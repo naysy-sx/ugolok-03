@@ -1,0 +1,808 @@
+/*! minimal.css — сброс + управляемые дефолты на переменных
+ *  Цель: современные движки (середина 2026). Всё оформление рулится
+ *  кастомными свойствами из слоя `tokens`.
+ *
+ *  Слои каскада, от низкого приоритета к высокому:
+ *      reset    — выжигаем стили браузера до предсказуемого нуля
+ *      tokens   — публичный API: каждая «крутилка» живёт здесь как --переменная
+ *      base     — html/body, цветовая схема, фокус, ритм документа
+ *      elements — вменяемые дефолты для голых тегов, все на переменных
+ *      utilities — тонкий opt-in слой классов (.flow, .cluster, .grid-auto, .prose …)
+ *
+ *  Твои собственные стили, написанные ВНЕ слоёв, по правилу каскада бьют
+ *  всё перечисленное выше — без войн специфичности и без !important.
+ *
+ *  Чтобы перекрасить/перешить тему: меняешь токены. Остального почти не касаешься.
+ */
+
+@layer reset, tokens, base, elements, utilities;
+
+/* ============================================================== *
+ *  reset                                                         *
+ * ============================================================== */
+@layer reset {
+	/* Box-model: предсказуемые размеры; min-width:0 не даёт flex/grid-детям
+     распирать контейнер; бордер по умолчанию 0-ширины solid — граница
+     теперь «в одну ширину» от тебя. */
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+		min-width: 0;
+		border: 0 solid;
+		background-repeat: no-repeat;
+	}
+
+	/* Сносим дефолтные отступы везде, кроме нативного <dialog>. */
+	:where(:not(dialog)) {
+		margin: 0;
+		padding: 0;
+	}
+
+	/* Документ: гасим авто-ресайз текста в iOS при повороте; убираем
+     подсветку тапа; разумный tab-size. */
+	html {
+		-webkit-text-size-adjust: 100%;
+		text-size-adjust: 100%;
+		-webkit-tap-highlight-color: transparent;
+		tab-size: 4;
+	}
+
+	/* Заголовки стартуют нейтральными; масштаб и насыщенность даёт слой `elements`. */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: inherit;
+		font-weight: inherit;
+	}
+
+	/* Списки теряют маркеры и отступ здесь; управляемо возвращаются в `elements`. */
+	ul,
+	ol,
+	menu {
+		list-style: none;
+	}
+
+	/* Медиа: блочные, не вылезают за контейнер, пропорции сохранены.
+     italic = так стилизуется alt-текст, когда картинка не загрузилась. */
+	img,
+	svg,
+	video,
+	canvas,
+	audio,
+	iframe,
+	embed,
+	object {
+		display: block;
+	}
+	img,
+	svg,
+	video,
+	canvas {
+		max-width: 100%;
+		height: auto;
+	}
+	img {
+		font-style: italic;
+	}
+
+	/* <picture> — прозрачная обёртка; пусть раскладкой рулит вложенный <img>. */
+	picture {
+		display: contents;
+	}
+
+	/* Контролы форм наследуют типографику вместо браузерной и сбрасывают
+     нативную «обвеску», чтобы стилизоваться с чистого листа. */
+	input,
+	button,
+	textarea,
+	select,
+	input[type="file"]::-webkit-file-upload-button {
+		font: inherit;
+		letter-spacing: inherit;
+		color: inherit;
+		background-color: transparent;
+		appearance: none;
+	}
+	textarea {
+		resize: vertical; /* горизонтальный ресайз ломает большинство раскладок */
+		field-sizing: content; /* растёт под контент где поддержано; иначе игнорируется */
+	}
+
+	/* Таблицы по умолчанию схлопывают границы и жмутся к содержимому. */
+	table {
+		border-collapse: collapse;
+		border-color: inherit;
+	}
+
+	/* Уважаем атрибут [hidden] даже после сброса выше. */
+	[hidden] {
+		display: none !important;
+	}
+}
+
+/* ============================================================== *
+ *  tokens — публичный API. Меняй эти значения, чтобы перешить тему. *
+ * ============================================================== */
+@layer tokens {
+	:root {
+		/* ---- Шкала шрифта -----------------------------------------------
+       Геометрическая шкала: каждый шаг = предыдущий * --ratio. Тело
+       (--step-0) остаётся фиксированным rem, чтобы зум браузера и
+       пользовательские настройки шрифта всегда работали. На мобиле ratio
+       меньше (заголовки компактнее), на широком экране больше (драматичнее)
+       — переключается на брейкпоинте ниже, при этом каждое значение
+       остаётся чистым rem (безопасно для зума).                         */
+		--font-size-base: 1rem; /* = тело текста; 16px по умолчанию */
+		--ratio: 1.2; /* мобильный / узкий */
+
+		--step--2: calc(var(--step--1) / var(--ratio));
+		--step--1: calc(var(--step-0) / var(--ratio));
+		--step-0: var(--font-size-base);
+		--step-1: calc(var(--step-0) * var(--ratio));
+		--step-2: calc(var(--step-1) * var(--ratio));
+		--step-3: calc(var(--step-2) * var(--ratio));
+		--step-4: calc(var(--step-3) * var(--ratio));
+		--step-5: calc(var(--step-4) * var(--ratio));
+
+		/* Текучие display-размеры для двух самых крупных заголовков. Границы
+       повторяют step-5 / step-4 при двух ratio на диапазоне 20rem–80rem;
+       rem-якоря сверху и снизу сохраняют работу зума — текучая только
+       середина, что допустимо для крупного display-текста (не для тела). */
+		--font-h1: clamp(2.49rem, 2.3rem + 0.94vw, 3.05rem);
+		--font-h2: clamp(2.07rem, 1.96rem + 0.6vw, 2.44rem);
+
+		--line-height: 1.6; /* тело */
+		--line-height-heading: 1.15;
+		--measure: 65ch; /* макс. длина читаемой строки */
+		--weight-normal: 400;
+		--weight-bold: 700;
+
+		/* Лёгкое уплотнение трекинга у крупных заголовков — придаёт display-тексту
+       более собранный, «журнальный» вид. Применяется только к h1–h3 ниже;
+       мелкий текст не трогаем, там это вредит читаемости. */
+		--heading-letter-spacing: -0.015em;
+
+		/* Кириллице-безопасный системный стек: именованные фолбэки ловят те
+       платформы, где `system-ui` резолвится в шрифт без нужных глифов. */
+		--font-body:
+			system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+			"Noto Sans", sans-serif;
+		--font-mono:
+			ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+			"Liberation Mono", monospace;
+		/* Засечный шрифт — редакторский контраст к гротеску тела. Применяется
+       к blockquote/figcaption и к заголовкам .prose. Не нужен контраст?
+       Поставь --font-serif: inherit, и засечки исчезнут везде разом. */
+		--font-serif: Georgia, "Times New Roman", Times, serif;
+
+		/* ---- Шкала отступов ---------------------------------------------
+       Все gap'ы, паддинги и ритм потока выводятся из одной единицы. */
+		--space-unit: 1rem;
+		--space-3xs: calc(var(--space-unit) * 0.25);
+		--space-2xs: calc(var(--space-unit) * 0.5);
+		--space-xs: calc(var(--space-unit) * 0.75);
+		--space-s: var(--space-unit);
+		--space-m: calc(var(--space-unit) * 1.5);
+		--space-l: calc(var(--space-unit) * 2);
+		--space-xl: calc(var(--space-unit) * 3);
+		--space-2xl: calc(var(--space-unit) * 4);
+		--space-3xl: calc(var(--space-unit) * 6);
+
+		/* ---- Цвет -------------------------------------------------------
+       Палитра выведена из нескольких базовых значений через oklch() +
+       color-mix(). light-dark() требует `color-scheme` (задан в `base`);
+       перевернуть страницу или любой блок — поставить на него
+       `color-scheme: light` / `dark`.                                   */
+		--hue: 250; /* нейтральный/UI-тон */
+		--accent-hue: 265;
+		--chroma-ui: 0.012; /* едва заметный подтон в нейтралях */
+
+		--bg: light-dark(
+			oklch(0.99 var(--chroma-ui) var(--hue)),
+			oklch(0.17 var(--chroma-ui) var(--hue))
+		);
+		--fg: light-dark(oklch(0.26 0.02 var(--hue)), oklch(0.92 0.015 var(--hue)));
+		--surface: color-mix(in oklch, var(--bg), var(--fg) 5%);
+		--muted: color-mix(in oklch, var(--fg), var(--bg) 45%);
+		--border: color-mix(in oklch, var(--bg), var(--fg) 18%);
+
+		--accent: light-dark(
+			oklch(0.55 0.17 var(--accent-hue)),
+			oklch(0.74 0.15 var(--accent-hue))
+		);
+		--accent-contrast: oklch(0.99 0 0);
+		--accent-hover: color-mix(in oklch, var(--accent), black 12%);
+
+		/* ---- Форма, глубина, движение ----------------------------------- */
+		--radius: 0; /* острые углы по умолчанию; кругли через эту переменную */
+		--marker-color: currentColor; /* цвет маркеров списка; .prose ставит акцент */
+		--border-width: 1px;
+		--shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.08);
+
+		--transition-speed: 150ms; /* одна крутилка на все hover/active-анимации */
+		--transition-ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+		/* ---- Layout-крутилки для утилит --------------------------------- */
+		--flow-space: var(--space-m); /* вертикальный ритм для .flow */
+		--cluster-gap: var(--space-s); /* gap для .cluster */
+		--grid-min: 16rem; /* мин. ширина колонки для .grid-auto */
+		--container: 70rem; /* макс. ширина для .center */
+	}
+
+	/* Широкие экраны: более драматичная шкала. Меняется только --ratio,
+     вся ступенчатая шкала пересчитывается из него. Значения остаются
+     чистым rem (безопасно для зума). */
+	@media (min-width: 48em) {
+		:root {
+			--ratio: 1.25;
+		}
+	}
+}
+
+/* ============================================================== *
+ *  base — документ, цветовая схема, фокус, ритм чтения           *
+ * ============================================================== */
+@layer base {
+	html {
+		color-scheme: light dark; /* включает light-dark(); темит UI форм/скроллбары */
+		font-family: var(--font-body);
+		line-height: var(--line-height);
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		html {
+			scroll-behavior: smooth;
+		}
+	}
+
+	body {
+		min-height: 100vh;
+		min-height: 100dvh; /* заполняет область под мобильным UI браузера */
+		background-color: var(--bg);
+		color: var(--fg);
+		font-size: var(
+			--step-0
+		); /* тело привязано к базовому токену, не к дефолту браузера */
+		text-rendering: optimizeLegibility;
+		font-optical-sizing: auto; /* оптический размер у вариативных шрифтов */
+		font-kerning: normal; /* кёрнинг пар глифов */
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	/* Видимый фокус с клавиатуры — пол доступности; никогда не убираем. */
+	:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 1px;
+	}
+
+	::selection {
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+	}
+
+	/* Переход по якорю не прячет цель под липкой шапкой. */
+	:target {
+		scroll-margin-block-start: var(--space-l);
+	}
+
+	/* Аккуратный перенос строк для прозы и заголовков. */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		text-wrap: balance;
+	}
+	p {
+		text-wrap: pretty;
+	}
+	p,
+	li,
+	figcaption,
+	blockquote {
+		overflow-wrap: break-word;
+	}
+}
+
+/* ============================================================== *
+ *  elements — управляемые дефолты для голых тегов               *
+ * ============================================================== */
+@layer elements {
+	/* ---- Заголовки --------------------------------------------------- */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		line-height: var(--line-height-heading);
+		font-weight: var(--weight-bold);
+		margin-block-start: var(--space-xl);
+		margin-block-end: var(--space-s);
+		scroll-margin-block-start: var(--space-l);
+	}
+	h1 {
+		font-size: var(--font-h1);
+	}
+	h2 {
+		font-size: var(--font-h2);
+	}
+	h3 {
+		font-size: var(--step-3);
+	}
+	h4 {
+		font-size: var(--step-2);
+	}
+	h5 {
+		font-size: var(--step-1);
+	}
+	h6 {
+		font-size: var(--step-0);
+	}
+	/* Уплотнение трекинга только у крупных заголовков. */
+	h1,
+	h2,
+	h3 {
+		letter-spacing: var(--heading-letter-spacing);
+	}
+	:is(h1, h2, h3, h4, h5, h6):first-child {
+		margin-block-start: 0;
+	}
+
+	/* ---- Проза ------------------------------------------------------- */
+	p,
+	ul,
+	ol,
+	dl,
+	blockquote,
+	pre,
+	table,
+	figure {
+		margin-block: var(--space-m);
+	}
+	p {
+		max-width: var(--measure);
+	}
+
+	/* Возвращаем спискам аффордансы (сброс их убрал) — отступ управляем. */
+	ul,
+	ol {
+		padding-inline-start: var(--space-l);
+	}
+	ul {
+		list-style: disc;
+	}
+	ol {
+		list-style: decimal;
+	}
+	li {
+		margin-block: var(--space-3xs);
+	}
+	li::marker {
+		color: var(--marker-color);
+	}
+	:where(ul, ol) :where(ul, ol) {
+		margin-block: 0;
+	} /* поджимаем вложенность */
+
+	/* Навигационные списки — без маркеров. ::before с zero-width space
+     возвращает семантику списка для VoiceOver в Safari: он «теряет»
+     список, когда снят list-style. Символ невидим, ничего не сдвигает. */
+	nav :where(ul, ol) {
+		list-style: none;
+		padding-inline-start: 0;
+	}
+	nav li::before {
+		content: "\200B";
+		float: left;
+	}
+
+	dt {
+		font-weight: var(--weight-bold);
+	}
+	dd {
+		margin-inline-start: var(--space-l);
+	}
+
+	/* ---- Ссылки ------------------------------------------------------ */
+	a {
+		color: var(--accent);
+		text-decoration-line: underline;
+		text-decoration-thickness: from-font;
+		text-underline-offset: 0.15em;
+		transition: color var(--transition-speed) var(--transition-ease);
+	}
+	a:hover {
+		color: var(--accent-hover);
+		text-decoration-line: none;
+	}
+
+	/* ---- Выделение и инлайн ------------------------------------------ */
+	b,
+	strong {
+		font-weight: var(--weight-bold);
+	}
+	small {
+		font-size: var(--step--1);
+	}
+	mark {
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+		padding-inline: 0.2em;
+		border-radius: 0.2em;
+	}
+	sub,
+	sup {
+		font-size: 0.75em;
+		line-height: 0;
+		position: relative;
+	}
+	sub {
+		bottom: -0.25em;
+	}
+	sup {
+		top: -0.5em;
+	}
+
+	/* ---- Код --------------------------------------------------------- */
+	code,
+	kbd,
+	samp,
+	pre {
+		font-family: var(--font-mono);
+		font-size: 0.9em;
+	}
+	:not(pre) > code,
+	kbd {
+		background-color: var(--surface);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.1em 0.35em;
+	}
+	pre {
+		background-color: var(--surface);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: var(--space-s);
+		overflow-x: auto;
+	}
+	pre code {
+		background: none;
+		border: 0;
+		padding: 0;
+		font-size: inherit;
+	}
+
+	/* ---- Цитаты и линии ---------------------------------------------- */
+	blockquote {
+		border-inline-start: 0.25rem solid var(--accent);
+		padding-inline-start: var(--space-m);
+		color: var(--muted);
+		font-family: var(--font-serif); /* засечный контраст */
+		font-style: italic;
+	}
+	hr {
+		border-block-start: var(--border-width) solid var(--border);
+		margin-block: var(--space-xl);
+	}
+
+	/* ---- Figure (гасим огромные UA-отступы, берём под контроль) ------ */
+	figure {
+		margin-inline: 0;
+	}
+	figcaption {
+		margin-block-start: var(--space-2xs);
+		font-size: var(--step--1);
+		color: var(--muted);
+		font-family: var(--font-serif); /* засечный контраст */
+		text-wrap: balance;
+	}
+
+	/* ---- Кнопки ------------------------------------------------------ */
+	button,
+	[type="button"],
+	[type="reset"],
+	[type="submit"] {
+		display: inline-block;
+		padding: var(--space-2xs) var(--space-m);
+		border: var(--border-width) solid transparent;
+		border-radius: var(--radius);
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: var(--weight-bold);
+		line-height: 1.2;
+		cursor: pointer;
+		transition:
+			background-color var(--transition-speed) var(--transition-ease),
+			transform var(--transition-speed) var(--transition-ease);
+	}
+	button:hover,
+	[type="button"]:hover,
+	[type="reset"]:hover,
+	[type="submit"]:hover {
+		background-color: var(--accent-hover);
+	}
+	button:active,
+	[type="button"]:active,
+	[type="reset"]:active,
+	[type="submit"]:active {
+		transform: translateY(1px);
+	}
+	button:disabled,
+	button[disabled],
+	[type="button"]:disabled,
+	[type="reset"]:disabled,
+	[type="submit"]:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+
+	/* ---- Поля -------------------------------------------------------- */
+	input:not(
+		[type="button"],
+		[type="reset"],
+		[type="submit"],
+		[type="checkbox"],
+		[type="radio"],
+		[type="range"],
+		[type="color"]
+	),
+	textarea,
+	select {
+		width: 100%;
+		max-width: 100%;
+		padding: var(--space-2xs) var(--space-xs);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		background-color: var(--surface);
+		line-height: 1.4;
+	}
+	input:focus-visible,
+	textarea:focus-visible,
+	select:focus-visible {
+		border-color: var(--accent);
+	}
+	/* У select сброс снял нативную стрелку (appearance:none). Возвращаем
+     каретку своей SVG-иконкой — поле остаётся стилистически своим, но
+     снова читается как выпадающий список. */
+	select {
+		padding-inline-end: var(--space-xl);
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888888' stroke-width='2' d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+		background-position: right var(--space-s) center;
+		background-size: 0.7em;
+	}
+	::placeholder {
+		color: var(--muted);
+		opacity: 1;
+	}
+	label {
+		cursor: pointer;
+	}
+	/* Подпись поля: <label>Телефон</label> над контролом. :not(:has(...))
+     отличает её от label'а, оборачивающего сам контрол (радио/чекбокс),
+     — тот остаётся обычным инлайном и не раздувается. */
+	label:not(:has(input, select, textarea)) {
+		display: block;
+		margin-block-end: var(--space-3xs);
+		font-size: var(--step--1);
+		font-weight: var(--weight-bold);
+	}
+	fieldset {
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: var(--space-s);
+	}
+	legend {
+		padding-inline: var(--space-2xs);
+	}
+
+	/* Возвращаем нативную отрисовку и ожидаемые курсоры этим контролам:
+     reset снял appearance у всех input, но этим он нужен — иначе
+     чекбоксы/радио/ползунок исчезают, а accent-color красить нечего. */
+	[type="checkbox"],
+	[type="radio"],
+	[type="range"],
+	[type="color"] {
+		appearance: auto;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+	:where(
+		a[href],
+		button,
+		label[for],
+		select,
+		summary,
+		[type="checkbox"],
+		[type="radio"]
+	) {
+		touch-action: manipulation; /* убирает 300мс задержку двойного тапа-зума */
+	}
+
+	/* ---- Таблицы ----------------------------------------------------- */
+	th,
+	td {
+		padding: var(--space-2xs) var(--space-s);
+		border: var(--border-width) solid var(--border);
+		text-align: start;
+		vertical-align: top;
+		font-variant-numeric: tabular-nums; /* колонки чисел выравниваются по разрядам */
+	}
+	th {
+		font-weight: var(--weight-bold);
+		background-color: var(--surface);
+	}
+	caption {
+		text-align: start;
+		color: var(--muted);
+		margin-block-end: var(--space-2xs);
+	}
+
+	/* ---- Details / summary ------------------------------------------- */
+	details {
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: var(--space-s);
+	}
+	summary {
+		cursor: pointer;
+		font-weight: var(--weight-bold);
+	}
+	details[open] > summary {
+		margin-block-end: var(--space-s);
+	}
+}
+
+/* ============================================================== *
+ *  utilities — тонкий opt-in слой классов                       *
+ * ============================================================== */
+@layer utilities {
+	/* Вертикальный ритм: отступ только между соседями («совёнок»), так
+     первый ребёнок сохраняет чистый верхний край. Под scope крутится
+     через --flow-space. */
+	.flow > * + * {
+		margin-block-start: var(--flow-space);
+	}
+
+	/* Горизонтальный кластер: переносит, ровные gap'ы, центр по вертикали. */
+	.cluster {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--cluster-gap);
+		align-items: center;
+	}
+
+	/* Готовая адаптивная сетка: столько колонок по --grid-min, сколько влезет. */
+	.grid-auto {
+		display: grid;
+		gap: var(--cluster-gap);
+		grid-template-columns: repeat(
+			auto-fit,
+			minmax(min(var(--grid-min), 100%), 1fr)
+		);
+	}
+
+	/* Центрированная колонка чтения с ограничением ширины и боковыми полями. */
+	.center {
+		max-width: var(--container);
+		margin-inline: auto;
+		padding-inline: var(--space-m);
+	}
+
+	/* Заполнить произвольный бокс без искажений (opt-in, никогда не глобально). */
+	.cover {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	/* Быстрые помощники выравнивания. */
+	.text-center {
+		text-align: center;
+	}
+	.text-end {
+		text-align: end;
+	}
+
+	/* Визуально скрыто, но доступно скринридерам. */
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* ---- .prose — «журнальный» режим (opt-in характер) ---------------
+     Включаешь на блоке-обёртке: <article class="prose">. База НАМЕРЕННО
+     не навязывает этот характер всем — он живёт здесь, по желанию. */
+	.prose {
+		font-variant-numeric: oldstyle-nums proportional-nums; /* старостильные цифры в тексте */
+		--marker-color: var(--accent); /* акцентные маркеры списков */
+	}
+	/* Зебра в таблицах контента — чётные строки слегка темнее, читаемость
+     широких таблиц растёт. Только в .prose: служебные таблицы не пачкаем. */
+	.prose tbody tr:nth-child(even) {
+		background-color: var(--surface);
+	}
+	/* Вводный абзац (standfirst): первый абзац после h1 — крупнее и спокойнее. */
+	.prose > h1 + p {
+		font-size: var(--step-1);
+		line-height: 1.5;
+		color: var(--muted);
+		text-wrap: balance;
+		max-width: var(--measure);
+	}
+	/* Надзаголовок-«кикер»: <p class="eyebrow">РУБРИКА</p> над заголовком. */
+	.eyebrow {
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		font-size: var(--step--1);
+		font-weight: var(--weight-bold);
+		color: var(--accent);
+		margin-block-end: var(--space-2xs);
+	}
+	/* Буквица: <p class="dropcap">. Без поддержки initial-letter буква
+     просто остаётся обычного размера (акцентной/жирной) — не ломается. */
+	.dropcap::first-letter {
+		-webkit-initial-letter: 3;
+		initial-letter: 3;
+		font-weight: var(--weight-bold);
+		color: var(--accent);
+		margin-inline-end: 0.08em;
+	}
+	/* Висячая пунктуация — оптически ровный край абзаца. Только Safari
+     (mid-2026); в остальных просто игнорируется, ничего не ломая. */
+	@supports (hanging-punctuation: first) {
+		.prose {
+			hanging-punctuation: first last;
+		}
+	}
+}
+
+/* ============================================================== *
+ *  Прогрессивное улучшение (только Chromium на середину 2026)    *
+ *  Плавная анимация открытия/закрытия <details> к авто-высоте.   *
+ *  Обёрнуто в @supports: в остальных просто игнорируется.        *
+ * ============================================================== */
+@supports (interpolate-size: allow-keywords) {
+	:root {
+		interpolate-size: allow-keywords;
+	}
+	details::details-content {
+		block-size: 0;
+		overflow: clip;
+		transition:
+			block-size var(--transition-speed) var(--transition-ease),
+			content-visibility var(--transition-speed) allow-discrete;
+	}
+	details[open]::details-content {
+		block-size: auto;
+	}
+}
+
+/* ============================================================== *
+ *  Override доступности — вне слоёв, чтобы побеждать всё.        *
+ *  Уважаем пользователей, попросивших меньше движения.          *
+ * ============================================================== */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

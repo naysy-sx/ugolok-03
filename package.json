@@ -1,0 +1,43 @@
+{
+  "name": "ugolok-2-project",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/naysy-sx/ugolok-03#readme",
+  "bugs": {
+    "url": "https://github.com/naysy-sx/ugolok-03/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/naysy-sx/ugolok-03.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@hpke/chacha20poly1305": "1.8.0",
+    "@hpke/dhkem-x448": "1.8.0",
+    "@hpke/hybridkem-x-wing": "0.7.0",
+    "@hpke/ml-kem": "0.3.0",
+    "@noble/ciphers": "2.2.0",
+    "@noble/curves": "2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@noble/post-quantum": "0.6.1",
+    "@preact/signals": "^2.9.2",
+    "@scure/bip32": "^2.2.0",
+    "@scure/bip39": "^2.2.0",
+    "comlink": "^4.4.2",
+    "dexie": "^4.4.4",
+    "nostr-tools": "^2.23.8",
+    "preact": "^10.29.2",
+    "ts-mls": "2.0.0-rc.14"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.5",
+    "vite": "^8.1.0",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
