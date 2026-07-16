@@ -1,11 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
-
-const BUILD_HASH =
-	typeof __BUILD_HASH__ !== "undefined" ? __BUILD_HASH__ : "unknown";
-const DEFAULT_RELAYS =
-	typeof __BUILD_DEFAULT_RELAYS__ !== "undefined"
-		? __BUILD_DEFAULT_RELAYS__
-		: [];
+import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {

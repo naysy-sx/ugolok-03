@@ -7,7 +7,7 @@
 - [x] Этап 1. **Каркас проекта** — Vite + Preact + vite-plugin-singlefile; приложение открывается в браузере, рендерит интерфейс с aside с навигацией (контакты, сообщения, подписки, настройки, профиль и все остальное) и контентной областью где меняются заглушки
     - `vite.config.js`, `index.html`, `src/main.jsx`, `src/ui/nav-items.js`, `src/ui/screens/diagnostics.jsx`, `src/ui/screens/placeholder.jsx`
 
-- [ ] Этап 2. **Service Worker + конфиг** — кэширование по `BUILD_HASH`, `skipWaiting` + `clients.claim`, старый кэш чистится при обновлении; `config.js` со списком relay
+- [x] Этап 2. **Service Worker + конфиг** — кэширование по `BUILD_HASH`, `skipWaiting` + `clients.claim`, старый кэш чистится при обновлении; `config.js` со списком relay
     - `service-worker.js`, `src/config.js`
 
 - [ ] Этап 3. **IndexedDB-схема + event-log** — все таблицы Dexie создаются (видны в DevTools), `appendEvent` / `queryEvents` / `getEventById` / `hasEvent` с `*flatTags`
@@ -107,3 +107,39 @@
 "Диагностика" (по решению пользователя), не выброшен.
 Отложено (не блокер): активный пункт навигации не выделен визуально
 (CSS), только `aria-current` в DOM.
+
+**Этап 2.** При старте этапа обнаружено: `service-worker.js` (коммит
+`336110b`, до принятия skill) и `src/config.js` (написан, но не
+закоммичен) уже реализовывали всё требуемое поведение — до
+CONTRACTS.md/тестов/log.md этого этапа. Решение: не пересоздавать
+через воркера (риск регресса уже рабочего кода без пользы), а
+формализовать задним числом — CONTRACTS.md + тесты + полная
+регрессия + адверсарный заход, как обычную приёмку. Воркер в этом
+этапе не вызывался (нового прикладного кода не потребовалось, кроме
+дедупликации констант в diagnostics.jsx — тривиальная точечная правка
+вручную, по прецеденту этапа 1).
+Правка контракта этапа 1 (п.13 skill): CONTRACTS.md ошибочно приписывал
+`main.jsx` вывод `BUILD_HASH`/`DEFAULT_RELAYS` "в шапке" — на деле это
+всегда было поведением `diagnostics.jsx`. Текст контракта исправлен,
+код не менялся.
+`diagnostics.jsx` переведён с дублирующей inline-логики фоллбэков на
+импорт `BUILD_HASH`/`BUILD_DEFAULT_RELAYS` из `src/config.js` (явное
+решение Claude, п.13 skill, поведение идентично в dev/build — Vite
+`define` применяется в обоих режимах; фоллбэк-текст вне Vite
+("dev" вместо "unknown") недостижим в реальном использовании).
+Адверсарная находка (реальный баг, не в файлах этапа, но в механизме
+F-OF-06): `emitServiceWorker` в `vite.config.js` подставлял `BUILD_HASH`
+через `.replaceAll(str, buildHash)` — при строковой замене движок
+специально трактует `$`-паттерны (`$&`, `$$`) в самом `buildHash`,
+что ломает подстановку, если хеш когда-либо содержит `$`. Исправлено
+на `.replaceAll(str, () => buildHash)` (замена функцией не парсит
+паттерны). Проверено сборкой с `BUILD_HASH='a$&b$$c'`.
+Регрессия: `npm test` (6/6), `npm run build` (default hash + override
+hash/relays — все значения корректно попадают в `dist/index.html` и
+`dist/service-worker.js`, включая adversarial `$`-hash после фикса).
+Интеграция: Playwright на собранном `dist/` (`vite preview`) —
+install создаёт `ugolok-cache-v{HASH}`, офлайн-фоллбэк отдаёт
+закешированный `index.html`, пересборка с другим `BUILD_HASH` →
+старый кэш удалён на `activate`, новый создан, `controllerchange`
+триггерит авто-reload (уже смонтировано в `main.jsx`/`diagnostics.jsx`
+с этапа 1), консоль без ошибок.

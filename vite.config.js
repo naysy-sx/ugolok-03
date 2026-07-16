@@ -29,9 +29,12 @@ function emitServiceWorker(buildHash) {
 		name: "ugolok:emit-sw",
 		apply: "build",
 		generateBundle() {
+			// buildHash — replaceAll(str, fn), не replaceAll(str, str): при
+			// строковой замене движок трактует `$`-паттерны в buildHash
+			// ($&, $$, ...) специально, что портит подстановку.
 			const src = readFileSync("service-worker.js", "utf8").replaceAll(
 				"__BUILD_HASH__",
-				buildHash,
+				() => buildHash,
 			);
 			this.emitFile({
 				type: "asset",
