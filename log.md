@@ -29,3 +29,13 @@
 Адверсарный заход: пересборка с другим `BUILD_HASH` при активной вкладке → старый кэш удалён на `activate`, новый создан, `controllerchange` вызвал авто-`reload()` (смонтировано с этапа 1); `BUILD_HASH` со спецсимволами `/?#` — собралось нормально; `BUILD_HASH='a$&b$$c'` — вскрыл баг `.replaceAll` (см. п.3 выше), исправлен и перепроверен.
 
 Правка контракта этапа 1: CONTRACTS.md ошибочно приписывал `main.jsx` вывод `BUILD_HASH`/`DEFAULT_RELAYS` "в шапке" — это поведение `diagnostics.jsx`. Текст исправлен, код не менялся.
+
+## Этап 3. IndexedDB-схема + event-log
+
+6. `src/core/store/database.js` — Dexie-схема (§10 TECH.md, дословно) — зелёный с первого раза, 2/2 теста.
+7. `src/core/store/event-log.js` (appendEvent/getEventById/hasEvent) — брак: `flatTags` через `tag.join(',')` вместо `` `${tag[0]}:${tag[1]}` ``. Исправлено точечно вручную (1 строка).
+8. `src/core/store/event-log.js` (queryEvents) — воркер не срезал markdown-обёртку, в файл попали ```` ```javascript ```` и хвостовой абзац прозы. Вычищено вручную (форматирование, не логика). Логика фильтра — верна с первого раза, 11/11 тестов.
+
+Регрессия: `npm test` (20/20), `npm run build` (ok).
+Интеграция: `npm run dev` + Playwright, `import()` `database.js`/`event-log.js` из консоли браузера — `indexedDB.databases()` → `["ugolok"]`, 24 таблицы видны, `appendEvent`/`hasEvent` работают на реальном IndexedDB.
+Адверсарный заход: `since`/`until`/`limit` = 0 отбрасывались falsy-проверкой (`if (filter.since)`) — реальный баг, исправлен на `!== undefined`, тест зафиксирован в `tests/event-log.test.js`. Дубли `id` через `appendEvent` дважды — не дедуплицируются (осознанно, не контракт этой функции — G-Set в этапе 4).

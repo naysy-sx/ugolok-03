@@ -10,7 +10,7 @@
 - [x] Этап 2. **Service Worker + конфиг** — кэширование по `BUILD_HASH`, `skipWaiting` + `clients.claim`, старый кэш чистится при обновлении; `config.js` со списком relay
     - `service-worker.js`, `src/config.js`
 
-- [ ] Этап 3. **IndexedDB-схема + event-log** — все таблицы Dexie создаются (видны в DevTools), `appendEvent` / `queryEvents` / `getEventById` / `hasEvent` с `*flatTags`
+- [x] Этап 3. **IndexedDB-схема + event-log** — все таблицы Dexie создаются (видны в DevTools), `appendEvent` / `queryEvents` / `getEventById` / `hasEvent` с `*flatTags`
     - `src/core/store/database.js`, `src/core/store/event-log.js`
 
 - [ ] Этап 4. **Валидатор событий + CRDT-примитивы** — `validateEventId` (NIP-01 canonical serialization + SHA-256), G-Set (idempotent merge), LWW (tiebreaker по `id`); юнит-тесты проходят
@@ -143,3 +143,28 @@ install создаёт `ugolok-cache-v{HASH}`, офлайн-фоллбэк от�
 старый кэш удалён на `activate`, новый создан, `controllerchange`
 триггерит авто-reload (уже смонтировано в `main.jsx`/`diagnostics.jsx`
 с этапа 1), консоль без ошибок.
+
+**Этап 3.** Devdependency `fake-indexeddb` (полифил IndexedDB для
+`node --test`, Dexie не работает без IndexedDB) — не влияет на бандл,
+только тесты. `database.js` собран воркером с первого раза (дословная
+копия схемы § 10 TECH.md), принято по 2/2 тестам. `event-log.js` —
+3 микрозадачи: (1) `appendEvent`/`getEventById`/`hasEvent` — брак
+(`flatTags` собирались через `tag.join(',')` вместо `` `${tag[0]}:${tag[1]}` ``),
+исправлено точечно вручную (1 строка); (2) `queryEvents` — воркер не
+срезал markdown-обёртку и приписал хвостовой прозаический абзац прямо
+в файл (сбой `worker.sh`, не логики) — вычищено вручную. Дизайн
+`queryEvents`: NIP-01-подобный REQ-фильтр, полное сканирование таблицы
++ фильтрация в памяти (осознанно без оптимизации через индексы —
+задокументировано в CONTRACTS.md как допустимое для этапа 3).
+Адверсарный заход вскрыл реальный баг: `since`/`until`/`limit`,
+равные `0`, отбрасывались JS-проверкой `if (filter.since)` (0 — falsy)
+— исправлено на `!== undefined`, тест-кейс добавлен в
+`tests/event-log.test.js` (регрессия впредь).
+Регрессия: `npm test` (20/20), `npm run build` (не меняет размер —
+`database.js`/`event-log.js` пока никем не импортируются в app-графе).
+Интеграция: `npm run dev` + Playwright — `await import("/src/core/store/database.js")`
+из консоли браузера, `db.open()`, `indexedDB.databases()` → `["ugolok"]`,
+все 24 таблицы видны, `appendEvent`/`hasEvent` отработали на реальном
+(не fake) IndexedDB. `main.jsx` не трогали (не входит в список файлов
+этапа 3) — открытие БД в реальном приложении подключится в этапе 5
+(app shell).

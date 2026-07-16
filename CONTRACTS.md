@@ -125,3 +125,82 @@ SW, версионирование имени кэша, чистка старо�
 `__BUILD_HASH__`/`__BUILD_DEFAULT_RELAYS__` внутри файла. Значения и
 поведение идентичны, меняется только источник констант. Требует полной
 регрессии (см. DoD этапа 2).
+
+## Этап 3 — IndexedDB-схема + event-log
+
+Тестирование: Dexie требует IndexedDB, которого нет в Node.
+Devdependency `fake-indexeddb` (`import "fake-indexeddb/auto"` первой
+строкой файла теста, до любого импорта Dexie/database.js) — стандартный
+способ юнит-тестировать Dexie вне браузера. Не влияет на бандл
+(devDependency, тестовый код). "Видимость в DevTools" (DoD) проверяется
+отдельно, интеграционно: `npm run dev` → в консоли браузера
+`const m = await import("/src/core/store/database.js"); await m.db.open();`
+— без изменения `main.jsx` (файл не входит в список этапа 3).
+
+### `src/core/store/database.js`
+
+```js
+export const db; // Dexie-инстанс, имя базы "ugolok" (решение Claude — в TECH.md имя не задано)
+```
+
+Схема — `db.version(1).stores({...})`, **дословно** раздел 10 TECH.md
+(все таблицы сразу, не только `events` — остальные пока не используются,
+но должны существовать и быть видны в DevTools). Значения в
+materialized-view таблицах пока НЕ шифруются (шифрование — этап 14,
+`encrypted-table.js`); сейчас это просто Dexie-таблицы с обычными
+объектами.
+
+### `src/core/store/event-log.js`
+
+```js
+export async function appendEvent(event); // -> Promise<number> (seq новой записи)
+export async function queryEvents(filter); // -> Promise<NostrEvent[]>
+export async function getEventById(id); // -> Promise<NostrEvent | undefined>
+export async function hasEvent(id); // -> Promise<boolean>
+```
+
+`NostrEvent` — стандартный NIP-01: `{id, pubkey, created_at, kind, tags, content, sig}`.
+`tags` — `string[][]` (каждый тег `[name, value, ...rest]`).
+
+**`appendEvent(event)`**: считает `flatTags` из `event.tags` — для
+каждого тега с `length >= 2` кладёт строку `` `${tag[0]}:${tag[1]}` ``
+в массив (теги короче 2 элементов пропускаются, `name:value` из них не
+собрать). Вставляет строку `{...event, flatTags}` в таблицу `events`
+через `table.add()` (не upsert — дедупликация по `id` не входит в
+контракт этой функции, это забота G-Set merge в этапе 4, который сам
+проверяет `hasEvent(id)` перед вызовом). Возвращает `seq` вставленной
+записи.
+
+**`queryEvents(filter)`**: `filter` — NIP-01-подобный REQ-фильтр:
+
+```js
+{
+  ids?: string[],       // OR
+  authors?: string[],   // OR, соответствует pubkey
+  kinds?: number[],     // OR
+  since?: number,        // created_at >= since
+  until?: number,        // created_at <= until
+  limit?: number,
+  // произвольные теговые фильтры в нотации NIP-01, напр. filter["#p"] = ["abc"], filter["#channel"] = ["topic1"]
+  // ключ без "#" не трактуется как тег. Внутри одного тега — OR по значениям; между разными тегами и остальными полями — AND.
+}
+```
+
+Реализация вправе выбрать наиболее селективный Dexie-индекс для
+стартовой выборки (`id`, `flatTags`, `[pubkey+kind]`, `created_at`) и
+дофильтровать остальные условия в памяти — порядок индекса не часть
+контракта, часть контракта — результат.
+Результат отсортирован по возрастанию `created_at` (при равенстве —
+по `seq`); `limit`, если задан, обрезает до первых `limit` записей
+**в этом порядке** (т.е. это не "последние N", а "первые N после
+сортировки по возрастанию времени" — простая, детерминированная
+семантика; если будущему этапу понадобится другая — правится явным
+решением Claude с регрессией).
+Фильтр без единого поля (`{}`) возвращает все события (полное
+сканирование `events`).
+
+**`getEventById(id)`**: первая запись с `event.id === id`
+(`events.where("id").equals(id).first()`), либо `undefined`. Не
+`.first()` по всей таблице без индекса — `id` уже проиндексирован.
+
+**`hasEvent(id)`**: `boolean`, эквивалент `(await getEventById(id)) !== undefined`, но не обязана вызывать getEventById буквально — вправе быть отдельным (более дешёвым) запросом типа `.count()`.
