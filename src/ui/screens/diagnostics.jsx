@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
+import { db } from "../../core/store/database.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -64,6 +65,22 @@ function useServiceWorker() {
 	return state;
 }
 
+function dbTone(state) {
+	if (state.startsWith("открыта")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useDatabaseStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		db.open()
+			.then(() => set(`открыта (${db.tables.length} таблиц)`))
+			.catch((e) => set("ошибка: " + (e?.message || e)));
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -94,6 +111,8 @@ function Row({ c }) {
 export default function Diagnostics() {
 	const checks = envChecks();
 	const sw = useServiceWorker();
+	const dbStatus = useDatabaseStatus();
+
 	const pass = checks.filter((c) => c.critical).every((c) => c.ok);
 
 	return (
@@ -135,12 +154,16 @@ export default function Diagnostics() {
 			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 				{checks.map((c) => (
 					<Row c={c} />
-				))}
+			 ))}
 			</ul>
 
 			<p style={{ color: "var(--muted)" }}>
 				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>
 			</p>
+			<p style={{ color: "var(--muted)" }}>
+				База данных: <strong style={{ color: dbTone(dbStatus) }}>{dbStatus}</strong>
+			</p>
+
 			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
 				{navigator.userAgent}
 			</small>
