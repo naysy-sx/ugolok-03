@@ -224,3 +224,26 @@ export async function hasEvent(id); // -> Promise<boolean>
 
 Приёмка — интеграционная (Playwright/`npm run dev`), не `node --test`,
 по прецеденту остальных частей `diagnostics.jsx`.
+
+### `src/ui/screens/diagnostics.jsx` (вторая правка — статус кэша, довесок к этапу 2)
+
+По просьбе пользователя: видимость результата работы Service Worker
+кэширования (F-OF-04/05/06), не только факта регистрации SW. Хук
+`useCacheStatus()`, по образцу `useServiceWorker()`/`useDatabaseStatus()`:
+
+- Cache API нет в браузере → `"не поддерживается"`
+- `import.meta.env.DEV` → `"пропущено (dev — кэш появляется только в vite build)"`
+  (кэш реален только в собранном `dist/`, как и сам SW)
+- иначе: поллинг `caches.keys()` (до 20 попыток по 200мс — install
+  асинхронный, может не успеть к моменту рендера) ищет ключ с
+  префиксом `ugolok-cache-`:
+  - не нашли за отведённое время → `"ошибка: кэш не создан за отведённое время"`
+  - нашли, но `cache.keys()` внутри пуст → `` "ошибка: кэш `${name}` создан, но пуст (precache не сработал)" ``
+  - нашли и непусто → `` "${match}, ${cachedKeys.length} файлов в кэше" `` (имя кэша содержит `BUILD_HASH`, поэтому это же подтверждает версионирование)
+
+Тон (`cacheTone`): `state.startsWith("ugolok-cache-")` → `var(--ok)`;
+`state.startsWith("ошибка")` → `var(--bad)`; иначе `var(--muted)`.
+Рендерится строкой "Кэш (Service Worker): …" после строки "Service
+Worker: …". Приёмка — интеграционная на собранном `dist/`
+(`vite preview`, не `npm run dev`), т.к. поведение принципиально
+build-only.

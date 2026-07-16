@@ -81,6 +81,43 @@ function useDatabaseStatus() {
 	return state;
 }
 
+function cacheTone(state) {
+	if (state.startsWith("ugolok-cache-")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useCacheStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		if (!("caches" in window)) return set("не поддерживается");
+		if (import.meta.env.DEV)
+			return set("пропущено (dev — кэш появляется только в vite build)");
+		let cancelled = false;
+		(async () => {
+			for (let i = 0; i < 20; i++) {
+				const keys = await caches.keys();
+				const match = keys.find((k) => k.startsWith("ugolok-cache-"));
+				if (match) {
+					const cache = await caches.open(match);
+					const cachedKeys = await cache.keys();
+					if (cancelled) return;
+					if (cachedKeys.length > 0) {
+						set(`${match}, ${cachedKeys.length} файлов в кэше`);
+					} else {
+						set(`ошибка: кэш ${match} создан, но пуст (precache не сработал)`);
+					}
+					return;
+				}
+				await new Promise((r) => setTimeout(r, 200));
+			}
+			if (!cancelled) set("ошибка: кэш не создан за отведённое время");
+		})().catch((e) => !cancelled && set("ошибка: " + (e?.message || e)));
+		return () => { cancelled = true; };
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -112,6 +149,7 @@ export default function Diagnostics() {
 	const checks = envChecks();
 	const sw = useServiceWorker();
 	const dbStatus = useDatabaseStatus();
+	const cacheStatus = useCacheStatus();
 
 	const pass = checks.filter((c) => c.critical).every((c) => c.ok);
 
@@ -160,6 +198,11 @@ export default function Diagnostics() {
 			<p style={{ color: "var(--muted)" }}>
 				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>
 			</p>
+			
+			<p style={{ color: "var(--muted)" }}>
+				Кэш (Service Worker): <strong style={{ color: cacheTone(cacheStatus) }}>{cacheStatus}</strong>
+			</p>
+
 			<p style={{ color: "var(--muted)" }}>
 				База данных: <strong style={{ color: dbTone(dbStatus) }}>{dbStatus}</strong>
 			</p>
