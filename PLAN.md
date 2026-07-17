@@ -13,7 +13,7 @@
 - [x] Этап 3. **IndexedDB-схема + event-log** — все таблицы Dexie создаются (видны в DevTools), `appendEvent` / `queryEvents` / `getEventById` / `hasEvent` с `*flatTags`
     - `src/core/store/database.js`, `src/core/store/event-log.js`
 
-- [ ] Этап 4. **Валидатор событий + CRDT-примитивы** — `validateEventId` (NIP-01 canonical serialization + SHA-256), G-Set (idempotent merge), LWW (tiebreaker по `id`); юнит-тесты проходят
+- [x] Этап 4. **Валидатор событий + CRDT-примитивы** — `validateEventId` (NIP-01 canonical serialization + SHA-256), G-Set (idempotent merge), LWW (tiebreaker по `id`); юнит-тесты проходят
     - `src/domain/events/validators.js`, `src/core/sync/g-set.js`, `src/core/sync/lww.js`
 
 - [ ] Этап 5. **App shell + hash-роутер + outbox-заглушка** — навигация между `#/onboarding`, `#/main`, `#/unlock` (экраны-заглушки); persistent queue outbox (скелет)
@@ -168,3 +168,23 @@ install создаёт `ugolok-cache-v{HASH}`, офлайн-фоллбэк от�
 (не fake) IndexedDB. `main.jsx` не трогали (не входит в список файлов
 этапа 3) — открытие БД в реальном приложении подключится в этапе 5
 (app shell).
+
+**Этап 4.** Пользователь обновил skill orchestrate-workers (SKILL.md):
+добавлены п.9a (эскалация при дефиците знаний — не гадать, спрашивать
+пользователя) и п.13a/13b (триаж рутина/алгоритмика + design-записка
+в DESIGN.md для алгоритмических задач — CRDT назван явным триггером).
+Применено впервые: `validateEventId` — рутина (нашёл `getEventHash` в
+`nostr-tools/pure`, готовая эталонная реализация NIP-01 canonical
+serialization + SHA-256 — пробел знания закрыт без вопроса пользователю,
+переизобретать сериализацию вручную не стал). `g-set.js`/`lww.js` —
+алгоритмические (CRDT), design-записка в DESIGN.md с формализацией
+инвариантов ДО тестов (G1/G2 для G-Set, L1–L4 для LWW).
+Все 3 воркер-вызова (`validators.js`, `g-set.js`, `lww.js`) — зелёные
+с первого раза по логике; `g-set.js` доработан вторым вызовом на
+найденную адверсарным заходом race condition (см. лог).
+Довесок к экрану диагностики (по установившейся практике) — второй
+вызов воркера на `diagnostics.jsx` провалился из-за МОЕЙ ошибки (забыл
+`--ctx`, воркер не видел текущий файл и переписал его с нуля,
+выдумав несуществующую структуру и фейковый copyright-футер) —
+восстановлено из предыдущего чтения, повторено с `--ctx`, дало брак
+поменьше (`</ span>`/`</ strong>` с лишним пробелом), исправлено точечно.

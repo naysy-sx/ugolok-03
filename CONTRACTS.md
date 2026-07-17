@@ -247,3 +247,84 @@ export async function hasEvent(id); // -> Promise<boolean>
 Worker: …". Приёмка — интеграционная на собранном `dist/`
 (`vite preview`, не `npm run dev`), т.к. поведение принципиально
 build-only.
+
+## Этап 4 — валидатор событий + CRDT-примитивы
+
+Design-обоснование (триаж, инварианты, псевдокод) — см. DESIGN.md,
+раздел "Этап 4". Здесь — только сигнатуры и формат данных.
+
+`NostrEvent` — как определено в этапе 3 (event-log.js): `{id, pubkey,
+created_at, kind, tags, content, sig}`.
+
+### `src/domain/events/validators.js`
+
+```js
+export function validateEventId(event); // -> boolean, синхронная
+```
+
+Пересчитывает `id` через `getEventHash` из `nostr-tools/pure` (canonical
+serialization + SHA-256) и сравнивает с `event.id`. На любой ошибке
+(некорректная форма события — `getEventHash`/`serializeEvent` внутри
+nostr-tools бросают на невалидной структуре) — возвращает `false`, не
+пробрасывает исключение. НЕ проверяет `sig` (это отдельная забота,
+`verifySig`/этап 9/10) — только соответствие `id` и его хеша.
+
+### `src/core/sync/g-set.js`
+
+```js
+export async function mergeEvent(event); // -> Promise<{ added: boolean }>
+```
+
+`added: true` — событие было новым и добавлено в `events` (через
+`appendEvent` из `../store/event-log.js`); `added: false` — `id` уже
+был в `events` (`hasEvent`), вызов — идемпотентный no-op. Порядок
+"проверить-затем-вставить" — часть контракта (инвариант G1 в DESIGN.md),
+не деталь реализации.
+
+### `src/core/sync/lww.js`
+
+```js
+export function lwwWinner(a, b); // -> a | b (объект события), синхронная, чистая
+export function pickLatest(events); // -> событие-победитель непустого массива
+```
+
+`lwwWinner`: максимум по отношению `≺` из DESIGN.md — сравнение по
+`created_at` (число), при равенстве — по `id` (строка, лексикографически,
+большее побеждает). `pickLatest`: свёртка массива через `lwwWinner`
+(`reduce` без начального значения — на пустом массиве стандартно
+бросает `TypeError`, это не обрабатывается отдельно, вызов с пустым
+массивом — ошибка на стороне вызывающего кода).
+
+### `src/ui/screens/diagnostics.jsx` (третья правка — статус этапа 4)
+
+По установившейся практике (пользователь просит показывать результат
+каждого этапа на экране диагностики): хук `useCoreLogicStatus()`,
+асинхронный self-check трёх примитивов этапа 4 прямо в браузере:
+
+1. `validateEventId` на ФИКСИРОВАННОМ тестовом векторе (не через
+   `nostr-tools` генерацию ключей/подпись — это утяжелило бы бандл
+   secp256k1/schnorr раньше срока, этапа 7/9; `validateEventId` сама
+   по себе тянет только SHA-256 через `getEventHash`, это уже
+   приемлемо для этапа 4). Вектор (посчитан заранее через
+   `getEventHash`, см. DESIGN.md/лог этапа 4):
+   ```js
+   { pubkey: "0".repeat(64), created_at: 1700000000, kind: 1, tags: [], content: "diagnostics-self-check",
+     id: "33e86c5abb6f63c5ddb082aaf603171c2532d8e886710c491f02111c1f3697d3" }
+   ```
+   Проверяет: вектор с этим `id` → `true`; тот же вектор с испорченным
+   `content` → `false`.
+2. `mergeEvent` — вызывается ДВАЖДЫ на синтетическом событии с
+   уникальным id (`"diag-selfcheck-" + Date.now()`), проверяет
+   `{added:true}` затем `{added:false}`; **обязательно** удаляет
+   тестовую строку из реальной `events` после проверки
+   (`db.table("events").where("id").equals(...).delete()`) — self-check
+   не должен оставлять мусор в БД пользователя.
+3. `lwwWinner` — детерминированный тайбрейк на двух заранее заданных
+   объектах с равным `created_at`, разным `id`.
+
+Любой сбой (несовпадение ожидания, исключение) → `"ошибка: " + сообщение`.
+Все три успешны → `` "ok (validateEventId, mergeEvent, lwwWinner)" ``.
+Тон — по тому же принципу, что `dbTone`/`cacheTone`: `startsWith("ok")` →
+`var(--ok)`, `startsWith("ошибка")` → `var(--bad)`, иначе `var(--muted)`.
+Рендерится строкой "Этап 4 (CRDT-примитивы): …". Приёмка —
+интеграционная (Playwright/`npm run dev`), не `node --test` (это UI).

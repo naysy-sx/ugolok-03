@@ -1,6 +1,9 @@
 import { useState, useEffect } from "preact/hooks";
 import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { db } from "../../core/store/database.js";
+import { validateEventId } from "../../domain/events/validators.js";
+import { mergeEvent } from "../../core/sync/g-set.js";
+import { lwwWinner } from "../../core/sync/lww.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -118,6 +121,63 @@ function useCacheStatus() {
 	return state;
 }
 
+function coreLogicTone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useCoreLogicStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		(async () => {
+			try {
+				const knownVector = {
+					pubkey: "0".repeat(64),
+					created_at: 1700000000,
+					kind: 1,
+					tags: [],
+					content: "diagnostics-self-check",
+					id: "33e86c5abb6f63c5ddb082aaf603171c2532d8e886710c491f02111c1f3697d3",
+				};
+				if (!validateEventId(knownVector)) {
+					throw new Error("validateEventId: известный вектор не прошёл проверку");
+				}
+				if (validateEventId({ ...knownVector, content: "испорчено" })) {
+					throw new Error("validateEventId: подмена содержимого не обнаружена");
+				}
+
+				const synthetic = {
+					id: "diag-selfcheck-" + Date.now(),
+					pubkey: "0".repeat(64),
+					created_at: 1,
+					kind: 1059,
+					tags: [],
+					content: "",
+					sig: "s",
+				};
+				const r1 = await mergeEvent(synthetic);
+				const r2 = await mergeEvent(synthetic);
+				await db.table("events").where("id").equals(synthetic.id).delete();
+				if (!r1.added || r2.added) {
+					throw new Error("mergeEvent: нарушена идемпотентность");
+				}
+
+				const a = { id: "aaa", created_at: 500 };
+				const b = { id: "bbb", created_at: 500 };
+				if (lwwWinner(a, b) !== b) {
+					throw new Error("lwwWinner: неверный тайбрейкер по id");
+				}
+
+				set("ok (validateEventId, mergeEvent, lwwWinner)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			}
+		})();
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -150,6 +210,7 @@ export default function Diagnostics() {
 	const sw = useServiceWorker();
 	const dbStatus = useDatabaseStatus();
 	const cacheStatus = useCacheStatus();
+	const coreLogicStatus = useCoreLogicStatus();
 
 	const pass = checks.filter((c) => c.critical).every((c) => c.ok);
 
@@ -198,13 +259,17 @@ export default function Diagnostics() {
 			<p style={{ color: "var(--muted)" }}>
 				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>
 			</p>
-			
+
 			<p style={{ color: "var(--muted)" }}>
 				Кэш (Service Worker): <strong style={{ color: cacheTone(cacheStatus) }}>{cacheStatus}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>
 				База данных: <strong style={{ color: dbTone(dbStatus) }}>{dbStatus}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 4 (CRDT-примитивы): <strong style={{ color: coreLogicTone(coreLogicStatus) }}>{coreLogicStatus}</strong>
 			</p>
 
 			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
