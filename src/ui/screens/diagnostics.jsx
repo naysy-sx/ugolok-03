@@ -9,6 +9,8 @@ import { enqueue, listPending, markSent } from "../../core/store/outbox.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
+import { deriveMasterSecret, deriveDbKey, opaqueDTag } from "../../core/crypto/derivation.js";
+import { encryptAndStore, decryptPrivateKey } from "../../core/crypto/keystore.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -275,6 +277,56 @@ function useNip06Status() {
 	return state;
 }
 
+function keystoreTone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useKeystoreStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		(async () => {
+			try {
+				const existing = await db.table("keystore").get("privkey");
+				if (existing) {
+					set("пропущено (уже есть сохранённый ключ — не трогаем боевые данные)");
+					return;
+				}
+
+				const fakePrivKey = new Uint8Array(32).fill(9);
+				const ms1 = deriveMasterSecret(fakePrivKey);
+				const ms2 = deriveMasterSecret(fakePrivKey);
+				if (bytesToHex(ms1) !== bytesToHex(ms2)) {
+					throw new Error("deriveMasterSecret: не детерминирована");
+				}
+				const dbKeyDerived = deriveDbKey(ms1);
+				if (dbKeyDerived.length !== 32) {
+					throw new Error("deriveDbKey: неверная длина");
+				}
+				const tag1 = opaqueDTag(ms1, 30051, "a:b");
+				const tag2 = opaqueDTag(ms1, 30051, "a:b");
+				const tag3 = opaqueDTag(ms1, 30051, "a:c");
+				if (tag1 !== tag2 || tag1 === tag3 || tag1.length !== 64) {
+					throw new Error("opaqueDTag: не прошла проверку");
+				}
+
+				await encryptAndStore(fakePrivKey, "diagnostics-self-check-password");
+				const decrypted = await decryptPrivateKey("diagnostics-self-check-password");
+				await db.table("keystore").delete("privkey");
+				if (bytesToHex(decrypted) !== bytesToHex(fakePrivKey)) {
+					throw new Error("keystore round-trip не совпал");
+				}
+
+				set("ok (derivation + keystore round-trip)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			}
+		})();
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -315,6 +367,7 @@ export default function Diagnostics() {
 	const outboxStatus = useOutboxStatus();
 	const releaseHashStatus = useReleaseHashStatus();
 	const nip06Status = useNip06Status();
+	const keystoreStatus = useKeystoreStatus();
 
 	return (
 		<main
@@ -371,6 +424,10 @@ export default function Diagnostics() {
 
 			<p style={{ color: "var(--muted)" }}>
 				Этап 7 (NIP-06): <strong style={{ color: nip06Tone(nip06Status) }}>{nip06Status}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 8 (KeyStore + деривация): <strong style={{ color: keystoreTone(keystoreStatus) }}>{keystoreStatus}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>

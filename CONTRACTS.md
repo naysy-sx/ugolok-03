@@ -566,3 +566,100 @@ hex-конвертация (`bytesToHex` из `@noble/hashes/utils.js`) — на
 задокументированы здесь, т.к. `diagnostics.jsx` — растущий файл и это,
 вероятно, станет стандартной практикой для будущих этапов.
 Рендерится строкой "Этап 7 (NIP-06): …".
+
+## Этап 8 — KeyStore + деривация секретов
+
+Триаж (п.13a): криптография (п.13b) — формализация = выбор готового
+примитива/параметров, уже сделан TECH.md. Design-записка не нужна.
+
+**Найдено и исправлено расхождение PLAN.md ↔ TECH.md (см. заметку в
+PLAN.md, этап 8):** PLAN.md писал "ChaCha20-Poly1305" для шифрования
+`privKey` — TECH.md (F-ID-05, §12.1 `encryptAndStore`, §12.9 `onUnlock`)
+однозначно требует **PBKDF2-SHA256 (600000 итераций) + AES-GCM через
+Web Crypto API**. Следую TECH.md. ChaCha20-Poly1305 в проекте
+применяется в других местах (шифрование БД — этап 14, channel keys —
+этап 28, файлы — этап 26), но НЕ для keystore.
+
+**Проверено запуском (не поверено на слово):** PBKDF2+AES-GCM
+round-trip через `crypto.subtle` (доступен в Node без полифилов),
+HKDF через `@noble/hashes/hkdf.js`, `opaqueDTag` — точный смоук-тест
+§16.3 TECH.md — все прогнаны лично, совпадают/детерминированы.
+**Фактическая поправка к документу** (как в этапе 7, не вопрос
+пользователю): пути импорта `@noble/hashes` в TECH.md устарели для
+установленной версии 2.2.0 — нужны `hmac.js`, `sha2.js` (не `sha256`),
+`utils.js`, `hkdf.js`.
+
+### `src/core/crypto/derivation.js`
+
+```js
+export function deriveMasterSecret(privKey);              // -> Uint8Array(32)
+export function deriveDbKey(masterSecret);                // -> Uint8Array(32)
+export function opaqueDTag(masterSecret, kind, logicalKey); // -> string (64 hex символа)
+```
+
+- `deriveMasterSecret`: `HKDF-SHA256(privKey, salt=utf8("Ugolok/v1/master"), info=utf8(""), length=32)`.
+- `deriveDbKey`: `HKDF-SHA256(masterSecret, salt=utf8("Ugolok/v1/db"), info=utf8(""), length=32)`.
+- `opaqueDTag`: `HMAC-SHA256(masterSecret, utf8(\`${kind}:${logicalKey}\`))`, hex-строка. Сигнатура и порядок
+  аргументов — ровно как в смоук-тесте §16.3 (`masterSecret` — явный
+  параметр, не читается из замыкания/глобала — "никогда не покидает
+  устройство" означает не персистится на диск, а не что функция не
+  может быть чистой).
+
+Все три — синхронные чистые функции (HKDF/HMAC в `@noble/hashes` не
+асинхронны в отличие от Web Crypto).
+
+### `src/core/crypto/keystore.js`
+
+```js
+export async function encryptAndStore(privKey, password); // -> Promise<void>
+export async function decryptPrivateKey(password);         // -> Promise<Uint8Array> (32 байта)
+```
+
+Таблица `keystore` уже существует (этап 3, схема `"id"`). Константа
+`KEYSTORE_ID = "privkey"` (решение Claude — TECH.md не даёт значение
+`id`, в проекте одна локальная идентичность на профиль браузера,
+мультиаккаунт вне скоупа MVP).
+
+`encryptAndStore(privKey, password)`:
+1. `salt = crypto.getRandomValues(new Uint8Array(16))`
+2. `iv = crypto.getRandomValues(new Uint8Array(12))`
+3. `passwordKey = crypto.subtle.importKey("raw", utf8(password), "PBKDF2", false, ["deriveKey"])`
+4. `encKey = crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:600000, hash:"SHA-256"}, passwordKey, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"])`
+5. `ciphertext = crypto.subtle.encrypt({name:"AES-GCM", iv}, encKey, privKey)`
+6. `db.table("keystore").put({id: KEYSTORE_ID, salt, iv, ciphertext})` — сырые `Uint8Array`/`ArrayBuffer`, IndexedDB structured clone хранит их без hex-конвертации.
+
+`decryptPrivateKey(password)`:
+1. `record = await db.table("keystore").get(KEYSTORE_ID)`; если `undefined` —
+   `throw new Error("keystore: приватный ключ не найден")` (реальный
+   достижимый сценарий — unlock до первого onboarding; боевая граница,
+   валидировать нужно).
+2. Повторить деривацию `encKey` с `record.salt` + данным `password`
+   (шаги 3–4 из `encryptAndStore`).
+3. `crypto.subtle.decrypt({name:"AES-GCM", iv: record.iv}, encKey, record.ciphertext)`
+   → `Uint8Array` (`privKey`). Неверный пароль → `crypto.subtle.decrypt`
+   сам бросает (AES-GCM tag mismatch) — не оборачиваем, даём
+   исключению дойти до вызывающего кода как есть (интерпретация
+   "неверный пароль" — забота UI, этап 11/12).
+
+### `src/ui/screens/diagnostics.jsx` (седьмая правка — статус этапа 8)
+
+**Важно про безопасность self-check'а (решение Claude):** таблица
+`keystore` — ОДНА запись с фиксированным id (`"privkey"`). В отличие
+от `events`/`outbox` (где синтетическая тестовая запись безопасно
+добавляется и удаляется рядом с боевыми данными), здесь тестовый
+round-trip `encryptAndStore`/`decryptPrivateKey` НЕИЗБЕЖНО пишет в ТУ
+ЖЕ ячейку, что и настоящий сохранённый ключ пользователя (когда он
+появится, начиная с этапа 11). Поэтому self-check ОБЯЗАН сначала
+проверить `db.table("keystore").get("privkey")`:
+- если запись уже существует — деструктивную проверку `keystore.js`
+  пропустить целиком (`"пропущено (уже есть сохранённый ключ — не
+  трогаем боевые данные)"`), проверить только чистые функции
+  `derivation.js` (безопасны, ничего не пишут).
+- если записи нет (текущее состояние проекта — онбординг ещё не
+  реализован) — прогнать полный round-trip на одноразовом
+  ФИКТИВНОМ ключе с последующим ОБЯЗАТЕЛЬНЫМ `db.table("keystore").delete("privkey")`.
+
+Рендерится строкой "Этап 8 (KeyStore + деривация): …", тон — тот же
+принцип (`ok`/`ошибка`/иначе muted). Способ работы с воркером — как в
+этапе 7: только новый фрагмент без `--ctx` всего файла, вставка через
+Edit вручную.
