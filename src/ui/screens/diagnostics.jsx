@@ -186,7 +186,6 @@ function stage5Tone(state) {
 	return "var(--muted)";
 }
 
-
 function useOutboxStatus() {
 	const [state, set] = useState("проверка…");
 	useEffect(() => {
@@ -204,6 +203,34 @@ function useOutboxStatus() {
 				}
 				await db.table("outbox").delete(seq);
 				set("ok (enqueue, listPending, markSent)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			}
+		})();
+	}, []);
+	return state;
+}
+
+function releaseHashTone(state) {
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	if (state.startsWith("пропущено")) return "var(--muted)";
+	return "var(--ok)";
+}
+
+function useReleaseHashStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		if (import.meta.env.DEV) {
+			set("пропущено (dev — актуально только для собранного index.html)");
+			return;
+		}
+		(async () => {
+			try {
+				const resp = await fetch(location.href, { cache: "no-store" });
+				const buf = await resp.arrayBuffer();
+				const digest = await crypto.subtle.digest("SHA-256", buf);
+				const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+				set(hex);
 			} catch (e) {
 				set("ошибка: " + (e?.message || e));
 			}
@@ -250,6 +277,7 @@ export default function Diagnostics() {
 
 	const route = useRoute();
 	const outboxStatus = useOutboxStatus();
+	const releaseHashStatus = useReleaseHashStatus();
 
 	return (
 		<main
@@ -298,6 +326,10 @@ export default function Diagnostics() {
 			</p>
 			<p style={{ color: "var(--muted)" }}>
 				Этап 5 (роутер + outbox): <strong style={{ color: stage5Tone(outboxStatus) }}>{outboxStatus}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 6 (release-хеш): <strong style={{ color: releaseHashTone(releaseHashStatus), wordBreak: "break-all" }}>{releaseHashStatus}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>
