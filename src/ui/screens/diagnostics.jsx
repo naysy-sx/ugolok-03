@@ -11,6 +11,10 @@ import { mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
 import { deriveMasterSecret, deriveDbKey, opaqueDTag } from "../../core/crypto/derivation.js";
 import { encryptAndStore, decryptPrivateKey } from "../../core/crypto/keystore.js";
+import { generateSecretKey, getPublicKey as nostrGetPublicKey } from "nostr-tools/pure";
+import { sign, verify } from "../../core/crypto/sign.js";
+import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
+import { wrap as nip59Wrap, unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -327,6 +331,53 @@ function useKeystoreStatus() {
 	return state;
 }
 
+function nip9Tone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useSignCryptoStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		try {
+			const aliceSk = generateSecretKey();
+			const bobSk = generateSecretKey();
+			const bobPk = nostrGetPublicKey(bobSk);
+			const alicePk = nostrGetPublicKey(aliceSk);
+
+			const signed = sign({ kind: 1, created_at: Math.floor(Date.now() / 1000), tags: [], content: "diag" }, aliceSk);
+			if (!verify(signed)) {
+				throw new Error("sign/verify: валидное событие не прошло проверку");
+			}
+			const tampered = { ...signed, content: "tampered" };
+			if (verify(tampered)) {
+				throw new Error("verify: не обнаружил подмену (Symbol-кэш не защищён)");
+			}
+
+			const ct = nip44Encrypt("hello", aliceSk, bobPk);
+			const pt = nip44Decrypt(ct, bobSk, alicePk);
+			if (pt !== "hello") {
+				throw new Error("nip44: round-trip не совпал");
+			}
+
+			const wrapped = nip59Wrap({ kind: 14, content: "hi", tags: [] }, aliceSk, bobPk);
+			if (wrapped.kind !== 1059) {
+				throw new Error("nip59: wrap не kind 1059");
+			}
+			const rumor = nip59Unwrap(wrapped, bobSk);
+			if (rumor.content !== "hi" || rumor.pubkey !== alicePk) {
+				throw new Error("nip59: unwrap не совпал");
+			}
+
+			set("ok (sign/verify, nip44, nip59)");
+		} catch (e) {
+			set("ошибка: " + (e?.message || e));
+		}
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -368,6 +419,7 @@ export default function Diagnostics() {
 	const releaseHashStatus = useReleaseHashStatus();
 	const nip06Status = useNip06Status();
 	const keystoreStatus = useKeystoreStatus();
+	const signCryptoStatus = useSignCryptoStatus();
 
 	return (
 		<main
@@ -428,6 +480,10 @@ export default function Diagnostics() {
 
 			<p style={{ color: "var(--muted)" }}>
 				Этап 8 (KeyStore + деривация): <strong style={{ color: keystoreTone(keystoreStatus) }}>{keystoreStatus}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 9 (sign/NIP-44/NIP-59): <strong style={{ color: nip9Tone(signCryptoStatus) }}>{signCryptoStatus}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>

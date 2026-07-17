@@ -663,3 +663,97 @@ round-trip `encryptAndStore`/`decryptPrivateKey` НЕИЗБЕЖНО пишет �
 принцип (`ok`/`ошибка`/иначе muted). Способ работы с воркером — как в
 этапе 7: только новый фрагмент без `--ctx` всего файла, вставка через
 Edit вручную.
+
+## Этап 9 — Подпись + NIP-44 + NIP-59
+
+Триаж (п.13b): криптография. `nostr-tools` — референсная реализация
+NIP-01/44/59 (TECH.md, таблица зависимостей) — `sign.js`/`nip44.js`/
+`nip59.js` реализованы как тонкие обёртки над `nostr-tools/pure` и
+`nostr-tools/nip44`/`nip59`, не переизобретаются. Исходники этих
+модулей лично прочитаны (не только типы) и сверены построчно с
+псевдокодом TECH.md §12.6 (rumor/seal/wrap, kind 13/1059, эфемерный
+ключ на wrap, `created_at = random(-2d..now)`) — совпадают.
+
+**Находка 1 (реальная уязвимость доверия в nostr-tools, не в этом
+проекте) — исправлена в контракте.** `finalizeEvent`/`verifyEvent`
+кэшируют результат проверки в **enumerable** `Symbol`-свойстве
+объекта события. Проверено лично: после `{...signedEvent, content:
+"x"}` (обычный spread, обычная практика в JS/React-стиле кода) символ
+копируется вместе с остальными полями, и `verifyEvent` на испорченной
+копии **молча возвращает `true`** — сигнатура не пересчитывается.
+Даже прямая мутация поля на исходном объекте даёт тот же ложный
+результат. Только `JSON.parse(JSON.stringify(...))` (или явная
+пересборка объекта по полям) стирает символ и заставляет
+`verifyEvent` перепроверить по-настоящему. **Наш `verify()` обязан
+защищаться** — не тонкая обёртка 1:1, а пересборка объекта из
+СТАНДАРТНЫХ NIP-01 полей (`id, pubkey, created_at, kind, tags,
+content, sig`) явным деструктурированием (не spread — spread копирует
+символы, деструктуризация по именам полей — нет) перед вызовом
+`verifyEvent`. Проверено: после фикса `verify(tamperedSpread) ===
+false` — сигнатура пересчитывается по-настоящему каждый раз.
+
+**Находка 2 (расхождение TECH.md с актуальным протоколом, спрошено у
+пользователя, не угадано).** TECH.md заявляет "жёсткий лимит
+plaintext NIP-44: 65535 байт" как будто это ограничение протокола.
+Проверено: (а) официальная спецификация NIP-44
+(github.com/nostr-protocol/nips/blob/master/44.md) поддерживает
+payload до ~4 ГБ через расширенный 6-байтный префикс длины для
+сообщений ≥ 65536 байт; (б) установленный `nostr-tools` это
+реализует корректно — лично зашифровал 100000 байт без ошибки.
+Значит "жёсткий лимит" TECH.md — не факт о протоколе, а (возможно
+неявное) намерение НАЛОЖИТЬ ограничение на уровне приложения.
+**Решение пользователя:** сохранить лимit 65535 байт как явную
+app-политику в `nip44.js.encrypt` (throw, если plaintext длиннее) —
+не полагаться на протокол/библиотеку в этом вопросе. Обоснование
+пользователя: закрывает исходный замысел TECH.md (F-AT-08 и бюджет
+голосовых уже посчитаны под этот лимит).
+
+### `src/core/crypto/sign.js`
+
+```js
+export function sign(eventTemplate, privateKey); // -> событие с id/pubkey/sig (обёртка над nostr-tools/pure finalizeEvent)
+export function verify(event); // -> boolean; пересобирает объект по 7 стандартным полям перед проверкой (защита от Symbol-кэша, см. находку 1)
+```
+
+### `src/core/crypto/nip44.js`
+
+```js
+export function encrypt(plaintext, privateKey, recipientPublicKey); // -> string (base64 payload)
+export function decrypt(payload, privateKey, senderPublicKey); // -> string (plaintext)
+```
+
+`encrypt`: если `new TextEncoder().encode(plaintext).length > 65535`
+— `throw new Error(...)` ДО вызова `nostr-tools/nip44` (app-политика,
+находка 2). Иначе — `getConversationKey(privateKey, recipientPublicKey)`
+→ `nip44.v2.encrypt(plaintext, conversationKey)`. `decrypt`: та же
+деривация ключа с `(privateKey, senderPublicKey)` (ECDH симметричен —
+даёт тот же `conversationKey`, что и на стороне отправителя) →
+`nip44.v2.decrypt(payload, conversationKey)`. Лимит на `decrypt` не
+нужен — decrypt получает уже готовый payload, а не произвольный
+plaintext заранее неизвестной длины от вызывающего кода.
+
+### `src/core/crypto/nip59.js`
+
+```js
+export function wrap(rumorTemplate, privateKey, recipientPublicKey); // -> gift wrap событие (kind 1059)
+export function unwrap(giftWrap, privateKey); // -> rumor (объект события kind 14, без sig)
+```
+
+Прямая обёртка над `nostr-tools/nip59` `wrapEvent`/`unwrapEvent` —
+сигнатуры совпадают буквально, переименование только для единого
+нейминга проекта (`wrap`/`unwrap`, не `wrapEvent`/`unwrapEvent`).
+Внутри уже: rumor (kind 14, без подписи) → seal (kind 13, `NIP44.encrypt`
++ подпись реальным ключом) → gift wrap (kind 1059, `NIP44.encrypt`
++ подпись ЭФЕМЕРНЫМ ключом, генерируемым заново на каждый wrap).
+`created_at` каждого слоя — `random(now - [0..2d])`.
+
+### `src/ui/screens/diagnostics.jsx` (восьмая правка — статус этапа 9)
+
+Self-check полностью в памяти (генерирует одноразовые тестовые ключи
+через `nostr-tools/pure`, ничего не пишет в `db`) — не нужна защита
+"не трогать боевые данные", как в этапе 8. Проверяет по цепочке:
+sign→verify (включая обнаружение подмены после подписи — та же
+проверка, что находка 1), nip44 round-trip, nip59 wrap→unwrap
+round-trip (content и `rumor.pubkey` совпадают с отправителем).
+Рендерится строкой "Этап 9 (sign/NIP-44/NIP-59): …". Способ работы с
+воркером — фрагмент без `--ctx`, вставка вручную (практика с этапа 7).
