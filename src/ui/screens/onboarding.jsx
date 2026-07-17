@@ -1,7 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
-import { encryptAndStore } from "../../core/crypto/keystore.js";
+import { encryptAndStore, decryptPrivateKey } from "../../core/crypto/keystore.js";
 import { db } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
@@ -19,6 +19,7 @@ export default function Onboarding() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [npub, setNpub] = useState("");
+  const [unlockPassword, setUnlockPassword] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -27,6 +28,15 @@ export default function Onboarding() {
       setStep(existing ? "blocked" : "choose");
     })();
   }, []);
+
+  async function handleUnlock() {
+    try {
+      await decryptPrivateKey(unlockPassword);
+      navigate("/main");
+    } catch (e) {
+      setError("Неверный пароль.");
+    }
+  }
 
   function chooseVariant(v) {
     setError("");
@@ -52,17 +62,30 @@ export default function Onboarding() {
       )}
 
       {step === "blocked" && (
-        <p
-          role="alert"
-          style={{
-            padding: "var(--space-m)",
-            background: "var(--surface)",
-            borderInlineStart: "3px solid var(--accent)",
-          }}
-        >
-          На этом устройстве уже есть сохранённый ключ. Создание нового
-          аккаунта его сотрёт. Эта проверка временная (до этапа 12).
-        </p>
+        <div class="flow">
+          <p
+            role="alert"
+            style={{
+              padding: "var(--space-m)",
+              background: "var(--surface)",
+              borderInlineStart: "3px solid var(--accent)",
+            }}
+          >
+            На этом устройстве уже есть сохранённый ключ. Создание нового
+            аккаунта поверх него сотрёт доступ к старому. Если это ваш
+            ключ — войдите паролем ниже.
+          </p>
+          <label for="unlock-password">Пароль</label>
+          <input
+            id="unlock-password"
+            type="password"
+            value={unlockPassword}
+            onInput={(e) => setUnlockPassword(e.currentTarget.value)}
+          />
+          <button type="button" onClick={handleUnlock}>
+            Войти
+          </button>
+        </div>
       )}
 
       {step === "choose" && (
@@ -167,6 +190,17 @@ export default function Onboarding() {
       {step === "import-key" && (
         <div class="flow">
           <p>Введите приватный ключ в формате nsec1... или как hex-строку (64 символа).</p>
+          <p style={{ color: "var(--muted)" }}>
+            Приватный ключ — секретная строка, которая даёт полный доступ к
+            вашему аккаунту. Никогда и никому её не показывайте. В формате{" "}
+            <code>nsec</code> (NIP-19, bech32) она начинается с{" "}
+            <code>nsec1</code> и выглядит примерно так:
+          </p>
+          <p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
+            <code>nsec1zh0anykm9v3grv0wmw56pauv3yks03pz8jdgj4agcyg85xqumq3qn8lrhz</code>
+            <br />
+            <small style={{ color: "var(--muted)" }}>(это лишь пример формата, не настоящий ключ)</small>
+          </p>
           <label for="import-key">Приватный ключ</label>
           <input
             id="import-key"
