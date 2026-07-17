@@ -3,6 +3,7 @@ import { useRoute } from "./ui/router.js";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "./ui/nav-items.js";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
+import Onboarding from "./ui/screens/onboarding.jsx";
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
@@ -47,7 +48,7 @@ function MainShell() {
 export default function App() {
 	const route = useRoute();
 
-	if (route === "/onboarding") return <Placeholder title="Онбординг" />;
+	if (route === "/onboarding") return <Onboarding />;
 	if (route === "/unlock") return <Placeholder title="Разблокировка" />;
 
 	return <MainShell />;
