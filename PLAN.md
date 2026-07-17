@@ -31,7 +31,7 @@
 - [x] Этап 9. **Подпись + NIP-44 + NIP-59** — `sign`/`verify`, `encrypt`/`decrypt` NIP-44, `wrap`/`unwrap` NIP-59 (gift wrap/seal/rumor); все round-trip тесты проходят
     - `src/core/crypto/sign.js`, `src/core/crypto/nip44.js`, `src/core/crypto/nip59.js`
 
-- [ ] Этап 10. **Файловое шифрование + crypto worker** — `encryptFile`/`decryptFile` (random key → ChaCha20 → upload pipeline), batch verify подписей в Web Worker через Comlink
+- [x] Этап 10. **Файловое шифрование + crypto worker** — `encryptFile`/`decryptFile` (random key → ChaCha20 → upload pipeline), batch verify подписей в Web Worker через Comlink
     - `src/core/crypto/file-crypto.js`, `src/workers/crypto.worker.js`
 
 - [ ] Этап 11. **Экран онбординга** — 3 варианта входа (создать новый / импорт мнемоники / вход по существующему ключу), отображение 12 слов с подтверждением, ввод и подтверждение пароля
@@ -363,3 +363,35 @@ wrap, `random(-2d..now)`).
 nip44, nip59)", консоль чистая. Self-check полностью в памяти
 (одноразовые тестовые ключи через `nostr-tools/pure`), не пишет в БД —
 защита "не трогать боевые данные" (как в этапе 8) здесь не нужна.
+
+**Этап 10.** `file-crypto.js` (ChaCha20-Poly1305, `@noble/ciphers`) —
+проверен лично до контракта (round-trip, неверный ключ → throw). Формат
+`{key, blob}` где `blob = nonce(12) ‖ ciphertext+tag` — инженерное
+решение (nonce не хранится отдельным полем, т.к. F-AT-02 описывает
+только `encryptionKey` в attachment-ref; nonce обязан ехать вместе с
+шифротекстом одним блобом). Зелёный с первого раза, 6/6 (включая
+пустой файл).
+`crypto.worker.js` (Comlink batch verify) — обёртка над `verify()` из
+этапа 9. Проверено лично: `Comlink.expose()` требует `ep.addEventListener`,
+которого нет в чистом Node (`globalThis` не имеет), поэтому файл
+принципиально не тестируется `node --test` — только интеграционно
+(тот же класс ограничения, что `service-worker.js` в этапе 2).
+
+**Реальное расхождение, найденное СБОРКОЙ, не документом:** стандартный
+Vite-паттерн `new Worker(new URL(...))` заставил Vite эмитить
+`crypto.worker.js` отдельным файлом — стало бы третьим файлом деплоя,
+нарушая явное решение CLAUDE.md "два файла: index.html +
+service-worker.js". Решено технически (не архитектурный компромисс,
+вопрос пользователю не понадобился): импорт с суффиксом
+`?worker&inline` — нативная возможность Vite, инлайнит воркер как
+base64 внутрь бандла. Проверено сборкой: после фикса — снова ровно
+2 файла в `dist/`. Это канонический способ инстанцировать
+`crypto.worker.js` для всех будущих этапов (bootstrap — этап 18,
+event handlers — этап 21).
+Регрессия: `npm test` (91/91), `npm run build` (107.68 КБ gzip, +18 КБ
+из-за base64-инлайна воркера + дублирования крипто-кода между
+потоками — компенсированная цена за сохранение "двух файлов").
+Интеграция: Playwright на реальном `dist/` (не dev — воркер
+инстанцируется только в build) — "Этап 10 (файлы + crypto worker): ok
+(batchVerify через Comlink Worker, file-crypto round-trip)", консоль
+чистая.

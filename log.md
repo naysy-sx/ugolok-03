@@ -155,3 +155,19 @@
 
 32. `src/ui/screens/diagnostics.jsx` — self-check sign→verify (включая обнаружение подмены), nip44 round-trip, nip59 wrap→unwrap. Полностью в памяти (одноразовые ключи через nostr-tools/pure), db не трогает — защита "не боевые данные" не нужна. Важный нюанс при вставке: `getPublicKey` уже был импортирован из нашего `keys.js` (возвращает Uint8Array) — для nostr-tools/nip44/nip59 (ожидают hex-строку) пришлось алиасировать `nostrGetPublicKey` из `nostr-tools/pure`, чтобы не перепутать типы.
 Интеграция: "Этап 9 (sign/NIP-44/NIP-59): ok (sign/verify, nip44, nip59)", консоль чистая.
+
+## Этап 10. Файловое шифрование + crypto worker
+
+33. `src/core/crypto/file-crypto.js` (encryptFile/decryptFile, ChaCha20-Poly1305) — зелёный с первого раза, 6/6 (включая пустой файл и подмену байта). Формат `{key, blob=nonce‖ciphertext+tag}` — решение по стандартной практике AEAD (F-AT-02 не даёт отдельного поля под nonce).
+34. `src/workers/crypto.worker.js` (Comlink batchVerify, обёртка над verify() этапа 9) — зелёный с первого раза. Не тестируется node --test в принципе (Comlink.expose требует ep.addEventListener, которого нет в чистом Node) — тот же класс ограничения, что service-worker.js в этапе 2.
+
+### Реальное расхождение, найденное сборкой (не документом)
+
+Стандартный `new Worker(new URL(...))` заставил Vite эмитить `crypto.worker.js` отдельным файлом — стало бы третьим файлом деплоя, нарушая CLAUDE.md ("два файла"). Решено технически: импорт `?worker&inline` (нативная фича Vite, проверено чтением исходника) инлайнит воркер как base64 в бандл. После фикса — снова ровно 2 файла в dist/. Канонический способ для всех будущих инстанцирований этого воркера.
+
+Регрессия: `npm test` (91/91), `npm run build` (107.68 КБ gzip, +18 КБ — base64-инлайн воркера + дублирование крипто-кода).
+
+### Довесок: статус этапа 10 на диагностике (он же единственная интеграционная проверка воркера)
+
+35. `src/ui/screens/diagnostics.jsx` — реальный `new CryptoWorker()` + `Comlink.wrap`, `batchVerify([валидное, испорченное])` → `[true, false]`; плюс file-crypto round-trip. `worker.terminate()` в finally.
+Интеграция на собранном `dist/` (vite preview, не dev — воркер работает только в build): "Этап 10 (файлы + crypto worker): ok (batchVerify через Comlink Worker, file-crypto round-trip)", консоль чистая.

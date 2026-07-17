@@ -757,3 +757,103 @@ sign→verify (включая обнаружение подмены после �
 round-trip (content и `rumor.pubkey` совпадают с отправителем).
 Рендерится строкой "Этап 9 (sign/NIP-44/NIP-59): …". Способ работы с
 воркером — фрагмент без `--ctx`, вставка вручную (практика с этапа 7).
+
+## Этап 10 — файловое шифрование + crypto worker
+
+Триаж (п.13b): криптография (файловое шифрование) — примитив и
+параметры уже зафиксированы TECH.md §12.6 (`fileKey ← random(32)`,
+`ChaCha20-Poly1305(file, fileKey, nonce)`). Design-записка не нужна.
+Проверено лично до контракта: `@noble/ciphers/chacha.js`
+`chacha20poly1305(key, nonce)` → `.encrypt`/`.decrypt`, 12-байтный
+nonce, 16-байтный tag, неверный ключ → `throw "invalid tag"`.
+
+**Инженерное решение по формату (не в TECH.md явно, решено самостоятельно
+по стандартной практике AEAD-шифрования файлов, не угадано наугад —
+обосновано):** TECH.md §5.х (F-AT-02) описывает ссылку на вложение как
+`{type, sha256, blossomUrl, encryptionKey, mime, size, name}` — **без
+отдельного поля под nonce**. Значит nonce обязан путешествовать
+вместе с шифротекстом одним блобом (иначе негде его хранить/передавать
+для расшифровки при скачивании в этапе 26). Стандартная практика:
+`nonce (12 байт) ‖ ciphertext+tag` как единый блоб, который и
+загружается на Blossom. `encryptFile` возвращает `{key, blob}`, где
+`blob` — то, что реально грузится; `decryptFile(blob, key)`
+самостоятельно вычитывает nonce из первых 12 байт.
+
+### `src/core/crypto/file-crypto.js`
+
+```js
+export function encryptFile(fileBytes); // -> { key: Uint8Array(32), blob: Uint8Array } — генерирует случайные key(32)+nonce(12)
+export function decryptFile(blob, key); // -> Uint8Array (исходные байты файла)
+```
+
+`encryptFile`: `key = crypto.getRandomValues(32)`, `nonce =
+crypto.getRandomValues(12)`, `blob = concat(nonce, chacha20poly1305(key,
+nonce).encrypt(fileBytes))`.
+`decryptFile`: `nonce = blob.subarray(0,12)`, `ciphertext =
+blob.subarray(12)`, `chacha20poly1305(key, nonce).decrypt(ciphertext)`.
+Не проверяет размер файла (лимиты F-AT-04 — граница загрузки, этап 26,
+не крипто-примитива).
+
+### `src/workers/crypto.worker.js`
+
+```js
+// экспонируется через Comlink.expose(api), не ES export
+api.batchVerify(events); // -> boolean[] (тот же порядок, что events)
+```
+
+Тонкая Comlink-обвязка над `verify()` из `sign.js` (этап 9, уже со
+встроенной защитой от Symbol-кэша) — `batchVerify = (events) =>
+events.map(verify)`. Не логика `verify` дублируется — переиспользуется.
+
+**Приёмка — НЕ `node --test`, только интеграционная (Playwright,
+реальный `new Worker(...)`).** Проверено лично: `Comlink.expose(...)`
+обращается к `ep.addEventListener` безусловно (`ep` по умолчанию —
+`globalThis`); под чистым Node `globalThis.addEventListener` не
+существует → `TypeError` при простом импорте файла. Тот же класс
+ограничения, что `service-worker.js` в этапе 2 (там — `self`/`caches`
+недоступны в Node). Импортировать `crypto.worker.js` в `node --test`
+невозможно в принципе, не только нежелательно.
+
+### `src/ui/screens/diagnostics.jsx` (девятая правка — статус этапа 10)
+
+Этот self-check — ЕДИНСТВЕННЫЙ способ вообще проверить
+`crypto.worker.js` (не только на диагностике — в принципе, см. выше:
+не тестируется в Node). Совмещает роль "self-check по практике
+пользователя" и "интеграционная приёмка воркера" в одном. Оборачивает
+`Comlink.wrap`, вызывает `batchVerify` на паре [валидное событие, то
+же с испорченным `content`] — ожидает `[true, false]`.
+`worker.terminate()` в `finally` (не оставлять висящий Worker). Плюс
+`file-crypto.js` round-trip (дёшево, без Worker). Рендерится строкой
+"Этап 10 (файлы + crypto worker): …".
+
+**Реальное расхождение со стек-решением CLAUDE.md, найдено сборкой,
+не документом (важно).** CLAUDE.md фиксирует: "Деплой: Два файла:
+`index.html` + `service-worker.js`". Инстанцирование воркера через
+стандартный Vite-паттерн `new Worker(new URL("./crypto.worker.js",
+import.meta.url), {type:"module"})` заставляет Vite эмитить
+`crypto.worker.js` ОТДЕЛЬНЫМ файлом (`dist/crypto.worker-[hash].js`,
+проверено сборкой — `vite-plugin-singlefile` инлайнит только главный
+скрипт/CSS в HTML-теги, воркер-чанки не трогает). Это стало бы ТРЕТЬИМ
+файлом деплоя — прямое нарушение уже принятого решения.
+
+**Решение (техническое, не архитектурный компромисс — вопрос
+пользователю не понадобился):** импортировать воркер с суффиксом
+`?worker&inline` — нативная возможность Vite (проверено чтением
+исходника `vite/dist/node/chunks/node.js`, `workerOrSharedWorkerRE` +
+`inlineRE`), инлайнит воркер как base64 data URL прямо в бандл, без
+отдельного файла:
+
+```js
+import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
+// ...
+const worker = new CryptoWorker(); // не new Worker(new URL(...))
+```
+
+Проверено сборкой: с `?worker&inline` — снова ровно 2 файла
+(`dist/index.html`, `dist/service-worker.js`), без
+`crypto.worker-*.js`. Цена — дублирование крипто-кода между главным
+потоком и воркером внутри одного бандла (+~30 КБ gzip: 77→107 КБ,
+в пределах бюджета NF-11 280 КБ) и base64-оверхед (~33%) вместо
+бинарного файла. **Это канонический способ инстанцировать
+`crypto.worker.js` для ВСЕХ последующих этапов** (bootstrap — этап 18,
+event handlers — этап 21 и т.д.) — не `new Worker(new URL(...))`.

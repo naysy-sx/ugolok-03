@@ -15,6 +15,8 @@ import { generateSecretKey, getPublicKey as nostrGetPublicKey } from "nostr-tool
 import { sign, verify } from "../../core/crypto/sign.js";
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
 import { wrap as nip59Wrap, unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
+import * as Comlink from "comlink";
+import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -378,6 +380,48 @@ function useSignCryptoStatus() {
 	return state;
 }
 
+function cryptoWorkerTone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useCryptoWorkerStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		let worker;
+		(async () => {
+			try {
+				worker = new CryptoWorker();
+				const api = Comlink.wrap(worker);
+				const sk = generateSecretKey();
+				const validEvent = sign({ kind: 1, created_at: Math.floor(Date.now() / 1000), tags: [], content: "worker-check" }, sk);
+				const invalidEvent = { ...validEvent, content: "tampered" };
+				const results = await api.batchVerify([validEvent, invalidEvent]);
+				if (!(results[0] === true && results[1] === false)) {
+					throw new Error("batchVerify: неверный результат " + JSON.stringify(results));
+				}
+
+				const { encryptFile, decryptFile } = await import("../../core/crypto/file-crypto.js");
+				const testFile = crypto.getRandomValues(new Uint8Array(1000));
+				const { key, blob } = encryptFile(testFile);
+				const decrypted = decryptFile(blob, key);
+				const filesMatch = decrypted.length === testFile.length && decrypted.every((b, i) => b === testFile[i]);
+				if (!filesMatch) {
+					throw new Error("file-crypto: round-trip не совпал побайтно");
+				}
+
+				set("ok (batchVerify через Comlink Worker, file-crypto round-trip)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			} finally {
+				worker?.terminate();
+			}
+		})();
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -420,6 +464,7 @@ export default function Diagnostics() {
 	const nip06Status = useNip06Status();
 	const keystoreStatus = useKeystoreStatus();
 	const signCryptoStatus = useSignCryptoStatus();
+	const cryptoWorkerStatus = useCryptoWorkerStatus();
 
 	return (
 		<main
@@ -484,6 +529,10 @@ export default function Diagnostics() {
 
 			<p style={{ color: "var(--muted)" }}>
 				Этап 9 (sign/NIP-44/NIP-59): <strong style={{ color: nip9Tone(signCryptoStatus) }}>{signCryptoStatus}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 10 (файлы + crypto worker): <strong style={{ color: cryptoWorkerTone(cryptoWorkerStatus) }}>{cryptoWorkerStatus}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>
