@@ -39,3 +39,18 @@ export async function listAccounts() {
   const records = await db.table("keystore").toArray();
   return records.map((r) => ({ id: r.id, login: r.login }));
 }
+
+export async function getProfile(id) {
+  const record = await db.table("keystore").get(id);
+  if (!record) {
+    throw new Error("keystore: аккаунт не найден");
+  }
+  return { login: record.login ?? "", avatar: record.avatar ?? "", bio: record.bio ?? "" };
+}
+
+export async function updateProfile(id, patch) {
+  const updates = {};
+  if (patch.avatar !== undefined) updates.avatar = patch.avatar;
+  if (patch.bio !== undefined) updates.bio = patch.bio;
+  await db.table("keystore").update(id, updates);
+}

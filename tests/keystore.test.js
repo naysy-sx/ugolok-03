@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { encryptAndStore, decryptPrivateKey, listAccounts } from "../src/core/crypto/keystore.js";
+import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile, updateProfile } from "../src/core/crypto/keystore.js";
 
 before(async () => {
 	await db.open();
@@ -93,4 +93,41 @@ test("listAccounts: возвращает {id, login} для каждого ак�
 		assert.equal(acc.iv, undefined);
 		assert.equal(acc.ciphertext, undefined);
 	}
+});
+
+test("getProfile: свежесозданный аккаунт — login из meta, avatar/bio пустые строки", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
+	const profile = await getProfile("acc-1");
+	assert.deepEqual(profile, { login: "alice", avatar: "", bio: "" });
+});
+
+test("getProfile: несуществующий id — понятная ошибка, не крах", async () => {
+	await assert.rejects(() => getProfile("no-such-account"), /keystore/i);
+});
+
+test("updateProfile: сохраняет avatar и bio, не трогая login и секреты", async () => {
+	const privKey = crypto.getRandomValues(new Uint8Array(32));
+	await encryptAndStore(privKey, "pw", "acc-1", { login: "alice" });
+	await updateProfile("acc-1", { avatar: "data:image/png;base64,AAAA", bio: "Привет!" });
+	const profile = await getProfile("acc-1");
+	assert.deepEqual(profile, { login: "alice", avatar: "data:image/png;base64,AAAA", bio: "Привет!" });
+	assert.deepEqual(new Uint8Array(await decryptPrivateKey("pw", "acc-1")), privKey);
+});
+
+test("updateProfile: частичное обновление (только bio) не стирает уже сохранённый avatar", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
+	await updateProfile("acc-1", { avatar: "data:image/png;base64,AAAA" });
+	await updateProfile("acc-1", { bio: "Только био" });
+	const profile = await getProfile("acc-1");
+	assert.equal(profile.avatar, "data:image/png;base64,AAAA");
+	assert.equal(profile.bio, "Только био");
+});
+
+test("updateProfile: два разных аккаунта не пересекаются", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw-a", "acc-a", { login: "alice" });
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw-b", "acc-b", { login: "bob" });
+	await updateProfile("acc-a", { bio: "Био Алисы" });
+	await updateProfile("acc-b", { bio: "Био Боба" });
+	assert.equal((await getProfile("acc-a")).bio, "Био Алисы");
+	assert.equal((await getProfile("acc-b")).bio, "Био Боба");
 });

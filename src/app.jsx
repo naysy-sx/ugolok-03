@@ -5,6 +5,7 @@ import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
 import Onboarding from "./ui/screens/onboarding.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
+import Profile from "./ui/screens/profile.jsx";
 import { currentUser } from "./ui/signals/auth.js";
 
 function MainShell() {
@@ -41,7 +42,11 @@ function MainShell() {
 					overflow: "auto"
 				}}
 			>
-				{activeId === "diagnostics" ? <Diagnostics /> : <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+				{activeId === "diagnostics" && <Diagnostics />}
+				{activeId === "profile" && <Profile />}
+				{activeId !== "diagnostics" && activeId !== "profile" && (
+					<Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />
+				)}
 			</div>
 		</div>
 	);
