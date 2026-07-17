@@ -4,6 +4,8 @@ import { db } from "../../core/store/database.js";
 import { validateEventId } from "../../domain/events/validators.js";
 import { mergeEvent } from "../../core/sync/g-set.js";
 import { lwwWinner } from "../../core/sync/lww.js";
+import { useRoute, ROUTES } from "../../ui/router.js";
+import { enqueue, listPending, markSent } from "../../core/store/outbox.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -178,6 +180,38 @@ function useCoreLogicStatus() {
 	return state;
 }
 
+function stage5Tone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+
+function useOutboxStatus() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		(async () => {
+			try {
+				const seq = await enqueue("diag-selfcheck-" + Date.now());
+				const pendingBefore = await listPending();
+				if (!pendingBefore.some((r) => r.seq === seq)) {
+					throw new Error("enqueue: запись не найдена в listPending");
+				}
+				await markSent(seq);
+				const pendingAfter = await listPending();
+				if (pendingAfter.some((r) => r.seq === seq)) {
+					throw new Error("markSent: запись всё ещё в listPending");
+				}
+				await db.table("outbox").delete(seq);
+				set("ok (enqueue, listPending, markSent)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			}
+		})();
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -213,6 +247,9 @@ export default function Diagnostics() {
 	const coreLogicStatus = useCoreLogicStatus();
 
 	const pass = checks.filter((c) => c.critical).every((c) => c.ok);
+
+	const route = useRoute();
+	const outboxStatus = useOutboxStatus();
 
 	return (
 		<main
@@ -255,6 +292,13 @@ export default function Diagnostics() {
 					<Row c={c} />
 			 ))}
 			</ul>
+
+			<p style={{ color: "var(--muted)" }}>
+				Маршрут: <strong style={{ color: "var(--fg)" }}>{route}</strong> (доступны: {ROUTES.join(", ")})
+			</p>
+			<p style={{ color: "var(--muted)" }}>
+				Этап 5 (роутер + outbox): <strong style={{ color: stage5Tone(outboxStatus) }}>{outboxStatus}</strong>
+			</p>
 
 			<p style={{ color: "var(--muted)" }}>
 				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>

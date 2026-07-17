@@ -328,3 +328,98 @@ export function pickLatest(events); // -> событие-победитель н
 `var(--ok)`, `startsWith("ошибка")` → `var(--bad)`, иначе `var(--muted)`.
 Рендерится строкой "Этап 4 (CRDT-примитивы): …". Приёмка —
 интеграционная (Playwright/`npm run dev`), не `node --test` (это UI).
+
+## Этап 5 — App shell + hash-роутер + outbox-заглушка
+
+Триаж (п.13a): **рутинная (а)** для всех трёх файлов — whitelist-роутинг
+по `hashchange`, CRUD-обёртка над Dexie-таблицей `outbox` (уже созданной
+в этапе 3), рефакторинг существующего JSX без изменения его логики.
+Design-записка не нужна.
+
+**Важный архитектурный нюанс (обнаружен чтением TECH.md §11, структура
+проекта, до начала работы, по просьбе пользователя):** `main.jsx` и
+`app.jsx` — РАЗНЫЕ файлы уже в целевой структуре проекта. Сейчас (после
+этапов 1–2) `main.jsx` сам рендерит nav-shell (aside + контент,
+`NAV_ITEMS`). Явное решение Claude (п.13, локальный контракт этапа 1/2
+меняется): shell-JSX переезжает в `app.jsx` как содержимое маршрута
+`/main`; `main.jsx` становится тонким bootstrap (SW-регистрация +
+`render(<App/>)`), без прикладной логики. Это необходимо, чтобы
+навигация между `#/onboarding`/`#/main`/`#/unlock` (DoD этапа 5) была
+реально видна и кликабельна в браузере, а не осталась мёртвым кодом —
+см. прецедент этапа 3 (там БД без интеграции была допустима, т.к. DoD
+ограничивался "видно в DevTools"; здесь DoD прямо требует навигацию).
+Требует полной регрессии + интеграционной проверки (npm run dev,
+переключение `location.hash` вручную и через клики).
+
+### `src/ui/router.js`
+
+```js
+export const ROUTES = ["/onboarding", "/main", "/unlock"];
+export const DEFAULT_ROUTE = "/main";
+
+export function parseRoute(hash); // -> string, чистая функция, БЕЗ обращения к DOM
+export function useRoute();       // -> string, preact-хук: useState(parseRoute(location.hash)) + useEffect на 'hashchange'
+export function navigate(path);   // -> void, location.hash = path
+```
+
+`parseRoute(hash)`: принимает сырую строку (с `#` или без — так проще
+тестировать чистой функцией и передавать `location.hash` напрямую).
+Убирает ведущий `#`, если он есть. Если результат — один из `ROUTES`,
+возвращает его; иначе (пустая строка, неизвестный путь) —
+`DEFAULT_ROUTE`. Никакого редиректа/логики авторизации здесь нет —
+это появится в этапе 12 (auth-состояние); сейчас чистый whitelist +
+фоллбэк.
+
+`useRoute`/`navigate` — тонкие обёртки над `parseRoute`/`location.hash`,
+зависят от DOM (`window`, `location`) → не тестируются `node --test`,
+только интеграционно. `parseRoute` — чистая, тестируется `node --test`
+без DOM.
+
+### `src/core/store/outbox.js`
+
+Таблица `outbox` уже существует (этап 3): `"++seq, eventId, status, retryCount"`.
+Это ЗАГЛУШКА (полная реализация с drain — этап 17): только CRUD, без
+сети, без publisher/subscriber (их ещё нет).
+
+```js
+export async function enqueue(eventId);   // -> Promise<number> (seq); вставляет {eventId, status: "pending", retryCount: 0}
+export async function listPending();      // -> Promise<OutboxEntry[]>, где status === "pending", по возрастанию seq (FIFO)
+export async function markSent(seq);      // -> Promise<void>; status = "sent"
+export async function markFailed(seq);    // -> Promise<void>; status = "failed", retryCount += 1
+```
+
+Статусы (решение Claude, в TECH.md не заданы явно): `"pending"` →
+`"sent"` | `"failed"`. Никакой логики повторной отправки/backoff —
+это этап 17.
+
+### `src/app.jsx`
+
+Новый корневой компонент. Использует `useRoute()` из `router.js`:
+- `/onboarding` → `<Placeholder title="Онбординг" />`
+- `/unlock` → `<Placeholder title="Разблокировка" />`
+- `/main` (и фактический дефолт) → существующий nav-shell из этапа 1
+  (aside с `NAV_ITEMS`, контент с `Diagnostics`/`Placeholder`) —
+  перенесён **без изменения поведения**, тот же принцип, что перенос
+  `diagnostics.jsx` в этапе 1.
+
+### `src/main.jsx` (правка контракта этапов 1/2)
+
+Сохраняет: `root.replaceChildren()` перед `render()`, регистрацию
+`controllerchange`. Теряет: весь shell-JSX (переехал в `app.jsx`).
+Новое содержимое — импорт `App` из `./app.jsx` и `render(<App/>, ...)`.
+
+Приёмка `app.jsx`/`main.jsx`/`router.js` (кроме `parseRoute`) —
+интеграционная (`npm run dev` + Playwright), по прецеденту UI-файлов
+этапов 1–2.
+
+### `src/ui/screens/diagnostics.jsx` (четвёртая правка — статус этапа 5)
+
+Хук `useRoute()` из `../../ui/router.js` — показывает текущий маршрут
+и список доступных (`` "/main (доступны: /onboarding, /main, /unlock)" ``).
+Плюс self-check `outbox.js` (по образцу этапа 4): `enqueue` синтетического
+`eventId` → проверка что попал в `listPending` → `markSent` → проверка
+что пропал из `listPending` → **обязательная очистка** тестовой строки
+(`db.table("outbox").delete(seq)`, т.к. в контракте `outbox.js` нет
+функции удаления — чистим напрямую через `db`, уже импортирован в файле).
+Формат ошибки/успеха и тон — тот же принцип, что `coreLogicTone`.
+Рендерится строкой "Этап 5 (роутер + outbox): …".
