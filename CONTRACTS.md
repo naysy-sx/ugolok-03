@@ -1289,3 +1289,105 @@ export async function updateProfile(id, patch);   // patch: {avatar?, bio?} — 
 
 Вкладка `"profile"` рендерит `<Profile />` вместо
 `<Placeholder title="Профиль" />`.
+
+## Этап 13 — MLS-спайк
+
+Полная формализация и обоснование решений — DESIGN.md, раздел
+"Этап 13". Здесь — только сигнатуры контракта.
+
+### `src/domain/events/kinds.js` (новый файл)
+
+```js
+export const KIND_MLS_KEY_PACKAGE = 443;       // NIP-EE: публикация своего KeyPackage
+export const KIND_MLS_WELCOME = 444;           // NIP-EE: приглашение (gift-wrap NIP-59, без подписи)
+export const KIND_MLS_GROUP_MESSAGE = 445;     // NIP-EE: сообщение группы, h-тег = nostr_group_id
+export const KIND_MLS_KEY_PACKAGE_RELAYS = 10051; // NIP-EE: replaceable список relay для KeyPackage
+```
+
+### `src/core/crypto/mls-session.js` (новый файл)
+
+Ciphersuite зафиксирован константой внутри модуля (не параметр наружу
+— единый выбор на весь проект, см. DESIGN.md обоснование):
+`MLS_CIPHERSUITE = "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519"`.
+
+Модуль владеет ВСЕМ wire-кодированием сам — вызывающий код (будущий
+`chat.js`, этап 24) работает только с сырыми байтами, которые идут
+прямо в/из `content` Nostr-событий 443/444/445, не имеет дела с
+форматами `ts-mls` напрямую.
+
+```js
+// credential.identity = UTF-8 байты hex-строки (64 символа) Nostr pubkey — НЕ сырые 32 байта
+export async function createOwnKeyPackage(nostrPubkeyHex);
+// -> { publicPackage, privatePackage, wireBytes }
+// wireBytes уже закодирован (mlsMessageEncoder, wireformat=mls_key_package) — готов как content kind 443
+// persist privatePackage — забота этапа 14, не этого модуля
+
+export async function createGroup(nostrPubkeyHex, ownKeyPackage, groupIdBytes);
+// -> sessionState (непрозрачный объект-обёртка над ts-mls clientState; наружу не парсится)
+
+// theirKeyPackageWireBytes — сырой content чужого kind 443 (декодируется внутри, бросает при wireformat != mls_key_package)
+export async function addMember(sessionState, theirKeyPackageWireBytes);
+// -> { newSessionState, welcomeWireBytes, commitWireBytes }
+// welcomeWireBytes -> content kind 444 (gift-wrap NIP-59 — этап 24)
+// commitWireBytes -> content kind 445 после NIP-44-конверта (см. ниже)
+// createCommit вызывается с ratchetTreeExtension:true (обязательное расширение NIP-EE,
+// проверено вживую) — welcome самодостаточен, отдельно передавать ratchetTree НЕ требуется
+// ВНУТРИ: consumed.forEach(zeroOutUint8Array) в finally — SM-1, наружу consumed не отдаётся
+
+// welcomeWireBytes — сырой content чужого kind 444 (после NIP-59 unwrap)
+export async function joinFromWelcome(ownKeyPackage, welcomeWireBytes);
+// -> sessionState
+
+// message — Uint8Array (уже прикладной plaintext, напр. rumor JSON из NIP-17)
+export async function encryptApplicationMessage(sessionState, message);
+// -> { newSessionState, wireBytes }  (wireBytes — сериализованный MLSMessage, ГОТОВ к шагу NIP-44 ниже)
+// ВНУТРИ: SM-1 (zeroOutUint8Array в finally)
+
+export async function decryptApplicationMessage(sessionState, wireBytes);
+// -> { newSessionState, message } | { newSessionState, kind: "control" } (proposal/commit, не app-сообщение)
+// ВНУТРИ: SM-1
+
+// exporter_secret эпохи -> ключи для NIP-44-конверта kind 445 (NIP-EE §5)
+export async function deriveNostrEnvelopeKeys(sessionState);
+// -> { privateKey, publicKey }  (privateKey = сырые 32 байта exporter_secret; publicKey = getPublicKey(privateKey) из keys.js)
+// label="nostr", context=new Uint8Array(0), length=32 — зафиксировано, не параметризуется
+
+export function serializeState(sessionState); // -> Uint8Array, для персиста этапом 14 (clientStateEncoder)
+export function deserializeState(bytes);       // -> sessionState (clientStateDecoder)
+```
+
+**Обёртка kind 445 content (используют этапы 16+/24, не этот модуль
+напрямую — но контракт кодирования фиксируется здесь, т.к. завязан на
+`deriveNostrEnvelopeKeys`):** `wireBytes` из
+`encryptApplicationMessage`/перед `decryptApplicationMessage` — бинарные,
+а `nip44.js` (этап 9) шифрует ТОЛЬКО строки (`pad()`/`unpad()` из
+`nostr-tools/nip44` гоняют plaintext через `TextEncoder`/`TextDecoder`,
+UTF-8 — произвольные байты через них не проходят байт-в-байт).
+Обязательный порядок: `wireBytes → base64 (btoa/Buffer) → nip44.encrypt(base64Str, envelopeKeys.privateKey, envelopeKeys.publicKey) → kind 445 content`.
+Тот же паттерн уже применён в проекте для голосовых (TECH.md §16.4).
+
+**Смок-тест `node --test` (отдельно от DESIGN.md — постоянная
+регрессия, не разовая проверка):** полный цикл
+`createOwnKeyPackage(alice) → createGroup → createOwnKeyPackage(bob) →
+addMember → joinFromWelcome(bob) → encryptApplicationMessage(alice) →
+decryptApplicationMessage(bob) == исходное сообщение`, плюс
+`deriveNostrEnvelopeKeys` даёт одинаковый результат у alice и bob в
+одной эпохе (округление до публичного API `ts-mls`, зафиксировано
+вручную — см. DESIGN.md). НЕ заменяет 785 официальных векторов
+(см. DESIGN.md, "Эмпирическая проверка") — только ловит поломку
+интеграции/установки при каждом обычном прогоне.
+
+**Граница ответственности (важно, не подразумевается — прочитать перед
+использованием модуля в будущих этапах):** `mls-session.js` НЕ проверяет,
+что байты KeyPackage/Welcome/Commit, переданные в `addMember`/
+`joinFromWelcome`/`decryptApplicationMessage`, действительно исходят от
+заявленного в `credential.identity` Nostr pubkey — эта проверка требует
+доступа к внешнему Nostr-событию (kind 443/444/445) и его подписи,
+которых у этого модуля нет. **Обязанность вызывающего кода** (этап 24):
+проверить подпись обёртывающего события (`verify()` из `sign.js`) и
+сверить `event.pubkey === credential.identity` (после декодирования
+KeyPackage) ДО вызова функций этого модуля. Внутри модуля используется
+собственный `nostrCredentialAuthService` (не `unsafeTestingAuthenticationService`
+из `ts-mls` — та всегда возвращает `true` без проверок, см. DESIGN.md)
+— делает только структурную проверку формы credential, не подменяет
+внешнюю проверку подписи.
