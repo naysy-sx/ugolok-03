@@ -294,12 +294,6 @@ function useKeystoreStatus() {
 	useEffect(() => {
 		(async () => {
 			try {
-				const existing = await db.table("keystore").get("privkey");
-				if (existing) {
-					set("пропущено (уже есть сохранённый ключ — не трогаем боевые данные)");
-					return;
-				}
-
 				const fakePrivKey = new Uint8Array(32).fill(9);
 				const ms1 = deriveMasterSecret(fakePrivKey);
 				const ms2 = deriveMasterSecret(fakePrivKey);
@@ -317,9 +311,10 @@ function useKeystoreStatus() {
 					throw new Error("opaqueDTag: не прошла проверку");
 				}
 
-				await encryptAndStore(fakePrivKey, "diagnostics-self-check-password");
-				const decrypted = await decryptPrivateKey("diagnostics-self-check-password");
-				await db.table("keystore").delete("privkey");
+				const testId = "diag-selfcheck-" + Date.now();
+				await encryptAndStore(fakePrivKey, "diagnostics-self-check-password", testId);
+				const decrypted = await decryptPrivateKey("diagnostics-self-check-password", testId);
+				await db.table("keystore").delete(testId);
 				if (bytesToHex(decrypted) !== bytesToHex(fakePrivKey)) {
 					throw new Error("keystore round-trip не совпал");
 				}
