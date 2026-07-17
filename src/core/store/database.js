@@ -25,5 +25,6 @@ db.version(1).stores({
   channelSyncState: "channelId",
   outbox: "++seq, eventId, status, retryCount",
   inboxRequests: "id, senderPubkey, created_at",
-  deletions: "targetId, deleterPubkey, created_at"
+  deletions: "targetId, deleterPubkey, created_at",
+  mlsGroups: "groupId"
 });

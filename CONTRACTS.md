@@ -1391,3 +1391,67 @@ KeyPackage) ДО вызова функций этого модуля. Внутр
 из `ts-mls` — та всегда возвращает `true` без проверок, см. DESIGN.md)
 — делает только структурную проверку формы credential, не подменяет
 внешнюю проверку подписи.
+
+## Этап 14 — шифрование БД + конечные автоматы
+
+Формализация и инварианты — DESIGN.md, раздел "Этап 14". Здесь —
+сигнатуры.
+
+### `src/core/fsm/machine.js`
+
+```js
+export function transition(transitions, state, event);
+// -> string (новое состояние)
+// transitions: { [state]: { [event]: state }, "*"?: { [event]: state } }
+// throw Error, если transitions[state]?.[event] и transitions["*"]?.[event] оба не определены
+// приоритет: конкретное state важнее "*" для той же пары событие/эффективное-состояние
+// ЧИСТАЯ функция: не мутирует transitions, не хранит состояние между вызовами
+```
+
+### `src/core/crypto/db-crypto.js`
+
+```js
+export function encryptRow(value, dbKey);
+// -> { nonce: Uint8Array(12), ciphertext: Uint8Array }
+// value — ЛЮБОЕ JSON-сериализуемое значение (не Uint8Array/Map/Set напрямую —
+// такие поля base64-оборачивает вызывающий код ДО передачи сюда)
+// nonce — crypto.getRandomValues(12) на каждый вызов, ChaCha20-Poly1305(dbKey, nonce)
+
+export function decryptRow(encrypted, dbKey);
+// -> исходное значение (JSON.parse после расшифровки)
+// encrypted: { nonce, ciphertext } — неверный dbKey/испорченный ciphertext -> throw (AEAD tag mismatch, не оборачивается)
+```
+
+### `src/core/store/encrypted-table.js`
+
+```js
+export function wrapEncryptedTable(table, plaintextFields, dbKey);
+// table — Dexie-таблица (db.table("..."))
+// plaintextFields — string[], ДОЛЖНЫ совпадать с полями, участвующими в индексе таблицы (Dexie primary key ОБЯЗАН быть в этом списке)
+// -> { put(record), get(key) }
+
+// put(record): поля из plaintextFields — как есть в топ-левел объект;
+//   ВСЕ остальные поля record — один encryptRow(...) под ключами { ...plainFields, nonce, ciphertext } -> table.put(...)
+// get(key): table.get(key); если undefined -> undefined;
+//   иначе { ...plainFields, ...decryptRow({nonce,ciphertext}, dbKey) }
+```
+
+Осознанно НЕ входит в контракт: `where`/`toArray`/`delete` — каждый
+домен (контакты/сообщения/каналы, этапы 21+) строит query поверх
+СЫРОЙ `table` (для plaintext-полей это штатно — они не зашифрованы)
+и `decryptRow` для расшифровки найденных строк, а не через эту
+обёртку — см. DESIGN.md, обоснование сужения скоупа.
+
+### `src/core/store/database.js` (правка контракта этапа 3)
+
+Добавлена таблица (без миграции версии — `db.version(1)` правится
+напрямую, проект в разработке, прецедент — мультиаккаунт этапа 11):
+
+```js
+mlsGroups: "groupId",
+```
+
+`plaintextFields` для будущего оборачивания (этап 24, не этот этап):
+`["groupId"]` — единственное поле, остальное (`clientState`
+сериализован через `serializeState()` из `mls-session.js`, base64,
+плюс `ownDeviceId`) — зашифровано.

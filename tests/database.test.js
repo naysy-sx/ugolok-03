@@ -28,6 +28,7 @@ const EXPECTED_TABLES = [
 	"outbox",
 	"inboxRequests",
 	"deletions",
+	"mlsGroups",
 ];
 
 test("схема Dexie (раздел 10 TECH.md): все таблицы созданы", async () => {
