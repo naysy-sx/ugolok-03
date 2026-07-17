@@ -6,6 +6,9 @@ import { mergeEvent } from "../../core/sync/g-set.js";
 import { lwwWinner } from "../../core/sync/lww.js";
 import { useRoute, ROUTES } from "../../ui/router.js";
 import { enqueue, listPending, markSent } from "../../core/store/outbox.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
+import { getPublicKey } from "../../core/crypto/keys.js";
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {
@@ -239,6 +242,39 @@ function useReleaseHashStatus() {
 	return state;
 }
 
+function nip06Tone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
+function useNip06Status() {
+	const [state, set] = useState("проверка…");
+	useEffect(() => {
+		(async () => {
+			try {
+				const VECTOR_MNEMONIC = "leader monkey parrot ring guide accident before fence cannon height naive bean";
+				const VECTOR_PRIVKEY_HEX = "7f7ff03d123792d6ac594bfa67bf6d0c0ab55b6b1fdb6249303fe861f1ccba9a";
+				const VECTOR_PUBKEY_HEX = "17162c921dc4d2518f9a101db33695df1afb56ab82f5ff3e5da6eec3ca5cd917";
+				const privKey = await mnemonicToPrivateKey(VECTOR_MNEMONIC);
+				const privHex = bytesToHex(privKey);
+				if (privHex !== VECTOR_PRIVKEY_HEX) {
+					throw new Error("mnemonicToPrivateKey: смоук-вектор §16.1 не совпал (privKey)");
+				}
+				const pubKey = getPublicKey(privKey);
+				const pubHex = bytesToHex(pubKey);
+				if (pubHex !== VECTOR_PUBKEY_HEX) {
+					throw new Error("getPublicKey: смоук-вектор §16.1 не совпал (pubKey)");
+				}
+				set("ok (NIP-06 §16.1 vector)");
+			} catch (e) {
+				set("ошибка: " + (e?.message || e));
+			}
+		})();
+	}, []);
+	return state;
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -278,6 +314,7 @@ export default function Diagnostics() {
 	const route = useRoute();
 	const outboxStatus = useOutboxStatus();
 	const releaseHashStatus = useReleaseHashStatus();
+	const nip06Status = useNip06Status();
 
 	return (
 		<main
@@ -330,6 +367,10 @@ export default function Diagnostics() {
 
 			<p style={{ color: "var(--muted)" }}>
 				Этап 6 (release-хеш): <strong style={{ color: releaseHashTone(releaseHashStatus), wordBreak: "break-all" }}>{releaseHashStatus}</strong>
+			</p>
+
+			<p style={{ color: "var(--muted)" }}>
+				Этап 7 (NIP-06): <strong style={{ color: nip06Tone(nip06Status) }}>{nip06Status}</strong>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>
