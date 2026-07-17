@@ -20,6 +20,8 @@ export default function Onboarding() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [npub, setNpub] = useState("");
   const [unlockPassword, setUnlockPassword] = useState("");
+  const [isQuickRegister, setIsQuickRegister] = useState(false);
+  const [login, setLogin] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function Onboarding() {
 
   function chooseVariant(v) {
     setError("");
+    setIsQuickRegister(false);
     if (v === "create") {
       setMnemonic(generateMnemonic());
       setStep("create-generate");
@@ -47,7 +50,36 @@ export default function Onboarding() {
       setStep("import-mnemonic");
     } else if (v === "import-key") {
       setStep("import-key");
+    } else if (v === "quick") {
+      setLogin("");
+      setPassword("");
+      setPasswordConfirm("");
+      setStep("quick-register");
     }
+  }
+
+  async function handleQuickRegister() {
+    if (!login.trim()) {
+      setError("Введите логин.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Пароль слишком короткий (минимум ${MIN_PASSWORD_LENGTH} символов).`);
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("Пароли не совпадают.");
+      return;
+    }
+    setError("");
+    const generated = generateMnemonic();
+    const key = await mnemonicToPrivateKey(generated);
+    await encryptAndStore(key, password);
+    await db.table("keystore").update("privkey", { login: login.trim() });
+    const pubKey = getPublicKey(key);
+    setNpub(npubEncode(bytesToHex(pubKey)));
+    setIsQuickRegister(true);
+    setStep("done");
   }
 
   return (
@@ -100,6 +132,44 @@ export default function Onboarding() {
             </button>
             <button type="button" onClick={() => chooseVariant("import-key")}>
               Войти по ключу (nsec)
+            </button>
+            <button type="button" onClick={() => chooseVariant("quick")}>
+              Регистрация
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === "quick-register" && (
+        <div class="flow">
+          <p>Придумайте логин и пароль.</p>
+          <label for="quick-login">Логин</label>
+          <input
+            id="quick-login"
+            type="text"
+            value={login}
+            onInput={(e) => setLogin(e.currentTarget.value)}
+          />
+          <label for="quick-password">Пароль</label>
+          <input
+            id="quick-password"
+            type="password"
+            value={password}
+            onInput={(e) => setPassword(e.currentTarget.value)}
+          />
+          <label for="quick-password-confirm">Повторите пароль</label>
+          <input
+            id="quick-password-confirm"
+            type="password"
+            value={passwordConfirm}
+            onInput={(e) => setPasswordConfirm(e.currentTarget.value)}
+          />
+          <div class="cluster">
+            <button type="button" onClick={handleQuickRegister}>
+              Зарегистрироваться
+            </button>
+            <button type="button" onClick={() => setStep("choose")}>
+              Назад
             </button>
           </div>
         </div>
@@ -286,6 +356,22 @@ export default function Onboarding() {
         <div class="flow">
           <p>Готово! Ваш публичный идентификатор:</p>
           <p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{npub}</p>
+          {isQuickRegister && (
+            <p
+              role="alert"
+              style={{
+                padding: "var(--space-m)",
+                background: "var(--surface)",
+                borderInlineStart: "3px solid var(--accent)",
+              }}
+            >
+              Быстрая регистрация: секретная фраза восстановления не
+              показывалась и нигде не сохранялась вами. Если это
+              устройство или браузерное хранилище будет потеряно —
+              восстановить доступ к аккаунту будет нечем. Показать фразу
+              для резервной копии можно будет позже в настройках.
+            </p>
+          )}
           <button type="button" onClick={() => navigate("/main")}>
             Перейти в приложение
           </button>
