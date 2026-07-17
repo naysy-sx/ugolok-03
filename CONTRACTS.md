@@ -1133,3 +1133,102 @@ selectedId)` → `navigate("/main")`.
 `getByRole("button", …)` в тестах больше не находит вкладки, нужен
 `getByRole("tab", …)` (учтено в тестовых сценариях; правильная
 семантика важнее совместимости со старыми селекторами).
+
+## Этап 12 — Auth-состояние + экран unlock
+
+Триаж (п.13a): рутинная — состояние на `@preact/signals` (уже
+зависимость) + склейка с готовыми `keystore.js`/`derivation.js`.
+Design-записка не нужна.
+
+**Реальный пробел, закрытый этим этапом:** до сих пор `onboarding.jsx`
+после входа/регистрации делал только `navigate("/main")` — приложение
+НИГДЕ не хранило "кто вошёл". Перезагрузка вкладки, `#/main` в адресной
+строке без пароля — ничего не защищало реальный экран. Этап 12 это чинит.
+
+### `src/ui/signals/auth.js`
+
+```js
+export const currentUser;   // signal<{id, login} | null>
+export const privKeySig;    // signal<Uint8Array | null> — in-memory, никогда не персистится сырым
+export const masterSecretSig; // signal<Uint8Array | null>
+export const dbKeySig;      // signal<Uint8Array | null>
+```
+
+Точные сигнатуры функций — ниже (раздел о разделении чистого/DOM-кода);
+здесь только сигналы.
+
+**Разделение чистого/DOM-зависимого (решение Claude — если бы
+`login()` сама трогала `localStorage`, даже сигнальная часть стала бы
+нетестируемой в Node):**
+
+```js
+export function login(id, login, privKeyBytes, now = Date.now()); // ЧИСТАЯ: 4 сигнала + touch(now); localStorage не трогает
+export function lock();                          // ЧИСТАЯ: сброс 4 сигналов в null
+export function touch(now = Date.now());          // ЧИСТАЯ: lastActivity = now (не сигнал, внутренняя переменная)
+export function isIdle(now = Date.now());          // ЧИСТАЯ: now - lastActivity > 24ч; now — параметр и здесь, и в touch/login — для тестов без реального ожидания 24 часов
+
+export function setRememberedAccountId(id);        // DOM: localStorage.setItem
+export function getRememberedAccountId();           // DOM: localStorage.getItem — throw в Node без localStorage
+export function startIdleWatcher();                 // DOM: setInterval(1мин) + click/keydown-слушатели → touch()/lock()
+```
+
+**Проверено лично** (не угадано): в чистом Node 24 `localStorage` НЕ
+определён глобально (`ReferenceError`) — `setRememberedAccountId`/
+`getRememberedAccountId`/`startIdleWatcher` тестируются ТОЛЬКО
+интеграционно (браузер/Playwright), не `node --test`. `login`/`lock`/
+`touch`/`isIdle` — тестируются `node --test` (`@preact/signals` —
+обычный JS-модуль, сигналы работают и в Node без DOM).
+
+Вызывающий код (`onboarding.jsx`/`unlock.jsx`) при успешном входе
+вызывает ОБЕ функции явно: `login(id, login, privKey)` +
+`setRememberedAccountId(id)` — не одна функция, которая делала бы
+и то, и другое (тестируемость).
+
+### `src/ui/screens/unlock.jsx`
+
+Фокусированный (не мульти-таб, в отличие от `onboarding.jsx`) экран:
+предзаполняет аккаунт из `getRememberedAccountId()`, если он есть в
+`listAccounts()`; иначе — тот же radio-список, что на вкладке "Вход"
+онбординга. Пароль → `decryptPrivateKey` → `login()` (не просто
+`navigate`, как раньше в онбординге) → `navigate("/main")`. Ссылка
+"Другой способ входа" → `navigate("/onboarding")` (для смены
+аккаунта/регистрации нового).
+
+### `src/app.jsx` — auth-гейтинг (правка контракта этапа 5)
+
+```
+если currentUser.value !== null:
+  всегда MainShell (игнорируя route — уже залогинен, /onboarding и /unlock не имеют смысла)
+иначе:
+  route === "/onboarding" → Onboarding
+  иначе (включая "/main" без сессии) → Unlock
+```
+
+Это должно быть реактивно на `currentUser` (Preact-сигналы
+авто-подписывают функциональный компонент на `.value`-чтения в теле
+рендера — `@preact/signals` уже зависимость, доп. хуков не требует).
+
+### `src/ui/screens/onboarding.jsx` (правка) и `src/main.jsx` (правка)
+
+`handleLoginSubmit` в онбординге вызывает `login(id, login, privKey)`
+из `auth.js` ПЕРЕД `navigate("/main")` — раньше просто расшифровывал и
+переходил, сессия нигде не сохранялась. Эта ветка не имеет
+промежуточного экрана подтверждения, поэтому вызов синхронный.
+
+**Правка контракта (найдено адверсарной фазой, не угадано заранее):**
+`handleRegisterSubmit`/`handleAdvancedPasswordSubmit` — НЕ вызывают
+`login()` синхронно. `currentUser` — реактивный сигнал, `app.jsx`
+читает его в теле рендера, значит присвоение `login()` немедленно
+размонтирует `Onboarding` (гейтинг переключается на `MainShell`) —
+для веток с промежуточным шагом `"done"` (показ `npub`, для
+quick-flow — предупреждение "фраза не показывалась") это стирало сам
+шаг подтверждения раньше, чем пользователь успевал его увидеть.
+Правильная последовательность: обработчики сабмита сохраняют
+`privKey`/`pendingLogin` в локальном state и переходят на
+`setStep("done")`; `login(id, pendingLogin, privKey)` +
+`setRememberedAccountId(id)` вызываются только из `onClick` кнопки
+"Перейти в приложение" на этом экране — сессия активируется не раньше,
+чем пользователь осознанно подтвердил экран с идентификатором.
+
+`main.jsx`: добавлен вызов `startIdleWatcher()` при загрузке
+(бутстрап приложения — единственное подходящее место, вызывается один раз).

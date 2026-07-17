@@ -1,6 +1,9 @@
 import "./styles/minimal.css";
 import { render } from "preact";
 import App from "./app.jsx";
+import { startIdleWatcher } from "./ui/signals/auth.js";
+
+startIdleWatcher();
 
 let refreshing = false;
 if ("serviceWorker" in navigator) {

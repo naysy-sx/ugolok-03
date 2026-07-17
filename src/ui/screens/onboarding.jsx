@@ -3,6 +3,7 @@ import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../
 import { getPublicKey } from "../../core/crypto/keys.js";
 import { encryptAndStore, decryptPrivateKey, listAccounts } from "../../core/crypto/keystore.js";
 import { navigate } from "../router.js";
+import { login, setRememberedAccountId } from "../signals/auth.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
@@ -30,6 +31,7 @@ export default function Onboarding() {
 
 	const [npub, setNpub] = useState("");
 	const [isQuickRegister, setIsQuickRegister] = useState(false);
+	const [pendingLogin, setPendingLogin] = useState("");
 	const [error, setError] = useState("");
 
 	useEffect(() => {
@@ -61,6 +63,8 @@ export default function Onboarding() {
 		const key = await mnemonicToPrivateKey(generated);
 		const id = bytesToHex(getPublicKey(key));
 		await encryptAndStore(key, regPassword, id, { login: regLogin.trim() });
+		setPrivKey(key);
+		setPendingLogin(regLogin.trim());
 		setNpub(npubEncode(id));
 		setIsQuickRegister(true);
 		setStep("done");
@@ -73,7 +77,10 @@ export default function Onboarding() {
 			return;
 		}
 		try {
-			await decryptPrivateKey(loginPassword, selectedAccountId);
+			const key = await decryptPrivateKey(loginPassword, selectedAccountId);
+			const account = accounts.find((a) => a.id === selectedAccountId);
+			login(selectedAccountId, account?.login ?? "", key);
+			setRememberedAccountId(selectedAccountId);
 			navigate("/main");
 		} catch (err) {
 			setError("Неверный пароль.");
@@ -114,6 +121,7 @@ export default function Onboarding() {
 		setError("");
 		const id = bytesToHex(getPublicKey(privKey));
 		await encryptAndStore(privKey, password, id, { login: advLogin.trim() });
+		setPendingLogin(advLogin.trim());
 		setNpub(npubEncode(id));
 		setIsQuickRegister(false);
 		setStep("done");
@@ -448,7 +456,15 @@ export default function Onboarding() {
 							для резервной копии можно будет позже в настройках.
 						</p>
 					)}
-					<button type="button" onClick={() => navigate("/main")}>
+					<button
+						type="button"
+						onClick={() => {
+							const id = bytesToHex(getPublicKey(privKey));
+							login(id, pendingLogin, privKey);
+							setRememberedAccountId(id);
+							navigate("/main");
+						}}
+					>
 						Перейти в приложение
 					</button>
 				</div>
