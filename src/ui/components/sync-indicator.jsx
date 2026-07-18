@@ -6,6 +6,13 @@ function label(state, synced) {
 	return state;
 }
 
-export default function SyncIndicator({ state, synced }) {
-	return <span role="status">{label(state, synced)}</span>;
+export default function SyncIndicator({ state, synced, url }) {
+	return (
+		<span role="status">
+			{label(state, synced)}
+			{url && (
+				<small style={{ color: "var(--muted)" }}> ({url})</small>
+			)}
+		</span>
+	);
 }

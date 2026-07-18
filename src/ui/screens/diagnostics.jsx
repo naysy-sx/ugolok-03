@@ -6,7 +6,7 @@ import { mergeEvent } from "../../core/sync/g-set.js";
 import { lwwWinner } from "../../core/sync/lww.js";
 import { useRoute, ROUTES } from "../../ui/router.js";
 import { enqueue, listPending, markSent } from "../../core/store/outbox.js";
-import { bytesToHex } from "@noble/hashes/utils.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
 import { deriveMasterSecret, deriveDbKey, opaqueDTag } from "../../core/crypto/derivation.js";
@@ -436,6 +436,9 @@ function usePSpikeBenchmark() {
 
 	async function run() {
 		setStatus("генерация синтетических событий (не входит в замер)…");
+		// Отдать кадр браузеру ДО тяжёлой синхронной работы — иначе виден только
+		// клик, статус выше физически не успевает отрисоваться до начала генерации.
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		let worker;
 		let benchDb;
 		try {
@@ -515,6 +518,17 @@ function usePSpikeBenchmark() {
 	return { status, run };
 }
 
+// НЕ секрет: фиксированная тестовая identity ТОЛЬКО для этого self-check
+// (sha256("ugolok-diagnostics-self-check-v1")). Раньше ключ генерировался
+// заново на каждый клик — pubkey непредсказуем, поэтому write-whitelist
+// локального relay (deny-by-default, этап 17, AC-14) отклонял публикацию
+// каждый раз (см. log.md, этап 20). Один и тот же публично известный pubkey
+// можно один раз внести в server/strfry/whitelist.json — остальные identity
+// по-прежнему отклоняются, свойство whitelist не ослаблено.
+const DIAGNOSTICS_SELF_CHECK_PRIVKEY = hexToBytes(
+	"87d0ba41e92f084a0b82cdfac5a35cb8b0dd6ae279254eb71542f55c649ed32b",
+);
+
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
 		if (predicate(conn.getState())) return resolve();
@@ -535,6 +549,7 @@ function useTransportSyncCheck() {
 	const [status, setStatus] = useState("не запущен");
 	const [connState, setConnState] = useState("disconnected");
 	const [synced, setSynced] = useState(false);
+	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 
 	async function run() {
 		setStatus("подключение…");
@@ -542,8 +557,7 @@ function useTransportSyncCheck() {
 		let conn;
 		let worker;
 		try {
-			const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
-			const privKey = crypto.getRandomValues(new Uint8Array(32));
+			const privKey = DIAGNOSTICS_SELF_CHECK_PRIVKEY;
 			const pubKeyHex = bytesToHex(getPublicKey(privKey));
 
 			conn = createRelayConnection(relayUrl, { onStateChange: (s) => setConnState(s) });
@@ -594,7 +608,7 @@ function useTransportSyncCheck() {
 		}
 	}
 
-	return { status, connState, synced, run };
+	return { status, connState, synced, relayUrl, run };
 }
 
 function Row({ c }) {
@@ -621,6 +635,57 @@ function Row({ c }) {
 				{c.hint && <small style={{ color: "var(--muted)" }}>{c.hint}</small>}
 			</span>
 		</li>
+	);
+}
+
+// Единая визуальная оболочка для всех проверок этапов (было: ~15 самостоятельно
+// стилизованных <p>, каждая со своим inline-color — отсюда жалоба "пёстро и
+// разрозненно"). tone/статус остаются per-check логикой (releaseHashTone,
+// dbTone, ... — семантика "что считается ok" у них разная и намеренно не унифицирована),
+// меняется только то, КАК это рисуется.
+function StatusRow({ label, status, tone, action, hint }) {
+	return (
+		<li
+			class="flow"
+			style={{
+				"--flow-space": "var(--space-3xs)",
+				paddingBlock: "var(--space-s)",
+				borderBlockEnd: "var(--border-width) solid var(--border)",
+			}}
+		>
+			<span class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+				<span class="cluster" style={{ "--cluster-gap": "var(--space-s)", alignItems: "center" }}>
+					<span aria-hidden="true" style={{ color: tone }}>●</span>
+					<span>{label}</span>
+				</span>
+				{action}
+			</span>
+			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
+				{status}
+				{hint ? ` · ${hint}` : ""}
+			</small>
+		</li>
+	);
+}
+
+function Section({ title, children }) {
+	return (
+		<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+			<h2
+				style={{
+					fontSize: "0.8rem",
+					fontWeight: "var(--weight-bold)",
+					textTransform: "uppercase",
+					letterSpacing: "0.04em",
+					color: "var(--muted)",
+				}}
+			>
+				{title}
+			</h2>
+			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+				{children}
+			</ul>
+		</section>
 	);
 }
 
@@ -679,73 +744,55 @@ export default function Diagnostics() {
 					: "Нет критического API — клиент здесь не запустится"}
 			</p>
 
-			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+			<Section title="Окружение">
 				{checks.map((c) => (
 					<Row c={c} />
-			 ))}
-			</ul>
+				))}
+				<StatusRow label="Маршрут" status={route} tone="var(--fg)" hint={`доступны: ${ROUTES.join(", ")}`} />
+			</Section>
 
-			<p style={{ color: "var(--muted)" }}>
-				Маршрут: <strong style={{ color: "var(--fg)" }}>{route}</strong> (доступны: {ROUTES.join(", ")})
-			</p>
-			<p style={{ color: "var(--muted)" }}>
-				Этап 5 (роутер + outbox): <strong style={{ color: stage5Tone(outboxStatus) }}>{outboxStatus}</strong>
-			</p>
+			<Section title="Ядро и криптография">
+				<StatusRow label="Этап 4 · CRDT-примитивы" status={coreLogicStatus} tone={coreLogicTone(coreLogicStatus)} />
+				<StatusRow label="Этап 7 · NIP-06" status={nip06Status} tone={nip06Tone(nip06Status)} />
+				<StatusRow label="Этап 8 · KeyStore + деривация" status={keystoreStatus} tone={keystoreTone(keystoreStatus)} />
+				<StatusRow label="Этап 9 · sign / NIP-44 / NIP-59" status={signCryptoStatus} tone={nip9Tone(signCryptoStatus)} />
+				<StatusRow label="Этап 10 · файлы + crypto worker" status={cryptoWorkerStatus} tone={cryptoWorkerTone(cryptoWorkerStatus)} />
+			</Section>
 
-			<p style={{ color: "var(--muted)" }}>
-				Этап 6 (release-хеш): <strong style={{ color: releaseHashTone(releaseHashStatus), wordBreak: "break-all" }}>{releaseHashStatus}</strong>
-			</p>
+			<Section title="Хранилище и офлайн">
+				<StatusRow label="База данных" status={dbStatus} tone={dbTone(dbStatus)} />
+				<StatusRow label="Этап 5 · роутер + outbox" status={outboxStatus} tone={stage5Tone(outboxStatus)} />
+				<StatusRow label="Service Worker" status={sw} tone="var(--fg)" />
+				<StatusRow label="Кэш (Service Worker)" status={cacheStatus} tone={cacheTone(cacheStatus)} />
+				<StatusRow label="Этап 6 · release-хеш" status={releaseHashStatus} tone={releaseHashTone(releaseHashStatus)} />
+			</Section>
 
-			<p style={{ color: "var(--muted)" }}>
-				Этап 7 (NIP-06): <strong style={{ color: nip06Tone(nip06Status) }}>{nip06Status}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				Этап 8 (KeyStore + деривация): <strong style={{ color: keystoreTone(keystoreStatus) }}>{keystoreStatus}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				Этап 9 (sign/NIP-44/NIP-59): <strong style={{ color: nip9Tone(signCryptoStatus) }}>{signCryptoStatus}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				Этап 10 (файлы + crypto worker): <strong style={{ color: cryptoWorkerTone(cryptoWorkerStatus) }}>{cryptoWorkerStatus}</strong>
-			</p>
-
-			<p class="cluster" style={{ color: "var(--muted)", alignItems: "center" }}>
-				Этап 15 (P-SPIKE): <strong style={{ color: pSpikeTone(pSpike.status) }}>{pSpike.status}</strong>
-				<button type="button" onClick={pSpike.run}>
-					Запустить P-SPIKE (5000 событий)
-				</button>
-			</p>
-
-			<div class="flow" style={{ color: "var(--muted)" }}>
-				<p class="cluster" style={{ alignItems: "center" }}>
-					Этапы 16-20 (транспорт + синхронизация): <strong style={{ color: transportSyncTone(transportSync.status) }}>{transportSync.status}</strong>
-					<button type="button" onClick={transportSync.run}>
-						Проверить relay pool + AUTH + publisher/subscriber + bootstrap + sync
-					</button>
-				</p>
-				<p class="cluster" style={{ alignItems: "center" }}>
-					Соединение: <SyncIndicator state={transportSync.connState} synced={transportSync.synced} />
-				</p>
-			</div>
-
-			<p style={{ color: "var(--muted)" }}>
-				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				Кэш (Service Worker): <strong style={{ color: cacheTone(cacheStatus) }}>{cacheStatus}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				База данных: <strong style={{ color: dbTone(dbStatus) }}>{dbStatus}</strong>
-			</p>
-
-			<p style={{ color: "var(--muted)" }}>
-				Этап 4 (CRDT-примитивы): <strong style={{ color: coreLogicTone(coreLogicStatus) }}>{coreLogicStatus}</strong>
-			</p>
+			<Section title="Транспорт и синхронизация">
+				<StatusRow
+					label="Этап 15 · P-SPIKE (5000 событий)"
+					status={pSpike.status}
+					tone={pSpikeTone(pSpike.status)}
+					action={
+						<button type="button" onClick={pSpike.run}>
+							Запустить
+						</button>
+					}
+				/>
+				<StatusRow
+					label="Этапы 16-20 · relay pool + AUTH + publisher/subscriber + bootstrap + sync"
+					status={transportSync.status}
+					tone={transportSyncTone(transportSync.status)}
+					action={
+						<button type="button" onClick={transportSync.run}>
+							Проверить
+						</button>
+					}
+				/>
+				<li class="cluster" style={{ alignItems: "center", paddingBlock: "var(--space-s)" }}>
+					Соединение:{" "}
+					<SyncIndicator state={transportSync.connState} synced={transportSync.synced} url={transportSync.relayUrl} />
+				</li>
+			</Section>
 
 			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
 				{navigator.userAgent}

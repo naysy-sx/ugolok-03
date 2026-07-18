@@ -13,6 +13,16 @@ function pick(pool, i) {
 	return pool[i % pool.length];
 }
 
+// Подпись/шифрование — синхронные CPU-операции; без периодической отдачи
+// event loop'у цикл на 5000 фикстур держит main thread занятым одним
+// блоком (~15-20с) и браузер не успевает перерисовать даже уже
+// выставленный React/Preact-статус. Каждые YIELD_EVERY итераций отдаём
+// один тик — не влияет на замеряемую фазу P-SPIKE (генерация в неё не входит).
+const YIELD_EVERY = 250;
+function yieldToMain() {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function randomBytesBase64(byteLength) {
   const array = new Uint8Array(byteLength);
   crypto.getRandomValues(array);
@@ -71,6 +81,7 @@ export async function generateSyntheticEvents(count, options = {}) {
 	const fixtures = [];
 
 	for (let i = 0; i < profileCount; i++) {
+		if (i > 0 && i % YIELD_EVERY === 0) await yieldToMain();
 		const identity = pick(identities, i);
 		const event = makeProfileEvent(identity.privKey, 300);
 		fixtures.push({ event, kindGroup: "profile", foldKey: identity.pubKeyHex });
@@ -81,6 +92,7 @@ export async function generateSyntheticEvents(count, options = {}) {
 	// senderPrivKey игнорируется в decrypt-пути, значит отправители могут повторяться свободно.
 	const owner = identities[0];
 	for (let i = 0; i < giftwrapCount; i++) {
+		if (i > 0 && i % YIELD_EVERY === 0) await yieldToMain();
 		const sender = pick(identities, i + 1);
 		const event = makeGiftWrapEvent(sender.privKey, owner.pubKeyHex, 200 + Math.floor(Math.random() * 600));
 		fixtures.push({ event, kindGroup: "giftwrap", foldKey: null });
@@ -90,12 +102,14 @@ export async function generateSyntheticEvents(count, options = {}) {
 	// ВЛАДЕЛЕЦ (тот же "owner", что и получатель giftwrap'ов), не случайный автор:
 	// расшифровать self-encrypted содержимое можно только СВОИМ privKey.
 	for (let i = 0; i < permissionCount; i++) {
+		if (i > 0 && i % YIELD_EVERY === 0) await yieldToMain();
 		const foldKey = pick(permissionFoldKeys, i);
 		const event = makePermissionProxyEvent(owner.privKey, foldKey, 150);
 		fixtures.push({ event, kindGroup: "permission-proxy", foldKey });
 	}
 
 	for (let i = 0; i < channelCount; i++) {
+		if (i > 0 && i % YIELD_EVERY === 0) await yieldToMain();
 		const identity = pick(identities, i);
 		const foldKey = pick(channelFoldKeys, i);
 		const channelKey = pick(channelKeys, i);

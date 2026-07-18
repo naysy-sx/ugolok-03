@@ -1851,9 +1851,13 @@ allowlist — правка контракта на этапах 21/22/24/30.
 ### `src/ui/components/sync-indicator.jsx`
 
 ```js
-export default function SyncIndicator({ state, synced });
+export default function SyncIndicator({ state, synced, url });
 // state — строка состояния relay-pool.js (disconnected/connecting/authenticating/connected/subscribed)
 // synced — boolean (onCaughtUp уже сработал хотя бы раз)
+// url — опционально, адрес relay; если передан, рендерится рядом с текстом
+//   статуса вне зависимости от state (в т.ч. в "офлайн") — правка по прямой
+//   просьбе пользователя (диагностика должна показывать, К ЧЕМУ идёт попытка
+//   подключения, не только факт её состояния)
 // Чисто презентационный компонент (по прецеденту MnemonicDisplay, этап 11) —
 // не создаёт соединение сам, родитель передаёт состояние через props
 ```
@@ -1862,3 +1866,39 @@ export default function SyncIndicator({ state, synced });
 строк): `disconnected`→"офлайн", `connecting`/`authenticating`→
 "подключение…", `connected`+`!synced`→"синхронизация…",
 `connected`/`subscribed`+`synced`→"на связи".
+
+### Правка контракта: dev-режим — локальный relay поднимается автоматически
+
+По прямой просьбе пользователя после визуального осмотра diagnostics.jsx
+(таймаут "disconnected" на пустом месте — relay не был запущен).
+Затрагивает `vite.config.js` и `server/strfry/whitelist.json`:
+
+```js
+function buildDefaultRelays(command);
+// command === "serve" (npm run dev) и BUILD_DEFAULT_RELAYS не задан явно
+// через env → ["ws://127.0.0.1:7777"] (локальный strfry, не placeholder).
+// command === "build"/"preview" → прежнее поведение, ["wss://relay.example"]
+// (продакшн-плейсхолдер, обязана переопределить конфигурация деплоя).
+// Явный env BUILD_DEFAULT_RELAYS всегда выигрывает в обоих режимах.
+
+function devRelayPlugin(); // apply: "serve" — на build/preview не действует
+// configureServer: если server/strfry/strfry-src/strfry не собран — warn и
+// no-op (диагностика останется без живого relay, но dev-сервер не падает);
+// иначе mkdir strfry-db при отсутствии, spawn server/strfry/run.sh,
+// stdout/stderr прокинуты в терминал vite с префиксом "[strfry]", kill при
+// закрытии dev-сервера (process "exit" + httpServer "close").
+```
+
+`server/strfry/whitelist.json` — правка дефолта: раньше `[]` (deny-all),
+теперь содержит РОВНО один pubkey —
+`d5b776f29d9783a9f33e422f285c723cb6cc5b4442d6778e4c24b723f0eae998`,
+детерминированная тестовая identity диагностического self-check'а
+(`DIAGNOSTICS_SELF_CHECK_PRIVKEY` в diagnostics.jsx = `sha256("ugolok-
+diagnostics-self-check-v1")`). Раньше `useTransportSyncCheck` генерировал
+случайный privKey на каждый клик — pubkey непредсказуем, поэтому write-
+whitelist (этап 17, AC-14) гарантированно отклонял публикацию при первом
+же запуске на свежесобранном relay (см. log.md, этап 20). Фиксированная
+identity не секрет (используется только для этого self-check, не несёт
+реальных данных) — предсказуемый pubkey можно внести в whitelist один раз;
+свойство "whitelist реально блокирует не-whitelisted pubkey" не ослаблено,
+проверяется отдельно (AC-14, этап 17).
