@@ -25,7 +25,14 @@ import {
 	addGroupMemberAction,
 	removeGroupMemberAction,
 	deleteGroupAction,
+	contactRequests,
+	refreshContactRequests,
+	sendContactRequestAction,
+	acceptContactRequestAction,
+	rejectContactRequestAction,
 } from "../src/ui/signals/contacts.js";
+import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
+import { CONTACT_REQUEST_KIND, parseContactRequestRumor } from "../src/domain/contacts/requests.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
@@ -42,11 +49,13 @@ beforeEach(async () => {
 	blockedContacts.value = [];
 	groups.value = [];
 	profiles.value = {};
+	contactRequests.value = [];
 	await db.table("contacts").clear();
 	await db.table("blockedContacts").clear();
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
 	await db.table("events").clear();
+	await db.table("contactRequests").clear();
 });
 
 after(() => {
@@ -238,4 +247,81 @@ test("ensureProfilesFetched: пустой список отсутствующи�
 		return new Map();
 	});
 	assert.equal(called, false);
+});
+
+// Настоящие secp256k1-ключи (не "a".repeat(64) заглушки выше) — nip59.wrap делает
+// реальный ECDH, невалидная точка на кривой бросит исключение.
+const BOB_REAL_PRIV = new Uint8Array(32).fill(7);
+const BOB_REAL_PUB = bytesToHex(getPublicKey(BOB_REAL_PRIV));
+
+test("sendContactRequestAction: добавляет адресата СЕБЕ и отправляет ему gift-wrapped запрос (находка 1)", async () => {
+	let sentGiftWrap;
+	const publish = async (event) => {
+		if (event.kind === 1059) sentGiftWrap = event;
+		return { ok: true };
+	};
+	await sendContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, "привет, добавь меня", publish);
+
+	assert.deepEqual(contacts.value, [BOB_REAL_PUB], "инициатор сразу видит адресата в своих контактах");
+	assert.ok(sentGiftWrap, "должен быть отправлен gift-wrap (kind 1059)");
+
+	const rumor = nip59Unwrap(sentGiftWrap, BOB_REAL_PRIV);
+	assert.equal(rumor.kind, CONTACT_REQUEST_KIND);
+	const parsed = parseContactRequestRumor(rumor);
+	assert.equal(parsed.greeting, "привет, добавь меня");
+	assert.equal(parsed.senderPubkey, OWNER_PUBKEY);
+});
+
+test("sendContactRequestAction: невалидный ключ -> throw, ничего не публикуется", async () => {
+	let publishCount = 0;
+	const publish = async () => {
+		publishCount++;
+		return { ok: true };
+	};
+	await assert.rejects(() => sendContactRequestAction(OWNER_PUBKEY, PRIV_KEY, "мусор", "привет", publish));
+	assert.equal(publishCount, 0);
+});
+
+test("refreshContactRequests: owner-scoped, читает contactRequests из БД", async () => {
+	await db.table("contactRequests").put({
+		owner: OWNER_PUBKEY,
+		senderPubkey: BOB_REAL_PUB,
+		greeting: "здравствуйте",
+		createdAt: 100,
+	});
+	const otherOwnerPub = "c".repeat(64);
+	await db.table("contactRequests").put({ owner: otherOwnerPub, senderPubkey: BOB_REAL_PUB, greeting: "x", createdAt: 1 });
+
+	await refreshContactRequests(OWNER_PUBKEY);
+	assert.equal(contactRequests.value.length, 1);
+	assert.equal(contactRequests.value[0].senderPubkey, BOB_REAL_PUB);
+});
+
+test("acceptContactRequestAction: добавляет в контакты (взаимно) и удаляет запись", async () => {
+	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
+	await refreshContactRequests(OWNER_PUBKEY);
+
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, okPublish);
+
+	assert.deepEqual(contacts.value, [BOB_REAL_PUB]);
+	assert.equal(contactRequests.value.length, 0);
+	assert.equal(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), undefined);
+});
+
+test("rejectContactRequestAction: блокирует отправителя и удаляет запись", async () => {
+	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
+	await refreshContactRequests(OWNER_PUBKEY);
+
+	await rejectContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, okPublish);
+
+	assert.deepEqual(blockedContacts.value, [BOB_REAL_PUB]);
+	assert.equal(contactRequests.value.length, 0);
+});
+
+test("acceptContactRequestAction: сбой публикации -> throw, запись НЕ удаляется", async () => {
+	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
+	await refreshContactRequests(OWNER_PUBKEY);
+
+	await assert.rejects(() => acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, failPublish));
+	assert.ok(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), "запись должна остаться при сбое");
 });

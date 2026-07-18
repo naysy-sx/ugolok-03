@@ -122,6 +122,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 | 24 (личные сообщения — ядро) | 215.42 КБ | +82.17 | Впервые `ts-mls` (mls-session.js, этап 13) подключён к app-графу через `chat.js`/`transport.js` — предсказано ещё в этапе 13 (оценка ~65 КБ, факт ~82 КБ, разница — реальный вес `@hpke/*`/зависимостей ts-mls при полной сборке). Запас до NF-11 (280 КБ) на этапы 25-32: ~64.6 КБ — требует внимания при финальном tree-shaking (этап 32), но не блокирует |
 | 25 (периферия + multi-device) | 219.19 КБ | +3.77 | `device.js`/`mirror.js`/`devices.js`/`inbox-requests.js`/`deletions.js` — небольшой прирост (ChaCha20-Poly1305 уже в графе с этапа 9/10, HKDF уже с этапа 8; весь новый код — тонкая обвязка над уже импортированными примитивами). Запас до NF-11 (280 КБ): ~60.8 КБ |
 | 26 (lazy-load + read-status + drafts) | 219.20 КБ | +0.01 | `read-status.js`/`drafts.js`/`lazy-chat.js` — все зависимости (nip44/sign/machine.js/db) уже в графе с более ранних этапов, новый код чисто логический. Запас до NF-11 (280 КБ): ~60.8 КБ |
+| 27 (UI чата) | 222.52 КБ | +3.32 | `chat.jsx`/`message-bubble.jsx`/`chats.js`/`inbox.js` — весь домен messaging (этапы 24-26) впервые подключён к реальному UI. Запас до NF-11 (280 КБ): ~57.5 КБ |
 
 **Важная находка при переработке плана:** бюджет TECH.md §7.2
 (~190–250 КБ итого, запас 30–90 КБ) посчитан ДО решения профиля B
@@ -214,8 +215,8 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 - [x] Этап 26. **Lazy-load чата + read status + черновики** [рутина] — подгрузка истории при открытии чата (окнами по 100, локально из уже материализованной IndexedDB — не REQ к relay, F-CSL-01 писался до пивота на MLS, см. "Заметки"); счётчики непрочитанного (kind 30070, fold → unread, AC-06); сохранение черновиков (kind 30071)
     - `src/core/sync/lazy-chat.js`, `src/domain/messaging/read-status.js`, `src/domain/messaging/drafts.js`
 
-- [ ] Этап 27. **UI чата** [рутина] — экран чата (input + список сообщений), message-bubble (входящее/исходящее, статусы), вкладка inbox (запросы от незнакомцев), принять → перенос в чат; удаление сообщения автором → «Сообщение удалено»
-    - `src/ui/screens/chat.jsx`, `src/ui/components/message-bubble.jsx`
+- [x] Этап 27. **UI чата** [рутина] — экран чата (список диалогов + переписка, lazy-load этапа 26), message-bubble (входящее/исходящее, статусы), секция "Запросы" в contacts.jsx (реальные данные, contact-request kind 3001) + вкладка "Входящие" в chat.jsx (inbox от незнакомцев, этап 25), принять → перенос в чат; удаление сообщения автором → «Сообщение удалено» (deletions.js, этап 25). Живая E2E-проверка (Playwright как библиотека, реальный strfry) подтвердила полный сценарий пользователя от начала проекта: регистрация → добавление в контакты → взаимный contact-request → чат → сообщения → удаление, с синхронизацией на обеих сторонах
+    - `src/ui/screens/chat.jsx`, `src/ui/components/message-bubble.jsx`, `src/ui/signals/chats.js`, `src/ui/signals/inbox.js`, правка `src/ui/signals/contacts.js` (contact-request), правка `src/ui/signals/transport.js` (messagingActivity), правка `src/ui/screens/contacts.jsx`/`src/app.jsx`
 
 - [ ] Этап 28. **Blossom-клиент + загрузка/скачивание файлов** [автомат transfer §9.4 — формализовать, хоть и всего 5 состояний, см. "Уроки"] — TECH.md §13.8: собственный HTTP-клиент (~100 LOC): PUT с auth event kind 24242, GET без auth; валидация MIME (F-AT-05) и размера (F-AT-04: image/file ≤20 MB, video ≤20 MB); e2e-шифрование (random key → ChaCha20 → upload, паттерн уже есть — `file-crypto.js` этапа 10); ДКА transfer (idle/encrypting/uploading/completed/failed)
     - `src/core/transport/blossom-client.js`, `src/domain/attachments/upload.js`, `src/domain/attachments/validation.js`, `src/domain/attachments/transfer-machine.js`

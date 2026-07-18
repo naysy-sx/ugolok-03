@@ -3069,3 +3069,204 @@ export async function markWindowLoaded(contactPubkey, oldestLoadedSeq);
 — `read-status.js`/`drafts.js` НЕ импортируют её из `chat.js` (не
 экспортирована) — своя копия хелпера, тот же паттерн, что `devices.js`
 (этап 25).
+
+## Этап 27 — UI чата
+
+Триаж (п.13a): **рутина** — склейка уже готовых доменов (этапы 24-26)
+в реальный UI, по прецеденту `contacts.jsx` (этап 23). Найдены и
+закрыты здесь три пробела, оставленные предыдущими этапами открытыми
+(явно, не молчаливо):
+
+### Находка 1: кто отправляет contact-request (kind 3001) — DESIGN.md этапа 24 не уточнял
+
+Дословный сценарий пользователя (сохранён в log.md с самого начала
+проекта): тот, кто ВВОДИТ чужой ключ в форму "Добавить контакт" —
+инициатор. Решение: форма "Добавить контакт" теперь ДЕЛАЕТ ДВЕ вещи
+одним действием — (1) `addContactAction` как раньше (инициатор сразу
+видит адресата в СВОИХ контактах — это его собственное намерение),
+(2) ДОПОЛНИТЕЛЬНО отправляет gift-wrapped `contact-request` (kind
+3001) адресату. Адресат видит запрос во "Входящих" — Принять
+(`addContactAction` взаимно + удалить запись — теперь ОБЕ стороны
+видят друг друга), Отклонить (`blockContactAction` + удалить запись),
+Игнорировать (ничего не делать, запись остаётся).
+
+### Находка 2: реактивность UI на входящее (новое сообщение/Welcome/запрос) — диспетчер живёт вне React
+
+`transport.js`'s диспетчеры (gift-wrap, kind 445) работают ФОНОВО, не
+через React re-render. Без явного сигнала открытый экран чата не
+узнает о новом сообщении, пока пользователь не переключит вкладку.
+Решение: один общий сигнал `messagingActivity` (`signals/chats.js`,
+`signal(0)`) — инкрементируется diспетчером transport.js на КАЖДОЕ
+успешно обработанное входящее (Welcome, contact-request,
+kind-445-сообщение/коммит, зеркало). `chat.jsx`/`contacts.jsx`
+подписываются на `messagingActivity.value` в `useEffect`-зависимостях
+и перезапрашивают своё локальное состояние (окно чата / списки
+запросов) при любом изменении — грубая, но простая и надёжная схема
+(перечитать всё активное состояние целиком, не point-to-point
+диффинг) — оправдана объёмом MVP (не миллионы событий).
+
+### Находка 3: `acceptInboxRequest`/ручной `ensureChatEstablished` не запускают `refreshGroupMessageSubscription` сами — обязательное правило вызова, как и раньше
+
+Тот же класс находки, что уже задокументирован для `ensureChatEstablished`
+(этап 24): создание НОВОЙ MLS-группы (через `acceptInboxRequest`, или
+через первую отправку сообщения новому контакту) не подписывает
+устройство на её `#h` само — вызывающий UI-код ОБЯЗАН вызвать
+`transport.refreshGroupMessageSubscription` сразу следом. Оба
+UI-orchestration-модуля ниже (`chats.js`/`inbox.js`) принимают её
+инъекцией (тот же паттерн, что `publish`/`fetchKeyPackage`) — не
+импортируют `transport.js` напрямую, вызывающий JSX передаёт её,
+получив из `transport.js` (тот же паттерн, что `contacts.jsx`
+уже делает для `ensureConnected`/`publish`/`fetchProfiles`).
+
+### `src/ui/signals/chats.js` (новый файл)
+
+```js
+export const messagingActivity = signal(0); // сигнал-триггер живого обновления (находка 2)
+export function bumpMessagingActivity(); // messagingActivity.value++ — вызывается ТОЛЬКО transport.js
+
+export async function listChatPartners(ownerPubkey);
+// db.table("mlsGroups").toArray() -> уникальные contactPubkey (у кого есть активный чат)
+// -> Promise<string[]>
+
+export async function sendChatMessageAction(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish, fetchKeyPackage, refreshGroupMessageSubscription);
+// await chat.ensureChatEstablished(ownerPubkey, privKey, contactPubkey, publish, fetchKeyPackage) -- no-op, если уже есть
+// await refreshGroupMessageSubscription(ownerPubkey, privKey, publish) -- ОБЯЗАТЕЛЬНО (находка 3),
+//   безусловно на каждую отправку -- сама идемпотентна (пересоздаёт REQ текущим списком groupId),
+//   дешевле и надёжнее, чем проверять "было ли реально создано"
+// -> await chat.sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish)
+// throw "у контакта нет опубликованного ключа для сообщений" всплывает как есть
+//   (fetchKeyPackage, этап 24) -- UI показывает понятную ошибку, не крашится
+
+export async function deleteChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish);
+// await deletions.deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish)
+// throw "нельзя удалить чужое сообщение" (deletions.js, этап 25) всплывает как есть
+
+export async function markChatReadAction(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish);
+// await readStatus.markChatAsRead(...) -- вызывается при ОТКРЫТИИ чата (chat.jsx), lastReadLamportTs =
+//   lamportTs последнего сообщения в уже загруженном (самом свежем) окне
+
+export async function saveChatDraftAction(ownerPubkey, privKey, contactPubkey, text, publish);
+// await drafts.saveDraft(...)
+```
+
+### `src/ui/signals/inbox.js` (новый файл)
+
+```js
+export async function refreshInboxRequests(ownerPubkey);
+// возвращает Promise<Array<{owner,senderPubkey,welcomeWireBytes,createdAt}>> (listInboxRequests, этап 25) —
+// вызывающий JSX держит в локальном useState (не отдельный @preact/signals сигнал —
+// re-render уже триггерится messagingActivity, доп. сигнал не нужен)
+
+export async function acceptInboxRequestAction(ownerPubkey, privKey, senderPubkey, refreshGroupMessageSubscription, publish);
+// await inboxRequests.acceptInboxRequest(ownerPubkey, senderPubkey)
+// await refreshGroupMessageSubscription(ownerPubkey, privKey, publish) -- ОБЯЗАТЕЛЬНО (находка 3)
+// openChat(senderPubkey) -- сразу переключить UI на новый чат (signals/chat.js, этап 23-довесок)
+
+export async function rejectInboxRequestAction(ownerPubkey, senderPubkey);
+// await inboxRequests.rejectInboxRequest(ownerPubkey, senderPubkey)
+```
+
+### `src/ui/signals/contacts.js` (правка контракта — добавлены contact-request функции)
+
+```js
+export const contactRequests = signal([]); // [{owner, senderPubkey, greeting, createdAt}]
+
+export async function refreshContactRequests(ownerPubkey);
+// db.table("contactRequests").where("owner").equals(ownerPubkey).toArray() -> contactRequests.value
+
+export async function sendContactRequestAction(ownerPubkey, privKey, npubOrHex, greeting, publish);
+// await addContactAction(ownerPubkey, privKey, npubOrHex, publish) -- находка 1, инициатор видит адресата сразу
+// targetPubkey = decodePubkeyInput(npubOrHex) (повторный вызов чистой функции — не проблема)
+// rumor = buildContactRequestRumor(greeting) (domain/contacts/requests.js, этап 24)
+// giftWrap = nip59.wrap(rumor, privKey, targetPubkey)
+// await requirePublishOk(publish, giftWrap)
+
+export async function acceptContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+// await addContactAction(ownerPubkey, privKey, senderPubkey, publish) -- взаимно
+// await db.table("contactRequests").delete([ownerPubkey, senderPubkey])
+// await refreshContactRequests(ownerPubkey)
+
+export async function rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+// await blockContactAction(ownerPubkey, privKey, senderPubkey, publish)
+// await db.table("contactRequests").delete([ownerPubkey, senderPubkey])
+// await refreshContactRequests(ownerPubkey)
+```
+
+### `src/ui/signals/transport.js` (правка контракта — bumpMessagingActivity)
+
+```js
+// giftWrapSubscriber.onBatch -- после успешной обработки rumor.kind===444 (и sibling, и
+//   от контакта, и inbox-request ветка), rumor.kind===CONTACT_REQUEST_KIND: bumpMessagingActivity()
+// refreshGroupMessageSubscription.onBatch -- после receiveGroupMessageEvent (успешно, не discard)
+//   и после applyIncomingDeletionIfMarker: bumpMessagingActivity()
+```
+
+### `src/ui/components/message-bubble.jsx` (новый файл, presentational)
+
+```js
+export default function MessageBubble({ message, isOwn, onDelete });
+// message: { text, lamportTs, senderPubkey, status, deleted, msgId }
+// deleted === true -> курсивный плейсхолдер "Сообщение удалено", кнопка удаления не показывается
+// иначе: текст сообщения; isOwn -> выравнивание вправо + статус (значок/подпись по
+//   MESSAGE_TRANSITIONS state: created/sending/sent/read/failed/discarded, machine.js этап 24);
+//   onDelete показывается ТОЛЬКО для isOwn && !deleted (F-EV-08 — чужое не потрогать)
+```
+
+### `src/ui/screens/chat.jsx` (новый файл, пишет Claude напрямую — стейтфул экран, урок PLAN.md)
+
+Два режима одного экрана (`activeChatPubkey.value` пуст/не пуст),
+как список диалогов и сама переписка внутри ОДНОГО компонента (по
+прецеденту `contacts.jsx`'s локальных подкомпонентов):
+
+- **Список** (`activeChatPubkey.value === null`): секция "Входящие"
+  (`inboxRequests`, Принять/Отклонить, находка 3), секция "Чаты"
+  (`listChatPartners` + `getUnreadCount` бейдж на каждого + клик →
+  `openChat`).
+- **Переписка** (`activeChatPubkey.value !== null`): кнопка "Назад"
+  (`openChat(null)`), `loadChatWindow` (этап 26, догрузка при скролле
+  вверх через `beforeSeq`), `MessageBubble` на каждое сообщение,
+  форма ввода (лимит 10000 символов, F-MS-08, клиентская валидация),
+  черновик (`getDraft` при открытии → поле ввода, `saveChatDraftAction`
+  debounced при вводе), `markChatReadAction` при открытии (lastReadLamportTs
+  = lamportTs последнего сообщения самого свежего окна).
+- `useEffect` на `[activeChatPubkey.value, messagingActivity.value]` —
+  перезагружает и список, и открытую переписку (находка 2).
+- `busyRef`-дисциплина на отправку/удаление/accept/reject (тот же
+  паттерн гонки, что `contacts.jsx`, этап 23).
+
+### Находка 4 (найдено ЖИВЫМ E2E-прогоном через реальный relay, не адверсарным юнит-тестом): черновик нельзя перезагружать на каждый `messagingActivity`
+
+Первая версия держала загрузку окна сообщений И черновика в ОДНОМ
+`useEffect`, зависящем от `messagingActivity.value`. Реальный
+сценарий (два настоящих браузерных контекста, Playwright как
+библиотека — MCP-инструмента нет в этой сессии, но `playwright`
+уже установлен пакетом проекта и запускается обычным Node-скриптом)
+вскрыл гонку: пока пользователь печатает ответ (текст ещё не
+сохранён как черновик — debounce 1с), ЛЮБОЕ фоновое событие
+(входящее сообщение, свой же bootstrap) инкрементирует
+`messagingActivity` → эффект перезапускается → `getDraft()`
+перезаписывает `text` ПОСЛЕДНИМ СОХРАНЁННЫМ (устаревшим/пустым)
+черновиком, стирая только что введённый пользователем текст. Внешне
+проявлялось как "кнопка Отправить внезапно снова disabled".
+
+Исправлено разделением на два независимых `useEffect`: загрузка окна
+сообщений + `markChatReadAction` реагирует на `messagingActivity.value`
+(это корректно — новые сообщения ДОЛЖНЫ подгружаться); загрузка
+черновика (`getDraft`) реагирует ТОЛЬКО на смену `contactPubkey` (смена
+самого чата) — черновик, единожды загруженный при открытии, дальше
+живёт только в `text` (React state) и debounce-сохранении, фоновая
+активность его не трогает.
+
+### Живая проверка (Playwright как библиотека, реальный `strfry`, два независимых браузерных контекста — Alice/Bob)
+
+Полный сценарий, буквально запрошенный пользователем в начале работы
+над messaging-частью проекта: регистрация обоих → Боб вводит npub
+Алисы в форму "Добавить контакт" → видит её сразу в своих контактах
+(находка 1) → Алиса ЖИВЬЁМ (без reload) видит входящий запрос →
+принимает → оба видят друг друга взаимно → Боб кликает на Алису →
+переходит в чат → отправляет сообщение → видит его сразу у себя →
+Алиса ЖИВЬЁМ видит новый чат в списке с непрочитанным счётчиком →
+открывает → реально расшифровывает MLS-сообщение → отвечает → Боб
+получает ответ → Алиса удаляет своё сообщение → у обеих сторон
+отображается "Сообщение удалено". Все шаги подтверждены реальным
+сетевым обменом через работающий `strfry`, не заглушкой.

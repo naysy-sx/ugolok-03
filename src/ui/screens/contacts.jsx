@@ -9,7 +9,9 @@ import {
 	blockedContacts,
 	groups,
 	profiles,
+	contactRequests,
 	refreshAll,
+	refreshContactRequests,
 	ensureProfilesFetched,
 	addContactAction,
 	removeContactAction,
@@ -20,7 +22,11 @@ import {
 	addGroupMemberAction,
 	removeGroupMemberAction,
 	deleteGroupAction,
+	sendContactRequestAction,
+	acceptContactRequestAction,
+	rejectContactRequestAction,
 } from "../signals/contacts.js";
+import { messagingActivity } from "../signals/chats.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
 
@@ -28,7 +34,7 @@ import PermissionEditor from "../components/permission-editor.jsx";
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
 // передан, делает аватар+имя ссылкой на чат (contacts.jsx, реальные контакты);
 // в списке заблокированных onClick не передаётся — просто отображение.
-function ContactIdentity({ pubkey, onClick }) {
+export function ContactIdentity({ pubkey, onClick }) {
 	const profile = profiles.value[pubkey];
 	const displayName = profile?.name || shortPubkey(pubkey);
 
@@ -127,6 +133,7 @@ export default function Contacts() {
 
 	useEffect(() => {
 		refreshAll(ownerPubkey);
+		refreshContactRequests(ownerPubkey);
 		ensureConnected(ownerPubkey, privKey)
 			.then(async () => {
 				await refreshAll(ownerPubkey);
@@ -148,6 +155,20 @@ export default function Contacts() {
 		}
 	}, [contacts.value]);
 
+	// Живое обновление входящих contact-request (этап 27, находка 2) — диспетчер
+	// transport.js инкрементирует messagingActivity при получении нового запроса,
+	// пока пользователь уже смотрит этот экран.
+	useEffect(() => {
+		refreshContactRequests(ownerPubkey).then(() => {
+			if (contactRequests.value.length > 0) {
+				ensureProfilesFetched(
+					contactRequests.value.map((r) => r.senderPubkey),
+					fetchProfiles,
+				).catch(() => {});
+			}
+		});
+	}, [ownerPubkey, messagingActivity.value]);
+
 	// busy сериализует действия этого экрана намеренно — найдено адверсарной фазой:
 	// два быстрых клика подряд (напр. "Добавить" дважды с разными контактами) читают
 	// contacts.value ДО того, как первое действие успевает его обновить — второе
@@ -160,10 +181,43 @@ export default function Contacts() {
 		setAddError("");
 		setBusy(true);
 		try {
-			await addContactAction(ownerPubkey, privKey, npubInput, publish);
+			// Находка 1 (CONTRACTS.md, этап 27): инициатор сразу видит адресата у себя
+			// (addContactAction внутри) И отправляет ему запрос — тот увидит его во
+			// "Входящих" и решит сам, добавлять ли взаимно.
+			await sendContactRequestAction(ownerPubkey, privKey, npubInput, "", publish);
 			setNpubInput("");
 		} catch (err) {
 			setAddError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	async function handleAcceptContactRequest(senderPubkey) {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setRowError("");
+		setBusy(true);
+		try {
+			await acceptContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+		} catch (err) {
+			setRowError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	async function handleRejectContactRequest(senderPubkey) {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setRowError("");
+		setBusy(true);
+		try {
+			await rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+		} catch (err) {
+			setRowError(err?.message || String(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -368,12 +422,35 @@ export default function Contacts() {
 
 				<div class="flow" style={{ "--flow-space": "var(--space-l)", flex: 1 }}>
 					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="requests-heading">Запросы (0)</h2>
-						<p style={{ color: "var(--muted)" }}>
-							Здесь будут появляться входящие запросы на добавление в контакты —
-							с кнопками "Принять" и "Отклонить". Сам протокол запроса строится
-							вместе с обменом сообщениями (этап 24).
-						</p>
+						<h2 id="requests-heading">Запросы ({contactRequests.value.length})</h2>
+						{contactRequests.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
+						) : (
+							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+								{contactRequests.value.map((req) => (
+									<li
+										key={req.senderPubkey}
+										class="cluster"
+										style={{
+											alignItems: "center",
+											justifyContent: "space-between",
+											paddingBlock: "var(--space-s)",
+											borderBlockEnd: "var(--border-width) solid var(--border)",
+										}}
+									>
+										<ContactIdentity pubkey={req.senderPubkey} />
+										<div class="cluster">
+											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.senderPubkey)}>
+												Принять
+											</button>
+											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.senderPubkey)}>
+												Отклонить
+											</button>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
 					</section>
 
 					<section class="flow" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>

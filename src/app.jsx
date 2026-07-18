@@ -7,16 +7,16 @@ import Onboarding from "./ui/screens/onboarding.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
+import Chat from "./ui/screens/chat.jsx";
 import { currentUser } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
-import { shortPubkey } from "./ui/format.js";
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
 
 	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
-	// вкладку на "Сообщения". Экрана чата ещё нет (строится этапом 24) — заготовка
-	// ниже лишь подтверждает, что переход состоялся, не имитирует переписку.
+	// вкладку на "Сообщения"; сам экран (chat.jsx, этап 27) реагирует на
+	// activeChatPubkey.value самостоятельно (список чатов ↔ открытая переписка).
 	useEffect(() => {
 		if (activeChatPubkey.value) setActiveId("messages");
 	}, [activeChatPubkey.value]);
@@ -55,13 +55,11 @@ function MainShell() {
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
 				{activeId === "contacts" && <Contacts />}
-				{activeId === "messages" && activeChatPubkey.value ? (
-					<Placeholder title={`Чат с ${shortPubkey(activeChatPubkey.value)}`} />
-				) : (
-					activeId !== "diagnostics" && activeId !== "profile" && activeId !== "contacts" && (
-						<Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />
-					)
-				)}
+				{activeId === "messages" && <Chat />}
+				{activeId !== "diagnostics" &&
+					activeId !== "profile" &&
+					activeId !== "contacts" &&
+					activeId !== "messages" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 		</div>
 	);

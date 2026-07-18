@@ -4,11 +4,14 @@ import { decode as nip19Decode } from "nostr-tools/nip19";
 import { buildContactListEvent, buildMuteListEvent, addContact, removeContact } from "../../domain/contacts/contacts.js";
 import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../domain/contacts/groups.js";
 import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
+import { buildContactRequestRumor } from "../../domain/contacts/requests.js";
+import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 
 export const contacts = signal([]);
 export const blockedContacts = signal([]);
 export const groups = signal([]);
 export const profiles = signal({}); // pubkey -> { name?, about?, picture? } | null (запрошен, но не найден)
+export const contactRequests = signal([]); // [{owner, senderPubkey, greeting, createdAt}]
 
 export async function refreshContacts(ownerPubkey) {
 	const rows = await db.table("contacts").where("owner").equals(ownerPubkey).toArray();
@@ -179,4 +182,33 @@ export async function deleteGroupAction(ownerPubkey, privKey, groupId, publish) 
 		await db.table("groupMembers").where("groupId").equals(groupId).delete();
 	});
 	await refreshGroups(ownerPubkey);
+}
+
+export async function refreshContactRequests(ownerPubkey) {
+	const rows = await db.table("contactRequests").where("owner").equals(ownerPubkey).toArray();
+	contactRequests.value = rows;
+}
+
+// Находка 1 (CONTRACTS.md, этап 27): тот, кто вводит чужой ключ в форму "Добавить
+// контакт", инициирует — сразу видит адресата в СВОИХ контактах (addContactAction,
+// как раньше) И отправляет gift-wrapped contact-request (kind 3001), чтобы адресат
+// узнал и мог решить (Принять/Отклонить/Игнорировать) взаимно.
+export async function sendContactRequestAction(ownerPubkey, privKey, npubOrHex, greeting, publish) {
+	const targetPubkey = decodePubkeyInput(npubOrHex);
+	await addContactAction(ownerPubkey, privKey, npubOrHex, publish);
+	const rumor = buildContactRequestRumor(greeting);
+	const giftWrap = nip59Wrap(rumor, privKey, targetPubkey);
+	await requirePublishOk(publish, giftWrap);
+}
+
+export async function acceptContactRequestAction(ownerPubkey, privKey, senderPubkey, publish) {
+	await addContactAction(ownerPubkey, privKey, senderPubkey, publish);
+	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
+	await refreshContactRequests(ownerPubkey);
+}
+
+export async function rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish) {
+	await blockContactAction(ownerPubkey, privKey, senderPubkey, publish);
+	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
+	await refreshContactRequests(ownerPubkey);
 }

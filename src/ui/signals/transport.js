@@ -24,6 +24,7 @@ import { decryptMirrorPayload, KIND_MESSAGE_MIRROR } from "../../domain/messagin
 import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
 import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-requests.js";
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
+import { bumpMessagingActivity } from "./chats.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -147,6 +148,7 @@ async function connect(pubkeyHex, privKey) {
 						} else {
 							await storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 						}
+						bumpMessagingActivity(); // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
 					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
 						const parsed = parseContactRequestRumor(rumor);
 						await db.table("contactRequests").put({
@@ -155,8 +157,9 @@ async function connect(pubkeyHex, privKey) {
 							greeting: parsed.greeting,
 							createdAt: parsed.createdAt,
 						});
+						bumpMessagingActivity(); // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
 					}
-					// иначе — будущий kind (этапы 25+, напр. inbox-request-сообщения от НЕ-контактов), discard
+					// иначе — будущий kind, discard
 				} catch {
 					// ошибка обработки конкретного rumor (напр. Welcome уже применён гонкой) — не ронять батч
 				}
@@ -321,6 +324,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
 						await applyIncomingDeletionIfMarker(event, receivedResult);
+						bumpMessagingActivity(); // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
 					}
