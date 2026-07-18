@@ -1455,3 +1455,74 @@ mlsGroups: "groupId",
 `["groupId"]` — единственное поле, остальное (`clientState`
 сериализован через `serializeState()` из `mls-session.js`, base64,
 плюс `ownDeviceId`) — зашифровано.
+
+## Этап 15 — P-SPIKE
+
+Методология — DESIGN.md, раздел "Этап 15".
+
+### `src/domain/events/synthetic-fixtures.js` (новый файл, тестовый генератор — не прикладной модуль)
+
+```js
+export async function generateSyntheticEvents(count, options);
+// -> Promise<{
+//   fixtures: Array<{ event: NostrEvent, kindGroup: "profile"|"giftwrap"|"permission-proxy"|"channel-proxy", foldKey: string|null, channelKey?: Uint8Array }>,
+//   // channelKey присутствует ТОЛЬКО для kindGroup==="channel-proxy" (нужен для decrypt конкретно этого поста)
+//   giftwrapRecipientPrivKey: Uint8Array, // ВСЕ giftwrap-события адресованы этому одному "владельцу" (bootstrap = расшифровка своего инбокса, не случайных чужих пар)
+// }>
+// options: { profile, giftwrap, permission, channel } — доли (по умолчанию 0.10/0.50/0.15/0.25, сумма = 1)
+// foldKey — синтетический "логический ключ" для группировки в LWW (для giftwrap — null, journal-тип, не replaceable)
+// Все события — с ВАЛИДНОЙ подписью (sign() из sign.js) и, где применимо, ВАЛИДНЫМ шифротекстом
+// (nip44.encrypt/nip59.wrap/chacha20poly1305) — не мусорные данные, моделирует нормальный (не атакующий) трафик.
+```
+
+### `scripts/p-spike-bench.mjs`
+
+Не модуль с экспортами — исполняемый Node-скрипт (`node scripts/p-spike-bench.mjs`).
+Оркестрирует: `vite build` → `vite preview` (порт задаётся внутри) →
+Playwright headless Chromium → `page.evaluate()` запускает пайплайн
+ВНУТРИ браузера (реальный `crypto.worker.js`, реальный IndexedDB) →
+два прогона (1× и CDP `Emulation.setCPUThrottlingRate({rate: 1.5})`)
+→ сравнение с порогом NF-09 (30000 мс) → `process.exit(1)` при провале
+любого из двух прогонов, иначе `process.exit(0)` с отчётом в stdout.
+
+Пайплайн внутри `page.evaluate()` (использует уже принятые модули
+`sign.js`/`nip44.js`/`nip59.js`/`g-set.js`/`lww.js`/`encrypted-table.js`/
+`db-crypto.js`, `crypto.worker.js` через `?worker&inline`):
+1. batch-verify всех 5000 событий одним вызовом `batchVerify` (Comlink).
+2. per-kind: giftwrap → `unwrap` → `mergeEvent` (журнал, `events`);
+   profile/proxy-kinds → decrypt → `pickLatest` по `foldKey` →
+   `encryptRow`/через одноразовую `wrapEncryptedTable` (throwaway
+   Dexie-таблица бенчмарка, НЕ реальная схема `database.js`) — не
+   трогает боевые таблицы.
+3. `performance.now()` до/после — единственная измеряемая метрика.
+
+**Где физически живёт пайплайн (решено по ходу работы, не описано
+заранее).** Собранный `dist/` — единый инлайненный файл, ничего не
+экспортирует наружу; `crypto.worker.js` инстанцируется корректно
+только в build (этап 10). Поэтому пайплайн — НЕ отдельный `src/`-модуль
+с публичным API, а хук `usePSpikeBenchmark()` в `diagnostics.jsx`, по
+прецеденту self-check-паттерна (`useCoreLogicStatus` и т.д. этапов
+1-10) — но КНОПКОЙ, не авто-запуском на монтировании (5000 событий —
+десятки секунд, недопустимо тяжело для обычного визита на экран
+диагностики). `scripts/p-spike-bench.mjs` управляет браузером снаружи:
+регистрирует тестовый аккаунт → открывает "Диагностика" → жмёт кнопку
+→ читает результат из DOM.
+
+### `src/main.jsx` / `src/ui/screens/diagnostics.jsx` (правка контракта этапов 1/2/5 — найдено этапом 15)
+
+Реальный баг, не архитектурное решение — см. DESIGN.md "Побочная
+адверсарная находка" этапа 15. Изменения:
+
+- `diagnostics.jsx`: удалён дублирующийся модульный код
+  `navigator.serviceWorker.addEventListener("controllerchange", …)` —
+  SW lifecycle отныне управляется ТОЛЬКО из `main.jsx`, не дублируется
+  в UI-экранах.
+- `main.jsx`: `controllerchange` → `location.reload()` теперь условен —
+  перезагрузка происходит, только если `navigator.serviceWorker.controller`
+  уже был не-`null` ДО регистрации (то есть это обновление уже
+  активного SW). Первая установка SW в свежей вкладке (controller был
+  `null`) больше не вызывает перезагрузку — раньше это стирало
+  in-memory сессию (`currentUser`) без единой ошибки в консоли, что
+  особенно опасно, т.к. регистрация SW в `useServiceWorker()` ленивая
+  (только при первом реальном показе экрана "Диагностика", который с
+  этапа 12 доступен ТОЛЬКО после входа).

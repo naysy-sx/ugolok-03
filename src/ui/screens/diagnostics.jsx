@@ -17,15 +17,10 @@ import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/cry
 import { wrap as nip59Wrap, unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
-
-let refreshing = false;
-if ("serviceWorker" in navigator) {
-	navigator.serviceWorker.addEventListener("controllerchange", () => {
-		if (refreshing) return;
-		refreshing = true;
-		location.reload();
-	});
-}
+import Dexie from "dexie";
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { wrapEncryptedTable } from "../../core/store/encrypted-table.js";
+import { generateSyntheticEvents } from "../../domain/events/synthetic-fixtures.js";
 
 function envChecks() {
 	return [
@@ -381,6 +376,12 @@ function cryptoWorkerTone(state) {
 	return "var(--muted)";
 }
 
+function pSpikeTone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
 function useCryptoWorkerStatus() {
 	const [state, set] = useState("проверка…");
 	useEffect(() => {
@@ -415,6 +416,90 @@ function useCryptoWorkerStatus() {
 		})();
 	}, []);
 	return state;
+}
+
+function usePSpikeBenchmark() {
+	const [status, setStatus] = useState("не запущен");
+
+	async function run() {
+		setStatus("генерация синтетических событий (не входит в замер)…");
+		let worker;
+		let benchDb;
+		try {
+			const { fixtures, giftwrapRecipientPrivKey } = await generateSyntheticEvents(5000);
+			const ownerPubHex = bytesToHex(getPublicKey(giftwrapRecipientPrivKey));
+
+			benchDb = new Dexie("ugolok-p-spike-bench-" + Date.now());
+			benchDb.version(1).stores({ derived: "foldKey" });
+			await benchDb.open();
+			const dbKey = crypto.getRandomValues(new Uint8Array(32));
+			const wrapped = wrapEncryptedTable(benchDb.table("derived"), ["foldKey"], dbKey);
+
+			worker = new CryptoWorker();
+			const api = Comlink.wrap(worker);
+
+			setStatus("прогон пайплайна (идёт замер)…");
+			const t0 = performance.now();
+
+			const verified = await api.batchVerify(fixtures.map((f) => f.event));
+
+			// проход 1: fold-решение по МЕТАДАННЫМ (created_at/id) — без расшифровки,
+			// расшифровывать имеет смысл только реального победителя LWW, не все версии
+			const winnerByFoldKey = new Map();
+			const fixtureByEventId = new Map();
+			for (let i = 0; i < fixtures.length; i++) {
+				if (!verified[i]) continue;
+				const f = fixtures[i];
+				if (f.kindGroup === "giftwrap") continue;
+				fixtureByEventId.set(f.event.id, f);
+				const existing = winnerByFoldKey.get(f.foldKey);
+				winnerByFoldKey.set(f.foldKey, existing ? lwwWinner(existing, f.event) : f.event);
+			}
+
+			// проход 2: расшифровка + запись только победителей
+			for (const [foldKey, winnerEvent] of winnerByFoldKey) {
+				const f = fixtureByEventId.get(winnerEvent.id);
+				let value;
+				if (f.kindGroup === "profile") {
+					value = JSON.parse(f.event.content);
+				} else if (f.kindGroup === "permission-proxy") {
+					value = JSON.parse(nip44Decrypt(f.event.content, giftwrapRecipientPrivKey, ownerPubHex));
+				} else {
+					const [nonceB64, ciphertextB64] = f.event.content.split(":");
+					const nonce = Uint8Array.from(atob(nonceB64), (c) => c.charCodeAt(0));
+					const ciphertext = Uint8Array.from(atob(ciphertextB64), (c) => c.charCodeAt(0));
+					value = chacha20poly1305(f.channelKey, nonce).decrypt(ciphertext);
+				}
+				await wrapped.put({ foldKey, value });
+			}
+
+			// gift wrap'ы — журнал (G-Set), не fold: каждый расшифровывается и пишется как есть
+			let journalCount = 0;
+			for (let i = 0; i < fixtures.length; i++) {
+				if (!verified[i] || fixtures[i].kindGroup !== "giftwrap") continue;
+				nip59Unwrap(fixtures[i].event, giftwrapRecipientPrivKey);
+				await mergeEvent(fixtures[i].event);
+				journalCount++;
+			}
+
+			const elapsedMs = performance.now() - t0;
+			const withinBudget = elapsedMs <= 30000;
+			setStatus(
+				(withinBudget ? "ok" : "ошибка") +
+					` (${elapsedMs.toFixed(0)} мс на 5000 событий, журнал ${journalCount}, materialized ${winnerByFoldKey.size}; порог NF-09 30000 мс)`,
+			);
+		} catch (e) {
+			setStatus("ошибка: " + (e?.message || e));
+		} finally {
+			worker?.terminate();
+			if (benchDb) {
+				benchDb.close();
+				await benchDb.delete();
+			}
+		}
+	}
+
+	return { status, run };
 }
 
 function Row({ c }) {
@@ -460,6 +545,7 @@ export default function Diagnostics() {
 	const keystoreStatus = useKeystoreStatus();
 	const signCryptoStatus = useSignCryptoStatus();
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
+	const pSpike = usePSpikeBenchmark();
 
 	return (
 		<main
@@ -528,6 +614,13 @@ export default function Diagnostics() {
 
 			<p style={{ color: "var(--muted)" }}>
 				Этап 10 (файлы + crypto worker): <strong style={{ color: cryptoWorkerTone(cryptoWorkerStatus) }}>{cryptoWorkerStatus}</strong>
+			</p>
+
+			<p class="cluster" style={{ color: "var(--muted)", alignItems: "center" }}>
+				Этап 15 (P-SPIKE): <strong style={{ color: pSpikeTone(pSpike.status) }}>{pSpike.status}</strong>
+				<button type="button" onClick={pSpike.run}>
+					Запустить P-SPIKE (5000 событий)
+				</button>
 			</p>
 
 			<p style={{ color: "var(--muted)" }}>
