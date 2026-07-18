@@ -11,6 +11,10 @@ export function deriveDbKey(masterSecret) {
   return hkdf(sha256, masterSecret, utf8ToBytes("Ugolok/v1/db"), utf8ToBytes(""), 32);
 }
 
+export function deriveMirrorKey(masterSecret) {
+  return hkdf(sha256, masterSecret, utf8ToBytes("Ugolok/v1/mirror"), utf8ToBytes(""), 32);
+}
+
 export function opaqueDTag(masterSecret, kind, logicalKey) {
   const input = utf8ToBytes(`${kind}:${logicalKey}`);
   return bytesToHex(hmac(sha256, masterSecret, input));

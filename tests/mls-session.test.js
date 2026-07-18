@@ -17,11 +17,11 @@ const ALICE_PUBKEY_HEX = "a".repeat(64);
 const BOB_PUBKEY_HEX = "b".repeat(64);
 
 async function setupGroupWithBob() {
-	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX);
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	const groupId = crypto.getRandomValues(new Uint8Array(32));
 	let aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
 
-	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX);
+	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device");
 	const addResult = await addMember(aliceState, bob.wireBytes);
 	aliceState = addResult.newSessionState;
 
@@ -30,7 +30,7 @@ async function setupGroupWithBob() {
 }
 
 test("createOwnKeyPackage: credential.identity после кодирования/декодирования совпадает с исходным hex pubkey", async () => {
-	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX);
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	assert.ok(alice.wireBytes instanceof Uint8Array);
 	assert.ok(alice.wireBytes.length > 0);
 });
@@ -67,7 +67,7 @@ test("decryptApplicationMessage: испорченный wireBytes (побита�
 });
 
 test("addMember: мусорные байты вместо KeyPackage — понятная ошибка, не тихая порча состояния", async () => {
-	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX);
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	const groupId = crypto.getRandomValues(new Uint8Array(32));
 	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
 
@@ -89,7 +89,7 @@ test("deriveNostrEnvelopeKeys: ключи конверта МЕНЯЮТСЯ по
 	const keysEpoch0 = await deriveNostrEnvelopeKeys(stateEpoch0);
 
 	// alice приглашает третьего участника -> новый commit -> новая эпоха
-	const carol = await createOwnKeyPackage("c".repeat(64));
+	const carol = await createOwnKeyPackage("c".repeat(64), "carol-device");
 	const { newSessionState: stateEpoch1 } = await addMember(stateEpoch0, carol.wireBytes);
 	const keysEpoch1 = await deriveNostrEnvelopeKeys(stateEpoch1);
 
@@ -126,19 +126,33 @@ test("createOwnKeyPackage: невалидный (не 64-hex) nostrPubkeyHex о�
 	await assert.rejects(() => createOwnKeyPackage("A".repeat(64))); // верхний регистр — не проходит строгий regex
 });
 
+test("createOwnKeyPackage: обязательный deviceId — пустая строка/отсутствие отклоняется (этап 25)", async () => {
+	await assert.rejects(() => createOwnKeyPackage(ALICE_PUBKEY_HEX));
+	await assert.rejects(() => createOwnKeyPackage(ALICE_PUBKEY_HEX, ""));
+});
+
+test("createOwnKeyPackage: credential.identity кодирует '${pubkey}:${deviceId}' — два устройства ОДНОЙ identity дают РАЗНЫЙ credential (этап 25)", async () => {
+	const deviceA = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "device-a");
+	const deviceB = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "device-b");
+	assert.notDeepEqual(
+		deviceA.publicPackage.leafNode.credential.identity,
+		deviceB.publicPackage.leafNode.credential.identity,
+	);
+});
+
 test("createGroup: невалидный nostrPubkeyHex отклоняется до обращения к ts-mls", async () => {
-	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX);
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	await assert.rejects(() => createGroup("bad", alice, crypto.getRandomValues(new Uint8Array(32))));
 });
 
 test("addMember: authService реально проверяется ts-mls (не декоративный) — credential с испорченным identity отклоняется на уровне протокола", async () => {
-	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX);
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	const groupId = crypto.getRandomValues(new Uint8Array(32));
 	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
 
 	// генерируем валидный (по форме) KeyPackage, но напрямую портим identity в уже закодированных wire-байтах
 	// так, чтобы decodeKeyPackage их принял (валидная TLS-структура), а identity перестал быть 64-hex
-	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX);
+	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device");
 	const corruptedIdentity = "z".repeat(64); // не hex — не пройдёт HEX_PUBKEY_RE в authService
 	const corruptedWireBytes = encode(mlsMessageEncoder, {
 		keyPackage: {

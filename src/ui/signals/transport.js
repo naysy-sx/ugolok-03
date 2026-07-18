@@ -13,7 +13,17 @@ import { parseProfileEvent } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
 import { CONTACT_REQUEST_KIND, parseContactRequestRumor } from "../../domain/contacts/requests.js";
-import { acceptWelcome, ensureOwnKeyPackagePublished, receiveGroupMessageEvent } from "../../domain/messaging/chat.js";
+import {
+	acceptWelcome,
+	ensureOwnKeyPackagePublished,
+	receiveGroupMessageEvent,
+	upsertMessage,
+} from "../../domain/messaging/chat.js";
+import { syncDeviceMembership } from "../../domain/messaging/devices.js";
+import { decryptMirrorPayload, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
+import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
+import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-requests.js";
+import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -93,6 +103,17 @@ async function connect(pubkeyHex, privKey) {
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
 
+	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
+	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
+	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
+	await syncDeviceMembership(pubkeyHex, privKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
+
+	// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
+	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
+	// переподключившееся устройство получило полный паритет истории чатов.
+	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
+	await syncMirroredHistory(pubkeyHex, mirrorKey);
+
 	// DESIGN.md, этап 24, п.6 — ПЕРВАЯ в проекте подписка не по "authors: [я]",
 	// а по адресату: входящие gift wrap (kind 1059, #p: [я]). Один REQ, диспетчеризация
 	// по kind развёрнутого rumor — Welcome (444, MLS) и contact-request (3001) делят
@@ -109,8 +130,23 @@ async function connect(pubkeyHex, privKey) {
 				}
 				try {
 					if (rumor.kind === 444) {
-						await acceptWelcome(pubkeyHex, rumor.pubkey, decodeBase64(rumor.content));
-						await refreshGroupMessageSubscription(pubkeyHex);
+						// Welcome от МОЕГО ЖЕ identity (rumor.pubkey === я) — это sibling-устройство
+						// (DESIGN.md, "Этап 25", раздел 1), не новый контакт: rumor.pubkey не годится
+						// как "с кем этот 1:1-чат" (это тоже я) — читаем contactPubkey из тега,
+						// который devices.js кладёт именно для этого случая.
+						const contactTag = rumor.tags.find((t) => t[0] === "contact");
+						const isSibling = rumor.pubkey === pubkeyHex;
+						const welcomeContactPubkey = isSibling && contactTag ? contactTag[1] : rumor.pubkey;
+						// DESIGN.md, "Этап 25", раздел 4 (AC-IB-01) — Welcome от НЕ-контакта не
+						// принимается автоматически: siblings всегда доверены (это я же), уже
+						// известные контакты — ожидаемый разговор, настоящий незнакомец — в inbox,
+						// без создания MLS-группы, пока пользователь не примет решение явно.
+						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
+							await acceptWelcome(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content));
+							await refreshGroupMessageSubscription(pubkeyHex, privKey, publisher.publish);
+						} else {
+							await storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
+						}
 					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
 						const parsed = parseContactRequestRumor(rumor);
 						await db.table("contactRequests").put({
@@ -134,7 +170,7 @@ async function connect(pubkeyHex, privKey) {
 	// отправитель на каждое сообщение, NIP-EE). Восстанавливает уже установленные чаты
 	// после reload; refreshGroupMessageSubscription (вызывается и выше, при Welcome)
 	// обновляет фильтр, когда появляется новый чат.
-	await refreshGroupMessageSubscription(pubkeyHex);
+	await refreshGroupMessageSubscription(pubkeyHex, privKey, publisher.publish);
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
@@ -268,7 +304,9 @@ export async function fetchKeyPackage(pubkeyHex) {
 // отправитель эфемерный на каждое сообщение). Вызывается при коннекте (восстановить
 // уже установленные чаты после reload) и при каждом новом Welcome (новый чат).
 // Пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема (MVP).
-export async function refreshGroupMessageSubscription(ownerPubkey) {
+// privKey/publish (правка контракта этапа 25) — нужны, чтобы receiveGroupMessageEvent
+// могло зеркалировать полученное сообщение best-effort (DESIGN.md, "Этап 25", раздел 2).
+export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publish) {
 	if (!connection) return;
 	const groupIds = (await db.table("mlsGroups").toArray()).map((row) => row.groupId);
 	if (groupIds.length === 0) return;
@@ -279,7 +317,10 @@ export async function refreshGroupMessageSubscription(ownerPubkey) {
 			onBatch: async (events) => {
 				for (const event of events) {
 					try {
-						await receiveGroupMessageEvent(ownerPubkey, event);
+						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
+						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
+						// application-message; no-op (false), если это обычное сообщение/control.
+						await applyIncomingDeletionIfMarker(event, receivedResult);
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
 					}
@@ -289,4 +330,86 @@ export async function refreshGroupMessageSubscription(ownerPubkey) {
 		connection.addMessageHandler(groupMessageSubscriber.handleMessage);
 	}
 	groupMessageSubscriber.subscribe("group-messages", [{ "#h": groupIds, kinds: [445] }]);
+}
+
+// DESIGN.md, этап 25, раздел 1 — one-shot REQ по ВСЕМ kind 443, когда-либо
+// опубликованным этой identity (включая собственные устройства) — вход для
+// syncDeviceMembership (devices.js). Пустой массив — нормальный случай (аккаунт без
+// второго устройства), НЕ throw (в отличие от fetchKeyPackage — отсутствие анонсов
+// не ошибка, это просто "устройство пока одно").
+export async function fetchOwnKeyPackageAnnounces(ownerPubkey) {
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchOwnKeyPackageAnnounces()");
+	}
+	const announces = [];
+	const subId = "own-keypackages-" + Math.random().toString(36).slice(2);
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: (events) => {
+				for (const event of events) {
+					try {
+						const deviceTag = event.tags.find((t) => t[0] === "device");
+						announces.push({
+							wireBytes: decodeBase64(event.content),
+							deviceId: deviceTag ? deviceTag[1] : undefined,
+							eventPubkey: event.pubkey,
+						});
+					} catch {
+						// повреждённый content — пропустить, не ронять весь fetch
+					}
+				}
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ authors: [ownerPubkey], kinds: [443] }]);
+	});
+
+	return announces;
+}
+
+// DESIGN.md, этап 25, раздел 2 — one-shot REQ по всем зеркалированным сообщениям этой
+// identity (kind 446), catch-up для нового/переподключившегося устройства. Расшифровка
+// одного события не блокирует остальные (console.warn + skip, не throw на весь батч —
+// тот же принцип, что fetchProfiles/парсинг повреждённого профиля).
+export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед syncMirroredHistory()");
+	}
+	const subId = "mirror-history-" + Math.random().toString(36).slice(2);
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						const payload = decryptMirrorPayload(event.content, mirrorKey);
+						await upsertMessage({
+							chatId: payload.contactPubkey,
+							lamportTs: payload.lamportTs,
+							senderPubkey: payload.senderPubkey,
+							id: event.id,
+							text: payload.text,
+							status: "sent",
+							msgId: payload.msgId,
+						});
+					} catch (e) {
+						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
+					}
+				}
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }]);
+	});
 }

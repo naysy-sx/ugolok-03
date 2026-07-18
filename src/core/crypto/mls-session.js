@@ -28,11 +28,28 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/;
 // Не unsafeTestingAuthenticationService из ts-mls (та безусловно возвращает true).
 // Настоящая проверка биннинга Nostr-подписи — граница вызывающего кода, см. DESIGN.md/CONTRACTS.md.
 // Здесь — только структурная проверка формы credential.
+// Этап 25 — правка контракта (многоустройственность): identity credential раньше был
+// ГОЛЫМ hex pubkey — единственный на identity, поэтому два устройства ОДНОЙ identity
+// давали ОДИНАКОВЫЙ credential, и ts-mls (defaultKeyPackageEqualityConfig, сравнение по
+// encode(credential) при несовпадении signaturePublicKey) отклонял добавление второго
+// устройства как "уже существующего участника" — найдено тестами devices.js, не домысел.
+// Теперь identity = "${nostrPubkeyHex}:${deviceId}" — каждое устройство ЧЕСТНО другой
+// MLS-участник (сохраняет защиту ts-mls от настоящих дублей — тот же KeyPackage дважды
+// по-прежнему отклоняется, см. addMember: мусорные байты и повторный Add теста этапа 13).
+const CREDENTIAL_IDENTITY_RE = /^([0-9a-f]{64}):(.+)$/;
+
+function encodeCredentialIdentity(nostrPubkeyHex, deviceId) {
+  if (typeof deviceId !== "string" || deviceId.length === 0) {
+    throw new Error("mls-session: deviceId обязателен и не может быть пустой строкой");
+  }
+  return new TextEncoder().encode(`${nostrPubkeyHex}:${deviceId}`);
+}
+
 const nostrCredentialAuthService = {
   async validateCredential(credential) {
     if (credential.credentialType !== defaultCredentialTypes.basic) return false;
     const identity = new TextDecoder().decode(credential.identity);
-    return HEX_PUBKEY_RE.test(identity);
+    return CREDENTIAL_IDENTITY_RE.test(identity);
   },
 };
 
@@ -77,12 +94,12 @@ function decodeGroupMessage(wireBytes) {
   return decoded;
 }
 
-export async function createOwnKeyPackage(nostrPubkeyHex) {
+export async function createOwnKeyPackage(nostrPubkeyHex, deviceId) {
   assertNostrPubkeyHex(nostrPubkeyHex);
   const cipherSuite = await getImpl();
   const credential = {
     credentialType: defaultCredentialTypes.basic,
-    identity: new TextEncoder().encode(nostrPubkeyHex),
+    identity: encodeCredentialIdentity(nostrPubkeyHex, deviceId),
   };
   const { publicPackage, privatePackage } = await generateKeyPackage({ credential, cipherSuite });
   const wireBytes = encode(mlsMessageEncoder, {

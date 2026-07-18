@@ -1316,11 +1316,13 @@ Ciphersuite зафиксирован константой внутри моду�
 форматами `ts-mls` напрямую.
 
 ```js
-// credential.identity = UTF-8 байты hex-строки (64 символа) Nostr pubkey — НЕ сырые 32 байта
-export async function createOwnKeyPackage(nostrPubkeyHex);
+// credential.identity = UTF-8 байты "${nostrPubkeyHex}:${deviceId}" (правка контракта,
+// этап 25 — было ГОЛЫМ nostrPubkeyHex; см. "Этап 25" ниже, раздел про credential-конфликт)
+export async function createOwnKeyPackage(nostrPubkeyHex, deviceId);
 // -> { publicPackage, privatePackage, wireBytes }
 // wireBytes уже закодирован (mlsMessageEncoder, wireformat=mls_key_package) — готов как content kind 443
 // persist privatePackage — забота этапа 14, не этого модуля
+// deviceId — ОБЯЗАТЕЛЬНЫЙ параметр (throw, если пустая строка/не строка), не дефолтится молча
 
 export async function createGroup(nostrPubkeyHex, ownKeyPackage, groupIdBytes);
 // -> sessionState (непрозрачный объект-обёртка над ts-mls clientState; наружу не парсится)
@@ -2588,7 +2590,9 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 // (вызывающий код обязан был вызвать ensureChatEstablished раньше — граница та же,
 // что mls-session.js само декларирует про credential-проверку, этап 13)
 // state = deserializeState(row.state)
-// plaintextBytes = new TextEncoder().encode(JSON.stringify({ text, lamportTs }))
+// msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)))  // правка этапа 25 —
+//   генерируется здесь ОДИН РАЗ, кладётся в plaintext И в зеркало (см. CONTRACTS.md "Этап 25")
+// plaintextBytes = new TextEncoder().encode(JSON.stringify({ text, lamportTs, msgId }))
 // // encryptApplicationMessage(state, message) ожидает Uint8Array, не строку — подтверждено
 // // tests/mls-session.test.js (setupGroupWithBob + new TextEncoder().encode(...) в тестах этапа 13)
 // { newSessionState, wireBytes } = encryptApplicationMessage(state, plaintextBytes)
@@ -2602,12 +2606,16 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 // ephemeralPriv = generateSecretKey() (nostr-tools/pure) -- НОВЫЙ на это сообщение, не переиспользуется
 // event = sign({ kind: 445, tags: [["h", toHex(groupId)]], content, created_at }, ephemeralPriv)
 // await requirePublishOk(publish, event)
-// -> персист локально в db.messages { chatId: contactPubkey, lamportTs, senderPubkey: ownerPubkey,
-//    id: event.id, text, status: "sent" } (FSM: created->SEND->sending->ACK->sent, см. machine.js;
+// -> upsertMessage({ chatId: contactPubkey, lamportTs, senderPubkey: ownerPubkey,
+//    id: event.id, text, status: "sent", msgId }) (FSM: created->SEND->sending->ACK->sent, см. machine.js;
 //    "sending" функционально пропускается для MVP — publish() уже ждёт ack синхронно, publisher.js этапа 18)
-// -> Promise<{ eventId: string }>
+// -> зеркало (best-effort, этап 25, см. ниже) -> Promise<{ eventId: string }>
 
-export async function receiveGroupMessageEvent(ownerPubkey, event);
+export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
+// ПРАВКА СИГНАТУРЫ (этап 25, было (ownerPubkey, event)): privKey/publish добавлены —
+// нужны ТОЛЬКО для зеркала best-effort (mirrorBestEffort ниже), сам приём/расшифровка
+// MLS не требует privKey (deriveNostrEnvelopeKeys берёт ключ конверта из MLS-состояния,
+// не из identity-ключа). Все вызывающие места (transport.js, тесты) обновлены.
 // groupId из event.tags (["h", hex]); mlsGroups нет записи -> discard (чужая/неизвестная группа) -> null
 // contactPubkey = row.contactPubkey (НЕ параметр функции — берётся из строки, установленной
 // ensureChatEstablished/acceptWelcome; вызывающему коду не нужно заранее знать, чей это чат)
@@ -2616,8 +2624,9 @@ export async function receiveGroupMessageEvent(ownerPubkey, event);
 // { newSessionState, message } | { newSessionState, kind: "control" } = decryptApplicationMessage(state, wireBytes)
 // персист newSessionState (SM-2), contactPubkey переносится тем же put() (см. sendMessage, та же находка)
 // kind==="control" -> Promise<null> (проposal/commit, не текст, MVP не показывает UI для этого)
-// иначе: parsed = JSON.parse(new TextDecoder().decode(message)); персист db.messages { chatId: contactPubkey,
-//   lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, id: event.id, text: parsed.text, status: "sent" }
+// иначе: parsed = JSON.parse(new TextDecoder().decode(message)); upsertMessage({ chatId: contactPubkey,
+//   lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, id: event.id, text: parsed.text,
+//   status: "sent", msgId: parsed.msgId }) -> зеркало (best-effort, этап 25, см. ниже)
 // -> Promise<{ text, lamportTs } | null>
 
 export async function getChatHistory(contactPubkey);
@@ -2644,10 +2653,271 @@ export async function ensureConnected(pubkeyHex, privKey);
 // подписка НА ВХОДЯЩИЕ { "#p": [pubkeyHex], kinds: [1059] } — ПЕРВАЯ в проекте подписка
 // не по "authors: [я]", а по адресату (DESIGN.md, этап 24, п.6). На каждое входящее:
 //   rumor = nip59.unwrap(event, privKey)
-//   rumor.kind === 444  -> joinFromWelcome(...) -> mlsGroups.put (пропустить, если groupId уже есть)
+//   rumor.kind === 444  -> welcomeContactPubkey = (rumor.pubkey === pubkeyHex && есть тег "contact")
+//     ? tag(rumor,"contact") : rumor.pubkey   -- ПРАВКА этапа 25: Welcome от sibling-устройства
+//     приходит от МЕНЯ ЖЕ (rumor.pubkey === pubkeyHex) — devices.js кладёт contactPubkey тегом,
+//     т.к. rumor.pubkey в этом случае не годится как "с кем этот 1:1-чат" (DESIGN.md, "Этап 25", раздел 1b)
+//     -> acceptWelcome(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content)) -> mlsGroups.put
 //   rumor.kind === 3001 -> parseContactRequestRumor(rumor) -> contactRequests.put
 //   иначе -> discard
 // Подписка на kind 445 (Group Message) — { "#h": [...все groupId из mlsGroups] }, тоже
 // заводится здесь; список groupId в фильтре обновляется при каждом новом ensureChatEstablished
 // (пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема, MVP)
+```
+
+## Этап 25 — Личные сообщения: периферия + multi-device
+
+Формализация (распознавание sibling-устройств + массовое добавление
+в MLS-группы, зеркало истории с ключом от мнемоники, идемпотентное
+слияние двух путей доставки) — DESIGN.md, раздел "Этап 25". Здесь —
+сигнатуры.
+
+### `src/domain/identity/device.js` (новый файл, рутина)
+
+```js
+export function getOrCreateDeviceId();
+// db.table("deviceIdentity").get("self") -- если есть, вернуть row.deviceId
+// иначе: deviceId = bytesToHex(crypto.getRandomValues(new Uint8Array(16))) (32 hex символа)
+//   -> db.table("deviceIdentity").put({ id: "self", deviceId }) -> вернуть deviceId
+// Синхронная обёртка невозможна (Dexie async) -- функция async, вызывающий код await'ит
+// -> Promise<string>
+```
+
+### `src/core/crypto/derivation.js` (правка контракта этапа 8 — добавлена функция, аддитивно)
+
+```js
+export function deriveMirrorKey(masterSecret); // -> Uint8Array(32)
+```
+
+- `HKDF-SHA256(masterSecret, salt=utf8("Ugolok/v1/mirror"), info=utf8(""), length=32)` —
+  параллельно уже принятой `deriveDbKey` (та же входная цепочка, другая
+  соль). Существующие `deriveMasterSecret`/`deriveDbKey`/`opaqueDTag` не
+  меняются.
+
+### `src/domain/messaging/mirror.js` (новый файл, крипто-обёртка — пишет Claude напрямую, по прецеденту `file-crypto.js`/`db-crypto.js`)
+
+```js
+export const KIND_MESSAGE_MIRROR = 446;
+
+export function encryptMirrorPayload(payload, mirrorKey);
+// payload: { text, lamportTs, senderPubkey, contactPubkey, msgId }
+// msgId — сгенерирован ОДИН РАЗ в sendMessage (chat.js), тождественен между
+// live-MLS путём и зеркалом ДЛЯ ОДНОГО И ТОГО ЖЕ логического сообщения — единственное
+// поле, по которому upsertMessage распознаёт дубликат (DESIGN.md, этап 25, п.3;
+// (chatId, lamportTs, senderPubkey) НЕ годится — легитимная коллизия при multi-device,
+// найдено адверсарным прогоном уже принятого теста этапа 24 до кода этого этапа)
+// plaintext = utf8(JSON.stringify(payload))
+// nonce = crypto.getRandomValues(12); ciphertext = ChaCha20-Poly1305(mirrorKey, nonce, plaintext)
+// -> base64(nonce ‖ ciphertext+tag)  (формат блоба как file-crypto.js, этап 10 — nonce не отдельным полем)
+
+export function decryptMirrorPayload(base64Content, mirrorKey);
+// обратное: base64decode -> split(nonce(12), rest) -> ChaCha20-Poly1305.decrypt
+// -> { text, lamportTs, senderPubkey, contactPubkey, msgId } (throw при неверном ключе/испорченном блобе, AEAD tag mismatch)
+
+export function buildMirrorEvent(payload, mirrorKey, groupIdHex, createdAt);
+// -> { kind: 446, tags: [["h", groupIdHex]], content: encryptMirrorPayload(payload, mirrorKey), created_at: createdAt }
+// НЕ подписывает (sign() -- обычной identity-подписью, вызывается в chat.js, не здесь --
+// та же граница ответственности, что buildContactRequestRumor/nip44.js: этот модуль только
+// формат/шифрование, подпись и публикация -- вызывающий код)
+```
+
+### `src/domain/messaging/devices.js` (новый файл — пишет Claude напрямую, самая рискованная логика этапа, тот же класс риска что `chat.js`)
+
+```js
+export async function syncDeviceMembership(ownerPubkey, privKey, publish, fetchOwnKeyPackageAnnounces);
+// fetchOwnKeyPackageAnnounces: () => Promise<Array<{ wireBytes: Uint8Array, deviceId: string, eventPubkey: string }>>
+//   -- инъекция, one-shot REQ { authors: [ownerPubkey], kinds: [443] } (реализация в transport.js)
+// myDeviceId = await getOrCreateDeviceId()
+// for each announce:
+//   if announce.deviceId undefined or === myDeviceId: continue  (легаси без тега / собственный анонс)
+//   knownRow = db.table("knownDevices").get([ownerPubkey, announce.deviceId])
+//   if !knownRow: knownRow = { ownerPubkey, deviceId: announce.deviceId, wireBytes: announce.wireBytes, addedGroupIds: [] }
+//   allGroups = db.table("mlsGroups").toArray()
+//   for group of allGroups:
+//     if knownRow.addedGroupIds.includes(group.groupId): continue
+//     state = deserializeState(group.state)
+//     { privateKey: oldEnvPriv, publicKey: oldEnvPub } = deriveNostrEnvelopeKeys(state)  // СТАРАЯ эпоха, ДО addMember
+//     { newSessionState, welcomeWireBytes, commitWireBytes } = addMember(state, knownRow.wireBytes)
+//     await db.table("mlsGroups").put({ groupId: group.groupId, contactPubkey: group.contactPubkey, state: serializeState(newSessionState) })  // SM-2
+//     // ОБЯЗАТЕЛЬНО (правка найдена при подготовке живой проверки, DESIGN.md п.1c):
+//     // commitWireBytes НЕ отбрасывается (в отличие от ensureChatEstablished, этап 24) —
+//     // group.contactPubkey уже существующий участник, ему нужен именно коммит, чтобы
+//     // продвинуть эпоху; иначе он застревает на старой эпохе молча (не throw нигде)
+//     commitContent = nip44Encrypt(base64(commitWireBytes), oldEnvPriv, bytesToHex(oldEnvPub))
+//     commitEvent = sign({ kind: 445, tags: [["h", group.groupId]], content: commitContent, created_at }, generateSecretKey())
+//     await requirePublishOk(publish, commitEvent)  // contactPubkey получает его через уже существующую
+//       // ветку result.kind==="control" в receiveGroupMessageEvent (chat.js, этап 24) — без правки chat.js
+//     welcomeEvent = nip59.wrap({ kind: 444, content: base64(welcomeWireBytes), tags: [["contact", group.contactPubkey]] }, privKey, ownerPubkey)
+//     await requirePublishOk(publish, welcomeEvent)
+//     knownRow.addedGroupIds.push(group.groupId); await db.table("knownDevices").put(knownRow)
+//     // персист СРАЗУ после каждой группы (не одним put в конце) — сбой на N-й группе
+//     // не должен откатывать уже сохранённый прогресс по 1..N-1
+// -> Promise<void>
+// Вызывается ОДИН РАЗ за connect() (transport.js, после ensureOwnKeyPackagePublished) —
+// не живой push, см. DESIGN.md "явное сужение скоупа"
+```
+
+### `src/domain/messaging/chat.js` (правка контракта этапа 24 — добавлены зеркало и upsert-дедупликация)
+
+```js
+export async function upsertMessage(row);
+// row: { chatId, lamportTs, senderPubkey, id, text, status, msgId }
+// try: db.table("messages").add(row); catch (только по уникальному индексу [chatId+msgId]): no-op
+// -> Promise<void>
+// Заменяет прямые db.table("messages").add(...) во ВСЕХ 4 местах: sendMessage,
+// receiveGroupMessageEvent, mirror-write (п.ниже), syncMirroredHistory (transport.js)
+
+// ensureOwnKeyPackagePublished — ПРАВКА ПОВЕДЕНИЯ (не сигнатуры, этап 25, п.13 skill,
+// явное решение + полная регрессия): tags больше не [], а [["device", await getOrCreateDeviceId()]].
+// Существующие уже опубликованные (легаси, без тега) kind 443 из более ранних тестовых
+// прогонов этого этапа НЕ мигрируются (проект в разработке, боевых пользователей нет,
+// прецедент этапа 11) — ensureOwnKeyPackagePublished остаётся no-op, если "self" уже
+// существует локально, повторной публикации с тегом не происходит для уже онбордженных
+// тестовых аккаунтов; чистые новые аккаунты получают тег сразу.
+
+// sendMessage — ПРАВКА ФОРМАТА application-message plaintext (этап 24 п.7,
+// явное решение + полная регрессия): msgId = bytesToHex(crypto.getRandomValues(new
+// Uint8Array(16))), СГЕНЕРИРОВАН ЗДЕСЬ, ОДИН РАЗ на сообщение; plaintextBytes теперь
+// utf8(JSON.stringify({ text, lamportTs, msgId })), не { text, lamportTs }.
+// receiveGroupMessageEvent — parsed.msgId читается из уже расширенного плейнтекста
+// (обратной совместимости со старыми (msgId-less) сообщениями не требуется — проект
+// в разработке, прецедент этапа 11).
+//
+// sendMessage/receiveGroupMessageEvent — ДОПОЛНЕНО (после успешной MLS-операции, best-effort,
+// сбой зеркала -- console.warn, НЕ throw, не блокирует основной путь):
+//   mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey))  // privKey — параметр sendMessage
+//   (уже было) и receiveGroupMessageEvent (правка сигнатуры этапа 25, см. выше)
+//   event = sign(buildMirrorEvent({ text, lamportTs, senderPubkey, contactPubkey, msgId }, mirrorKey, groupIdHex, created_at), privKey)
+//   try { await requirePublishOk(publish, event) } catch (e) { console.warn(...) }
+// db.table("messages").add(...) в обеих функциях заменяется на upsertMessage(... , msgId)
+```
+
+### `src/ui/signals/transport.js` (правка контракта этапа 24 — добавлены device-sync и mirror catch-up)
+
+```js
+export async function fetchOwnKeyPackageAnnounces(ownerPubkey);
+// one-shot REQ { authors: [ownerPubkey], kinds: [443] }, EOSE -> для каждого event:
+//   { wireBytes: base64decode(event.content), deviceId: tag(event,"device"), eventPubkey: event.pubkey }
+// -> Promise<Array<{...}>> (пустой массив, если ни одного -- НЕ throw, в отличие от fetchKeyPackage:
+//   отсутствие анонсов -- нормальный случай для аккаунта без второго устройства)
+
+export async function syncMirroredHistory(ownerPubkey, mirrorKey);
+// one-shot REQ { authors: [ownerPubkey], kinds: [446] }, EOSE -> для каждого event:
+//   payload = decryptMirrorPayload(event.content, mirrorKey)  -- неверный ключ/битый блоб -> skip + console.warn, не throw на весь батч
+//   upsertMessage({ chatId: payload.contactPubkey, lamportTs: payload.lamportTs,
+//     senderPubkey: payload.senderPubkey, id: event.id, text: payload.text, status: "sent", msgId: payload.msgId })
+// -> Promise<void>
+
+// ensureConnected -- ДОПОЛНЕНО, после ensureOwnKeyPackagePublished и ДО refreshGroupMessageSubscription:
+//   await syncDeviceMembership(pubkeyHex, privKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex))
+//   mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey)); await syncMirroredHistory(pubkeyHex, mirrorKey)
+// (после -- refreshGroupMessageSubscription(pubkeyHex) уже существующий, подхватит и новые
+// группы, если syncDeviceMembership только что что-то добавил -- для СЕБЯ добавление не
+// создаёт новых mlsGroups строк, только для добавляемого сиблинга, так что фактически
+// refreshGroupMessageSubscription здесь ничего нового не находит -- но порядок вызовов
+// сохраняется для консистентности с остальным connect())
+```
+
+### `src/core/store/database.js` (правка схемы, `db.version(3)`, аддитивно)
+
+```js
+deviceIdentity: "id",
+knownDevices: "[ownerPubkey+deviceId], ownerPubkey",
+messages: "++seq, &[chatId+msgId], [chatId+lamportTs+senderPubkey+id], chatId, id, status, deleted",
+inboxRequests: "[owner+senderPubkey], owner, senderPubkey, createdAt"
+```
+
+Остальные таблицы не меняются. `messages` переопределяется целиком в
+`version(3)` (Dexie требует полного списка индексов таблицы при
+изменении хотя бы одного) — новый unique-индекс `[chatId+msgId]`
+(дедупликация, п. выше) добавлен РЯДОМ со старым неуникальным индексом
+`[chatId+lamportTs+senderPubkey+id]` (сортировка `getChatHistory`,
+не трогается) — два индекса, два разных назначения, не заменяют друг
+друга. Строки без `msgId` (тестовые фикстуры этапа 24, `bulkAdd` до
+этого этапа) не индексируются unique-индексом (IndexedDB пропускает
+запись в compound-индексе при отсутствующем поле key path) — не
+требуют правки задним числом. `inboxRequests` переопределена (была
+`"id, senderPubkey, created_at"`, version(1), никем не использовалась
+с этапа 3) — owner-scoping, тот же пробел мультиаккаунта, что уже
+исправлен для `contactRequests` (этап 24), просто не замечен раньше
+(мёртвая таблица); `createdAt` camelCase для единообразия.
+
+### `src/domain/messaging/inbox-requests.js` (новый файл)
+
+```js
+export async function isKnownContact(ownerPubkey, candidatePubkey);
+// db.table("contacts").get([ownerPubkey, candidatePubkey]) -> Boolean(row)
+
+export async function storeInboxRequest(ownerPubkey, senderPubkey, welcomeWireBytes, createdAt);
+// db.table("inboxRequests").put({ owner: ownerPubkey, senderPubkey, welcomeWireBytes, createdAt })
+// welcomeWireBytes хранится СЫРЫМ (Uint8Array, Dexie структурно клонирует) — Welcome НЕ
+// распаковывается (joinFromWelcome НЕ вызывается), пока пользователь явно не примет решение
+// -> Promise<void>
+
+export async function listInboxRequests(ownerPubkey);
+// db.table("inboxRequests").where("owner").equals(ownerPubkey).toArray() -> Promise<Array<{owner,senderPubkey,welcomeWireBytes,createdAt}>>
+
+export async function acceptInboxRequest(ownerPubkey, senderPubkey);
+// row = db.table("inboxRequests").get([ownerPubkey, senderPubkey]); нет записи -> throw
+// await chat.acceptWelcome(ownerPubkey, senderPubkey, row.welcomeWireBytes)  -- переиспользует
+//   этап 24 буквально, без изменений; ownKeyPackage.self НЕ ротируется (известное
+//   упрощение этапа 24) -- joinFromWelcome сработает той же приватной половиной
+// await db.table("inboxRequests").delete([ownerPubkey, senderPubkey])
+// -> Promise<void>
+// ВАЖНО: вызывающий код (будущий chat.jsx, этап 27) ОБЯЗАН вызвать
+// transport.refreshGroupMessageSubscription после acceptInboxRequest — тот же принцип,
+// что ensureChatEstablished (этап 24, CONTRACTS.md) — inbox-requests.js не импортирует transport.js
+
+export async function rejectInboxRequest(ownerPubkey, senderPubkey);
+// db.table("inboxRequests").delete([ownerPubkey, senderPubkey]) -- MLS-группа никогда не
+// создавалась (Welcome не распаковывался), удалять больше нечего -> Promise<void>
+```
+
+### `src/ui/signals/transport.js` (правка контракта этапа 24/25 — whitelist-гейт для Welcome)
+
+```js
+// Диспетчер входящих gift-wrap, rumor.kind === 444 — ПРАВКА (после self-Welcome-тега, раздел 1b):
+//   isSibling = rumor.pubkey === pubkeyHex
+//   welcomeContactPubkey = isSibling && contactTag ? contactTag[1] : rumor.pubkey
+//   if isSibling || await isKnownContact(pubkeyHex, welcomeContactPubkey):
+//     acceptWelcome(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content)); refreshGroupMessageSubscription(...)
+//   else:
+//     storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at)
+//     // НЕ acceptWelcome — Welcome от настоящего незнакомца не создаёт MLS-группу автоматически (AC-IB-01)
+```
+
+### `src/domain/messaging/deletions.js` (новый файл)
+
+```js
+export function buildDeletionText(msgId);
+// -> "__ugolok_delete__:" + msgId
+
+export function parseDeletionText(text);
+// -> text.slice(prefix.length), если начинается с префикса; иначе null
+
+export async function deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish);
+// targetRow = db.table("messages").where("[chatId+msgId]").equals([contactPubkey, msgId]).first()
+// !targetRow || targetRow.senderPubkey !== ownerPubkey -> throw ("нельзя удалить чужое сообщение")
+//   -- найдено адверсарным тестом (не домысел): без этой проверки можно было бы локально
+//   "удалить" чужое (Боба) сообщение — та же F-EV-08 граница, что и на приёмной стороне
+// { eventId } = await chat.sendMessage(ownerPubkey, privKey, contactPubkey, buildDeletionText(msgId), lamportTs, publish)
+//   -- переиспользует ВЕСЬ криптографический путь этапа 24 буквально, без изменений chat.js
+// db.table("messages").where("[chatId+msgId]").equals([contactPubkey, msgId]).modify({ deleted: true, text: "" })
+//   -- своя копия помечается СРАЗУ (не дожидаясь приёма контактом) -- UX «Сообщение удалено» мгновенно
+// -> Promise<{ eventId: string }>
+
+export async function applyIncomingDeletionIfMarker(event, receivedResult);
+// receivedResult — возврат receiveGroupMessageEvent (chat.js): { text, lamportTs } | null
+// if !receivedResult: return false
+// targetMsgId = parseDeletionText(receivedResult.text); if null: return false (обычное сообщение, не маркер)
+// hTag = event.tags.find(t => t[0]==="h"); groupRow = db.table("mlsGroups").get(hTag[1]); if !groupRow: return false
+// deleterPubkey = groupRow.contactPubkey  -- НЕ event.pubkey (эфемерный на kind 445, та же находка
+//   этапа 24 п.7) -- тот же способ, что receiveGroupMessageEvent резолвит contactPubkey
+// targetRow = db.table("messages").where("[chatId+msgId]").equals([groupRow.contactPubkey, targetMsgId]).first()
+// if !targetRow or targetRow.senderPubkey !== deleterPubkey: return false
+//   -- авторизация: аналог validateDeletion (этап 22) F-EV-08 -- только автор может удалить своё
+// db.table("messages").where("[chatId+msgId]").equals([groupRow.contactPubkey, targetMsgId]).modify({ deleted: true, text: "" })
+// -> Promise<boolean>  -- true, если реально применено
+// Вызывается ПОСЛЕ receiveGroupMessageEvent в диспетчере kind 445 (transport.js), не внутри chat.js.
+// Строка самого маркера (delete-запрос как "сообщение") НЕ скрывается здесь -- backlog UI, этап 27.
 ```

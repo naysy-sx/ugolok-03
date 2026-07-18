@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	deriveMasterSecret,
 	deriveDbKey,
+	deriveMirrorKey,
 	opaqueDTag,
 } from "../src/core/crypto/derivation.js";
 
@@ -28,6 +29,33 @@ test("deriveDbKey: 32 байта, детерминирован, отличает
 	assert.equal(dbKey1.length, 32);
 	assert.deepEqual(dbKey1, dbKey2);
 	assert.notDeepEqual(dbKey1, ms);
+});
+
+test("deriveMirrorKey: 32 байта, детерминирован, отличается от dbKey и masterSecret", () => {
+	const ms = deriveMasterSecret(new Uint8Array(32).fill(1));
+	const dbKey = deriveDbKey(ms);
+	const mirrorKey1 = deriveMirrorKey(ms);
+	const mirrorKey2 = deriveMirrorKey(ms);
+	assert.equal(mirrorKey1.length, 32);
+	assert.deepEqual(mirrorKey1, mirrorKey2);
+	assert.notDeepEqual(mirrorKey1, dbKey);
+	assert.notDeepEqual(mirrorKey1, ms);
+});
+
+test("deriveMirrorKey: та же цепочка (privKey -> masterSecret) на разных 'устройствах' даёт одинаковый ключ", () => {
+	// Симуляция: два вызова deriveMasterSecret с ОДНИМ privKey (как если бы это
+	// произошло на двух разных устройствах с одной мнемоникой) -> mirrorKey совпадает
+	// без какого-либо обмена/согласования между ними.
+	const privKey = new Uint8Array(32).fill(42);
+	const msDeviceA = deriveMasterSecret(privKey);
+	const msDeviceB = deriveMasterSecret(privKey);
+	assert.deepEqual(deriveMirrorKey(msDeviceA), deriveMirrorKey(msDeviceB));
+});
+
+test("deriveMirrorKey: разные masterSecret -> разные mirrorKey", () => {
+	const a = deriveMirrorKey(deriveMasterSecret(new Uint8Array(32).fill(1)));
+	const b = deriveMirrorKey(deriveMasterSecret(new Uint8Array(32).fill(2)));
+	assert.notDeepEqual(a, b);
 });
 
 test("opaqueDTag: смоук-тест §16.3 TECH.md (дословно)", () => {

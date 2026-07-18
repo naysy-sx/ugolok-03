@@ -15,7 +15,10 @@ import {
 	serializeState,
 	deserializeState,
 } from "../../core/crypto/mls-session.js";
+import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
+import { buildMirrorEvent } from "./mirror.js";
 import { db } from "../../core/store/database.js";
+import { getOrCreateDeviceId } from "../identity/device.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -39,11 +42,39 @@ async function requirePublishOk(publish, event) {
 	}
 }
 
+// upsertMessage — идемпотентная вставка (DESIGN.md, этап 25, раздел 3): одно и то же
+// логическое сообщение может прийти ДВУМЯ путями (живой MLS kind 445 и зеркало kind 446),
+// в любом порядке, любое число раз. Дедупликация по unique-индексу [chatId+msgId]
+// (db.version(3)) — НЕ по (chatId, lamportTs, senderPubkey): два РАЗНЫХ сообщения могут
+// легитимно иметь одинаковый lamportTs при multi-device (найдено адверсарным прогоном
+// уже принятого теста getChatHistory tiebreak-by-id).
+export async function upsertMessage(row) {
+	try {
+		await db.table("messages").add(row);
+	} catch (e) {
+		if (e.name !== "ConstraintError") throw e;
+		// уже есть строка с тем же (chatId, msgId) — тихий no-op, не дубль
+	}
+}
+
+// Зеркало best-effort (DESIGN.md, этап 25, раздел 2): сбой публикации НЕ блокирует и не
+// откатывает основной MLS-путь, только предупреждение — по прецеденту profile.jsx (этап 23-довесок).
+async function mirrorBestEffort(privKey, publish, payload, groupIdHex) {
+	try {
+		const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
+		const event = sign(buildMirrorEvent(payload, mirrorKey, groupIdHex, Math.floor(Date.now() / 1000)), privKey);
+		await requirePublishOk(publish, event);
+	} catch (e) {
+		console.warn("mirrorBestEffort: не удалось зеркалировать сообщение", e);
+	}
+}
+
 export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish) {
 	const existing = await db.table("ownKeyPackage").get("self");
 	if (existing) return;
 
-	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey);
+	const deviceId = await getOrCreateDeviceId();
+	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
 	await db.table("ownKeyPackage").put({
 		id: "self",
 		publicPackage: ownKeyPackage.publicPackage,
@@ -52,7 +83,12 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish
 	});
 
 	const event = sign(
-		{ kind: 443, tags: [], content: encodeBase64(ownKeyPackage.wireBytes), created_at: Math.floor(Date.now() / 1000) },
+		{
+			kind: 443,
+			tags: [["device", deviceId]],
+			content: encodeBase64(ownKeyPackage.wireBytes),
+			created_at: Math.floor(Date.now() / 1000),
+		},
 		privKey,
 	);
 	await requirePublishOk(publish, event);
@@ -72,7 +108,8 @@ export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey,
 
 	// Свежий KeyPackage — для СОЗДАНИЯ именно этой группы, не переиспользует
 	// опубликованный "приглашающий" ownKeyPackage.self (тот — для входящих Welcome от других).
-	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey);
+	const deviceId = await getOrCreateDeviceId();
+	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
 	const state = await createGroup(ownerPubkey, ownKeyPackage, groupId);
 	const { newSessionState, welcomeWireBytes } = await addMember(state, theirWireBytes);
 	// commitWireBytes сознательно отброшен — некому его слать (DESIGN.md п.3.4):
@@ -124,7 +161,10 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	}
 
 	const state = deserializeState(row.state);
-	const plaintextBytes = utf8ToBytes(JSON.stringify({ text, lamportTs }));
+	// msgId (этап 25) — единственный идентификатор, тождественный между живым MLS-путём
+	// и зеркалом одного и того же логического сообщения (DESIGN.md, "Этап 25", раздел 3).
+	const msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+	const plaintextBytes = utf8ToBytes(JSON.stringify({ text, lamportTs, msgId }));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
 	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
@@ -141,19 +181,31 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	);
 	await requirePublishOk(publish, event);
 
-	await db.table("messages").add({
+	await upsertMessage({
 		chatId: contactPubkey,
 		lamportTs,
 		senderPubkey: ownerPubkey,
 		id: event.id,
 		text,
 		status: "sent",
+		msgId,
 	});
+
+	await mirrorBestEffort(
+		privKey,
+		publish,
+		{ text, lamportTs, senderPubkey: ownerPubkey, contactPubkey, msgId },
+		groupIdHex,
+	);
 
 	return { eventId: event.id };
 }
 
-export async function receiveGroupMessageEvent(ownerPubkey, event) {
+// privKey/publish (правка контракта этапа 25, было (ownerPubkey, event)) — нужны для
+// зеркала best-effort (DESIGN.md, "Этап 25", раздел 2): устройство, ПРИНЯВШЕЕ сообщение
+// живым MLS-путём, обязано распространить его на ОСТАЛЬНЫЕ устройства той же identity,
+// иначе они не MLS-участники именно этого сообщения и никогда его не увидят.
+export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publish) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return null;
 	const groupIdHex = hTag[1];
@@ -172,14 +224,22 @@ export async function receiveGroupMessageEvent(ownerPubkey, event) {
 	if (result.kind === "control") return null;
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
-	await db.table("messages").add({
+	await upsertMessage({
 		chatId: contactPubkey,
 		lamportTs: parsed.lamportTs,
 		senderPubkey: contactPubkey,
 		id: event.id,
 		text: parsed.text,
 		status: "sent",
+		msgId: parsed.msgId,
 	});
+
+	await mirrorBestEffort(
+		privKey,
+		publish,
+		{ text: parsed.text, lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, contactPubkey, msgId: parsed.msgId },
+		groupIdHex,
+	);
 
 	return { text: parsed.text, lamportTs: parsed.lamportTs };
 }

@@ -72,7 +72,7 @@ test("ensureOwnKeyPackagePublished: публикует kind 443 и персис�
 
 async function establishAliceToBob() {
 	// Боб публикует свой KeyPackage (симулируем то, что реально произошло бы на его стороне)
-	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB);
+	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
 	const fetchKeyPackage = async (pubkey) => {
 		assert.equal(pubkey, BOB_PUB);
 		return bobKeyPackage.wireBytes;
@@ -151,13 +151,17 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	const { groupId, bobSerializedState } = await establishAliceToBob();
 	const groupIdHex = toHex(groupId);
 
-	let sentEvent;
+	const publishedEvents = [];
 	const publish = async (event) => {
-		sentEvent = event;
+		publishedEvents.push(event);
 		return { ok: true };
 	};
 	// db.mlsGroups сейчас содержит запись АЛИСЫ (establishAliceToBob оставил её последней)
+	// sendMessage публикует ДВА события (этап 25): живой kind 445 и зеркало kind 446 (best-effort)
 	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет, Боб", 5, publish);
+	const sentEvent = publishedEvents.find((e) => e.kind === 445);
+	assert.ok(sentEvent, "должен опубликовать живое MLS-сообщение (kind 445)");
+	assert.ok(publishedEvents.some((e) => e.kind === 446), "должен зеркалировать (kind 446)");
 	assert.equal(sentEvent.kind, 445);
 	assert.equal(eventId, sentEvent.id);
 	assert.deepEqual(sentEvent.tags, [["h", groupIdHex]]);
@@ -166,14 +170,14 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 
 	// "Переключаемся" на Боба (его отдельная копия состояния, не запись Алисы) — см. asBob
 	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
-		receiveGroupMessageEvent(BOB_PUB, sentEvent),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvent, async () => ({ ok: true })),
 	);
 	assert.deepEqual(received, { text: "привет, Боб", lamportTs: 5 });
 });
 
 test("receiveGroupMessageEvent: неизвестный groupId (h-тег) — discard, не бросает", async () => {
 	const fakeEvent = { kind: 445, tags: [["h", "00".repeat(32)]], content: "irrelevant", pubkey: "x", id: "y" };
-	const result = await receiveGroupMessageEvent(BOB_PUB, fakeEvent);
+	const result = await receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, fakeEvent, async () => ({ ok: true }));
 	assert.equal(result, null);
 });
 
@@ -190,7 +194,9 @@ test("contactPubkey переживает put() из sendMessage — второй
 	const rowAfterFirstSend = await db.table("mlsGroups").get(groupIdHex);
 	assert.equal(rowAfterFirstSend.contactPubkey, BOB_PUB);
 
-	await asBob(groupIdHex, bobSerializedState, () => receiveGroupMessageEvent(BOB_PUB, sentEvents[0]));
+	await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvents[0], async () => ({ ok: true })),
+	);
 	const bobRowAfterReceive = await db.table("mlsGroups").get(groupIdHex);
 	assert.equal(bobRowAfterReceive.contactPubkey, ALICE_PUB, "и после приёма (put в receiveGroupMessageEvent) тоже");
 });

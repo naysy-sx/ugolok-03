@@ -36,3 +36,25 @@ db.version(2).stores({
   ownKeyPackage: "id",
   contactRequests: "[owner+senderPubkey], owner"
 });
+
+// Этап 25 — аддитивно: две новые таблицы (multi-device) + messages переопределена
+// целиком (Dexie требует полный список индексов таблицы при изменении хотя бы
+// одного) — добавлен unique-индекс [chatId+msgId] для идемпотентного upsertMessage
+// (DESIGN.md, "Этап 25", раздел 3). НЕ [chatId+lamportTs+senderPubkey] — легитимная
+// коллизия при multi-device (два устройства одной identity тикают один и тот же
+// lamport-момент), тайбрейк по id уже покрыт существующим тестом этапа 24. Старый
+// неуникальный индекс [chatId+lamportTs+senderPubkey+id] остаётся для сортировки
+// getChatHistory, данных к миграции нет (пустые локальные базы).
+db.version(3).stores({
+  deviceIdentity: "id",
+  knownDevices: "[ownerPubkey+deviceId], ownerPubkey",
+  messages:
+    "++seq, &[chatId+msgId], [chatId+lamportTs+senderPubkey+id], chatId, id, status, deleted",
+  // Правка находки: version(1)'s inboxRequests (bare "id") не был owner-scoped — тот же
+  // класс пробела, что contactRequests УЖЕ исправил в этапе 24 (мультиаккаунт на одном
+  // устройстве иначе схлопывает pending-запросы разных владельцев в одну строку). Таблица
+  // не использовалась нигде до этого этапа (мёртвая с этапа 3) — переопределение безопасно,
+  // данных к миграции нет. createdAt (camelCase) — для единообразия с contactRequests,
+  // было created_at (единственное расхождение стиля во всей схеме).
+  inboxRequests: "[owner+senderPubkey], owner, senderPubkey, createdAt"
+});
