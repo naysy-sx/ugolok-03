@@ -12,6 +12,8 @@ import {
 	listChatPartners,
 	sendChatMessageAction,
 	deleteChatMessageAction,
+	deleteMessageForMeAction,
+	clearChatHistoryAction,
 	markChatReadAction,
 	saveChatDraftAction,
 } from "../src/ui/signals/chats.js";
@@ -141,4 +143,28 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 	await deleteChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, row.msgId, 3, publish);
 	const updated = await db.table("messages").where("id").equals(eventId).first();
 	assert.equal(updated.deleted, true);
+});
+
+test("deleteMessageForMeAction/clearChatHistoryAction: делегируют в deletions.js (этап 27-довесок-5)", async () => {
+	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
+	const publish = async () => ({ ok: true });
+	const { eventId } = await sendChatMessageAction(
+		ALICE_PUB,
+		ALICE_PRIV,
+		BOB_PUB,
+		"привет",
+		1,
+		publish,
+		async () => bobKeyPackage.wireBytes,
+		async () => {},
+	);
+	const row = await db.table("messages").where("id").equals(eventId).first();
+
+	await deleteMessageForMeAction(ALICE_PUB, BOB_PUB, row.msgId);
+	assert.equal(await db.table("messages").where("id").equals(eventId).first(), undefined);
+
+	await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "ещё одно", 2, publish, async () => bobKeyPackage.wireBytes, async () => {});
+	await clearChatHistoryAction(ALICE_PUB, BOB_PUB);
+	const remaining = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).toArray();
+	assert.deepEqual(remaining, []);
 });

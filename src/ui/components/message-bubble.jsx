@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+
 const STATUS_LABELS = {
 	created: "черновик",
 	sending: "отправка…",
@@ -7,7 +9,12 @@ const STATUS_LABELS = {
 	discarded: "отменено",
 };
 
-export default function MessageBubble({ message, isOwn, onDelete }) {
+// "Удалить у обоих" технически возможно ТОЛЬКО для своих сообщений (deleteMessage
+// проверяет авторство, CONTRACTS.md этап 27-довесок-5) — выбор показывается только у
+// isOwn; у чужих сообщений сразу одна кнопка "Удалить у себя", без раскрывающегося меню.
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth }) {
+	const [confirming, setConfirming] = useState(false);
+
 	const bubbleStyle = {
 		alignSelf: isOwn ? "flex-end" : "flex-start",
 		maxWidth: "70%",
@@ -29,16 +36,41 @@ export default function MessageBubble({ message, isOwn, onDelete }) {
 	return (
 		<div style={bubbleStyle}>
 			<p>{message.text}</p>
-			{isOwn && (
-				<footer class="cluster" style={{ alignItems: "center" }}>
-					{statusLabel && <small style={{ color: "var(--muted)" }}>{statusLabel}</small>}
-					{typeof onDelete === "function" && (
-						<button type="button" onClick={() => onDelete(message.msgId)}>
-							Удалить
+			<footer class="cluster" style={{ alignItems: "center" }}>
+				{isOwn && statusLabel && <small style={{ color: "var(--muted)" }}>{statusLabel}</small>}
+				{typeof onDeleteForMe === "function" && !confirming && (
+					<button type="button" onClick={() => setConfirming(true)}>
+						Удалить
+					</button>
+				)}
+				{confirming && (
+					<>
+						<button
+							type="button"
+							onClick={() => {
+								setConfirming(false);
+								onDeleteForMe(message.msgId);
+							}}
+						>
+							Удалить у себя
 						</button>
-					)}
-				</footer>
-			)}
+						{isOwn && typeof onDeleteForBoth === "function" && (
+							<button
+								type="button"
+								onClick={() => {
+									setConfirming(false);
+									onDeleteForBoth(message.msgId);
+								}}
+							>
+								Удалить у обоих
+							</button>
+						)}
+						<button type="button" onClick={() => setConfirming(false)}>
+							Отмена
+						</button>
+					</>
+				)}
+			</footer>
 		</div>
 	);
 }

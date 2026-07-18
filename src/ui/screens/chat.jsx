@@ -20,6 +20,8 @@ import {
 	listChatPartners,
 	sendChatMessageAction,
 	deleteChatMessageAction,
+	deleteMessageForMeAction,
+	clearChatHistoryAction,
 	markChatReadAction,
 	saveChatDraftAction,
 } from "../signals/chats.js";
@@ -365,7 +367,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		}
 	}
 
-	async function handleDelete(msgId) {
+	async function handleDeleteForBoth(msgId) {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
@@ -381,6 +383,27 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		}
 	}
 
+	// "Удалить у себя" — чисто локально (нет сети, нет ожидания relay) — busy-блокировка
+	// не нужна, но reloadWindow всё равно async.
+	async function handleDeleteForMe(msgId) {
+		try {
+			await deleteMessageForMeAction(ownerPubkey, contactPubkey, msgId);
+			await reloadWindow();
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	async function handleClearHistory() {
+		if (!window.confirm("Очистить переписку? Сообщения удалятся только у вас, у собеседника всё останется.")) return;
+		try {
+			await clearChatHistoryAction(ownerPubkey, contactPubkey);
+			await reloadWindow();
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
 	const profile = profiles.value[contactPubkey];
 	const displayName = profile?.name || shortPubkey(contactPubkey);
 
@@ -391,6 +414,9 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 					← Назад
 				</button>
 				<h1>{displayName}</h1>
+				<button type="button" onClick={handleClearHistory}>
+					Очистить переписку
+				</button>
 			</header>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -413,7 +439,8 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 								key={message.msgId}
 								message={message}
 								isOwn={isOwn}
-								onDelete={isOwn ? handleDelete : undefined}
+								onDeleteForMe={handleDeleteForMe}
+								onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
 							/>
 						);
 					})}

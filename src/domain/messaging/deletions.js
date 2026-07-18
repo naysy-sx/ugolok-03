@@ -59,3 +59,19 @@ export async function applyIncomingDeletionIfMarker(ownerPubkey, event, received
 	});
 	return true;
 }
+
+// "Удалить у себя" — чисто локально, БЕЗ публикации в relay и БЕЗ проверки авторства
+// (в отличие от deleteMessage/"у обоих" — здесь скрывается только МОЯ копия, чужие данные
+// не затрагиваются, поэтому разрешено для любого msgId, не только своих сообщений).
+// Жёсткое удаление строки (не soft-delete с плейсхолдером "Сообщение удалено" — та пометка
+// нужна, только когда ОБЕ стороны знают об удалении; здесь знаю только я).
+export async function deleteMessageForMe(ownerPubkey, contactPubkey, msgId) {
+	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).delete();
+}
+
+// "Очистить переписку" (у себя) — удаляет ВСЕ сообщения этого чата локально. mlsGroups-запись
+// (сам канал) не трогается — listChatPartners (chats.js) читает mlsGroups, не messages, чат
+// остаётся в списке, просто пустым; переписка продолжает работать при следующей отправке/приёме.
+export async function clearChatHistory(ownerPubkey, contactPubkey) {
+	await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).delete();
+}

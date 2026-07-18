@@ -12,6 +12,8 @@ import {
 	parseDeletionText,
 	deleteMessage,
 	applyIncomingDeletionIfMarker,
+	deleteMessageForMe,
+	clearChatHistory,
 } from "../src/domain/messaging/deletions.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -189,4 +191,62 @@ test("applyIncomingDeletionIfMarker: обычное (не-маркерное) с
 test("applyIncomingDeletionIfMarker: receivedResult===null (control-сообщение) — false", async () => {
 	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, { tags: [] }, null);
 	assert.equal(applied, false);
+});
+
+test("deleteMessageForMe: жёстко удаляет строку локально, без публикации (в отличие от deleteMessage/'у обоих')", async () => {
+	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: ALICE_PUB,
+		id: "evt-1",
+		text: "моё сообщение",
+		status: "sent",
+		msgId: "msg-1",
+	});
+	await deleteMessageForMe(ALICE_PUB, BOB_PUB, "msg-1");
+	const row = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, "msg-1"]).first();
+	assert.equal(row, undefined, "строка удалена целиком, не soft-delete с плейсхолдером");
+});
+
+test("deleteMessageForMe: работает и для ЧУЖОГО сообщения (локально скрыть у себя разрешено всем)", async () => {
+	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: BOB_PUB,
+		id: "evt-2",
+		text: "сообщение от Боба",
+		status: "sent",
+		msgId: "msg-2",
+	});
+	await deleteMessageForMe(ALICE_PUB, BOB_PUB, "msg-2");
+	const row = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, "msg-2"]).first();
+	assert.equal(row, undefined);
+});
+
+test("deleteMessageForMe: несуществующий msgId — no-op, не бросает", async () => {
+	await assert.doesNotReject(() => deleteMessageForMe(ALICE_PUB, BOB_PUB, "нет-такого"));
+});
+
+test("clearChatHistory: удаляет ВСЕ сообщения чата owner+chatId, не трогает другой chatId и другого owner", async () => {
+	await db.table("messages").bulkAdd([
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "a1", text: "1", status: "sent", msgId: "m1" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: BOB_PUB, id: "a2", text: "2", status: "sent", msgId: "m2" },
+		// другой собеседник у той же Алисы — должен остаться нетронутым
+		{ ownerPubkey: ALICE_PUB, chatId: "carol-pub", lamportTs: 1, senderPubkey: ALICE_PUB, id: "a3", text: "3", status: "sent", msgId: "m3" },
+		// та же переписка, но с точки зрения Боба (другой owner) — должна остаться нетронутой
+		{ ownerPubkey: BOB_PUB, chatId: ALICE_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "a4", text: "4", status: "sent", msgId: "m4" },
+	]);
+
+	await clearChatHistory(ALICE_PUB, BOB_PUB);
+
+	const aliceBobRows = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).toArray();
+	assert.deepEqual(aliceBobRows, []);
+
+	const aliceCarolRows = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, "carol-pub"]).toArray();
+	assert.equal(aliceCarolRows.length, 1);
+
+	const bobAliceRows = await db.table("messages").where("[ownerPubkey+chatId]").equals([BOB_PUB, ALICE_PUB]).toArray();
+	assert.equal(bobAliceRows.length, 1);
 });

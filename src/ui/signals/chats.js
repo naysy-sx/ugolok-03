@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals";
 import { db } from "../../core/store/database.js";
 import { ensureChatEstablished, sendMessage } from "../../domain/messaging/chat.js";
-import { deleteMessage } from "../../domain/messaging/deletions.js";
+import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
 import { markChatAsRead } from "../../domain/messaging/read-status.js";
 import { saveDraft } from "../../domain/messaging/drafts.js";
 
@@ -42,6 +42,16 @@ export async function sendChatMessageAction(
 
 export async function deleteChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish) {
 	return deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish);
+}
+
+// "Удалить у себя" — локально, без публикации (см. CONTRACTS.md, этап 27-довесок-5).
+export async function deleteMessageForMeAction(ownerPubkey, contactPubkey, msgId) {
+	return deleteMessageForMe(ownerPubkey, contactPubkey, msgId);
+}
+
+// "Очистить переписку" — локально, у собеседника всё остаётся (mlsGroups не трогается).
+export async function clearChatHistoryAction(ownerPubkey, contactPubkey) {
+	return clearChatHistory(ownerPubkey, contactPubkey);
 }
 
 export async function markChatReadAction(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish) {
