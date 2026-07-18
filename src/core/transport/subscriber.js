@@ -6,6 +6,7 @@ export function createSubscriber(connection, options) {
   const batchWindowMs = options.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS;
   const verifyBatch = options.verifyBatch;
   const onBatch = options.onBatch;
+  const onEose = options.onEose;
 
   // per-subId состояние очереди — подписки не должны смешивать батчи
   const queues = new Map(); // subId -> { events: [], timer }
@@ -70,7 +71,10 @@ export function createSubscriber(connection, options) {
     }
 
     if (type === "EOSE" && queues.has(subId)) {
-      flush(subId);
+      // onEose обязан сработать ПОСЛЕ того, как последний батч уже обработан
+      // onBatch — иначе вызывающий код (bootstrap.js, этап 19) мог бы решить,
+      // что данные готовы, пока последний батч ещё асинхронно летит.
+      Promise.resolve(flush(subId)).then(() => onEose?.(subId));
       return true;
     }
 

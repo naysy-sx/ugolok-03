@@ -111,6 +111,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 | 16 (relay pool + транспорт) | 124.56 КБ | +0 | `relay-pool.js`/`transport.js` вне app-графа — реальный потребитель (publisher/subscriber, bootstrap) с этапа 18-19 |
 | 17 (NIP-42 AUTH) | 124.56 КБ | +0 | `relay-auth.js` тоже вне app-графа по той же причине |
 | 18 (publisher/subscriber/outbox) | 124.56 КБ | +0 | `publisher.js`/`subscriber.js` вне app-графа; `outbox.js`/`g-set.js` уже в графе с более ранних этапов (не новые файлы) |
+| 19 (Lamport + bootstrap) | 124.56 КБ | +0 | `lamport.js`/`bootstrap.js` вне app-графа — реальный потребитель (главный экран после входа) появится только когда UI начнёт вызывать bootstrap, этапы 20+ |
 
 **Важная находка при переработке плана:** бюджет TECH.md §7.2
 (~190–250 КБ итого, запас 30–90 КБ) посчитан ДО решения профиля B
@@ -179,7 +180,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 - [x] Этап 18. **Publisher + subscriber + outbox** [рутина] — публикация событий с batching (100 evt / 200мс); подписки по фильтрам; outbox: drain при восстановлении сети (offline → online → автодоставка, AC-09)
     - `src/core/transport/publisher.js`, `src/core/transport/subscriber.js`, `src/core/store/outbox.js`
 
-- [ ] Этап 19. **Lamport-часы + bootstrap cold start** [алгоритмика — DESIGN.md: синхронизация с неочевидными переходами, п.13a] — TECH.md §4.4/§12.2: tick (in-mem), receive, persist (в транзакции с записью события), init из max(lamportTs); полная загрузка состояния при первом входе (скачать + fold + батч). Критерий: 10 синтетических событий lamportTs 1..10, перезагрузка → `lamport.value == 11`; bootstrap 1000 kind 0 < 10с (частичный AC-12, полный замер — этап 32)
+- [x] Этап 19. **Lamport-часы + bootstrap cold start** [алгоритмика — DESIGN.md: синхронизация с неочевидными переходами, п.13a] — TECH.md §4.4/§12.2: tick (in-mem), receive, persist, init из max(lamportTs). **Явное сужение скоупа bootstrap.js (DESIGN.md):** только шаги 1-4/10-11 из §12.2 (fetch+fold журнала+lamport+syncState) и ОДНО соединение (не "все relay" буквально — self-hosted, `transport.js` даёт failover URL, не параллельную агрегацию); расшифровка приватных kind/channel-key/allowlist/rebuild permissions — правка контракта на этапах 21/28/30, когда домены появятся. Критерий (DoD): 10 синтетических сообщений lamportTs 1..10 → `computeInitialLamportValue() == 11` — выполнен. Полный AC-12/13 замер — этап 32 (throughput пайплайна уже подтверждён P-SPIKE, этап 15, теми же примитивами)
     - `src/core/sync/lamport.js`, `src/core/sync/bootstrap.js`
 
 - [ ] Этап 20. **Инкрементальная синхронизация + профиль** [рутина] — TECH.md §12.5/§4.8: realtime-подписки на новые события; kind 0 (профиль) и kind 10002 (relay-list); индикатор синхронизации (подключён/syncing/оффлайн); проверка clock skew > 30с → предупреждение (F-RL-06). **Перенос решения:** в довеске к этапу 12 уже построен локальный stand-in профиля (`avatar`/`bio` как открытые поля записи `keystore`, не kind 0) — на старте этого этапа явно решить миграцию: локальные поля становятся черновиком первой публикации kind 0, или полностью заменяются; не угадывать, задокументировать выбор в CONTRACTS.md до кода

@@ -141,3 +141,34 @@ test("две независимые подписки не смешивают с�
 	assert.deepEqual(batchesBySub.subA.map((e) => e.id), ["a1"]);
 	assert.deepEqual(batchesBySub.subB.map((e) => e.id), ["b1"]);
 });
+
+test("onEose вызывается ПОСЛЕ flush() текущего батча, не раньше (правка контракта, этап 19)", async () => {
+	const events = [];
+	let eoseCalledAfterBatch = false;
+	const { conn } = setupConnected();
+	const sub = createSubscriber(conn, {
+		batchSize: 100,
+		verifyBatch: acceptAllVerify,
+		onBatch: async (evs) => {
+			events.push(...evs);
+		},
+		onEose: (subId) => {
+			eoseCalledAfterBatch = events.length === 2 && subId === "sub1";
+		},
+	});
+	sub.subscribe("sub1", [{}]);
+	sub.handleMessage(["EVENT", "sub1", ev("a")]);
+	sub.handleMessage(["EVENT", "sub1", ev("b")]);
+	sub.handleMessage(["EOSE", "sub1"]);
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	assert.equal(eoseCalledAfterBatch, true);
+});
+
+test("onEose не обязателен (options без него) — EOSE всё равно флашит батч без ошибки", async () => {
+	const batches = [];
+	const { conn } = setupConnected();
+	const sub = createSubscriber(conn, { verifyBatch: acceptAllVerify, onBatch: async (evs) => batches.push(evs) });
+	sub.subscribe("sub1", [{}]);
+	sub.handleMessage(["EVENT", "sub1", ev("a")]);
+	assert.doesNotThrow(() => sub.handleMessage(["EOSE", "sub1"]));
+});

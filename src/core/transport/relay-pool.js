@@ -53,6 +53,18 @@ export function createRelayConnection(url, options = {}) {
   let reconnectAttempt = 0;
   let reconnectTimer = null;
 
+  // Композиция message-interceptor'ов (relay-auth.js/publisher.js/subscriber.js,
+  // этапы 17-18) — правка контракта, этап 19. `onMessage` из options — сырой
+  // наблюдатель (видит ВСЁ, ни на что не влияет); handleMessage-функции
+  // регистрируются здесь и пробуются по очереди до первой, вернувшей true
+  // ("сообщение моё, обработано") — тот же паттерн first-match-wins, что уже
+  // используют сами interceptor'ы.
+  const messageHandlers = [];
+
+  function addMessageHandler(handler) {
+    messageHandlers.push(handler);
+  }
+
   function setState(next) {
     const prev = state;
     state = next;
@@ -89,7 +101,11 @@ export function createRelayConnection(url, options = {}) {
       apply("ERROR");
     };
     ws.onmessage = (evt) => {
-      onMessage?.(JSON.parse(evt.data));
+      const msg = JSON.parse(evt.data);
+      onMessage?.(msg);
+      for (const handler of messageHandlers) {
+        if (handler(msg)) break;
+      }
     };
   }
 
@@ -115,6 +131,8 @@ export function createRelayConnection(url, options = {}) {
 
   return {
     getState: () => state,
+    getUrl: () => url,
+    addMessageHandler,
     connect,
     send,
     reportAuthChallenge: () => apply("AUTH_CHALLENGE"),

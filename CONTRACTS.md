@@ -1588,12 +1588,14 @@ export function createRelayConnection(url, options = {});
 // options: {
 //   WebSocketImpl = globalThis.WebSocket,   // инъекция для тестов — фейковый WS без реальной сети
 //   backoff = DEFAULT_BACKOFF,
-//   onMessage(parsedJsonArray),              // сырые входящие сообщения relay, разбор — забота вызывающего кода (relay-auth.js/subscriber.js, этапы 17-18)
+//   onMessage(parsedJsonArray),              // СЫРОЙ наблюдатель — видит ВСЕ сообщения, ни на что не влияет (логирование/отладка), не interceptor
 //   onStateChange(newState, oldState),
 //   autoReconnect = true,                    // реконнект с backoff при CLOSE/ERROR, если close() не был вызван явно
 // }
 // -> {
 //   getState(): string,                      // текущее состояние автомата (см. DESIGN.md таблицу)
+//   getUrl(): string,                         // (этап 19) — url, переданный при конструировании
+//   addMessageHandler(handler): void,         // (правка контракта, этап 19, см. DESIGN.md) — регистрирует message-interceptor (handler(msg): boolean); пробуются по очереди, первый true останавливает цепочку
 //   connect(): void,                          // CONNECT -> connecting; сама заводит WS, сама транслирует WS-события open/close/error в OPEN/CLOSE/ERROR автомата
 //   send(msgArray): void,                     // JSON.stringify(msgArray) -> ws.send; throw, если state не "connected"/"subscribed"/"authenticating"
 //     (правка контракта, этап 17: "authenticating" тоже разрешён — relay-auth.js обязан отправить AUTH-ответ именно в этом состоянии, WS реально открыт)
@@ -1733,3 +1735,63 @@ NostrEvent — забота вызывающего кода (этап 19+, boots
 event}` — резолвинг `eventId → event` тоже на стороне вызывающего
 (инъекция), не хардкод `getEventById` внутрь `outbox.js` (тестируется
 без реальной БД).
+
+## Этап 19 — Lamport-часы + bootstrap cold start
+
+Формализация и обоснование сужения скоупа `bootstrap.js` — DESIGN.md,
+раздел "Этап 19". Здесь — сигнатуры.
+
+### `src/core/transport/subscriber.js` (правка контракта этапа 18 — добавлена опция, остальное не менялось)
+
+```js
+export function createSubscriber(connection, options);
+// options добавлено: onEose(subId): void  — вызывается ПОСЛЕ flush() текущего батча на EOSE
+```
+
+### `src/core/sync/lamport.js`
+
+```js
+export function createLamportClock(initialValue = 0);
+// -> { tick(): number, receive(remoteT: number): number, getValue(): number }
+// ЧИСТЫЙ, in-memory, без побочных эффектов на БД (см. DESIGN.md — persist это забота вызывающего кода, в одной транзакции с записью сообщения)
+
+export async function computeInitialLamportValue();
+// -> Promise<number>
+// Сканирует db.table("messages") (materialized view, поле lamportTs) -> max(0, max{lamportTs}) + 1
+// ВСЕГДА пересчитывает от фактических данных, не читает закэшированное значение из clock (см. DESIGN.md, инвариант L2)
+
+export async function persistLamportValue(value);
+// -> Promise<void>
+// db.table("clock").put({ id: "lamport", value }) — вызывающий код кладёт ВНУТРИ своей Dexie-транзакции
+// (передаёт транзакционный контекст через уже открытую db.transaction(...) — Dexie резолвит вложенные вызовы в текущую транзакцию автоматически, если она открыта)
+```
+
+### `src/core/sync/bootstrap.js`
+
+Скоуп (что реализовано и что явно отложено) — таблица в DESIGN.md.
+
+```js
+export async function runBootstrap(connection, pubkey, options = {});
+// connection — ОДНО уже подключённое соединение (createRelayConnection, connected/subscribed)
+// options: { verifyBatch, subId = "bootstrap" } (verifyBatch — та же инъекция, что subscriber.js, этап 18)
+// -> Promise<{ addedCount: number, lamportValue: number }>
+//
+// 1. subscriber = createSubscriber(connection, { verifyBatch, onBatch: (events) => mergeEvents(events), onEose: ... })
+// 2. subscriber.subscribe(subId, [{ authors: [pubkey] }, { "#p": [pubkey], kinds: [30053] }])
+// 3. Promise резолвится по onEose (после того, как последний batch этой подписки обработан onBatch)
+// 4. После EOSE: lamportValue = await computeInitialLamportValue(); await persistLamportValue(lamportValue)
+// 5. await setSyncState(<url соединения>, Math.floor(Date.now()/1000))
+// 6. -> { addedCount (сумма addedIds.length по всем onBatch-вызовам), lamportValue }
+
+export async function getSyncState(relayUrl);
+// -> Promise<number | undefined>  — db.table("syncState").get(relayUrl)?.lastSeen
+
+export async function setSyncState(relayUrl, lastSeen);
+// -> Promise<void> — db.table("syncState").put({ relay: relayUrl, lastSeen })
+// Экспортируется отдельно — этап 20 (инкрементальная синхронизация, F-CS-09) читает то же значение, не дублирует формат
+```
+
+**Не в скоупе (см. таблицу DESIGN.md):** расшифровка приватных kind,
+channel keys, comment allowlist, fold в domain-таблицы кроме
+журнального `events`, rebuild `effectivePerms`, UI-уведомление о
+готовности. Каждое — правка контракта на своём будущем этапе (21/28/30).

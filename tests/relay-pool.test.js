@@ -177,3 +177,41 @@ test("send() также разрешён в authenticating (нужно для о
 	assert.equal(conn.getState(), "authenticating");
 	assert.doesNotThrow(() => conn.send(["AUTH", { kind: 22242 }]));
 });
+
+test("addMessageHandler: композиция нескольких обработчиков, first-match-wins; onMessage — сырой наблюдатель, видит всё независимо", () => {
+	const WS = freshWS();
+	const observed = [];
+	const conn = createRelayConnection("ws://test", {
+		WebSocketImpl: WS,
+		onMessage: (msg) => observed.push(msg),
+	});
+	conn.connect();
+	WS.instances[0]._open();
+
+	const calls = [];
+	conn.addMessageHandler((msg) => {
+		calls.push(["first", msg]);
+		return msg[0] === "AUTH"; // перехватывает только AUTH
+	});
+	conn.addMessageHandler((msg) => {
+		calls.push(["second", msg]);
+		return true;
+	});
+
+	WS.instances[0].onmessage({ data: JSON.stringify(["AUTH", "chal"]) });
+	assert.deepEqual(
+		calls.map((c) => c[0]),
+		["first"],
+		"первый обработчик вернул true на AUTH — второй не должен вызываться",
+	);
+
+	calls.length = 0;
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", {}]) });
+	assert.deepEqual(
+		calls.map((c) => c[0]),
+		["first", "second"],
+		"первый не забрал EVENT (вернул false) — дошло до второго",
+	);
+
+	assert.equal(observed.length, 2, "onMessage-наблюдатель видел оба сообщения независимо от перехвата");
+});
