@@ -2921,3 +2921,151 @@ export async function applyIncomingDeletionIfMarker(event, receivedResult);
 // Вызывается ПОСЛЕ receiveGroupMessageEvent в диспетчере kind 445 (transport.js), не внутри chat.js.
 // Строка самого маркера (delete-запрос как "сообщение") НЕ скрывается здесь -- backlog UI, этап 27.
 ```
+
+## Этап 26 — Lazy-load чата + read status + черновики
+
+Триаж (п.13a): **рутина** — CRUD/fold-обвязка по прецеденту `groups.js`/
+`handlers.js` (этапы 22-24), никакого нового пространства состояний с
+неочевидными переходами. Design-записка не пишется (п.13a), находки —
+ниже, по прецеденту предыдущих рутинных этапов.
+
+### Находки (архитектурные расхождения с TECH.md, до кода)
+
+**1. F-CSL-01/6.4 писались ДО пивота на MLS (этап 13) — не переносятся
+буквально.** Оригинальный псевдокод предполагает REQ к relay по kind
+1059 "при открытии чата с контактом X" — модель, где сообщения НЕ
+материализуются локально заранее. С этапа 24/25 вся история чата УЖЕ
+материализуется в `messages` НЕЗАВИСИМО от того, открыт ли конкретный
+чат в UI (живая подписка по ВСЕМ `groupId` сразу + зеркало по
+`authors:[me]` сразу, этапы 24-25). "Lazy-load" здесь — ЛОКАЛЬНАЯ
+операция над уже заполненной IndexedDB (окно последних N при открытии,
+подгрузка более старых при скролле), БЕЗ обращения к relay. Тот же
+класс правки, что self-mirror (этап 25).
+
+**2. Окна "по 100" — контракт UI (сколько показывается за раз), не
+буквальная курсорная оптимизация физического запроса.** `messages`
+одного 1:1 чата в MVP-масштабах — не миллионы строк; `.where("chatId").
+equals(...).toArray()` + сортировка+срез в памяти — тот же осознанный
+компромисс, что `queryEvents` этапа 3 ("полное сканирование, без
+оптимизации через индексы — допустимо для этого объёма"). Настоящая
+Dexie-курсорная оптимизация (реальный частичный запрос без full-scan
+таблицы) — backlog, если понадобится по перформансу.
+
+**3. `chatSyncState` (схема с этапа 3, `"chatId"`) — мёртвая таблица
+до этого этапа, первый реальный потребитель.** Одна строка на чат несёт
+`{chatId, lastReadLamportTs, draftText, draftUpdatedAt, oldestLoadedSeq}`
+— не заводится отдельных таблиц под read-status/draft/lazy-курсор
+(Dexie не требует фиксированной схемы столбцов, только индексов) —
+проще, чем три отдельные таблицы ради трёх независимых kind'ов,
+которые в UI всё равно читаются вместе (открытие чата).
+
+**4. Read-status monotonic guard.** `foldReadStatus` не должен
+откатывать `lastReadLamportTs` НАЗАД, если локально уже есть более
+свежее значение (relay не гарантирует порядок доставки replaceable
+kind'ов) — симметрично `nextCreatedAt`-дисциплине этапа 23/24, но
+здесь монотонность проверяется НА ЧТЕНИИ (fold), не на записи.
+
+**5. Идемпотентность fold read-status относительно ДКА сообщения.**
+`transitionMessage("read", "READ")` не определён (finalное состояние,
+machine.js бросает) — повторный fold ТОЙ ЖЕ версии kind 30070 не
+должен падать: `foldReadStatus` пропускает строки, уже `status ===
+"read"`, ДО вызова `transitionMessage`, а не глушит исключение try/catch
+(прозрачнее — ошибка перехода для НЕожиданного случая по-прежнему
+всплывает).
+
+### `src/domain/messaging/read-status.js` (новый файл)
+
+```js
+export function buildReadStatusEvent(privKey, { chatId, lastReadLamportTs }, createdAt = Math.floor(Date.now()/1000));
+// createdAt — необязательный параметр (по прецеденту buildGroupEvent, этап 24/23-довесок) —
+// вызывающий код может передать nextCreatedAt()-подобное монотонное значение против
+// коллизии в ту же секунду; дефолт — текущее время.
+// kind 30070, tags=[["d", chatId]] (d-tag = chatId В ОТКРЫТОМ ВИДЕ — TECH.md: для этого
+// kind'а d-tag не privacy-чувствителен, opaqueDTag не нужен, по прецеденту buildGroupEvent)
+// content = NIP-44(JSON.stringify({ lastReadLamportTs }), privKey, ownPubkey) — self-encrypt
+// -> подписанный NostrEvent
+
+export function parseReadStatusEvent(event, privKey);
+// decrypt NIP-44(event.content, privKey, event.pubkey), JSON.parse
+// -> { chatId (из d-tag), lastReadLamportTs }
+
+export async function foldReadStatus(event, privKey);
+// { chatId, lastReadLamportTs } = parseReadStatusEvent(event, privKey)
+// existing = db.table("chatSyncState").get(chatId)
+// if existing?.lastReadLamportTs >= lastReadLamportTs: return  -- monotonic guard, находка 4
+// db.table("chatSyncState").put({ ...existing, chatId, lastReadLamportTs })
+// rows = db.table("messages").where("chatId").equals(chatId).toArray()
+// for row of rows:
+//   if row.senderPubkey === event.pubkey: continue  --자신의 исходящие не переводятся тут
+//     (F-MS-07: READ относится к сообщениям, которые Я прочитал ОТ контакта, не к своим же)
+//   if row.lamportTs > lastReadLamportTs: continue
+//   if row.status !== "sent": continue  -- уже "read" (идемпотентность, находка 5) или иной статус
+//   db.table("messages").update(row, { status: transitionMessage(row.status, "READ") })
+// -> Promise<void>
+
+export async function markChatAsRead(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish);
+// event = buildReadStatusEvent(privKey, { chatId: contactPubkey, lastReadLamportTs })
+// await requirePublishOk(publish, event)  -- та же дисциплина, что chat.js/devices.js
+// await foldReadStatus(event, privKey)  -- локально применяем СРАЗУ, не ждём эха от relay
+// -> Promise<void>
+
+export async function getUnreadCount(ownerPubkey, contactPubkey);
+// existing = db.table("chatSyncState").get(contactPubkey); lastRead = existing?.lastReadLamportTs ?? 0
+// db.table("messages").where("chatId").equals(contactPubkey).toArray()
+//   .filter(m => m.senderPubkey === contactPubkey && m.lamportTs > lastRead).length
+// -> Promise<number>
+```
+
+### `src/domain/messaging/drafts.js` (новый файл)
+
+```js
+export function buildDraftEvent(privKey, { chatId, text }, createdAt = Math.floor(Date.now()/1000));
+// kind 30071, tags=[["d", chatId]] (один активный черновик на чат, d-tag в открытом виде,
+// тот же принцип, что read-status — TECH.md: 30071 d-tag не privacy-чувствителен)
+// content = NIP-44(JSON.stringify({ text }), privKey, ownPubkey) — self-encrypt
+// text === "" -- валиден (republish с пустым text = стирание черновика)
+// -> подписанный NostrEvent
+
+export function parseDraftEvent(event, privKey);
+// -> { chatId (из d-tag), text }
+
+export async function foldDraft(event, privKey);
+// { chatId, text } = parseDraftEvent(event, privKey)
+// db.table("chatSyncState").put({ ...(await db.table("chatSyncState").get(chatId)), chatId,
+//   draftText: text, draftUpdatedAt: event.created_at })
+// -- LWW по created_at уже даёт "последнюю версию" на уровне raw-события (та же гарантия,
+//   что contacts/groups, этапы 22-24) -- foldDraft не нужен собственный monotonic guard
+// -> Promise<void>
+
+export async function saveDraft(ownerPubkey, privKey, contactPubkey, text, publish);
+// event = buildDraftEvent(privKey, { chatId: contactPubkey, text })
+// await requirePublishOk(publish, event); await foldDraft(event, privKey)
+// -> Promise<void>
+
+export async function getDraft(contactPubkey);
+// (await db.table("chatSyncState").get(contactPubkey))?.draftText ?? ""
+// -> Promise<string>
+```
+
+### `src/core/sync/lazy-chat.js` (новый файл)
+
+```js
+export async function loadChatWindow(contactPubkey, { limit = 100, beforeSeq } = {});
+// rows = db.table("messages").where("chatId").equals(contactPubkey).toArray()
+// sorted = rows.sort(та же компаратор-функция, что getChatHistory: (lamportTs, senderPubkey, id))
+// source = beforeSeq === undefined ? sorted : sorted.slice(0, sorted.findIndex(m => m.seq === beforeSeq))
+//   (findIndex не найден (-1) -> source = sorted, курсор устарел/невалиден -- не throw)
+// windowRows = source.slice(-limit)
+// -> Promise<{ messages: MessageRow[], hasMore: boolean }>  -- hasMore = source.length > limit
+
+export async function markWindowLoaded(contactPubkey, oldestLoadedSeq);
+// db.table("chatSyncState").put({ ...(await db.table("chatSyncState").get(contactPubkey)),
+//   chatId: contactPubkey, oldestLoadedSeq })
+// -- курсор для UI (chat.jsx, этап 27): "докуда догружено", не влияет на sort/filter сам по себе
+// -> Promise<void>
+```
+
+Требует `sendMessage`'s `requirePublishOk` семантику (throw при `!result.ok`)
+— `read-status.js`/`drafts.js` НЕ импортируют её из `chat.js` (не
+экспортирована) — своя копия хелпера, тот же паттерн, что `devices.js`
+(этап 25).
