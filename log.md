@@ -1757,3 +1757,22 @@ expectedSha256).
 Regression: `npm test` 479/479. `npm run build` 223.50 КБ gzip (без
 изменений — новые модули не achievable из точки входа, этап 29
 подключит).
+
+## Этап 28-довесок — живой Blossom-сервер
+
+По просьбе пользователя развёрнут локальный Blossom-сервер (аналог
+strfry). Выбор: `sebdeveloper6952/blossom-server` (Go), не
+официальный `hzrd149/blossom-server-ts` (deprecated на npm, тяжёлые
+нативные зависимости). `server/blossom/{setup,run}.sh` + `config.yml`
+зеркалируют `server/strfry/` буквально; `vite.config.js` получил
+`devBlossomPlugin()` — автозапуск вместе с `vite dev`, прямой аналог
+`devRelayPlugin()`.
+
+Живая проверка против РЕАЛЬНОГО сервера (не заглушка из юнит-тестов):
+полный round-trip `blossom-client.js` и `upload.js`/`download.js` —
+шифрование → загрузка → скачивание → расшифровка → совпадение с
+оригиналом. Адверсарный сценарий (неверный `x`-тег) — сервер реально
+отвечает 400, клиент корректно пробрасывает ошибку.
+
+Regression: `npm test` 479/479 (не менялся тестируемый код, только
+инфраструктура). `npm run build` 223.50 КБ gzip.

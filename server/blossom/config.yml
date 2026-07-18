@@ -1,0 +1,35 @@
+# Тестовый Blossom-сервер проекта "Уголок" (server/blossom/, аналог server/strfry/).
+# Разворачивается через setup.sh, запускается через run.sh (копирует этот файл в
+# blossom-src/config.yml перед запуском — сам сервер читает фиксированный
+# относительный путь "config.yml" от рабочей директории, флага --config нет).
+
+# Хранилище — SQLite, вне blossom-src/ (переживает переустановку/пересборку сервера),
+# путь относительно рабочей директории процесса (blossom-src/, см. run.sh).
+db_path: "../blossom-db/database.sqlite3"
+
+log_level: "INFO"
+
+# 127.0.0.1, не 0.0.0.0 — тот же принцип, что strfry.conf (relay.bind = "127.0.0.1"):
+# локальная сеть/разработка, не публичный интернет (CLAUDE.md).
+api_addr: "127.0.0.1:8080"
+cdn_url: "http://127.0.0.1:8080"
+
+# Не используется тестовыми сценариями (админ-эндпоинты не вызываются клиентом) —
+# фиксированное значение-заглушка, а не реальный ключ.
+admin_pubkey: "0000000000000000000000000000000000000000000000000000000000000000"
+
+# F-AT-04: 20 MB — тот же лимит, что src/domain/attachments/validation.js
+# (MAX_IMAGE_FILE_SIZE/MAX_VIDEO_SIZE). Дублирование сознательное: сервер —
+# независимая проверка (defense-in-depth), не источник истины для клиентских лимитов.
+max_upload_size_bytes: 20971520
+
+# Permissive-конфигурация тестового сервера — по прямому прецеденту strfry.conf
+# (relay.writePolicy.plugin = "" — принимает всё от любого): whitelist по pubkey
+# не в скоупе этого этапа, MIME-фильтрация уже сделана на клиенте (validation.js).
+access_control_rules:
+  - action: "ALLOW"
+    pubkey: "ALL"
+    resource: "UPLOAD"
+  - action: "ALLOW"
+    pubkey: "ALL"
+    resource: "GET"

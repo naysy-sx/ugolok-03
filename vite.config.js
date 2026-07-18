@@ -58,6 +58,46 @@ function devRelayPlugin() {
 	};
 }
 
+// Этап 28, довесок — тот же принцип, что devRelayPlugin выше, для тестового
+// Blossom-сервера (server/blossom/). Отдельная функция, не параметризация общей —
+// разные бинарники/пути/готовностные проверки, дублирование проще читать, чем
+// разбирать общий helper с двумя режимами.
+function devBlossomPlugin() {
+	const blossomBinary = fileURLToPath(new URL("./server/blossom/blossom-src/bin/app", import.meta.url));
+	const dbDir = fileURLToPath(new URL("./server/blossom/blossom-db", import.meta.url));
+	const runScript = fileURLToPath(new URL("./server/blossom/run.sh", import.meta.url));
+	let child;
+	return {
+		name: "ugolok:dev-blossom",
+		apply: "serve",
+		configureServer(server) {
+			if (!existsSync(blossomBinary)) {
+				server.config.logger.warn(
+					"[ugolok:dev-blossom] Blossom-сервер не собран (см. server/README.md) — вложения останутся без живого сервера.",
+				);
+				return;
+			}
+			if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
+
+			child = spawn(runScript, [], { stdio: ["ignore", "pipe", "pipe"] });
+			child.stdout.on("data", (d) => process.stdout.write(`[blossom] ${d}`));
+			child.stderr.on("data", (d) => process.stderr.write(`[blossom] ${d}`));
+			child.on("exit", (code, signal) => {
+				if (code !== 0 && signal !== "SIGTERM") {
+					// Частая причина — порт 8080 уже занят другим blossom (запущен вручную
+					// или другим `vite dev`); не роняем dev-сервер из-за этого.
+					server.config.logger.warn(`[ugolok:dev-blossom] blossom завершился (code=${code}).`);
+				}
+			});
+			const stop = () => {
+				if (child && !child.killed) child.kill();
+			};
+			process.once("exit", stop);
+			server.httpServer?.once("close", stop);
+		},
+	};
+}
+
 // F-RL-01: дефолт-relay компилируется в бандл из env. В dev без явного
 // override — локальный strfry (devRelayPlugin поднимает его сам), чтобы
 // диагностика/самопроверки всегда имели реальный relay; в проде плейсхолдер,
@@ -96,7 +136,7 @@ export default defineConfig(({ command }) => ({
 		preact({ devToolsEnabled: false }), // обход бага preset×Vite8×zimmerframe
 		emitServiceWorker(BUILD_HASH),
 		viteSingleFile(),
-		...(command === "serve" ? [devRelayPlugin()] : []),
+		...(command === "serve" ? [devRelayPlugin(), devBlossomPlugin()] : []),
 	],
 	define: {
 		__BUILD_HASH__: JSON.stringify(BUILD_HASH),
