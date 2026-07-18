@@ -24,6 +24,12 @@ test("buildContactListEvent: kind 3 (NIP-02), валидная подпись, �
 	);
 });
 
+test("buildContactListEvent: явный createdAt переопределяет Date.now() (для монотонности при частых публикациях)", () => {
+	const event = buildContactListEvent(PRIV_KEY, ["alice-pk"], 12345);
+	assert.equal(event.created_at, 12345);
+	assert.equal(verify(event), true);
+});
+
 test("parseContactListEvent: round-trip своего же события", () => {
 	const pubkeys = ["a", "b", "c"];
 	const event = buildContactListEvent(PRIV_KEY, pubkeys);
@@ -72,6 +78,12 @@ test("buildMuteListEvent: kind 10000 (NIP-51 Mute List), валидная под
 		event.tags.filter((t) => t[0] === "p"),
 		[["p", "evil-pk"]],
 	);
+});
+
+test("buildMuteListEvent: явный createdAt переопределяет Date.now()", () => {
+	const event = buildMuteListEvent(PRIV_KEY, ["evil-pk"], 54321);
+	assert.equal(event.created_at, 54321);
+	assert.equal(verify(event), true);
 });
 
 test("parseMuteListEvent: round-trip своего же события", () => {

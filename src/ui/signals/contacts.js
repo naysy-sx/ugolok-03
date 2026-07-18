@@ -65,10 +65,26 @@ async function requirePublishOk(publish, event) {
 	}
 }
 
+// Монотонный created_at по kind — найдено адверсарной проверкой этапа 23-довеска:
+// два kind-3/kind-10000/kind-30050 события в ТУ ЖЕ wall-clock секунду (частые
+// последовательные действия — блокировка сразу после разблокировки и т.п.)
+// тай-брейкаются lww.js по id (AC-18, TECH.md §17.5 — контракт этапа 4, менять
+// нельзя), который никак не связан с реальным порядком публикации. Из-за этого
+// rebuildContactsAndGroups (полный пересчёт из журнала) мог "воскресить" более
+// старую версию. Устраняем коллизию В ИСТОЧНИКЕ — created_at строго не убывает
+// для последовательных публикаций одного kind в рамках этой вкладки/сессии.
+const lastCreatedAtByKind = new Map();
+function nextCreatedAt(kind) {
+	const now = Math.floor(Date.now() / 1000);
+	const value = Math.max(now, (lastCreatedAtByKind.get(kind) ?? 0) + 1);
+	lastCreatedAtByKind.set(kind, value);
+	return value;
+}
+
 export async function addContactAction(ownerPubkey, privKey, npubOrHex, publish) {
 	const pubkeyToAdd = decodePubkeyInput(npubOrHex);
 	const updated = addContact(contacts.value, pubkeyToAdd);
-	const event = buildContactListEvent(privKey, updated);
+	const event = buildContactListEvent(privKey, updated, nextCreatedAt(3));
 	await requirePublishOk(publish, event);
 	await foldContactList(event);
 	await refreshContacts(ownerPubkey);
@@ -76,25 +92,39 @@ export async function addContactAction(ownerPubkey, privKey, npubOrHex, publish)
 
 export async function removeContactAction(ownerPubkey, privKey, pubkeyToRemove, publish) {
 	const updated = removeContact(contacts.value, pubkeyToRemove);
-	const event = buildContactListEvent(privKey, updated);
+	const event = buildContactListEvent(privKey, updated, nextCreatedAt(3));
 	await requirePublishOk(publish, event);
 	await foldContactList(event);
 	await refreshContacts(ownerPubkey);
 }
 
+// Блокировка = заглушить (kind 10000) И отписаться (kind 3) одновременно —
+// по обратной связи пользователя: контакт либо "реальный", либо "заблокированный",
+// две категории взаимоисключающие, не показываются одновременно в UI.
+// Разблокировка (ниже) намеренно НЕ возвращает в контакты автоматически —
+// повторное добавление остаётся отдельным явным действием пользователя.
 export async function blockContactAction(ownerPubkey, privKey, npubOrHex, publish) {
 	const pubkeyToBlock = decodePubkeyInput(npubOrHex);
-	const updated = addContact(blockedContacts.value, pubkeyToBlock);
-	const event = buildMuteListEvent(privKey, updated);
-	await requirePublishOk(publish, event);
-	await foldMuteList(event);
+
+	const updatedBlocked = addContact(blockedContacts.value, pubkeyToBlock);
+	const blockEvent = buildMuteListEvent(privKey, updatedBlocked, nextCreatedAt(10000));
+	await requirePublishOk(publish, blockEvent);
+	await foldMuteList(blockEvent);
 	await refreshBlockedContacts(ownerPubkey);
+
+	if (contacts.value.includes(pubkeyToBlock)) {
+		const updatedContacts = removeContact(contacts.value, pubkeyToBlock);
+		const contactsEvent = buildContactListEvent(privKey, updatedContacts, nextCreatedAt(3));
+		await requirePublishOk(publish, contactsEvent);
+		await foldContactList(contactsEvent);
+		await refreshContacts(ownerPubkey);
+	}
 }
 
 export async function unblockContactAction(ownerPubkey, privKey, npubOrHex, publish) {
 	const pubkeyToUnblock = decodePubkeyInput(npubOrHex);
 	const updated = removeContact(blockedContacts.value, pubkeyToUnblock);
-	const event = buildMuteListEvent(privKey, updated);
+	const event = buildMuteListEvent(privKey, updated, nextCreatedAt(10000));
 	await requirePublishOk(publish, event);
 	await foldMuteList(event);
 	await refreshBlockedContacts(ownerPubkey);
@@ -102,7 +132,10 @@ export async function unblockContactAction(ownerPubkey, privKey, npubOrHex, publ
 
 export async function createGroupAction(ownerPubkey, privKey, name, publish) {
 	const groupId = crypto.randomUUID();
-	const event = buildGroupEvent(privKey, { groupId, name, memberPubkeys: [] });
+	// новая группа — свежий UUID, коллизия created_at с самой собой невозможна,
+	// но регистрируем в трекере сразу, чтобы последующие правки ЭТОЙ группы
+	// (переименование/добавление участника) корректно шли по возрастанию
+	const event = buildGroupEvent(privKey, { groupId, name, memberPubkeys: [] }, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey);
 	await refreshGroups(ownerPubkey);
@@ -116,7 +149,7 @@ function requireGroup(groupId) {
 
 export async function renameGroupAction(ownerPubkey, privKey, groupId, newName, publish) {
 	const updated = renameGroup(requireGroup(groupId), newName);
-	const event = buildGroupEvent(privKey, updated);
+	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey);
 	await refreshGroups(ownerPubkey);
@@ -124,7 +157,7 @@ export async function renameGroupAction(ownerPubkey, privKey, groupId, newName, 
 
 export async function addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish) {
 	const updated = addMember(requireGroup(groupId), pubkey);
-	const event = buildGroupEvent(privKey, updated);
+	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey);
 	await refreshGroups(ownerPubkey);
@@ -132,7 +165,7 @@ export async function addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey
 
 export async function removeGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish) {
 	const updated = removeMember(requireGroup(groupId), pubkey);
-	const event = buildGroupEvent(privKey, updated);
+	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey);
 	await refreshGroups(ownerPubkey);

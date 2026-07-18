@@ -1,11 +1,11 @@
 import { sign } from '../../core/crypto/sign.js';
 
-export function buildContactListEvent(privKey, pubkeys) {
+export function buildContactListEvent(privKey, pubkeys, createdAt = Math.floor(Date.now() / 1000)) {
   const eventTemplate = {
     kind: 3,
     tags: pubkeys.map(pk => ['p', pk]),
     content: '',
-    created_at: Math.floor(Date.now() / 1000)
+    created_at: createdAt
   };
   return sign(eventTemplate, privKey);
 }
@@ -29,12 +29,12 @@ export function removeContact(pubkeys, pubkeyToRemove) {
   return pubkeys.slice();
 }
 
-export function buildMuteListEvent(privKey, pubkeys) {
+export function buildMuteListEvent(privKey, pubkeys, createdAt = Math.floor(Date.now() / 1000)) {
   const eventTemplate = {
     kind: 10000,
     tags: pubkeys.map(pk => ['p', pk]),
     content: '',
-    created_at: Math.floor(Date.now() / 1000)
+    created_at: createdAt
   };
   return sign(eventTemplate, privKey);
 }

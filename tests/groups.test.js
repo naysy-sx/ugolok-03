@@ -19,6 +19,12 @@ test("buildGroupEvent: kind 30050, валидная подпись, d-tag = grou
 	assert.deepEqual(event.tags.filter((t) => t[0] === "d"), [["d", "group-1"]]);
 });
 
+test("buildGroupEvent: явный createdAt переопределяет Date.now() (монотонность при частых правках)", () => {
+	const event = buildGroupEvent(PRIV_KEY, { groupId: "group-1", name: "Друзья", memberPubkeys: [] }, 99999);
+	assert.equal(event.created_at, 99999);
+	assert.equal(verify(event), true);
+});
+
 test("buildGroupEvent: content зашифрован — не содержит имя/участников в открытом виде", () => {
 	const event = buildGroupEvent(PRIV_KEY, { groupId: "group-1", name: "Секретная группа", memberPubkeys: ["alice-pubkey"] });
 	assert.equal(event.content.includes("Секретная группа"), false);

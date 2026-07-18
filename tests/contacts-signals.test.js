@@ -115,6 +115,34 @@ test("blockContactAction/unblockContactAction: обновляют blockedContact
 	assert.deepEqual(blockedContacts.value, []);
 });
 
+test("blockContactAction: если pubkey был в контактах — блокировка ОДНОВРЕМЕННО отписывает (взаимоисключающие категории)", async () => {
+	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+	assert.deepEqual(contacts.value, [ALICE_PK]);
+
+	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+
+	assert.deepEqual(blockedContacts.value, [ALICE_PK]);
+	assert.deepEqual(contacts.value, [], "заблокированный контакт не должен оставаться в contacts");
+});
+
+test("blockContactAction: pubkey, которого не было в контактах — не публикует лишнее обновление contacts", async () => {
+	let contactsPublishCalls = 0;
+	const countingPublish = async (event) => {
+		if (event.kind === 3) contactsPublishCalls++;
+		return { ok: true };
+	};
+	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, EVIL_PK, countingPublish);
+	assert.equal(contactsPublishCalls, 0);
+});
+
+test("unblockContactAction: НЕ возвращает разблокированного обратно в contacts автоматически", async () => {
+	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+	await unblockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+	assert.deepEqual(blockedContacts.value, []);
+	assert.deepEqual(contacts.value, [], "разблокировка не должна сама по себе восстанавливать контакт");
+});
+
 test("createGroupAction: создаёт группу, обновляет groups сигнал", async () => {
 	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Друзья", okPublish);
 	assert.equal(groups.value.length, 1);

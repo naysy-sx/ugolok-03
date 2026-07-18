@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { useRoute } from "./ui/router.js";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "./ui/nav-items.js";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
@@ -8,9 +8,18 @@ import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
 import { currentUser } from "./ui/signals/auth.js";
+import { activeChatPubkey } from "./ui/signals/chat.js";
+import { shortPubkey } from "./ui/format.js";
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
+
+	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
+	// вкладку на "Сообщения". Экрана чата ещё нет (строится этапом 24) — заготовка
+	// ниже лишь подтверждает, что переход состоялся, не имитирует переписку.
+	useEffect(() => {
+		if (activeChatPubkey.value) setActiveId("messages");
+	}, [activeChatPubkey.value]);
 
 	return (
 		<div style={{ display: "flex", minHeight: "100dvh" }}>
@@ -46,8 +55,12 @@ function MainShell() {
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
 				{activeId === "contacts" && <Contacts />}
-				{activeId !== "diagnostics" && activeId !== "profile" && activeId !== "contacts" && (
-					<Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />
+				{activeId === "messages" && activeChatPubkey.value ? (
+					<Placeholder title={`Чат с ${shortPubkey(activeChatPubkey.value)}`} />
+				) : (
+					activeId !== "diagnostics" && activeId !== "profile" && activeId !== "contacts" && (
+						<Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />
+					)
 				)}
 			</div>
 		</div>

@@ -1,8 +1,9 @@
 import { useState, useEffect, useId, useRef } from "preact/hooks";
-import { npubEncode } from "nostr-tools/nip19";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
+import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, connState, synced } from "../signals/transport.js";
+import { openChat } from "../signals/chat.js";
 import {
 	contacts,
 	blockedContacts,
@@ -23,58 +24,82 @@ import {
 import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
 
-function shortPubkey(pubkey) {
-	try {
-		const npub = npubEncode(pubkey);
-		return npub.slice(0, 12) + "…" + npub.slice(-6);
-	} catch {
-		return pubkey.slice(0, 8) + "…" + pubkey.slice(-6);
-	}
-}
-
 // F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
-// (см. ensureProfilesFetched), иначе — усечённый npub как раньше.
-function ContactIdentity({ pubkey }) {
+// (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
+// передан, делает аватар+имя ссылкой на чат (contacts.jsx, реальные контакты);
+// в списке заблокированных onClick не передаётся — просто отображение.
+function ContactIdentity({ pubkey, onClick }) {
 	const profile = profiles.value[pubkey];
 	const displayName = profile?.name || shortPubkey(pubkey);
-	return (
-		<div class="cluster" style={{ alignItems: "center" }}>
-			{profile?.picture ? (
-				<img
-					src={profile.picture}
-					alt=""
-					width="40"
-					height="40"
-					style={{
-						width: "2.5rem",
-						height: "2.5rem",
-						borderRadius: "50%",
-						border: "var(--border-width) solid var(--border)",
-					}}
-				/>
-			) : (
-				<div
-					aria-hidden="true"
-					style={{
-						width: "2.5rem",
-						height: "2.5rem",
-						borderRadius: "50%",
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-						background: "var(--surface)",
-						border: "var(--border-width) solid var(--border)",
-						color: "var(--muted)",
-					}}
-				>
-					{(displayName || "?").trim().charAt(0).toUpperCase()}
-				</div>
-			)}
-			<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<span style={profile?.name ? {} : { fontFamily: "var(--font-mono)" }}>{displayName}</span>
-				{profile?.about && <small style={{ color: "var(--muted)" }}>{profile.about}</small>}
-			</span>
+
+	const avatar = profile?.picture ? (
+		<img
+			src={profile.picture}
+			alt=""
+			width="40"
+			height="40"
+			style={{
+				width: "2.5rem",
+				height: "2.5rem",
+				borderRadius: "50%",
+				border: "var(--border-width) solid var(--border)",
+			}}
+		/>
+	) : (
+		<div
+			aria-hidden="true"
+			style={{
+				width: "2.5rem",
+				height: "2.5rem",
+				borderRadius: "50%",
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "center",
+				background: "var(--surface)",
+				border: "var(--border-width) solid var(--border)",
+				color: "var(--muted)",
+			}}
+		>
+			{(displayName || "?").trim().charAt(0).toUpperCase()}
 		</div>
+	);
+
+	const text = (
+		<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<span style={profile?.name ? {} : { fontFamily: "var(--font-mono)" }}>{displayName}</span>
+			{profile?.about && <small style={{ color: "var(--muted)" }}>{profile.about}</small>}
+		</span>
+	);
+
+	if (!onClick) {
+		return (
+			<div class="cluster" style={{ alignItems: "center" }}>
+				{avatar}
+				{text}
+			</div>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			aria-label={`Открыть чат с ${displayName}`}
+			class="cluster"
+			style={{
+				alignItems: "center",
+				background: "none",
+				border: "none",
+				padding: 0,
+				cursor: "pointer",
+				textAlign: "left",
+				font: "inherit",
+				color: "inherit",
+			}}
+		>
+			{avatar}
+			{text}
+		</button>
 	);
 }
 
@@ -190,10 +215,14 @@ export default function Contacts() {
 		}
 	}
 
+	// Контакты и заблокированные — взаимоисключающие категории в UI (blockContactAction
+	// уже гарантирует это на уровне данных, см. signals/contacts.js), но фильтр здесь
+	// не помешает, если данные пришли извне (другое устройство, будущий импорт).
+	const nonBlockedContacts = contacts.value.filter((pk) => !blockedContacts.value.includes(pk));
 	const visibleContacts =
 		selectedGroupIds.size === 0
-			? contacts.value
-			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
+			? nonBlockedContacts
+			: nonBlockedContacts.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
 
 	return (
 		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
@@ -337,120 +366,152 @@ export default function Contacts() {
 					)}
 				</section>
 
-				<section class="flow" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)", flex: 1 }}>
-					<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
-					{rowError && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-							{rowError}
+				<div class="flow" style={{ "--flow-space": "var(--space-l)", flex: 1 }}>
+					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="requests-heading">Запросы (0)</h2>
+						<p style={{ color: "var(--muted)" }}>
+							Здесь будут появляться входящие запросы на добавление в контакты —
+							с кнопками "Принять" и "Отклонить". Сам протокол запроса строится
+							вместе с обменом сообщениями (этап 24).
 						</p>
-					)}
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-						{visibleContacts.map((pubkey) => {
-							const isBlocked = blockedContacts.value.includes(pubkey);
-							const memberOfGroups = groupsForContact(pubkey);
-							const isExpanded = expandedPubkey === pubkey;
-							return (
+					</section>
+
+					<section class="flow" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
+						{rowError && (
+							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+								{rowError}
+							</p>
+						)}
+						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+							{visibleContacts.map((pubkey) => {
+								const memberOfGroups = groupsForContact(pubkey);
+								const isExpanded = expandedPubkey === pubkey;
+								return (
+									<li
+										key={pubkey}
+										class="flow"
+										style={{
+											"--flow-space": "var(--space-2xs)",
+											paddingBlock: "var(--space-s)",
+											borderBlockEnd: "var(--border-width) solid var(--border)",
+										}}
+									>
+										<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
+											<div class="cluster">
+												<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
+													{isExpanded ? "Скрыть права" : "Права"}
+												</button>
+												<button
+													type="button"
+													disabled={busy}
+													onClick={() =>
+														runRowAction(() => blockContactAction(ownerPubkey, privKey, pubkey, publish))
+													}
+												>
+													Заблокировать
+												</button>
+												<button
+													type="button"
+													disabled={busy}
+													onClick={() =>
+														runRowAction(() => removeContactAction(ownerPubkey, privKey, pubkey, publish))
+													}
+												>
+													Удалить
+												</button>
+											</div>
+										</div>
+
+										<div class="cluster">
+											{memberOfGroups.map((g) => (
+												<span
+													key={g.id}
+													class="cluster"
+													style={{
+														"--cluster-gap": "var(--space-3xs)",
+														alignItems: "center",
+														background: "var(--surface)",
+														paddingInline: "var(--space-2xs)",
+														borderRadius: "var(--radius)",
+													}}
+												>
+													{g.name}
+													<button
+														type="button"
+														disabled={busy}
+														aria-label={`Убрать из группы ${g.name}`}
+														onClick={() =>
+															runRowAction(() =>
+																removeGroupMemberAction(ownerPubkey, privKey, g.id, pubkey, publish),
+															)
+														}
+													>
+														×
+													</button>
+												</span>
+											))}
+											{groups.value.length > 0 && (
+												<AddToGroupControl
+													groups={groups.value}
+													excludeGroupIds={memberOfGroups.map((g) => g.id)}
+													disabled={busy}
+													onAdd={(groupId) =>
+														runRowAction(() =>
+															addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish),
+														)
+													}
+												/>
+											)}
+										</div>
+
+										{isExpanded && (
+											<PermissionEditor ownerPubkey={ownerPubkey} privKey={privKey} subject={pubkey} />
+										)}
+									</li>
+								);
+							})}
+						</ul>
+						{visibleContacts.length === 0 && (
+							<p style={{ color: "var(--muted)" }}>
+								{nonBlockedContacts.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
+							</p>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="blocked-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="blocked-heading">Заблокированные ({blockedContacts.value.length})</h2>
+						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+							{blockedContacts.value.map((pubkey) => (
 								<li
 									key={pubkey}
-									class="flow"
+									class="cluster"
 									style={{
-										"--flow-space": "var(--space-2xs)",
+										alignItems: "center",
+										justifyContent: "space-between",
 										paddingBlock: "var(--space-s)",
 										borderBlockEnd: "var(--border-width) solid var(--border)",
 									}}
 								>
-									<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-										<ContactIdentity pubkey={pubkey} />
-										<div class="cluster">
-											<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
-												{isExpanded ? "Скрыть права" : "Права"}
-											</button>
-											<button
-												type="button"
-												disabled={busy}
-												onClick={() =>
-													runRowAction(() =>
-														isBlocked
-															? unblockContactAction(ownerPubkey, privKey, pubkey, publish)
-															: blockContactAction(ownerPubkey, privKey, pubkey, publish),
-													)
-												}
-											>
-												{isBlocked ? "Разблокировать" : "Заблокировать"}
-											</button>
-											<button
-												type="button"
-												disabled={busy}
-												onClick={() =>
-													runRowAction(() => removeContactAction(ownerPubkey, privKey, pubkey, publish))
-												}
-											>
-												Удалить
-											</button>
-										</div>
-									</div>
-
-									<div class="cluster">
-										{memberOfGroups.map((g) => (
-											<span
-												key={g.id}
-												class="cluster"
-												style={{
-													"--cluster-gap": "var(--space-3xs)",
-													alignItems: "center",
-													background: "var(--surface)",
-													paddingInline: "var(--space-2xs)",
-													borderRadius: "var(--radius)",
-												}}
-											>
-												{g.name}
-												<button
-													type="button"
-													disabled={busy}
-													aria-label={`Убрать из группы ${g.name}`}
-													onClick={() =>
-														runRowAction(() =>
-															removeGroupMemberAction(ownerPubkey, privKey, g.id, pubkey, publish),
-														)
-													}
-												>
-													×
-												</button>
-											</span>
-										))}
-										{groups.value.length > 0 && (
-											<AddToGroupControl
-												groups={groups.value}
-												excludeGroupIds={memberOfGroups.map((g) => g.id)}
-												disabled={busy}
-												onAdd={(groupId) =>
-													runRowAction(() =>
-														addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish),
-													)
-												}
-											/>
-										)}
-									</div>
-
-									{isBlocked && (
-										<p style={{ color: "var(--muted)" }}>
-										Заблокирован — список синхронизирован между вашими устройствами; фактическая фильтрация входящих сообщений появится вместе с обменом сообщениями.
-									</p>
-									)}
-
-									{isExpanded && (
-										<PermissionEditor ownerPubkey={ownerPubkey} privKey={privKey} subject={pubkey} />
-									)}
+									<ContactIdentity pubkey={pubkey} />
+									<button
+										type="button"
+										disabled={busy}
+										onClick={() =>
+											runRowAction(() => unblockContactAction(ownerPubkey, privKey, pubkey, publish))
+										}
+									>
+										Разблокировать
+									</button>
 								</li>
-							);
-						})}
-					</ul>
-					{visibleContacts.length === 0 && (
-						<p style={{ color: "var(--muted)" }}>
-							{contacts.value.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
-						</p>
-					)}
-				</section>
+							))}
+						</ul>
+						{blockedContacts.value.length === 0 && (
+							<p style={{ color: "var(--muted)" }}>Нет заблокированных.</p>
+						)}
+					</section>
+				</div>
 			</div>
 		</main>
 	);

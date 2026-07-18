@@ -3,11 +3,11 @@ import { getPublicKey } from '../../core/crypto/keys.js';
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from '../../core/crypto/nip44.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
-export function buildGroupEvent(privKey, { groupId, name, memberPubkeys }) {
+export function buildGroupEvent(privKey, { groupId, name, memberPubkeys }, createdAt = Math.floor(Date.now() / 1000)) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
   const plaintext = JSON.stringify({ name, memberPubkeys });
   const content = nip44Encrypt(plaintext, privKey, ownPubHex);
-  const eventTemplate = { kind: 30050, tags: [['d', groupId]], content, created_at: Math.floor(Date.now()/1000) };
+  const eventTemplate = { kind: 30050, tags: [['d', groupId]], content, created_at: createdAt };
   return sign(eventTemplate, privKey);
 }
 
