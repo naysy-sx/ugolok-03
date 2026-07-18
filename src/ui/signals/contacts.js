@@ -47,6 +47,20 @@ export async function ensureProfilesFetched(pubkeys, fetchProfilesFn) {
 	profiles.value = next;
 }
 
+// Найденный баг (пользователь, F-CT-04-довесок): ensureProfilesFetched пропускает уже
+// закэшированные pubkey навсегда — обновление био/имени собеседником никогда не долетало
+// до UI. refreshProfiles безусловно перезапрашивает переданные pubkey и перезаписывает
+// кэш — вызывать в точках "открыт экран" (чат, список чатов), а не на каждый рендер.
+export async function refreshProfiles(pubkeys, fetchProfilesFn) {
+	if (pubkeys.length === 0) return;
+	const fetched = await fetchProfilesFn(pubkeys);
+	const next = { ...profiles.value };
+	for (const pk of pubkeys) {
+		next[pk] = fetched.get(pk) ?? null;
+	}
+	profiles.value = next;
+}
+
 export async function refreshAll(ownerPubkey) {
 	await Promise.all([refreshContacts(ownerPubkey), refreshBlockedContacts(ownerPubkey), refreshGroups(ownerPubkey)]);
 }

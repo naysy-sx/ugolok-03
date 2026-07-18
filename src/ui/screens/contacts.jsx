@@ -13,6 +13,7 @@ import {
 	refreshAll,
 	refreshContactRequests,
 	ensureProfilesFetched,
+	refreshProfiles,
 	addContactAction,
 	removeContactAction,
 	blockContactAction,
@@ -138,9 +139,9 @@ export default function Contacts() {
 			.then(async () => {
 				await refreshAll(ownerPubkey);
 				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
-				// (нет соединения) — попытка "втихую" до connect() закэшировала бы
-				// контакты как "профиль не найден" навсегда, см. ensureProfilesFetched
-				await ensureProfilesFetched(contacts.value, fetchProfiles).catch(() => {});
+				// (нет соединения). Экран открыт заново — refreshProfiles подтягивает
+				// СВЕЖИЕ данные (найденный баг: старое био/имя не обновлялись годами).
+				await refreshProfiles(contacts.value, fetchProfiles).catch(() => {});
 			})
 			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);

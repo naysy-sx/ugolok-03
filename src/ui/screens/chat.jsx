@@ -13,7 +13,7 @@ import {
 	synced,
 } from "../signals/transport.js";
 import { activeChatPubkey, openChat } from "../signals/chat.js";
-import { profiles, ensureProfilesFetched } from "../signals/contacts.js";
+import { profiles, refreshProfiles } from "../signals/contacts.js";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -61,7 +61,9 @@ function ChatList({ ownerPubkey, privKey, connectionError }) {
 				setUnreadByPartner(unread);
 				const allPubkeys = [...partners, ...inbox.map((r) => r.senderPubkey)];
 				if (allPubkeys.length > 0) {
-					await ensureProfilesFetched(allPubkeys, fetchProfiles).catch(() => {});
+					// Найденный баг (пользователь): ensureProfilesFetched никогда не обновляла
+					// уже закэшированное био/имя — refreshProfiles безусловно перезаписывает.
+					await refreshProfiles(allPubkeys, fetchProfiles).catch(() => {});
 				}
 			} catch (err) {
 				if (!cancelled) setListError(err?.message || String(err));
@@ -225,7 +227,9 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	const userEditedRef = useRef(false);
 
 	useEffect(() => {
-		ensureProfilesFetched([contactPubkey], fetchProfiles).catch(() => {});
+		// Найденный баг (пользователь): при входе в чат подтягиваем СВЕЖИЙ профиль
+		// собеседника (refreshProfiles), а не только "если ещё не кэширован".
+		refreshProfiles([contactPubkey], fetchProfiles).catch(() => {});
 	}, [contactPubkey]);
 
 	useEffect(() => {

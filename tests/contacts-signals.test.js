@@ -15,6 +15,7 @@ import {
 	refreshGroups,
 	refreshAll,
 	ensureProfilesFetched,
+	refreshProfiles,
 	decodePubkeyInput,
 	addContactAction,
 	removeContactAction,
@@ -324,4 +325,29 @@ test("acceptContactRequestAction: сбой публикации -> throw, зап
 
 	await assert.rejects(() => acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, failPublish));
 	assert.ok(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), "запись должна остаться при сбое");
+});
+
+test("refreshProfiles: перезаписывает УЖЕ закэшированный профиль свежими данными (найденный баг — био не обновлялось)", async () => {
+	profiles.value = { [ALICE_PK]: { name: "Алиса", about: "старое био" } };
+	const fetchStub = async (pubkeys) => {
+		assert.deepEqual(pubkeys, [ALICE_PK], "refreshProfiles НЕ должен исключать уже закэшированные из запроса");
+		return new Map([[ALICE_PK, { name: "Алиса", about: "новое био" }]]);
+	};
+	await refreshProfiles([ALICE_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса", about: "новое био" });
+});
+
+test("refreshProfiles: пустой список -> не вызывает fetch", async () => {
+	let called = false;
+	await refreshProfiles([], async () => {
+		called = true;
+		return new Map();
+	});
+	assert.equal(called, false);
+});
+
+test("refreshProfiles: контакт больше не найден -> обновляет на null (не оставляет устаревшую запись)", async () => {
+	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
+	await refreshProfiles([ALICE_PK], async () => new Map());
+	assert.equal(profiles.value[ALICE_PK], null);
 });
