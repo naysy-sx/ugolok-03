@@ -2,7 +2,7 @@ import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, fetchProfiles, connState, synced } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, connState, synced } from "../signals/transport.js";
 import { openChat } from "../signals/chat.js";
 import {
 	contacts,
@@ -142,6 +142,10 @@ export default function Contacts() {
 				// (нет соединения). Экран открыт заново — refreshProfiles подтягивает
 				// СВЕЖИЕ данные (найденный баг: старое био/имя не обновлялись годами).
 				await refreshProfiles(contacts.value, fetchProfiles).catch(() => {});
+				// Найденный баг (пользователь, этап 27-довесок-7): без ЖИВОЙ подписки
+				// изменение профиля контакта не появлялось на уже открытом экране — нужно
+				// было уйти и вернуться (только тогда refreshProfiles вызывался заново).
+				await refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 			})
 			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);
@@ -153,6 +157,9 @@ export default function Contacts() {
 	useEffect(() => {
 		if (contacts.value.length > 0) {
 			ensureProfilesFetched(contacts.value, fetchProfiles).catch(() => {});
+			// Новый контакт — переподписка (идемпотентно, тот же приём, что
+			// refreshGroupMessageSubscription на каждую отправку) подхватывает его в live-набор.
+			refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 		}
 	}, [contacts.value]);
 

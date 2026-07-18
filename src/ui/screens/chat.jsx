@@ -8,6 +8,7 @@ import {
 	fetchProfiles,
 	fetchKeyPackage,
 	refreshGroupMessageSubscription,
+	refreshLiveProfileSubscription,
 	nextLamportTick,
 	connState,
 	synced,
@@ -499,7 +500,9 @@ export default function Chat() {
 	const [connectionError, setConnectionError] = useState("");
 
 	useEffect(() => {
-		ensureConnected(ownerPubkey, privKey).catch((e) => setConnectionError(e?.message || String(e)));
+		ensureConnected(ownerPubkey, privKey)
+			.then(() => refreshLiveProfileSubscription(ownerPubkey))
+			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);
 
 	if (activeChatPubkey.value) {

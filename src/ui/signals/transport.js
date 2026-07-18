@@ -26,6 +26,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
+import { profiles } from "./contacts.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -289,6 +290,46 @@ export async function fetchProfiles(pubkeys) {
 	});
 
 	return results;
+}
+
+let profileSubscriber = null;
+
+// Найденный баг (пользователь, этап 27-довесок-7): fetchProfiles/refreshProfiles — ОДНОРАЗОВЫЙ
+// REQ+EOSE, обновление профиля контакта долетало только при СЛЕДУЮЩЕМ вызове refreshProfiles
+// (т.е. при перемонтировании экрана — уйти и вернуться) — на уже открытом экране изменение
+// собеседника не появлялось само. Аналог refreshGroupMessageSubscription, но для kind 0:
+// ПОСТОЯННАЯ подписка — relay сначала отдаёт текущее состояние (REQ backlog), затем стримит
+// НОВЫЕ kind-0 по мере публикации контактами, без переоткрытия экрана.
+export async function refreshLiveProfileSubscription(ownerPubkey) {
+	if (!connection) return;
+	const contactPubkeys = (await db.table("contacts").where("owner").equals(ownerPubkey).toArray()).map((row) => row.pubkey);
+	if (contactPubkeys.length === 0) return;
+
+	if (!profileSubscriber) {
+		profileSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: (events) => {
+				const next = { ...profiles.value };
+				let changed = false;
+				for (const event of events) {
+					try {
+						next[event.pubkey] = parseProfileEvent(event);
+						changed = true;
+					} catch {
+						// повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять батч
+					}
+				}
+				if (changed) {
+					profiles.value = next;
+					bumpMessagingActivity(); // этап 27, находка 2 — открытые экраны перечитывают profiles
+				}
+			},
+		});
+		connection.addMessageHandler(profileSubscriber.handleMessage);
+	}
+	// Повторный вызов (новый контакт добавлен) — тот же приём, что groupMessageSubscriber:
+	// переподписка тем же subId идемпотентна и дёшево обновляет набор authors.
+	profileSubscriber.subscribe("live-profiles", [{ authors: contactPubkeys, kinds: [0] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если
