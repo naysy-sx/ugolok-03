@@ -36,8 +36,15 @@ rl.on("line", (line) => {
 	const whitelist = loadWhitelist();
 	const pubkey = (req.event?.pubkey ?? "").toLowerCase();
 
+	// "*" — специальный элемент: allow-all. Дефолт локального dev-relay (см.
+	// whitelist.json) — целевая аудитория дев-сборки: любой, кто зарегистрировался
+	// на СВОЁМ устройстве в локальной сети (CLAUDE.md), не нуждается в ручном
+	// добавлении pubkey просто чтобы попробовать приложение. Deny-by-default
+	// (конкретный список без "*") остаётся рабочим режимом для целевой проверки
+	// самого механизма whitelist (AC-14, этап 17) — переключается правкой файла,
+	// не кода.
 	const res = { id: req.event.id };
-	if (whitelist.has(pubkey)) {
+	if (whitelist.has("*") || whitelist.has(pubkey)) {
 		res.action = "accept";
 	} else {
 		res.action = "reject";

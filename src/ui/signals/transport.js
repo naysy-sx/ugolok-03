@@ -52,7 +52,19 @@ function teardown() {
 	synced.value = false;
 }
 
+// Найдено на реальном использовании: невалидный pubkeyHex (напр. нечётной длины)
+// добирался незамеченным до REQ-фильтра bootstrap'а и молча ронял соединение
+// на стороне relay ("bad req: error parsing authors: uneven size input to
+// from_hex") — с точки зрения пользователя это выглядело как необъяснимый
+// обрыв, а не ясная ошибка. Проверяем формат СРАЗУ, на входе.
+function assertValidPubkeyHex(pubkeyHex) {
+	if (typeof pubkeyHex !== "string" || !/^[0-9a-f]{64}$/i.test(pubkeyHex)) {
+		throw new Error(`невалидный pubkey (ожидается 64-hex): "${pubkeyHex}"`);
+	}
+}
+
 async function connect(pubkeyHex, privKey) {
+	assertValidPubkeyHex(pubkeyHex);
 	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 	connection = createRelayConnection(relayUrl, { onStateChange: (s) => (connState.value = s) });
 	connection.connect();
