@@ -1,0 +1,430 @@
+import { useState, useEffect, useId, useRef } from "preact/hooks";
+import { npubEncode } from "nostr-tools/nip19";
+import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
+import { currentUser, privKeySig } from "../signals/auth.js";
+import { ensureConnected, publish, connState, synced } from "../signals/transport.js";
+import {
+	contacts,
+	blockedContacts,
+	groups,
+	refreshAll,
+	addContactAction,
+	removeContactAction,
+	blockContactAction,
+	unblockContactAction,
+	createGroupAction,
+	renameGroupAction,
+	addGroupMemberAction,
+	removeGroupMemberAction,
+	deleteGroupAction,
+} from "../signals/contacts.js";
+import SyncIndicator from "../components/sync-indicator.jsx";
+import PermissionEditor from "../components/permission-editor.jsx";
+
+function shortPubkey(pubkey) {
+	try {
+		const npub = npubEncode(pubkey);
+		return npub.slice(0, 12) + "…" + npub.slice(-6);
+	} catch {
+		return pubkey.slice(0, 8) + "…" + pubkey.slice(-6);
+	}
+}
+
+export default function Contacts() {
+	const ownerPubkey = currentUser.value.id;
+	const privKey = privKeySig.value;
+	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
+
+	const [connectionError, setConnectionError] = useState("");
+	const [npubInput, setNpubInput] = useState("");
+	const [addError, setAddError] = useState("");
+	const [newGroupName, setNewGroupName] = useState("");
+	const [groupError, setGroupError] = useState("");
+	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
+	const [expandedPubkey, setExpandedPubkey] = useState(null);
+	const [renamingGroupId, setRenamingGroupId] = useState(null);
+	const [renameValue, setRenameValue] = useState("");
+	const [rowError, setRowError] = useState("");
+	const [busy, setBusy] = useState(false);
+	// busyRef — синхронная защита от повторного входа. busy (state) обновляется через
+	// setBusy и коммитится АСИНХРОННО (рендер-цикл) — обработчик второго клика,
+	// вызванный до коммита, читает СТАРОЕ значение busy из замыкания того же рендера
+	// и гонку не ловит. Ref читается/пишется немедленно, синхронно с самим кликом.
+	const busyRef = useRef(false);
+
+	useEffect(() => {
+		refreshAll(ownerPubkey);
+		ensureConnected(ownerPubkey, privKey)
+			.then(() => refreshAll(ownerPubkey))
+			.catch((e) => setConnectionError(e?.message || String(e)));
+	}, [ownerPubkey]);
+
+	// busy сериализует действия этого экрана намеренно — найдено адверсарной фазой:
+	// два быстрых клика подряд (напр. "Добавить" дважды с разными контактами) читают
+	// contacts.value ДО того, как первое действие успевает его обновить — второе
+	// добавление тихо теряется (lost update). Простое отключение кнопок на время
+	// одного in-flight действия полностью устраняет гонку для UI, управляемого кликом.
+	async function handleAddContact(e) {
+		e.preventDefault();
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setAddError("");
+		setBusy(true);
+		try {
+			await addContactAction(ownerPubkey, privKey, npubInput, publish);
+			setNpubInput("");
+		} catch (err) {
+			setAddError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	async function handleCreateGroup(e) {
+		e.preventDefault();
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setGroupError("");
+		setBusy(true);
+		try {
+			await createGroupAction(ownerPubkey, privKey, newGroupName, publish);
+			setNewGroupName("");
+		} catch (err) {
+			setGroupError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	function groupsForContact(pubkey) {
+		return groups.value.filter((g) => g.memberPubkeys.includes(pubkey));
+	}
+
+	function toggleGroupFilter(groupId) {
+		setSelectedGroupIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(groupId)) next.delete(groupId);
+			else next.add(groupId);
+			return next;
+		});
+	}
+
+	async function runRowAction(fn) {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setRowError("");
+		setBusy(true);
+		try {
+			await fn();
+		} catch (err) {
+			setRowError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	const visibleContacts =
+		selectedGroupIds.size === 0
+			? contacts.value
+			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
+
+	return (
+		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
+			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+				<p class="eyebrow">Уголок</p>
+				<h1>Контакты</h1>
+				<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+					Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
+				</p>
+				{connectionError && (
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						{connectionError}
+					</p>
+				)}
+			</header>
+
+			<form class="cluster" onSubmit={handleAddContact} style={{ alignItems: "flex-end" }}>
+				<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
+					<label for="add-contact-input">Добавить контакт (npub или hex-ключ)</label>
+					<input
+						id="add-contact-input"
+						type="text"
+						value={npubInput}
+						onInput={(e) => setNpubInput(e.currentTarget.value)}
+					/>
+				</div>
+				<button type="submit" disabled={busy}>
+					Добавить
+				</button>
+			</form>
+			{addError && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{addError}
+				</p>
+			)}
+
+			<div class="cluster" style={{ alignItems: "flex-start" }}>
+				<section
+					class="flow"
+					aria-labelledby="groups-heading"
+					style={{ "--flow-space": "var(--space-s)", minWidth: "16rem" }}
+				>
+					<h2 id="groups-heading">Группы</h2>
+					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						<li>
+							<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+								<input
+									id="group-filter-all"
+									type="checkbox"
+									checked={selectedGroupIds.size === 0}
+									onChange={() => setSelectedGroupIds(new Set())}
+								/>
+								<label for="group-filter-all">Все группы</label>
+							</span>
+						</li>
+						{groups.value.map((g) => (
+							<li key={g.id}>
+								<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+									<input
+										id={`group-filter-${g.id}`}
+										type="checkbox"
+										checked={selectedGroupIds.has(g.id)}
+										onChange={() => toggleGroupFilter(g.id)}
+									/>
+									{renamingGroupId === g.id ? (
+										<form
+											class="cluster"
+											onSubmit={(e) => {
+												e.preventDefault();
+												runRowAction(async () => {
+													await renameGroupAction(ownerPubkey, privKey, g.id, renameValue, publish);
+													setRenamingGroupId(null);
+												});
+											}}
+										>
+											<label class="visually-hidden" for={`rename-group-${g.id}`}>
+												Новое имя группы
+											</label>
+											<input
+												id={`rename-group-${g.id}`}
+												type="text"
+												value={renameValue}
+												onInput={(e) => setRenameValue(e.currentTarget.value)}
+											/>
+											<button type="submit" disabled={busy}>
+												Сохранить
+											</button>
+											<button type="button" onClick={() => setRenamingGroupId(null)}>
+												Отмена
+											</button>
+										</form>
+									) : (
+										<>
+											<label for={`group-filter-${g.id}`}>
+												{g.name} ({g.memberPubkeys.length})
+											</label>
+											<button
+												type="button"
+												onClick={() => {
+													setRenamingGroupId(g.id);
+													setRenameValue(g.name);
+												}}
+											>
+												Переименовать
+											</button>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() =>
+													runRowAction(() => deleteGroupAction(ownerPubkey, privKey, g.id, publish))
+												}
+											>
+												Удалить
+											</button>
+										</>
+									)}
+								</div>
+							</li>
+						))}
+					</ul>
+
+					<form class="cluster" onSubmit={handleCreateGroup}>
+						<label class="visually-hidden" for="new-group-name">
+							Название новой группы
+						</label>
+						<input
+							id="new-group-name"
+							type="text"
+							placeholder="Новая группа…"
+							value={newGroupName}
+							onInput={(e) => setNewGroupName(e.currentTarget.value)}
+						/>
+						<button type="submit" disabled={busy}>
+							Добавить
+						</button>
+					</form>
+					{groupError && (
+						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+							{groupError}
+						</p>
+					)}
+				</section>
+
+				<section class="flow" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)", flex: 1 }}>
+					<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
+					{rowError && (
+						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+							{rowError}
+						</p>
+					)}
+					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						{visibleContacts.map((pubkey) => {
+							const isBlocked = blockedContacts.value.includes(pubkey);
+							const memberOfGroups = groupsForContact(pubkey);
+							const isExpanded = expandedPubkey === pubkey;
+							return (
+								<li
+									key={pubkey}
+									class="flow"
+									style={{
+										"--flow-space": "var(--space-2xs)",
+										paddingBlock: "var(--space-s)",
+										borderBlockEnd: "var(--border-width) solid var(--border)",
+									}}
+								>
+									<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+										<span style={{ fontFamily: "var(--font-mono)" }}>{shortPubkey(pubkey)}</span>
+										<div class="cluster">
+											<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
+												{isExpanded ? "Скрыть права" : "Права"}
+											</button>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() =>
+													runRowAction(() =>
+														isBlocked
+															? unblockContactAction(ownerPubkey, privKey, pubkey, publish)
+															: blockContactAction(ownerPubkey, privKey, pubkey, publish),
+													)
+												}
+											>
+												{isBlocked ? "Разблокировать" : "Заблокировать"}
+											</button>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() =>
+													runRowAction(() => removeContactAction(ownerPubkey, privKey, pubkey, publish))
+												}
+											>
+												Удалить
+											</button>
+										</div>
+									</div>
+
+									<div class="cluster">
+										{memberOfGroups.map((g) => (
+											<span
+												key={g.id}
+												class="cluster"
+												style={{
+													"--cluster-gap": "var(--space-3xs)",
+													alignItems: "center",
+													background: "var(--surface)",
+													paddingInline: "var(--space-2xs)",
+													borderRadius: "var(--radius)",
+												}}
+											>
+												{g.name}
+												<button
+													type="button"
+													disabled={busy}
+													aria-label={`Убрать из группы ${g.name}`}
+													onClick={() =>
+														runRowAction(() =>
+															removeGroupMemberAction(ownerPubkey, privKey, g.id, pubkey, publish),
+														)
+													}
+												>
+													×
+												</button>
+											</span>
+										))}
+										{groups.value.length > 0 && (
+											<AddToGroupControl
+												groups={groups.value}
+												excludeGroupIds={memberOfGroups.map((g) => g.id)}
+												disabled={busy}
+												onAdd={(groupId) =>
+													runRowAction(() =>
+														addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish),
+													)
+												}
+											/>
+										)}
+									</div>
+
+									{isBlocked && (
+										<p style={{ color: "var(--muted)" }}>
+										Заблокирован — список синхронизирован между вашими устройствами; фактическая фильтрация входящих сообщений появится вместе с обменом сообщениями.
+									</p>
+									)}
+
+									{isExpanded && (
+										<PermissionEditor ownerPubkey={ownerPubkey} privKey={privKey} subject={pubkey} />
+									)}
+								</li>
+							);
+						})}
+					</ul>
+					{visibleContacts.length === 0 && (
+						<p style={{ color: "var(--muted)" }}>
+							{contacts.value.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
+						</p>
+					)}
+				</section>
+			</div>
+		</main>
+	);
+}
+
+function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
+	const instanceId = useId();
+	const [selected, setSelected] = useState("");
+	const available = groups.filter((g) => !excludeGroupIds.includes(g.id));
+	if (available.length === 0) return null;
+
+	const selectId = `add-to-group-select-${instanceId}`;
+
+	return (
+		<form
+			class="cluster"
+			style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}
+			onSubmit={(e) => {
+				e.preventDefault();
+				if (!selected) return;
+				onAdd(selected);
+				setSelected("");
+			}}
+		>
+			<label class="visually-hidden" for={selectId}>
+				Добавить в группу
+			</label>
+			<select id={selectId} value={selected} disabled={disabled} onChange={(e) => setSelected(e.currentTarget.value)}>
+				<option value="">+ в группу…</option>
+				{available.map((g) => (
+					<option key={g.id} value={g.id}>
+						{g.name}
+					</option>
+				))}
+			</select>
+			<button type="submit" disabled={!selected || disabled}>
+				Добавить
+			</button>
+		</form>
+	);
+}

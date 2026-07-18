@@ -3,6 +3,8 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
+import { sign } from "../src/core/crypto/sign.js";
+import { encrypt as nip44Encrypt } from "../src/core/crypto/nip44.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { buildContactListEvent, buildMuteListEvent } from "../src/domain/contacts/contacts.js";
 import { buildGroupEvent } from "../src/domain/contacts/groups.js";
@@ -15,6 +17,8 @@ import {
 	parsePermissionEvent,
 	rebuildEffectivePermissions,
 	validateDeletion,
+	buildAddressableDeletionEvent,
+	rebuildContactsAndGroups,
 } from "../src/domain/events/handlers.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(3);
@@ -137,4 +141,97 @@ test("validateDeletion (AC-17): чужое kind 5 на чужой ивент -> 
 	const target = { id: "target-1", pubkey: "author-pk" };
 	const del = { kind: 5, pubkey: "someone-else-pk" };
 	assert.equal(validateDeletion(del, target), false);
+});
+
+test("buildAddressableDeletionEvent: kind 5, a-тег в форме kind:pubkey:dtag", () => {
+	const event = buildAddressableDeletionEvent(PRIV_KEY, 30050, "group-1");
+	assert.equal(event.kind, 5);
+	assert.deepEqual(event.tags, [["a", `30050:${OWNER_PUBKEY}:group-1`]]);
+});
+
+function rawContactListEvent(privKey, pubkeys, createdAt) {
+	return sign({ kind: 3, tags: pubkeys.map((pk) => ["p", pk]), content: "", created_at: createdAt }, privKey);
+}
+
+function rawGroupEvent(privKey, { groupId, name, memberPubkeys }, createdAt) {
+	const ownPubHex = bytesToHex(getPublicKey(privKey));
+	const content = nip44Encrypt(JSON.stringify({ name, memberPubkeys }), privKey, ownPubHex);
+	return sign({ kind: 30050, tags: [["d", groupId]], content, created_at: createdAt }, privKey);
+}
+
+test("rebuildContactsAndGroups: contacts — из нескольких версий журнала материализуется только САМАЯ ПОЗДНЯЯ", async () => {
+	const older = rawContactListEvent(PRIV_KEY, ["alice"], 1000);
+	const newer = rawContactListEvent(PRIV_KEY, ["bob"], 2000);
+	await db.table("events").add({ ...older, flatTags: [] });
+	await db.table("events").add({ ...newer, flatTags: [] });
+
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	const rows = await db.table("contacts").where("owner").equals(OWNER_PUBKEY).toArray();
+	assert.deepEqual(rows.map((r) => r.pubkey), ["bob"]);
+});
+
+test("rebuildContactsAndGroups: mute list — та же схема, только последняя версия", async () => {
+	const older = sign({ kind: 10000, tags: [["p", "evil-old"]], content: "", created_at: 1000 }, PRIV_KEY);
+	const newer = sign({ kind: 10000, tags: [["p", "evil-new"]], content: "", created_at: 2000 }, PRIV_KEY);
+	await db.table("events").add({ ...older, flatTags: [] });
+	await db.table("events").add({ ...newer, flatTags: [] });
+
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	const rows = await db.table("blockedContacts").where("owner").equals(OWNER_PUBKEY).toArray();
+	assert.deepEqual(rows.map((r) => r.pubkey), ["evil-new"]);
+});
+
+test("rebuildContactsAndGroups: группы — несколько версий ОДНОГО d-tag, материализуется последняя", async () => {
+	const older = rawGroupEvent(PRIV_KEY, { groupId: "g1", name: "Старое имя", memberPubkeys: ["a"] }, 1000);
+	const newer = rawGroupEvent(PRIV_KEY, { groupId: "g1", name: "Новое имя", memberPubkeys: ["a", "b"] }, 2000);
+	await db.table("events").add({ ...older, flatTags: [] });
+	await db.table("events").add({ ...newer, flatTags: [] });
+
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	const group = await db.table("groups").get([OWNER_PUBKEY, "g1"]);
+	assert.equal(group.name, "Новое имя");
+	const members = await db.table("groupMembers").where("groupId").equals("g1").toArray();
+	assert.deepEqual(members.map((m) => m.pubkey).sort(), ["a", "b"]);
+});
+
+test("rebuildContactsAndGroups: РАЗНЫЕ d-tag — независимые группы, не путаются", async () => {
+	const g1 = rawGroupEvent(PRIV_KEY, { groupId: "g1", name: "Друзья", memberPubkeys: ["a"] }, 1000);
+	const g2 = rawGroupEvent(PRIV_KEY, { groupId: "g2", name: "Работа", memberPubkeys: ["b"] }, 1000);
+	await db.table("events").add({ ...g1, flatTags: [] });
+	await db.table("events").add({ ...g2, flatTags: [] });
+
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	assert.equal((await db.table("groups").get([OWNER_PUBKEY, "g1"])).name, "Друзья");
+	assert.equal((await db.table("groups").get([OWNER_PUBKEY, "g2"])).name, "Работа");
+});
+
+test("rebuildContactsAndGroups: удалённая (a-тег) группа НЕ материализуется", async () => {
+	const groupEvent = rawGroupEvent(PRIV_KEY, { groupId: "g-deleted", name: "Удалённая", memberPubkeys: ["a"] }, 1000);
+	const deletionEvent = buildAddressableDeletionEvent(PRIV_KEY, 30050, "g-deleted");
+	await db.table("events").add({ ...groupEvent, flatTags: [] });
+	await db.table("events").add({ ...deletionEvent, flatTags: [] });
+
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	const group = await db.table("groups").get([OWNER_PUBKEY, "g-deleted"]);
+	assert.equal(group, undefined);
+});
+
+test("rebuildContactsAndGroups: группа, ранее смэтериализованная, а ПОТОМ удалённая — убирается при пересчёте", async () => {
+	const groupEvent = rawGroupEvent(PRIV_KEY, { groupId: "g-to-delete", name: "Скоро удалю", memberPubkeys: ["a"] }, 1000);
+	await db.table("events").add({ ...groupEvent, flatTags: [] });
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+	assert.ok(await db.table("groups").get([OWNER_PUBKEY, "g-to-delete"]));
+
+	const deletionEvent = buildAddressableDeletionEvent(PRIV_KEY, 30050, "g-to-delete");
+	await db.table("events").add({ ...deletionEvent, flatTags: [] });
+	await rebuildContactsAndGroups(OWNER_PUBKEY, PRIV_KEY);
+
+	assert.equal(await db.table("groups").get([OWNER_PUBKEY, "g-to-delete"]), undefined);
+	const members = await db.table("groupMembers").where("groupId").equals("g-to-delete").toArray();
+	assert.equal(members.length, 0);
 });

@@ -116,6 +116,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 | 20-довесок (UX diagnostics.jsx: живой relay при dev, вёрстка) | 127.46 КБ | +0.34 | Детерминированный self-check ключ + группировка UI, без новых зависимостей |
 | 21 (bitset + журнальный движок прав) | 127.46 КБ | +0 | `bitset.js`/`permissions.js`/`engine.js` вне app-графа — реальный потребитель (`handlers.js`, permission-editor) с этапов 22-23 |
 | 22 (контакты + группы + блокировка + NIP-09) | 127.46 КБ | +0 | `contacts.js`/`groups.js`/`handlers.js` тоже вне app-графа — реальный потребитель (UI контактов, permission-editor) с этапа 23 |
+| 23 (UI контактов + редактор прав) | 132.04 КБ | +4.58 | Впервые весь домен contacts/groups/permissions (этапы 21-22) + новый `transport.js` (сессионное соединение от лица реального пользователя, не self-check) подключены к app-графу через `contacts.jsx` |
 
 **Важная находка при переработке плана:** бюджет TECH.md §7.2
 (~190–250 КБ итого, запас 30–90 КБ) посчитан ДО решения профиля B
@@ -196,7 +197,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 - [x] Этап 22. **Контакты + группы + блокировка + NIP-09** [рутина] — kind 3 (контакт-лист), kind 30050 (группы), блокировка; fold для kinds 3/30050/**5051** (правка: не 30051, см. CONTRACTS.md — parameterized-replaceable несовместим с журнальной моделью R6-5 этапа 21); удаление событий (kind 5, F-EV-08): автор может удалить своё, чужое kind 5 игнорируется (AC-17)
     - `src/domain/contacts/contacts.js`, `src/domain/contacts/groups.js`, `src/domain/events/handlers.js`
 
-- [ ] Этап 23. **UI контактов + редактор прав** [рутина, но семантика форм — см. онбординг-уроки этапа 11 в "Заметки"] — экран списка контактов и групп, создание/удаление группы, permission-editor (grant/revoke VIEW и COMMENT на контакты и группы), signals для реактивности
+- [x] Этап 23. **UI контактов + редактор прав** [рутина, но семантика форм — см. онбординг-уроки этапа 11 в "Заметки"] — экран списка контактов и групп, создание/удаление группы, permission-editor (grant/revoke VIEW и COMMENT на контакты и группы), signals для реактивности. **Дополнено сверх исходного списка файлов** (см. CONTRACTS.md): `signals/transport.js` (сессионное соединение с relay от лица реального пользователя — раньше существовало только для diagnostics self-check) и правка `handlers.js` (`buildAddressableDeletionEvent`/`rebuildContactsAndGroups` — удаление ЦЕЛОЙ группы требует NIP-09 `a`-тег, не просто republish)
     - `src/ui/screens/contacts.jsx`, `src/ui/components/permission-editor.jsx`, `src/ui/signals/contacts.js`
 
 - [ ] Этап 24. **Личные сообщения — ядро** [алгоритмика — DESIGN.md для автомата сообщения §9.1, формализовать ДО кода] — TECH.md §13.7 (6.1–6.3): ДКА сообщения (created/sending/sent/read/failed/discarded, §9.1) поверх `core/fsm/machine.js`; `sendMessage`/`receiveMessage` через NIP-17 + MLS-интеграция по выходу этапа 13 (kind 445, состояние группы, commit/proposal, персист); `getChatHistory` с сортировкой по (lamportTs, senderPubkey, eventId) — тайбрейкер критичен для AC-05 (multi-device одного пользователя тоже, не только разных)

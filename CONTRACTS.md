@@ -2139,3 +2139,167 @@ export function validateDeletion(deleteEvent, targetEvent);
 // -> boolean. Чистая функция, без побочных эффектов, без domain-эффекта (см. "Находки", п.4) —
 // вызывающий код решает, что делать с true/false для конкретного домена
 ```
+
+## Этап 23 — UI контактов + редактор прав
+
+Триаж (п.13a): **рутина** для сигналов/CRUD-обвязки; для `contacts.jsx`
+и `permission-editor.jsx` действует урок из PLAN.md ("Уроки предыдущих
+этапов" — крупные JSX-экраны со связанным состоянием писать напрямую,
+не воркером) — оба security/session-смежные (права, идентичность),
+пишутся Claude напрямую с самого начала, не после found brak'а.
+
+### Находки и решения (до сигнатур)
+
+**1. Гэп инфраструктуры: до этого этапа ни один экран не держит
+постоянного соединения с relay от лица РЕАЛЬНОГО залогиненного
+пользователя** — `diagnostics.jsx`'s `useTransportSyncCheck` поднимает
+одноразовое соединение с фиктичной self-check identity, `profile.jsx`
+целиком локален (не публикует). Добавлен `src/ui/signals/transport.js`
+— НЕ в исходном списке файлов PLAN.md для этого этапа, но необходимое
+следствие: без него "добавление контакта" осталось бы локальной
+имитацией, а не реальной публикацией/синхронизацией. Транспортный
+стек (16-20) не меняется — `transport.js` лишь первый настоящий
+потребитель уже готового `createRelayConnection`/`createPublisher`/
+`runBootstrap`/`startIncrementalSync` от лица сессии, а не self-check.
+
+**2. Исправление находки этапа 22: "группы не нуждаются в kind 5"
+было неверно для УДАЛЕНИЯ ЦЕЛОЙ группы.** Этап 22 корректно рассудил,
+что удаление УЧАСТНИКА группы не требует kind 5 (republish kind 30050
+без него). Но полное удаление группы — другое: kind 30050
+parameterized-replaceable не имеет "пустой" версии, означающей
+"группы больше нет" — нужна явная tombstone-семантика. NIP-09
+поддерживает это штатно через `a`-тег (адресуемое удаление:
+`["a", "{kind}:{pubkey}:{d-tag}"]`), в отличие от `e`-тега (по id
+конкретного события, для kind 5, F-EV-08 этапа 22). Добавлена
+`buildAddressableDeletionEvent`; `validateDeletion` (этап 22) остаётся
+как есть (`e`-тег форма, для будущих regular-kind доменов) — это
+ДОПОЛНЕНИЕ, не замена.
+
+### `src/domain/events/handlers.js` (правка контракта этапа 22 — добавлены 2 функции)
+
+```js
+export function buildAddressableDeletionEvent(privKey, kind, dTag);
+// ownPubHex = bytesToHex(getPublicKey(privKey))
+// kind 5, tags = [["a", `${kind}:${ownPubHex}:${dTag}`]], content = ""
+// -> подписанный NostrEvent (NIP-09, адресуемое удаление)
+
+export async function rebuildContactsAndGroups(ownerPubkey, privKey);
+// 1. contacts: db.table("events").where("[pubkey+kind]").equals([ownerPubkey, 3]).toArray()
+//    -> если непусто, lww.pickLatest(events) -> foldContactList(latest)
+// 2. mute list: та же схема, kind 10000 -> foldMuteList(latest)
+// 3. группы: db.table("events").where("[pubkey+kind]").equals([ownerPubkey, 30050]).toArray(),
+//    группировка по d-tag (Map), внутри группы — lww.pickLatest -> latestByDTag
+// 4. удаления: db.table("events").where("[pubkey+kind]").equals([ownerPubkey, 5]).toArray(),
+//    отфильтровать теги ["a", target] -> Set deletedTargets (только форма "30050:pubkey:dtag")
+// 5. для каждого (dTag, event) из latestByDTag: если `30050:${ownerPubkey}:${dTag}` НЕ в
+//    deletedTargets -> foldGroup(event, privKey); ИНАЧЕ -> удалить из db.groups/db.groupMembers
+//    (группа была смэтериализована раньше, потом удалена — явно почистить, не оставлять висеть)
+// MVP — полный пересчёт (тот же принцип, что rebuildEffectivePermissions), не инкрементально
+```
+
+### `src/ui/signals/transport.js` (новый, по находке 1)
+
+```js
+export const connState;  // signal<string> — состояние relay-pool.js (disconnected/connecting/.../subscribed)
+export const synced;     // signal<boolean> — onCaughtUp сработал хотя бы раз в этой сессии
+
+export async function ensureConnected(pubkeyHex, privKey);
+// Идемпотентно (singleton connection на вкладку) — повторные вызовы, пока соединение
+// уже устанавливается/установлено, await'ят ТУ ЖЕ попытку, не открывают вторую.
+// relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777" (config.js, этап 2/20)
+// connect() -> дождаться "connected" -> CryptoWorker/Comlink verifyBatch (по образцу
+// diagnostics.jsx) -> runBootstrap(pubkeyHex, {verifyBatch}) -> ПОСЛЕ bootstrap:
+// rebuildContactsAndGroups(pubkeyHex, privKey) + rebuildEffectivePermissions(pubkeyHex, privKey)
+// -> startIncrementalSync(pubkeyHex, {verifyBatch, onEvent: (addedCount) => { if (addedCount > 0)
+//    { rebuildContactsAndGroups(...); rebuildEffectivePermissions(...); } }})
+// -> Promise<void>, резолвится после bootstrap+первого rebuild (incremental sync остаётся в фоне)
+
+export async function publish(event);
+// ensureConnected() уже должен быть вызван раньше (throw, если соединения ещё нет —
+// не пытается неявно подключаться само, вызывающий код управляет жизненным циклом явно)
+// -> publisher.publish(event) (publisher.js, этап 18) -> { ok: boolean, reason: string }
+
+export async function nextLamportTick();
+// Единый Lamport-счётчик НА СЕССИЮ (module-level singleton), не per-компонент —
+// PermissionEditor монтируется многократно (по разу на контакт/группу), отдельный
+// счётчик на каждый экземпляр нарушил бы причинный порядок между permission-событиями.
+// Ленивая инициализация через computeInitialLamportValue() (lamport.js, этап 19) при
+// первом вызове, persistLamportValue() после каждого tick(). -> Promise<number>
+```
+
+### `src/ui/signals/contacts.js`
+
+```js
+export const contacts;         // signal<string[]>  — pubkeys
+export const blockedContacts;  // signal<string[]>
+export const groups;           // signal<{ id, name, memberPubkeys }[]>
+
+export async function refreshContacts(ownerPubkey);        // читает db.contacts -> contacts.value
+export async function refreshBlockedContacts(ownerPubkey); // читает db.blockedContacts -> blockedContacts.value
+export async function refreshGroups(ownerPubkey);           // читает db.groups + db.groupMembers (join по id) -> groups.value
+export async function refreshAll(ownerPubkey);               // все три параллельно (Promise.all)
+
+export function decodePubkeyInput(input);
+// npub1... -> nip19.decode, .type !== 'npub' -> throw; 64-hex -> lowercase как есть;
+// иначе throw new Error("не похоже на npub или hex-ключ")
+
+// Действия — build (contacts.js/handlers.js, этап 22) -> publish (transport.js) -> fold локально
+// (не ждать incremental-sync round-trip для мгновенного отклика UI) -> refresh соответствующего сигнала:
+export async function addContactAction(ownerPubkey, privKey, npubOrHex, publish);
+export async function removeContactAction(ownerPubkey, privKey, pubkeyToRemove, publish);
+export async function blockContactAction(ownerPubkey, privKey, npubOrHex, publish);   // decodePubkeyInput внутри, как addContactAction
+export async function unblockContactAction(ownerPubkey, privKey, npubOrHex, publish); // decodePubkeyInput внутри, как addContactAction
+export async function createGroupAction(ownerPubkey, privKey, name, publish);
+export async function renameGroupAction(ownerPubkey, privKey, groupId, newName, publish);
+export async function addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish);
+export async function removeGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish);
+export async function deleteGroupAction(ownerPubkey, privKey, groupId, publish);
+// publish — явно инъецируемая функция (event) => Promise<{ok, reason}>, ПО ОБРАЗЦУ
+// verifyBatch (subscriber.js/bootstrap.js) и publishFn (outbox.js) — не скрытый импорт
+// transport.js внутри contacts.js. contacts.jsx передаёт transport.publish; тесты —
+// свой stub. Держит contacts.js юнит-тестируемым (node --test) без реальной сети.
+// publish(event) может вернуть { ok: false } (relay reject/timeout) — действие в этом случае
+// НЕ фолдит локально и НЕ обновляет сигнал (не показывать успех, которого не было),
+// бросает Error с reason, чтобы UI показал ошибку
+```
+
+### `src/ui/components/permission-editor.jsx`
+
+```js
+export default function PermissionEditor({ ownerPubkey, privKey, subject, resource });
+// subject — pubkey контакта ИЛИ id группы (вызывающий код решает, что это; компонент не
+// различает — engine.js/effectivePerms работают с opaque-строками одинаково для обоих)
+// resource — opaque-строка. РЕАЛЬНОГО resource-picker домена ещё нет (каналы — этапы 28/30),
+// поэтому UI даёт свободный текстовый ввод идентификатора ресурса — сознательное
+// временное упрощение, не выдаётся за готовый продукт (лейбл явно "Идентификатор ресурса")
+//
+// Показывает текущий effectivePerms.mask для (subject, resource) (db.effectivePerms,
+// этап 22), чекбоксы VIEW/COMMENT (ТОЛЬКО эти два действия — PLAN.md явно ограничивает
+// скоуп этого этапа; WRITE/MODERATE/ADMIN осмысленны только с реальными ресурсами,
+// остаются на будущее). Изменение чекбокса -> buildPermissionEvent (allowMask/denyMask
+// считаются от ТЕКУЩЕГО эффективного состояния: включение бита -> allow=bit, denyMask=0;
+// выключение -> allow=0, denyMask=bit) с lamportTs = следующий tick сессионных часов
+// (см. ниже) -> publish -> rebuildEffectivePermissions -> обновить локальное отображение
+```
+
+Lamport для permission-событий этого экрана — сессионный in-memory
+счётчик (`createLamportClock`, этап 19), инициализированный через
+`computeInitialLamportValue()` при первом обращении к экрану,
+`persistLamportValue` после каждого `tick()` — тот же паттерн, что
+уже принят для остальных Lamport-меток в проекте (единый счётчик на
+пользователя, TECH.md §4.4), не отдельный per-permission-событие счётчик.
+
+### `src/ui/screens/contacts.jsx`
+
+Экран: список контактов (карточка = pubkey/npub, теги групп на
+карточке, кнопки "Заблокировать"/"Удалить"), панель групп (чекбокс-
+фильтр по нескольким группам одновременно, "+ создать группу", "..."
+меню группы: переименовать/удалить), форма добавления контакта
+(поле npub/hex). Каждый контакт/группа — раскрываемая секция с
+`PermissionEditor`. Вызывает `ensureConnected` в `useEffect` при
+монтировании (лениво, не при логине — см. "Находки", п.1), показывает
+`connState`/`synced` (переиспользует `SyncIndicator`, этап 20) как
+статус-строку. UX-элементы (групповой фильтр, теги на карточке,
+inline-меню группы) — по референсу пользователя (скриншоты v0.1),
+кроме модели добавления контакта (одностороннее по npub/hex, не
+invite-key+confirm — решение этапа 22, F-CT-01).

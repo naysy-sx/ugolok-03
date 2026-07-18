@@ -8,6 +8,7 @@ import { deriveMasterSecret, opaqueDTag } from '../../core/crypto/derivation.js'
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { createPermissionRecord } from '../auth/permissions.js';
 import { rebuildCache } from '../auth/engine.js';
+import { lwwWinner, pickLatest } from '../../core/sync/lww.js';
 
 export async function foldContactList(event) {
   const pubkeys = parseContactListEvent(event);
@@ -73,4 +74,51 @@ export async function foldGroup(event, privKey) {
 
 export function validateDeletion(deleteEvent, targetEvent) {
   return deleteEvent.kind === 5 && deleteEvent.pubkey === targetEvent.pubkey;
+}
+
+export function buildAddressableDeletionEvent(privKey, kind, dTag) {
+  const ownPubHex = bytesToHex(getPublicKey(privKey));
+  const eventTemplate = { kind: 5, tags: [['a', `${kind}:${ownPubHex}:${dTag}`]], content: '', created_at: Math.floor(Date.now() / 1000) };
+  return sign(eventTemplate, privKey);
+}
+
+export async function rebuildContactsAndGroups(ownerPubkey, privKey) {
+  const contactEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 3]).toArray();
+  if (contactEvents.length > 0) {
+    await foldContactList(pickLatest(contactEvents));
+  }
+
+  const muteEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 10000]).toArray();
+  if (muteEvents.length > 0) {
+    await foldMuteList(pickLatest(muteEvents));
+  }
+
+  const groupEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 30050]).toArray();
+  const latestByDTag = new Map();
+  for (const ev of groupEvents) {
+    const dTag = ev.tags.find((t) => t[0] === 'd')?.[1];
+    if (!dTag) continue;
+    const existing = latestByDTag.get(dTag);
+    latestByDTag.set(dTag, existing ? lwwWinner(existing, ev) : ev);
+  }
+
+  const deletionEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 5]).toArray();
+  const deletedTargets = new Set();
+  for (const del of deletionEvents) {
+    for (const tag of del.tags) {
+      if (tag[0] === 'a') deletedTargets.add(tag[1]);
+    }
+  }
+
+  for (const [dTag, event] of latestByDTag) {
+    const target = `30050:${ownerPubkey}:${dTag}`;
+    if (deletedTargets.has(target)) {
+      await db.transaction('rw', db.table('groups'), db.table('groupMembers'), async () => {
+        await db.table('groups').delete([ownerPubkey, dTag]);
+        await db.table('groupMembers').where('groupId').equals(dTag).delete();
+      });
+    } else {
+      await foldGroup(event, privKey);
+    }
+  }
 }

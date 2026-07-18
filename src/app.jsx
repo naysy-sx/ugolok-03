@@ -6,6 +6,7 @@ import Placeholder from "./ui/screens/placeholder.jsx";
 import Onboarding from "./ui/screens/onboarding.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
+import Contacts from "./ui/screens/contacts.jsx";
 import { currentUser } from "./ui/signals/auth.js";
 
 function MainShell() {
@@ -44,7 +45,8 @@ function MainShell() {
 			>
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
-				{activeId !== "diagnostics" && activeId !== "profile" && (
+				{activeId === "contacts" && <Contacts />}
+				{activeId !== "diagnostics" && activeId !== "profile" && activeId !== "contacts" && (
 					<Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />
 				)}
 			</div>
