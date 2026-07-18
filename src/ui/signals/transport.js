@@ -10,6 +10,14 @@ import { rebuildContactsAndGroups, rebuildEffectivePermissions } from "../../dom
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
 import { createSubscriber } from "../../core/transport/subscriber.js";
 import { parseProfileEvent } from "../../domain/identity/profile.js";
+import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
+import { db } from "../../core/store/database.js";
+import { CONTACT_REQUEST_KIND, parseContactRequestRumor } from "../../domain/contacts/requests.js";
+import { acceptWelcome, ensureOwnKeyPackagePublished, receiveGroupMessageEvent } from "../../domain/messaging/chat.js";
+
+function decodeBase64(str) {
+	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+}
 
 export const connState = signal("disconnected");
 export const synced = signal(false);
@@ -20,6 +28,7 @@ let cryptoWorker = null;
 let connectPromise = null;
 let connectedForPubkey = null;
 let verifyBatchFn = null;
+let groupMessageSubscriber = null;
 
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
@@ -40,6 +49,7 @@ function waitForConnState(conn, predicate, timeoutMs) {
 function teardown() {
 	publisher = null;
 	verifyBatchFn = null;
+	groupMessageSubscriber = null;
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
 		cryptoWorker = null;
@@ -81,6 +91,50 @@ async function connect(pubkeyHex, privKey) {
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
 	await rebuildContactsAndGroups(pubkeyHex, privKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
+	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
+
+	// DESIGN.md, этап 24, п.6 — ПЕРВАЯ в проекте подписка не по "authors: [я]",
+	// а по адресату: входящие gift wrap (kind 1059, #p: [я]). Один REQ, диспетчеризация
+	// по kind развёрнутого rumor — Welcome (444, MLS) и contact-request (3001) делят
+	// один и тот же механизм доставки (NIP-59), не два разных.
+	const giftWrapSubscriber = createSubscriber(connection, {
+		verifyBatch,
+		onBatch: async (events) => {
+			for (const event of events) {
+				let rumor;
+				try {
+					rumor = nip59Unwrap(event, privKey);
+				} catch {
+					continue; // не наш gift wrap / повреждён — пропустить, не ронять остальной батч
+				}
+				try {
+					if (rumor.kind === 444) {
+						await acceptWelcome(pubkeyHex, rumor.pubkey, decodeBase64(rumor.content));
+						await refreshGroupMessageSubscription(pubkeyHex);
+					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
+						const parsed = parseContactRequestRumor(rumor);
+						await db.table("contactRequests").put({
+							owner: pubkeyHex,
+							senderPubkey: parsed.senderPubkey,
+							greeting: parsed.greeting,
+							createdAt: parsed.createdAt,
+						});
+					}
+					// иначе — будущий kind (этапы 25+, напр. inbox-request-сообщения от НЕ-контактов), discard
+				} catch {
+					// ошибка обработки конкретного rumor (напр. Welcome уже применён гонкой) — не ронять батч
+				}
+			}
+		},
+	});
+	connection.addMessageHandler(giftWrapSubscriber.handleMessage);
+	giftWrapSubscriber.subscribe("incoming-giftwrap", [{ "#p": [pubkeyHex], kinds: [1059] }]);
+
+	// Подписка на входящие kind 445 (Group Message) — по #h, не по authors (эфемерный
+	// отправитель на каждое сообщение, NIP-EE). Восстанавливает уже установленные чаты
+	// после reload; refreshGroupMessageSubscription (вызывается и выше, при Welcome)
+	// обновляет фильтр, когда появляется новый чат.
+	await refreshGroupMessageSubscription(pubkeyHex);
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
@@ -175,4 +229,64 @@ export async function fetchProfiles(pubkeys) {
 	});
 
 	return results;
+}
+
+// Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если
+// не найден (chat.js's ensureChatEstablished превращает это в понятную ошибку
+// "у контакта нет опубликованного ключа для сообщений").
+export async function fetchKeyPackage(pubkeyHex) {
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchKeyPackage()");
+	}
+	let found = null;
+	const subId = "keypackage-" + Math.random().toString(36).slice(2);
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: (events) => {
+				for (const event of events) {
+					found = decodeBase64(event.content);
+				}
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ authors: [pubkeyHex], kinds: [443] }]);
+	});
+
+	if (!found) {
+		throw new Error("у контакта нет опубликованного ключа для сообщений");
+	}
+	return found;
+}
+
+// DESIGN.md, этап 24, п.5 — подписка на входящие kind 445 по #h (не authors —
+// отправитель эфемерный на каждое сообщение). Вызывается при коннекте (восстановить
+// уже установленные чаты после reload) и при каждом новом Welcome (новый чат).
+// Пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема (MVP).
+export async function refreshGroupMessageSubscription(ownerPubkey) {
+	if (!connection) return;
+	const groupIds = (await db.table("mlsGroups").toArray()).map((row) => row.groupId);
+	if (groupIds.length === 0) return;
+
+	if (!groupMessageSubscriber) {
+		groupMessageSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						await receiveGroupMessageEvent(ownerPubkey, event);
+					} catch {
+						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
+					}
+				}
+			},
+		});
+		connection.addMessageHandler(groupMessageSubscriber.handleMessage);
+	}
+	groupMessageSubscriber.subscribe("group-messages", [{ "#h": groupIds, kinds: [445] }]);
 }

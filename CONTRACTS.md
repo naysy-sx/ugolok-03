@@ -2470,3 +2470,184 @@ kind в ту же wall-clock секунду) может дать ДВА собы
 разблокировка, без задержки — ровно сценарий, ловивший гонку) — после
 фикса контакт остаётся в "Заблокированные (0)"/"Контакты (0)", не
 воскресает.
+
+## Этап 24 — Личные сообщения: ядро
+
+Формализация (ДКА сообщения, MLS/NIP-17 оркестрация 1:1-разговора,
+contact-request протокол) — DESIGN.md, раздел "Этап 24". Здесь —
+сигнатуры.
+
+### `src/domain/messaging/machine.js`
+
+```js
+export const MESSAGE_TRANSITIONS; // {state: {event: state}} — TECH.md §9.1, буквально:
+// created: {SEND: "sending"}
+// sending: {ACK: "sent", FAIL: "failed"}
+// sent: {READ: "read"}
+// failed: {RETRY: "sending", DISCARD: "discarded"}
+// (read/discarded — финальные, без исходящих переходов)
+
+export function transitionMessage(state, event);
+// -> transition(MESSAGE_TRANSITIONS, state, event) (core/fsm/machine.js, этап 14)
+// throw на любой не перечисленной паре (state, event) — уже гарантия machine.js, не переопределяется здесь
+```
+
+### `src/domain/contacts/requests.js`
+
+```js
+export const CONTACT_REQUEST_KIND = 3001;
+
+export function buildContactRequestRumor(greeting = "");
+// -> { kind: 3001, content: greeting, tags: [], created_at: Math.floor(Date.now()/1000) }
+// НЕ подписывается здесь (rumor — подписывает/оборачивает nip59.wrap выше по стеку,
+// как для kind 444, DESIGN.md п.6) — просто шаблон rumor-события
+
+export function parseContactRequestRumor(rumor);
+// -> { greeting: rumor.content, senderPubkey: rumor.pubkey, createdAt: rumor.created_at }
+// (rumor.pubkey уже проверен вызывающим кодом — nip59.unwrap проверяет rumor.pubkey===seal.pubkey, F-EV-05)
+```
+
+### `src/domain/events/kinds.js` (правка контракта этапа 13 — добавлены константы)
+
+```js
+export const KIND_CONTACT_REQUEST = 3001;
+export const KIND_GROUP_MESSAGE = 445; // алиас KIND_MLS_GROUP_MESSAGE, для симметрии с новыми константами
+```
+
+### `src/core/store/database.js` (правка схемы, `db.version(2)`, аддитивно)
+
+```js
+ownKeyPackage: "id",                              // одна строка, id="self": { id, publicPackage, privatePackage, wireBytes }
+contactRequests: "[owner+senderPubkey], owner",   // { owner, senderPubkey, greeting, createdAt }
+```
+
+Остальные таблицы (включая `mlsGroups`) не меняются — Dexie наследует
+их из `version(1)` автоматически. Новая версия схемы нужна ТОЛЬКО
+из-за добавления двух новых таблиц (Dexie требует явного `version()`
+bump при изменении списка stores, даже аддитивном).
+
+### `src/domain/messaging/chat.js`
+
+```js
+export function computeGroupId(pubkeyHexA, pubkeyHexB);
+// sortedPair = [pubkeyHexA, pubkeyHexB].sort()
+// -> sha256(utf8(sortedPair.join(":"))) как Uint8Array(32) (DESIGN.md п.2)
+// Детерминировано для обеих сторон, не хранится отдельно как "chatId->groupId" маппинг.
+
+export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish);
+// db.table("ownKeyPackage").get("self") — если есть,no-op (не идёт в сеть повторно)
+// иначе: createOwnKeyPackage(ownerPubkey) (mls-session.js, этап 13) -> персист
+// { id: "self", publicPackage, privatePackage, wireBytes } (encrypted-table, dbKey)
+// -> build kind 443 { tags: [], content: base64(wireBytes) } -> sign(privKey) -> publish -> requirePublishOk
+// -> Promise<void>
+
+export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey, publish, fetchKeyPackage);
+// groupId = computeGroupId(ownerPubkey, contactPubkey)
+// db.table("mlsGroups").get(toHex(groupId)) уже есть -> no-op, Promise<void> сразу
+// иначе (DESIGN.md п.3, шаги 2-6):
+//   theirWireBytes = await fetchKeyPackage(contactPubkey) -- инъекция (по образцу fetchProfiles,
+//     этап 23) -- throw, если не найден ("у контакта нет опубликованного ключа для сообщений")
+//   ownKeyPackage = createOwnKeyPackage(ownerPubkey) (СВЕЖИЙ, не переиспользует ownKeyPackage.self)
+//   state = createGroup(ownerPubkey, ownKeyPackage, groupId)
+//   { newSessionState, welcomeWireBytes } = addMember(state, theirWireBytes) // commitWireBytes отброшен
+//   персист newSessionState -> mlsGroups.put({ groupId: toHex(groupId), contactPubkey, state: serializeState(...) })
+//   (SM-2, ДО publish; contactPubkey хранится РЯДОМ с состоянием, не отдельной таблицей —
+//   groupId однонаправленный хэш пары pubkey, из него нельзя восстановить контакта обратно,
+//   а именно это нужно диспетчеру входящих kind 445, который знает только h-тег)
+//   welcomeEvent = nip59.wrap({ kind: 444, content: base64(welcomeWireBytes), tags: [] }, privKey, contactPubkey)
+//   await requirePublishOk(publish, welcomeEvent)
+// -> Promise<void>
+//
+// ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ВЫЗОВА (найдено живой проверкой, не в исходном плане):
+// вызывающий код ОБЯЗАН вызвать transport.refreshGroupMessageSubscription(ownerPubkey)
+// СРАЗУ ПОСЛЕ успешного ensureChatEstablished. chat.js намеренно не импортирует
+// transport.js (домен не зависит от UI-слоя, тот же принцип, что publish/fetchKeyPackage
+// инъекция) — но БЕЗ этого вызова инициатор разговора никогда не подпишется на входящие
+// kind 445 для НОВОГО groupId и не увидит ответные сообщения контакта. Симметричная
+// сторона (принявшая Welcome через диспетчер) получает это автоматически — см.
+// transport.js ниже, acceptWelcome сам вызывает refreshGroupMessageSubscription.
+// Пропуск этого вызова — тихий баг (соединение и отправка работают, ответы не приходят),
+// не бросает исключение нигде — требует явной дисциплины вызывающего кода (будущий
+// chat.jsx/orchestration, этап 27).
+
+export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWireBytes);
+// Вызывается диспетчером входящих gift wrap (transport.js) на rumor.kind===444.
+// welcomeSenderPubkey = rumor.pubkey (уже проверен nip59.unwrap — F-EV-05) — это и есть
+// контакт, устанавливающий разговор, с ПОЛУЧАЮЩЕЙ стороны (симметрично ensureChatEstablished
+// со стороны инициатора).
+// groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey)
+// mlsGroups уже есть запись -> no-op (повторная доставка того же Welcome, EOSE-повтор и т.п.)
+// иначе: ownKeyPackageRow = db.table("ownKeyPackage").get("self") -- нет записи -> throw
+//   ("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше")
+//   state = joinFromWelcome({ publicPackage, privatePackage }, welcomeWireBytes)
+//   mlsGroups.put({ groupId: toHex(groupId), contactPubkey: welcomeSenderPubkey, state: serializeState(state) })
+// -> Promise<void>
+
+export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish);
+// groupId = computeGroupId(ownerPubkey, contactPubkey); throw, если mlsGroups нет записи
+// (вызывающий код обязан был вызвать ensureChatEstablished раньше — граница та же,
+// что mls-session.js само декларирует про credential-проверку, этап 13)
+// state = deserializeState(row.state)
+// plaintextBytes = new TextEncoder().encode(JSON.stringify({ text, lamportTs }))
+// // encryptApplicationMessage(state, message) ожидает Uint8Array, не строку — подтверждено
+// // tests/mls-session.test.js (setupGroupWithBob + new TextEncoder().encode(...) в тестах этапа 13)
+// { newSessionState, wireBytes } = encryptApplicationMessage(state, plaintextBytes)
+// персист newSessionState (SM-2, ДО publish) -- ВАЖНО: put() перезаписывает всю строку,
+// contactPubkey (row.contactPubkey) обязан переноситься тем же вызовом, иначе следующий
+// приём/отправка потеряет обратную ссылку на контакт (найдено тестами, не спекуляция)
+// { privateKey, publicKey } = deriveNostrEnvelopeKeys(newSessionState)
+// content = nip44Encrypt(base64(wireBytes), privateKey, bytesToHex(publicKey)) -- deriveNostrEnvelopeKeys
+//   возвращает publicKey СЫРЫМИ байтами (core/crypto/keys.js), nip44.js ожидает hex-строку —
+//   несовпадение форматов, найдено тестами (не третий параметр как есть)
+// ephemeralPriv = generateSecretKey() (nostr-tools/pure) -- НОВЫЙ на это сообщение, не переиспользуется
+// event = sign({ kind: 445, tags: [["h", toHex(groupId)]], content, created_at }, ephemeralPriv)
+// await requirePublishOk(publish, event)
+// -> персист локально в db.messages { chatId: contactPubkey, lamportTs, senderPubkey: ownerPubkey,
+//    id: event.id, text, status: "sent" } (FSM: created->SEND->sending->ACK->sent, см. machine.js;
+//    "sending" функционально пропускается для MVP — publish() уже ждёт ack синхронно, publisher.js этапа 18)
+// -> Promise<{ eventId: string }>
+
+export async function receiveGroupMessageEvent(ownerPubkey, event);
+// groupId из event.tags (["h", hex]); mlsGroups нет записи -> discard (чужая/неизвестная группа) -> null
+// contactPubkey = row.contactPubkey (НЕ параметр функции — берётся из строки, установленной
+// ensureChatEstablished/acceptWelcome; вызывающему коду не нужно заранее знать, чей это чат)
+// state = deserializeState(row.state); { privateKey, publicKey } = deriveNostrEnvelopeKeys(state)
+// wireBytes = base64decode(nip44Decrypt(event.content, privateKey, bytesToHex(publicKey)))
+// { newSessionState, message } | { newSessionState, kind: "control" } = decryptApplicationMessage(state, wireBytes)
+// персист newSessionState (SM-2), contactPubkey переносится тем же put() (см. sendMessage, та же находка)
+// kind==="control" -> Promise<null> (проposal/commit, не текст, MVP не показывает UI для этого)
+// иначе: parsed = JSON.parse(new TextDecoder().decode(message)); персист db.messages { chatId: contactPubkey,
+//   lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, id: event.id, text: parsed.text, status: "sent" }
+// -> Promise<{ text, lamportTs } | null>
+
+export async function getChatHistory(contactPubkey);
+// db.table("messages").where("chatId").equals(contactPubkey).toArray()
+// сортировка по (lamportTs, senderPubkey, eventId=id) лексикографически по senderPubkey/id
+// при равенстве lamportTs (F-MS-05/AC-05) -> Promise<MessageRow[]>
+```
+
+**Разделение обязанностей (важно для тестируемости):** `sendMessage`/
+`receiveGroupMessageEvent`/`ensureChatEstablished`/`ensureOwnKeyPackagePublished`
+принимают `publish` (и `fetchKeyPackage` для establish) как явные
+параметры — тот же паттерн инъекции, что `signals/contacts.js` (этап
+23), не скрытый импорт `transport.js`. Persist-вызовы (`mlsGroups`,
+`messages`, `ownKeyPackage`) идут напрямую через `db` (как
+`handlers.js`, этапы 22-23) — `chat.js` не чисто-функционален (не может
+им быть, MLS state обязан жить в БД между вызовами), но транспорт
+инъецируется, а не импортируется напрямую.
+
+### `src/ui/signals/transport.js` (правка контракта этапа 23 — добавлен диспетчер входящих gift-wrap)
+
+```js
+export async function ensureConnected(pubkeyHex, privKey);
+// ДОПОЛНЕНО (после bootstrap, наравне с rebuildContactsAndGroups/rebuildEffectivePermissions):
+// подписка НА ВХОДЯЩИЕ { "#p": [pubkeyHex], kinds: [1059] } — ПЕРВАЯ в проекте подписка
+// не по "authors: [я]", а по адресату (DESIGN.md, этап 24, п.6). На каждое входящее:
+//   rumor = nip59.unwrap(event, privKey)
+//   rumor.kind === 444  -> joinFromWelcome(...) -> mlsGroups.put (пропустить, если groupId уже есть)
+//   rumor.kind === 3001 -> parseContactRequestRumor(rumor) -> contactRequests.put
+//   иначе -> discard
+// Подписка на kind 445 (Group Message) — { "#h": [...все groupId из mlsGroups] }, тоже
+// заводится здесь; список groupId в фильтре обновляется при каждом новом ensureChatEstablished
+// (пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема, MVP)
+```

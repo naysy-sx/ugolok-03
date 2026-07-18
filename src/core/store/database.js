@@ -28,3 +28,11 @@ db.version(1).stores({
   deletions: "targetId, deleterPubkey, created_at",
   mlsGroups: "groupId"
 });
+
+// Этап 24 — аддитивно: две новые таблицы, остальные наследуются из version(1)
+// без изменений (стандартная Dexie-семантика, миграция данных не нужна — проект
+// ещё не в проде, только пустые локальные базы).
+db.version(2).stores({
+  ownKeyPackage: "id",
+  contactRequests: "[owner+senderPubkey], owner"
+});

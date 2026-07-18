@@ -1,0 +1,195 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { generateSecretKey } from "nostr-tools/pure";
+import { sign } from "../../core/crypto/sign.js";
+import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
+import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
+import {
+	createOwnKeyPackage,
+	createGroup,
+	addMember,
+	joinFromWelcome,
+	encryptApplicationMessage,
+	decryptApplicationMessage,
+	deriveNostrEnvelopeKeys,
+	serializeState,
+	deserializeState,
+} from "../../core/crypto/mls-session.js";
+import { db } from "../../core/store/database.js";
+
+function encodeBase64(bytes) {
+	return btoa(String.fromCharCode.apply(null, bytes));
+}
+
+function decodeBase64(str) {
+	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+}
+
+// DESIGN.md, этап 24, п.2: детерминирован для ОБЕИХ сторон — не хранится
+// отдельно как "chatId -> groupId" маппинг, пересчитывается на лету.
+export function computeGroupId(pubkeyHexA, pubkeyHexB) {
+	const sorted = [pubkeyHexA, pubkeyHexB].sort();
+	return sha256(utf8ToBytes(sorted.join(":")));
+}
+
+async function requirePublishOk(publish, event) {
+	const result = await publish(event);
+	if (!result.ok) {
+		throw new Error(result.reason || "relay отклонил публикацию");
+	}
+}
+
+export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish) {
+	const existing = await db.table("ownKeyPackage").get("self");
+	if (existing) return;
+
+	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey);
+	await db.table("ownKeyPackage").put({
+		id: "self",
+		publicPackage: ownKeyPackage.publicPackage,
+		privatePackage: ownKeyPackage.privatePackage,
+		wireBytes: ownKeyPackage.wireBytes,
+	});
+
+	const event = sign(
+		{ kind: 443, tags: [], content: encodeBase64(ownKeyPackage.wireBytes), created_at: Math.floor(Date.now() / 1000) },
+		privKey,
+	);
+	await requirePublishOk(publish, event);
+}
+
+// DESIGN.md, этап 24, п.3 — установление 1:1-разговора. Своя (не из NIP-EE
+// напрямую) последовательность: KeyPackage адресата -> createGroup+addMember
+// -> персист ДО отправки (SM-1/SM-2, этап 13) -> Welcome как gift wrap.
+export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey, publish, fetchKeyPackage) {
+	const groupId = computeGroupId(ownerPubkey, contactPubkey);
+	const groupIdHex = bytesToHex(groupId);
+
+	const existing = await db.table("mlsGroups").get(groupIdHex);
+	if (existing) return;
+
+	const theirWireBytes = await fetchKeyPackage(contactPubkey);
+
+	// Свежий KeyPackage — для СОЗДАНИЯ именно этой группы, не переиспользует
+	// опубликованный "приглашающий" ownKeyPackage.self (тот — для входящих Welcome от других).
+	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey);
+	const state = await createGroup(ownerPubkey, ownKeyPackage, groupId);
+	const { newSessionState, welcomeWireBytes } = await addMember(state, theirWireBytes);
+	// commitWireBytes сознательно отброшен — некому его слать (DESIGN.md п.3.4):
+	// у новой 2-местной группы нет других существующих участников кроме нового,
+	// который узнаёт состояние из Welcome, не из коммита.
+
+	// contactPubkey хранится РЯДОМ с состоянием (не отдельной таблицей-маппингом) —
+	// нужен для обратного поиска "чьё это kind 445" по groupId из h-тега: groupId —
+	// однонаправленный хэш (DESIGN.md п.2), pubkey из него не восстановить назад.
+	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) });
+
+	const welcomeEvent = nip59Wrap(
+		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] },
+		privKey,
+		contactPubkey,
+	);
+	await requirePublishOk(publish, welcomeEvent);
+}
+
+// Вызывается диспетчером входящих gift wrap (transport.js) на rumor.kind===444.
+// welcomeSenderPubkey = rumor.pubkey (уже проверен nip59.unwrap — F-EV-05) — это и есть
+// контакт, с которым устанавливается разговор с ПОЛУЧАЮЩЕЙ стороны.
+export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWireBytes) {
+	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
+	const groupIdHex = bytesToHex(groupId);
+
+	const existing = await db.table("mlsGroups").get(groupIdHex);
+	if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
+
+	const ownKeyPackageRow = await db.table("ownKeyPackage").get("self");
+	if (!ownKeyPackageRow) {
+		throw new Error("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше");
+	}
+	const ownKeyPackage = {
+		publicPackage: ownKeyPackageRow.publicPackage,
+		privatePackage: ownKeyPackageRow.privatePackage,
+	};
+
+	const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
+	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) });
+}
+
+export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish) {
+	const groupId = computeGroupId(ownerPubkey, contactPubkey);
+	const groupIdHex = bytesToHex(groupId);
+	const row = await db.table("mlsGroups").get(groupIdHex);
+	if (!row) {
+		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
+	}
+
+	const state = deserializeState(row.state);
+	const plaintextBytes = utf8ToBytes(JSON.stringify({ text, lamportTs }));
+	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
+
+	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
+
+	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
+	const content = nip44Encrypt(encodeBase64(wireBytes), privateKey, bytesToHex(publicKey));
+
+	// НОВЫЙ эфемерный Nostr-ключ на КАЖДОЕ kind 445 (NIP-EE) — обфускация состава
+	// группы теряет смысл при переиспользовании, см. DESIGN.md/CONTRACTS.md этапа 24.
+	const ephemeralPriv = generateSecretKey();
+	const event = sign(
+		{ kind: 445, tags: [["h", groupIdHex]], content, created_at: Math.floor(Date.now() / 1000) },
+		ephemeralPriv,
+	);
+	await requirePublishOk(publish, event);
+
+	await db.table("messages").add({
+		chatId: contactPubkey,
+		lamportTs,
+		senderPubkey: ownerPubkey,
+		id: event.id,
+		text,
+		status: "sent",
+	});
+
+	return { eventId: event.id };
+}
+
+export async function receiveGroupMessageEvent(ownerPubkey, event) {
+	const hTag = event.tags.find((t) => t[0] === "h");
+	if (!hTag) return null;
+	const groupIdHex = hTag[1];
+
+	const row = await db.table("mlsGroups").get(groupIdHex);
+	if (!row) return null; // чужая/неизвестная группа — не наш разговор
+	const contactPubkey = row.contactPubkey;
+
+	const state = deserializeState(row.state);
+	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(state);
+	const wireBytes = decodeBase64(nip44Decrypt(event.content, privateKey, bytesToHex(publicKey)));
+
+	const result = await decryptApplicationMessage(state, wireBytes);
+	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) });
+
+	if (result.kind === "control") return null;
+
+	const parsed = JSON.parse(new TextDecoder().decode(result.message));
+	await db.table("messages").add({
+		chatId: contactPubkey,
+		lamportTs: parsed.lamportTs,
+		senderPubkey: contactPubkey,
+		id: event.id,
+		text: parsed.text,
+		status: "sent",
+	});
+
+	return { text: parsed.text, lamportTs: parsed.lamportTs };
+}
+
+export async function getChatHistory(contactPubkey) {
+	const rows = await db.table("messages").where("chatId").equals(contactPubkey).toArray();
+	rows.sort((a, b) => {
+		if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;
+		if (a.senderPubkey !== b.senderPubkey) return a.senderPubkey < b.senderPubkey ? -1 : 1;
+		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+	});
+	return rows;
+}

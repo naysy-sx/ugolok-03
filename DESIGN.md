@@ -1141,6 +1141,251 @@ TECH.md §12.2 описывает 12 шагов. На этом этапе физ
 проговорить явно, почему она не опциональна: изолированные unit-тесты
 систематически такое пропускают, это не невезение).
 
+## Этап 24 — Личные сообщения: ядро
+
+Триаж (п.13a): **алгоритмическая**, по трём независимым причинам: (а)
+ДКА сообщения (§9.1) — PLAN.md сам требует формализации; (б) оркестровка
+MLS-сессии (createGroup/addMember/Welcome/kind 445) — пространство
+состояний с неочевидными переходами, самая рискованная часть проекта
+(DESIGN.md, этап 13); (в) дополнительно включённый пользователем
+протокол запроса на добавление контакта — новый rumor-kind поверх уже
+принятого NIP-59.
+
+### 1. ДКА сообщения (TECH.md §9.1) — буквально, без отклонений
+
+```
+States: {created, sending, sent, read, failed, discarded}
+Events: {SEND, ACK, READ, FAIL, RETRY, DISCARD}
+Initial: created
+Final: {read, discarded}
+
+created  + SEND    → sending
+sending  + ACK     → sent
+sending  + FAIL    → failed
+sent     + READ    → read
+failed   + RETRY   → sending
+failed   + DISCARD → discarded
+```
+
+Реализуется через уже принятый `core/fsm/machine.js` (`transition(transitions, state, event)`,
+этап 14) — `domain/messaging/machine.js` только объявляет таблицу выше
+как данные, ничего не решает сам. Недопустимые переходы (не
+перечисленные явно) обязаны бросать — уже гарантировано `machine.js`
+(`throw`, если `transitions[state]?.[event]` не определён и нет `"*"`
+фоллбэка). Тесты — исчерпывающий перебор ВСЕХ пар (state, event),
+не только happy path (урок из "Уроки предыдущих этапов" в PLAN.md):
+6 состояний × 6 событий = 36 пар, 7 валидных (включая начальное
+created как стартовую точку для SEND), 29 обязаны бросать.
+
+### 2. Модель chatId — pubkey контакта, НЕ MLS groupId
+
+`messages`/`chatSyncState` (схема этапа 3) используют `chatId` как
+внешний, человеко-осмысленный идентификатор — уже так задумано (UI
+этапа 23 вызывает `openChat(pubkey)`, не `openChat(groupId)`). MLS же
+оперирует `groupId` (opaque `Uint8Array` в терминах `ts-mls`). Чтобы
+не городить отдельную таблицу-маппинг "pubkey контакта → groupId" (лишняя
+мультипликация мест истины, лишний риск рассинхронизации), `groupId`
+для 1:1 чата вычисляется ДЕТЕРМИНИРОВАННО из пары pubkey, а не хранится
+отдельно:
+
+```
+groupId = SHA-256(UTF8(sorted([myPubkeyHex, theirPubkeyHex]).join(":")))
+```
+
+`sorted(...)` — лексикографическая сортировка двух hex-строк, поэтому
+ОБЕ стороны независимо вычисляют ОДИН И ТОТ ЖЕ 32-байтный `groupId`,
+не дожидаясь синхронизации/обмена явным идентификатором группы. Это
+именно то значение, что передаётся в `mls-session.js`'s `createGroup(...,
+groupIdBytes)`. Отдельной таблицы-маппинга "chatId → groupId" не
+заводится — `groupId` пересчитывается на лету везде, где известен
+контакт (отправка, установление разговора).
+
+**Уточнение, найденное при написании тестов (не в исходном плане):**
+обратное направление — "дан `groupId` из `h`-тега входящего kind 445,
+какой это контакт?" — НЕ решается пересчётом (`groupId` — однонаправленный
+хэш, pubkey из него не восстановить). Поэтому `mlsGroups` (схема этапа
+13) получает одно дополнительное поле `contactPubkey` РЯДОМ с уже
+существующим `state` (не новая таблица, тот же ряд, тот же ключ
+`groupId`) — записывается один раз при установлении разговора
+(`ensureChatEstablished`/`acceptWelcome`, п.3) и обязан переноситься
+каждым последующим `put()` (`sendMessage`/приём сообщения тоже
+перезаписывают всю строку целиком — Dexie `put` не делает partial
+update).
+
+### 3. Установление 1:1-разговора (нет готового рецепта в NIP-EE — своя, обоснованная последовательность)
+
+Реальный NIP-EE (проверено WebFetch, github.com/nostr-protocol/nips/blob/master/EE.md,
+этот этап) НЕ описывает пошаговый handshake для старта 1:1-беседы —
+только форматы KeyPackage/Welcome/Group Event по отдельности.
+Последовательность ниже — решение этого этапа, не домысел протокола:
+
+1. **Публикация своего KeyPackage** (лениво, один раз на identity):
+   `createOwnKeyPackage(myPubkeyHex)` → `wireBytes` → kind 443, content =
+   `base64(wireBytes)` (тот же паттерн кодирования, что уже применяется
+   для kind 445, см. п.5), подписано обычной identity-подписью (`sign()`,
+   НЕ MLS-credential). `privatePackage` персистируется (`encrypted-table`,
+   dbKey) — без него нельзя обработать чужой Welcome, использующий этот
+   KeyPackage. Таблица `ownKeyPackage` (новая, схема ниже) — одна строка
+   на identity, не per-chat.
+2. **Инициатор (A) хочет написать B впервые**: `groupId = computeGroupId(A,B)`.
+   Если `mlsGroups.get(groupId)` уже есть — разговор уже установлен,
+   переходим к п.5 (отправка). Иначе:
+3. Забрать KeyPackage B (одноразовый REQ `{authors:[B], kinds:[443]}`,
+   тот же паттерн, что `transport.fetchProfiles`, этап 23 — не
+   постоянная подписка). Нет ответа → throw (контакт ещё не пользовался
+   приложением, разговор нельзя начать — честная ошибка UI, не тихий сбой).
+4. `ownKeyPackage = createOwnKeyPackage(A)` (СВЕЖИЙ, для создания ИМЕННО
+   этой группы — не переиспользует опубликованный "приглашающий"
+   KeyPackage, тот для входящих Welcome от других) → `state =
+   createGroup(A, ownKeyPackage, groupId)` → `{newSessionState,
+   welcomeWireBytes, commitWireBytes} = addMember(state, B'сWireBytes)`.
+   `commitWireBytes` **отбрасывается** — коммит адресован уже
+   существующим членам группы, которых для НОВОЙ 2-местной группы нет
+   (единственный "новый" участник узнаёт состояние из Welcome, не из
+   коммита).
+5. **SM-2 (персист до эффекта, этап 13 — обязателен и здесь)**:
+   `serializeState(newSessionState)` → `mlsGroups.put({groupId, ...})`
+   ДО того, как Welcome считается отправленным.
+6. Welcome доставляется как gift wrap: `nip59.wrap({kind: 444, content:
+   base64(welcomeWireBytes), tags: []}, A_privKey, B_pubKey)` → kind 1059,
+   публикуется обычным `publish()` (transport.js, этап 23). Подтверждено
+   WebFetch: "kind: 444 events MUST never be signed" — `wrap()` (nip59.js,
+   этап 9) уже гарантирует это (rumor только подписывается на seal-слое,
+   сам rumor без `sig`).
+7. **B получает Welcome**: см. п.6 ниже (общий диспетчер входящих gift wrap).
+   `joinFromWelcome(ownKeyPackage_B, welcomeWireBytes)` → `state` →
+   персист (SM-2) в `mlsGroups` под тем же `groupId` (B тоже вычисляет
+   его из (A,B) — тот же `computeGroupId`, детерминированно, п.2).
+
+### 4. Отправка сообщения (после того как группа установлена)
+
+```
+state = await mlsGroups.get(groupId) → deserializeState
+{ newSessionState, wireBytes } = encryptApplicationMessage(state, plaintext)
+persist newSessionState (SM-2, ДО публикации)
+{ privateKey, publicKey } = deriveNostrEnvelopeKeys(newSessionState)
+content = NIP-44(base64(wireBytes), privateKey, publicKey)   // "себе" — см. этап 13, DESIGN.md
+ephemeralKeypair = generateSecretKey() (nostr-tools/pure)      // НОВЫЙ на КАЖДОЕ kind 445 (NIP-EE, обязательно)
+event = sign({ kind: 445, tags: [["h", toHex(groupId)]], content, created_at }, ephemeralKeypair)
+publish(event)
+```
+
+Нарушение "новый ключ на каждое событие" сводит на нет метаданные-защиту
+`h`-тега (DESIGN.md, этап 13) — это ПРОВЕРЯЕМЫЙ тестами инвариант
+(SEND-1 ниже), не комментарий.
+
+### 5. Приём сообщений
+
+Подписка (одна на все активные чаты): `{"#h": [...все groupId из
+mlsGroups], kinds: [445]}` — список тегов обновляется при установлении
+нового чата (п.3). На каждое входящее kind 445:
+
+```
+decoded = decodeGroupMessageEvent(event) // достать groupId из h-тега
+state = mlsGroups.get(groupId) → deserializeState (нет записи → чужая/неизвестная группа, discard)
+{ privateKey, publicKey } = deriveNostrEnvelopeKeys(state)  // ключ этой эпохи, ДО decrypt
+wireBytes = base64decode(NIP-44.decrypt(event.content, privateKey, publicKey))
+{ newSessionState, message } | { newSessionState, kind: "control" } = decryptApplicationMessage(state, wireBytes)
+persist newSessionState (SM-2)
+if message !== undefined: применить к materialized messages (lamportTs из RUMOR, п.7)
+// kind:"control" — proposal/commit от другого участника (напр. будущий
+// remove при добавлении устройств) — состояние продвинуто, прикладного
+// текста нет, UI ничего не показывает на этом этапе (не в скоупе "ядра")
+```
+
+### 6. Общий диспетчер входящих gift wrap (kind 1059, `#p: [я]`) — Welcome И contact-request
+
+Это ПЕРВАЯ в проекте подписка на события, адресованные ЛИЧНО мне (не
+мной опубликованные) — до этого этапа `bootstrap.js`/`incremental-sync.js`
+(этапы 19-20) фильтровали только `authors: [я]`. Один REQ,
+диспетчеризация по kind развёрнутого rumor:
+
+```
+on incoming kind 1059 (#p: я):
+  rumor = nip59.unwrap(event, myPrivKey)   // валидирует rumor.pubkey === seal.pubkey (F-EV-05, уже в nip59.js)
+  switch (rumor.kind):
+    444  → MLS Welcome  → joinFromWelcome(...) → persist mlsGroups (п.3, шаг 7)
+    3001 → contact-request → persist в contactRequests (новая таблица, ниже)
+    иначе → discard (будущие kind — этапы 25+, напр. inbox-request-сообщения от НЕ-контактов)
+```
+
+### 7. `getChatHistory` — сортировка (F-MS-05/AC-05)
+
+`(lamportTs, senderPubkey, eventId)` — тот же тотальный порядок, что
+уже формализован для DM в TECH.md §4.4 (Этап 19 DESIGN.md цитирует
+дословно). `lamportTs` — **внутри `message` (application message
+plaintext от `decryptApplicationMessage`)**, не `event.created_at` —
+ровно как rumor уже нёс `lamportTs` в довоенной (pre-MLS) схеме NIP-17
+(§4.4: "Lamport timestamp хранится внутри зашифрованного rumor").
+`message` (MLS plaintext) — JSON `{text, lamportTs}`, сериализуется
+перед `encryptApplicationMessage`, парсится после `decryptApplicationMessage`.
+`senderPubkey` — определяется НЕ из `event.pubkey` (эфемерный, per
+сообщение!) и НЕ из MLS-состояния — а из направления вызова: **MVP-
+упрощение этого этапа (явное, не молчаливое)** — один Nostr-identity =
+одно устройство = один MLS-leaf (полная multi-device модель "owner +
+device-members", TECH.md §4.9/SM-3, уже отложена этапом 13 на "этап
+22+", здесь та же граница). При этом упрощении 1:1-группа СТРОГО
+двухместная: сообщение, отправленное МНОЙ через `sendMessage` (я вызываю
+`encryptApplicationMessage` сам), помечается `senderPubkey = я`;
+сообщение, пришедшее через диспетчер входящих kind 445 (я вызываю
+`decryptApplicationMessage` как получатель), помечается `senderPubkey =
+контакт этого чата` — двух других вариантов физически нет в
+двухместной группе. Наращивать `mls-session.js` возвратом
+senderCredential НЕ требуется для этого этапа — понадобится, когда
+модель устройств/групповые (>2 участника) чаты реально появятся.
+
+### 8. Протокол запроса на добавление контакта (kind 3001, дополнение пользователя)
+
+`buildContactRequestEvent`/`parseContactRequestEvent` (`domain/contacts/requests.js`,
+новый файл) — rumor `{kind: 3001, content: greeting, tags: []}`,
+gift-wrap как в п.6. Материализация — `contactRequests` (новая таблица,
+`[owner+senderPubkey], owner`), полный пересчёт из журнала входящих
+(этот kind НЕ проходит через G-Set `events`-журнал, т.к. это НЕ
+самим-собой-authored событие — оно приходит через gift-wrap, вне
+общего `authors:[я]`-потока bootstrap/incremental-sync; персистируется
+диспетчером п.6 напрямую по факту получения, не через `rebuildX`
+полный пересчёт — журнала входящих gift-wrap локально не существует
+до этого этапа, а ретроактивно перекачать историю gift-wrap с relay
+для МУЛЬТИУСТРОЙСТВА уже покрыто тем же REQ-фильтром `#p:[я]`
+`kinds:[1059]` при повторном bootstrap на новом устройстве — те же
+Welcome/contact-request придут снова, EOSE не отличает "уже видел" от
+"новое", но `foldContactRequest`/`joinFromWelcome` естественно
+идемпотентны при повторном приходе того же rumor: contactRequests.put
+перезаписывает ту же запись, `mlsGroups` — деструктивно перезаписывать
+НЕЛЬЗЯ (потеряет epoch-продвижение) — welcome-обработка проверяет
+`mlsGroups.get(groupId)` ДО join и пропускает уже-установленные).
+
+Accept → `addContactAction` (уже готова, этап 23) + удалить запись из
+`contactRequests`. Reject → `blockContactAction` (уже готова, теперь
+и отписывает — этап 23-довесок) + удалить запись. Ignore → запись
+остаётся, ничего не меняется.
+
+### 9. Новые таблицы (правка схемы `database.js`, аддитивно — `db.version(2)`)
+
+```js
+ownKeyPackage: "id",                              // id = "self", единственная строка на identity
+contactRequests: "[owner+senderPubkey], owner",   // входящие запросы на добавление
+```
+
+Обе — новые таблицы, не изменяют существующие индексы (`mlsGroups`,
+`messages` и т.д. остаются как в версии 1) — Dexie `version(2).stores({...
+только новые/изменённые таблицы...})` штатно наследует остальные из
+`version(1)` (уже устоявшийся Dexie-паттерн, не требует ручной миграции
+данных, т.к. проект ещё не в проде — пустая база на каждом текущем
+инсталле).
+
+### Явное сужение скоупа этапа 24 (по прецеденту предыдущих "ядро"-этапов)
+
+Не в скоупе: `lazy-chat.js` (окна по 100, подписка по chatId — этап
+26), `read-status.js`/`drafts.js` (этап 26), `inbox-requests.js`
+(сообщения от НЕ-контактов, whitelist-after-unwrap — этап 25;
+ОТЛИЧАЕТСЯ от contact-request этого этапа, см. п.8), двойной gift wrap
+для self-mirror (этап 25), удаление сообщений kind 5 (этап 25), UI
+экрана чата (`chat.jsx`/`message-bubble.jsx` — этап 27; `Placeholder`
+из этапа 23-довеска остаётся). Ротация/replenishment `ownKeyPackage`
+после того, как Welcome его "использовал" — известное упрощение MVP,
+не в скоупе (backlog, как и per-device MLS remove UX из этапа 13 SM-3).
+
 ## Этап 20 — Инкрементальная синхронизация + профиль
 
 Триаж (п.13a): рутина (склейка уже готовых `subscriber.js`/
