@@ -1569,3 +1569,64 @@ AUTH-сообщения за весь коннект. Это значит:
 
 Запуск: `server/strfry/setup.sh` (один раз, сборка) → `server/strfry/run.sh`
 (поднимает `ws://127.0.0.1:7777`). Подробности — `server/README.md`.
+
+## Этап 16 — Relay pool + pluggable транспорт
+
+Формализация автомата и обоснование правки контракта TECH.md §9.3 —
+DESIGN.md, раздел "Этап 16". Здесь — сигнатуры.
+
+### `src/core/transport/relay-pool.js`
+
+```js
+export function computeBackoffDelay(attempt, config = DEFAULT_BACKOFF);
+// attempt — целое ≥0 (номер попытки, 0-indexed)
+// config: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0.2 }
+// -> number (мс): min(baseMs * multiplier^attempt, maxMs) ± случайный джиттер (доля jitter)
+// ЧИСТАЯ функция, кроме встроенного Math.random() для джиттера — тестируется проверкой ГРАНИЦ диапазона, не точного значения
+
+export function createRelayConnection(url, options = {});
+// options: {
+//   WebSocketImpl = globalThis.WebSocket,   // инъекция для тестов — фейковый WS без реальной сети
+//   backoff = DEFAULT_BACKOFF,
+//   onMessage(parsedJsonArray),              // сырые входящие сообщения relay, разбор — забота вызывающего кода (relay-auth.js/subscriber.js, этапы 17-18)
+//   onStateChange(newState, oldState),
+//   autoReconnect = true,                    // реконнект с backoff при CLOSE/ERROR, если close() не был вызван явно
+// }
+// -> {
+//   getState(): string,                      // текущее состояние автомата (см. DESIGN.md таблицу)
+//   connect(): void,                          // CONNECT -> connecting; сама заводит WS, сама транслирует WS-события open/close/error в OPEN/CLOSE/ERROR автомата
+//   send(msgArray): void,                     // JSON.stringify(msgArray) -> ws.send; throw, если state не "connected"/"subscribed"
+//   reportAuthChallenge(): void,              // -> transition(..., "AUTH_CHALLENGE"); вызывает relay-auth.js (этап 17), разобрав сырое AUTH-сообщение
+//   reportAuthOk(): void,
+//   reportAuthFail(): void,
+//   reportAuthTimeout(): void,
+//   reportSubscribed(): void,                 // вызывает subscriber.js (этап 18) после успешной подписки
+//   close(): void,                            // намеренное закрытие — CLOSE в автомат, отключает autoReconnect до следующего connect()
+// }
+```
+
+Таблица переходов — константа внутри модуля (не параметр наружу,
+единственная версия автомата на весь проект — см. DESIGN.md).
+Реконнект: при переходе в `disconnected` НЕ по явному `close()` —
+планируется повторный `connect()` через `computeBackoffDelay(attempt)`,
+`attempt` растёт при каждом провале подряд, сбрасывается в 0 при
+успешном `OPEN`.
+
+### `src/core/transport/transport.js`
+
+```js
+export function createEndpointList(urls);
+// urls: string[], непустой (throw на пустом массиве — вызывающая ошибка, не сетевая)
+// -> {
+//   current(): string,   // текущий URL
+//   next(): string,       // round-robin: переход к следующему (после последнего — снова к первому), возвращает НОВЫЙ текущий
+//   reset(): void,        // возврат к urls[0]
+// }
+```
+
+Чистый, детерминированный, без сети и без знания о `relay-pool.js` —
+политику "когда звать `next()`" (сколько неудачных реконнектов
+`relay-pool.js` считать поводом сменить endpoint) реализует вызывающий
+код (этап 18, publisher/subscriber — первый реальный потребитель),
+не зашита сюда: у `transport.js` этого этапа ещё нет достаточно
+информации о реальных паттернах отказов, чтобы не гадать (см. DESIGN.md).
