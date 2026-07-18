@@ -21,6 +21,13 @@ import Dexie from "dexie";
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { wrapEncryptedTable } from "../../core/store/encrypted-table.js";
 import { generateSyntheticEvents } from "../../domain/events/synthetic-fixtures.js";
+import { createRelayConnection } from "../../core/transport/relay-pool.js";
+import { createPublisher } from "../../core/transport/publisher.js";
+import { runBootstrap } from "../../core/sync/bootstrap.js";
+import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
+import { buildProfileEvent } from "../../domain/identity/profile.js";
+import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
+import SyncIndicator from "../components/sync-indicator.jsx";
 
 function envChecks() {
 	return [
@@ -382,6 +389,12 @@ function pSpikeTone(state) {
 	return "var(--muted)";
 }
 
+function transportSyncTone(state) {
+	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ошибка")) return "var(--bad)";
+	return "var(--muted)";
+}
+
 function useCryptoWorkerStatus() {
 	const [state, set] = useState("проверка…");
 	useEffect(() => {
@@ -502,6 +515,88 @@ function usePSpikeBenchmark() {
 	return { status, run };
 }
 
+function waitForConnState(conn, predicate, timeoutMs) {
+	return new Promise((resolve, reject) => {
+		if (predicate(conn.getState())) return resolve();
+		const t0 = Date.now();
+		const iv = setInterval(() => {
+			if (predicate(conn.getState())) {
+				clearInterval(iv);
+				resolve();
+			} else if (Date.now() - t0 > timeoutMs) {
+				clearInterval(iv);
+				reject(new Error(`таймаут ожидания состояния соединения (сейчас: "${conn.getState()}")`));
+			}
+		}, 50);
+	});
+}
+
+function useTransportSyncCheck() {
+	const [status, setStatus] = useState("не запущен");
+	const [connState, setConnState] = useState("disconnected");
+	const [synced, setSynced] = useState(false);
+
+	async function run() {
+		setStatus("подключение…");
+		setSynced(false);
+		let conn;
+		let worker;
+		try {
+			const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
+			const privKey = crypto.getRandomValues(new Uint8Array(32));
+			const pubKeyHex = bytesToHex(getPublicKey(privKey));
+
+			conn = createRelayConnection(relayUrl, { onStateChange: (s) => setConnState(s) });
+			conn.connect();
+			await waitForConnState(conn, (s) => s === "connected", 8000);
+
+			worker = new CryptoWorker();
+			const api = Comlink.wrap(worker);
+			const verifyBatch = (events) => api.batchVerify(events);
+
+			setStatus("публикация профиля + relay-list…");
+			const pub = createPublisher(conn);
+			conn.addMessageHandler(pub.handleMessage);
+			const profileEvent = buildProfileEvent(privKey, { name: "diag-self-check", about: "этап 20, самопроверка" });
+			const relayListEvent = buildRelayListEvent(privKey, [relayUrl]);
+			const [profileResult, relayListResult] = await Promise.all([pub.publish(profileEvent), pub.publish(relayListEvent)]);
+			if (!profileResult.ok || !relayListResult.ok) {
+				throw new Error("relay отклонил публикацию (не в whitelist? см. server/strfry/whitelist.json)");
+			}
+
+			setStatus("bootstrap…");
+			const bootResult = await runBootstrap(conn, pubKeyHex, { verifyBatch });
+			if (bootResult.addedCount < 2) {
+				throw new Error(`bootstrap нашёл ${bootResult.addedCount} из 2 ожидаемых событий`);
+			}
+
+			setStatus("инкрементальная синхронизация…");
+			let caughtUp = false;
+			const sync = await startIncrementalSync(conn, pubKeyHex, {
+				verifyBatch,
+				onCaughtUp: () => {
+					caughtUp = true;
+					setSynced(true);
+				},
+			});
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			sync.stop();
+			if (!caughtUp) {
+				throw new Error("incremental sync не подтвердил onCaughtUp");
+			}
+
+			setStatus(`ok (relay ${relayUrl}, bootstrap +${bootResult.addedCount}, sync подтверждён)`);
+		} catch (e) {
+			setStatus("ошибка: " + (e?.message || e));
+		} finally {
+			worker?.terminate();
+			conn?.close();
+		}
+	}
+
+	return { status, connState, synced, run };
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -546,6 +641,7 @@ export default function Diagnostics() {
 	const signCryptoStatus = useSignCryptoStatus();
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
 	const pSpike = usePSpikeBenchmark();
+	const transportSync = useTransportSyncCheck();
 
 	return (
 		<main
@@ -622,6 +718,18 @@ export default function Diagnostics() {
 					Запустить P-SPIKE (5000 событий)
 				</button>
 			</p>
+
+			<div class="flow" style={{ color: "var(--muted)" }}>
+				<p class="cluster" style={{ alignItems: "center" }}>
+					Этапы 16-20 (транспорт + синхронизация): <strong style={{ color: transportSyncTone(transportSync.status) }}>{transportSync.status}</strong>
+					<button type="button" onClick={transportSync.run}>
+						Проверить relay pool + AUTH + publisher/subscriber + bootstrap + sync
+					</button>
+				</p>
+				<p class="cluster" style={{ alignItems: "center" }}>
+					Соединение: <SyncIndicator state={transportSync.connState} synced={transportSync.synced} />
+				</p>
+			</div>
 
 			<p style={{ color: "var(--muted)" }}>
 				Service Worker: <strong style={{ color: "var(--fg)" }}>{sw}</strong>

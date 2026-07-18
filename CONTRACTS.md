@@ -1795,3 +1795,70 @@ export async function setSyncState(relayUrl, lastSeen);
 channel keys, comment allowlist, fold в domain-таблицы кроме
 журнального `events`, rebuild `effectivePerms`, UI-уведомление о
 готовности. Каждое — правка контракта на своём будущем этапе (21/28/30).
+
+## Этап 20 — Инкрементальная синхронизация + профиль
+
+Обоснование миграции профиля и сужения скоупа — DESIGN.md, раздел
+"Этап 20". Здесь — сигнатуры.
+
+### `src/domain/identity/profile.js`
+
+```js
+export function buildProfileEvent(privKey, { name, about } = {});
+// kind 0, content = JSON.stringify({ name, about }) — поле picture НЕ пишется
+// (см. DESIGN.md: аватар остаётся локальным до Blossom, этап 26)
+// -> подписанный NostrEvent (sign() из sign.js)
+
+export function parseProfileEvent(event);
+// -> { name?: string, about?: string, picture?: string } — parse ЧУЖОГО kind 0,
+// picture может присутствовать (чужой клиент его опубликовал), просто наш build его не создаёт
+// event.content не валидный JSON -> throw (боевая граница: данные из relay, не наши)
+```
+
+### `src/domain/identity/relay-list.js`
+
+```js
+export function buildRelayListEvent(privKey, relayUrls);
+// kind 10002, tags = relayUrls.map(url => ["r", url]), content = ""
+// -> подписанный NostrEvent
+
+export function parseRelayListEvent(event);
+// -> string[] — urls из тегов ["r", url]
+```
+
+### `src/core/sync/incremental-sync.js`
+
+```js
+export async function startIncrementalSync(connection, pubkey, options = {});
+// options: {
+//   verifyBatch,                          // как в subscriber.js/bootstrap.js
+//   subId = "incremental-sync",
+//   onCaughtUp: () => void,                 // EOSE — историческая часть догнана, дальше живой поток (F-CS-10)
+//   onEvent: (addedCount) => void,           // после каждого обработанного батча
+//   onClockSkew: (skewSeconds) => void,      // |Date.now()/1000 - event.created_at| > 30 для события ИЗ ТЕКУЩЕГО батча (F-RL-06)
+// }
+// -> Promise<{ stop(): void }>
+// since = (await getSyncState(connection.getUrl())) ?? 0 — читает то же значение, что пишет bootstrap.js (этап 19), не дублирует формат
+// В отличие от runBootstrap (этап 19, резолвится один раз после EOSE) — эта подписка
+// ОСТАЁТСЯ ОТКРЫТОЙ после EOSE (F-CS-10, фоновый live-поток), .stop() — явное завершение
+```
+
+**Осознанно НЕ в скоупе** (см. таблицу-аналог DESIGN.md этапа 19):
+расшифровка приватных kind, rebuildCache permissions/contacts/groups,
+`lamport.receive` для сообщений в открытых чатах, обновление channel
+allowlist — правка контракта на этапах 21/22/24/30.
+
+### `src/ui/components/sync-indicator.jsx`
+
+```js
+export default function SyncIndicator({ state, synced });
+// state — строка состояния relay-pool.js (disconnected/connecting/authenticating/connected/subscribed)
+// synced — boolean (onCaughtUp уже сработал хотя бы раз)
+// Чисто презентационный компонент (по прецеденту MnemonicDisplay, этап 11) —
+// не создаёт соединение сам, родитель передаёт состояние через props
+```
+
+Маппинг `state`→текст (решение Claude, TECH.md не даёт готовых
+строк): `disconnected`→"офлайн", `connecting`/`authenticating`→
+"подключение…", `connected`+`!synced`→"синхронизация…",
+`connected`/`subscribed`+`synced`→"на связи".
