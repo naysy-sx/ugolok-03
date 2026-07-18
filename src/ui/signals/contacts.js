@@ -8,6 +8,7 @@ import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent
 export const contacts = signal([]);
 export const blockedContacts = signal([]);
 export const groups = signal([]);
+export const profiles = signal({}); // pubkey -> { name?, about?, picture? } | null (запрошен, но не найден)
 
 export async function refreshContacts(ownerPubkey) {
 	const rows = await db.table("contacts").where("owner").equals(ownerPubkey).toArray();
@@ -27,6 +28,20 @@ export async function refreshGroups(ownerPubkey) {
 		result.push({ id: g.id, name: g.name, memberPubkeys: members.map((m) => m.pubkey) });
 	}
 	groups.value = result;
+}
+
+// F-CT-04 — запрос профиля контакта. fetchProfilesFn инъецируется (по образцу publish) —
+// реально transport.fetchProfiles, тесты дают stub. Пропускает уже закэшированные pubkey
+// (в т.ч. null — "запрошен, не найден", не повторяет запрос бесконечно на каждый рендер).
+export async function ensureProfilesFetched(pubkeys, fetchProfilesFn) {
+	const missing = pubkeys.filter((pk) => !(pk in profiles.value));
+	if (missing.length === 0) return;
+	const fetched = await fetchProfilesFn(missing);
+	const next = { ...profiles.value };
+	for (const pk of missing) {
+		next[pk] = fetched.get(pk) ?? null;
+	}
+	profiles.value = next;
 }
 
 export async function refreshAll(ownerPubkey) {

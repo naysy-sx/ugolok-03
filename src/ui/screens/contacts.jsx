@@ -2,12 +2,14 @@ import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { currentUser, privKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, connState, synced } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, connState, synced } from "../signals/transport.js";
 import {
 	contacts,
 	blockedContacts,
 	groups,
+	profiles,
 	refreshAll,
+	ensureProfilesFetched,
 	addContactAction,
 	removeContactAction,
 	blockContactAction,
@@ -28,6 +30,52 @@ function shortPubkey(pubkey) {
 	} catch {
 		return pubkey.slice(0, 8) + "…" + pubkey.slice(-6);
 	}
+}
+
+// F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
+// (см. ensureProfilesFetched), иначе — усечённый npub как раньше.
+function ContactIdentity({ pubkey }) {
+	const profile = profiles.value[pubkey];
+	const displayName = profile?.name || shortPubkey(pubkey);
+	return (
+		<div class="cluster" style={{ alignItems: "center" }}>
+			{profile?.picture ? (
+				<img
+					src={profile.picture}
+					alt=""
+					width="40"
+					height="40"
+					style={{
+						width: "2.5rem",
+						height: "2.5rem",
+						borderRadius: "50%",
+						border: "var(--border-width) solid var(--border)",
+					}}
+				/>
+			) : (
+				<div
+					aria-hidden="true"
+					style={{
+						width: "2.5rem",
+						height: "2.5rem",
+						borderRadius: "50%",
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						background: "var(--surface)",
+						border: "var(--border-width) solid var(--border)",
+						color: "var(--muted)",
+					}}
+				>
+					{(displayName || "?").trim().charAt(0).toUpperCase()}
+				</div>
+			)}
+			<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<span style={profile?.name ? {} : { fontFamily: "var(--font-mono)" }}>{displayName}</span>
+				{profile?.about && <small style={{ color: "var(--muted)" }}>{profile.about}</small>}
+			</span>
+		</div>
+	);
 }
 
 export default function Contacts() {
@@ -55,9 +103,25 @@ export default function Contacts() {
 	useEffect(() => {
 		refreshAll(ownerPubkey);
 		ensureConnected(ownerPubkey, privKey)
-			.then(() => refreshAll(ownerPubkey))
+			.then(async () => {
+				await refreshAll(ownerPubkey);
+				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
+				// (нет соединения) — попытка "втихую" до connect() закэшировала бы
+				// контакты как "профиль не найден" навсегда, см. ensureProfilesFetched
+				await ensureProfilesFetched(contacts.value, fetchProfiles).catch(() => {});
+			})
 			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);
+
+	// F-CT-04: подтягиваем профиль и для контактов, добавленных ПОСЛЕ того, как
+	// соединение уже установлено (эффект выше покрывает только первичную загрузку).
+	// Пока соединения ещё нет, fetchProfiles бросает — ensureProfilesFetched тогда
+	// ничего не кэширует, .catch(() => {}) просто откладывает до следующего триггера.
+	useEffect(() => {
+		if (contacts.value.length > 0) {
+			ensureProfilesFetched(contacts.value, fetchProfiles).catch(() => {});
+		}
+	}, [contacts.value]);
 
 	// busy сериализует действия этого экрана намеренно — найдено адверсарной фазой:
 	// два быстрых клика подряд (напр. "Добавить" дважды с разными контактами) читают
@@ -296,7 +360,7 @@ export default function Contacts() {
 									}}
 								>
 									<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-										<span style={{ fontFamily: "var(--font-mono)" }}>{shortPubkey(pubkey)}</span>
+										<ContactIdentity pubkey={pubkey} />
 										<div class="cluster">
 											<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
 												{isExpanded ? "Скрыть права" : "Права"}

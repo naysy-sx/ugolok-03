@@ -2303,3 +2303,70 @@ Lamport для permission-событий этого экрана — сесси�
 inline-меню группы) — по референсу пользователя (скриншоты v0.1),
 кроме модели добавления контакта (одностороннее по npub/hex, не
 invite-key+confirm — решение этапа 22, F-CT-01).
+
+## Правка после этапа 23: собственный npub в профиле + профиль контакта (F-CT-04)
+
+По прямой обратной связи пользователя, реально попробовавшего добавить
+контакт: свой npub негде было увидеть, чтобы передать другому
+пользователю; список контактов показывал только усечённый pubkey, не
+никнейм/аватар/био. Оба пункта — доведение уже решённого в этапе 22
+как "отложено до UI-слоя" (F-CT-04), не новая архитектура.
+
+### `src/ui/screens/profile.jsx` (правка контракта этапа 12/довеска)
+
+Добавлена секция "Ваш идентификатор" — `npubEncode(id)` в `<code
+role="button" tabIndex="0">`, клик/Enter/Space копирует в буфер
+(`navigator.clipboard.writeText`), статус "Скопировано" на 2с (по
+образцу `bioStatus`). Текст-пояснение под ним — по формулировке
+пользователя.
+
+`handleBioSubmit` теперь ДОПОЛНИТЕЛЬНО публикует kind 0 (`
+buildProfileEvent(privKey, {name: login, about: bio})`) через
+`ensureConnected`+`publish` (transport.js) после локального сохранения
+в keystore. **Важно**: локальное сохранение НЕ зависит от публикации
+и не блокируется ей — профиль в этом экране хранится в keystore
+напрямую (не materialized fold из журнала событий, в отличие от
+contacts/groups), поэтому офлайн-редактирование остаётся полностью
+рабочим; публикация — отдельный best-effort шаг с собственным
+статусом ("не опубликовано для других: <reason>"), не подменяющий
+"Сохранено".
+
+### `src/ui/signals/transport.js` (правка контракта этапа 23 — добавлена функция)
+
+```js
+export async function fetchProfiles(pubkeys);
+// pubkeys: string[] -> Promise<Map<pubkey, {name?, about?, picture?}>>
+// Одноразовый REQ kind 0 + EOSE (не постоянная подписка), unsubscribe после EOSE.
+// kind 0 replaceable — relay сам отдаёт только последнюю версию, клиентский
+// pickLatest не нужен. Побитый/не-JSON профиль чужого клиента — пропускается
+// (не роняет остальной fetch). throw, если ensureConnected() ещё не вызывался
+// (НЕ пустой Map — иначе вызывающий код (ensureProfilesFetched) закэшировал бы
+// "профиль не найден" только из-за отсутствия соединения, навсегда).
+// Известное ограничение MVP: relay-pool.js не имеет removeMessageHandler —
+// обработчик этого одноразового запроса остаётся в цепочке до конца сессии
+// (дёшево, сверяет subId); вызывается только для НЕ закэшированных pubkey.
+```
+
+### `src/ui/signals/contacts.js` (правка контракта этапа 23 — добавлены сигнал и функция)
+
+```js
+export const profiles; // signal<Record<pubkey, {name?,about?,picture?} | null>> — null = запрошен, не найден
+
+export async function ensureProfilesFetched(pubkeys, fetchProfilesFn);
+// fetchProfilesFn — инъекция (по образцу publish), реально transport.fetchProfiles
+// Исключает уже закэшированные pubkey (в т.ч. null) из запроса; пустой remainder
+// после фильтра -> fetchProfilesFn вообще не вызывается
+```
+
+### `src/ui/screens/contacts.jsx` (правка)
+
+`ContactIdentity({ pubkey })` — заменяет голый усечённый pubkey:
+аватар (`profile.picture` или круг с первой буквой никнейма), имя
+(`profile.name` или усечённый npub как раньше), био (`profile.about`,
+если есть) под именем. Подгрузка — `ensureProfilesFetched` вызывается
+дважды: (1) после `ensureConnected` резолвится (начальный список
+контактов), (2) при каждом изменении `contacts.value` (новые контакты
+после того, как соединение уже установлено). Пока соединения нет,
+`fetchProfiles` бросает — `ensureProfilesFetched` в этом случае НИЧЕГО
+не кэширует (ошибка проглатывается на уровне вызова в `contacts.jsx`,
+эффект №1 подхватит после успешного `ensureConnected`).

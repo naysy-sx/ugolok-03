@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "preact/hooks";
+import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
-import { currentUser } from "../signals/auth.js";
+import { buildProfileEvent } from "../../domain/identity/profile.js";
+import { currentUser, privKeySig } from "../signals/auth.js";
+import { ensureConnected, publish } from "../signals/transport.js";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -22,8 +25,11 @@ export default function Profile() {
 	const [bio, setBio] = useState("");
 	const [savedBio, setSavedBio] = useState("");
 	const [bioStatus, setBioStatus] = useState("");
+	const [publishStatus, setPublishStatus] = useState("");
 	const [avatarError, setAvatarError] = useState("");
+	const [copyStatus, setCopyStatus] = useState("");
 	const statusTimerRef = useRef(null);
+	const copyTimerRef = useRef(null);
 
 	useEffect(() => {
 		(async () => {
@@ -33,8 +39,22 @@ export default function Profile() {
 			setSavedBio(profile.bio);
 			setLoading(false);
 		})();
-		return () => clearTimeout(statusTimerRef.current);
+		return () => {
+			clearTimeout(statusTimerRef.current);
+			clearTimeout(copyTimerRef.current);
+		};
 	}, [id]);
+
+	async function handleCopyNpub() {
+		try {
+			await navigator.clipboard.writeText(npubEncode(id));
+			setCopyStatus("Скопировано");
+		} catch {
+			setCopyStatus("Не удалось скопировать — скопируйте вручную");
+		}
+		clearTimeout(copyTimerRef.current);
+		copyTimerRef.current = setTimeout(() => setCopyStatus(""), 2000);
+	}
 
 	async function handleAvatarChange(e) {
 		const input = e.currentTarget;
@@ -64,6 +84,20 @@ export default function Profile() {
 		setBioStatus("Сохранено");
 		clearTimeout(statusTimerRef.current);
 		statusTimerRef.current = setTimeout(() => setBioStatus(""), 2000);
+
+		// Локальное сохранение НЕ зависит от публикации (профиль в этом экране —
+		// keystore-запись, не fold из журнала событий, в отличие от contacts/groups) —
+		// публикация в relay отдельный, best-effort шаг: другие пользователи видят
+		// никнейм/био через kind 0 (F-CT-04), но офлайн-редактирование остаётся рабочим.
+		setPublishStatus("публикация…");
+		try {
+			await ensureConnected(id, privKeySig.value);
+			const event = buildProfileEvent(privKeySig.value, { name: login, about: bio });
+			const result = await publish(event);
+			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+		} catch (err) {
+			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+		}
 	}
 
 	if (loading) {
@@ -83,6 +117,41 @@ export default function Profile() {
 				<p class="eyebrow">Профиль</p>
 				<h1>{login || "Без имени"}</h1>
 			</header>
+
+			<section class="flow" aria-labelledby="profile-npub-heading">
+				<h2 id="profile-npub-heading">Ваш идентификатор</h2>
+				<p class="cluster" style={{ alignItems: "center" }}>
+					<code
+						role="button"
+						tabIndex="0"
+						onClick={handleCopyNpub}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleCopyNpub();
+							}
+						}}
+						title="Нажмите, чтобы скопировать"
+						style={{
+							cursor: "pointer",
+							wordBreak: "break-all",
+							padding: "var(--space-3xs) var(--space-2xs)",
+							background: "var(--surface)",
+							borderRadius: "var(--radius)",
+						}}
+					>
+						{npubEncode(id)}
+					</code>
+					{copyStatus && (
+						<span role="status" style={{ color: "var(--muted)" }}>
+							{copyStatus}
+						</span>
+					)}
+				</p>
+				<small style={{ color: "var(--muted)" }}>
+					Вот этот ключ вы можете использовать, чтобы другие пользователи могли вас добавить.
+				</small>
+			</section>
 
 			<section class="flow" aria-labelledby="profile-avatar-heading">
 				<h2 id="profile-avatar-heading">Аватар</h2>
@@ -169,6 +238,11 @@ export default function Profile() {
 					{bioStatus && (
 						<span role="status" style={{ color: "var(--muted)" }}>
 							{bioStatus}
+						</span>
+					)}
+					{publishStatus && (
+						<span role="status" style={{ color: "var(--muted)" }}>
+							{publishStatus}
 						</span>
 					)}
 				</div>

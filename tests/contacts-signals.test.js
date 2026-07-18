@@ -9,10 +9,12 @@ import {
 	contacts,
 	blockedContacts,
 	groups,
+	profiles,
 	refreshContacts,
 	refreshBlockedContacts,
 	refreshGroups,
 	refreshAll,
+	ensureProfilesFetched,
 	decodePubkeyInput,
 	addContactAction,
 	removeContactAction,
@@ -39,6 +41,7 @@ beforeEach(async () => {
 	contacts.value = [];
 	blockedContacts.value = [];
 	groups.value = [];
+	profiles.value = {};
 	await db.table("contacts").clear();
 	await db.table("blockedContacts").clear();
 	await db.table("groups").clear();
@@ -165,4 +168,46 @@ test("refreshAll: подтягивает все три сигнала парал
 	assert.deepEqual(contacts.value, ["x"]);
 	assert.deepEqual(blockedContacts.value, ["y"]);
 	assert.deepEqual(groups.value, [{ id: "g1", name: "Z", memberPubkeys: ["z"] }]);
+});
+
+test("ensureProfilesFetched: заполняет profiles найденными записями", async () => {
+	const fetchStub = async (pubkeys) => {
+		assert.deepEqual(pubkeys, [ALICE_PK]);
+		return new Map([[ALICE_PK, { name: "Алиса", about: "био" }]]);
+	};
+	await ensureProfilesFetched([ALICE_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса", about: "био" });
+});
+
+test("ensureProfilesFetched: не найденный профиль кэшируется как null (не запрашивается повторно)", async () => {
+	let calls = 0;
+	const fetchStub = async () => {
+		calls++;
+		return new Map();
+	};
+	await ensureProfilesFetched([BOB_PK], fetchStub);
+	assert.equal(profiles.value[BOB_PK], null);
+	await ensureProfilesFetched([BOB_PK], fetchStub);
+	assert.equal(calls, 1, "второй вызов не должен снова запрашивать уже известный (пусть и пустой) результат");
+});
+
+test("ensureProfilesFetched: уже закэшированные pubkey исключаются из запроса", async () => {
+	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
+	const fetchStub = async (pubkeys) => {
+		assert.deepEqual(pubkeys, [BOB_PK]);
+		return new Map([[BOB_PK, { name: "Боб" }]]);
+	};
+	await ensureProfilesFetched([ALICE_PK, BOB_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса" });
+	assert.deepEqual(profiles.value[BOB_PK], { name: "Боб" });
+});
+
+test("ensureProfilesFetched: пустой список отсутствующих pubkey не вызывает fetch вовсе", async () => {
+	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
+	let called = false;
+	await ensureProfilesFetched([ALICE_PK], async () => {
+		called = true;
+		return new Map();
+	});
+	assert.equal(called, false);
 });

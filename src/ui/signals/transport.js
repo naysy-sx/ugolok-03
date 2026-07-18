@@ -8,6 +8,8 @@ import { runBootstrap } from "../../core/sync/bootstrap.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { rebuildContactsAndGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
+import { createSubscriber } from "../../core/transport/subscriber.js";
+import { parseProfileEvent } from "../../domain/identity/profile.js";
 
 export const connState = signal("disconnected");
 export const synced = signal(false);
@@ -17,6 +19,7 @@ let publisher = null;
 let cryptoWorker = null;
 let connectPromise = null;
 let connectedForPubkey = null;
+let verifyBatchFn = null;
 
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
@@ -36,6 +39,7 @@ function waitForConnState(conn, predicate, timeoutMs) {
 
 function teardown() {
 	publisher = null;
+	verifyBatchFn = null;
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
 		cryptoWorker = null;
@@ -57,6 +61,7 @@ async function connect(pubkeyHex, privKey) {
 	cryptoWorker = new CryptoWorker();
 	const api = Comlink.wrap(cryptoWorker);
 	const verifyBatch = (events) => api.batchVerify(events);
+	verifyBatchFn = verifyBatch;
 
 	publisher = createPublisher(connection);
 	connection.addMessageHandler(publisher.handleMessage);
@@ -116,4 +121,46 @@ export async function nextLamportTick() {
 	const value = lamportClock.tick();
 	await persistLamportValue(value);
 	return value;
+}
+
+// F-CT-04 (запрос профиля при добавлении контакта) — сознательно отложено в этапе 22
+// на "UI/orchestration слой, этап 23" (см. CONTRACTS.md). Одноразовый REQ+EOSE (не
+// постоянная подписка) по kind 0 для набора pubkey; kind 0 replaceable — relay сам
+// отдаёт только последнюю версию на каждого автора, клиентский pickLatest не нужен.
+// Известное ограничение MVP: relay-pool.js не даёт removeMessageHandler — обработчик
+// этого одноразового запроса остаётся в цепочке до конца сессии (дёшево — сверяет
+// subId и пропускает дальше); вызывается только для ЕЩЁ не закэшированных контактов,
+// не поллингом, поэтому число вызовов за сессию ограничено количеством новых контактов.
+export async function fetchProfiles(pubkeys) {
+	if (pubkeys.length === 0) return new Map();
+	if (!connection) {
+		// throw, не пустой Map — вызывающий код (ensureProfilesFetched) не должен
+		// закэшировать "профиль не найден" только потому, что соединения ещё нет
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchProfiles()");
+	}
+	const results = new Map();
+	const subId = "profiles-" + Math.random().toString(36).slice(2);
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: (events) => {
+				for (const event of events) {
+					try {
+						results.set(event.pubkey, parseProfileEvent(event));
+					} catch {
+						// повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять весь fetch
+					}
+				}
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ authors: pubkeys, kinds: [0] }]);
+	});
+
+	return results;
 }
