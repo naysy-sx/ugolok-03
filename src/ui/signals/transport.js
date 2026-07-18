@@ -219,11 +219,31 @@ export async function publish(event) {
 // (тот же принцип, что lamport.js, этап 19).
 let lamportClock = null;
 
-export async function nextLamportTick() {
+async function ensureLamportClock() {
 	if (!lamportClock) {
 		lamportClock = createLamportClock(await computeInitialLamportValue());
 	}
-	const value = lamportClock.tick();
+	return lamportClock;
+}
+
+export async function nextLamportTick() {
+	const clock = await ensureLamportClock();
+	const value = clock.tick();
+	await persistLamportValue(value);
+	return value;
+}
+
+// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): receive() (lamport.js, этап 19,
+// L1 — уже покрыт юнит-тестами) нигде не вызывался на входящее сообщение — часы
+// Алисы и Боба тикали НЕЗАВИСИМО, никогда не синхронизируясь. Из-за этого causally
+// более позднее сообщение могло получить МЕНЬШИЙ lamportTs, чем уже отправленное
+// сообщение собеседника (если тот дольше молчал/не писал), путая сортировку
+// getChatHistory/loadChatWindow (lamportTs, senderPubkey, id) — реальный баг,
+// найденный пользователем, не гипотетический. Вызывается на КАЖДОЕ входящее
+// (живое kind 445 сообщение и зеркало) — receive() гарантирует value > max(текущий, remote).
+export async function receiveLamportTick(remoteLamportTs) {
+	const clock = await ensureLamportClock();
+	const value = clock.receive(remoteLamportTs);
 	await persistLamportValue(value);
 	return value;
 }
@@ -325,6 +345,9 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 				for (const event of events) {
 					try {
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
+						// Найдено реальным использованием — синхронизация Lamport-часов на входящее
+						// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
+						if (receivedResult) await receiveLamportTick(receivedResult.lamportTs);
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
 						await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
@@ -408,6 +431,7 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 							status: "sent",
 							msgId: payload.msgId,
 						});
+						await receiveLamportTick(payload.lamportTs);
 					} catch (e) {
 						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
 					}
