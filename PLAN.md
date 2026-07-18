@@ -110,6 +110,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 | 15 (P-SPIKE) | 124.56 КБ | +1.46 | `synthetic-fixtures.js` + P-SPIKE хук в diagnostics.jsx впервые подключили `db-crypto.js`/`encrypted-table.js` к app-графу (тестовый код, но бандлится вместе с приложением — diagnostics.jsx часть основного бандла); `machine.js` по-прежнему вне графа |
 | 16 (relay pool + транспорт) | 124.56 КБ | +0 | `relay-pool.js`/`transport.js` вне app-графа — реальный потребитель (publisher/subscriber, bootstrap) с этапа 18-19 |
 | 17 (NIP-42 AUTH) | 124.56 КБ | +0 | `relay-auth.js` тоже вне app-графа по той же причине |
+| 18 (publisher/subscriber/outbox) | 124.56 КБ | +0 | `publisher.js`/`subscriber.js` вне app-графа; `outbox.js`/`g-set.js` уже в графе с более ранних этапов (не новые файлы) |
 
 **Важная находка при переработке плана:** бюджет TECH.md §7.2
 (~190–250 КБ итого, запас 30–90 КБ) посчитан ДО решения профиля B
@@ -175,7 +176,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 - [x] Этап 17. **NIP-42 AUTH** [рутина] — challenge → sign kind 22242 → response. **Правка контракта по итогам исследования (DESIGN.md/CONTRACTS.md, решение пользователя):** whitelist на запись (AC-14) реализован по `event.pubkey` в write-policy плагине relay, НЕ через NIP-42 — strfry архитектурно не привязывает их друг к другу (подтверждено исходниками и офиц. документацией). NIP-42 AUTH реализован честно и полностью (нужен для protected events/будущего read-gating), но провал AUTH не блокирует соединение целиком — правка автомата этапа 16
     - `src/core/transport/relay-auth.js`
 
-- [ ] Этап 18. **Publisher + subscriber + outbox** [рутина] — публикация событий с batching (100 evt / 200мс); подписки по фильтрам; outbox: drain при восстановлении сети (offline → online → автодоставка, AC-09)
+- [x] Этап 18. **Publisher + subscriber + outbox** [рутина] — публикация событий с batching (100 evt / 200мс); подписки по фильтрам; outbox: drain при восстановлении сети (offline → online → автодоставка, AC-09)
     - `src/core/transport/publisher.js`, `src/core/transport/subscriber.js`, `src/core/store/outbox.js`
 
 - [ ] Этап 19. **Lamport-часы + bootstrap cold start** [алгоритмика — DESIGN.md: синхронизация с неочевидными переходами, п.13a] — TECH.md §4.4/§12.2: tick (in-mem), receive, persist (в транзакции с записью события), init из max(lamportTs); полная загрузка состояния при первом входе (скачать + fold + батч). Критерий: 10 синтетических событий lamportTs 1..10, перезагрузка → `lamport.value == 11`; bootstrap 1000 kind 0 < 10с (частичный AC-12, полный замер — этап 32)

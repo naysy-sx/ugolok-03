@@ -92,3 +92,32 @@ test("G2 (property-based): порядок и повторы вызовов merge
 		}
 	}
 });
+
+test("mergeEvents: батч из новых событий — все добавлены, addedIds содержит все id", async () => {
+	const { mergeEvents } = await import("../src/core/sync/g-set.js");
+	const events = Array.from({ length: 5 }, (_, i) => makeEvent({ id: `batch-${i}` }));
+	const { addedIds } = await mergeEvents(events);
+	assert.equal(addedIds.length, 5);
+	assert.deepEqual(new Set(addedIds), new Set(events.map((e) => e.id)));
+	const stored = await queryEvents({});
+	assert.equal(stored.length, 5);
+});
+
+test("mergeEvents: дубли внутри батча и дубли с уже сохранённым — не создают лишних строк", async () => {
+	const { mergeEvents } = await import("../src/core/sync/g-set.js");
+	await mergeEvent(makeEvent({ id: "already-there" }));
+
+	const dup = makeEvent({ id: "dup-in-batch" });
+	const events = [dup, dup, makeEvent({ id: "already-there" }), makeEvent({ id: "new-one" })];
+	const { addedIds } = await mergeEvents(events);
+
+	assert.deepEqual(new Set(addedIds), new Set(["dup-in-batch", "new-one"]));
+	const stored = await queryEvents({});
+	assert.equal(stored.length, 3, "already-there(1) + dup-in-batch(1) + new-one(1)");
+});
+
+test("mergeEvents: пустой батч — не бросает, addedIds пуст", async () => {
+	const { mergeEvents } = await import("../src/core/sync/g-set.js");
+	const { addedIds } = await mergeEvents([]);
+	assert.deepEqual(addedIds, []);
+});

@@ -1665,3 +1665,71 @@ NIP-42 `authed`. Добавлен `server/strfry/whitelist-plugin.mjs`
 разрешённых hex-pubkey, версionируется — тестовые фикстуры, не боевой
 секрет). `strfry.conf`: `relay.writePolicy.plugin =
 "./whitelist-plugin.mjs"`.
+
+## Этап 18 — Publisher + subscriber + outbox
+
+Обоснование батчинга/bulk-транзакции/drain-семантики — DESIGN.md,
+раздел "Этап 18". Здесь — сигнатуры.
+
+### `src/core/sync/g-set.js` (правка контракта этапа 4 — добавлена функция, `mergeEvent` не менялся)
+
+```js
+export async function mergeEvents(events);
+// events: NostrEvent[]
+// -> Promise<{ addedIds: string[] }>  // id событий, реально добавленных (не дублей)
+// ОДНА db.transaction("rw", db.events, ...) на весь массив (F-CS-08)
+```
+
+### `src/core/transport/publisher.js`
+
+```js
+export function createPublisher(connection, options = {});
+// connection — объект от createRelayConnection (relay-pool.js, этап 16)
+// options: { batchSize = 100, batchWindowMs = 200 }
+// -> {
+//   publish(event): Promise<{ ok: boolean, reason: string }>,  // резолвится по OK от relay; событие уходит на ближайшем флаше очереди
+//   flush(): void,                                              // принудительный немедленный флаш (не ждать size/timer)
+//   handleMessage(msg): boolean,                                 // message-interceptor: ["OK", id, ok, reason] для событий из этой очереди
+// }
+```
+
+### `src/core/transport/subscriber.js`
+
+```js
+export function createSubscriber(connection, options);
+// options: {
+//   batchSize = 100, batchWindowMs = 200,
+//   verifyBatch: async (events) => boolean[],      // инъекция — реально crypto.worker.js batchVerify (этап 10), тесты дают фейк
+//   onBatch: async (validEvents, subId) => void,      // инъекция — реально mergeEvents (см. выше), тесты дают фейк; subId — чтобы вызывающий код мог различать подписки (разные таблицы/маршруты)
+// }
+// -> {
+//   subscribe(subId, filters): void,   // -> connection.send(["REQ", subId, ...filters])
+//   unsubscribe(subId): void,          // -> connection.send(["CLOSE", subId])
+//   handleMessage(msg): boolean,       // message-interceptor: ["EVENT", subId, event] копится в очередь subId; ["EOSE", subId] форсирует флаш этой подписки
+// }
+```
+
+Флаш триггеры (per-subscription очередь, у каждого `subId` своя):
+`size(batchSize)` ИЛИ `time(batchWindowMs)` ИЛИ `EOSE` — что раньше.
+На флаше: `verifyBatch(batch)` → события, где `verified[i]===true` →
+`onBatch(validEvents)`.
+
+### `src/core/store/outbox.js` (правка — добавлена функция, CRUD этапа 5 не менялся)
+
+```js
+export async function drain(publishFn);
+// publishFn: async (eventRecord) => { ok: boolean }  // обычно createPublisher(...).publish, но принимает NostrEvent, не outbox-запись — см. примечание
+// -> Promise<{ sentCount: number, failedCount: number }>
+// Последовательно (не параллельно, см. DESIGN.md) по listPending() (FIFO): publishFn(event) -> ok ? markSent(seq) : markFailed(seq)
+```
+
+**Примечание о форме данных outbox.** Таблица `outbox` (этап 5) хранит
+`{seq, eventId, status, retryCount}` — НЕ само событие целиком, только
+`eventId`. `drain` для реальной публикации нуждается в полном
+NostrEvent — забота вызывающего кода (этап 19+, bootstrap/chat.js)
+достать событие по `eventId` через `getEventById` (этап 3) ПЕРЕД
+вызовом `publishFn`. `drain` в этом контракте принимает уже готовую
+функцию `publishFn(eventRecord)`, где `eventRecord = {seq, eventId,
+event}` — резолвинг `eventId → event` тоже на стороне вызывающего
+(инъекция), не хардкод `getEventById` внутрь `outbox.js` (тестируется
+без реальной БД).

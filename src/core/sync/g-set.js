@@ -10,3 +10,16 @@ export async function mergeEvent(event) {
     return { added: true };
   });
 }
+
+export async function mergeEvents(events) {
+  const addedIds = [];
+  return db.transaction("rw", db.events, async () => {
+    for (const event of events) {
+      if (!(await hasEvent(event.id))) {
+        await appendEvent(event);
+        addedIds.push(event.id);
+      }
+    }
+    return { addedIds };
+  });
+}

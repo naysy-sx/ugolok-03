@@ -62,3 +62,76 @@ test("markFailed: статус failed, retryCount увеличивается, у
 	row = await db.table("outbox").get(seq);
 	assert.equal(row.retryCount, 2);
 });
+
+test("drain: успешная публикация всех pending -> markSent для каждой, sentCount корректен", async () => {
+	const { drain } = await import("../src/core/store/outbox.js");
+	const s1 = await enqueue("a");
+	const s2 = await enqueue("b");
+
+	const published = [];
+	const result = await drain(async (record) => {
+		published.push(record.eventId);
+		return { ok: true };
+	});
+
+	assert.deepEqual(published, ["a", "b"], "последовательно, в FIFO-порядке");
+	assert.deepEqual(result, { sentCount: 2, failedCount: 0 });
+	assert.equal((await db.table("outbox").get(s1)).status, "sent");
+	assert.equal((await db.table("outbox").get(s2)).status, "sent");
+});
+
+test("drain: частичный отказ — неудачные помечаются failed (retryCount растёт), успешные — sent", async () => {
+	const { drain } = await import("../src/core/store/outbox.js");
+	const sGood = await enqueue("good");
+	const sBad = await enqueue("bad");
+
+	const result = await drain(async (record) => ({ ok: record.eventId !== "bad" }));
+
+	assert.deepEqual(result, { sentCount: 1, failedCount: 1 });
+	assert.equal((await db.table("outbox").get(sGood)).status, "sent");
+	const badRow = await db.table("outbox").get(sBad);
+	assert.equal(badRow.status, "failed");
+	assert.equal(badRow.retryCount, 1);
+});
+
+test("drain: пустая очередь — не бросает, нулевые счётчики, publishFn не вызывается", async () => {
+	const { drain } = await import("../src/core/store/outbox.js");
+	let calls = 0;
+	const result = await drain(async () => {
+		calls++;
+		return { ok: true };
+	});
+	assert.deepEqual(result, { sentCount: 0, failedCount: 0 });
+	assert.equal(calls, 0);
+});
+
+test("drain: уже sent/failed записи не попадают в drain повторно", async () => {
+	const { drain } = await import("../src/core/store/outbox.js");
+	const seq = await enqueue("once");
+	await drain(async () => ({ ok: true }));
+
+	let calls = 0;
+	await drain(async () => {
+		calls++;
+		return { ok: true };
+	});
+	assert.equal(calls, 0, "уже sent — drain не должен трогать повторно");
+});
+
+test("АДВЕРСАРНО: publishFn бросает исключение на одной записи — drain не должен рухнуть целиком, остальные записи обрабатываются", async () => {
+	const { drain } = await import("../src/core/store/outbox.js");
+	const s1 = await enqueue("ok-1");
+	const sBad = await enqueue("throws");
+	const s2 = await enqueue("ok-2");
+
+	const result = await drain(async (record) => {
+		if (record.eventId === "throws") throw new Error("сетевая ошибка на середине batch");
+		return { ok: true };
+	});
+
+	assert.equal((await db.table("outbox").get(s1)).status, "sent", "запись до сбоя должна быть отправлена");
+	assert.equal((await db.table("outbox").get(s2)).status, "sent", "запись после сбоя тоже должна быть обработана, drain не должен остановиться");
+	const badRow = await db.table("outbox").get(sBad);
+	assert.equal(badRow.status, "failed", "упавшая запись должна быть помечена failed, не оставлена в pending навсегда");
+	assert.deepEqual(result, { sentCount: 2, failedCount: 1 });
+});
