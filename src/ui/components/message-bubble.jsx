@@ -9,11 +9,14 @@ const STATUS_LABELS = {
 	discarded: "отменено",
 };
 
-// "Удалить у обоих" технически возможно ТОЛЬКО для своих сообщений (deleteMessage
-// проверяет авторство, CONTRACTS.md этап 27-довесок-5) — выбор показывается только у
-// isOwn; у чужих сообщений сразу одна кнопка "Удалить у себя", без раскрывающегося меню.
-export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth }) {
-	const [confirming, setConfirming] = useState(false);
+// "Удалить у обоих"/"Редактировать" технически возможны ТОЛЬКО для своих сообщений
+// (deleteMessage/editMessage проверяют авторство, CONTRACTS.md этап 27-довесок-5/6) —
+// у чужих сообщений доступно только "Удалить у себя", без раскрывающегося меню.
+// mode: null | "confirming-delete" | "editing" — один открытый режим за раз, без
+// модалки/библиотеки (бюджет бандла), инлайн в самом сообщении.
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength }) {
+	const [mode, setMode] = useState(null);
+	const [editText, setEditText] = useState(message.text);
 
 	const bubbleStyle = {
 		alignSelf: isOwn ? "flex-end" : "flex-start",
@@ -33,22 +36,61 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	const statusLabel = STATUS_LABELS[message.status];
 
+	if (mode === "editing") {
+		return (
+			<div style={bubbleStyle}>
+				<textarea value={editText} maxLength={maxLength} rows={2} onInput={(e) => setEditText(e.currentTarget.value)} />
+				<footer class="cluster" style={{ alignItems: "center" }}>
+					<button
+						type="button"
+						disabled={editText.length === 0}
+						onClick={() => {
+							setMode(null);
+							onEdit(message.msgId, editText);
+						}}
+					>
+						Сохранить
+					</button>
+					<button
+						type="button"
+						onClick={() => {
+							setMode(null);
+							setEditText(message.text);
+						}}
+					>
+						Отмена
+					</button>
+				</footer>
+			</div>
+		);
+	}
+
 	return (
 		<div style={bubbleStyle}>
 			<p>{message.text}</p>
 			<footer class="cluster" style={{ alignItems: "center" }}>
 				{isOwn && statusLabel && <small style={{ color: "var(--muted)" }}>{statusLabel}</small>}
-				{typeof onDeleteForMe === "function" && !confirming && (
-					<button type="button" onClick={() => setConfirming(true)}>
-						Удалить
-					</button>
+				{message.edited && <small style={{ color: "var(--muted)" }}>(изменено)</small>}
+				{mode !== "confirming-delete" && (
+					<>
+						{isOwn && typeof onEdit === "function" && (
+							<button type="button" onClick={() => setMode("editing")}>
+								Редактировать
+							</button>
+						)}
+						{typeof onDeleteForMe === "function" && (
+							<button type="button" onClick={() => setMode("confirming-delete")}>
+								Удалить
+							</button>
+						)}
+					</>
 				)}
-				{confirming && (
+				{mode === "confirming-delete" && (
 					<>
 						<button
 							type="button"
 							onClick={() => {
-								setConfirming(false);
+								setMode(null);
 								onDeleteForMe(message.msgId);
 							}}
 						>
@@ -58,14 +100,14 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 							<button
 								type="button"
 								onClick={() => {
-									setConfirming(false);
+									setMode(null);
 									onDeleteForBoth(message.msgId);
 								}}
 							>
 								Удалить у обоих
 							</button>
 						)}
-						<button type="button" onClick={() => setConfirming(false)}>
+						<button type="button" onClick={() => setMode(null)}>
 							Отмена
 						</button>
 					</>

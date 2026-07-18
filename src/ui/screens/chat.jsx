@@ -22,6 +22,7 @@ import {
 	deleteChatMessageAction,
 	deleteMessageForMeAction,
 	clearChatHistoryAction,
+	editChatMessageAction,
 	markChatReadAction,
 	saveChatDraftAction,
 } from "../signals/chats.js";
@@ -404,6 +405,26 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		}
 	}
 
+	async function handleEdit(msgId, newText) {
+		if (busyRef.current) return;
+		if (newText.length > MAX_MESSAGE_LENGTH) {
+			setError(`Сообщение слишком длинное (максимум ${MAX_MESSAGE_LENGTH} символов)`);
+			return;
+		}
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			const lamportTs = await nextLamportTick();
+			await editChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish);
+			await reloadWindow();
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
 	const profile = profiles.value[contactPubkey];
 	const displayName = profile?.name || shortPubkey(contactPubkey);
 
@@ -441,6 +462,8 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 								isOwn={isOwn}
 								onDeleteForMe={handleDeleteForMe}
 								onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
+								onEdit={isOwn ? handleEdit : undefined}
+								maxLength={MAX_MESSAGE_LENGTH}
 							/>
 						);
 					})}

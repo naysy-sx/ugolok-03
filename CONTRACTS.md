@@ -3563,3 +3563,82 @@ contactPubkey, msgId)`, `clearChatHistoryAction(ownerPubkey, contactPubkey)` —
 все сообщения owner+chatId, не трогает сообщения ДРУГОГО chatId и
 ДРУГОГО owner — owner-scoping, тот же класс проверки, что и везде в
 проекте с этапа 26).
+
+## Этап 27-довесок-6 — редактирование сообщения
+
+Пожелание пользователя (явно принято как сложное). Триаж 13a:
+алгоритмическая задача — LWW-инвариант для конкурентных правок,
+формализован в DESIGN.md ("Этап 27-довесок-6"). Обвязка по прямому
+прецеденту `deletions.js`.
+
+**Новый модуль `src/domain/messaging/edits.js`** (написан Claude
+напрямую, не воркером — авторизационная логика поверх MLS-канала,
+та же причина, что `deletions.js`):
+```js
+export function buildEditText(msgId, newText);
+export function parseEditText(text);
+// __ugolok_edit__: + JSON.stringify({msgId, text}) — JSON, не
+// произвольная конкатенация (текст правки может содержать любые
+// символы, включая ":"). parseEditText защищается от повреждённого/
+// адверсарного JSON — try/catch -> null, не бросает.
+
+export async function editMessage(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish);
+// Авторизация — targetRow.senderPubkey === ownerPubkey (иначе throw
+// "нельзя редактировать чужое сообщение", тот же паттерн, что
+// deleteMessage). targetRow.deleted === true -> throw (нельзя
+// редактировать удалённое). Публикует edit-маркер через sendMessage
+// (тот же криптографический путь, что deleteMessage) И СИНХРОННО,
+// ОПТИМИСТИЧНО обновляет СВОЮ строку (text/edited/editedAt) — не
+// дожидаясь доставки, тот же UX, что мгновенное "Сообщение удалено"
+// у deleteMessage.
+
+export async function applyIncomingEditIfMarker(ownerPubkey, event, receivedResult);
+// Вызывается ПОСЛЕ applyIncomingDeletionIfMarker в диспетчере
+// transport.js (refreshGroupMessageSubscription, НЕ в
+// syncMirroredHistory — та же уже принятая граница, что и delete).
+// LWW: targetRow.editedAt !== undefined && targetRow.editedAt >=
+// editLamportTs -> false (устаревшая правка, игнорируется), иначе
+// применяет и возвращает true. targetRow.deleted -> false. !targetRow
+// (правка раньше оригинала) -> false, тот же прецедент, что delete.
+```
+
+**`src/ui/signals/chats.js`**: `editChatMessageAction(ownerPubkey,
+privKey, contactPubkey, msgId, newText, lamportTs, publish)` — тонкая
+обёртка, как остальные `*Action`.
+
+**Побочная находка (не баг, но пришлось решить, иначе редактирование
+получало бы уродливый побочный эффект):** `sendMessage` (chat.js)
+создаёт СОБСТВЕННУЮ строку `messages` на КАЖДОЕ отправленное
+kind-445-сообщение, включая маркеры (delete/edit) — это уже
+существовало для delete (DESIGN.md, "Этап 25", раздел 5,
+"Явное упрощение MVP") и было явно оставлено как backlog
+("Фильтрация маркерных строк из отображаемой истории — ответственность
+UI"), но НИКОГДА не было реализовано. Без фильтрации редактирование
+оставляло бы в истории ДВЕ строки: саму отредактированную (текст верно
+обновлён — хорошо) И отдельную "сиротскую" строку с сырым JSON
+маркера (плохо, хуже, чем непрочитанный тег на удалении, где хотя бы
+оригинал превращается в чистый плейсхолдер). Исправлено ЗАОДНО с этой
+задачей (маленький, самостоятельный фикс, тот же файл): `loadChatWindow`
+(`src/core/sync/lazy-chat.js`) теперь отфильтровывает строки, чей
+`text` распознаётся `parseDeletionText` ИЛИ `parseEditText`, ДО
+сортировки/оконной нарезки (упрощает и `hasMore`/пагинацию — маркерные
+строки больше не съедают место в окне `limit`).
+
+**UI (`message-bubble.jsx`, `chat.jsx`):** `MessageBubble` — у своих
+сообщений (не удалённых) добавлена кнопка "Редактировать", раскрывающая
+инлайн `<textarea>` + "Сохранить"/"Отмена" (без модалки/библиотеки, тот
+же принцип, что выбор удаления этапа 27-довесок-5). Отредактированное
+сообщение помечается меткой "(изменено)" рядом со статусом (косметика,
+из уже хранимого `edited`). `ChatWindow.handleEdit(msgId, newText)` —
+валидирует `MAX_MESSAGE_LENGTH` (тот же лимит F-MS-08, что при отправке),
+тикает `nextLamportTick()`, вызывает `editChatMessageAction`,
+`reloadWindow()`.
+
+Тесты: `tests/edits.test.js` (новый файл, по образцу
+`deletions.test.js`) — round-trip маркера, применение своей правки
+локально и мгновенно, LWW при неупорядоченной доставке (правка с
+БОЛЬШИМ editLamportTs побеждает правку с меньшим независимо от порядка
+прихода), отклонение правки на чужое сообщение (адверсарный сценарий,
+как в deletions.test.js), отклонение правки на удалённое сообщение,
+отклонение правки, пришедшей раньше оригинала. `tests/lazy-chat.test.js`
+— маркерные строки (delete и edit) не попадают в `loadChatWindow`.

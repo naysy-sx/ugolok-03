@@ -24,6 +24,7 @@ import { decryptMirrorPayload, KIND_MESSAGE_MIRROR } from "../../domain/messagin
 import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
 import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-requests.js";
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
+import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
 
 function decodeBase64(str) {
@@ -351,6 +352,9 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
 						await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
+						// DESIGN.md, "Этап 27-довесок-6" — edit-маркер, тот же принцип; порядок с
+						// deletion неважен (разные префиксы, взаимоисключающие no-op на чужом маркере).
+						await applyIncomingEditIfMarker(ownerPubkey, event, receivedResult);
 						bumpMessagingActivity(); // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч

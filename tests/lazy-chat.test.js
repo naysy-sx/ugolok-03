@@ -5,6 +5,8 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { loadChatWindow, markWindowLoaded } from "../src/core/sync/lazy-chat.js";
+import { buildDeletionText } from "../src/domain/messaging/deletions.js";
+import { buildEditText } from "../src/domain/messaging/edits.js";
 
 const BOB_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(2)));
 const ALICE_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(1)));
@@ -93,6 +95,35 @@ test("loadChatWindow: не путает разные чаты", async () => {
 	const { messages } = await loadChatWindow(ALICE_PUB, carolPub, { limit: 100 });
 	assert.equal(messages.length, 1);
 	assert.equal(messages[0].text, "для Кэрол");
+});
+
+test("loadChatWindow: не включает 'сиротские' строки delete/edit-маркеров в отдаваемую историю (этап 27-довесок-6)", async () => {
+	await seedMessages(3);
+	await db.table("messages").bulkAdd([
+		{
+			ownerPubkey: ALICE_PUB,
+			chatId: BOB_PUB,
+			lamportTs: 4,
+			senderPubkey: ALICE_PUB,
+			id: "del-evt",
+			text: buildDeletionText("m2"),
+			status: "sent",
+			msgId: "del-msgid",
+		},
+		{
+			ownerPubkey: ALICE_PUB,
+			chatId: BOB_PUB,
+			lamportTs: 5,
+			senderPubkey: ALICE_PUB,
+			id: "edit-evt",
+			text: buildEditText("m1", "правка"),
+			status: "sent",
+			msgId: "edit-msgid",
+		},
+	]);
+	const { messages } = await loadChatWindow(ALICE_PUB, BOB_PUB, { limit: 100 });
+	assert.equal(messages.length, 3, "маркерные строки не попадают в окно, только 3 исходных сообщения");
+	assert.ok(messages.every((m) => m.msgId !== "del-msgid" && m.msgId !== "edit-msgid"));
 });
 
 test("markWindowLoaded: сохраняет курсор, не затирая другие поля chatSyncState", async () => {

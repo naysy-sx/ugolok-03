@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import { db } from "../../core/store/database.js";
 import { ensureChatEstablished, sendMessage } from "../../domain/messaging/chat.js";
 import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
+import { editMessage } from "../../domain/messaging/edits.js";
 import { markChatAsRead } from "../../domain/messaging/read-status.js";
 import { saveDraft } from "../../domain/messaging/drafts.js";
 
@@ -52,6 +53,11 @@ export async function deleteMessageForMeAction(ownerPubkey, contactPubkey, msgId
 // "Очистить переписку" — локально, у собеседника всё остаётся (mlsGroups не трогается).
 export async function clearChatHistoryAction(ownerPubkey, contactPubkey) {
 	return clearChatHistory(ownerPubkey, contactPubkey);
+}
+
+// Редактирование — этап 27-довесок-6, DESIGN.md (LWW-инвариант).
+export async function editChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish) {
+	return editMessage(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish);
 }
 
 export async function markChatReadAction(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish) {
