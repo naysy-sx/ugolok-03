@@ -1731,3 +1731,29 @@ Regression: `npm test` 452/452. `npm run build` 223.41 КБ gzip.
 
 Regression: `npm test` 452/452 (не юнит-тестируется, только E2E).
 `npm run build` 223.50 КБ gzip.
+
+## Этап 28 — Blossom-клиент + загрузка/скачивание файлов
+
+TECH.md §13.8, скоуп по PLAN.md: только клиент+крипто+FSM, без UI
+(этап 29). DESIGN.md формализовал автомат transfer ДО кода (5
+состояний, буквально TECH.md §9.4, encrypting+ERROR сознательно не
+определён — по прецеденту message-machine). Тесты ДО кода для всех
+5 файлов, включая исчерпывающий перебор 25 пар (state×event) для
+FSM. Реализация — воркер (validation.js с первого захода; blossom-
+client.js с первого захода; upload.js/download.js — 2 реальных бага
+worker'а найдены и исправлены точечно: отсутствующие импорты,
+downloadBlob вызывался с sha256(expectedSha256) вместо самого
+expectedSha256).
+
+Адверсарная фаза нашла реальный баг: serverUrl с завершающим "/"
+давал двойной слэш в пути запроса — часть Blossom-серверов трактует
+как другой путь. Исправлено (`stripTrailingSlash`), тест добавлен.
+
+Живого Blossom-сервера в проекте нет (в отличие от strfry) —
+протокол проверен интеграционным тестом на РЕАЛЬНОМ `node:http`
+сервере (не мок функции), плюс DI-стаб тесты (`options.fetchImpl`,
+прецедент `relay-pool.js`'s `WebSocketImpl`).
+
+Regression: `npm test` 479/479. `npm run build` 223.50 КБ gzip (без
+изменений — новые модули не achievable из точки входа, этап 29
+подключит).

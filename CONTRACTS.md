@@ -3683,3 +3683,126 @@ export async function refreshLiveProfileSubscription(ownerPubkey);
 Regression: `npm test` 452/452 (transport.js не юнит-тестируется,
 проверено только живым E2E — та же причина, что и предыдущие правки
 этого файла). `npm run build` 223.50 КБ gzip.
+
+## Этап 28 — Blossom-клиент + загрузка/скачивание файлов
+
+TECH.md §13.8/§5.8 (F-AT-01..10). Скоуп по PLAN.md: только клиент +
+крипто-обвязка + автомат состояния передачи — БЕЗ UI, БЕЗ превью/
+голоса (thumbnails.js/voice.js/UI — этап 29), БЕЗ wiring в chat.js
+(это F-AT-02, вложения в сообщениях — тоже этап 29, когда есть что
+показать в UI).
+
+### `src/domain/attachments/validation.js` (F-AT-04/05, рутина)
+
+```js
+export const ALLOWED_MIME_TYPES; // Set<string> — буквально список F-AT-05
+export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024; // image И документы (F-AT-04: "image/file — 20 MB")
+export const MAX_VIDEO_SIZE = 20 * 1024 * 1024;      // отдельная константа от image, хоть число то же —
+                                                       // TECH.md перечисляет video отдельной строкой, оставляем
+                                                       // раздельно настраиваемым на будущее
+export const MAX_VOICE_SIZE = 3 * 1024 * 1024;       // audio — F-AT-04 "≤3 минуты, ≤3 MB на opus 96kbps"
+
+export function validateAttachment({ mime, size }); // throw с понятным текстом при нарушении MIME
+                                                       // ИЛИ размера; не throw -> файл допустим
+```
+Лимит размера выбирается по префиксу mime (`video/*` → MAX_VIDEO_SIZE,
+`audio/*` → MAX_VOICE_SIZE, иначе — MAX_IMAGE_FILE_SIZE, включая
+документы). MIME не в `ALLOWED_MIME_TYPES` — отказ независимо от
+размера (AC-AT-05, `.exe` типично `application/x-msdownload`/
+`application/octet-stream`, не в списке — отклоняется этой же
+проверкой, без спецкейса под расширение файла).
+
+### `src/core/transport/blossom-client.js` (F-AT-01/03/10, рутина)
+
+По ПРЯМОМУ прецеденту `relay-pool.js`'s `options.WebSocketImpl ??
+globalThis.WebSocket` — тот же приём для fetch, не новый стиль DI:
+```js
+export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privKey, options = {});
+// options.fetchImpl ?? globalThis.fetch. Собирает auth-событие kind 24242
+// (F-AT-10): tags [["t","upload"],["x",sha256Hex],["expiration", String(now+300)]],
+// content: "upload blob", подписывает privKey (sign() из core/crypto/sign.js).
+// Authorization: `Nostr ${base64(JSON(event))}`. PUT {serverUrl}/upload,
+// body=encryptedBytes. !response.ok -> throw с status+telом ответа.
+// Возвращает response.json() как есть — {sha256, size, type, url} (F-AT-01),
+// поля НЕ переименовываются на этом уровне (переименование в blossomUrl
+// происходит на уровне upload.js, см. ниже).
+
+export async function downloadBlob(serverUrl, sha256Hex, options = {});
+// options.fetchImpl ?? globalThis.fetch. GET {serverUrl}/{sha256Hex} —
+// БЕЗ Authorization (F-AT-10: "GET — без авторизации"). !response.ok -> throw.
+// Возвращает Uint8Array (response.arrayBuffer()).
+```
+`expiration` — 300 секунд (5 минут): auth-событие одноразовое, живёт
+ровно на время одного запроса, не переиспользуется и не хранится.
+
+### `src/domain/attachments/upload.js` / `download.js` (F-AT-01/02/03, рутина)
+
+```js
+export async function uploadAttachment(serverUrl, fileBytes, { mime, name }, privKey, options = {});
+// validateAttachment({mime, size: fileBytes.length}) -> encryptFile(fileBytes)
+// (file-crypto.js, этап 10, {key, blob}) -> sha256Hex = bytesToHex(sha256(blob))
+// (хэш ШИФРОТЕКСТА — то, что реально лежит на сервере и проверяется его
+// же авторизацией, не хэш оригинала) -> uploadBlob(serverUrl, blob, sha256Hex, privKey, options).
+// Возвращает дескриптор F-AT-02 буквально:
+// {type, sha256, blossomUrl, encryptionKey, mime, size, name}
+//   type — категория для UI (этап 29): "image"/"video"/"audio"/"file" по
+//     префиксу mime, НЕ из ответа сервера (сервер про это не знает).
+//   sha256/size — из ОТВЕТА сервера response.sha256, НЕ из локального
+//     расчёта (сервер — источник истины по факту сохранённого; size —
+//     размер ШИФРОТЕКСТА на сервере, не оригинала — то, что реально там лежит).
+//   blossomUrl — serverUrl (параметр функции, НЕ response.url) — по
+//     F-AT-03 буквально: "GET {blossomUrl}/{sha256}" требует БАЗОВЫЙ URL
+//     сервера, конкатенация с уже полным response.url дала бы битый путь.
+//   encryptionKey — base64(key) (F-AT-02 явно требует base64 для этого
+//     поля, единственное отступление от hex-конвенции проекта — не
+//     самодеятельность, буквально по спецификации).
+//   mime/name — переданы как есть.
+
+export async function downloadAttachment({ sha256, blossomUrl, encryptionKey }, options = {});
+// downloadBlob(blossomUrl, sha256, options) -> ПРОВЕРКА ЦЕЛОСТНОСТИ:
+// bytesToHex(sha256(blob)) === sha256 иначе throw ("Blossom-сервер вернул
+// подменённые данные") — content-addressing существует ИМЕННО для того,
+// чтобы клиент мог сам проверить, а не только полагаться на сервер;
+// без этой проверки скомпрометированный/чужой Blossom-сервер мог бы
+// молча подменить контент (найдено design-фазой, не адверсарным тестом
+// постфактум — добавлено сразу, не задним числом). -> decryptFile(blob,
+// decodeBase64(encryptionKey)) -> Uint8Array оригинала.
+```
+
+### `src/domain/attachments/transfer-machine.js` (TECH.md §9.4, ФОРМАЛИЗОВАНО В DESIGN.md ДО кода)
+
+Прямой прецедент `domain/messaging/machine.js` (этап 24) — тот же
+generic `core/fsm/machine.js`, буквально те же 5 переходов, что в
+TECH.md §9.4, без единого отклонения/добавления:
+```js
+export const TRANSFER_TRANSITIONS; // ровно 5 переходов, см. DESIGN.md
+export function transitionTransfer(state, event);
+```
+`completed` — терминальное состояние (нет исходящих переходов), как
+`read`/`discarded` в message-machine.
+
+### Явное сужение скоупа
+
+Не в скоупе: превью изображений/постеры видео (F-AT-06/07, этап 29);
+голосовые сообщения/inline ≤32KB (F-AT-08, этап 29); UI (file picker,
+progress, voice-recorder — этап 29); список Blossom-серверов в
+settings (F-AT-09, kind 30072 — этап 32, там же остальные настройки);
+wiring дескриптора вложения в `chat.js`/rumor сообщения — тоже этап 29
+(нет UI, некуда класть). Живая проверка против РЕАЛЬНОГО Blossom-
+сервера НЕ проводилась — в отличие от strfry (relay), готового
+Blossom-сервера в `server/` нет; протокольная корректность (формат
+auth-события, заголовки, реконструкция URL) проверена интеграционным
+тестом с ЛОКАЛЬНЫМ HTTP-сервером на `node:http` (реальный HTTP,
+не мок объекта) — см. tests/blossom-client.test.js. Спросить
+пользователя перед этапом 29/финалом, нужна ли живая проверка против
+конкретной реализации Blossom-сервера.
+
+### Адверсарная фаза (находка)
+
+`serverUrl` с завершающим `/` (пользователь неизбежно введёт его то
+с, то без — F-AT-09, ручной ввод списка серверов, этап 32) давал
+`.../upload` → `...//upload` (двойной слэш) — часть Blossom-серверов
+трактует это как ДРУГОЙ путь, не `/upload`. Исправлено:
+`stripTrailingSlash()` в `blossom-client.js`, применяется к
+`serverUrl` в обеих функциях перед конкатенацией пути. Тест —
+`tests/blossom-client.test.js`.

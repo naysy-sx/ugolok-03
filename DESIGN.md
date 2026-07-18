@@ -2088,3 +2088,75 @@ function applyEdit(targetRow, editorPubkey, newText, editLamportTs):
 этап 25) — та же уже принятая граница, что и `applyIncomingDeletionIfMarker`
 сейчас применяется ТОЛЬКО в живом пути `refreshGroupMessageSubscription`,
 не в мультиустройственном зеркале.
+
+## Этап 28 — Автомат transfer (TECH.md §9.4)
+
+По прямому указанию "Уроки предыдущих этапов" (PLAN.md): все 4 конечных
+автомата TECH.md §9 формализуются ДО кода и тестируются на КАЖДЫЙ
+недопустимый переход, даже когда состояний мало — transfer (5 состояний)
+не исключение, несмотря на тривиальность.
+
+### Формализация
+
+Множество состояний `S = {idle, encrypting, uploading, completed, failed}`.
+Множество событий `E = {START, ENCRYPTED, UPLOADED, ERROR, RETRY}`.
+Функция перехода `δ: S × E → S`, ЧАСТИЧНАЯ (не определена для большинства
+пар — недопустимый переход обязан бросать, не быть no-op и не молча
+оставаться в текущем состоянии, тот же принцип, что генерик-движок
+`core/fsm/machine.js` уже даёт через `transition()`).
+
+Ровно 5 определённых пар (буквально TECH.md §9.4, без добавлений):
+
+```
+δ(idle,       START)     = encrypting
+δ(encrypting, ENCRYPTED) = uploading
+δ(uploading,  UPLOADED)  = completed
+δ(uploading,  ERROR)     = failed
+δ(failed,     RETRY)     = encrypting
+```
+
+`completed` — терминальное состояние (нет исходящих рёбер вообще, как
+`read`/`discarded` в message-machine, этап 24).
+
+**Явно НЕ формализуется (сознательная граница, не пробел):** переход
+`encrypting + ERROR → failed` в спецификации ОТСУТСТВУЕТ — TECH.md §9.4
+не предусматривает явного события "шифрование не удалось". Это
+согласуется с прецедентом message-machine: сам FSM — чистая функция
+состояния передачи протокола, а не универсальный обработчик всех
+исключений вызывающего кода. Если `encryptFile` бросает синхронно
+(редкий случай — недоступен Web Crypto/недостаточно памяти), вызывающий
+код (`upload.js`/будущий UI этапа 29) ловит исключение СВОИМ try/catch
+и решает, что делать (например, оставить state в `idle`, показать
+ошибку, не вызывая `transitionTransfer` вовсе) — FSM не обязан покрывать
+путь, которого нет в спецификации; расширение выходило бы за рамки
+"буквально как в TECH.md", тот же принцип, что message-machine.test.js
+формулирует явно ("ровно N валидных переходов, буквально как в
+спецификации").
+
+### Инвариант для тестов
+
+Исчерпывающий перебор всех `|S| × |E| = 25` пар (state, event): ровно
+5 бросают `false` (т.е. НЕ бросают — валидны), ровно 20 обязаны
+бросать. Прямой прецедент `tests/messaging-machine.test.js` (36 пар,
+6 валидных/30 невалидных) — тот же тестовый шаблон, только меньше
+состояний.
+
+### Псевдокод (тривиален, но фиксируется для воркера)
+
+```
+TRANSFER_TRANSITIONS = {
+  idle:       { START: "encrypting" },
+  encrypting: { ENCRYPTED: "uploading" },
+  uploading:  { UPLOADED: "completed", ERROR: "failed" },
+  failed:     { RETRY: "encrypting" }
+  // completed отсутствует как ключ вовсе -> любое событие в completed бросает
+}
+
+function transitionTransfer(state, event):
+    return transition(TRANSFER_TRANSITIONS, state, event)  // core/fsm/machine.js, этап 14
+```
+
+Обвязку (файл `transfer-machine.js`, буквальное переложение таблицы
+выше + вызов уже существующего generic `transition()`) пишет воркер —
+рутинная механическая работа по уже formalized таблице, тот же
+паттерн, что `domain/messaging/machine.js`.
