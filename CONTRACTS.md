@@ -1902,3 +1902,64 @@ identity не секрет (используется только для это�
 реальных данных) — предсказуемый pubkey можно внести в whitelist один раз;
 свойство "whitelist реально блокирует не-whitelisted pubkey" не ослаблено,
 проверяется отдельно (AC-14, этап 17).
+
+## Этап 21 — Битовая маска прав + журнальный движок
+
+Формализация решётки join/meet и инварианта монотонности R6-5 —
+DESIGN.md, раздел "Этап 21". Здесь — сигнатуры. Все три модуля работают
+над АБСТРАКТНЫМИ данными (не nostr-событиями) — см. границы скоупа в
+конце раздела.
+
+### `src/domain/auth/bitset.js`
+
+```js
+export const ACTIONS; // { VIEW: 1, COMMENT: 2, WRITE: 4, MODERATE: 8, ADMIN: 16 } — TECH.md §4.2
+export const ALL_ACTIONS; // VIEW|COMMENT|WRITE|MODERATE|ADMIN (для complement)
+
+export function join(a, b);        // a | b
+export function meet(a, b);        // a & b
+export function complement(a);     // (~a) & ALL_ACTIONS — относительно ALL_ACTIONS, не 32-битного ~a буквально
+export function effective(allowMask, denyMask); // allowMask & ~denyMask; effective(0,0) === 0 (fail-closed)
+export function can(mask, action); // (mask & action) !== 0
+```
+
+Алгебраические свойства (коммутативность/ассоциативность/идемпотентность
+`join`/`meet`, поглощение, де Морган через `complement`) — контракт,
+проверяемый тестами этапа, не документируется отдельно от кода теста.
+
+### `src/domain/auth/permissions.js`
+
+```js
+export function createPermissionRecord({ subject, resource, allowMask, denyMask, lamportTs, eventId });
+// Фабрика формы записи журнала (PermissionRecord). Валидирует обязательные
+// поля (throw при отсутствии/неверном типе subject/resource/lamportTs/eventId);
+// allowMask/denyMask по умолчанию 0. НЕ проверяет подпись/issuer — это
+// ответственность вызывающего кода (см. "Границы скоупа" ниже).
+// -> { subject, resource, allowMask, denyMask, lamportTs, eventId }
+```
+
+### `src/domain/auth/engine.js`
+
+```js
+export function rebuildCache(records);
+// records: PermissionRecord[] (любой порядок, не обязательно отсортирован)
+// Группирует по (subject, resource), внутри группы сортирует по
+// (lamportTs asc, eventId asc), сворачивает: acc = 0; for r in order:
+// acc = (acc | r.allowMask) & ~r.denyMask. Псевдокод и формальный
+// инвариант R6-5 — DESIGN.md.
+// -> Map<string, number> — ключ JSON.stringify([subject, resource]), значение effectiveMask
+
+export function can(cache, subject, resource, action);
+// cache.get(JSON.stringify([subject, resource])) ?? 0, затем bitset.can(mask, action)
+// undefined-запись (subject/resource без единой записи в журнале) -> 0 -> false (fail-closed)
+```
+
+### Границы скоупа этапа 21 (явное сужение, DESIGN.md)
+
+Не в скоупе: разбор/подпись/публикация nostr-событий, выбор конкретного
+`kind` для permission-событий, проверка "issuer == владелец resource",
+интеграция с contacts/groups (subject/resource — просто opaque-строки
+здесь). Всё это — `handlers.js` этапа 22 ("fold для kinds 3, 30050,
+30051" по PLAN.md), который будет вызывать `rebuildCache` с уже
+провалидированными записями — ровно как `mergeEvent`/`g-set.js`
+доверяет `validateEventId`, проверенному ДО вызова, не внутри.
