@@ -4,3 +4,10 @@ dist/
 *.log
 .env
 .env.*
+
+# server/strfry — тестовый relay, поднимается локально по docs в server/README.md.
+# Исходники/сборка/БД не версионируются (бинарь платформозависим, БД — локальные
+# тестовые данные, может расти неограниченно). strfry.conf и наши скрипты — версионируются.
+server/strfry/strfry-src/
+server/strfry/strfry-db/
+server/strfry/strfry.log
