@@ -71,7 +71,7 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 	const alicePub2 = ALICE_PUB;
 	const aliceOwnKeyPackage = await createOwnKeyPackage(alicePub2, "alice-device");
 	await db.table("ownKeyPackage").put({
-		id: "self",
+		ownerPubkey: alicePub2,
 		publicPackage: aliceOwnKeyPackage.publicPackage,
 		privatePackage: aliceOwnKeyPackage.privatePackage,
 		wireBytes: aliceOwnKeyPackage.wireBytes,
@@ -96,7 +96,7 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 
 	assert.equal((await listInboxRequests(ALICE_PUB)).length, 0, "запись удалена после принятия");
 	const groupIdHex = bytesToHex(computeGroupId(ALICE_PUB, STRANGER_PUB));
-	const groupRow = await db.table("mlsGroups").get(groupIdHex);
+	const groupRow = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
 	assert.ok(groupRow, "Алиса реально присоединилась к MLS-группе");
 	assert.equal(groupRow.contactPubkey, STRANGER_PUB);
 });

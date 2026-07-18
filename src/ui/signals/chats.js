@@ -14,8 +14,11 @@ export function bumpMessagingActivity() {
 	messagingActivity.value++;
 }
 
+// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра возвращал ЧАТЫ
+// ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey — второй
+// локальный аккаунт (мультиаккаунт, этап 11) видел чужую переписку в списке диалогов.
 export async function listChatPartners(ownerPubkey) {
-	const rows = await db.table("mlsGroups").toArray();
+	const rows = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
 	return [...new Set(rows.map((r) => r.contactPubkey))];
 }
 

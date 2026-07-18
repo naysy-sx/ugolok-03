@@ -1542,3 +1542,71 @@ HTML-атрибуты вместо `style={{}}`, сломанная статус
 покрытых signals-модулей — JSX не тестируется node --test по
 прецеденту проекта, verification — E2E выше). `npm run build` —
 222.52 КБ gzip (+3.32 КБ). Запас до NF-11 (280 КБ): ~57.5 КБ.
+
+## Этап 24-27-довесок — owner-scoping messaging-таблиц (критическая находка)
+
+Пользователь сообщил три симптома после первого реального
+использования (два локальных аккаунта, naysy/matero, на одном
+устройстве): (1) "Commit cannot contain an Add proposal for someone
+already in the group" сразу при первой отправке; (2) сообщения не
+приходят живьём, появляются только после ухода на другой экран и
+возврата; (3) в обоих чатах в заголовке отображается один и тот же
+собеседник (matero) независимо от того, под кем залогинен.
+
+Диагностика (чтение кода, не гадание): `ownKeyPackage`/`mlsGroups`/
+`messages`/`chatSyncState` НИКОГДА не были owner-scoped — молчаливое
+допущение "одна identity = одно устройство = одна БД" (этапы 13/24)
+не учло мультиаккаунт на одном устройстве (этап 11, `listAccounts()`).
+`ownKeyPackage` хранил ОДНУ запись `id: "self"` на всё устройство —
+второй локальный аккаунт получал MLS-credential ПЕРВОГО, что ts-mls
+закономерно отверг. `mlsGroups`/`messages`/`chatSyncState` были голыми
+— второй аккаунт видел чужие данные.
+
+Правка: `db.version(4)` (ownKeyPackage: "ownerPubkey", mlsGroups:
+"[ownerPubkey+groupId]", messages: unique "[ownerPubkey+chatId+msgId]"
++ сортировочный "[ownerPubkey+chatId+lamportTs+senderPubkey+id]",
+chatSyncState: "[ownerPubkey+chatId]"). Правка сигнатур везде, где
+использовались эти таблицы: chat.js (ensureOwnKeyPackagePublished,
+ensureChatEstablished, acceptWelcome, sendMessage,
+receiveGroupMessageEvent, getChatHistory — добавлен параметр
+ownerPubkey), devices.js (syncDeviceMembership's mlsGroups.toArray()
+без фильтра — РЕАЛЬНЫЙ баг, не только схема), deletions.js
+(applyIncomingDeletionIfMarker — добавлен параметр ownerPubkey),
+read-status.js/drafts.js (foldReadStatus/foldDraft берут ownerPubkey
+из event.pubkey — self-signed события, без нового параметра;
+getDraft/getUnreadCount — добавлен параметр), lazy-chat.js
+(loadChatWindow/markWindowLoaded — добавлен параметр), chats.js
+(listChatPartners — реальный баг, .toArray() без фильтра),
+transport.js (refreshGroupMessageSubscription и syncMirroredHistory —
+оба реальные баги), chat.jsx (все вызовы обновлены).
+
+19 файлов затронуто (11 src + 8 test). Каждый тест поправлен вручную
+(не воркером — точечные правки существующих фикстур/запросов, риск
+слишком высок для делегирования). Одна ловушка при правке
+deletions.test.js: тест "Алиса пытается удалить сообщение Боба"
+изначально держал ОДНУ строку messages, симулирующую ОБЕ стороны
+(Alice's и Bob's копии) — с owner-scoping это перестало работать
+корректно, пришлось завести ДВЕ отдельные фикстуры (по одной на
+каждую сторону), иначе тест либо не находил targetRow вообще, либо
+проверял не ту сторону авторизации.
+
+Живая E2E-проверка мультиаккаунта (Playwright как библиотека, ОДИН
+browser context = ОДНА IndexedDB, `page.reload()` между регистрацией
+naysy и matero — не `page.goto()` с hash, тот НЕ сбрасывает
+module-level JS-состояние, это SPA same-document navigation, не
+полный reload — первая версия скрипта на этом споткнулась, найдено
+трассировкой `activeChatPubkey.value` через page.evaluate) —
+подтвердила: matero не видит переписку naysy; matero устанавливает
+СВОЙ чат с carol без MLS credential conflict; carol видит оба чата
+как отдельные.
+
+Побочная находка ТОГО ЖЕ E2E-прогона: `chat.jsx`'s асинхронная
+загрузка черновика при монтировании может резолвиться ПОСЛЕ того, как
+пользователь уже начал печатать, стирая ввод — маловероятно для
+человека (БД быстрее печати), но не гарантировано. Исправлено флагом
+`userEditedRef`.
+
+Регрессия: `npm test` — 431/431 (все существующие тесты обновлены под
+новую схему, новых тестов на изоляцию мультиаккаунта добавлено 4:
+getChatHistory/listChatPartners по одному owner-scoping тесту).
+`npm run build` — 222.60 КБ gzip (+0.08 КБ).

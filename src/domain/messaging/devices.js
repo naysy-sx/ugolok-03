@@ -30,6 +30,7 @@ async function addSiblingToGroup(ownerPubkey, privKey, publish, knownRow, group)
 
 	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, knownRow.wireBytes);
 	await db.table("mlsGroups").put({
+		ownerPubkey,
 		groupId: group.groupId,
 		contactPubkey: group.contactPubkey,
 		state: serializeState(newSessionState),
@@ -91,7 +92,10 @@ export async function syncDeviceMembership(ownerPubkey, privKey, publish, fetchO
 			await db.table("knownDevices").put(knownRow);
 		}
 
-		const allGroups = await db.table("mlsGroups").toArray();
+		// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра возвращал
+		// ГРУППЫ ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey —
+		// приводило к попытке добавить сиблинга в ЧУЖУЮ (другого локального аккаунта) группу.
+		const allGroups = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
 		for (const group of allGroups) {
 			if (knownRow.addedGroupIds.includes(group.groupId)) continue;
 

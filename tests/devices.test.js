@@ -61,9 +61,9 @@ async function establishAliceToBob() {
 // db.mlsGroups (единственная база в этом тестовом процессе), не трогая копию Алисы
 // (тот же паттерн, что chat.test.js's asBob).
 async function asBob(groupIdHex, bobSerializedState, fn) {
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
+	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
 	const result = await fn();
-	const updatedBobRow = await db.table("mlsGroups").get(groupIdHex);
+	const updatedBobRow = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
 	return { result, updatedBobSerializedState: updatedBobRow.state };
 }
 
@@ -161,7 +161,7 @@ test("syncDeviceMembership: новый сиблинг без активных ч
 
 test("syncDeviceMembership: новый сиблинг + один активный чат — добавлен в MLS-группу, Welcome опубликован", async () => {
 	await establishAliceToBob();
-	const rowsBefore = await db.table("mlsGroups").toArray();
+	const rowsBefore = await db.table("mlsGroups").where("ownerPubkey").equals(ALICE_PUB).toArray();
 	assert.equal(rowsBefore.length, 1);
 	const groupIdHex = rowsBefore[0].groupId;
 
@@ -198,7 +198,7 @@ test("syncDeviceMembership: новый сиблинг + один активны�
 	const knownRow = await db.table("knownDevices").get([ALICE_PUB, "sibling-1"]);
 	assert.deepEqual(knownRow.addedGroupIds, [groupIdHex]);
 
-	const aliceGroupRow = await db.table("mlsGroups").get(groupIdHex);
+	const aliceGroupRow = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
 	assert.equal(aliceGroupRow.contactPubkey, BOB_PUB, "contactPubkey Алисы не потерян после addMember");
 });
 

@@ -21,13 +21,15 @@ export function parseReadStatusEvent(event, privKey) {
   return { chatId, lastReadLamportTs: parsed.lastReadLamportTs };
 }
 
+// ownerPubkey (owner-scoping, db.version(4)) берётся из event.pubkey — read-status
+// ВСЕГДА self-signed ("я прочитал"), отдельный параметр не нужен, не домысел.
 export async function foldReadStatus(event, privKey) {
-  const ownPubHex = bytesToHex(getPublicKey(privKey));
+  const ownerPubkey = event.pubkey;
   const { chatId, lastReadLamportTs } = parseReadStatusEvent(event, privKey);
-  let existing = await db.table('chatSyncState').get(chatId);
+  let existing = await db.table('chatSyncState').get([ownerPubkey, chatId]);
   if (existing && existing.lastReadLamportTs >= lastReadLamportTs) return;
-  await db.table('chatSyncState').put({ ...existing, chatId, lastReadLamportTs });
-  const rows = await db.table('messages').where('chatId').equals(chatId).toArray();
+  await db.table('chatSyncState').put({ ...existing, ownerPubkey, chatId, lastReadLamportTs });
+  const rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, chatId]).toArray();
   for (const row of rows) {
     if (row.senderPubkey === event.pubkey || row.lamportTs > lastReadLamportTs || row.status !== 'sent') continue;
     await db.table('messages').update(row.seq, { status: transitionMessage(row.status, 'READ') });
@@ -42,8 +44,8 @@ export async function markChatAsRead(ownerPubkey, privKey, contactPubkey, lastRe
 }
 
 export async function getUnreadCount(ownerPubkey, contactPubkey) {
-  const existing = await db.table('chatSyncState').get(contactPubkey);
+  const existing = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
   const lastRead = existing?.lastReadLamportTs ?? 0;
-  const rows = await db.table('messages').where('chatId').equals(contactPubkey).toArray();
+  const rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, contactPubkey]).toArray();
   return rows.filter(m => m.senderPubkey === contactPubkey && m.lamportTs > lastRead).length;
 }

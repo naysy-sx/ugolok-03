@@ -1,7 +1,8 @@
 import { db } from '../store/database.js';
 
-export async function loadChatWindow(contactPubkey, { limit = 100, beforeSeq } = {}) {
-    let rows = await db.table('messages').where('chatId').equals(contactPubkey).toArray();
+export async function loadChatWindow(ownerPubkey, contactPubkey, { limit = 100, beforeSeq } = {}) {
+    // [ownerPubkey+chatId] (db.version(4), owner-scoping — см. database.js).
+    let rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, contactPubkey]).toArray();
     
     rows.sort((a, b) => {
         if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;
@@ -21,7 +22,7 @@ export async function loadChatWindow(contactPubkey, { limit = 100, beforeSeq } =
     return { messages: windowMessages, hasMore };
 }
 
-export async function markWindowLoaded(contactPubkey, oldestLoadedSeq) {
-    let existing = await db.table('chatSyncState').get(contactPubkey);
-    await db.table('chatSyncState').put({ ...existing, chatId: contactPubkey, oldestLoadedSeq });
+export async function markWindowLoaded(ownerPubkey, contactPubkey, oldestLoadedSeq) {
+    let existing = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
+    await db.table('chatSyncState').put({ ...existing, ownerPubkey, chatId: contactPubkey, oldestLoadedSeq });
 }

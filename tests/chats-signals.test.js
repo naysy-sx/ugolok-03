@@ -44,11 +44,20 @@ test("bumpMessagingActivity: инкрементирует сигнал", () => {
 
 test("listChatPartners: возвращает уникальные contactPubkey активных MLS-групп", async () => {
 	await db.table("mlsGroups").bulkAdd([
-		{ groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) },
-		{ groupId: "g2", contactPubkey: ALICE_PUB, state: new Uint8Array([2]) },
+		{ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) },
+		{ ownerPubkey: ALICE_PUB, groupId: "g2", contactPubkey: "carol-pub", state: new Uint8Array([2]) },
 	]);
 	const partners = await listChatPartners(ALICE_PUB);
-	assert.deepEqual(partners.sort(), [ALICE_PUB, BOB_PUB].sort());
+	assert.deepEqual(partners.sort(), [BOB_PUB, "carol-pub"].sort());
+});
+
+test("listChatPartners: owner-scoping — не путает чаты РАЗНЫХ локальных аккаунтов на одном устройстве (критическая находка)", async () => {
+	await db.table("mlsGroups").bulkAdd([
+		{ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) },
+		{ ownerPubkey: "matero-pub", groupId: "g2", contactPubkey: "someone-else", state: new Uint8Array([2]) },
+	]);
+	const alicePartners = await listChatPartners(ALICE_PUB);
+	assert.deepEqual(alicePartners, [BOB_PUB], "Алиса не должна видеть чаты аккаунта matero");
 });
 
 test("listChatPartners: без активных чатов -> пустой массив", async () => {
@@ -124,10 +133,10 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 	await markChatReadAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, 1, publish);
 	// своё же сообщение не переводится в read этим механизмом (F-MS-07, этап 26) — просто
 	// проверяем, что вызов не бросает и chatSyncState обновился
-	assert.equal((await db.table("chatSyncState").get(BOB_PUB)).lastReadLamportTs, 1);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 1);
 
 	await saveChatDraftAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "черновик", publish);
-	assert.equal((await db.table("chatSyncState").get(BOB_PUB)).draftText, "черновик");
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).draftText, "черновик");
 
 	await deleteChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, row.msgId, 3, publish);
 	const updated = await db.table("messages").where("id").equals(eventId).first();

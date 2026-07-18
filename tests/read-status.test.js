@@ -41,22 +41,22 @@ test("buildReadStatusEvent/parseReadStatusEvent: round-trip, d-tag = chatId в �
 test("foldReadStatus: сохраняет lastReadLamportTs в chatSyncState", async () => {
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 10 });
 	await foldReadStatus(event, ALICE_PRIV);
-	const row = await db.table("chatSyncState").get(BOB_PUB);
+	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(row.lastReadLamportTs, 10);
 });
 
 test("foldReadStatus: monotonic guard — не откатывает назад более свежее локальное значение", async () => {
 	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 20 }), ALICE_PRIV);
 	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 }), ALICE_PRIV);
-	const row = await db.table("chatSyncState").get(BOB_PUB);
+	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(row.lastReadLamportTs, 20, "более старая версия не должна откатить назад");
 });
 
 test("foldReadStatus: переводит sent->read ТОЛЬКО входящие сообщения (не свои же исходящие)", async () => {
 	await db.table("messages").bulkAdd([
-		{ chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "in1", text: "от Боба", status: "sent", msgId: "m1" },
-		{ chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "out1", text: "от меня", status: "sent", msgId: "m2" },
-		{ chatId: BOB_PUB, lamportTs: 3, senderPubkey: BOB_PUB, id: "in2", text: "ещё от Боба, позже прочитанного", status: "sent", msgId: "m3" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "in1", text: "от Боба", status: "sent", msgId: "m1" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "out1", text: "от меня", status: "sent", msgId: "m2" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 3, senderPubkey: BOB_PUB, id: "in2", text: "ещё от Боба, позже прочитанного", status: "sent", msgId: "m3" },
 	]);
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 2 });
 	// событие "прочитано" в этом чате публикует САМА Алиса — event.pubkey === ALICE_PUB
@@ -72,6 +72,7 @@ test("foldReadStatus: переводит sent->read ТОЛЬКО входящи�
 
 test("foldReadStatus: идемпотентность — повторный fold той же версии не бросает (уже read)", async () => {
 	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
 		chatId: BOB_PUB,
 		lamportTs: 1,
 		senderPubkey: BOB_PUB,
@@ -89,6 +90,7 @@ test("foldReadStatus: идемпотентность — повторный fold
 
 test("markChatAsRead: публикует событие и применяет fold локально сразу", async () => {
 	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
 		chatId: BOB_PUB,
 		lamportTs: 1,
 		senderPubkey: BOB_PUB,
@@ -111,14 +113,14 @@ test("markChatAsRead: публикует событие и применяет fo
 test("markChatAsRead: сбой публикации -> throw, не применяет fold локально", async () => {
 	const publish = async () => ({ ok: false, reason: "отклонено" });
 	await assert.rejects(() => markChatAsRead(ALICE_PUB, ALICE_PRIV, BOB_PUB, 1, publish), /отклонено/);
-	assert.equal(await db.table("chatSyncState").get(BOB_PUB), undefined);
+	assert.equal(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), undefined);
 });
 
 test("getUnreadCount: считает входящие сообщения после lastReadLamportTs", async () => {
 	await db.table("messages").bulkAdd([
-		{ chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "in1", text: "1", status: "sent", msgId: "m1" },
-		{ chatId: BOB_PUB, lamportTs: 2, senderPubkey: BOB_PUB, id: "in2", text: "2", status: "sent", msgId: "m2" },
-		{ chatId: BOB_PUB, lamportTs: 3, senderPubkey: ALICE_PUB, id: "out1", text: "3", status: "sent", msgId: "m3" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "in1", text: "1", status: "sent", msgId: "m1" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: BOB_PUB, id: "in2", text: "2", status: "sent", msgId: "m2" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 3, senderPubkey: ALICE_PUB, id: "out1", text: "3", status: "sent", msgId: "m3" },
 	]);
 	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 2, "без read-status всё входящее непрочитано");
 	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 1 }), ALICE_PRIV);

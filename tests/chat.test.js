@@ -62,7 +62,7 @@ test("ensureOwnKeyPackagePublished: публикует kind 443 и персис�
 		return { ok: true };
 	};
 	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, publish);
-	const row = await db.table("ownKeyPackage").get("self");
+	const row = await db.table("ownKeyPackage").get(ALICE_PUB);
 	assert.ok(row);
 	assert.equal(publishCount, 1);
 
@@ -106,15 +106,15 @@ async function establishAliceToBob() {
 // db.mlsGroups (единственная база в этом тестовом процессе), не трогая копию Алисы,
 // которую вызывающий тест обязан сохранить/восстановить сам при необходимости.
 async function asBob(groupIdHex, bobSerializedState, fn) {
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
+	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
 	const result = await fn();
-	const updatedBobRow = await db.table("mlsGroups").get(groupIdHex);
+	const updatedBobRow = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
 	return { result, updatedBobSerializedState: updatedBobRow.state };
 }
 
 test("ensureChatEstablished: полный флоу — mlsGroups получает запись у A, Welcome доходит до B и применяется", async () => {
 	const { groupId, bobSerializedState } = await establishAliceToBob();
-	const aliceRow = await db.table("mlsGroups").get(toHex(groupId));
+	const aliceRow = await db.table("mlsGroups").get([ALICE_PUB, toHex(groupId)]);
 	assert.ok(aliceRow, "у Алисы есть своя запись");
 	assert.ok(bobSerializedState, "Боб успешно применил Welcome и получил рабочее состояние");
 });
@@ -191,13 +191,13 @@ test("contactPubkey переживает put() из sendMessage — второй
 	};
 	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "первое", 1, publish);
 	// contactPubkey должен пережить put() внутри sendMessage (это был реальный найденный баг)
-	const rowAfterFirstSend = await db.table("mlsGroups").get(groupIdHex);
+	const rowAfterFirstSend = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
 	assert.equal(rowAfterFirstSend.contactPubkey, BOB_PUB);
 
 	await asBob(groupIdHex, bobSerializedState, () =>
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvents[0], async () => ({ ok: true })),
 	);
-	const bobRowAfterReceive = await db.table("mlsGroups").get(groupIdHex);
+	const bobRowAfterReceive = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
 	assert.equal(bobRowAfterReceive.contactPubkey, ALICE_PUB, "и после приёма (put в receiveGroupMessageEvent) тоже");
 });
 
@@ -219,11 +219,11 @@ test("sendMessage: каждое сообщение публикуется с Н�
 
 test("getChatHistory: сортировка по (lamportTs, senderPubkey, eventId) — F-MS-05/AC-05", async () => {
 	await db.table("messages").bulkAdd([
-		{ chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e2", text: "b", status: "sent" },
-		{ chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "a", status: "sent" },
-		{ chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e0", text: "c-tiebreak-by-id", status: "sent" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e2", text: "b", status: "sent" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "a", status: "sent" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e0", text: "c-tiebreak-by-id", status: "sent" },
 	]);
-	const history = await getChatHistory(BOB_PUB);
+	const history = await getChatHistory(ALICE_PUB, BOB_PUB);
 	assert.deepEqual(
 		history.map((m) => m.id),
 		["e1", "e0", "e2"],
@@ -233,9 +233,18 @@ test("getChatHistory: сортировка по (lamportTs, senderPubkey, eventI
 test("getChatHistory: не путает разные чаты (chatId изоляция)", async () => {
 	const carolPub = bytesToHex(getPublicKey(new Uint8Array(32).fill(3)));
 	await db.table("messages").bulkAdd([
-		{ chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e1", text: "for bob", status: "sent" },
-		{ chatId: carolPub, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e2", text: "for carol", status: "sent" },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e1", text: "for bob", status: "sent" },
+		{ ownerPubkey: ALICE_PUB, chatId: carolPub, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e2", text: "for carol", status: "sent" },
 	]);
-	const history = await getChatHistory(BOB_PUB);
+	const history = await getChatHistory(ALICE_PUB, BOB_PUB);
 	assert.deepEqual(history.map((m) => m.text), ["for bob"]);
+});
+
+test("getChatHistory: owner-scoping — не путает переписки РАЗНЫХ локальных аккаунтов на одном устройстве (критическая находка)", async () => {
+	await db.table("messages").bulkAdd([
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "alice's copy", status: "sent" },
+		{ ownerPubkey: "matero-pub", chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e2", text: "matero's unrelated copy", status: "sent" },
+	]);
+	const aliceHistory = await getChatHistory(ALICE_PUB, BOB_PUB);
+	assert.deepEqual(aliceHistory.map((m) => m.text), ["alice's copy"]);
 });

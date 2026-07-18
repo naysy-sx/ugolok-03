@@ -44,10 +44,11 @@ async function requirePublishOk(publish, event) {
 
 // upsertMessage — идемпотентная вставка (DESIGN.md, этап 25, раздел 3): одно и то же
 // логическое сообщение может прийти ДВУМЯ путями (живой MLS kind 445 и зеркало kind 446),
-// в любом порядке, любое число раз. Дедупликация по unique-индексу [chatId+msgId]
-// (db.version(3)) — НЕ по (chatId, lamportTs, senderPubkey): два РАЗНЫХ сообщения могут
-// легитимно иметь одинаковый lamportTs при multi-device (найдено адверсарным прогоном
-// уже принятого теста getChatHistory tiebreak-by-id).
+// в любом порядке, любое число раз. Дедупликация по unique-индексу [ownerPubkey+chatId+msgId]
+// (db.version(4), owner-scoping — найдено реальным использованием, см. database.js) — НЕ по
+// (chatId, lamportTs, senderPubkey): два РАЗНЫХ сообщения могут легитимно иметь одинаковый
+// lamportTs при multi-device (найдено адверсарным прогоном уже принятого теста
+// getChatHistory tiebreak-by-id). row обязан содержать ownerPubkey — вызывающий код.
 export async function upsertMessage(row) {
 	try {
 		await db.table("messages").add(row);
@@ -70,13 +71,13 @@ async function mirrorBestEffort(privKey, publish, payload, groupIdHex) {
 }
 
 export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish) {
-	const existing = await db.table("ownKeyPackage").get("self");
+	const existing = await db.table("ownKeyPackage").get(ownerPubkey);
 	if (existing) return;
 
 	const deviceId = await getOrCreateDeviceId();
 	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
 	await db.table("ownKeyPackage").put({
-		id: "self",
+		ownerPubkey,
 		publicPackage: ownKeyPackage.publicPackage,
 		privatePackage: ownKeyPackage.privatePackage,
 		wireBytes: ownKeyPackage.wireBytes,
@@ -101,13 +102,13 @@ export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey,
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
-	const existing = await db.table("mlsGroups").get(groupIdHex);
+	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return;
 
 	const theirWireBytes = await fetchKeyPackage(contactPubkey);
 
 	// Свежий KeyPackage — для СОЗДАНИЯ именно этой группы, не переиспользует
-	// опубликованный "приглашающий" ownKeyPackage.self (тот — для входящих Welcome от других).
+	// опубликованный "приглашающий" ownKeyPackage (тот — для входящих Welcome от других).
 	const deviceId = await getOrCreateDeviceId();
 	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
 	const state = await createGroup(ownerPubkey, ownKeyPackage, groupId);
@@ -119,7 +120,8 @@ export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey,
 	// contactPubkey хранится РЯДОМ с состоянием (не отдельной таблицей-маппингом) —
 	// нужен для обратного поиска "чьё это kind 445" по groupId из h-тега: groupId —
 	// однонаправленный хэш (DESIGN.md п.2), pubkey из него не восстановить назад.
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) });
+	// ownerPubkey — часть составного ключа (db.version(4), owner-scoping — см. database.js).
+	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) });
 
 	const welcomeEvent = nip59Wrap(
 		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] },
@@ -136,10 +138,10 @@ export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWir
 	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
-	const existing = await db.table("mlsGroups").get(groupIdHex);
+	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
 
-	const ownKeyPackageRow = await db.table("ownKeyPackage").get("self");
+	const ownKeyPackageRow = await db.table("ownKeyPackage").get(ownerPubkey);
 	if (!ownKeyPackageRow) {
 		throw new Error("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше");
 	}
@@ -149,13 +151,13 @@ export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWir
 	};
 
 	const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) });
+	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) });
 }
 
 export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
-	const row = await db.table("mlsGroups").get(groupIdHex);
+	const row = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!row) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
 	}
@@ -167,7 +169,7 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	const plaintextBytes = utf8ToBytes(JSON.stringify({ text, lamportTs, msgId }));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
+	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
 
 	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
 	const content = nip44Encrypt(encodeBase64(wireBytes), privateKey, bytesToHex(publicKey));
@@ -182,6 +184,7 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	await requirePublishOk(publish, event);
 
 	await upsertMessage({
+		ownerPubkey,
 		chatId: contactPubkey,
 		lamportTs,
 		senderPubkey: ownerPubkey,
@@ -210,7 +213,7 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 	if (!hTag) return null;
 	const groupIdHex = hTag[1];
 
-	const row = await db.table("mlsGroups").get(groupIdHex);
+	const row = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!row) return null; // чужая/неизвестная группа — не наш разговор
 	const contactPubkey = row.contactPubkey;
 
@@ -219,12 +222,13 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 	const wireBytes = decodeBase64(nip44Decrypt(event.content, privateKey, bytesToHex(publicKey)));
 
 	const result = await decryptApplicationMessage(state, wireBytes);
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) });
+	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) });
 
 	if (result.kind === "control") return null;
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
 	await upsertMessage({
+		ownerPubkey,
 		chatId: contactPubkey,
 		lamportTs: parsed.lamportTs,
 		senderPubkey: contactPubkey,
@@ -244,8 +248,8 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 	return { text: parsed.text, lamportTs: parsed.lamportTs };
 }
 
-export async function getChatHistory(contactPubkey) {
-	const rows = await db.table("messages").where("chatId").equals(contactPubkey).toArray();
+export async function getChatHistory(ownerPubkey, contactPubkey) {
+	const rows = await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).toArray();
 	rows.sort((a, b) => {
 		if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;
 		if (a.senderPubkey !== b.senderPubkey) return a.senderPubkey < b.senderPubkey ? -1 : 1;

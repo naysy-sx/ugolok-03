@@ -3270,3 +3270,71 @@ export default function MessageBubble({ message, isOwn, onDelete });
 получает ответ → Алиса удаляет своё сообщение → у обеих сторон
 отображается "Сообщение удалено". Все шаги подтверждены реальным
 сетевым обменом через работающий `strfry`, не заглушкой.
+
+## Этап 24-27-довесок — owner-scoping messaging-таблиц (критическая находка реального использования)
+
+Найдено пользователем ПРИ ПЕРВОМ РЕАЛЬНОМ ИСПОЛЬЗОВАНИИ (не адверсарным
+тестом, не Playwright-эмуляцией): `ownKeyPackage`, `mlsGroups`,
+`messages`, `chatSyncState` НИКОГДА не были owner-scoped — в отличие
+от `contacts`/`blockedContacts`/`groups`/`contactRequests`/
+`inboxRequests`/`knownDevices` (owner-scoped с самого начала).
+Молчаливое допущение "одна identity = одно устройство = одна БД"
+(этапы 13/24) не учло, что мультиаккаунт на ОДНОМ устройстве (этап
+11, `listAccounts()`) означает НЕСКОЛЬКО identity, делящих ОДНУ
+IndexedDB (один origin). Симптомы пользователя: `ownKeyPackage` хранил
+ОДНУ запись `"self"` на всё устройство — второй локальный аккаунт
+молча получал MLS-credential ПЕРВОГО, что ts-mls закономерно отверг
+как "участник уже в группе" (`Commit cannot contain an Add proposal
+for someone already in the group`); `mlsGroups`/`messages`/
+`chatSyncState` были голыми (без owner) — второй локальный аккаунт
+видел ЧУЖИЕ переписки/собеседника в заголовке чата.
+
+**Правка схемы (`db.version(4)`, аддитивно):**
+```js
+ownKeyPackage: "ownerPubkey",                        // было "id" со значением "self"
+mlsGroups: "[ownerPubkey+groupId], ownerPubkey",     // было "groupId"
+messages: "++seq, &[ownerPubkey+chatId+msgId], [ownerPubkey+chatId+lamportTs+senderPubkey+id], [ownerPubkey+chatId], id, status, deleted",
+chatSyncState: "[ownerPubkey+chatId], ownerPubkey"   // было "chatId"
+```
+`deviceIdentity` НЕ owner-scoped НАМЕРЕННО и остаётся так — `deviceId`
+это метка ФИЗИЧЕСКОГО устройства, общая для всех identity на нём
+(credential = `identity:deviceId` уже различает identity через первую
+часть).
+
+**Правка сигнатур (owner-scoping):** `getChatHistory(ownerPubkey,
+contactPubkey)` (было без ownerPubkey), `getDraft(ownerPubkey,
+contactPubkey)`, `loadChatWindow(ownerPubkey, contactPubkey, opts)`,
+`markWindowLoaded(ownerPubkey, contactPubkey, seq)`,
+`applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult)`
+(было без ownerPubkey). `foldReadStatus`/`foldDraft` НЕ получили новый
+параметр — `ownerPubkey = event.pubkey` внутри (read-status/draft
+всегда self-signed, отдельный параметр избыточен).
+
+**Правка мест, где `ownerPubkey` УЖЕ БЫЛ параметром, но не
+использовался для scoping запроса (тихая порча данных, не throw):**
+`devices.js`'s `syncDeviceMembership` (`mlsGroups.toArray()` без
+фильтра — добавляло сиблинга в группы ВСЕХ локальных аккаунтов),
+`transport.js`'s `refreshGroupMessageSubscription` (та же проблема),
+`chats.js`'s `listChatPartners` (та же проблема), `transport.js`'s
+`syncMirroredHistory` (upsertMessage без `ownerPubkey` в row).
+
+**Найдено ЖИВЫМ E2E-прогоном мультиаккаунтного сценария (Playwright
+как библиотека, ОДИН browser context = ОДИН origin = ОДНА IndexedDB,
+реальная перезагрузка страницы `page.reload()` между регистрацией
+naysy и matero — именно так пользователь переключался между
+локальными аккаунтами, отдельной кнопки logout в UI нет):**
+`chat.jsx`'s асинхронная загрузка черновика (`getDraft`) при
+монтировании МОЖЕТ резолвиться ПОСЛЕ того, как пользователь уже начал
+печатать — `setText(draft)` стирает введённый текст. В обычном
+человеческом использовании маловероятно (БД быстрее печати), но не
+гарантировано. Исправлено флагом `userEditedRef` (`useRef`) — как
+только пользователь хоть раз редактировал текст, асинхронная загрузка
+черновика больше не имеет права его перезаписывать; сбрасывается при
+смене `contactPubkey` (новый чат).
+
+Полный мультиаккаунтный сценарий (naysy регистрируется → устанавливает
+чат с carol → реальная перезагрузка страницы (F5) → matero
+регистрируется НА ТОМ ЖЕ устройстве → НЕ видит переписку naysy
+(owner-scoping) → устанавливает СВОЙ чат с carol БЕЗ MLS credential
+conflict → carol видит ОБА чата как отдельные) подтверждён живьём
+через реальный `strfry`.

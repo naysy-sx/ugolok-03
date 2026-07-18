@@ -58,3 +58,25 @@ db.version(3).stores({
   // было created_at (единственное расхождение стиля во всей схеме).
   inboxRequests: "[owner+senderPubkey], owner, senderPubkey, createdAt"
 });
+
+// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не адверсарным тестом) — критический пробел
+// этапов 13/24/25/26: ownKeyPackage/mlsGroups/messages/chatSyncState НИКОГДА не были
+// owner-scoped, в отличие от contacts/blockedContacts/groups/contactRequests/inboxRequests/
+// knownDevices (owner-scoped с самого начала). Молчаливое допущение "одна identity = одно
+// устройство = одна БД" не учитывало, что мультиаккаунт на ОДНОМ устройстве (уже поддержан
+// с этапа 11) означает НЕСКОЛЬКО identities, делящих ОДНУ IndexedDB (один origin). На практике:
+// ownKeyPackage хранил ОДНУ запись "self" на всё устройство — второй локальный аккаунт молча
+// получал MLS-credential ПЕРВОГО, что ts-mls закономерно отвергает как "участник уже в группе"
+// (тот же класс конфликта, что этап 25 исправил для credential identity:deviceId, только
+// теперь между РАЗНЫМИ identity на одном устройстве, не между устройствами одной identity).
+// mlsGroups/messages/chatSyncState были голыми (без owner) — второй локальный аккаунт видел
+// ЧУЖИЕ переписки. deviceIdentity НЕ owner-scoped НАМЕРЕННО и остаётся так — deviceId это
+// метка ФИЗИЧЕСКОГО устройства, общая для всех identity на нём (credential = identity:deviceId
+// уже различает identity через первую часть, коллизии deviceId сам по себе не создаёт).
+db.version(4).stores({
+  ownKeyPackage: "ownerPubkey",
+  mlsGroups: "[ownerPubkey+groupId], ownerPubkey",
+  messages:
+    "++seq, &[ownerPubkey+chatId+msgId], [ownerPubkey+chatId+lamportTs+senderPubkey+id], [ownerPubkey+chatId], id, status, deleted",
+  chatSyncState: "[ownerPubkey+chatId], ownerPubkey"
+});

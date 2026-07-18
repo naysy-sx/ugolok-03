@@ -311,7 +311,11 @@ export async function fetchKeyPackage(pubkeyHex) {
 // могло зеркалировать полученное сообщение best-effort (DESIGN.md, "Этап 25", раздел 2).
 export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publish) {
 	if (!connection) return;
-	const groupIds = (await db.table("mlsGroups").toArray()).map((row) => row.groupId);
+	// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра подписывал(ся)
+	// на #h ГРУПП ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey.
+	const groupIds = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map(
+		(row) => row.groupId,
+	);
 	if (groupIds.length === 0) return;
 
 	if (!groupMessageSubscriber) {
@@ -323,7 +327,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
-						await applyIncomingDeletionIfMarker(event, receivedResult);
+						await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
 						bumpMessagingActivity(); // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
@@ -395,6 +399,7 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						await upsertMessage({
+							ownerPubkey,
 							chatId: payload.contactPubkey,
 							lamportTs: payload.lamportTs,
 							senderPubkey: payload.senderPubkey,

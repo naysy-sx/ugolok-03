@@ -57,9 +57,9 @@ async function establishAliceToBob() {
 }
 
 async function asBob(groupIdHex, bobSerializedState, fn) {
-	await db.table("mlsGroups").put({ groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
+	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
 	const result = await fn();
-	const updatedBobRow = await db.table("mlsGroups").get(groupIdHex);
+	const updatedBobRow = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
 	return { result, updatedBobSerializedState: updatedBobRow.state };
 }
 
@@ -80,7 +80,7 @@ test("deleteMessage: помечает СВОЮ локальную строку �
 
 	await deleteMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, msgId, 2, publish);
 
-	const updated = await db.table("messages").where("[chatId+msgId]").equals([BOB_PUB, msgId]).first();
+	const updated = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, msgId]).first();
 	assert.equal(updated.deleted, true);
 	assert.equal(updated.text, "");
 });
@@ -95,7 +95,7 @@ test("applyIncomingDeletionIfMarker: Bob получает delete-запрос о
 	};
 
 	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "оригинал", 1, publish);
-	const originalMsgId = (await db.table("messages").where("chatId").equals(BOB_PUB).first()).msgId;
+	const originalMsgId = (await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).first()).msgId;
 
 	// Боб получает оригинал (материализует свою копию строки)
 	const originalEvent = sentEvents.find((e) => e.kind === 445);
@@ -111,11 +111,11 @@ test("applyIncomingDeletionIfMarker: Bob получает delete-запрос о
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, deleteEvent, async () => ({ ok: true })),
 	);
 
-	const applied = await applyIncomingDeletionIfMarker(deleteEvent, bobReceiveResult);
+	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, deleteEvent, bobReceiveResult);
 	assert.equal(applied, true);
 
 	await asBob(groupIdHex, updatedBobSerializedState, async () => {
-		const bobRow = await db.table("messages").where("[chatId+msgId]").equals([ALICE_PUB, originalMsgId]).first();
+		const bobRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, originalMsgId]).first();
 		assert.equal(bobRow.deleted, true);
 		assert.equal(bobRow.text, "");
 	});
@@ -125,15 +125,26 @@ test("applyIncomingDeletionIfMarker: Алиса пытается удалить 
 	const { groupId, bobSerializedState } = await establishAliceToBob();
 	const groupIdHex = toHex(groupId);
 
-	// Боб пишет сообщение (в реальности — Боб вызывает sendMessage на СВОЕЙ стороне;
-	// здесь материализуем это как "Алиса приняла его" — контрольная строка на стороне Алисы,
-	// senderPubkey = BOB_PUB, ровно как делает receiveGroupMessageEvent).
+	// Боб пишет сообщение — в реальности это ДВЕ РАЗНЫЕ строки в ДВУХ РАЗНЫХ БД (owner-scoping,
+	// этап 27): у Алисы (ownerPubkey=ALICE_PUB, она получатель, chatId=BOB_PUB) и у самого Боба
+	// (ownerPubkey=BOB_PUB, chatId=ALICE_PUB — с ЕГО стороны собеседник это Алиса).
 	const bobMsgId = "b".repeat(32);
 	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
 		chatId: BOB_PUB,
 		lamportTs: 1,
 		senderPubkey: BOB_PUB,
-		id: "bob-original",
+		id: "bob-original-at-alice",
+		text: "сообщение от Боба",
+		status: "sent",
+		msgId: bobMsgId,
+	});
+	await db.table("messages").add({
+		ownerPubkey: BOB_PUB,
+		chatId: ALICE_PUB,
+		lamportTs: 1,
+		senderPubkey: BOB_PUB,
+		id: "bob-original-at-bob",
 		text: "сообщение от Боба",
 		status: "sent",
 		msgId: bobMsgId,
@@ -157,25 +168,25 @@ test("applyIncomingDeletionIfMarker: Алиса пытается удалить 
 	const { result: bobReceiveResult } = await asBob(groupIdHex, bobSerializedState, () =>
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, deleteEvent, async () => ({ ok: true })),
 	);
-	const applied = await applyIncomingDeletionIfMarker(deleteEvent, bobReceiveResult);
+	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, deleteEvent, bobReceiveResult);
 	assert.equal(applied, false, "Алиса не автор этого сообщения — приёмная сторона отклоняет независимо");
 
-	const stillThere = await db.table("messages").where("[chatId+msgId]").equals([BOB_PUB, bobMsgId]).first();
-	assert.equal(stillThere.deleted, undefined, "сообщение Боба осталось нетронутым");
+	const stillThere = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, bobMsgId]).first();
+	assert.equal(stillThere.deleted, undefined, "сообщение Боба (в ЕГО собственной БД) осталось нетронутым");
 });
 
 test("applyIncomingDeletionIfMarker: неизвестный msgId — false, не бросает", async () => {
 	const fakeEvent = { tags: [["h", "00".repeat(32)]] };
-	const applied = await applyIncomingDeletionIfMarker(fakeEvent, { text: buildDeletionText("nope"), lamportTs: 1 });
+	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, fakeEvent, { text: buildDeletionText("nope"), lamportTs: 1 });
 	assert.equal(applied, false);
 });
 
 test("applyIncomingDeletionIfMarker: обычное (не-маркерное) сообщение — false, ничего не меняет", async () => {
-	const applied = await applyIncomingDeletionIfMarker({ tags: [] }, { text: "обычный текст", lamportTs: 1 });
+	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, { tags: [] }, { text: "обычный текст", lamportTs: 1 });
 	assert.equal(applied, false);
 });
 
 test("applyIncomingDeletionIfMarker: receivedResult===null (control-сообщение) — false", async () => {
-	const applied = await applyIncomingDeletionIfMarker({ tags: [] }, null);
+	const applied = await applyIncomingDeletionIfMarker(BOB_PUB, { tags: [] }, null);
 	assert.equal(applied, false);
 });

@@ -41,7 +41,7 @@ test("refreshInboxRequests: возвращает owner-scoped список", asy
 test("acceptInboxRequestAction: присоединяется к MLS-группе, вызывает refresh-подписку и переключает на чат", async () => {
 	const aliceOwnKeyPackage = await createOwnKeyPackage(ALICE_PUB, "alice-device");
 	await db.table("ownKeyPackage").put({
-		id: "self",
+		ownerPubkey: ALICE_PUB,
 		publicPackage: aliceOwnKeyPackage.publicPackage,
 		privatePackage: aliceOwnKeyPackage.privatePackage,
 		wireBytes: aliceOwnKeyPackage.wireBytes,

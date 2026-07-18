@@ -20,10 +20,12 @@ export function parseDraftEvent(event, privKey) {
   return { chatId, text: parsed.text };
 }
 
+// ownerPubkey (owner-scoping, db.version(4)) — из event.pubkey, draft ВСЕГДА self-signed.
 export async function foldDraft(event, privKey) {
+  const ownerPubkey = event.pubkey;
   const { chatId, text } = parseDraftEvent(event, privKey);
-  let existing = await db.table('chatSyncState').get(chatId);
-  await db.table('chatSyncState').put({ ...existing, chatId, draftText: text, draftUpdatedAt: event.created_at });
+  let existing = await db.table('chatSyncState').get([ownerPubkey, chatId]);
+  await db.table('chatSyncState').put({ ...existing, ownerPubkey, chatId, draftText: text, draftUpdatedAt: event.created_at });
 }
 
 export async function saveDraft(ownerPubkey, privKey, contactPubkey, text, publish) {
@@ -36,7 +38,7 @@ export async function saveDraft(ownerPubkey, privKey, contactPubkey, text, publi
   }
 }
 
-export async function getDraft(contactPubkey) {
-  const row = await db.table('chatSyncState').get(contactPubkey);
+export async function getDraft(ownerPubkey, contactPubkey) {
+  const row = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
   return row?.draftText ?? '';
 }

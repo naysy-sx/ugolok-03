@@ -62,19 +62,35 @@ test("events: первичный ключ seq (autoincrement), индексы id
 	db.close();
 });
 
-test("messages (этап 25): unique compound-индекс [chatId+msgId] для upsertMessage", async () => {
+test("messages (этап 27, owner-scoping): unique compound-индекс [ownerPubkey+chatId+msgId] для upsertMessage", async () => {
 	await db.open();
 	const messages = db.table("messages");
 	const uniqueIdx = messages.schema.indexes.find(
-		(i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "chatId+msgId",
+		(i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+chatId+msgId",
 	);
-	assert.ok(uniqueIdx, "должен быть compound-индекс [chatId+msgId]");
+	assert.ok(uniqueIdx, "должен быть compound-индекс [ownerPubkey+chatId+msgId]");
 	assert.ok(uniqueIdx.unique, "индекс должен быть unique (& в Dexie-нотации)");
 	const oldIdx = messages.schema.indexes.find(
-		(i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "chatId+lamportTs+senderPubkey+id",
+		(i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+chatId+lamportTs+senderPubkey+id",
 	);
-	assert.ok(oldIdx, "старый неуникальный индекс с id не должен быть удалён");
-	assert.ok(!oldIdx.unique, "старый индекс остаётся неуникальным");
+	assert.ok(oldIdx, "сортировочный индекс должен быть тоже owner-scoped");
+	assert.ok(!oldIdx.unique, "сортировочный индекс остаётся неуникальным");
+	db.close();
+});
+
+test("mlsGroups/ownKeyPackage/chatSyncState (этап 27, owner-scoping — критическая находка мультиаккаунта): составные/owner-based первичные ключи", async () => {
+	await db.open();
+	assert.equal(db.table("ownKeyPackage").schema.primKey.name, "ownerPubkey", "ownKeyPackage: ключ = сам ownerPubkey, не голый 'self'");
+	const mlsGroups = db.table("mlsGroups");
+	assert.ok(
+		Array.isArray(mlsGroups.schema.primKey.keyPath) && mlsGroups.schema.primKey.keyPath.join("+") === "ownerPubkey+groupId",
+		"mlsGroups: составной первичный ключ [ownerPubkey+groupId]",
+	);
+	const chatSyncState = db.table("chatSyncState");
+	assert.ok(
+		Array.isArray(chatSyncState.schema.primKey.keyPath) && chatSyncState.schema.primKey.keyPath.join("+") === "ownerPubkey+chatId",
+		"chatSyncState: составной первичный ключ [ownerPubkey+chatId]",
+	);
 	db.close();
 });
 

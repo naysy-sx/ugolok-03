@@ -38,19 +38,19 @@ test("buildDraftEvent: пустой text валиден (стирание чер
 test("foldDraft/getDraft: сохраняет и возвращает текст черновика по chatId", async () => {
 	const event = buildDraftEvent(ALICE_PRIV, { chatId: BOB_PUB, text: "привет, как дела" });
 	await foldDraft(event, ALICE_PRIV);
-	assert.equal(await getDraft(BOB_PUB), "привет, как дела");
+	assert.equal(await getDraft(ALICE_PUB, BOB_PUB), "привет, как дела");
 });
 
 test("getDraft: нет черновика -> пустая строка, не throw/undefined", async () => {
-	assert.equal(await getDraft(BOB_PUB), "");
+	assert.equal(await getDraft(ALICE_PUB, BOB_PUB), "");
 });
 
 test("foldDraft: не путает черновики разных чатов", async () => {
 	const carolPub = "c".repeat(64);
 	await foldDraft(buildDraftEvent(ALICE_PRIV, { chatId: BOB_PUB, text: "для Боба" }), ALICE_PRIV);
 	await foldDraft(buildDraftEvent(ALICE_PRIV, { chatId: carolPub, text: "для Кэрол" }), ALICE_PRIV);
-	assert.equal(await getDraft(BOB_PUB), "для Боба");
-	assert.equal(await getDraft(carolPub), "для Кэрол");
+	assert.equal(await getDraft(ALICE_PUB, BOB_PUB), "для Боба");
+	assert.equal(await getDraft(ALICE_PUB, carolPub), "для Кэрол");
 });
 
 test("saveDraft: публикует и применяет fold сразу", async () => {
@@ -61,19 +61,19 @@ test("saveDraft: публикует и применяет fold сразу", asyn
 	};
 	await saveDraft(ALICE_PUB, ALICE_PRIV, BOB_PUB, "черновик", publish);
 	assert.equal(publishedEvent.kind, 30071);
-	assert.equal(await getDraft(BOB_PUB), "черновик");
+	assert.equal(await getDraft(ALICE_PUB, BOB_PUB), "черновик");
 });
 
 test("saveDraft: сбой публикации -> throw, локально не применяется", async () => {
 	const publish = async () => ({ ok: false, reason: "отклонено" });
 	await assert.rejects(() => saveDraft(ALICE_PUB, ALICE_PRIV, BOB_PUB, "текст", publish), /отклонено/);
-	assert.equal(await getDraft(BOB_PUB), "");
+	assert.equal(await getDraft(ALICE_PUB, BOB_PUB), "");
 });
 
 test("foldDraft: не затирает lastReadLamportTs той же строки chatSyncState (общая таблица с read-status)", async () => {
-	await db.table("chatSyncState").put({ chatId: BOB_PUB, lastReadLamportTs: 42 });
+	await db.table("chatSyncState").put({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lastReadLamportTs: 42 });
 	await foldDraft(buildDraftEvent(ALICE_PRIV, { chatId: BOB_PUB, text: "новый черновик" }), ALICE_PRIV);
-	const row = await db.table("chatSyncState").get(BOB_PUB);
+	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(row.lastReadLamportTs, 42, "foldDraft не должен затирать другие поля той же строки");
 	assert.equal(row.draftText, "новый черновик");
 });

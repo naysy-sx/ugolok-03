@@ -216,6 +216,13 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
 	const draftTimerRef = useRef(null);
+	// Найдено живым E2E-прогоном (мультиаккаунт, не гипотеза): асинхронная загрузка
+	// черновика при монтировании МОЖЕТ резолвиться ПОСЛЕ того, как пользователь уже начал
+	// печатать — тогда setText(draft) стирает уже введённый текст. В обычном человеческом
+	// использовании это маловероятно (БД быстрее печати), но не гарантировано. Как только
+	// пользователь хоть раз редактировал текст — асинхронная загрузка черновика больше не
+	// имеет права его перезаписывать. Сбрасывается при смене contactPubkey (новый чат).
+	const userEditedRef = useRef(false);
 
 	useEffect(() => {
 		ensureProfilesFetched([contactPubkey], fetchProfiles).catch(() => {});
@@ -224,7 +231,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	useEffect(() => {
 		let cancelled = false;
 		async function load() {
-			const { messages: freshWindow, hasMore: more } = await loadChatWindow(contactPubkey, { limit: 100 });
+			const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100 });
 			if (cancelled) return;
 			setMessages(freshWindow);
 			setHasMore(more);
@@ -245,14 +252,15 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	// иначе входящее сообщение фоном стирало бы уже вводимый (ещё не сохранённый) текст
 	// пользователя, перезаписывая его последним ЗАСОХРАНЁННЫМ черновиком.
 	useEffect(() => {
+		userEditedRef.current = false;
 		let cancelled = false;
-		getDraft(contactPubkey).then((draft) => {
-			if (!cancelled) setText(draft);
+		getDraft(ownerPubkey, contactPubkey).then((draft) => {
+			if (!cancelled && !userEditedRef.current) setText(draft);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [contactPubkey]);
+	}, [ownerPubkey, contactPubkey]);
 
 	// Черновик не сохраняется на КАЖДОЕ нажатие клавиши (лишняя публикация kind 30071) —
 	// debounce 1с; таймер отменяется при размонтировании/смене чата, чтобы не сохранить
@@ -264,6 +272,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	}, [contactPubkey]);
 
 	function handleTextInput(e) {
+		userEditedRef.current = true;
 		const value = e.currentTarget.value;
 		setText(value);
 		if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
@@ -278,7 +287,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	// Не теряет данные (просто нужно заново нажать "Загрузить более старые" при
 	// следующем скролле) — полировка отложена (backlog, этап 32).
 	async function reloadWindow() {
-		const { messages: freshWindow, hasMore: more } = await loadChatWindow(contactPubkey, { limit: 100 });
+		const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100 });
 		setMessages(freshWindow);
 		setHasMore(more);
 	}
@@ -286,10 +295,10 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	async function handleLoadMore() {
 		if (messages.length === 0) return;
 		const oldestSeq = messages[0].seq;
-		const { messages: older, hasMore: more } = await loadChatWindow(contactPubkey, { limit: 100, beforeSeq: oldestSeq });
+		const { messages: older, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100, beforeSeq: oldestSeq });
 		setMessages((prev) => [...older, ...prev]);
 		setHasMore(more);
-		if (older.length > 0) await markWindowLoaded(contactPubkey, older[0].seq);
+		if (older.length > 0) await markWindowLoaded(ownerPubkey, contactPubkey, older[0].seq);
 	}
 
 	async function handleSend(e) {
