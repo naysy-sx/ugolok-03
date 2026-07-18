@@ -1963,3 +1963,179 @@ export function can(cache, subject, resource, action);
 30051" по PLAN.md), который будет вызывать `rebuildCache` с уже
 провалидированными записями — ровно как `mergeEvent`/`g-set.js`
 доверяет `validateEventId`, проверенному ДО вызова, не внутри.
+
+## Этап 22 — Контакты + группы + блокировка + NIP-09
+
+Триаж (п.13a): **рутина** — склейка уже готовых примитивов (mergeEvent,
+sign/NIP-44, createPermissionRecord/rebuildCache из этапа 21). DESIGN.md
+формальный раздел не пишется (нет нетривиального инварианта), но
+протокольные решения ниже — реальные находки/несоответствия, требующие
+явной фиксации, не молчаливого выбора.
+
+### Находки и решения (до сигнатур)
+
+**1. `kind 30051` для журнала прав — устарел, заменён на `kind 5051`.**
+TECH.md сам предупреждает не читать старую форму "kind 30051" буквально
+после R6-5 (журнальная модель, этап 21): диапазон 30000-39999 —
+parameterized-replaceable, relay схлопывает записи по `(pubkey, kind,
+d-tag)` — несовместимо с append-only журналом (новый `grant`/`revoke`
+исчезнет, останется только последняя запись, что убивает саму цель R6-5).
+TECH.md строка 240 сама определяет диапазон 1000-9999 как "журнальный"
+(relay хранит все экземпляры) — уже используется в проекте для gift wrap
+(1059). Выбран **`kind 5051`** (не занят, мнемонически перекликается со
+старым 30051). `d-tag` сохраняется как `opaqueDTag(masterSecret, 5051,
+subject + ":" + resource)` — на non-replaceable kind relay его не
+использует для замены, но он остаётся полезен клиенту как фильтр
+(`#d`) для точечного query конкретной пары (subject, resource), не
+только для замены. PLAN.md формулировка "fold для kinds 3/30050/30051"
+читается с этой поправкой (30051 → 5051), не буквально.
+
+**2. Блокировка — новый `kind 10000` (NIP-51 Mute List).** TECH.md
+(F-CT-05) описывает ПОВЕДЕНИЕ (события заблокированных игнорируются),
+но не называет конкретный kind для синхронизации блок-листа между
+устройствами одного пользователя (мультиустройство — уже принятое
+требование проекта, NF-15). Стандартный NIP-51 kind 10000 (replaceable)
+выбран по прецеденту уже принятого использования стандартных NIP kind
+там, где применимо (0, 3, 10002) — не самодельный формат без причины.
+
+**3. Таблица `permissions` в `database.js` (этап 3) — не используется
+новым кодом.** Схема была зафиксирована ДО решения R6-5 (журнальная
+модель прав — решение ревизии 6.0, схема БД — этап 3, задолго до этого).
+Компаунд-ключ `[owner+subject+resource]` физически допускает только
+ОДНУ строку на пару — несовместим с журналом (много permission-событий
+на одну и ту же пару, разных `lamportTs`). Журнал живёт в уже
+существующей общей таблице `events` (журнальный G-Set, этап 3/4,
+фильтр `[pubkey+kind]`); материализованный результат `rebuildCache` —
+таблица `effectivePerms` (тот же файл, УЖЕ подходящая схема — один
+эффективный `mask` на `[owner+subject+resource]`, ровно то, что
+`rebuildCache` производит). Таблица `permissions` остаётся в файле
+(миграция версии Dexie-схемы ради удаления неиспользуемого поля —
+несоразмерный риск), но код её не читает и не пишет.
+
+**4. Явное сужение скоупа (по прецеденту `bootstrap.js`/`incremental-sync.js`).**
+Не в скоупе этого этапа:
+- F-CT-02, часть "чат архивируется" — `messaging`/`chat.js` не
+  существует (этап 24).
+- F-CT-02, часть "права отзываются" (каскад) — технически ВЫПОЛНИМО
+  уже сейчас (`engine.js` этапа 21 готов), но сознательно НЕ зашито
+  неявно внутрь `removeContact` — чистый domain-модуль не должен молча
+  оркестровать публикацию revoke-permission-событий поверх удаления
+  контакта из списка (тот же принцип, что и в `bitset.js`/`permissions.js`
+  этапа 21: домен не публикует события сам). Каскад — явная отдельная
+  операция orchestration-слоя (UI, этап 23): "удалить контакт" И "отозвать
+  права" — два явных вызова, не один неявный.
+- F-CT-04 (запрос профиля при добавлении контакта) — транспортная
+  операция (subscribe kind 0), UI/orchestration слой, этап 23.
+- NIP-09 (kind 5, F-EV-08/AC-17) — реализована ТОЛЬКО как чистая
+  проверочная функция (`validateDeletion`), без domain-специфичного
+  эффекта: ни contacts (kind 3), ни groups (kind 30050) физически не
+  нуждаются в kind 5 (оба replaceable — "удаление" это публикация новой
+  версии без записи), permission-журнал (kind 5051) НЕ должен допускать
+  удаления записей (противоречило бы цели R6-5 — сохранности истории
+  для аудита). Реальный потребитель `validateDeletion` — messaging/content,
+  этапы 24/28/30.
+
+### `src/domain/contacts/contacts.js`
+
+```js
+export function buildContactListEvent(privKey, pubkeys);
+// kind 3 (NIP-02), tags = pubkeys.map(pk => ["p", pk]), content = ""
+// -> подписанный NostrEvent
+
+export function parseContactListEvent(event);
+// -> string[] — pubkeys из тегов ["p", pubkey, ...]
+
+export function addContact(pubkeys, newPubkey);
+// -> новый массив (не мутирует), идемпотентно (уже есть -> тот же список без дублей)
+
+export function removeContact(pubkeys, pubkeyToRemove);
+// -> новый массив без указанного pubkey (без каскада — см. "Находки", п.4)
+
+export function buildMuteListEvent(privKey, pubkeys);
+// kind 10000 (NIP-51 Mute List), tags = pubkeys.map(pk => ["p", pk]), content = ""
+// -> подписанный NostrEvent
+
+export function parseMuteListEvent(event);
+// -> string[]
+
+export function isBlocked(blockedPubkeys, pubkey);
+// -> boolean, blockedPubkeys.includes(pubkey)
+```
+
+### `src/domain/contacts/groups.js`
+
+```js
+export function buildGroupEvent(privKey, { groupId, name, memberPubkeys });
+// kind 30050, tags = [["d", groupId]] (F-GR-04, d-tag = UUID группы, в открытом виде —
+// TECH.md §4.8: только владелец читает свои kind 30050, opaque-обфускация не нужна)
+// content = NIP-44(JSON.stringify({ name, memberPubkeys }), privKey, ownPubkey) — self-encrypt
+// -> подписанный NostrEvent
+
+export function parseGroupEvent(event, privKey);
+// decrypt content через NIP-44(event.content, privKey, event.pubkey), JSON.parse
+// -> { groupId (из d-tag), name, memberPubkeys }
+// content не расшифровывается/не валидный JSON -> throw (боевая граница, данные с relay)
+
+export function addMember(group, pubkey);
+// -> новый group-объект с добавленным pubkey в memberPubkeys (идемпотентно, без дублей)
+
+export function removeMember(group, pubkey);
+// -> новый group-объект без pubkey в memberPubkeys
+
+export function renameGroup(group, newName);
+// -> новый group-объект с изменённым name
+```
+
+F-GR-02 ("контакт в нескольких группах") не требует отдельной
+структуры — естественное следствие того, что группы независимы, один
+и тот же pubkey может присутствовать в `memberPubkeys` нескольких групп
+одновременно.
+
+### `src/domain/events/handlers.js`
+
+```js
+export async function foldContactList(event);
+// kind 3 -> parseContactListEvent -> транзакция: удалить все db.contacts
+// WHERE owner=event.pubkey, вставить строки {owner: event.pubkey, pubkey} для каждого
+// contact pubkey (replaceable — новая версия ПОЛНОСТЬЮ замещает старый список)
+
+export async function foldMuteList(event);
+// kind 10000 -> parseMuteListEvent -> аналогично foldContactList, таблица db.blockedContacts
+
+export async function foldGroup(event, privKey);
+// kind 30050 -> parseGroupEvent(event, privKey) -> транзакция:
+// upsert db.groups {owner: event.pubkey, id: groupId, name},
+// заменить db.groupMembers WHERE groupId=groupId новыми строками {groupId, pubkey}
+// для каждого memberPubkeys (replaceable — та же логика, что foldContactList)
+
+export function buildPermissionEvent(privKey, { subject, resource, allowMask = 0, denyMask = 0, lamportTs });
+// kind 5051 (см. "Находки", п.1), tags = [["d", opaqueDTag(deriveMasterSecret(privKey), 5051,
+// subject + ":" + resource)]] — derivation.js (этап 8), masterSecret вычисляется внутри,
+// не передаётся отдельным параметром (вызывающий код не обязан знать про него)
+// content = NIP-44(JSON.stringify({ subject, resource, allowMask, denyMask, lamportTs }), privKey, ownPubkey) — self-encrypt
+// lamportTs — параметр, НЕ вычисляется внутри (вызывающий код сам делает lamportClock.tick(),
+// по прецеденту DM/rumor.lamportTs, TECH.md §4.4 — часы не забота domain-модуля построения события)
+// -> подписанный NostrEvent
+
+export function parsePermissionEvent(event, privKey);
+// decrypt NIP-44(event.content, privKey, event.pubkey), JSON.parse ->
+// { subject, resource, allowMask, denyMask, lamportTs }
+// НЕ создаёт PermissionRecord сам (нет eventId в возвращаемом объекте) — вызывающий код
+// (rebuildEffectivePermissions) добавляет eventId = event.id и передаёт в createPermissionRecord
+
+export async function rebuildEffectivePermissions(ownerPubkey, privKey);
+// 1. db.events.where("[pubkey+kind]").equals([ownerPubkey, 5051]).toArray()
+// 2. для каждого: parsePermissionEvent(event, privKey) -> createPermissionRecord(
+//    { ...поля, eventId: event.id })
+// 3. cache = engine.rebuildCache(records) (этап 21, полный пересчёт — MVP-алгоритм,
+//    TECH.md §4.2; 10000 записей < 100мс уже подтверждено perf-тестом этапа 21)
+// 4. транзакция: удалить db.effectivePerms WHERE owner=ownerPubkey, вставить
+//    {owner, subject, resource, mask} для каждой пары в cache
+// НЕ вызывается на каждое единичное событие — вызывающий код (этап 23/handlers-диспетчер)
+// решает, когда пересчитывать (после батча fold, не после каждого mergeEvent)
+
+export function validateDeletion(deleteEvent, targetEvent);
+// F-EV-08/AC-17: deleteEvent.kind === 5 И deleteEvent.pubkey === targetEvent.pubkey
+// -> boolean. Чистая функция, без побочных эффектов, без domain-эффекта (см. "Находки", п.4) —
+// вызывающий код решает, что делать с true/false для конкретного домена
+```
