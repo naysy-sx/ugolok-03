@@ -218,6 +218,18 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
 	const draftTimerRef = useRef(null);
+	// Упущение пользователя (не баг): при входе в чат нужна автопрокрутка к последнему
+	// сообщению. bottomRef — сентинел ПОСЛЕ последнего сообщения; scrollIntoView() сам
+	// находит реально скроллящегося предка (в этой вёрстке им оказался document, а не
+	// внутренний div с overflowY:auto — тот никогда не переполняется, т.к. его height:100%
+	// считается от minHeight-предка и растёт вместе с контентом). scrollTop на конкретном
+	// div здесь был бы no-op — подтверждено живым E2E при вёрстке с реальным overflow.
+	// pendingScrollRef взводится при смене contactPubkey (список messages грузится
+	// АСИНХРОННО отдельным эффектом ниже) — прокрутка срабатывает один раз, когда messages
+	// реально обновится, а не на каждое последующее фоновое сообщение (иначе выдёргивала
+	// бы пользователя, читающего историю выше).
+	const bottomRef = useRef(null);
+	const pendingScrollRef = useRef(false);
 	// Найдено живым E2E-прогоном (мультиаккаунт, не гипотеза): асинхронная загрузка
 	// черновика при монтировании МОЖЕТ резолвиться ПОСЛЕ того, как пользователь уже начал
 	// печатать — тогда setText(draft) стирает уже введённый текст. В обычном человеческом
@@ -231,6 +243,20 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		// собеседника (refreshProfiles), а не только "если ещё не кэширован".
 		refreshProfiles([contactPubkey], fetchProfiles).catch(() => {});
 	}, [contactPubkey]);
+
+	useEffect(() => {
+		pendingScrollRef.current = true;
+	}, [contactPubkey]);
+
+	useEffect(() => {
+		// messages стартует с [] и этот эффект тоже срабатывает на самом первом рендере —
+		// длину проверяем, чтобы не погасить pendingScrollRef на пустом начальном значении
+		// ДО того, как асинхронный loadChatWindow реально подгрузит историю.
+		if (pendingScrollRef.current && messages.length > 0 && bottomRef.current) {
+			bottomRef.current.scrollIntoView({ block: "end" });
+			pendingScrollRef.current = false;
+		}
+	}, [messages]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -391,6 +417,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 							/>
 						);
 					})}
+					<div ref={bottomRef} />
 				</div>
 			</div>
 
