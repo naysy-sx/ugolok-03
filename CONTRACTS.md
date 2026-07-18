@@ -1595,7 +1595,8 @@ export function createRelayConnection(url, options = {});
 // -> {
 //   getState(): string,                      // текущее состояние автомата (см. DESIGN.md таблицу)
 //   connect(): void,                          // CONNECT -> connecting; сама заводит WS, сама транслирует WS-события open/close/error в OPEN/CLOSE/ERROR автомата
-//   send(msgArray): void,                     // JSON.stringify(msgArray) -> ws.send; throw, если state не "connected"/"subscribed"
+//   send(msgArray): void,                     // JSON.stringify(msgArray) -> ws.send; throw, если state не "connected"/"subscribed"/"authenticating"
+//     (правка контракта, этап 17: "authenticating" тоже разрешён — relay-auth.js обязан отправить AUTH-ответ именно в этом состоянии, WS реально открыт)
 //   reportAuthChallenge(): void,              // -> transition(..., "AUTH_CHALLENGE"); вызывает relay-auth.js (этап 17), разобрав сырое AUTH-сообщение
 //   reportAuthOk(): void,
 //   reportAuthFail(): void,
@@ -1630,3 +1631,37 @@ export function createEndpointList(urls);
 код (этап 18, publisher/subscriber — первый реальный потребитель),
 не зашита сюда: у `transport.js` этого этапа ещё нет достаточно
 информации о реальных паттернах отказов, чтобы не гадать (см. DESIGN.md).
+
+## Этап 17 — NIP-42 AUTH
+
+Обоснование пробела/решения пользователя — DESIGN.md, раздел "Этап 17".
+
+### `src/core/transport/relay-auth.js`
+
+```js
+export function buildAuthEvent(challenge, relayUrl, privKey);
+// -> NostrEvent (kind 22242, подписанное, sign() из sign.js)
+// tags: [["relay", relayUrl], ["challenge", challenge]], content: "", created_at: Math.floor(Date.now()/1000)
+
+export function createAuthHandler(connection, relayUrl, privKey, options = {});
+// connection — объект от createRelayConnection (relay-pool.js, этап 16)
+// options: { timeoutMs = 10000 }
+// -> function handleMessage(msgArray): boolean
+//    ["AUTH", challenge]                      -> connection.reportAuthChallenge(); buildAuthEvent(...); connection.send(["AUTH", authEvent]); запускает таймер timeoutMs -> connection.reportAuthTimeout(), если OK не пришёл; возвращает true
+//    ["OK", <id ожидаемого auth-события>, ok, msg] -> connection.reportAuthOk()/reportAuthFail() (гасит таймер); возвращает true
+//    любое другое сообщение -> false (не обработано, пусть смотрит следующий обработчик в цепочке — publisher.js/subscriber.js, этап 18)
+```
+
+Не владеет `onMessage` монопольно — возвращает функцию-перехватчик,
+вызывающий код (этап 18+) комбинирует несколько таких функций в
+цепочку по паттерну "первый, кто вернул true — обработал".
+
+### Инфраструктура: whitelist на запись (правка `server/strfry/`)
+
+Решение пользователя (DESIGN.md) — whitelist по `event.pubkey`, не по
+NIP-42 `authed`. Добавлен `server/strfry/whitelist-plugin.mjs`
+(Node-скрипт, протокол plugin — построчный JSON stdin/stdout, по
+`docs/plugins.md` strfry) + `server/strfry/whitelist.json` (список
+разрешённых hex-pubkey, версionируется — тестовые фикстуры, не боевой
+секрет). `strfry.conf`: `relay.writePolicy.plugin =
+"./whitelist-plugin.mjs"`.

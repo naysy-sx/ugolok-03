@@ -12,6 +12,11 @@ const TRANSITIONS = {
     SUBSCRIBE_OK: "subscribed",
   },
   authenticating: {
+    // Повторный challenge поверх уже идущей аутентификации — самопереход
+    // (сохранено из исходного автомата TECH.md §9.3). NIP-42 прямо допускает
+    // новый challenge в любой момент; relay-auth.js обязан отправить ответ
+    // именно на ПОСЛЕДНИЙ — старый теряет силу (см. DESIGN.md/тесты этапа 17).
+    AUTH_CHALLENGE: "authenticating",
     AUTH_OK: "connected",
     AUTH_FAIL: "connected",
     TIMEOUT: "connected",
@@ -89,7 +94,11 @@ export function createRelayConnection(url, options = {}) {
   }
 
   function send(msgArray) {
-    if (state !== "connected" && state !== "subscribed") {
+    // "authenticating" тоже допустим: именно в этом состоянии relay-auth.js
+    // (этап 17) обязан отправить AUTH-ответ на challenge — WS реально открыт
+    // во всех трёх состояниях, различие только в том, что приложение считает
+    // уместным делать сейчас.
+    if (state !== "connected" && state !== "subscribed" && state !== "authenticating") {
       throw new Error(`relay-pool: send() недоступен в состоянии "${state}"`);
     }
     ws.send(JSON.stringify(msgArray));

@@ -109,6 +109,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 | 14 (шифрование БД + FSM) | 123.10 КБ | +0.01 | `db-crypto.js`/`encrypted-table.js`/`machine.js` тоже вне app-графа — реально применяются доменными модулями начиная с этапа 21+ |
 | 15 (P-SPIKE) | 124.56 КБ | +1.46 | `synthetic-fixtures.js` + P-SPIKE хук в diagnostics.jsx впервые подключили `db-crypto.js`/`encrypted-table.js` к app-графу (тестовый код, но бандлится вместе с приложением — diagnostics.jsx часть основного бандла); `machine.js` по-прежнему вне графа |
 | 16 (relay pool + транспорт) | 124.56 КБ | +0 | `relay-pool.js`/`transport.js` вне app-графа — реальный потребитель (publisher/subscriber, bootstrap) с этапа 18-19 |
+| 17 (NIP-42 AUTH) | 124.56 КБ | +0 | `relay-auth.js` тоже вне app-графа по той же причине |
 
 **Важная находка при переработке плана:** бюджет TECH.md §7.2
 (~190–250 КБ итого, запас 30–90 КБ) посчитан ДО решения профиля B
@@ -171,7 +172,7 @@ stand-in профиля из довеска к этапу 12 → этап 20).
 - [x] Этап 16. **Relay pool + pluggable транспорт** [алгоритмика для автомата соединения (§9.3) — формализовать transitions до кода] — TECH.md §13.5/§4.1/§4.1b: автомат соединений (disconnected→connecting→authenticating→connected→subscribed), реконнект с backoff; абстракция транспорта: список endpoint, WSS через фронтинг (CDN/обратный прокси), фоллбэк при блокировке (NF-17, AC-TRANSPORT). Тестовый relay поднят заранее (`server/strfry/`, strfry — тот же, что в CLAUDE.md для продакшена, не мок; см. CONTRACTS.md "Инфраструктура"). **Эмпирическая находка оттуда, важна для дизайна автомата:** `auth.enabled=true` НЕ гарантирует, что relay реально пришлёт AUTH-challenge при коннекте (принуждение — отдельный `writePolicy.plugin`, пуст сейчас) — переход `authenticating` обязан штатно (не как edge-case/таймаут) работать и в ветке "challenge не пришёл вовсе"
     - `src/core/transport/relay-pool.js`, `src/core/transport/transport.js`
 
-- [ ] Этап 17. **NIP-42 AUTH** [рутина] — challenge → sign kind 22242 → response; replay-окно ±60с (AC-14); не-whitelist pubkey получает `OK auth false` и далее не подключается
+- [x] Этап 17. **NIP-42 AUTH** [рутина] — challenge → sign kind 22242 → response. **Правка контракта по итогам исследования (DESIGN.md/CONTRACTS.md, решение пользователя):** whitelist на запись (AC-14) реализован по `event.pubkey` в write-policy плагине relay, НЕ через NIP-42 — strfry архитектурно не привязывает их друг к другу (подтверждено исходниками и офиц. документацией). NIP-42 AUTH реализован честно и полностью (нужен для protected events/будущего read-gating), но провал AUTH не блокирует соединение целиком — правка автомата этапа 16
     - `src/core/transport/relay-auth.js`
 
 - [ ] Этап 18. **Publisher + subscriber + outbox** [рутина] — публикация событий с batching (100 evt / 200мс); подписки по фильтрам; outbox: drain при восстановлении сети (offline → online → автодоставка, AC-09)

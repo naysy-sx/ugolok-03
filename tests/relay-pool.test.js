@@ -167,3 +167,13 @@ test("повторный connect() на уже подключённом соед
 	assert.equal(conn.getState(), "connected");
 	assert.throws(() => conn.connect());
 });
+
+test("send() также разрешён в authenticating (нужно для отправки AUTH-ответа, этап 17)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.reportAuthChallenge();
+	assert.equal(conn.getState(), "authenticating");
+	assert.doesNotThrow(() => conn.send(["AUTH", { kind: 22242 }]));
+});
