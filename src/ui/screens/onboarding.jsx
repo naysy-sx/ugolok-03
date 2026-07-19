@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
 import { encryptAndStore, decryptPrivateKey, listAccounts } from "../../core/crypto/keystore.js";
+import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { login, setRememberedAccountId } from "../signals/auth.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
@@ -36,13 +37,24 @@ export default function Onboarding() {
 
 	useEffect(() => {
 		(async () => {
-			const list = await listAccounts();
-			setAccounts(list);
-			if (list.length > 0) setSelectedAccountId(list[0].id);
-			setAuthTab(list.length > 0 ? "login" : "register");
-			setStep("main");
+			try {
+				const list = await listAccounts();
+				setAccounts(list);
+				if (list.length > 0) setSelectedAccountId(list[0].id);
+				setAuthTab(list.length > 0 ? "login" : "register");
+				setStep("main");
+			} catch {
+				// Дев-стадия: несовместимая со старой схемой локальная база (см. database.js,
+				// resetLocalDatabase) — без этого шаг остался бы на "Проверка…" навсегда.
+				setStep("db-error");
+			}
 		})();
 	}, []);
+
+	async function handleResetDatabase() {
+		await resetLocalDatabase();
+		location.reload();
+	}
 
 	async function handleRegisterSubmit(e) {
 		e.preventDefault();
@@ -136,6 +148,22 @@ export default function Onboarding() {
 
 			{step === "loading" && (
 				<p style={{ color: "var(--muted)" }}>Проверка…</p>
+			)}
+
+			{step === "db-error" && (
+				<div class="flow">
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						Не удалось открыть локальную базу данных — возможно, она осталась в
+						несовместимом формате после обновления приложения.
+					</p>
+					<p style={{ color: "var(--muted)" }}>
+						Это стирает все локальные данные на этом устройстве (аккаунты,
+						переписку, каналы) и потребует повторного входа или регистрации.
+					</p>
+					<button type="button" onClick={handleResetDatabase}>
+						Очистить локальные данные и начать заново
+					</button>
+				</div>
 			)}
 
 			{step === "main" && (

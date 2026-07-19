@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { db } from "../src/core/store/database.js";
+import { db, resetLocalDatabase } from "../src/core/store/database.js";
 
 const EXPECTED_TABLES = [
 	"events",
@@ -190,5 +190,25 @@ test("channelMessages (этап 32, owner-scoped с рождения): сост�
 		channelMessages.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+channelId+createdAt"),
 		"channelMessages: индекс [ownerPubkey+channelId+createdAt] для windowed-загрузки чата канала",
 	);
+	db.close();
+});
+
+// Найдено живым использованием (не юнит-тестом): реальный браузер с непустыми
+// таблицами, чей primary key менялся между версиями (channels/posts/comments),
+// падает на db.open() с UpgradeError "Not yet support for changing primary key" —
+// Onboarding/Unlock зависали на "Проверка…" навсегда. resetLocalDatabase — способ
+// восстановления (снести базу целиком, дев-стадия не подразумевает миграции).
+// Тест — последний в файле: db.delete() уничтожает данные, следующие файлы
+// запускаются в отдельном процессе node --test и не разделяют это состояние.
+test("resetLocalDatabase: удаляет базу, повторный db.open() создаёт её заново с полной схемой", async () => {
+	await db.open();
+	db.close();
+	await resetLocalDatabase();
+
+	await db.open();
+	const names = db.tables.map((t) => t.name);
+	for (const name of EXPECTED_TABLES) {
+		assert.ok(names.includes(name), `после сброса нет таблицы "${name}"`);
+	}
 	db.close();
 });

@@ -112,3 +112,15 @@ db.version(6).stores({
 db.version(7).stores({
   channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt]"
 });
+
+// Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
+// posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
+// db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных
+// к миграции нет" (см. version(5)/(6) комментарии) — но живой браузер, где реально
+// тестировали фичи (не пустой fake-indexeddb юнит-тестов), эту непустоту нарушает.
+// Найдено живым использованием: Onboarding/Unlock зависали на "Проверка…" навсегда
+// (await listAccounts() падал необработанным rejection'ом). Единственный выход —
+// снести локальную базу целиком, данные всё равно не в проде.
+export async function resetLocalDatabase() {
+  await db.delete();
+}

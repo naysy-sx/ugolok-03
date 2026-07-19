@@ -2,9 +2,11 @@ import { useState, useEffect } from "preact/hooks";
 import { decryptPrivateKey, listAccounts } from "../../core/crypto/keystore.js";
 import { login, setRememberedAccountId, getRememberedAccountId } from "../signals/auth.js";
 import { navigate } from "../router.js";
+import { resetLocalDatabase } from "../../core/store/database.js";
 
 export default function Unlock() {
 	const [loading, setLoading] = useState(true);
+	const [dbError, setDbError] = useState(false);
 	const [accounts, setAccounts] = useState([]);
 	const [selectedAccountId, setSelectedAccountId] = useState("");
 	const [password, setPassword] = useState("");
@@ -12,14 +14,25 @@ export default function Unlock() {
 
 	useEffect(() => {
 		(async () => {
-			const list = await listAccounts();
-			setAccounts(list);
-			const remembered = getRememberedAccountId();
-			const match = list.find((a) => a.id === remembered);
-			setSelectedAccountId(match ? match.id : (list[0]?.id ?? ""));
-			setLoading(false);
+			try {
+				const list = await listAccounts();
+				setAccounts(list);
+				const remembered = getRememberedAccountId();
+				const match = list.find((a) => a.id === remembered);
+				setSelectedAccountId(match ? match.id : (list[0]?.id ?? ""));
+				setLoading(false);
+			} catch {
+				// Дев-стадия: несовместимая со старой схемой локальная база — та же ситуация,
+				// что onboarding.jsx (см. database.js, resetLocalDatabase).
+				setDbError(true);
+			}
 		})();
 	}, []);
+
+	async function handleResetDatabase() {
+		await resetLocalDatabase();
+		location.reload();
+	}
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -45,9 +58,25 @@ export default function Unlock() {
 				<h1>Разблокировка</h1>
 			</header>
 
-			{loading && <p style={{ color: "var(--muted)" }}>Проверка…</p>}
+			{loading && !dbError && <p style={{ color: "var(--muted)" }}>Проверка…</p>}
 
-			{!loading && accounts.length === 0 && (
+			{dbError && (
+				<div class="flow">
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						Не удалось открыть локальную базу данных — возможно, она осталась в
+						несовместимом формате после обновления приложения.
+					</p>
+					<p style={{ color: "var(--muted)" }}>
+						Это стирает все локальные данные на этом устройстве (аккаунты,
+						переписку, каналы) и потребует повторного входа или регистрации.
+					</p>
+					<button type="button" onClick={handleResetDatabase}>
+						Очистить локальные данные и начать заново
+					</button>
+				</div>
+			)}
+
+			{!loading && !dbError && accounts.length === 0 && (
 				<div class="flow">
 					<p style={{ color: "var(--muted)" }}>На этом устройстве ещё нет ни одного аккаунта.</p>
 					<button type="button" onClick={() => navigate("/onboarding")}>
