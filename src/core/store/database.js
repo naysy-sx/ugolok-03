@@ -140,6 +140,21 @@ db.version(10).stores({
   channelVisibilityGroups: "[ownerPubkey+channelId+groupId], [ownerPubkey+channelId], [ownerPubkey+groupId]"
 });
 
+// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (пользователь, мультиаккаунт в разных вкладках
+// одного браузера/origin) — clock (Lamport-часы, этап 19) НИКОГДА не был owner-scoped,
+// в отличие от messages/mlsGroups/ownKeyPackage/chatSyncState (db.version(4)) и
+// channels/channelKeys/... (db.version(5)/(6)) — тот же класс пробела, пропущенный
+// при том рефакторинге. Один глобальный {id:'lamport'} на ВСЁ устройство означал, что
+// computeInitialLamportValue() (lamport.js) искала max(lamportTs) по messages ВСЕХ
+// локальных аккаунтов разом, а persistLamportValue() писала в ОДНУ строку — второй
+// локальный аккаунт (второй пользователь переписки, открытый в соседней вкладке)
+// перетирал тики первого, путая сортировку истории чата (то же следствие, что
+// найденный на этапе 19-25 баг "часы не синхронизировались", только через другой
+// канал — общий персист вместо отсутствующего receive()).
+db.version(11).stores({
+  clock: "[ownerPubkey+id]"
+});
+
 // Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
 // posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
 // db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных

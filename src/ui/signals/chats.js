@@ -41,7 +41,7 @@ export async function sendChatMessageAction(
 	attachment,
 ) {
 	await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchKeyPackage);
-	await refreshGroupMessageSubscription(ownerPubkey, privKey, publish);
+	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
 	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment);
 }
 

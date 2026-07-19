@@ -2536,3 +2536,50 @@ contactRequests-запись/rebuildReadStatus).
 materialized-view таблицы с каким-либо контентом зашифрованы dbKey.
 
 Regression: `npm test` 649/649. `npm run build` ~242 КБ gzip.
+
+## Этап 42-довесок. Owner-scoping для clock (Lamport-часы)
+
+Пользователь проверил AC-16 (шифрование подтверждено, всё ок) и сразу
+же нашёл ДРУГОЙ баг: переписка двумя ЛОКАЛЬНЫМИ аккаунтами в разных
+вкладках одного браузера — сообщения второго участника приходили
+с опозданием и путались местами в истории чата ("опять" — похоже на
+уже чинившийся класс проблемы, этап 19-25).
+
+Диагностика: живой прогон send→receive→reply→receive (4 сообщения,
+реальные sendMessage/receiveGroupMessageEvent/getChatHistory) в
+scratchpad-скрипте подтвердил, что MLS + Lamport-синхронизация САМИ
+ПО СЕБЕ корректны — первая попытка воспроизвести баг провалилась
+из-за ошибки в собственном тестовом скрипте (стухшая переменная
+состояния Боба), не из-за приложения.
+
+Реальная причина — чтением кода: `clock` (database.js, db.version(1))
+единственная таблица во ВСЕЙ схеме, для которой owner-scoping НИКОГДА
+не делался (тот же класс пробела уже закрывался трижды для других
+таблиц — db.version(4)/(5)/(6)). Один глобальный {id:'lamport'} на
+устройство; computeInitialLamportValue() считала max(lamportTs) по
+messages ВСЕХ локальных аккаунтов без фильтра владельца.
+
+Попутным аудитом найдены и исправлены два реальных пропуска
+аргументов (не проявлялись на практике, но были миной): (1)
+rebuildReadStatus(pubkeyHex, privKey) в connect() — недостающий
+dbKey, пропущен на этапе 42; (2) refreshGroupMessageSubscription
+вызывался с 3 аргументами вместо 4 в chats.js/inbox.js — publish
+сдвигался в dbKey, publish терялся; не проявлялось, т.к.
+groupMessageSubscriber — singleton, обычно уже создан правильно
+раньше, но был миной при пересоздании после reconnect.
+
+Фикс: db.version(11) — clock: "[ownerPubkey+id]"; lamport.js —
+computeInitialLamportValue(ownerPubkey)/persistLamportValue(ownerPubkey,
+value); transport.js — module-level lamportClock дополнен
+lamportClockOwner (тот же приём, что connectedForPubkey для WS),
+пересоздаётся при смене владельца в той же вкладке; nextLamportTick/
+receiveLamportTick получили ownerPubkey первым параметром.
+
+Добавлен адверсарный тест в lamport.test.js: чужие сообщения другого
+owner не влияют на счётчик текущего.
+
+Живой E2E пользователем не переповторён в этой сессии (нет
+browser-инструмента) — фикс проверен построчным чтением каждого
+вызывающего места + regression.
+
+Regression: `npm test` 651/651. `npm run build` ~242 КБ gzip.

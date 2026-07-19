@@ -111,14 +111,14 @@ test("runBootstrap: дубликат (уже в events) не увеличива�
 });
 
 test("runBootstrap: после EOSE lamportValue вычислен и персистирован в clock", async () => {
-	await db.table("messages").add({ chatId: "c1", lamportTs: 7, senderPubkey: "pk", id: "m1", status: "sent", deleted: false });
+	await db.table("messages").add({ ownerPubkey: PUBKEY, chatId: "c1", lamportTs: 7, senderPubkey: "pk", id: "m1", status: "sent", deleted: false });
 	const { conn, ws } = setupConnected();
 	const promise = runBootstrap(conn, PUBKEY, { verifyBatch: acceptAllVerify, subId: "boot" });
 	ws._emit(["EOSE", "boot"]);
 
 	const result = await promise;
 	assert.equal(result.lamportValue, 8);
-	const row = await db.table("clock").get("lamport");
+	const row = await db.table("clock").get([PUBKEY, "lamport"]);
 	assert.equal(row.value, 8);
 });
 

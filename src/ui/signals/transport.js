@@ -157,7 +157,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
-	await rebuildReadStatus(pubkeyHex, privKey);
+	await rebuildReadStatus(pubkeyHex, privKey, dbKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publisher.publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
@@ -341,19 +341,26 @@ export async function publish(event) {
 // контакт/группу). Ленивая инициализация: computeInitialLamportValue() читает
 // фактические данные при первом обращении, не доверяет только persisted-значению
 // (тот же принцип, что lamport.js, этап 19).
+// lamportClockOwner (найдено реальным использованием, мультиаккаунт в разных вкладках
+// ОДНОГО браузера/origin — тот же класс пробела, что owner-scoping messages/mlsGroups
+// на этапе 25): без сброса при смене владельца этот module-level singleton пережил бы
+// логин ДРУГИМ локальным аккаунтом в той же вкладке — второй пользователь получал бы
+// тики, продолжающие счётчик первого.
 let lamportClock = null;
+let lamportClockOwner = null;
 
-async function ensureLamportClock() {
-	if (!lamportClock) {
-		lamportClock = createLamportClock(await computeInitialLamportValue());
+async function ensureLamportClock(ownerPubkey) {
+	if (!lamportClock || lamportClockOwner !== ownerPubkey) {
+		lamportClock = createLamportClock(await computeInitialLamportValue(ownerPubkey));
+		lamportClockOwner = ownerPubkey;
 	}
 	return lamportClock;
 }
 
-export async function nextLamportTick() {
-	const clock = await ensureLamportClock();
+export async function nextLamportTick(ownerPubkey) {
+	const clock = await ensureLamportClock(ownerPubkey);
 	const value = clock.tick();
-	await persistLamportValue(value);
+	await persistLamportValue(ownerPubkey, value);
 	return value;
 }
 
@@ -365,10 +372,10 @@ export async function nextLamportTick() {
 // getChatHistory/loadChatWindow (lamportTs, senderPubkey, id) — реальный баг,
 // найденный пользователем, не гипотетический. Вызывается на КАЖДОЕ входящее
 // (живое kind 445 сообщение и зеркало) — receive() гарантирует value > max(текущий, remote).
-export async function receiveLamportTick(remoteLamportTs) {
-	const clock = await ensureLamportClock();
+export async function receiveLamportTick(ownerPubkey, remoteLamportTs) {
+	const clock = await ensureLamportClock(ownerPubkey);
 	const value = clock.receive(remoteLamportTs);
-	await persistLamportValue(value);
+	await persistLamportValue(ownerPubkey, value);
 	return value;
 }
 
@@ -624,7 +631,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
 						// Найдено реальным использованием — синхронизация Lamport-часов на входящее
 						// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
-						if (receivedResult) await receiveLamportTick(receivedResult.lamportTs);
+						if (receivedResult) await receiveLamportTick(ownerPubkey, receivedResult.lamportTs);
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
 						const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
@@ -711,7 +718,7 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 						// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
 						// отдельно от WebSocket-обвязки, см. mirror.test.js).
 						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
-						await receiveLamportTick(payload.lamportTs);
+						await receiveLamportTick(ownerPubkey, payload.lamportTs);
 					} catch (e) {
 						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
 					}

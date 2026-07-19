@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../src/core/sync/lamport.js";
 
+const OWNER_PUBKEY = "owner-pub";
+
 before(async () => {
 	await db.open();
 });
@@ -50,36 +52,53 @@ test("createLamportClock: initialValue по умолчанию 0", () => {
 
 test("computeInitialLamportValue: DoD PLAN.md — 10 синтетических сообщений lamportTs 1..10 -> 11", async () => {
 	for (let ts = 1; ts <= 10; ts++) {
-		await db.table("messages").add({ chatId: "c1", lamportTs: ts, senderPubkey: "pk", id: `id-${ts}`, status: "sent", deleted: false });
+		await db.table("messages").add({ ownerPubkey: OWNER_PUBKEY, chatId: "c1", lamportTs: ts, senderPubkey: "pk", id: `id-${ts}`, status: "sent", deleted: false });
 	}
-	const value = await computeInitialLamportValue();
+	const value = await computeInitialLamportValue(OWNER_PUBKEY);
 	assert.equal(value, 11);
 });
 
 test("computeInitialLamportValue: пустая таблица messages -> 1 (max(0, -Infinity-подобное) + 1)", async () => {
-	const value = await computeInitialLamportValue();
+	const value = await computeInitialLamportValue(OWNER_PUBKEY);
 	assert.equal(value, 1);
 });
 
 test("computeInitialLamportValue: не зависит от порядка вставки, только от максимума", async () => {
 	const values = [5, 1, 9, 3, 7];
 	for (const ts of values) {
-		await db.table("messages").add({ chatId: "c1", lamportTs: ts, senderPubkey: "pk", id: `id-${ts}`, status: "sent", deleted: false });
+		await db.table("messages").add({ ownerPubkey: OWNER_PUBKEY, chatId: "c1", lamportTs: ts, senderPubkey: "pk", id: `id-${ts}`, status: "sent", deleted: false });
 	}
-	const value = await computeInitialLamportValue();
+	const value = await computeInitialLamportValue(OWNER_PUBKEY);
 	assert.equal(value, 10);
 });
 
-test("persistLamportValue -> записывает {id:'lamport', value} в таблицу clock", async () => {
-	await persistLamportValue(42);
-	const row = await db.table("clock").get("lamport");
-	assert.deepEqual(row, { id: "lamport", value: 42 });
+// AC-16-довесок (найдено пользователем: мультиаккаунт в разных вкладках одного
+// браузера/origin) — второй локальный аккаунт НЕ должен влиять на max(lamportTs)
+// первого, иначе тики двух аккаунтов пересекаются и путают сортировку истории чата.
+test("computeInitialLamportValue: owner-scoping — не путает сообщения РАЗНЫХ локальных аккаунтов на одном устройстве", async () => {
+	await db.table("messages").add({ ownerPubkey: OWNER_PUBKEY, chatId: "c1", lamportTs: 3, senderPubkey: "pk", id: "id-1", status: "sent", deleted: false });
+	await db.table("messages").add({ ownerPubkey: "other-owner-pub", chatId: "c1", lamportTs: 999, senderPubkey: "pk", id: "id-2", status: "sent", deleted: false });
+	const value = await computeInitialLamportValue(OWNER_PUBKEY);
+	assert.equal(value, 4, "чужие (other-owner-pub) сообщения не должны влиять на счётчик этого владельца");
+});
+
+test("persistLamportValue -> записывает {ownerPubkey, id:'lamport', value} в таблицу clock", async () => {
+	await persistLamportValue(OWNER_PUBKEY, 42);
+	const row = await db.table("clock").get([OWNER_PUBKEY, "lamport"]);
+	assert.deepEqual(row, { ownerPubkey: OWNER_PUBKEY, id: "lamport", value: 42 });
 });
 
 test("persistLamportValue дважды подряд — обновляет, не дублирует запись", async () => {
-	await persistLamportValue(1);
-	await persistLamportValue(2);
-	const rows = await db.table("clock").toArray();
+	await persistLamportValue(OWNER_PUBKEY, 1);
+	await persistLamportValue(OWNER_PUBKEY, 2);
+	const rows = await db.table("clock").where("ownerPubkey").equals(OWNER_PUBKEY).toArray();
 	assert.equal(rows.length, 1);
 	assert.equal(rows[0].value, 2);
+});
+
+test("persistLamportValue: РАЗНЫЕ владельцы — независимые строки, не перезаписывают друг друга", async () => {
+	await persistLamportValue(OWNER_PUBKEY, 7);
+	await persistLamportValue("other-owner-pub", 100);
+	assert.equal((await db.table("clock").get([OWNER_PUBKEY, "lamport"])).value, 7);
+	assert.equal((await db.table("clock").get(["other-owner-pub", "lamport"])).value, 100);
 });

@@ -10,7 +10,7 @@ export async function refreshInboxRequests(ownerPubkey, dbKey) {
 // сразу следом (тот же принцип, что ensureChatEstablished, этап 24).
 export async function acceptInboxRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, refreshGroupMessageSubscription, publish) {
 	await acceptInboxRequest(ownerPubkey, dbKey, senderPubkey);
-	await refreshGroupMessageSubscription(ownerPubkey, privKey, publish);
+	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
 	openChat(senderPubkey);
 }
 

@@ -33,8 +33,8 @@ export async function runBootstrap(connection, pubkey, options = {}) {
     subscriber.subscribe(subId, [{ authors: [pubkey] }, { "#p": [pubkey], kinds: [30053] }]);
   });
 
-  const lamportValue = await computeInitialLamportValue();
-  await persistLamportValue(lamportValue);
+  const lamportValue = await computeInitialLamportValue(pubkey);
+  await persistLamportValue(pubkey, lamportValue);
   await setSyncState(connection.getUrl(), Math.floor(Date.now() / 1000));
 
   return { addedCount, lamportValue };

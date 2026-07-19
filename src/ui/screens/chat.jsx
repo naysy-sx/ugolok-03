@@ -484,7 +484,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			const attachment = await buildOutgoingAttachment();
 			setUploadingAttachment(false);
 
-			const lamportTs = await nextLamportTick();
+			const lamportTs = await nextLamportTick(ownerPubkey);
 			await sendChatMessageAction(
 				ownerPubkey,
 				privKey,
@@ -519,7 +519,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		busyRef.current = true;
 		setBusy(true);
 		try {
-			const lamportTs = await nextLamportTick();
+			const lamportTs = await nextLamportTick(ownerPubkey);
 			await deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish);
 			await reloadWindow();
 		} catch (err) {
@@ -560,7 +560,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		busyRef.current = true;
 		setBusy(true);
 		try {
-			const lamportTs = await nextLamportTick();
+			const lamportTs = await nextLamportTick(ownerPubkey);
 			await editChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish);
 			await reloadWindow();
 		} catch (err) {

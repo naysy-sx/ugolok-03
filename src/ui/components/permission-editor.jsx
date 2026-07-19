@@ -36,7 +36,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 			return;
 		}
 		try {
-			const lamportTs = await nextLamportTick();
+			const lamportTs = await nextLamportTick(ownerPubkey);
 			const event = buildPermissionEvent(privKey, {
 				subject,
 				resource: resourceInput,
