@@ -23,8 +23,8 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	const [busy, setBusy] = useState(false);
 
 	async function refresh() {
-		setReports(await listReports(ownerPubkey, channelId));
-		setStats(await getModerationStats(ownerPubkey, channelId));
+		setReports(await listReports(ownerPubkey, dbKey, channelId));
+		setStats(await getModerationStats(ownerPubkey, dbKey, channelId));
 		setBanned(await listBannedMembers(ownerPubkey, channelId));
 	}
 

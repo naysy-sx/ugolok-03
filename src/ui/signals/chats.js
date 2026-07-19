@@ -64,10 +64,10 @@ export async function editChatMessageAction(ownerPubkey, privKey, dbKey, contact
 	return editMessage(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish);
 }
 
-export async function markChatReadAction(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish) {
-	return markChatAsRead(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish);
+export async function markChatReadAction(ownerPubkey, privKey, dbKey, contactPubkey, lastReadLamportTs, publish) {
+	return markChatAsRead(ownerPubkey, privKey, dbKey, contactPubkey, lastReadLamportTs, publish);
 }
 
-export async function saveChatDraftAction(ownerPubkey, privKey, contactPubkey, text, publish) {
-	return saveDraft(ownerPubkey, privKey, contactPubkey, text, publish);
+export async function saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, text, publish) {
+	return saveDraft(ownerPubkey, privKey, dbKey, contactPubkey, text, publish);
 }

@@ -35,8 +35,8 @@ after(() => {
 });
 
 test("refreshInboxRequests: возвращает owner-scoped список", async () => {
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, new Uint8Array([1, 2, 3]), 100);
-	const rows = await refreshInboxRequests(ALICE_PUB);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, new Uint8Array([1, 2, 3]), 100);
+	const rows = await refreshInboxRequests(ALICE_PUB, DB_KEY);
 	assert.equal(rows.length, 1);
 	assert.equal(rows[0].senderPubkey, STRANGER_PUB);
 });
@@ -59,7 +59,7 @@ test("acceptInboxRequestAction: присоединяется к MLS-группе
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);
 	const welcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, welcomeWireBytes, rumor.created_at);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, welcomeWireBytes, rumor.created_at);
 
 	let refreshCalls = 0;
 	const refreshGroupMessageSubscription = async () => {
@@ -69,12 +69,12 @@ test("acceptInboxRequestAction: присоединяется к MLS-группе
 
 	assert.equal(refreshCalls, 1, "refreshGroupMessageSubscription обязана быть вызвана (находка 3)");
 	assert.equal(activeChatPubkey.value, STRANGER_PUB, "должен переключить UI на новый чат");
-	assert.equal((await refreshInboxRequests(ALICE_PUB)).length, 0, "запись должна быть удалена");
+	assert.equal((await refreshInboxRequests(ALICE_PUB, DB_KEY)).length, 0, "запись должна быть удалена");
 });
 
 test("rejectInboxRequestAction: удаляет запись, не создаёт MLS-группу", async () => {
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, new Uint8Array([1]), 100);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, new Uint8Array([1]), 100);
 	await rejectInboxRequestAction(ALICE_PUB, STRANGER_PUB);
-	assert.equal((await refreshInboxRequests(ALICE_PUB)).length, 0);
+	assert.equal((await refreshInboxRequests(ALICE_PUB, DB_KEY)).length, 0);
 	assert.equal(await db.table("mlsGroups").count(), 0);
 });

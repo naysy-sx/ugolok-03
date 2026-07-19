@@ -113,8 +113,31 @@ test("reportContent: gift-wrap, владелец узнаёт РЕАЛЬНОГО
 	assert.equal(rumor.tags.find((t) => t[0] === "reason")[1], "report");
 });
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — жалоба несёт реальный
+// текст (contentText), тот же класс данных, что комментарии/сообщения.
+test("AC-16: channelReports хранится зашифрованным — сырой дамп не содержит contentText", async () => {
+	await receiveReport(ALICE_PUB, DB_KEY, {
+		reporterPubkey: BOB_PUB,
+		channelId: "ch1",
+		targetPubkey: "mallory-pub",
+		contentType: "chat_message",
+		contentId: "m1",
+		contentText: "секретная жалоба",
+		reason: "report",
+		createdAt: 1000,
+	});
+	const raw = await db.table("channelReports").where("[ownerPubkey+channelId]").equals([ALICE_PUB, "ch1"]).first();
+	assert.equal(raw.reporterPubkey, BOB_PUB);
+	assert.equal("contentText" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.contentText, "секретная жалоба");
+});
+
 test("receiveReport: сохраняет жалобу локально у владельца, viewed=false по умолчанию", async () => {
-	const applied = await receiveReport(ALICE_PUB, {
+	const applied = await receiveReport(ALICE_PUB, DB_KEY, {
 		reporterPubkey: BOB_PUB,
 		channelId: "ch1",
 		targetPubkey: "mallory-pub",
@@ -286,40 +309,40 @@ test("АДВЕРСАРНЫЙ (крипто-барьер): после бана Б
 });
 
 test("listReports: сортировка по createdAt убыв., owner-scoped по каналу", async () => {
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c1", contentText: "a", reason: "report", createdAt: 100 });
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c2", contentText: "b", reason: "report", createdAt: 200 });
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch2", targetPubkey: "x", contentType: "comment", contentId: "c3", contentText: "c", reason: "report", createdAt: 300 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c1", contentText: "a", reason: "report", createdAt: 100 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c2", contentText: "b", reason: "report", createdAt: 200 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch2", targetPubkey: "x", contentType: "comment", contentId: "c3", contentText: "c", reason: "report", createdAt: 300 });
 
-	const reports = await listReports(ALICE_PUB, "ch1");
+	const reports = await listReports(ALICE_PUB, DB_KEY, "ch1");
 	assert.equal(reports.length, 2);
 	assert.equal(reports[0].createdAt, 200, "свежие первыми");
 	assert.equal(reports[1].createdAt, 100);
 });
 
 test("markReportViewed/markAllReportsViewed", async () => {
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c1", contentText: "a", reason: "report", createdAt: 100 });
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c2", contentText: "b", reason: "report", createdAt: 200 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c1", contentText: "a", reason: "report", createdAt: 100 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "x", contentType: "comment", contentId: "c2", contentText: "b", reason: "report", createdAt: 200 });
 
-	let reports = await listReports(ALICE_PUB, "ch1");
+	let reports = await listReports(ALICE_PUB, DB_KEY, "ch1");
 	await markReportViewed(ALICE_PUB, reports[0].id);
-	reports = await listReports(ALICE_PUB, "ch1");
+	reports = await listReports(ALICE_PUB, DB_KEY, "ch1");
 	assert.equal(reports.find((r) => r.createdAt === 200).viewed, true);
 	assert.equal(reports.find((r) => r.createdAt === 100).viewed, false);
 
 	await markAllReportsViewed(ALICE_PUB, "ch1");
-	reports = await listReports(ALICE_PUB, "ch1");
+	reports = await listReports(ALICE_PUB, DB_KEY, "ch1");
 	assert.ok(reports.every((r) => r.viewed === true));
 });
 
 test("getModerationStats: total/unviewed/topIgnored (уникальные жалующиеся, не повторы)", async () => {
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c1", contentText: "a", reason: "ignore", createdAt: 100 });
-	await receiveReport(ALICE_PUB, { reporterPubkey: "eve-pub", channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c2", contentText: "b", reason: "ignore", createdAt: 200 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c1", contentText: "a", reason: "ignore", createdAt: 100 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: "eve-pub", channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c2", contentText: "b", reason: "ignore", createdAt: 200 });
 	// Боб игнорит Mallory ДВАЖДЫ (два разных сообщения) — не должен считаться дважды в topIgnored
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c3", contentText: "c", reason: "ignore", createdAt: 300 });
-	await receiveReport(ALICE_PUB, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "eve-pub", contentType: "comment", contentId: "c4", contentText: "жалоба", reason: "report", createdAt: 400 });
-	await markReportViewed(ALICE_PUB, (await listReports(ALICE_PUB, "ch1"))[0].id);
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "mallory", contentType: "comment", contentId: "c3", contentText: "c", reason: "ignore", createdAt: 300 });
+	await receiveReport(ALICE_PUB, DB_KEY, { reporterPubkey: BOB_PUB, channelId: "ch1", targetPubkey: "eve-pub", contentType: "comment", contentId: "c4", contentText: "жалоба", reason: "report", createdAt: 400 });
+	await markReportViewed(ALICE_PUB, (await listReports(ALICE_PUB, DB_KEY, "ch1"))[0].id);
 
-	const stats = await getModerationStats(ALICE_PUB, "ch1");
+	const stats = await getModerationStats(ALICE_PUB, DB_KEY, "ch1");
 	assert.equal(stats.total, 4);
 	assert.equal(stats.unviewed, 3);
 	assert.equal(stats.topIgnored[0].pubkey, "mallory");

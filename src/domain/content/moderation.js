@@ -7,7 +7,7 @@ import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { sendViewGrant } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_REPORTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 // DESIGN.md, этап 33 — следующий свободный parameterized-replaceable kind после
 // общего чата (30063). Контент шифруется channelKey[v_OLD] (не v_new!) — единственный
@@ -51,20 +51,26 @@ export async function reportContent(reporterPrivKey, channelOwnerPubkey, params,
 // transport.js, домен получает уже распакованные примитивы (тот же принцип, что
 // CONTACT_REQUEST_KIND/CHANNEL_SUBSCRIBE_REQUEST_KIND). reporterPubkey — аутентичный
 // отправитель из unwrap (rumor.pubkey), НЕ из тега (тег легко подделать, unwrap — нет).
-export async function receiveReport(ownerPubkey, { reporterPubkey, channelId, targetPubkey, contentType, contentId, contentText, reason, createdAt }) {
-	await db.table("channelReports").put({
-		ownerPubkey,
-		id: crypto.randomUUID(),
-		channelId,
-		reporterPubkey,
-		targetPubkey,
-		contentType,
-		contentId,
-		contentText,
-		reason,
-		viewed: false,
-		createdAt,
-	});
+export async function receiveReport(ownerPubkey, dbKey, { reporterPubkey, channelId, targetPubkey, contentType, contentId, contentText, reason, createdAt }) {
+	await db.table("channelReports").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: crypto.randomUUID(),
+				channelId,
+				reporterPubkey,
+				targetPubkey,
+				contentType,
+				contentId,
+				contentText,
+				reason,
+				viewed: false,
+				createdAt,
+			},
+			CHANNEL_REPORTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return true;
 }
 
@@ -205,8 +211,9 @@ export async function receiveBanAnnouncement(ownerPubkey, dbKey, event) {
 	return true;
 }
 
-export async function listReports(ownerPubkey, channelId) {
-	const rows = await db.table("channelReports").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
+export async function listReports(ownerPubkey, dbKey, channelId) {
+	const raw = await db.table("channelReports").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
+	const rows = raw.map((r) => fromEncryptedRow(r, dbKey));
 	return rows.sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -224,8 +231,8 @@ export async function markAllReportsViewed(ownerPubkey, channelId) {
 // ТЗ: "статистика: общее количество отчётов, количество непросмотренных, топ-заигноренных
 // пользователей". topIgnored считает РАЗНЫХ жалующихся (reporterPubkey) на каждого
 // targetPubkey среди reason==="ignore" — повторный игнор тем же человеком не накручивает счётчик.
-export async function getModerationStats(ownerPubkey, channelId) {
-	const rows = await listReports(ownerPubkey, channelId);
+export async function getModerationStats(ownerPubkey, dbKey, channelId) {
+	const rows = await listReports(ownerPubkey, dbKey, channelId);
 	const total = rows.length;
 	const unviewed = rows.filter((r) => !r.viewed).length;
 

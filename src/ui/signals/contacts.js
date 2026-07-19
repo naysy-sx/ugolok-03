@@ -206,9 +206,9 @@ export async function deleteGroupAction(ownerPubkey, privKey, dbKey, groupId, pu
 	await refreshGroups(ownerPubkey, dbKey);
 }
 
-export async function refreshContactRequests(ownerPubkey) {
-	const rows = await db.table("contactRequests").where("owner").equals(ownerPubkey).toArray();
-	contactRequests.value = rows;
+export async function refreshContactRequests(ownerPubkey, dbKey) {
+	const raw = await db.table("contactRequests").where("owner").equals(ownerPubkey).toArray();
+	contactRequests.value = raw.map((r) => fromEncryptedRow(r, dbKey));
 }
 
 // Находка 1 (CONTRACTS.md, этап 27): тот, кто вводит чужой ключ в форму "Добавить
@@ -223,10 +223,10 @@ export async function sendContactRequestAction(ownerPubkey, privKey, npubOrHex, 
 	await requirePublishOk(publish, giftWrap);
 }
 
-export async function acceptContactRequestAction(ownerPubkey, privKey, senderPubkey, publish) {
+export async function acceptContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish) {
 	await addContactAction(ownerPubkey, privKey, senderPubkey, publish);
 	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
-	await refreshContactRequests(ownerPubkey);
+	await refreshContactRequests(ownerPubkey, dbKey);
 	// Этап 34 — уведомление "запрос принят" (пункт настроек уведомлений) отправителю.
 	// Best-effort: основное действие (добавление в контакты) уже выполнено выше и не
 	// должно зависеть от доставки этого сигнала.
@@ -237,8 +237,8 @@ export async function acceptContactRequestAction(ownerPubkey, privKey, senderPub
 	}
 }
 
-export async function rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish) {
+export async function rejectContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish) {
 	await blockContactAction(ownerPubkey, privKey, senderPubkey, publish);
 	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
-	await refreshContactRequests(ownerPubkey);
+	await refreshContactRequests(ownerPubkey, dbKey);
 }

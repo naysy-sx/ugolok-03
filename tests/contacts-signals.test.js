@@ -35,7 +35,7 @@ import {
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
 import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../src/domain/contacts/requests.js";
 import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { GROUPS_PLAINTEXT_FIELDS, CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
@@ -298,26 +298,41 @@ test("sendContactRequestAction: невалидный ключ -> throw, ниче
 	assert.equal(publishCount, 0);
 });
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — приветствие запроса в
+// контакты содержательный текст, та же категория, что contentText/greeting-поля
+// в других таблицах этого тира.
+test("AC-16: contactRequests хранится зашифрованным — сырой дамп не содержит greeting", async () => {
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "секретное приветствие", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	const raw = await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]);
+	assert.equal(raw.senderPubkey, BOB_REAL_PUB);
+	assert.equal("greeting" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
+	assert.equal(contactRequests.value[0].greeting, "секретное приветствие");
+});
+
 test("refreshContactRequests: owner-scoped, читает contactRequests из БД", async () => {
-	await db.table("contactRequests").put({
+	await db.table("contactRequests").put(toEncryptedRow({
 		owner: OWNER_PUBKEY,
 		senderPubkey: BOB_REAL_PUB,
 		greeting: "здравствуйте",
 		createdAt: 100,
-	});
+	}, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
 	const otherOwnerPub = "c".repeat(64);
-	await db.table("contactRequests").put({ owner: otherOwnerPub, senderPubkey: BOB_REAL_PUB, greeting: "x", createdAt: 1 });
+	await db.table("contactRequests").put(toEncryptedRow({ owner: otherOwnerPub, senderPubkey: BOB_REAL_PUB, greeting: "x", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
 
-	await refreshContactRequests(OWNER_PUBKEY);
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 	assert.equal(contactRequests.value.length, 1);
 	assert.equal(contactRequests.value[0].senderPubkey, BOB_REAL_PUB);
 });
 
 test("acceptContactRequestAction: добавляет в контакты (взаимно) и удаляет запись", async () => {
-	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
-	await refreshContactRequests(OWNER_PUBKEY);
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, okPublish);
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, okPublish);
 
 	assert.deepEqual(contacts.value, [BOB_REAL_PUB]);
 	assert.equal(contactRequests.value.length, 0);
@@ -325,11 +340,11 @@ test("acceptContactRequestAction: добавляет в контакты (вза
 });
 
 test("acceptContactRequestAction (этап 34): дополнительно отправляет отправителю gift-wrap CONTACT_ACCEPTED_KIND — без него 'запрос принят' необнаружим", async () => {
-	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
-	await refreshContactRequests(OWNER_PUBKEY);
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 
 	const published = [];
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, async (event) => {
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, async (event) => {
 		published.push(event);
 		return { ok: true };
 	});
@@ -342,11 +357,11 @@ test("acceptContactRequestAction (этап 34): дополнительно от�
 });
 
 test("acceptContactRequestAction: сбой публикации уведомления НЕ мешает основному действию (добавлению в контакты)", async () => {
-	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
-	await refreshContactRequests(OWNER_PUBKEY);
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 
 	let callCount = 0;
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, async () => {
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, async () => {
 		callCount += 1;
 		if (callCount === 1) return { ok: true }; // addContactAction — обязан пройти
 		throw new Error("сеть недоступна"); // gift-wrap уведомление — best-effort, ошибка проглатывается
@@ -356,20 +371,20 @@ test("acceptContactRequestAction: сбой публикации уведомле
 });
 
 test("rejectContactRequestAction: блокирует отправителя и удаляет запись", async () => {
-	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
-	await refreshContactRequests(OWNER_PUBKEY);
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 
-	await rejectContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, okPublish);
+	await rejectContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, okPublish);
 
 	assert.deepEqual(blockedContacts.value, [BOB_REAL_PUB]);
 	assert.equal(contactRequests.value.length, 0);
 });
 
 test("acceptContactRequestAction: сбой публикации -> throw, запись НЕ удаляется", async () => {
-	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
-	await refreshContactRequests(OWNER_PUBKEY);
+	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
+	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
 
-	await assert.rejects(() => acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, failPublish));
+	await assert.rejects(() => acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, failPublish));
 	assert.ok(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), "запись должна остаться при сбое");
 });
 

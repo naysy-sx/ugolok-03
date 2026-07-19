@@ -29,3 +29,16 @@ export const CHANNELS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelTopic", "
 // не шифруются вовсе (голые pubkey-списки без отдельного "контента", TECH.md/DESIGN.md
 // этапа 41) — только groups.name содержательна.
 export const GROUPS_PLAINTEXT_FIELDS = ["owner", "id"];
+
+// Этап 42 (Tier 3 — модерация/черновики, CONTRACTS.md). channelIgnores/
+// bannedMembers/channelVisibilityGroups/channelReaders не шифруются вовсе (голые
+// id/pubkey-списки, тот же принцип, что groupMembers/contacts на этапе 41).
+export const CHAT_SYNC_STATE_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastReadLamportTs", "oldestLoadedSeq"];
+
+export const CONTACT_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey"];
+
+// createdAt — единственное поле с ОТДЕЛЬНЫМ одноколоночным индексом (database.js,
+// db.version(3)) — обязано остаться plaintext, иначе индекс не построить.
+export const INBOX_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey", "createdAt"];
+
+export const CHANNEL_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "viewed", "reporterPubkey", "targetPubkey", "contentType", "contentId", "reason"];

@@ -5,6 +5,8 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { db } from '../../core/store/database.js';
 import { transitionMessage } from './machine.js';
 import { pickLatest } from '../../core/sync/lww.js';
+import { toEncryptedRow, fromEncryptedRow } from '../../core/store/encrypted-table.js';
+import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../../core/store/table-fields.js';
 
 export function buildReadStatusEvent(privKey, { chatId, lastReadLamportTs }, createdAt = Math.floor(Date.now()/1000)) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
@@ -24,12 +26,17 @@ export function parseReadStatusEvent(event, privKey) {
 
 // ownerPubkey (owner-scoping, db.version(4)) берётся из event.pubkey — read-status
 // ВСЕГДА self-signed ("я прочитал"), отдельный параметр не нужен, не домысел.
-export async function foldReadStatus(event, privKey) {
+export async function foldReadStatus(event, privKey, dbKey) {
   const ownerPubkey = event.pubkey;
   const { chatId, lastReadLamportTs } = parseReadStatusEvent(event, privKey);
-  let existing = await db.table('chatSyncState').get([ownerPubkey, chatId]);
-  if (existing && existing.lastReadLamportTs >= lastReadLamportTs) return;
-  await db.table('chatSyncState').put({ ...existing, ownerPubkey, chatId, lastReadLamportTs });
+  const raw = await db.table('chatSyncState').get([ownerPubkey, chatId]);
+  // lastReadLamportTs — plaintext (CONTRACTS.md, Tier 3), проверка LWW работает на
+  // сырой строке без расшифровки.
+  if (raw && raw.lastReadLamportTs >= lastReadLamportTs) return;
+  // decrypt-merge-encrypt (тот же класс находки, что drafts.js/foldDraft) — гарантирует,
+  // что строка ВСЕГДА несёт nonce/ciphertext, даже если это первая запись для чата.
+  const merged = { ...(raw ? fromEncryptedRow(raw, dbKey) : {}), ownerPubkey, chatId, lastReadLamportTs };
+  await db.table('chatSyncState').put(toEncryptedRow(merged, CHAT_SYNC_STATE_PLAINTEXT_FIELDS, dbKey));
   const rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, chatId]).toArray();
   for (const row of rows) {
     if (row.senderPubkey === event.pubkey || row.lamportTs > lastReadLamportTs || row.status !== 'sent') continue;
@@ -37,11 +44,11 @@ export async function foldReadStatus(event, privKey) {
   }
 }
 
-export async function markChatAsRead(ownerPubkey, privKey, contactPubkey, lastReadLamportTs, publish) {
+export async function markChatAsRead(ownerPubkey, privKey, dbKey, contactPubkey, lastReadLamportTs, publish) {
   const event = buildReadStatusEvent(privKey, { chatId: contactPubkey, lastReadLamportTs });
   const result = await publish(event);
   if (!result.ok) throw new Error(result.reason || 'relay отклонил публикацию');
-  await foldReadStatus(event, privKey);
+  await foldReadStatus(event, privKey, dbKey);
 }
 
 // AC-06 (TECH.md §15) — тот же паттерн, что rebuildUiSettings (этап 34): читает
@@ -52,7 +59,7 @@ export async function markChatAsRead(ownerPubkey, privKey, contactPubkey, lastRe
 // с другого сеанса) kind 30070 обратно. Группировка по chatId (d-tag) обязательна:
 // read-status у РАЗНЫХ чатов независим, брать глобально самый свежий event
 // (как lww.js's pickLatest без группировки) стёрло бы все чаты, кроме одного.
-export async function rebuildReadStatus(ownerPubkey, privKey) {
+export async function rebuildReadStatus(ownerPubkey, privKey, dbKey) {
   const events = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 30070]).toArray();
   const byChatId = new Map();
   for (const event of events) {
@@ -63,7 +70,7 @@ export async function rebuildReadStatus(ownerPubkey, privKey) {
     byChatId.set(dTag, group);
   }
   for (const group of byChatId.values()) {
-    await foldReadStatus(pickLatest(group), privKey);
+    await foldReadStatus(pickLatest(group), privKey, dbKey);
   }
 }
 

@@ -5,8 +5,8 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { loadChatWindow, markWindowLoaded } from "../src/core/sync/lazy-chat.js";
-import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { MESSAGES_PLAINTEXT_FIELDS, CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import { buildDeletionText } from "../src/domain/messaging/deletions.js";
 import { buildEditText } from "../src/domain/messaging/edits.js";
 
@@ -150,9 +150,9 @@ test("loadChatWindow: не включает 'сиротские' строки de
 });
 
 test("markWindowLoaded: сохраняет курсор, не затирая другие поля chatSyncState", async () => {
-	await db.table("chatSyncState").put({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lastReadLamportTs: 42 });
-	await markWindowLoaded(ALICE_PUB, BOB_PUB, 12345);
-	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
+	await db.table("chatSyncState").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lastReadLamportTs: 42 }, CHAT_SYNC_STATE_PLAINTEXT_FIELDS, DB_KEY));
+	await markWindowLoaded(ALICE_PUB, DB_KEY, BOB_PUB, 12345);
+	const row = fromEncryptedRow(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), DB_KEY);
 	assert.equal(row.oldestLoadedSeq, 12345);
 	assert.equal(row.lastReadLamportTs, 42, "не должен затирать другие поля той же строки");
 });

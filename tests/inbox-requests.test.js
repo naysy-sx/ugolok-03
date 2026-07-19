@@ -47,25 +47,39 @@ test("isKnownContact: true, если контакт есть", async () => {
 	assert.equal(await isKnownContact(ALICE_PUB, STRANGER_PUB), true);
 });
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — welcomeWireBytes несёт
+// MLS-протокольный материал незнакомца, до явного решения пользователя (accept/reject).
+test("AC-16: inboxRequests хранится зашифрованным — сырой дамп не содержит welcomeWireBytes", async () => {
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, new Uint8Array([9, 9, 9]), 100);
+	const raw = await db.table("inboxRequests").get([ALICE_PUB, STRANGER_PUB]);
+	assert.equal(raw.senderPubkey, STRANGER_PUB);
+	assert.equal("welcomeWireBytes" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.deepEqual(decrypted.welcomeWireBytes, new Uint8Array([9, 9, 9]));
+});
+
 test("storeInboxRequest/listInboxRequests: owner-scoped — не путает разных владельцев на одном устройстве", async () => {
 	const bobPub = bytesToHex(getPublicKey(new Uint8Array(32).fill(2)));
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, new Uint8Array([1, 2, 3]), 100);
-	await storeInboxRequest(bobPub, STRANGER_PUB, new Uint8Array([4, 5, 6]), 200);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, new Uint8Array([1, 2, 3]), 100);
+	await storeInboxRequest(bobPub, DB_KEY, STRANGER_PUB, new Uint8Array([4, 5, 6]), 200);
 
-	const aliceRequests = await listInboxRequests(ALICE_PUB);
+	const aliceRequests = await listInboxRequests(ALICE_PUB, DB_KEY);
 	assert.equal(aliceRequests.length, 1);
 	assert.equal(aliceRequests[0].senderPubkey, STRANGER_PUB);
 	assert.deepEqual(aliceRequests[0].welcomeWireBytes, new Uint8Array([1, 2, 3]));
 
-	const bobRequests = await listInboxRequests(bobPub);
+	const bobRequests = await listInboxRequests(bobPub, DB_KEY);
 	assert.equal(bobRequests.length, 1);
 	assert.deepEqual(bobRequests[0].welcomeWireBytes, new Uint8Array([4, 5, 6]));
 });
 
 test("rejectInboxRequest: удаляет запись, MLS-группа не создавалась (нечего откатывать)", async () => {
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, new Uint8Array([1]), 100);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, new Uint8Array([1]), 100);
 	await rejectInboxRequest(ALICE_PUB, STRANGER_PUB);
-	assert.equal((await listInboxRequests(ALICE_PUB)).length, 0);
+	assert.equal((await listInboxRequests(ALICE_PUB, DB_KEY)).length, 0);
 	assert.equal(await db.table("mlsGroups").count(), 0);
 });
 
@@ -92,12 +106,12 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);
 	const welcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));
 
-	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, welcomeWireBytes, rumor.created_at);
-	assert.equal((await listInboxRequests(ALICE_PUB)).length, 1);
+	await storeInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB, welcomeWireBytes, rumor.created_at);
+	assert.equal((await listInboxRequests(ALICE_PUB, DB_KEY)).length, 1);
 
 	await acceptInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB);
 
-	assert.equal((await listInboxRequests(ALICE_PUB)).length, 0, "запись удалена после принятия");
+	assert.equal((await listInboxRequests(ALICE_PUB, DB_KEY)).length, 0, "запись удалена после принятия");
 	const groupIdHex = bytesToHex(computeGroupId(ALICE_PUB, STRANGER_PUB));
 	const groupRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
 	assert.ok(groupRow, "Алиса реально присоединилась к MLS-группе");

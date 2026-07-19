@@ -1,8 +1,8 @@
 import { listInboxRequests, acceptInboxRequest, rejectInboxRequest } from "../../domain/messaging/inbox-requests.js";
 import { openChat } from "./chat.js";
 
-export async function refreshInboxRequests(ownerPubkey) {
-	return listInboxRequests(ownerPubkey);
+export async function refreshInboxRequests(ownerPubkey, dbKey) {
+	return listInboxRequests(ownerPubkey, dbKey);
 }
 
 // Находка 3 (CONTRACTS.md, этап 27): acceptInboxRequest сама не подписывает устройство

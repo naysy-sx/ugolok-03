@@ -63,7 +63,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 		async function refresh() {
 			try {
 				const partners = await listChatPartners(ownerPubkey, dbKey);
-				const inbox = await refreshInboxRequests(ownerPubkey);
+				const inbox = await refreshInboxRequests(ownerPubkey, dbKey);
 				const unread = {};
 				for (const partnerPubkey of partners) {
 					unread[partnerPubkey] = await getUnreadCount(ownerPubkey, partnerPubkey);
@@ -311,7 +311,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			setHasMore(more);
 			if (freshWindow.length > 0) {
 				const lastLamportTs = freshWindow[freshWindow.length - 1].lamportTs;
-				await markChatReadAction(ownerPubkey, privKey, contactPubkey, lastLamportTs, publish).catch(() => {});
+				await markChatReadAction(ownerPubkey, privKey, dbKey, contactPubkey, lastLamportTs, publish).catch(() => {});
 			}
 		}
 		load();
@@ -328,7 +328,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	useEffect(() => {
 		userEditedRef.current = false;
 		let cancelled = false;
-		getDraft(ownerPubkey, contactPubkey).then((draft) => {
+		getDraft(ownerPubkey, dbKey, contactPubkey).then((draft) => {
 			if (!cancelled && !userEditedRef.current) setText(draft);
 		});
 		return () => {
@@ -351,7 +351,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		setText(value);
 		if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 		draftTimerRef.current = setTimeout(() => {
-			saveChatDraftAction(ownerPubkey, privKey, contactPubkey, value, publish).catch(() => {});
+			saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, value, publish).catch(() => {});
 		}, 1000);
 	}
 
@@ -436,7 +436,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		const { messages: older, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit: 100, beforeSeq: oldestSeq });
 		setMessages((prev) => [...older, ...prev]);
 		setHasMore(more);
-		if (older.length > 0) await markWindowLoaded(ownerPubkey, contactPubkey, older[0].seq);
+		if (older.length > 0) await markWindowLoaded(ownerPubkey, dbKey, contactPubkey, older[0].seq);
 	}
 
 	// Строит дескриптор вложения (F-AT-02) из выбранного файла или записанного голоса.
@@ -503,7 +503,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			setAttachmentError("");
 			setRecordedVoiceBlob(null);
 			setRecordingState("idle");
-			await saveChatDraftAction(ownerPubkey, privKey, contactPubkey, "", publish).catch(() => {});
+			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
 			await reloadWindow();
 		} catch (err) {
 			setError(err?.message || String(err));

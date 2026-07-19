@@ -135,7 +135,7 @@ export default function Contacts() {
 
 	useEffect(() => {
 		refreshAll(ownerPubkey, dbKey);
-		refreshContactRequests(ownerPubkey);
+		refreshContactRequests(ownerPubkey, dbKey);
 		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(async () => {
 				await refreshAll(ownerPubkey, dbKey);
@@ -168,7 +168,7 @@ export default function Contacts() {
 	// transport.js инкрементирует messagingActivity при получении нового запроса,
 	// пока пользователь уже смотрит этот экран.
 	useEffect(() => {
-		refreshContactRequests(ownerPubkey).then(() => {
+		refreshContactRequests(ownerPubkey, dbKey).then(() => {
 			if (contactRequests.value.length > 0) {
 				ensureProfilesFetched(
 					contactRequests.value.map((r) => r.senderPubkey),
@@ -209,7 +209,7 @@ export default function Contacts() {
 		setRowError("");
 		setBusy(true);
 		try {
-			await acceptContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+			await acceptContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish);
 		} catch (err) {
 			setRowError(err?.message || String(err));
 		} finally {
@@ -224,7 +224,7 @@ export default function Contacts() {
 		setRowError("");
 		setBusy(true);
 		try {
-			await rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish);
+			await rejectContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish);
 		} catch (err) {
 			setRowError(err?.message || String(err));
 		} finally {

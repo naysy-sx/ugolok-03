@@ -39,6 +39,8 @@ import { notify } from "../../domain/notifications/notifier.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished } from "../../domain/identity/profile.js";
 import { currentUser } from "./auth.js";
+import { toEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -214,17 +216,23 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content));
 							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
 						} else {
-							await storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
+							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 						}
 						activityChanged = true; // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
 					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
 						const parsed = parseContactRequestRumor(rumor);
-						await db.table("contactRequests").put({
-							owner: pubkeyHex,
-							senderPubkey: parsed.senderPubkey,
-							greeting: parsed.greeting,
-							createdAt: parsed.createdAt,
-						});
+						await db.table("contactRequests").put(
+							toEncryptedRow(
+								{
+									owner: pubkeyHex,
+									senderPubkey: parsed.senderPubkey,
+									greeting: parsed.greeting,
+									createdAt: parsed.createdAt,
+								},
+								CONTACT_REQUESTS_PLAINTEXT_FIELDS,
+								dbKey,
+							),
+						);
 						notify(settings, "contacts", "newRequests", { title: "Новый запрос в контакты", body: parsed.greeting || "" });
 						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
 					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
@@ -241,7 +249,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
 						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
 						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).
-						await receiveReport(pubkeyHex, {
+						await receiveReport(pubkeyHex, dbKey, {
 							reporterPubkey: rumor.pubkey,
 							channelId: rumor.tags.find((t) => t[0] === "channel_id")?.[1],
 							targetPubkey: rumor.tags.find((t) => t[0] === "target")?.[1],

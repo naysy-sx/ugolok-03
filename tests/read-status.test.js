@@ -19,6 +19,7 @@ const CAROL_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const CAROL_PUB = bytesToHex(getPublicKey(CAROL_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -44,14 +45,14 @@ test("buildReadStatusEvent/parseReadStatusEvent: round-trip, d-tag = chatId в �
 
 test("foldReadStatus: сохраняет lastReadLamportTs в chatSyncState", async () => {
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 10 });
-	await foldReadStatus(event, ALICE_PRIV);
+	await foldReadStatus(event, ALICE_PRIV, DB_KEY);
 	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(row.lastReadLamportTs, 10);
 });
 
 test("foldReadStatus: monotonic guard — не откатывает назад более свежее локальное значение", async () => {
-	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 20 }), ALICE_PRIV);
-	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 }), ALICE_PRIV);
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 20 }), ALICE_PRIV, DB_KEY);
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 }), ALICE_PRIV, DB_KEY);
 	const row = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(row.lastReadLamportTs, 20, "более старая версия не должна откатить назад");
 });
@@ -64,7 +65,7 @@ test("foldReadStatus: переводит sent->read ТОЛЬКО входящи�
 	]);
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 2 });
 	// событие "прочитано" в этом чате публикует САМА Алиса — event.pubkey === ALICE_PUB
-	await foldReadStatus(event, ALICE_PRIV);
+	await foldReadStatus(event, ALICE_PRIV, DB_KEY);
 
 	const in1 = await db.table("messages").where("id").equals("in1").first();
 	assert.equal(in1.status, "read", "входящее до lastReadLamportTs -> read");
@@ -86,8 +87,8 @@ test("foldReadStatus: идемпотентность — повторный fold
 		msgId: "m1",
 	});
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 });
-	await foldReadStatus(event, ALICE_PRIV);
-	await foldReadStatus(event, ALICE_PRIV); // повтор — не должен бросить
+	await foldReadStatus(event, ALICE_PRIV, DB_KEY);
+	await foldReadStatus(event, ALICE_PRIV, DB_KEY); // повтор — не должен бросить
 	const in1 = await db.table("messages").where("id").equals("in1").first();
 	assert.equal(in1.status, "read");
 });
@@ -108,7 +109,7 @@ test("markChatAsRead: публикует событие и применяет fo
 		publishedEvent = event;
 		return { ok: true };
 	};
-	await markChatAsRead(ALICE_PUB, ALICE_PRIV, BOB_PUB, 1, publish);
+	await markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 1, publish);
 	assert.equal(publishedEvent.kind, 30070);
 	const in1 = await db.table("messages").where("id").equals("in1").first();
 	assert.equal(in1.status, "read");
@@ -116,7 +117,7 @@ test("markChatAsRead: публикует событие и применяет fo
 
 test("markChatAsRead: сбой публикации -> throw, не применяет fold локально", async () => {
 	const publish = async () => ({ ok: false, reason: "отклонено" });
-	await assert.rejects(() => markChatAsRead(ALICE_PUB, ALICE_PRIV, BOB_PUB, 1, publish), /отклонено/);
+	await assert.rejects(() => markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 1, publish), /отклонено/);
 	assert.equal(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), undefined);
 });
 
@@ -127,7 +128,7 @@ test("getUnreadCount: считает входящие сообщения пос�
 		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 3, senderPubkey: ALICE_PUB, id: "out1", text: "3", status: "sent", msgId: "m3" },
 	]);
 	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 2, "без read-status всё входящее непрочитано");
-	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 1 }), ALICE_PRIV);
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 1 }), ALICE_PRIV, DB_KEY);
 	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 1);
 });
 
@@ -153,7 +154,7 @@ test("rebuildReadStatus: восстанавливает read-status из лок�
 	await db.table("events").add(event);
 
 	assert.equal(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), undefined, "до rebuild — ничего не применено");
-	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY);
 
 	const state = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
 	assert.equal(state.lastReadLamportTs, 5);
@@ -166,7 +167,7 @@ test("rebuildReadStatus: несколько чатов — независимы�
 	const eventCarol = buildReadStatusEvent(ALICE_PRIV, { chatId: CAROL_PUB, lastReadLamportTs: 7 });
 	await db.table("events").bulkAdd([eventBob, eventCarol]);
 
-	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY);
 
 	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 3);
 	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, CAROL_PUB])).lastReadLamportTs, 7);
@@ -177,10 +178,10 @@ test("rebuildReadStatus: несколько версий для ОДНОГО ч�
 	const newer = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 9 }, 2000);
 	await db.table("events").bulkAdd([older, newer]);
 
-	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY);
 	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 9);
 });
 
 test("rebuildReadStatus АДВЕРСАРНО: нет ни одного kind 30070 в events — no-op, не бросает", async () => {
-	await assert.doesNotReject(() => rebuildReadStatus(ALICE_PUB, ALICE_PRIV));
+	await assert.doesNotReject(() => rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY));
 });

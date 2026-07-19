@@ -158,13 +158,13 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 	);
 	const row = await db.table("messages").where("id").equals(eventId).first();
 
-	await markChatReadAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, 1, publish);
+	await markChatReadAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 1, publish);
 	// своё же сообщение не переводится в read этим механизмом (F-MS-07, этап 26) — просто
 	// проверяем, что вызов не бросает и chatSyncState обновился
 	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 1);
 
-	await saveChatDraftAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "черновик", publish);
-	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).draftText, "черновик");
+	await saveChatDraftAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "черновик", publish);
+	assert.equal(fromEncryptedRow(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), DB_KEY).draftText, "черновик");
 
 	await deleteChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, row.msgId, 3, publish);
 	const updated = await db.table("messages").where("id").equals(eventId).first();

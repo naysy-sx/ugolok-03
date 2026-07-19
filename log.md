@@ -2506,3 +2506,33 @@ addGroupMemberAction/removeGroupMemberAction/deleteGroupAction все
 Добавлен AC-16-тест (groups) — прямой ответ на пример пользователя.
 
 Regression: `npm test` 645/645. `npm run build` ~241 КБ gzip.
+
+## Этап 42. AC-16, Tier 4 (последний) — шифрование модерации/черновиков
+
+Завершение "все 4 тира последовательно". Только 4 таблицы несут контент:
+channelReports.contentText, chatSyncState.draftText/draftUpdatedAt,
+contactRequests.greeting, inboxRequests.welcomeWireBytes. Остальные
+(channelIgnores/bannedMembers/channelVisibilityGroups/channelReaders) —
+голые id/pubkey-списки, не тронуты.
+
+Реальная находка: chatSyncState пишется ТРЕМЯ независимыми файлами
+(drafts.js/read-status.js/lazy-chat.js), каждый — partial-merge поверх
+одной строки. Голый {...existing} на сырой (уже зашифрованной) строке
+либо потерял бы nonce/ciphertext (если existing ещё нет — первая запись
+осталась бы вовсе не зашифрованной), либо не отразил бы новое значение
+внутри ciphertext. Все три переведены на decrypt-merge-encrypt, даже
+там, где меняется только plaintext-поле — ради инварианта "нет частично
+зашифрованных строк в таблице".
+
+dbKey протянут до chats.js/chat.jsx (getDraft/markWindowLoaded/
+markChatReadAction/saveChatDraftAction), contacts.jsx (refreshContactRequests/
+accept-/rejectContactRequestAction), moderation-panel.jsx (listReports/
+getModerationStats), transport.js (storeInboxRequest/receiveReport/
+contactRequests-запись/rebuildReadStatus).
+
+Добавлено 4 AC-16-теста (по одному на таблицу).
+
+Этим этапом закрыт AC-16 целиком за 4 стадии (39-42) — все
+materialized-view таблицы с каким-либо контентом зашифрованы dbKey.
+
+Regression: `npm test` 649/649. `npm run build` ~242 КБ gzip.

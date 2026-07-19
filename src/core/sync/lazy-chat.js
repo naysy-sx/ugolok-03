@@ -1,7 +1,8 @@
 import { db } from '../store/database.js';
 import { parseDeletionText } from '../../domain/messaging/deletions.js';
 import { parseEditText } from '../../domain/messaging/edits.js';
-import { fromEncryptedRow } from '../store/encrypted-table.js';
+import { toEncryptedRow, fromEncryptedRow } from '../store/encrypted-table.js';
+import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../store/table-fields.js';
 
 export async function loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit = 100, beforeSeq } = {}) {
     // [ownerPubkey+chatId] (db.version(4), owner-scoping — см. database.js).
@@ -32,7 +33,8 @@ export async function loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit 
     return { messages: windowMessages, hasMore };
 }
 
-export async function markWindowLoaded(ownerPubkey, contactPubkey, oldestLoadedSeq) {
-    let existing = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
-    await db.table('chatSyncState').put({ ...existing, ownerPubkey, chatId: contactPubkey, oldestLoadedSeq });
+export async function markWindowLoaded(ownerPubkey, dbKey, contactPubkey, oldestLoadedSeq) {
+    const raw = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
+    const merged = { ...(raw ? fromEncryptedRow(raw, dbKey) : {}), ownerPubkey, chatId: contactPubkey, oldestLoadedSeq };
+    await db.table('chatSyncState').put(toEncryptedRow(merged, CHAT_SYNC_STATE_PLAINTEXT_FIELDS, dbKey));
 }
