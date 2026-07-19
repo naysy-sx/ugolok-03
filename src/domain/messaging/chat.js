@@ -264,7 +264,10 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 		groupIdHex,
 	);
 
-	return { text: parsed.text, lamportTs: parsed.lamportTs, ...extra };
+	// contactPubkey — аддитивное поле (этап 34): нужно вызывающему коду (transport.js)
+	// для уведомлений "новое сообщение от X", ничего не ломает (существующие вызовы
+	// проверяют отдельные поля через assert.equal, не строгий deepEqual на весь объект).
+	return { text: parsed.text, lamportTs: parsed.lamportTs, contactPubkey, ...extra };
 }
 
 export async function getChatHistory(ownerPubkey, contactPubkey) {

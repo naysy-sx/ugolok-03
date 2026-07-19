@@ -9,6 +9,7 @@ import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
+import Settings from "./ui/screens/settings.jsx";
 import { currentUser } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 
@@ -58,11 +59,13 @@ function MainShell() {
 				{activeId === "contacts" && <Contacts />}
 				{activeId === "messages" && <Chat />}
 				{activeId === "channels" && <Channels />}
+				{activeId === "settings" && <Settings />}
 				{activeId !== "diagnostics" &&
 					activeId !== "profile" &&
 					activeId !== "contacts" &&
 					activeId !== "messages" &&
-					activeId !== "channels" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+					activeId !== "channels" &&
+					activeId !== "settings" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 		</div>
 	);

@@ -3,7 +3,16 @@ import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { currentUser, privKeySig } from "../signals/auth.js";
-import { ensureConnected, publish } from "../signals/transport.js";
+import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";
+import {
+	loadUiSettings,
+	addRelayUrl,
+	removeRelayUrl,
+	setActiveRelayUrl,
+	addBlossomUrl,
+	removeBlossomUrl,
+	setActiveBlossomUrl,
+} from "../../domain/settings/ui-settings.js";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -14,6 +23,137 @@ function readFileAsDataUrl(file) {
 		reader.onerror = () => reject(reader.error);
 		reader.readAsDataURL(file);
 	});
+}
+
+// CONTRACTS.md, этап 34 — пользователь: "в профиль необходимо добавить возможность
+// добавления и переключения на другие relay сервера". Blossom — тот же паттерн, без
+// переподключения (URL читается per-upload, не держит постоянное соединение).
+function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRemove, onSetActive, busy }) {
+	const [newUrl, setNewUrl] = useState("");
+	const [error, setError] = useState("");
+
+	async function handleAdd(e) {
+		e.preventDefault();
+		const trimmed = newUrl.trim();
+		if (!trimmed) return;
+		setError("");
+		try {
+			await onAdd(trimmed);
+			setNewUrl("");
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	async function runAction(fn) {
+		setError("");
+		try {
+			await fn();
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	return (
+		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{title}</h2>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+				{urls.map((url) => (
+					<li key={url} class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<span style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
+							{url} {url === activeUrl && <strong>(активный)</strong>}
+						</span>
+						<span class="cluster">
+							{url !== activeUrl && (
+								<button type="button" disabled={busy} onClick={() => runAction(() => onSetActive(url))}>
+									Сделать активным
+								</button>
+							)}
+							<button type="button" disabled={busy} onClick={() => runAction(() => onRemove(url))}>
+								Удалить
+							</button>
+						</span>
+					</li>
+				))}
+				{urls.length === 0 && <li style={{ color: "var(--muted)" }}>Список пуст.</li>}
+			</ul>
+			<form class="cluster" onSubmit={handleAdd}>
+				<label class="visually-hidden" for={`${title}-new-url`}>
+					Добавить сервер
+				</label>
+				<input
+					id={`${title}-new-url`}
+					type="text"
+					placeholder={urlPlaceholder}
+					value={newUrl}
+					onInput={(e) => setNewUrl(e.currentTarget.value)}
+				/>
+				<button type="submit" disabled={busy || !newUrl.trim()}>
+					Добавить
+				</button>
+			</form>
+		</section>
+	);
+}
+
+function RelayBlossomSection({ ownerPubkey, privKey }) {
+	const [settings, setSettings] = useState(null);
+	const [busy, setBusy] = useState(false);
+
+	async function refresh() {
+		setSettings(await loadUiSettings(ownerPubkey));
+	}
+
+	useEffect(() => {
+		refresh().catch(() => {});
+	}, [ownerPubkey]);
+
+	async function withBusy(fn) {
+		setBusy(true);
+		try {
+			await fn();
+			await refresh();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	if (!settings) return null;
+
+	return (
+		<div class="flow" style={{ "--flow-space": "var(--space-m)" }}>
+			<ServerListEditor
+				title="Relay-серверы"
+				urlPlaceholder="wss://relay.example.com"
+				urls={settings.relayUrls}
+				activeUrl={settings.activeRelayUrl}
+				busy={busy}
+				onAdd={(url) => withBusy(() => addRelayUrl(ownerPubkey, privKey, url, publish))}
+				onRemove={(url) => withBusy(() => removeRelayUrl(ownerPubkey, privKey, url, publish))}
+				onSetActive={(url) =>
+					withBusy(async () => {
+						await setActiveRelayUrl(ownerPubkey, privKey, url, publish);
+						await reconnectWithNewSettings(ownerPubkey, privKey);
+					})
+				}
+			/>
+			<ServerListEditor
+				title="Blossom-серверы (файлы/вложения)"
+				urlPlaceholder="https://blossom.example.com"
+				urls={settings.blossomUrls}
+				activeUrl={settings.activeBlossomUrl}
+				busy={busy}
+				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, url, publish))}
+				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, url, publish))}
+				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, url, publish))}
+			/>
+		</div>
+	);
 }
 
 export default function Profile() {
@@ -256,6 +396,8 @@ export default function Profile() {
 				<label for="profile-files-input">Добавить файлы</label>
 				<input id="profile-files-input" type="file" multiple disabled />
 			</section>
+
+			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} />
 		</main>
 	);
 }

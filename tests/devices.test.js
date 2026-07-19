@@ -113,7 +113,8 @@ test("syncDeviceMembership: существующий участник (Bob) по
 	const { result: decryptedByBob } = await asBob(groupIdHex, updatedBobSerializedState, () =>
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, siblingMessageEvent, async () => ({ ok: true })),
 	);
-	assert.deepEqual(decryptedByBob, { text: "после добавления сиблинга", lamportTs: 99 });
+	// contactPubkey (этап 34) — аддитивное поле, нужное transport.js для уведомлений.
+	assert.deepEqual(decryptedByBob, { text: "после добавления сиблинга", lamportTs: 99, contactPubkey: ALICE_PUB });
 });
 
 test("syncDeviceMembership: нет анонсов — no-op, publish не вызывается", async () => {

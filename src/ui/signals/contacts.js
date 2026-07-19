@@ -4,7 +4,7 @@ import { decode as nip19Decode } from "nostr-tools/nip19";
 import { buildContactListEvent, buildMuteListEvent, addContact, removeContact } from "../../domain/contacts/contacts.js";
 import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../domain/contacts/groups.js";
 import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
-import { buildContactRequestRumor } from "../../domain/contacts/requests.js";
+import { buildContactRequestRumor, buildContactAcceptedRumor } from "../../domain/contacts/requests.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 
 export const contacts = signal([]);
@@ -219,6 +219,14 @@ export async function acceptContactRequestAction(ownerPubkey, privKey, senderPub
 	await addContactAction(ownerPubkey, privKey, senderPubkey, publish);
 	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
 	await refreshContactRequests(ownerPubkey);
+	// Этап 34 — уведомление "запрос принят" (пункт настроек уведомлений) отправителю.
+	// Best-effort: основное действие (добавление в контакты) уже выполнено выше и не
+	// должно зависеть от доставки этого сигнала.
+	try {
+		await publish(nip59Wrap(buildContactAcceptedRumor(), privKey, senderPubkey));
+	} catch {
+		// сеть недоступна — переживёт до следующего onEvent контакта, не критично
+	}
 }
 
 export async function rejectContactRequestAction(ownerPubkey, privKey, senderPubkey, publish) {

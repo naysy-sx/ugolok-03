@@ -23,6 +23,7 @@ const EXPECTED_TABLES = [
 	"channelReports",
 	"channelIgnores",
 	"bannedMembers",
+	"uiSettings",
 	"attachments",
 	"keystore",
 	"clock",
@@ -226,6 +227,13 @@ test("channelReaders/channelReports/channelIgnores/bannedMembers (этап 33): 
 		Array.isArray(bannedMembers.schema.primKey.keyPath) && bannedMembers.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+pubkey",
 		"bannedMembers: составной первичный ключ [ownerPubkey+channelId+pubkey]",
 	);
+	db.close();
+});
+
+test("uiSettings (этап 34): голый ownerPubkey как первичный ключ — сам по себе owner-scoped", async () => {
+	await db.open();
+	const uiSettings = db.table("uiSettings");
+	assert.equal(uiSettings.schema.primKey.name, "ownerPubkey", "uiSettings: первичный ключ — сам ownerPubkey, не составной и не голый id");
 	db.close();
 });
 

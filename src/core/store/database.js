@@ -125,6 +125,13 @@ db.version(8).stores({
   bannedMembers: "[ownerPubkey+channelId+pubkey], [ownerPubkey+channelId]"
 });
 
+// Этап 34 — настройки (kind 30072, F-SY-03). Один blob на аккаунт, голый
+// ownerPubkey — сам по себе owner-scoped (тот же приём, что deviceIdentity/
+// ownKeyPackage), составной ключ не нужен, т.к. это не коллекция записей.
+db.version(9).stores({
+  uiSettings: "ownerPubkey"
+});
+
 // Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
 // posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
 // db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных

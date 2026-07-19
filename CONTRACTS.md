@@ -4835,3 +4835,230 @@ Math.max(уже известное, пришедшее)` — защита от �
 содержимое гранта — d-тег и payload больше не расходятся.
 
 Regression: `npm test` 573/573 (полная регрессия, не только этап 33).
+
+## Этап 34 — Настройки: тема, масштаб, язык, уведомления, relay/Blossom-серверы
+
+Рутина (PLAN.md-триаж: "[рутина + AC-чеклист в конце, не код]") — глюe
+поверх уже существующей CSS-системы токенов (`--accent-hue`,
+`--font-size-base`) и уже специфицированного F-SY-03 (kind 30072).
+DESIGN.md-формализация не требуется (нет состояния/автомата — только
+пара точных решений о приоритете источников данных, см. ниже).
+
+### Скрин-референс пользователя (v0.1, https://ibb.co/WWQNbYJ6)
+
+Секции: масштаб интерфейса (dropdown), акцентный цвет (сетка
+именованных swatches), язык интерфейса (dropdown), уведомления
+(вложенные тумблеры), приватность (онлайн-статус/последний
+визит/показ в поиске). **Приватность — вне скоупа этого этапа**
+(решение пользователя): presence-протокол и поиск пользователей не
+существуют в архитектуре проекта вовсе, это отдельная будущая фича,
+не настройка поверх существующего.
+
+### Найденное решение — приоритет источников для активного relay
+
+Активный relay нужен ДО того, как можно получить что-либо с relay
+(включая kind 30072 с синхронизированным списком) — классическая
+бутстрап-проблема. Решение: локальный кэш (`uiSettings.activeRelayUrl`)
+— источник истины для ТЕКУЩЕГО подключения этого устройства; kind
+30072 — best-effort синхронизация между СВОИМИ устройствами (тот же
+принцип, что profile.jsx: публикация не блокирует и не гейтит
+локальное сохранение). Первый запуск без локальной записи — фолбэк на
+`BUILD_DEFAULT_RELAYS[0]` (build-time дефолт), который тут же
+сохраняется в `uiSettings`, чтобы дальше локальный кэш был
+единственным источником, который читает `connect()`.
+
+### Найденное решение — уведомления модерации всегда включены
+
+Инфо-бокс мокапа буквально: "Предупреждения, бан и удаление канала
+показываются всегда" — `notify()` для категории `moderation`
+(бан/report-acted-on/удаление канала) НЕ проверяет тумблеры вовсе,
+только `Notification.permission === "granted"`. Остальные категории
+(contacts/messages/channels) гейтятся вложенными тумблерами буквально
+по дереву мокапа.
+
+### `src/ui/theme/accent-palette.js`
+
+```js
+export const ACCENT_COLORS = [
+  { id: "blue", label: "Blue", hue: 255 }, { id: "indigo", label: "Indigo", hue: 275 },
+  { id: "sky", label: "Sky", hue: 230 }, { id: "teal", label: "Teal", hue: 185 },
+  { id: "cyan", label: "Cyan", hue: 200 }, { id: "lavender", label: "Lavender", hue: 290 },
+  { id: "violet", label: "Violet", hue: 305 }, { id: "terracotta", label: "Terracotta", hue: 35 },
+  { id: "amber", label: "Amber", hue: 75 }, { id: "peach", label: "Peach", hue: 45 },
+  { id: "saffron", label: "Saffron", hue: 85 }, { id: "orange", label: "Orange", hue: 55 },
+  { id: "olive", label: "Olive", hue: 115 }, { id: "moss", label: "Moss", hue: 140 },
+]; // hue — то же число, что уже управляет --accent-hue в styles/minimal.css,
+   // просто именованные точки на круге, ничего нового в CSS не вводится.
+
+export function applyAccentColor(colorId);
+// document.documentElement.style.setProperty("--accent-hue", ACCENT_COLORS.find(...).hue).
+// Неизвестный colorId -> no-op (не бросает — вызывающий код мог прочитать устаревший
+// локальный кэш до правки палитры, деградация в "текущий акцент остаётся", не крах).
+```
+
+### `src/ui/theme/ui-scale.js`
+
+```js
+export const SCALE_OPTIONS = [
+  { id: "small", label: "Small (90%)", percent: 90 },
+  { id: "medium", label: "Medium (100%)", percent: 100 },
+  { id: "large", label: "Large (110%)", percent: 110 },
+  { id: "xlarge", label: "Extra Large (125%)", percent: 125 },
+];
+
+export function applyUiScale(scaleId);
+// document.documentElement.style.fontSize = `${percent}%` — весь остальной дизайн
+// уже rem-относительный (--space-unit, --step-*), масштабируется целиком бесплатно.
+```
+
+### `src/domain/settings/ui-settings.js`
+
+```js
+export const KIND_UI_SETTINGS = 30072; // F-SY-03, d-tag='settings' буквально (не opaque —
+// не privacy-чувствительно, тот же принцип, что read-status/drafts этапа 26).
+
+export const DEFAULT_NOTIFICATIONS = {
+  enabled: true, sound: true,
+  contacts: { enabled: true, newRequests: true, accepted: true },
+  messages: { enabled: true, incoming: true },
+  channels: { enabled: true, newPosts: true, chatMessages: true },
+};
+export const DEFAULT_SETTINGS = {
+  accentColorId: "blue", uiScale: "medium", language: "ru",
+  notifications: DEFAULT_NOTIFICATIONS,
+  relayUrls: [], activeRelayUrl: null, // заполняются BUILD_DEFAULT_RELAYS при первом сохранении
+  blossomUrls: [], activeBlossomUrl: null,
+};
+
+export function buildUiSettingsEvent(privKey, settings, createdAt = Math.floor(Date.now()/1000));
+// kind 30072, tags=[['d','settings']], content = NIP-44(JSON.stringify(settings), privKey, ownPub).
+
+export function parseUiSettingsEvent(event, privKey);
+// NIP-44.decrypt -> JSON.parse -> {...DEFAULT_SETTINGS, ...parsed} (глубокое слияние notifications
+// отдельно — старый payload без нового поля не должен терять остальные разделы дерева).
+
+export async function loadUiSettings(ownerPubkey);
+// db.table("uiSettings").get(ownerPubkey) ?? DEFAULT_SETTINGS (с relayUrls/activeRelayUrl,
+// заполненными из BUILD_DEFAULT_RELAYS/BUILD_DEFAULT_BLOSSOM_SERVERS на лету, не персистентно,
+// ЕСЛИ строки в БД ещё нет вовсе — первый вызов).
+
+export async function saveUiSettings(ownerPubkey, privKey, settings, publish);
+// Локально put СРАЗУ (офлайн-first). Публикация — best-effort, ошибка публикации НЕ бросает
+// наружу (тот же принцип, что profile.jsx: publishStatus вместо throw).
+
+export async function rebuildUiSettings(ownerPubkey, privKey);
+// Тот же паттерн, что rebuildContactsAndGroups (handlers.js): db.table("events").where(
+// "[pubkey+kind]").equals([ownerPubkey, KIND_UI_SETTINGS]).toArray() -> pickLatest -> parse -> put.
+// Вызывается из transport.js's connect(), рядом с rebuildContactsAndGroups/rebuildEffectivePermissions —
+// событие уже приходит через существующий bootstrap-фильтр {authors:[я]}, нового REQ не нужно.
+
+export async function addRelayUrl(ownerPubkey, privKey, url, publish);
+export async function removeRelayUrl(ownerPubkey, privKey, url, publish);
+export async function setActiveRelayUrl(ownerPubkey, privKey, url, publish);
+// Все три — читают loadUiSettings, мутируют relayUrls/activeRelayUrl, saveUiSettings. setActiveRelayUrl
+// НЕ переподключает сама — вызывающий UI-код (settings.jsx) обязан после неё вызвать
+// transport.js's reconnectWithNewSettings (явный шаг, не скрытый побочный эффект в доменной функции).
+
+export async function addBlossomUrl(ownerPubkey, privKey, url, publish);
+export async function removeBlossomUrl(ownerPubkey, privKey, url, publish);
+export async function setActiveBlossomUrl(ownerPubkey, privKey, url, publish);
+// Тот же паттерн — Blossom не требует переподключения (URL читается per-upload, не держит
+// постоянное соединение), setActiveBlossomUrl достаточно самой по себе.
+```
+
+### `src/domain/notifications/notifier.js`
+
+```js
+export async function requestNotificationPermission();
+// Notification.requestPermission() — обёртка для тестируемости (DI через переданный
+// NotificationImpl, по прецеденту WebSocketImpl/MediaRecorderImpl).
+
+export function notify(settings, category, subcategory, { title, body });
+// category: "contacts"|"messages"|"channels"|"moderation". "moderation" — ВСЕГДА (см. находку
+// выше), игнорирует settings целиком. Остальные — settings.notifications.enabled &&
+// settings.notifications[category].enabled && settings.notifications[category][subcategory] !== false
+// (subcategory может отсутствовать — тогда только verhний уровень категории). Permission !==
+// "granted" -> no-op молча (это UX-фича, не критичный путь — как клиентский rate-limit этапа 33).
+```
+
+### Wiring — `transport.js`
+
+- `connect()`: `const localSettings = await loadUiSettings(pubkeyHex); const relayUrl =
+  localSettings.activeRelayUrl ?? DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";` вместо жёсткого
+  `DEFAULT_RELAYS[0]`. После `rebuildEffectivePermissions` — `await rebuildUiSettings(pubkeyHex,
+  privKey);`.
+- Новый экспорт `reconnectWithNewSettings(pubkeyHex, privKey)`: `teardown(); connectedForPubkey =
+  null; connectPromise = null; return ensureConnected(pubkeyHex, privKey);` — полный разрыв и
+  чистое переподключение (новый `connect()` уже читает свежий `activeRelayUrl` из локального кэша).
+- `notify(...)` вызывается в существующих ветках диспетчера: `upsertMessage` (входящее сообщение,
+  category "messages"/"incoming"), contact-request-accepted (существующий kind 3 fold, "contacts"),
+  `receivePost`/`receiveChannelMessage` ("channels", "newPosts"/"chatMessages"),
+  `receiveBanAnnouncement`/`receiveReport` ("moderation", всегда).
+
+### Профиль — relay/Blossom management UI
+
+Не отдельный экран — секция в уже существующем `profile.jsx` (пользователь: "в профиль
+необходимо добавить"). Список текущих relay/Blossom с кнопкой "Удалить" (кроме активного —
+нельзя удалить то, к чему подключены прямо сейчас, сначала переключиться), форма добавления
+нового URL, радио/кнопка "Сделать активным" на каждой строке (relay — вызывает
+`reconnectWithNewSettings` явно после `setActiveRelayUrl`).
+
+### `src/ui/screens/settings.jsx`
+
+Масштаб (select из `SCALE_OPTIONS`), акцент (grid кнопок `ACCENT_COLORS`, применяется сразу по
+клику — превью без сохранения, `saveUiSettings` по явному сабмиту секции, тот же принцип, что
+`--accent-hue` уже CSS-переменная — смена мгновенная, без reload), язык (select с ЕДИНСТВЕННОЙ
+опцией "Русский" — намеренно, в проекте нет i18n-инфраструктуры, вторая опция появится только
+вместе с реальным переводом строк, это НЕ фиктивный переключатель "заглушка", а честно урезанный
+список валидных значений), уведомления (вложенные чекбоксы 1:1 по дереву мокапа, вызывает
+`requestNotificationPermission()` при первом включении верхнего тумблера), кнопка "Заблокировать
+сейчас" (сбрасывает `currentUser`/`privKeySig`, `navigate("/unlock")` — тот же logout-путь, что уже
+где-то есть, если найдётся; иначе — новый маленький вызов `logout()` в `signals/auth.js`).
+
+### Схема БД — `db.version(9)`
+
+```js
+uiSettings: "ownerPubkey" // одинblob на аккаунт, голый pubkey — сам по себе owner-scoped
+```
+
+### Явное сужение скоупа
+
+Приватность (онлайн-статус/последний визит/поиск) — вне скоупа (решение пользователя, нет
+presence-протокола). Светлая/тёмная тема как ручной переключатель — вне скоупа (мокап её не
+показывает; `color-scheme: light dark` уже даёт авто-переключение по ОС, ручной оверрайд —
+backlog при явном запросе). Финальный AC-чеклист TECH.md §15/бенчмарки bootstrap
+1k-5k/self-hosting docs (изначально тоже часть этапа 34 по PLAN.md) — отдельным заходом после
+этой функциональной части, по согласованию с пользователем.
+
+### Правки при реализации (относительно черновика контракта выше)
+
+1. **UX применения настроек** — черновик предполагал "превью без сохранения,
+   явный сабмит секции". При реализации выбран более простой и согласованный
+   с остальным приложением паттерн: каждое изменение (клик по цвету, выбор
+   масштаба, тумблер) применяется и сохраняется СРАЗУ, без промежуточной
+   кнопки "Сохранить" — тот же принцип, что чекбоксы групп в contacts.jsx.
+
+2. **Найденный пробел, закрытый новым сигналом** — `acceptContactRequestAction`
+   (signals/contacts.js) добавляет отправителя ТОЛЬКО в свой contact-list
+   (kind 3), ничего не сообщая обратно. `rebuildContactsAndGroups` сканирует
+   ТОЛЬКО свои kind-3 события — без отдельного сигнала пункт настроек
+   "Запрос принят" технически недостижим. Добавлен `CONTACT_ACCEPTED_KIND =
+   3004` (`domain/contacts/requests.js`) — gift-wrap rumor, тот же приём, что
+   `CONTACT_REQUEST_KIND`/`CHANNEL_SUBSCRIBE_REQUEST_KIND` (3001/3002),
+   отправляется best-effort сразу после успешного добавления в контакты
+   (сбой публикации уведомления НЕ должен откатывать уже выполненное
+   основное действие — покрыто тестом в contacts-signals.test.js).
+
+3. **Аддитивное поле в `receiveGroupMessageEvent`** (chat.js, этап 24) —
+   возвращаемый объект получил `contactPubkey` (нужен transport.js для текста
+   уведомления "новое сообщение"). Проверено: существующие тесты сверяют
+   ОТДЕЛЬНЫЕ поля (`.text`, `.lamportTs`), не строгий `deepEqual` на весь
+   объект — новое поле безопасно, кроме одного теста (devices.test.js),
+   который делал строгий `deepEqual` — обновлён явно.
+
+4. **Уведомление на входящее сообщение фильтрует delete/edit-маркеры** —
+   `applyIncomingDeletionIfMarker`/`applyIncomingEditIfMarker` уже
+   возвращают `true`, если событие было служебным маркером (не обычным
+   текстом); `notify(..., "messages", "incoming", ...)` вызывается, только
+   если ни один из них не сработал — иначе пользователь получал бы
+   уведомление на удаление/правку чужого сообщения как на "новое".

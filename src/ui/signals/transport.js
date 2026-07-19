@@ -12,7 +12,7 @@ import { createSubscriber } from "../../core/transport/subscriber.js";
 import { parseProfileEvent } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
-import { CONTACT_REQUEST_KIND, parseContactRequestRumor } from "../../domain/contacts/requests.js";
+import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../../domain/contacts/requests.js";
 import {
 	acceptWelcome,
 	ensureOwnKeyPackagePublished,
@@ -33,6 +33,8 @@ import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
+import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { notify } from "../../domain/notifications/notifier.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -94,7 +96,12 @@ function assertValidPubkeyHex(pubkeyHex) {
 
 async function connect(pubkeyHex, privKey) {
 	assertValidPubkeyHex(pubkeyHex);
-	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
+	// Этап 34 — найденное решение (бутстрап-проблема): активный relay нужен ДО того, как
+	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
+	// Локальный кэш — источник истины для ТЕКУЩЕГО подключения; build-time дефолт —
+	// только фолбэк на первый запуск, пока локальной записи ещё нет вовсе.
+	const localSettings = await loadUiSettings(pubkeyHex);
+	const relayUrl = localSettings.activeRelayUrl ?? DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 	connection = createRelayConnection(relayUrl, { onStateChange: (s) => (connState.value = s) });
 	connection.connect();
 	await waitForConnState(connection, (s) => s === "connected", 8000);
@@ -110,6 +117,7 @@ async function connect(pubkeyHex, privKey) {
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
 	await rebuildContactsAndGroups(pubkeyHex, privKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
+	await rebuildUiSettings(pubkeyHex, privKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
 
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
@@ -130,6 +138,7 @@ async function connect(pubkeyHex, privKey) {
 	const giftWrapSubscriber = createSubscriber(connection, {
 		verifyBatch,
 		onBatch: async (events) => {
+			const settings = await loadUiSettings(pubkeyHex);
 			for (const event of events) {
 				let rumor;
 				try {
@@ -165,7 +174,11 @@ async function connect(pubkeyHex, privKey) {
 							greeting: parsed.greeting,
 							createdAt: parsed.createdAt,
 						});
+						notify(settings, "contacts", "newRequests", { title: "Новый запрос в контакты", body: parsed.greeting || "" });
 						bumpMessagingActivity(); // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
+					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
+						// Этап 34 — сигнал "мой запрос приняли" (найденный пробел, см. requests.js).
+						notify(settings, "contacts", "accepted", { title: "Запрос принят", body: "Ваш запрос в контакты приняли" });
 					} else if (rumor.kind === CHANNEL_SUBSCRIBE_REQUEST_KIND) {
 						// Этап 30 — владелец канала автоматически подтверждает COMMENT-доступ
 						// (group-видимость уже была его решением при создании канала).
@@ -187,6 +200,9 @@ async function connect(pubkeyHex, privKey) {
 							reason: rumor.tags.find((t) => t[0] === "reason")?.[1],
 							createdAt: rumor.created_at,
 						});
+						// "moderation" — единственная категория, игнорирующая тумблеры целиком
+						// (мокап: "предупреждения, бан и удаление канала показываются всегда").
+						notify(settings, "moderation", null, { title: "Новая жалоба", body: rumor.content || "" });
 						bumpMessagingActivity(); // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
@@ -237,6 +253,19 @@ export async function ensureConnected(pubkeyHex, privKey) {
 		throw e;
 	});
 	return connectPromise;
+}
+
+// Этап 34 — явное переподключение после смены активного relay в настройках. Полный
+// разрыв (teardown) + сброс кэша ensureConnected, чтобы новый connect() не вернул
+// старый connectPromise для того же pubkeyHex — connect() сам прочитает уже сохранённый
+// новый activeRelayUrl из локального кэша. Вызывающий UI-код (profile.jsx/settings.jsx)
+// обязан вызвать это САМ после setActiveRelayUrl — не скрытый побочный эффект внутри
+// доменной функции (CONTRACTS.md, этап 34).
+export async function reconnectWithNewSettings(pubkeyHex, privKey) {
+	teardown();
+	connectedForPubkey = null;
+	connectPromise = null;
+	return ensureConnected(pubkeyHex, privKey);
 }
 
 export async function publish(event) {
@@ -416,6 +445,7 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 		channelContentSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
+				const settings = await loadUiSettings(ownerPubkey);
 				for (const event of events) {
 					try {
 						if (event.kind === 30060) {
@@ -425,17 +455,32 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 						} else if (event.kind === 30061) {
 							// Этап 31 — receivePost сама проверяет авторство (event.pubkey ===
 							// creatorPubkey, DESIGN.md формализация 2) — здесь только диспетчеризация.
-							await receivePost(ownerPubkey, event);
+							const applied = await receivePost(ownerPubkey, event);
+							// Не своё же эхо (я — владелец, вижу свой опубликованный пост через ту же
+							// подписку по topic) — уведомление только на ЧУЖОЙ, т.е. буквально всегда
+							// (пост может быть только от владельца, а не-владелец не пишет посты), но
+							// проверка event.pubkey оставлена явной — дешевле, чем гадать по роли.
+							if (applied && event.pubkey !== ownerPubkey) {
+								notify(settings, "channels", "newPosts", { title: "Новый пост в канале", body: "" });
+							}
 						} else if (event.kind === 30062) {
+							// Комментарии — вне скоупа уведомлений (мокап не содержит такого пункта
+							// в дереве "Каналы", только "Новые посты"/"Сообщения в чате канала").
 							await receiveComment(ownerPubkey, event);
 						} else if (event.kind === 30063) {
 							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
 							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
-							await receiveChannelMessage(ownerPubkey, event);
+							const applied = await receiveChannelMessage(ownerPubkey, event);
+							if (applied && event.pubkey !== ownerPubkey) {
+								notify(settings, "channels", "chatMessages", { title: "Новое сообщение в чате канала", body: "" });
+							}
 						} else if (event.kind === CHANNEL_BAN_KIND) {
 							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
 							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация.
-							await receiveBanAnnouncement(ownerPubkey, event);
+							const applied = await receiveBanAnnouncement(ownerPubkey, event);
+							if (applied && event.pubkey !== ownerPubkey) {
+								notify(settings, "moderation", null, { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
+							}
 						}
 						bumpMessagingActivity(); // channels.jsx/channel.jsx перечитывают списки
 					} catch {
@@ -501,6 +546,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 		groupMessageSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
+				const settings = await loadUiSettings(ownerPubkey);
 				for (const event of events) {
 					try {
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
@@ -509,10 +555,16 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 						if (receivedResult) await receiveLamportTick(receivedResult.lamportTs);
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
-						await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
+						const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
 						// DESIGN.md, "Этап 27-довесок-6" — edit-маркер, тот же принцип; порядок с
 						// deletion неважен (разные префиксы, взаимоисключающие no-op на чужом маркере).
-						await applyIncomingEditIfMarker(ownerPubkey, event, receivedResult);
+						const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, event, receivedResult);
+						// Этап 34 — уведомление только на ОБЫЧНОЕ новое сообщение, не на служебные
+						// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
+						// собственного же сообщения собеседником).
+						if (receivedResult && !wasDeletion && !wasEdit) {
+							notify(settings, "messages", "incoming", { title: "Новое сообщение", body: receivedResult.text });
+						}
 						bumpMessagingActivity(); // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч

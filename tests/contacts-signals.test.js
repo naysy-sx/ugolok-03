@@ -33,7 +33,7 @@ import {
 	rejectContactRequestAction,
 } from "../src/ui/signals/contacts.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
-import { CONTACT_REQUEST_KIND, parseContactRequestRumor } from "../src/domain/contacts/requests.js";
+import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../src/domain/contacts/requests.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
@@ -307,6 +307,37 @@ test("acceptContactRequestAction: добавляет в контакты (вза
 	assert.deepEqual(contacts.value, [BOB_REAL_PUB]);
 	assert.equal(contactRequests.value.length, 0);
 	assert.equal(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), undefined);
+});
+
+test("acceptContactRequestAction (этап 34): дополнительно отправляет отправителю gift-wrap CONTACT_ACCEPTED_KIND — без него 'запрос принят' необнаружим", async () => {
+	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
+	await refreshContactRequests(OWNER_PUBKEY);
+
+	const published = [];
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, async (event) => {
+		published.push(event);
+		return { ok: true };
+	});
+
+	const giftWrap = published.find((e) => e.kind === 1059);
+	assert.ok(giftWrap, "должен быть отправлен gift-wrap отправителю запроса");
+	const rumor = nip59Unwrap(giftWrap, BOB_REAL_PRIV);
+	assert.equal(rumor.kind, CONTACT_ACCEPTED_KIND);
+	assert.equal(rumor.pubkey, OWNER_PUBKEY, "Боб узнаёт, что именно этот владелец принял его запрос");
+});
+
+test("acceptContactRequestAction: сбой публикации уведомления НЕ мешает основному действию (добавлению в контакты)", async () => {
+	await db.table("contactRequests").put({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 });
+	await refreshContactRequests(OWNER_PUBKEY);
+
+	let callCount = 0;
+	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, async () => {
+		callCount += 1;
+		if (callCount === 1) return { ok: true }; // addContactAction — обязан пройти
+		throw new Error("сеть недоступна"); // gift-wrap уведомление — best-effort, ошибка проглатывается
+	});
+
+	assert.deepEqual(contacts.value, [BOB_REAL_PUB], "контакт добавлен, несмотря на сбой уведомления");
 });
 
 test("rejectContactRequestAction: блокирует отправителя и удаляет запись", async () => {
