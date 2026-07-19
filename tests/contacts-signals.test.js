@@ -34,6 +34,8 @@ import {
 } from "../src/ui/signals/contacts.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
 import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../src/domain/contacts/requests.js";
+import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
@@ -154,21 +156,33 @@ test("unblockContactAction: НЕ возвращает разблокирован
 	assert.deepEqual(contacts.value, [], "разблокировка не должна сама по себе восстанавливать контакт");
 });
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
+// увидел название группы "Друзья" открытым текстом в этой таблице.
+test("AC-16: groups хранится зашифрованным — сырой дамп не содержит name", async () => {
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Секретная группа", okPublish);
+	const groupId = groups.value[0].id;
+	const raw = await db.table("groups").get([OWNER_PUBKEY, groupId]);
+	assert.equal(raw.id, groupId);
+	assert.equal("name" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+});
+
 test("createGroupAction: создаёт группу, обновляет groups сигнал", async () => {
-	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Друзья", okPublish);
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Друзья", okPublish);
 	assert.equal(groups.value.length, 1);
 	assert.equal(groups.value[0].name, "Друзья");
 	assert.deepEqual(groups.value[0].memberPubkeys, []);
 });
 
 test("renameGroupAction/addGroupMemberAction/removeGroupMemberAction: полный цикл редактирования", async () => {
-	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Старое имя", okPublish);
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Старое имя", okPublish);
 	const groupId = groups.value[0].id;
 
-	await renameGroupAction(OWNER_PUBKEY, PRIV_KEY, groupId, "Новое имя", okPublish);
+	await renameGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, groupId, "Новое имя", okPublish);
 	assert.equal(groups.value.find((g) => g.id === groupId).name, "Новое имя");
 
-	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, groupId, "alice-pk", okPublish);
+	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, groupId, "alice-pk", okPublish);
 	assert.deepEqual(groups.value.find((g) => g.id === groupId).memberPubkeys, ["alice-pk"]);
 
 	await removeGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, groupId, "alice-pk", okPublish);
@@ -176,21 +190,21 @@ test("renameGroupAction/addGroupMemberAction/removeGroupMemberAction: полны
 });
 
 test("deleteGroupAction: группа исчезает из groups сигнала и из БД", async () => {
-	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Временная", okPublish);
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Временная", okPublish);
 	const groupId = groups.value[0].id;
 
-	await deleteGroupAction(OWNER_PUBKEY, PRIV_KEY, groupId, okPublish);
+	await deleteGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, groupId, okPublish);
 
 	assert.equal(groups.value.find((g) => g.id === groupId), undefined);
 	assert.equal(await db.table("groups").get([OWNER_PUBKEY, groupId]), undefined);
 });
 
 test("F-GR-02 через UI-действия: один pubkey в нескольких группах одновременно", async () => {
-	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Друзья", okPublish);
-	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, "Работа", okPublish);
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Друзья", okPublish);
+	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Работа", okPublish);
 	const [g1, g2] = groups.value;
-	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, g1.id, "shared-pk", okPublish);
-	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, g2.id, "shared-pk", okPublish);
+	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, g1.id, "shared-pk", okPublish);
+	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, g2.id, "shared-pk", okPublish);
 
 	assert.ok(groups.value.find((g) => g.id === g1.id).memberPubkeys.includes("shared-pk"));
 	assert.ok(groups.value.find((g) => g.id === g2.id).memberPubkeys.includes("shared-pk"));
@@ -199,10 +213,10 @@ test("F-GR-02 через UI-действия: один pubkey в несколь�
 test("refreshAll: подтягивает все три сигнала параллельно из БД без действий", async () => {
 	await db.table("contacts").add({ owner: OWNER_PUBKEY, pubkey: "x" });
 	await db.table("blockedContacts").add({ owner: OWNER_PUBKEY, pubkey: "y" });
-	await db.table("groups").add({ owner: OWNER_PUBKEY, id: "g1", name: "Z" });
+	await db.table("groups").add(toEncryptedRow({ owner: OWNER_PUBKEY, id: "g1", name: "Z" }, GROUPS_PLAINTEXT_FIELDS, DB_KEY));
 	await db.table("groupMembers").add({ groupId: "g1", pubkey: "z" });
 
-	await refreshAll(OWNER_PUBKEY);
+	await refreshAll(OWNER_PUBKEY, DB_KEY);
 
 	assert.deepEqual(contacts.value, ["x"]);
 	assert.deepEqual(blockedContacts.value, ["y"]);

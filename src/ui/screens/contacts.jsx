@@ -134,11 +134,11 @@ export default function Contacts() {
 	const busyRef = useRef(false);
 
 	useEffect(() => {
-		refreshAll(ownerPubkey);
+		refreshAll(ownerPubkey, dbKey);
 		refreshContactRequests(ownerPubkey);
 		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(async () => {
-				await refreshAll(ownerPubkey);
+				await refreshAll(ownerPubkey, dbKey);
 				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
 				// (нет соединения). Экран открыт заново — refreshProfiles подтягивает
 				// СВЕЖИЕ данные (найденный баг: старое био/имя не обновлялись годами).
@@ -240,7 +240,7 @@ export default function Contacts() {
 		setGroupError("");
 		setBusy(true);
 		try {
-			await createGroupAction(ownerPubkey, privKey, newGroupName, publish);
+			await createGroupAction(ownerPubkey, privKey, dbKey, newGroupName, publish);
 			setNewGroupName("");
 		} catch (err) {
 			setGroupError(err?.message || String(err));
@@ -356,7 +356,7 @@ export default function Contacts() {
 											onSubmit={(e) => {
 												e.preventDefault();
 												runRowAction(async () => {
-													await renameGroupAction(ownerPubkey, privKey, g.id, renameValue, publish);
+													await renameGroupAction(ownerPubkey, privKey, dbKey, g.id, renameValue, publish);
 													setRenamingGroupId(null);
 												});
 											}}
@@ -395,7 +395,7 @@ export default function Contacts() {
 												type="button"
 												disabled={busy}
 												onClick={() =>
-													runRowAction(() => deleteGroupAction(ownerPubkey, privKey, g.id, publish))
+													runRowAction(() => deleteGroupAction(ownerPubkey, privKey, dbKey, g.id, publish))
 												}
 											>
 												Удалить
@@ -545,7 +545,7 @@ export default function Contacts() {
 													disabled={busy}
 													onAdd={(groupId) =>
 														runRowAction(() =>
-															addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish),
+															addGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish),
 														)
 													}
 												/>

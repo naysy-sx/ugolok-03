@@ -186,14 +186,14 @@ test("revokeIfNoLongerVisible АДВЕРСАРНО: pubkey никогда не �
 });
 
 test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реально отзывает VIEW у того, кто состоял только в одной группе, и НЕ трогает того, кто виден ещё и через другую", async () => {
-	await createGroupAction(ALICE_PUB, ALICE_PRIV, "Друзья", capturingPublish([]));
+	await createGroupAction(ALICE_PUB, ALICE_PRIV, DB_KEY, "Друзья", capturingPublish([]));
 	const friendsId = groups.value.find((g) => g.name === "Друзья").id;
-	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, friendsId, BOB_PUB, capturingPublish([]));
+	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, friendsId, BOB_PUB, capturingPublish([]));
 
-	await createGroupAction(ALICE_PUB, ALICE_PRIV, "Семья", capturingPublish([]));
+	await createGroupAction(ALICE_PUB, ALICE_PRIV, DB_KEY, "Семья", capturingPublish([]));
 	const familyId = groups.value.find((g) => g.name === "Семья").id;
-	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, familyId, BOB_PUB, capturingPublish([]));
-	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, familyId, CAROL_PUB, capturingPublish([]));
+	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, familyId, BOB_PUB, capturingPublish([]));
+	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, familyId, CAROL_PUB, capturingPublish([]));
 
 	const { channelId } = await createChannel(
 		ALICE_PUB,

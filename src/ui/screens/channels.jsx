@@ -93,7 +93,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 	const [busy, setBusy] = useState(false);
 
 	useEffect(() => {
-		refreshGroups(ownerPubkey).catch(() => {});
+		refreshGroups(ownerPubkey, dbKey).catch(() => {});
 	}, [ownerPubkey]);
 
 	function handleAvatarSelected(e) {

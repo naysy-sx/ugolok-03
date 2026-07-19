@@ -149,7 +149,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	drainOutboxSafely(publisher.publish);
 
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
-	await rebuildContactsAndGroups(pubkeyHex, privKey);
+	await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
 	await rebuildUiSettings(pubkeyHex, privKey);
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
@@ -285,7 +285,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		},
 		onEvent: async (addedCount) => {
 			if (addedCount > 0) {
-				await rebuildContactsAndGroups(pubkeyHex, privKey);
+				await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
 				await rebuildEffectivePermissions(pubkeyHex, privKey);
 			}
 		},

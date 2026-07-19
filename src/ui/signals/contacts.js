@@ -7,6 +7,7 @@ import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent
 import { buildContactRequestRumor, buildContactAcceptedRumor } from "../../domain/contacts/requests.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 export const contacts = signal([]);
 export const blockedContacts = signal([]);
@@ -24,8 +25,9 @@ export async function refreshBlockedContacts(ownerPubkey) {
 	blockedContacts.value = rows.map((r) => r.pubkey);
 }
 
-export async function refreshGroups(ownerPubkey) {
-	const groupRows = await db.table("groups").where("owner").equals(ownerPubkey).toArray();
+export async function refreshGroups(ownerPubkey, dbKey) {
+	const groupRowsRaw = await db.table("groups").where("owner").equals(ownerPubkey).toArray();
+	const groupRows = groupRowsRaw.map((g) => fromEncryptedRow(g, dbKey));
 	const result = [];
 	for (const g of groupRows) {
 		const members = await db.table("groupMembers").where("groupId").equals(g.id).toArray();
@@ -62,8 +64,8 @@ export async function refreshProfiles(pubkeys, fetchProfilesFn) {
 	profiles.value = next;
 }
 
-export async function refreshAll(ownerPubkey) {
-	await Promise.all([refreshContacts(ownerPubkey), refreshBlockedContacts(ownerPubkey), refreshGroups(ownerPubkey)]);
+export async function refreshAll(ownerPubkey, dbKey) {
+	await Promise.all([refreshContacts(ownerPubkey), refreshBlockedContacts(ownerPubkey), refreshGroups(ownerPubkey, dbKey)]);
 }
 
 export function decodePubkeyInput(input) {
@@ -148,15 +150,15 @@ export async function unblockContactAction(ownerPubkey, privKey, npubOrHex, publ
 	await refreshBlockedContacts(ownerPubkey);
 }
 
-export async function createGroupAction(ownerPubkey, privKey, name, publish) {
+export async function createGroupAction(ownerPubkey, privKey, dbKey, name, publish) {
 	const groupId = crypto.randomUUID();
 	// новая группа — свежий UUID, коллизия created_at с самой собой невозможна,
 	// но регистрируем в трекере сразу, чтобы последующие правки ЭТОЙ группы
 	// (переименование/добавление участника) корректно шли по возрастанию
 	const event = buildGroupEvent(privKey, { groupId, name, memberPubkeys: [] }, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
-	await foldGroup(event, privKey);
-	await refreshGroups(ownerPubkey);
+	await foldGroup(event, privKey, dbKey);
+	await refreshGroups(ownerPubkey, dbKey);
 }
 
 function requireGroup(groupId) {
@@ -165,43 +167,43 @@ function requireGroup(groupId) {
 	return { groupId: group.id, name: group.name, memberPubkeys: group.memberPubkeys };
 }
 
-export async function renameGroupAction(ownerPubkey, privKey, groupId, newName, publish) {
+export async function renameGroupAction(ownerPubkey, privKey, dbKey, groupId, newName, publish) {
 	const updated = renameGroup(requireGroup(groupId), newName);
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
-	await foldGroup(event, privKey);
-	await refreshGroups(ownerPubkey);
+	await foldGroup(event, privKey, dbKey);
+	await refreshGroups(ownerPubkey, dbKey);
 }
 
-export async function addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish) {
+export async function addGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish) {
 	const updated = addMember(requireGroup(groupId), pubkey);
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
-	await foldGroup(event, privKey);
-	await refreshGroups(ownerPubkey);
+	await foldGroup(event, privKey, dbKey);
+	await refreshGroups(ownerPubkey, dbKey);
 }
 
 export async function removeGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish) {
 	const updated = removeMember(requireGroup(groupId), pubkey);
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
-	await foldGroup(event, privKey);
+	await foldGroup(event, privKey, dbKey);
 	// Этап 36 (DESIGN.md) — foldGroup уже обновил groupMembers (удалил pubkey из
 	// groupId), значит проверка "виден ли ещё через другую группу" читает АКТУАЛЬНОЕ
 	// состояние. Отзывает VIEW только если pubkey не виден каналу ни через одну
 	// ДРУГУЮ группу, привязанную к нему при создании (F-CH-06).
 	await revokeIfNoLongerVisible(ownerPubkey, privKey, dbKey, pubkey, groupId, publish);
-	await refreshGroups(ownerPubkey);
+	await refreshGroups(ownerPubkey, dbKey);
 }
 
-export async function deleteGroupAction(ownerPubkey, privKey, groupId, publish) {
+export async function deleteGroupAction(ownerPubkey, privKey, dbKey, groupId, publish) {
 	const event = buildAddressableDeletionEvent(privKey, 30050, groupId);
 	await requirePublishOk(publish, event);
 	await db.transaction("rw", db.table("groups"), db.table("groupMembers"), async () => {
 		await db.table("groups").delete([ownerPubkey, groupId]);
 		await db.table("groupMembers").where("groupId").equals(groupId).delete();
 	});
-	await refreshGroups(ownerPubkey);
+	await refreshGroups(ownerPubkey, dbKey);
 }
 
 export async function refreshContactRequests(ownerPubkey) {

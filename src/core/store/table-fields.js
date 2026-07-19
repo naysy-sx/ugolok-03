@@ -24,3 +24,8 @@ export const COMMENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "postId", "parent
 export const CHANNEL_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "authorPubkey"];
 
 export const CHANNELS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelTopic", "role", "creatorPubkey", "createdAt", "allowChatAttachments"];
+
+// Этап 41 (Tier 2 — соцграф, CONTRACTS.md). groupMembers/contacts/blockedContacts
+// не шифруются вовсе (голые pubkey-списки без отдельного "контента", TECH.md/DESIGN.md
+// этапа 41) — только groups.name содержательна.
+export const GROUPS_PLAINTEXT_FIELDS = ["owner", "id"];

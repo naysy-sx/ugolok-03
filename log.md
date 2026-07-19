@@ -2483,3 +2483,26 @@ channels) — сырой дамп таблицы не содержит sensitive
 Regression: `npm test` 644/644. `npm run build` ~241 КБ gzip.
 Живой E2E через браузер не выполнен (нет browser-инструмента в этой
 сессии) — то же ограничение, что этап 39.
+
+## Этап 41. AC-16, Tier 2 — шифрование соцграфа (groups.name)
+
+Продолжение по инструкции "все 4 тира последовательно". Tier 2 — второй
+явный пример пользователя (название группы "Друзья"). Узкий скоуп по
+дизайну: groupMembers/contacts/blockedContacts — голые pubkey-списки,
+шифровать нечего; только groups.name содержательна.
+
+GROUPS_PLAINTEXT_FIELDS = [owner, id]. handlers.js's foldGroup/
+rebuildContactsAndGroups получили dbKey, протянутый из transport.js's
+connect()/incremental-sync onEvent. contacts.js (ui/signals) —
+refreshGroups/refreshAll/createGroupAction/renameGroupAction/
+addGroupMemberAction/removeGroupMemberAction/deleteGroupAction все
+получили dbKey; UI (contacts.jsx, channels.jsx's group-picker) обновлены.
+
+Без новых находок-багов в этот раз (в отличие от этапов 39-40) — все
+затронутые чтения groups.name уже проходили через один путь
+(refreshGroups), партиал-инвариант не возникает (foldGroup всегда
+пишет группу целиком, .delete() не трогает контент).
+
+Добавлен AC-16-тест (groups) — прямой ответ на пример пользователя.
+
+Regression: `npm test` 645/645. `npm run build` ~241 КБ gzip.

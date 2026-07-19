@@ -9,6 +9,8 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { createPermissionRecord } from '../auth/permissions.js';
 import { rebuildCache } from '../auth/engine.js';
 import { lwwWinner, pickLatest } from '../../core/sync/lww.js';
+import { toEncryptedRow } from '../../core/store/encrypted-table.js';
+import { GROUPS_PLAINTEXT_FIELDS } from '../../core/store/table-fields.js';
 
 export async function foldContactList(event) {
   const pubkeys = parseContactListEvent(event);
@@ -62,11 +64,11 @@ export async function rebuildEffectivePermissions(ownerPubkey, privKey) {
   });
 }
 
-export async function foldGroup(event, privKey) {
+export async function foldGroup(event, privKey, dbKey) {
   const { groupId, name, memberPubkeys } = parseGroupEvent(event, privKey);
 
   return db.transaction('rw', db.table('groups'), db.table('groupMembers'), async () => {
-    await db.table('groups').put({ owner: event.pubkey, id: groupId, name });
+    await db.table('groups').put(toEncryptedRow({ owner: event.pubkey, id: groupId, name }, GROUPS_PLAINTEXT_FIELDS, dbKey));
     await db.table('groupMembers').where('groupId').equals(groupId).delete();
     await db.table('groupMembers').bulkAdd(memberPubkeys.map(pk => ({ groupId, pubkey: pk })));
   });
@@ -82,7 +84,7 @@ export function buildAddressableDeletionEvent(privKey, kind, dTag) {
   return sign(eventTemplate, privKey);
 }
 
-export async function rebuildContactsAndGroups(ownerPubkey, privKey) {
+export async function rebuildContactsAndGroups(ownerPubkey, privKey, dbKey) {
   const contactEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 3]).toArray();
   if (contactEvents.length > 0) {
     await foldContactList(pickLatest(contactEvents));
@@ -118,7 +120,7 @@ export async function rebuildContactsAndGroups(ownerPubkey, privKey) {
         await db.table('groupMembers').where('groupId').equals(dTag).delete();
       });
     } else {
-      await foldGroup(event, privKey);
+      await foldGroup(event, privKey, dbKey);
     }
   }
 }
