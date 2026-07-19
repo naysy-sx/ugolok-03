@@ -139,6 +139,13 @@ async function connect(pubkeyHex, privKey) {
 		verifyBatch,
 		onBatch: async (events) => {
 			const settings = await loadUiSettings(pubkeyHex);
+			// НАЙДЕНО ЖИВЫМ ЗАМЕРОМ (этап 34, AC-12): bumpMessagingActivity() на КАЖДОЕ
+			// событие батча триггерит React/Preact useEffect в открытых экранах (напр.
+			// contacts.jsx перечитывает всю таблицу на каждый бамп) — при батче в 1000
+			// событий это O(N²) поведение (N перечитываний растущей таблицы), а не N
+			// независимых O(1) операций. Один бамп на весь батч даёт ТОТ ЖЕ эффект
+			// с точки зрения UI (экран узнаёт "что-то обновилось"), но за O(N), не O(N²).
+			let activityChanged = false;
 			for (const event of events) {
 				let rumor;
 				try {
@@ -165,7 +172,7 @@ async function connect(pubkeyHex, privKey) {
 						} else {
 							await storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 						}
-						bumpMessagingActivity(); // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
+						activityChanged = true; // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
 					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
 						const parsed = parseContactRequestRumor(rumor);
 						await db.table("contactRequests").put({
@@ -175,7 +182,7 @@ async function connect(pubkeyHex, privKey) {
 							createdAt: parsed.createdAt,
 						});
 						notify(settings, "contacts", "newRequests", { title: "Новый запрос в контакты", body: parsed.greeting || "" });
-						bumpMessagingActivity(); // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
+						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
 					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
 						// Этап 34 — сигнал "мой запрос приняли" (найденный пробел, см. requests.js).
 						notify(settings, "contacts", "accepted", { title: "Запрос принят", body: "Ваш запрос в контакты приняли" });
@@ -186,7 +193,7 @@ async function connect(pubkeyHex, privKey) {
 						if (channelIdTag) {
 							await handleIncomingSubscribeRequest(pubkeyHex, privKey, channelIdTag[1], rumor.pubkey, publisher.publish);
 						}
-						bumpMessagingActivity(); // channels.jsx узнаёт о новом подписчике
+						activityChanged = true; // channels.jsx узнаёт о новом подписчике
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
 						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
 						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).
@@ -203,13 +210,14 @@ async function connect(pubkeyHex, privKey) {
 						// "moderation" — единственная категория, игнорирующая тумблеры целиком
 						// (мокап: "предупреждения, бан и удаление канала показываются всегда").
 						notify(settings, "moderation", null, { title: "Новая жалоба", body: rumor.content || "" });
-						bumpMessagingActivity(); // ModerationPanel узнаёт о новой жалобе
+						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
 				} catch {
 					// ошибка обработки конкретного rumor (напр. Welcome уже применён гонкой) — не ронять батч
 				}
 			}
+			if (activityChanged) bumpMessagingActivity();
 		},
 	});
 	connection.addMessageHandler(giftWrapSubscriber.handleMessage);
@@ -405,18 +413,27 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey) {
 		channelGrantSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
+				// НАЙДЕНО ЖИВЫМ ЗАМЕРОМ (этап 34, AC-12) — тот же класс находки, что
+				// giftWrapSubscriber выше: refreshChannelContentSubscription (Dexie-запрос
+				// + REQ-переподписка на relay) и bumpMessagingActivity на КАЖДЫЙ грант — при
+				// батче из N грантов это N лишних REQ-циклов вместо одного. Один раз после
+				// всего батча достаточно (topics всё равно читаются заново целиком).
+				let gotNewGrant = false;
 				for (const event of events) {
 					try {
 						await receiveChannelKeyGrant(ownerPubkey, privKey, event.pubkey, event);
-						// Новый канал стал известен (получен channelTopic) — переподписка на
-						// контент (kind 30060/30054) обязана подхватить его topic немедленно,
-						// иначе метаданные/allowlist этого канала не придут до следующего
-						// перезахода (тот же класс находки, что этап 27-довесок-7 для профилей).
-						await refreshChannelContentSubscription(ownerPubkey);
-						bumpMessagingActivity(); // channels.jsx узнаёт о новом "Доступном" канале
+						gotNewGrant = true;
 					} catch {
 						// не мой грант / повреждён — пропустить, не ронять батч
 					}
+				}
+				if (gotNewGrant) {
+					// Новый канал стал известен (получен channelTopic) — переподписка на
+					// контент (kind 30060/30054) обязана подхватить его topic немедленно,
+					// иначе метаданные/allowlist этого канала не придут до следующего
+					// перезахода (тот же класс находки, что этап 27-довесок-7 для профилей).
+					await refreshChannelContentSubscription(ownerPubkey);
+					bumpMessagingActivity(); // channels.jsx узнаёт о новом "Доступном" канале
 				}
 			},
 		});
@@ -446,6 +463,7 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
 				const settings = await loadUiSettings(ownerPubkey);
+				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {
 						if (event.kind === 30060) {
@@ -482,11 +500,12 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 								notify(settings, "moderation", null, { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
 							}
 						}
-						bumpMessagingActivity(); // channels.jsx/channel.jsx перечитывают списки
+						activityChanged = true; // channels.jsx/channel.jsx перечитывают списки
 					} catch {
 						// повреждено/эпоха неизвестна и т.п. — пропустить, не ронять батч
 					}
 				}
+				if (activityChanged) bumpMessagingActivity();
 			},
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
@@ -547,6 +566,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
 				const settings = await loadUiSettings(ownerPubkey);
+				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
@@ -565,11 +585,12 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 						if (receivedResult && !wasDeletion && !wasEdit) {
 							notify(settings, "messages", "incoming", { title: "Новое сообщение", body: receivedResult.text });
 						}
-						bumpMessagingActivity(); // этап 27, находка 2 — открытый chat.jsx перечитывает окно
+						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {
 						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
 					}
 				}
+				if (activityChanged) bumpMessagingActivity();
 			},
 		});
 		connection.addMessageHandler(groupMessageSubscriber.handleMessage);

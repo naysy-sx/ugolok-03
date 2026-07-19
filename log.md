@@ -2081,3 +2081,63 @@ incremental-sync.test.js при полной параллельной нагру
 Не в этой части: финальный tree-shaking/бенчмарки bootstrap
 1k-5k/self-hosting docs/полный E2E-чеклист TECH.md §15 — отдельным
 заходом (по согласованию с пользователем).
+
+## Этап 34 (часть 2). Бенчмарки AC-12/13, self-hosting docs, tree-shaking, аудит AC-чеклиста
+
+Без вызовов воркера — вся работа этой части инфраструктурная/
+диагностическая (замеры, конфиги, docs), не app-код по контракту.
+
+`scripts/bootstrap-bench.mjs` — Playwright + Node, публикует N
+gift-wrapped CONTACT_REQUEST через реальный strfry (свой отправитель
+на каждое событие — иначе `contactRequests` put по
+`[owner+senderPubkey]` схлопывает дубликаты), пересобирает `dist/` с
+`BUILD_DEFAULT_RELAYS` override на локальный strfry (прод-дефолт
+vite.config.js иначе указывает на недостижимый `wss://relay.example`),
+измеряет холодный bootstrap до появления "Запросы (N)".
+
+Первый прогон AC-12 (1000 событий): 14650мс — ПРОВАЛ (порог 10000мс).
+Диагностика без домысла, по фактам:
+1. `#requests-heading` застрял на "(500)" даже после 120с ожидания —
+   не медленный прогресс, а полное недополучение данных. Причина:
+   `strfry.conf`'s `maxFilterLimit=500` (дефолт апстрима) молча
+   обрезает ЛЮБОЙ REQ-фильтр без явного `limit` — giftWrapSubscriber/
+   bootstrap.js/channel-подписки все используют фильтры без limit
+   (нет курсора-пагинации в клиенте). Исправлено: `maxFilterLimit`
+   увеличен до 10000 (свой relay, не публичный — обоснование в
+   комментарии strfry.conf), relay перезапущен (конфиг не читается на
+   лету).
+2. После фикса выше — всё ещё 14650мс. Найдено: `bumpMessagingActivity()`
+   (signals/transport.js) вызывался на КАЖДОЕ событие внутри
+   `onBatch`-циклов пяти подписчиков — триггерит Preact `useEffect` в
+   открытых экранах (contacts.jsx перечитывает всю таблицу на каждый
+   бамп), O(N²) на батч, не O(N). Исправлено паттерном "один bump на
+   батч" (флаг `activityChanged`/`gotNewGrant`) в giftWrapSubscriber,
+   channelGrantSubscriber, channelContentSubscriber,
+   groupMessageSubscriber (profileSubscriber уже был написан
+   правильно). `receiveLamportTick`/`persistLamportValue` намеренно
+   НЕ тронуты — остаются per-event (причинный порядок).
+
+После обоих фиксов: **AC-12 (1000, порог 10000мс): 3179мс — OK**.
+**AC-13 (5000, порог 30000мс): 18150мс — OK**.
+
+**AC-11**: `npm run build` (прод-конфиг, без override) — ~230 КБ gzip
+(запас ~50 КБ до бюджета NF-11 280 КБ). Единственное постороннее в
+выводе сборки — предупреждение Rolldown `INVALID_ANNOTATION` про
+`/* @__PURE__ */` в `@hpke/common` (чужая библиотека, не влияет на
+итоговый размер, не наш код).
+
+**AC-15**: `docs/self-hosting.md` написан — strfry+Blossom setup,
+смена bind/api_addr на `0.0.0.0` для LAN, подключение через
+Профиль→Relay/Blossom-серверы, оценка 15-20 минут (порог <30 минут).
+
+**Аудит TECH.md §15** (фоновый агент, сверка с тестами/log.md):
+пробелы AC-FS-02 (не найден), AC-06/AC-AT-06 (частично), AC-19
+(только граница) — приняты как известный backlog, не блокируют этап.
+**AC-09 (offline→outbox→доставка)** — критичный пробел уровня
+MVP-критерия: `outbox.js` реализован и протестирован, но НЕ
+подключён к реальной отправке (`chat.js`'s `sendMessage` бросает
+исключение при сбое publish, не enqueue'ит). По явному решению
+пользователя (AskUserQuestion) — отложено отдельным этапом (см.
+PLAN.md backlog), этап 34 закрывается без него.
+
+Regression: `npm test` 601/601.
