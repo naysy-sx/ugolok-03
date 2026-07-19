@@ -35,6 +35,7 @@ import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { notify } from "../../domain/notifications/notifier.js";
+import { drain } from "../../core/store/outbox.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -65,6 +66,26 @@ function waitForConnState(conn, predicate, timeoutMs) {
 			}
 		}, 50);
 	});
+}
+
+// AC-09 — auto-drain: вызывается и при первом подключении (явно, после создания
+// publisher — на этот момент onStateChange уже мог отстреляться с publisher===null),
+// и при каждом авто-reconnect relay-pool.js после обрыва связи (через onStateChange).
+// Fire-and-forget — не должен блокировать остальной connect()/reconnect-flow; сбой
+// (relay снова недоступен посреди попытки) проглатывается, не валит вызывающий код.
+async function drainOutboxSafely(publish) {
+	try {
+		const { sentCount } = await drain(async (record) => {
+			const result = await publish(record.event);
+			if (result.ok) {
+				await db.table("messages").where("id").equals(record.eventId).modify({ status: "sent" });
+			}
+			return result;
+		});
+		if (sentCount > 0) bumpMessagingActivity();
+	} catch (e) {
+		console.warn("drainOutboxSafely: не удалось опустошить outbox", e);
+	}
 }
 
 function teardown() {
@@ -102,7 +123,16 @@ async function connect(pubkeyHex, privKey) {
 	// только фолбэк на первый запуск, пока локальной записи ещё нет вовсе.
 	const localSettings = await loadUiSettings(pubkeyHex);
 	const relayUrl = localSettings.activeRelayUrl ?? DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
-	connection = createRelayConnection(relayUrl, { onStateChange: (s) => (connState.value = s) });
+	connection = createRelayConnection(relayUrl, {
+		onStateChange: (s) => {
+			connState.value = s;
+			// Повторное подключение после обрыва (relay-pool.js's autoReconnect) —
+			// publisher уже существует на этот момент (пережил обрыв, message-
+			// handler'ы не сбрасываются). На САМОМ первом "connected" publisher
+			// ещё null — этот случай покрыт явным вызовом ниже, после его создания.
+			if (s === "connected" && publisher) drainOutboxSafely(publisher.publish);
+		},
+	});
 	connection.connect();
 	await waitForConnState(connection, (s) => s === "connected", 8000);
 
@@ -113,6 +143,7 @@ async function connect(pubkeyHex, privKey) {
 
 	publisher = createPublisher(connection);
 	connection.addMessageHandler(publisher.handleMessage);
+	drainOutboxSafely(publisher.publish);
 
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
 	await rebuildContactsAndGroups(pubkeyHex, privKey);

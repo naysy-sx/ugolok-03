@@ -30,6 +30,7 @@ beforeEach(async () => {
 	await db.table("ownKeyPackage").clear();
 	await db.table("mlsGroups").clear();
 	await db.table("messages").clear();
+	await db.table("outbox").clear();
 });
 
 after(() => {
@@ -179,6 +180,38 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	assert.equal(received.lamportTs, 5);
 	assert.equal(typeof received.sentAt, "number");
 	assert.equal(received.attachment, undefined, "без вложения — поле отсутствует, не undefined-значение");
+});
+
+test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ бросает, ставит event в outbox целиком, сохраняет сообщение локально со статусом 'failed', возвращает {eventId, queued:true}", async () => {
+	await establishAliceToBob();
+	const publish = async () => ({ ok: false, reason: "relay недоступен" });
+
+	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "не долетит", 7, publish);
+	assert.equal(result.queued, true);
+	assert.equal(typeof result.eventId, "string");
+
+	const outboxRows = await db.table("outbox").where("eventId").equals(result.eventId).toArray();
+	assert.equal(outboxRows.length, 1, "событие должно быть поставлено в outbox");
+	assert.equal(outboxRows[0].status, "pending");
+	assert.equal(outboxRows[0].event.kind, 445, "в outbox должен лежать ВЕСЬ подписанный event (МЛС-ратчет уже продвинут — регенерировать нельзя), не только id");
+	assert.equal(outboxRows[0].event.id, result.eventId);
+
+	const messageRows = await db.table("messages").where("id").equals(result.eventId).toArray();
+	assert.equal(messageRows.length, 1, "сообщение должно остаться в локальной истории, не потеряно молча");
+	assert.equal(messageRows[0].status, "failed");
+	assert.equal(messageRows[0].text, "не долетит");
+});
+
+test("AC-09 АДВЕРСАРНО: sendMessage — publish() бросает исключение напрямую (не {ok:false}) — тоже перехватывается, тоже enqueue, не роняет вызывающий код", async () => {
+	await establishAliceToBob();
+	const publish = async () => {
+		throw new Error("сеть недоступна");
+	};
+
+	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "тоже не долетит", 8, publish);
+	assert.equal(result.queued, true);
+	const outboxRows = await db.table("outbox").where("eventId").equals(result.eventId).toArray();
+	assert.equal(outboxRows.length, 1);
 });
 
 test("receiveGroupMessageEvent: неизвестный groupId (h-тег) — discard, не бросает", async () => {

@@ -19,6 +19,7 @@ import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivatio
 import { buildMirrorEvent } from "./mirror.js";
 import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
+import { enqueue } from "../../core/store/outbox.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -189,7 +190,30 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 		{ kind: 445, tags: [["h", groupIdHex]], content, created_at: Math.floor(Date.now() / 1000) },
 		ephemeralPriv,
 	);
-	await requirePublishOk(publish, event);
+	try {
+		await requirePublishOk(publish, event);
+	} catch (e) {
+		// AC-09: сбой publish — event уже подписан (MLS-ратчет уже продвинут
+		// строкой выше, эфемерный ключ уже одноразово использован), поэтому
+		// нельзя просто повторно вызвать sendMessage с тем же текстом позже —
+		// это создало бы ВТОРОЙ, другой шифртекст. Кладём в outbox буквально
+		// ТОТ ЖЕ event для повторной попытки, не бросаем исключение — сообщение
+		// остаётся видимым локально со статусом "failed", не теряется молча.
+		await enqueue(event);
+		await upsertMessage({
+			ownerPubkey,
+			chatId: contactPubkey,
+			lamportTs,
+			senderPubkey: ownerPubkey,
+			id: event.id,
+			text,
+			status: "failed",
+			msgId,
+			sentAt,
+			...(attachment !== undefined ? { attachment } : {}),
+		});
+		return { eventId: event.id, queued: true };
+	}
 
 	await upsertMessage({
 		ownerPubkey,

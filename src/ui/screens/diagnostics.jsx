@@ -204,7 +204,8 @@ function useOutboxStatus() {
 	useEffect(() => {
 		(async () => {
 			try {
-				const seq = await enqueue("diag-selfcheck-" + Date.now());
+				const diagEventId = "diag-selfcheck-" + Date.now();
+				const seq = await enqueue({ id: diagEventId, kind: 0, tags: [], content: "", sig: "", pubkey: "", created_at: 0 });
 				const pendingBefore = await listPending();
 				if (!pendingBefore.some((r) => r.seq === seq)) {
 					throw new Error("enqueue: запись не найдена в listPending");

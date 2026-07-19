@@ -2,7 +2,11 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { enqueue, listPending, markSent, markFailed } from "../src/core/store/outbox.js";
+import { enqueue, listPending, markSent, markFailed, drain } from "../src/core/store/outbox.js";
+
+function fakeEvent(id, extra = {}) {
+	return { id, kind: 445, tags: [], content: "cipher-" + id, sig: "sig-" + id, pubkey: "pub", created_at: 0, ...extra };
+}
 
 before(async () => {
 	await db.open();
@@ -17,24 +21,26 @@ after(() => {
 });
 
 test("enqueue: возвращает числовой seq, растущий с каждой вставкой", async () => {
-	const seq1 = await enqueue("event-1");
-	const seq2 = await enqueue("event-2");
+	const seq1 = await enqueue(fakeEvent("event-1"));
+	const seq2 = await enqueue(fakeEvent("event-2"));
 	assert.equal(typeof seq1, "number");
 	assert.ok(seq2 > seq1);
 });
 
-test("enqueue: создаёт запись со статусом pending и retryCount 0", async () => {
-	const seq = await enqueue("event-1");
+test("enqueue: создаёт запись со статусом pending, retryCount 0, eventId=event.id и сохраняет ВЕСЬ event целиком", async () => {
+	const event = fakeEvent("event-1");
+	const seq = await enqueue(event);
 	const row = await db.table("outbox").get(seq);
 	assert.equal(row.eventId, "event-1");
 	assert.equal(row.status, "pending");
 	assert.equal(row.retryCount, 0);
+	assert.deepEqual(row.event, event, "весь подписанный event должен сохраняться буквально — MLS-ратчет уже продвинут, регенерировать нельзя");
 });
 
 test("listPending: возвращает только pending, в порядке FIFO (по seq)", async () => {
-	const s1 = await enqueue("a");
-	const s2 = await enqueue("b");
-	const s3 = await enqueue("c");
+	const s1 = await enqueue(fakeEvent("a"));
+	const s2 = await enqueue(fakeEvent("b"));
+	const s3 = await enqueue(fakeEvent("c"));
 	await markSent(s2);
 	const pending = await listPending();
 	assert.deepEqual(pending.map((r) => r.eventId), ["a", "c"]);
@@ -42,7 +48,7 @@ test("listPending: возвращает только pending, в порядке 
 });
 
 test("markSent: переводит запись в статус sent, убирает из listPending", async () => {
-	const seq = await enqueue("event-1");
+	const seq = await enqueue(fakeEvent("event-1"));
 	await markSent(seq);
 	const row = await db.table("outbox").get(seq);
 	assert.equal(row.status, "sent");
@@ -50,7 +56,7 @@ test("markSent: переводит запись в статус sent, убира
 });
 
 test("markFailed: статус failed, retryCount увеличивается, убирает из listPending", async () => {
-	const seq = await enqueue("event-1");
+	const seq = await enqueue(fakeEvent("event-1"));
 	await markFailed(seq);
 	let row = await db.table("outbox").get(seq);
 	assert.equal(row.status, "failed");
@@ -63,29 +69,28 @@ test("markFailed: статус failed, retryCount увеличивается, у
 	assert.equal(row.retryCount, 2);
 });
 
-test("drain: успешная публикация всех pending -> markSent для каждой, sentCount корректен", async () => {
-	const { drain } = await import("../src/core/store/outbox.js");
-	const s1 = await enqueue("a");
-	const s2 = await enqueue("b");
+test("drain: успешная публикация всех pending -> markSent для каждой, sentCount корректен; publishFn получает record с .event", async () => {
+	const s1 = await enqueue(fakeEvent("a"));
+	const s2 = await enqueue(fakeEvent("b"));
 
-	const published = [];
+	const publishedEventIds = [];
 	const result = await drain(async (record) => {
-		published.push(record.eventId);
+		assert.equal(record.event.id, record.eventId, "record.event должен соответствовать record.eventId");
+		publishedEventIds.push(record.event.id);
 		return { ok: true };
 	});
 
-	assert.deepEqual(published, ["a", "b"], "последовательно, в FIFO-порядке");
+	assert.deepEqual(publishedEventIds, ["a", "b"], "последовательно, в FIFO-порядке");
 	assert.deepEqual(result, { sentCount: 2, failedCount: 0 });
 	assert.equal((await db.table("outbox").get(s1)).status, "sent");
 	assert.equal((await db.table("outbox").get(s2)).status, "sent");
 });
 
 test("drain: частичный отказ — неудачные помечаются failed (retryCount растёт), успешные — sent", async () => {
-	const { drain } = await import("../src/core/store/outbox.js");
-	const sGood = await enqueue("good");
-	const sBad = await enqueue("bad");
+	const sGood = await enqueue(fakeEvent("good"));
+	const sBad = await enqueue(fakeEvent("bad"));
 
-	const result = await drain(async (record) => ({ ok: record.eventId !== "bad" }));
+	const result = await drain(async (record) => ({ ok: record.event.id !== "bad" }));
 
 	assert.deepEqual(result, { sentCount: 1, failedCount: 1 });
 	assert.equal((await db.table("outbox").get(sGood)).status, "sent");
@@ -95,7 +100,6 @@ test("drain: частичный отказ — неудачные помечаю
 });
 
 test("drain: пустая очередь — не бросает, нулевые счётчики, publishFn не вызывается", async () => {
-	const { drain } = await import("../src/core/store/outbox.js");
 	let calls = 0;
 	const result = await drain(async () => {
 		calls++;
@@ -106,8 +110,7 @@ test("drain: пустая очередь — не бросает, нулевые
 });
 
 test("drain: уже sent/failed записи не попадают в drain повторно", async () => {
-	const { drain } = await import("../src/core/store/outbox.js");
-	const seq = await enqueue("once");
+	await enqueue(fakeEvent("once"));
 	await drain(async () => ({ ok: true }));
 
 	let calls = 0;
@@ -119,13 +122,12 @@ test("drain: уже sent/failed записи не попадают в drain по
 });
 
 test("АДВЕРСАРНО: publishFn бросает исключение на одной записи — drain не должен рухнуть целиком, остальные записи обрабатываются", async () => {
-	const { drain } = await import("../src/core/store/outbox.js");
-	const s1 = await enqueue("ok-1");
-	const sBad = await enqueue("throws");
-	const s2 = await enqueue("ok-2");
+	const s1 = await enqueue(fakeEvent("ok-1"));
+	const sBad = await enqueue(fakeEvent("throws"));
+	const s2 = await enqueue(fakeEvent("ok-2"));
 
 	const result = await drain(async (record) => {
-		if (record.eventId === "throws") throw new Error("сетевая ошибка на середине batch");
+		if (record.event.id === "throws") throw new Error("сетевая ошибка на середине batch");
 		return { ok: true };
 	});
 

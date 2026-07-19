@@ -5088,3 +5088,72 @@ AskUserQuestion) — `outbox.js` существует как готовый, п�
 (chat.js) или `relay-pool.js`'s `onStateChange`, должен явно учитывать
 этот открытый пробел, а не считать offline-очередь уже работающей
 сквозной функциональностью — см. PLAN.md backlog п.3.
+
+## Этап 35 — AC-09: outbox подключён к реальной отправке
+
+### Правка контракта `src/core/store/outbox.js` (было: `enqueue(eventId)`)
+
+**Причина ревизии (обязательна к чтению, не самоочевидна):** к моменту вызова
+`requirePublishOk(publish, event)` в `sendMessage` (chat.js) MLS-ратчет УЖЕ
+продвинут (`newSessionState` уже записан в `mlsGroups` ДО попытки publish,
+см. chat.js:180) и новый эфемерный Nostr-ключ уже одноразово использован
+(этап 24 — новый ключ на каждое kind 445, обфускация состава группы). Значит
+при сбое publish **нельзя просто повторно вызвать sendMessage с тем же
+текстом** — это создаст ВТОРОЙ, отличный от первого, шифртекст/событие,
+продвинув ратчет ещё раз. Единственный корректный retry — повторно
+отправить БУКВАЛЬНО ТОТ ЖЕ УЖЕ ПОДПИСАННЫЙ event. Значит outbox обязан
+хранить не ссылку (`eventId`), а сам объект события целиком.
+
+```js
+export async function enqueue(event) {
+  // event — уже подписанный, готовый к publish() Nostr-event (id/kind/tags/
+  // content/sig/pubkey/created_at). eventId хранится ОТДЕЛЬНО от event тем
+  // же полем, что и раньше (event.id) — для обратной совместимости запросов
+  // по eventId (diagnostics.jsx, тесты), сам event — новое поле.
+  return db.outbox.add({ eventId: event.id, event, status: "pending", retryCount: 0 });
+}
+```
+
+`listPending()`/`markSent(seq)`/`markFailed(seq)` — без изменений сигнатуры.
+`drain(publishFn)` — тоже без изменений сигнатуры (`publishFn(record)`,
+record теперь несёt `.event`); вызывающий код (transport.js) обязан делать
+`publishFn = (record) => publish(record.event)`, не `publish(record)`
+напрямую.
+
+### `chat.js`'s `sendMessage` — публичная правка контракта возврата
+
+Было: при сбое `requirePublishOk` — throw, ничего не сохранено локально.
+Стало: сбой publish **не бросает исключение** — сообщение уходит в outbox
+(`enqueue(event)`) и сохраняется локально через `upsertMessage` со
+`status: "failed"` (тот же словарь состояний, что уже существующий, но
+ранее не используемый в реальном пути, `domain/messaging/machine.js`'s
+`MESSAGE_TRANSITIONS` и уже готовая метка "не доставлено" в
+`message-bubble.jsx`'s `STATUS_LABELS`). Возврат — `{ eventId: event.id,
+queued: true }` вместо throw. Исключение по-прежнему бросается для ДРУГИХ
+предусловий (чат не установлен, нет опубликованного ключа контакта) —
+это невосстановимые ошибки вызова, не сетевые сбои, семантика не меняется.
+
+**UI-следствие (chat.jsx, БЕЗ изменений кода)**: `handleSend`'s `catch`
+теперь не срабатывает на сетевой сбой — happy-path (очистка поля ввода,
+`reloadWindow()`) выполняется всегда, сообщение появляется в ленте с
+меткой "не доставлено" (уже готовый рендер `message-bubble.jsx`). Это
+корректное поведение реального мессенджера (сообщение "легло", не потеряно
+из UI), а не побочный эффект.
+
+### `transport.js` — auto-drain при (пере)подключении
+
+`connect()`'s `onStateChange` callback дополнен: при переходе в
+`"connected"` (это происходит и при первом подключении, и при
+авто-reconnect `relay-pool.js` после обрыва — `intentionalClose=false`
+ветка) — вызов fire-and-forget `drainOutboxSafely(publisher.publish)`.
+Гвард на `publisher` (может быть ещё `null` в момент самого первого
+`"connected"`, до строки `publisher = createPublisher(connection)`) —
+доп. явный вызов сразу после создания `publisher` покрывает этот случай
+(отправка того, что скопилось за время, пока приложение было закрыто).
+`drainOutboxSafely` при успешной отправке записи обновляет статус
+соответствующей строки `messages` (`where("id").equals(record.eventId)`)
+на `"sent"` и, если хоть одна запись реально ушла, вызывает
+`bumpMessagingActivity()` — иначе открытый экран чата не узнает, что
+статус сообщения изменился. Ошибки самого `drain` (relay снова недоступен
+посреди попытки) — проглатываются с `console.warn`, не должны валить
+остальной `connect()`/reconnect-flow.

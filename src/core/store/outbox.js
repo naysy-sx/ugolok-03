@@ -1,7 +1,7 @@
 import { db } from "./database.js";
 
-export async function enqueue(eventId) {
-  return db.outbox.add({ eventId, status: "pending", retryCount: 0 });
+export async function enqueue(event) {
+  return db.outbox.add({ eventId: event.id, event, status: "pending", retryCount: 0 });
 }
 
 export async function listPending() {
