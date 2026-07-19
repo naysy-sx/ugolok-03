@@ -6,6 +6,7 @@ import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../dom
 import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { buildContactRequestRumor, buildContactAcceptedRumor } from "../../domain/contacts/requests.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
+import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
 
 export const contacts = signal([]);
 export const blockedContacts = signal([]);
@@ -185,6 +186,11 @@ export async function removeGroupMemberAction(ownerPubkey, privKey, groupId, pub
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey);
+	// Этап 36 (DESIGN.md) — foldGroup уже обновил groupMembers (удалил pubkey из
+	// groupId), значит проверка "виден ли ещё через другую группу" читает АКТУАЛЬНОЕ
+	// состояние. Отзывает VIEW только если pubkey не виден каналу ни через одну
+	// ДРУГУЮ группу, привязанную к нему при создании (F-CH-06).
+	await revokeIfNoLongerVisible(ownerPubkey, privKey, pubkey, groupId, publish);
 	await refreshGroups(ownerPubkey);
 }
 

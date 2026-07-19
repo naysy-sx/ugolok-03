@@ -18,9 +18,6 @@ async function requirePublishOk(publish, event) {
 	}
 }
 
-// CONTRACTS.md, этап 30 — найденный пробел: kind 30060 несёт МЕТАДАННЫЕ (не "для себя",
-// как в исходном TECH.md §10), зашифрованные channelKey[v] — replaceable, владелец может
-// переиздать при редактировании БЕЗ повторной раздачи ключей всем читателям.
 export async function createChannel(ownerPubkey, ownerPrivKey, { name, description, rules, avatarDescriptor, allowChatAttachments = true }, groupIds, publish) {
 	const channelId = crypto.randomUUID();
 	const channelKeyHex = bytesToHex(generateChannelKey());
@@ -84,6 +81,10 @@ export async function createChannel(ownerPubkey, ownerPrivKey, { name, descripti
 		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey });
 	}
 
+	for (const groupId of groupIds) {
+		await db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId });
+	}
+
 	return { channelId };
 }
 
@@ -107,7 +108,7 @@ export async function listAvailableChannels(ownerPubkey) {
 // обязан перехватывать per-event, тот же принцип, что везде в диспетчере.
 export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channelOwnerPubkey, event) {
 	const grant = decryptChannelKeyGrant(event.content, readerPrivKey, channelOwnerPubkey);
-	// НАЙДЕНО ЖИВЫМ АДВЕРСАРНЫМ ТЕСТОМ (этап 33) — версия теперь идёт В ПЕЙЛОАДЕ гранта
+	// НАЙДено ЖИВЫМ АДВЕРСАРНЫМ ТЕСТОМ (этап 33) — версия теперь идёт В ПЕЙЛОАДЕ гранта
 	// (channel-key.js, encryptChannelKeyGrant), а не хардкодится: захардкоженная "1" молча
 	// затирала уже сохранённый v_old тем же номером версии при ротации ключа (banMember),
 	// ломая исторический доступ читателя. currentVersion — максимум из уже известного и

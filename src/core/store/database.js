@@ -132,6 +132,14 @@ db.version(9).stores({
   uiSettings: "ownerPubkey"
 });
 
+// Этап 36 — отзыв VIEW при выходе из группы (DESIGN.md). Снимок "какие группы
+// дали каналу видимость при создании" — без этого removeGroupMemberAction не
+// может узнать, на какие каналы вообще влияет выход из группы. Обратный индекс
+// [ownerPubkey+groupId] — findChannelIdsByVisibilityGroup без полного скана channels.
+db.version(10).stores({
+  channelVisibilityGroups: "[ownerPubkey+channelId+groupId], [ownerPubkey+channelId], [ownerPubkey+groupId]"
+});
+
 // Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
 // posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
 // db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных

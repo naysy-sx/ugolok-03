@@ -5157,3 +5157,51 @@ queued: true }` вместо throw. Исключение по-прежнему �
 статус сообщения изменился. Ошибки самого `drain` (relay снова недоступен
 посреди попытки) — проглатываются с `console.warn`, не должны валить
 остальной `connect()`/reconnect-flow.
+
+## Этап 36 — отзыв VIEW при выходе из группы (формализация в DESIGN.md)
+
+### Схема БД — `db.version(10)`
+
+```js
+channelVisibilityGroups: "[ownerPubkey+channelId+groupId], [ownerPubkey+channelId], [ownerPubkey+groupId]"
+```
+
+### `channel.js`'s `createChannel` — аддитивная правка (не меняет сигнатуру)
+
+После существующего цикла раздачи VIEW (строки, добавляющие
+`channelReaders`) — новый цикл `for (const groupId of groupIds) await
+db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId })`.
+Пустой `groupIds` (канал-заметочник) — таблица остаётся пустой для
+этого канала, как и раньше ничего не ломает.
+
+### Новый файл `src/domain/content/channel-visibility.js`
+
+```js
+export async function findChannelIdsByVisibilityGroup(ownerPubkey, groupId)
+// -> string[] (channelId), каналы, чья видимость зависит от этой группы
+
+export async function revokeViewFromMember(ownerPubkey, ownerPrivKey, channelId, targetPubkey, publish)
+// СТРОГОЕ ПОДМНОЖЕСТВО moderation.js's banMember: ротация channelKey
+// (v_old->v_new), переиздача VIEW оставшимся channelReaders (кроме
+// targetPubkey), обновление allowlist новой версии (без targetPubkey,
+// если был), удаление строки channelReaders. БЕЗ бан-объявления
+// (CHANNEL_BAN_KIND), БЕЗ bannedMembers, БЕЗ скрытия контента —
+// это не модерация, человек не нарушил правил.
+
+export async function revokeIfNoLongerVisible(ownerPubkey, ownerPrivKey, pubkey, removedFromGroupId, publish)
+// Оркестратор по псевдокоду DESIGN.md, этап 36: для каждого канала из
+// findChannelIdsByVisibilityGroup — если pubkey НЕ виден ни через одну
+// ДРУГУЮ привязанную группу (isStillVisibleViaOtherGroups, внутренняя,
+// не экспортируется) И у него ЕСТЬ строка channelReaders для этого
+// канала — revokeViewFromMember. Идемпотентно (нет readerRow -> no-op).
+```
+
+### `signals/contacts.js`'s `removeGroupMemberAction` — правка контракта
+
+Добавлен 6-й параметр `ownerPrivKey`... нет, `privKey` уже есть первым
+позиционным (сигнатура не меняется: `(ownerPubkey, privKey, groupId,
+pubkey, publish)`). В конце функции, ПОСЛЕ существующего
+`foldGroup(event, privKey)` (нужен АКТУАЛЬНЫЙ `groupMembers` — foldGroup
+удаляет старые строки группы и вставляет новые ДО проверки видимости
+через другие группы) — новый вызов: `await revokeIfNoLongerVisible(ownerPubkey,
+privKey, pubkey, groupId, publish);`.
