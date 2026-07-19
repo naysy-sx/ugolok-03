@@ -163,6 +163,7 @@ export default function Profile() {
 
 	const [loading, setLoading] = useState(true);
 	const [avatar, setAvatar] = useState("");
+	const [avatarUrl, setAvatarUrl] = useState("");
 	const [bio, setBio] = useState("");
 	const [savedBio, setSavedBio] = useState("");
 	const [bioStatus, setBioStatus] = useState("");
@@ -176,6 +177,7 @@ export default function Profile() {
 		(async () => {
 			const profile = await getProfile(id);
 			setAvatar(profile.avatar);
+			setAvatarUrl(profile.avatarUrl);
 			setBio(profile.bio);
 			setSavedBio(profile.bio);
 			setLoading(false);
@@ -231,6 +233,11 @@ export default function Profile() {
 			const fileBytes = new Uint8Array(await file.arrayBuffer());
 			await ensureConnected(id, privKeySig.value);
 			const url = await uploadAvatarBlob(serverUrl, fileBytes, file.type, privKeySig.value);
+			// Персистируем ПУБЛИЧНЫЙ URL отдельно от dataUrl-превью (этап 38-довесок) —
+			// без этого handleBioSubmit не смогла бы включить picture в свой republish
+			// и молча стирала бы уже опубликованный аватар при следующем сохранении био.
+			setAvatarUrl(url);
+			await updateProfile(id, { avatarUrl: url });
 			// savedBio (не текущий черновик bio) — republish не должен затирать уже
 			// опубликованное био незасабмиченным черновиком в поле ввода.
 			const event = buildProfileEvent(privKeySig.value, { name: login, about: savedBio, picture: url });
@@ -256,7 +263,10 @@ export default function Profile() {
 		setPublishStatus("публикация…");
 		try {
 			await ensureConnected(id, privKeySig.value);
-			const event = buildProfileEvent(privKeySig.value, { name: login, about: bio });
+			// avatarUrl (этап 38-довесок, найденный реальным использованием баг): БЕЗ
+			// него этот republish стирал бы уже опубликованный аватар — kind 0
+			// replaceable, отсутствие поля в новой версии = "поля больше нет".
+			const event = buildProfileEvent(privKeySig.value, { name: login, about: bio, picture: avatarUrl || undefined });
 			const result = await publish(event);
 			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
 		} catch (err) {

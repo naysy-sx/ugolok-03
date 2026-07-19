@@ -45,12 +45,17 @@ export async function getProfile(id) {
   if (!record) {
     throw new Error("keystore: аккаунт не найден");
   }
-  return { login: record.login ?? "", avatar: record.avatar ?? "", bio: record.bio ?? "" };
+  // avatarUrl (этап 38-довесок) — ПУБЛИЧНЫЙ Blossom-URL последней успешной
+  // загрузки, ОТДЕЛЬНО от avatar (локальный data:URL превью). Нужен, чтобы
+  // handleBioSubmit могла переиздать kind-0 БЕЗ потери уже опубликованной
+  // picture — сам dataUrl для этого непригоден (не публичный URL, огромный).
+  return { login: record.login ?? "", avatar: record.avatar ?? "", bio: record.bio ?? "", avatarUrl: record.avatarUrl ?? "" };
 }
 
 export async function updateProfile(id, patch) {
   const updates = {};
   if (patch.avatar !== undefined) updates.avatar = patch.avatar;
   if (patch.bio !== undefined) updates.bio = patch.bio;
+  if (patch.avatarUrl !== undefined) updates.avatarUrl = patch.avatarUrl;
   await db.table("keystore").update(id, updates);
 }

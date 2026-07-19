@@ -95,10 +95,10 @@ test("listAccounts: возвращает {id, login} для каждого ак�
 	}
 });
 
-test("getProfile: свежесозданный аккаунт — login из meta, avatar/bio пустые строки", async () => {
+test("getProfile: свежесозданный аккаунт — login из meta, avatar/bio/avatarUrl пустые строки", async () => {
 	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
 	const profile = await getProfile("acc-1");
-	assert.deepEqual(profile, { login: "alice", avatar: "", bio: "" });
+	assert.deepEqual(profile, { login: "alice", avatar: "", bio: "", avatarUrl: "" });
 });
 
 test("getProfile: несуществующий id — понятная ошибка, не крах", async () => {
@@ -110,7 +110,7 @@ test("updateProfile: сохраняет avatar и bio, не трогая login �
 	await encryptAndStore(privKey, "pw", "acc-1", { login: "alice" });
 	await updateProfile("acc-1", { avatar: "data:image/png;base64,AAAA", bio: "Привет!" });
 	const profile = await getProfile("acc-1");
-	assert.deepEqual(profile, { login: "alice", avatar: "data:image/png;base64,AAAA", bio: "Привет!" });
+	assert.deepEqual(profile, { login: "alice", avatar: "data:image/png;base64,AAAA", bio: "Привет!", avatarUrl: "" });
 	assert.deepEqual(new Uint8Array(await decryptPrivateKey("pw", "acc-1")), privKey);
 });
 
@@ -121,6 +121,28 @@ test("updateProfile: частичное обновление (только bio) 
 	const profile = await getProfile("acc-1");
 	assert.equal(profile.avatar, "data:image/png;base64,AAAA");
 	assert.equal(profile.bio, "Только био");
+});
+
+// Этап 38-довесок — найденный реальным использованием баг: handleBioSubmit
+// republish'ила kind-0 БЕЗ picture, стирая уже опубликованный аватар (kind 0
+// replaceable — republish без поля означает "поля больше нет"). avatarUrl —
+// ОТДЕЛЬНОЕ поле от avatar (dataUrl-превью): нужен именно ПУБЛИЧНЫЙ Blossom-URL,
+// который handleBioSubmit сможет переиспользовать при своём republish.
+test("updateProfile/getProfile: avatarUrl хранится отдельно от avatar (dataUrl превью не публикуемо, avatarUrl — публичный URL)", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
+	await updateProfile("acc-1", { avatar: "data:image/png;base64,AAAA", avatarUrl: "https://blossom.test/abc123.png" });
+	const profile = await getProfile("acc-1");
+	assert.equal(profile.avatar, "data:image/png;base64,AAAA");
+	assert.equal(profile.avatarUrl, "https://blossom.test/abc123.png");
+});
+
+test("updateProfile: обновление bio НЕ стирает уже сохранённый avatarUrl (частичный patch)", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
+	await updateProfile("acc-1", { avatarUrl: "https://blossom.test/abc123.png" });
+	await updateProfile("acc-1", { bio: "Новое био" });
+	const profile = await getProfile("acc-1");
+	assert.equal(profile.avatarUrl, "https://blossom.test/abc123.png");
+	assert.equal(profile.bio, "Новое био");
 });
 
 test("updateProfile: два разных аккаунта не пересекаются", async () => {
