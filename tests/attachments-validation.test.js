@@ -18,8 +18,8 @@ test("validateAttachment: недопустимый MIME (.exe) — отказ (A
 	assert.throws(() => validateAttachment({ mime: "application/x-msdownload", size: 1024 }), /тип/);
 });
 
-test("validateAttachment: аудио (голосовое) свыше 3 MB — отказ, даже если формат допустим", () => {
-	assert.throws(() => validateAttachment({ mime: "audio/ogg", size: 4 * 1024 * 1024 }), /размер/);
+test("validateAttachment: аудио свыше 50 MB — отказ, даже если формат допустим (этап 29-довесок)", () => {
+	assert.throws(() => validateAttachment({ mime: "audio/ogg", size: 51 * 1024 * 1024 }), /размер/);
 });
 
 test("validateAttachment: видео ровно на границе лимита (=MAX_VIDEO_SIZE) — допустимо, > — нет", () => {
@@ -49,6 +49,7 @@ test("ALLOWED_MIME_TYPES: содержит все MIME из F-AT-05 буквал
 	}
 });
 
-test("MAX_VOICE_SIZE — 3 MB (F-AT-04, голосовые ≤3 минуты)", () => {
-	assert.equal(MAX_VOICE_SIZE, 3 * 1024 * 1024);
+test("MAX_VOICE_SIZE/MAX_VIDEO_SIZE — 50 MB (этап 29-довесок, по просьбе пользователя)", () => {
+	assert.equal(MAX_VOICE_SIZE, 50 * 1024 * 1024);
+	assert.equal(MAX_VIDEO_SIZE, 50 * 1024 * 1024);
 });

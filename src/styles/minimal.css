@@ -703,6 +703,25 @@
 		object-fit: cover;
 	}
 
+	/* Прелоадер загрузки/скачивания вложений (этап 29-довесок) — чистый CSS, без
+	   библиотеки. prefers-reduced-motion уже глушит анимацию глобально (см. низ файла). */
+	.spinner {
+		display: inline-block;
+		width: 1em;
+		height: 1em;
+		border: 0.15em solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		vertical-align: -0.15em;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	/* Быстрые помощники выравнивания. */
 	.text-center {
 		text-align: center;

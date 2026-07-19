@@ -647,7 +647,11 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 				</p>
 			)}
 
-			{uploadingAttachment && <p role="status">Загрузка вложения…</p>}
+			{uploadingAttachment && (
+				<p class="cluster" role="status" style={{ alignItems: "center" }}>
+					<span class="spinner" aria-hidden="true" /> Загрузка вложения…
+				</p>
+			)}
 
 			<form class="cluster" onSubmit={handleSend} style={{ alignItems: "flex-end" }}>
 				<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />

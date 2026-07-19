@@ -48,7 +48,13 @@ function ImageAttachment({ attachment }) {
 			</p>
 		);
 	}
-	if (!url) return <p style={{ color: "var(--muted)" }}>Загрузка картинки…</p>;
+	if (!url) {
+		return (
+			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+				<span class="spinner" aria-hidden="true" /> Загрузка картинки…
+			</p>
+		);
+	}
 
 	return (
 		<>
@@ -63,9 +69,9 @@ function ImageAttachment({ attachment }) {
 	);
 }
 
-// Аудио/голосовое — тоже eager (лимит F-AT-04 всего 3 МБ, в отличие от видео/картинок
-// до 20 МБ — цена автозагрузки много ниже). voiceInline (F-AT-08, ≤32КБ) вообще не ходит
-// в сеть — декодируется прямо из base64 в payload сообщения.
+// Аудио/голосовое — тоже eager (F-AT-04, этап 29-довесок: тот же потолок 50 МБ, что
+// видео — раньше был отдельный лимит 3 МБ, поднят по просьбе пользователя). voiceInline
+// (F-AT-08, ≤32КБ) вообще не ходит в сеть — декодируется прямо из base64 в payload.
 function AudioAttachment({ attachment }) {
 	const [url, setUrl] = useState(null);
 	const [error, setError] = useState("");
@@ -100,12 +106,19 @@ function AudioAttachment({ attachment }) {
 			</p>
 		);
 	}
-	if (!url) return <p style={{ color: "var(--muted)" }}>Загрузка{attachment.voice ? " голосового" : " аудио"}…</p>;
+	if (!url) {
+		return (
+			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+				<span class="spinner" aria-hidden="true" /> Загрузка{attachment.voice ? " голосового" : " аудио"}…
+			</p>
+		);
+	}
 	return <audio controls src={url} />;
 }
 
-// Видео — ЛЕНИВАЯ загрузка по клику (до 20 МБ; автозагрузка каждого видео в истории
-// чата была бы избыточной — в отличие от картинок, которые ожидаются видимыми сразу).
+// Видео — ЛЕНИВАЯ загрузка по клику (до 50 МБ, этап 29-довесок; автозагрузка каждого
+// видео в истории чата была бы избыточной — в отличие от картинок, ожидаемых видимыми
+// сразу).
 function VideoAttachment({ attachment }) {
 	const [url, setUrl] = useState(null);
 	const [loading, setLoading] = useState(false);
@@ -138,7 +151,8 @@ function VideoAttachment({ attachment }) {
 			<span>
 				{attachment.name} ({formatFileSize(attachment.size)})
 			</span>
-			<button type="button" onClick={handleLoad} disabled={loading}>
+			<button type="button" onClick={handleLoad} disabled={loading} class="cluster" style={{ alignItems: "center" }}>
+				{loading && <span class="spinner" aria-hidden="true" />}
 				{loading ? "Загрузка…" : "Воспроизвести"}
 			</button>
 			{error && (
@@ -180,7 +194,8 @@ function FileAttachment({ attachment }) {
 			<span>
 				{attachment.name} ({formatFileSize(attachment.size)})
 			</span>
-			<button type="button" onClick={handleDownload} disabled={loading}>
+			<button type="button" onClick={handleDownload} disabled={loading} class="cluster" style={{ alignItems: "center" }}>
+				{loading && <span class="spinner" aria-hidden="true" />}
 				{loading ? "Скачивание…" : "Скачать"}
 			</button>
 			{error && (
