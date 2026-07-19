@@ -9,7 +9,7 @@ import { createOwnKeyPackage, joinFromWelcome, serializeState } from "../src/cor
 import { ensureChatEstablished, receiveGroupMessageEvent, sendMessage, computeGroupId } from "../src/domain/messaging/chat.js";
 import { buildEditText, parseEditText, editMessage, applyIncomingEditIfMarker } from "../src/domain/messaging/edits.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -81,7 +81,7 @@ test("editMessage: обновляет СВОЮ локальную строку �
 
 	await editMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, row.msgId, "исправленный текст", 2, publish);
 
-	const updated = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, row.msgId]).first();
+	const updated = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, row.msgId]).first(), DB_KEY);
 	assert.equal(updated.text, "исправленный текст");
 	assert.equal(updated.edited, true);
 	assert.equal(updated.editedAt, 2);
@@ -149,7 +149,7 @@ test("applyIncomingEditIfMarker: Bob получает правку от Алис
 	assert.equal(applied, true);
 
 	await asBob(groupIdHex, updatedBobSerializedState, async () => {
-		const bobRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, originalMsgId]).first();
+		const bobRow = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, originalMsgId]).first(), DB_KEY);
 		assert.equal(bobRow.text, "исправлено Алисой");
 		assert.equal(bobRow.edited, true);
 		assert.equal(bobRow.editedAt, 2);
@@ -159,16 +159,22 @@ test("applyIncomingEditIfMarker: Bob получает правку от Алис
 test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamportTs, применённая ПЕРВОЙ, не откатывается более старой правкой, пришедшей ПОЗЖЕ", async () => {
 	const hTag = ["h", "aa".repeat(32)];
 	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
-	await db.table("messages").add({
-		ownerPubkey: BOB_PUB,
-		chatId: ALICE_PUB,
-		lamportTs: 1,
-		senderPubkey: ALICE_PUB,
-		id: "orig-evt",
-		text: "оригинал",
-		status: "sent",
-		msgId: "target-msgid",
-	});
+	await db.table("messages").add(
+		toEncryptedRow(
+			{
+				ownerPubkey: BOB_PUB,
+				chatId: ALICE_PUB,
+				lamportTs: 1,
+				senderPubkey: ALICE_PUB,
+				id: "orig-evt",
+				text: "оригинал",
+				status: "sent",
+				msgId: "target-msgid",
+			},
+			MESSAGES_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
+	);
 
 	// Правка с БОЛЬШИМ editLamportTs (10) применяется первой.
 	const newerApplied = await applyIncomingEditIfMarker(
@@ -189,7 +195,7 @@ test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamp
 	);
 	assert.equal(olderApplied, false, "устаревшая правка (editLamportTs=5 < уже применённых 10) отклонена");
 
-	const row = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, "target-msgid"]).first();
+	const row = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, "target-msgid"]).first(), DB_KEY);
 	assert.equal(row.text, "новая версия (позже по editLamportTs)", "текст остался от правки с большим editLamportTs");
 	assert.equal(row.editedAt, 10);
 });

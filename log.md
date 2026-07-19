@@ -2444,3 +2444,42 @@ Regression: `npm test` 639/639. `npm run build` ~241 КБ gzip.
 Живой E2E-прогон через браузер НЕ выполнен в этой сессии — нет
 browser-инструмента; полнота проверена регрессией + построчной
 сверкой всех вызовов затронутых функций (`grep` по кодовому дереву).
+
+## Этап 40. AC-16, Tier 1 — шифрование пользовательского контента
+
+Продолжение этапа 39 по инструкции пользователя "все 4 тира
+последовательно". Tier 1 = ИМЕННО те таблицы, что пользователь
+проверял вручную: messages, posts, comments, channelMessages,
+channels. Та же архитектура toEncryptedRow/fromEncryptedRow,
+table-fields.js расширен новыми константами.
+
+Реальная находка (не гипотеза, всплыла при построчной сверке):
+partial `.modify()`/`.update()` по sensitive-полю в трёх местах
+(messages.text — edits.js/deletions.js; posts.text/attachments —
+post.js's updateDraftPost; channels.name/description/rules/avatar —
+channel.js's receiveChannelMetadata) писал бы новое значение
+plaintext рядом с ciphertext, не внутри него — тот же класс бага,
+что Uint8Array/BigInt в db-crypto.js на этапе 39, только уровнем
+выше (доменная логика, не сериализация). Исправлено переводом на
+decrypt-merge-encrypt через put().
+
+Вторая находка: moderation.js's deleteChannelLocally/
+receiveBanAnnouncement фильтровали comments по c.channelId/
+c.authorPubkey — оба sensitive для ЭТОЙ таблицы (в отличие от
+posts/channelMessages, где те же поля остались plaintext) — фильтр
+на сырых строках сравнивал с undefined, значит удаление канала не
+чистило бы его комментарии, а бан не скрывал бы контент забаненного.
+Исправлено расшифровкой перед фильтром.
+
+dbKey протянут до lazy-chat.js/lazy-channel.js (все три windowed-
+загрузчика) и до UI (channels.jsx/channel.jsx/channel-chat.jsx/
+moderation-panel.jsx).
+
+Добавлено 5 AC-16-тестов (messages/posts/comments/channelMessages/
+channels) — сырой дамп таблицы не содержит sensitive-поле, прямой
+адверсарный ответ на исходный вопрос пользователя ("это нормально
+вообще?").
+
+Regression: `npm test` 644/644. `npm run build` ~241 КБ gzip.
+Живой E2E через браузер не выполнен (нет browser-инструмента в этой
+сессии) — то же ограничение, что этап 39.

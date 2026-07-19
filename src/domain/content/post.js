@@ -3,7 +3,8 @@ import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { transitionPost } from "./post-machine.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { POSTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -14,40 +15,50 @@ async function requirePublishOk(publish, event) {
 
 // DESIGN.md, "Этап 31", формализация 1 — draft НИКОГДА не публикуется, строго
 // локальная запись до первого PUBLISH.
-export async function createDraftPost(ownerPubkey, channelId, { text, attachments = [] }) {
+export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments = [] }) {
 	const postId = crypto.randomUUID();
-	await db.table("posts").put({
-		ownerPubkey,
-		id: postId,
-		channelId,
-		authorPubkey: ownerPubkey,
-		text,
-		attachments,
-		status: "draft",
-		keyVersion: null,
-		createdAt: Math.floor(Date.now() / 1000),
-		deleted: false,
-	});
+	await db.table("posts").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: postId,
+				channelId,
+				authorPubkey: ownerPubkey,
+				text,
+				attachments,
+				status: "draft",
+				keyVersion: null,
+				createdAt: Math.floor(Date.now() / 1000),
+				deleted: false,
+			},
+			POSTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return { postId };
 }
 
 // Локальное редактирование — до первой публикации, ИЛИ после UNPUBLISH (снова draft).
-export async function updateDraftPost(ownerPubkey, postId, { text, attachments }) {
-	const row = await db.table("posts").get([ownerPubkey, postId]);
-	if (!row) throw new Error("пост не найден");
-	if (row.status !== "draft") {
+// text/attachments — sensitive поля (CONTRACTS.md, Tier 1): decrypt-merge-encrypt,
+// не partial .update() (тот же класс находки, что messages/edits.js).
+export async function updateDraftPost(ownerPubkey, dbKey, postId, { text, attachments }) {
+	const raw = await db.table("posts").get([ownerPubkey, postId]);
+	if (!raw) throw new Error("пост не найден");
+	if (raw.status !== "draft") {
 		throw new Error("редактировать можно только черновик (unpublish уже опубликованный, затем редактировать)");
 	}
-	await db.table("posts").update([ownerPubkey, postId], { text, attachments });
+	const merged = { ...fromEncryptedRow(raw, dbKey), text, attachments };
+	await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
 }
 
 // Общая часть publishPost/archivePost/unpublishPost — DESIGN.md формализация 1:
 // статус — ЧАСТЬ синхронизируемого payload'а, republish того же d-tag (kind 30061
 // параметризованно-replaceable, NIP-01) заменяет предыдущую версию у всех читателей.
 async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsmEvent, publish) {
-	const row = await db.table("posts").get([ownerPubkey, postId]);
-	if (!row) throw new Error("пост не найден");
-	const newStatus = transitionPost(row.status, fsmEvent); // бросает на недопустимый переход
+	const raw = await db.table("posts").get([ownerPubkey, postId]);
+	if (!raw) throw new Error("пост не найден");
+	const newStatus = transitionPost(raw.status, fsmEvent); // бросает на недопустимый переход
+	const row = fromEncryptedRow(raw, dbKey); // text/attachments — sensitive, нужны для republish-контента
 
 	const channelRow = await db.table("channels").get([ownerPubkey, row.channelId]);
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, row.channelId]);
@@ -136,22 +147,28 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 	const existing = await db.table("posts").get([ownerPubkey, postId]);
 	const createdAt = existing ? existing.createdAt : event.created_at;
 
-	await db.table("posts").put({
-		ownerPubkey,
-		id: postId,
-		channelId: channelRow.id,
-		authorPubkey: event.pubkey,
-		text: parsed.text,
-		attachments: parsed.attachments,
-		status: parsed.status,
-		keyVersion: meta.currentVersion,
-		createdAt,
-		deleted: false,
-	});
+	await db.table("posts").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: postId,
+				channelId: channelRow.id,
+				authorPubkey: event.pubkey,
+				text: parsed.text,
+				attachments: parsed.attachments,
+				status: parsed.status,
+				keyVersion: meta.currentVersion,
+				createdAt,
+				deleted: false,
+			},
+			POSTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return true;
 }
 
-export async function listChannelPosts(ownerPubkey, channelId) {
-	const rows = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
-	return rows.filter((r) => r.channelId === channelId && !r.deleted);
+export async function listChannelPosts(ownerPubkey, dbKey, channelId) {
+	const raw = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
+	return raw.filter((r) => r.channelId === channelId && !r.deleted).map((r) => fromEncryptedRow(r, dbKey));
 }

@@ -1,6 +1,7 @@
 import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 const EDIT_MARKER_PREFIX = "__ugolok_edit__:";
 
@@ -26,19 +27,19 @@ export function parseEditText(text) {
 // НЕ трогается; editLamportTs (=lamportTs самой правки, отдельный тик) хранится
 // отдельно в editedAt для LWW-разрешения конкурентных правок.
 export async function editMessage(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish) {
-	const targetRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
-	if (!targetRow || targetRow.senderPubkey !== ownerPubkey) {
+	const raw = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
+	if (!raw || raw.senderPubkey !== ownerPubkey) {
 		throw new Error("нельзя редактировать чужое сообщение");
 	}
-	if (targetRow.deleted) {
+	if (raw.deleted) {
 		throw new Error("нельзя редактировать удалённое сообщение");
 	}
 	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildEditText(msgId, newText), lamportTs, publish);
-	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).modify({
-		text: newText,
-		edited: true,
-		editedAt: lamportTs,
-	});
+	// text/edited/editedAt — sensitive поля (CONTRACTS.md, Tier 1): partial .modify()
+	// писал бы их plaintext поверх зашифрованной строки, минуя ciphertext вовсе —
+	// поэтому decrypt-merge-encrypt через put(), не modify().
+	const merged = { ...fromEncryptedRow(raw, dbKey), text: newText, edited: true, editedAt: lamportTs };
+	await db.table("messages").put(toEncryptedRow(merged, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	return result;
 }
 
@@ -57,22 +58,20 @@ export async function applyIncomingEditIfMarker(ownerPubkey, dbKey, event, recei
 	const groupRow = fromEncryptedRow(groupRaw, dbKey);
 
 	const editorPubkey = groupRow.contactPubkey;
-	const targetRow = await db
+	const raw = await db
 		.table("messages")
 		.where("[ownerPubkey+chatId+msgId]")
 		.equals([ownerPubkey, groupRow.contactPubkey, parsed.msgId])
 		.first();
-	if (!targetRow) return false; // правка раньше оригинала — тот же прецедент, что delete
-	if (targetRow.deleted) return false;
-	if (targetRow.senderPubkey !== editorPubkey) return false; // F-EV-08 аналог
+	if (!raw) return false; // правка раньше оригинала — тот же прецедент, что delete
+	if (raw.deleted) return false;
+	if (raw.senderPubkey !== editorPubkey) return false; // F-EV-08 аналог
 
+	const targetRow = fromEncryptedRow(raw, dbKey);
 	const editLamportTs = receivedResult.lamportTs;
 	if (targetRow.editedAt !== undefined && targetRow.editedAt >= editLamportTs) return false; // LWW
 
-	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, groupRow.contactPubkey, parsed.msgId]).modify({
-		text: parsed.text,
-		edited: true,
-		editedAt: editLamportTs,
-	});
+	const merged = { ...targetRow, text: parsed.text, edited: true, editedAt: editLamportTs };
+	await db.table("messages").put(toEncryptedRow(merged, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	return true;
 }

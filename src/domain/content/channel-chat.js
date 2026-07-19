@@ -2,7 +2,8 @@ import { db } from "../../core/store/database.js";
 import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CHANNEL_MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -37,16 +38,22 @@ export async function sendChannelMessage(ownerPubkey, ownerPrivKey, dbKey, chann
 	);
 	await requirePublishOk(publish, event);
 
-	await db.table("channelMessages").put({
-		ownerPubkey,
-		id: messageId,
-		channelId,
-		authorPubkey: ownerPubkey,
-		text,
-		attachments,
-		keyVersion: meta.currentVersion,
-		createdAt: event.created_at,
-	});
+	await db.table("channelMessages").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: messageId,
+				channelId,
+				authorPubkey: ownerPubkey,
+				text,
+				attachments,
+				keyVersion: meta.currentVersion,
+				createdAt: event.created_at,
+			},
+			CHANNEL_MESSAGES_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return { messageId };
 }
 
@@ -87,15 +94,21 @@ export async function receiveChannelMessage(ownerPubkey, dbKey, event) {
 	const messageId = dTag[1].slice(dTag[1].indexOf(":") + 1);
 	const attachments = channelRow.allowChatAttachments ? parsed.attachments : [];
 
-	await db.table("channelMessages").put({
-		ownerPubkey,
-		id: messageId,
-		channelId: channelRow.id,
-		authorPubkey: event.pubkey,
-		text: parsed.text,
-		attachments,
-		keyVersion: meta.currentVersion,
-		createdAt: event.created_at,
-	});
+	await db.table("channelMessages").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: messageId,
+				channelId: channelRow.id,
+				authorPubkey: event.pubkey,
+				text: parsed.text,
+				attachments,
+				keyVersion: meta.currentVersion,
+				createdAt: event.created_at,
+			},
+			CHANNEL_MESSAGES_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return true;
 }

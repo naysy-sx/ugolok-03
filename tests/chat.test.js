@@ -8,7 +8,7 @@ import { decrypt as nip44Decrypt } from "../src/core/crypto/nip44.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
 import { joinFromWelcome, createOwnKeyPackage, deserializeState, serializeState } from "../src/core/crypto/mls-session.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import {
 	computeGroupId,
 	ensureOwnKeyPackagePublished,
@@ -273,7 +273,7 @@ test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ б
 	assert.equal(outboxRows[0].event.kind, 445, "в outbox должен лежать ВЕСЬ подписанный event (МЛС-ратчет уже продвинут — регенерировать нельзя), не только id");
 	assert.equal(outboxRows[0].event.id, result.eventId);
 
-	const messageRows = await db.table("messages").where("id").equals(result.eventId).toArray();
+	const messageRows = (await db.table("messages").where("id").equals(result.eventId).toArray()).map((r) => fromEncryptedRow(r, DB_KEY));
 	assert.equal(messageRows.length, 1, "сообщение должно остаться в локальной истории, не потеряно молча");
 	assert.equal(messageRows[0].status, "failed");
 	assert.equal(messageRows[0].text, "не долетит");
@@ -321,6 +321,22 @@ test("acceptWelcome: требует опубликованный собстве�
 	await assert.rejects(() => acceptWelcome(BOB_PUB, DB_KEY, ALICE_PUB, new Uint8Array(10)), /KeyPackage/);
 });
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
+// увидел "ну чё" открытым текстом в этой таблице.
+test("AC-16: messages хранится зашифрованным — сырой дамп не содержит text/attachment", async () => {
+	await establishAliceToBob();
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "секретное сообщение", 1, async () => ({ ok: true }));
+	const raw = await db.table("messages").where("id").equals(eventId).first();
+	assert.equal(raw.id, eventId);
+	assert.equal("text" in raw, false);
+	assert.equal("sentAt" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.text, "секретное сообщение");
+});
+
 test("sendMessage: каждое сообщение публикуется с НОВЫМ эфемерным ключом (не переиспользуется)", async () => {
 	await establishAliceToBob();
 	const events = [];
@@ -335,11 +351,11 @@ test("sendMessage: каждое сообщение публикуется с Н�
 
 test("getChatHistory: сортировка по (lamportTs, senderPubkey, eventId) — F-MS-05/AC-05", async () => {
 	await db.table("messages").bulkAdd([
-		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e2", text: "b", status: "sent" },
-		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "a", status: "sent" },
-		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e0", text: "c-tiebreak-by-id", status: "sent" },
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e2", text: "b", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "a", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 2, senderPubkey: ALICE_PUB, id: "e0", text: "c-tiebreak-by-id", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const history = await getChatHistory(ALICE_PUB, BOB_PUB);
+	const history = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
 	assert.deepEqual(
 		history.map((m) => m.id),
 		["e1", "e0", "e2"],
@@ -349,19 +365,19 @@ test("getChatHistory: сортировка по (lamportTs, senderPubkey, eventI
 test("getChatHistory: не путает разные чаты (chatId изоляция)", async () => {
 	const carolPub = bytesToHex(getPublicKey(new Uint8Array(32).fill(3)));
 	await db.table("messages").bulkAdd([
-		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e1", text: "for bob", status: "sent" },
-		{ ownerPubkey: ALICE_PUB, chatId: carolPub, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e2", text: "for carol", status: "sent" },
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e1", text: "for bob", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: carolPub, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e2", text: "for carol", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const history = await getChatHistory(ALICE_PUB, BOB_PUB);
+	const history = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
 	assert.deepEqual(history.map((m) => m.text), ["for bob"]);
 });
 
 test("getChatHistory: owner-scoping — не путает переписки РАЗНЫХ локальных аккаунтов на одном устройстве (критическая находка)", async () => {
 	await db.table("messages").bulkAdd([
-		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "alice's copy", status: "sent" },
-		{ ownerPubkey: "matero-pub", chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e2", text: "matero's unrelated copy", status: "sent" },
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e1", text: "alice's copy", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: "matero-pub", chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "e2", text: "matero's unrelated copy", status: "sent" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const aliceHistory = await getChatHistory(ALICE_PUB, BOB_PUB);
+	const aliceHistory = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
 	assert.deepEqual(aliceHistory.map((m) => m.text), ["alice's copy"]);
 });
 
@@ -371,7 +387,7 @@ test("этап 29: sendMessage — sentAt (wall-clock) генерируется 
 	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет", 1, async () => ({ ok: true }));
 	const after = Math.floor(Date.now() / 1000);
 
-	const row = await db.table("messages").where("id").equals(eventId).first();
+	const row = fromEncryptedRow(await db.table("messages").where("id").equals(eventId).first(), DB_KEY);
 	assert.equal(typeof row.sentAt, "number");
 	assert.ok(row.sentAt >= before && row.sentAt <= after, "sentAt — реальное время отправки, не что попало");
 	assert.equal(row.attachment, undefined, "без вложения — поле отсутствует");
@@ -393,7 +409,7 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 	const publish = async () => ({ ok: true });
 	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "смотри", 1, publish, attachment);
 
-	const aliceRow = await db.table("messages").where("id").equals(eventId).first();
+	const aliceRow = fromEncryptedRow(await db.table("messages").where("id").equals(eventId).first(), DB_KEY);
 	assert.deepEqual(aliceRow.attachment, attachment, "своя копия сразу содержит вложение (оптимистично, как text)");
 
 	const sentEvents = [];
@@ -409,7 +425,7 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 	);
 	assert.deepEqual(received.attachment, attachment, "вложение доходит до собеседника без искажений");
 
-	const bobRow = await db.table("messages").where("id").equals(sentEvent.id).first();
+	const bobRow = fromEncryptedRow(await db.table("messages").where("id").equals(sentEvent.id).first(), DB_KEY);
 	assert.deepEqual(bobRow.attachment, attachment, "и попадает в его локальную строку тоже");
 });
 

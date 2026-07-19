@@ -11,7 +11,7 @@ import {
 import { parseAndVerifyAllowlist } from "../../core/crypto/comment-allowlist.js";
 import { sendViewGrant, sendSubscribeRequest } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -51,19 +51,25 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 	);
 	await requirePublishOk(publish, metaEvent);
 
-	await db.table("channels").put({
-		ownerPubkey,
-		id: channelId,
-		creatorPubkey: ownerPubkey,
-		name,
-		description,
-		rules,
-		avatar: avatarDescriptor ?? null,
-		allowChatAttachments,
-		channelTopic: channelTopicHex,
-		role: "owner",
-		createdAt: Math.floor(Date.now() / 1000),
-	});
+	await db.table("channels").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: channelId,
+				creatorPubkey: ownerPubkey,
+				name,
+				description,
+				rules,
+				avatar: avatarDescriptor ?? null,
+				allowChatAttachments,
+				channelTopic: channelTopicHex,
+				role: "owner",
+				createdAt: Math.floor(Date.now() / 1000),
+			},
+			CHANNELS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId, keyVersion: version, channelKey: channelKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
 	await db.table("channelKeyMeta").put({ ownerPubkey, channelId, currentVersion: version });
 
@@ -90,19 +96,19 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 	return { channelId };
 }
 
-export async function listOwnedChannels(ownerPubkey) {
+export async function listOwnedChannels(ownerPubkey, dbKey) {
 	const rows = await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray();
-	return rows.filter((r) => r.role === "owner");
+	return rows.filter((r) => r.role === "owner").map((r) => fromEncryptedRow(r, dbKey));
 }
 
-export async function listSubscribedChannels(ownerPubkey) {
+export async function listSubscribedChannels(ownerPubkey, dbKey) {
 	const rows = await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray();
-	return rows.filter((r) => r.role === "subscriber");
+	return rows.filter((r) => r.role === "subscriber").map((r) => fromEncryptedRow(r, dbKey));
 }
 
-export async function listAvailableChannels(ownerPubkey) {
+export async function listAvailableChannels(ownerPubkey, dbKey) {
 	const rows = await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray();
-	return rows.filter((r) => r.role === "available");
+	return rows.filter((r) => r.role === "available").map((r) => fromEncryptedRow(r, dbKey));
 }
 
 // kind 30053 — decryptChannelKeyGrant БРОСАЕТ на "не мой грант" (NIP-44 AEAD-проверка
@@ -124,19 +130,25 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 
 	const existing = await db.table("channels").get([ownerPubkey, grant.channelId]);
 	if (!existing) {
-		await db.table("channels").put({
-			ownerPubkey,
-			id: grant.channelId,
-			creatorPubkey: channelOwnerPubkey,
-			name: "",
-			description: "",
-			rules: "",
-			avatar: null,
-			allowChatAttachments: true,
-			channelTopic: grant.channelTopic,
-			role: "available",
-			createdAt: Math.floor(Date.now() / 1000),
-		});
+		await db.table("channels").put(
+			toEncryptedRow(
+				{
+					ownerPubkey,
+					id: grant.channelId,
+					creatorPubkey: channelOwnerPubkey,
+					name: "",
+					description: "",
+					rules: "",
+					avatar: null,
+					allowChatAttachments: true,
+					channelTopic: grant.channelTopic,
+					role: "available",
+					createdAt: Math.floor(Date.now() / 1000),
+				},
+				CHANNELS_PLAINTEXT_FIELDS,
+				dbKey,
+			),
+		);
 	}
 }
 
@@ -159,13 +171,17 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
 	if (plaintext === null) return;
 	const parsed = JSON.parse(plaintext);
-	await db.table("channels").update([ownerPubkey, channelId], {
+	// name/description/rules/avatar — sensitive поля (CONTRACTS.md, Tier 1): decrypt-
+	// merge-encrypt через put(), не partial .update() (та же находка, что messages/posts).
+	const merged = {
+		...fromEncryptedRow(existing, dbKey),
 		name: parsed.name,
 		description: parsed.description,
 		rules: parsed.rules,
 		avatar: parsed.avatar,
 		allowChatAttachments: parsed.allowChatAttachments ?? true,
-	});
+	};
+	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
 }
 
 // kind 30054 — если МОЙ pubkey появился в allowedAuthors и я ещё не owner — апгрейд

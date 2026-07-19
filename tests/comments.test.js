@@ -72,6 +72,23 @@ async function grantViewTo(channelId, targetPubkey) {
 	return grantPublish[0];
 }
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
+// увидел комментарий "Куси" открытым текстом в этой таблице.
+test("AC-16: comments хранится зашифрованным — сырой дамп не содержит text/authorPubkey", async () => {
+	const { channelId } = await setupChannelWithBobSubscribed();
+	const postId = "post-1";
+	const { commentId } = await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postId, postId, "секретный комментарий", [], capturingPublish([]));
+	const raw = await db.table("comments").get([BOB_PUB, commentId]);
+	assert.equal(raw.id, commentId);
+	assert.equal("text" in raw, false);
+	assert.equal("authorPubkey" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.text, "секретный комментарий");
+});
+
 test("addComment/receiveComment: Боб (подписчик с COMMENT) комментирует пост, Алиса получает и верифицирует", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const postId = "post-1";
@@ -84,7 +101,7 @@ test("addComment/receiveComment: Боб (подписчик с COMMENT) комм
 
 	const applied = await receiveComment(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, true);
-	const tree = await getCommentsTree(ALICE_PUB, postId);
+	const tree = await getCommentsTree(ALICE_PUB, DB_KEY, postId);
 	assert.equal(tree.length, 1);
 	assert.equal(tree[0].text, "отличная статья!");
 });
@@ -102,7 +119,7 @@ test("АДВЕРСАРНЫЙ (F-EV-06/AC-08b): VIEW-держатель БЕЗ CO
 
 	const applied = await receiveComment(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, false, "комментарий без COMMENT-права обязан быть отклонён (AC-08b)");
-	assert.equal((await getCommentsTree(ALICE_PUB, postId)).length, 0);
+	assert.equal((await getCommentsTree(ALICE_PUB, DB_KEY, postId)).length, 0);
 });
 
 test("Владелец канала может комментировать СВОЙ канал, даже не будучи в commentAllowlists (он туда никогда не подписывается на себя)", async () => {
@@ -128,7 +145,7 @@ test("getCommentsTree: строит вложенность по parentId (отв
 	const replyEvent = replyPublished.find((e) => e.kind === 30062);
 	await receiveComment(BOB_PUB, DB_KEY, replyEvent);
 
-	const tree = await getCommentsTree(BOB_PUB, postId);
+	const tree = await getCommentsTree(BOB_PUB, DB_KEY, postId);
 	assert.equal(tree.length, 1);
 	assert.equal(tree[0].id, rootId);
 	assert.equal(tree[0].replies.length, 1);
@@ -150,6 +167,6 @@ test("countTopLevelCommentsByPost: считает только верхнеур�
 	assert.equal(counts.get(postB), 1);
 	assert.equal(counts.get("post-без-комментариев"), 0);
 
-	const treeA = await getCommentsTree(BOB_PUB, postA);
+	const treeA = await getCommentsTree(BOB_PUB, DB_KEY, postA);
 	assert.equal(treeA.length, counts.get(postA), "бейдж обязан совпадать с tree.length после раскрытия");
 });

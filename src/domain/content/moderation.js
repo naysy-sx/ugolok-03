@@ -133,7 +133,7 @@ export async function banMember(ownerPubkey, ownerPrivKey, dbKey, channelId, tar
 	await db.table("channelReaders").delete([ownerPubkey, channelId, targetPubkey]);
 }
 
-async function deleteChannelLocally(ownerPubkey, channelId) {
+async function deleteChannelLocally(ownerPubkey, dbKey, channelId) {
 	await db.table("channels").delete([ownerPubkey, channelId]);
 	await db.table("channelKeyMeta").delete([ownerPubkey, channelId]);
 	await db.table("channelKeys").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).delete();
@@ -145,7 +145,11 @@ async function deleteChannelLocally(ownerPubkey, channelId) {
 
 	const posts = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
 	await db.table("posts").bulkDelete(posts.filter((p) => p.channelId === channelId).map((p) => [ownerPubkey, p.id]));
-	const comments = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	// comments.channelId — sensitive поле (CONTRACTS.md, Tier 1), в отличие от posts/
+	// channelMessages, где channelId остаётся plaintext — фильтр обязан идти по
+	// расшифрованным строкам, иначе c.channelId всегда undefined на сырой строке.
+	const commentsRaw = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const comments = commentsRaw.map((c) => fromEncryptedRow(c, dbKey));
 	await db.table("comments").bulkDelete(comments.filter((c) => c.channelId === channelId).map((c) => [ownerPubkey, c.id]));
 	const messages = await db.table("channelMessages").where("ownerPubkey").equals(ownerPubkey).toArray();
 	await db.table("channelMessages").bulkDelete(messages.filter((m) => m.channelId === channelId).map((m) => [ownerPubkey, m.id]));
@@ -176,13 +180,17 @@ export async function receiveBanAnnouncement(ownerPubkey, dbKey, event) {
 	const { targetPubkey } = JSON.parse(plaintext);
 
 	if (targetPubkey === ownerPubkey) {
-		await deleteChannelLocally(ownerPubkey, channelRow.id);
+		await deleteChannelLocally(ownerPubkey, dbKey, channelRow.id);
 		return true;
 	}
 
 	await db.table("bannedMembers").put({ ownerPubkey, channelId: channelRow.id, pubkey: targetPubkey, bannedAt: event.created_at });
 
-	const comments = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	// comments.channelId/authorPubkey — sensitive (см. deleteChannelLocally выше) —
+	// фильтр на расшифрованных строках; .update({deleted:true}) остаётся точечным
+	// partial (deleted — plaintext поле, ничего не шифрует поверх ciphertext).
+	const commentsRaw = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const comments = commentsRaw.map((c) => fromEncryptedRow(c, dbKey));
 	for (const c of comments) {
 		if (c.channelId === channelRow.id && c.authorPubkey === targetPubkey && !c.deleted) {
 			await db.table("comments").update([ownerPubkey, c.id], { deleted: true });

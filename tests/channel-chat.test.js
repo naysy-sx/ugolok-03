@@ -75,6 +75,22 @@ async function grantViewTo(channelId, targetPubkey) {
 	return grantPublish[0];
 }
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
+// увидел "Добро пожаловать в общий чат!" открытым текстом в этой таблице.
+test("AC-16: channelMessages хранится зашифрованным — сырой дамп не содержит text/attachments", async () => {
+	const { channelId } = await setupChannelWithBobSubscribed();
+	const { messageId } = await sendChannelMessage(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "секретное сообщение", [], capturingPublish([]));
+	const raw = await db.table("channelMessages").get([BOB_PUB, messageId]);
+	assert.equal(raw.id, messageId);
+	assert.equal("text" in raw, false);
+	assert.equal("attachments" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.text, "секретное сообщение");
+});
+
 test("sendChannelMessage/receiveChannelMessage: Боб (подписчик с COMMENT) пишет в чат, Алиса получает", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const published = [];
@@ -86,7 +102,7 @@ test("sendChannelMessage/receiveChannelMessage: Боб (подписчик с CO
 
 	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, true);
-	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
+	const { messages } = await loadChannelChatWindow(ALICE_PUB, DB_KEY, channelId, { limit: 15 });
 	assert.equal(messages.length, 1);
 	assert.equal(messages[0].text, "привет всем");
 });
@@ -112,7 +128,7 @@ test("АДВЕРСАРНЫЙ: VIEW-держатель БЕЗ COMMENT пишет 
 
 	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, false, "сообщение без COMMENT-права обязано быть отклонено");
-	assert.equal((await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 })).messages.length, 0);
+	assert.equal((await loadChannelChatWindow(ALICE_PUB, DB_KEY, channelId, { limit: 15 })).messages.length, 0);
 });
 
 test("allowChatAttachments=false: вложение обрезается на приёме, текст сообщения остаётся", async () => {
@@ -123,7 +139,7 @@ test("allowChatAttachments=false: вложение обрезается на п�
 
 	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, true);
-	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
+	const { messages } = await loadChannelChatWindow(ALICE_PUB, DB_KEY, channelId, { limit: 15 });
 	assert.equal(messages[0].text, "вот файл", "текст сохраняется");
 	assert.deepEqual(messages[0].attachments, [], "вложение обрезано политикой канала, не отброшено всё сообщение");
 });
@@ -135,6 +151,6 @@ test("allowChatAttachments=true (default): вложение сохраняетс
 	const event = published.find((e) => e.kind === 30063);
 
 	await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
-	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
+	const { messages } = await loadChannelChatWindow(ALICE_PUB, DB_KEY, channelId, { limit: 15 });
 	assert.equal(messages[0].attachments.length, 1);
 });

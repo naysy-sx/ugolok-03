@@ -3,9 +3,12 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { loadPostsWindow, loadCommentsWindow, loadChannelChatWindow } from "../src/core/sync/lazy-channel.js";
+import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { POSTS_PLAINTEXT_FIELDS, COMMENTS_PLAINTEXT_FIELDS, CHANNEL_MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const OWNER = "owner-pub";
 const CHANNEL_ID = "channel-1";
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -25,25 +28,31 @@ after(() => {
 async function seedPosts(count, { channelId = CHANNEL_ID, ownerPubkey = OWNER, statusFor = () => "published" } = {}) {
 	const rows = [];
 	for (let i = 1; i <= count; i++) {
-		rows.push({
-			ownerPubkey,
-			id: `${channelId}-post-${i}`,
-			channelId,
-			authorPubkey: ownerPubkey,
-			text: `пост ${i}`,
-			attachments: [],
-			status: statusFor(i),
-			keyVersion: 1,
-			createdAt: i,
-			deleted: false,
-		});
+		rows.push(
+			toEncryptedRow(
+				{
+					ownerPubkey,
+					id: `${channelId}-post-${i}`,
+					channelId,
+					authorPubkey: ownerPubkey,
+					text: `пост ${i}`,
+					attachments: [],
+					status: statusFor(i),
+					keyVersion: 1,
+					createdAt: i,
+					deleted: false,
+				},
+				POSTS_PLAINTEXT_FIELDS,
+				DB_KEY,
+			),
+		);
 	}
 	await db.table("posts").bulkAdd(rows);
 }
 
 test("loadPostsWindow: возвращает последние N постов (самые свежие по createdAt)", async () => {
 	await seedPosts(25);
-	const { posts, hasMore } = await loadPostsWindow(OWNER, CHANNEL_ID, { limit: 10 });
+	const { posts, hasMore } = await loadPostsWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 10 });
 	assert.equal(posts.length, 10);
 	assert.equal(posts[0].createdAt, 16);
 	assert.equal(posts[9].createdAt, 25);
@@ -52,16 +61,16 @@ test("loadPostsWindow: возвращает последние N постов (�
 
 test("loadPostsWindow: меньше постов, чем limit -> hasMore=false", async () => {
 	await seedPosts(5);
-	const { posts, hasMore } = await loadPostsWindow(OWNER, CHANNEL_ID, { limit: 10 });
+	const { posts, hasMore } = await loadPostsWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 10 });
 	assert.equal(posts.length, 5);
 	assert.equal(hasMore, false);
 });
 
 test("loadPostsWindow: beforeCreatedAt подгружает более старое окно (пагинация вверх)", async () => {
 	await seedPosts(25);
-	const first = await loadPostsWindow(OWNER, CHANNEL_ID, { limit: 10 });
+	const first = await loadPostsWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 10 });
 	const oldestLoaded = first.posts[0]; // createdAt=16
-	const second = await loadPostsWindow(OWNER, CHANNEL_ID, { limit: 10, beforeCreatedAt: oldestLoaded.createdAt });
+	const second = await loadPostsWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 10, beforeCreatedAt: oldestLoaded.createdAt });
 	assert.equal(second.posts.length, 10);
 	assert.equal(second.posts[0].createdAt, 6);
 	assert.equal(second.posts[9].createdAt, 15);
@@ -70,7 +79,7 @@ test("loadPostsWindow: beforeCreatedAt подгружает более стар�
 
 test("loadPostsWindow: черновики НЕ попадают в окно вовсе (только published/archived)", async () => {
 	await seedPosts(5, { statusFor: (i) => (i === 3 ? "draft" : "published") });
-	const { posts } = await loadPostsWindow(OWNER, CHANNEL_ID, { limit: 10 });
+	const { posts } = await loadPostsWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 10 });
 	assert.equal(posts.length, 4);
 	assert.ok(!posts.some((p) => p.id === `${CHANNEL_ID}-post-3`));
 });
@@ -78,29 +87,35 @@ test("loadPostsWindow: черновики НЕ попадают в окно во
 test("loadPostsWindow: не путает разные каналы", async () => {
 	await seedPosts(3, { channelId: "channel-A" });
 	await seedPosts(2, { channelId: "channel-B" });
-	const { posts } = await loadPostsWindow(OWNER, "channel-B", { limit: 10 });
+	const { posts } = await loadPostsWindow(OWNER, DB_KEY, "channel-B", { limit: 10 });
 	assert.equal(posts.length, 2);
 });
 
 test("loadCommentsWindow: возвращает до 50 комментариев поста, отсортированных по времени", async () => {
 	const rows = [];
 	for (let i = 1; i <= 60; i++) {
-		rows.push({
-			ownerPubkey: OWNER,
-			id: `c${i}`,
-			postId: "post-1",
-			parentId: "post-1",
-			channelId: CHANNEL_ID,
-			authorPubkey: OWNER,
-			text: `комментарий ${i}`,
-			attachments: [],
-			keyVersion: 1,
-			createdAt: i,
-			deleted: false,
-		});
+		rows.push(
+			toEncryptedRow(
+				{
+					ownerPubkey: OWNER,
+					id: `c${i}`,
+					postId: "post-1",
+					parentId: "post-1",
+					channelId: CHANNEL_ID,
+					authorPubkey: OWNER,
+					text: `комментарий ${i}`,
+					attachments: [],
+					keyVersion: 1,
+					createdAt: i,
+					deleted: false,
+				},
+				COMMENTS_PLAINTEXT_FIELDS,
+				DB_KEY,
+			),
+		);
 	}
 	await db.table("comments").bulkAdd(rows);
-	const { comments, hasMore } = await loadCommentsWindow(OWNER, "post-1", { limit: 50 });
+	const { comments, hasMore } = await loadCommentsWindow(OWNER, DB_KEY, "post-1", { limit: 50 });
 	assert.equal(comments.length, 50);
 	assert.equal(hasMore, true);
 	assert.equal(comments[0].createdAt, 11);
@@ -109,10 +124,10 @@ test("loadCommentsWindow: возвращает до 50 комментариев 
 
 test("loadCommentsWindow: не путает разные посты", async () => {
 	await db.table("comments").bulkAdd([
-		{ ownerPubkey: OWNER, id: "c1", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: OWNER, text: "a", attachments: [], keyVersion: 1, createdAt: 1, deleted: false },
-		{ ownerPubkey: OWNER, id: "c2", postId: "post-2", parentId: "post-2", channelId: CHANNEL_ID, authorPubkey: OWNER, text: "b", attachments: [], keyVersion: 1, createdAt: 1, deleted: false },
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c1", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: OWNER, text: "a", attachments: [], keyVersion: 1, createdAt: 1, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c2", postId: "post-2", parentId: "post-2", channelId: CHANNEL_ID, authorPubkey: OWNER, text: "b", attachments: [], keyVersion: 1, createdAt: 1, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const { comments } = await loadCommentsWindow(OWNER, "post-1", { limit: 50 });
+	const { comments } = await loadCommentsWindow(OWNER, DB_KEY, "post-1", { limit: 50 });
 	assert.equal(comments.length, 1);
 	assert.equal(comments[0].text, "a");
 });
@@ -120,23 +135,29 @@ test("loadCommentsWindow: не путает разные посты", async () =
 async function seedChannelMessages(count, { channelId = CHANNEL_ID, ownerPubkey = OWNER } = {}) {
 	const rows = [];
 	for (let i = 1; i <= count; i++) {
-		rows.push({
-			ownerPubkey,
-			id: `${channelId}-msg-${i}`,
-			channelId,
-			authorPubkey: ownerPubkey,
-			text: `сообщение ${i}`,
-			attachments: [],
-			keyVersion: 1,
-			createdAt: i,
-		});
+		rows.push(
+			toEncryptedRow(
+				{
+					ownerPubkey,
+					id: `${channelId}-msg-${i}`,
+					channelId,
+					authorPubkey: ownerPubkey,
+					text: `сообщение ${i}`,
+					attachments: [],
+					keyVersion: 1,
+					createdAt: i,
+				},
+				CHANNEL_MESSAGES_PLAINTEXT_FIELDS,
+				DB_KEY,
+			),
+		);
 	}
 	await db.table("channelMessages").bulkAdd(rows);
 }
 
 test("loadChannelChatWindow: возвращает последние N сообщений (лимит 15 по ТЗ)", async () => {
 	await seedChannelMessages(20);
-	const { messages, hasMore } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	const { messages, hasMore } = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15 });
 	assert.equal(messages.length, 15);
 	assert.equal(messages[0].createdAt, 6);
 	assert.equal(messages[14].createdAt, 20);
@@ -145,16 +166,16 @@ test("loadChannelChatWindow: возвращает последние N сооб�
 
 test("loadChannelChatWindow: меньше сообщений, чем limit -> hasMore=false", async () => {
 	await seedChannelMessages(5);
-	const { messages, hasMore } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	const { messages, hasMore } = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15 });
 	assert.equal(messages.length, 5);
 	assert.equal(hasMore, false);
 });
 
 test("loadChannelChatWindow: beforeCreatedAt подгружает более старое окно", async () => {
 	await seedChannelMessages(20);
-	const first = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	const first = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15 });
 	const oldestLoaded = first.messages[0]; // createdAt=6
-	const second = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15, beforeCreatedAt: oldestLoaded.createdAt });
+	const second = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15, beforeCreatedAt: oldestLoaded.createdAt });
 	assert.equal(second.messages.length, 5);
 	assert.equal(second.messages[0].createdAt, 1);
 	assert.equal(second.hasMore, false);
@@ -163,37 +184,37 @@ test("loadChannelChatWindow: beforeCreatedAt подгружает более с�
 test("loadChannelChatWindow: не путает разные каналы", async () => {
 	await seedChannelMessages(3, { channelId: "channel-A" });
 	await seedChannelMessages(2, { channelId: "channel-B" });
-	const { messages } = await loadChannelChatWindow(OWNER, "channel-B", { limit: 15 });
+	const { messages } = await loadChannelChatWindow(OWNER, DB_KEY, "channel-B", { limit: 15 });
 	assert.equal(messages.length, 2);
 });
 
 test("loadChannelChatWindow (этап 33): исключает сообщения с deleted:true (бан)", async () => {
 	await seedChannelMessages(3);
 	await db.table("channelMessages").update([OWNER, `${CHANNEL_ID}-msg-2`], { deleted: true });
-	const { messages } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	const { messages } = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15 });
 	assert.equal(messages.length, 2);
 	assert.ok(!messages.some((m) => m.id === `${CHANNEL_ID}-msg-2`));
 });
 
 test("loadChannelChatWindow (этап 33): исключает сообщения авторов, которых Я проигнорировал (не влияет на других)", async () => {
 	await db.table("channelMessages").bulkAdd([
-		{ ownerPubkey: OWNER, id: "m1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1 },
-		{ ownerPubkey: OWNER, id: "m2", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2 },
-		{ ownerPubkey: OWNER, id: "m3", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "c", attachments: [], keyVersion: 1, createdAt: 3 },
+		toEncryptedRow({ ownerPubkey: OWNER, id: "m1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "m2", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "m3", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "c", attachments: [], keyVersion: 1, createdAt: 3 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
 	]);
 	await db.table("channelIgnores").add({ ownerPubkey: OWNER, channelId: CHANNEL_ID, ignoredPubkey: "author-b" });
-	const { messages } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	const { messages } = await loadChannelChatWindow(OWNER, DB_KEY, CHANNEL_ID, { limit: 15 });
 	assert.equal(messages.length, 2);
 	assert.ok(!messages.some((m) => m.authorPubkey === "author-b"));
 });
 
 test("loadCommentsWindow (этап 33): исключает комментарии авторов, проигнорированных ЭТИМ смотрящим", async () => {
 	await db.table("comments").bulkAdd([
-		{ ownerPubkey: OWNER, id: "c1", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1, deleted: false },
-		{ ownerPubkey: OWNER, id: "c2", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2, deleted: false },
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c1", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c2", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
 	]);
 	await db.table("channelIgnores").add({ ownerPubkey: OWNER, channelId: CHANNEL_ID, ignoredPubkey: "author-b" });
-	const { comments } = await loadCommentsWindow(OWNER, "post-1", { limit: 50 });
+	const { comments } = await loadCommentsWindow(OWNER, DB_KEY, "post-1", { limit: 50 });
 	assert.equal(comments.length, 1);
 	assert.equal(comments[0].authorPubkey, "author-a");
 });

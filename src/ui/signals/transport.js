@@ -173,7 +173,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
 	// переподключившееся устройство получило полный паритет истории чатов.
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
-	await syncMirroredHistory(pubkeyHex, mirrorKey);
+	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
 
 	// DESIGN.md, этап 24, п.6 — ПЕРВАЯ в проекте подписка не по "authors: [я]",
 	// а по адресату: входящие gift wrap (kind 1059, #p: [я]). Один REQ, диспетчеризация
@@ -687,7 +687,7 @@ export async function fetchOwnKeyPackageAnnounces(ownerPubkey) {
 // identity (kind 446), catch-up для нового/переподключившегося устройства. Расшифровка
 // одного события не блокирует остальные (console.warn + skip, не throw на весь батч —
 // тот же принцип, что fetchProfiles/парсинг повреждённого профиля).
-export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
+export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед syncMirroredHistory()");
 	}
@@ -702,7 +702,7 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
 						// отдельно от WebSocket-обвязки, см. mirror.test.js).
-						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id));
+						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
 						await receiveLamportTick(payload.lamportTs);
 					} catch (e) {
 						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);

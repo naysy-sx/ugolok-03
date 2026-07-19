@@ -58,6 +58,29 @@ async function seedGroupWithBob() {
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 }
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
+// увидел название группы "Друзья" (а для channels — name/description/rules) открытым текстом.
+test("AC-16: channels хранится зашифрованным — сырой дамп не содержит name/description/rules", async () => {
+	const { channelId } = await createChannel(
+		ALICE_PUB,
+		ALICE_PRIV,
+		DB_KEY,
+		{ name: "Секретный канал", description: "секретное описание", rules: "секретные правила" },
+		[],
+		capturingPublish([]),
+	);
+	const raw = await db.table("channels").get([ALICE_PUB, channelId]);
+	assert.equal(raw.id, channelId);
+	assert.equal("name" in raw, false);
+	assert.equal("description" in raw, false);
+	assert.equal("rules" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.name, "Секретный канал");
+});
+
 test("createChannel: без групп -> ни одного VIEW-гранта, канал сугубо локальный (заметочник)", async () => {
 	const published = [];
 	const { channelId } = await createChannel(
@@ -73,7 +96,7 @@ test("createChannel: без групп -> ни одного VIEW-гранта, �
 		0,
 		"без групп ни один VIEW-грант не публикуется",
 	);
-	const owned = await listOwnedChannels(ALICE_PUB);
+	const owned = await listOwnedChannels(ALICE_PUB, DB_KEY);
 	assert.equal(owned.length, 1);
 	assert.equal(owned[0].name, "Заметки");
 });
@@ -137,10 +160,10 @@ test("Боб получает VIEW и метаданные -> канал поя�
 	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
 	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
 
-	const available = await listAvailableChannels(BOB_PUB);
+	const available = await listAvailableChannels(BOB_PUB, DB_KEY);
 	assert.equal(available.length, 1);
 	assert.equal(available[0].name, "Котики");
-	assert.equal((await listSubscribedChannels(BOB_PUB)).length, 0);
+	assert.equal((await listSubscribedChannels(BOB_PUB, DB_KEY)).length, 0);
 });
 
 test("полный флоу подписки: Боб -> запрос -> Алиса auto-подтверждает -> allowlist -> Боб переезжает в 'Подписки'", async () => {
@@ -173,8 +196,8 @@ test("полный флоу подписки: Боб -> запрос -> Алис
 
 	// Боб получает обновлённый allowlist -> его роль повышается локально.
 	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, allowlistEvent);
-	assert.equal((await listAvailableChannels(BOB_PUB)).length, 0, "канал уехал из 'Доступные'");
-	const subscribed = await listSubscribedChannels(BOB_PUB);
+	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 0, "канал уехал из 'Доступные'");
+	const subscribed = await listSubscribedChannels(BOB_PUB, DB_KEY);
 	assert.equal(subscribed.length, 1);
 	assert.equal(subscribed[0].name, "Котики");
 });
@@ -221,6 +244,6 @@ test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный al
 	const forged = buildAllowlistEvent(grant.channelId, grant.channelTopic, 1, [BOB_PUB], grant.channelKey, MALLORY_PRIV, deriveMasterSecret(MALLORY_PRIV));
 
 	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, forged);
-	assert.equal((await listSubscribedChannels(BOB_PUB)).length, 0, "поддельный allowlist не должен повышать роль");
-	assert.equal((await listAvailableChannels(BOB_PUB)).length, 1, "канал остаётся в 'Доступные'");
+	assert.equal((await listSubscribedChannels(BOB_PUB, DB_KEY)).length, 0, "поддельный allowlist не должен повышать роль");
+	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 1, "канал остаётся в 'Доступные'");
 });

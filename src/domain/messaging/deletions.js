@@ -1,6 +1,7 @@
 import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 const DELETE_MARKER_PREFIX = "__ugolok_delete__:";
 
@@ -18,12 +19,15 @@ export async function deleteMessage(ownerPubkey, privKey, dbKey, contactPubkey, 
 	// проверки deleteMessage могла бы "удалить" (локально) чужое сообщение (Боба), не только
 	// своё — та же F-EV-08 граница, что applyIncomingDeletionIfMarker уже проверяет на приёме.
 	// [ownerPubkey+chatId+msgId] (db.version(4), owner-scoping — см. database.js).
-	const targetRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
-	if (!targetRow || targetRow.senderPubkey !== ownerPubkey) {
+	const raw = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
+	if (!raw || raw.senderPubkey !== ownerPubkey) {
 		throw new Error("нельзя удалить чужое сообщение");
 	}
 	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildDeletionText(msgId), lamportTs, publish);
-	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).modify({ deleted: true, text: "" });
+	// text — sensitive поле (CONTRACTS.md, Tier 1): decrypt-merge-encrypt, не modify()
+	// (см. edits.js — та же находка).
+	const merged = { ...fromEncryptedRow(raw, dbKey), deleted: true, text: "" };
+	await db.table("messages").put(toEncryptedRow(merged, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	return result;
 }
 
@@ -46,19 +50,17 @@ export async function applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, r
 	// deleterPubkey — НЕ event.pubkey (эфемерный на kind 445, та же находка этапа 24 п.7) —
 	// contactPubkey уже резолвится из mlsGroups, тем же способом, что receiveGroupMessageEvent.
 	const deleterPubkey = groupRow.contactPubkey;
-	const targetRow = await db
+	const raw = await db
 		.table("messages")
 		.where("[ownerPubkey+chatId+msgId]")
 		.equals([ownerPubkey, groupRow.contactPubkey, targetMsgId])
 		.first();
-	if (!targetRow) return false;
+	if (!raw) return false;
 	// Авторизация — аналог validateDeletion (этап 22, F-EV-08): только автор может удалить своё.
-	if (targetRow.senderPubkey !== deleterPubkey) return false;
+	if (raw.senderPubkey !== deleterPubkey) return false;
 
-	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, groupRow.contactPubkey, targetMsgId]).modify({
-		deleted: true,
-		text: "",
-	});
+	const merged = { ...fromEncryptedRow(raw, dbKey), deleted: true, text: "" };
+	await db.table("messages").put(toEncryptedRow(merged, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	return true;
 }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { db } from "../../core/store/database.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
@@ -41,7 +42,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 			if (attachment.file) {
 				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
 			}
-			const { postId } = await createDraftPost(ownerPubkey, channelId, { text, attachments });
+			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments });
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
 		} catch (err) {
@@ -233,7 +234,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 	}
 
 	async function refreshComments() {
-		const fresh = await getCommentsTree(ownerPubkey, post.id);
+		const fresh = await getCommentsTree(ownerPubkey, dbKey, post.id);
 		setTree(fresh);
 		onCountChange?.(post.id, fresh.length);
 		ensureProfilesFetched([...new Set(flattenAuthors(fresh))], fetchProfiles).catch(() => {});
@@ -326,11 +327,12 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [limiter] = useState(() => createRateLimiter());
 
 	async function refresh() {
-		const row = await db.table("channels").get([ownerPubkey, channelId]);
+		const raw = await db.table("channels").get([ownerPubkey, channelId]);
+		const row = raw ? fromEncryptedRow(raw, dbKey) : undefined;
 		setChannelRow(row ?? null);
 		setLoading(false);
 		if (!row) return; // забанен владельцем (receiveBanAnnouncement) — канал исчез локально
-		const { posts: freshPosts, hasMore: more } = await loadPostsWindow(ownerPubkey, channelId, { limit: 10 });
+		const { posts: freshPosts, hasMore: more } = await loadPostsWindow(ownerPubkey, dbKey, channelId, { limit: 10 });
 		setPosts(freshPosts);
 		setHasMore(more);
 		// Найдено пользователем: счётчик комментариев показывал 0 до первого клика —
@@ -349,7 +351,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	async function handleLoadMore() {
 		if (posts.length === 0) return;
-		const { posts: older, hasMore: more } = await loadPostsWindow(ownerPubkey, channelId, { limit: 10, beforeCreatedAt: posts[0].createdAt });
+		const { posts: older, hasMore: more } = await loadPostsWindow(ownerPubkey, dbKey, channelId, { limit: 10, beforeCreatedAt: posts[0].createdAt });
 		setPosts((prev) => [...older, ...prev]);
 		setHasMore(more);
 	}

@@ -17,7 +17,7 @@ import {
 	markChatReadAction,
 	saveChatDraftAction,
 } from "../src/ui/signals/chats.js";
-import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -127,7 +127,7 @@ test("этап 29: sendChatMessageAction — attachment пробрасывает
 		async () => {},
 		attachment,
 	);
-	const row = await db.table("messages").where("id").equals(eventId).first();
+	const row = fromEncryptedRow(await db.table("messages").where("id").equals(eventId).first(), DB_KEY);
 	assert.deepEqual(row.attachment, attachment);
 });
 

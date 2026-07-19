@@ -264,9 +264,9 @@ function ChannelsList() {
 	}, [ownerPubkey]);
 
 	async function refreshLists() {
-		setOwned(await listOwnedChannels(ownerPubkey));
-		setSubscribed(await listSubscribedChannels(ownerPubkey));
-		setAvailable(await listAvailableChannels(ownerPubkey));
+		setOwned(await listOwnedChannels(ownerPubkey, dbKey));
+		setSubscribed(await listSubscribedChannels(ownerPubkey, dbKey));
+		setAvailable(await listAvailableChannels(ownerPubkey, dbKey));
 	}
 
 	// messagingActivity — тот же диспетчерский сигнал, что чат/контакты (этап 27,

@@ -2,7 +2,8 @@ import { db } from "../../core/store/database.js";
 import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { COMMENTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -38,19 +39,25 @@ export async function addComment(ownerPubkey, ownerPrivKey, dbKey, channelId, po
 	);
 	await requirePublishOk(publish, event);
 
-	await db.table("comments").put({
-		ownerPubkey,
-		id: commentId,
-		postId,
-		parentId,
-		channelId,
-		authorPubkey: ownerPubkey,
-		text,
-		attachments,
-		keyVersion: meta.currentVersion,
-		createdAt: event.created_at,
-		deleted: false,
-	});
+	await db.table("comments").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: commentId,
+				postId,
+				parentId,
+				channelId,
+				authorPubkey: ownerPubkey,
+				text,
+				attachments,
+				keyVersion: meta.currentVersion,
+				createdAt: event.created_at,
+				deleted: false,
+			},
+			COMMENTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return { commentId };
 }
 
@@ -91,19 +98,25 @@ export async function receiveComment(ownerPubkey, dbKey, event) {
 	if (!dTag) return false;
 	const commentId = dTag[1].slice(dTag[1].indexOf(":") + 1);
 
-	await db.table("comments").put({
-		ownerPubkey,
-		id: commentId,
-		postId: parsed.postId,
-		parentId: parsed.parentId,
-		channelId: channelRow.id,
-		authorPubkey: event.pubkey,
-		text: parsed.text,
-		attachments: parsed.attachments,
-		keyVersion: meta.currentVersion,
-		createdAt: event.created_at,
-		deleted: false,
-	});
+	await db.table("comments").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				id: commentId,
+				postId: parsed.postId,
+				parentId: parsed.parentId,
+				channelId: channelRow.id,
+				authorPubkey: event.pubkey,
+				text: parsed.text,
+				attachments: parsed.attachments,
+				keyVersion: meta.currentVersion,
+				createdAt: event.created_at,
+				deleted: false,
+			},
+			COMMENTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	return true;
 }
 
@@ -114,9 +127,9 @@ function buildTree(comments, parentId) {
 		.map((c) => ({ ...c, replies: buildTree(comments, c.id) }));
 }
 
-export async function getCommentsTree(ownerPubkey, postId) {
-	const rows = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
-	const forPost = rows.filter((r) => r.postId === postId && !r.deleted);
+export async function getCommentsTree(ownerPubkey, dbKey, postId) {
+	const raw = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const forPost = raw.filter((r) => r.postId === postId && !r.deleted).map((r) => fromEncryptedRow(r, dbKey));
 	return buildTree(forPost, postId);
 }
 

@@ -85,7 +85,7 @@ test("deleteMessage: помечает СВОЮ локальную строку �
 
 	await deleteMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, msgId, 2, publish);
 
-	const updated = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, msgId]).first();
+	const updated = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, msgId]).first(), DB_KEY);
 	assert.equal(updated.deleted, true);
 	assert.equal(updated.text, "");
 });
@@ -120,7 +120,7 @@ test("applyIncomingDeletionIfMarker: Bob получает delete-запрос о
 	assert.equal(applied, true);
 
 	await asBob(groupIdHex, updatedBobSerializedState, async () => {
-		const bobRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, originalMsgId]).first();
+		const bobRow = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([BOB_PUB, ALICE_PUB, originalMsgId]).first(), DB_KEY);
 		assert.equal(bobRow.deleted, true);
 		assert.equal(bobRow.text, "");
 	});

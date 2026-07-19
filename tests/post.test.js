@@ -16,7 +16,8 @@ import {
 	receivePost,
 	listChannelPosts,
 } from "../src/domain/content/post.js";
-import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -61,25 +62,41 @@ async function setupChannelWithBobViewing() {
 	return { channelId };
 }
 
+// AC-16 (найдено пользователем прямым осмотром IndexedDB, этап 39/40) — сырой дамп
+// таблицы posts не должен выдавать текст поста в открытом виде.
+test("AC-16: posts хранится зашифрованным — сырой дамп не содержит text/attachments", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "секретный черновик", attachments: [] });
+	const raw = await db.table("posts").get([ALICE_PUB, postId]);
+	assert.equal(raw.id, postId);
+	assert.equal("text" in raw, false);
+	assert.equal("attachments" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.text, "секретный черновик");
+});
+
 test("createDraftPost: локальная запись, НИЧЕГО не публикуется", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "черновик", attachments: [] });
-	const row = await db.table("posts").get([ALICE_PUB, postId]);
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "черновик", attachments: [] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "draft");
 	assert.equal(row.text, "черновик");
 });
 
 test("updateDraftPost: редактирует черновик до публикации", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "v1", attachments: [] });
-	await updateDraftPost(ALICE_PUB, postId, { text: "v2", attachments: [] });
-	const row = await db.table("posts").get([ALICE_PUB, postId]);
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [] });
+	await updateDraftPost(ALICE_PUB, DB_KEY, postId, { text: "v2", attachments: [] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.text, "v2");
 });
 
 test("publishPost: публикует kind 30061, Боб (VIEW-держатель) расшифровывает контент", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "первая статья", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "первая статья", attachments: [] });
 	const published = [];
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
 
@@ -91,27 +108,27 @@ test("publishPost: публикует kind 30061, Боб (VIEW-держател�
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
 	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published" });
 
-	const row = await db.table("posts").get([ALICE_PUB, postId]);
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "published");
 });
 
 test("publishPost: недопустимый переход (публикация уже опубликованного без unpublish) -> throw", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 	await assert.rejects(() => publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([])));
 });
 
 test("archivePost/unpublishPost: republish того же d-tag с обновлённым статусом", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 
 	const archivePublished = [];
 	await archivePost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(archivePublished));
 	const archiveEvent = archivePublished.find((e) => e.kind === 30061);
 	assert.deepEqual(archiveEvent.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`], "тот же d-tag — replaceable");
-	let row = await db.table("posts").get([ALICE_PUB, postId]);
+	let row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "archived");
 
 	// archived — финальное, ARCHIVE/UNPUBLISH из него недопустимы
@@ -120,14 +137,14 @@ test("archivePost/unpublishPost: republish того же d-tag с обновлё
 
 test("unpublishPost: published -> draft, можно отредактировать и опубликовать заново", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "v1", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [] });
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 	await unpublishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 
-	let row = await db.table("posts").get([ALICE_PUB, postId]);
+	let row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "draft");
 
-	await updateDraftPost(ALICE_PUB, postId, { text: "v2 отредактировано", attachments: [] });
+	await updateDraftPost(ALICE_PUB, DB_KEY, postId, { text: "v2 отредактировано", attachments: [] });
 	const republished = [];
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(republished));
 	const event = republished.find((e) => e.kind === 30061);
@@ -138,17 +155,17 @@ test("unpublishPost: published -> draft, можно отредактироват
 
 test("deletePost: черновик (никогда не публиковался) — только локально, БЕЗ kind 5", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
 	const published = [];
 	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(published));
 	assert.equal(published.length, 0, "черновик нечего отзывать на relay");
-	const row = await db.table("posts").get([ALICE_PUB, postId]);
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.deleted, true);
 });
 
 test("deletePost: опубликованный пост -> kind 5 (NIP-09 addressable, F-CH-10)", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 	const published = [];
 	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(published));
@@ -159,14 +176,14 @@ test("deletePost: опубликованный пост -> kind 5 (NIP-09 addres
 
 test("receivePost: Боб получает и расшифровывает пост Алисы, попадает в locally listChannelPosts", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
-	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "для всех подписчиков", attachments: [] });
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "для всех подписчиков", attachments: [] });
 	const published = [];
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
 	const event = published.find((e) => e.kind === 30061);
 
 	const applied = await receivePost(BOB_PUB, DB_KEY, event);
 	assert.equal(applied, true);
-	const bobPosts = await listChannelPosts(BOB_PUB, channelId);
+	const bobPosts = await listChannelPosts(BOB_PUB, DB_KEY, channelId);
 	assert.equal(bobPosts.length, 1);
 	assert.equal(bobPosts[0].text, "для всех подписчиков");
 });
@@ -191,7 +208,7 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 	);
 	const { decryptChannelKeyGrant } = await import("../src/core/crypto/channel-key.js");
 	const grant = decryptChannelKeyGrant(grantPublish[0].content, MALLORY_PRIV, ALICE_PUB);
-	await db.table("channelKeys").put({ ownerPubkey: MALLORY_PUB, channelId, keyVersion: 1, channelKey: grant.channelKey });
+	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey: MALLORY_PUB, channelId, keyVersion: 1, channelKey: grant.channelKey }, CHANNEL_KEYS_PLAINTEXT_FIELDS, DB_KEY));
 
 	// Mallory теперь ИМЕЕТ channelKey (законно, как читатель) — но НЕ владелец канала.
 	// Она шифрует "пост" тем же ключом и публикует его с тем же #h — расшифровывается
@@ -218,6 +235,6 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 
 	const applied = await receivePost(BOB_PUB, DB_KEY, forgedEvent);
 	assert.equal(applied, false, "пост НЕ от создателя канала обязан быть отклонён");
-	const bobPosts = await listChannelPosts(BOB_PUB, channelId);
+	const bobPosts = await listChannelPosts(BOB_PUB, DB_KEY, channelId);
 	assert.equal(bobPosts.length, 0);
 });

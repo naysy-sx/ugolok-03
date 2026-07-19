@@ -21,7 +21,7 @@ import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
 import { enqueue } from "../../core/store/outbox.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -52,9 +52,9 @@ async function requirePublishOk(publish, event) {
 // (chatId, lamportTs, senderPubkey): два РАЗНЫХ сообщения могут легитимно иметь одинаковый
 // lamportTs при multi-device (найдено адверсарным прогоном уже принятого теста
 // getChatHistory tiebreak-by-id). row обязан содержать ownerPubkey — вызывающий код.
-export async function upsertMessage(row) {
+export async function upsertMessage(row, dbKey) {
 	try {
-		await db.table("messages").add(row);
+		await db.table("messages").add(toEncryptedRow(row, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	} catch (e) {
 		if (e.name !== "ConstraintError") throw e;
 		// уже есть строка с тем же (chatId, msgId) — тихий no-op, не дубль
@@ -229,7 +229,7 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 			msgId,
 			sentAt,
 			...(attachment !== undefined ? { attachment } : {}),
-		});
+		}, dbKey);
 		return { eventId: event.id, queued: true };
 	}
 
@@ -244,7 +244,7 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 		msgId,
 		sentAt,
 		...(attachment !== undefined ? { attachment } : {}),
-	});
+	}, dbKey);
 
 	await mirrorBestEffort(
 		privKey,
@@ -300,7 +300,7 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 		status: "sent",
 		msgId: parsed.msgId,
 		...extra,
-	});
+	}, dbKey);
 
 	await mirrorBestEffort(
 		privKey,
@@ -315,8 +315,9 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 	return { text: parsed.text, lamportTs: parsed.lamportTs, contactPubkey, ...extra };
 }
 
-export async function getChatHistory(ownerPubkey, contactPubkey) {
-	const rows = await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).toArray();
+export async function getChatHistory(ownerPubkey, contactPubkey, dbKey) {
+	const raw = await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).toArray();
+	const rows = raw.map((r) => fromEncryptedRow(r, dbKey));
 	rows.sort((a, b) => {
 		if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;
 		if (a.senderPubkey !== b.senderPubkey) return a.senderPubkey < b.senderPubkey ? -1 : 1;

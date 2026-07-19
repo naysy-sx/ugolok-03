@@ -86,7 +86,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	const pendingScrollRef = useRef(false);
 
 	async function refresh() {
-		const { messages: fresh, hasMore: more } = await loadChannelChatWindow(ownerPubkey, channelId, { limit: 15 });
+		const { messages: fresh, hasMore: more } = await loadChannelChatWindow(ownerPubkey, dbKey, channelId, { limit: 15 });
 		setMessages(fresh);
 		setHasMore(more);
 		pendingScrollRef.current = true;
@@ -109,7 +109,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 
 	async function handleLoadMore() {
 		if (messages.length === 0) return;
-		const { messages: older, hasMore: more } = await loadChannelChatWindow(ownerPubkey, channelId, { limit: 15, beforeCreatedAt: messages[0].createdAt });
+		const { messages: older, hasMore: more } = await loadChannelChatWindow(ownerPubkey, dbKey, channelId, { limit: 15, beforeCreatedAt: messages[0].createdAt });
 		setMessages((prev) => [...older, ...prev]);
 		setHasMore(more);
 	}

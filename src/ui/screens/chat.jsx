@@ -305,7 +305,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	useEffect(() => {
 		let cancelled = false;
 		async function load() {
-			const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100 });
+			const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit: 100 });
 			if (cancelled) return;
 			setMessages(freshWindow);
 			setHasMore(more);
@@ -425,7 +425,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// Не теряет данные (просто нужно заново нажать "Загрузить более старые" при
 	// следующем скролле) — полировка отложена (backlog, этап 32).
 	async function reloadWindow() {
-		const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100 });
+		const { messages: freshWindow, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit: 100 });
 		setMessages(freshWindow);
 		setHasMore(more);
 	}
@@ -433,7 +433,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	async function handleLoadMore() {
 		if (messages.length === 0) return;
 		const oldestSeq = messages[0].seq;
-		const { messages: older, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, { limit: 100, beforeSeq: oldestSeq });
+		const { messages: older, hasMore: more } = await loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit: 100, beforeSeq: oldestSeq });
 		setMessages((prev) => [...older, ...prev]);
 		setHasMore(more);
 		if (older.length > 0) await markWindowLoaded(ownerPubkey, contactPubkey, older[0].seq);
