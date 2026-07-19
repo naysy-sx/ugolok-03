@@ -107,6 +107,15 @@ function buildDefaultRelays(command) {
 	return command === "serve" ? ["ws://127.0.0.1:7777"] : ["wss://relay.example"];
 }
 
+// Этап 29 — тот же приём, что buildDefaultRelays выше: F-AT-09 (список Blossom-серверов
+// в settings) — только этап 32, а вложения отправлять уже нужно сейчас. dev — локальный
+// сервер (server/blossom/, довесок этапа 28), прод — плейсхолдер, обязана переопределить
+// конфигурация деплоя.
+function buildDefaultBlossomServers(command) {
+	if (process.env.BUILD_DEFAULT_BLOSSOM_SERVERS) return JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
+	return command === "serve" ? ["http://127.0.0.1:8080"] : ["https://blossom.example"];
+}
+
 // SW не должен инлайниться в index.html, но БАНДЛИТЬ define-константы — должен.
 // Эмитим его отдельным ассетом, подставляя BUILD_HASH в плейсхолдер.
 function emitServiceWorker(buildHash) {
@@ -141,6 +150,7 @@ export default defineConfig(({ command }) => ({
 	define: {
 		__BUILD_HASH__: JSON.stringify(BUILD_HASH),
 		__BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays(command)),
+		__BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(buildDefaultBlossomServers(command)),
 	},
 	build: {
 		target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры

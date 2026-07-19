@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import AttachmentView from "./attachment-view.jsx";
 
 const STATUS_LABELS = {
 	created: "черновик",
@@ -8,6 +9,13 @@ const STATUS_LABELS = {
 	failed: "не доставлено",
 	discarded: "отменено",
 };
+
+// sentAt (этап 29) — wall-clock время отправки, ОТСУТСТВУЕТ у сообщений старого формата
+// (до этого этапа) — тогда просто не показываем метку, не 'Invalid Date'.
+function formatTimestamp(sentAt) {
+	if (typeof sentAt !== "number") return null;
+	return new Date(sentAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 // "Удалить у обоих"/"Редактировать" технически возможны ТОЛЬКО для своих сообщений
 // (deleteMessage/editMessage проверяют авторство, CONTRACTS.md этап 27-довесок-5/6) —
@@ -35,6 +43,12 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	}
 
 	const statusLabel = STATUS_LABELS[message.status];
+	const timestamp = formatTimestamp(message.sentAt);
+	// position (F-AT-02, CONTRACTS.md этап 29) — ТОЛЬКО для type==="image"; остальные
+	// типы вложений всегда рендерятся под текстом (переключатель им не показывается).
+	const attachment = message.attachment;
+	const attachmentAbove = attachment?.type === "image" && attachment.position === "above";
+	const attachmentBelow = attachment && !attachmentAbove;
 
 	if (mode === "editing") {
 		return (
@@ -67,8 +81,11 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	return (
 		<div style={bubbleStyle}>
-			<p>{message.text}</p>
+			{attachmentAbove && <AttachmentView attachment={attachment} />}
+			{message.text && <p>{message.text}</p>}
+			{attachmentBelow && <AttachmentView attachment={attachment} />}
 			<footer class="cluster" style={{ alignItems: "center" }}>
+				{timestamp && <small style={{ color: "var(--muted)" }}>{timestamp}</small>}
 				{isOwn && statusLabel && <small style={{ color: "var(--muted)" }}>{statusLabel}</small>}
 				{message.edited && <small style={{ color: "var(--muted)" }}>(изменено)</small>}
 				{mode !== "confirming-delete" && (

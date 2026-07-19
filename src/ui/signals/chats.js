@@ -26,6 +26,7 @@ export async function listChatPartners(ownerPubkey) {
 // Находка 3 (CONTRACTS.md, этап 27): ensureChatEstablished не подписывает устройство
 // на #h новой группы само — refreshGroupMessageSubscription обязана вызываться следом,
 // безусловно на каждую отправку (идемпотентна — дешевле, чем проверять "было ли создано").
+// attachment (этап 29) — необязательный, проброс в sendMessage как есть.
 export async function sendChatMessageAction(
 	ownerPubkey,
 	privKey,
@@ -35,10 +36,11 @@ export async function sendChatMessageAction(
 	publish,
 	fetchKeyPackage,
 	refreshGroupMessageSubscription,
+	attachment,
 ) {
 	await ensureChatEstablished(ownerPubkey, privKey, contactPubkey, publish, fetchKeyPackage);
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, publish);
-	return sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish);
+	return sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish, attachment);
 }
 
 export async function deleteChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish) {

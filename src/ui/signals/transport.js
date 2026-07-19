@@ -466,6 +466,12 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 				for (const event of events) {
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
+						// Этап 29 — тот же принцип, что chat.js: включать sentAt/attachment, только
+						// если реально присутствуют в зеркалированном payload (обратная совместимость
+						// со старыми зеркалами, не undefined-значения).
+						const extra = {};
+						if (payload.sentAt !== undefined) extra.sentAt = payload.sentAt;
+						if (payload.attachment !== undefined) extra.attachment = payload.attachment;
 						await upsertMessage({
 							ownerPubkey,
 							chatId: payload.contactPubkey,
@@ -475,6 +481,7 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 							text: payload.text,
 							status: "sent",
 							msgId: payload.msgId,
+							...extra,
 						});
 						await receiveLamportTick(payload.lamportTs);
 					} catch (e) {

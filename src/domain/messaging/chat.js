@@ -154,7 +154,12 @@ export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWir
 	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) });
 }
 
-export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish) {
+// Этап 29 — правка контракта (skill п.12: только Claude, полная регрессия сразу
+// после). attachment — необязательный 7-й параметр (undefined по умолчанию, старые
+// вызовы без изменений). sentAt (wall-clock, секунды) генерируется ВСЕГДА — обе
+// стороны видят ОДИНАКОВОЕ время отправки (не время получения); lamportTs (логические
+// часы, порядок сортировки) не трогается — назначение разное, смешивать нельзя.
+export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish, attachment) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 	const row = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
@@ -166,7 +171,10 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	// msgId (этап 25) — единственный идентификатор, тождественный между живым MLS-путём
 	// и зеркалом одного и того же логического сообщения (DESIGN.md, "Этап 25", раздел 3).
 	const msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-	const plaintextBytes = utf8ToBytes(JSON.stringify({ text, lamportTs, msgId }));
+	const sentAt = Math.floor(Date.now() / 1000);
+	const messagePayload = { text, lamportTs, msgId, sentAt };
+	if (attachment !== undefined) messagePayload.attachment = attachment;
+	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
 	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
@@ -192,12 +200,14 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 		text,
 		status: "sent",
 		msgId,
+		sentAt,
+		...(attachment !== undefined ? { attachment } : {}),
 	});
 
 	await mirrorBestEffort(
 		privKey,
 		publish,
-		{ text, lamportTs, senderPubkey: ownerPubkey, contactPubkey, msgId },
+		{ text, lamportTs, senderPubkey: ownerPubkey, contactPubkey, msgId, sentAt, ...(attachment !== undefined ? { attachment } : {}) },
 		groupIdHex,
 	);
 
@@ -227,6 +237,14 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 	if (result.kind === "control") return null;
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
+	// Этап 29 — sentAt/attachment ОТСУТСТВУЮТ у сообщений старого формата (до этого
+	// этапа) — включаются в строку/результат, только если РЕАЛЬНО пришли в payload,
+	// не как undefined-значения (иначе deepEqual-тесты на старый формат, devices.test.js,
+	// увидели бы лишние ключи и сломались бы).
+	const extra = {};
+	if (parsed.sentAt !== undefined) extra.sentAt = parsed.sentAt;
+	if (parsed.attachment !== undefined) extra.attachment = parsed.attachment;
+
 	await upsertMessage({
 		ownerPubkey,
 		chatId: contactPubkey,
@@ -236,16 +254,17 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 		text: parsed.text,
 		status: "sent",
 		msgId: parsed.msgId,
+		...extra,
 	});
 
 	await mirrorBestEffort(
 		privKey,
 		publish,
-		{ text: parsed.text, lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, contactPubkey, msgId: parsed.msgId },
+		{ text: parsed.text, lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, contactPubkey, msgId: parsed.msgId, ...extra },
 		groupIdHex,
 	);
 
-	return { text: parsed.text, lamportTs: parsed.lamportTs };
+	return { text: parsed.text, lamportTs: parsed.lamportTs, ...extra };
 }
 
 export async function getChatHistory(ownerPubkey, contactPubkey) {

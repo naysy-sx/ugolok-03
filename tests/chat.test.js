@@ -172,7 +172,13 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvent, async () => ({ ok: true })),
 	);
-	assert.deepEqual(received, { text: "привет, Боб", lamportTs: 5 });
+	// sentAt (этап 29) — sendMessage теперь ВСЕГДА генерирует его, поэтому появляется и
+	// здесь (в отличие от devices.test.js, где payload собран вручную БЕЗ sentAt —
+	// та ветка обратной совместимости покрыта отдельно, см. chat.js).
+	assert.equal(received.text, "привет, Боб");
+	assert.equal(received.lamportTs, 5);
+	assert.equal(typeof received.sentAt, "number");
+	assert.equal(received.attachment, undefined, "без вложения — поле отсутствует, не undefined-значение");
 });
 
 test("receiveGroupMessageEvent: неизвестный groupId (h-тег) — discard, не бросает", async () => {
@@ -248,3 +254,58 @@ test("getChatHistory: owner-scoping — не путает переписки Р�
 	const aliceHistory = await getChatHistory(ALICE_PUB, BOB_PUB);
 	assert.deepEqual(aliceHistory.map((m) => m.text), ["alice's copy"]);
 });
+
+test("этап 29: sendMessage — sentAt (wall-clock) генерируется всегда, попадает в локальную строку", async () => {
+	await establishAliceToBob();
+	const before = Math.floor(Date.now() / 1000);
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет", 1, async () => ({ ok: true }));
+	const after = Math.floor(Date.now() / 1000);
+
+	const row = await db.table("messages").where("id").equals(eventId).first();
+	assert.equal(typeof row.sentAt, "number");
+	assert.ok(row.sentAt >= before && row.sentAt <= after, "sentAt — реальное время отправки, не что попало");
+	assert.equal(row.attachment, undefined, "без вложения — поле отсутствует");
+});
+
+test("этап 29: sendMessage(attachment) — вложение попадает в локальную строку и доходит до собеседника", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const attachment = {
+		type: "image",
+		sha256: "a".repeat(64),
+		blossomUrl: "http://127.0.0.1:8080",
+		encryptionKey: "base64keyplaceholder==",
+		mime: "image/jpeg",
+		size: 12345,
+		name: "photo.jpg",
+		position: "above",
+	};
+	const publish = async () => ({ ok: true });
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "смотри", 1, publish, attachment);
+
+	const aliceRow = await db.table("messages").where("id").equals(eventId).first();
+	assert.deepEqual(aliceRow.attachment, attachment, "своя копия сразу содержит вложение (оптимистично, как text)");
+
+	const sentEvents = [];
+	const publishCapture = async (event) => {
+		sentEvents.push(event);
+		return { ok: true };
+	};
+	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "ещё одна с вложением", 2, publishCapture, attachment);
+	const sentEvent = sentEvents.find((e) => e.kind === 445);
+
+	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvent, async () => ({ ok: true })),
+	);
+	assert.deepEqual(received.attachment, attachment, "вложение доходит до собеседника без искажений");
+
+	const bobRow = await db.table("messages").where("id").equals(sentEvent.id).first();
+	assert.deepEqual(bobRow.attachment, attachment, "и попадает в его локальную строку тоже");
+});
+
+// Обратная совместимость (старый формат payload без sentAt/attachment — сообщение,
+// отправленное ДО этапа 29, или сиблинг с более старой версией клиента) уже покрыта
+// tests/devices.test.js ("...сиблинг шлёт НОВОЕ сообщение..." — payload там собран
+// вручную БЕЗ sentAt/attachment, assert.deepEqual(decryptedByBob, {text, lamportTs})
+// проверяет ИМЕННО отсутствие лишних ключей, не просто "не бросает"). Не дублируется
+// здесь намеренно.

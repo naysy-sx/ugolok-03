@@ -107,6 +107,24 @@ test("sendChatMessageAction: устанавливает чат при перво
 	assert.equal(refreshCalls, 2, "refresh всё равно вызывается на каждую отправку (безусловно, идемпотентно)");
 });
 
+test("этап 29: sendChatMessageAction — attachment пробрасывается в sendMessage как есть", async () => {
+	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
+	const attachment = { type: "file", sha256: "b".repeat(64), blossomUrl: "http://127.0.0.1:8080", encryptionKey: "key==", mime: "application/pdf", size: 999, name: "doc.pdf" };
+	const { eventId } = await sendChatMessageAction(
+		ALICE_PUB,
+		ALICE_PRIV,
+		BOB_PUB,
+		"",
+		1,
+		async () => ({ ok: true }),
+		async () => bobKeyPackage.wireBytes,
+		async () => {},
+		attachment,
+	);
+	const row = await db.table("messages").where("id").equals(eventId).first();
+	assert.deepEqual(row.attachment, attachment);
+});
+
 test("sendChatMessageAction: fetchKeyPackage не находит адресата -> понятная ошибка всплывает как есть", async () => {
 	const fetchKeyPackage = async () => {
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
