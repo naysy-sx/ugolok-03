@@ -182,6 +182,40 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	assert.equal(received.attachment, undefined, "без вложения — поле отсутствует, не undefined-значение");
 });
 
+// AC-FS-02 (TECH.md §15, метод "Перемешать доставку") — уровень приложения, не
+// только сырое ts-mls API (см. mls-session.test.js): relay не гарантирует порядок
+// доставки live-событий, значит receiveGroupMessageEvent обязан корректно
+// обрабатывать реальные kind 445, пришедшие в произвольном порядке, ПЕРСИСТИРУЯ
+// состояние между вызовами так же, как это реально происходит в приложении между
+// приёмами сообщений (не всё в одной функции без сериализации).
+test("AC-FS-02 (уровень приложения): receiveGroupMessageEvent обрабатывает реальные kind 445, пришедшие НЕ ПО ПОРЯДКУ (2, 3, 1)", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const sentEvents = [];
+	const publish = async (event) => {
+		sentEvents.push(event);
+		return { ok: true };
+	};
+
+	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "первое", 1, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "второе", 2, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "третье", 3, publish);
+	const [event1, event2, event3] = sentEvents.filter((e) => e.kind === 445);
+
+	let bobState = bobSerializedState;
+
+	let step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event2, async () => ({ ok: true })));
+	bobState = step.updatedBobSerializedState;
+	assert.equal(step.result.text, "второе");
+
+	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event3, async () => ({ ok: true })));
+	bobState = step.updatedBobSerializedState;
+	assert.equal(step.result.text, "третье");
+
+	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event1, async () => ({ ok: true })));
+	assert.equal(step.result.text, "первое", "пропущенное первое сообщение всё равно расшифровывается корректно после персистенции состояния между приёмами");
+});
+
 test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ бросает, ставит event в outbox целиком, сохраняет сообщение локально со статусом 'failed', возвращает {eventId, queued:true}", async () => {
 	await establishAliceToBob();
 	const publish = async () => ({ ok: false, reason: "relay недоступен" });

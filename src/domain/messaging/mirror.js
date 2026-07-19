@@ -34,3 +34,24 @@ export function buildMirrorEvent(payload, mirrorKey, groupIdHex, createdAt) {
 		created_at: createdAt,
 	};
 }
+
+// AC-AT-06 (TECH.md §15) — извлечено из transport.js's syncMirroredHistory (было
+// инлайн внутри onBatch, непроверяемо юнит-тестом отдельно от WebSocket-обвязки).
+// sentAt/attachment включаются, ТОЛЬКО если реально присутствуют в payload (этап 29
+// — обратная совместимость со старыми зеркалами, не undefined-значения).
+export function buildMirroredMessageRow(ownerPubkey, payload, eventId) {
+	const extra = {};
+	if (payload.sentAt !== undefined) extra.sentAt = payload.sentAt;
+	if (payload.attachment !== undefined) extra.attachment = payload.attachment;
+	return {
+		ownerPubkey,
+		chatId: payload.contactPubkey,
+		lamportTs: payload.lamportTs,
+		senderPubkey: payload.senderPubkey,
+		id: eventId,
+		text: payload.text,
+		status: "sent",
+		msgId: payload.msgId,
+		...extra,
+	};
+}

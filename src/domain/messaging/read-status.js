@@ -4,6 +4,7 @@ import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from '../../core/cry
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { db } from '../../core/store/database.js';
 import { transitionMessage } from './machine.js';
+import { pickLatest } from '../../core/sync/lww.js';
 
 export function buildReadStatusEvent(privKey, { chatId, lastReadLamportTs }, createdAt = Math.floor(Date.now()/1000)) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
@@ -41,6 +42,29 @@ export async function markChatAsRead(ownerPubkey, privKey, contactPubkey, lastRe
   const result = await publish(event);
   if (!result.ok) throw new Error(result.reason || 'relay отклонил публикацию');
   await foldReadStatus(event, privKey);
+}
+
+// AC-06 (TECH.md §15) — тот же паттерн, что rebuildUiSettings (этап 34): читает
+// уже накопленный локальный кэш bootstrap'а (широкий REQ authors:[me], без
+// ограничения по kind — см. bootstrap.js) вместо сети напрямую. До этой функции
+// foldReadStatus вызывалась ТОЛЬКО из markChatAsRead на устройстве-публикаторе —
+// другое устройство той же identity никогда не читало чужой (или даже свой же
+// с другого сеанса) kind 30070 обратно. Группировка по chatId (d-tag) обязательна:
+// read-status у РАЗНЫХ чатов независим, брать глобально самый свежий event
+// (как lww.js's pickLatest без группировки) стёрло бы все чаты, кроме одного.
+export async function rebuildReadStatus(ownerPubkey, privKey) {
+  const events = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 30070]).toArray();
+  const byChatId = new Map();
+  for (const event of events) {
+    const dTag = event.tags.find((t) => t[0] === 'd')?.[1];
+    if (!dTag) continue;
+    const group = byChatId.get(dTag) ?? [];
+    group.push(event);
+    byChatId.set(dTag, group);
+  }
+  for (const group of byChatId.values()) {
+    await foldReadStatus(pickLatest(group), privKey);
+  }
 }
 
 export async function getUnreadCount(ownerPubkey, contactPubkey) {

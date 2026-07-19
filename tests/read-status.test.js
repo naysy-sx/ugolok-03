@@ -10,12 +10,15 @@ import {
 	foldReadStatus,
 	markChatAsRead,
 	getUnreadCount,
+	rebuildReadStatus,
 } from "../src/domain/messaging/read-status.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
+const CAROL_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
+const CAROL_PUB = bytesToHex(getPublicKey(CAROL_PRIV));
 
 before(async () => {
 	await db.open();
@@ -24,6 +27,7 @@ before(async () => {
 beforeEach(async () => {
 	await db.table("chatSyncState").clear();
 	await db.table("messages").clear();
+	await db.table("events").clear();
 });
 
 after(() => {
@@ -125,4 +129,58 @@ test("getUnreadCount: считает входящие сообщения пос�
 	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 2, "без read-status всё входящее непрочитано");
 	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 1 }), ALICE_PRIV);
 	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 1);
+});
+
+// AC-06 (TECH.md §15): read-status обязан синхронизироваться МЕЖДУ устройствами.
+// До rebuildReadStatus markChatAsRead публиковала kind 30070, но НИ ОДНО устройство
+// (включая то же самое при холодном рестарте) никогда не читало его обратно —
+// foldReadStatus вызывалась ТОЛЬКО из markChatAsRead на устройстве-публикаторе сразу
+// после публикации. rebuildReadStatus — тот же паттерн, что rebuildUiSettings (этап
+// 34): читает уже накопленный локальный кэш bootstrap'а (широкий REQ authors:[me]
+// без ограничения по kind, см. bootstrap.js) по [pubkey+kind], а не сеть напрямую.
+test("rebuildReadStatus: восстанавливает read-status из локального кэша events (AC-06 — кросс-device sync)", async () => {
+	await db.table("messages").add({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 5,
+		senderPubkey: BOB_PUB,
+		id: "in1",
+		text: "от Боба",
+		status: "sent",
+		msgId: "m1",
+	});
+	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 });
+	await db.table("events").add(event);
+
+	assert.equal(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), undefined, "до rebuild — ничего не применено");
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+
+	const state = await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]);
+	assert.equal(state.lastReadLamportTs, 5);
+	const in1 = await db.table("messages").where("id").equals("in1").first();
+	assert.equal(in1.status, "read", "сообщение реально помечено прочитанным на этом устройстве");
+});
+
+test("rebuildReadStatus: несколько чатов — независимый read-status на каждый (не путает по chatId)", async () => {
+	const eventBob = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 3 });
+	const eventCarol = buildReadStatusEvent(ALICE_PRIV, { chatId: CAROL_PUB, lastReadLamportTs: 7 });
+	await db.table("events").bulkAdd([eventBob, eventCarol]);
+
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 3);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, CAROL_PUB])).lastReadLamportTs, 7);
+});
+
+test("rebuildReadStatus: несколько версий для ОДНОГО чата — берёт ПОСЛЕДНЮЮ (LWW по created_at), не первую попавшуюся", async () => {
+	const older = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 2 }, 1000);
+	const newer = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 9 }, 2000);
+	await db.table("events").bulkAdd([older, newer]);
+
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 9);
+});
+
+test("rebuildReadStatus АДВЕРСАРНО: нет ни одного kind 30070 в events — no-op, не бросает", async () => {
+	await assert.doesNotReject(() => rebuildReadStatus(ALICE_PUB, ALICE_PRIV));
 });

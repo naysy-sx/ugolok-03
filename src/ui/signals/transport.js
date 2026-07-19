@@ -20,7 +20,7 @@ import {
 	upsertMessage,
 } from "../../domain/messaging/chat.js";
 import { syncDeviceMembership } from "../../domain/messaging/devices.js";
-import { decryptMirrorPayload, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
+import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
 import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
 import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-requests.js";
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
@@ -34,6 +34,7 @@ import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { rebuildReadStatus } from "../../domain/messaging/read-status.js";
 import { notify } from "../../domain/notifications/notifier.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished } from "../../domain/identity/profile.js";
@@ -151,6 +152,10 @@ async function connect(pubkeyHex, privKey) {
 	await rebuildContactsAndGroups(pubkeyHex, privKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
 	await rebuildUiSettings(pubkeyHex, privKey);
+	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
+	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
+	// kind 30070, второе устройство той же identity никогда не читало его обратно.
+	await rebuildReadStatus(pubkeyHex, privKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
@@ -695,23 +700,9 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey) {
 				for (const event of events) {
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
-						// Этап 29 — тот же принцип, что chat.js: включать sentAt/attachment, только
-						// если реально присутствуют в зеркалированном payload (обратная совместимость
-						// со старыми зеркалами, не undefined-значения).
-						const extra = {};
-						if (payload.sentAt !== undefined) extra.sentAt = payload.sentAt;
-						if (payload.attachment !== undefined) extra.attachment = payload.attachment;
-						await upsertMessage({
-							ownerPubkey,
-							chatId: payload.contactPubkey,
-							lamportTs: payload.lamportTs,
-							senderPubkey: payload.senderPubkey,
-							id: event.id,
-							text: payload.text,
-							status: "sent",
-							msgId: payload.msgId,
-							...extra,
-						});
+						// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
+						// отдельно от WebSocket-обвязки, см. mirror.test.js).
+						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id));
 						await receiveLamportTick(payload.lamportTs);
 					} catch (e) {
 						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);

@@ -66,6 +66,51 @@ test("decryptApplicationMessage: испорченный wireBytes (побита�
 	await assert.rejects(() => decryptApplicationMessage(bobState, tampered));
 });
 
+// AC-FS-02 (TECH.md §15, метод "Перемешать доставку") — Nostr-relay не гарантирует
+// порядок доставки live-событий, значит kind 445 могут прийти В ЛЮБОМ порядке
+// относительно того, в каком Alice их зашифровала. ts-mls обязан буферизовать
+// "пропущенные" ключи для сообщений, ратчет которых уже продвинут дальше.
+test("AC-FS-02: сообщения, пришедшие НЕ ПО ПОРЯДКУ (2, 3, 1), все расшифровываются — ts-mls хранит пропущенные ключи", async () => {
+	let { aliceState, bobState } = await setupGroupWithBob();
+
+	const r1 = await encryptApplicationMessage(aliceState, new TextEncoder().encode("сообщение 1"));
+	aliceState = r1.newSessionState;
+	const r2 = await encryptApplicationMessage(aliceState, new TextEncoder().encode("сообщение 2"));
+	aliceState = r2.newSessionState;
+	const r3 = await encryptApplicationMessage(aliceState, new TextEncoder().encode("сообщение 3"));
+	aliceState = r3.newSessionState;
+
+	// Боб получает 2, затем 3, затем ПРОПУЩЕННОЕ 1 — последним.
+	const d2 = await decryptApplicationMessage(bobState, r2.wireBytes);
+	bobState = d2.newSessionState;
+	assert.equal(new TextDecoder().decode(d2.message), "сообщение 2");
+
+	const d3 = await decryptApplicationMessage(bobState, r3.wireBytes);
+	bobState = d3.newSessionState;
+	assert.equal(new TextDecoder().decode(d3.message), "сообщение 3");
+
+	const d1 = await decryptApplicationMessage(bobState, r1.wireBytes);
+	assert.equal(new TextDecoder().decode(d1.message), "сообщение 1", "пропущенный ключ для сообщения 1 должен был сохраниться в состоянии");
+});
+
+test("AC-FS-02: пропущенное сообщение переживает serializeState/deserializeState (состояние между сессиями, не только в памяти)", async () => {
+	let { aliceState, bobState } = await setupGroupWithBob();
+
+	const r1 = await encryptApplicationMessage(aliceState, new TextEncoder().encode("будет получено последним"));
+	aliceState = r1.newSessionState;
+	const r2 = await encryptApplicationMessage(aliceState, new TextEncoder().encode("приходит первым"));
+	aliceState = r2.newSessionState;
+
+	const d2 = await decryptApplicationMessage(bobState, r2.wireBytes);
+	// Симулируем закрытие/переоткрытие приложения между приёмом r2 и r1 (chat.js
+	// персистит serializeState после каждого decrypt) — пропущенный ключ для r1
+	// обязан пережить round-trip через сериализацию, а не жить только в памяти.
+	const restoredBobState = deserializeState(serializeState(d2.newSessionState));
+
+	const d1 = await decryptApplicationMessage(restoredBobState, r1.wireBytes);
+	assert.equal(new TextDecoder().decode(d1.message), "будет получено последним");
+});
+
 test("addMember: мусорные байты вместо KeyPackage — понятная ошибка, не тихая порча состояния", async () => {
 	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
 	const groupId = crypto.getRandomValues(new Uint8Array(32));
