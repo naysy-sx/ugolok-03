@@ -1,16 +1,18 @@
 import { useState, useEffect } from "preact/hooks";
 import { db } from "../../core/store/database.js";
-import { publish } from "../signals/transport.js";
+import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
+import { ensureProfilesFetched } from "../signals/contacts.js";
 import { openChannel } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
-import { addComment, getCommentsTree } from "../../domain/content/comments.js";
+import { addComment, getCommentsTree, countTopLevelCommentsByPost } from "../../domain/content/comments.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
+import AttachmentView from "../components/attachment-view.jsx";
 import PostCard from "../components/post-card.jsx";
 import ChannelChat from "../components/channel-chat.jsx";
-import { shortPubkey } from "../format.js";
+import { ContactIdentity } from "./contacts.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -143,8 +145,9 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 	return (
 		<li style={{ marginInlineStart: depth > 0 ? "var(--space-m)" : 0, paddingBlockStart: "var(--space-2xs)" }}>
 			<p style={{ whiteSpace: "pre-wrap" }}>{comment.text}</p>
+			{comment.attachments?.[0] && <AttachmentView attachment={comment.attachments[0]} />}
 			<div class="cluster" style={{ alignItems: "center" }}>
-				<small style={{ color: "var(--muted)" }}>{shortPubkey(comment.authorPubkey)}</small>
+				<ContactIdentity pubkey={comment.authorPubkey} />
 				{canComment && (
 					<button type="button" onClick={() => setReplying((v) => !v)}>
 						Ответить
@@ -187,13 +190,24 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 	);
 }
 
-function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, channelId, onPostChanged }) {
+function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, channelId, commentCount, onCountChange, onPostChanged }) {
 	const [expanded, setExpanded] = useState(false);
 	const [tree, setTree] = useState([]);
 	const [error, setError] = useState("");
 
+	function flattenAuthors(nodes, acc = []) {
+		for (const node of nodes) {
+			acc.push(node.authorPubkey);
+			flattenAuthors(node.replies, acc);
+		}
+		return acc;
+	}
+
 	async function refreshComments() {
-		setTree(await getCommentsTree(ownerPubkey, post.id));
+		const fresh = await getCommentsTree(ownerPubkey, post.id);
+		setTree(fresh);
+		onCountChange?.(post.id, fresh.length);
+		ensureProfilesFetched([...new Set(flattenAuthors(fresh))], fetchProfiles).catch(() => {});
 	}
 
 	useEffect(() => {
@@ -214,7 +228,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 			<PostCard
 				post={post}
 				isOwner={isOwner}
-				commentCount={tree.length}
+				commentCount={expanded ? tree.length : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, post.id, publish))}
@@ -273,12 +287,21 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 	const [showComposer, setShowComposer] = useState(false);
 	const [error, setError] = useState("");
 	const [tab, setTab] = useState("posts");
+	const [commentCounts, setCommentCounts] = useState({});
 
 	async function refresh() {
 		setChannelRow(await db.table("channels").get([ownerPubkey, channelId]));
 		const { posts: freshPosts, hasMore: more } = await loadPostsWindow(ownerPubkey, channelId, { limit: 10 });
 		setPosts(freshPosts);
 		setHasMore(more);
+		// Найдено пользователем: счётчик комментариев показывал 0 до первого клика —
+		// один общий скан на все посты списка сразу, вместо getCommentsTree на каждый.
+		const counts = await countTopLevelCommentsByPost(ownerPubkey, freshPosts.map((p) => p.id));
+		setCommentCounts(Object.fromEntries(counts));
+	}
+
+	function handleCommentCountChange(postId, count) {
+		setCommentCounts((prev) => ({ ...prev, [postId]: count }));
 	}
 
 	useEffect(() => {
@@ -374,6 +397,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 									ownerPubkey={ownerPubkey}
 									privKey={privKey}
 									channelId={channelId}
+									commentCount={commentCounts[post.id] ?? 0}
+									onCountChange={handleCommentCountChange}
 									onPostChanged={refresh}
 								/>
 							))}

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { sendChannelMessage } from "../../domain/content/channel-chat.js";
 import { loadChannelChatWindow } from "../../core/sync/lazy-channel.js";
-import { publish } from "../signals/transport.js";
+import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
+import { ensureProfilesFetched } from "../signals/contacts.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "./attachment-preview.jsx";
 import AttachmentView from "./attachment-view.jsx";
-import { formatDateTime, shortPubkey } from "./post-card.jsx";
+import { ContactIdentity } from "../screens/contacts.jsx";
+import { formatDateTime } from "./post-card.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
@@ -83,6 +85,10 @@ export default function ChannelChat({ ownerPubkey, privKey, channelId, canWrite,
 		setMessages(fresh);
 		setHasMore(more);
 		pendingScrollRef.current = true;
+		// Найдено пользователем: авторы чата канала могут не быть контактами — профиль
+		// (никнейм/аватар) всё равно нужен, ensureProfilesFetched не ограничен контактами.
+		const authors = [...new Set(fresh.map((m) => m.authorPubkey))];
+		ensureProfilesFetched(authors, fetchProfiles).catch(() => {});
 	}
 
 	useEffect(() => {
@@ -122,7 +128,7 @@ export default function ChannelChat({ ownerPubkey, privKey, channelId, canWrite,
 					{messages.map((m) => (
 						<li key={m.id}>
 							<div class="cluster" style={{ alignItems: "center" }}>
-								<strong>{shortPubkey(m.authorPubkey)}</strong>
+								<ContactIdentity pubkey={m.authorPubkey} />
 								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
 							</div>
 							<p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>

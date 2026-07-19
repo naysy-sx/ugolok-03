@@ -117,3 +117,21 @@ export async function getCommentsTree(ownerPubkey, postId) {
 	const forPost = rows.filter((r) => r.postId === postId && !r.deleted);
 	return buildTree(forPost, postId);
 }
+
+// Найдено пользователем: счётчик "Комментарии (N)" на карточке поста показывал 0 до
+// первого клика — раньше он брался из локального tree.length ВНУТРИ PostWithComments,
+// который заполнялся только после раскрытия (getCommentsTree дорогой на одиночный
+// пост, но неприемлемо гонять его на КАЖДЫЙ пост списка через N отдельных полных
+// сканов таблицы). Здесь — ОДИН скан на весь список постов канала разом. Считает
+// только верхнеуровневые комментарии (parentId === postId), тот же критерий, что
+// buildTree(..., postId)'s корень — чтобы бейдж совпадал с tree.length после клика.
+export async function countTopLevelCommentsByPost(ownerPubkey, postIds) {
+	const rows = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const counts = new Map(postIds.map((id) => [id, 0]));
+	for (const r of rows) {
+		if (!r.deleted && r.parentId === r.postId && counts.has(r.postId)) {
+			counts.set(r.postId, counts.get(r.postId) + 1);
+		}
+	}
+	return counts;
+}

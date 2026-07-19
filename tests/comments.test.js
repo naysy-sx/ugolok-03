@@ -7,7 +7,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/channel.js";
 import { sendViewGrant, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
-import { addComment, receiveComment, getCommentsTree } from "../src/domain/content/comments.js";
+import { addComment, receiveComment, getCommentsTree, countTopLevelCommentsByPost } from "../src/domain/content/comments.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -132,4 +132,22 @@ test("getCommentsTree: строит вложенность по parentId (отв
 	assert.equal(tree[0].replies.length, 1);
 	assert.equal(tree[0].replies[0].id, replyId);
 	assert.equal(tree[0].replies[0].text, "ответ владельца");
+});
+
+test("countTopLevelCommentsByPost: считает только верхнеуровневые (parentId===postId), совпадает с tree.length, один скан на несколько постов сразу", async () => {
+	const { channelId } = await setupChannelWithBobSubscribed();
+	const postA = "post-a";
+	const postB = "post-b";
+	await addComment(BOB_PUB, BOB_PRIV, channelId, postA, postA, "корневой A1", [], capturingPublish([]));
+	const { commentId: rootA2 } = await addComment(BOB_PUB, BOB_PRIV, channelId, postA, postA, "корневой A2", [], capturingPublish([]));
+	await addComment(BOB_PUB, BOB_PRIV, channelId, postA, rootA2, "ответ на A2 (не должен считаться)", [], capturingPublish([]));
+	await addComment(BOB_PUB, BOB_PRIV, channelId, postB, postB, "корневой B1", [], capturingPublish([]));
+
+	const counts = await countTopLevelCommentsByPost(BOB_PUB, [postA, postB, "post-без-комментариев"]);
+	assert.equal(counts.get(postA), 2, "2 верхнеуровневых у post-a (ответ на A2 не считается)");
+	assert.equal(counts.get(postB), 1);
+	assert.equal(counts.get("post-без-комментариев"), 0);
+
+	const treeA = await getCommentsTree(BOB_PUB, postA);
+	assert.equal(treeA.length, counts.get(postA), "бейдж обязан совпадать с tree.length после раскрытия");
 });
