@@ -13,7 +13,6 @@ const EXPECTED_TABLES = [
 	"effectivePerms",
 	"channelKeys",
 	"channelKeyMeta",
-	"channelTopics",
 	"commentAllowlists",
 	"messages",
 	"channels",
@@ -113,6 +112,44 @@ test("deviceIdentity/knownDevices (этап 25): первичные ключи �
 		Array.isArray(knownDevices.schema.primKey.keyPath) &&
 			knownDevices.schema.primKey.keyPath.join("+") === "ownerPubkey+deviceId",
 		"knownDevices: составной первичный ключ [ownerPubkey+deviceId]",
+	);
+	db.close();
+});
+
+test("channels/channelKeys/channelKeyMeta/commentAllowlists (этап 30, owner-scoping — найдено рассуждением до кода): составные owner-scoped ключи, channelTopics больше не отдельная таблица", async () => {
+	await db.open();
+	const names = db.tables.map((t) => t.name);
+	assert.ok(!names.includes("channelTopics"), "channelTopics свёрнута в channels.channelTopic, отдельной таблицы больше нет");
+
+	const channels = db.table("channels");
+	assert.ok(
+		Array.isArray(channels.schema.primKey.keyPath) && channels.schema.primKey.keyPath.join("+") === "ownerPubkey+id",
+		"channels: составной первичный ключ [ownerPubkey+id]",
+	);
+	assert.ok(
+		channels.schema.indexes.some((i) => i.name === "channelTopic"),
+		"channels: индекс channelTopic для обратного поиска (topic -> канал)",
+	);
+
+	const channelKeys = db.table("channelKeys");
+	assert.ok(
+		Array.isArray(channelKeys.schema.primKey.keyPath) &&
+			channelKeys.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+keyVersion",
+		"channelKeys: составной первичный ключ [ownerPubkey+channelId+keyVersion]",
+	);
+
+	const channelKeyMeta = db.table("channelKeyMeta");
+	assert.ok(
+		Array.isArray(channelKeyMeta.schema.primKey.keyPath) &&
+			channelKeyMeta.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId",
+		"channelKeyMeta: составной первичный ключ [ownerPubkey+channelId]",
+	);
+
+	const commentAllowlists = db.table("commentAllowlists");
+	assert.ok(
+		Array.isArray(commentAllowlists.schema.primKey.keyPath) &&
+			commentAllowlists.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+keyVersion",
+		"commentAllowlists: составной первичный ключ [ownerPubkey+channelId+keyVersion]",
 	);
 	db.close();
 });

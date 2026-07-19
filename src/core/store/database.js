@@ -80,3 +80,20 @@ db.version(4).stores({
     "++seq, &[ownerPubkey+chatId+msgId], [ownerPubkey+chatId+lamportTs+senderPubkey+id], [ownerPubkey+chatId], id, status, deleted",
   chatSyncState: "[ownerPubkey+chatId], ownerPubkey"
 });
+
+// Этап 30 — найдено рассуждением ДО кода (не постфактум), тот же класс пробела, что уже
+// исправлен для messages/mlsGroups/ownKeyPackage/chatSyncState (этапы 25-27): channels/
+// channelKeys/channelKeyMeta/commentAllowlists в version(1) были объявлены БЕЗ ownerPubkey
+// в индексе — при мультиаккаунте на одном устройстве второй локальный аккаунт видел бы
+// чужие каналы/ключи. Эти таблицы НИКОГДА не использовались кодом (объявлены с этапа 1,
+// не заполнялись) — переопределение без риска миграции данных. channelTopics (была
+// отдельной таблицей channelId→topic) сворачивается в поле channels.channelTopic —
+// тот же список получаем через channels.where('ownerPubkey'), обратный запрос
+// (topic→канал) — через индекс channelTopic той же таблицы, отдельная таблица не нужна.
+db.version(5).stores({
+  channels: "[ownerPubkey+id], ownerPubkey, channelTopic",
+  channelKeys: "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+  channelKeyMeta: "[ownerPubkey+channelId]",
+  commentAllowlists: "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+  channelTopics: null
+});

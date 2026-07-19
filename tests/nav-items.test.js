@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "../src/ui/nav-items.js";
 
+// "subscriptions" переименован в "channels" на этапе 30 (пожелание пользователя —
+// полноценный экран каналов вместо пустой заглушки-placeholder).
 const REQUIRED_IDS = [
 	"contacts",
 	"messages",
-	"subscriptions",
+	"channels",
 	"settings",
 	"profile",
 	"diagnostics",

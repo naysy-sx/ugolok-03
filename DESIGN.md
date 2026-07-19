@@ -2160,3 +2160,154 @@ function transitionTransfer(state, event):
 выше + вызов уже существующего generic `transition()`) пишет воркер —
 рутинная механическая работа по уже formalized таблице, тот же
 паттерн, что `domain/messaging/machine.js`.
+
+## Этап 30 — Каналы: создание + группы-видимость + VIEW/подписка
+
+Пожелание пользователя, расширяющее исходный TECH.md §4.7 (ключи
+каналов + comment allowlist) до полного UX: видимость по группам
+контактов, различение "Доступные"/"Подписки", навигация. Архитектура
+подтверждена пользователем — существующая relay-broadcast модель
+(TECH.md §4.7.1/4.7.2), НЕ звёздчатая топология из его референсной
+спецификации (см. CONTRACTS.md за объяснением конфликта).
+
+### Формализация 1 — найденный пробел: распространение метаданных канала
+
+TECH.md §10/§4.8 буквально: kind 30060 (метаданные канала) — "NIP-44
+для себя", читает ТОЛЬКО владелец. Это была модель "локальный индекс
+своих каналов для мультиустройственной синхронизации владельца" (тот
+же принцип, что kind 30070/30071/30072 — все "для себя"). Но теперь
+нужно, чтобы ЧУЖИЕ VIEW-получатели тоже видели название/описание/
+правила/аватар канала (иначе "Доступные"/"Подписки" нечего
+отображать) — буквальная схема TECH.md этого не даёт.
+
+**Решение (правка контракта, найдено рассуждением до кода, не
+доменом):** kind 30060 шифруется НЕ "для себя", а `channelKey[v_current]`
+— тем же способом, что посты (F-CH-03, версионированный конверт
+`base64(uint32BE(v) ‖ nonce(12) ‖ ChaCha20-Poly1305(...))`). Событие
+остаётся replaceable (NIP-01, d-tag = UUID канала) — владелец может
+переиздать его в любой момент (переименование канала, смена аватара)
+БЕЗ повторной раздачи ключей всем читателям: у них уже есть
+`channelKey[v_current]`, они просто перечитывают событие с relay.
+kind 30053 (per-reader грант) при этом несёт ТОЛЬКО ключевой материал
+`{channelId, channelTopic, channelKey}` — не метаданные: единственный
+источник истины для имени/описания/правил/аватара — kind 30060,
+не дублируется. Апдейт TECH.md-контракта: 30060 переходит из "NIP-44
+для себя" в "ChaCha20-Poly1305(channelKey[v])" — та же строка таблицы
+§10, что 30061/30062.
+
+### Формализация 2 — VIEW vs COMMENT: что даёт "видимость по группам"
+
+При создании канала владелец выбирает контакт-группы → раскрываются в
+список pubkey (объединение членов всех выбранных групп, дедуп) →
+КАЖДОМУ отправляется kind 30053 (VIEW-грант, F-CH-04). Если группы не
+выбраны — грантов ноль, канал существует только локально у владельца
+("заметочник", буквально по ТЗ пользователя) — не отдельный код-путь,
+просто пустой список получателей.
+
+Получив VIEW (kind 30053), клиент читателя:
+1. Персистит `channelKey[v]` + `channelTopic` локально, создаёт
+   локальную запись канала с `role: "available"`.
+2. Может СРАЗУ читать посты/комментарии (расшифровать может — есть
+   ключ) — буквально по ТЗ: "ознакомиться с содержимым, почитать
+   комментарии... писать не может".
+3. НЕ может комментировать/писать в чат канала, пока его pubkey не
+   попадёт в comment allowlist (kind 30054, F-CH-05) — это
+   криптографически проверяется получателями (§4.7.2), не UI-заглушка.
+
+**Переход available → subscriber ("Подписаться"):** читатель
+отправляет запрос на COMMENT-доступ владельцу (новый rumor kind,
+gift-wrap — тот же паттерн, что contact-request, kind 3001).
+Владелец, получив запрос, **автоматически** (без второго
+подтверждающего клика в UI — group-видимость уже была осознанным
+решением владельца допустить ИМЕННО этих людей) добавляет pubkey
+заявителя в allowlist и переиздаёт kind 30054 с новой версией списка
+(НЕ новая эпоха channelKey — ротация ключа нужна только для REVOKE
+VIEW, добавление COMMENT-права не требует менять channelKey вообще,
+F-CH-05 буквально: "при назначении COMMENT: дополнительно
+перевыпускается kind 30054... без нового channelKey"). Получив
+обновлённый allowlist, где обнаруживает СЕБЯ — читатель локально
+помечает роль `role: "subscriber"`, канал переезжает из "Доступные" в
+"Подписки" (чисто локальный UI-эффект, не отдельное сетевое событие).
+
+**Новый kind (rumor, gift-wrap kind 1059, тот же принцип, что
+contact-request 3001):** `CHANNEL_SUBSCRIBE_REQUEST_KIND = 3002`.
+Содержимое rumor — `{channelId}`. Подписан заявителем, gift-wrap для
+владельца — владелец узнаёт, КТО просит (через `seal.pubkey`/rumor,
+как и везде в NIP-59), релей не видит содержимого запроса.
+
+### Формализация 3 — инвариант L-07 (эпохи ключа, из TECH.md, не меняется)
+
+Тот же принцип, что уже в TECH.md §4.7.1: `v_current` — монотонно
+растущий счётчик версии `channelKey`. Отзыв VIEW у читателя ⇒
+`v_current += 1`, новый `channelKey[v_current]`, новый allowlist[v_current]
+БЕЗ отозванного, kind 30053 рассылается ТОЛЬКО оставшимся читателям.
+Инвариант: отозванный читатель, уже скачавший события эпох `≤
+v_revoke`, СОХРАНЯЕТ к ним доступ (ключи эпох он не выбрасывает) —
+но новых `channelKey` (эпох `> v_revoke`) не получает и не может
+расшифровать новый контент. **Отзыв VIEW — не в скоупе этого этапа**
+(нет UI для "убрать группу из видимости после создания") — сама
+модель (versioned `channelKeys` таблица, `keyVersion`-индекс) уже
+корректно поддерживает будущий revoke без правки схемы.
+
+### Модель данных (owner-scoping — найдено рассуждением ДО кода, по прецеденту этапов 25-27)
+
+`channels`/`channelKeys`/`channelKeyMeta`/`commentAllowlists` в схеме
+`db.version(1)` (TECH.md §10) объявлены БЕЗ `ownerPubkey` в индексе —
+тот же класс пробела, что уже был найден и исправлен для
+`messages`/`mlsGroups`/`ownKeyPackage`/`chatSyncState` (этапы 25-27):
+при мультиаккаунте на одном устройстве второй локальный аккаунт видел
+бы чужие каналы/ключи. Эти таблицы НИКОГДА не использовались кодом
+(объявлены, не заполнялись) — правка схемы БЕЗ риска миграции данных.
+`db.version(5)` переопределяет их с `ownerPubkey` в составном индексе,
+по прямому прецеденту `db.version(4)`. `channelTopics` (отдельная
+таблица `channelId→topic`, TECH.md §10) сворачивается В `channels`
+(поле `channelTopic` там же, с собственным индексом) — та же
+информация, не нужна отдельная таблица: прямой запрос "мои
+channelTopics" уже даёт `channels.where('ownerPubkey').equals(...)`,
+обратный запрос "topic → канал" — по индексу `channelTopic`.
+
+```js
+channels: "[ownerPubkey+id], ownerPubkey, channelTopic",
+// value: { channelId, creatorPubkey, name, description, rules,
+//          avatar: {sha256,blossomUrl,encryptionKey,mime} | null,
+//          channelTopic (hex), role: "owner"|"available"|"subscriber",
+//          createdAt }
+channelKeys: "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+// value: { channelKey (hex) }
+channelKeyMeta: "[ownerPubkey+channelId]", // value: { currentVersion }
+commentAllowlists: "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+// value: { allowedAuthors: [pubkey,...] } — верифицированный кэш ПОСЛЕ проверки подписи
+```
+
+### Псевдокод (только нетривиальные функции)
+
+```
+function decryptChannelContent(base64Content, channelKeysByVersion):
+    bytes = base64decode(base64Content)
+    v = readUint32BE(bytes[0:4])
+    nonce = bytes[4:16]
+    ciphertext = bytes[16:]
+    key = channelKeysByVersion[v]
+    if key is None: return None   // эпоха неизвестна — не наша (никогда не было VIEW) или ещё не эта версия
+    return ChaCha20Poly1305Decrypt(ciphertext, key, nonce)
+
+function verifyCommentAuthor(commentEvent, allowlistForVersion, channelOwnerPubkey, allowlistEventPubkey):
+    if allowlistEventPubkey != channelOwnerPubkey: return false   // allowlist не владельцем подписан
+    return commentEvent.pubkey in allowlistForVersion.allowedAuthors
+
+function handleIncomingSubscribeRequest(currentAllowlist, requesterPubkey):
+    // владелец: добавление в allowlist той же эпохи (COMMENT не ротирует channelKey)
+    if requesterPubkey in currentAllowlist.allowedAuthors: return currentAllowlist  // идемпотентно
+    return { ...currentAllowlist, allowedAuthors: [...currentAllowlist.allowedAuthors, requesterPubkey] }
+```
+
+### Явное сужение скоупа
+
+Не в скоупе этапа 30: отзыв VIEW/исключение из видимости после
+создания (модель уже поддерживает, UI — backlog); редактирование
+метаданных канала после создания (kind 30060 replaceable, функция
+дешёвая, но UI — экран канала, этап 31); посты/комментарии/чат/
+модерация (этапы 31-33); resize аватара (200×200 — canvas-обработка
+не строится: единичная операция на канал, не поток вложений, но и не
+критична для MVP этого этапа — грузится как есть через уже готовый
+`uploadAttachment`, resize — backlog polish).

@@ -8,6 +8,7 @@ import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
 import Chat from "./ui/screens/chat.jsx";
+import Channels from "./ui/screens/channels.jsx";
 import { currentUser } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 
@@ -56,10 +57,12 @@ function MainShell() {
 				{activeId === "profile" && <Profile />}
 				{activeId === "contacts" && <Contacts />}
 				{activeId === "messages" && <Chat />}
+				{activeId === "channels" && <Channels />}
 				{activeId !== "diagnostics" &&
 					activeId !== "profile" &&
 					activeId !== "contacts" &&
-					activeId !== "messages" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+					activeId !== "messages" &&
+					activeId !== "channels" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 		</div>
 	);

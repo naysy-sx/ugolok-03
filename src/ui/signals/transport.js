@@ -27,6 +27,8 @@ import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
 import { profiles } from "./contacts.js";
+import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
+import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -160,6 +162,14 @@ async function connect(pubkeyHex, privKey) {
 							createdAt: parsed.createdAt,
 						});
 						bumpMessagingActivity(); // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
+					} else if (rumor.kind === CHANNEL_SUBSCRIBE_REQUEST_KIND) {
+						// Этап 30 — владелец канала автоматически подтверждает COMMENT-доступ
+						// (group-видимость уже была его решением при создании канала).
+						const channelIdTag = rumor.tags.find((t) => t[0] === "channel_id");
+						if (channelIdTag) {
+							await handleIncomingSubscribeRequest(pubkeyHex, privKey, channelIdTag[1], rumor.pubkey, publisher.publish);
+						}
+						bumpMessagingActivity(); // channels.jsx узнаёт о новом подписчике
 					}
 					// иначе — будущий kind, discard
 				} catch {
@@ -176,6 +186,11 @@ async function connect(pubkeyHex, privKey) {
 	// после reload; refreshGroupMessageSubscription (вызывается и выше, при Welcome)
 	// обновляет фильтр, когда появляется новый чат.
 	await refreshGroupMessageSubscription(pubkeyHex, privKey, publisher.publish);
+
+	// Этап 30 — восстановление подписок на VIEW-гранты/контент каналов после
+	// reload/переподключения, тот же принцип, что refreshGroupMessageSubscription выше.
+	await refreshChannelGrantSubscription(pubkeyHex, privKey);
+	await refreshChannelContentSubscription(pubkeyHex);
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
@@ -330,6 +345,76 @@ export async function refreshLiveProfileSubscription(ownerPubkey) {
 	// Повторный вызов (новый контакт добавлен) — тот же приём, что groupMessageSubscriber:
 	// переподписка тем же subId идемпотентна и дёшево обновляет набор authors.
 	profileSubscriber.subscribe("live-profiles", [{ authors: contactPubkeys, kinds: [0] }]);
+}
+
+let channelGrantSubscriber = null;
+
+// Этап 30 — kind 30053 (VIEW-грант), тег #p: [я]. Постоянная подписка (тот же принцип,
+// что refreshLiveProfileSubscription) — грант может прийти в любой момент (владелец
+// добавил тебя в видимую группу уже ПОСЛЕ того, как ты открыл приложение).
+export async function refreshChannelGrantSubscription(ownerPubkey, privKey) {
+	if (!connection) return;
+	if (!channelGrantSubscriber) {
+		channelGrantSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						await receiveChannelKeyGrant(ownerPubkey, privKey, event.pubkey, event);
+						// Новый канал стал известен (получен channelTopic) — переподписка на
+						// контент (kind 30060/30054) обязана подхватить его topic немедленно,
+						// иначе метаданные/allowlist этого канала не придут до следующего
+						// перезахода (тот же класс находки, что этап 27-довесок-7 для профилей).
+						await refreshChannelContentSubscription(ownerPubkey);
+						bumpMessagingActivity(); // channels.jsx узнаёт о новом "Доступном" канале
+					} catch {
+						// не мой грант / повреждён — пропустить, не ронять батч
+					}
+				}
+			},
+		});
+		connection.addMessageHandler(channelGrantSubscriber.handleMessage);
+	}
+	channelGrantSubscriber.subscribe("channel-grants", [{ "#p": [ownerPubkey], kinds: [30053] }]);
+}
+
+let channelContentSubscriber = null;
+
+// Этап 30 — kind 30060 (метаданные, channelKey-зашифрованные, replaceable) и kind 30054
+// (comment allowlist) по known channelTopics. Топики меняются со временем (новые
+// каналы/гранты) — переподписка тем же subId идемпотентна, тот же приём, что
+// groupMessageSubscriber/profileSubscriber выше. Фильтр по тегу `h` (НЕ `channel` —
+// найдено живым прогоном против strfry: NIP-12 индексирует только ОДНОБУКВЕННЫЕ теги,
+// `{"#channel": [...]}` relay буквально отклоняет как "unindexed tag filter" — TECH.md
+// исходно предлагал многобуквенный тег "channel", это протокольная ошибка спецификации,
+// не домысел; `h` — тот же однобуквенный routing-тег, что уже используется для MLS-групп
+// kind 445, естественное расширение того же паттерна на kind 30060/30061/30062/30054).
+export async function refreshChannelContentSubscription(ownerPubkey) {
+	if (!connection) return;
+	const topics = (await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => r.channelTopic);
+	if (topics.length === 0) return;
+
+	if (!channelContentSubscriber) {
+		channelContentSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						if (event.kind === 30060) {
+							await receiveChannelMetadata(ownerPubkey, event);
+						} else if (event.kind === 30054) {
+							await receiveAllowlistUpdate(ownerPubkey, ownerPubkey, event);
+						}
+						bumpMessagingActivity(); // channels.jsx перечитывает списки/метаданные
+					} catch {
+						// повреждено/эпоха неизвестна и т.п. — пропустить, не ронять батч
+					}
+				}
+			},
+		});
+		connection.addMessageHandler(channelContentSubscriber.handleMessage);
+	}
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

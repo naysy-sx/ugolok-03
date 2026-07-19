@@ -4115,3 +4115,212 @@ Regression: `npm test` 493/493 (обновлены 2 теста в
 `attachments-validation.test.js` — старые лимиты 3 МБ/20 МБ заменены
 на 50 МБ). `npm run build` 227.12 КБ gzip (+0.13 КБ — CSS-спиннер,
 без новых зависимостей).
+
+## Этап 30 — Каналы: создание + группы-видимость + VIEW/подписка + навигация
+
+### Разрешённый архитектурный конфликт
+
+Пользователь предоставил детальное ТЗ на функциональность каналов
+("версия 0.1"), но описанная там архитектура — звёздчатая топология
+(участник → владельцу → владелец вручную релеит всем, контент
+шифруется только "для себя" at rest, по сети — plaintext) —
+несовместима с тем, что уже построено в этом проекте с самого начала
+(TECH.md §4.7/§5.9: relay-broadcast, сквозное шифрование channelKey,
+offline-first — работает без участия владельца онлайн). Решение
+пользователя (после предъявления конфликта): функциональность/UX —
+из ТЗ, архитектура — уже принятая (relay-broadcast). Объём вырос
+кратно относительно исходных 3 этапов (30-32) — переразбит на 5
+(30-34, см. PLAN.md). Этот этап — первый из пяти: создание канала,
+видимость по группам контактов, различение VIEW/COMMENT
+("Доступные"/"Подписки"), навигация. Посты/комментарии — этап 31
+(уже планировался); общий чат канала — этап 32 (новое); модерация
+(жалобы/бан/игнор/rate-limit) — этап 33 (новое); настройки/финал —
+этап 34 (было 32).
+
+### Найденный пробел и правка контракта (DESIGN.md, формализация 1)
+
+TECH.md §10 буквально: kind 30060 (метаданные канала) — "NIP-44 для
+себя", читает только владелец. Не даёт способа для VIEW-получателей
+узнать имя/описание/правила/аватар канала — необходимо для
+"Доступные"/"Подписки". **Правка:** kind 30060 шифруется
+`channelKey[v_current]` (тот же версионированный конверт, что посты,
+F-CH-03), остаётся replaceable — владелец переиздаёт при
+редактировании БЕЗ повторной раздачи ключей. kind 30053 несёт ТОЛЬКО
+ключевой материал (`channelId`, `channelTopic`, `channelKey`), не
+метаданные — единственный источник истины для метаданных — kind
+30060.
+
+### `src/core/crypto/channel-key.js`
+
+```js
+export function generateChannelKey(); // Uint8Array(32), crypto.getRandomValues
+export function generateChannelTopic(); // Uint8Array(16), crypto.getRandomValues — routing tag #channel
+
+export function encryptChannelKeyGrant(channelId, channelTopicHex, channelKeyHex, ownerPrivKey, readerPubkey);
+// NIP-44(JSON({channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex}), ownerPrivKey, readerPubkey)
+// -> строка content для kind 30053. ТОЛЬКО ключевой материал (см. правку выше).
+
+export function decryptChannelKeyGrant(content, readerPrivKey, ownerPubkey);
+// NIP-44.decrypt(content, readerPrivKey, ownerPubkey) -> JSON.parse -> {channelId, channelTopic, channelKey}
+// Повреждённый/чужой контент -> throw (вызывающий код решает, отбросить событие или нет).
+
+export function encryptChannelContent(plaintext, channelKeyHex, version);
+// base64(uint32BE(version) ‖ nonce(12) ‖ ChaCha20-Poly1305(utf8(plaintext), key, nonce)) — F-CH-03
+// буквально, версия — заголовок конверта, не часть JSON-плейнтекста.
+
+export function decryptChannelContent(base64Content, channelKeysByVersion);
+// channelKeysByVersion: Map<number, hexString> ИЛИ {[version]: hexString}.
+// Читает version из заголовка, берёт channelKeysByVersion[version]; версия неизвестна
+// (никогда не было VIEW на эту эпоху) -> return null, НЕ throw (тот же принцип, что
+// receiveGroupMessageEvent -> null на "не наша группа", не exception на каждое чужое событие).
+// Иначе -> строка plaintext.
+```
+
+### `src/core/crypto/comment-allowlist.js`
+
+```js
+export function buildAllowlistEvent(channelId, channelTopicHex, version, allowedAuthors, channelKeyHex, ownerPrivKey);
+// kind 30054, tags: [['d', opaqueDTag(masterSecret, 30054, channelId+':'+version)], ['channel', channelTopicHex]]
+// (тот же HMAC-обфусцированный d-tag, что TECH.md §4.8 — но masterSecret передаётся
+// вызывающим кодом, этот модуль masterSecret не хранит и не деривирует сам).
+// content: encryptChannelContent(JSON.stringify({channelId, version, allowedAuthors}), channelKeyHex, version)
+// подписывается ownerPrivKey (sign() из core/crypto/sign.js).
+
+export function parseAndVerifyAllowlist(event, channelKeyHex, expectedOwnerPubkey);
+// event.pubkey !== expectedOwnerPubkey -> return null (allowlist не владельцем — F-EV-07 аналог)
+// иначе decryptChannelContent(event.content, {[version]: channelKeyHex}) -> JSON.parse
+// -> {version, allowedAuthors} или null при любой неудаче (не throw — злонамеренное
+// событие должно тихо отбрасываться, F-EV-06 принцип).
+
+export function canAuthorComment(authorPubkey, verifiedAllowlist);
+// verifiedAllowlist === null -> false; иначе authorPubkey ∈ allowlist.allowedAuthors.
+```
+
+### `src/domain/content/channel-access.js` (VIEW/COMMENT протокол)
+
+```js
+export const CHANNEL_SUBSCRIBE_REQUEST_KIND = 3002; // новый rumor kind, по прецеденту
+// CONTACT_REQUEST_KIND=3001 (contacts/requests.js) — gift-wrap (kind 1059), не публичный.
+
+export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, publish);
+// channel: {channelId, channelTopic (hex), channelKey (hex)}. Строит kind 30053
+// (encryptChannelKeyGrant + sign), tags: [['p', readerPubkey]], publish. НЕ проверяет
+// "уже был грант этому reader" — идемпотентно на уровне relay (повторная публикация
+// того же гранта безвредна), проверка "уже подписан" — на уровне вызывающего кода
+// (channel.js), не здесь.
+
+export function buildSubscribeRequestRumor(channelId);
+// { kind: CHANNEL_SUBSCRIBE_REQUEST_KIND, content: '', tags: [['channel_id', channelId]],
+//   created_at: now } — по прецеденту buildContactRequestRumor (requests.js).
+
+export async function sendSubscribeRequest(requesterPrivKey, ownerPubkey, channelId, publish);
+// nip59Wrap(buildSubscribeRequestRumor(channelId), requesterPrivKey, ownerPubkey) -> publish.
+
+export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, channelId, requesterPubkey, publish);
+// Владелец: читает текущий channelKeyMeta/commentAllowlists (владелец САМ хранит и
+// поддерживает allowlist, он же его подписывает) для channelId у СЕБЯ; если
+// requesterPubkey уже в списке — no-op (идемпотентно); иначе — новый allowedAuthors
+// (та же ВЕРСИЯ channelKey — COMMENT не ротирует ключ, F-CH-05), buildAllowlistEvent,
+// sign, publish. НЕ проверяет, что requesterPubkey реально имеет VIEW (доверяет
+// прикладному вызову — group-видимость уже была решением владельца; злонамеренный
+// requester без VIEW всё равно не сможет РАСШИФРОВАТЬ канал, allowlist только про
+// право ПИСАТЬ, симметрично F-CH-05).
+```
+
+### `src/domain/content/channel.js` (создание, локальные списки, приём событий)
+
+```js
+export async function createChannel(ownerPubkey, ownerPrivKey, {name, description, rules, avatarDescriptor}, groupIds, publish);
+// groupIds: string[] (ID контакт-групп, groups.js). Резолвит -> Set<pubkey> (объединение
+// groupMembers всех groupIds, дедуп). Генерирует channelKey/channelTopic (v=1),
+// публикует kind 30060 (метаданные, channelKey-зашифрованные), персистит channels
+// {role:"owner"} + channelKeys[v=1] + channelKeyMeta{currentVersion:1} локально у
+// СЕБЯ, ЗАТЕМ sendViewGrant КАЖДОМУ pubkey из Set (пустой Set -> ни одного гранта,
+// канал остаётся сугубо локальным "заметочником", буквально по ТЗ). Возвращает
+// {channelId}.
+
+export async function listOwnedChannels(ownerPubkey);
+export async function listSubscribedChannels(ownerPubkey);
+export async function listAvailableChannels(ownerPubkey);
+// Все три — db.table('channels').where('ownerPubkey').equals(ownerPubkey), фильтр по
+// полю role ("owner"/"subscriber"/"available" соответственно).
+
+export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channelOwnerPubkey, event);
+// decryptChannelKeyGrant(event.content, readerPrivKey, channelOwnerPubkey) -> throw
+// перехватывается ВЫЗЫВАЮЩИМ кодом (transport.js, тот же принцип, что остальные live-
+// подписки — сбой одного события не роняет батч), не здесь. Персистит channelKeys/
+// channelKeyMeta; если локальной записи channels для этого channelId ЕЩЁ нет — создаёт
+// с role:"available", creatorPubkey: channelOwnerPubkey; если УЖЕ есть (повторный
+// грант/новая эпоха после revoke) — обновляет channelKeys, роль НЕ понижает.
+
+export async function receiveChannelMetadata(ownerPubkey, event);
+// kind 30060 — decryptChannelContent через уже известные channelKeys данного канала
+// (находится по channelTopic из тега #channel); null (эпоха неизвестна) -> no-op, не
+// наш канал ещё/уже. Обновляет name/description/rules/avatar в локальной строке
+// channels (upsert полей, роль не трогает).
+
+export async function receiveAllowlistUpdate(ownerPubkey, myPubkey, event);
+// kind 30054 — parseAndVerifyAllowlist; myPubkey ∈ allowedAuthors И текущая локальная
+// роль НЕ "owner" -> апгрейд role "available"->"subscriber" (владелец не апгрейдится
+// сам себе, он и так полный доступ имеет). Персистит commentAllowlists (верифицированный
+// кэш) — используется ПОЗЖЕ (этап 31) для проверки авторства входящих комментариев.
+
+export async function subscribeToChannelAction(ownerPubkey, ownerPrivKey, channelId, publish);
+// Тонкая обёртка — читает channelOwnerPubkey из локальной строки channels, зовёт
+// sendSubscribeRequest (channel-access.js).
+```
+
+### Схема БД — `db.version(5)`, owner-scoping (найдено рассуждением, см. DESIGN.md)
+
+`channels`/`channelKeys`/`channelKeyMeta`/`commentAllowlists` в
+`db.version(1)` объявлены БЕЗ `ownerPubkey` — тот же класс пробела,
+что уже исправлен для messages/mlsGroups/ownKeyPackage/chatSyncState
+(этапы 25-27). Никогда не использовались кодом — правка без риска
+миграции. `channelTopics` (отдельная таблица) сворачивается в поле
+`channels.channelTopic` — та же информация, не нужна отдельная
+таблица.
+
+### Навигация
+
+`src/ui/nav-items.js`: `{ id: "subscriptions", label: "Подписки" }` →
+`{ id: "channels", label: "Каналы" }`. `src/ui/screens/channels.jsx`
+(новый) — 3 вкладки (Мои каналы/Подписки/Доступные) + кнопка
+"Создать канал" (форма: имя/описание/правила/аватар/чекбоксы групп) +
+кнопка "Подписаться" на карточках "Доступные".
+
+### Явное сужение скоупа
+
+Отзыв VIEW после создания; редактирование метаданных после создания
+(kind 30060 дешёво переиздать, но UI — этап 31, экран канала);
+resize аватара 200×200 (грузится как есть через `uploadAttachment`,
+canvas-resize — backlog polish, единичная операция на канал, не
+поток); посты/комментарии/чат/модерация — этапы 31-33.
+
+### Найденная живым прогоном протокольная ошибка — правка контракта TECH.md
+
+TECH.md §4.7/§4.8/§5.9 буквально предлагал многобуквенный тег
+`#channel` для маршрутизации по `channelTopic` (kind 30060/30061/
+30062/30054). Первый живой E2E-прогон (два реальных браузерных
+контекста + настоящий strfry) показал: metadata/allowlist никогда не
+доходят до получателя — VIEW-грант (kind 30053, тег `#p`, однобуквенный)
+доставляется штатно, а подписка `{"#channel": [...]}` относительно
+`h-` тега молча не даёт результатов. Прямая проверка сырым WebSocket-
+запросом к strfry подтвердила причину: `strfry` вернул `CLOSED
+"ERROR: bad req: error parsing #channel: unindexed tag filter"` —
+**NIP-12 индексирует и делает queryable ТОЛЬКО однобуквенные теги**
+(`a-zA-Z`), многобуквенные теги (`channel`) relay не индексирует и не
+обязан обслуживать по спецификации. Это ошибка в самой TECH.md
+спецификации (написана до эмпирической проверки против реального
+relay), не в реализации.
+
+**Правка:** маршрутизирующий тег для kind 30060/30061/30062/30054 —
+`h` (не `channel`) — тот же однобуквенный routing-принцип, что уже
+используется для MLS-групп (kind 445, `h`-тег с этапа 24). Естественное
+расширение уже принятого паттерна на новый класс контента, не новая
+концепция. Затронуты: `channel.js` (kind 30060, тег при публикации и
+при чтении), `comment-allowlist.js` (kind 30054), `transport.js`
+(фильтр подписки `refreshChannelContentSubscription`). Тесты обновлены
+(`comment-allowlist.test.js`). TECH.md остаётся историческим
+документом замысла (не переписан построчно), правка зафиксирована
+здесь и в log.md — по прецеденту всех предыдущих отклонений от
+исходной спецификации в проекте.
