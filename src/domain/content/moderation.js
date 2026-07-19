@@ -6,6 +6,8 @@ import { generateChannelKey, encryptChannelContent, decryptChannelContent } from
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { sendViewGrant } from "./channel-access.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 // DESIGN.md, этап 33 — следующий свободный parameterized-replaceable kind после
 // общего чата (30063). Контент шифруется channelKey[v_OLD] (не v_new!) — единственный
@@ -82,16 +84,16 @@ export async function getIgnoredSet(viewerPubkey, channelId) {
 // DESIGN.md, "Этап 33", формализация 1 — шаги 1-6 буквально. Не бросает, если
 // targetPubkey не был в readers/allowlist (VIEW-only без COMMENT — валидный бан-кейс,
 // ротация и уведомление всё равно применяются).
-export async function banMember(ownerPubkey, ownerPrivKey, channelId, targetPubkey, publish) {
+export async function banMember(ownerPubkey, ownerPrivKey, dbKey, channelId, targetPubkey, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
-	const oldKeyRow = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
+	const oldKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 	const vOld = meta.currentVersion;
 	const vNew = vOld + 1;
 
 	const newKeyHex = bytesToHex(generateChannelKey());
-	await db.table("channelKeys").put({ ownerPubkey, channelId, keyVersion: vNew, channelKey: newKeyHex });
+	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId, keyVersion: vNew, channelKey: newKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
 	await db.table("channelKeyMeta").update([ownerPubkey, channelId], { currentVersion: vNew });
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
@@ -101,13 +103,15 @@ export async function banMember(ownerPubkey, ownerPrivKey, channelId, targetPubk
 		await sendViewGrant(ownerPubkey, ownerPrivKey, newChannel, r.readerPubkey, vNew, publish);
 	}
 
-	const oldAllowlistRow = await db.table("commentAllowlists").get([ownerPubkey, channelId, vOld]);
+	const oldAllowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelId, vOld]), dbKey);
 	if (oldAllowlistRow) {
 		const newAuthors = oldAllowlistRow.allowedAuthors.filter((p) => p !== targetPubkey);
 		const masterSecret = deriveMasterSecret(ownerPrivKey);
 		const allowlistEvent = buildAllowlistEvent(channelId, channelRow.channelTopic, vNew, newAuthors, newKeyHex, ownerPrivKey, masterSecret);
 		await requirePublishOk(publish, allowlistEvent);
-		await db.table("commentAllowlists").put({ ownerPubkey, channelId, keyVersion: vNew, allowedAuthors: newAuthors });
+		await db.table("commentAllowlists").put(
+			toEncryptedRow({ ownerPubkey, channelId, keyVersion: vNew, allowedAuthors: newAuthors }, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, dbKey),
+		);
 	}
 
 	const banContent = encryptChannelContent(JSON.stringify({ targetPubkey }), oldKeyRow.channelKey, vOld);
@@ -148,7 +152,7 @@ async function deleteChannelLocally(ownerPubkey, channelId) {
 }
 
 // DESIGN.md, "Приём kind 30064" — шаги 1-5 буквально.
-export async function receiveBanAnnouncement(ownerPubkey, event) {
+export async function receiveBanAnnouncement(ownerPubkey, dbKey, event) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
 	const channelRow = await db
@@ -161,7 +165,8 @@ export async function receiveBanAnnouncement(ownerPubkey, event) {
 
 	// Единственное место в этом этапе, где нужны ВСЕ исторические ключи (не только
 	// current) — объявление шифруется v_old, который у текущих читателей уже НЕ current.
-	const keyRows = await db.table("channelKeys").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelRow.id]).toArray();
+	const keyRowsRaw = await db.table("channelKeys").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelRow.id]).toArray();
+	const keyRows = keyRowsRaw.map((k) => fromEncryptedRow(k, dbKey));
 	const versionsMap = Object.fromEntries(keyRows.map((k) => [k.keyVersion, k.channelKey]));
 	const plaintext = decryptChannelContent(event.content, versionsMap);
 	if (plaintext === null) return false;

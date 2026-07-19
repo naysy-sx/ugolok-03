@@ -18,6 +18,7 @@ import {
 	subscribeToChannelAction,
 } from "../src/domain/content/channel.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
+import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -25,6 +26,7 @@ const MALLORY_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const MALLORY_PUB = bytesToHex(getPublicKey(MALLORY_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -61,7 +63,7 @@ test("createChannel: без групп -> ни одного VIEW-гранта, �
 	const { channelId } = await createChannel(
 		ALICE_PUB,
 		ALICE_PRIV,
-		{ name: "Заметки", description: "личное", rules: "" },
+		DB_KEY, { name: "Заметки", description: "личное", rules: "" },
 		[],
 		capturingPublish(published),
 	);
@@ -81,7 +83,7 @@ test("НАЙДЕНО ЖИВЫМ E2E (этап 32): kind 30053 для РАЗНЫ�
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
 	const published = [];
-	await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
 
 	const grants = published.filter((e) => e.kind === 30053);
 	assert.equal(grants.length, 2, "по гранту на каждого читателя");
@@ -96,7 +98,7 @@ test("createChannel: группа с Бобом -> Боб получает kind 
 	const { channelId } = await createChannel(
 		ALICE_PUB,
 		ALICE_PRIV,
-		{ name: "Котики", description: "фото котиков", rules: "без спама" },
+		DB_KEY, { name: "Котики", description: "фото котиков", rules: "без спама" },
 		["friends"],
 		capturingPublish(published),
 	);
@@ -118,7 +120,7 @@ test("createChannel: группа с Бобом -> Боб получает kind 
 
 test("createChannel (этап 33, аддитивная правка): персистит channelReaders для каждого реального получателя VIEW", async () => {
 	await seedGroupWithBob();
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.equal(readers.length, 1);
 	assert.equal(readers[0].readerPubkey, BOB_PUB);
@@ -127,13 +129,13 @@ test("createChannel (этап 33, аддитивная правка): перси
 test("Боб получает VIEW и метаданные -> канал появляется в 'Доступные', не в 'Подписки'", async () => {
 	await seedGroupWithBob();
 	const published = [];
-	await createChannel(ALICE_PUB, ALICE_PRIV, { name: "Котики", description: "d", rules: "" }, ["friends"], capturingPublish(published));
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Котики", description: "d", rules: "" }, ["friends"], capturingPublish(published));
 
 	const grantEvent = published.find((e) => e.kind === 30053);
 	const metaEvent = published.find((e) => e.kind === 30060);
 
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, grantEvent);
-	await receiveChannelMetadata(BOB_PUB, metaEvent);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
 
 	const available = await listAvailableChannels(BOB_PUB);
 	assert.equal(available.length, 1);
@@ -144,11 +146,11 @@ test("Боб получает VIEW и метаданные -> канал поя�
 test("полный флоу подписки: Боб -> запрос -> Алиса auto-подтверждает -> allowlist -> Боб переезжает в 'Подписки'", async () => {
 	await seedGroupWithBob();
 	const aliceOutbox = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "Котики", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Котики", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
 	const grantEvent = aliceOutbox.find((e) => e.kind === 30053);
 	const metaEvent = aliceOutbox.find((e) => e.kind === 30060);
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, grantEvent);
-	await receiveChannelMetadata(BOB_PUB, metaEvent);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
 
 	// Боб отправляет запрос на подписку (gift-wrap, владелец узнаёт получателя через unwrap)
 	const bobOutbox = [];
@@ -165,12 +167,12 @@ test("полный флоу подписки: Боб -> запрос -> Алис
 	// Алиса (владелец) автоматически подтверждает — без второго клика (group-видимость уже
 	// была осознанным решением при создании канала).
 	const aliceOutbox2 = [];
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, requestedChannelId, rumor.pubkey, capturingPublish(aliceOutbox2));
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, requestedChannelId, rumor.pubkey, capturingPublish(aliceOutbox2));
 	const allowlistEvent = aliceOutbox2.find((e) => e.kind === 30054);
 	assert.ok(allowlistEvent, "владелец обязан переиздать allowlist (kind 30054)");
 
 	// Боб получает обновлённый allowlist -> его роль повышается локально.
-	await receiveAllowlistUpdate(BOB_PUB, BOB_PUB, allowlistEvent);
+	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, allowlistEvent);
 	assert.equal((await listAvailableChannels(BOB_PUB)).length, 0, "канал уехал из 'Доступные'");
 	const subscribed = await listSubscribedChannels(BOB_PUB);
 	assert.equal(subscribed.length, 1);
@@ -180,15 +182,15 @@ test("полный флоу подписки: Боб -> запрос -> Алис
 test("handleIncomingSubscribeRequest: повторный запрос уже подписанного — идемпотентно, allowlist не дублирует pubkey", async () => {
 	await seedGroupWithBob();
 	const aliceOutbox = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
 
 	const outbox1 = [];
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(outbox1));
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(outbox1));
 	const outbox2 = [];
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(outbox2));
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(outbox2));
 
 	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
-	const allowlistRow = await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]);
+	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	const occurrences = allowlistRow.allowedAuthors.filter((p) => p === BOB_PUB).length;
 	assert.equal(occurrences, 1, "повторный запрос не должен дублировать pubkey в allowlist");
 });
@@ -196,20 +198,20 @@ test("handleIncomingSubscribeRequest: повторный запрос уже п�
 test("АДВЕРСАРНЫЙ: receiveChannelKeyGrant для ЧУЖОГО получателя (не Mallory) -> throw, не тихо принимает", async () => {
 	await seedGroupWithBob();
 	const published = [];
-	await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
 	const grantEvent = published.find((e) => e.kind === 30053); // предназначен Бобу, не Мэллори
 
-	await assert.rejects(() => receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, ALICE_PUB, grantEvent));
+	await assert.rejects(() => receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, grantEvent));
 });
 
 test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный allowlist (не от владельца канала) отклоняется, роль не повышается", async () => {
 	await seedGroupWithBob();
 	const aliceOutbox = [];
-	await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
 	const grantEvent = aliceOutbox.find((e) => e.kind === 30053);
 	const metaEvent = aliceOutbox.find((e) => e.kind === 30060);
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, grantEvent);
-	await receiveChannelMetadata(BOB_PUB, metaEvent);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
 
 	// Mallory (не владелец) публикует "allowlist", включающий Боба — событие подписано ЕЁ
 	// ключом, event.pubkey не совпадает с реальным владельцем канала (Алисой).
@@ -218,7 +220,7 @@ test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный al
 	const grant = decryptChannelKeyGrant(grantEvent.content, BOB_PRIV, ALICE_PUB);
 	const forged = buildAllowlistEvent(grant.channelId, grant.channelTopic, 1, [BOB_PUB], grant.channelKey, MALLORY_PRIV, deriveMasterSecret(MALLORY_PRIV));
 
-	await receiveAllowlistUpdate(BOB_PUB, BOB_PUB, forged);
+	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, forged);
 	assert.equal((await listSubscribedChannels(BOB_PUB)).length, 0, "поддельный allowlist не должен повышать роль");
 	assert.equal((await listAvailableChannels(BOB_PUB)).length, 1, "канал остаётся в 'Доступные'");
 });

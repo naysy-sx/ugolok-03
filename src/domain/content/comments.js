@@ -2,6 +2,7 @@ import { db } from "../../core/store/database.js";
 import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -15,11 +16,11 @@ async function requirePublishOk(publish, event) {
 // источник истины — allowlist на приёмной стороне, см. receiveComment/F-EV-06):
 // у автора либо получится (он в allowlist у получателей), либо его комментарий
 // молча отбросят все честные клиенты — тот же принцип, что posts/deletions.
-export async function addComment(ownerPubkey, ownerPrivKey, channelId, postId, parentId, text, attachments, publish) {
+export async function addComment(ownerPubkey, ownerPrivKey, dbKey, channelId, postId, parentId, text, attachments, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 
 	const commentId = crypto.randomUUID();
 	const content = encryptChannelContent(JSON.stringify({ postId, parentId, text, attachments }), keyRow.channelKey, meta.currentVersion);
@@ -59,7 +60,7 @@ export async function addComment(ownerPubkey, ownerPrivKey, channelId, postId, p
 // (найдено рассуждением: он никогда не проходит через handleIncomingSubscribeRequest
 // сам на себя, поэтому его pubkey не попадает в allowlist естественным путём — без
 // этого исключения его СОБСТВЕННЫЕ комментарии отбрасывались бы другими подписчиками).
-export async function receiveComment(ownerPubkey, event) {
+export async function receiveComment(ownerPubkey, dbKey, event) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
 	const channelRow = await db
@@ -72,14 +73,15 @@ export async function receiveComment(ownerPubkey, event) {
 
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
 	if (!meta) return false;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRow) return false;
+	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+	if (!keyRowRaw) return false;
+	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
 	if (plaintext === null) return false;
 
 	if (event.pubkey !== channelRow.creatorPubkey) {
-		const allowlistRow = await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+		const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, meta.currentVersion]), dbKey);
 		const verifiedAllowlist = allowlistRow ? { allowedAuthors: allowlistRow.allowedAuthors } : null;
 		if (!canAuthorComment(event.pubkey, verifiedAllowlist)) return false;
 	}

@@ -4,6 +4,8 @@ import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import { encryptChannelKeyGrant } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 // Новый rumor kind (gift-wrap, kind 1059) — по прямому прецеденту CONTACT_REQUEST_KIND
 // (3001, contacts/requests.js): не публичный, владелец узнаёт запросившего через unwrap.
@@ -53,14 +55,15 @@ export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPu
 // group-видимость была решением при создании канала; здесь только выдача COMMENT).
 // F-CH-05: НЕ ротирует channelKey (та же версия) — только новый allowlist той же эпохи.
 // Идемпотентно: requesterPubkey уже в списке -> no-op, не публикует лишний kind 30054.
-export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, channelId, requesterPubkey, publish) {
+export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, dbKey, channelId, requesterPubkey, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) return; // не наш канал — defensive, не должно происходить в норме
 
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
 	const version = meta.currentVersion;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelId, version]);
-	const allowlistRow = await db.table("commentAllowlists").get([ownerPubkey, channelId, version]);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, version]), dbKey);
+	const allowlistRowRaw = await db.table("commentAllowlists").get([ownerPubkey, channelId, version]);
+	const allowlistRow = fromEncryptedRow(allowlistRowRaw, dbKey);
 	const currentAuthors = allowlistRow ? allowlistRow.allowedAuthors : [];
 	if (currentAuthors.includes(requesterPubkey)) return;
 
@@ -68,5 +71,7 @@ export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, 
 	const masterSecret = deriveMasterSecret(ownerPrivKey);
 	const event = buildAllowlistEvent(channelId, channelRow.channelTopic, version, newAuthors, keyRow.channelKey, ownerPrivKey, masterSecret);
 	await requirePublishOk(publish, event);
-	await db.table("commentAllowlists").put({ ownerPubkey, channelId, keyVersion: version, allowedAuthors: newAuthors });
+	await db.table("commentAllowlists").put(
+		toEncryptedRow({ ownerPubkey, channelId, keyVersion: version, allowedAuthors: newAuthors }, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, dbKey),
+	);
 }

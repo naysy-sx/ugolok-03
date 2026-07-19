@@ -118,7 +118,7 @@ function assertValidPubkeyHex(pubkeyHex) {
 	}
 }
 
-async function connect(pubkeyHex, privKey) {
+async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	// Этап 34 — найденное решение (бутстрап-проблема): активный relay нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
@@ -156,7 +156,7 @@ async function connect(pubkeyHex, privKey) {
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
 	await rebuildReadStatus(pubkeyHex, privKey);
-	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
+	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publisher.publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
 	// best-effort (сбой сети не блокирует остальной connect()).
@@ -167,7 +167,7 @@ async function connect(pubkeyHex, privKey) {
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
 	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
 	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
-	await syncDeviceMembership(pubkeyHex, privKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
+	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
 
 	// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
 	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
@@ -211,8 +211,8 @@ async function connect(pubkeyHex, privKey) {
 						// известные контакты — ожидаемый разговор, настоящий незнакомец — в inbox,
 						// без создания MLS-группы, пока пользователь не примет решение явно.
 						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
-							await acceptWelcome(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content));
-							await refreshGroupMessageSubscription(pubkeyHex, privKey, publisher.publish);
+							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content));
+							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
 						} else {
 							await storeInboxRequest(pubkeyHex, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 						}
@@ -235,7 +235,7 @@ async function connect(pubkeyHex, privKey) {
 						// (group-видимость уже была его решением при создании канала).
 						const channelIdTag = rumor.tags.find((t) => t[0] === "channel_id");
 						if (channelIdTag) {
-							await handleIncomingSubscribeRequest(pubkeyHex, privKey, channelIdTag[1], rumor.pubkey, publisher.publish);
+							await handleIncomingSubscribeRequest(pubkeyHex, privKey, dbKey, channelIdTag[1], rumor.pubkey, publisher.publish);
 						}
 						activityChanged = true; // channels.jsx узнаёт о новом подписчике
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
@@ -271,12 +271,12 @@ async function connect(pubkeyHex, privKey) {
 	// отправитель на каждое сообщение, NIP-EE). Восстанавливает уже установленные чаты
 	// после reload; refreshGroupMessageSubscription (вызывается и выше, при Welcome)
 	// обновляет фильтр, когда появляется новый чат.
-	await refreshGroupMessageSubscription(pubkeyHex, privKey, publisher.publish);
+	await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
 
 	// Этап 30 — восстановление подписок на VIEW-гранты/контент каналов после
 	// reload/переподключения, тот же принцип, что refreshGroupMessageSubscription выше.
-	await refreshChannelGrantSubscription(pubkeyHex, privKey);
-	await refreshChannelContentSubscription(pubkeyHex);
+	await refreshChannelGrantSubscription(pubkeyHex, privKey, dbKey);
+	await refreshChannelContentSubscription(pubkeyHex, dbKey);
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
@@ -295,12 +295,12 @@ async function connect(pubkeyHex, privKey) {
 // Идемпотентно — singleton-соединение на вкладку. Смена identity (logout/login
 // другим аккаунтом в той же вкладке) корректно рвёт старое соединение вместо
 // того, чтобы молча продолжать синхронизацию под чужим pubkey-фильтром.
-export async function ensureConnected(pubkeyHex, privKey) {
+export async function ensureConnected(pubkeyHex, privKey, dbKey) {
 	if (connectPromise && connectedForPubkey === pubkeyHex) return connectPromise;
 
 	teardown();
 	connectedForPubkey = pubkeyHex;
-	connectPromise = connect(pubkeyHex, privKey).catch((e) => {
+	connectPromise = connect(pubkeyHex, privKey, dbKey).catch((e) => {
 		connectPromise = null; // не кэшировать провал — следующий вызов вправе повторить попытку
 		throw e;
 	});
@@ -313,11 +313,11 @@ export async function ensureConnected(pubkeyHex, privKey) {
 // новый activeRelayUrl из локального кэша. Вызывающий UI-код (profile.jsx/settings.jsx)
 // обязан вызвать это САМ после setActiveRelayUrl — не скрытый побочный эффект внутри
 // доменной функции (CONTRACTS.md, этап 34).
-export async function reconnectWithNewSettings(pubkeyHex, privKey) {
+export async function reconnectWithNewSettings(pubkeyHex, privKey, dbKey) {
 	teardown();
 	connectedForPubkey = null;
 	connectPromise = null;
-	return ensureConnected(pubkeyHex, privKey);
+	return ensureConnected(pubkeyHex, privKey, dbKey);
 }
 
 export async function publish(event) {
@@ -451,7 +451,7 @@ let channelGrantSubscriber = null;
 // Этап 30 — kind 30053 (VIEW-грант), тег #p: [я]. Постоянная подписка (тот же принцип,
 // что refreshLiveProfileSubscription) — грант может прийти в любой момент (владелец
 // добавил тебя в видимую группу уже ПОСЛЕ того, как ты открыл приложение).
-export async function refreshChannelGrantSubscription(ownerPubkey, privKey) {
+export async function refreshChannelGrantSubscription(ownerPubkey, privKey, dbKey) {
 	if (!connection) return;
 	if (!channelGrantSubscriber) {
 		channelGrantSubscriber = createSubscriber(connection, {
@@ -465,7 +465,7 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey) {
 				let gotNewGrant = false;
 				for (const event of events) {
 					try {
-						await receiveChannelKeyGrant(ownerPubkey, privKey, event.pubkey, event);
+						await receiveChannelKeyGrant(ownerPubkey, privKey, dbKey, event.pubkey, event);
 						gotNewGrant = true;
 					} catch {
 						// не мой грант / повреждён — пропустить, не ронять батч
@@ -476,7 +476,7 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey) {
 					// контент (kind 30060/30054) обязана подхватить его topic немедленно,
 					// иначе метаданные/allowlist этого канала не придут до следующего
 					// перезахода (тот же класс находки, что этап 27-довесок-7 для профилей).
-					await refreshChannelContentSubscription(ownerPubkey);
+					await refreshChannelContentSubscription(ownerPubkey, dbKey);
 					bumpMessagingActivity(); // channels.jsx узнаёт о новом "Доступном" канале
 				}
 			},
@@ -497,7 +497,7 @@ let channelContentSubscriber = null;
 // исходно предлагал многобуквенный тег "channel", это протокольная ошибка спецификации,
 // не домысел; `h` — тот же однобуквенный routing-тег, что уже используется для MLS-групп
 // kind 445, естественное расширение того же паттерна на kind 30060/30061/30062/30054).
-export async function refreshChannelContentSubscription(ownerPubkey) {
+export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 	if (!connection) return;
 	const topics = (await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => r.channelTopic);
 	if (topics.length === 0) return;
@@ -511,13 +511,13 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 				for (const event of events) {
 					try {
 						if (event.kind === 30060) {
-							await receiveChannelMetadata(ownerPubkey, event);
+							await receiveChannelMetadata(ownerPubkey, dbKey, event);
 						} else if (event.kind === 30054) {
-							await receiveAllowlistUpdate(ownerPubkey, ownerPubkey, event);
+							await receiveAllowlistUpdate(ownerPubkey, dbKey, ownerPubkey, event);
 						} else if (event.kind === 30061) {
 							// Этап 31 — receivePost сама проверяет авторство (event.pubkey ===
 							// creatorPubkey, DESIGN.md формализация 2) — здесь только диспетчеризация.
-							const applied = await receivePost(ownerPubkey, event);
+							const applied = await receivePost(ownerPubkey, dbKey, event);
 							// Не своё же эхо (я — владелец, вижу свой опубликованный пост через ту же
 							// подписку по topic) — уведомление только на ЧУЖОЙ, т.е. буквально всегда
 							// (пост может быть только от владельца, а не-владелец не пишет посты), но
@@ -528,18 +528,18 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 						} else if (event.kind === 30062) {
 							// Комментарии — вне скоупа уведомлений (мокап не содержит такого пункта
 							// в дереве "Каналы", только "Новые посты"/"Сообщения в чате канала").
-							await receiveComment(ownerPubkey, event);
+							await receiveComment(ownerPubkey, dbKey, event);
 						} else if (event.kind === 30063) {
 							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
 							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
-							const applied = await receiveChannelMessage(ownerPubkey, event);
+							const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
 								notify(settings, "channels", "chatMessages", { title: "Новое сообщение в чате канала", body: "" });
 							}
 						} else if (event.kind === CHANNEL_BAN_KIND) {
 							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
 							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация.
-							const applied = await receiveBanAnnouncement(ownerPubkey, event);
+							const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
 								notify(settings, "moderation", null, { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
 							}
@@ -596,7 +596,7 @@ export async function fetchKeyPackage(pubkeyHex) {
 // Пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема (MVP).
 // privKey/publish (правка контракта этапа 25) — нужны, чтобы receiveGroupMessageEvent
 // могло зеркалировать полученное сообщение best-effort (DESIGN.md, "Этап 25", раздел 2).
-export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publish) {
+export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish) {
 	if (!connection) return;
 	// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра подписывал(ся)
 	// на #h ГРУПП ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey.
@@ -613,16 +613,16 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, publ
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {
-						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, event, publish);
+						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
 						// Найдено реальным использованием — синхронизация Lamport-часов на входящее
 						// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
 						if (receivedResult) await receiveLamportTick(receivedResult.lamportTs);
 						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 						// application-message; no-op (false), если это обычное сообщение/control.
-						const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult);
+						const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
 						// DESIGN.md, "Этап 27-довесок-6" — edit-маркер, тот же принцип; порядок с
 						// deletion неважен (разные префиксы, взаимоисключающие no-op на чужом маркере).
-						const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, event, receivedResult);
+						const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, dbKey, event, receivedResult);
 						// Этап 34 — уведомление только на ОБЫЧНОЕ новое сообщение, не на служебные
 						// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
 						// собственного же сообщения собеседником).

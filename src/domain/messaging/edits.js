@@ -1,5 +1,6 @@
 import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 const EDIT_MARKER_PREFIX = "__ugolok_edit__:";
 
@@ -24,7 +25,7 @@ export function parseEditText(text) {
 // DESIGN.md, "Этап 27-довесок-6" — lamportTs строки сообщения (позиция в хронологии)
 // НЕ трогается; editLamportTs (=lamportTs самой правки, отдельный тик) хранится
 // отдельно в editedAt для LWW-разрешения конкурентных правок.
-export async function editMessage(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish) {
+export async function editMessage(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish) {
 	const targetRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
 	if (!targetRow || targetRow.senderPubkey !== ownerPubkey) {
 		throw new Error("нельзя редактировать чужое сообщение");
@@ -32,7 +33,7 @@ export async function editMessage(ownerPubkey, privKey, contactPubkey, msgId, ne
 	if (targetRow.deleted) {
 		throw new Error("нельзя редактировать удалённое сообщение");
 	}
-	const result = await sendMessage(ownerPubkey, privKey, contactPubkey, buildEditText(msgId, newText), lamportTs, publish);
+	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildEditText(msgId, newText), lamportTs, publish);
 	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).modify({
 		text: newText,
 		edited: true,
@@ -44,15 +45,16 @@ export async function editMessage(ownerPubkey, privKey, contactPubkey, msgId, ne
 // Вызывается ПОСЛЕ applyIncomingDeletionIfMarker в диспетчере transport.js
 // (refreshGroupMessageSubscription) — тот же принцип: no-op (false) на обычные
 // сообщения/control, не бросает на неизвестных msgId/группах.
-export async function applyIncomingEditIfMarker(ownerPubkey, event, receivedResult) {
+export async function applyIncomingEditIfMarker(ownerPubkey, dbKey, event, receivedResult) {
 	if (!receivedResult) return false;
 	const parsed = parseEditText(receivedResult.text);
 	if (!parsed) return false;
 
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
-	const groupRow = await db.table("mlsGroups").get([ownerPubkey, hTag[1]]);
-	if (!groupRow) return false;
+	const groupRaw = await db.table("mlsGroups").get([ownerPubkey, hTag[1]]);
+	if (!groupRaw) return false;
+	const groupRow = fromEncryptedRow(groupRaw, dbKey);
 
 	const editorPubkey = groupRow.contactPubkey;
 	const targetRow = await db

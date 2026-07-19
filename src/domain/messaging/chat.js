@@ -20,6 +20,8 @@ import { buildMirrorEvent } from "./mirror.js";
 import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
 import { enqueue } from "../../core/store/outbox.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -71,18 +73,24 @@ async function mirrorBestEffort(privKey, publish, payload, groupIdHex) {
 	}
 }
 
-export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish) {
+export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, publish) {
 	const existing = await db.table("ownKeyPackage").get(ownerPubkey);
 	if (existing) return;
 
 	const deviceId = await getOrCreateDeviceId();
 	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
-	await db.table("ownKeyPackage").put({
-		ownerPubkey,
-		publicPackage: ownKeyPackage.publicPackage,
-		privatePackage: ownKeyPackage.privatePackage,
-		wireBytes: ownKeyPackage.wireBytes,
-	});
+	await db.table("ownKeyPackage").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				publicPackage: ownKeyPackage.publicPackage,
+				privatePackage: ownKeyPackage.privatePackage,
+				wireBytes: ownKeyPackage.wireBytes,
+			},
+			OWN_KEY_PACKAGE_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 
 	const event = sign(
 		{
@@ -99,7 +107,7 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, publish
 // DESIGN.md, этап 24, п.3 — установление 1:1-разговора. Своя (не из NIP-EE
 // напрямую) последовательность: KeyPackage адресата -> createGroup+addMember
 // -> персист ДО отправки (SM-1/SM-2, этап 13) -> Welcome как gift wrap.
-export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey, publish, fetchKeyPackage) {
+export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchKeyPackage) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
@@ -122,7 +130,11 @@ export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey,
 	// нужен для обратного поиска "чьё это kind 445" по groupId из h-тега: groupId —
 	// однонаправленный хэш (DESIGN.md п.2), pubkey из него не восстановить назад.
 	// ownerPubkey — часть составного ключа (db.version(4), owner-scoping — см. database.js).
-	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) });
+	// Этап 39 — contactPubkey/state теперь sensitive (шифруются dbKey), ownerPubkey/groupId
+	// остаются plaintext (составной PK, нужен для .get([ownerPubkey, groupIdHex])).
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+	);
 
 	const welcomeEvent = nip59Wrap(
 		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] },
@@ -135,24 +147,27 @@ export async function ensureChatEstablished(ownerPubkey, privKey, contactPubkey,
 // Вызывается диспетчером входящих gift wrap (transport.js) на rumor.kind===444.
 // welcomeSenderPubkey = rumor.pubkey (уже проверен nip59.unwrap — F-EV-05) — это и есть
 // контакт, с которым устанавливается разговор с ПОЛУЧАЮЩЕЙ стороны.
-export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWireBytes) {
+export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, welcomeWireBytes) {
 	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
 	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
 
-	const ownKeyPackageRow = await db.table("ownKeyPackage").get(ownerPubkey);
-	if (!ownKeyPackageRow) {
+	const ownKeyPackageRaw = await db.table("ownKeyPackage").get(ownerPubkey);
+	if (!ownKeyPackageRaw) {
 		throw new Error("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше");
 	}
+	const ownKeyPackageRow = fromEncryptedRow(ownKeyPackageRaw, dbKey);
 	const ownKeyPackage = {
 		publicPackage: ownKeyPackageRow.publicPackage,
 		privatePackage: ownKeyPackageRow.privatePackage,
 	};
 
 	const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
-	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) });
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+	);
 }
 
 // Этап 29 — правка контракта (skill п.12: только Claude, полная регрессия сразу
@@ -160,13 +175,14 @@ export async function acceptWelcome(ownerPubkey, welcomeSenderPubkey, welcomeWir
 // вызовы без изменений). sentAt (wall-clock, секунды) генерируется ВСЕГДА — обе
 // стороны видят ОДИНАКОВОЕ время отправки (не время получения); lamportTs (логические
 // часы, порядок сортировки) не трогается — назначение разное, смешивать нельзя.
-export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lamportTs, publish, attachment) {
+export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
-	const row = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (!row) {
+	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+	if (!raw) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
 	}
+	const row = fromEncryptedRow(raw, dbKey);
 
 	const state = deserializeState(row.state);
 	// msgId (этап 25) — единственный идентификатор, тождественный между живым MLS-путём
@@ -178,7 +194,9 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
-	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) });
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+	);
 
 	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
 	const content = nip44Encrypt(encodeBase64(wireBytes), privateKey, bytesToHex(publicKey));
@@ -242,13 +260,14 @@ export async function sendMessage(ownerPubkey, privKey, contactPubkey, text, lam
 // зеркала best-effort (DESIGN.md, "Этап 25", раздел 2): устройство, ПРИНЯВШЕЕ сообщение
 // живым MLS-путём, обязано распространить его на ОСТАЛЬНЫЕ устройства той же identity,
 // иначе они не MLS-участники именно этого сообщения и никогда его не увидят.
-export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publish) {
+export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return null;
 	const groupIdHex = hTag[1];
 
-	const row = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (!row) return null; // чужая/неизвестная группа — не наш разговор
+	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+	if (!raw) return null; // чужая/неизвестная группа — не наш разговор
+	const row = fromEncryptedRow(raw, dbKey);
 	const contactPubkey = row.contactPubkey;
 
 	const state = deserializeState(row.state);
@@ -256,7 +275,9 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, event, publ
 	const wireBytes = decodeBase64(nip44Decrypt(event.content, privateKey, bytesToHex(publicKey)));
 
 	const result = await decryptApplicationMessage(state, wireBytes);
-	await db.table("mlsGroups").put({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) });
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+	);
 
 	if (result.kind === "control") return null;
 

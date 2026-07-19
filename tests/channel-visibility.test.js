@@ -9,6 +9,7 @@ import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-ac
 import { CHANNEL_BAN_KIND } from "../src/domain/content/moderation.js";
 import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible } from "../src/domain/content/channel-visibility.js";
 import { groups, createGroupAction, addGroupMemberAction, removeGroupMemberAction } from "../src/ui/signals/contacts.js";
+import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -18,6 +19,7 @@ const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const MALLORY_PUB = bytesToHex(getPublicKey(MALLORY_PRIV));
 const CAROL_PUB = bytesToHex(getPublicKey(CAROL_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -54,7 +56,8 @@ async function setupChannelOneGroup() {
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
 	const aliceOutbox = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY,
+		{ name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
 	return { channelId };
 }
 
@@ -70,6 +73,7 @@ async function setupChannelTwoGroups() {
 	const { channelId } = await createChannel(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		{ name: "К", description: "d", rules: "" },
 		["friends", "family"],
 		capturingPublish(aliceOutbox),
@@ -87,7 +91,8 @@ test("createChannel: персистит channelVisibilityGroups — одна с�
 });
 
 test("createChannel: groupIds=[] (канал-заметочник) — channelVisibilityGroups остаётся пустой", async () => {
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "Заметки", description: "d", rules: "" }, [], capturingPublish([]));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY,
+		{ name: "Заметки", description: "d", rules: "" }, [], capturingPublish([]));
 	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(rows, []);
 });
@@ -101,7 +106,7 @@ test("findChannelIdsByVisibilityGroup: находит канал по связа
 test("revokeViewFromMember: ротирует channelKey, реиздаёт грант ОСТАВШЕМУСЯ читателю, удаляет target из channelReaders — БЕЗ бан-объявления", async () => {
 	const { channelId } = await setupChannelOneGroup();
 	const published = [];
-	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
 	const grants = published.filter((e) => e.kind === 30053);
 	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
@@ -121,13 +126,13 @@ test("revokeViewFromMember: ротирует channelKey, реиздаёт гра
 test("revokeViewFromMember: переиздаёт allowlist БЕЗ target (если был подписчиком)", async () => {
 	const { channelId } = await setupChannelOneGroup();
 	// Боб подписывается (COMMENT) — попадает в commentAllowlists текущей версии.
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish([]));
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish([]));
 
 	const published = [];
-	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
 	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
-	const allowlistRow = await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]);
+	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	assert.ok(allowlistRow);
 	assert.ok(!allowlistRow.allowedAuthors.includes(BOB_PUB), "Боб исключён из нового allowlist");
 });
@@ -137,7 +142,7 @@ test("revokeIfNoLongerVisible: pubkey состоял ТОЛЬКО в удаля�
 	await db.table("groupMembers").where("[groupId+pubkey]").equals(["friends", BOB_PUB]).delete();
 
 	const published = [];
-	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, BOB_PUB, "friends", capturingPublish(published));
+	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "friends", capturingPublish(published));
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(readers.map((r) => r.readerPubkey), [MALLORY_PUB], "Боб отозван, Mallory остаётся");
@@ -151,7 +156,7 @@ test("revokeIfNoLongerVisible: pubkey всё ещё виден через ДРУ
 	await db.table("groupMembers").where("[groupId+pubkey]").equals(["friends", BOB_PUB]).delete();
 
 	const published = [];
-	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, BOB_PUB, "friends", capturingPublish(published));
+	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "friends", capturingPublish(published));
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(
@@ -167,14 +172,14 @@ test("revokeIfNoLongerVisible: pubkey всё ещё виден через ДРУ
 test("revokeIfNoLongerVisible: группа не связана ни с одним каналом — no-op, не бросает", async () => {
 	await setupChannelOneGroup();
 	const published = [];
-	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, BOB_PUB, "unrelated-group", capturingPublish(published));
+	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "unrelated-group", capturingPublish(published));
 	assert.deepEqual(published, []);
 });
 
 test("revokeIfNoLongerVisible АДВЕРСАРНО: pubkey никогда не был читателем этого канала — no-op, не бросает", async () => {
 	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}, Кэрол не входит
 	const published = [];
-	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, CAROL_PUB, "friends", capturingPublish(published));
+	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, CAROL_PUB, "friends", capturingPublish(published));
 	assert.deepEqual(published, []);
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.equal(readers.length, 2, "существующие читатели не тронуты");
@@ -193,6 +198,7 @@ test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реа
 	const { channelId } = await createChannel(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		{ name: "К", description: "d", rules: "" },
 		[friendsId, familyId],
 		capturingPublish([]),
@@ -200,12 +206,12 @@ test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реа
 
 	const published = [];
 	// Боб выходит из "Друзья" — остаётся видим через "Семья", отзыва быть не должно.
-	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, friendsId, BOB_PUB, capturingPublish(published));
+	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, friendsId, BOB_PUB, capturingPublish(published));
 	let readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [BOB_PUB, CAROL_PUB].sort(), "Боб ещё виден через Семья");
 
 	// Кэрол выходит из "Семья" — это была её ЕДИНСТВЕННАЯ видящая группа, VIEW отзывается.
-	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, familyId, CAROL_PUB, capturingPublish(published));
+	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, familyId, CAROL_PUB, capturingPublish(published));
 	readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(readers.map((r) => r.readerPubkey), [BOB_PUB], "Кэрол отозвана, Боб остаётся");
 });

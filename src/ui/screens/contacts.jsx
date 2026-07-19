@@ -1,7 +1,7 @@
 import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { shortPubkey } from "../format.js";
-import { currentUser, privKeySig } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, connState, synced } from "../signals/transport.js";
 import { openChat } from "../signals/chat.js";
 import {
@@ -113,6 +113,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 export default function Contacts() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
+	const dbKey = dbKeySig.value;
 	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 
 	const [connectionError, setConnectionError] = useState("");
@@ -135,7 +136,7 @@ export default function Contacts() {
 	useEffect(() => {
 		refreshAll(ownerPubkey);
 		refreshContactRequests(ownerPubkey);
-		ensureConnected(ownerPubkey, privKey)
+		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(async () => {
 				await refreshAll(ownerPubkey);
 				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
@@ -529,7 +530,7 @@ export default function Contacts() {
 														aria-label={`Убрать из группы ${g.name}`}
 														onClick={() =>
 															runRowAction(() =>
-																removeGroupMemberAction(ownerPubkey, privKey, g.id, pubkey, publish),
+																removeGroupMemberAction(ownerPubkey, privKey, dbKey, g.id, pubkey, publish),
 															)
 														}
 													>

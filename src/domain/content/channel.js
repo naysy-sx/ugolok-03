@@ -10,6 +10,8 @@ import {
 } from "../../core/crypto/channel-key.js";
 import { parseAndVerifyAllowlist } from "../../core/crypto/comment-allowlist.js";
 import { sendViewGrant, sendSubscribeRequest } from "./channel-access.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -18,7 +20,7 @@ async function requirePublishOk(publish, event) {
 	}
 }
 
-export async function createChannel(ownerPubkey, ownerPrivKey, { name, description, rules, avatarDescriptor, allowChatAttachments = true }, groupIds, publish) {
+export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, description, rules, avatarDescriptor, allowChatAttachments = true }, groupIds, publish) {
 	const channelId = crypto.randomUUID();
 	const channelKeyHex = bytesToHex(generateChannelKey());
 	const channelTopicHex = bytesToHex(generateChannelTopic());
@@ -62,7 +64,7 @@ export async function createChannel(ownerPubkey, ownerPrivKey, { name, descripti
 		role: "owner",
 		createdAt: Math.floor(Date.now() / 1000),
 	});
-	await db.table("channelKeys").put({ ownerPubkey, channelId, keyVersion: version, channelKey: channelKeyHex });
+	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId, keyVersion: version, channelKey: channelKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
 	await db.table("channelKeyMeta").put({ ownerPubkey, channelId, currentVersion: version });
 
 	// Группы -> pubkeys, объединение с дедупликацией (Set). Пустой groupIds -> пустой Set
@@ -106,7 +108,7 @@ export async function listAvailableChannels(ownerPubkey) {
 // kind 30053 — decryptChannelKeyGrant БРОСАЕТ на "не мой грант" (NIP-44 AEAD-проверка
 // проваливается для чужого получателя) — вызывающий код (transport.js, этап 30 wiring)
 // обязан перехватывать per-event, тот же принцип, что везде в диспетчере.
-export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channelOwnerPubkey, event) {
+export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, channelOwnerPubkey, event) {
 	const grant = decryptChannelKeyGrant(event.content, readerPrivKey, channelOwnerPubkey);
 	// НАЙДено ЖИВЫМ АДВЕРСАРНЫМ ТЕСТОМ (этап 33) — версия теперь идёт В ПЕЙЛОАДЕ гранта
 	// (channel-key.js, encryptChannelKeyGrant), а не хардкодится: захардкоженная "1" молча
@@ -115,7 +117,7 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channel
 	// пришедшего (защита от переупорядоченной доставки: старый грант, пришедший ПОСЛЕ
 	// нового, не должен откатывать текущую версию назад).
 	const version = grant.version;
-	await db.table("channelKeys").put({ ownerPubkey, channelId: grant.channelId, keyVersion: version, channelKey: grant.channelKey });
+	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId: grant.channelId, keyVersion: version, channelKey: grant.channelKey }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
 	const existingMeta = await db.table("channelKeyMeta").get([ownerPubkey, grant.channelId]);
 	const currentVersion = Math.max(existingMeta?.currentVersion ?? 0, version);
 	await db.table("channelKeyMeta").put({ ownerPubkey, channelId: grant.channelId, currentVersion });
@@ -141,7 +143,7 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channel
 // kind 30060 — обновляет локальные метаданные (имя/описание/правила/аватар). Неизвестный
 // канал (нет VIEW ещё) ИЛИ неизвестная эпоха -> тихий no-op (рутинный случай в потоке
 // relay-broadcast, не ошибка).
-export async function receiveChannelMetadata(ownerPubkey, event) {
+export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 	const dTag = event.tags.find((t) => t[0] === "d");
 	if (!dTag) return;
 	const channelId = dTag[1];
@@ -150,8 +152,9 @@ export async function receiveChannelMetadata(ownerPubkey, event) {
 	if (!existing) return;
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
 	if (!meta) return;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
-	if (!keyRow) return;
+	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
+	if (!keyRowRaw) return;
+	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
 	if (plaintext === null) return;
@@ -167,7 +170,7 @@ export async function receiveChannelMetadata(ownerPubkey, event) {
 
 // kind 30054 — если МОЙ pubkey появился в allowedAuthors и я ещё не owner — апгрейд
 // роли available -> subscriber (чисто локальный эффект, не отдельное сетевое событие).
-export async function receiveAllowlistUpdate(ownerPubkey, myPubkey, event) {
+export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event) {
 	const channelTag = event.tags.find((t) => t[0] === "h"); // routing-тег, см. createChannel
 	if (!channelTag) return;
 	const channelRow = await db
@@ -181,18 +184,25 @@ export async function receiveAllowlistUpdate(ownerPubkey, myPubkey, event) {
 
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
 	if (!meta) return;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRow) return;
+	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+	if (!keyRowRaw) return;
+	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const verified = parseAndVerifyAllowlist(event, keyRow.channelKey, channelRow.creatorPubkey);
 	if (verified === null) return;
 
-	await db.table("commentAllowlists").put({
-		ownerPubkey,
-		channelId: channelRow.id,
-		keyVersion: verified.version,
-		allowedAuthors: verified.allowedAuthors,
-	});
+	await db.table("commentAllowlists").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				channelId: channelRow.id,
+				keyVersion: verified.version,
+				allowedAuthors: verified.allowedAuthors,
+			},
+			COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 	if (verified.allowedAuthors.includes(myPubkey)) {
 		await db.table("channels").update([ownerPubkey, channelRow.id], { role: "subscriber" });
 	}

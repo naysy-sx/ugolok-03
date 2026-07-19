@@ -15,7 +15,7 @@ const REASON_LABEL = { report: "Жалоба", ignore: "Игнор" };
 
 // ТЗ: третья вкладка канала, только владелец. Список отчётов (жалобы+игноры), статистика,
 // пометка просмотренных, бан прямо из строки репорта.
-export default function ModerationPanel({ ownerPubkey, privKey, channelId }) {
+export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId }) {
 	const [reports, setReports] = useState([]);
 	const [stats, setStats] = useState({ total: 0, unviewed: 0, topIgnored: [] });
 	const [banned, setBanned] = useState([]);
@@ -37,7 +37,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, channelId }) {
 		setBusy(true);
 		setError("");
 		try {
-			await banMember(ownerPubkey, privKey, channelId, targetPubkey, publish);
+			await banMember(ownerPubkey, privKey, dbKey, channelId, targetPubkey, publish);
 			await refresh();
 		} catch (err) {
 			setError(err?.message || String(err));

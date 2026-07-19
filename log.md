@@ -2398,3 +2398,49 @@ Regression: `npm test` 633/633.
 реально возвращает на экран "Разблокировка".
 
 Regression: `npm test` 633/633 (CSS/JSX-правки не требуют новых тестов).
+
+## Этап 39. AC-16, Tier 0 — шифрование крипто-состояния at rest
+
+Пользователь осмотрел IndexedDB через DevTools и нашёл незашифрованный
+plaintext (комментарии, сообщения, посты, события, группы) — прямой
+вопрос "это нормально вообще?". TECH.md/AC-16 требует шифрования ВСЕХ
+materialized-view таблиц, но это никогда не было подключено дальше
+изолированных примитивов. Инструкция пользователя: сначала
+design-запись (DESIGN.md), затем план, затем — "все 4 тира
+последовательно". Это Tier 0 (самое чувствительное: ownKeyPackage,
+mlsGroups, channelKeys, commentAllowlists).
+
+Claude писал код напрямую (не воркер) — правки затрагивают крипто-
+границу приложения, точность важнее экономии токенов.
+
+Найдены и исправлены на уровне `db-crypto.js` два реальных бага
+(живым прогоном против настоящих MLS-данных, не гипотеза):
+1. Голый `JSON.stringify`/`parse` терял тип `Uint8Array` (MLS session
+   state) — `deserializeState` падал с "DataView constructor must be
+   an ArrayBuffer". Фикс: `replacer`/`reviver` с base64-маркером.
+2. `JSON.stringify` бросает на `BigInt` (MLS epoch/leaf-index в
+   KeyPackage) ДО вызова replacer. Фикс: рекурсивный
+   `replaceBigIntDeep` пре-пасс перед сериализацией.
+
+`toEncryptedRow`/`fromEncryptedRow` (заменили `wrapEncryptedTable`) —
+Dexie работает напрямую с `db.table(X)`, домен пропускает объекты
+через эти функции на границе записи/чтения; индексируемые поля
+(ownerPubkey, groupId и т.п., `table-fields.js`) остаются plaintext.
+`dbKey` — явный параметр сразу после `privKey` во всех затронутых
+функциях, до самого верха (`transport.js`'s `connect()` и все его
+подписки — центральный узел, не только тесты).
+
+Partial-update аудит: только 3 места во всём дереве меняют частично
+само чувствительное поле (messages.text, posts.text, channels-
+метаданные) — остальные partial `.modify()` (viewed, role,
+currentVersion, флаги) остаются plaintext без правок.
+
+Тесты: весь набор домен-тестов переписан под новую сигнатуру;
+адверсарные добавлены на уровне `db-crypto.test.js` (неверный dbKey →
+throw, plaintext не протекает в ciphertext, nonce не переиспользуется,
+Uint8Array/BigInt переживают round-trip).
+
+Regression: `npm test` 639/639. `npm run build` ~241 КБ gzip.
+Живой E2E-прогон через браузер НЕ выполнен в этой сессии — нет
+browser-инструмента; полнота проверена регрессией + построчной
+сверкой всех вызовов затронутых функций (`grep` по кодовому дереву).

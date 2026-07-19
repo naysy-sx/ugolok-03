@@ -6,6 +6,8 @@ import { encrypt as nip44Encrypt } from "../../core/crypto/nip44.js";
 import { sign } from "../../core/crypto/sign.js";
 import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -21,7 +23,7 @@ async function requirePublishOk(publish, event) {
 // злонамеренное объявление или сбой addMember НЕ должны прерывать обработку остальных
 // групп/устройств (найдено адверсарным заходом; тот же принцип, что giftWrapSubscriber/
 // refreshGroupMessageSubscription в transport.js — "не ронять батч").
-async function addSiblingToGroup(ownerPubkey, privKey, publish, knownRow, group) {
+async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group) {
 	const state = deserializeState(group.state);
 	// Ключ конверта СТАРОЙ (пред-коммитной) эпохи — ей всё ещё пользуется
 	// contactPubkey (Bob, уже существующий участник группы), пока не применит
@@ -29,12 +31,18 @@ async function addSiblingToGroup(ownerPubkey, privKey, publish, knownRow, group)
 	const { privateKey: oldEnvPriv, publicKey: oldEnvPub } = await deriveNostrEnvelopeKeys(state);
 
 	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, knownRow.wireBytes);
-	await db.table("mlsGroups").put({
-		ownerPubkey,
-		groupId: group.groupId,
-		contactPubkey: group.contactPubkey,
-		state: serializeState(newSessionState),
-	});
+	await db.table("mlsGroups").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				groupId: group.groupId,
+				contactPubkey: group.contactPubkey,
+				state: serializeState(newSessionState),
+			},
+			MLS_GROUPS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
 
 	// НАЙДЕНО ПРИ ПОДГОТОВКЕ ЖИВОЙ ПРОВЕРКИ (не домысел, до фактического запуска):
 	// в отличие от ensureChatEstablished (этап 24, брендовая 2-местная группа —
@@ -74,7 +82,7 @@ async function addSiblingToGroup(ownerPubkey, privKey, publish, knownRow, group)
 	await db.table("knownDevices").put(knownRow);
 }
 
-export async function syncDeviceMembership(ownerPubkey, privKey, publish, fetchOwnKeyPackageAnnounces) {
+export async function syncDeviceMembership(ownerPubkey, privKey, dbKey, publish, fetchOwnKeyPackageAnnounces) {
 	const myDeviceId = await getOrCreateDeviceId();
 	const announces = await fetchOwnKeyPackageAnnounces();
 
@@ -95,12 +103,13 @@ export async function syncDeviceMembership(ownerPubkey, privKey, publish, fetchO
 		// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра возвращал
 		// ГРУППЫ ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey —
 		// приводило к попытке добавить сиблинга в ЧУЖУЮ (другого локального аккаунта) группу.
-		const allGroups = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+		const allGroupsRaw = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+		const allGroups = allGroupsRaw.map((g) => fromEncryptedRow(g, dbKey));
 		for (const group of allGroups) {
 			if (knownRow.addedGroupIds.includes(group.groupId)) continue;
 
 			try {
-				await addSiblingToGroup(ownerPubkey, privKey, publish, knownRow, group);
+				await addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group);
 			} catch (e) {
 				console.warn("syncDeviceMembership: не удалось добавить устройство в группу", announce.deviceId, group.groupId, e);
 			}

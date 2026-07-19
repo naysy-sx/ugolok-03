@@ -181,7 +181,7 @@ export async function addGroupMemberAction(ownerPubkey, privKey, groupId, pubkey
 	await refreshGroups(ownerPubkey);
 }
 
-export async function removeGroupMemberAction(ownerPubkey, privKey, groupId, pubkey, publish) {
+export async function removeGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish) {
 	const updated = removeMember(requireGroup(groupId), pubkey);
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
@@ -190,7 +190,7 @@ export async function removeGroupMemberAction(ownerPubkey, privKey, groupId, pub
 	// groupId), значит проверка "виден ли ещё через другую группу" читает АКТУАЛЬНОЕ
 	// состояние. Отзывает VIEW только если pubkey не виден каналу ни через одну
 	// ДРУГУЮ группу, привязанную к нему при создании (F-CH-06).
-	await revokeIfNoLongerVisible(ownerPubkey, privKey, pubkey, groupId, publish);
+	await revokeIfNoLongerVisible(ownerPubkey, privKey, dbKey, pubkey, groupId, publish);
 	await refreshGroups(ownerPubkey);
 }
 

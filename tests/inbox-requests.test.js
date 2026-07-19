@@ -14,11 +14,14 @@ import {
 } from "../src/domain/messaging/inbox-requests.js";
 import { ensureChatEstablished, computeGroupId } from "../src/domain/messaging/chat.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const STRANGER_PRIV = new Uint8Array(32).fill(9);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const STRANGER_PUB = bytesToHex(getPublicKey(STRANGER_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -70,12 +73,12 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 	// Симулируем: незнакомец установил бы чат с Алисой (как contactRequests-флоу, но это Welcome напрямую)
 	const alicePub2 = ALICE_PUB;
 	const aliceOwnKeyPackage = await createOwnKeyPackage(alicePub2, "alice-device");
-	await db.table("ownKeyPackage").put({
+	await db.table("ownKeyPackage").put(toEncryptedRow({
 		ownerPubkey: alicePub2,
 		publicPackage: aliceOwnKeyPackage.publicPackage,
 		privatePackage: aliceOwnKeyPackage.privatePackage,
 		wireBytes: aliceOwnKeyPackage.wireBytes,
-	});
+	}, OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, DB_KEY));
 
 	let welcomeGiftWrap;
 	const publish = async (event) => {
@@ -83,7 +86,7 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 		return { ok: true };
 	};
 	// Незнакомец (условно) инициирует через тот же примитив ensureChatEstablished, адресуя Welcome Алисе
-	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, alicePub2, publish, async () => aliceOwnKeyPackage.wireBytes);
+	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, alicePub2, publish, async () => aliceOwnKeyPackage.wireBytes);
 	await db.table("mlsGroups").clear(); // у Алисы своей записи ещё нет — это ЕЁ первый приём
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);
@@ -92,15 +95,15 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 	await storeInboxRequest(ALICE_PUB, STRANGER_PUB, welcomeWireBytes, rumor.created_at);
 	assert.equal((await listInboxRequests(ALICE_PUB)).length, 1);
 
-	await acceptInboxRequest(ALICE_PUB, STRANGER_PUB);
+	await acceptInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB);
 
 	assert.equal((await listInboxRequests(ALICE_PUB)).length, 0, "запись удалена после принятия");
 	const groupIdHex = bytesToHex(computeGroupId(ALICE_PUB, STRANGER_PUB));
-	const groupRow = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const groupRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
 	assert.ok(groupRow, "Алиса реально присоединилась к MLS-группе");
 	assert.equal(groupRow.contactPubkey, STRANGER_PUB);
 });
 
 test("acceptInboxRequest: нет такой записи — понятная ошибка, не тихий сбой", async () => {
-	await assert.rejects(() => acceptInboxRequest(ALICE_PUB, STRANGER_PUB), /входящ/);
+	await assert.rejects(() => acceptInboxRequest(ALICE_PUB, DB_KEY, STRANGER_PUB), /входящ/);
 });

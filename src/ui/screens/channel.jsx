@@ -20,7 +20,7 @@ import { ContactIdentity } from "./contacts.jsx";
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
 
-function PostComposer({ ownerPubkey, privKey, channelId, limiter, onPublished, onCancel }) {
+function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPublished, onCancel }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -42,7 +42,7 @@ function PostComposer({ ownerPubkey, privKey, channelId, limiter, onPublished, o
 				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
 			}
 			const { postId } = await createDraftPost(ownerPubkey, channelId, { text, attachments });
-			await publishPost(ownerPubkey, privKey, postId, publish);
+			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -82,7 +82,7 @@ function PostComposer({ ownerPubkey, privKey, channelId, limiter, onPublished, o
 	);
 }
 
-function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, limiter, onSubmitted, onCancel, autoFocus }) {
+function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, parentId, limiter, onSubmitted, onCancel, autoFocus }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -103,7 +103,7 @@ function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, li
 			if (attachment.file) {
 				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
 			}
-			await addComment(ownerPubkey, privKey, channelId, postId, parentId, text, attachments, publish);
+			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, text, attachments, publish);
 			onSubmitted();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -151,7 +151,7 @@ function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, li
 	);
 }
 
-function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth }) {
+function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth }) {
 	const [replying, setReplying] = useState(false);
 	const isOwnComment = comment.authorPubkey === ownerPubkey;
 	return (
@@ -182,6 +182,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, cha
 				<CommentComposer
 					ownerPubkey={ownerPubkey}
 					privKey={privKey}
+					dbKey={dbKey}
 					channelId={channelId}
 					postId={postId}
 					parentId={comment.id}
@@ -203,6 +204,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, cha
 							canComment={canComment}
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
+							dbKey={dbKey}
 							channelId={channelId}
 							channelOwnerPubkey={channelOwnerPubkey}
 							postId={postId}
@@ -217,7 +219,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, cha
 	);
 }
 
-function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged }) {
+function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged }) {
 	const [expanded, setExpanded] = useState(false);
 	const [tree, setTree] = useState([]);
 	const [error, setError] = useState("");
@@ -257,8 +259,8 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 				isOwner={isOwner}
 				commentCount={expanded ? tree.length : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
-				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, post.id, publish))}
-				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, post.id, publish))}
+				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
+				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {
 					if (window.confirm("Удалить пост? Действие необратимо.")) runAction(() => deletePost(ownerPubkey, privKey, post.id, publish));
 				}}
@@ -274,6 +276,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 						<CommentComposer
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
+							dbKey={dbKey}
 							channelId={channelId}
 							postId={post.id}
 							parentId={post.id}
@@ -294,6 +297,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 									canComment={canComment}
 									ownerPubkey={ownerPubkey}
 									privKey={privKey}
+									dbKey={dbKey}
 									channelId={channelId}
 									channelOwnerPubkey={channelOwnerPubkey}
 									postId={post.id}
@@ -310,7 +314,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 	);
 }
 
-export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
+export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }) {
 	const [channelRow, setChannelRow] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [posts, setPosts] = useState([]);
@@ -426,6 +430,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 						<PostComposer
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
+							dbKey={dbKey}
 							channelId={channelId}
 							limiter={limiter}
 							onPublished={() => {
@@ -453,6 +458,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 									canComment={canComment}
 									ownerPubkey={ownerPubkey}
 									privKey={privKey}
+									dbKey={dbKey}
 									channelId={channelId}
 									channelOwnerPubkey={channelRow.creatorPubkey}
 									limiter={limiter}
@@ -471,6 +477,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 					<ChannelChat
 						ownerPubkey={ownerPubkey}
 						privKey={privKey}
+						dbKey={dbKey}
 						channelId={channelId}
 						channelOwnerPubkey={channelRow.creatorPubkey}
 						canWrite={canComment}
@@ -482,7 +489,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 
 			{tab === "moderation" && isOwner && (
 				<section role="tabpanel">
-					<ModerationPanel ownerPubkey={ownerPubkey} privKey={privKey} channelId={channelId} />
+					<ModerationPanel ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} />
 				</section>
 			)}
 		</main>

@@ -8,6 +8,7 @@ import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/cha
 import { sendViewGrant, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { sendChannelMessage, receiveChannelMessage } from "../src/domain/content/channel-chat.js";
 import { loadChannelChatWindow } from "../src/core/sync/lazy-channel.js";
+import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -15,6 +16,7 @@ const MALLORY_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const MALLORY_PUB = bytesToHex(getPublicKey(MALLORY_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -45,10 +47,10 @@ async function setupChannelWithBobSubscribed(options = {}) {
 	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 	const published = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "", ...options }, ["friends"], capturingPublish(published));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "", ...options }, ["friends"], capturingPublish(published));
 	const grantEvent = published.find((e) => e.kind === 30053);
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, grantEvent);
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish([]));
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish([]));
 	// Бобу тоже нужна строка channels с правильным allowChatAttachments — обычно это
 	// приходит через receiveChannelMetadata (этап 30), здесь проставляем напрямую, раз
 	// это не предмет теста channel-chat.js.
@@ -59,7 +61,7 @@ async function setupChannelWithBobSubscribed(options = {}) {
 }
 
 async function grantViewTo(channelId, targetPubkey) {
-	const aliceKeyRow = await db.table("channelKeys").get([ALICE_PUB, channelId, 1]);
+	const aliceKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, 1]), DB_KEY);
 	const aliceChannelRow = await db.table("channels").get([ALICE_PUB, channelId]);
 	const grantPublish = [];
 	await sendViewGrant(
@@ -76,13 +78,13 @@ async function grantViewTo(channelId, targetPubkey) {
 test("sendChannelMessage/receiveChannelMessage: Боб (подписчик с COMMENT) пишет в чат, Алиса получает", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const published = [];
-	const { messageId } = await sendChannelMessage(BOB_PUB, BOB_PRIV, channelId, "привет всем", [], capturingPublish(published));
+	const { messageId } = await sendChannelMessage(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "привет всем", [], capturingPublish(published));
 
 	const event = published.find((e) => e.kind === 30063);
 	assert.ok(event);
 	assert.deepEqual(event.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${messageId}`]);
 
-	const applied = await receiveChannelMessage(ALICE_PUB, event);
+	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, true);
 	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
 	assert.equal(messages.length, 1);
@@ -92,23 +94,23 @@ test("sendChannelMessage/receiveChannelMessage: Боб (подписчик с CO
 test("Владелец канала может писать в чат СВОЕГО канала, даже не будучи в commentAllowlists", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const published = [];
-	await sendChannelMessage(ALICE_PUB, ALICE_PRIV, channelId, "сообщение от владельца", [], capturingPublish(published));
+	await sendChannelMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "сообщение от владельца", [], capturingPublish(published));
 	const event = published.find((e) => e.kind === 30063);
 
-	const applied = await receiveChannelMessage(BOB_PUB, event);
+	const applied = await receiveChannelMessage(BOB_PUB, DB_KEY, event);
 	assert.equal(applied, true, "владелец канала имплицитно всегда имеет право писать в чат");
 });
 
 test("АДВЕРСАРНЫЙ: VIEW-держатель БЕЗ COMMENT пишет в чат — отклонено (тот же allowlist, что комментарии)", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const grantEvent = await grantViewTo(channelId, MALLORY_PUB);
-	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, ALICE_PUB, grantEvent);
+	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, grantEvent);
 
 	const published = [];
-	await sendChannelMessage(MALLORY_PUB, MALLORY_PRIV, channelId, "спам без права", [], capturingPublish(published));
+	await sendChannelMessage(MALLORY_PUB, MALLORY_PRIV, DB_KEY, channelId, "спам без права", [], capturingPublish(published));
 	const event = published.find((e) => e.kind === 30063);
 
-	const applied = await receiveChannelMessage(ALICE_PUB, event);
+	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, false, "сообщение без COMMENT-права обязано быть отклонено");
 	assert.equal((await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 })).messages.length, 0);
 });
@@ -116,10 +118,10 @@ test("АДВЕРСАРНЫЙ: VIEW-держатель БЕЗ COMMENT пишет 
 test("allowChatAttachments=false: вложение обрезается на приёме, текст сообщения остаётся", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed({ allowChatAttachments: false });
 	const published = [];
-	await sendChannelMessage(BOB_PUB, BOB_PRIV, channelId, "вот файл", [{ sha256: "abc", mime: "image/png" }], capturingPublish(published));
+	await sendChannelMessage(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "вот файл", [{ sha256: "abc", mime: "image/png" }], capturingPublish(published));
 	const event = published.find((e) => e.kind === 30063);
 
-	const applied = await receiveChannelMessage(ALICE_PUB, event);
+	const applied = await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	assert.equal(applied, true);
 	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
 	assert.equal(messages[0].text, "вот файл", "текст сохраняется");
@@ -129,10 +131,10 @@ test("allowChatAttachments=false: вложение обрезается на п�
 test("allowChatAttachments=true (default): вложение сохраняется на приёме", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const published = [];
-	await sendChannelMessage(BOB_PUB, BOB_PRIV, channelId, "вот файл", [{ sha256: "abc", mime: "image/png" }], capturingPublish(published));
+	await sendChannelMessage(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "вот файл", [{ sha256: "abc", mime: "image/png" }], capturingPublish(published));
 	const event = published.find((e) => e.kind === 30063);
 
-	await receiveChannelMessage(ALICE_PUB, event);
+	await receiveChannelMessage(ALICE_PUB, DB_KEY, event);
 	const { messages } = await loadChannelChatWindow(ALICE_PUB, channelId, { limit: 15 });
 	assert.equal(messages[0].attachments.length, 1);
 });

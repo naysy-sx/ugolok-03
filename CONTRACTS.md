@@ -5362,3 +5362,88 @@ avatarUrl || undefined` в свой republish — симметрично том�
 Живая проверка (Playwright, реальный Blossom+strfry): загрузка аватара
 → сохранение био → прямой запрос к relay — `picture` И `about`
 присутствуют ОБА одновременно, в любом порядке операций.
+
+## Этап 39 (готовится) — шифрование локальной БД, per-table field split
+
+Формализация — DESIGN.md, раздел "Этап 39". Ниже — точный список
+полей по каждой таблице (по данным фонового аудита всех `db.table(X)`
+вызовов в `src/`, 216 мест). `plaintextFields` — остаются top-level
+полями строки (индексы + несекретные enum/флаги/счётчики).
+`sensitiveFields` — уходят в один `{nonce, ciphertext}` blob через
+`toEncryptedRow`/`fromEncryptedRow`.
+
+### Tier 0 — крипто-состояние (наивысший приоритет)
+
+| Таблица | plaintextFields | sensitiveFields |
+|---|---|---|
+| `ownKeyPackage` | `ownerPubkey` (PK) | `publicPackage`, `privatePackage`, `wireBytes` |
+| `mlsGroups` | `ownerPubkey`, `groupId` | `state`, `contactPubkey` |
+| `channelKeys` | `ownerPubkey`, `channelId`, `keyVersion` | `channelKey` |
+| `commentAllowlists` | `ownerPubkey`, `channelId`, `keyVersion` | `allowedAuthors` |
+
+### Tier 1 — пользовательский контент (прямая находка пользователя)
+
+| Таблица | plaintextFields | sensitiveFields | Партиал на sensitive-поле |
+|---|---|---|---|
+| `messages` | `seq`(PK), `ownerPubkey`, `chatId`, `msgId`, `lamportTs`, `senderPubkey`, `id`, `status`, `deleted` | `text`, `sentAt`, `attachment`, `edited`, `editedAt` | ДА — `edits.js`/`deletions.js`, decrypt-merge-encrypt |
+| `posts` | `ownerPubkey`, `id`, `channelId`, `createdAt`, `deleted`, `status`, `keyVersion` | `text`, `attachments`, `authorPubkey` | ДА — `post.js:40`, decrypt-merge-encrypt |
+| `comments` | `ownerPubkey`, `id`, `postId`, `parentId`, `deleted` | `text` | нет (put всегда полный) |
+| `channelMessages` | `ownerPubkey`, `id`, `channelId`, `createdAt`, `deleted`, `authorPubkey` | `text`, `attachment` | нет |
+| `channels` | `ownerPubkey`, `id`, `channelTopic`, `role`, `creatorPubkey`, `createdAt`, `allowChatAttachments` | `name`, `description`, `rules`, `avatar` | ДА — `channel.js:159`, decrypt-merge-encrypt |
+
+### Tier 2 — социальный граф (в основном тривиально/структурно)
+
+| Таблица | plaintextFields | sensitiveFields |
+|---|---|---|
+| `groups` | `owner`, `id` | `name` |
+| `groupMembers` | всё (`groupId`, `pubkey`) | — (нет отдельного контента) |
+| `contacts` | всё (`owner`, `pubkey`) | — |
+| `blockedContacts` | всё (`owner`, `pubkey`) | — |
+
+### Tier 3 — модерация/черновики
+
+| Таблица | plaintextFields | sensitiveFields |
+|---|---|---|
+| `channelReports` | `ownerPubkey`, `id`, `channelId`, `viewed`, `reporterPubkey`, `targetPubkey`, `contentType`, `contentId`, `reason` | `contentText` |
+| `chatSyncState` | `ownerPubkey`, `chatId`, `lastReadLamportTs`, `oldestLoadedSeq` | `draftText`, `draftUpdatedAt` |
+| `channelIgnores` | всё | — |
+| `bannedMembers` | всё | — |
+| `channelVisibilityGroups` | всё | — |
+| `channelReaders` | всё | — |
+| `contactRequests` | `owner`, `senderPubkey` | `greeting`, `createdAt` |
+| `inboxRequests` | `owner`, `senderPubkey`, `createdAt` (индексируется отдельно) | `welcomeWireBytes` |
+
+### Tier 4 — низкий приоритет
+
+| Таблица | Заметка |
+|---|---|
+| `uiSettings` | URL relay/Blossom — метаданные, не контент |
+| `outbox` | `event` УЖЕ готов стать публичным на relay через секунды |
+| `channelKeyMeta` | только `currentVersion` — счётчик, нечего шифровать |
+| `knownDevices`, `deviceIdentity` | не аудировано детально в этом заходе — вне явного скоупа этапа 39, отдельная проверка при необходимости |
+
+### Пропустить полностью (мёртвый код)
+
+`permissions` — объявлена в схеме, ни одного вызова `db.table` во всём
+`src/`. `effectivePerms` — только пишется bulk-rebuild'ом
+(`handlers.js`), ни разу не читается никаким доменным кодом —
+отдельная находка (недостающее чтение прав?), не в скоупе этого этапа.
+
+### Новый контракт `src/core/store/encrypted-table.js` (правка — было `wrapEncryptedTable`)
+
+```js
+export function toEncryptedRow(record, plaintextFields, dbKey);
+// -> { ...subset(record, plaintextFields), nonce, ciphertext }
+// ciphertext = encryptRow(остальные поля record, dbKey) — одним вызовом,
+// не по одному полю.
+
+export function fromEncryptedRow(row, dbKey);
+// row === undefined -> undefined.
+// -> { ...(row без nonce/ciphertext), ...decryptRow({nonce,ciphertext}, dbKey) }
+```
+
+`db-crypto.js`'s `encryptRow`/`decryptRow` — БЕЗ ИЗМЕНЕНИЙ (уже
+корректны, `wrapEncryptedTable` был лишь неудачной формой API поверх
+них). Старый `wrapEncryptedTable` — удаляется, `diagnostics.jsx`'s
+самопроверка переписывается на новую пару функций (не самостоятельная
+ценность, просто больше не единственный потребитель модуля).

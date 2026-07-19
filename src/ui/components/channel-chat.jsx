@@ -13,7 +13,7 @@ import { formatDateTime } from "./post-card.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
-function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, limiter, onSent }) {
+function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments, limiter, onSent }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -34,7 +34,7 @@ function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, limit
 			if (attachment.file) {
 				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
 			}
-			await sendChannelMessage(ownerPubkey, privKey, channelId, text, attachments, publish);
+			await sendChannelMessage(ownerPubkey, privKey, dbKey, channelId, text, attachments, publish);
 			setText("");
 			attachment.reset();
 			onSent();
@@ -78,7 +78,7 @@ function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, limit
 
 // Общий чат канала (этап 32) — плоская лента, свежие внизу (тот же принцип отображения,
 // что личные чаты, chat.jsx), не дерево (в отличие от комментариев).
-export default function ChannelChat({ ownerPubkey, privKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter }) {
+export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
@@ -156,7 +156,7 @@ export default function ChannelChat({ ownerPubkey, privKey, channelId, channelOw
 			)}
 			<div ref={bottomRef} />
 			{canWrite ? (
-				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} channelId={channelId} allowAttachments={allowAttachments} limiter={limiter} onSent={refresh} />
+				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} allowAttachments={allowAttachments} limiter={limiter} onSent={refresh} />
 			) : (
 				<p style={{ color: "var(--muted)" }}>Только чтение — подпишитесь, чтобы писать в чат.</p>
 			)}

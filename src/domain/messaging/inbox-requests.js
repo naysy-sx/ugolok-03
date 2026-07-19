@@ -16,10 +16,10 @@ export async function listInboxRequests(ownerPubkey) {
 	return db.table("inboxRequests").where("owner").equals(ownerPubkey).toArray();
 }
 
-export async function acceptInboxRequest(ownerPubkey, senderPubkey) {
+export async function acceptInboxRequest(ownerPubkey, dbKey, senderPubkey) {
 	const row = await db.table("inboxRequests").get([ownerPubkey, senderPubkey]);
 	if (!row) throw new Error("нет такого входящего запроса");
-	await acceptWelcome(ownerPubkey, senderPubkey, row.welcomeWireBytes);
+	await acceptWelcome(ownerPubkey, dbKey, senderPubkey, row.welcomeWireBytes);
 	await db.table("inboxRequests").delete([ownerPubkey, senderPubkey]);
 }
 

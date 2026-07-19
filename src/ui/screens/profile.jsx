@@ -3,7 +3,7 @@ import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { uploadAvatarBlob } from "../../domain/attachments/upload.js";
-import { currentUser, privKeySig } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";
 import {
 	loadUiSettings,
@@ -139,7 +139,7 @@ function RelayBlossomSection({ ownerPubkey, privKey }) {
 				onSetActive={(url) =>
 					withBusy(async () => {
 						await setActiveRelayUrl(ownerPubkey, privKey, url, publish);
-						await reconnectWithNewSettings(ownerPubkey, privKey);
+						await reconnectWithNewSettings(ownerPubkey, privKey, dbKeySig.value);
 					})
 				}
 			/>
@@ -231,7 +231,7 @@ export default function Profile() {
 				return;
 			}
 			const fileBytes = new Uint8Array(await file.arrayBuffer());
-			await ensureConnected(id, privKeySig.value);
+			await ensureConnected(id, privKeySig.value, dbKeySig.value);
 			const url = await uploadAvatarBlob(serverUrl, fileBytes, file.type, privKeySig.value);
 			// Персистируем ПУБЛИЧНЫЙ URL отдельно от dataUrl-превью (этап 38-довесок) —
 			// без этого handleBioSubmit не смогла бы включить picture в свой republish
@@ -262,7 +262,7 @@ export default function Profile() {
 		// никнейм/био через kind 0 (F-CT-04), но офлайн-редактирование остаётся рабочим.
 		setPublishStatus("публикация…");
 		try {
-			await ensureConnected(id, privKeySig.value);
+			await ensureConnected(id, privKeySig.value, dbKeySig.value);
 			// avatarUrl (этап 38-довесок, найденный реальным использованием баг): БЕЗ
 			// него этот republish стирал бы уже опубликованный аватар — kind 0
 			// replaceable, отсутствие поля в новой версии = "поля больше нет".

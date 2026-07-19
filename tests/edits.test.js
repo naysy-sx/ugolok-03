@@ -8,11 +8,14 @@ import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
 import { createOwnKeyPackage, joinFromWelcome, serializeState } from "../src/core/crypto/mls-session.js";
 import { ensureChatEstablished, receiveGroupMessageEvent, sendMessage, computeGroupId } from "../src/domain/messaging/chat.js";
 import { buildEditText, parseEditText, editMessage, applyIncomingEditIfMarker } from "../src/domain/messaging/edits.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -40,7 +43,7 @@ async function establishAliceToBob() {
 		publishedEvents.push(event);
 		return { ok: true };
 	};
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
 
 	const welcomeGiftWrap = publishedEvents.find((e) => e.kind === 1059);
 	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);
@@ -52,9 +55,11 @@ async function establishAliceToBob() {
 }
 
 async function asBob(groupIdHex, bobSerializedState, fn) {
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
+	);
 	const result = await fn();
-	const updatedBobRow = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
+	const updatedBobRow = fromEncryptedRow(await db.table("mlsGroups").get([BOB_PUB, groupIdHex]), DB_KEY);
 	return { result, updatedBobSerializedState: updatedBobRow.state };
 }
 
@@ -71,10 +76,10 @@ test("buildEditText/parseEditText: round-trip, обычный текст и по
 test("editMessage: обновляет СВОЮ локальную строку сразу (оптимистично), без ожидания приёма контактом", async () => {
 	await establishAliceToBob();
 	const publish = async () => ({ ok: true });
-	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "оригинал", 1, publish);
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "оригинал", 1, publish);
 	const row = await db.table("messages").where("id").equals(eventId).first();
 
-	await editMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, row.msgId, "исправленный текст", 2, publish);
+	await editMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, row.msgId, "исправленный текст", 2, publish);
 
 	const updated = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, row.msgId]).first();
 	assert.equal(updated.text, "исправленный текст");
@@ -96,7 +101,7 @@ test("editMessage: чужое сообщение -> throw, ничего не п�
 	const publish = async () => {
 		throw new Error("publish не должен вызываться");
 	};
-	await assert.rejects(() => editMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "bob-msgid", "подделка", 2, publish), /чужое/);
+	await assert.rejects(() => editMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "bob-msgid", "подделка", 2, publish), /чужое/);
 });
 
 test("editMessage: уже удалённое сообщение -> throw", async () => {
@@ -112,7 +117,7 @@ test("editMessage: уже удалённое сообщение -> throw", async
 		msgId: "deleted-msgid",
 	});
 	const publish = async () => ({ ok: true });
-	await assert.rejects(() => editMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "deleted-msgid", "правка удалённого", 2, publish), /удал/);
+	await assert.rejects(() => editMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "deleted-msgid", "правка удалённого", 2, publish), /удал/);
 });
 
 test("applyIncomingEditIfMarker: Bob получает правку от Алисы на ЕЁ сообщение — применяется", async () => {
@@ -124,23 +129,23 @@ test("applyIncomingEditIfMarker: Bob получает правку от Алис
 		return { ok: true };
 	};
 
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "оригинал", 1, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "оригинал", 1, publish);
 	const originalMsgId = (await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).first()).msgId;
 
 	const originalEvent = sentEvents.find((e) => e.kind === 445);
 	const { updatedBobSerializedState: stateAfterOriginal } = await asBob(groupIdHex, bobSerializedState, () =>
-		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, originalEvent, async () => ({ ok: true })),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, originalEvent, async () => ({ ok: true })),
 	);
 
 	sentEvents.length = 0;
-	await editMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, originalMsgId, "исправлено Алисой", 2, publish);
+	await editMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, originalMsgId, "исправлено Алисой", 2, publish);
 	const editEvent = sentEvents.find((e) => e.kind === 445);
 
 	const { result: bobReceiveResult, updatedBobSerializedState } = await asBob(groupIdHex, stateAfterOriginal, () =>
-		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, editEvent, async () => ({ ok: true })),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, editEvent, async () => ({ ok: true })),
 	);
 
-	const applied = await applyIncomingEditIfMarker(BOB_PUB, editEvent, bobReceiveResult);
+	const applied = await applyIncomingEditIfMarker(BOB_PUB, DB_KEY, editEvent, bobReceiveResult);
 	assert.equal(applied, true);
 
 	await asBob(groupIdHex, updatedBobSerializedState, async () => {
@@ -153,7 +158,7 @@ test("applyIncomingEditIfMarker: Bob получает правку от Алис
 
 test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamportTs, применённая ПЕРВОЙ, не откатывается более старой правкой, пришедшей ПОЗЖЕ", async () => {
 	const hTag = ["h", "aa".repeat(32)];
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" });
+	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
 	await db.table("messages").add({
 		ownerPubkey: BOB_PUB,
 		chatId: ALICE_PUB,
@@ -168,6 +173,7 @@ test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamp
 	// Правка с БОЛЬШИМ editLamportTs (10) применяется первой.
 	const newerApplied = await applyIncomingEditIfMarker(
 		BOB_PUB,
+		DB_KEY,
 		{ tags: [hTag] },
 		{ text: buildEditText("target-msgid", "новая версия (позже по editLamportTs)"), lamportTs: 10 },
 	);
@@ -177,6 +183,7 @@ test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamp
 	// меньше уже применённого) — должна быть отклонена (LWW, не откатывает).
 	const olderApplied = await applyIncomingEditIfMarker(
 		BOB_PUB,
+		DB_KEY,
 		{ tags: [hTag] },
 		{ text: buildEditText("target-msgid", "устаревшая версия (editLamportTs=5)"), lamportTs: 5 },
 	);
@@ -189,7 +196,7 @@ test("applyIncomingEditIfMarker: LWW — правка с БОЛЬШИМ editLamp
 
 test("applyIncomingEditIfMarker: правка на сообщение, написанное ДРУГИМ автором — отклонена (F-EV-08 аналог)", async () => {
 	const hTag = ["h", "bb".repeat(32)];
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" });
+	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
 	await db.table("messages").add({
 		ownerPubkey: BOB_PUB,
 		chatId: ALICE_PUB,
@@ -203,6 +210,7 @@ test("applyIncomingEditIfMarker: правка на сообщение, напи�
 
 	const applied = await applyIncomingEditIfMarker(
 		BOB_PUB,
+		DB_KEY,
 		{ tags: [hTag] },
 		{ text: buildEditText("bob-own-msgid", "подделанная правка от имени Алисы"), lamportTs: 2 },
 	);
@@ -214,7 +222,7 @@ test("applyIncomingEditIfMarker: правка на сообщение, напи�
 
 test("applyIncomingEditIfMarker: правка на удалённое сообщение — отклонена", async () => {
 	const hTag = ["h", "cc".repeat(32)];
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" });
+	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
 	await db.table("messages").add({
 		ownerPubkey: BOB_PUB,
 		chatId: ALICE_PUB,
@@ -229,6 +237,7 @@ test("applyIncomingEditIfMarker: правка на удалённое сообщ
 
 	const applied = await applyIncomingEditIfMarker(
 		BOB_PUB,
+		DB_KEY,
 		{ tags: [hTag] },
 		{ text: buildEditText("deleted-msgid", "правка удалённого"), lamportTs: 2 },
 	);
@@ -237,22 +246,22 @@ test("applyIncomingEditIfMarker: правка на удалённое сообщ
 
 test("applyIncomingEditIfMarker: правка, прибывшая раньше оригинала (targetRow не найден) — false, не бросает", async () => {
 	const hTag = ["h", "dd".repeat(32)];
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" });
-	const applied = await applyIncomingEditIfMarker(BOB_PUB, { tags: [hTag] }, { text: buildEditText("нет-такого-msgid", "правка"), lamportTs: 2 });
+	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: hTag[1], contactPubkey: ALICE_PUB, state: "unused" }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
+	const applied = await applyIncomingEditIfMarker(BOB_PUB, DB_KEY, { tags: [hTag] }, { text: buildEditText("нет-такого-msgid", "правка"), lamportTs: 2 });
 	assert.equal(applied, false);
 });
 
 test("applyIncomingEditIfMarker: неизвестная группа (нет h-тега/mlsGroups) — false, не бросает", async () => {
-	const applied = await applyIncomingEditIfMarker(BOB_PUB, { tags: [] }, { text: buildEditText("x", "y"), lamportTs: 1 });
+	const applied = await applyIncomingEditIfMarker(BOB_PUB, DB_KEY, { tags: [] }, { text: buildEditText("x", "y"), lamportTs: 1 });
 	assert.equal(applied, false);
 });
 
 test("applyIncomingEditIfMarker: обычное (не-маркерное) сообщение — false, ничего не меняет", async () => {
-	const applied = await applyIncomingEditIfMarker(BOB_PUB, { tags: [] }, { text: "обычный текст", lamportTs: 1 });
+	const applied = await applyIncomingEditIfMarker(BOB_PUB, DB_KEY, { tags: [] }, { text: "обычный текст", lamportTs: 1 });
 	assert.equal(applied, false);
 });
 
 test("applyIncomingEditIfMarker: receivedResult===null (control-сообщение) — false", async () => {
-	const applied = await applyIncomingEditIfMarker(BOB_PUB, { tags: [] }, null);
+	const applied = await applyIncomingEditIfMarker(BOB_PUB, DB_KEY, { tags: [] }, null);
 	assert.equal(applied, false);
 });

@@ -37,6 +37,43 @@ test("decryptRow с неверным dbKey — отклоняется (AEAD tag 
 	assert.throws(() => decryptRow(encrypted, wrongKey));
 });
 
+// Найдено реальным использованием (этап 39): mlsGroups.state/ownKeyPackage's
+// privatePackage/wireBytes — Uint8Array (иногда вложенный внутри объекта, не
+// только top-level). Голый JSON.stringify/parse ТЕРЯЕТ Uint8Array-тип (превращает
+// в {"0":1,"1":2,...}) — deserializeState() падал с "First argument to DataView
+// constructor must be an ArrayBuffer" при попытке использовать результат.
+test("encryptRow -> decryptRow: Uint8Array на top-level переживает round-trip КАК Uint8Array, не как объект с числовыми ключами", () => {
+	const value = { state: new Uint8Array([1, 2, 3, 255, 0, 128]) };
+	const encrypted = encryptRow(value, dbKey);
+	const decrypted = decryptRow(encrypted, dbKey);
+	assert.ok(decrypted.state instanceof Uint8Array, "обязан остаться Uint8Array, не превратиться в {0:1,1:2,...}");
+	assert.deepEqual(decrypted.state, value.state);
+});
+
+test("encryptRow -> decryptRow: Uint8Array ВЛОЖЕННЫЙ внутри объекта (как ts-mls's KeyPackage) тоже переживает round-trip", () => {
+	const value = { publicPackage: { leafNode: { encryptionKey: new Uint8Array([9, 8, 7]) }, meta: "x" }, wireBytes: new Uint8Array(64).fill(42) };
+	const encrypted = encryptRow(value, dbKey);
+	const decrypted = decryptRow(encrypted, dbKey);
+	assert.ok(decrypted.publicPackage.leafNode.encryptionKey instanceof Uint8Array);
+	assert.deepEqual(decrypted.publicPackage.leafNode.encryptionKey, value.publicPackage.leafNode.encryptionKey);
+	assert.ok(decrypted.wireBytes instanceof Uint8Array);
+	assert.deepEqual(decrypted.wireBytes, value.wireBytes);
+});
+
+// Найдено реальным использованием (этап 39, следом за Uint8Array-находкой):
+// ts-mls's KeyPackage (createOwnKeyPackage's publicPackage/privatePackage)
+// содержит BigInt (протокольные поля MLS) — JSON.stringify БЕЗ спецобработки
+// бросает "Do not know how to serialize a BigInt".
+test("encryptRow -> decryptRow: BigInt (top-level и вложенный) переживает round-trip КАК BigInt", () => {
+	const value = { epoch: 9007199254740993n, nested: { leafIndex: 42n } };
+	const encrypted = encryptRow(value, dbKey);
+	const decrypted = decryptRow(encrypted, dbKey);
+	assert.equal(typeof decrypted.epoch, "bigint");
+	assert.equal(decrypted.epoch, 9007199254740993n);
+	assert.equal(typeof decrypted.nested.leafIndex, "bigint");
+	assert.equal(decrypted.nested.leafIndex, 42n);
+});
+
 test("AC-16 (частично, на уровне примитива): ciphertext не содержит plaintext как подстроку", () => {
 	const secretMarker = "совершенно-секретный-маркер-12345";
 	const encrypted = encryptRow({ content: secretMarker }, dbKey);

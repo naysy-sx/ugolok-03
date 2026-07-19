@@ -37,6 +37,7 @@ import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND }
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 const okPublish = async () => ({ ok: true });
 const failPublish = async () => ({ ok: false, reason: "relay отклонил" });
@@ -170,7 +171,7 @@ test("renameGroupAction/addGroupMemberAction/removeGroupMemberAction: полны
 	await addGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, groupId, "alice-pk", okPublish);
 	assert.deepEqual(groups.value.find((g) => g.id === groupId).memberPubkeys, ["alice-pk"]);
 
-	await removeGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, groupId, "alice-pk", okPublish);
+	await removeGroupMemberAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, groupId, "alice-pk", okPublish);
 	assert.deepEqual(groups.value.find((g) => g.id === groupId).memberPubkeys, []);
 });
 

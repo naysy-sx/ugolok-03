@@ -25,6 +25,7 @@ import {
 	getModerationStats,
 	listBannedMembers,
 } from "../src/domain/content/moderation.js";
+import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -32,6 +33,7 @@ const MALLORY_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const MALLORY_PUB = bytesToHex(getPublicKey(MALLORY_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -66,7 +68,7 @@ function capturingPublish(bucket) {
 async function setupChannel() {
 	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
 	return { channelId };
 }
 
@@ -77,18 +79,18 @@ async function setupChannelWithTwoReadersOneSubscribed() {
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
 	const aliceOutbox = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
 	const grantEvents = aliceOutbox.filter((e) => e.kind === 30053);
 	const bobGrant = grantEvents.find((e) => e.tags.find((t) => t[0] === "p")[1] === BOB_PUB);
 	const malloryGrant = grantEvents.find((e) => e.tags.find((t) => t[0] === "p")[1] === MALLORY_PUB);
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, bobGrant);
-	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, ALICE_PUB, malloryGrant);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, bobGrant);
+	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, malloryGrant);
 	const subscribeOutbox = [];
-	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(subscribeOutbox));
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(subscribeOutbox));
 	// Mallory тоже должна получить обновлённый allowlist, чтобы F-EV-06 пропускал
 	// комментарии Боба у неё локально (иначе тест ниже проверял бы не то, что заявлено).
 	const allowlistEvent = subscribeOutbox.find((e) => e.kind === 30054);
-	await receiveAllowlistUpdate(MALLORY_PUB, MALLORY_PUB, allowlistEvent);
+	await receiveAllowlistUpdate(MALLORY_PUB, DB_KEY, MALLORY_PUB, allowlistEvent);
 	return { channelId };
 }
 
@@ -170,7 +172,7 @@ test("ignoreMember: повторный вызов идемпотентен ло�
 test("banMember: ротирует channelKey, реиздаёт грант ОСТАВШЕМУСЯ читателю (Mallory), НЕ забаненному (Боб)", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const published = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
 	const grants = published.filter((e) => e.kind === 30053);
 	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
@@ -186,10 +188,10 @@ test("banMember: ротирует channelKey, реиздаёт грант ОСТ
 test("banMember: переиздаёт allowlist БЕЗ забаненного (если он был подписчиком)", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const published = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
 	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
-	const allowlistRow = await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]);
+	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	assert.ok(allowlistRow);
 	assert.ok(!allowlistRow.allowedAuthors.includes(BOB_PUB), "Боб исключён из нового allowlist");
 });
@@ -197,7 +199,7 @@ test("banMember: переиздаёт allowlist БЕЗ забаненного (�
 test("banMember: публикует kind 30064, расшифровывается ЛЮБЫМ, у кого есть v_old (включая самого забаненного)", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const published = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
 	const banEvent = published.find((e) => e.kind === CHANNEL_BAN_KIND);
 	assert.ok(banEvent);
@@ -207,11 +209,11 @@ test("banMember: публикует kind 30064, расшифровывается
 test("receiveBanAnnouncement: у ЗАБАНЕННОГО (Боб) — канал удаляется локально целиком", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const published = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 	const banEvent = published.find((e) => e.kind === CHANNEL_BAN_KIND);
 
 	assert.ok(await db.table("channels").get([BOB_PUB, channelId]), "у Боба канал ещё существует до обработки объявления");
-	const applied = await receiveBanAnnouncement(BOB_PUB, banEvent);
+	const applied = await receiveBanAnnouncement(BOB_PUB, DB_KEY, banEvent);
 	assert.equal(applied, true);
 	assert.equal(await db.table("channels").get([BOB_PUB, channelId]), undefined, "канал удалён локально у забаненного");
 });
@@ -221,16 +223,16 @@ test("receiveBanAnnouncement: у ОСТАЛЬНЫХ (Mallory) — канал о�
 
 	// Боб успевает опубликовать комментарий ДО бана — Mallory его получает и кэширует.
 	const commentPublished = [];
-	await addComment(BOB_PUB, BOB_PRIV, channelId, "post-1", "post-1", "давайте жить дружно", [], capturingPublish(commentPublished));
+	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "post-1", "post-1", "давайте жить дружно", [], capturingPublish(commentPublished));
 	const commentEvent = commentPublished.find((e) => e.kind === 30062);
-	await receiveComment(MALLORY_PUB, commentEvent);
+	await receiveComment(MALLORY_PUB, DB_KEY, commentEvent);
 	assert.equal((await db.table("comments").where("ownerPubkey").equals(MALLORY_PUB).toArray()).length, 1);
 
 	const published = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(published));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 	const banEvent = published.find((e) => e.kind === CHANNEL_BAN_KIND);
 
-	const applied = await receiveBanAnnouncement(MALLORY_PUB, banEvent);
+	const applied = await receiveBanAnnouncement(MALLORY_PUB, DB_KEY, banEvent);
 	assert.equal(applied, true);
 	assert.ok(await db.table("channels").get([MALLORY_PUB, channelId]), "канал у Mallory НЕ удалён (она не забанена)");
 	const comments = await db.table("comments").where("ownerPubkey").equals(MALLORY_PUB).toArray();
@@ -241,7 +243,7 @@ test("АДВЕРСАРНЫЙ: поддельное объявление о ба�
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const channelRow = await db.table("channels").get([ALICE_PUB, channelId]);
 	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
-	const keyRow = await db.table("channelKeys").get([ALICE_PUB, channelId, meta.currentVersion]);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 
 	// Mallory (не владелец) подделывает бан Боба, подписывая СВОИМ ключом.
 	const forged = sign(
@@ -254,7 +256,7 @@ test("АДВЕРСАРНЫЙ: поддельное объявление о ба�
 		MALLORY_PRIV,
 	);
 
-	const applied = await receiveBanAnnouncement(MALLORY_PUB, forged);
+	const applied = await receiveBanAnnouncement(MALLORY_PUB, DB_KEY, forged);
 	assert.equal(applied, false, "поддельный бан от не-владельца обязан быть отклонён");
 	assert.ok(await db.table("channels").get([MALLORY_PUB, channelId]), "канал не тронут");
 });
@@ -262,24 +264,24 @@ test("АДВЕРСАРНЫЙ: поддельное объявление о ба�
 test("АДВЕРСАРНЫЙ (крипто-барьер): после бана Боб НЕ может писать НОВЫЕ комментарии — v_old не годится текущим читателям", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const banOutbox = [];
-	await banMember(ALICE_PUB, ALICE_PRIV, channelId, BOB_PUB, capturingPublish(banOutbox));
+	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(banOutbox));
 
 	// Mallory (честный клиент) получает переизданный грант v_new через свою подписку —
 	// её channelKeyMeta.currentVersion переходит на v_new (тот же путь, что receiveChannelKeyGrant
 	// уже покрыт тестами этапа 30, здесь он — предпосылка для проверки крипто-барьера).
 	const newGrant = banOutbox.find((e) => e.kind === 30053);
-	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, ALICE_PUB, newGrant);
+	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, newGrant);
 
 	// Боб — нечестный клиент, игнорирует объявление о своём бане и всё равно пытается
 	// написать комментарий СВОИМ (уже устаревшим v_old) ключом.
 	const published = [];
-	await addComment(BOB_PUB, BOB_PRIV, channelId, "post-1", "post-1", "я всё ещё тут", [], capturingPublish(published));
+	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "post-1", "post-1", "я всё ещё тут", [], capturingPublish(published));
 	const forgedComment = published.find((e) => e.kind === 30062);
 
 	// Mallory (получила v_new через переиздачу) пытается принять — крипто-барьер
 	// (DESIGN.md): decryptChannelContent ищет ТОЛЬКО meta.currentVersion (v_new),
 	// у события заголовок v_old -> null -> discard, ДО проверки allowlist.
-	const applied = await receiveComment(MALLORY_PUB, forgedComment);
+	const applied = await receiveComment(MALLORY_PUB, DB_KEY, forgedComment);
 	assert.equal(applied, false, "комментарий забаненного с устаревшим ключом обязан быть отклонён");
 });
 

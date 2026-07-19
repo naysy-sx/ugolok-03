@@ -10,11 +10,14 @@ import { storeInboxRequest } from "../src/domain/messaging/inbox-requests.js";
 import { createOwnKeyPackage } from "../src/core/crypto/mls-session.js";
 import { ensureChatEstablished } from "../src/domain/messaging/chat.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
+import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const STRANGER_PRIV = new Uint8Array(32).fill(9);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const STRANGER_PUB = bytesToHex(getPublicKey(STRANGER_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -40,18 +43,18 @@ test("refreshInboxRequests: возвращает owner-scoped список", asy
 
 test("acceptInboxRequestAction: присоединяется к MLS-группе, вызывает refresh-подписку и переключает на чат", async () => {
 	const aliceOwnKeyPackage = await createOwnKeyPackage(ALICE_PUB, "alice-device");
-	await db.table("ownKeyPackage").put({
+	await db.table("ownKeyPackage").put(toEncryptedRow({
 		ownerPubkey: ALICE_PUB,
 		publicPackage: aliceOwnKeyPackage.publicPackage,
 		privatePackage: aliceOwnKeyPackage.privatePackage,
 		wireBytes: aliceOwnKeyPackage.wireBytes,
-	});
+	}, OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, DB_KEY));
 	let welcomeGiftWrap;
 	const publish = async (event) => {
 		if (event.kind === 1059) welcomeGiftWrap = event;
 		return { ok: true };
 	};
-	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, ALICE_PUB, publish, async () => aliceOwnKeyPackage.wireBytes);
+	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, ALICE_PUB, publish, async () => aliceOwnKeyPackage.wireBytes);
 	await db.table("mlsGroups").clear();
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);
@@ -62,7 +65,7 @@ test("acceptInboxRequestAction: присоединяется к MLS-группе
 	const refreshGroupMessageSubscription = async () => {
 		refreshCalls++;
 	};
-	await acceptInboxRequestAction(ALICE_PUB, ALICE_PRIV, STRANGER_PUB, refreshGroupMessageSubscription, publish);
+	await acceptInboxRequestAction(ALICE_PUB, ALICE_PRIV, DB_KEY, STRANGER_PUB, refreshGroupMessageSubscription, publish);
 
 	assert.equal(refreshCalls, 1, "refreshGroupMessageSubscription обязана быть вызвана (находка 3)");
 	assert.equal(activeChatPubkey.value, STRANGER_PUB, "должен переключить UI на новый чат");

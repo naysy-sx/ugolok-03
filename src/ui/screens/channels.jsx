@@ -1,5 +1,5 @@
 import { useState, useEffect, useId } from "preact/hooks";
-import { currentUser, privKeySig } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, refreshChannelContentSubscription } from "../signals/transport.js";
 import { groups, refreshGroups } from "../signals/contacts.js";
 import { messagingActivity } from "../signals/chats.js";
@@ -80,7 +80,7 @@ function ChannelList({ channels, emptyText, showSubscribe, onSubscribe, onOpen, 
 	);
 }
 
-function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
+function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel }) {
 	const instanceId = useId();
 	const [name, setName] = useState("");
 	const [description, setDescription] = useState("");
@@ -133,11 +133,12 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 			await createChannel(
 				ownerPubkey,
 				privKey,
+				dbKey,
 				{ name, description, rules, avatarDescriptor, allowChatAttachments },
 				[...selectedGroupIds],
 				publish,
 			);
-			await refreshChannelContentSubscription(ownerPubkey);
+			await refreshChannelContentSubscription(ownerPubkey, dbKey);
 			onCreated();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -248,6 +249,7 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 function ChannelsList() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
+	const dbKey = dbKeySig.value;
 
 	const [tab, setTab] = useState("owned");
 	const [owned, setOwned] = useState([]);
@@ -258,7 +260,7 @@ function ChannelsList() {
 	const [busy, setBusy] = useState(false);
 
 	useEffect(() => {
-		ensureConnected(ownerPubkey, privKey).catch((e) => setError(e?.message || String(e)));
+		ensureConnected(ownerPubkey, privKey, dbKey).catch((e) => setError(e?.message || String(e)));
 	}, [ownerPubkey]);
 
 	async function refreshLists() {
@@ -320,6 +322,7 @@ function ChannelsList() {
 						<CreateChannelForm
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
+							dbKey={dbKey}
 							onCreated={() => {
 								setShowCreateForm(false);
 								refreshLists();
@@ -355,7 +358,7 @@ function ChannelsList() {
 
 export default function Channels() {
 	if (activeChannelId.value) {
-		return <ChannelDetail ownerPubkey={currentUser.value.id} privKey={privKeySig.value} channelId={activeChannelId.value} />;
+		return <ChannelDetail ownerPubkey={currentUser.value.id} privKey={privKeySig.value} dbKey={dbKeySig.value} channelId={activeChannelId.value} />;
 	}
 	return <ChannelsList />;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { shortPubkey } from "../format.js";
-import { currentUser, privKeySig } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import {
 	ensureConnected,
 	publish,
@@ -48,7 +48,7 @@ function base64FromBytes(bytes) {
 // contacts.jsx уже вызывает ensureConnected при заходе на вкладку "Контакты" — но
 // пользователь может открыть "Сообщения" напрямую, минуя её. ensureConnected идемпотентна
 // (singleton-соединение на вкладку), повторный вызов отсюда безопасен.
-function ChatList({ ownerPubkey, privKey, connectionError }) {
+function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 	const [chatPartners, setChatPartners] = useState([]);
 	const [inboxList, setInboxList] = useState([]);
 	const [unreadByPartner, setUnreadByPartner] = useState({});
@@ -62,7 +62,7 @@ function ChatList({ ownerPubkey, privKey, connectionError }) {
 		let cancelled = false;
 		async function refresh() {
 			try {
-				const partners = await listChatPartners(ownerPubkey);
+				const partners = await listChatPartners(ownerPubkey, dbKey);
 				const inbox = await refreshInboxRequests(ownerPubkey);
 				const unread = {};
 				for (const partnerPubkey of partners) {
@@ -105,7 +105,7 @@ function ChatList({ ownerPubkey, privKey, connectionError }) {
 
 	function handleAccept(senderPubkey) {
 		return runAction(async () => {
-			await acceptInboxRequestAction(ownerPubkey, privKey, senderPubkey, refreshGroupMessageSubscription, publish);
+			await acceptInboxRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, refreshGroupMessageSubscription, publish);
 		});
 	}
 
@@ -223,7 +223,7 @@ function ChatList({ ownerPubkey, privKey, connectionError }) {
 	);
 }
 
-function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
+function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [text, setText] = useState("");
@@ -488,6 +488,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 			await sendChatMessageAction(
 				ownerPubkey,
 				privKey,
+				dbKey,
 				contactPubkey,
 				text,
 				lamportTs,
@@ -519,7 +520,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		setBusy(true);
 		try {
 			const lamportTs = await nextLamportTick();
-			await deleteChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish);
+			await deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish);
 			await reloadWindow();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -560,7 +561,7 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 		setBusy(true);
 		try {
 			const lamportTs = await nextLamportTick();
-			await editChatMessageAction(ownerPubkey, privKey, contactPubkey, msgId, newText, lamportTs, publish);
+			await editChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish);
 			await reloadWindow();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -697,18 +698,19 @@ function ChatWindow({ ownerPubkey, privKey, contactPubkey }) {
 export default function Chat() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
+	const dbKey = dbKeySig.value;
 
 	const [connectionError, setConnectionError] = useState("");
 
 	useEffect(() => {
-		ensureConnected(ownerPubkey, privKey)
+		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(() => refreshLiveProfileSubscription(ownerPubkey))
 			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);
 
 	if (activeChatPubkey.value) {
-		return <ChatWindow ownerPubkey={ownerPubkey} privKey={privKey} contactPubkey={activeChatPubkey.value} />;
+		return <ChatWindow ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} contactPubkey={activeChatPubkey.value} />;
 	}
 
-	return <ChatList ownerPubkey={ownerPubkey} privKey={privKey} connectionError={connectionError} />;
+	return <ChatList ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} connectionError={connectionError} />;
 }

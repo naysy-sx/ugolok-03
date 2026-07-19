@@ -16,6 +16,7 @@ import {
 	receivePost,
 	listChannelPosts,
 } from "../src/domain/content/post.js";
+import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -23,6 +24,7 @@ const MALLORY_PRIV = new Uint8Array(32).fill(3);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
 const MALLORY_PUB = bytesToHex(getPublicKey(MALLORY_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -53,9 +55,9 @@ async function setupChannelWithBobViewing() {
 	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
 	const published = [];
-	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
 	const grantEvent = published.find((e) => e.kind === 30053);
-	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, ALICE_PUB, grantEvent);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
 	return { channelId };
 }
 
@@ -79,13 +81,13 @@ test("publishPost: публикует kind 30061, Боб (VIEW-держател�
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "первая статья", attachments: [] });
 	const published = [];
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(published));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
 
 	const event = published.find((e) => e.kind === 30061);
 	assert.ok(event);
 	assert.deepEqual(event.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`]);
 
-	const bobKeyRow = await db.table("channelKeys").get([BOB_PUB, channelId, 1]);
+	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
 	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published" });
 
@@ -96,40 +98,40 @@ test("publishPost: публикует kind 30061, Боб (VIEW-держател�
 test("publishPost: недопустимый переход (публикация уже опубликованного без unpublish) -> throw", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
-	await assert.rejects(() => publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([])));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	await assert.rejects(() => publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([])));
 });
 
 test("archivePost/unpublishPost: republish того же d-tag с обновлённым статусом", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 
 	const archivePublished = [];
-	await archivePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(archivePublished));
+	await archivePost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(archivePublished));
 	const archiveEvent = archivePublished.find((e) => e.kind === 30061);
 	assert.deepEqual(archiveEvent.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`], "тот же d-tag — replaceable");
 	let row = await db.table("posts").get([ALICE_PUB, postId]);
 	assert.equal(row.status, "archived");
 
 	// archived — финальное, ARCHIVE/UNPUBLISH из него недопустимы
-	await assert.rejects(() => unpublishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([])));
+	await assert.rejects(() => unpublishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([])));
 });
 
 test("unpublishPost: published -> draft, можно отредактировать и опубликовать заново", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "v1", attachments: [] });
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
-	await unpublishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	await unpublishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 
 	let row = await db.table("posts").get([ALICE_PUB, postId]);
 	assert.equal(row.status, "draft");
 
 	await updateDraftPost(ALICE_PUB, postId, { text: "v2 отредактировано", attachments: [] });
 	const republished = [];
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(republished));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(republished));
 	const event = republished.find((e) => e.kind === 30061);
-	const bobKeyRow = await db.table("channelKeys").get([BOB_PUB, channelId, 1]);
+	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
 	assert.equal(JSON.parse(plaintext).text, "v2 отредактировано");
 });
@@ -147,7 +149,7 @@ test("deletePost: черновик (никогда не публиковался
 test("deletePost: опубликованный пост -> kind 5 (NIP-09 addressable, F-CH-10)", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "x", attachments: [] });
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
 	const published = [];
 	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(published));
 	const delEvent = published.find((e) => e.kind === 5);
@@ -159,10 +161,10 @@ test("receivePost: Боб получает и расшифровывает по�
 	const { channelId } = await setupChannelWithBobViewing();
 	const { postId } = await createDraftPost(ALICE_PUB, channelId, { text: "для всех подписчиков", attachments: [] });
 	const published = [];
-	await publishPost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish(published));
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
 	const event = published.find((e) => e.kind === 30061);
 
-	const applied = await receivePost(BOB_PUB, event);
+	const applied = await receivePost(BOB_PUB, DB_KEY, event);
 	assert.equal(applied, true);
 	const bobPosts = await listChannelPosts(BOB_PUB, channelId);
 	assert.equal(bobPosts.length, 1);
@@ -175,7 +177,7 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
 	// (группа уже создана в setupChannelWithBobViewing с одним Бобом — добавим Mallory вручную
 	// через тот же kind 30053 механизм, реиспользуя приватный доступ к ключу канала Алисы)
-	const aliceKeyRow = await db.table("channelKeys").get([ALICE_PUB, channelId, 1]);
+	const aliceKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, 1]), DB_KEY);
 	const aliceChannelRow = await db.table("channels").get([ALICE_PUB, channelId]);
 	const { sendViewGrant } = await import("../src/domain/content/channel-access.js");
 	const grantPublish = [];
@@ -214,7 +216,7 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 		MALLORY_PRIV,
 	);
 
-	const applied = await receivePost(BOB_PUB, forgedEvent);
+	const applied = await receivePost(BOB_PUB, DB_KEY, forgedEvent);
 	assert.equal(applied, false, "пост НЕ от создателя канала обязан быть отклонён");
 	const bobPosts = await listChannelPosts(BOB_PUB, channelId);
 	assert.equal(bobPosts.length, 0);

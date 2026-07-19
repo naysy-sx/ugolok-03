@@ -7,6 +7,8 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { decrypt as nip44Decrypt } from "../src/core/crypto/nip44.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
 import { joinFromWelcome, createOwnKeyPackage, deserializeState, serializeState } from "../src/core/crypto/mls-session.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import {
 	computeGroupId,
 	ensureOwnKeyPackagePublished,
@@ -21,6 +23,10 @@ const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
+// Этап 39 (AC-16) — один dbKey на весь тестовый процесс (реально у каждого
+// аккаунта свой, но тут Алиса и Боб делят один процесс/БД уже по прежней
+// договорённости теста, см. asBob ниже — тот же принцип, dbKey тоже общий).
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -62,13 +68,28 @@ test("ensureOwnKeyPackagePublished: публикует kind 443 и персис�
 		assert.equal(event.kind, 443);
 		return { ok: true };
 	};
-	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, publish);
+	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, DB_KEY, publish);
 	const row = await db.table("ownKeyPackage").get(ALICE_PUB);
 	assert.ok(row);
 	assert.equal(publishCount, 1);
 
-	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, publish);
+	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, DB_KEY, publish);
 	assert.equal(publishCount, 1, "повторный вызов не должен публиковать снова");
+});
+
+// AC-16 — прямой дамп таблицы (в обход домена) не должен выдавать приватный
+// материал MLS KeyPackage в открытом виде.
+test("AC-16: ownKeyPackage хранится зашифрованным — сырой дамп не содержит privatePackage/wireBytes", async () => {
+	await ensureOwnKeyPackagePublished(ALICE_PUB, ALICE_PRIV, DB_KEY, async () => ({ ok: true }));
+	const raw = await db.table("ownKeyPackage").get(ALICE_PUB);
+	assert.equal(raw.ownerPubkey, ALICE_PUB);
+	assert.equal("privatePackage" in raw, false);
+	assert.equal("wireBytes" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.ok(decrypted.privatePackage);
 });
 
 async function establishAliceToBob() {
@@ -84,7 +105,7 @@ async function establishAliceToBob() {
 		return { ok: true };
 	};
 
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
 
 	const welcomeGiftWrap = publishedEvents.find((e) => e.kind === 1059);
 	assert.ok(welcomeGiftWrap, "должен опубликовать gift wrap с Welcome");
@@ -106,10 +127,15 @@ async function establishAliceToBob() {
 // Симулирует "теперь мы на устройстве Боба": подкладывает его копию состояния в
 // db.mlsGroups (единственная база в этом тестовом процессе), не трогая копию Алисы,
 // которую вызывающий тест обязан сохранить/восстановить сам при необходимости.
+// Этап 39 — строка теперь зашифрована DB_KEY (toEncryptedRow/fromEncryptedRow),
+// как и в реальном коде.
 async function asBob(groupIdHex, bobSerializedState, fn) {
-	await db.table("mlsGroups").put({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState });
+	await db.table("mlsGroups").put(
+		toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
+	);
 	const result = await fn();
-	const updatedBobRow = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
+	const updatedBobRaw = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
+	const updatedBobRow = fromEncryptedRow(updatedBobRaw, DB_KEY);
 	return { result, updatedBobSerializedState: updatedBobRow.state };
 }
 
@@ -118,6 +144,23 @@ test("ensureChatEstablished: полный флоу — mlsGroups получае�
 	const aliceRow = await db.table("mlsGroups").get([ALICE_PUB, toHex(groupId)]);
 	assert.ok(aliceRow, "у Алисы есть своя запись");
 	assert.ok(bobSerializedState, "Боб успешно применил Welcome и получил рабочее состояние");
+});
+
+// AC-16 — mlsGroups.state — MLS-ратчет-секреты; contactPubkey — с кем разговор.
+// Оба относятся к forward-secrecy-критичному состоянию (Tier 0, DESIGN.md этап 39).
+test("AC-16: mlsGroups хранится зашифрованным — сырой дамп не содержит state/contactPubkey", async () => {
+	const { groupId } = await establishAliceToBob();
+	const raw = await db.table("mlsGroups").get([ALICE_PUB, toHex(groupId)]);
+	assert.equal(raw.ownerPubkey, ALICE_PUB);
+	assert.equal(raw.groupId, toHex(groupId));
+	assert.equal("state" in raw, false);
+	assert.equal("contactPubkey" in raw, false);
+	assert.ok(raw.nonce instanceof Uint8Array);
+	assert.ok(raw.ciphertext instanceof Uint8Array);
+
+	const decrypted = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(decrypted.contactPubkey, BOB_PUB);
+	assert.ok(decrypted.state);
 });
 
 test("ensureChatEstablished: повторный вызов — no-op, не публикует Welcome снова", async () => {
@@ -130,7 +173,7 @@ test("ensureChatEstablished: повторный вызов — no-op, не пу�
 		return { ok: true };
 	};
 	await establishAliceToBob();
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
 	assert.equal(publishCount, 0);
 });
 
@@ -139,13 +182,13 @@ test("ensureChatEstablished: fetchKeyPackage не находит адресат�
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
 	};
 	await assert.rejects(
-		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, BOB_PUB, async () => ({ ok: true }), fetchKeyPackage),
+		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchKeyPackage),
 		/ключ/,
 	);
 });
 
 test("sendMessage: бросает, если чат ещё не установлен (нет mlsGroups записи)", async () => {
-	await assert.rejects(() => sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет", 1, async () => ({ ok: true })));
+	await assert.rejects(() => sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет", 1, async () => ({ ok: true })));
 });
 
 test("sendMessage/receiveGroupMessageEvent: полный цикл — B реально получает и расшифровывает сообщение от A", async () => {
@@ -159,7 +202,7 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	};
 	// db.mlsGroups сейчас содержит запись АЛИСЫ (establishAliceToBob оставил её последней)
 	// sendMessage публикует ДВА события (этап 25): живой kind 445 и зеркало kind 446 (best-effort)
-	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет, Боб", 5, publish);
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет, Боб", 5, publish);
 	const sentEvent = publishedEvents.find((e) => e.kind === 445);
 	assert.ok(sentEvent, "должен опубликовать живое MLS-сообщение (kind 445)");
 	assert.ok(publishedEvents.some((e) => e.kind === 446), "должен зеркалировать (kind 446)");
@@ -171,7 +214,7 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 
 	// "Переключаемся" на Боба (его отдельная копия состояния, не запись Алисы) — см. asBob
 	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
-		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvent, async () => ({ ok: true })),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, sentEvent, async () => ({ ok: true })),
 	);
 	// sentAt (этап 29) — sendMessage теперь ВСЕГДА генерирует его, поэтому появляется и
 	// здесь (в отличие от devices.test.js, где payload собран вручную БЕЗ sentAt —
@@ -197,22 +240,22 @@ test("AC-FS-02 (уровень приложения): receiveGroupMessageEvent �
 		return { ok: true };
 	};
 
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "первое", 1, publish);
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "второе", 2, publish);
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "третье", 3, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "первое", 1, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "второе", 2, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "третье", 3, publish);
 	const [event1, event2, event3] = sentEvents.filter((e) => e.kind === 445);
 
 	let bobState = bobSerializedState;
 
-	let step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event2, async () => ({ ok: true })));
+	let step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event2, async () => ({ ok: true })));
 	bobState = step.updatedBobSerializedState;
 	assert.equal(step.result.text, "второе");
 
-	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event3, async () => ({ ok: true })));
+	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event3, async () => ({ ok: true })));
 	bobState = step.updatedBobSerializedState;
 	assert.equal(step.result.text, "третье");
 
-	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, event1, async () => ({ ok: true })));
+	step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })));
 	assert.equal(step.result.text, "первое", "пропущенное первое сообщение всё равно расшифровывается корректно после персистенции состояния между приёмами");
 });
 
@@ -220,7 +263,7 @@ test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ б
 	await establishAliceToBob();
 	const publish = async () => ({ ok: false, reason: "relay недоступен" });
 
-	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "не долетит", 7, publish);
+	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "не долетит", 7, publish);
 	assert.equal(result.queued, true);
 	assert.equal(typeof result.eventId, "string");
 
@@ -242,7 +285,7 @@ test("AC-09 АДВЕРСАРНО: sendMessage — publish() бросает ис�
 		throw new Error("сеть недоступна");
 	};
 
-	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "тоже не долетит", 8, publish);
+	const result = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "тоже не долетит", 8, publish);
 	assert.equal(result.queued, true);
 	const outboxRows = await db.table("outbox").where("eventId").equals(result.eventId).toArray();
 	assert.equal(outboxRows.length, 1);
@@ -250,7 +293,7 @@ test("AC-09 АДВЕРСАРНО: sendMessage — publish() бросает ис�
 
 test("receiveGroupMessageEvent: неизвестный groupId (h-тег) — discard, не бросает", async () => {
 	const fakeEvent = { kind: 445, tags: [["h", "00".repeat(32)]], content: "irrelevant", pubkey: "x", id: "y" };
-	const result = await receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, fakeEvent, async () => ({ ok: true }));
+	const result = await receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, fakeEvent, async () => ({ ok: true }));
 	assert.equal(result, null);
 });
 
@@ -262,20 +305,20 @@ test("contactPubkey переживает put() из sendMessage — второй
 		sentEvents.push(event);
 		return { ok: true };
 	};
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "первое", 1, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "первое", 1, publish);
 	// contactPubkey должен пережить put() внутри sendMessage (это был реальный найденный баг)
-	const rowAfterFirstSend = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const rowAfterFirstSend = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
 	assert.equal(rowAfterFirstSend.contactPubkey, BOB_PUB);
 
 	await asBob(groupIdHex, bobSerializedState, () =>
-		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvents[0], async () => ({ ok: true })),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, sentEvents[0], async () => ({ ok: true })),
 	);
-	const bobRowAfterReceive = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
+	const bobRowAfterReceive = fromEncryptedRow(await db.table("mlsGroups").get([BOB_PUB, groupIdHex]), DB_KEY);
 	assert.equal(bobRowAfterReceive.contactPubkey, ALICE_PUB, "и после приёма (put в receiveGroupMessageEvent) тоже");
 });
 
 test("acceptWelcome: требует опубликованный собственный ownKeyPackage", async () => {
-	await assert.rejects(() => acceptWelcome(BOB_PUB, ALICE_PUB, new Uint8Array(10)), /KeyPackage/);
+	await assert.rejects(() => acceptWelcome(BOB_PUB, DB_KEY, ALICE_PUB, new Uint8Array(10)), /KeyPackage/);
 });
 
 test("sendMessage: каждое сообщение публикуется с НОВЫМ эфемерным ключом (не переиспользуется)", async () => {
@@ -285,8 +328,8 @@ test("sendMessage: каждое сообщение публикуется с Н�
 		events.push(event);
 		return { ok: true };
 	};
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "первое", 1, publish);
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "второе", 2, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "первое", 1, publish);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "второе", 2, publish);
 	assert.notEqual(events[0].pubkey, events[1].pubkey);
 });
 
@@ -325,7 +368,7 @@ test("getChatHistory: owner-scoping — не путает переписки Р�
 test("этап 29: sendMessage — sentAt (wall-clock) генерируется всегда, попадает в локальную строку", async () => {
 	await establishAliceToBob();
 	const before = Math.floor(Date.now() / 1000);
-	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет", 1, async () => ({ ok: true }));
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет", 1, async () => ({ ok: true }));
 	const after = Math.floor(Date.now() / 1000);
 
 	const row = await db.table("messages").where("id").equals(eventId).first();
@@ -348,7 +391,7 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 		position: "above",
 	};
 	const publish = async () => ({ ok: true });
-	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "смотри", 1, publish, attachment);
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "смотри", 1, publish, attachment);
 
 	const aliceRow = await db.table("messages").where("id").equals(eventId).first();
 	assert.deepEqual(aliceRow.attachment, attachment, "своя копия сразу содержит вложение (оптимистично, как text)");
@@ -358,11 +401,11 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 		sentEvents.push(event);
 		return { ok: true };
 	};
-	await sendMessage(ALICE_PUB, ALICE_PRIV, BOB_PUB, "ещё одна с вложением", 2, publishCapture, attachment);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "ещё одна с вложением", 2, publishCapture, attachment);
 	const sentEvent = sentEvents.find((e) => e.kind === 445);
 
 	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
-		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, sentEvent, async () => ({ ok: true })),
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, sentEvent, async () => ({ ok: true })),
 	);
 	assert.deepEqual(received.attachment, attachment, "вложение доходит до собеседника без искажений");
 

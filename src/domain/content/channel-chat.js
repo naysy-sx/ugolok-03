@@ -2,6 +2,7 @@ import { db } from "../../core/store/database.js";
 import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -14,11 +15,11 @@ async function requirePublishOk(publish, event) {
 // писать в чат = COMMENT-allowlist (PLAN.md буквально), отдельного allowlist для чата
 // не заводим. kind 30063 (следующий свободный в 30060-30069, parameterized-replaceable,
 // как посты/комментарии — сообщение не редактируется в этом этапе, d-tag просто уникален).
-export async function sendChannelMessage(ownerPubkey, ownerPrivKey, channelId, text, attachments, publish) {
+export async function sendChannelMessage(ownerPubkey, ownerPrivKey, dbKey, channelId, text, attachments, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 
 	const messageId = crypto.randomUUID();
 	const content = encryptChannelContent(JSON.stringify({ text, attachments }), keyRow.channelKey, meta.currentVersion);
@@ -54,7 +55,7 @@ export async function sendChannelMessage(ownerPubkey, ownerPrivKey, channelId, t
 // сообщение целиком — обрезает вложение (UX/политика владельца, не auth-нарушение: у
 // автора и так есть channelKey+COMMENT, вложение в обход настройки не даёт ему ничего
 // нового, чего он не мог бы сделать иначе).
-export async function receiveChannelMessage(ownerPubkey, event) {
+export async function receiveChannelMessage(ownerPubkey, dbKey, event) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
 	const channelRow = await db
@@ -67,14 +68,15 @@ export async function receiveChannelMessage(ownerPubkey, event) {
 
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
 	if (!meta) return false;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRow) return false;
+	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+	if (!keyRowRaw) return false;
+	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
 	if (plaintext === null) return false;
 
 	if (event.pubkey !== channelRow.creatorPubkey) {
-		const allowlistRow = await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+		const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, meta.currentVersion]), dbKey);
 		const verifiedAllowlist = allowlistRow ? { allowedAuthors: allowlistRow.allowedAuthors } : null;
 		if (!canAuthorComment(event.pubkey, verifiedAllowlist)) return false;
 	}

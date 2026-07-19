@@ -3,6 +3,7 @@ import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { transitionPost } from "./post-machine.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -43,14 +44,14 @@ export async function updateDraftPost(ownerPubkey, postId, { text, attachments }
 // Общая часть publishPost/archivePost/unpublishPost — DESIGN.md формализация 1:
 // статус — ЧАСТЬ синхронизируемого payload'а, republish того же d-tag (kind 30061
 // параметризованно-replaceable, NIP-01) заменяет предыдущую версию у всех читателей.
-async function republishWithStatus(ownerPubkey, ownerPrivKey, postId, fsmEvent, publish) {
+async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsmEvent, publish) {
 	const row = await db.table("posts").get([ownerPubkey, postId]);
 	if (!row) throw new Error("пост не найден");
 	const newStatus = transitionPost(row.status, fsmEvent); // бросает на недопустимый переход
 
 	const channelRow = await db.table("channels").get([ownerPubkey, row.channelId]);
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, row.channelId]);
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, row.channelId, meta.currentVersion]);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, row.channelId, meta.currentVersion]), dbKey);
 
 	const content = encryptChannelContent(
 		JSON.stringify({ text: row.text, attachments: row.attachments, status: newStatus }),
@@ -74,16 +75,16 @@ async function republishWithStatus(ownerPubkey, ownerPrivKey, postId, fsmEvent, 
 	return { eventId: event.id };
 }
 
-export async function publishPost(ownerPubkey, ownerPrivKey, postId, publish) {
-	return republishWithStatus(ownerPubkey, ownerPrivKey, postId, "PUBLISH", publish);
+export async function publishPost(ownerPubkey, ownerPrivKey, dbKey, postId, publish) {
+	return republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, "PUBLISH", publish);
 }
 
-export async function archivePost(ownerPubkey, ownerPrivKey, postId, publish) {
-	return republishWithStatus(ownerPubkey, ownerPrivKey, postId, "ARCHIVE", publish);
+export async function archivePost(ownerPubkey, ownerPrivKey, dbKey, postId, publish) {
+	return republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, "ARCHIVE", publish);
 }
 
-export async function unpublishPost(ownerPubkey, ownerPrivKey, postId, publish) {
-	return republishWithStatus(ownerPubkey, ownerPrivKey, postId, "UNPUBLISH", publish);
+export async function unpublishPost(ownerPubkey, ownerPrivKey, dbKey, postId, publish) {
+	return republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, "UNPUBLISH", publish);
 }
 
 // F-CH-10 — kind 5 (NIP-09), АДРЕСУЕМОЕ удаление (тег "a": kind:pubkey:d-tag) —
@@ -104,7 +105,7 @@ export async function deletePost(ownerPubkey, ownerPrivKey, postId, publish) {
 // DESIGN.md, формализация 2 (найденная адверсарная угроза) — event.pubkey ОБЯЗАН
 // совпадать с channelRow.creatorPubkey: ЛЮБОЙ VIEW-держатель технически способен
 // зашифровать валидный kind 30061 тем же channelKey — владение ключом ≠ авторство.
-export async function receivePost(ownerPubkey, event) {
+export async function receivePost(ownerPubkey, dbKey, event) {
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
 	const channelRow = await db
@@ -118,8 +119,9 @@ export async function receivePost(ownerPubkey, event) {
 
 	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
 	if (!meta) return false;
-	const keyRow = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRow) return false;
+	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
+	if (!keyRowRaw) return false;
+	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
 	if (plaintext === null) return false;

@@ -19,7 +19,7 @@ import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import Dexie from "dexie";
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
-import { wrapEncryptedTable } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow } from "../../core/store/encrypted-table.js";
 import { generateSyntheticEvents } from "../../domain/events/synthetic-fixtures.js";
 import { createRelayConnection } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
@@ -450,7 +450,6 @@ function usePSpikeBenchmark() {
 			benchDb.version(1).stores({ derived: "foldKey" });
 			await benchDb.open();
 			const dbKey = crypto.getRandomValues(new Uint8Array(32));
-			const wrapped = wrapEncryptedTable(benchDb.table("derived"), ["foldKey"], dbKey);
 
 			worker = new CryptoWorker();
 			const api = Comlink.wrap(worker);
@@ -487,7 +486,7 @@ function usePSpikeBenchmark() {
 					const ciphertext = Uint8Array.from(atob(ciphertextB64), (c) => c.charCodeAt(0));
 					value = chacha20poly1305(f.channelKey, nonce).decrypt(ciphertext);
 				}
-				await wrapped.put({ foldKey, value });
+				await benchDb.table("derived").put(toEncryptedRow({ foldKey, value }, ["foldKey"], dbKey));
 			}
 
 			// gift wrap'ы — журнал (G-Set), не fold: каждый расшифровывается и пишется как есть

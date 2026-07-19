@@ -17,11 +17,14 @@ import {
 	markChatReadAction,
 	saveChatDraftAction,
 } from "../src/ui/signals/chats.js";
+import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -46,24 +49,24 @@ test("bumpMessagingActivity: инкрементирует сигнал", () => {
 
 test("listChatPartners: возвращает уникальные contactPubkey активных MLS-групп", async () => {
 	await db.table("mlsGroups").bulkAdd([
-		{ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) },
-		{ ownerPubkey: ALICE_PUB, groupId: "g2", contactPubkey: "carol-pub", state: new Uint8Array([2]) },
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, groupId: "g2", contactPubkey: "carol-pub", state: new Uint8Array([2]) }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const partners = await listChatPartners(ALICE_PUB);
+	const partners = await listChatPartners(ALICE_PUB, DB_KEY);
 	assert.deepEqual(partners.sort(), [BOB_PUB, "carol-pub"].sort());
 });
 
 test("listChatPartners: owner-scoping — не путает чаты РАЗНЫХ локальных аккаунтов на одном устройстве (критическая находка)", async () => {
 	await db.table("mlsGroups").bulkAdd([
-		{ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) },
-		{ ownerPubkey: "matero-pub", groupId: "g2", contactPubkey: "someone-else", state: new Uint8Array([2]) },
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: "matero-pub", groupId: "g2", contactPubkey: "someone-else", state: new Uint8Array([2]) }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
 	]);
-	const alicePartners = await listChatPartners(ALICE_PUB);
+	const alicePartners = await listChatPartners(ALICE_PUB, DB_KEY);
 	assert.deepEqual(alicePartners, [BOB_PUB], "Алиса не должна видеть чаты аккаунта matero");
 });
 
 test("listChatPartners: без активных чатов -> пустой массив", async () => {
-	assert.deepEqual(await listChatPartners(ALICE_PUB), []);
+	assert.deepEqual(await listChatPartners(ALICE_PUB, DB_KEY), []);
 });
 
 test("sendChatMessageAction: устанавливает чат при первой отправке (ensureChatEstablished no-op при повторе) и вызывает refresh-подписку", async () => {
@@ -78,6 +81,7 @@ test("sendChatMessageAction: устанавливает чат при перво
 	const { eventId } = await sendChatMessageAction(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		BOB_PUB,
 		"привет",
 		1,
@@ -97,6 +101,7 @@ test("sendChatMessageAction: устанавливает чат при перво
 	await sendChatMessageAction(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		BOB_PUB,
 		"второе",
 		2,
@@ -113,6 +118,7 @@ test("этап 29: sendChatMessageAction — attachment пробрасывает
 	const { eventId } = await sendChatMessageAction(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		BOB_PUB,
 		"",
 		1,
@@ -130,7 +136,8 @@ test("sendChatMessageAction: fetchKeyPackage не находит адресат�
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
 	};
 	await assert.rejects(
-		() => sendChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "привет", 1, async () => ({ ok: true }), fetchKeyPackage, async () => {}),
+		() => sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY,
+		BOB_PUB, "привет", 1, async () => ({ ok: true }), fetchKeyPackage, async () => {}),
 		/ключ/,
 	);
 });
@@ -141,6 +148,7 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 	const { eventId } = await sendChatMessageAction(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		BOB_PUB,
 		"привет",
 		1,
@@ -158,7 +166,7 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 	await saveChatDraftAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "черновик", publish);
 	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).draftText, "черновик");
 
-	await deleteChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, row.msgId, 3, publish);
+	await deleteChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, row.msgId, 3, publish);
 	const updated = await db.table("messages").where("id").equals(eventId).first();
 	assert.equal(updated.deleted, true);
 });
@@ -169,6 +177,7 @@ test("deleteMessageForMeAction/clearChatHistoryAction: делегируют в d
 	const { eventId } = await sendChatMessageAction(
 		ALICE_PUB,
 		ALICE_PRIV,
+		DB_KEY,
 		BOB_PUB,
 		"привет",
 		1,
@@ -181,7 +190,8 @@ test("deleteMessageForMeAction/clearChatHistoryAction: делегируют в d
 	await deleteMessageForMeAction(ALICE_PUB, BOB_PUB, row.msgId);
 	assert.equal(await db.table("messages").where("id").equals(eventId).first(), undefined);
 
-	await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, BOB_PUB, "ещё одно", 2, publish, async () => bobKeyPackage.wireBytes, async () => {});
+	await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY,
+		BOB_PUB, "ещё одно", 2, publish, async () => bobKeyPackage.wireBytes, async () => {});
 	await clearChatHistoryAction(ALICE_PUB, BOB_PUB);
 	const remaining = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).toArray();
 	assert.deepEqual(remaining, []);

@@ -1,5 +1,6 @@
 import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 const DELETE_MARKER_PREFIX = "__ugolok_delete__:";
 
@@ -12,7 +13,7 @@ export function parseDeletionText(text) {
 	return text.slice(DELETE_MARKER_PREFIX.length);
 }
 
-export async function deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, lamportTs, publish) {
+export async function deleteMessage(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish) {
 	// Авторизация СВОЕЙ же стороны (найдено адверсарным тестом, не домысел): без этой
 	// проверки deleteMessage могла бы "удалить" (локально) чужое сообщение (Боба), не только
 	// своё — та же F-EV-08 граница, что applyIncomingDeletionIfMarker уже проверяет на приёме.
@@ -21,7 +22,7 @@ export async function deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, 
 	if (!targetRow || targetRow.senderPubkey !== ownerPubkey) {
 		throw new Error("нельзя удалить чужое сообщение");
 	}
-	const result = await sendMessage(ownerPubkey, privKey, contactPubkey, buildDeletionText(msgId), lamportTs, publish);
+	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildDeletionText(msgId), lamportTs, publish);
 	await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).modify({ deleted: true, text: "" });
 	return result;
 }
@@ -31,15 +32,16 @@ export async function deleteMessage(ownerPubkey, privKey, contactPubkey, msgId, 
 // ownerPubkey (правка контракта — owner-scoping, найдено реальным использованием мультиаккаунта
 // на одном устройстве, см. database.js) — идентичность ВЫЗЫВАЮЩЕГО (кто сейчас подключён),
 // нужен, чтобы найти ПРАВИЛЬНУЮ (этого владельца) mlsGroups/messages строку.
-export async function applyIncomingDeletionIfMarker(ownerPubkey, event, receivedResult) {
+export async function applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult) {
 	if (!receivedResult) return false;
 	const targetMsgId = parseDeletionText(receivedResult.text);
 	if (!targetMsgId) return false;
 
 	const hTag = event.tags.find((t) => t[0] === "h");
 	if (!hTag) return false;
-	const groupRow = await db.table("mlsGroups").get([ownerPubkey, hTag[1]]);
-	if (!groupRow) return false;
+	const groupRaw = await db.table("mlsGroups").get([ownerPubkey, hTag[1]]);
+	if (!groupRaw) return false;
+	const groupRow = fromEncryptedRow(groupRaw, dbKey);
 
 	// deleterPubkey — НЕ event.pubkey (эфемерный на kind 445, та же находка этапа 24 п.7) —
 	// contactPubkey уже резолвится из mlsGroups, тем же способом, что receiveGroupMessageEvent.
