@@ -36,6 +36,8 @@ import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnounc
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { notify } from "../../domain/notifications/notifier.js";
 import { drain } from "../../core/store/outbox.js";
+import { ensureProfilePublished } from "../../domain/identity/profile.js";
+import { currentUser } from "./auth.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -150,6 +152,12 @@ async function connect(pubkeyHex, privKey) {
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
 	await rebuildUiSettings(pubkeyHex, privKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, publisher.publish);
+	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
+	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
+	// best-effort (сбой сети не блокирует остальной connect()).
+	if (currentUser.value?.login) {
+		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publisher.publish);
+	}
 
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
 	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же

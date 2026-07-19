@@ -5205,3 +5205,74 @@ pubkey, publish)`). В конце функции, ПОСЛЕ существую�
 удаляет старые строки группы и вставляет новые ДО проверки видимости
 через другие группы) — новый вызов: `await revokeIfNoLongerVisible(ownerPubkey,
 privKey, pubkey, groupId, publish);`.
+
+## Этап 37 — авто-публикация профиля + аватар через Blossom
+
+Рутина (skill правило 13a — обвязка существующей инфраструктуры,
+DESIGN.md не нужен).
+
+### Правка принятого контракта `domain/identity/profile.js`'s `buildProfileEvent`
+
+Было (этап 26, `tests/profile.test.js`): `picture` СОЗНАТЕЛЬНО не
+писалась в content — комментарий объяснял, что аватар был "локальный
+stand-in до Blossom". Теперь Blossom-загрузка реализована (см. ниже) —
+контракт меняется: `buildProfileEvent(privKey, { name, about, picture })`
+пишет `picture` в content, если передана (`JSON.stringify` сам
+опускает `undefined`-поля — ничего специально проверять не нужно).
+Старый тест "НЕ пишет поле picture" — переписан на обратное
+утверждение (Claude, не воркер — правка контракта, правило 12).
+
+### Новая функция там же: `ensureProfilePublished(ownerPubkey, login, privKey, publish)`
+
+Тот же идиома, что `chat.js`'s `ensureOwnKeyPackagePublished` (этап 25):
+проверка локального флага ДО публикации, флаг персистится ДО попытки
+publish (не после) — повторных попыток при неудаче сознательно нет,
+как и у прототипа. Флаг — НЕ новая таблица, а необязательное
+(неиндексируемое, схему менять не нужно) поле `profileAutoPublished`
+на существующей строке `keystore` (`db.table("keystore").update(ownerPubkey,
+{ profileAutoPublished: true })`). ОТЛИЧИЕ от прототипа: publish
+оборачивается в try/catch внутри самой функции — сбой сети НЕ должен
+ронять `connect()`/блокировать вход (имя в профиле — косметика, не
+критичный для работы мессенджера примитив, в отличие от MLS
+KeyPackage). Публикует ТОЛЬКО `{ name: login }` (без `about`/`picture` —
+на момент первого вызова их ещё физически не может быть, echo
+`getProfile`'s дефолты пустые).
+
+### `signals/transport.js`'s `connect()` — аддитивная правка
+
+После существующего `await ensureOwnKeyPackagePublished(pubkeyHex, privKey,
+publisher.publish);` — новый вызов: `if (currentUser.value?.login) await
+ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey,
+publisher.publish);`. Гвард на `login` — оборонительный (сценарий,
+где он пуст, не ожидается в норме, но `currentUser` — просто сигнал,
+явная проверка дешевле домысла). Новый импорт `currentUser` из
+`./auth.js` — не создаёт цикла (`auth.js` ничего не импортирует из
+`transport.js`).
+
+### Новая функция `domain/attachments/upload.js`'s `uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, options)`
+
+Параллель `uploadAttachment`, БЕЗ шифрования (публичный профиль — не
+сообщение, шифровать нечего и незачем): валидирует mime/size тем же
+`validateAttachment` (2 МБ клиентский лимит в profile.jsx — заведомо
+меньше 20 МБ лимита картинок, проверка никогда не сработает практически,
+переиспользуется ради mime-allowlist, не ради size-лимита), считает
+sha256 ОТ ИСХОДНЫХ байт (не от шифротекста — шифрования нет), зовёт уже
+существующий `uploadBlob` (сам по себе агностичен к тому, зашифрованы
+байты или нет — просто грузит, что дали). Возвращает СТРОКУ — публичный
+URL (`response.url`, фолбэк `serverUrl + '/' + sha256Hex`, если сервер
+почему-то не вернул `url`) — не полный дескриптор вложения, т.к. avatar
+не идёт через `downloadAttachment`'s sha256-проверку (публичный `<img
+src>`, а не расшифровка сообщения).
+
+### `profile.jsx`'s `handleAvatarChange` — аддитивная правка
+
+После существующего `await updateProfile(id, { avatar: dataUrl });`
+(локальный кэш, НЕ убирается — он же превью/офлайн-фолбэк) — best-effort
+попытка (та же философия, что `handleBioSubmit`: локальное сохранение
+никогда не зависит от публикации): взять активный Blossom-URL через
+`loadUiSettings(id)`, `uploadAvatarBlob`, затем republish kind-0 ЧЕРЕЗ
+`buildProfileEvent(privKeySig.value, { name: login, about: savedBio,
+picture: url })` — ОБЯЗАТЕЛЬНО с текущим `savedBio` (не пустой строкой),
+иначе аплоад аватара молча стёр бы уже опубликованное био. Ошибка сети —
+видимый статус (тот же `publishStatus`, что уже использует
+`handleBioSubmit`), не throw, не блокирует локальное превью аватара.

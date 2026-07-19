@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
+import { uploadAvatarBlob } from "../../domain/attachments/upload.js";
 import { currentUser, privKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";
 import {
@@ -215,6 +216,29 @@ export default function Profile() {
 		setAvatar(dataUrl);
 		await updateProfile(id, { avatar: dataUrl });
 		input.value = "";
+
+		// Best-effort (та же философия, что handleBioSubmit): локальное превью/кэш
+		// НЕ зависит от публикации. Аватар — публичный профиль, не сообщение,
+		// поэтому загружается БЕЗ шифрования (uploadAvatarBlob, этап 37).
+		setPublishStatus("публикация…");
+		try {
+			const settings = await loadUiSettings(id);
+			const serverUrl = settings.activeBlossomUrl;
+			if (!serverUrl) {
+				setPublishStatus("не опубликовано для других: нет активного Blossom-сервера");
+				return;
+			}
+			const fileBytes = new Uint8Array(await file.arrayBuffer());
+			await ensureConnected(id, privKeySig.value);
+			const url = await uploadAvatarBlob(serverUrl, fileBytes, file.type, privKeySig.value);
+			// savedBio (не текущий черновик bio) — republish не должен затирать уже
+			// опубликованное био незасабмиченным черновиком в поле ввода.
+			const event = buildProfileEvent(privKeySig.value, { name: login, about: savedBio, picture: url });
+			const result = await publish(event);
+			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+		} catch (err) {
+			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+		}
 	}
 
 	async function handleBioSubmit(e) {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
-import { uploadAttachment, downloadAttachment } from "../src/domain/attachments/upload.js";
+import { uploadAttachment, downloadAttachment, uploadAvatarBlob } from "../src/domain/attachments/upload.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -111,4 +111,45 @@ test("downloadAttachment: сервер вернул ПОДМЕНЁННЫЕ да�
 	store.set(storedKey, new TextEncoder().encode("подменённые байты той же или другой длины!!"));
 
 	await assert.rejects(() => downloadAttachment(descriptor, { fetchImpl }), /sha256|подмен|целостност/i);
+});
+
+test("uploadAvatarBlob: НЕ шифрует — сервер получает те же байты, что переданы (публичный профиль, не сообщение)", async () => {
+	const store = new Map();
+	let sentBody;
+	const fetchImpl = async (url, opts) => {
+		sentBody = opts.body;
+		return makeUploadFetch(store)(url, opts);
+	};
+	const original = new TextEncoder().encode("картинка-аватар (условно)");
+	await uploadAvatarBlob("https://blossom.test", original, "image/png", ALICE_PRIV, { fetchImpl });
+	assert.deepEqual(new Uint8Array(sentBody), original, "avatar публичный — байты идут как есть, без encryptFile");
+});
+
+test("uploadAvatarBlob: возвращает СТРОКУ — публичный URL из ответа сервера (response.url), не дескриптор", async () => {
+	const store = new Map();
+	const fetchImpl = makeUploadFetch(store);
+	const url = await uploadAvatarBlob("https://blossom.test", new Uint8Array([1, 2, 3]), "image/jpeg", ALICE_PRIV, { fetchImpl });
+	assert.equal(typeof url, "string");
+	assert.ok(url.startsWith("https://blossom.test/"));
+});
+
+test("uploadAvatarBlob: недопустимый MIME — throw ДО сети (переиспользует validateAttachment)", async () => {
+	let called = false;
+	const fetchImpl = async () => {
+		called = true;
+		return fakeResponse();
+	};
+	await assert.rejects(
+		() => uploadAvatarBlob("https://blossom.test", new Uint8Array([1]), "application/x-msdownload", ALICE_PRIV, { fetchImpl }),
+		/тип/,
+	);
+	assert.equal(called, false);
+});
+
+test("uploadAvatarBlob: сервер не вернул response.url — фолбэк на serverUrl + '/' + sha256", async () => {
+	const original = new TextEncoder().encode("аватар без url в ответе");
+	const sha256Hex = bytesToHex(sha256(original));
+	const fetchImpl = async () => fakeResponse({ jsonBody: { sha256: sha256Hex, size: original.length } });
+	const url = await uploadAvatarBlob("https://blossom.test/", original, "image/png", ALICE_PRIV, { fetchImpl });
+	assert.equal(url, `https://blossom.test/${sha256Hex}`);
 });

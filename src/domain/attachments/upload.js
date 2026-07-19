@@ -35,6 +35,17 @@ export async function uploadAttachment(serverUrl, fileBytes, { mime, name }, pri
   };
 }
 
+// Этап 37 — параллель uploadAttachment, БЕЗ шифрования (публичный профиль, не
+// сообщение — шифровать нечего и незачем). Возвращает СТРОКУ (публичный URL),
+// не дескриптор — avatar идёт через обычный <img src>, не через
+// downloadAttachment's sha256-проверку.
+export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, options = {}) {
+  validateAttachment({ mime, size: fileBytes.length });
+  const sha256Hex = bytesToHex(sha256(fileBytes));
+  const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);
+}
+
 export async function downloadAttachment({ sha256: expectedSha256, blossomUrl, encryptionKey }, options = {}) {
   const blob = await downloadBlob(blossomUrl, expectedSha256, options);
   const actualSha256 = bytesToHex(sha256(blob));
