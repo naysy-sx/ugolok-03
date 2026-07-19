@@ -19,6 +19,10 @@ const EXPECTED_TABLES = [
 	"posts",
 	"comments",
 	"channelMessages",
+	"channelReaders",
+	"channelReports",
+	"channelIgnores",
+	"bannedMembers",
 	"attachments",
 	"keystore",
 	"clock",
@@ -189,6 +193,38 @@ test("channelMessages (этап 32, owner-scoped с рождения): сост�
 	assert.ok(
 		channelMessages.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+channelId+createdAt"),
 		"channelMessages: индекс [ownerPubkey+channelId+createdAt] для windowed-загрузки чата канала",
+	);
+	db.close();
+});
+
+test("channelReaders/channelReports/channelIgnores/bannedMembers (этап 33): owner-scoped составные ключи", async () => {
+	await db.open();
+	const channelReaders = db.table("channelReaders");
+	assert.ok(
+		Array.isArray(channelReaders.schema.primKey.keyPath) && channelReaders.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+readerPubkey",
+		"channelReaders: составной первичный ключ [ownerPubkey+channelId+readerPubkey]",
+	);
+
+	const channelReports = db.table("channelReports");
+	assert.ok(
+		Array.isArray(channelReports.schema.primKey.keyPath) && channelReports.schema.primKey.keyPath.join("+") === "ownerPubkey+id",
+		"channelReports: составной первичный ключ [ownerPubkey+id]",
+	);
+	assert.ok(
+		channelReports.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+channelId"),
+		"channelReports: индекс [ownerPubkey+channelId]",
+	);
+
+	const channelIgnores = db.table("channelIgnores");
+	assert.ok(
+		Array.isArray(channelIgnores.schema.primKey.keyPath) && channelIgnores.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+ignoredPubkey",
+		"channelIgnores: составной первичный ключ [ownerPubkey+channelId+ignoredPubkey]",
+	);
+
+	const bannedMembers = db.table("bannedMembers");
+	assert.ok(
+		Array.isArray(bannedMembers.schema.primKey.keyPath) && bannedMembers.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId+pubkey",
+		"bannedMembers: составной первичный ключ [ownerPubkey+channelId+pubkey]",
 	);
 	db.close();
 });

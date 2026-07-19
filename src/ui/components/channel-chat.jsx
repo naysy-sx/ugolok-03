@@ -8,11 +8,12 @@ import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-
 import AttachmentPreview from "./attachment-preview.jsx";
 import AttachmentView from "./attachment-view.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
+import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
-function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, onSent }) {
+function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, limiter, onSent }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -22,6 +23,10 @@ function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, onSen
 		e.preventDefault();
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
+		if (!limiter.tryAction("chat")) {
+			setError("Слишком быстро — подождите немного");
+			return;
+		}
 		setBusy(true);
 		setError("");
 		try {
@@ -73,7 +78,7 @@ function ChatComposer({ ownerPubkey, privKey, channelId, allowAttachments, onSen
 
 // Общий чат канала (этап 32) — плоская лента, свежие внизу (тот же принцип отображения,
 // что личные чаты, chat.jsx), не дерево (в отличие от комментариев).
-export default function ChannelChat({ ownerPubkey, privKey, channelId, canWrite, allowAttachments }) {
+export default function ChannelChat({ ownerPubkey, privKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
@@ -130,6 +135,18 @@ export default function ChannelChat({ ownerPubkey, privKey, channelId, canWrite,
 							<div class="cluster" style={{ alignItems: "center" }}>
 								<ContactIdentity pubkey={m.authorPubkey} />
 								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
+								{m.authorPubkey !== ownerPubkey && (
+									<ModerationActions
+										viewerPubkey={ownerPubkey}
+										viewerPrivKey={privKey}
+										channelOwnerPubkey={channelOwnerPubkey}
+										channelId={channelId}
+										targetPubkey={m.authorPubkey}
+										contentType="chat_message"
+										contentId={m.id}
+										contentText={m.text}
+									/>
+								)}
 							</div>
 							<p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
 							{m.attachments?.[0] && <AttachmentView attachment={m.attachments[0]} />}
@@ -139,7 +156,7 @@ export default function ChannelChat({ ownerPubkey, privKey, channelId, canWrite,
 			)}
 			<div ref={bottomRef} />
 			{canWrite ? (
-				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} channelId={channelId} allowAttachments={allowAttachments} onSent={refresh} />
+				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} channelId={channelId} allowAttachments={allowAttachments} limiter={limiter} onSent={refresh} />
 			) : (
 				<p style={{ color: "var(--muted)" }}>Только чтение — подпишитесь, чтобы писать в чат.</p>
 			)}

@@ -15,6 +15,7 @@ beforeEach(async () => {
 	await db.table("posts").clear();
 	await db.table("comments").clear();
 	await db.table("channelMessages").clear();
+	await db.table("channelIgnores").clear();
 });
 
 after(() => {
@@ -164,4 +165,35 @@ test("loadChannelChatWindow: не путает разные каналы", async
 	await seedChannelMessages(2, { channelId: "channel-B" });
 	const { messages } = await loadChannelChatWindow(OWNER, "channel-B", { limit: 15 });
 	assert.equal(messages.length, 2);
+});
+
+test("loadChannelChatWindow (этап 33): исключает сообщения с deleted:true (бан)", async () => {
+	await seedChannelMessages(3);
+	await db.table("channelMessages").update([OWNER, `${CHANNEL_ID}-msg-2`], { deleted: true });
+	const { messages } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	assert.equal(messages.length, 2);
+	assert.ok(!messages.some((m) => m.id === `${CHANNEL_ID}-msg-2`));
+});
+
+test("loadChannelChatWindow (этап 33): исключает сообщения авторов, которых Я проигнорировал (не влияет на других)", async () => {
+	await db.table("channelMessages").bulkAdd([
+		{ ownerPubkey: OWNER, id: "m1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1 },
+		{ ownerPubkey: OWNER, id: "m2", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2 },
+		{ ownerPubkey: OWNER, id: "m3", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "c", attachments: [], keyVersion: 1, createdAt: 3 },
+	]);
+	await db.table("channelIgnores").add({ ownerPubkey: OWNER, channelId: CHANNEL_ID, ignoredPubkey: "author-b" });
+	const { messages } = await loadChannelChatWindow(OWNER, CHANNEL_ID, { limit: 15 });
+	assert.equal(messages.length, 2);
+	assert.ok(!messages.some((m) => m.authorPubkey === "author-b"));
+});
+
+test("loadCommentsWindow (этап 33): исключает комментарии авторов, проигнорированных ЭТИМ смотрящим", async () => {
+	await db.table("comments").bulkAdd([
+		{ ownerPubkey: OWNER, id: "c1", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-a", text: "a", attachments: [], keyVersion: 1, createdAt: 1, deleted: false },
+		{ ownerPubkey: OWNER, id: "c2", postId: "post-1", parentId: "post-1", channelId: CHANNEL_ID, authorPubkey: "author-b", text: "b", attachments: [], keyVersion: 1, createdAt: 2, deleted: false },
+	]);
+	await db.table("channelIgnores").add({ ownerPubkey: OWNER, channelId: CHANNEL_ID, ignoredPubkey: "author-b" });
+	const { comments } = await loadCommentsWindow(OWNER, "post-1", { limit: 50 });
+	assert.equal(comments.length, 1);
+	assert.equal(comments[0].authorPubkey, "author-a");
 });

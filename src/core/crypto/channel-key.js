@@ -35,8 +35,16 @@ export function generateChannelTopic() {
 // kind 30053 (F-CH-04) — ТОЛЬКО ключевой материал (CONTRACTS.md, этап 30: найденный
 // пробел — метаданные канала идут ОТДЕЛЬНО через kind 30060, channelKey-зашифрованный,
 // не через этот грант, иначе апдейт метаданных требовал бы повторной раздачи ключей).
-export function encryptChannelKeyGrant(channelId, channelTopicHex, channelKeyHex, ownerPrivKey, readerPubkey) {
-	const payload = JSON.stringify({ channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex });
+// НАЙДЕНО ЖИВЫМ АДВЕРСАРНЫМ ТЕСТОМ (этап 33, banMember): версия НЕ передавалась в payload
+// вовсе — receiveChannelKeyGrant хардкодил version=1 для ЛЮБОГО гранта (комментарий этапа
+// 30 буквально предполагал это временным: "если появится revoke, kind 30053 обязан нести
+// версию явно"). Ротация ключа при бане прислала grant с v_new под тем же хардкодом "1" —
+// молча ЗАТИРАЛА уже сохранённый v_old тем же номером версии, ломая исторический доступ
+// и вызывая AEAD-ошибку у всех, кто ещё пытался читать старый эпоху. version — обязательный
+// параметр теперь (не опциональный: подписчик БЕЗ версии — забытая правка вызывающего кода,
+// должно падать явно, а не тихо считать v1).
+export function encryptChannelKeyGrant(channelId, channelTopicHex, channelKeyHex, version, ownerPrivKey, readerPubkey) {
+	const payload = JSON.stringify({ channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex, version });
 	return nip44Encrypt(payload, ownerPrivKey, readerPubkey);
 }
 

@@ -39,7 +39,7 @@ export async function sendSubscribeRequest(requesterPrivKey, ownerPubkey, channe
 // публикация того же гранта безвредна"), не заметив, что РАЗНЫЕ читатели с ПУСТЫМ
 // d-tag коллизируют друг с другом на relay, а не только сами с собой.
 export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, keyVersion, publish) {
-	const content = encryptChannelKeyGrant(channel.channelId, channel.channelTopic, channel.channelKey, ownerPrivKey, readerPubkey);
+	const content = encryptChannelKeyGrant(channel.channelId, channel.channelTopic, channel.channelKey, keyVersion, ownerPrivKey, readerPubkey);
 	const masterSecret = deriveMasterSecret(ownerPrivKey);
 	const dTag = opaqueDTag(masterSecret, 30053, `${channel.channelId}:${readerPubkey}:${keyVersion}`);
 	const event = sign(

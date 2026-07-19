@@ -78,6 +78,10 @@ export async function createChannel(ownerPubkey, ownerPrivKey, { name, descripti
 	const channel = { channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex };
 	for (const readerPubkey of readerPubkeys) {
 		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, version, publish);
+		// Этап 33 — аддитивная правка контракта этапа 30 (DESIGN.md, "Этап 33", найденный
+		// пробел): владелец нигде не хранил список реальных получателей VIEW, без чего
+		// banMember не смог бы переиздать ротированный ключ ОСТАВШИМСЯ читателям.
+		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey });
 	}
 
 	return { channelId };
@@ -103,12 +107,17 @@ export async function listAvailableChannels(ownerPubkey) {
 // обязан перехватывать per-event, тот же принцип, что везде в диспетчере.
 export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channelOwnerPubkey, event) {
 	const grant = decryptChannelKeyGrant(event.content, readerPrivKey, channelOwnerPubkey);
-	// Версия гранта: этап 30 не реализует revoke/ротацию, грант всегда v1 (см. DESIGN.md,
-	// "явное сужение скоупа") — если/когда появится revoke, кind 30053 обязан будет нести
-	// версию явно в своём payload, сейчас это не нужно.
-	const version = 1;
+	// НАЙДЕНО ЖИВЫМ АДВЕРСАРНЫМ ТЕСТОМ (этап 33) — версия теперь идёт В ПЕЙЛОАДЕ гранта
+	// (channel-key.js, encryptChannelKeyGrant), а не хардкодится: захардкоженная "1" молча
+	// затирала уже сохранённый v_old тем же номером версии при ротации ключа (banMember),
+	// ломая исторический доступ читателя. currentVersion — максимум из уже известного и
+	// пришедшего (защита от переупорядоченной доставки: старый грант, пришедший ПОСЛЕ
+	// нового, не должен откатывать текущую версию назад).
+	const version = grant.version;
 	await db.table("channelKeys").put({ ownerPubkey, channelId: grant.channelId, keyVersion: version, channelKey: grant.channelKey });
-	await db.table("channelKeyMeta").put({ ownerPubkey, channelId: grant.channelId, currentVersion: version });
+	const existingMeta = await db.table("channelKeyMeta").get([ownerPubkey, grant.channelId]);
+	const currentVersion = Math.max(existingMeta?.currentVersion ?? 0, version);
+	await db.table("channelKeyMeta").put({ ownerPubkey, channelId: grant.channelId, currentVersion });
 
 	const existing = await db.table("channels").get([ownerPubkey, grant.channelId]);
 	if (!existing) {

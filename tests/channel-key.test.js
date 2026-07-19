@@ -33,14 +33,20 @@ test("generateChannelTopic: 16 случайных байт, разные при 
 	assert.notDeepEqual(a, b);
 });
 
-test("encryptChannelKeyGrant/decryptChannelKeyGrant: round-trip даёт исходные channelId/channelTopic/channelKey", () => {
-	const content = encryptChannelKeyGrant("channel-uuid-1", "aa".repeat(16), "bb".repeat(32), OWNER_PRIV, READER_PUB);
+test("encryptChannelKeyGrant/decryptChannelKeyGrant: round-trip даёт исходные channelId/channelTopic/channelKey/version", () => {
+	const content = encryptChannelKeyGrant("channel-uuid-1", "aa".repeat(16), "bb".repeat(32), 1, OWNER_PRIV, READER_PUB);
 	const decrypted = decryptChannelKeyGrant(content, READER_PRIV, OWNER_PUB);
-	assert.deepEqual(decrypted, { channelId: "channel-uuid-1", channelTopic: "aa".repeat(16), channelKey: "bb".repeat(32) });
+	assert.deepEqual(decrypted, { channelId: "channel-uuid-1", channelTopic: "aa".repeat(16), channelKey: "bb".repeat(32), version: 1 });
+});
+
+test("encryptChannelKeyGrant: версия — обязательная часть payload (найдено адверсарным тестом этапа 33 — без неё receiveChannelKeyGrant не может отличить эпохи при ротации)", () => {
+	const content = encryptChannelKeyGrant("channel-uuid-1", "aa".repeat(16), "bb".repeat(32), 2, OWNER_PRIV, READER_PUB);
+	const decrypted = decryptChannelKeyGrant(content, READER_PRIV, OWNER_PUB);
+	assert.equal(decrypted.version, 2);
 });
 
 test("decryptChannelKeyGrant: чужой приватный ключ (не reader) -> throw, не тихо возвращает мусор", () => {
-	const content = encryptChannelKeyGrant("channel-uuid-1", "aa".repeat(16), "bb".repeat(32), OWNER_PRIV, READER_PUB);
+	const content = encryptChannelKeyGrant("channel-uuid-1", "aa".repeat(16), "bb".repeat(32), 1, OWNER_PRIV, READER_PUB);
 	assert.throws(() => decryptChannelKeyGrant(content, OTHER_PRIV, OWNER_PUB));
 });
 

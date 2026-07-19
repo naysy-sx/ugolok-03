@@ -32,6 +32,7 @@ import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
+import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -173,6 +174,20 @@ async function connect(pubkeyHex, privKey) {
 							await handleIncomingSubscribeRequest(pubkeyHex, privKey, channelIdTag[1], rumor.pubkey, publisher.publish);
 						}
 						bumpMessagingActivity(); // channels.jsx узнаёт о новом подписчике
+					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
+						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
+						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).
+						await receiveReport(pubkeyHex, {
+							reporterPubkey: rumor.pubkey,
+							channelId: rumor.tags.find((t) => t[0] === "channel_id")?.[1],
+							targetPubkey: rumor.tags.find((t) => t[0] === "target")?.[1],
+							contentType: rumor.tags.find((t) => t[0] === "content_type")?.[1],
+							contentId: rumor.tags.find((t) => t[0] === "content_id")?.[1],
+							contentText: rumor.content,
+							reason: rumor.tags.find((t) => t[0] === "reason")?.[1],
+							createdAt: rumor.created_at,
+						});
+						bumpMessagingActivity(); // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
 				} catch {
@@ -417,6 +432,10 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
 							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
 							await receiveChannelMessage(ownerPubkey, event);
+						} else if (event.kind === CHANNEL_BAN_KIND) {
+							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
+							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация.
+							await receiveBanAnnouncement(ownerPubkey, event);
 						}
 						bumpMessagingActivity(); // channels.jsx/channel.jsx перечитывают списки
 					} catch {
@@ -427,7 +446,7 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
-	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063] }]);
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_BAN_KIND] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

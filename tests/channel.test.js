@@ -37,6 +37,7 @@ beforeEach(async () => {
 	await db.table("commentAllowlists").clear();
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
+	await db.table("channelReaders").clear();
 });
 
 after(() => {
@@ -113,6 +114,14 @@ test("createChannel: группа с Бобом -> Боб получает kind 
 	assert.ok(metaEvent, "должны быть опубликованы метаданные канала");
 	const metaPlain = decryptChannelContent(metaEvent.content, { 1: grant.channelKey });
 	assert.deepEqual(JSON.parse(metaPlain), { name: "Котики", description: "фото котиков", rules: "без спама", avatar: null, allowChatAttachments: true });
+});
+
+test("createChannel (этап 33, аддитивная правка): персистит channelReaders для каждого реального получателя VIEW", async () => {
+	await seedGroupWithBob();
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.equal(readers.length, 1);
+	assert.equal(readers[0].readerPubkey, BOB_PUB);
 });
 
 test("Боб получает VIEW и метаданные -> канал появляется в 'Доступные', не в 'Подписки'", async () => {

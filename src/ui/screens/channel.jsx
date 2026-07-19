@@ -7,17 +7,20 @@ import { openChannel } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countTopLevelCommentsByPost } from "../../domain/content/comments.js";
+import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
 import PostCard from "../components/post-card.jsx";
 import ChannelChat from "../components/channel-chat.jsx";
+import ModerationActions from "../components/moderation-actions.jsx";
+import ModerationPanel from "../components/moderation-panel.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
 
-function PostComposer({ ownerPubkey, privKey, channelId, onPublished, onCancel }) {
+function PostComposer({ ownerPubkey, privKey, channelId, limiter, onPublished, onCancel }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -27,6 +30,10 @@ function PostComposer({ ownerPubkey, privKey, channelId, onPublished, onCancel }
 		e.preventDefault();
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
+		if (!limiter.tryAction("post")) {
+			setError("Слишком быстро — подождите немного");
+			return;
+		}
 		setBusy(true);
 		setError("");
 		try {
@@ -75,7 +82,7 @@ function PostComposer({ ownerPubkey, privKey, channelId, onPublished, onCancel }
 	);
 }
 
-function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, onSubmitted, onCancel, autoFocus }) {
+function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, limiter, onSubmitted, onCancel, autoFocus }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -85,6 +92,10 @@ function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, on
 		e.preventDefault();
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
+		if (!limiter.tryAction("comment")) {
+			setError("Слишком быстро — подождите немного");
+			return;
+		}
 		setBusy(true);
 		setError("");
 		try {
@@ -140,8 +151,9 @@ function CommentComposer({ ownerPubkey, privKey, channelId, postId, parentId, on
 	);
 }
 
-function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, postId, onChanged, depth }) {
+function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth }) {
 	const [replying, setReplying] = useState(false);
+	const isOwnComment = comment.authorPubkey === ownerPubkey;
 	return (
 		<li style={{ marginInlineStart: depth > 0 ? "var(--space-m)" : 0, paddingBlockStart: "var(--space-2xs)" }}>
 			<p style={{ whiteSpace: "pre-wrap" }}>{comment.text}</p>
@@ -153,6 +165,18 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 						Ответить
 					</button>
 				)}
+				{!isOwnComment && (
+					<ModerationActions
+						viewerPubkey={ownerPubkey}
+						viewerPrivKey={privKey}
+						channelOwnerPubkey={channelOwnerPubkey}
+						channelId={channelId}
+						targetPubkey={comment.authorPubkey}
+						contentType="comment"
+						contentId={comment.id}
+						contentText={comment.text}
+					/>
+				)}
 			</div>
 			{replying && (
 				<CommentComposer
@@ -161,6 +185,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 					channelId={channelId}
 					postId={postId}
 					parentId={comment.id}
+					limiter={limiter}
 					autoFocus
 					onSubmitted={() => {
 						setReplying(false);
@@ -179,7 +204,9 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
 							channelId={channelId}
+							channelOwnerPubkey={channelOwnerPubkey}
 							postId={postId}
+							limiter={limiter}
 							onChanged={onChanged}
 							depth={depth + 1}
 						/>
@@ -190,7 +217,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, channelId, pos
 	);
 }
 
-function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, channelId, commentCount, onCountChange, onPostChanged }) {
+function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged }) {
 	const [expanded, setExpanded] = useState(false);
 	const [tree, setTree] = useState([]);
 	const [error, setError] = useState("");
@@ -250,6 +277,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 							channelId={channelId}
 							postId={post.id}
 							parentId={post.id}
+							limiter={limiter}
 							onSubmitted={refreshComments}
 						/>
 					) : (
@@ -267,7 +295,9 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 									ownerPubkey={ownerPubkey}
 									privKey={privKey}
 									channelId={channelId}
+									channelOwnerPubkey={channelOwnerPubkey}
 									postId={post.id}
+									limiter={limiter}
 									onChanged={refreshComments}
 									depth={0}
 								/>
@@ -282,15 +312,20 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, cha
 
 export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 	const [channelRow, setChannelRow] = useState(null);
+	const [loading, setLoading] = useState(true);
 	const [posts, setPosts] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [showComposer, setShowComposer] = useState(false);
 	const [error, setError] = useState("");
 	const [tab, setTab] = useState("posts");
 	const [commentCounts, setCommentCounts] = useState({});
+	const [limiter] = useState(() => createRateLimiter());
 
 	async function refresh() {
-		setChannelRow(await db.table("channels").get([ownerPubkey, channelId]));
+		const row = await db.table("channels").get([ownerPubkey, channelId]);
+		setChannelRow(row ?? null);
+		setLoading(false);
+		if (!row) return; // забанен владельцем (receiveBanAnnouncement) — канал исчез локально
 		const { posts: freshPosts, hasMore: more } = await loadPostsWindow(ownerPubkey, channelId, { limit: 10 });
 		setPosts(freshPosts);
 		setHasMore(more);
@@ -315,13 +350,29 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 		setHasMore(more);
 	}
 
-	if (!channelRow) {
+	if (loading) {
 		return (
 			<main class="flow" style={{ padding: "var(--space-m)" }}>
 				<button type="button" onClick={() => openChannel(null)}>
 					← Назад
 				</button>
 				<p style={{ color: "var(--muted)" }}>Загрузка…</p>
+			</main>
+		);
+	}
+
+	// Этап 33 — различать "ещё грузится" от "пропал" (тот же класс находки, что
+	// onboarding/unlock, этап 32-довесок): канал исчезает локально, если владелец забанил
+	// этого пользователя (receiveBanAnnouncement удаляет строку channels целиком).
+	if (!channelRow) {
+		return (
+			<main class="flow" style={{ padding: "var(--space-m)" }}>
+				<button type="button" onClick={() => openChannel(null)}>
+					← Назад
+				</button>
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					Этот канал больше недоступен — возможно, владелец забанил вас или удалил канал.
+				</p>
 			</main>
 		);
 	}
@@ -357,6 +408,11 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 				<button type="button" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
 					Чат
 				</button>
+				{isOwner && (
+					<button type="button" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
+						Модерация
+					</button>
+				)}
 			</div>
 
 			{tab === "posts" && (
@@ -371,6 +427,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
 							channelId={channelId}
+							limiter={limiter}
 							onPublished={() => {
 								setShowComposer(false);
 								refresh();
@@ -397,6 +454,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 									ownerPubkey={ownerPubkey}
 									privKey={privKey}
 									channelId={channelId}
+									channelOwnerPubkey={channelRow.creatorPubkey}
+									limiter={limiter}
 									commentCount={commentCounts[post.id] ?? 0}
 									onCountChange={handleCommentCountChange}
 									onPostChanged={refresh}
@@ -413,9 +472,17 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 						ownerPubkey={ownerPubkey}
 						privKey={privKey}
 						channelId={channelId}
+						channelOwnerPubkey={channelRow.creatorPubkey}
 						canWrite={canComment}
 						allowAttachments={channelRow.allowChatAttachments}
+						limiter={limiter}
 					/>
+				</section>
+			)}
+
+			{tab === "moderation" && isOwner && (
+				<section role="tabpanel">
+					<ModerationPanel ownerPubkey={ownerPubkey} privKey={privKey} channelId={channelId} />
 				</section>
 			)}
 		</main>

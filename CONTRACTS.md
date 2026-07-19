@@ -4652,3 +4652,186 @@ Regression: `npm test` 552/552. `npm run build` 233.63 КБ gzip.
 
 Regression: `npm test` 553/553. `npm run build` без существенного
 роста (JSX-правки, один новый маленький доменный запрос).
+
+## Этап 33 — Модерация: жалобы + бан + игнор + rate-limiting
+
+DESIGN.md, "Этап 33" — прочитать перед этим разделом (найденный
+барьер NIP-09, крипто-обоснование почему ротации ключа достаточно
+для блокировки нового контента забаненного, формализация игнора и
+почему разбан невозможен в этой модели).
+
+### Правка контракта этапа 30 (аддитивная) — `channelReaders`
+
+`createChannel` (`channel.js`) ДОПОЛНИТЕЛЬНО персистит для каждого
+`readerPubkey` из group-snapshot: `db.table("channelReaders").put({
+ownerPubkey, channelId, readerPubkey})` — рядом с уже существующим
+`sendViewGrant`. Ничего в существующей сигнатуре/поведении не
+меняется, только новая побочная запись. Существующие тесты
+(`channel.test.js`) не ломаются (не проверяли отсутствие этой
+таблицы).
+
+### `src/domain/content/rate-limiter.js`
+
+```js
+export function createRateLimiter(windowMs = 5000);
+// -> { tryAction(actionType, now = Date.now()): boolean }
+// true и записывает now как lastActionAt[actionType], ЕСЛИ now - lastActionAt[actionType] >= windowMs
+// (или actionType ещё не встречался). Иначе false, БЕЗ обновления lastActionAt (окно не сдвигается
+// повторными отклонёнными попытками — иначе спам-клики продлевали бы блокировку бесконечно).
+```
+
+### `src/domain/content/moderation.js`
+
+```js
+export const CHANNEL_REPORT_KIND = 3003; // gift-wrap rumor, прецедент CHANNEL_SUBSCRIBE_REQUEST_KIND=3002
+export const CHANNEL_BAN_KIND = 30064; // parameterized-replaceable, следующий свободный после чата (30063)
+
+export async function reportContent(reporterPubkey, reporterPrivKey, channelOwnerPubkey, { channelId, targetPubkey, contentType, contentId, contentText, reason }, publish);
+// reason: "report" | "ignore". rumor = {kind: CHANNEL_REPORT_KIND, content: contentText, tags:
+// [["channel_id", channelId], ["target", targetPubkey], ["content_type", contentType],
+// ["content_id", contentId], ["reason", reason]], created_at}. nip59Wrap(rumor, reporterPrivKey,
+// channelOwnerPubkey) -> publish. Owner различает "report"/"ignore" по тегу reason на приёме.
+
+export async function receiveReport(ownerPubkey, { reporterPubkey, channelId, targetPubkey, contentType, contentId, contentText, reason, createdAt });
+// ПРАВКА КОНВЕНЦИИ (согласовано с уже существующим диспетчером giftWrapSubscriber,
+// transport.js): unwrap делает ТОЛЬКО transport.js (как для CONTACT_REQUEST_KIND/
+// CHANNEL_SUBSCRIBE_REQUEST_KIND — домен получает уже РАСПАКОВАННЫЕ примитивы, не сырой
+// gift-wrap и не приватный ключ; reporterPubkey = rumor.pubkey, аутентичный отправитель
+// из unwrap, НЕ из тега). upsert channelReports: {ownerPubkey, id: crypto.randomUUID(),
+// channelId, reporterPubkey, targetPubkey, contentType, contentId, contentText, reason,
+// viewed: false, createdAt}. return true.
+
+export async function ignoreMember(viewerPubkey, viewerPrivKey, channelOwnerPubkey, { channelId, targetPubkey, contentType, contentId, contentText }, publish);
+// db.table("channelIgnores").put({ownerPubkey: viewerPubkey, channelId, ignoredPubkey: targetPubkey}) —
+// ЛОКАЛЬНО, идемпотентно (put, не add). Затем reportContent(..., reason: "ignore", ...) — авто-репорт
+// с контекстом (ТЗ). Не проверяет, был ли уже проигнорирован (повторный вызов — no-op по эффекту,
+// лишний report владельцу — не страшно, тот же принцип, что sendViewGrant "публикация того же —
+// безвредна", здесь дополнительно: сам channelIgnores.put идемпотентен по PK).
+
+export async function getIgnoredSet(viewerPubkey, channelId);
+// -> Set<pubkey>. Читает channelIgnores[viewerPubkey, channelId, *]. Используется lazy-channel.js
+// для фильтрации ленты чата/комментариев ТОЛЬКО у смотрящего.
+
+export async function banMember(ownerPubkey, ownerPrivKey, channelId, targetPubkey, publish);
+// DESIGN.md формализация 1, шаги 1-5 буквально:
+// 1. meta = channelKeyMeta[ownerPubkey,channelId]; v_old = meta.currentVersion; keyOld = channelKeys[...,v_old].
+// 2. v_new = v_old + 1; channelKeyNew = generateChannelKey(); persist channelKeys[...,v_new],
+//    channelKeyMeta.currentVersion = v_new.
+// 3. readers = channelReaders[ownerPubkey,channelId,*] minus targetPubkey; для каждого —
+//    sendViewGrant(ownerPubkey, ownerPrivKey, {channelId, channelTopic: channelRow.channelTopic,
+//    channelKey: channelKeyNew}, readerPubkey, v_new, publish) (реиспользует правку этапа 32-довесок).
+// 4. Если commentAllowlists[...,v_old] существует — buildAllowlistEvent с v_new, allowedAuthors
+//    минус targetPubkey -> sign(ownerPrivKey) -> publish; persist commentAllowlists[...,v_new] локально.
+// 5. banEvent = sign({kind: CHANNEL_BAN_KIND, tags: [["d", `${channelId}:ban:${targetPubkey}`],
+//    ["h", channelRow.channelTopic]], content: encryptChannelContent(JSON.stringify({targetPubkey}),
+//    keyOld, v_old), created_at}, ownerPrivKey) -> requirePublishOk.
+// 6. Локально: bannedMembers.put({ownerPubkey, channelId, pubkey: targetPubkey, bannedAt}); удалить
+//    targetPubkey из channelReaders[ownerPubkey,channelId,*].
+// Не бросает, если targetPubkey не в readers/allowlist (VIEW-only без COMMENT — валидный бан-кейс).
+
+export async function receiveBanAnnouncement(ownerPubkey, event);
+// DESIGN.md, раздел "Приём kind 30064", шаги 1-5 буквально. Собирает ВСЕ channelKeys[ownerPubkey,
+// channelId,*] в map version->key (не только current — единственное место в этапе, где это нужно).
+// event.pubkey !== channelRow.creatorPubkey -> discard (return false). decrypt null -> discard.
+// targetPubkey === ownerPubkey -> deleteChannelLocally(ownerPubkey, channelRow.id) (новая приватная
+// функция — стирает channels-строку и ВСЕ связанные таблицы этого channelId у себя). Иначе —
+// bulk-update comments/channelMessages (deleted:true) где authorPubkey===targetPubkey И
+// channelId===channelRow.id; bannedMembers.put(...) (у ВСЕХ получателей, не только владельца).
+// return true.
+
+export async function listReports(ownerPubkey, channelId); // -> [{...report}] сортировка по createdAt desc
+export async function markReportViewed(ownerPubkey, reportId);
+export async function markAllReportsViewed(ownerPubkey, channelId);
+export async function getModerationStats(ownerPubkey, channelId);
+// -> {total, unviewed, topIgnored: [{pubkey, count}]} — topIgnored: группировка reports с
+// reason==="ignore" по targetPubkey, count = число РАЗНЫХ reporterPubkey (Set), сортировка desc,
+// top-5.
+export async function listBannedMembers(ownerPubkey, channelId); // -> [pubkey]
+```
+
+### `src/core/sync/lazy-channel.js` — правка (фильтрация игнора)
+
+`loadCommentsWindow`/`loadChannelChatWindow` дополнительно исключают
+строки с `deleted===true` (`channelMessages` теперь тоже может иметь
+этот флаг — правка бана) И строки, чей `authorPubkey` ∈
+`getIgnoredSet(ownerPubkey, channelId)` (ownerPubkey здесь — ВСЕГДА
+"я, локальный смотрящий", тот же параметр, что везде в этой схеме).
+
+### Схема БД — `db.version(8)`
+
+```js
+channelReaders: "[ownerPubkey+channelId+readerPubkey], [ownerPubkey+channelId]",
+channelReports: "[ownerPubkey+id], [ownerPubkey+channelId], viewed",
+channelIgnores: "[ownerPubkey+channelId+ignoredPubkey], [ownerPubkey+channelId]",
+bannedMembers: "[ownerPubkey+channelId+pubkey], [ownerPubkey+channelId]"
+```
+
+### Wiring — `transport.js`
+
+- `refreshChannelContentSubscription`: kinds += `CHANNEL_BAN_KIND`
+  (30064), диспетчер получает ветку `receiveBanAnnouncement`.
+- Диспетчер gift-wrap (`giftWrapSubscriber`, уже существующий для
+  contact-request/subscribe-request) получает ветку для
+  `CHANNEL_REPORT_KIND` (3003) → `receiveReport`.
+
+### UI
+
+- Кнопки "Пожаловаться"/"Игнорировать" — у каждого комментария
+  (`CommentNode`) и сообщения чата (`ChannelChat`), видны всем КРОМЕ
+  автора (нельзя пожаловаться на себя). "Пожаловаться" — модалка/форма
+  с опциональным текстом причины (используется как `contentText`
+  репорта — ЕСЛИ пусто, берётся текст самого сообщения); "Игнорировать"
+  — сразу, без формы (авто-контекст = текст сообщения), с
+  `window.confirm` (необратимо для не-владельца — see DESIGN.md).
+- Владелец: вкладка "Модерация" (третья, рядом с "Посты"/"Чат") —
+  список репортов (реиспользует `ContactIdentity` для reporter/target),
+  бейджи report/ignore, "Пометить просмотренным"/"Пометить всё
+  просмотренным", статистика (`getModerationStats`), кнопка "Забанить"
+  прямо из строки репорта (`targetPubkey` уже известен) с
+  `window.confirm`.
+- `ChannelDetail`: если после `refresh()` канал не найден в
+  `channels` (не "ещё грузится", а "пропал") — отдельный экран "Вы
+  были удалены из этого канала владельцем" вместо вечного "Загрузка…"
+  (тот же класс находки, что onboarding/unlock, этап 32-довесок —
+  различать "loading" и "пропало" явно).
+- Rate limiter: один `createRateLimiter()` на `ChannelDetail`
+  (`useState(() => createRateLimiter())`), передаётся в
+  `PostComposer`/`CommentComposer`/`ChatComposer`; `tryAction(...)
+  === false` -> локальный статус-параграф "Слишком быстро — подождите
+  немного" (тот же паттерн, что `bioStatus` в profile.jsx), сабмит не
+  происходит.
+
+### Явное сужение скоупа
+
+Массовая рассылка предупреждений (без бана) — backlog. Разбан и снятие
+игнора владельцем — backlog (см. DESIGN.md, невозможно в модели без
+отдельного сетевого механизма). Владелец в списке читателей/
+allowlist не проверяется отдельно (не может забанить сам себя
+осмысленно, но и не запрещено явно — безвредно).
+
+### Найдено АДВЕРСАРНЫМ ТЕСТОМ (не живым прогоном) — грант VIEW не нёс версию
+
+При написании адверсарного теста для `banMember` ("после бана Боб не
+может писать новые комментарии") обнаружено: `encryptChannelKeyGrant`
+(этап 30) никогда не включала номер версии в payload гранта (только
+`{channelId, channelTopic, channelKey}`), а `receiveChannelKeyGrant`
+хардкодила `version = 1` для ЛЮБОГО полученного гранта — комментарий
+кода буквально предвидел это как временное упрощение ("если появится
+revoke, kind 30053 обязан нести версию явно"). Ротация ключа при бане
+(`banMember`) прислала переизданный грант с v_new — получатель молча
+ЗАТИРАЛ им же сохранённый v_old ПОД ТЕМ ЖЕ номером версии "1",
+разрушая исторический доступ и вызывая `Error: invalid tag` (AEAD)
+при попытке расшифровать что угодно старым эпохом.
+
+**Правка (контракт этапа 30, немедленная полная регрессия):**
+`encryptChannelKeyGrant(channelId, channelTopicHex, channelKeyHex,
+version, ownerPrivKey, readerPubkey)` — версия теперь обязательный
+параметр, часть payload. `receiveChannelKeyGrant` читает
+`grant.version` вместо хардкода; `channelKeyMeta.currentVersion =
+Math.max(уже известное, пришедшее)` — защита от переупорядоченной
+доставки (старый грант, пришедший после нового, не откатывает
+текущую версию назад). `sendViewGrant` (этап 32-довесок уже добавил
+параметр `keyVersion` для d-тега) теперь передаёт его же и в
+содержимое гранта — d-тег и payload больше не расходятся.
+
+Regression: `npm test` 573/573 (полная регрессия, не только этап 33).

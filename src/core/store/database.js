@@ -113,6 +113,18 @@ db.version(7).stores({
   channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt]"
 });
 
+// Этап 33 — модерация. channelReaders: аддитивная правка контракта этапа 30
+// (createChannel теперь персистит, кому реально выдан VIEW — нужно banMember,
+// чтобы переиздать ключ ВСЕМ оставшимся). channelMessages не меняет primary key
+// (аддитивно) — получает поле deleted (не индексируется, фильтрация в памяти,
+// тот же паттерн, что posts/comments).
+db.version(8).stores({
+  channelReaders: "[ownerPubkey+channelId+readerPubkey], [ownerPubkey+channelId]",
+  channelReports: "[ownerPubkey+id], [ownerPubkey+channelId], viewed",
+  channelIgnores: "[ownerPubkey+channelId+ignoredPubkey], [ownerPubkey+channelId]",
+  bannedMembers: "[ownerPubkey+channelId+pubkey], [ownerPubkey+channelId]"
+});
+
 // Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
 // posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
 // db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных
