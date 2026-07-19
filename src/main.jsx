@@ -1,4 +1,5 @@
 import "./styles/minimal.css";
+import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
 import { startIdleWatcher } from "./ui/signals/auth.js";

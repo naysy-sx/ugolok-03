@@ -10,7 +10,7 @@ import Contacts from "./ui/screens/contacts.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Settings from "./ui/screens/settings.jsx";
-import { currentUser } from "./ui/signals/auth.js";
+import { currentUser, lock } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 
 function MainShell() {
@@ -40,6 +40,7 @@ function MainShell() {
 									type="button"
 									onClick={() => setActiveId(item.id)}
 									aria-current={item.id === activeId ? "page" : null}
+									class={item.id === activeId ? "is-active" : undefined}
 								>
 									{item.label}
 								</button>
@@ -47,6 +48,9 @@ function MainShell() {
 						))}
 					</ul>
 				</nav>
+				<button type="button" onClick={lock} style={{ marginBlockStart: "var(--space-m)" }}>
+					Выйти
+				</button>
 			</aside>
 			<div
 				style={{
