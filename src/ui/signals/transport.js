@@ -30,6 +30,7 @@ import { profiles } from "./contacts.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
+import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 
 function decodeBase64(str) {
@@ -412,6 +413,10 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 							await receivePost(ownerPubkey, event);
 						} else if (event.kind === 30062) {
 							await receiveComment(ownerPubkey, event);
+						} else if (event.kind === 30063) {
+							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
+							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
+							await receiveChannelMessage(ownerPubkey, event);
 						}
 						bumpMessagingActivity(); // channels.jsx/channel.jsx перечитывают списки
 					} catch {
@@ -422,7 +427,7 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
-	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062] }]);
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

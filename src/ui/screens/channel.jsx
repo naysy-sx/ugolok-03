@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { publish } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
@@ -6,50 +6,14 @@ import { openChannel } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree } from "../../domain/content/comments.js";
-import { validateAttachment } from "../../domain/attachments/validation.js";
-import { uploadAttachment } from "../../domain/attachments/upload.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import PostCard from "../components/post-card.jsx";
+import ChannelChat from "../components/channel-chat.jsx";
 import { shortPubkey } from "../format.js";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
-
-// Один необязательный аттач на пост/комментарий (не до 10/5, как в исходном ТЗ) —
-// CONTRACTS.md, этап 31: сознательное упрощение, та же UX-модель, что чат (этап 29),
-// формат данных (attachments: []) уже поддерживает множественные без миграции схемы.
-function usePendingAttachment() {
-	const [file, setFile] = useState(null);
-	const [error, setError] = useState("");
-	const inputRef = useRef(null);
-
-	function handleSelect(e) {
-		const picked = e.currentTarget.files?.[0];
-		e.currentTarget.value = "";
-		if (!picked) return;
-		setFile(picked);
-		try {
-			validateAttachment({ mime: picked.type, size: picked.size });
-			setError("");
-		} catch (err) {
-			setError(err?.message || String(err));
-		}
-	}
-
-	function reset() {
-		setFile(null);
-		setError("");
-	}
-
-	return { file, error, inputRef, handleSelect, reset };
-}
-
-async function uploadPendingAttachment(file, privKey) {
-	const bytes = new Uint8Array(await file.arrayBuffer());
-	return uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: file.type, name: file.name }, privKey);
-}
 
 function PostComposer({ ownerPubkey, privKey, channelId, onPublished, onCancel }) {
 	const [text, setText] = useState("");
@@ -308,6 +272,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 	const [hasMore, setHasMore] = useState(false);
 	const [showComposer, setShowComposer] = useState(false);
 	const [error, setError] = useState("");
+	const [tab, setTab] = useState("posts");
 
 	async function refresh() {
 		setChannelRow(await db.table("channels").get([ownerPubkey, channelId]));
@@ -362,46 +327,71 @@ export default function ChannelDetail({ ownerPubkey, privKey, channelId }) {
 				</p>
 			)}
 
-			{isOwner && !showComposer && (
-				<button type="button" onClick={() => setShowComposer(true)}>
-					Написать пост
+			<div class="cluster" role="tablist" aria-label="Раздел канала">
+				<button type="button" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
+					Посты
 				</button>
-			)}
-			{isOwner && showComposer && (
-				<PostComposer
-					ownerPubkey={ownerPubkey}
-					privKey={privKey}
-					channelId={channelId}
-					onPublished={() => {
-						setShowComposer(false);
-						refresh();
-					}}
-					onCancel={() => setShowComposer(false)}
-				/>
-			)}
+				<button type="button" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
+					Чат
+				</button>
+			</div>
 
-			{hasMore && (
-				<button type="button" onClick={handleLoadMore}>
-					Загрузить более старые посты
-				</button>
-			)}
-			{posts.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>В этом канале пока нет постов.</p>
-			) : (
-				<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
-					{[...posts].reverse().map((post) => (
-						<PostWithComments
-							key={post.id}
-							post={post}
-							isOwner={isOwner}
-							canComment={canComment}
+			{tab === "posts" && (
+				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+					{isOwner && !showComposer && (
+						<button type="button" onClick={() => setShowComposer(true)}>
+							Написать пост
+						</button>
+					)}
+					{isOwner && showComposer && (
+						<PostComposer
 							ownerPubkey={ownerPubkey}
 							privKey={privKey}
 							channelId={channelId}
-							onPostChanged={refresh}
+							onPublished={() => {
+								setShowComposer(false);
+								refresh();
+							}}
+							onCancel={() => setShowComposer(false)}
 						/>
-					))}
-				</div>
+					)}
+
+					{hasMore && (
+						<button type="button" onClick={handleLoadMore}>
+							Загрузить более старые посты
+						</button>
+					)}
+					{posts.length === 0 ? (
+						<p style={{ color: "var(--muted)" }}>В этом канале пока нет постов.</p>
+					) : (
+						<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+							{[...posts].reverse().map((post) => (
+								<PostWithComments
+									key={post.id}
+									post={post}
+									isOwner={isOwner}
+									canComment={canComment}
+									ownerPubkey={ownerPubkey}
+									privKey={privKey}
+									channelId={channelId}
+									onPostChanged={refresh}
+								/>
+							))}
+						</div>
+					)}
+				</section>
+			)}
+
+			{tab === "chat" && (
+				<section role="tabpanel">
+					<ChannelChat
+						ownerPubkey={ownerPubkey}
+						privKey={privKey}
+						channelId={channelId}
+						canWrite={canComment}
+						allowAttachments={channelRow.allowChatAttachments}
+					/>
+				</section>
 			)}
 		</main>
 	);

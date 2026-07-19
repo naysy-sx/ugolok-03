@@ -21,14 +21,14 @@ async function requirePublishOk(publish, event) {
 // CONTRACTS.md, этап 30 — найденный пробел: kind 30060 несёт МЕТАДАННЫЕ (не "для себя",
 // как в исходном TECH.md §10), зашифрованные channelKey[v] — replaceable, владелец может
 // переиздать при редактировании БЕЗ повторной раздачи ключей всем читателям.
-export async function createChannel(ownerPubkey, ownerPrivKey, { name, description, rules, avatarDescriptor }, groupIds, publish) {
+export async function createChannel(ownerPubkey, ownerPrivKey, { name, description, rules, avatarDescriptor, allowChatAttachments = true }, groupIds, publish) {
 	const channelId = crypto.randomUUID();
 	const channelKeyHex = bytesToHex(generateChannelKey());
 	const channelTopicHex = bytesToHex(generateChannelTopic());
 	const version = 1;
 
 	const metaContent = encryptChannelContent(
-		JSON.stringify({ name, description, rules, avatar: avatarDescriptor ?? null }),
+		JSON.stringify({ name, description, rules, avatar: avatarDescriptor ?? null, allowChatAttachments }),
 		channelKeyHex,
 		version,
 	);
@@ -60,6 +60,7 @@ export async function createChannel(ownerPubkey, ownerPrivKey, { name, descripti
 		description,
 		rules,
 		avatar: avatarDescriptor ?? null,
+		allowChatAttachments,
 		channelTopic: channelTopicHex,
 		role: "owner",
 		createdAt: Math.floor(Date.now() / 1000),
@@ -76,7 +77,7 @@ export async function createChannel(ownerPubkey, ownerPrivKey, { name, descripti
 	}
 	const channel = { channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex };
 	for (const readerPubkey of readerPubkeys) {
-		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, publish);
+		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, version, publish);
 	}
 
 	return { channelId };
@@ -119,6 +120,7 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, channel
 			description: "",
 			rules: "",
 			avatar: null,
+			allowChatAttachments: true,
 			channelTopic: grant.channelTopic,
 			role: "available",
 			createdAt: Math.floor(Date.now() / 1000),
@@ -149,6 +151,7 @@ export async function receiveChannelMetadata(ownerPubkey, event) {
 		description: parsed.description,
 		rules: parsed.rules,
 		avatar: parsed.avatar,
+		allowChatAttachments: parsed.allowChatAttachments ?? true,
 	});
 }
 

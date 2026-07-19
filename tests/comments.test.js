@@ -64,6 +64,7 @@ async function grantViewTo(channelId, targetPubkey) {
 		ALICE_PRIV,
 		{ channelId, channelTopic: aliceChannelRow.channelTopic, channelKey: aliceKeyRow.channelKey },
 		targetPubkey,
+		1,
 		capturingPublish(grantPublish),
 	);
 	return grantPublish[0];

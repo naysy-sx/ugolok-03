@@ -18,6 +18,7 @@ const EXPECTED_TABLES = [
 	"channels",
 	"posts",
 	"comments",
+	"channelMessages",
 	"attachments",
 	"keystore",
 	"clock",
@@ -174,6 +175,20 @@ test("posts/comments (этап 31, owner-scoping — найдено рассуж
 	assert.ok(
 		comments.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+postId"),
 		"comments: индекс [ownerPubkey+postId] для выборки дерева комментариев поста",
+	);
+	db.close();
+});
+
+test("channelMessages (этап 32, owner-scoped с рождения): составной первичный ключ, индекс для windowed-загрузки чата", async () => {
+	await db.open();
+	const channelMessages = db.table("channelMessages");
+	assert.ok(
+		Array.isArray(channelMessages.schema.primKey.keyPath) && channelMessages.schema.primKey.keyPath.join("+") === "ownerPubkey+id",
+		"channelMessages: составной первичный ключ [ownerPubkey+id]",
+	);
+	assert.ok(
+		channelMessages.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+channelId+createdAt"),
+		"channelMessages: индекс [ownerPubkey+channelId+createdAt] для windowed-загрузки чата канала",
 	);
 	db.close();
 });

@@ -4450,3 +4450,130 @@ topics}`, тот же диспетчер, ветки `receivePost`/`receiveComme
 не баг, но заслуживает явной фиксации здесь, раз найдено практикой.
 Живое повторное приглашение (пересканировать группу и разослать
 недостающие гранты) — backlog, тот же класс, что revoke.
+
+## Этап 32 — Общий чат канала
+
+Рутина (PLAN.md-триаж): переиспользует ту же broadcast-схему, что
+посты/комментарии (channelKey-шифрование, `#h`-роутинг, replaceable
+d-tag), не новый примитив — DESIGN.md-формализация не требуется.
+Новый kind 30063 (следующий свободный в диапазоне 30060-30069,
+parameterized-replaceable, тот же класс, что 30061/30062).
+
+### Разрешение вложений в чате — расширение метаданных канала
+
+ТЗ: "вложения только если владелец разрешил в настройках канала".
+Поле `allowChatAttachments` (boolean, default `true`) добавляется в
+payload kind 30060 (рядом с name/description/rules/avatar) и в
+`channels`-строку — тот же канал передачи, что уже несёт остальные
+метаданные, отдельного события не требуется. `createChannel` принимает
+его в объекте опций; `CreateChannelForm` — чекбокс (по умолчанию
+отмечен). Редактирование после создания — часть Этапа 34 (настройки),
+не в этом этапе.
+
+**Решение (не security-инвариант, UX/политика):** проверка на
+отправке — только подсказка в UI (кнопка "📎" не рендерится, если
+`!channelRow.allowChatAttachments`), как и везде в проекте источник
+истины — приёмная сторона. На приёме, если `!channelRow.
+allowChatAttachments` и во входящем сообщении есть вложение —
+вложение обрезается (текст сообщения остаётся), а не всё сообщение
+целиком отбрасывается: это политика отображения, а не нарушение
+авторизации (у любого участника COMMENT и так есть channelKey и право
+писать в чат — вложение в обход настройки не даёт ему ничего, что он
+не мог бы сделать иначе, просто нарушает пожелание владельца по
+UX/трафику).
+
+### `src/domain/content/channel-chat.js`
+
+```js
+export async function sendChannelMessage(ownerPubkey, ownerPrivKey, channelId, text, attachments, publish);
+// Резолвит channelRow/channelKeys/channelKeyMeta локально (как addComment).
+// messageId = crypto.randomUUID(). kind 30063, d-tag = `${channelId}:${messageId}`,
+// тег `h` = channelRow.channelTopic. content = encryptChannelContent(JSON.stringify(
+// {text, attachments}), channelKey[v_current], v_current). Права COMMENT не проверяются
+// здесь заранее (тот же принцип, что addComment) — источник истины на приёме.
+// Локально upsert в channelMessages сразу (оптимистично). attachments — до 1 элемента
+// (как посты/комментарии), формат данных [] сохранён для единообразия.
+
+export async function receiveChannelMessage(ownerPubkey, event);
+// Тот же контур, что receiveComment: `h`-тег -> channelRow -> channelKeyMeta/channelKeys
+// -> decryptChannelContent (null -> discard). Владелец канала — неявно разрешён
+// (тот же спецкейс, что receiveComment, этап 31). Иначе — canAuthorComment против
+// ЛОКАЛЬНО закэшированного commentAllowlists[v_current] (PLAN.md буквально: "allowlist
+// COMMENT = право писать в чат тоже", тот же allowlist, отдельного для чата не заводим).
+// Не авторизован -> discard (return false). Авторизован, но !channelRow.
+// allowChatAttachments && parsed.attachments?.length -> upsert с attachments:[] (обрезка,
+// см. решение выше), НЕ discard. upsert в channelMessages, return true.
+```
+
+### `src/core/sync/lazy-channel.js` — добавление
+
+```js
+export async function loadChannelChatWindow(ownerPubkey, channelId, { limit = 15, beforeCreatedAt } = {});
+// Буквально тот же паттерн, что loadPostsWindow/loadCommentsWindow — сортировка по
+// createdAt, slice(-limit), hasMore = source.length > limit. Пользовательское ТЗ — 15
+// за окно (было 10/50 у постов/комментариев).
+```
+
+### Схема БД — `db.version(7)`
+
+```js
+channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt]"
+```
+
+Owner-scoped с рождения (не постфактум-правка, как посты/комментарии
+этапа 31, — паттерн уже усвоен, таблица объявляется правильно сразу).
+
+### Wiring — `transport.js`
+
+`refreshChannelContentSubscription` расширяется: `kinds: [30060, 30054,
+30061, 30062, 30063]`. Диспетчер получает ветку `receiveChannelMessage`
+рядом с `receivePost`/`receiveComment`.
+
+### UI
+
+`src/ui/components/channel-chat.jsx` — список сообщений (без дерева,
+плоская лента, свежие внизу — тот же принцип отображения, что
+`chat.jsx`) + композер (текст + опциональное вложение, кнопка
+прикрепления скрыта при `!channelRow.allowChatAttachments`) + "Загрузить
+более старые". `channel.jsx` (`ChannelDetail`) получает переключатель
+вкладок "Посты"/"Чат" (аналог табов `channels.jsx`, `role="tablist"`).
+Право писать в чат — то же `canComment`, что уже вычислено для
+комментариев (`role === "owner" || role === "subscriber"`), без
+`canComment` — только чтение ленты чата.
+
+### Явное сужение скоупа
+
+Редактирование/удаление отдельного сообщения чата — не в этом этапе
+(в отличие от постов/комментариев, F-CH-10 здесь не применяется);
+статусы отправки (sending/sent/failed, как в личных чатах) — не в
+этом этапе, отправка либо сразу `requirePublishOk` бросает, либо
+считается успешной (тот же уровень, что posts/comments сейчас).
+
+### Правка контракта этапа 30 (найдено живым E2E, не домысел) — `sendViewGrant` без d-тега
+
+При живой проверке этапа 32 (два подписчика на один канал) обнаружена
+РЕАЛЬНАЯ протокольная ошибка контракта этапа 30: `sendViewGrant`
+публиковал kind 30053 с тегами `[['p', readerPubkey]]` — БЕЗ d-тега
+вовсе. NIP-01 трактует отсутствующий d как `d=""` для parameterized-
+replaceable кинда (30000-39999): второй грант (Мэллори) от того же
+владельца (тот же pubkey+kind+d="") ЗАМЕЩАЛ на relay грант первого
+читателя (Боба) — Боб терял VIEW навсегда при следующей выборке по
+`#p`. Комментарий контракта этапа 30 называл это "идемпотентностью"
+("повторная публикация того же гранта безвредна"), не учтя, что
+РАЗНЫЕ читатели с пустым d-tag коллизируют друг с другом, не только
+каждый сам с собой. TECH.md §4.8 уже специфицировал HMAC d-tag для
+kind 30053 — реализация этапа 30 просто не перенесла его в код.
+
+**Правка:** `sendViewGrant(ownerPubkey, ownerPrivKey, channel,
+readerPubkey, keyVersion, publish)` — добавлен параметр `keyVersion`,
+d-tag = `opaqueDTag(masterSecret, 30053, channelId+":"+readerPubkey+
+":"+keyVersion)`, буквально по TECH.md §4.8. Получатель по-прежнему
+находит свой грант через `#p`, d-tag вычислять не должен (TECH.md:
+"d-tag не нужен получателю"). Вызывающий код (`channel.js:
+createChannel`) — передаёт уже известную `version` (пока всегда 1,
+ротации в этом этапе нет). Регрессионный тест зафиксирован в
+`tests/channel.test.js`: два гранта одного канала ОБЯЗАНЫ иметь
+РАЗНЫЕ d-теги (юнит-тесты не симулируют relay-коллизию напрямую —
+захват publish() не моделирует хранение по (kind,pubkey,d-tag), но
+свойство "разные d-теги" — то самое, что коллизию предотвращает).
+Немедленная полная регрессия после правки: `npm test` 551/551.

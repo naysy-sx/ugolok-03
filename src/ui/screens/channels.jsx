@@ -87,6 +87,7 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 	const [rules, setRules] = useState("");
 	const [avatarFile, setAvatarFile] = useState(null);
 	const [avatarError, setAvatarError] = useState("");
+	const [allowChatAttachments, setAllowChatAttachments] = useState(true);
 	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -132,7 +133,7 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 			await createChannel(
 				ownerPubkey,
 				privKey,
-				{ name, description, rules, avatarDescriptor },
+				{ name, description, rules, avatarDescriptor, allowChatAttachments },
 				[...selectedGroupIds],
 				publish,
 			);
@@ -192,6 +193,16 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 				<label for={`${instanceId}-avatar`}>Аватар канала</label>
 				<input id={`${instanceId}-avatar`} type="file" accept="image/*" onChange={handleAvatarSelected} />
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
+			</div>
+
+			<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+				<input
+					id={`${instanceId}-allow-chat-attachments`}
+					type="checkbox"
+					checked={allowChatAttachments}
+					onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)}
+				/>
+				<label for={`${instanceId}-allow-chat-attachments`}>Разрешить вложения в общем чате канала</label>
 			</div>
 
 			<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>

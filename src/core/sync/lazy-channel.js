@@ -35,3 +35,19 @@ export async function loadCommentsWindow(ownerPubkey, postId, { limit = 50, befo
 	const hasMore = source.length > limit;
 	return { comments: windowComments, hasMore };
 }
+
+// Общий чат канала (этап 32) — тот же паттерн, лимит 15 (пользовательское ТЗ).
+export async function loadChannelChatWindow(ownerPubkey, channelId, { limit = 15, beforeCreatedAt } = {}) {
+	let rows = await db.table("channelMessages").where("ownerPubkey").equals(ownerPubkey).toArray();
+	rows = rows.filter((r) => r.channelId === channelId);
+	rows.sort((a, b) => a.createdAt - b.createdAt);
+
+	let source = rows;
+	if (beforeCreatedAt !== undefined) {
+		source = source.filter((r) => r.createdAt < beforeCreatedAt);
+	}
+
+	const windowMessages = source.slice(-limit);
+	const hasMore = source.length > limit;
+	return { messages: windowMessages, hasMore };
+}

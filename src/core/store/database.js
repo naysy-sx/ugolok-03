@@ -106,3 +106,9 @@ db.version(6).stores({
   posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted",
   comments: "[ownerPubkey+id], [ownerPubkey+postId], deleted"
 });
+
+// Этап 32 — общий чат канала. Owner-scoped с рождения (паттерн из этапов 25-31
+// уже усвоен — не откладываем правильную схему на потом).
+db.version(7).stores({
+  channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt]"
+});

@@ -3,7 +3,7 @@ import { sign } from "../../core/crypto/sign.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import { encryptChannelKeyGrant } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
-import { deriveMasterSecret } from "../../core/crypto/derivation.js";
+import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
 
 // Новый rumor kind (gift-wrap, kind 1059) — по прямому прецеденту CONTACT_REQUEST_KIND
 // (3001, contacts/requests.js): не публичный, владелец узнаёт запросившего через unwrap.
@@ -27,10 +27,23 @@ export async function sendSubscribeRequest(requesterPrivKey, ownerPubkey, channe
 
 // channel: {channelId, channelTopic (hex), channelKey (hex)}. F-CH-04 — kind 30053,
 // тег #p для маршрутизации к конкретному читателю.
-export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, publish) {
+//
+// НАЙДЕНО ЖИВЫМ E2E (этап 32, не домысел): исходная реализация (этап 30) публиковала
+// kind 30053 БЕЗ d-тега вовсе — NIP-01 трактует отсутствующий d как d="" для
+// parameterized-replaceable кинда (30000-39999). Раздача VIEW ВТОРОМУ читателю того
+// же канала (тот же kind+pubkey+d="") заменяла на relay грант ПЕРВОГО читателя —
+// он навсегда терял VIEW при следующей выборке по `#p`. TECH.md §4.8 буквально
+// специфицирует d-tag = HMAC(masterSecret, "30053:" + channelId + readerPubkey +
+// keyVersion) — контракт этапа 30 (CONTRACTS.md) этот d-tag просто не перенёс в
+// реализацию, комментарий там ошибочно называл это "идемпотентностью" ("повторная
+// публикация того же гранта безвредна"), не заметив, что РАЗНЫЕ читатели с ПУСТЫМ
+// d-tag коллизируют друг с другом на relay, а не только сами с собой.
+export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, keyVersion, publish) {
 	const content = encryptChannelKeyGrant(channel.channelId, channel.channelTopic, channel.channelKey, ownerPrivKey, readerPubkey);
+	const masterSecret = deriveMasterSecret(ownerPrivKey);
+	const dTag = opaqueDTag(masterSecret, 30053, `${channel.channelId}:${readerPubkey}:${keyVersion}`);
 	const event = sign(
-		{ kind: 30053, content, tags: [["p", readerPubkey]], created_at: Math.floor(Date.now() / 1000) },
+		{ kind: 30053, content, tags: [["d", dTag], ["p", readerPubkey]], created_at: Math.floor(Date.now() / 1000) },
 		ownerPrivKey,
 	);
 	await requirePublishOk(publish, event);

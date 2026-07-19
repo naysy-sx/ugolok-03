@@ -75,6 +75,20 @@ test("createChannel: без групп -> ни одного VIEW-гранта, �
 	assert.equal(owned[0].name, "Заметки");
 });
 
+test("НАЙДЕНО ЖИВЫМ E2E (этап 32): kind 30053 для РАЗНЫХ читателей одного канала несёт РАЗНЫЕ d-теги — без этого relay (NIP-01, d отсутствует = d='') схлопывает гранты разных читателей в один parameterized-replaceable слот, второй читатель замещает грант первого", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
+	const published = [];
+	await createChannel(ALICE_PUB, ALICE_PRIV, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
+
+	const grants = published.filter((e) => e.kind === 30053);
+	assert.equal(grants.length, 2, "по гранту на каждого читателя");
+	const dTags = grants.map((e) => e.tags.find((t) => t[0] === "d")?.[1]);
+	assert.ok(dTags.every(Boolean), "у каждого гранта обязан быть d-тег (не implicit d='')");
+	assert.notEqual(dTags[0], dTags[1], "d-теги разных читателей ОБЯЗАНЫ различаться — иначе relay схлопывает их в один слот");
+});
+
 test("createChannel: группа с Бобом -> Боб получает kind 30053 (VIEW), метаданные — kind 30060 channelKey-зашифрованы", async () => {
 	await seedGroupWithBob();
 	const published = [];
@@ -98,7 +112,7 @@ test("createChannel: группа с Бобом -> Боб получает kind 
 	const metaEvent = published.find((e) => e.kind === 30060);
 	assert.ok(metaEvent, "должны быть опубликованы метаданные канала");
 	const metaPlain = decryptChannelContent(metaEvent.content, { 1: grant.channelKey });
-	assert.deepEqual(JSON.parse(metaPlain), { name: "Котики", description: "фото котиков", rules: "без спама", avatar: null });
+	assert.deepEqual(JSON.parse(metaPlain), { name: "Котики", description: "фото котиков", rules: "без спама", avatar: null, allowChatAttachments: true });
 });
 
 test("Боб получает VIEW и метаданные -> канал появляется в 'Доступные', не в 'Подписки'", async () => {

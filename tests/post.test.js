@@ -184,6 +184,7 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 		ALICE_PRIV,
 		{ channelId, channelTopic: aliceChannelRow.channelTopic, channelKey: aliceKeyRow.channelKey },
 		MALLORY_PUB,
+		1,
 		capturingPublish(grantPublish),
 	);
 	const { decryptChannelKeyGrant } = await import("../src/core/crypto/channel-key.js");
