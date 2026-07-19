@@ -97,3 +97,12 @@ db.version(5).stores({
   commentAllowlists: "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
   channelTopics: null
 });
+
+// Этап 31 — тот же класс пробела, найденный рассуждением ДО кода (не постфактум), что
+// этап 30 уже исправил для channels/channelKeys/...: posts/comments в version(1) были
+// объявлены БЕЗ ownerPubkey. Никогда не использовались кодом — переопределение без
+// риска миграции.
+db.version(6).stores({
+  posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted",
+  comments: "[ownerPubkey+id], [ownerPubkey+postId], deleted"
+});

@@ -4324,3 +4324,129 @@ relay), не в реализации.
 документом замысла (не переписан построчно), правка зафиксирована
 здесь и в log.md — по прецеденту всех предыдущих отклонений от
 исходной спецификации в проекте.
+
+## Этап 31 — Посты + комментарии + lazy-load канала
+
+### `src/domain/content/post-machine.js`
+
+```js
+export const POST_TRANSITIONS = {
+  draft: { PUBLISH: "published" },
+  published: { ARCHIVE: "archived", UNPUBLISH: "draft" },
+};
+export function transitionPost(state, event); // transition() из core/fsm/machine.js, этап 14
+```
+
+### `src/domain/content/post.js`
+
+```js
+export async function createDraftPost(ownerPubkey, channelId, { text, attachments });
+// Локальная запись ТОЛЬКО (status:"draft") — НИЧЕГО не публикуется (DESIGN.md,
+// формализация 1: черновик не должен утекать на relay до PUBLISH). postId =
+// crypto.randomUUID(). attachments — до 10 дескрипторов (upload.js, этап 28/29),
+// validateAttachment уже применена на уровне UI при выборе файла. Возвращает {postId}.
+
+export async function publishPost(ownerPubkey, ownerPrivKey, postId, publish);
+// transitionPost(текущий статус, "PUBLISH") — бросает на недопустимый переход
+// (already published без UNPUBLISH сначала и т.п., generic FSM уже это даёт).
+// Шифрует channelKey[v_current] СВОЕГО канала (владелец всегда знает актуальный клюx),
+// публикует kind 30061: d-tag = `${channelId}:${postId}` (НЕ opaque, TECH.md §4.8),
+// тег `h` = channelTopic (routing, этап 30-довесок фикс). Локально: status="published".
+
+export async function archivePost(ownerPubkey, ownerPrivKey, postId, publish);
+export async function unpublishPost(ownerPubkey, ownerPrivKey, postId, publish);
+// Оба — republish ТОГО ЖЕ d-tag с обновлённым status в payload (DESIGN.md,
+// формализация 1) — параметризованно-replaceable событие заменяет предыдущую версию.
+
+export async function deletePost(ownerPubkey, ownerPrivKey, postId, publish);
+// F-CH-10 — kind 5 (NIP-09) на id последней опубликованной версии события; локально
+// deleted:true. Черновик (никогда не публиковался) — просто локальное удаление
+// строки, kind 5 не нужен (нечего отзывать на relay).
+
+export async function receivePost(ownerPubkey, event);
+// DESIGN.md, формализация 2 (найденная адверсарная угроза) — event.pubkey ДОЛЖЕН
+// совпадать с channelRow.creatorPubkey, иначе discard (return false), НЕЗАВИСИМО от
+// того, что контент корректно расшифровывается (любой VIEW-держатель технически может
+// зашифровать валидный kind 30061 тем же channelKey — авторство поста не то же самое,
+// что владение ключом). Канал/эпоха неизвестны -> discard. Иначе upsert локальной
+// строки posts (d-tag даёт postId), return true.
+
+export async function listChannelPosts(ownerPubkey, channelId); // без пагинации —
+// см. lazy-channel.js для windowed-версии (F-CSC-01); эта — простой список для
+// случаев, где окно не нужно (напр. подсчёт для UI).
+```
+
+### `src/domain/content/comments.js`
+
+```js
+export async function addComment(ownerPubkey, ownerPrivKey, channel, postId, parentId, text, attachments, publish);
+// channel: {channelId, channelTopic, channelKey (текущая версия — только владелец
+// или подписчик с COMMENT могут вызывать, но эта функция НЕ проверяет права заранее:
+// сеть/allowlist на приёмной стороне — источник истины, локальная проверка была бы
+// просто UX-подсказкой, добавлена в UI-слое, не здесь). parentId — postId (комментарий
+// верхнего уровня) ИЛИ commentId (ответ на комментарий), вложенность произвольная.
+// commentId = crypto.randomUUID(). kind 30062, d-tag = `${postId}:${commentId}`
+// (не opaque), тег `h` = channelTopic. Локально upsert в comments сразу (оптимистично,
+// как chat.js). До 4000 символов/5 вложений — проверка на UI-уровне (как MAX_MESSAGE_LENGTH).
+
+export async function receiveComment(ownerPubkey, event);
+// DESIGN.md, формализация 3 (F-EV-06) — канал/эпоха неизвестны -> discard. Иначе
+// decryptChannelContent -> canAuthorComment(event.pubkey, локальный кэш
+// commentAllowlists[текущая версия]) -> false -> discard (return false), НЕ throw:
+// малициозный VIEW-держатель без COMMENT — рутинный случай в потоке, не исключение.
+// true -> upsert локальной строки comments, return true.
+
+export async function getCommentsTree(ownerPubkey, postId);
+// Плоский список из comments (по postId) -> buildTree: группировка по parentId,
+// корень — записи с parentId===postId. Возвращает [{...comment, replies: [...]}].
+```
+
+### `src/core/sync/lazy-channel.js` (F-CSC-01)
+
+```js
+export async function loadPostsWindow(ownerPubkey, channelId, { limit = 10, beforeCreatedAt } = {});
+// Аналог loadChatWindow (этап 25) — сортировка по createdAt (один автор — простая
+// хронология, Lamport не нужен). Возвращает published+archived (черновики ЧУЖИЕ не
+// видны вовсе — не upsert'ятся получателем; СВОИ черновики — отдельный запрос
+// listChannelPosts с фильтром status==="draft", не через это окно).
+
+export async function loadCommentsWindow(ownerPubkey, postId, { limit = 50, beforeCreatedAt } = {});
+// Тот же принцип, до 50 за раз (пользовательское ТЗ).
+```
+
+### Wiring — `transport.js`
+
+`refreshChannelContentSubscription` расширяется: `kinds: [30060, 30054,
+30061, 30062]` (было только 30060/30054) — тот же фильтр `{"#h":
+topics}`, тот же диспетчер, ветки `receivePost`/`receiveComment`
+добавляются рядом с уже существующими.
+
+### Схема БД — `db.version(6)`, owner-scoping (DESIGN.md)
+
+`posts`/`comments` в `db.version(1)` были объявлены без `ownerPubkey`
+— никогда не использовались кодом, переопределение без риска
+миграции (тот же прецедент, что channels/channelKeys этапа 30).
+
+### Явное сужение скоупа
+
+Экран канала целиком (владелец-only вкладки — этапы 32-33); общий
+чат канала (этап 32); редактирование ОПУБЛИКОВАННОГО поста как
+отдельная функция (UNPUBLISH+редактирование локально+PUBLISH заново
+уже даёт этот эффект, отдельная "кнопка редактировать" — backlog);
+удаление одного комментария в UI (F-CH-10 покрывает оба случая
+одинаково на уровне домена, но кнопка в интерфейсе — только у постов
+в этом этапе).
+
+### Подтверждено живым прогоном — видимость по группе снимается ОДИН РАЗ, при создании
+
+`createChannel` резолвит членов выбранных групп В МОМЕНТ создания
+канала — добавление контакта в уже используемую для видимости группу
+ПОСЛЕ создания канала НЕ выдаёт ему VIEW задним числом (симметрично
+уже принятому "отзыв VIEW после создания — не в скоупе", этап 30).
+Найдено и подтверждено ИМЕННО живым E2E при подготовке адверсарного
+сценария (не домысел): тестовый сценарий пришлось перестроить — Mallory
+добавлена в группу ДО создания канала, иначе она не видит канал вовсе,
+даже "Доступные" пусто. Это ожидаемое поведение снимка-при-создании,
+не баг, но заслуживает явной фиксации здесь, раз найдено практикой.
+Живое повторное приглашение (пересканировать группу и разослать
+недостающие гранты) — backlog, тот же класс, что revoke.

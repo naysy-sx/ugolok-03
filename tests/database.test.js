@@ -153,3 +153,27 @@ test("channels/channelKeys/channelKeyMeta/commentAllowlists (этап 30, owner-
 	);
 	db.close();
 });
+
+test("posts/comments (этап 31, owner-scoping — найдено рассуждением до кода): составные owner-scoped ключи", async () => {
+	await db.open();
+	const posts = db.table("posts");
+	assert.ok(
+		Array.isArray(posts.schema.primKey.keyPath) && posts.schema.primKey.keyPath.join("+") === "ownerPubkey+id",
+		"posts: составной первичный ключ [ownerPubkey+id]",
+	);
+	assert.ok(
+		posts.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+channelId+createdAt"),
+		"posts: индекс [ownerPubkey+channelId+createdAt] для windowed-загрузки ленты",
+	);
+
+	const comments = db.table("comments");
+	assert.ok(
+		Array.isArray(comments.schema.primKey.keyPath) && comments.schema.primKey.keyPath.join("+") === "ownerPubkey+id",
+		"comments: составной первичный ключ [ownerPubkey+id]",
+	);
+	assert.ok(
+		comments.schema.indexes.some((i) => Array.isArray(i.keyPath) && i.keyPath.join("+") === "ownerPubkey+postId"),
+		"comments: индекс [ownerPubkey+postId] для выборки дерева комментариев поста",
+	);
+	db.close();
+});

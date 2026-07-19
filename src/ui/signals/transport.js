@@ -28,6 +28,8 @@ import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
 import { profiles } from "./contacts.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
+import { receivePost } from "../../domain/content/post.js";
+import { receiveComment } from "../../domain/content/comments.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 
 function decodeBase64(str) {
@@ -404,8 +406,14 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 							await receiveChannelMetadata(ownerPubkey, event);
 						} else if (event.kind === 30054) {
 							await receiveAllowlistUpdate(ownerPubkey, ownerPubkey, event);
+						} else if (event.kind === 30061) {
+							// Этап 31 — receivePost сама проверяет авторство (event.pubkey ===
+							// creatorPubkey, DESIGN.md формализация 2) — здесь только диспетчеризация.
+							await receivePost(ownerPubkey, event);
+						} else if (event.kind === 30062) {
+							await receiveComment(ownerPubkey, event);
 						}
-						bumpMessagingActivity(); // channels.jsx перечитывает списки/метаданные
+						bumpMessagingActivity(); // channels.jsx/channel.jsx перечитывают списки
 					} catch {
 						// повреждено/эпоха неизвестна и т.п. — пропустить, не ронять батч
 					}
@@ -414,7 +422,7 @@ export async function refreshChannelContentSubscription(ownerPubkey) {
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
-	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054] }]);
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

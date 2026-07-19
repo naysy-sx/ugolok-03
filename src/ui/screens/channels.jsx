@@ -13,17 +13,24 @@ import {
 import { validateAttachment } from "../../domain/attachments/validation.js";
 import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { activeChannelId, openChannel } from "../signals/channel-nav.js";
+import ChannelDetail from "./channel.jsx";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
-function ChannelCard({ channel, showSubscribe, onSubscribe, busy }) {
+function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 	return (
 		<li style={{ paddingBlock: "var(--space-s)", borderBlockEnd: "var(--border-width) solid var(--border)" }}>
 			<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-				<div class="cluster" style={{ alignItems: "center" }}>
+				<button
+					type="button"
+					onClick={() => onOpen(channel.id)}
+					class="cluster"
+					style={{ alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }}
+				>
 					{channel.avatar ? (
 						<span aria-hidden="true" style={{ fontSize: "1.5rem" }}>
 							🖼️
@@ -49,7 +56,7 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, busy }) {
 						<strong>{channel.name || "(без названия)"}</strong>
 						{channel.description && <small style={{ color: "var(--muted)" }}>{channel.description}</small>}
 					</span>
-				</div>
+				</button>
 				{showSubscribe && (
 					<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
 						Подписаться
@@ -60,14 +67,14 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, busy }) {
 	);
 }
 
-function ChannelList({ channels, emptyText, showSubscribe, onSubscribe, busy }) {
+function ChannelList({ channels, emptyText, showSubscribe, onSubscribe, onOpen, busy }) {
 	if (channels.length === 0) {
 		return <p style={{ color: "var(--muted)" }}>{emptyText}</p>;
 	}
 	return (
 		<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 			{channels.map((channel) => (
-				<ChannelCard key={channel.id} channel={channel} showSubscribe={showSubscribe} onSubscribe={onSubscribe} busy={busy} />
+				<ChannelCard key={channel.id} channel={channel} showSubscribe={showSubscribe} onSubscribe={onSubscribe} onOpen={onOpen} busy={busy} />
 			))}
 		</ul>
 	);
@@ -227,7 +234,7 @@ function CreateChannelForm({ ownerPubkey, privKey, onCreated, onCancel }) {
 	);
 }
 
-export default function Channels() {
+function ChannelsList() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
 
@@ -309,21 +316,35 @@ export default function Channels() {
 							onCancel={() => setShowCreateForm(false)}
 						/>
 					)}
-					<ChannelList channels={owned} emptyText="У вас пока нет каналов." />
+					<ChannelList channels={owned} emptyText="У вас пока нет каналов." onOpen={openChannel} />
 				</section>
 			)}
 
 			{tab === "subscribed" && (
 				<section role="tabpanel">
-					<ChannelList channels={subscribed} emptyText="Вы пока ни на что не подписаны." />
+					<ChannelList channels={subscribed} emptyText="Вы пока ни на что не подписаны." onOpen={openChannel} />
 				</section>
 			)}
 
 			{tab === "available" && (
 				<section role="tabpanel">
-					<ChannelList channels={available} emptyText="Нет доступных каналов." showSubscribe onSubscribe={handleSubscribe} busy={busy} />
+					<ChannelList
+						channels={available}
+						emptyText="Нет доступных каналов."
+						showSubscribe
+						onSubscribe={handleSubscribe}
+						onOpen={openChannel}
+						busy={busy}
+					/>
 				</section>
 			)}
 		</main>
 	);
+}
+
+export default function Channels() {
+	if (activeChannelId.value) {
+		return <ChannelDetail ownerPubkey={currentUser.value.id} privKey={privKeySig.value} channelId={activeChannelId.value} />;
+	}
+	return <ChannelsList />;
 }
