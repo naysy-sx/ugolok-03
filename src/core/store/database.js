@@ -50,12 +50,6 @@ db.version(3).stores({
   knownDevices: "[ownerPubkey+deviceId], ownerPubkey",
   messages:
     "++seq, &[chatId+msgId], [chatId+lamportTs+senderPubkey+id], chatId, id, status, deleted",
-  // Правка находки: version(1)'s inboxRequests (bare "id") не был owner-scoped — тот же
-  // класс пробела, что contactRequests УЖЕ исправил в этапе 24 (мультиаккаунт на одном
-  // устройстве иначе схлопывает pending-запросы разных владельцев в одну строку). Таблица
-  // не использовалась нигде до этого этапа (мёртвая с этапа 3) — переопределение безопасно,
-  // данных к миграции нет. createdAt (camelCase) — для единообразия с contactRequests,
-  // было created_at (единственное расхождение стиля во всей схеме).
   inboxRequests: "[owner+senderPubkey], owner, senderPubkey, createdAt"
 });
 
@@ -63,7 +57,7 @@ db.version(3).stores({
 // этапов 13/24/25/26: ownKeyPackage/mlsGroups/messages/chatSyncState НИКОГДА не были
 // owner-scoped, в отличие от contacts/blockedContacts/groups/contactRequests/inboxRequests/
 // knownDevices (owner-scoped с самого начала). Молчаливое допущение "одна identity = одно
-// устройство = одна БД" не учитывало, что мультиаккаунт на ОДНОМ устройстве (уже поддержан
+// устройство = одна БД" не учитывало, что мультиаккаунт на одном устройстве (уже поддержан
 // с этапа 11) означает НЕСКОЛЬКО identities, делящих ОДНУ IndexedDB (один origin). На практике:
 // ownKeyPackage хранил ОДНУ запись "self" на всё устройство — второй локальный аккаунт молча
 // получал MLS-credential ПЕРВОГО, что ts-mls закономерно отвергает как "участник уже в группе"
@@ -114,7 +108,7 @@ db.version(7).stores({
 });
 
 // Этап 33 — модерация. channelReaders: аддитивная правка контракта этапа 30
-// (createChannel теперь персистит, кому реально выдан VIEW — нужно banMember,
+// (createChannel теперь персистит, кому realistically выдан VIEW — нужно banMember,
 // чтобы переиздать ключ ВСЕМ оставшимся). channelMessages не меняет primary key
 // (аддитивно) — получает поле deleted (не индексируется, фильтрация в памяти,
 // тот же паттерн, что posts/comments).
@@ -155,14 +149,12 @@ db.version(11).stores({
   clock: "[ownerPubkey+id]"
 });
 
-// Дев-стадия: часть версий выше меняла primary key существующих таблиц (channels/
-// posts/comments), что IndexedDB принципиально не умеет мигрировать in-place —
-// db.open() кидает UpgradeError на непустой старой базе. Проект "не в проде, данных
-// к миграции нет" (см. version(5)/(6) комментарии) — но живой браузер, где реально
-// тестировали фичи (не пустой fake-indexeddb юнит-тестов), эту непустоту нарушает.
-// Найдено живым использованием: Onboarding/Unlock зависали на "Проверка…" навсегда
-// (await listAccounts() падал необработанным rejection'ом). Единственный выход —
-// снести локальную базу целиком, данные всё равно не в проде.
+// Этап 43 — переопределяет мёртвую attachments (объявлена с этапа 1, никогда не
+// читалась/писалась) под owner-scoped кэш расшифрованных вложений (CONTRACTS.md/DESIGN.md).
+db.version(12).stores({
+  attachments: "[ownerPubkey+sha256], ownerPubkey, lastAccessedAt"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

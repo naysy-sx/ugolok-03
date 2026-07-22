@@ -10,6 +10,7 @@ import {
 	touch,
 	isIdle,
 } from "../src/ui/signals/auth.js";
+import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../src/ui/attachment-memory-cache.js";
 
 test("исходное состояние: все сигналы пусты", () => {
 	lock(); // сброс на случай порядка выполнения тестов
@@ -39,6 +40,12 @@ test("lock: сбрасывает все 4 сигнала в null", () => {
 	assert.equal(privKeySig.value, null);
 	assert.equal(masterSecretSig.value, null);
 	assert.equal(dbKeySig.value, null);
+});
+
+test("lock: чистит кэш расшифрованных вложений в памяти (найдено ревью Opus — иначе медиа переживает блокировку сессии в оперативке)", () => {
+	putMemoryCachedAttachment("some-sha256", new Uint8Array([1, 2, 3]), "image/png");
+	lock();
+	assert.equal(getMemoryCachedUrl("some-sha256"), undefined);
 });
 
 test("login: masterSecret/dbKey детерминированы (та же деривация, что этап 8)", () => {

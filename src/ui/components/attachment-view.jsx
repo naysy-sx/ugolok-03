@@ -1,5 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
-import { downloadAttachment } from "../../domain/attachments/upload.js";
+import { getOrDownloadAttachment } from "../../domain/attachments/cache.js";
+import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
+import { currentUser, dbKeySig } from "../signals/auth.js";
 import ImageModal from "./image-modal.jsx";
 
 function base64ToBytes(str) {
@@ -19,25 +21,34 @@ const FILE_TYPE_ICONS = { video: "🎞️", audio: "🎵", file: "📄" };
 // показать хоть пиксель) — но картинки ожидаются видимыми сразу в бабле (в отличие от
 // видео, см. VideoAttachment), клик -> полноэкранная модалка (image-modal.jsx).
 function ImageAttachment({ attachment }) {
-	const [url, setUrl] = useState(null);
+	// Ленивая инициализация из общего слоя памяти (attachment-memory-cache.js) —
+	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
+	// без вспышки спиннера (найдено ревью: URL.revokeObjectURL на каждом unmount
+	// раньше заставлял пере-качивать и пере-расшифровывать уже виденное).
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.sha256) ?? null);
 	const [error, setError] = useState("");
 	const [showModal, setShowModal] = useState(false);
 
 	useEffect(() => {
+		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		if (memUrl) {
+			setUrl(memUrl);
+			return;
+		}
 		let cancelled = false;
-		let objectUrl;
-		downloadAttachment(attachment)
+		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
 			.then((bytes) => {
 				if (cancelled) return;
-				objectUrl = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
-				setUrl(objectUrl);
+				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(err?.message || String(err));
 			});
+		// URL НЕ отзывается здесь — им теперь владеет attachment-memory-cache.js
+		// (вытесняется по LRU/бюджету или полностью в lock()), не жизненный цикл
+		// этого конкретного компонента.
 		return () => {
 			cancelled = true;
-			if (objectUrl) URL.revokeObjectURL(objectUrl);
 		};
 	}, [attachment]);
 
@@ -73,29 +84,34 @@ function ImageAttachment({ attachment }) {
 // видео — раньше был отдельный лимит 3 МБ, поднят по просьбе пользователя). voiceInline
 // (F-AT-08, ≤32КБ) вообще не ходит в сеть — декодируется прямо из base64 в payload.
 function AudioAttachment({ attachment }) {
-	const [url, setUrl] = useState(null);
+	const [url, setUrl] = useState(() => (attachment.voiceInline ? null : (getMemoryCachedUrl(attachment.sha256) ?? null)));
 	const [error, setError] = useState("");
 
 	useEffect(() => {
-		let cancelled = false;
-		let objectUrl;
+		// voiceInline (≤32КБ, F-AT-08) — decode из payload КАЖДЫЙ раз, в сеть/кэш
+		// не ходит вовсе, кэшировать нечего (уже дёшево, ObjectURL живёт своим
+		// unmount'ом, как раньше).
 		if (attachment.voiceInline) {
-			objectUrl = URL.createObjectURL(new Blob([base64ToBytes(attachment.voiceInline)], { type: attachment.mime || "audio/webm" }));
+			const objectUrl = URL.createObjectURL(new Blob([base64ToBytes(attachment.voiceInline)], { type: attachment.mime || "audio/webm" }));
 			setUrl(objectUrl);
 			return () => URL.revokeObjectURL(objectUrl);
 		}
-		downloadAttachment(attachment)
+		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		if (memUrl) {
+			setUrl(memUrl);
+			return;
+		}
+		let cancelled = false;
+		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
 			.then((bytes) => {
 				if (cancelled) return;
-				objectUrl = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
-				setUrl(objectUrl);
+				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(err?.message || String(err));
 			});
 		return () => {
 			cancelled = true;
-			if (objectUrl) URL.revokeObjectURL(objectUrl);
 		};
 	}, [attachment]);
 
@@ -120,26 +136,23 @@ function AudioAttachment({ attachment }) {
 // видео в истории чата была бы избыточной — в отличие от картинок, ожидаемых видимыми
 // сразу).
 function VideoAttachment({ attachment }) {
-	const [url, setUrl] = useState(null);
+	// Если это видео уже смотрели в этой вкладке — url есть сразу из памяти,
+	// клик "Воспроизвести" не нужен повторно (тот же приём, что ImageAttachment).
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.sha256) ?? null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 
 	function handleLoad() {
 		setLoading(true);
 		setError("");
-		downloadAttachment(attachment)
+		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
 			.then((bytes) => {
-				setUrl(URL.createObjectURL(new Blob([bytes], { type: attachment.mime })));
+				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
 			})
 			.catch((err) => setError(err?.message || String(err)))
 			.finally(() => setLoading(false));
 	}
-
-	useEffect(() => {
-		return () => {
-			if (url) URL.revokeObjectURL(url);
-		};
-	}, [url]);
+	// URL НЕ отзывается на unmount — им владеет attachment-memory-cache.js (см. ImageAttachment).
 
 	if (url) {
 		return <video controls autoPlay src={url} style={{ maxWidth: "100%", borderRadius: "var(--radius)", display: "block" }} />;
@@ -174,7 +187,7 @@ function FileAttachment({ attachment }) {
 		setLoading(true);
 		setError("");
 		try {
-			const bytes = await downloadAttachment(attachment);
+			const bytes = await getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment);
 			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
 			const a = document.createElement("a");
 			a.href = url;

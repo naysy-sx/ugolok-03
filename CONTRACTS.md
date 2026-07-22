@@ -5447,3 +5447,201 @@ export function fromEncryptedRow(row, dbKey);
 них). Старый `wrapEncryptedTable` — удаляется, `diagnostics.jsx`'s
 самопроверка переписывается на новую пару функций (не самостоятельная
 ценность, просто больше не единственный потребитель модуля).
+
+## Этап 43 — локальный кэш вложений (decrypted, dbKey-encrypted at rest)
+
+Найдено разметкой ролей хранилища (обсуждение с пользователем, вне
+кода): `attachments` объявлена в схеме с этапа 1 (`sha256, messageId,
+type, mime`), ни разу не использована ни одним доменным файлом —
+мёртвая таблица. Переопределяется под реальную задачу: вложения сейчас
+скачиваются с Blossom и расшифровываются заново при КАЖДОМ показе
+(`attachment-view.jsx`, `URL.revokeObjectURL` при каждом размонтировании
+компонента) — повторный просмотр того же вложения тратит и сеть, и
+CPU на расшифровку впустую.
+
+### Схема (`database.js`, аддитивно)
+
+```js
+db.version(12).stores({
+  attachments: "[ownerPubkey+sha256], ownerPubkey, lastAccessedAt"
+});
+```
+
+Owner-scoped ключ ОБЯЗАТЕЛЕН — тот же класс бага, что Lamport-часы
+(этап 42-довесок): два локальных аккаунта в одном браузере не должны
+делить кэш по голому `sha256`, иначе строка, записанная под dbKey
+аккаунта A, не расшифруется под dbKey аккаунта B (или, ещё хуже,
+маскирует чужой контент под тем же content-hash).
+
+### `src/core/store/table-fields.js` (добавить)
+
+```js
+export const ATTACHMENT_CACHE_PLAINTEXT_FIELDS = ["ownerPubkey", "sha256", "mime", "size", "lastAccessedAt"];
+```
+
+`bytes` (сами расшифрованные байты вложения) — единственное sensitive-поле,
+уходит в `ciphertext` через `toEncryptedRow` как есть (Uint8Array
+корректно круглотрипается `db-crypto.js`'s replacer/reviver, найдено
+этапом 39).
+
+### `src/domain/attachments/cache.js` (новый файл)
+
+```js
+export const CACHE_BUDGET_BYTES = 200 * 1024 * 1024; // 200 МБ на владельца
+export const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней с последнего обращения
+
+export async function getCachedAttachment(ownerPubkey, dbKey, sha256Hex);
+// -> Uint8Array | undefined (undefined на промах, НЕ бросает).
+// При попадании обновляет lastAccessedAt = Date.now() той же строки (LRU-touch).
+
+export async function putCachedAttachment(ownerPubkey, dbKey, sha256Hex, mime, bytes, options = {});
+// put (не add — идемпотентно перезаписывает) toEncryptedRow(
+//   { ownerPubkey, sha256: sha256Hex, mime, size: bytes.length, lastAccessedAt: Date.now(), bytes },
+//   ATTACHMENT_CACHE_PLAINTEXT_FIELDS, dbKey
+// ), затем вызывает evictIfNeeded(ownerPubkey, options).
+
+export async function evictIfNeeded(ownerPubkey, { budgetBytes = CACHE_BUDGET_BYTES, ttlMs = CACHE_TTL_MS } = {});
+// Псевдокод и инварианты — DESIGN.md, этап 43. options принимает
+// budgetBytes/ttlMs НЕ из констант напрямую, а как параметры с
+// дефолтом — тесты подставляют маленькие значения, не ждут гигабайты.
+
+export async function getOrDownloadAttachment(ownerPubkey, dbKey, attachment, options = {});
+// attachment — дескриптор F-AT-02 ({sha256, blossomUrl, encryptionKey, mime, ...}).
+// hit -> getCachedAttachment(...), сеть НЕ дёргается.
+// miss -> downloadAttachment(attachment, options) [upload.js, сигнатура БЕЗ
+// изменений] -> putCachedAttachment(...) -> возвращает байты.
+```
+
+### Точка вызова — `attachment-view.jsx`
+
+`ImageAttachment`/`AudioAttachment` (только не-`voiceInline` ветка —
+она уже не ходит в сеть, F-AT-08)/`VideoAttachment`/`FileAttachment`:
+`downloadAttachment(attachment)` → `getOrDownloadAttachment(currentUser.value.id,
+dbKeySig.value, attachment)`. `ownerPubkey`/`dbKey` читаются напрямую
+из `ui/signals/auth.js` (`currentUser`, `dbKeySig`) — тот же приём, что
+уже используют другие компоненты, читающие сессионные сигналы
+напрямую; проп-дриллинг через `message-bubble.jsx`/`post-card.jsx`/
+`channel-chat.jsx`/`channel.jsx` не нужен, `AttachmentView` не меняет
+свой публичный проп-интерфейс.
+
+### Миграция
+
+Та же позиция, что версии 5/6/9/11 — dev-стадия, данных к миграции
+нет, `resetLocalDatabase()` уже покрывает этот класс изменений схемы.
+
+### Правка (найдено ревью — Claude Opus, до коммита): честная мотивация + два слоя
+
+Первая версия этой секции обосновывала дисковый кэш "быстрее". Неверно:
+`dbKey`-расшифровка стоит РОВНО столько же CPU, сколько расшифровка
+контентным ключом в `downloadAttachment` — выигрыша в CPU между "кэш
+шифротекста" и "кэш плейнтекста, зашифрованного dbKey" нет вообще.
+Хуже того — реализация ЧЕРЕЗ `toEncryptedRow`/`encryptRow`
+(`db-crypto.js`) для больших бинарных вложений оказалась НЕ ПРОСТО
+медленной, а **сломанной**: `encryptRow` JSON.stringify'ит значение и
+кодирует `Uint8Array` в base64 через `btoa(String.fromCharCode.apply(null,
+value))` — `.apply()` на массиве в мегабайты бросает `RangeError:
+Maximum call stack size exceeded` (проверено эмпирически: 100 КБ ещё
+проходит, 2 МБ уже падает — лимиты вложений 20-50 МБ, F-AT-04).
+
+**Честная мотивация дискового слоя:** не скорость, а (а) работает без
+сети/после перезагрузки (offline-first для медиа, не только для
+текста), (б) AEAD-тег ChaCha20-Poly1305 попутно ловит порчу кэша на
+диске (не отдельная фича, а бесплатное следствие того же примитива).
+
+**Реальная причина тормозов** (найдена верно, но не там, где чинили) —
+`attachment-view.jsx` вызывает `URL.revokeObjectURL` на КАЖДОМ
+размонтировании компонента: пролистали мимо картинки и обратно —
+полный цикл сеть+расшифровка заново, хотя байты только что были в
+памяти вкладки. Это и есть настоящий CPU/UX-выигрыш, и его даёт только
+отдельный слой в памяти, не дисковый кэш.
+
+**Архитектура — два слоя, не один:**
+
+- **Слой 1 (память, новый).** `src/ui/attachment-memory-cache.js` —
+  LRU `Map<sha256Hex, {url, size}>` поверх уже созданных
+  `Blob`/`ObjectURL`. Обязательное условие (иначе течёт дисциплина "на
+  диске всё зашифровано" через оперативку) — очищается в `lock()`
+  (`ui/signals/auth.js`) синхронно с обнулением `dbKeySig`/`privKeySig`.
+- **Слой 2 (диск, правка существующего).** `src/domain/attachments/cache.js`
+  переписывается на ПРЯМОЕ ChaCha20-Poly1305 поверх сырых байт (тот же
+  примитив, что `core/crypto/file-crypto.js`, ключ — `dbKey` вместо
+  случайного) — БЕЗ `toEncryptedRow`/JSON/base64 для поля с байтами.
+
+#### `src/domain/attachments/cache.js` — новая сигнатура шифрования
+
+```js
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
+// db.table('attachments') строка теперь: { ownerPubkey, sha256, mime, size,
+// lastAccessedAt, nonce, ciphertext } — nonce/ciphertext сырые Uint8Array,
+// Dexie/IndexedDB structured clone хранит их нативно, JSON не нужен.
+
+export async function getCachedAttachment(ownerPubkey, dbKey, sha256Hex);
+// get([ownerPubkey, sha256Hex]) -> undefined на промах.
+// bytes = chacha20poly1305(dbKey, row.nonce).decrypt(row.ciphertext).
+// touch lastAccessedAt, вернуть bytes.
+
+export async function putCachedAttachment(ownerPubkey, dbKey, sha256Hex, mime, bytes, options = {});
+// nonce = crypto.getRandomValues(new Uint8Array(12));
+// ciphertext = chacha20poly1305(dbKey, nonce).encrypt(bytes);
+// put({ownerPubkey, sha256: sha256Hex, mime, size: bytes.length,
+//      lastAccessedAt: Date.now(), nonce, ciphertext});
+// evictIfNeeded(ownerPubkey, options) — БЕЗ ИЗМЕНЕНИЙ, работает с
+// plaintext-полями size/lastAccessedAt, к шифрованию не касается.
+
+// evictIfNeeded, getOrDownloadAttachment — БЕЗ ИЗМЕНЕНИЙ (см. секцию выше).
+```
+
+`ATTACHMENT_CACHE_PLAINTEXT_FIELDS`/`toEncryptedRow` для этой таблицы
+БОЛЬШЕ НЕ ИСПОЛЬЗУЮТСЯ — вычеркнуть из `table-fields.js`, если были
+добавлены. Осознанное исключение из общего "все таблицы через
+`toEncryptedRow`" (DESIGN.md, этап 43-правка) — единственная таблица
+с крупными бинарными полями, для которой этот путь ломается.
+
+#### `src/ui/attachment-memory-cache.js` (новый файл)
+
+```js
+export const MEMORY_CACHE_BUDGET_BYTES = 50 * 1024 * 1024; // 50 МБ, оперативная память вкладки
+
+export function getMemoryCachedUrl(sha256Hex);
+// -> string | undefined. При попадании — переставляет запись в конец
+// внутреннего Map (MRU), как lastAccessedAt-touch в дисковом слое.
+
+export function putMemoryCachedAttachment(sha256Hex, bytes, mime, options = {});
+// Если sha256Hex уже в кэше — вернуть существующий url (не плодить
+// повторные Blob на один и тот же файл). Иначе: new Blob([bytes],
+// {type: mime}) -> URL.createObjectURL -> сохранить {url, size} ->
+// evictMemoryCacheIfNeeded(options) -> вернуть url.
+
+export function evictMemoryCacheIfNeeded(options = {});
+// { budgetBytes = MEMORY_CACHE_BUDGET_BYTES } = options. Сумма size по
+// всем записям; если > budgetBytes — вытеснять с НАЧАЛА Map (порядок
+// вставки = LRU, тот же принцип, что дисковый слой) через
+// URL.revokeObjectURL + delete, пока не уложится.
+
+export function clearMemoryCache();
+// URL.revokeObjectURL для КАЖДОЙ записи, затем cache.clear(). Вызывается
+// из ui/signals/auth.js's lock().
+```
+
+#### Точка вызова — `attachment-view.jsx`
+
+`ImageAttachment`/`AudioAttachment` (не-`voiceInline`)/`VideoAttachment`:
+сначала синхронно `getMemoryCachedUrl(attachment.sha256)` — попадание,
+url есть сразу, без единого await. Промах — как раньше,
+`getOrDownloadAttachment(...)`, но результат ДОПОЛНИТЕЛЬНО прогоняется
+через `putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime)`
+вместо голого `URL.createObjectURL(new Blob(...))` — url теперь владеет
+им общий кэш, не компонент. **Убрать** `URL.revokeObjectURL` из
+cleanup-функции `useEffect` в этих трёх компонентах — жизненным циклом
+url управляет `attachment-memory-cache.js` (вытеснение/`clearMemoryCache`),
+повторный revoke компонентом на своём unmount убил бы url, которым в
+это время уже владеет кэш и может отдать другому компоненту.
+`FileAttachment` — БЕЗ ИЗМЕНЕНИЙ (одноразовое скачивание через `<a
+download>`, нет постоянно отображаемого url — слой памяти ему не даёт
+ничего, дисковый слой уже подключён).
+
+#### Точка вызова — `ui/signals/auth.js`
+
+`lock()` — добавить `clearMemoryCache()` первой строкой (до/вместе с
+обнулением `dbKeySig`/`privKeySig`) — расшифрованное медиа не должно
+пережить логическую блокировку сессии в памяти вкладки.

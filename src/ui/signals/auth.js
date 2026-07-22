@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { deriveMasterSecret, deriveDbKey } from "../../core/crypto/derivation.js";
+import { clearMemoryCache } from "../attachment-memory-cache.js";
 
 export const currentUser = signal(null);
 export const privKeySig = signal(null);
@@ -17,6 +18,7 @@ export function login(id, loginName, privKeyBytes, now = Date.now()) {
 }
 
 export function lock() {
+  clearMemoryCache();
   currentUser.value = null;
   privKeySig.value = null;
   masterSecretSig.value = null;
