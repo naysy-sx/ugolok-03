@@ -17,6 +17,7 @@ import ChannelChat from "../components/channel-chat.jsx";
 import ModerationActions from "../components/moderation-actions.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
 import { ContactIdentity } from "./contacts.jsx";
+import Screen from "../components/screen.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -358,12 +359,9 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	if (loading) {
 		return (
-			<main class="flow" style={{ padding: "var(--space-m)" }}>
-				<button type="button" onClick={() => openChannel(null)}>
-					← Назад
-				</button>
+			<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title="Канал">
 				<p style={{ color: "var(--muted)" }}>Загрузка…</p>
-			</main>
+			</Screen>
 		);
 	}
 
@@ -372,14 +370,11 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// этого пользователя (receiveBanAnnouncement удаляет строку channels целиком).
 	if (!channelRow) {
 		return (
-			<main class="flow" style={{ padding: "var(--space-m)" }}>
-				<button type="button" onClick={() => openChannel(null)}>
-					← Назад
-				</button>
+			<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title="Канал недоступен">
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					Этот канал больше недоступен — возможно, владелец забанил вас или удалил канал.
 				</p>
-			</main>
+			</Screen>
 		);
 	}
 
@@ -387,13 +382,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const canComment = channelRow.role === "owner" || channelRow.role === "subscriber";
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
-			<header class="cluster" style={{ alignItems: "center" }}>
-				<button type="button" onClick={() => openChannel(null)}>
-					← Назад
-				</button>
-				<h1>{channelRow.name || "(без названия)"}</h1>
-			</header>
+		<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title={channelRow.name || "(без названия)"}>
 			{channelRow.description && <p>{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details>
@@ -494,6 +483,6 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 					<ModerationPanel ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} />
 				</section>
 			)}
-		</main>
+		</Screen>
 	);
 }

@@ -1,9 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
-import { useRoute } from "./ui/router.js";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "./ui/nav-items.js";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
-import Onboarding from "./ui/screens/onboarding.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
@@ -12,6 +10,25 @@ import Channels from "./ui/screens/channels.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import { currentUser, lock } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
+import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
+import IconChatBubble from "./ui/icons/chat-bubble.jsx";
+import IconReader from "./ui/icons/reader.jsx";
+import IconPeople from "./ui/icons/people.jsx";
+import IconGear from "./ui/icons/gear.jsx";
+import IconPerson from "./ui/icons/person.jsx";
+import IconActivityLog from "./ui/icons/activity-log.jsx";
+import IconExit from "./ui/icons/exit.jsx";
+
+// nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
+// живёт здесь, во view-слое.
+const NAV_ICONS = {
+	messages: IconChatBubble,
+	channels: IconReader,
+	contacts: IconPeople,
+	settings: IconGear,
+	profile: IconPerson,
+	diagnostics: IconActivityLog,
+};
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
@@ -24,40 +41,35 @@ function MainShell() {
 	}, [activeChatPubkey.value]);
 
 	return (
-		<div style={{ display: "flex", minHeight: "100dvh" }}>
-			<aside
-				style={{
-					flex: "0 0 auto",
-					borderInlineEnd: "var(--border-width) solid var(--border)",
-					padding: "var(--space-m)"
-				}}
-			>
-				<nav role="navigation">
+		<div class="app-layout">
+			<aside class="sidebar" aria-label="Профиль и главное меню">
+				<SidebarProfileCard onEditProfile={() => setActiveId("profile")} />
+				<nav role="navigation" aria-label="Главное меню" style={{ flex: "1 1 auto" }}>
 					<ul role="list">
-						{NAV_ITEMS.map(item => (
-							<li key={item.id}>
-								<button
-									type="button"
-									onClick={() => setActiveId(item.id)}
-									aria-current={item.id === activeId ? "page" : null}
-									class={item.id === activeId ? "is-active" : undefined}
-								>
-									{item.label}
-								</button>
-							</li>
-						))}
+						{NAV_ITEMS.map(item => {
+							const ItemIcon = NAV_ICONS[item.id];
+							return (
+								<li key={item.id}>
+									<button
+										type="button"
+										class={`nav-item-btn${item.id === activeId ? " is-active" : ""}`}
+										onClick={() => setActiveId(item.id)}
+										aria-current={item.id === activeId ? "page" : null}
+									>
+										<ItemIcon />
+										{item.label}
+									</button>
+								</li>
+							);
+						})}
 					</ul>
 				</nav>
-				<button type="button" onClick={lock} style={{ marginBlockStart: "var(--space-m)" }}>
+				<button type="button" class="nav-item-btn" onClick={lock}>
+					<IconExit />
 					Выйти
 				</button>
 			</aside>
-			<div
-				style={{
-					flex: "1 1 auto",
-					overflow: "auto"
-				}}
-			>
+			<div class="main-content">
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
 				{activeId === "contacts" && <Contacts />}
@@ -76,13 +88,13 @@ function MainShell() {
 }
 
 export default function App() {
-	const route = useRoute();
 	const user = currentUser.value;
 
 	if (user) {
 		return <MainShell />;
 	}
 
-	if (route === "/onboarding") return <Onboarding />;
+	// Единый стартовый экран (unlock.jsx) — вход, регистрация и "другие способы"
+	// живут виджетами одной страницы, отдельный роут /onboarding больше не нужен.
 	return <Unlock />;
 }

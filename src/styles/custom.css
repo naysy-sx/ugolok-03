@@ -13,3 +13,579 @@
 	background-color: deeppink;
 	color: white;
 }
+
+/* Пункт главного меню с иконкой (Radix Icons, MIT — см. src/ui/icons/) —
+   иконка перед подписью, размер иконки завязан на font-size кнопки (width/
+   height: 1em на самой svg), поэтому отдельно ничего не масштабируем здесь. */
+.nav-item-btn {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	width: 100%;
+}
+.nav-item-btn svg {
+	flex: none;
+}
+
+/* Radix Icons — заливка (fill), не обводка: у них нет stroke-width, чтобы
+   буквально "утолщить линию". Накладываем тонкую обводку того же цвета
+   поверх заливки — визуально бьёт по самым тонким местам фигуры (рамка
+   "пузыря", контур шестерёнки), не разбухая на сплошных участках. Подкрутить
+   толщину — одна цифра здесь, ничего не трогая в самих иконках. */
+.icon path {
+	stroke: currentColor;
+	stroke-width: 0.6;
+}
+
+/* ================================================================== *
+ *  Основной экран приложения (app.jsx, MainShell + screen.jsx) —     *
+ *  каркас "шапка+один локальный скролл+подвал" на всех внутренних    *
+ *  экранах (обсуждено с пользователем). Идея вёрстки — от пользо-    *
+ *  вателя, реализация/приёмы (position:absolute-скролл, min-height:0,*
+ *  медиа-фолбэк < 768px) — моя.                                      *
+ * ================================================================== */
+
+/* height:100dvh + overflow:hidden — ГЛАВНОЕ требование пользователя:
+   глобальный скролл страницы не должен появляться вообще, только внутри
+   .content-wrapper ниже. body/html не трогаем (там min-height, не height —
+   стартовый экран, unlock.jsx, специально скроллится как обычная страница,
+   это другой сценарий) — ограничение живёт строго на .app-layout. */
+.app-layout {
+	height: 100dvh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-layout .sidebar {
+	flex: 0 0 auto;
+	overflow-y: auto;
+	padding: var(--space-m);
+	border-block-end: var(--border-width) solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-m);
+}
+
+.app-layout .main-content {
+	flex: 1;
+	min-height: 0; /* без этого flex-ребёнок не сжался бы под контент, см. .content-area ниже */
+	overflow: hidden;
+}
+
+/* ≥768px (тот же порог, что auth-layout, — обсуждено с пользователем):
+   сайдбар сбоку фиксированной ширины, не полосой сверху. На узких экранах
+   сознательно НЕ включаем фикс-высоту/hidden-скролл — это отдельная, не
+   затронутая сейчас задача (просили именно "десктоп, большие разрешения"),
+   ниже порога просто обычная прокручиваемая страница, как было раньше. */
+@media (min-width: 48em) {
+	.app-layout {
+		flex-direction: row;
+	}
+	.app-layout .sidebar {
+		flex: 0 0 auto;
+		width: 15rem;
+		border-block-end: none;
+		border-inline-end: var(--border-width) solid var(--border);
+	}
+}
+
+.app-layout .profile-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: var(--space-2xs);
+	padding-block-end: var(--space-m);
+	border-block-end: var(--border-width) solid var(--border);
+}
+.app-layout .profile-card-body h2 {
+	font-size: var(--step-1);
+	margin-block: 0;
+}
+.app-layout .profile-card-body p {
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block-start: var(--space-3xs);
+}
+.app-layout .btn-link {
+	background-color: transparent;
+	border: 0;
+	padding: var(--space-3xs);
+	color: var(--accent);
+	font-weight: var(--weight-normal);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	cursor: pointer;
+	font-size: var(--step--1);
+}
+.app-layout .btn-link:hover {
+	color: var(--accent-hover);
+}
+
+/* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
+   прокручиваемой зоны. content-section заполняет .main-content целиком. */
+.app-layout .content-section {
+	height: 100%;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-layout .section-header {
+	flex: 0 0 auto;
+	padding: var(--space-m);
+	border-block-end: var(--border-width) solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.app-layout .header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+}
+.app-layout .header-actions h1 {
+	font-size: var(--step-2);
+}
+.app-layout .action-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+
+.app-layout .breadcrumbs ol {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3xs);
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.app-layout .breadcrumbs li:not(:last-child)::after {
+	content: "/";
+	margin-inline-start: var(--space-3xs);
+}
+.app-layout .breadcrumbs button {
+	background: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	cursor: pointer;
+	font: inherit;
+	font-size: inherit;
+}
+.app-layout .breadcrumbs button:hover {
+	color: var(--accent-hover);
+}
+.app-layout .breadcrumbs [aria-current="page"] {
+	color: var(--fg);
+}
+
+/* Приём "скроллится ровно то, что осталось от flex-родителя": content-area —
+   position:relative + flex:1 + min-height:0, content-wrapper — абсолютно
+   спозиционирован на все 4 края (inset:0) и сам скроллится. Не зависит от
+   капризов flexbox-переполнения в разных браузерах — тот же приём, что на
+   стартовом экране (.auth-layout .sidebar), только тут это САМА суть задачи,
+   не второстепенная деталь. */
+.app-layout .content-area {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+.app-layout .content-wrapper {
+	position: absolute;
+	inset: 0;
+	overflow-y: auto;
+	padding: var(--space-m);
+}
+
+.app-layout .section-footer {
+	flex: 0 0 auto;
+	padding: var(--space-m);
+	border-block-start: var(--border-width) solid var(--border);
+}
+
+/* ================================================================== *
+ *  Стартовый экран (вход/регистрация, unlock.jsx) — вёрстка          *
+ *  предоставлена пользователем, перенесена из отдельного <style>     *
+ *  на чистом HTML/CSS. Токены — те же переменные minimal.css, ничего *
+ *  нового не заведено, кроме локальных производных на .auth-layout.  *
+ * ================================================================== */
+
+.auth-layout {
+	--radius: calc(var(--space-unit) * 0.5);
+	--avatar-size: calc(var(--space-unit) * 2.5);
+	--avatar-size-l: calc(var(--space-unit) * 4);
+	--rule-accent: calc(var(--border-width) * 3);
+	--surface-raised: color-mix(in oklch, var(--surface), var(--fg) 5%);
+}
+
+.auth-layout {
+	min-height: 100dvh;
+	max-width: var(--container);
+	margin-inline: auto;
+	padding-inline: var(--space-m);
+
+	display: grid;
+	row-gap: var(--space-xl);
+	column-gap: var(--space-l);
+
+	grid-template-areas:
+		"header"
+		"main"
+		"sidebar"
+		"footer";
+	grid-template-rows: auto 1fr auto auto;
+}
+
+.auth-layout .site-header {
+	grid-area: header;
+}
+.auth-layout main {
+	grid-area: main;
+}
+.auth-layout .sidebar {
+	grid-area: sidebar;
+}
+.auth-layout .site-footer {
+	grid-area: footer;
+}
+
+.auth-layout input {
+	background-color: var(--bg);
+}
+
+@media (min-width: 48em) {
+	.auth-layout {
+		grid-template-areas:
+			"header header"
+			"main   sidebar"
+			"footer footer";
+		grid-template-columns: minmax(0, 2fr) minmax(var(--grid-min), 1fr);
+		grid-template-rows: auto 1fr auto;
+	}
+
+	.auth-layout .sidebar {
+		position: sticky;
+		inset-block-start: var(--space-m);
+		align-self: start;
+		max-block-size: calc(100dvh - var(--space-m) * 2);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
+	}
+}
+
+.auth-layout .site-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-s) var(--space-m);
+	padding-block: var(--space-s);
+	border-block-end: var(--border-width) solid var(--border);
+}
+
+.auth-layout .logo {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2xs);
+}
+.auth-layout .logo-name {
+	font-size: var(--step-3);
+	font-weight: 900;
+	letter-spacing: var(--heading-letter-spacing);
+	color: var(--accent);
+}
+
+.auth-layout .main-nav {
+	margin-inline: auto;
+}
+.auth-layout .nav-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2xs) var(--space-m);
+	margin-block: 0;
+	padding-inline-start: 0;
+	list-style: none;
+}
+.auth-layout .nav-links li {
+	margin-block: 0;
+}
+.auth-layout .nav-links a {
+	color: var(--fg);
+	text-decoration: none;
+}
+.auth-layout .nav-links a:hover {
+	color: var(--accent);
+}
+
+.auth-layout .header-actions {
+	margin-inline-start: auto;
+}
+
+.auth-layout .sidebar {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min), 100%), 1fr));
+	gap: var(--space-m);
+	align-content: start;
+}
+
+.auth-layout .widget {
+	container-type: inline-size;
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-m);
+	box-shadow: var(--shadow);
+}
+
+.auth-layout .widget :is(h3, h4) {
+	font-size: var(--step-1);
+	margin-block: 0 var(--space-2xs);
+}
+.auth-layout .widget p {
+	margin-block: var(--space-2xs);
+}
+.auth-layout .widget > :first-child {
+	margin-block-start: 0;
+}
+.auth-layout .widget > :last-child {
+	margin-block-end: 0;
+}
+
+.auth-layout .widget-subtitle {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+
+/* "Другие способы" — простой список ссылок, не кнопки: действие второстепенное
+   (переход к редким сценариям входа), шрифт нарочно чуть мельче обычного текста. */
+.auth-layout .link-list {
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: var(--space-s) 0;
+	display: grid;
+	gap: var(--space-2xs);
+}
+.auth-layout .link-list li {
+	margin-block: 0;
+}
+.auth-layout .link-list-item {
+	display: inline;
+	background: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	font-size: var(--step--1);
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	cursor: pointer;
+	text-align: start;
+}
+.auth-layout .link-list-item:hover {
+	color: var(--accent-hover);
+}
+
+.auth-layout .accounts-list {
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: var(--space-s) 0;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	row-gap: var(--space-3xs);
+}
+.auth-layout .accounts-list li {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: subgrid;
+	margin-block: 0;
+}
+
+.auth-layout .account-picker-btn {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: subgrid;
+	align-items: center;
+	column-gap: var(--space-s);
+
+	background-color: transparent;
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+	text-align: start;
+	padding: var(--space-2xs);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius);
+	transition:
+		background-color var(--transition-speed) var(--transition-ease),
+		border-color var(--transition-speed) var(--transition-ease);
+}
+.auth-layout .account-picker-btn:hover {
+	background-color: var(--surface-raised);
+	border-color: var(--border);
+}
+.auth-layout .account-picker-btn:hover .account-name,
+.auth-layout .account-picker-btn[aria-current="true"] .account-name {
+	color: var(--accent);
+}
+.auth-layout .account-picker-btn[aria-current="true"] {
+	border-color: var(--accent);
+}
+
+.auth-layout .account-avatar,
+.auth-layout .account-avatar-large {
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: calc(infinity * 1px);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface-raised);
+}
+.auth-layout .account-avatar {
+	inline-size: var(--avatar-size);
+}
+.auth-layout .account-avatar-large {
+	inline-size: var(--avatar-size-l);
+}
+
+/* Заглушка вместо фото, пока у аккаунта нет сохранённого аватара — первая
+   буква логина на цветном круге, тот же приём, что ContactIdentity в чате. */
+.auth-layout .account-avatar-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}
+
+@container (min-width: 24rem) {
+	.auth-layout .accounts-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2xs);
+	}
+	.auth-layout .account-picker-btn {
+		display: flex;
+		gap: var(--space-2xs);
+		padding-inline-end: var(--space-s);
+		border-color: var(--border);
+		border-radius: calc(infinity * 1px);
+	}
+}
+
+.auth-layout .auth-box {
+	border-block-start: var(--rule-accent) solid var(--accent);
+
+	transition:
+		opacity var(--transition-speed) var(--transition-ease),
+		translate var(--transition-speed) var(--transition-ease);
+
+	@starting-style {
+		opacity: 0;
+		translate: 0 calc(-1 * var(--space-2xs));
+	}
+}
+
+.auth-layout .auth-box-header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	margin-block-end: var(--space-s);
+}
+.auth-layout .auth-box-header h4 {
+	margin-block: 0;
+}
+
+.auth-layout .auth-form {
+	display: grid;
+	gap: var(--space-s);
+	margin-block: 0;
+}
+.auth-layout .form-group {
+	margin-block: 0;
+}
+
+.auth-layout .btn {
+	display: inline-block;
+	padding: var(--space-2xs) var(--space-m);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: var(--weight-bold);
+	line-height: 1.2;
+	text-decoration: none;
+	cursor: pointer;
+	transition:
+		background-color var(--transition-speed) var(--transition-ease),
+		transform var(--transition-speed) var(--transition-ease);
+}
+.auth-layout .btn:hover {
+	background-color: var(--accent-hover);
+	color: var(--accent-contrast);
+}
+.auth-layout .btn:active {
+	transform: translateY(var(--border-width));
+}
+
+.auth-layout .btn-block {
+	display: block;
+	inline-size: 100%;
+	text-align: center;
+}
+
+.auth-layout .btn-link {
+	background-color: transparent;
+	border: 0;
+	padding: var(--space-3xs);
+	color: var(--accent);
+	font-weight: var(--weight-normal);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	justify-self: center;
+	cursor: pointer;
+	transition: color var(--transition-speed) var(--transition-ease);
+}
+.auth-layout .btn-link:hover {
+	background-color: transparent;
+	color: var(--accent-hover);
+	text-decoration: none;
+}
+.auth-layout .btn-link:active {
+	transform: none;
+}
+
+.auth-layout .hero-section {
+	padding-block: var(--space-2xl, var(--space-xl)) var(--space-xl);
+}
+
+.auth-layout .hero-section h1 {
+	max-width: var(--measure);
+}
+
+.auth-layout .hero-lead {
+	font-size: var(--step-1);
+	line-height: 1.5;
+	color: var(--muted);
+	max-width: var(--measure);
+	margin-block: var(--space-m) var(--space-l);
+}
+
+.auth-layout .site-footer {
+	border-block-start: var(--border-width) solid var(--border);
+	padding-block: var(--space-m);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.auth-layout .site-footer p {
+	margin-block: 0;
+}

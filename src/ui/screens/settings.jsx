@@ -5,6 +5,7 @@ import { loadUiSettings, saveUiSettings } from "../../domain/settings/ui-setting
 import { requestNotificationPermission } from "../../domain/notifications/notifier.js";
 import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
+import Screen from "../components/screen.jsx";
 
 // Мокап пользователя (v0.1, https://ibb.co/WWQNbYJ6) — раздел "Приватность" вне
 // скоупа (решение пользователя, CONTRACTS.md/этап 34): presence-протокол и поиск
@@ -74,20 +75,16 @@ export default function Settings() {
 
 	if (!settings) {
 		return (
-			<main class="flow" style={{ padding: "var(--space-m)" }}>
+			<Screen title="Настройки">
 				<p style={{ color: "var(--muted)" }}>Загрузка настроек…</p>
-			</main>
+			</Screen>
 		);
 	}
 
 	const n = settings.notifications;
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "44rem" }}>
-			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<p class="eyebrow">Уголок</p>
-				<h1>Настройки</h1>
-			</header>
+		<Screen title="Настройки">
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -259,6 +256,6 @@ export default function Settings() {
 					</button>
 				</div>
 			</section>
-		</main>
+		</Screen>
 	);
 }

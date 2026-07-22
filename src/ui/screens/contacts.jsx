@@ -30,6 +30,7 @@ import {
 import { messagingActivity } from "../signals/chats.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
+import Screen from "../components/screen.jsx";
 
 // F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
@@ -288,19 +289,15 @@ export default function Contacts() {
 			: nonBlockedContacts.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
-			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<p class="eyebrow">Уголок</p>
-				<h1>Контакты</h1>
-				<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-					Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
+		<Screen title="Контакты">
+			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+				Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
+			</p>
+			{connectionError && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{connectionError}
 				</p>
-				{connectionError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-						{connectionError}
-					</p>
-				)}
-			</header>
+			)}
 
 			<form class="cluster" onSubmit={handleAddContact} style={{ alignItems: "flex-end" }}>
 				<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
@@ -599,7 +596,7 @@ export default function Contacts() {
 					</section>
 				</div>
 			</div>
-		</main>
+		</Screen>
 	);
 }
 

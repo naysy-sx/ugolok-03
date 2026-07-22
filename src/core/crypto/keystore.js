@@ -37,7 +37,7 @@ export async function decryptPrivateKey(password, id) {
 
 export async function listAccounts() {
   const records = await db.table("keystore").toArray();
-  return records.map((r) => ({ id: r.id, login: r.login }));
+  return records.map((r) => ({ id: r.id, login: r.login, avatar: r.avatar ?? "" }));
 }
 
 export async function getProfile(id) {

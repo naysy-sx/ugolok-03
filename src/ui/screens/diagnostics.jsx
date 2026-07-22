@@ -28,6 +28,7 @@ import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
+import Screen from "../components/screen.jsx";
 
 function envChecks() {
 	return [
@@ -709,25 +710,19 @@ export default function Diagnostics() {
 	const transportSync = useTransportSyncCheck();
 
 	return (
-		<main
-			class="center flow"
+		<Screen title="Проверка движка">
+		<div
+			class="flow"
 			style={{
-				"--container": "44rem",
 				"--ok": "oklch(0.62 0.17 150)",
 				"--bad": "oklch(0.58 0.21 25)",
 				"--warn": "oklch(0.72 0.15 85)",
-				paddingBlock: "var(--space-xl)",
-				paddingInline: "var(--space-m)",
 			}}
 		>
-			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<p class="eyebrow">Уголок · диагностика окружения</p>
-				<h1>Проверка движка</h1>
-				<small style={{ color: "var(--muted)" }}>
-					build <code>{BUILD_HASH}</code> · relays:{" "}
-					{DEFAULT_RELAYS.length ? DEFAULT_RELAYS.join(", ") : "—"}
-				</small>
-			</header>
+			<small style={{ color: "var(--muted)" }}>
+				build <code>{BUILD_HASH}</code> · relays:{" "}
+				{DEFAULT_RELAYS.length ? DEFAULT_RELAYS.join(", ") : "—"}
+			</small>
 
 			<p
 				role="status"
@@ -797,6 +792,7 @@ export default function Diagnostics() {
 			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
 				{navigator.userAgent}
 			</small>
-		</main>
+		</div>
+		</Screen>
 	);
 }

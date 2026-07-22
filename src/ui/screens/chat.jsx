@@ -37,6 +37,7 @@ import { createVoiceRecorder, shouldInlineVoice } from "../../domain/attachments
 import SyncIndicator from "../components/sync-indicator.jsx";
 import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentPreview from "../components/attachment-preview.jsx";
+import Screen from "../components/screen.jsx";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
@@ -117,24 +118,20 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 	}
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
-			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<p class="eyebrow">Уголок</p>
-				<h1>Сообщения</h1>
-				<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-					Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={DEFAULT_RELAYS[0]} />
+		<Screen title="Сообщения" feed>
+			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+				Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={DEFAULT_RELAYS[0]} />
+			</p>
+			{connectionError && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{connectionError}
 				</p>
-				{connectionError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-						{connectionError}
-					</p>
-				)}
-				{listError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-						{listError}
-					</p>
-				)}
-			</header>
+			)}
+			{listError && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{listError}
+				</p>
+			)}
 
 			<section class="flow" aria-labelledby="inbox-heading" style={{ "--flow-space": "var(--space-s)" }}>
 				<h2 id="inbox-heading">Входящие ({inboxList.length})</h2>
@@ -219,7 +216,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 					</ul>
 				)}
 			</section>
-		</main>
+		</Screen>
 	);
 }
 
@@ -233,10 +230,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const draftTimerRef = useRef(null);
 	// Упущение пользователя (не баг): при входе в чат нужна автопрокрутка к последнему
 	// сообщению. bottomRef — сентинел ПОСЛЕ последнего сообщения; scrollIntoView() сам
-	// находит реально скроллящегося предка (в этой вёрстке им оказался document, а не
-	// внутренний div с overflowY:auto — тот никогда не переполняется, т.к. его height:100%
-	// считается от minHeight-предка и растёт вместе с контентом). scrollTop на конкретном
-	// div здесь был бы no-op — подтверждено живым E2E при вёрстке с реальным overflow.
+	// находит реально скроллящегося предка — после переезда на общий каркас (screen.jsx)
+	// это .content-wrapper (position:absolute;inset:0;overflow-y:auto), не document.
 	// pendingScrollRef взводится при смене contactPubkey (список messages грузится
 	// АСИНХРОННО отдельным эффектом ниже) — прокрутка срабатывает один раз, когда messages
 	// реально обновится, а не на каждое последующее фоновое сообщение (иначе выдёргивала
@@ -575,123 +570,123 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const displayName = profile?.name || shortPubkey(contactPubkey);
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem", height: "100%", display: "flex", flexDirection: "column" }}>
-			<header class="cluster" style={{ alignItems: "center" }}>
-				<button type="button" onClick={() => openChat(null)}>
-					← Назад
-				</button>
-				<h1>{displayName}</h1>
+		<Screen
+			breadcrumb={{ label: "Сообщения", onBack: () => openChat(null) }}
+			title={displayName}
+			actions={
 				<button type="button" onClick={handleClearHistory}>
 					Очистить переписку
 				</button>
-			</header>
+			}
+			feed
+			footer={
+				<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+					{attachmentFile && (
+						<AttachmentPreview
+							file={attachmentFile}
+							position={attachmentPosition}
+							onPositionChange={setAttachmentPosition}
+							onRemove={handleRemoveAttachment}
+							error={attachmentError}
+						/>
+					)}
+
+					{recordingState === "recording" && (
+						<p class="cluster" role="status" style={{ alignItems: "center" }}>
+							<span aria-hidden="true">🔴</span> Идёт запись голосового…
+							<button type="button" onClick={handleStopRecording}>
+								Остановить
+							</button>
+							<button type="button" onClick={handleCancelRecording}>
+								Отменить
+							</button>
+						</p>
+					)}
+
+					{recordingState === "recorded" && recordedVoiceUrl && (
+						<p class="cluster" style={{ alignItems: "center" }}>
+							<audio controls src={recordedVoiceUrl} />
+							<button type="button" onClick={handleDiscardRecordedVoice}>
+								Удалить запись
+							</button>
+						</p>
+					)}
+
+					{uploadingAttachment && (
+						<p class="cluster" role="status" style={{ alignItems: "center" }}>
+							<span class="spinner" aria-hidden="true" /> Загрузка вложения…
+						</p>
+					)}
+
+					<form class="cluster" onSubmit={handleSend} style={{ alignItems: "flex-end" }}>
+						<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
+						<button
+							type="button"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={recordingState !== "idle"}
+							aria-label="Прикрепить файл"
+						>
+							📎
+						</button>
+						<button
+							type="button"
+							onClick={handleStartRecording}
+							disabled={recordingState !== "idle" || !!attachmentFile}
+							aria-label="Записать голосовое сообщение"
+						>
+							🎤
+						</button>
+						<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
+							<label class="visually-hidden" for="chat-message-input">
+								Сообщение
+							</label>
+							<textarea
+								id="chat-message-input"
+								value={text}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onInput={handleTextInput}
+								rows={2}
+							/>
+						</div>
+						<button
+							type="submit"
+							disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
+						>
+							Отправить
+						</button>
+					</form>
+				</div>
+			}
+		>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
-
-			<div class="flow" style={{ flex: "1 1 auto", overflowY: "auto", "--flow-space": "var(--space-2xs)" }}>
-				{hasMore && (
-					<button type="button" onClick={handleLoadMore}>
-						Загрузить более старые сообщения
-					</button>
-				)}
-				{messages.length === 0 && <p style={{ color: "var(--muted)" }}>Сообщений пока нет — напишите первое!</p>}
-				<div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2xs)" }}>
-					{messages.map((message) => {
-						const isOwn = message.senderPubkey === ownerPubkey;
-						return (
-							<MessageBubble
-								key={message.msgId}
-								message={message}
-								isOwn={isOwn}
-								onDeleteForMe={handleDeleteForMe}
-								onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
-								onEdit={isOwn ? handleEdit : undefined}
-								maxLength={MAX_MESSAGE_LENGTH}
-							/>
-						);
-					})}
-					<div ref={bottomRef} />
-				</div>
+			{hasMore && (
+				<button type="button" onClick={handleLoadMore}>
+					Загрузить более старые сообщения
+				</button>
+			)}
+			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>Сообщений пока нет — напишите первое!</p>}
+			<div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2xs)" }}>
+				{messages.map((message) => {
+					const isOwn = message.senderPubkey === ownerPubkey;
+					return (
+						<MessageBubble
+							key={message.msgId}
+							message={message}
+							isOwn={isOwn}
+							onDeleteForMe={handleDeleteForMe}
+							onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
+							onEdit={isOwn ? handleEdit : undefined}
+							maxLength={MAX_MESSAGE_LENGTH}
+						/>
+					);
+				})}
+				<div ref={bottomRef} />
 			</div>
-
-			{attachmentFile && (
-				<AttachmentPreview
-					file={attachmentFile}
-					position={attachmentPosition}
-					onPositionChange={setAttachmentPosition}
-					onRemove={handleRemoveAttachment}
-					error={attachmentError}
-				/>
-			)}
-
-			{recordingState === "recording" && (
-				<p class="cluster" role="status" style={{ alignItems: "center" }}>
-					<span aria-hidden="true">🔴</span> Идёт запись голосового…
-					<button type="button" onClick={handleStopRecording}>
-						Остановить
-					</button>
-					<button type="button" onClick={handleCancelRecording}>
-						Отменить
-					</button>
-				</p>
-			)}
-
-			{recordingState === "recorded" && recordedVoiceUrl && (
-				<p class="cluster" style={{ alignItems: "center" }}>
-					<audio controls src={recordedVoiceUrl} />
-					<button type="button" onClick={handleDiscardRecordedVoice}>
-						Удалить запись
-					</button>
-				</p>
-			)}
-
-			{uploadingAttachment && (
-				<p class="cluster" role="status" style={{ alignItems: "center" }}>
-					<span class="spinner" aria-hidden="true" /> Загрузка вложения…
-				</p>
-			)}
-
-			<form class="cluster" onSubmit={handleSend} style={{ alignItems: "flex-end" }}>
-				<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
-				<button
-					type="button"
-					onClick={() => fileInputRef.current?.click()}
-					disabled={recordingState !== "idle"}
-					aria-label="Прикрепить файл"
-				>
-					📎
-				</button>
-				<button
-					type="button"
-					onClick={handleStartRecording}
-					disabled={recordingState !== "idle" || !!attachmentFile}
-					aria-label="Записать голосовое сообщение"
-				>
-					🎤
-				</button>
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
-					<label class="visually-hidden" for="chat-message-input">
-						Сообщение
-					</label>
-					<textarea
-						id="chat-message-input"
-						value={text}
-						maxLength={MAX_MESSAGE_LENGTH}
-						onInput={handleTextInput}
-						rows={2}
-					/>
-				</div>
-				<button
-					type="submit"
-					disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
-				>
-					Отправить
-				</button>
-			</form>
-		</main>
+		</Screen>
 	);
 }
 

@@ -15,6 +15,7 @@ import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { activeChannelId, openChannel } from "../signals/channel-nav.js";
 import ChannelDetail from "./channel.jsx";
+import Screen from "../components/screen.jsx";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -288,11 +289,7 @@ function ChannelsList() {
 	}
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "56rem" }}>
-			<header class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<p class="eyebrow">Уголок</p>
-				<h1>Каналы</h1>
-			</header>
+		<Screen title="Каналы">
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -352,7 +349,7 @@ function ChannelsList() {
 					/>
 				</section>
 			)}
-		</main>
+		</Screen>
 	);
 }
 

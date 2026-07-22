@@ -14,6 +14,8 @@ import {
 	removeBlossomUrl,
 	setActiveBlossomUrl,
 } from "../../domain/settings/ui-settings.js";
+import Screen from "../components/screen.jsx";
+import { bumpProfileActivity } from "../signals/profile.js";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -217,6 +219,7 @@ export default function Profile() {
 		const dataUrl = await readFileAsDataUrl(file);
 		setAvatar(dataUrl);
 		await updateProfile(id, { avatar: dataUrl });
+		bumpProfileActivity();
 		input.value = "";
 
 		// Best-effort (та же философия, что handleBioSubmit): локальное превью/кэш
@@ -251,6 +254,7 @@ export default function Profile() {
 	async function handleBioSubmit(e) {
 		e.preventDefault();
 		await updateProfile(id, { bio });
+		bumpProfileActivity();
 		setSavedBio(bio);
 		setBioStatus("Сохранено");
 		clearTimeout(statusTimerRef.current);
@@ -276,9 +280,9 @@ export default function Profile() {
 
 	if (loading) {
 		return (
-			<main class="flow" style={{ padding: "var(--space-m)" }}>
+			<Screen title="Профиль">
 				<p style={{ color: "var(--muted)" }}>Загрузка профиля…</p>
-			</main>
+			</Screen>
 		);
 	}
 
@@ -286,12 +290,7 @@ export default function Profile() {
 	const bioIsDirty = bio !== savedBio;
 
 	return (
-		<main class="flow" style={{ padding: "var(--space-m)", "--container": "44rem" }}>
-			<header class="flow">
-				<p class="eyebrow">Профиль</p>
-				<h1>{login || "Без имени"}</h1>
-			</header>
-
+		<Screen title={login || "Без имени"}>
 			<section class="flow" aria-labelledby="profile-npub-heading">
 				<h2 id="profile-npub-heading">Ваш идентификатор</h2>
 				<p class="cluster" style={{ alignItems: "center" }}>
@@ -432,6 +431,6 @@ export default function Profile() {
 			</section>
 
 			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} />
-		</main>
+		</Screen>
 	);
 }
