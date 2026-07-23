@@ -201,7 +201,7 @@ test("banMember: ротирует channelKey, реиздаёт грант ОСТ
 	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
 	assert.deepEqual(grants[0].tags.find((t) => t[0] === "p"), ["p", MALLORY_PUB]);
 
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "версия ключа увеличена");
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
@@ -213,7 +213,7 @@ test("banMember: переиздаёт allowlist БЕЗ забаненного (�
 	const published = [];
 	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	assert.ok(allowlistRow);
 	assert.ok(!allowlistRow.allowedAuthors.includes(BOB_PUB), "Боб исключён из нового allowlist");
@@ -265,7 +265,7 @@ test("receiveBanAnnouncement: у ОСТАЛЬНЫХ (Mallory) — канал о�
 test("АДВЕРСАРНЫЙ: поддельное объявление о бане (не от владельца) отклоняется", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const channelRow = await db.table("channels").get([ALICE_PUB, channelId]);
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 
 	// Mallory (не владелец) подделывает бан Боба, подписывая СВОИМ ключом.

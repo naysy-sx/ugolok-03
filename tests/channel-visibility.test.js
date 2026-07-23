@@ -112,7 +112,7 @@ test("revokeViewFromMember: ротирует channelKey, реиздаёт гра
 	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
 	assert.deepEqual(grants[0].tags.find((t) => t[0] === "p"), ["p", MALLORY_PUB]);
 
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "версия ключа увеличена");
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
@@ -131,7 +131,7 @@ test("revokeViewFromMember: переиздаёт allowlist БЕЗ target (есл
 	const published = [];
 	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	assert.ok(allowlistRow);
 	assert.ok(!allowlistRow.allowedAuthors.includes(BOB_PUB), "Боб исключён из нового allowlist");
@@ -146,7 +146,7 @@ test("revokeIfNoLongerVisible: pubkey состоял ТОЛЬКО в удаля�
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(readers.map((r) => r.readerPubkey), [MALLORY_PUB], "Боб отозван, Mallory остаётся");
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "ключ ротирован");
 });
 
@@ -164,7 +164,7 @@ test("revokeIfNoLongerVisible: pubkey всё ещё виден через ДРУ
 		[BOB_PUB, CAROL_PUB].sort(),
 		"Боб НЕ отозван — виден через family",
 	);
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 1, "ключ НЕ ротирован — отзыва не было");
 	assert.deepEqual(published, [], "publish не должен вызываться, если отзыва не произошло");
 });

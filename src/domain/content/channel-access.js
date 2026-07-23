@@ -59,7 +59,7 @@ export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, 
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) return; // не наш канал — defensive, не должно происходить в норме
 
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const version = meta.currentVersion;
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, version]), dbKey);
 	const allowlistRowRaw = await db.table("commentAllowlists").get([ownerPubkey, channelId, version]);

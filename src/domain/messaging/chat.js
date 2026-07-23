@@ -217,7 +217,7 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 		// это создало бы ВТОРОЙ, другой шифртекст. Кладём в outbox буквально
 		// ТОТ ЖЕ event для повторной попытки, не бросаем исключение — сообщение
 		// остаётся видимым локально со статусом "failed", не теряется молча.
-		await enqueue(event);
+		await enqueue(event, dbKey);
 		await upsertMessage({
 			ownerPubkey,
 			chatId: contactPubkey,

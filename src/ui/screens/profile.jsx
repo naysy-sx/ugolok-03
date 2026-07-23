@@ -104,12 +104,12 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 	);
 }
 
-function RelayBlossomSection({ ownerPubkey, privKey }) {
+function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 	const [settings, setSettings] = useState(null);
 	const [busy, setBusy] = useState(false);
 
 	async function refresh() {
-		setSettings(await loadUiSettings(ownerPubkey));
+		setSettings(await loadUiSettings(ownerPubkey, dbKey));
 	}
 
 	useEffect(() => {
@@ -136,11 +136,11 @@ function RelayBlossomSection({ ownerPubkey, privKey }) {
 				urls={settings.relayUrls}
 				activeUrl={settings.activeRelayUrl}
 				busy={busy}
-				onAdd={(url) => withBusy(() => addRelayUrl(ownerPubkey, privKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeRelayUrl(ownerPubkey, privKey, url, publish))}
+				onAdd={(url) => withBusy(() => addRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
+				onRemove={(url) => withBusy(() => removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
 				onSetActive={(url) =>
 					withBusy(async () => {
-						await setActiveRelayUrl(ownerPubkey, privKey, url, publish);
+						await setActiveRelayUrl(ownerPubkey, privKey, dbKey, url, publish);
 						await reconnectWithNewSettings(ownerPubkey, privKey, dbKeySig.value);
 					})
 				}
@@ -151,9 +151,9 @@ function RelayBlossomSection({ ownerPubkey, privKey }) {
 				urls={settings.blossomUrls}
 				activeUrl={settings.activeBlossomUrl}
 				busy={busy}
-				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, url, publish))}
-				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, url, publish))}
+				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
+				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
+				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
 			/>
 		</div>
 	);
@@ -227,7 +227,7 @@ export default function Profile() {
 		// поэтому загружается БЕЗ шифрования (uploadAvatarBlob, этап 37).
 		setPublishStatus("публикация…");
 		try {
-			const settings = await loadUiSettings(id);
+			const settings = await loadUiSettings(id, dbKeySig.value);
 			const serverUrl = settings.activeBlossomUrl;
 			if (!serverUrl) {
 				setPublishStatus("не опубликовано для других: нет активного Blossom-сервера");
@@ -430,7 +430,7 @@ export default function Profile() {
 				<input id="profile-files-input" type="file" multiple disabled />
 			</section>
 
-			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} />
+			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 		</Screen>
 	);
 }

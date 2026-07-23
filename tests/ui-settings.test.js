@@ -22,6 +22,7 @@ import {
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
+const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
 before(async () => {
 	await db.open();
@@ -73,7 +74,7 @@ test("parseUiSettingsEvent: неполный старый payload (без notifi
 });
 
 test("loadUiSettings: без локальной записи -> дефолт", async () => {
-	const settings = await loadUiSettings(ALICE_PUB);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.accentColorId, "blue");
 	assert.equal(settings.uiScale, "medium");
 	assert.deepEqual(settings.notifications, DEFAULT_SETTINGS.notifications);
@@ -81,51 +82,51 @@ test("loadUiSettings: без локальной записи -> дефолт", a
 
 test("saveUiSettings: сохраняет локально СРАЗУ, даже если publish бросает ошибку (best-effort)", async () => {
 	const settings = { ...DEFAULT_SETTINGS, accentColorId: "violet" };
-	await saveUiSettings(ALICE_PUB, ALICE_PRIV, settings, failingPublish());
-	const loaded = await loadUiSettings(ALICE_PUB);
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, settings, failingPublish());
+	const loaded = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(loaded.accentColorId, "violet", "локальное сохранение не зависит от результата публикации");
 });
 
 test("addRelayUrl/setActiveRelayUrl/removeRelayUrl: полный цикл", async () => {
 	const published = [];
-	await addRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-a.example", capturingPublish(published));
-	await addRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-b.example", capturingPublish(published));
-	let settings = await loadUiSettings(ALICE_PUB);
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	let settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.deepEqual(settings.relayUrls, ["wss://relay-a.example", "wss://relay-b.example"]);
 
-	await setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-b.example", capturingPublish(published));
-	settings = await loadUiSettings(ALICE_PUB);
+	await setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.activeRelayUrl, "wss://relay-b.example");
 
 	await assert.rejects(
-		() => removeRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-b.example", capturingPublish(published)),
+		() => removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published)),
 		/активный/,
 		"нельзя удалить активный relay",
 	);
 
-	await removeRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-a.example", capturingPublish(published));
-	settings = await loadUiSettings(ALICE_PUB);
+	await removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.deepEqual(settings.relayUrls, ["wss://relay-b.example"]);
 });
 
 test("addRelayUrl: повторное добавление того же URL идемпотентно (не дублирует)", async () => {
 	const published = [];
-	await addRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-a.example", capturingPublish(published));
-	await addRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://relay-a.example", capturingPublish(published));
-	const settings = await loadUiSettings(ALICE_PUB);
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.deepEqual(settings.relayUrls, ["wss://relay-a.example"]);
 });
 
 test("setActiveRelayUrl: URL, которого нет в списке -> throw", async () => {
-	await assert.rejects(() => setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, "wss://unknown.example", capturingPublish([])), /отсутствует/);
+	await assert.rejects(() => setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://unknown.example", capturingPublish([])), /отсутствует/);
 });
 
 test("addBlossomUrl/setActiveBlossomUrl/removeBlossomUrl: тот же цикл, что relay", async () => {
 	const published = [];
-	await addBlossomUrl(ALICE_PUB, ALICE_PRIV, "https://blossom-a.example", capturingPublish(published));
-	await setActiveBlossomUrl(ALICE_PUB, ALICE_PRIV, "https://blossom-a.example", capturingPublish(published));
-	await assert.rejects(() => removeBlossomUrl(ALICE_PUB, ALICE_PRIV, "https://blossom-a.example", capturingPublish(published)), /активный/);
-	const settings = await loadUiSettings(ALICE_PUB);
+	await addBlossomUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "https://blossom-a.example", capturingPublish(published));
+	await setActiveBlossomUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "https://blossom-a.example", capturingPublish(published));
+	await assert.rejects(() => removeBlossomUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "https://blossom-a.example", capturingPublish(published)), /активный/);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.activeBlossomUrl, "https://blossom-a.example");
 });
 
@@ -136,13 +137,31 @@ test("rebuildUiSettings: сканирует events, берёт ПОСЛЕДНИ�
 		{ id: older.id, pubkey: ALICE_PUB, kind: KIND_UI_SETTINGS, created_at: older.created_at, tags: older.tags, content: older.content, sig: older.sig },
 		{ id: newer.id, pubkey: ALICE_PUB, kind: KIND_UI_SETTINGS, created_at: newer.created_at, tags: newer.tags, content: newer.content, sig: newer.sig },
 	]);
-	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV);
-	const settings = await loadUiSettings(ALICE_PUB);
+	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.accentColorId, "moss", "последняя по created_at версия выигрывает (LWW)");
 });
 
 test("rebuildUiSettings: нет событий -> no-op, не бросает", async () => {
-	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV);
-	const settings = await loadUiSettings(ALICE_PUB);
+	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.accentColorId, "blue", "остаётся дефолт");
+});
+
+// AC-16, Tier 4 (этап 45) — сырой дамп таблицы не должен содержать relay/Blossom
+// URL в открытом виде; только ownerPubkey остаётся plaintext (индекс).
+test("AC-16: сырая запись uiSettings в IndexedDB не содержит relayUrls/blossomUrls в открытом виде", async () => {
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, relayUrls: ["wss://secret-relay.example"] }, capturingPublish([]));
+	const row = await db.table("uiSettings").get(ALICE_PUB);
+	assert.equal(row.ownerPubkey, ALICE_PUB);
+	assert.equal(row.relayUrls, undefined, "поля настроек не должны лежать top-level в открытом виде");
+	const dump = JSON.stringify(row);
+	assert.ok(!dump.includes("secret-relay"), "URL не должен встречаться нигде в сырой записи");
+	assert.ok(row.nonce && row.ciphertext, "содержимое должно быть зашифровано в nonce/ciphertext");
+});
+
+test("неверный dbKey -> loadUiSettings бросает (AES-GCM/ChaCha tag mismatch), не молча возвращает мусор", async () => {
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, accentColorId: "violet" }, capturingPublish([]));
+	const wrongKey = crypto.getRandomValues(new Uint8Array(32));
+	await assert.rejects(() => loadUiSettings(ALICE_PUB, wrongKey));
 });

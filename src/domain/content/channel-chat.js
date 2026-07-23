@@ -19,7 +19,7 @@ async function requirePublishOk(publish, event) {
 export async function sendChannelMessage(ownerPubkey, ownerPrivKey, dbKey, channelId, text, attachments, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 
 	const messageId = crypto.randomUUID();
@@ -73,7 +73,7 @@ export async function receiveChannelMessage(ownerPubkey, dbKey, event) {
 		.first();
 	if (!channelRow) return false;
 
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
 	if (!meta) return false;
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
 	if (!keyRowRaw) return false;

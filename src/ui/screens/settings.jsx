@@ -1,5 +1,5 @@
 import { useState, useEffect, useId } from "preact/hooks";
-import { currentUser, privKeySig, lock } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig, lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { loadUiSettings, saveUiSettings } from "../../domain/settings/ui-settings.js";
 import { requestNotificationPermission } from "../../domain/notifications/notifier.js";
@@ -15,6 +15,7 @@ import MnemonicReveal from "../components/mnemonic-reveal.jsx";
 export default function Settings() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
+	const dbKey = dbKeySig.value;
 
 	const [settings, setSettings] = useState(null);
 	const [error, setError] = useState("");
@@ -22,7 +23,7 @@ export default function Settings() {
 	const instanceId = useId();
 
 	useEffect(() => {
-		loadUiSettings(ownerPubkey).then((loaded) => {
+		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
 			setSettings(loaded);
 			applyAccentColor(loaded.accentColorId);
 			applyUiScale(loaded.uiScale);
@@ -35,7 +36,7 @@ export default function Settings() {
 	async function persist(next) {
 		setSettings(next);
 		try {
-			await saveUiSettings(ownerPubkey, privKey, next, publish);
+			await saveUiSettings(ownerPubkey, privKey, dbKey, next, publish);
 		} catch (err) {
 			setError(err?.message || String(err));
 		}

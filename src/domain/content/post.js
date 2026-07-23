@@ -61,7 +61,7 @@ async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsm
 	const row = fromEncryptedRow(raw, dbKey); // text/attachments — sensitive, нужны для republish-контента
 
 	const channelRow = await db.table("channels").get([ownerPubkey, row.channelId]);
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, row.channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, row.channelId]), dbKey);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, row.channelId, meta.currentVersion]), dbKey);
 
 	const content = encryptChannelContent(
@@ -128,7 +128,7 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 	if (!channelRow) return false;
 	if (event.pubkey !== channelRow.creatorPubkey) return false;
 
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
 	if (!meta) return false;
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
 	if (!keyRowRaw) return false;

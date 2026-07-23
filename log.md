@@ -2693,3 +2693,36 @@ CONTRACTS.md ("Новый UI — settings.jsx").
 импорт-по-ключу) + адверсарно (неверный пароль, скрыть/показать цикл).
 Regression: `npm test` 677/677 (было 670, +7). `npm run build`
 250.06 КБ gzip.
+
+## Этап 45 — AC-16, реальный Tier 4 (uiSettings/outbox/channelKeyMeta)
+
+Найдено чтением PLAN.md/table-fields.js: этап 42 назвал себя "Tier 4
+(последний)" в PLAN.md, но по составу таблиц (channelReports/
+chatSyncState/contactRequests/inboxRequests) это Tier 3 — код
+(table-fields.js:33) всегда называл это правильно, путаница была
+только в PLAN.md. Настоящий Tier 4 не был реализован вовсе. Ценность
+шифрования спорная (DESIGN.md), пользователь выбрал реализовать ради
+полноты — задача рутинная (повторение паттерна Tier 0-3), design-
+записка не нужна.
+
+Без вызова воркера — весь объём мелкая механическая правка по уже
+установленному паттерну (toEncryptedRow/fromEncryptedRow), сделано
+вручную: ui-settings.js (9 функций, dbKey третьим/новым параметром),
+outbox.js (enqueue/listPending/drain), channelKeyMeta в 7 файлах
+домена (channel.js, channel-access.js, post.js, channel-chat.js,
+channel-visibility.js, moderation.js, comments.js) — везде dbKey уже
+был параметром (channelKeys рядом уже шифровался тем же ключом),
+только .get/.put обернуть + 2 места .update->put (партиал-инвариант,
+тот же класс, что messages.text на Tier 0/1).
+
+Тесты обновлены до кода (ui-settings.test.js, outbox.test.js,
+channel.test.js, channel-visibility.test.js, moderation.test.js) +
+5 новых AC-16/adversarial тестов. Regression поймала 1 пропуск:
+chat.test.js читал outbox сырым db.table.get — поправлено на
+listPending (расшифровка).
+
+Живая проверка: реальный strfry уже был запущен в системе (чужой
+процесс, не трогал) — через него: relay-переключение в Профиле,
+Диагностика "Этап 5" ok, создание канала целиком через реальный relay
+успешно. Regression: `npm test` 682/682 (было 677). `npm run build`
+250.08 КБ gzip.

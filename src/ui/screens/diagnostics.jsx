@@ -206,13 +206,14 @@ function useOutboxStatus() {
 		(async () => {
 			try {
 				const diagEventId = "diag-selfcheck-" + Date.now();
-				const seq = await enqueue({ id: diagEventId, kind: 0, tags: [], content: "", sig: "", pubkey: "", created_at: 0 });
-				const pendingBefore = await listPending();
+				const diagDbKey = crypto.getRandomValues(new Uint8Array(32));
+				const seq = await enqueue({ id: diagEventId, kind: 0, tags: [], content: "", sig: "", pubkey: "", created_at: 0 }, diagDbKey);
+				const pendingBefore = await listPending(diagDbKey);
 				if (!pendingBefore.some((r) => r.seq === seq)) {
 					throw new Error("enqueue: запись не найдена в listPending");
 				}
 				await markSent(seq);
-				const pendingAfter = await listPending();
+				const pendingAfter = await listPending(diagDbKey);
 				if (pendingAfter.some((r) => r.seq === seq)) {
 					throw new Error("markSent: запись всё ещё в listPending");
 				}

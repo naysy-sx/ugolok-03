@@ -1,11 +1,17 @@
 import { db } from "./database.js";
+import { toEncryptedRow, fromEncryptedRow } from "./encrypted-table.js";
+import { OUTBOX_PLAINTEXT_FIELDS } from "./table-fields.js";
 
-export async function enqueue(event) {
-  return db.outbox.add({ eventId: event.id, event, status: "pending", retryCount: 0 });
+// dbKey (этап 45, Tier 4) — event целиком уходит в шифр; eventId/status/retryCount
+// остаются plaintext (индексируемые, читаются partial-update'ами markSent/markFailed
+// ниже — они НЕ трогают event, поэтому decrypt-merge-encrypt для них не нужен).
+export async function enqueue(event, dbKey) {
+  return db.outbox.add(toEncryptedRow({ eventId: event.id, event, status: "pending", retryCount: 0 }, OUTBOX_PLAINTEXT_FIELDS, dbKey));
 }
 
-export async function listPending() {
-  return db.outbox.where("status").equals("pending").sortBy("seq");
+export async function listPending(dbKey) {
+  const rows = await db.outbox.where("status").equals("pending").sortBy("seq");
+  return rows.map((row) => fromEncryptedRow(row, dbKey));
 }
 
 export async function markSent(seq) {
@@ -19,8 +25,8 @@ export async function markFailed(seq) {
   }
 }
 
-export async function drain(publishFn) {
-  let records = await listPending();
+export async function drain(publishFn, dbKey) {
+  let records = await listPending(dbKey);
   let sentCount = 0;
   let failedCount = 0;
 

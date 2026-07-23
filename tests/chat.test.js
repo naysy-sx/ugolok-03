@@ -267,7 +267,7 @@ test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ б
 	assert.equal(result.queued, true);
 	assert.equal(typeof result.eventId, "string");
 
-	const outboxRows = await db.table("outbox").where("eventId").equals(result.eventId).toArray();
+	const outboxRows = (await db.table("outbox").where("eventId").equals(result.eventId).toArray()).map((r) => fromEncryptedRow(r, DB_KEY));
 	assert.equal(outboxRows.length, 1, "событие должно быть поставлено в outbox");
 	assert.equal(outboxRows[0].status, "pending");
 	assert.equal(outboxRows[0].event.kind, 445, "в outbox должен лежать ВЕСЬ подписанный event (МЛС-ратчет уже продвинут — регенерировать нельзя), не только id");

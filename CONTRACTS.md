@@ -5716,3 +5716,130 @@ Password-gate: кнопка "Показать фразу" → инлайн-фо�
 (старый аккаунт до этапа 44, или вход по приватному ключу) — вместо
 кнопки короткое пояснение, почему функция недоступна для ЭТОГО
 аккаунта (честно, не скрывать молча).
+
+## Этап 45 — AC-16 Tier 4 (низкий приоритет) — `uiSettings`/`outbox`/`channelKeyMeta`
+
+Исправление найденной путаницы в нумерации: этап 42 назвал себя в
+PLAN.md "Tier 4 (последний)", но по составу таблиц
+(`channelReports`/`chatSyncState`/`contactRequests`/`inboxRequests`)
+это Tier 3 из исходной таблицы приоритизации (раздел "Этап 39" выше,
+`table-fields.js:33` уже правильно называет это Tier 3). Реальный
+Tier 4 — три таблицы ниже — не был реализован вовсе. Ценность
+шифрования для них сама по себе спорная (см. таблицу "Tier 4" выше:
+`uiSettings` — метаданные, не контент; `outbox` — событие и так станет
+публичным на relay через секунды; `channelKeyMeta` — только счётчик
+`currentVersion`) — пользователь тем не менее выбрал реализовать, ради
+полноты AC-16 (100% materialized-view таблиц под `dbKey`, без
+исключений по "спорности"). `knownDevices`/`deviceIdentity` — вне
+скоупа (как и в исходной таблице Tier 4 — отдельный, не проведённый
+аудит).
+
+### `table-fields.js` — новые константы
+
+```js
+export const UI_SETTINGS_PLAINTEXT_FIELDS = ["ownerPubkey"];
+export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"];
+export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
+```
+
+### `ui-settings.js` — правка контракта (dbKey — новый параметр сразу после privKey, тот же DI-стиль, что везде)
+
+```js
+export function loadUiSettings(ownerPubkey, dbKey);
+// db.table("uiSettings").get(ownerPubkey) -> fromEncryptedRow(row, dbKey)
+// (fromEncryptedRow сама возвращает undefined на undefined — ветка
+// "нет локальной записи, дефолт" не меняется).
+
+export function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish);
+// put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey))
+// publish(buildUiSettingsEvent(...)) — БЕЗ ИЗМЕНЕНИЙ (kind 30072 остаётся
+// NIP-44-шифрованным как раньше — это отдельный, уже существующий слой
+// для синхронизации между СВОИМИ устройствами через relay; dbKey — только
+// для локального кэша на этом устройстве, никогда не путать эти два шифра).
+
+export function rebuildUiSettings(ownerPubkey, privKey, dbKey);
+// parseUiSettingsEvent (kind 30072, NIP-44) — БЕЗ ИЗМЕНЕНИЙ; put в конце
+// оборачивается toEncryptedRow(..., dbKey), как saveUiSettings.
+
+// addRelayUrl/removeRelayUrl/setActiveRelayUrl/addBlossomUrl/removeBlossomUrl/
+// setActiveBlossomUrl — все шесть получают dbKey ТРЕТЬИМ параметром
+// (ownerPubkey, privKey, dbKey, url, publish) — тонкие обёртки над
+// loadUiSettings/saveUiSettings, просто пробрасывают дальше.
+```
+
+Вызывающие места (dbKey уже присутствует в области видимости везде,
+двойной проверкой по коду — новых сигналов/пропсов не требуется, кроме
+одного): `transport.js`'s `connect(pubkeyHex, privKey, dbKey)` (вызовы
+`loadUiSettings`/`rebuildUiSettings` внутри) и `onBatch`-замыкания
+`refreshChannelContentSubscription(ownerPubkey, dbKey)`/
+`refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish)`
+(оба уже принимают `dbKey`); `profile.jsx`'s `handleAvatarChange`
+(`dbKeySig.value` уже импортирован) и `RelayBlossomSection` (НОВЫЙ
+проп `dbKey`, проброшенный из `<RelayBlossomSection ownerPubkey={id}
+privKey={...} dbKey={dbKeySig.value} />`); `settings.jsx` — НОВЫЙ
+импорт `dbKeySig` из `auth.js` (сейчас импортирован только
+`privKeySig`), `persist()`/начальный `loadUiSettings` получают
+`dbKeySig.value`.
+
+### `outbox.js` — правка контракта
+
+```js
+export function enqueue(event, dbKey);
+// db.outbox.add({ eventId, status:'pending', retryCount:0, ...toEncryptedRow({event}, [], dbKey) })
+// ВСЁ содержимое record, кроме eventId/status/retryCount (plaintext,
+// индексируемые), уходит в шифр — практически только поле `event`
+// (сам подписанный Nostr-event целиком).
+
+export function listPending(dbKey);
+// db.outbox.where("status").equals("pending").sortBy("seq")
+// -> .map(row => fromEncryptedRow(row, dbKey)) — возвращает СПИСОК
+// РАСШИФРОВАННЫХ записей (call sites читают record.event как раньше).
+
+export function markSent(seq);
+export function markFailed(seq);
+// БЕЗ ИЗМЕНЕНИЙ — партиал .update() трогает ТОЛЬКО status/retryCount,
+// оба plaintext-поля вне ciphertext, decrypt-merge-encrypt не нужен
+// (иначе, чем messages.text/posts.text на Tier 0/1 — там партиал бил
+// по самому зашифрованному полю, здесь нет).
+
+export function drain(publishFn, dbKey);
+// listPending(dbKey) вместо listPending() — единственное изменение тела.
+```
+
+Вызывающие места: `chat.js`'s `sendMessage` (`enqueue(event)` →
+`enqueue(event, dbKey)` — `dbKey` уже параметр функции, строка рядом
+уже шифрует `mlsGroups` тем же ключом); `transport.js`'s
+`drainOutboxSafely(publish)` → `drainOutboxSafely(publish, dbKey)` (оба
+вызова — внутри `connect(pubkeyHex, privKey, dbKey)`, `dbKey` уже в
+замыкании); `diagnostics.jsx` self-check (этап 5) — генерирует
+собственный throwaway `dbKey` через уже импортированные
+`deriveMasterSecret`/`deriveDbKey` (тот же приём, что остальные
+self-check тесты, использующие домен, требующий `dbKey`).
+
+### `channelKeyMeta` — правка контракта (7 файлов домена)
+
+Тот же паттерн, что уже применяется в этих же файлах к `channelKeys`
+(`toEncryptedRow`/`fromEncryptedRow`, `CHANNEL_KEYS_PLAINTEXT_FIELDS`)
+— сигнатуры функций НЕ меняются, `dbKey` уже параметр каждой из них.
+
+- `.get([ownerPubkey, channelId])` → обернуть
+  `fromEncryptedRow(await db.table("channelKeyMeta").get([...]), dbKey)`
+  (`channel.js` ×3, `channel-access.js` ×1, `post.js` ×2,
+  `channel-chat.js` ×2, `channel-visibility.js` ×1, `moderation.js` ×1,
+  `comments.js` ×2).
+- `.put({ownerPubkey, channelId, currentVersion})` → обернуть
+  `toEncryptedRow({...}, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey)`
+  (`channel.js` ×2).
+- `.update([ownerPubkey, channelId], {currentVersion: vNew})` → ЗАМЕНА
+  на `.put(toEncryptedRow({ownerPubkey, channelId, currentVersion: vNew}, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey))`
+  — партиал-инвариант: `currentVersion` — ЕДИНСТВЕННОЕ sensitive-поле
+  этой таблицы, голый `.update()` писал бы его поверх/рядом с
+  `nonce`/`ciphertext` как plaintext (тот же класс бага, что
+  `messages.text` на Tier 0/1). Два места: `channel-visibility.js:35`,
+  `moderation.js:103`.
+- `.delete([ownerPubkey, channelId])` — БЕЗ ИЗМЕНЕНИЙ (`moderation.js:144`).
+
+Тесты, читающие `db.table("channelKeyMeta").get(...).currentVersion`
+напрямую (`channel.test.js`, `channel-visibility.test.js`,
+`moderation.test.js`) — обернуть чтение в `fromEncryptedRow(row, DB_KEY)`,
+тот же приём, что уже применяется в этих файлах к `channelKeys`.

@@ -212,7 +212,7 @@ test("handleIncomingSubscribeRequest: повторный запрос уже п�
 	const outbox2 = [];
 	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(outbox2));
 
-	const meta = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
 	const occurrences = allowlistRow.allowedAuthors.filter((p) => p === BOB_PUB).length;
 	assert.equal(occurrences, 1, "повторный запрос не должен дублировать pubkey в allowlist");
@@ -225,6 +225,19 @@ test("АДВЕРСАРНЫЙ: receiveChannelKeyGrant для ЧУЖОГО пол�
 	const grantEvent = published.find((e) => e.kind === 30053); // предназначен Бобу, не Мэллори
 
 	await assert.rejects(() => receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, grantEvent));
+});
+
+// AC-16, Tier 4 (этап 45) — сырой дамп channelKeyMeta не должен содержать
+// currentVersion в открытом виде; только ownerPubkey/channelId (составной PK) plaintext.
+test("AC-16: сырая запись channelKeyMeta не содержит currentVersion в открытом виде", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	const row = await db.table("channelKeyMeta").get([ALICE_PUB, channelId]);
+	assert.equal(row.ownerPubkey, ALICE_PUB);
+	assert.equal(row.channelId, channelId);
+	assert.equal(row.currentVersion, undefined, "currentVersion не должен лежать top-level в открытом виде");
+	assert.ok(row.nonce && row.ciphertext);
+	const decrypted = fromEncryptedRow(row, DB_KEY);
+	assert.equal(decrypted.currentVersion, 1);
 });
 
 test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный allowlist (не от владельца канала) отклоняется, роль не повышается", async () => {

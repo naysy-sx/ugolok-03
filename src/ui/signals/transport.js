@@ -78,7 +78,7 @@ function waitForConnState(conn, predicate, timeoutMs) {
 // и при каждом авто-reconnect relay-pool.js после обрыва связи (через onStateChange).
 // Fire-and-forget — не должен блокировать остальной connect()/reconnect-flow; сбой
 // (relay снова недоступен посреди попытки) проглатывается, не валит вызывающий код.
-async function drainOutboxSafely(publish) {
+async function drainOutboxSafely(publish, dbKey) {
 	try {
 		const { sentCount } = await drain(async (record) => {
 			const result = await publish(record.event);
@@ -86,7 +86,7 @@ async function drainOutboxSafely(publish) {
 				await db.table("messages").where("id").equals(record.eventId).modify({ status: "sent" });
 			}
 			return result;
-		});
+		}, dbKey);
 		if (sentCount > 0) bumpMessagingActivity();
 	} catch (e) {
 		console.warn("drainOutboxSafely: не удалось опустошить outbox", e);
@@ -126,7 +126,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
 	// Локальный кэш — источник истины для ТЕКУЩЕГО подключения; build-time дефолт —
 	// только фолбэк на первый запуск, пока локальной записи ещё нет вовсе.
-	const localSettings = await loadUiSettings(pubkeyHex);
+	const localSettings = await loadUiSettings(pubkeyHex, dbKey);
 	const relayUrl = localSettings.activeRelayUrl ?? DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 	connection = createRelayConnection(relayUrl, {
 		onStateChange: (s) => {
@@ -135,7 +135,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			// publisher уже существует на этот момент (пережил обрыв, message-
 			// handler'ы не сбрасываются). На САМОМ первом "connected" publisher
 			// ещё null — этот случай покрыт явным вызовом ниже, после его создания.
-			if (s === "connected" && publisher) drainOutboxSafely(publisher.publish);
+			if (s === "connected" && publisher) drainOutboxSafely(publisher.publish, dbKey);
 		},
 	});
 	connection.connect();
@@ -148,12 +148,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 
 	publisher = createPublisher(connection);
 	connection.addMessageHandler(publisher.handleMessage);
-	drainOutboxSafely(publisher.publish);
+	drainOutboxSafely(publisher.publish, dbKey);
 
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
 	await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
-	await rebuildUiSettings(pubkeyHex, privKey);
+	await rebuildUiSettings(pubkeyHex, privKey, dbKey);
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
@@ -184,7 +184,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	const giftWrapSubscriber = createSubscriber(connection, {
 		verifyBatch,
 		onBatch: async (events) => {
-			const settings = await loadUiSettings(pubkeyHex);
+			const settings = await loadUiSettings(pubkeyHex, dbKey);
 			// НАЙДЕНО ЖИВЫМ ЗАМЕРОМ (этап 34, AC-12): bumpMessagingActivity() на КАЖДОЕ
 			// событие батча триггерит React/Preact useEffect в открытых экранах (напр.
 			// contacts.jsx перечитывает всю таблицу на каждый бамп) — при батче в 1000
@@ -521,7 +521,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 		channelContentSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
-				const settings = await loadUiSettings(ownerPubkey);
+				const settings = await loadUiSettings(ownerPubkey, dbKey);
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {
@@ -624,7 +624,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 		groupMessageSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
-				const settings = await loadUiSettings(ownerPubkey);
+				const settings = await loadUiSettings(ownerPubkey, dbKey);
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {

@@ -42,3 +42,12 @@ export const CONTACT_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey"];
 export const INBOX_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey", "createdAt"];
 
 export const CHANNEL_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "viewed", "reporterPubkey", "targetPubkey", "contentType", "contentId", "reason"];
+
+// Этап 45 (Tier 4 — низкий приоритет/спорная ценность, CONTRACTS.md). Ценность
+// шифрования здесь спорная (метаданные/счётчик/событие и так скоро публичное) —
+// реализовано ради полноты AC-16 по явному выбору пользователя.
+export const UI_SETTINGS_PLAINTEXT_FIELDS = ["ownerPubkey"];
+
+export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"];
+
+export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];

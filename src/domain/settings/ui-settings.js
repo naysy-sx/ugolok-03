@@ -5,6 +5,8 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 // F-SY-03 (TECH.md) — d-tag='settings' буквально, не opaque (не privacy-чувствительно,
 // тот же принцип, что read-status/drafts этапа 26).
@@ -62,8 +64,8 @@ export function parseUiSettingsEvent(event, privKey) {
 // что-либо получить С relay (включая сам этот kind 30072). Локальная запись —
 // единственный источник истины для ТЕКУЩЕГО подключения; при её отсутствии (первый
 // запуск) — build-time дефолт, который тут же станет локальной записью при первом save.
-export async function loadUiSettings(ownerPubkey) {
-	const row = await db.table("uiSettings").get(ownerPubkey);
+export async function loadUiSettings(ownerPubkey, dbKey) {
+	const row = fromEncryptedRow(await db.table("uiSettings").get(ownerPubkey), dbKey);
 	if (!row) {
 		return mergeWithDefaults({
 			relayUrls: [...BUILD_DEFAULT_RELAYS],
@@ -78,8 +80,11 @@ export async function loadUiSettings(ownerPubkey) {
 
 // Локально — сразу (офлайн-first), публикация — best-effort и НЕ бросает наружу
 // (тот же принцип, что profile.jsx: локальное сохранение не зависит от публикации).
-export async function saveUiSettings(ownerPubkey, privKey, settings, publish) {
-	await db.table("uiSettings").put({ ownerPubkey, ...settings });
+// dbKey (этап 45, Tier 4) — только для ЛОКАЛЬНОГО кэша на этом устройстве; kind 30072
+// остаётся NIP-44-шифрованным для синхронизации между СВОИМИ устройствами — два разных
+// шифра, не путать.
+export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish) {
+	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 	try {
 		await publish(buildUiSettingsEvent(privKey, settings));
 	} catch {
@@ -90,53 +95,53 @@ export async function saveUiSettings(ownerPubkey, privKey, settings, publish) {
 
 // Тот же паттерн, что rebuildContactsAndGroups (handlers.js, этап 20-24) — событие уже
 // приходит через существующий bootstrap-фильтр {authors:[я]}, нового REQ не нужно.
-export async function rebuildUiSettings(ownerPubkey, privKey) {
+export async function rebuildUiSettings(ownerPubkey, privKey, dbKey) {
 	const events = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_UI_SETTINGS]).toArray();
 	if (events.length === 0) return;
 	const settings = parseUiSettingsEvent(pickLatest(events), privKey);
-	await db.table("uiSettings").put({ ownerPubkey, ...settings });
+	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 }
 
-export async function addRelayUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function addRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (settings.relayUrls.includes(url)) return; // идемпотентно
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, relayUrls: [...settings.relayUrls, url] }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: [...settings.relayUrls, url] }, publish);
 }
 
-export async function removeRelayUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (url === settings.activeRelayUrl) {
 		throw new Error("нельзя удалить активный relay — сначала переключитесь на другой");
 	}
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, relayUrls: settings.relayUrls.filter((u) => u !== url) }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: settings.relayUrls.filter((u) => u !== url) }, publish);
 }
 
-export async function setActiveRelayUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function setActiveRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (!settings.relayUrls.includes(url)) {
 		throw new Error("URL отсутствует в списке — сначала добавьте");
 	}
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, activeRelayUrl: url }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, activeRelayUrl: url }, publish);
 }
 
-export async function addBlossomUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (settings.blossomUrls.includes(url)) return;
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, blossomUrls: [...settings.blossomUrls, url] }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, blossomUrls: [...settings.blossomUrls, url] }, publish);
 }
 
-export async function removeBlossomUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (url === settings.activeBlossomUrl) {
 		throw new Error("нельзя удалить активный Blossom-сервер — сначала переключитесь на другой");
 	}
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, blossomUrls: settings.blossomUrls.filter((u) => u !== url) }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, blossomUrls: settings.blossomUrls.filter((u) => u !== url) }, publish);
 }
 
-export async function setActiveBlossomUrl(ownerPubkey, privKey, url, publish) {
-	const settings = await loadUiSettings(ownerPubkey);
+export async function setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (!settings.blossomUrls.includes(url)) {
 		throw new Error("URL отсутствует в списке — сначала добавьте");
 	}
-	await saveUiSettings(ownerPubkey, privKey, { ...settings, activeBlossomUrl: url }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, activeBlossomUrl: url }, publish);
 }

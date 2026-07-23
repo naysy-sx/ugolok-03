@@ -7,7 +7,7 @@ import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { sendViewGrant } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_REPORTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_REPORTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 // DESIGN.md, этап 33 — следующий свободный parameterized-replaceable kind после
 // общего чата (30063). Контент шифруется channelKey[v_OLD] (не v_new!) — единственный
@@ -93,14 +93,16 @@ export async function getIgnoredSet(viewerPubkey, channelId) {
 export async function banMember(ownerPubkey, ownerPrivKey, dbKey, channelId, targetPubkey, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const oldKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 	const vOld = meta.currentVersion;
 	const vNew = vOld + 1;
 
 	const newKeyHex = bytesToHex(generateChannelKey());
 	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId, keyVersion: vNew, channelKey: newKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
-	await db.table("channelKeyMeta").update([ownerPubkey, channelId], { currentVersion: vNew });
+	// currentVersion — ЕДИНСТВЕННОЕ sensitive-поле этой таблицы (партиал-инвариант,
+	// CONTRACTS.md этап 45) — decrypt-merge-encrypt через put(), не голый .update().
+	await db.table("channelKeyMeta").put(toEncryptedRow({ ownerPubkey, channelId, currentVersion: vNew }, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey));
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
 	const remaining = readers.filter((r) => r.readerPubkey !== targetPubkey);

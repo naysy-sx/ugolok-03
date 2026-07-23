@@ -11,7 +11,7 @@ import {
 import { parseAndVerifyAllowlist } from "../../core/crypto/comment-allowlist.js";
 import { sendViewGrant, sendSubscribeRequest } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
@@ -71,7 +71,7 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 		),
 	);
 	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId, keyVersion: version, channelKey: channelKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
-	await db.table("channelKeyMeta").put({ ownerPubkey, channelId, currentVersion: version });
+	await db.table("channelKeyMeta").put(toEncryptedRow({ ownerPubkey, channelId, currentVersion: version }, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey));
 
 	// Группы -> pubkeys, объединение с дедупликацией (Set). Пустой groupIds -> пустой Set
 	// -> ни одного гранта -> канал остаётся сугубо локальным "заметочником" (буквально по ТЗ).
@@ -124,9 +124,9 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 	// нового, не должен откатывать текущую версию назад).
 	const version = grant.version;
 	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey, channelId: grant.channelId, keyVersion: version, channelKey: grant.channelKey }, CHANNEL_KEYS_PLAINTEXT_FIELDS, dbKey));
-	const existingMeta = await db.table("channelKeyMeta").get([ownerPubkey, grant.channelId]);
+	const existingMeta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, grant.channelId]), dbKey);
 	const currentVersion = Math.max(existingMeta?.currentVersion ?? 0, version);
-	await db.table("channelKeyMeta").put({ ownerPubkey, channelId: grant.channelId, currentVersion });
+	await db.table("channelKeyMeta").put(toEncryptedRow({ ownerPubkey, channelId: grant.channelId, currentVersion }, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey));
 
 	const existing = await db.table("channels").get([ownerPubkey, grant.channelId]);
 	if (!existing) {
@@ -162,7 +162,7 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 
 	const existing = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!existing) return;
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	if (!meta) return;
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
 	if (!keyRowRaw) return;
@@ -198,7 +198,7 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 	if (!channelRow) return;
 	if (channelRow.role === "owner") return;
 
-	const meta = await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
 	if (!meta) return;
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
 	if (!keyRowRaw) return;
