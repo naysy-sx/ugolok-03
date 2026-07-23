@@ -2657,3 +2657,39 @@ Preact-специфики, которое у слабой модели не га
 Regression: `npm test` 670/670 (было 662, +8: 6 тестов слоя памяти +
 1 тест на `lock()` + 1 тест на реалистичный размер вложения на диске).
 `npm run build` — успешно.
+
+## Этап 44 — повторный показ мнемоники
+
+Бэкенд (keystore.js/unlock.jsx-регистрация/тесты) уже был готов на
+входе в сессию (написан в предыдущей). Оставался UI-кусок из
+CONTRACTS.md ("Новый UI — settings.jsx").
+
+Воркер, вызов 1/1 (`mnemonic-reveal.jsx`, новый файл, задача рутинная —
+форма поверх готового `decryptMnemonic`): вернул рабочий каркас, но
+2 реальных бага при чтении: (1) `import decryptMnemonic from
+"...keystore.js"` — default-import несуществующего default-export
+(в keystore.js это named export, вызов упал бы "not a function");
+(2) кнопка "Скрыть" (`handleCancel`) не сбрасывала `phrase` — фраза
+не пропадала из state/DOM, "Скрыть" не скрывал ничего. Оба —
+точечная правка Claude (1 строка + 1 строка), не переигрывался.
+
+Проводка в settings.jsx (listAccounts()->hasMnemonic, новая секция)
+сделана вручную — тривиальная склейка, не стоит вызова воркера.
+
+Живая проверка (Playwright как библиотека, реальный vite preview,
+без relay) нашла ЕЩЁ 2 реальных бага, не пойманных юнит-тестами
+(в screens/components их и нет — проверка только живым прогоном):
+- `unlock.jsx`: `handleAdvancedPasswordSubmit` не передавала mnemonic
+  в encryptAndStore, ветка "Войти по мнемонике" не клала введённую
+  фразу в mnemonic-state — оба пункта прописаны в CONTRACTS.md,
+  но не реализованы при первом проходе. Без фикса hasMnemonic
+  навсегда false после "Создать с показом фразы".
+- `mnemonic-reveal.jsx`: `useState(!hasMnemonic)` защёлкивал
+  showForm=true на первом рендере (hasMnemonic ещё false, до
+  резолва listAccounts() в settings.jsx) — форма пароля открывалась
+  сразу вместо кнопки "Показать фразу". Фикс: useState(false).
+
+Три living-сценария до конца (создать-с-показом, быстрая регистрация,
+импорт-по-ключу) + адверсарно (неверный пароль, скрыть/показать цикл).
+Regression: `npm test` 677/677 (было 670, +7). `npm run build`
+250.06 КБ gzip.

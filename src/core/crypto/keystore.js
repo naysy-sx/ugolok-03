@@ -17,12 +17,21 @@ async function deriveEncKey(password, salt) {
   );
 }
 
-export async function encryptAndStore(privKey, password, id, meta = {}) {
+export async function encryptAndStore(privKey, password, id, meta = {}, mnemonic) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encKey = await deriveEncKey(password, salt);
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, encKey, privKey);
-  await db.table("keystore").put({ id, salt, iv, ciphertext, ...meta });
+  
+  let mnemonicIv;
+  let mnemonicCiphertext;
+  
+  if (mnemonic) {
+    mnemonicIv = crypto.getRandomValues(new Uint8Array(12));
+    mnemonicCiphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: mnemonicIv }, encKey, new TextEncoder().encode(mnemonic));
+  }
+  
+  await db.table('keystore').put({ id, salt, iv, ciphertext, ...meta, mnemonicIv, mnemonicCiphertext });
 }
 
 export async function decryptPrivateKey(password, id) {
@@ -35,9 +44,18 @@ export async function decryptPrivateKey(password, id) {
   return new Uint8Array(decrypted);
 }
 
+export async function decryptMnemonic(password, id) {
+  const record = await db.table('keystore').get(id);
+  if (!record) throw new Error('keystore: приватный ключ не найден');
+  if (!record.mnemonicCiphertext) throw new Error('keystore: мнемоника не сохранена для этого аккаунта');
+  const encKey = await deriveEncKey(password, record.salt);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: record.mnemonicIv }, encKey, record.mnemonicCiphertext);
+  return new TextDecoder().decode(decrypted);
+}
+
 export async function listAccounts() {
   const records = await db.table("keystore").toArray();
-  return records.map((r) => ({ id: r.id, login: r.login, avatar: r.avatar ?? "" }));
+  return records.map((r) => ({ id: r.id, login: r.login, avatar: r.avatar ?? '', hasMnemonic: !!r.mnemonicCiphertext }));
 }
 
 export async function getProfile(id) {
@@ -45,10 +63,6 @@ export async function getProfile(id) {
   if (!record) {
     throw new Error("keystore: аккаунт не найден");
   }
-  // avatarUrl (этап 38-довесок) — ПУБЛИЧНЫЙ Blossom-URL последней успешной
-  // загрузки, ОТДЕЛЬНО от avatar (локальный data:URL превью). Нужен, чтобы
-  // handleBioSubmit могла переиздать kind-0 БЕЗ потери уже опубликованной
-  // picture — сам dataUrl для этого непригоден (не публичный URL, огромный).
   return { login: record.login ?? "", avatar: record.avatar ?? "", bio: record.bio ?? "", avatarUrl: record.avatarUrl ?? "" };
 }
 

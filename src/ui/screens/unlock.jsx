@@ -125,7 +125,11 @@ export default function Unlock() {
 		const generated = generateMnemonic();
 		const key = await mnemonicToPrivateKey(generated);
 		const id = bytesToHex(getPublicKey(key));
-		await encryptAndStore(key, regPassword, id, { login: regLogin.trim() });
+		// Этап 44 (ревью Opus) — раньше generated отбрасывалась после однократного
+		// использования, фраза восстановления нигде не сохранялась. Сохраняем
+		// зашифрованной ТЕМ ЖЕ паролем — "Показать фразу" в настройках (обещание,
+		// которое уже давал шаг "done" ниже) теперь честно работает.
+		await encryptAndStore(key, regPassword, id, { login: regLogin.trim() }, generated);
 		setPrivKey(key);
 		setPendingLogin(regLogin.trim());
 		setNpub(npubEncode(id));
@@ -138,6 +142,10 @@ export default function Unlock() {
 		setAdvLogin("");
 		setPassword("");
 		setPasswordConfirm("");
+		// Этап 44 — сброс на пустую строку для ВСЕХ веток (иначе повторный заход в
+		// "создать" после "импорт по ключу" в той же сессии мог бы утащить
+		// устаревшую мнемонику от предыдущей попытки в encryptAndStore).
+		setMnemonic("");
 		if (kind === "create") {
 			setMnemonic(generateMnemonic());
 			setStep("create-generate");
@@ -166,7 +174,7 @@ export default function Unlock() {
 		}
 		setError("");
 		const id = bytesToHex(getPublicKey(privKey));
-		await encryptAndStore(privKey, password, id, { login: advLogin.trim() });
+		await encryptAndStore(privKey, password, id, { login: advLogin.trim() }, mnemonic || undefined);
 		setPendingLogin(advLogin.trim());
 		setNpub(npubEncode(id));
 		setIsQuickRegister(false);
@@ -300,6 +308,7 @@ export default function Unlock() {
 								setError("");
 								const key = await mnemonicToPrivateKey(trimmed);
 								setPrivKey(key);
+								setMnemonic(trimmed);
 								setStep("advanced-password");
 							}}
 						>

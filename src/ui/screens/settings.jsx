@@ -3,9 +3,11 @@ import { currentUser, privKeySig, lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { loadUiSettings, saveUiSettings } from "../../domain/settings/ui-settings.js";
 import { requestNotificationPermission } from "../../domain/notifications/notifier.js";
+import { listAccounts } from "../../core/crypto/keystore.js";
 import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import Screen from "../components/screen.jsx";
+import MnemonicReveal from "../components/mnemonic-reveal.jsx";
 
 // Мокап пользователя (v0.1, https://ibb.co/WWQNbYJ6) — раздел "Приватность" вне
 // скоупа (решение пользователя, CONTRACTS.md/этап 34): presence-протокол и поиск
@@ -16,6 +18,7 @@ export default function Settings() {
 
 	const [settings, setSettings] = useState(null);
 	const [error, setError] = useState("");
+	const [hasMnemonic, setHasMnemonic] = useState(false);
 	const instanceId = useId();
 
 	useEffect(() => {
@@ -23,6 +26,9 @@ export default function Settings() {
 			setSettings(loaded);
 			applyAccentColor(loaded.accentColorId);
 			applyUiScale(loaded.uiScale);
+		});
+		listAccounts().then((accounts) => {
+			setHasMnemonic(!!accounts.find((a) => a.id === ownerPubkey)?.hasMnemonic);
 		});
 	}, [ownerPubkey]);
 
@@ -246,6 +252,11 @@ export default function Settings() {
 				<p style={{ color: "var(--muted)", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}>
 					Предупреждения, бан и удаление канала показываются всегда.
 				</p>
+			</section>
+
+			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Секретная фраза восстановления</h2>
+				<MnemonicReveal ownerPubkey={ownerPubkey} hasMnemonic={hasMnemonic} />
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
