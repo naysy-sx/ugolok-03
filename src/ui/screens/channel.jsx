@@ -6,7 +6,7 @@ import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
-import { openChannel } from "../signals/channel-nav.js";
+import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countTopLevelCommentsByPost } from "../../domain/content/comments.js";
@@ -155,11 +155,16 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	);
 }
 
-function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth }) {
+function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth, highlightCommentId }) {
 	const [replying, setReplying] = useState(false);
 	const isOwnComment = comment.authorPubkey === ownerPubkey;
+	const isTarget = comment.id === highlightCommentId;
 	return (
-		<li style={{ marginInlineStart: depth > 0 ? "var(--space-m)" : 0, paddingBlockStart: "var(--space-2xs)" }}>
+		<li
+			id={`comment-${comment.id}`}
+			class={isTarget ? "is-target-comment" : undefined}
+			style={{ marginInlineStart: depth > 0 ? "var(--space-m)" : 0, paddingBlockStart: "var(--space-2xs)" }}
+		>
 			<p style={{ whiteSpace: "pre-wrap" }}>{comment.text}</p>
 			{comment.attachments?.[0] && <AttachmentView attachment={comment.attachments[0]} />}
 			<div class="cluster" style={{ alignItems: "center" }}>
@@ -215,6 +220,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 							limiter={limiter}
 							onChanged={onChanged}
 							depth={depth + 1}
+							highlightCommentId={highlightCommentId}
 						/>
 					))}
 				</ul>
@@ -223,7 +229,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 	);
 }
 
-function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged }) {
+function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged, autoExpand, highlightCommentId }) {
 	const [expanded, setExpanded] = useState(false);
 	const [tree, setTree] = useState([]);
 	const [error, setError] = useState("");
@@ -236,16 +242,52 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		return acc;
 	}
 
+	function flattenCreatedAt(nodes, acc = []) {
+		for (const node of nodes) {
+			acc.push(node.createdAt);
+			flattenCreatedAt(node.replies, acc);
+		}
+		return acc;
+	}
+
 	async function refreshComments() {
 		const fresh = await getCommentsTree(ownerPubkey, dbKey, post.id);
 		setTree(fresh);
 		onCountChange?.(post.id, fresh.length);
 		ensureProfilesFetched([...new Set(flattenAuthors(fresh))], fetchProfiles).catch(() => {});
+		// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-3) — курсор канала продвигался при
+		// загрузке постов/чата, но НЕ при просмотре комментариев: если непрочитанным
+		// был именно комментарий, бейдж "Каналы [N]" не пропадал даже после его
+		// открытия. Тот же приём, что refresh() в ChannelDetail — курсор один на канал.
+		const createdAts = flattenCreatedAt(fresh);
+		if (createdAts.length > 0) {
+			markChannelAsRead(ownerPubkey, privKey, channelId, Math.max(...createdAts), publish)
+				.then(() => refreshUnreadChannelsCount(ownerPubkey, dbKey))
+				.catch(() => {});
+		}
 	}
 
 	useEffect(() => {
 		if (expanded) refreshComments().catch((e) => setError(e?.message || String(e)));
 	}, [expanded, ownerPubkey, post.id, messagingActivity.value]);
+
+	// Этап 47-довесок-3 — клик по уведомлению о посте/комментарии/ответе передаёт
+	// сюда autoExpand (этот пост совпал с channelPostTarget) — раскрываем и
+	// скроллим к посту сами, не дожидаясь клика "Комментарии" от пользователя.
+	useEffect(() => {
+		if (autoExpand) setExpanded(true);
+	}, [autoExpand]);
+
+	useEffect(() => {
+		if (autoExpand) document.getElementById(`post-${post.id}`)?.scrollIntoView({ block: "center" });
+	}, [autoExpand, post.id]);
+
+	// Скролл к конкретному комментарию — только после того, как tree реально
+	// загружен (иначе элемента с этим id ещё нет в DOM).
+	useEffect(() => {
+		if (!highlightCommentId || tree.length === 0) return;
+		document.getElementById(`comment-${highlightCommentId}`)?.scrollIntoView({ block: "center" });
+	}, [highlightCommentId, tree]);
 
 	async function runAction(fn) {
 		try {
@@ -257,7 +299,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 	}
 
 	return (
-		<div>
+		<div id={`post-${post.id}`}>
 			<PostCard
 				post={post}
 				isOwner={isOwner}
@@ -308,6 +350,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 									limiter={limiter}
 									onChanged={refreshComments}
 									depth={0}
+									highlightCommentId={highlightCommentId}
 								/>
 							))}
 						</ul>
@@ -328,6 +371,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [tab, setTab] = useState("posts");
 	const [commentCounts, setCommentCounts] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
+	const [navTarget, setNavTarget] = useState(null); // этап 47-довесок-3 — {postId, commentId?} из уведомления
 
 	async function refresh() {
 		const raw = await db.table("channels").get([ownerPubkey, channelId]);
@@ -370,6 +414,28 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		setPosts((prev) => [...older, ...prev]);
 		setHasMore(more);
 	}
+
+	// Этап 47-довесок-3 — клик по уведомлению о посте/комментарии/ответе (или по
+	// "Модерация"/"Чат" через subTab) передаёт сюда цель через channelPostTarget
+	// (notification-nav.js). Читаем ОДИН раз и сразу гасим сигнал — иначе повторное
+	// ручное открытие того же канала снова прыгало бы к старой цели.
+	useEffect(() => {
+		const target = channelPostTarget.value;
+		if (!target) return;
+		if (target.subTab) setTab(target.subTab);
+		if (target.postId) setNavTarget({ postId: target.postId, commentId: target.commentId });
+		channelPostTarget.value = null;
+	}, [channelPostTarget.value]);
+
+	// Целевой пост может быть старше уже загруженного окна (loadPostsWindow грузит
+	// только последние 10) — догружаем более старые страницы, пока не найдём его
+	// или не кончится история (hasMore === false).
+	useEffect(() => {
+		if (!navTarget?.postId) return;
+		if (posts.some((p) => p.id === navTarget.postId)) return;
+		if (!hasMore) return;
+		handleLoadMore();
+	}, [navTarget, posts, hasMore]);
 
 	if (loading) {
 		return (
@@ -470,6 +536,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 									commentCount={commentCounts[post.id] ?? 0}
 									onCountChange={handleCommentCountChange}
 									onPostChanged={refresh}
+									autoExpand={navTarget?.postId === post.id}
+									highlightCommentId={navTarget?.postId === post.id ? navTarget?.commentId : null}
 								/>
 							))}
 						</div>

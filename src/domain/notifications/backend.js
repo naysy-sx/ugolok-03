@@ -16,15 +16,26 @@ export function createWebNotificationBackend(options = {}) {
 		// см. ui/signals/toasts.js) вместо него.Нативное уведомление — fallback
 		// ИМЕННО для случая "вкладка свёрнута/не в фокусе", где тоста никто не
 		// увидит (страница не рендерится видимо), а нативное продолжает работать.
-		showPopup(title, body) {
+		// onClick (этап 47-довесок-3) — необязательный колбэк "перейти к месту события".
+		// Для тоста — прокидывается как есть (сам DOM-элемент кликабелен). Для нативного
+		// Notification — вешается на .onclick; окно может быть не в фокусе (та самая
+		// ветка, где нативное вообще показывается), поэтому явный window.focus() ПЕРЕД
+		// колбэком — иначе навигация произойдёт в невидимой вкладке.
+		showPopup(title, body, onClick) {
 			const isVisible = documentImpl ? documentImpl.visibilityState === "visible" : true;
 			if (isVisible && onToast) {
-				onToast(title, body);
+				onToast(title, body, onClick);
 				return;
 			}
 			if (!NotificationImpl || NotificationImpl.permission !== "granted") return;
-			// eslint-disable-next-line no-new
-			new NotificationImpl(title, { body });
+			const notification = new NotificationImpl(title, { body });
+			if (onClick) {
+				notification.onclick = () => {
+					globalThis.focus?.();
+					onClick();
+					notification.close?.();
+				};
+			}
 		},
 		playSound() {
 			// Web Notification API не поддерживает кастомный звук годами — звук

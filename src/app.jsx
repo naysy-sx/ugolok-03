@@ -11,6 +11,8 @@ import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import { currentUser, lock, dbKeySig } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
+import { activeChannelId } from "./ui/signals/channel-nav.js";
+import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
 import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, refreshUnreadChannelsCount } from "./ui/signals/notifications.js";
@@ -50,12 +52,12 @@ function MainShell() {
 	// см. backend.js). Настраивается здесь, а не в notifier.js, потому что
 	// pushToast/аудио — UI-специфичные зависимости.
 	useEffect(() => {
-		// НАЙДЕНО ЖИВЫМ ИСПОЛЬЗОВАНИЕМ: backend.js вызывает onToast(title, body)
-		// ПОЗИЦИОННО (тот же стиль, что showPopup(title, body)), а pushToast ждёт
-		// ОДИН объект {title, body} — без адаптера title попадал бы в pushToast как
-		// первый позиционный аргумент, деструктуризация {title,body} из строки
-		// давала бы undefined, заголовок тоста оставался пустым.
-		configureDefaultBackend({ onToast: (title, body) => pushToast({ title, body }), audioSrc: NOTIFICATION_SOUND_DATA_URI });
+		// НАЙДЕНО ЖИВЫМ ИСПОЛЬЗОВАНИЕМ: backend.js вызывает onToast(title, body, onClick)
+		// ПОЗИЦИОННО (тот же стиль, что showPopup(title, body, onClick)), а pushToast ждёт
+		// ОДИН объект {title, body, onClick} — без адаптера title/body попадали бы
+		// неправильно, а onClick вовсе терялся бы: клик по тосту не переходил "к месту
+		// события" ни при каких обстоятельствах, хотя backend.js его честно передавал.
+		configureDefaultBackend({ onToast: (title, body, onClick) => pushToast({ title, body, onClick }), audioSrc: NOTIFICATION_SOUND_DATA_URI });
 	}, []);
 
 	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
@@ -64,6 +66,26 @@ function MainShell() {
 	useEffect(() => {
 		if (activeChatPubkey.value) setActiveId("messages");
 	}, [activeChatPubkey.value]);
+
+	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-3) — тот же принцип, что выше для
+	// activeChatPubkey, но для каналов ЕГО НЕ БЫЛО ВООБЩЕ: openChannel(id) менял
+	// сигнал, но вкладку нава не переключал — работало, только если пользователь
+	// УЖЕ был на "Каналах". Без этого клик по уведомлению о канале открывал бы
+	// нужный канал "невидимо" за текущей вкладкой.
+	useEffect(() => {
+		if (activeChannelId.value) setActiveId("channels");
+	}, [activeChannelId.value]);
+
+	// Этап 47-довесок-3 — клик по уведомлению (тост/нативное) переходит "к месту
+	// события": сначала переключаем вкладку нава, затем форвардим специфику
+	// экрана (контакт/канал/пост/комментарий) в уже существующие сигналы.
+	useEffect(() => {
+		const target = pendingNavTarget.value;
+		if (!target) return;
+		setActiveId(target.screen);
+		applyNavTarget(target);
+		pendingNavTarget.value = null;
+	}, [pendingNavTarget.value]);
 
 	// Этап 47 — бейджи "[N]" в наве. Тот же триггер (messagingActivity), что уже
 	// используют contacts.jsx/channels.jsx для перечитывания своих списков — здесь

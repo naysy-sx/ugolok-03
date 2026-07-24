@@ -28,6 +28,7 @@ export const DEFAULT_NOTIFICATIONS = {
 	},
 	replies: "sound", // ответ на МОЙ пост/комментарий — глобально, без per-entity
 	moderation: { reports: "popup" }, // бан/warn/delete — принудительно вне settings, см. notifier.js
+	inbox: "popup", // этап 47-довесок-3 — заявка (MLS Welcome) от НЕЗНАКОМЦА, глобально
 };
 
 export const DEFAULT_SETTINGS = {

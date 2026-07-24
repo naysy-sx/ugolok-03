@@ -171,6 +171,12 @@ export default function Settings() {
 		persist({ ...settings, notifications: { ...settings.notifications, moderation: { ...settings.notifications.moderation, reports: level } } });
 	}
 
+	// Этап 47-довесок-3 — новая категория: заявка (MLS Welcome) от НЕЗНАКОМЦА,
+	// глобальный уровень без per-entity (тот же приём, что replies).
+	function handleInboxLevel(level) {
+		persist({ ...settings, notifications: { ...settings.notifications, inbox: level } });
+	}
+
 	if (!settings) {
 		return (
 			<Screen title="Настройки">
@@ -367,6 +373,14 @@ export default function Settings() {
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
 							Кто-то ответил на мой пост/комментарий
 							<LevelSelect id={`${instanceId}-replies`} value={n.replies} onChange={handleRepliesLevel} />
+						</label>
+					</section>
+
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Заявки от незнакомцев</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Кто-то незнакомый хочет написать вам
+							<LevelSelect id={`${instanceId}-inbox`} value={n.inbox} onChange={handleInboxLevel} />
 						</label>
 					</section>
 

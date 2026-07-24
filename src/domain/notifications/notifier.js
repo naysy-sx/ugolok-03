@@ -72,6 +72,13 @@ export function resolveNotificationLevel(settings, category, subcategory, entity
 		return notifications.replies ?? "off";
 	}
 
+	// Этап 47-довесок-3 — заявка от НЕЗНАКОМЦА (MLS Welcome не от контакта, уходит
+	// в inbox) — глобальный уровень, без per-entity (тот же принцип, что replies:
+	// список "кто мне ещё не знаком" не стабилен, таблицу override строить не из чего).
+	if (category === "inbox") {
+		return notifications.inbox ?? "off";
+	}
+
 	return "off";
 }
 
@@ -79,10 +86,13 @@ export function resolveNotificationLevel(settings, category, subcategory, entity
 // фактического unread-состояния в БД — notify() не источник истины для бейджа, только
 // решает показывать ли popup/играть ли звук). level∈{popup,sound} -> showPopup.
 // level==="sound" -> ДОПОЛНИТЕЛЬНО playSound (sound — надмножество popup, DESIGN.md).
-export function notify(settings, category, subcategory, { title, body }, entityId, backend = getDefaultBackend()) {
+// onClick (этап 47-довесок-3) — необязательный колбэк, вызывается при клике на
+// сам popup (тост ИЛИ нативное уведомление) — переход "к месту события" (см.
+// signals/notification-nav.js). Не участвует в решении уровня, только пробрасывается.
+export function notify(settings, category, subcategory, { title, body, onClick }, entityId, backend = getDefaultBackend()) {
 	const level = resolveNotificationLevel(settings, category, subcategory, entityId);
 	if (level === "off") return level;
-	if (level === "popup" || level === "sound") backend.showPopup(title, body);
+	if (level === "popup" || level === "sound") backend.showPopup(title, body, onClick);
 	if (level === "sound") backend.playSound();
 	return level;
 }

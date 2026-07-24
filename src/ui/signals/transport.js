@@ -27,7 +27,8 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { profiles, addContactAction } from "./contacts.js";
+import { profiles, addContactAction, ensureProfilesFetched } from "./contacts.js";
+import { navigateFromNotification } from "./notification-nav.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
@@ -46,6 +47,28 @@ import { CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+}
+
+// Этап 47-довесок-3 — "сделай уведомления информативными" (пользователь). Профиль
+// может быть ещё не закэширован на момент прихода события (fetchProfiles — сеть) —
+// вызывающий код обязан await ensureProfilesFetched([pubkeyHex], fetchProfiles) ДО
+// вызова этого хелпера, иначе первое уведомление от нового автора покажет усечённый
+// pubkey вместо имени (не идеально, но не хуже, чем остальной UI в том же случае).
+function usernameFor(pubkeyHex) {
+	const name = profiles.value[pubkeyHex]?.name?.trim();
+	return name || `${pubkeyHex.slice(0, 8)}…`;
+}
+
+function truncateForNotification(text, maxLength = 120) {
+	if (!text) return "";
+	return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+async function channelNameFor(ownerPubkey, dbKey, channelId) {
+	if (!channelId) return "неизвестном канале";
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	const row = raw ? fromEncryptedRow(raw, dbKey) : null;
+	return row?.name || "канале без названия";
 }
 
 export const connState = signal("disconnected");
@@ -222,6 +245,16 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
 						} else {
 							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
+							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА
+							// раньше попадала в inbox БЕЗ единого уведомления вовсе (только activityChanged,
+							// заметно лишь если пользователь уже был на вкладке "Сообщения"). Профиль
+							// незнакомца обычно ещё не закэширован — та же оговорка, что usernameFor.
+							await ensureProfilesFetched([welcomeContactPubkey], fetchProfiles).catch(() => {});
+							notify(settings, "inbox", null, {
+								title: "Новый запрос от незнакомца",
+								body: `${usernameFor(welcomeContactPubkey)} хочет написать вам`,
+								onClick: () => navigateFromNotification({ screen: "messages" }),
+							});
 						}
 						activityChanged = true; // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
 					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
@@ -238,11 +271,21 @@ async function connect(pubkeyHex, privKey, dbKey) {
 								dbKey,
 							),
 						);
-						notify(settings, "contacts", "newRequests", { title: "Новый запрос в контакты", body: parsed.greeting || "" });
+						await ensureProfilesFetched([parsed.senderPubkey], fetchProfiles).catch(() => {});
+						notify(settings, "contacts", "newRequests", {
+							title: `Новый запрос в контакты от ${usernameFor(parsed.senderPubkey)}`,
+							body: parsed.greeting || "",
+							onClick: () => navigateFromNotification({ screen: "contacts" }),
+						});
 						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
 					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
 						// Этап 34 — сигнал "мой запрос приняли" (найденный пробел, см. requests.js).
-						notify(settings, "contacts", "accepted", { title: "Запрос принят", body: "Ваш запрос в контакты приняли" });
+						await ensureProfilesFetched([rumor.pubkey], fetchProfiles).catch(() => {});
+						notify(settings, "contacts", "accepted", {
+							title: "Запрос в контакты принят",
+							body: `${usernameFor(rumor.pubkey)} принял(а) ваш запрос`,
+							onClick: () => navigateFromNotification({ screen: "contacts" }),
+						});
 						// НАЙДЕНО ЖИВЫМ E2E (этап 46): sendAcquaintanceRequestAction (в отличие
 						// от sendContactRequestAction, форма "Добавить контакт") НЕ добавляет
 						// адресата в контакты оптимистично при отправке (инвариант DESIGN.md) —
@@ -271,9 +314,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
 						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
 						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).
+						const reportChannelId = rumor.tags.find((t) => t[0] === "channel_id")?.[1];
 						await receiveReport(pubkeyHex, dbKey, {
 							reporterPubkey: rumor.pubkey,
-							channelId: rumor.tags.find((t) => t[0] === "channel_id")?.[1],
+							channelId: reportChannelId,
 							targetPubkey: rumor.tags.find((t) => t[0] === "target")?.[1],
 							contentType: rumor.tags.find((t) => t[0] === "content_type")?.[1],
 							contentId: rumor.tags.find((t) => t[0] === "content_id")?.[1],
@@ -283,7 +327,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						});
 						// Этап 47 — "reports" единственная moderation-подкатегория, ставшая
 						// настраиваемой (бан/warn/delete по-прежнему принудительны, см. notifier.js).
-						notify(settings, "moderation", "reports", { title: "Новая жалоба", body: rumor.content || "" });
+						notify(settings, "moderation", "reports", {
+							title: `Новая жалоба в канале «${await channelNameFor(pubkeyHex, dbKey, reportChannelId)}»`,
+							body: truncateForNotification(rumor.content),
+							onClick: () => navigateFromNotification({ screen: "channels", channelId: reportChannelId, subTab: "moderation" }),
+						});
 						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
@@ -622,11 +670,17 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 						// Разрешаем channelId по h-тегу ОДИН раз — нужен как entityId для
 						// notify() (этап 47, per-channel override) во всех ветках ниже, кроме
 						// 30060/30054 (у них своя, более ранняя точка входа без уведомлений).
+						// Расшифровываем ЗДЕСЬ, ДО любых мутаций этой итерации (этап 47-довесок-3,
+						// найденное — receiveBanAnnouncement ниже может УДАЛИТЬ эту же строку
+						// channels, если банят самого owner'а/зрителя; название нужно взять из
+						// состояния "до", а не гонять новый запрос "после" и получить пустоту).
 						const hTag = event.tags.find((t) => t[0] === "h");
-						const channelRowForNotify = hTag
+						const channelRowForNotifyRaw = hTag
 							? await db.table("channels").where("channelTopic").equals(hTag[1]).and((r) => r.ownerPubkey === ownerPubkey).first()
 							: null;
+						const channelRowForNotify = channelRowForNotifyRaw ? fromEncryptedRow(channelRowForNotifyRaw, dbKey) : null;
 						const channelId = channelRowForNotify?.id;
+						const channelName = channelRowForNotify?.name || "канал без названия";
 
 						if (event.kind === 30060) {
 							await receiveChannelMetadata(ownerPubkey, dbKey, event);
@@ -641,7 +695,23 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 							// (пост может быть только от владельца, а не-владелец не пишет посты), но
 							// проверка event.pubkey оставлена явной — дешевле, чем гадать по роли.
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "channels", "posts", { title: "Новый пост в канале", body: "" }, channelId);
+								// postId — тот же приём, что post.js's receivePost (d-tag формата
+								// "{channelId}:{postId}", plaintext) — нужен и для чтения только что
+								// сохранённого текста (для тела уведомления), и для click-нав.
+								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+								const postId = dTag?.slice(dTag.indexOf(":") + 1);
+								const postRow = postId ? fromEncryptedRow(await db.table("posts").get([ownerPubkey, postId]), dbKey) : null;
+								notify(
+									settings,
+									"channels",
+									"posts",
+									{
+										title: `Новый пост в канале «${channelName}»`,
+										body: truncateForNotification(postRow?.text),
+										onClick: () => navigateFromNotification({ screen: "channels", channelId, postId, subTab: "posts" }),
+									},
+									channelId,
+								);
 							}
 						} else if (event.kind === 30062) {
 							// Этап 47 — раньше комментарии были вне скоупа уведомлений вовсе
@@ -649,15 +719,28 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 							// COMMENT-allowlist — здесь диспетчеризация + обнаружение "ответили мне".
 							const applied = await receiveComment(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "channels", "comments", { title: "Новый комментарий в канале", body: "" }, channelId);
-								// "Ответили МНЕ" — отдельная, обычно более громкая категория (DESIGN.md):
-								// родитель (parentId) — либо мой пост, либо мой же комментарий. commentId
-								// парсится из d-тега тем же приёмом, что comments.js's receiveComment
-								// (d-tag формата "{postId}:{commentId}", plaintext, без расшифровки).
+								// commentId парсится из d-тега тем же приёмом, что comments.js's
+								// receiveComment (d-tag формата "{postId}:{commentId}", plaintext, без
+								// расшифровки) — нужен и для тела уведомления, и для click-нав, и для
+								// поиска родителя ниже.
 								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
 								const commentId = dTag?.slice(dTag.indexOf(":") + 1);
-								const storedComment = commentId ? await db.table("comments").get([ownerPubkey, commentId]) : null;
-								const parentId = storedComment ? fromEncryptedRow(storedComment, dbKey)?.parentId : null;
+								const storedComment = commentId ? fromEncryptedRow(await db.table("comments").get([ownerPubkey, commentId]), dbKey) : null;
+								notify(
+									settings,
+									"channels",
+									"comments",
+									{
+										title: `Комментарий в канале «${channelName}»`,
+										body: truncateForNotification(storedComment?.text),
+										onClick: () =>
+											navigateFromNotification({ screen: "channels", channelId, postId: storedComment?.postId, commentId, subTab: "posts" }),
+									},
+									channelId,
+								);
+								// "Ответили МНЕ" — отдельная, обычно более громкая категория (DESIGN.md):
+								// родитель (parentId) — либо мой пост, либо мой же комментарий.
+								const parentId = storedComment?.parentId;
 								if (parentId) {
 									const parentPost = await db.table("posts").get([ownerPubkey, parentId]);
 									const parentComment = !parentPost ? await db.table("comments").get([ownerPubkey, parentId]) : null;
@@ -667,7 +750,13 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 											? fromEncryptedRow(parentComment, dbKey)?.authorPubkey
 											: null;
 									if (parentAuthor === ownerPubkey) {
-										notify(settings, "replies", null, { title: "Вам ответили в канале", body: "" });
+										await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
+										notify(settings, "replies", null, {
+											title: `${channelName}: ${usernameFor(event.pubkey)} вам ответил`,
+											body: `«${truncateForNotification(storedComment?.text)}»`,
+											onClick: () =>
+												navigateFromNotification({ screen: "channels", channelId, postId: storedComment?.postId, commentId, subTab: "posts" }),
+										});
 									}
 								}
 							}
@@ -676,14 +765,34 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
 							const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "channels", "chat", { title: "Новое сообщение в чате канала", body: "" }, channelId);
+								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+								const messageId = dTag?.slice(dTag.indexOf(":") + 1);
+								const messageRow = messageId
+									? fromEncryptedRow(await db.table("channelMessages").get([ownerPubkey, messageId]), dbKey)
+									: null;
+								await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
+								notify(
+									settings,
+									"channels",
+									"chat",
+									{
+										title: `Сообщение в чате канала «${channelName}»`,
+										body: `${usernameFor(event.pubkey)}: ${truncateForNotification(messageRow?.text)}`,
+										onClick: () => navigateFromNotification({ screen: "channels", channelId, subTab: "chat" }),
+									},
+									channelId,
+								);
 							}
 						} else if (event.kind === CHANNEL_BAN_KIND) {
 							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
 							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация.
 							const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "moderation", "ban", { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
+								notify(settings, "moderation", "ban", {
+									title: `Модерация канала «${channelName}»`,
+									body: "Изменения в канале — см. вкладку Модерация",
+									onClick: () => navigateFromNotification({ screen: "channels", channelId, subTab: "moderation" }),
+								});
 							}
 						}
 						activityChanged = true; // channels.jsx/channel.jsx перечитывают списки
@@ -769,7 +878,18 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
 						// собственного же сообщения собеседником).
 						if (receivedResult && !wasDeletion && !wasEdit) {
-							notify(settings, "messages", null, { title: "Новое сообщение", body: receivedResult.text }, receivedResult.contactPubkey);
+							await ensureProfilesFetched([receivedResult.contactPubkey], fetchProfiles).catch(() => {});
+							notify(
+								settings,
+								"messages",
+								null,
+								{
+									title: `Новое сообщение от ${usernameFor(receivedResult.contactPubkey)}`,
+									body: receivedResult.text,
+									onClick: () => navigateFromNotification({ screen: "messages", contactPubkey: receivedResult.contactPubkey }),
+								},
+								receivedResult.contactPubkey,
+							);
 						}
 						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {

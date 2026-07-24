@@ -606,9 +606,16 @@
 	border: var(--border-width) solid var(--border);
 	border-inline-start: 3px solid var(--accent);
 	border-radius: var(--radius);
-	padding: var(--space-2xs) var(--space-s);
+	/* НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-3): крестик закрытия (absolute,
+	   top-right) перекрывал текст заголовка/тела — паддинг справа не резервировал
+	   под него места. inline-end увеличен на ширину кнопки + отступ. */
+	padding: var(--space-2xs) calc(var(--space-l) + var(--space-2xs)) var(--space-2xs) var(--space-s);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 	animation: toast-in 0.25s ease-out;
+}
+
+.toast.is-clickable {
+	cursor: pointer;
 }
 
 .toast.is-leaving {
@@ -662,6 +669,29 @@
 	.toast,
 	.toast.is-leaving {
 		animation: none;
+	}
+}
+
+/* Этап 47-довесок-3 — клик по уведомлению о комментарии/ответе ведёт к конкретному
+   комментарию; вспышка помогает найти его среди остальных сразу после скролла. */
+.is-target-comment {
+	animation: target-flash 2s ease-out;
+	border-radius: var(--radius);
+}
+
+@keyframes target-flash {
+	from {
+		background: color-mix(in oklch, var(--accent) 25%, transparent);
+	}
+	to {
+		background: transparent;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.is-target-comment {
+		animation: none;
+		background: color-mix(in oklch, var(--accent) 25%, transparent);
 	}
 }
 

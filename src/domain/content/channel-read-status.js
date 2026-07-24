@@ -35,10 +35,26 @@ export async function foldChannelReadStatus(event, privKey) {
 	await db.table("channelSyncState").put({ ownerPubkey, channelId, lastReadAt });
 }
 
+// НАЙДЕНО ЖИВЫМ E2E (этап 47-довесок-3) — kind 30074 replaceable (NIP-01): strfry
+// отклоняет новое событие с тем же (pubkey, kind, d=channelId) как "replaced: have
+// newer event", если created_at НЕ строго больше уже принятого. С клика по
+// уведомлению о комментарии два независимых вызова markChannelAsRead (ChannelDetail
+// на посты, PostWithComments на комментарии) почти всегда попадают в ОДНУ и ту же
+// секунду wall-clock — второй публикующийся отклоняется, а его catch(()=>{}) в
+// вызывающем коде это молча проглатывает, из-за чего локальный курсор навсегда
+// застревал на более старом значении, и бейдж "Каналы [N]" не пропадал. Карта здесь
+// держит "последний использованный created_at" на канал — гарантирует строго
+// возрастающую последовательность для ЭТОЙ сессии независимо от того, сколько
+// вызовов пришло в одну и ту же секунду.
+const lastPublishedCreatedAt = new Map();
+
 export async function markChannelAsRead(ownerPubkey, privKey, channelId, lastReadAt, publish) {
-	const event = buildChannelReadStatusEvent(privKey, { channelId, lastReadAt });
+	const now = Math.floor(Date.now() / 1000);
+	const createdAt = Math.max(now, (lastPublishedCreatedAt.get(channelId) ?? 0) + 1);
+	const event = buildChannelReadStatusEvent(privKey, { channelId, lastReadAt }, createdAt);
 	const result = await publish(event);
 	if (!result.ok) throw new Error(result.reason || "relay отклонил публикацию");
+	lastPublishedCreatedAt.set(channelId, createdAt);
 	await foldChannelReadStatus(event, privKey);
 }
 

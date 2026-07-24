@@ -18,7 +18,7 @@ function fakeBackend() {
 	let soundPlays = 0;
 	return {
 		backend: {
-			showPopup: (title, body) => popups.push({ title, body }),
+			showPopup: (title, body, onClick) => popups.push({ title, body, onClick }),
 			playSound: () => {
 				soundPlays++;
 			},
@@ -119,6 +119,12 @@ test("resolveNotificationLevel: replies — глобальный уровень,
 	assert.equal(resolveNotificationLevel(settings, "replies", null), "off");
 });
 
+test("resolveNotificationLevel: inbox (заявка от незнакомца) — глобальный уровень, без per-entity", () => {
+	const settings = { ...DEFAULT_SETTINGS, notifications: { ...DEFAULT_SETTINGS.notifications, inbox: "off" } };
+	assert.equal(resolveNotificationLevel(settings, "inbox", null), "off");
+	assert.equal(resolveNotificationLevel(DEFAULT_SETTINGS, "inbox", null), "popup", "дефолт из DEFAULT_SETTINGS");
+});
+
 test("resolveNotificationLevel: неизвестная категория -> 'off'", () => {
 	assert.equal(resolveNotificationLevel(DEFAULT_SETTINGS, "unknown-category", null), "off");
 });
@@ -167,4 +173,18 @@ test("notify: moderation/бан игнорирует settings.enabled=false, lev
 	assert.equal(result, "sound");
 	assert.equal(popups.length, 1);
 	assert.equal(getSoundPlays(), 1);
+});
+
+// Этап 47-довесок-3 — клик "к месту события".
+test("notify: onClick пробрасывается в backend.showPopup как есть (для тоста/нативного клика)", () => {
+	const { backend, popups } = fakeBackend();
+	const onClick = () => {};
+	notify(DEFAULT_SETTINGS, "messages", null, { title: "t", body: "b", onClick }, "bob", backend);
+	assert.equal(popups[0].onClick, onClick);
+});
+
+test("notify: onClick не передан -> backend получает undefined, не бросает", () => {
+	const { backend, popups } = fakeBackend();
+	notify(DEFAULT_SETTINGS, "messages", null, { title: "t", body: "b" }, "bob", backend);
+	assert.equal(popups[0].onClick, undefined);
 });

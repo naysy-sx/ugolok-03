@@ -2908,3 +2908,53 @@ page.evaluate() постфактум ничего не поймала, timing-а
 (280 КБ) всего ~8.7 КБ, отмечено пользователю явно.
 
 Regression: npm test 741/741 (без изменений — только данные).
+
+## Этап 47-довесок-3 — контент/click-нав/2 бага/новая категория
+
+Ручные правки (не воркер — критическая логика transport.js/channel.jsx,
+малый диффузный объём по многим файлам, воркер неэффективен):
+notifier.js (onClick пробрасывается, категория inbox), backend.js
+(showPopup(title,body,onClick)), toasts.js/toast-host.jsx (тост
+кликабелен, close — stopPropagation), custom.css (padding-фикс крестика
++ .is-target-comment), notification-nav.js (новый файл), channel-nav.js
+(+channelPostTarget), app.jsx (+2 useEffect), transport.js (контент+onClick
+во ВСЕХ notify()-точках), channel.jsx (channelPostTarget consumption,
+markChannelAsRead в refreshComments), ui-settings.js (+inbox default),
+settings.jsx (+секция "Заявки от незнакомцев"), channel-read-status.js
+(monotonic created_at — protocol race fix).
+
+Живой E2E (Playwright, 2 аккаунта, реальный strfry) нашёл ДВА бага сверх
+заявленных:
+1. app.jsx's onToast терял onClick (2-арг адаптер вместо 3-арг) — НИ
+   ОДИН тост не был кликабелен, юнит-тесты не покрывали (configureDefaultBackend
+   не вызывается в тестах).
+2. Бейдж "Каналы [N]" — после добавления markChannelAsRead в
+   refreshComments() вскрылся протокольный race: kind 30074 replaceable,
+   два вызова markChannelAsRead в одну wall-clock секунду -> strfry
+   отклоняет второй ("have newer event") -> молча проглатывалось ->
+   курсор не продвигался. Fix — monotonic created_at per channelId
+   (channel-read-status.js), решает на уровне примитива, не патч на
+   вызывающей стороне.
+
+Regression: npm test 744/744 (было 741, +3). npm run build 272.43 КБ
+gzip (было 271.34, +1.09 КБ, бюджет 280 КБ — запас ~7.6 КБ).
+
+Definition of Done: тесты этапа зелёные ✓, полная регрессия зелёная ✓,
+живой E2E (не адверсарный отдельно — сам E2E вскрыл 2 реальных бага
+сверх заявленных) ✓, PLAN.md/CONTRACTS.md обновлены ✓, коммит — ожидает
+подтверждения пользователя.
+
+## Этап 47-довесок-3 (продолжение) — новый звук от пользователя
+
+Пользователь передал новый MP3 через sound.txt (корень, временный
+транспорт — удалён после встраивания). sound-asset.js обновлён,
+вызывающий код не менялся. Живая проверка: new Audio(dataURI) в реальном
+браузере, loadedmetadata срабатывает, duration≈1.68с — не битый файл.
+
+БЮДЖЕТ NF-11 (280 КБ) ПРЕВЫШЕН: 332.46 КБ (было 272.43, +60 КБ). Явно
+предупреждён пользователю; пользователь принял как временно некритичное.
+Открытый вопрос на будущее — либо ужать звук, либо вынести из
+singlefile-бандла.
+
+Regression: npm test 744/744 (без изменений в логике). npm run build
+332.46 КБ gzip.
