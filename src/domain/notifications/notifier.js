@@ -16,8 +16,19 @@ export async function requestNotificationPermission(options = {}) {
 export const NOTIFICATION_LEVELS = ["off", "badge", "popup", "sound"];
 
 let defaultBackend = null;
+let defaultBackendOptions = {};
+
+// Этап 47-довесок — вызывается ОДИН раз из корня UI (app.jsx) с onToast/audioSrc,
+// как только эти зависимости (сигнал тостов, звуковой ассет) становятся известны.
+// До первого notify() без явного backend — использует дефолтные (без тоста/звука),
+// getDefaultBackend просто ленивый синглтон поверх ЭТИХ опций.
+export function configureDefaultBackend(options) {
+	defaultBackendOptions = { ...defaultBackendOptions, ...options };
+	defaultBackend = null; // пересоздать со свежими опциями при следующем обращении
+}
+
 function getDefaultBackend() {
-	if (!defaultBackend) defaultBackend = createWebNotificationBackend();
+	if (!defaultBackend) defaultBackend = createWebNotificationBackend(defaultBackendOptions);
 	return defaultBackend;
 }
 

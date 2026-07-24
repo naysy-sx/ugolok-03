@@ -3,6 +3,7 @@ import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
+import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
 import { openChannel } from "../signals/channel-nav.js";
@@ -342,7 +343,12 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		// рассинхрона по времени устройства, тот же принцип, что markChatReadAction).
 		if (freshPosts.length > 0) {
 			const lastCreatedAt = Math.max(...freshPosts.map((p) => p.createdAt));
-			markChannelAsRead(ownerPubkey, privKey, channelId, lastCreatedAt, publish).catch(() => {});
+			// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок) — тот же класс находки, что chat.jsx:
+			// локальное прочтение не бампает messagingActivity, без явного пересчёта здесь
+			// "Каналы [N]" в наве не пропадал бы после открытия канала.
+			markChannelAsRead(ownerPubkey, privKey, channelId, lastCreatedAt, publish)
+				.then(() => refreshUnreadChannelsCount(ownerPubkey, dbKey))
+				.catch(() => {});
 		}
 		// Найдено пользователем: счётчик комментариев показывал 0 до первого клика —
 		// один общий скан на все посты списка сразу, вместо getCommentsTree на каждый.

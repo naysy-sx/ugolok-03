@@ -586,6 +586,85 @@
 	color: var(--muted);
 	font-size: var(--step--1);
 }
+/* Этап 47-довесок — свои тосты уведомлений (не системный Notification API,
+   который мы не можем стилизовать) — плавный fade+slide вход/выход. */
+.toast-host {
+	position: fixed;
+	inset-block-start: var(--space-m);
+	inset-inline-end: var(--space-m);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	z-index: 1000;
+	pointer-events: none;
+	max-width: min(24rem, calc(100vw - var(--space-m) * 2));
+}
+
+.toast {
+	pointer-events: auto;
+	background: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-inline-start: 3px solid var(--accent);
+	border-radius: var(--radius);
+	padding: var(--space-2xs) var(--space-s);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+	animation: toast-in 0.25s ease-out;
+}
+
+.toast.is-leaving {
+	animation: toast-out 0.2s ease-in forwards;
+}
+
+.toast-title {
+	font-weight: var(--weight-bold);
+	margin: 0;
+}
+
+.toast-body {
+	color: var(--muted);
+	margin: var(--space-3xs) 0 0;
+}
+
+.toast-close {
+	position: absolute;
+	inset-block-start: var(--space-3xs);
+	inset-inline-end: var(--space-3xs);
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--muted);
+	line-height: 1;
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(-0.5rem) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes toast-out {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-0.25rem) scale(0.97);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.toast,
+	.toast.is-leaving {
+		animation: none;
+	}
+}
+
 .auth-layout .site-footer p {
 	margin-block: 0;
 }

@@ -63,6 +63,14 @@ export default function Settings() {
 	const [error, setError] = useState("");
 	const [hasMnemonic, setHasMnemonic] = useState(false);
 	const [myChannels, setMyChannels] = useState([]);
+	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок): notifications.enabled=true ПО
+	// УМОЛЧАНИЮ означает, что handleToggleEnabled (единственное место, запрашивающее
+	// разрешение браузера) практически никогда не срабатывает — чекбокс уже включён,
+	// пользователю нечего переключать. Разрешение оставалось "default" НАВСЕГДА,
+	// всплывашки молча не показывались (showPopup гейтится permission==='granted').
+	// Статус — ОТДЕЛЬНОЕ состояние, не производное от settings, чтобы кнопка ниже
+	// могла явно предложить запросить его.
+	const [browserPermission, setBrowserPermission] = useState(() => globalThis.Notification?.permission ?? "unsupported");
 	const instanceId = useId();
 
 	useEffect(() => {
@@ -104,12 +112,17 @@ export default function Settings() {
 
 	async function handleToggleEnabled(checked) {
 		if (checked) {
-			const permission = await requestNotificationPermission();
-			if (permission !== "granted") {
-				setError("Уведомления не разрешены в браузере — проверьте настройки сайта и попробуйте снова.");
-			}
+			await handleRequestPermission();
 		}
 		persist({ ...settings, notifications: { ...settings.notifications, enabled: checked } });
+	}
+
+	async function handleRequestPermission() {
+		const permission = await requestNotificationPermission();
+		setBrowserPermission(permission);
+		if (permission !== "granted") {
+			setError("Уведомления не разрешены в браузере — проверьте настройки сайта и попробуйте снова.");
+		}
 	}
 
 	function handleContactLevel(subcategory, level) {
@@ -236,6 +249,23 @@ export default function Settings() {
 					<input type="checkbox" checked={n.enabled} onChange={(e) => handleToggleEnabled(e.currentTarget.checked)} />
 					Включить уведомления
 				</label>
+
+				{n.enabled && browserPermission !== "granted" && browserPermission !== "unsupported" && (
+					<p
+						role="alert"
+						class="cluster"
+						style={{ alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
+					>
+						{browserPermission === "denied"
+							? "Браузер заблокировал уведомления для этого сайта — разрешите вручную в настройках сайта браузера."
+							: "Браузер ещё не спрашивал разрешение на всплывающие уведомления — без него они не покажутся."}
+						{browserPermission !== "denied" && (
+							<button type="button" onClick={handleRequestPermission}>
+								Запросить разрешение
+							</button>
+						)}
+					</p>
+				)}
 
 				<div class="flow" style={{ "--flow-space": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>

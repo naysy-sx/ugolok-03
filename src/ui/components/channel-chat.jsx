@@ -3,6 +3,7 @@ import { sendChannelMessage } from "../../domain/content/channel-chat.js";
 import { loadChannelChatWindow } from "../../core/sync/lazy-channel.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
+import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
@@ -94,7 +95,9 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		// Этап 47 — тот же общий курсор канала, что channel.jsx (посты) — см. комментарий там.
 		if (fresh.length > 0) {
 			const lastCreatedAt = Math.max(...fresh.map((m) => m.createdAt));
-			markChannelAsRead(ownerPubkey, privKey, channelId, lastCreatedAt, publish).catch(() => {});
+			markChannelAsRead(ownerPubkey, privKey, channelId, lastCreatedAt, publish)
+				.then(() => refreshUnreadChannelsCount(ownerPubkey, dbKey))
+				.catch(() => {});
 		}
 		// Найдено пользователем: авторы чата канала могут не быть контактами — профиль
 		// (никнейм/аватар) всё равно нужен, ensureProfilesFetched не ограничен контактами.

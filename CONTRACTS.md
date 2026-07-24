@@ -6306,3 +6306,80 @@ select в одной строке, список каналов пишется Р
 задан ЯВНО (пустой override -> "(как по умолчанию)" в UI, реального
 пустого объекта в `overrides` не создаётся, пока пользователь не тронет
 конкретную строку — не захламлять settings записями-заглушками).
+
+## Этап 47-довесок — найдено живым использованием: три реальных бага
+
+Пользователь после первого прохода этапа 47 сообщил: всплывашки не
+появляются, звук не играет, бейдж "Сообщения [N]" не пропадает после
+прочтения. Все три — реальные пробелы, не домысел.
+
+### Баг 1 — бейдж не пересчитывался после ЛОКАЛЬНОГО прочтения
+
+`messagingActivity` (сигнал, на который завязан пересчёт бейджей в
+`app.jsx`) бампается ТОЛЬКО входящими событиями из `transport.js` —
+"я прочитал сообщение" не входящее событие, бамп не срабатывал. Правка:
+`chat.jsx` (после `markChatReadAction`) и `channel.jsx`/`channel-chat.jsx`
+(после `markChannelAsRead`) теперь ДОПОЛНИТЕЛЬНО напрямую вызывают
+`refreshUnreadMessagesCount`/`refreshUnreadChannelsCount` — не полагаются
+на общий activity-бамп для этого конкретного случая.
+
+### Баг 2 — разрешение браузера никогда не запрашивалось
+
+`notifications.enabled: true` ПО УМОЛЧАНИЮ означало, что единственное
+место, запрашивающее `Notification.requestPermission()` (обработчик
+чекбокса "Включить уведомления"), практически никогда не срабатывало —
+чекбокс уже включён, переключать нечего. Разрешение оставалось
+`"default"` навсегда, `showPopup` молча ничего не показывал (гейтится
+`permission === "granted"`). Правка — `settings.jsx`: отдельное состояние
+`browserPermission` (не производное от settings) + явная кнопка
+"Запросить разрешение", показывается, если `n.enabled && permission
+!== "granted" && permission !== "unsupported"`; для `"denied"` — только
+пояснение (запрос уже бессмыслен, нужны настройки сайта в браузере).
+
+### Баг 3 — свои тосты вместо нестилизуемого Notification API
+
+Пользователь: "всплывашки должны быть красивыми и плавными" — системный
+`Notification` API стилизовать невозможно (чужой UI ОС/браузера).
+Решение (обсуждено, выбран гибрид): пока вкладка ВИДНА
+(`document.visibilityState === "visible"`) — свой тост с CSS-анимацией
+fade+slide (`styles/custom.css`, `.toast`/`@keyframes toast-in/out`);
+иначе (вкладка свёрнута/не в фокусе, тост никто не увидит) — fallback на
+нативное уведомление ОС, как раньше.
+
+```js
+// src/ui/signals/toasts.js
+export const toasts = signal([]); // [{id, title, body, leaving}]
+export function pushToast({ title, body }); // -> id, авто-dismiss через 4.5с
+export function dismissToast(id); // leaving=true -> (200мс) -> реально убрать
+```
+
+`src/domain/notifications/backend.js` — `createWebNotificationBackend`
+получил `onToast(title, body)` (ПОЗИЦИОННО, тот же стиль, что
+`showPopup(title, body)`) и `documentImpl` (DI, по прецеденту остальных
+опций). `showPopup`: `isVisible && onToast` -> `onToast(title, body)`,
+иначе — прежний путь через `NotificationImpl`.
+
+`src/domain/notifications/notifier.js` — новый `configureDefaultBackend(options)`
+(мёрджит опции, сбрасывает закэшированный `defaultBackend`, чтобы
+следующий `notify()` без явного backend пересоздал его со свежими
+опциями) — вызывается ОДИН раз из `app.jsx`'s `MainShell` со
+`onToast`/`audioSrc`.
+
+**НАЙДЕНО ЖИВЫМ E2E:** `backend.js`'s `onToast(title, body)` —
+позиционный вызов, но `pushToast({title, body})` ждёт ОДИН объект.
+Прямая передача `onToast: pushToast` в `configureDefaultBackend`
+(без адаптера) роняла заголовок тоста в `undefined` (деструктуризация
+`{title, body}` из строки `title`, пришедшей первым позиционным
+аргументом). Правка — `app.jsx`: `onToast: (title, body) =>
+pushToast({ title, body })`.
+
+### Звук — задел, ассет ожидается от пользователя
+
+`src/domain/notifications/sound-asset.js` — `NOTIFICATION_SOUND_DATA_URI`,
+заглушка (`null`) до предоставления пользователем реального файла (MP3,
+кладётся как base64-текст в `notification-sound-base64.txt` в корне
+проекта, встраивается как `data:audio/mpeg;base64,...` — тот же принцип,
+что остальные bundled-ассеты проекта, vite-plugin-singlefile). `backend.js`'s
+`playSound()` уже фейл-сейф на `null` (no-op, не бросает) — довесок
+"впаять реальный звук" не меняет ни один вызывающий код, только эту
+константу.

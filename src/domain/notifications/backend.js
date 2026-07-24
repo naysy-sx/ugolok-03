@@ -6,9 +6,22 @@ export function createWebNotificationBackend(options = {}) {
 	const NotificationImpl = options.NotificationImpl ?? globalThis.Notification;
 	const AudioImpl = options.AudioImpl ?? globalThis.Audio;
 	const audioSrc = options.audioSrc;
+	const onToast = options.onToast;
+	const documentImpl = options.documentImpl ?? globalThis.document;
 
 	return {
+		// Этап 47-довесок (пользователь: "всплывашки должны быть красивыми и
+		// плавными") — системный Notification API стилизовать нельзя (чужой UI ОС/
+		// браузера), поэтому пока вкладка ВИДНА, показываем СВОЙ тост (onToast,
+		// см. ui/signals/toasts.js) вместо него.Нативное уведомление — fallback
+		// ИМЕННО для случая "вкладка свёрнута/не в фокусе", где тоста никто не
+		// увидит (страница не рендерится видимо), а нативное продолжает работать.
 		showPopup(title, body) {
+			const isVisible = documentImpl ? documentImpl.visibilityState === "visible" : true;
+			if (isVisible && onToast) {
+				onToast(title, body);
+				return;
+			}
 			if (!NotificationImpl || NotificationImpl.permission !== "granted") return;
 			// eslint-disable-next-line no-new
 			new NotificationImpl(title, { body });

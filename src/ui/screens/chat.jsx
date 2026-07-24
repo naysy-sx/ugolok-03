@@ -31,6 +31,7 @@ import { refreshInboxRequests, acceptInboxRequestAction, rejectInboxRequestActio
 import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
 import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
+import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { validateAttachment } from "../../domain/attachments/validation.js";
 import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { createVoiceRecorder, shouldInlineVoice } from "../../domain/attachments/voice.js";
@@ -306,7 +307,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			setHasMore(more);
 			if (freshWindow.length > 0) {
 				const lastLamportTs = freshWindow[freshWindow.length - 1].lamportTs;
+				// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок): прочтение — ЛОКАЛЬНОЕ действие,
+				// не бампает messagingActivity (тот бампается только входящими событиями из
+				// transport.js) — без явного пересчёта здесь бейдж "Сообщения [N]" в нave
+				// оставался бы прежним навсегда после открытия чата.
 				await markChatReadAction(ownerPubkey, privKey, dbKey, contactPubkey, lastLamportTs, publish).catch(() => {});
+				refreshUnreadMessagesCount(ownerPubkey).catch(() => {});
 			}
 		}
 		load();

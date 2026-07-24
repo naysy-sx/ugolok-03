@@ -14,6 +14,10 @@ import { activeChatPubkey } from "./ui/signals/chat.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
 import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, refreshUnreadChannelsCount } from "./ui/signals/notifications.js";
+import { configureDefaultBackend } from "./domain/notifications/notifier.js";
+import { pushToast } from "./ui/signals/toasts.js";
+import ToastHost from "./ui/components/toast-host.jsx";
+import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
 import IconChatBubble from "./ui/icons/chat-bubble.jsx";
 import IconReader from "./ui/icons/reader.jsx";
@@ -41,6 +45,19 @@ function MainShell() {
 	const ownerPubkey = currentUser.value.id;
 	const dbKey = dbKeySig.value;
 
+	// Этап 47-довесок — ОДИН раз подключаем свой тост + звуковой ассет к
+	// дефолтному backend'у notifier.js (domain-слой не знает о UI/тостах вовсе,
+	// см. backend.js). Настраивается здесь, а не в notifier.js, потому что
+	// pushToast/аудио — UI-специфичные зависимости.
+	useEffect(() => {
+		// НАЙДЕНО ЖИВЫМ ИСПОЛЬЗОВАНИЕМ: backend.js вызывает onToast(title, body)
+		// ПОЗИЦИОННО (тот же стиль, что showPopup(title, body)), а pushToast ждёт
+		// ОДИН объект {title, body} — без адаптера title попадал бы в pushToast как
+		// первый позиционный аргумент, деструктуризация {title,body} из строки
+		// давала бы undefined, заголовок тоста оставался пустым.
+		configureDefaultBackend({ onToast: (title, body) => pushToast({ title, body }), audioSrc: NOTIFICATION_SOUND_DATA_URI });
+	}, []);
+
 	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
 	// вкладку на "Сообщения"; сам экран (chat.jsx, этап 27) реагирует на
 	// activeChatPubkey.value самостоятельно (список чатов ↔ открытая переписка).
@@ -60,6 +77,7 @@ function MainShell() {
 
 	return (
 		<div class="app-layout">
+			<ToastHost />
 			<aside class="sidebar" aria-label="Профиль и главное меню">
 				<SidebarProfileCard onEditProfile={() => setActiveId("profile")} />
 				<nav role="navigation" aria-label="Главное меню" style={{ flex: "1 1 auto" }}>
