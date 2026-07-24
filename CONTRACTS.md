@@ -6117,3 +6117,192 @@ relay и т.п.) — локальный кэш рос монотонно и пр
 сети, функция после `onEose` удаляет из `discoveryProfiles` все строки,
 чьи pubkey не встретились в ЭТОМ снимке (`bulkDelete` по разнице
 множеств).
+
+## Этап 47 — гибкие уведомления
+
+Обсуждение с пользователем (см. диалог этой сессии) — формализация
+состояний/приоритета разрешения уровня — DESIGN.md, раздел "Этап 47".
+
+### `src/domain/notifications/notifier.js` — правка контракта
+
+```js
+export const NOTIFICATION_LEVELS = ["off", "badge", "popup", "sound"];
+// Упорядоченное множество (DESIGN.md) — НЕ 3 независимых булевых флага.
+
+export function resolveNotificationLevel(settings, category, subcategory, entityId);
+// Приоритет (DESIGN.md, ИСПРАВЛЕНО — найдено собственным тестом при
+// реализации, порядок в первой версии этого контракта был перепутан):
+// (1) category==="moderation" && subcategory!=="reports" -> "sound" ВСЕГДА,
+// ДАЖЕ при notifications.enabled===false (бан/предупреждение/удаление —
+// принудительно, вне settings ЦЕЛИКОМ, поведение этапа 34 для этих
+// подкатегорий НЕ меняется — "moderation игнорирует settings целиком" уже
+// означало "включая enabled", не только категориальные тумблеры);
+// (2) notifications.enabled===false -> "off" для ВСЕГО ОСТАЛЬНОГО (включая
+// moderation.reports); (3) entityId и есть explicit override для него
+// (messages.overrides[entityId] ИЛИ channels.overrides[entityId]?.[subcategory])
+// -> override ПОБЕЖДАЕТ целиком, даже "off"; (4) иначе — дефолт
+// категории/подкатегории; неизвестная
+// категория -> "off".
+
+export function notify(settings, category, subcategory, { title, body }, entityId, backend = defaultWebBackend());
+// level = resolveNotificationLevel(...). "off" -> return null, ничего не
+// делает (даже бейдж не трогает — счётчик непрочитанного считается ОТДЕЛЬНО,
+// из фактического unread-состояния в БД, см. ниже; notify() лишь решает,
+// показывать ли popup/играть ли звук, он НЕ источник истины для бейджа).
+// level∈{popup,sound} -> backend.showPopup(title, body). level==="sound" ->
+// ДОПОЛНИТЕЛЬНО backend.playSound(). Возвращает level (тесты проверяют
+// побочные эффекты через backend-мок, не строку).
+```
+
+### `src/domain/notifications/backend.js` (новый файл) — задел под Tauri/Capacitor
+
+```js
+export function createWebNotificationBackend(options = {}) {
+  // options.NotificationImpl (DI, как раньше), options.audioSrc (URL звука,
+  // bundled asset), options.AudioImpl (DI для тестов, по умолчанию globalThis.Audio).
+  return {
+    showPopup(title, body) { /* тот же new NotificationImpl(...), что раньше */ },
+    playSound() { /* new AudioImpl(audioSrc).play().catch(() => {}) — автоплей
+                     может быть заблокирован политикой браузера без прежнего
+                     user-gesture, ошибка проглатывается, не критично */ },
+    setBadgeCount(n) { /* navigator.setAppBadge?.(n) / navigator.clearAppBadge?.()
+                           — Badging API, НЕ во всех браузерах; отсутствие
+                           метода — no-op, не throw (feature-detect) */ },
+  };
+}
+// Tauri/Capacitor-порт (ПОЗЖЕ, вне этого этапа): та же форма {showPopup,
+// playSound, setBadgeCount}, backend передаётся в notify() явным параметром —
+// вызывающий код (transport.js) не меняется вовсе.
+```
+
+### `src/domain/settings/ui-settings.js` — правка `DEFAULT_NOTIFICATIONS`
+
+```js
+export const DEFAULT_NOTIFICATIONS = {
+  enabled: true,
+  contacts: { newRequests: "sound", accepted: "popup" },
+  messages: { default: "sound", overrides: {} },        // overrides: {[contactPubkey]: level}
+  channels: {
+    posts: "popup", comments: "popup", chat: "sound",
+    overrides: {},                                       // overrides: {[channelId]: {posts?, comments?, chat?}}
+  },
+  replies: "sound",           // ответ на МОЙ пост/комментарий — глобально, без per-entity (DESIGN.md)
+  moderation: { reports: "popup" },  // бан/warn/delete — вне settings, см. resolveNotificationLevel
+};
+```
+
+Старый булев формат (`enabled`/`newRequests`/`incoming` как `true/false`,
+без `overrides`) НЕ мигрируется явно (dev-стадия, `mergeWithDefaults` уже
+спреды дефолт+сохранённое — старые булевы поля просто повиснут неиспользуемым
+мусором рядом с новыми, `resolveNotificationLevel` их не читает).
+
+### Read-tracking каналов — новый файл `src/domain/content/channel-read-status.js`
+
+Прямая аналогия `messaging/read-status.js` (см. DESIGN.md за отличия):
+
+```js
+export const CHANNEL_READ_STATUS_KIND = 30074;
+
+export function buildChannelReadStatusEvent(privKey, { channelId, lastReadAt }, createdAt = Math.floor(Date.now()/1000));
+// NIP-44 self-encrypted content (тот же приём, что buildReadStatusEvent),
+// tags: [["d", channelId]].
+
+export function parseChannelReadStatusEvent(event, privKey);
+
+export async function foldChannelReadStatus(event, privKey);
+// db.table("channelSyncState").get([ownerPubkey, channelId]) -> LWW
+// (raw.lastReadAt >= lastReadAt -> return). БЕЗ toEncryptedRow/fromEncryptedRow
+// — таблица целиком plaintext (см. ниже), put() голого объекта.
+
+export async function markChannelAsRead(ownerPubkey, privKey, channelId, lastReadAt, publish);
+// publish(event) -> throw если !result.ok (тот же паттерн, что markChatAsRead) -> foldChannelReadStatus.
+
+export async function rebuildChannelReadStatus(ownerPubkey, privKey);
+// events.where("[pubkey+kind]").equals([ownerPubkey, CHANNEL_READ_STATUS_KIND]),
+// группировка по d-tag (channelId), pickLatest на группу — тот же паттерн,
+// что rebuildReadStatus. Вызывается из transport.js's connect().
+
+export async function getChannelUnreadCount(ownerPubkey, channelId, dbKey);
+// lastReadAt = (channelSyncState.get(...))?.lastReadAt ?? 0.
+// 1. channelMessages: .where("[ownerPubkey+channelId]").equals(...) — ВСЕ поля
+//    нужные (channelId/authorPubkey/createdAt/deleted) plaintext, фильтр
+//    БЕЗ расшифровки: createdAt>lastReadAt && authorPubkey!==ownerPubkey && !deleted.
+// 2. posts: .where("[ownerPubkey+channelId]") — channelId/createdAt/deleted
+//    plaintext, фильтруем ИМИ первыми; authorPubkey sensitive — fromEncryptedRow
+//    ТОЛЬКО кандидатов, прошедших первый фильтр (не всех постов владельца).
+// 3. comments: НИ channelId, НИ authorPubkey, НИ createdAt не plaintext (Tier 1)
+//    — .where("ownerPubkey").equals(ownerPubkey).toArray(), fromEncryptedRow
+//    КАЖДОЙ (тот же паттерн, что moderation.js's deleteChannelLocally), фильтр
+//    в памяти.
+// Возвращает СУММУ трёх счётчиков (один общий курсор на канал, DESIGN.md).
+```
+
+### `table-fields.js` — БЕЗ новой константы
+
+`channelSyncState` не несёт sensitive-полей (только `ownerPubkey`,
+`channelId`, `lastReadAt` — все индексируемые/plaintext по смыслу) —
+`toEncryptedRow`/`fromEncryptedRow` для этой таблицы не применяются вовсе,
+голый `db.table("channelSyncState").put({...})`/`.get(...)`.
+
+### `database.js` — правка схемы (не новая версия таблицы, а её оживление)
+
+```js
+// db.version(14) — channelSyncState объявлена с этапа 1, ни разу не
+// использована (мёртвый код, класс находки — как attachments до этапа 43),
+// была БЕЗ owner-scoping (голый channelId — тот же класс пробела, что
+// clock/messages до соответствующих правок).
+db.version(14).stores({
+  channelSyncState: "[ownerPubkey+channelId]"
+});
+```
+
+### Badge-счётчики — новый файл `src/ui/signals/notifications.js`
+
+```js
+export const unreadMessagesCount = signal(0);   // сумма getUnreadCount по всем contacts
+export const unreadChannelsCount = signal(0);    // сумма getChannelUnreadCount по listSubscribedChannels+listOwnedChannels
+
+export async function refreshUnreadMessagesCount(ownerPubkey);
+export async function refreshUnreadChannelsCount(ownerPubkey, dbKey);
+```
+
+Модерация (жалобы) — БЕЗ отдельного глобального бейджа в навигации: раздел
+"Модерация" не отдельный пункт нава (панель внутри экрана конкретного
+канала, `channel.jsx`), непрочитанные жалобы уже показываются точечно там
+же через существующую `getModerationStats().unviewed` (этап 33) —
+расширять до нав-бейджа вне скоупа этого этапа (нет данных, что пользователь
+это просил — просил только настраиваемость самого уведомления, не бейдж).
+
+Вызывающий код (`app.jsx`/`MainShell`) читает оба сигнала, дописывает
+`" [N]"` к label пункта нава, если `count > 0` — обновляет по тому же
+триггеру, что уже использует messagingActivity-подобный бамп (существующий
+паттерн, не новый механизм).
+
+### `transport.js` — правки вызовов `notify()`
+
+Все существующие вызовы получают ЧЕТВЁРТЫЙ аргумент `entityId` (там, где
+применимо — `senderPubkey`/`channelId`), пятый (backend) не передаётся —
+дефолтный `createWebNotificationBackend()`. НОВАЯ ветка для kind 30062
+(receiveComment) — сейчас диспетчер этот kind ВООБЩЕ не уведомляет,
+добавить `notify(settings, "channels", "comments", {...}, channelId)`
+после успешного `receiveComment`. НОВОЕ обнаружение "ответ мне": после
+приёма comment/post — проверить, является ли родитель (`parentId`
+комментария ИЛИ адресат поста) чем-то, автором чего был Я
+(`event.pubkey текущего пользователя`) — при совпадении ДОПОЛНИТЕЛЬНО
+`notify(settings, "replies", null, {...})` (не вместо "comments", а
+вместе — пользователь может настроить их по-разному: обычно "ответы мне"
+громче общего потока).
+
+### UI — `settings.jsx`, секция "Уведомления" (правка, транспонированные таблицы)
+
+Один select (не 3 чекбокса) на строку с опциями `NOTIFICATION_LEVELS`.
+Таблица "Каналы": СТРОКА = канал (из `listOwnedChannels`+`listSubscribedChannels`,
+объединение, без дублей), КОЛОНКИ = Посты/Комментарии/Общий чат — три
+select в одной строке, список каналов пишется РОВНО ОДИН РАЗ (находка
+пользователя, не плодить 3 списка). Таблица "Сообщения": строка = контакт
+(из `contacts.value`), одна колонка "Уведомление". Обе таблицы — сверху
+строка "По умолчанию для новых" (`channels.posts/comments/chat` и
+`messages.default`), остальные строки — только те, где `overrides[id]`
+задан ЯВНО (пустой override -> "(как по умолчанию)" в UI, реального
+пустого объекта в `overrides` не создаётся, пока пользователь не тронет
+конкретную строку — не захламлять settings записями-заглушками).

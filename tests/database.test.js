@@ -265,6 +265,17 @@ test("discoverySettings/discoveryProfiles/outgoingAcquaintanceRequests (этап
 	db.close();
 });
 
+test("channelSyncState (этап 47 — оживление мёртвой таблицы этапа 1): owner-scoped составной первичный ключ", async () => {
+	await db.open();
+	const channelSyncState = db.table("channelSyncState");
+	assert.ok(
+		Array.isArray(channelSyncState.schema.primKey.keyPath) &&
+			channelSyncState.schema.primKey.keyPath.join("+") === "ownerPubkey+channelId",
+		"channelSyncState: составной первичный ключ [ownerPubkey+channelId]",
+	);
+	db.close();
+});
+
 test("resetLocalDatabase: удаляет базу, повторный db.open() создаёт её заново с полной схемой", async () => {
 	await db.open();
 	db.close();

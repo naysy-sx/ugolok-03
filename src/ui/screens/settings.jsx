@@ -2,12 +2,54 @@ import { useState, useEffect, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig, lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { loadUiSettings, saveUiSettings } from "../../domain/settings/ui-settings.js";
-import { requestNotificationPermission } from "../../domain/notifications/notifier.js";
+import { requestNotificationPermission, NOTIFICATION_LEVELS } from "../../domain/notifications/notifier.js";
 import { listAccounts } from "../../core/crypto/keystore.js";
+import { contacts, refreshContacts } from "../signals/contacts.js";
+import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
+import { ContactIdentity } from "./contacts.jsx";
 import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import Screen from "../components/screen.jsx";
 import MnemonicReveal from "../components/mnemonic-reveal.jsx";
+
+// Этап 47 — уровень уведомления как единый select (упорядоченная шкала off/badge/
+// popup/sound, DESIGN.md), не 3 независимых чекбокса.
+const LEVEL_LABELS = {
+	off: "Выключено",
+	badge: "Только счётчик",
+	popup: "Всплывающее",
+	sound: "Звук",
+};
+
+const DEFAULT_SENTINEL = "__default__";
+
+// Один select для дефолта категории/подкатегории (только 4 уровня, без "по умолчанию").
+function LevelSelect({ id, value, onChange, disabled }) {
+	return (
+		<select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.currentTarget.value)}>
+			{NOTIFICATION_LEVELS.map((level) => (
+				<option key={level} value={level}>
+					{LEVEL_LABELS[level]}
+				</option>
+			))}
+		</select>
+	);
+}
+
+// Select для per-entity override — 5-й вариант "По умолчанию" сверху (найденный
+// пользователем принцип: пустой override не создаётся, пока строку явно не тронули).
+function OverrideSelect({ id, override, onChange, disabled }) {
+	return (
+		<select id={id} value={override ?? DEFAULT_SENTINEL} disabled={disabled} onChange={(e) => onChange(e.currentTarget.value === DEFAULT_SENTINEL ? undefined : e.currentTarget.value)}>
+			<option value={DEFAULT_SENTINEL}>(по умолчанию)</option>
+			{NOTIFICATION_LEVELS.map((level) => (
+				<option key={level} value={level}>
+					{LEVEL_LABELS[level]}
+				</option>
+			))}
+		</select>
+	);
+}
 
 // Мокап пользователя (v0.1, https://ibb.co/WWQNbYJ6) — раздел "Приватность" вне
 // скоупа (решение пользователя, CONTRACTS.md/этап 34): presence-протокол и поиск
@@ -20,6 +62,7 @@ export default function Settings() {
 	const [settings, setSettings] = useState(null);
 	const [error, setError] = useState("");
 	const [hasMnemonic, setHasMnemonic] = useState(false);
+	const [myChannels, setMyChannels] = useState([]);
 	const instanceId = useId();
 
 	useEffect(() => {
@@ -30,6 +73,13 @@ export default function Settings() {
 		});
 		listAccounts().then((accounts) => {
 			setHasMnemonic(!!accounts.find((a) => a.id === ownerPubkey)?.hasMnemonic);
+		});
+		refreshContacts(ownerPubkey);
+		// Этап 47 — список каналов ДЛЯ ТАБЛИЦЫ уведомлений: владельческие+подписанные
+		// (не "доступные" — там ещё нет права ни на что, уведомлять не о чем), объединены
+		// в ОДИН список без дублей (находка пользователя — не плодить список 3 раза).
+		Promise.all([listOwnedChannels(ownerPubkey, dbKey), listSubscribedChannels(ownerPubkey, dbKey)]).then(([owned, subscribed]) => {
+			setMyChannels([...owned, ...subscribed]);
 		});
 	}, [ownerPubkey]);
 
@@ -62,22 +112,50 @@ export default function Settings() {
 		persist({ ...settings, notifications: { ...settings.notifications, enabled: checked } });
 	}
 
-	function handleToggleSound(checked) {
-		persist({ ...settings, notifications: { ...settings.notifications, sound: checked } });
-	}
-
-	function handleToggleCategory(category, checked) {
+	function handleContactLevel(subcategory, level) {
 		persist({
 			...settings,
-			notifications: { ...settings.notifications, [category]: { ...settings.notifications[category], enabled: checked } },
+			notifications: { ...settings.notifications, contacts: { ...settings.notifications.contacts, [subcategory]: level } },
 		});
 	}
 
-	function handleToggleSub(category, field, checked) {
+	function handleMessagesDefault(level) {
 		persist({
 			...settings,
-			notifications: { ...settings.notifications, [category]: { ...settings.notifications[category], [field]: checked } },
+			notifications: { ...settings.notifications, messages: { ...settings.notifications.messages, default: level } },
 		});
+	}
+
+	function handleMessagesOverride(contactPubkey, level) {
+		const overrides = { ...settings.notifications.messages.overrides };
+		if (level === undefined) delete overrides[contactPubkey];
+		else overrides[contactPubkey] = level;
+		persist({ ...settings, notifications: { ...settings.notifications, messages: { ...settings.notifications.messages, overrides } } });
+	}
+
+	function handleChannelsDefault(subcategory, level) {
+		persist({
+			...settings,
+			notifications: { ...settings.notifications, channels: { ...settings.notifications.channels, [subcategory]: level } },
+		});
+	}
+
+	function handleChannelOverride(channelId, subcategory, level) {
+		const overrides = { ...settings.notifications.channels.overrides };
+		const forChannel = { ...overrides[channelId] };
+		if (level === undefined) delete forChannel[subcategory];
+		else forChannel[subcategory] = level;
+		if (Object.keys(forChannel).length === 0) delete overrides[channelId];
+		else overrides[channelId] = forChannel;
+		persist({ ...settings, notifications: { ...settings.notifications, channels: { ...settings.notifications.channels, overrides } } });
+	}
+
+	function handleRepliesLevel(level) {
+		persist({ ...settings, notifications: { ...settings.notifications, replies: level } });
+	}
+
+	function handleModerationReportsLevel(level) {
+		persist({ ...settings, notifications: { ...settings.notifications, moderation: { ...settings.notifications.moderation, reports: level } } });
 	}
 
 	if (!settings) {
@@ -158,101 +236,121 @@ export default function Settings() {
 					<input type="checkbox" checked={n.enabled} onChange={(e) => handleToggleEnabled(e.currentTarget.checked)} />
 					Включить уведомления
 				</label>
-				<label class="cluster" style={{ alignItems: "center" }}>
-					<input type="checkbox" checked={n.sound} onChange={(e) => handleToggleSound(e.currentTarget.checked)} disabled={!n.enabled} />
-					Звуковое оповещение
-				</label>
 
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<label class="cluster" style={{ alignItems: "center" }}>
-						<input
-							type="checkbox"
-							checked={n.contacts.enabled}
-							onChange={(e) => handleToggleCategory("contacts", e.currentTarget.checked)}
-							disabled={!n.enabled}
-						/>
-						Контакты
-					</label>
-					<div class="flow" style={{ "--flow-space": "var(--space-3xs)", marginInlineStart: "var(--space-m)" }}>
-						<label class="cluster" style={{ alignItems: "center" }}>
-							<input
-								type="checkbox"
-								checked={n.contacts.newRequests}
-								onChange={(e) => handleToggleSub("contacts", "newRequests", e.currentTarget.checked)}
-								disabled={!n.enabled || !n.contacts.enabled}
-							/>
+				<div class="flow" style={{ "--flow-space": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Контакты</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
 							Новые запросы в контакты
+							<LevelSelect id={`${instanceId}-contacts-newRequests`} value={n.contacts.newRequests} onChange={(l) => handleContactLevel("newRequests", l)} />
 						</label>
-						<label class="cluster" style={{ alignItems: "center" }}>
-							<input
-								type="checkbox"
-								checked={n.contacts.accepted}
-								onChange={(e) => handleToggleSub("contacts", "accepted", e.currentTarget.checked)}
-								disabled={!n.enabled || !n.contacts.enabled}
-							/>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
 							Запрос принят
+							<LevelSelect id={`${instanceId}-contacts-accepted`} value={n.contacts.accepted} onChange={(l) => handleContactLevel("accepted", l)} />
 						</label>
-					</div>
-				</div>
+					</section>
 
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<label class="cluster" style={{ alignItems: "center" }}>
-						<input
-							type="checkbox"
-							checked={n.messages.enabled}
-							onChange={(e) => handleToggleCategory("messages", e.currentTarget.checked)}
-							disabled={!n.enabled}
-						/>
-						Сообщения
-					</label>
-					<div class="flow" style={{ "--flow-space": "var(--space-3xs)", marginInlineStart: "var(--space-m)" }}>
-						<label class="cluster" style={{ alignItems: "center" }}>
-							<input
-								type="checkbox"
-								checked={n.messages.incoming}
-								onChange={(e) => handleToggleSub("messages", "incoming", e.currentTarget.checked)}
-								disabled={!n.enabled || !n.messages.enabled}
-							/>
-							Входящие сообщения
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Сообщения</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							По умолчанию для новых
+							<LevelSelect id={`${instanceId}-messages-default`} value={n.messages.default} onChange={handleMessagesDefault} />
 						</label>
-					</div>
-				</div>
+						{contacts.value.length > 0 && (
+							<table>
+								<caption class="visually-hidden">Уведомления по каждому контакту</caption>
+								<thead>
+									<tr>
+										<th scope="col">Контакт</th>
+										<th scope="col">Уведомление</th>
+									</tr>
+								</thead>
+								<tbody>
+									{contacts.value.map((pubkey) => (
+										<tr key={pubkey}>
+											<td>
+												<ContactIdentity pubkey={pubkey} />
+											</td>
+											<td>
+												<OverrideSelect
+													id={`${instanceId}-messages-${pubkey}`}
+													override={n.messages.overrides[pubkey]}
+													onChange={(l) => handleMessagesOverride(pubkey, l)}
+												/>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						)}
+					</section>
 
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<label class="cluster" style={{ alignItems: "center" }}>
-						<input
-							type="checkbox"
-							checked={n.channels.enabled}
-							onChange={(e) => handleToggleCategory("channels", e.currentTarget.checked)}
-							disabled={!n.enabled}
-						/>
-						Каналы
-					</label>
-					<div class="flow" style={{ "--flow-space": "var(--space-3xs)", marginInlineStart: "var(--space-m)" }}>
-						<label class="cluster" style={{ alignItems: "center" }}>
-							<input
-								type="checkbox"
-								checked={n.channels.newPosts}
-								onChange={(e) => handleToggleSub("channels", "newPosts", e.currentTarget.checked)}
-								disabled={!n.enabled || !n.channels.enabled}
-							/>
-							Новые посты
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Каналы</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Посты — по умолчанию
+							<LevelSelect id={`${instanceId}-channels-posts`} value={n.channels.posts} onChange={(l) => handleChannelsDefault("posts", l)} />
 						</label>
-						<label class="cluster" style={{ alignItems: "center" }}>
-							<input
-								type="checkbox"
-								checked={n.channels.chatMessages}
-								onChange={(e) => handleToggleSub("channels", "chatMessages", e.currentTarget.checked)}
-								disabled={!n.enabled || !n.channels.enabled}
-							/>
-							Сообщения в чате канала
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Комментарии — по умолчанию
+							<LevelSelect id={`${instanceId}-channels-comments`} value={n.channels.comments} onChange={(l) => handleChannelsDefault("comments", l)} />
 						</label>
-					</div>
-				</div>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Общий чат — по умолчанию
+							<LevelSelect id={`${instanceId}-channels-chat`} value={n.channels.chat} onChange={(l) => handleChannelsDefault("chat", l)} />
+						</label>
+						{myChannels.length > 0 && (
+							// Находка пользователя — список каналов пишется РОВНО ОДИН РАЗ, три
+							// колонки (не три отдельных списка), CONTRACTS.md этап 47.
+							<table>
+								<caption class="visually-hidden">Уведомления по каждому каналу — посты/комментарии/общий чат</caption>
+								<thead>
+									<tr>
+										<th scope="col">Канал</th>
+										<th scope="col">Посты</th>
+										<th scope="col">Комментарии</th>
+										<th scope="col">Общий чат</th>
+									</tr>
+								</thead>
+								<tbody>
+									{myChannels.map((c) => (
+										<tr key={c.id}>
+											<td>{c.name || "(без названия)"}</td>
+											{["posts", "comments", "chat"].map((sub) => (
+												<td key={sub}>
+													<OverrideSelect
+														id={`${instanceId}-channels-${c.id}-${sub}`}
+														override={n.channels.overrides[c.id]?.[sub]}
+														onChange={(l) => handleChannelOverride(c.id, sub, l)}
+													/>
+												</td>
+											))}
+										</tr>
+									))}
+								</tbody>
+							</table>
+						)}
+					</section>
 
-				<p style={{ color: "var(--muted)", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}>
-					Предупреждения, бан и удаление канала показываются всегда.
-				</p>
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Ответы</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Кто-то ответил на мой пост/комментарий
+							<LevelSelect id={`${instanceId}-replies`} value={n.replies} onChange={handleRepliesLevel} />
+						</label>
+					</section>
+
+					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Модерация</h3>
+						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+							Новая жалоба
+							<LevelSelect id={`${instanceId}-moderation-reports`} value={n.moderation.reports} onChange={handleModerationReportsLevel} />
+						</label>
+						<p style={{ color: "var(--muted)", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}>
+							Предупреждения, бан и удаление канала показываются всегда — это не настраивается.
+						</p>
+					</section>
+				</div>
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>

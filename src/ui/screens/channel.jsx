@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
+import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
 import { openChannel } from "../signals/channel-nav.js";
@@ -336,6 +337,13 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		const { posts: freshPosts, hasMore: more } = await loadPostsWindow(ownerPubkey, dbKey, channelId, { limit: 10 });
 		setPosts(freshPosts);
 		setHasMore(more);
+		// Этап 47 — курсор ОДИН на канал (posts+comments+chat вместе, DESIGN.md), продвигаем
+		// его максимумом createdAt среди РЕАЛЬНО загруженного, не Date.now() (избегает
+		// рассинхрона по времени устройства, тот же принцип, что markChatReadAction).
+		if (freshPosts.length > 0) {
+			const lastCreatedAt = Math.max(...freshPosts.map((p) => p.createdAt));
+			markChannelAsRead(ownerPubkey, privKey, channelId, lastCreatedAt, publish).catch(() => {});
+		}
 		// Найдено пользователем: счётчик комментариев показывал 0 до первого клика —
 		// один общий скан на все посты списка сразу, вместо getCommentsTree на каждый.
 		const counts = await countTopLevelCommentsByPost(ownerPubkey, freshPosts.map((p) => p.id));

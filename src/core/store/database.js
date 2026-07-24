@@ -168,6 +168,15 @@ db.version(13).stores({
   outgoingAcquaintanceRequests: "[owner+targetPubkey], owner"
 });
 
+// Этап 47 — гибкие уведомления (CONTRACTS.md/DESIGN.md). channelSyncState объявлена
+// с этапа 1, ни разу не использована (мёртвый код, класс находки — как attachments
+// до этапа 43) и была БЕЗ owner-scoping (голый channelId — тот же класс пробела, что
+// clock/messages до соответствующих правок). Оживлена под read-tracking каналов —
+// ОДИН общий курсор на канал (posts+comments+chat вместе), не три отдельных.
+db.version(14).stores({
+  channelSyncState: "[ownerPubkey+channelId]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

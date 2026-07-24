@@ -63,14 +63,26 @@ test("buildUiSettingsEvent/parseUiSettingsEvent: round-trip, kind 30072, d-tag='
 test("parseUiSettingsEvent: неполный старый payload (без notifications.channels) сливается с дефолтом, не теряя остальное дерево", () => {
 	const oldShape = {
 		accentColorId: "blue",
-		notifications: { enabled: false, contacts: { enabled: true, newRequests: false, accepted: true } },
+		notifications: { enabled: false, contacts: { newRequests: "off", accepted: "sound" } },
 	};
 	const event = buildUiSettingsEvent(ALICE_PRIV, oldShape);
 	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
 	assert.equal(parsed.notifications.enabled, false, "явно заданное поле сохраняется");
-	assert.equal(parsed.notifications.contacts.newRequests, false);
+	assert.equal(parsed.notifications.contacts.newRequests, "off");
 	assert.deepEqual(parsed.notifications.channels, DEFAULT_SETTINGS.notifications.channels, "отсутствовавшая ветка — из дефолта");
 	assert.equal(parsed.uiScale, "medium", "отсутствовавшее верхнеуровневое поле — из дефолта");
+});
+
+test("parseUiSettingsEvent: messages.overrides из старого payload (без channels/moderation вовсе) не теряется, остальные ветки — из дефолта", () => {
+	const oldShape = {
+		notifications: { messages: { default: "popup", overrides: { alice: "off" } } },
+	};
+	const event = buildUiSettingsEvent(ALICE_PRIV, oldShape);
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.equal(parsed.notifications.messages.default, "popup");
+	assert.deepEqual(parsed.notifications.messages.overrides, { alice: "off" });
+	assert.deepEqual(parsed.notifications.channels, DEFAULT_SETTINGS.notifications.channels);
+	assert.deepEqual(parsed.notifications.moderation, DEFAULT_SETTINGS.notifications.moderation);
 });
 
 test("loadUiSettings: без локальной записи -> дефолт", async () => {

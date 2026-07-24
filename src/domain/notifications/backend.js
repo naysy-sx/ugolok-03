@@ -1,0 +1,41 @@
+// Этап 47 — задел под Tauri/Capacitor (CONTRACTS.md): notify() принимает backend
+// явным параметром, вызывающий код (transport.js) не знает о платформе вовсе.
+// Нативный порт ПОЗЖЕ подставит СВОЮ реализацию той же формы {showPopup, playSound,
+// setBadgeCount} под теми же вызовами — не в скоупе этого этапа.
+export function createWebNotificationBackend(options = {}) {
+	const NotificationImpl = options.NotificationImpl ?? globalThis.Notification;
+	const AudioImpl = options.AudioImpl ?? globalThis.Audio;
+	const audioSrc = options.audioSrc;
+
+	return {
+		showPopup(title, body) {
+			if (!NotificationImpl || NotificationImpl.permission !== "granted") return;
+			// eslint-disable-next-line no-new
+			new NotificationImpl(title, { body });
+		},
+		playSound() {
+			// Web Notification API не поддерживает кастомный звук годами — звук
+			// проигрывается отдельным <audio>, не через саму всплывашку. Автоплей
+			// может быть заблокирован политикой браузера (нет недавнего user-gesture)
+			// — ошибка проглатывается, звук не критичен для доставки уведомления.
+			if (!AudioImpl || !audioSrc) return;
+			try {
+				new AudioImpl(audioSrc).play()?.catch(() => {});
+			} catch {
+				// AudioImpl может бросить синхронно в некоторых окружениях (напр. node
+				// без polyfill) — тот же принцип, не критично для остального notify().
+			}
+		},
+		setBadgeCount(n) {
+			// Badging API — не во всех браузерах/окружениях (напр. node без DOM
+			// вовсе) — globalThis.navigator, не голый navigator (иначе ReferenceError
+			// там, где глобала нет совсем, до какого-либо optional chaining).
+			const nav = globalThis.navigator;
+			if (n > 0) {
+				nav?.setAppBadge?.(n)?.catch?.(() => {});
+			} else {
+				nav?.clearAppBadge?.()?.catch?.(() => {});
+			}
+		},
+	};
+}

@@ -36,11 +36,12 @@ import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { rebuildReadStatus } from "../../domain/messaging/read-status.js";
+import { rebuildChannelReadStatus } from "../../domain/content/channel-read-status.js";
 import { notify } from "../../domain/notifications/notifier.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished } from "../../domain/identity/profile.js";
 import { currentUser } from "./auth.js";
-import { toEncryptedRow } from "../../core/store/encrypted-table.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 function decodeBase64(str) {
@@ -159,6 +160,9 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
 	await rebuildReadStatus(pubkeyHex, privKey, dbKey);
+	// Этап 47 — тот же класс кросс-device синхронизации, что AC-06 выше, но для
+	// read-tracking каналов (kind 30074), не личных чатов.
+	await rebuildChannelReadStatus(pubkeyHex, privKey);
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publisher.publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
@@ -277,9 +281,9 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							reason: rumor.tags.find((t) => t[0] === "reason")?.[1],
 							createdAt: rumor.created_at,
 						});
-						// "moderation" — единственная категория, игнорирующая тумблеры целиком
-						// (мокап: "предупреждения, бан и удаление канала показываются всегда").
-						notify(settings, "moderation", null, { title: "Новая жалоба", body: rumor.content || "" });
+						// Этап 47 — "reports" единственная moderation-подкатегория, ставшая
+						// настраиваемой (бан/warn/delete по-прежнему принудительны, см. notifier.js).
+						notify(settings, "moderation", "reports", { title: "Новая жалоба", body: rumor.content || "" });
 						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
@@ -615,6 +619,15 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
 					try {
+						// Разрешаем channelId по h-тегу ОДИН раз — нужен как entityId для
+						// notify() (этап 47, per-channel override) во всех ветках ниже, кроме
+						// 30060/30054 (у них своя, более ранняя точка входа без уведомлений).
+						const hTag = event.tags.find((t) => t[0] === "h");
+						const channelRowForNotify = hTag
+							? await db.table("channels").where("channelTopic").equals(hTag[1]).and((r) => r.ownerPubkey === ownerPubkey).first()
+							: null;
+						const channelId = channelRowForNotify?.id;
+
 						if (event.kind === 30060) {
 							await receiveChannelMetadata(ownerPubkey, dbKey, event);
 						} else if (event.kind === 30054) {
@@ -628,25 +641,49 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 							// (пост может быть только от владельца, а не-владелец не пишет посты), но
 							// проверка event.pubkey оставлена явной — дешевле, чем гадать по роли.
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "channels", "newPosts", { title: "Новый пост в канале", body: "" });
+								notify(settings, "channels", "posts", { title: "Новый пост в канале", body: "" }, channelId);
 							}
 						} else if (event.kind === 30062) {
-							// Комментарии — вне скоупа уведомлений (мокап не содержит такого пункта
-							// в дереве "Каналы", только "Новые посты"/"Сообщения в чате канала").
-							await receiveComment(ownerPubkey, dbKey, event);
+							// Этап 47 — раньше комментарии были вне скоупа уведомлений вовсе
+							// (найденный пробел, CONTRACTS.md). receiveComment сама проверяет
+							// COMMENT-allowlist — здесь диспетчеризация + обнаружение "ответили мне".
+							const applied = await receiveComment(ownerPubkey, dbKey, event);
+							if (applied && event.pubkey !== ownerPubkey) {
+								notify(settings, "channels", "comments", { title: "Новый комментарий в канале", body: "" }, channelId);
+								// "Ответили МНЕ" — отдельная, обычно более громкая категория (DESIGN.md):
+								// родитель (parentId) — либо мой пост, либо мой же комментарий. commentId
+								// парсится из d-тега тем же приёмом, что comments.js's receiveComment
+								// (d-tag формата "{postId}:{commentId}", plaintext, без расшифровки).
+								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+								const commentId = dTag?.slice(dTag.indexOf(":") + 1);
+								const storedComment = commentId ? await db.table("comments").get([ownerPubkey, commentId]) : null;
+								const parentId = storedComment ? fromEncryptedRow(storedComment, dbKey)?.parentId : null;
+								if (parentId) {
+									const parentPost = await db.table("posts").get([ownerPubkey, parentId]);
+									const parentComment = !parentPost ? await db.table("comments").get([ownerPubkey, parentId]) : null;
+									const parentAuthor = parentPost
+										? fromEncryptedRow(parentPost, dbKey)?.authorPubkey
+										: parentComment
+											? fromEncryptedRow(parentComment, dbKey)?.authorPubkey
+											: null;
+									if (parentAuthor === ownerPubkey) {
+										notify(settings, "replies", null, { title: "Вам ответили в канале", body: "" });
+									}
+								}
+							}
 						} else if (event.kind === 30063) {
 							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
 							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
 							const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "channels", "chatMessages", { title: "Новое сообщение в чате канала", body: "" });
+								notify(settings, "channels", "chat", { title: "Новое сообщение в чате канала", body: "" }, channelId);
 							}
 						} else if (event.kind === CHANNEL_BAN_KIND) {
 							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
 							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация.
 							const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
-								notify(settings, "moderation", null, { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
+								notify(settings, "moderation", "ban", { title: "Модерация канала", body: "Изменения в канале — см. вкладку Модерация" });
 							}
 						}
 						activityChanged = true; // channels.jsx/channel.jsx перечитывают списки
@@ -732,7 +769,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
 						// собственного же сообщения собеседником).
 						if (receivedResult && !wasDeletion && !wasEdit) {
-							notify(settings, "messages", "incoming", { title: "Новое сообщение", body: receivedResult.text });
+							notify(settings, "messages", null, { title: "Новое сообщение", body: receivedResult.text }, receivedResult.contactPubkey);
 						}
 						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
 					} catch {

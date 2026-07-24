@@ -9,8 +9,11 @@ import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
-import { currentUser, lock } from "./ui/signals/auth.js";
+import { currentUser, lock, dbKeySig } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
+import { messagingActivity } from "./ui/signals/chats.js";
+import { refreshContacts } from "./ui/signals/contacts.js";
+import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, refreshUnreadChannelsCount } from "./ui/signals/notifications.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
 import IconChatBubble from "./ui/icons/chat-bubble.jsx";
 import IconReader from "./ui/icons/reader.jsx";
@@ -35,6 +38,8 @@ const NAV_ICONS = {
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
+	const ownerPubkey = currentUser.value.id;
+	const dbKey = dbKeySig.value;
 
 	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
 	// вкладку на "Сообщения"; сам экран (chat.jsx, этап 27) реагирует на
@@ -42,6 +47,16 @@ function MainShell() {
 	useEffect(() => {
 		if (activeChatPubkey.value) setActiveId("messages");
 	}, [activeChatPubkey.value]);
+
+	// Этап 47 — бейджи "[N]" в наве. Тот же триггер (messagingActivity), что уже
+	// используют contacts.jsx/channels.jsx для перечитывания своих списков — здесь
+	// просто ещё один потребитель того же bump-сигнала. refreshContacts — на случай,
+	// если пользователь ни разу не открывал "Контакты" в этой сессии (contacts.value
+	// иначе остался бы пустым, unread-сумма всегда 0).
+	useEffect(() => {
+		refreshContacts(ownerPubkey).then(() => refreshUnreadMessagesCount(ownerPubkey));
+		refreshUnreadChannelsCount(ownerPubkey, dbKey);
+	}, [ownerPubkey, messagingActivity.value]);
 
 	return (
 		<div class="app-layout">
@@ -51,6 +66,7 @@ function MainShell() {
 					<ul role="list">
 						{NAV_ITEMS.map(item => {
 							const ItemIcon = NAV_ICONS[item.id];
+							const badgeCount = item.id === "messages" ? unreadMessagesCount.value : item.id === "channels" ? unreadChannelsCount.value : 0;
 							return (
 								<li key={item.id}>
 									<button
@@ -61,6 +77,7 @@ function MainShell() {
 									>
 										<ItemIcon />
 										{item.label}
+										{badgeCount > 0 && <span aria-label={`непрочитано: ${badgeCount}`}> [{badgeCount}]</span>}
 									</button>
 								</li>
 							);

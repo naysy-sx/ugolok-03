@@ -12,12 +12,22 @@ import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 // тот же принцип, что read-status/drafts этапа 26).
 export const KIND_UI_SETTINGS = 30072;
 
+// Этап 47 — уровни уведомления вместо булевых тумблеров (DESIGN.md: упорядоченное
+// множество off/badge/popup/sound, не 3 независимых флага). Старое поле верхнего
+// уровня `sound` больше не нужно — звук теперь часть шкалы уровня самой категории/
+// подкатегории/entity-override, не отдельный глобальный рубильник.
 export const DEFAULT_NOTIFICATIONS = {
 	enabled: true,
-	sound: true,
-	contacts: { enabled: true, newRequests: true, accepted: true },
-	messages: { enabled: true, incoming: true },
-	channels: { enabled: true, newPosts: true, chatMessages: true },
+	contacts: { newRequests: "sound", accepted: "popup" },
+	messages: { default: "sound", overrides: {} }, // overrides: {[contactPubkey]: level}
+	channels: {
+		posts: "popup",
+		comments: "popup",
+		chat: "sound",
+		overrides: {}, // overrides: {[channelId]: {posts?, comments?, chat?}}
+	},
+	replies: "sound", // ответ на МОЙ пост/комментарий — глобально, без per-entity
+	moderation: { reports: "popup" }, // бан/warn/delete — принудительно вне settings, см. notifier.js
 };
 
 export const DEFAULT_SETTINGS = {
@@ -44,6 +54,7 @@ function mergeWithDefaults(parsed) {
 			contacts: { ...DEFAULT_NOTIFICATIONS.contacts, ...(notifications.contacts ?? {}) },
 			messages: { ...DEFAULT_NOTIFICATIONS.messages, ...(notifications.messages ?? {}) },
 			channels: { ...DEFAULT_NOTIFICATIONS.channels, ...(notifications.channels ?? {}) },
+			moderation: { ...DEFAULT_NOTIFICATIONS.moderation, ...(notifications.moderation ?? {}) },
 		},
 	};
 }
