@@ -321,8 +321,29 @@ async function connect(pubkeyHex, privKey, dbKey) {
 // Идемпотентно — singleton-соединение на вкладку. Смена identity (logout/login
 // другим аккаунтом в той же вкладке) корректно рвёт старое соединение вместо
 // того, чтобы молча продолжать синхронизацию под чужим pubkey-фильтром.
+//
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ ЖИВЫМ ИСПОЛЬЗОВАНИЕМ (этап 46-довесок): раньше проверялся
+// только факт "connectPromise когда-то резолвился" — не РЕАЛЬНОЕ текущее
+// состояние соединения. Если WebSocket с тех пор отвалился и снова восстановился
+// (autoReconnect relay-pool.js сам чинит его в фоне, с экспоненциальным backoff)
+// БЕЗ явного teardown(), возможны два расхождения со старой проверкой: (а)
+// connectPromise ещё "жив", но соединение прямо сейчас НЕ "connected" (реконнект
+// в процессе) — раньше код уходил на publish()/подписку немедленно и падал с
+// "relay-pool: send() недоступен в состоянии 'disconnected'"; (б) connectPromise
+// уже сброшен в null где-то ещё, а соединение уже СНОВА "connected" — раньше это
+// ошибочно уходило в полный teardown()+connect(), обрывая рабочее соединение
+// просто потому, что один флаг не совпал. Проверка ниже основана на РЕАЛЬНОМ
+// connection.getState(), а не на связке кэш-флагов.
 export async function ensureConnected(pubkeyHex, privKey, dbKey) {
-	if (connectPromise && connectedForPubkey === pubkeyHex) return connectPromise;
+	if (connectedForPubkey === pubkeyHex && connection) {
+		if (connection.getState() === "connected") return;
+		if (connectPromise) {
+			await connectPromise;
+			if (connection.getState() === "connected") return;
+		}
+		await waitForConnState(connection, (s) => s === "connected", 8000);
+		return;
+	}
 
 	teardown();
 	connectedForPubkey = pubkeyHex;
@@ -445,11 +466,20 @@ export async function fetchProfiles(pubkeys) {
 // альфы (CONTRACTS.md, этап 46). content — от ЛЮБОГО чужого нетрастед pubkey,
 // parseDiscoveryEvent сама защищается от мусора, но JSON.parse внутри неё может
 // бросить на невалидном JSON — try/catch здесь же, тот же принцип, что fetchProfiles.
+//
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 46-довесок): фильтр БЕЗ authors — ПОЛНЫЙ снимок
+// сети на каждый вызов, а не инкрементальное дополнение (в отличие от
+// fetchProfiles, где authors — известное подмножество). Раньше put() только
+// добавлял/обновлял — событие, пропавшее с relay (автор больше не публикует,
+// событие удалено вручную и т.п.), навсегда оставалось в локальном кэше и
+// продолжало рисовать карточку. Теперь — реконсиляция: всё, чего НЕ было в
+// ЭТОМ полном снимке, удаляется из локального кэша.
 export async function fetchDiscoveryProfiles() {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDiscoveryProfiles()");
 	}
 	const subId = "discovery-" + Math.random().toString(36).slice(2);
+	const seenPubkeys = new Set();
 
 	await new Promise((resolve) => {
 		const subscriber = createSubscriber(connection, {
@@ -458,6 +488,7 @@ export async function fetchDiscoveryProfiles() {
 				for (const event of events) {
 					try {
 						const parsed = parseDiscoveryEvent(event);
+						seenPubkeys.add(event.pubkey);
 						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
 					} catch {
 						// повреждённый/не-JSON discovery-broadcast чужого клиента — пропустить
@@ -472,6 +503,12 @@ export async function fetchDiscoveryProfiles() {
 		connection.addMessageHandler(subscriber.handleMessage);
 		subscriber.subscribe(subId, [{ kinds: [DISCOVERY_KIND] }]);
 	});
+
+	const cachedPubkeys = await db.table("discoveryProfiles").toCollection().primaryKeys();
+	const stalePubkeys = cachedPubkeys.filter((pk) => !seenPubkeys.has(pk));
+	if (stalePubkeys.length > 0) {
+		await db.table("discoveryProfiles").bulkDelete(stalePubkeys);
+	}
 }
 
 let profileSubscriber = null;
