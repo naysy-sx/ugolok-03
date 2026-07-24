@@ -2958,3 +2958,41 @@ singlefile-бандла.
 
 Regression: npm test 744/744 (без изменений в логике). npm run build
 332.46 КБ gzip.
+
+## Этап 47-довесок-4 — бюджет NF-11 повышен (+1 МБ), найдена и исправлена "лавина уведомлений"
+
+Явное решение пользователя: NF-11 280 КБ -> 1304 КБ (TECH.md/CLAUDE.md
+обновлены). Исторические замеры в CONTRACTS.md не переписаны (верны для
+своего момента).
+
+Пользователь сообщил: одно сообщение A->B вызывает ~10 уведомлений/
+звуков на B почти одновременно, похожее — с комментариями. НЕ баг
+конкретных тестовых identity, пересоздавать пользователей не нужно.
+
+Корень (прочитан код): refreshGroupMessageSubscription/
+refreshChannelContentSubscription/refreshChannelGrantSubscription —
+singleton-подписчики, но subscribe() вызывается безусловно на каждый
+триггер (chats.js: "идемпотентна — дешевле, чем проверять", решение
+ДО этого довеска) -> REQ с тем же subId штатно заставляет relay
+передоставить ВСЮ backlog-историю по фильтру. receivePost/
+receiveComment/receiveChannelMessage/receiveGroupMessageEvent
+возвращают truthy на "успешно расшифровано", не на "действительно
+новое" -> redelivery старого события проходит весь конвейер заново,
+notify() срабатывает повторно. channelGrantSubscriber усугубляет —
+сам вызывает refreshChannelContentSubscription на каждый (в т.ч.
+передоставленный) грант — мультипликативный каскад.
+
+Fix: дедуп по event.id на входе КАЖДОГО onBatch (processedEventIds —
+module-level Set в transport.js, сброс в teardown()) — 5 мест:
+giftWrapSubscriber, profileSubscriber, channelGrantSubscriber,
+channelContentSubscriber, groupMessageSubscriber. НЕ применено к
+одноразовым REQ+EOSE (fetchProfiles и т.п. — случайный subId, нет
+переиспользуемой подписки).
+
+Живая проверка: Bob шлёт Alice 5 сообщений подряд, new Audio().play()
+перехвачен через addInitScript — ровно 5 срабатываний на 5 сообщений
+(было бы N×M без фикса). Сообщения не задвоились и в БД (1 вхождение
+текста на сообщение).
+
+Regression: npm test 744/744. npm run build 332.54 КБ gzip (бюджет
+1304 КБ — запас ~972 КБ).

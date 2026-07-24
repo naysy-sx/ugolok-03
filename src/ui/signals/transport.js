@@ -118,10 +118,35 @@ async function drainOutboxSafely(publish, dbKey) {
 	}
 }
 
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-4) — "~10 уведомлений на ОДНО сообщение".
+// Корень: refreshGroupMessageSubscription/refreshChannelContentSubscription/
+// refreshChannelGrantSubscription — ПОСТОЯННЫЕ подписчики (singleton), но subscribe()
+// вызывается БЕЗУСЛОВНО на каждый триггер (новое сообщение, новый грант, новый
+// подписчик канала — см. chats.js "идемпотентна — дешевле, чем проверять") — REQ с
+// тем же subId ЗАСТАВЛЯЕТ relay передоставить ВСЮ историю, матчащую фильтр (обычное
+// поведение NIP-01, не протокольный баг). receivePost/receiveComment/
+// receiveChannelMessage/receiveGroupMessageEvent возвращают truthy на "успешно
+// расшифровано+авторизовано", а НЕ на "это действительно новое" — redelivery старого
+// события проходит ВЕСЬ конвейер заново, notify() срабатывает повторно на уже
+// виденный контент. Хуже: channelGrantSubscriber на каждый (передоставленный!) грант
+// сам вызывает refreshChannelContentSubscription — мультипликативный каскад (N
+// грантов × M событий контента). Дедуп по event.id — ОДИН раз, на входе КАЖДОГО
+// onBatch, а не патч в каждой receiveX (та же логика в 5 разных местах была бы
+// хрупкой). In-memory, сбрасывается на teardown() — не переживает reload/переподключение
+// (не нужно: слот открывается заново, начинать с чистого листа — правильно).
+const processedEventIds = new Set();
+
+function isNewEvent(eventId) {
+	if (processedEventIds.has(eventId)) return false;
+	processedEventIds.add(eventId);
+	return true;
+}
+
 function teardown() {
 	publisher = null;
 	verifyBatchFn = null;
 	groupMessageSubscriber = null;
+	processedEventIds.clear();
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
 		cryptoWorker = null;
@@ -221,6 +246,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			// с точки зрения UI (экран узнаёт "что-то обновилось"), но за O(N), не O(N²).
 			let activityChanged = false;
 			for (const event of events) {
+				if (!isNewEvent(event.id)) continue; // redelivery при resubscribe — уже обработан этой сессией
 				let rumor;
 				try {
 					rumor = nip59Unwrap(event, privKey);
@@ -583,6 +609,7 @@ export async function refreshLiveProfileSubscription(ownerPubkey) {
 				const next = { ...profiles.value };
 				let changed = false;
 				for (const event of events) {
+					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe
 					try {
 						next[event.pubkey] = parseProfileEvent(event);
 						changed = true;
@@ -621,6 +648,10 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey, dbKe
 				// всего батча достаточно (topics всё равно читаются заново целиком).
 				let gotNewGrant = false;
 				for (const event of events) {
+					// КРИТИЧНО именно здесь (этап 47-довесок-4): без этой проверки redelivery
+					// СТАРОГО гранта на resubscribe снова ставил бы gotNewGrant=true и запускал
+					// бы refreshChannelContentSubscription — мультипликативный каскад с ним же.
+					if (!isNewEvent(event.id)) continue;
 					try {
 						await receiveChannelKeyGrant(ownerPubkey, privKey, dbKey, event.pubkey, event);
 						gotNewGrant = true;
@@ -666,6 +697,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 				const settings = await loadUiSettings(ownerPubkey, dbKey);
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
+					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe (этап 47-довесок-4)
 					try {
 						// Разрешаем channelId по h-тегу ОДИН раз — нужен как entityId для
 						// notify() (этап 47, per-channel override) во всех ветках ниже, кроме
@@ -863,6 +895,16 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 				const settings = await loadUiSettings(ownerPubkey, dbKey);
 				let activityChanged = false; // этап 34, AC-12 — см. giftWrapSubscriber выше
 				for (const event of events) {
+					// КРИТИЧНО именно здесь (этап 47-довесок-4, найденный пользователем баг
+					// "~10 уведомлений на одно сообщение"): sendChatMessageAction (chats.js)
+					// БЕЗУСЛОВНО вызывает refreshGroupMessageSubscription на КАЖДУЮ отправку —
+					// resubscribe с тем же subId заставляет relay передоставить ВСЮ историю
+					// kind 445 по фильтру заново. decryptApplicationMessage (MLS ratchet)
+					// толерантен к redelivery в пределах окна (иначе не пережил бы обычную
+					// сетевую доставку не по порядку) — без этой проверки КАЖДАЯ такая
+					// редоставка старого сообщения проходила бы весь конвейер заново и
+					// notify()'ла бы уже виденное сообщение повторно.
+					if (!isNewEvent(event.id)) continue;
 					try {
 						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
 						// Найдено реальным использованием — синхронизация Lamport-часов на входящее
