@@ -12,7 +12,8 @@ import { createSubscriber } from "../../core/transport/subscriber.js";
 import { parseProfileEvent } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
-import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../../domain/contacts/requests.js";
+import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
+import { DISCOVERY_KIND, parseDiscoveryEvent } from "../../domain/discovery/discovery.js";
 import {
 	acceptWelcome,
 	ensureOwnKeyPackagePublished,
@@ -26,7 +27,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { profiles } from "./contacts.js";
+import { profiles, addContactAction } from "./contacts.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
@@ -238,6 +239,23 @@ async function connect(pubkeyHex, privKey, dbKey) {
 					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
 						// Этап 34 — сигнал "мой запрос приняли" (найденный пробел, см. requests.js).
 						notify(settings, "contacts", "accepted", { title: "Запрос принят", body: "Ваш запрос в контакты приняли" });
+						// НАЙДЕНО ЖИВЫМ E2E (этап 46): sendAcquaintanceRequestAction (в отличие
+						// от sendContactRequestAction, форма "Добавить контакт") НЕ добавляет
+						// адресата в контакты оптимистично при отправке (инвариант DESIGN.md) —
+						// без этой строки принявший так и оставался бы НЕ контактом у отправителя,
+						// и его карточка не пропадала бы из "Обзора" (contacts-фильтр в discovery.js
+						// не сработал бы). Идемпотентно для старого flow (там уже добавлен).
+						await addContactAction(pubkeyHex, privKey, rumor.pubkey, publisher.publish);
+						// Приняли МОЮ заявку из "Обзора" (если она оттуда была) — pending-запись
+						// больше не актуальна.
+						await db.table("outgoingAcquaintanceRequests").delete([pubkeyHex, rumor.pubkey]);
+						activityChanged = true; // discovery.jsx/contacts.jsx узнают, что заявка закрылась
+					} else if (rumor.kind === ACQUAINT_CANCELLED_KIND) {
+						// Этап 46 — отправитель отозвал СВОЮ ещё не принятую заявку (DESIGN.md,
+						// переход pending--CANCELLED_BY(A)-->none). rumor.pubkey — аутентичный
+						// отправитель из unwrap, не из тега.
+						await db.table("contactRequests").delete([pubkeyHex, rumor.pubkey]);
+						activityChanged = true; // contacts.jsx узнаёт, что входящая заявка исчезла
 					} else if (rumor.kind === CHANNEL_SUBSCRIBE_REQUEST_KIND) {
 						// Этап 30 — владелец канала автоматически подтверждает COMMENT-доступ
 						// (group-видимость уже была его решением при создании канала).
@@ -419,6 +437,41 @@ export async function fetchProfiles(pubkeys) {
 	});
 
 	return results;
+}
+
+// Этап 46 — раздел "Обзор". Тот же одноразовый REQ+EOSE паттерн, что fetchProfiles,
+// но БЕЗ authors — первая широкая (не по конкретным pubkey) подписка в проекте:
+// известное ограничение, не масштабируется без пагинации за пределы локальной сети/
+// альфы (CONTRACTS.md, этап 46). content — от ЛЮБОГО чужого нетрастед pubkey,
+// parseDiscoveryEvent сама защищается от мусора, но JSON.parse внутри неё может
+// бросить на невалидном JSON — try/catch здесь же, тот же принцип, что fetchProfiles.
+export async function fetchDiscoveryProfiles() {
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDiscoveryProfiles()");
+	}
+	const subId = "discovery-" + Math.random().toString(36).slice(2);
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						const parsed = parseDiscoveryEvent(event);
+						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
+					} catch {
+						// повреждённый/не-JSON discovery-broadcast чужого клиента — пропустить
+					}
+				}
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ kinds: [DISCOVERY_KIND] }]);
+	});
 }
 
 let profileSubscriber = null;

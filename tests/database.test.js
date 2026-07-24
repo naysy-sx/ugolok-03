@@ -38,6 +38,9 @@ const EXPECTED_TABLES = [
 	"contactRequests",
 	"deviceIdentity",
 	"knownDevices",
+	"discoverySettings",
+	"discoveryProfiles",
+	"outgoingAcquaintanceRequests",
 ];
 
 test("схема Dexie (раздел 10 TECH.md): все таблицы созданы", async () => {
@@ -244,6 +247,24 @@ test("uiSettings (этап 34): голый ownerPubkey как первичный
 // восстановления (снести базу целиком, дев-стадия не подразумевает миграции).
 // Тест — последний в файле: db.delete() уничтожает данные, следующие файлы
 // запускаются в отдельном процессе node --test и не разделяют это состояние.
+test("discoverySettings/discoveryProfiles/outgoingAcquaintanceRequests (этап 46): первичные ключи", async () => {
+	await db.open();
+	const discoverySettings = db.table("discoverySettings");
+	assert.equal(discoverySettings.schema.primKey.keyPath, "ownerPubkey");
+
+	const discoveryProfiles = db.table("discoveryProfiles");
+	assert.equal(discoveryProfiles.schema.primKey.keyPath, "pubkey");
+
+	const outgoingAcquaintanceRequests = db.table("outgoingAcquaintanceRequests");
+	assert.ok(
+		Array.isArray(outgoingAcquaintanceRequests.schema.primKey.keyPath) &&
+			outgoingAcquaintanceRequests.schema.primKey.keyPath.join("+") === "owner+targetPubkey",
+		"outgoingAcquaintanceRequests: составной первичный ключ [owner+targetPubkey]",
+	);
+	assert.ok(outgoingAcquaintanceRequests.schema.indexes.some((i) => i.name === "owner"));
+	db.close();
+});
+
 test("resetLocalDatabase: удаляет базу, повторный db.open() создаёт её заново с полной схемой", async () => {
 	await db.open();
 	db.close();

@@ -5843,3 +5843,247 @@ self-check тесты, использующие домен, требующий `
 напрямую (`channel.test.js`, `channel-visibility.test.js`,
 `moderation.test.js`) — обернуть чтение в `fromEncryptedRow(row, DB_KEY)`,
 тот же приём, что уже применяется в этих файлах к `channelKeys`.
+
+## Backlog — утечка метаданных через kind 30053 (найдено ревью, обсуждение с пользователем после этапа 45)
+
+**Пробел (не баг, осознанно отложено):** приватность контента канала
+держится на шифровании (`channelKey` + kind 30053, NIP-44-адресованный
+VIEW-грант), НЕ на ACL релея — проверено живым сырым `WebSocket`-запросом
+к своему strfry (без какой-либо авторизации relay отдаёт ВСЕ kind
+30060-30063 события, содержимое — валидный шифротекст, не парсится).
+Это делает канал безопасным на ЛЮБОМ relay, включая публичные — но kind
+30053 несёт тег `["p", readerPubkey]` В ОТКРЫТОМ ВИДЕ. Пассивный
+наблюдатель relay не прочтёт контент, но видит "этот pubkey получил
+грант на канал с таким-то `channelTopic`" — коррелируя гранты во
+времени, можно восстановить фрагмент социального графа (кто с кем в
+одной приватной группе), не зная названия/содержимого канала.
+
+**Почему отложено:** (1) деплой — локальная сеть, не публичный интернет
+(CLAUDE.md) — пул тех, кто способен пассивно наблюдать relay, и так уже
+доверенный; (2) риск актуализируется вместе с разделом "Обзор"
+(знакомство с чужими людьми через публичную карточку) — до его
+появления угроза не растёт; (3) тот же класс компромисса, что уже
+принятый L-07 (бывший читатель сохраняет старые эпохи) — известная,
+проговорённая граница модели, не скрытая дыра.
+
+**Если когда-нибудь понадобится закрыть:** перевести kind 30053 на
+gift-wrap (`nip59Wrap`, тот же паттерн, что уже используется для
+`CONTACT_REQUEST_KIND`/`CHANNEL_SUBSCRIBE_REQUEST_KIND`/MLS-welcome) —
+инфраструктура уже есть в проекте, это не новая примитив-работа, скорее
+перевод точки доставки на уже существующий `giftWrapSubscriber` вместо
+отдельной по-pubkey-тегу подписки.
+
+## Этап 46 — раздел "Обзор"
+
+Формализация состояний — DESIGN.md, раздел "Этап 46". Ниже — точный
+протокольный и файловый контракт.
+
+### Новые kind'ы
+
+```
+DISCOVERY_KIND = 30073   // parameterized-replaceable, d="discovery" (буквально,
+                          // тот же приём, что KIND_UI_SETTINGS=30072). ПУБЛИЧНЫЙ,
+                          // НЕ зашифрован — весь смысл в том, чтобы кто угодно
+                          // прочитал. content = JSON.stringify({ visible: bool,
+                          // showChannels: bool, channels: [{id, name, description}] }).
+                          // Выключение видимости — НЕ NIP-09 delete (relay не
+                          // обязан его уважать), а publish той же replaceable
+                          // формы с visible:false — гарантированно вытесняет
+                          // предыдущую версию у всех, кто ещё не забрал.
+
+ACQUAINT_CANCELLED_KIND = 3005   // gift-wrap rumor (nip59Wrap), content: "",
+                                   // tags: [] — тот же минимальный шаблон, что
+                                   // CONTACT_ACCEPTED_KIND. Смысл несёт САМ ФАКТ
+                                   // приёма + rumor.pubkey (аутентичный отправитель
+                                   // из unwrap, не из тега).
+```
+
+### `src/domain/discovery/discovery.js` (новый файл)
+
+```js
+export function buildDiscoveryEvent(privKey, { visible, showChannels, channels }, createdAt = Math.floor(Date.now()/1000));
+// content = JSON.stringify({visible, showChannels, channels}), tags:[["d","discovery"]].
+// channels — [{id, name, description}], ПУСТОЙ массив, если showChannels=false
+// (не полагаться на клиента-получателя, чтобы он сам не показал лишнее).
+
+export function parseDiscoveryEvent(event);
+// JSON.parse(event.content), defensively: visible/showChannels -> !!x,
+// channels -> Array.isArray ? фильтр валидных {id,name,description} : [].
+// Контент — от ЛЮБОГО чужого pubkey, НЕ доверенный ввод, парсинг должен
+// пережить произвольный мусор (try/catch на JSON.parse на стороне вызывающего,
+// тот же принцип, что parseProfileEvent в fetchProfiles).
+
+export async function loadDiscoverySettings(ownerPubkey);
+// db.table("discoverySettings").get(ownerPubkey) -> {visible, showChannels,
+// channelIds} | дефолт {visible:false, showChannels:false, channelIds:[]}.
+// ЛОКАЛЬНОЕ зеркало собственного выбора — тот же бутстрап-принцип, что
+// loadUiSettings (не ждать relay round-trip, чтобы открыть свой же тумблер).
+
+export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { visible, showChannels, channelIds }, publish);
+// 1. db.table("discoverySettings").put({ownerPubkey, visible, showChannels, channelIds})
+//    (локально, СРАЗУ, офлайн-first — тот же принцип, что saveUiSettings).
+// 2. channels = showChannels ? (await listOwnedChannels(ownerPubkey, dbKey))
+//    .filter(c => channelIds.includes(c.id)).map(c => ({id:c.id, name:c.name,
+//    description:c.description})) : [].
+// 3. await publish(buildDiscoveryEvent(privKey, {visible, showChannels, channels})) —
+//    best-effort (try/catch, не бросает наружу — тот же принцип, что saveUiSettings).
+```
+
+### `src/domain/contacts/requests.js` — правка контракта (добавить, не менять существующее)
+
+```js
+export const ACQUAINT_CANCELLED_KIND = 3005;
+export function buildAcquaintCancelledRumor() {
+  return { kind: ACQUAINT_CANCELLED_KIND, content: "", tags: [], created_at: Math.floor(Date.now()/1000) };
+}
+```
+
+### `src/ui/signals/discovery.js` (новый файл — сигналы + действия, тот же паттерн, что `signals/contacts.js`)
+
+```js
+export const discoveryProfiles = signal([]); // [{pubkey, visible, showChannels, channels, updatedAt}], уже отфильтровано:
+                                               // visible===true И pubkey НЕ в contacts.value (см. refreshDiscoveryProfiles)
+export const outgoingRequests = signal([]);   // [{owner, targetPubkey, createdAt}]
+
+export async function refreshDiscoveryProfiles(ownerPubkey);
+// Читает db.table("discoveryProfiles").toArray(), фильтрует visible && !contacts
+// (contacts.value уже загружен отдельно, contacts.jsx-конвенция), пишет в сигнал.
+
+export async function refreshOutgoingRequests(ownerPubkey);
+// db.table("outgoingAcquaintanceRequests").where("owner").equals(ownerPubkey).toArray()
+// -> outgoingRequests.value.
+
+export async function sendAcquaintanceRequestAction(ownerPubkey, privKey, targetPubkey, publish);
+// НЕ вызывает addContactAction (отличие от sendContactRequestAction — CONTRACTS.md/
+// DESIGN.md этапа 46, инвариант). await db.table("outgoingAcquaintanceRequests")
+// .put({owner: ownerPubkey, targetPubkey, createdAt: Math.floor(Date.now()/1000)});
+// затем await requirePublishOk(publish, nip59Wrap(buildContactRequestRumor(""), privKey, targetPubkey))
+// — ТОТ ЖЕ CONTACT_REQUEST_KIND, что форма "Добавить контакт" (получатель не
+// различает источник). Локальная запись — ДО publish (офлайн-first, тот же
+// принцип, что остальной проект); если publish бросает — запись остаётся,
+// поведение как остальные best-effort действия (пользователь может закрыть
+// заявку сам, если увидит, что не долетело).
+
+export async function cancelAcquaintanceRequestAction(ownerPubkey, privKey, targetPubkey, publish);
+// await db.table("outgoingAcquaintanceRequests").delete([ownerPubkey, targetPubkey])
+// СРАЗУ (оптимистично, чекбокс/галочка пропадает немедленно) — затем best-effort
+// (try/catch, не бросает) publish(nip59Wrap(buildAcquaintCancelledRumor(), privKey, targetPubkey)).
+```
+
+### `transport.js` — правки
+
+```js
+export async function fetchDiscoveryProfiles();
+// Тот же паттерн, что fetchProfiles/fetchKeyPackage (одноразовый REQ до EOSE,
+// НЕ персистентная подписка — раздел "Обзор" не нужно держать в реальном
+// времени открытым фоном). Filter: {kinds:[DISCOVERY_KIND]} БЕЗ authors —
+// первая широкая (не authors:[конкретные]) подписка в проекте, известное и
+// принятое ограничение — не масштабируется без пагинации за пределы
+// локальной сети/альфы (см. CONTRACTS.md backlog-заметку рядом, не блокер
+// сейчас). На каждое полученное событие — try{parseDiscoveryEvent}, если
+// удалось — db.table("discoveryProfiles").put({pubkey: event.pubkey, ...parsed,
+// updatedAt: event.created_at}) (put, не add — kind replaceable, но REQ без
+// since/until вернёт только последнюю версию каждого автора от relay уже
+// по протоколу NIP-01, put лишь синхронизирует локальный кэш).
+
+// giftWrapSubscriber — новая ветка:
+} else if (rumor.kind === ACQUAINT_CANCELLED_KIND) {
+  await db.table("contactRequests").delete([pubkeyHex, rumor.pubkey]);
+  activityChanged = true; // contacts.jsx узнаёт, что входящая заявка исчезла
+}
+// CONTACT_ACCEPTED_KIND — ДОПОЛНИТЬ существующую ветку (не менять её текущее
+// поведение, только добавить строку):
+} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
+  await db.table("outgoingAcquaintanceRequests").delete([pubkeyHex, rumor.pubkey]);
+  notify(...); // как было
+}
+```
+
+### `database.js` — `db.version(13)`
+
+```js
+db.version(13).stores({
+  discoverySettings: "ownerPubkey",
+  discoveryProfiles: "pubkey",
+  outgoingAcquaintanceRequests: "[owner+targetPubkey], owner",
+});
+```
+
+Ни одна из трёх таблиц не несёт содержательного текста, требующего
+шифрования по AC-16-логике (`discoverySettings`/`outgoingAcquaintanceRequests`
+— голые pubkey/флаги, тот же класс, что `groupMembers`/`contacts` на Tier 2;
+`discoveryProfiles` — локальный кэш ЧУЖИХ данных, уже публичных на relay по
+определению — шифровать локальную копию публичного смысла нет).
+
+### UI — новый экран `src/ui/screens/discovery.jsx` + `nav-items.js`/`app.jsx`
+
+Новый пункт навигации `"discovery"` → `"Обзор"` (между "Контакты" и
+"Настройки" — обсуждение с пользователем не уточняло порядок, любое
+разумное место подходит).
+
+Сверху — тумблер "Показывать меня в обзоре" (`checked = settings.visible`,
+onChange → `publishDiscoverySettings(..., {visible: true/false, showChannels:
+settings.showChannels, channelIds: settings.channelIds}, publish)`, при
+включении УЖЕ показывает checkbox "Показывать список моих каналов" ниже
+(условный рендер по `settings.visible`). Отметка чекбокса раскрывает список
+`await listOwnedChannels(ownerPubkey, dbKey)` с чекбоксом на каждый (по
+умолчанию НИ ОДИН не отмечен — явный opt-in per DESIGN.md/обсуждению).
+Кнопка "OK" вызывает `publishDiscoverySettings` с текущим выбором.
+
+Ниже — сетка карточек по `discoveryProfiles.value` (аватар из
+`profiles.value[pubkey]`? — НЕТ: kind 0 отдельно, discovery-событие не несёт
+avatar/bio — карточка должна ДОПОЛНИТЕЛЬНО дотянуть kind 0 через уже
+существующий `fetchProfiles`/`ensureProfilesFetched`, тот же паттерн, что
+`contacts.jsx`). Если `showChannels` — под био список
+`channels.map(c => c.name + ": " + c.description)`.
+
+Клик по карточке без исходящей заявки → `sendAcquaintanceRequestAction` →
+зелёная галочка (проверка `outgoingRequests.value.some(r => r.targetPubkey
+=== pubkey)`). Повторный клик (галочка уже есть) →
+`cancelAcquaintanceRequestAction`.
+
+### `contacts.jsx` — новая секция "Отправленные заявки"
+
+Список `outgoingRequests.value` (аватар/имя через `profiles`, тот же
+паттерн, что список входящих `contactRequests`) с кнопкой "Отменить" →
+`cancelAcquaintanceRequestAction` (тот же вызов, что untoggle карточки в
+Обзоре — единственная точка правды, не дублировать логику).
+
+### Найденные живым E2E правки контракта (за пределами первоначального плана)
+
+1. **`CONTACT_ACCEPTED_KIND` обязан вызывать `addContactAction`.**
+   `sendAcquaintanceRequestAction` (в отличие от `sendContactRequestAction`)
+   намеренно НЕ добавляет адресата в контакты при отправке (инвариант
+   DESIGN.md) — но это означало, что после принятия заявки взаимность
+   контактов была ОДНОСТОРОННЕЙ: принявший добавлял отправителя (через
+   свой `acceptContactRequestAction`), а сам отправитель никогда не получал
+   принявшего в СВОИ контакты — "Обзор" продолжал бы показывать его
+   карточку бесконечно. Правка: `transport.js`'s ветка `CONTACT_ACCEPTED_KIND`
+   теперь ТАКЖЕ вызывает `addContactAction(pubkeyHex, privKey, rumor.pubkey,
+   publisher.publish)` — идемпотентно и безопасно для СТАРОГО flow
+   (форма "Добавить контакт"), где адресат уже был добавлен ранее.
+2. **Порядок в `discovery.jsx`:** `refreshContacts` обязан быть
+   `await`-нут ДО `refreshDiscoveryProfiles` в эффекте монтирования —
+   иначе фильтр "скрыть уже существующих контактов" читает устаревший
+   `contacts.value` (гонка: `ensureConnected` часто резолвится раньше,
+   чем параллельный `refreshContacts` успевал прочитать IndexedDB).
+
+### Backlog — `ensureConnected`/`connectPromise` не проверяет реальное состояние соединения
+
+**Найдено живым E2E этапа 46 (не относится к самому разделу "Обзор" —
+предсуществующий пробел в `transport.js`, всплывший на достаточно долгом
+сценарии с несколькими переходами между вкладками).** `ensureConnected`
+кэширует `connectPromise` по факту `connectedForPubkey === pubkeyHex` и
+считает соединение живым, если этот промис КОГДА-ТО успешно резолвился —
+не проверяя, что WebSocket всё ещё в состоянии `"connected"` СЕЙЧАС. Если
+соединение реально отвалилось (idle-таймаут и т.п.) без явного
+`teardown()`/reconnect-цикла, повторный `ensureConnected(...).then(...)`
+сразу выполняет callback на устаревшем резолвленном промисе — любой
+`publish`/новая подписка внутри падает с "relay-pool: send() недоступен в
+состоянии 'disconnected'". Пострадавший экран получает молчаливый сбой
+(поймано `.catch` соответствующего экрана, обычно просто не обновляет
+данные) вместо явного индикатора "переподключаюсь". Затрагивает ВСЕ
+экраны, вызывающие `ensureConnected` (не только "Обзор") — не в скоупе
+этапа 46, отдельная задача при необходимости: `ensureConnected` должен
+дополнительно проверять `connState.value === "connected"` перед возвратом
+кэшированного промиса, не только факт "промис когда-то резолвился".

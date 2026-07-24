@@ -28,6 +28,7 @@ import {
 	rejectContactRequestAction,
 } from "../signals/contacts.js";
 import { messagingActivity } from "../signals/chats.js";
+import { outgoingRequests, refreshOutgoingRequests, cancelAcquaintanceRequestAction } from "../signals/discovery.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
@@ -173,6 +174,18 @@ export default function Contacts() {
 			if (contactRequests.value.length > 0) {
 				ensureProfilesFetched(
 					contactRequests.value.map((r) => r.senderPubkey),
+					fetchProfiles,
+				).catch(() => {});
+			}
+		});
+		// Этап 46 — CONTACT_ACCEPTED_KIND чистит outgoingAcquaintanceRequests
+		// (transport.js), ACQUAINT_CANCELLED_KIND не трогает эту сторону вовсе —
+		// обновляем на тот же триггер, что входящие запросы, чтобы список
+		// "Отправленные заявки" не расходился с реальностью на уже открытом экране.
+		refreshOutgoingRequests(ownerPubkey).then(() => {
+			if (outgoingRequests.value.length > 0) {
+				ensureProfilesFetched(
+					outgoingRequests.value.map((r) => r.targetPubkey),
 					fetchProfiles,
 				).catch(() => {});
 			}
@@ -453,6 +466,39 @@ export default function Contacts() {
 												Отклонить
 											</button>
 										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="outgoing-requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="outgoing-requests-heading">Отправленные заявки ({outgoingRequests.value.length})</h2>
+						{outgoingRequests.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
+						) : (
+							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+								{outgoingRequests.value.map((req) => (
+									<li
+										key={req.targetPubkey}
+										class="cluster"
+										style={{
+											alignItems: "center",
+											justifyContent: "space-between",
+											paddingBlock: "var(--space-s)",
+											borderBlockEnd: "var(--border-width) solid var(--border)",
+										}}
+									>
+										<ContactIdentity pubkey={req.targetPubkey} />
+										<button
+											type="button"
+											disabled={busy}
+											onClick={() =>
+												runRowAction(() => cancelAcquaintanceRequestAction(ownerPubkey, privKey, req.targetPubkey, publish))
+											}
+										>
+											Отменить
+										</button>
 									</li>
 								))}
 							</ul>

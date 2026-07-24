@@ -11,6 +11,7 @@ export const NAV_ITEMS = [
   { id: "messages", label: "Сообщения" },
   { id: "channels", label: "Каналы" },
   { id: "contacts", label: "Контакты" },
+  { id: "discovery", label: "Обзор" },
   { id: "settings", label: "Настройки" },
   { id: "profile", label: "Профиль" },
   { id: "diagnostics", label: "Диагностика" },

@@ -7,6 +7,7 @@ import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
+import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import { currentUser, lock } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
@@ -18,6 +19,7 @@ import IconGear from "./ui/icons/gear.jsx";
 import IconPerson from "./ui/icons/person.jsx";
 import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
+import IconGlobe from "./ui/icons/globe.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -25,6 +27,7 @@ const NAV_ICONS = {
 	messages: IconChatBubble,
 	channels: IconReader,
 	contacts: IconPeople,
+	discovery: IconGlobe,
 	settings: IconGear,
 	profile: IconPerson,
 	diagnostics: IconActivityLog,
@@ -75,12 +78,14 @@ function MainShell() {
 				{activeId === "contacts" && <Contacts />}
 				{activeId === "messages" && <Chat />}
 				{activeId === "channels" && <Channels />}
+				{activeId === "discovery" && <Discovery />}
 				{activeId === "settings" && <Settings />}
 				{activeId !== "diagnostics" &&
 					activeId !== "profile" &&
 					activeId !== "contacts" &&
 					activeId !== "messages" &&
 					activeId !== "channels" &&
+					activeId !== "discovery" &&
 					activeId !== "settings" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 		</div>

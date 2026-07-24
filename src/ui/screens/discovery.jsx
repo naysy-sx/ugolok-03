@@ -1,0 +1,220 @@
+import { useState, useEffect, useId } from "preact/hooks";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
+import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles } from "../signals/transport.js";
+import { contacts, profiles, refreshContacts, ensureProfilesFetched } from "../signals/contacts.js";
+import { ContactIdentity } from "./contacts.jsx";
+import {
+	discoveryProfiles,
+	outgoingRequests,
+	refreshDiscoveryProfiles,
+	refreshOutgoingRequests,
+	sendAcquaintanceRequestAction,
+	cancelAcquaintanceRequestAction,
+} from "../signals/discovery.js";
+import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
+import { listOwnedChannels } from "../../domain/content/channel.js";
+import Screen from "../components/screen.jsx";
+
+// Раздел "Обзор" (этап 46, CONTRACTS.md/DESIGN.md) — публичное знакомство: тумблер
+// видимости + опциональный список СВОИХ каналов сверху, карточки чужих
+// discovery-broadcast'ов ("хотят познакомиться") снизу.
+export default function Discovery() {
+	const ownerPubkey = currentUser.value.id;
+	const privKey = privKeySig.value;
+	const dbKey = dbKeySig.value;
+	const instanceId = useId();
+
+	const [settings, setSettings] = useState(null); // {visible, showChannels, channelIds}
+	const [ownedChannels, setOwnedChannels] = useState([]);
+	const [error, setError] = useState("");
+	const [busy, setBusy] = useState(false);
+
+	useEffect(() => {
+		loadDiscoverySettings(ownerPubkey).then(setSettings);
+		listOwnedChannels(ownerPubkey, dbKey).then(setOwnedChannels);
+
+		ensureConnected(ownerPubkey, privKey, dbKey)
+			.then(async () => {
+				// НАЙДЕНО ЖИВЫМ E2E (этап 46): refreshContacts ОБЯЗАН завершиться ДО
+				// refreshDiscoveryProfiles — иначе фильтр "скрыть уже существующих
+				// контактов" читает устаревший contacts.value и только что принятый
+				// контакт продолжает показываться карточкой.
+				await refreshContacts(ownerPubkey);
+				await fetchDiscoveryProfiles();
+				await refreshDiscoveryProfiles(ownerPubkey);
+				await refreshOutgoingRequests(ownerPubkey);
+				const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
+				await ensureProfilesFetched(pubkeys, fetchProfiles).catch(() => {});
+			})
+			.catch((e) => setError(e?.message || String(e)));
+	}, [ownerPubkey]);
+
+	async function persist(next) {
+		setSettings(next);
+		try {
+			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	function handleVisibleToggle(checked) {
+		if (!checked) {
+			// Скрыть — сразу, без промежуточного "OK" (симметрично тому, что показ
+			// каналов/выбор каналов подтверждаются явно, а спрятаться можно немедленно).
+			persist({ ...settings, visible: false });
+		} else {
+			// Показать — только раскрывает панель настроек ниже, публикация — по "OK"
+			// (пользовательское описание раздела, CONTRACTS.md этап 46).
+			setSettings({ ...settings, visible: true });
+		}
+	}
+
+	function toggleChannelId(channelId) {
+		setSettings((prev) => {
+			const has = prev.channelIds.includes(channelId);
+			return { ...prev, channelIds: has ? prev.channelIds.filter((id) => id !== channelId) : [...prev.channelIds, channelId] };
+		});
+	}
+
+	async function handleToggleCard(pubkey) {
+		if (busy) return;
+		setBusy(true);
+		setError("");
+		try {
+			const alreadySent = outgoingRequests.value.some((r) => r.targetPubkey === pubkey);
+			if (alreadySent) {
+				await cancelAcquaintanceRequestAction(ownerPubkey, privKey, pubkey, publish);
+			} else {
+				await sendAcquaintanceRequestAction(ownerPubkey, privKey, pubkey, publish);
+			}
+			await refreshOutgoingRequests(ownerPubkey);
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	if (!settings) {
+		return (
+			<Screen title="Обзор">
+				<p style={{ color: "var(--muted)" }}>Загрузка…</p>
+			</Screen>
+		);
+	}
+
+	return (
+		<Screen title="Обзор">
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+
+			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+				<label class="cluster" style={{ alignItems: "center" }}>
+					<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
+					Показывать меня в обзоре
+				</label>
+
+				{settings.visible && (
+					<div class="flow" style={{ "--flow-space": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
+						<label class="cluster" style={{ alignItems: "center" }}>
+							<input
+								type="checkbox"
+								checked={settings.showChannels}
+								onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
+							/>
+							Показывать список моих каналов
+						</label>
+
+						{settings.showChannels && (
+							<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>
+								<legend>Какие каналы показывать</legend>
+								{ownedChannels.length === 0 ? (
+									<p style={{ color: "var(--muted)" }}>У вас пока нет своих каналов.</p>
+								) : (
+									ownedChannels.map((c) => (
+										<label key={c.id} class="cluster" style={{ alignItems: "center" }}>
+											<input
+												id={`${instanceId}-ch-${c.id}`}
+												type="checkbox"
+												checked={settings.channelIds.includes(c.id)}
+												onChange={() => toggleChannelId(c.id)}
+											/>
+											{c.name}
+										</label>
+									))
+								)}
+							</fieldset>
+						)}
+
+						<div>
+							<button type="button" onClick={() => persist(settings)}>
+								OK
+							</button>
+						</div>
+					</div>
+				)}
+			</section>
+
+			<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Хотят познакомиться</h2>
+				{discoveryProfiles.value.length === 0 ? (
+					<p style={{ color: "var(--muted)" }}>Пока никого не видно.</p>
+				) : (
+					<div class="grid-auto" style={{ gap: "var(--space-s)" }}>
+						{discoveryProfiles.value.map((card) => {
+							const sent = outgoingRequests.value.some((r) => r.targetPubkey === card.pubkey);
+							return (
+								<article
+									key={card.pubkey}
+									class="flow"
+									style={{
+										"--flow-space": "var(--space-2xs)",
+										position: "relative",
+										border: "var(--border-width) solid var(--border)",
+										borderRadius: "var(--radius)",
+										padding: "var(--space-s)",
+									}}
+								>
+									<button
+										type="button"
+										disabled={busy}
+										onClick={() => handleToggleCard(card.pubkey)}
+										aria-pressed={sent}
+										aria-label={sent ? "Отменить заявку на знакомство" : "Отправить заявку на знакомство"}
+										style={{
+											position: "absolute",
+											top: "var(--space-2xs)",
+											right: "var(--space-2xs)",
+											border: "none",
+											background: "none",
+											cursor: "pointer",
+											fontSize: "var(--step-2)",
+											color: sent ? "var(--ok, oklch(0.6 0.17 145))" : "var(--muted)",
+										}}
+									>
+										{sent ? "✓" : "○"}
+									</button>
+									<ContactIdentity pubkey={card.pubkey} />
+									{card.showChannels && card.channels.length > 0 && (
+										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+											{card.channels.map((c) => (
+												<li key={c.id}>
+													<strong>{c.name}</strong>
+													{c.description && <>: {c.description}</>}
+												</li>
+											))}
+										</ul>
+									)}
+								</article>
+							);
+						})}
+					</div>
+				)}
+			</section>
+		</Screen>
+	);
+}

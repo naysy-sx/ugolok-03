@@ -2726,3 +2726,50 @@ listPending (расшифровка).
 Диагностика "Этап 5" ok, создание канала целиком через реальный relay
 успешно. Regression: `npm test` 682/682 (было 677). `npm run build`
 250.08 КБ gzip.
+
+## Этап 46 — раздел "Обзор"
+
+Контракт/design — до кода (CONTRACTS.md/DESIGN.md, этап 46). Тесты —
+до реализации (discovery.test.js, discovery-signals.test.js, +requests/
+database тесты).
+
+Воркер, вызов 1/1 (discovery.js): проигнорировал прямое указание
+"импортируй listOwnedChannels из channel.js" — продублировал функцию
+локально, забыв импортировать fromEncryptedRow (упало бы на первом же
+вызове с showChannels=true). Точечная правка (2 правки), не переигрывался.
+
+signals/discovery.js — написан вручную (не воркером): единственный
+критичный инвариант всего этапа ("НЕ вызывать addContactAction" в
+sendAcquaintanceRequestAction) — доверять слабой модели с этим не стал,
+слишком легко скопировать паттерн из соседнего sendContactRequestAction
+по привычке.
+
+transport.js (2 новые ветки в giftWrapSubscriber + fetchDiscoveryProfiles),
+discovery.jsx, contacts.jsx (секция), nav-items.js/app.jsx — вручную
+(большие/чувствительные файлы, тот же принцип, что unlock.jsx/profile.jsx
+в предыдущих этапах).
+
+Живой двух-браузерный E2E (Alice+Bob, реальный уже поднятый strfry)
+нашёл 2 реальных бага, не пойманных юнит-тестами:
+1. CONTACT_ACCEPTED_KIND не добавлял принявшего в контакты у ТОГО, кто
+   отправил заявку из "Обзора" (sendAcquaintanceRequestAction намеренно
+   не делает это при отправке, в отличие от sendContactRequestAction) —
+   взаимность контактов была односторонней. Найдено: карточка Alice не
+   пропадала из "Обзора" у Bob после того, как Alice приняла его заявку,
+   хотя у САМОЙ Alice Боб корректно появился в контактах.
+2. discovery.jsx не дожидался refreshContacts перед refreshDiscoveryProfiles
+   (гонка с ensureConnected, часто резолвящимся быстрее параллельного
+   чтения IndexedDB) — фильтр "скрыть уже контактов" читал пустой/устаревший
+   contacts.value.
+
+Диагностика бага 2 заняла несколько итераций живого прогона (добавлял
+временные console.log/mount-counter прямо в discovery.jsx, откатил после
+подтверждения фикса) — по пути найден и ТРЕТИЙ баг, вне скоупа этапа 46:
+ensureConnected кэширует connectPromise по факту "когда-то резолвился",
+не проверяя consState.value сейчас — на длинном сценарии с несколькими
+переходами между вкладками соединение реально отвалилось, и повторный
+ensureConnected тихо возвращал мёртвый промис вместо переподключения.
+Записано в CONTRACTS.md backlog, не в скоуп этого этапа (затрагивает ВСЕ
+экраны, не только "Обзор").
+
+Regression: `npm test` 701/701 (было 682, +19). `npm run build` 251.80 КБ gzip.

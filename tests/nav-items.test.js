@@ -11,6 +11,7 @@ const REQUIRED_IDS = [
 	"settings",
 	"profile",
 	"diagnostics",
+	"discovery", // этап 46
 ];
 
 test("NAV_ITEMS содержит обязательный минимум пунктов этапа 1", () => {

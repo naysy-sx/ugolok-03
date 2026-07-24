@@ -155,6 +155,19 @@ db.version(12).stores({
   attachments: "[ownerPubkey+sha256], ownerPubkey, lastAccessedAt"
 });
 
+// Этап 46 — раздел "Обзор" (CONTRACTS.md/DESIGN.md). discoverySettings — локальное
+// зеркало СВОЕГО выбора видимости (тот же бутстрап-принцип, что uiSettings — не ждать
+// relay round-trip, чтобы открыть свой тумблер). discoveryProfiles — локальный кэш ЧУЖИХ
+// discovery-broadcast'ов (kind 30073, публичный по определению — шифровать локальную
+// копию публичного смысла нет). outgoingAcquaintanceRequests — присутствие строки САМО
+// является состоянием "заявка ещё не отменена/не принята" (DESIGN.md, этап 46) —
+// голые pubkey, тот же класс, что groupMembers/contacts на Tier 2, не шифруется.
+db.version(13).stores({
+  discoverySettings: "ownerPubkey",
+  discoveryProfiles: "pubkey",
+  outgoingAcquaintanceRequests: "[owner+targetPubkey], owner"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

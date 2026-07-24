@@ -18,3 +18,12 @@ export const CONTACT_ACCEPTED_KIND = 3004;
 export function buildContactAcceptedRumor() {
   return { kind: CONTACT_ACCEPTED_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
 }
+
+// Этап 46 — раздел "Обзор": отправитель отзывает ещё НЕ принятую заявку (DESIGN.md,
+// переход pending--CANCEL(A)-->none). Минимальный шаблон, тот же приём, что
+// CONTACT_ACCEPTED_KIND — смысл несёт rumor.pubkey после unwrap, не content.
+export const ACQUAINT_CANCELLED_KIND = 3005;
+
+export function buildAcquaintCancelledRumor() {
+  return { kind: ACQUAINT_CANCELLED_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
+}
