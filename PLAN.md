@@ -1290,4 +1290,42 @@ read/unread, новый стартовый экран после логина. �
 — Claude; 4) UI (`contacts.jsx` под новую модель) — Claude. Затем отдельно
 (не FSM): N1-инвариант для notify() + фича "Журнал".
 
-Начинаем с п.1.
+**П.1 готово.** Воркер (qwen2.5-coder:7b) сдал черновик `contact-fsm.js`
+с 6 багами (2 опечатки/ReferenceError, отсутствующие I3/I4-переходы,
+полностью нерабочий `reconcileList`) — исправлено вручную. Плюс поймана
+и исправлена собственная ошибка спецификации (resolvedAt=now при входе
+в *_PENDING ломал последующий REMOTE_ACCEPT — обнаружено тестом). 31
+тест, зелёные. Закоммичено (84f70dd).
+
+**П.2+3 готовы (в одном заходе, Claude).** `contact-runtime.js` —
+imperative shell: Map<peerPubkey,peerState>, исполнение команд
+(PUBLISH_*→gift-wrap+publish, UPDATE_CONTACTS_LIST/UPDATE_MUTE_LIST→
+republish kind-3/kind-10000 из ТЕКУЩЕГО состава Map, UPSERT/DELETE→
+персист ПОЛНОГО текущего peerState в `contactRelationships`, EMIT/
+LOG_JOURNAL→колбэки). Новый kind `CONTACT_REJECTED_KIND=3006` +
+`buildContactRejectedRumor` (requests.js) — раньше отказа как сигнала
+не существовало вовсе. Новая таблица `contactRelationships` (database.js,
+db.version(15), аддитивно) — `greeting` зашифрован (CONTACT_RELATIONSHIPS_
+PLAINTEXT_FIELDS), state/resolvedAt/sentAt открыты (нужны индексу).
+
+Миграция (`migrateLegacyContactTables`) — отложена до unlock (развилка,
+решена пользователем): Dexie upgrade-транзакция не имеет доступа к dbKey
+(contactRequests зашифрована), поэтому перенос — обычная async-функция,
+вызываемая из `load()`. Идемпотентна по конструкции: очищает исходные
+таблицы после успешного переноса, повторный вызов находит их пустыми.
+BLOCKED приоритетнее одновременной contactRequests-записи того же peer
+(тот же принцип, что старый blockContactAction). `outgoingAcquaintance
+Requests` — чистый старт, не переносится (решено ранее).
+
+Найден и исправлен ещё один пробел в contact-fsm.js при написании
+рантайм-тестов: `NONE + USER_BLOCK` не имел перехода вовсе (блокировка
+постороннего без предыстории — реальный сценарий старого
+blockContactAction) — добавлен переход в BLOCKED.
+
+21 новый тест (contact-runtime.test.js) + 1 (contact-fsm.js, NONE+BLOCK)
++ 2 (requests.js, CONTACT_REJECTED_KIND). Полная регрессия: 882/882.
+
+Осталось: вписать contact-runtime.js в transport.js (giftWrapSubscriber
+маршрутизация + kind-3/10000 reconcile вместо foldContactList/foldMuteList)
+и обновить contacts.jsx (п.4, 5 разделов по state-фильтрам). Затем отдельно
+N1 + "Журнал".

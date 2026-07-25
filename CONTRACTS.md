@@ -7232,3 +7232,50 @@ export const CONTACT_REJECTED_KIND = 3006; // следующий свободн�
 "Входящие заявки" (INCOMING_PENDING, было "Запросы"), "Контакты"
 (CONTACT), "Отклонённые" (REJECTED_BY_ME, НОВЫЙ раздел), "Заблокированные"
 (BLOCKED).
+
+### `contact-runtime.js` — публичный API (задача 2, реализация Claude)
+
+Фабрика, тот же DI-паттерн, что `createCallRuntime` (call-runtime.js,
+этап 48): `publish`/`privKey`/`ownerPubkey` инъецируются, `db` —
+прямой импорт (как в handlers.js/contacts.js — не звонок, тут
+персистентность неотъемлема от домена).
+
+```js
+createContactRuntime({ ownerPubkey, privKey, publish, onStateChange, onJournal })
+  -> {
+    load,                              // async () -> void: СНАЧАЛА одноразовая миграция
+                                        // legacy-таблиц (contacts/blockedContacts/contactRequests
+                                        // -> contactRelationships, отложена до unlock — dbKey
+                                        // недоступен в Dexie upgrade-транзакции, developer
+                                        // decision этапа 49), ПОТОМ читает contactRelationships в Map.
+                                        // Идемпотентна: миграция очищает исходные таблицы после
+                                        // успешного переноса, повторный вызов — no-op.
+    sendRequest(peer, greeting),       // USER_SEND_REQUEST
+    accept(peer), reject(peer), cancel(peer),
+    block(peer), unblock(peer), removeContact(peer),
+    handleIncomingRumor(rumor),        // kind 3001/3004/3006/3005 -> REMOTE_* (rumor.pubkey, rumor.created_at)
+    reconcileContactList(pubkeySet, createdAt),  // reconcileList(..., "contacts", ...) + исполнение команд
+    reconcileMuteList(pubkeySet, createdAt),     // reconcileList(..., "mute", ...)
+    getPeerState(peer),                // peerState | null
+    listPeersByState(stateName),       // peerState[]
+  }
+```
+
+`onStateChange(peerPubkey, stateName)` — EMIT. `onJournal(entry)` —
+LOG_JOURNAL (entry = `{peer, message}`), runtime транслирует в
+`notify()`+запись в "Журнал" (этап 49, Приложение Б) — сам runtime
+про UI/notifier ничего не знает, только зовёт колбэк.
+
+`UPSERT`/`DELETE` персистятся ОДИНАКОВО: runtime пишет ПОЛНОЕ текущее
+`peerState` (уже пересчитанное `reduce`/`reconcileList`) в
+`contactRelationships` — `fields` в самой команде не используется для
+персистентности напрямую (он лишь документирует, что именно
+изменилось), избегая рассинхрона между Map и БД.
+
+`UPDATE_CONTACTS_LIST`/`UPDATE_MUTE_LIST` republish-ят kind-3/kind-10000
+из ТЕКУЩЕГО состава `listPeersByState("CONTACT"|"BLOCKED")` (Map уже
+обновлена к моменту исполнения команды) — локальный `contactRelationships`
+уже актуален через сопутствующий `UPSERT`/`DELETE` в той же транзакции
+δ, поэтому publish не блокирует локальную консистентность (тот же
+принцип, что `foldContactList` раньше — локально-оптимистично,
+kind-3-событие лишь транслирует изменение на другие устройства).

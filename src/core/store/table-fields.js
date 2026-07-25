@@ -51,3 +51,10 @@ export const UI_SETTINGS_PLAINTEXT_FIELDS = ["ownerPubkey"];
 export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"];
 
 export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
+
+// Этап 49 — contactRelationships (единая таблица, CONTACTS-FSM.md §3). state/
+// resolvedAt/sentAt — структурные метаданные и индексы ([owner+peer], [owner+state]
+// требуют plaintext), тот же принцип, что contacts/blockedContacts на этапе 41.
+// greeting — единственное содержательное поле (текст приветствия заявки), остаётся
+// зашифрованным — прямое продолжение CONTACT_REQUESTS_PLAINTEXT_FIELDS.
+export const CONTACT_RELATIONSHIPS_PLAINTEXT_FIELDS = ["owner", "peer", "state", "resolvedAt", "sentAt"];

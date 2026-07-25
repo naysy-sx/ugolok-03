@@ -27,3 +27,13 @@ export const ACQUAINT_CANCELLED_KIND = 3005;
 export function buildAcquaintCancelledRumor() {
   return { kind: ACQUAINT_CANCELLED_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
 }
+
+// Этап 49 (CONTACTS-FSM.md §3) — раньше отказа не существовало как сигнала вовсе
+// (rejectContactRequestAction молча блокировала локально, отправитель никогда не
+// узнавал). PUBLISH_REJECT (contact-fsm.js) требует именно эту команду. Тот же
+// минимальный приём, что CONTACT_ACCEPTED_KIND/ACQUAINT_CANCELLED_KIND.
+export const CONTACT_REJECTED_KIND = 3006;
+
+export function buildContactRejectedRumor() {
+  return { kind: CONTACT_REJECTED_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
+}

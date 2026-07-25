@@ -177,6 +177,15 @@ db.version(14).stores({
   channelSyncState: "[ownerPubkey+channelId]"
 });
 
+// Этап 49 — единая таблица состояний контакта/заявки (CONTACTS-FSM.md §3),
+// заменяет structurally contacts/contactRequests/blockedContacts/
+// outgoingAcquaintanceRequests (те остаются в схеме нетронутыми до
+// переноса — миграция отложена до unlock, см. contact-runtime.js,
+// contactRequests зашифрована и нечитаема без dbKey в момент upgrade).
+db.version(15).stores({
+  contactRelationships: "[owner+peer], [owner+state]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

@@ -5,10 +5,10 @@ export function reduce(peerState, event) {
     case "NONE":
       if (event.type === "USER_SEND_REQUEST") {
         return {
-          state: { ...peerState, name: "OUTGOING_PENDING" },
+          state: { ...peerState, name: "OUTGOING_PENDING", sentAt: now },
           commands: [
             { type: "PUBLISH_REQUEST", peer: event.peer, greeting: event.greeting },
-            { type: "UPSERT", peer: event.peer, fields: {} },
+            { type: "UPSERT", peer: event.peer, fields: { sentAt: now } },
             { type: "EMIT", peer: event.peer, stateName: "OUTGOING_PENDING" },
           ],
         };
@@ -19,6 +19,16 @@ export function reduce(peerState, event) {
           commands: [
             { type: "UPSERT", peer: event.peer, fields: { greeting: event.greeting, createdAt: event.createdAt } },
             { type: "EMIT", peer: event.peer, stateName: "INCOMING_PENDING" },
+          ],
+        };
+      }
+      if (event.type === "USER_BLOCK") {
+        return {
+          state: { ...peerState, name: "BLOCKED", resolvedAt: now },
+          commands: [
+            { type: "UPDATE_MUTE_LIST", peer: event.peer, action: "add" },
+            { type: "UPSERT", peer: event.peer, fields: { resolvedAt: now } },
+            { type: "EMIT", peer: event.peer, stateName: "BLOCKED" },
           ],
         };
       }
@@ -179,10 +189,10 @@ export function reduce(peerState, event) {
       }
       if (event.type === "USER_SEND_REQUEST") {
         return {
-          state: { ...peerState, name: "OUTGOING_PENDING" },
+          state: { ...peerState, name: "OUTGOING_PENDING", sentAt: now },
           commands: [
             { type: "PUBLISH_REQUEST", peer: event.peer, greeting: event.greeting },
-            { type: "UPSERT", peer: event.peer, fields: {} },
+            { type: "UPSERT", peer: event.peer, fields: { sentAt: now } },
             { type: "EMIT", peer: event.peer, stateName: "OUTGOING_PENDING" },
           ],
         };
@@ -206,6 +216,7 @@ export function reduce(peerState, event) {
           state: { ...peerState, name: "NONE" },
           commands: [
             { type: "UPDATE_MUTE_LIST", peer: event.peer, action: "remove" },
+            { type: "DELETE", peer: event.peer },
             { type: "EMIT", peer: event.peer, stateName: "NONE" },
           ],
         };
@@ -234,6 +245,7 @@ export function reconcileList(relationships, listKind, pubkeySet, createdAt) {
         greeting: null,
       });
       commands.push({ type: "UPSERT", peer, fields: { resolvedAt: createdAt } });
+      commands.push({ type: "EMIT", peer, stateName: targetState });
     }
   }
 
@@ -242,6 +254,7 @@ export function reconcileList(relationships, listKind, pubkeySet, createdAt) {
       if (peerState.resolvedAt <= createdAt) {
         newRelationships.set(peer, { ...peerState, name: "NONE", resolvedAt: createdAt });
         commands.push({ type: "DELETE", peer });
+        commands.push({ type: "EMIT", peer, stateName: "NONE" });
       }
     }
   }

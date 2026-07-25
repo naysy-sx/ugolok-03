@@ -188,6 +188,13 @@ test("удаление контакта: CONTACT -> USER_REMOVE_CONTACT -> NONE,
 });
 
 // --- Доп. переходы: USER_BLOCK из разных состояний ---
+test("USER_BLOCK из NONE -> BLOCKED (блокировка постороннего без предыстории — реальный сценарий из старого blockContactAction)", () => {
+	const s = none(BOB);
+	const r = reduce(s, { type: "USER_BLOCK", peer: BOB });
+	assert.equal(r.state.name, "BLOCKED");
+	assert.ok(names(r.commands).includes("UPDATE_MUTE_LIST"));
+});
+
 test("USER_BLOCK из OUTGOING_PENDING -> BLOCKED, PUBLISH_CANCEL (вежливо отозвать заявку)", () => {
 	const s = withState("OUTGOING_PENDING", BOB);
 	const r = reduce(s, { type: "USER_BLOCK", peer: BOB });
