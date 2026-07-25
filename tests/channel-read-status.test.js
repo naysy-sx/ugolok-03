@@ -79,10 +79,26 @@ test("markChannelAsRead: публикует событие и применяет
 	assert.equal(row.lastReadAt, 42);
 });
 
-test("markChannelAsRead: сбой публикации -> throw, не применяет fold локально", async () => {
+// Этап 50-довесок (пользователь, живая проверка) — контракт ИЗМЕНЁН: раньше
+// сбой publish откатывал/блокировал локальный fold (throw, ничего не
+// применено), из-за чего бейдж "Каналы [N]" мог застрять устаревшим
+// неограниченно долго при любой сетевой заминке. Теперь локальное прочтение
+// применяется БЕЗУСЛОВНО и ПЕРВЫМ — сбой publish (или его отсутствие/зависание)
+// больше не мешает пользователю увидеть, что он прочитал.
+test("markChannelAsRead: сбой публикации -> локальный fold ВСЁ РАВНО применяется (бейдж не должен зависеть от сети), не бросает", async () => {
 	const publish = async () => ({ ok: false, reason: "отклонено" });
-	await assert.rejects(() => markChannelAsRead(ALICE_PUB, ALICE_PRIV, CHAN_A, 42, publish), /отклонено/);
-	assert.equal(await db.table("channelSyncState").get([ALICE_PUB, CHAN_A]), undefined);
+	await assert.doesNotReject(() => markChannelAsRead(ALICE_PUB, ALICE_PRIV, CHAN_A, 42, publish));
+	const row = await db.table("channelSyncState").get([ALICE_PUB, CHAN_A]);
+	assert.equal(row.lastReadAt, 42, "локальный курсор обязан продвинуться, несмотря на отклонённую публикацию");
+});
+
+test("markChannelAsRead: publish() бросает исключение (не просто {ok:false}) -> тоже не мешает локальному fold", async () => {
+	const publish = async () => {
+		throw new Error("сеть недоступна");
+	};
+	await assert.doesNotReject(() => markChannelAsRead(ALICE_PUB, ALICE_PRIV, CHAN_A, 99, publish));
+	const row = await db.table("channelSyncState").get([ALICE_PUB, CHAN_A]);
+	assert.equal(row.lastReadAt, 99);
 });
 
 test("rebuildChannelReadStatus: восстанавливает несколько каналов независимо, LWW по created_at на дубли", async () => {

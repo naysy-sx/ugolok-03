@@ -48,14 +48,28 @@ export async function foldChannelReadStatus(event, privKey) {
 // вызовов пришло в одну и ту же секунду.
 const lastPublishedCreatedAt = new Map();
 
+// Найденный пользователем баг (живая проверка после этапа 50): "Каналы [N]" не
+// пропадал сразу после прочтения. Корень — локальный курсор (channelSyncState,
+// источник getChannelUnreadCount/бейджа) применялся ТОЛЬКО ПОСЛЕ успешной
+// публикации kind 30074, а вызывающий UI-код (channel.jsx/channel-chat.jsx)
+// глотал ЛЮБОЙ сбой publish через .catch(()=>{}) без ретрая — при малейшей
+// задержке/сбое relay локальное состояние (и бейдж) застревали устаревшими
+// НЕОГРАНИЧЕННО долго. Разворачиваем порядок: локальный fold — СРАЗУ и
+// безусловно (то, что пользователь реально увидел, не должно ждать сеть);
+// публикация — best-effort для синхронизации МЕЖДУ устройствами, её сбой
+// молча проглатывается (другие устройства узнают через rebuildChannelReadStatus
+// при следующем connect() либо при следующей успешной публикации).
 export async function markChannelAsRead(ownerPubkey, privKey, channelId, lastReadAt, publish) {
 	const now = Math.floor(Date.now() / 1000);
 	const createdAt = Math.max(now, (lastPublishedCreatedAt.get(channelId) ?? 0) + 1);
 	const event = buildChannelReadStatusEvent(privKey, { channelId, lastReadAt }, createdAt);
-	const result = await publish(event);
-	if (!result.ok) throw new Error(result.reason || "relay отклонил публикацию");
 	lastPublishedCreatedAt.set(channelId, createdAt);
 	await foldChannelReadStatus(event, privKey);
+	try {
+		await publish(event);
+	} catch {
+		// best-effort — см. пояснение выше
+	}
 }
 
 // Тот же паттерн, что rebuildReadStatus — группировка по d-tag (channelId) обязательна,

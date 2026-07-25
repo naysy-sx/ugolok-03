@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals";
-import { listJournalEntries, markJournalEntryRead } from "../../domain/notifications/journal.js";
+import { listJournalEntries, markJournalEntryRead, markAllJournalEntriesRead } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 
 // Этап 50 (CONTACTS-FSM.md §7) — сигнал полностью пересчитывается из БД (не
@@ -21,4 +21,10 @@ export async function openJournalEntry(ownerPubkey, dbKey, entry) {
 		await refreshJournal(ownerPubkey, dbKey);
 	}
 	navigateFromNotification(entry.navTarget);
+}
+
+// "Отметить всё прочитанным" (пользователь, живая проверка).
+export async function markAllRead(ownerPubkey, dbKey) {
+	await markAllJournalEntriesRead(ownerPubkey, dbKey);
+	await refreshJournal(ownerPubkey, dbKey);
 }

@@ -8,11 +8,20 @@ import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-tab
 import { JOURNAL_ENTRIES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { notify } from "./notifier.js";
 
-export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, body, navTarget }) {
+// Этап 50-довесок (пользователь, живая проверка) — createdAt (момент, когда
+// ЭТО устройство записало уведомление) и occurredAt (момент, когда событие
+// РЕАЛЬНО произошло — created_at исходного rumor'а/события) — РАЗНЫЕ вещи,
+// расходятся ровно тогда, когда важно (догнать историю после offline/релогина).
+// occurredAt — опционален у вызывающего (options.occurredAt в notifyAndLog);
+// если не передан (звонки — событие ВСЕГДА "сейчас", либо вызывающий код ещё
+// не прокинул), по умолчанию равен createdAt.
+export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, body, navTarget, occurredAt }) {
+	const createdAt = Date.now();
 	const entry = {
 		id: crypto.randomUUID(),
 		owner: ownerPubkey,
-		createdAt: Date.now(),
+		createdAt,
+		occurredAt: occurredAt ?? createdAt,
 		category,
 		title,
 		body,
@@ -23,9 +32,13 @@ export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, b
 	return entry;
 }
 
+// Сортировка по occurredAt (не createdAt) — пользователь просматривает Журнал
+// как хронологию РЕАЛЬНЫХ событий (и календарь-переход, ниже в UI, опирается
+// именно на эту хронологию); в подавляющем большинстве случаев (не было offline)
+// они совпадают день-в-день, расхождение — только полезное исключение.
 export async function listJournalEntries(ownerPubkey, dbKey) {
 	const rows = await db.table("journalEntries").where("owner").equals(ownerPubkey).toArray();
-	return rows.map((row) => fromEncryptedRow(row, dbKey)).sort((a, b) => b.createdAt - a.createdAt);
+	return rows.map((row) => fromEncryptedRow(row, dbKey)).sort((a, b) => b.occurredAt - a.occurredAt);
 }
 
 // read — plaintext-поле (JOURNAL_ENTRIES_PLAINTEXT_FIELDS) — update() патчит
@@ -34,11 +47,24 @@ export async function markJournalEntryRead(id) {
 	await db.table("journalEntries").update(id, { read: true });
 }
 
+// "Отметить всё прочитанным" (пользователь) — read уже plaintext, фильтр по
+// нему прямо на сырых строках, расшифровка не нужна вовсе.
+export async function markAllJournalEntriesRead(ownerPubkey, dbKey) {
+	const rows = await db.table("journalEntries").where("owner").equals(ownerPubkey).toArray();
+	await Promise.all(rows.filter((row) => !row.read).map((row) => db.table("journalEntries").update(row.id, { read: true })));
+}
+
 export async function notifyAndLog(ownerPubkey, dbKey, settings, category, subcategory, options, entityId, backend) {
 	const level = notify(settings, category, subcategory, options, entityId, backend);
 	if (level !== "off") {
 		try {
-			await writeJournalEntry(ownerPubkey, dbKey, { category, title: options.title, body: options.body, navTarget: options.navTarget });
+			await writeJournalEntry(ownerPubkey, dbKey, {
+				category,
+				title: options.title,
+				body: options.body,
+				navTarget: options.navTarget,
+				occurredAt: options.occurredAt,
+			});
 		} catch {
 			// персистентность Журнала — best-effort, тот же принцип, что остальные
 			// non-critical записи в этой кодовой базе (ensureProfilesFetched и т.п.)

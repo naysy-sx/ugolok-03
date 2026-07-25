@@ -9,7 +9,7 @@ import { ensureProfilesFetched } from "../signals/contacts.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
-import { addComment, getCommentsTree, countTopLevelCommentsByPost } from "../../domain/content/comments.js";
+import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
@@ -250,10 +250,17 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		return acc;
 	}
 
+	// Найденный пользователем баг (живая проверка после этапа 50): "Комментарии (N)"
+	// считал только корневой уровень (tree.length/fresh.length) — вложенные ответы
+	// не учитывались. countNodes суммирует ВСЕ узлы дерева, включая replies.
+	function countNodes(nodes) {
+		return nodes.reduce((sum, node) => sum + 1 + countNodes(node.replies), 0);
+	}
+
 	async function refreshComments() {
 		const fresh = await getCommentsTree(ownerPubkey, dbKey, post.id);
 		setTree(fresh);
-		onCountChange?.(post.id, fresh.length);
+		onCountChange?.(post.id, countNodes(fresh));
 		ensureProfilesFetched([...new Set(flattenAuthors(fresh))], fetchProfiles).catch(() => {});
 		// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-3) — курсор канала продвигался при
 		// загрузке постов/чата, но НЕ при просмотре комментариев: если непрочитанным
@@ -303,7 +310,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 			<PostCard
 				post={post}
 				isOwner={isOwner}
-				commentCount={expanded ? tree.length : commentCount}
+				commentCount={expanded ? countNodes(tree) : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
@@ -396,7 +403,9 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		}
 		// Найдено пользователем: счётчик комментариев показывал 0 до первого клика —
 		// один общий скан на все посты списка сразу, вместо getCommentsTree на каждый.
-		const counts = await countTopLevelCommentsByPost(ownerPubkey, freshPosts.map((p) => p.id));
+		// (Второй найденный баг — вложенные ответы не учитывались — исправлен внутри
+		// countCommentsByPost, comments.js.)
+		const counts = await countCommentsByPost(ownerPubkey, freshPosts.map((p) => p.id));
 		setCommentCounts(Object.fromEntries(counts));
 	}
 

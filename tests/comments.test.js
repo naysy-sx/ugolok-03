@@ -7,7 +7,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/channel.js";
 import { sendViewGrant, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
-import { addComment, receiveComment, getCommentsTree, countTopLevelCommentsByPost } from "../src/domain/content/comments.js";
+import { addComment, receiveComment, getCommentsTree, countCommentsByPost } from "../src/domain/content/comments.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -153,20 +153,19 @@ test("getCommentsTree: строит вложенность по parentId (отв
 	assert.equal(tree[0].replies[0].text, "ответ владельца");
 });
 
-test("countTopLevelCommentsByPost: считает только верхнеуровневые (parentId===postId), совпадает с tree.length, один скан на несколько постов сразу", async () => {
+// Найденный пользователем баг (живая проверка после этапа 50): счётчик считал
+// только верхнеуровневые комментарии, ответы на комментарии не учитывались.
+test("countCommentsByPost: считает ВСЕ комментарии поста, включая вложенные ответы, один скан на несколько постов сразу", async () => {
 	const { channelId } = await setupChannelWithBobSubscribed();
 	const postA = "post-a";
 	const postB = "post-b";
 	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postA, postA, "корневой A1", [], capturingPublish([]));
 	const { commentId: rootA2 } = await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postA, postA, "корневой A2", [], capturingPublish([]));
-	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postA, rootA2, "ответ на A2 (не должен считаться)", [], capturingPublish([]));
+	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postA, rootA2, "ответ на A2 (ОБЯЗАН считаться)", [], capturingPublish([]));
 	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postB, postB, "корневой B1", [], capturingPublish([]));
 
-	const counts = await countTopLevelCommentsByPost(BOB_PUB, [postA, postB, "post-без-комментариев"]);
-	assert.equal(counts.get(postA), 2, "2 верхнеуровневых у post-a (ответ на A2 не считается)");
+	const counts = await countCommentsByPost(BOB_PUB, [postA, postB, "post-без-комментариев"]);
+	assert.equal(counts.get(postA), 3, "2 верхнеуровневых + 1 ответ у post-a");
 	assert.equal(counts.get(postB), 1);
 	assert.equal(counts.get("post-без-комментариев"), 0);
-
-	const treeA = await getCommentsTree(BOB_PUB, DB_KEY, postA);
-	assert.equal(treeA.length, counts.get(postA), "бейдж обязан совпадать с tree.length после раскрытия");
 });

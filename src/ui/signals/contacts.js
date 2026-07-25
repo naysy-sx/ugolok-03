@@ -66,6 +66,7 @@ async function notifyContactJournalEntry(entry) {
 			body: "",
 			navTarget,
 			onClick: () => navigateFromNotification(navTarget),
+			occurredAt: entry.createdAt * 1000,
 		});
 	} catch {
 		// нет настроек/сети — состояние уже применено (peerState/EMIT), уведомление необязательно

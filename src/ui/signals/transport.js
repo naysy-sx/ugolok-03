@@ -291,6 +291,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 								body: `${usernameFor(welcomeContactPubkey)} хочет написать вам`,
 								navTarget: { screen: "messages" },
 								onClick: () => navigateFromNotification({ screen: "messages" }),
+								occurredAt: rumor.created_at * 1000,
 							});
 						}
 						activityChanged = true; // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
@@ -339,6 +340,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							body: truncateForNotification(rumor.content),
 							navTarget: { screen: "channels", channelId: reportChannelId, subTab: "moderation" },
 							onClick: () => navigateFromNotification({ screen: "channels", channelId: reportChannelId, subTab: "moderation" }),
+							occurredAt: rumor.created_at * 1000,
 						});
 						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
 					}
@@ -749,6 +751,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 										body: truncateForNotification(postRow?.text),
 										navTarget,
 										onClick: () => navigateFromNotification(navTarget),
+										occurredAt: event.created_at * 1000,
 									},
 									channelId,
 								);
@@ -779,6 +782,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 										body: truncateForNotification(storedComment?.text),
 										navTarget: commentNavTarget,
 										onClick: () => navigateFromNotification(commentNavTarget),
+										occurredAt: event.created_at * 1000,
 									},
 									channelId,
 								);
@@ -800,6 +804,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 											body: `«${truncateForNotification(storedComment?.text)}»`,
 											navTarget: commentNavTarget,
 											onClick: () => navigateFromNotification(commentNavTarget),
+											occurredAt: event.created_at * 1000,
 										});
 									}
 								}
@@ -828,6 +833,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 										body: `${usernameFor(event.pubkey)}: ${truncateForNotification(messageRow?.text)}`,
 										navTarget: chatNavTarget,
 										onClick: () => navigateFromNotification(chatNavTarget),
+										occurredAt: event.created_at * 1000,
 									},
 									channelId,
 								);
@@ -845,6 +851,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									body: "Изменения в канале — см. вкладку Модерация",
 									navTarget: banNavTarget,
 									onClick: () => navigateFromNotification(banNavTarget),
+									occurredAt: event.created_at * 1000,
 								});
 							}
 						}
@@ -964,6 +971,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 									body: receivedResult.text,
 									navTarget: messageNavTarget,
 									onClick: () => navigateFromNotification(messageNavTarget),
+									occurredAt: event.created_at * 1000,
 								},
 								receivedResult.contactPubkey,
 							);

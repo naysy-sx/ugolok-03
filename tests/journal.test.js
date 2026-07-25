@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { writeJournalEntry, listJournalEntries, markJournalEntryRead, notifyAndLog } from "../src/domain/notifications/journal.js";
+import { writeJournalEntry, listJournalEntries, markJournalEntryRead, markAllJournalEntriesRead, notifyAndLog } from "../src/domain/notifications/journal.js";
 import { DEFAULT_SETTINGS } from "../src/domain/settings/ui-settings.js";
 
 const OWNER_PUBKEY = "a".repeat(64);
@@ -67,7 +67,7 @@ test("writeJournalEntry: сырая запись в IndexedDB не содерж�
 	assert.ok(raw.ciphertext instanceof Uint8Array);
 });
 
-test("listJournalEntries: сортировка по createdAt — самое свежее первым", async () => {
+test("listJournalEntries: сортировка по occurredAt (не createdAt) — самое свежее СОБЫТИЕ первым", async () => {
 	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "первое", body: "", navTarget: { screen: "messages" } });
 	await new Promise((r) => setTimeout(r, 5));
 	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "channels", title: "второе", body: "", navTarget: { screen: "channels" } });
@@ -76,6 +76,30 @@ test("listJournalEntries: сортировка по createdAt — самое с�
 	assert.equal(list.length, 2);
 	assert.equal(list[0].title, "второе", "свежее — первым");
 	assert.equal(list[1].title, "первое");
+});
+
+// Этап 50-довесок (пользователь) — occurredAt (реальное время события) может
+// РАСХОДИТЬСЯ с createdAt (когда устройство записало уведомление) — например,
+// догнали историю после offline. Сортировка обязана идти по occurredAt.
+test("listJournalEntries: occurredAt переопределяет порядок сортировки относительно createdAt", async () => {
+	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "записано первым, но событие СТАРОЕ", body: "", navTarget: {}, occurredAt: 1000 });
+	await new Promise((r) => setTimeout(r, 5));
+	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "записано вторым, но событие НОВОЕ", body: "", navTarget: {}, occurredAt: 999999999999 });
+
+	const list = await listJournalEntries(OWNER_PUBKEY, DB_KEY);
+	assert.equal(list[0].title, "записано вторым, но событие НОВОЕ");
+	assert.equal(list[1].title, "записано первым, но событие СТАРОЕ");
+});
+
+test("writeJournalEntry: occurredAt не передан -> по умолчанию равен createdAt", async () => {
+	const entry = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "calls", title: "звонок", body: "", navTarget: {} });
+	assert.equal(entry.occurredAt, entry.createdAt);
+});
+
+test("writeJournalEntry: occurredAt передан явно -> сохраняется как есть, НЕ равен createdAt", async () => {
+	const entry = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "channels", title: "старый пост", body: "", navTarget: {}, occurredAt: 12345 });
+	assert.equal(entry.occurredAt, 12345);
+	assert.notEqual(entry.occurredAt, entry.createdAt);
 });
 
 test("listJournalEntries: owner-scoped — не видит чужие записи", async () => {
@@ -100,6 +124,24 @@ test("markJournalEntryRead: помечает read=true, НЕ трогая заш
 	assert.equal(list[0].read, true);
 	assert.equal(list[0].title, "заголовок", "заголовок должен остаться читаемым после update()");
 	assert.deepEqual(list[0].navTarget, { screen: "messages", contactPubkey: "x" });
+});
+
+test("markAllJournalEntriesRead: помечает ВСЕ непрочитанные владельца, не трогает чужие", async () => {
+	const e1 = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "1", body: "", navTarget: {} });
+	const e2 = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "2", body: "", navTarget: {} });
+	const other = await writeJournalEntry(OTHER_OWNER, DB_KEY, { category: "messages", title: "чужое", body: "", navTarget: {} });
+	await markJournalEntryRead(e1.id); // уже прочитано — не должно сломаться от повторной пометки
+
+	await markAllJournalEntriesRead(OWNER_PUBKEY, DB_KEY);
+
+	const list = await listJournalEntries(OWNER_PUBKEY, DB_KEY);
+	assert.ok(list.every((e) => e.read === true));
+	const otherRaw = await db.table("journalEntries").get(other.id);
+	assert.equal(otherRaw.read, false, "чужая запись не тронута");
+});
+
+test("markAllJournalEntriesRead: пустой журнал -> no-op, не бросает", async () => {
+	await assert.doesNotReject(() => markAllJournalEntriesRead(OWNER_PUBKEY, DB_KEY));
 });
 
 // --- notifyAndLog: обёртка над notify() ---
@@ -148,6 +190,22 @@ test("notifyAndLog: onClick пробрасывается в backend как ра�
 	const onClick = () => {};
 	await notifyAndLog(OWNER_PUBKEY, DB_KEY, DEFAULT_SETTINGS, "messages", null, { title: "t", body: "b", onClick, navTarget: { screen: "messages" } }, "bob", backend);
 	assert.equal(popups[0].onClick, onClick);
+});
+
+test("notifyAndLog: options.occurredAt пробрасывается в запись Журнала", async () => {
+	const { backend } = fakeBackend();
+	await notifyAndLog(
+		OWNER_PUBKEY,
+		DB_KEY,
+		DEFAULT_SETTINGS,
+		"messages",
+		null,
+		{ title: "старое сообщение", body: "", navTarget: { screen: "messages" }, occurredAt: 555 },
+		"bob",
+		backend,
+	);
+	const list = await listJournalEntries(OWNER_PUBKEY, DB_KEY);
+	assert.equal(list[0].occurredAt, 555);
 });
 
 test("notifyAndLog: moderation/бан (level всегда 'sound', даже enabled=false) — тоже попадает в Журнал", async () => {

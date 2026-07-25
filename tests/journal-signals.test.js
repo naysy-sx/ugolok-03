@@ -3,7 +3,7 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { writeJournalEntry } from "../src/domain/notifications/journal.js";
-import { journalEntries, refreshJournal, openJournalEntry } from "../src/ui/signals/journal.js";
+import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../src/ui/signals/journal.js";
 import { pendingNavTarget } from "../src/ui/signals/notification-nav.js";
 
 const OWNER_PUBKEY = "a".repeat(64);
@@ -55,4 +55,15 @@ test("openJournalEntry: уже прочитанная запись — не тр
 	await openJournalEntry(OWNER_PUBKEY, DB_KEY, { ...journalEntries.value[0], read: true });
 
 	assert.deepEqual(pendingNavTarget.value, { screen: "messages", contactPubkey: "bob" });
+});
+
+test("markAllRead: помечает все записи прочитанными и обновляет сигнал", async () => {
+	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "1", body: "", navTarget: {} });
+	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "channels", title: "2", body: "", navTarget: {} });
+	await refreshJournal(OWNER_PUBKEY, DB_KEY);
+	assert.ok(journalEntries.value.some((e) => !e.read));
+
+	await markAllRead(OWNER_PUBKEY, DB_KEY);
+
+	assert.ok(journalEntries.value.every((e) => e.read === true));
 });

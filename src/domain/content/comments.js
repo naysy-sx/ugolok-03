@@ -137,14 +137,20 @@ export async function getCommentsTree(ownerPubkey, dbKey, postId) {
 // первого клика — раньше он брался из локального tree.length ВНУТРИ PostWithComments,
 // который заполнялся только после раскрытия (getCommentsTree дорогой на одиночный
 // пост, но неприемлемо гонять его на КАЖДЫЙ пост списка через N отдельных полных
-// сканов таблицы). Здесь — ОДИН скан на весь список постов канала разом. Считает
-// только верхнеуровневые комментарии (parentId === postId), тот же критерий, что
-// buildTree(..., postId)'s корень — чтобы бейдж совпадал с tree.length после клика.
-export async function countTopLevelCommentsByPost(ownerPubkey, postIds) {
+// сканов таблицы). Здесь — ОДИН скан на весь список постов канала разом.
+//
+// Найден и исправлен ВТОРОЙ баг (пользователь, живая проверка после этапа 50):
+// счётчик считал ТОЛЬКО верхнеуровневые комментарии (parentId === postId),
+// вложенные ответы не учитывались вовсе — "Комментарии (N)" занижал число.
+// postId у ЛЮБОГО комментария (и верхнеуровневого, и вложенного ответа —
+// addComment принимает postId явным аргументом независимо от глубины, см. выше)
+// указывает на пост целиком, а не на непосредственного родителя — parentId
+// нужен ТОЛЬКО buildTree для построения дерева, не для подсчёта общего числа.
+export async function countCommentsByPost(ownerPubkey, postIds) {
 	const rows = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
 	const counts = new Map(postIds.map((id) => [id, 0]));
 	for (const r of rows) {
-		if (!r.deleted && r.parentId === r.postId && counts.has(r.postId)) {
+		if (!r.deleted && counts.has(r.postId)) {
 			counts.set(r.postId, counts.get(r.postId) + 1);
 		}
 	}
