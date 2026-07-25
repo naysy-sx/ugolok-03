@@ -1179,4 +1179,9 @@ Regression: `npm test` 779/779.
 
 П.3 (`media-controller.js`, обёртка RTCPeerConnection) — готов, написан
 Claude напрямую (риск-точка glare-rollback). 19 тестов (FakeRTCPeerConnection).
-Regression: `npm test` 798/798. Следующий шаг — п.4 (`signaling-adapter.js`).
+Regression: `npm test` 798/798.
+
+П.4 (`signaling-adapter.js`, Nostr I/O) — готов, написан Claude напрямую
+(kind 20075 эфемерный, NIP-44 напрямую). 15 тестов (round-trip реальными
+ключами). Regression: `npm test` 813/813. Следующий шаг — п.5
+(`call-runtime.js` — склейка).

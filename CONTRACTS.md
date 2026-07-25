@@ -6879,3 +6879,38 @@ export function createMediaController(options = {}) -> { execute(command) }
 застаблен (`FakeRTCPeerConnection`, тот же приём, что `FakeMediaRecorder`
 в `voice.test.js`) — реальное согласование ICE проверяется живым
 Playwright (`--use-fake-device-for-media-stream`), не юнит-тестами.
+
+## Этап 48, п.4 — `signaling-adapter.js` (Nostr I/O для сигналинга)
+
+Написан Claude напрямую (короткий, тесно завязан на уже принятое решение
+по шифрованию — не отправлен воркеру после сегодняшних неудачных
+попыток на более сложном call-fsm.js).
+
+```js
+export const CALL_SIGNAL_KIND = 20075;
+export function buildCallSignalEvent(privKey, peerPubkey, payload, createdAt?) -> event
+export function parseCallSignalEvent(event, privKey) -> payload
+export async function execute(command, {privKey, peerPubkey, sessionId, publish}) -> publish() result | undefined
+export function toFsmEvent(payload, senderPubkey, myPubkey) -> Σ_in-событие | null
+```
+
+`payload` (после NIP-44-расшифровки) — `{type: "offer"|"answer"|"ice"|"hangup",
+sessionId, sdp?, candidate?}`. `execute()` обрабатывает ТОЛЬКО `SEND_OFFER`/
+`SEND_ANSWER`/`SEND_ICE`/`SEND_HANGUP` — остальные команды (медиа/таймеры/EMIT)
+сюда не приходят. `toFsmEvent()` — чистая функция, маппит payload обратно в
+Σ_in-событие (`REMOTE_OFFER`/`REMOTE_ANSWER`/`REMOTE_ICE`/`REMOTE_HANGUP`) для
+`reduce()`; неизвестный `payload.type` → `null` (вызывающий код должен сам
+решить, что делать — обычно просто не диспетчеризовать).
+
+Тег `["p", peerPubkey]` — адресация получателю (тот же принцип, что
+contact-request rumors). Подписка на входящие kind 20075 (REQ-фильтр
+`{"#p":[myPubkey], kinds:[20075]}`) — забота `call-runtime.js` (п.5), не
+этого модуля: `signaling-adapter.js` только строит/парсит события и
+маппит команды/payload, само подключение к транспорту (transport.js) —
+на следующем шаге.
+
+Тесты — `tests/signaling-adapter.test.js` (15): kind в эфемерном
+диапазоне, полный round-trip шифрования (Alice→Bob, реальные
+secp256k1-ключи), содержимое реально нечитаемо как есть, чужой ключ не
+расшифровывает (бросает), все 4 SEND_*-команды, все 4 toFsmEvent-маппинга,
+неизвестный тип, сквозной цикл execute→parse→toFsmEvent.
