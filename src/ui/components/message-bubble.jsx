@@ -26,18 +26,16 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
-	const bubbleStyle = {
-		alignSelf: isOwn ? "flex-end" : "flex-start",
-		maxWidth: "70%",
-		padding: "var(--space-2xs)",
-		borderRadius: "var(--radius)",
-		background: isOwn ? "var(--accent, oklch(0.9 0.05 250))" : "var(--surface)",
-	};
+	// Ассиметричный "хвостик" пузыря (VISUAL.md, Claude Opus) — исходящее
+	// поджато справа-снизу, входящее зеркально слева-снизу; сам скруглённый
+	// радиус живёт в CSS (.message-bubble-own/-other), не инлайн-стилем —
+	// нужен был класс, а не style, чтобы завязать цвета/радиус на палитру.
+	const bubbleClass = `message-bubble ${isOwn ? "message-bubble-own" : "message-bubble-other"}`;
 
 	if (message.deleted) {
 		return (
-			<div style={bubbleStyle}>
-				<p style={{ fontStyle: "italic", color: "var(--muted)" }}>Сообщение удалено</p>
+			<div class={`${bubbleClass} message-bubble-deleted`}>
+				<p>Сообщение удалено</p>
 			</div>
 		);
 	}
@@ -52,7 +50,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	if (mode === "editing") {
 		return (
-			<div style={bubbleStyle}>
+			<div class={bubbleClass}>
 				<textarea value={editText} maxLength={maxLength} rows={2} onInput={(e) => setEditText(e.currentTarget.value)} />
 				<footer class="cluster" style={{ alignItems: "center" }}>
 					<button
@@ -80,14 +78,14 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	}
 
 	return (
-		<div style={bubbleStyle}>
+		<div class={bubbleClass}>
 			{attachmentAbove && <AttachmentView attachment={attachment} />}
 			{message.text && <p>{message.text}</p>}
 			{attachmentBelow && <AttachmentView attachment={attachment} />}
-			<footer class="cluster" style={{ alignItems: "center" }}>
-				{timestamp && <small style={{ color: "var(--muted)" }}>{timestamp}</small>}
-				{isOwn && statusLabel && <small style={{ color: "var(--muted)" }}>{statusLabel}</small>}
-				{message.edited && <small style={{ color: "var(--muted)" }}>(изменено)</small>}
+			<footer class="cluster message-bubble-meta" style={{ alignItems: "center" }}>
+				{timestamp && <small>{timestamp}</small>}
+				{isOwn && statusLabel && <small>{statusLabel}</small>}
+				{message.edited && <small>(изменено)</small>}
 				{mode !== "confirming-delete" && (
 					<>
 						{isOwn && typeof onEdit === "function" && (

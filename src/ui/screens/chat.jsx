@@ -17,6 +17,7 @@ import { activeChatPubkey, openChat } from "../signals/chat.js";
 import { profiles, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
+import IconSend from "../icons/send.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -631,10 +632,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					<form class="cluster" onSubmit={handleSend} style={{ alignItems: "flex-end" }}>
+					<form class="message-compose" onSubmit={handleSend}>
 						<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
 						<button
 							type="button"
+							class="message-compose-tool-btn"
 							onClick={() => fileInputRef.current?.click()}
 							disabled={recordingState !== "idle"}
 							aria-label="Прикрепить файл"
@@ -643,29 +645,31 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</button>
 						<button
 							type="button"
+							class="message-compose-tool-btn"
 							onClick={handleStartRecording}
 							disabled={recordingState !== "idle" || !!attachmentFile}
 							aria-label="Записать голосовое сообщение"
 						>
 							🎤
 						</button>
-						<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
-							<label class="visually-hidden" for="chat-message-input">
-								Сообщение
-							</label>
-							<textarea
-								id="chat-message-input"
-								value={text}
-								maxLength={MAX_MESSAGE_LENGTH}
-								onInput={handleTextInput}
-								rows={2}
-							/>
-						</div>
+						<label class="visually-hidden" for="chat-message-input">
+							Сообщение
+						</label>
+						<textarea
+							id="chat-message-input"
+							class="message-compose-field"
+							value={text}
+							maxLength={MAX_MESSAGE_LENGTH}
+							onInput={handleTextInput}
+							rows={2}
+						/>
 						<button
 							type="submit"
+							class="message-compose-send-btn"
 							disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
+							aria-label="Отправить"
 						>
-							Отправить
+							<IconSend />
 						</button>
 					</form>
 				</div>
@@ -682,7 +686,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				</button>
 			)}
 			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>Сообщений пока нет — напишите первое!</p>}
-			<div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2xs)" }}>
+			<div class="message-list">
 				{messages.map((message) => {
 					const isOwn = message.senderPubkey === ownerPubkey;
 					return (

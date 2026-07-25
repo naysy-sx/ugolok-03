@@ -500,6 +500,126 @@ button:has(> .icon),
 }
 
 /* ================================================================== *
+ *  Экран сообщений (chat.jsx, message-bubble.jsx) — ассиметричные     *
+ *  пузыри + компоуз-бар пилюлей (VISUAL.md, Claude Opus).             *
+ * ================================================================== */
+
+.app-layout .message-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	/* Свет, "наливающийся" из угла (подпись VISUAL.md) — тихо, едва
+	   заметно: тот же приём, что фон всего приложения (см. body в
+	   minimal.css), только локально в ленте сообщений. color-mix, не
+	   отдельный токен — работает с любой из 14 акцентных палитр сразу. */
+	background-image: radial-gradient(120% 60% at 100% 0%, color-mix(in oklch, var(--accent), transparent 92%), transparent 60%);
+}
+
+.app-layout .message-bubble {
+	max-width: 70%;
+	padding: var(--space-2xs) var(--space-s);
+	box-shadow: var(--shadow);
+}
+.app-layout .message-bubble p {
+	margin-block: 0;
+	max-width: none;
+}
+/* Исходящее — заливка "лампой" (--accent), поджатый угол справа-снизу —
+   ты приносишь свет в угол. Входящее — на поверхности, зеркальный хвост
+   слева-снизу. Асимметрия читается как "хвостик" реплики без рисованного
+   хвоста (VISUAL.md). */
+.app-layout .message-bubble-own {
+	align-self: flex-end;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border-radius: 1.125rem 1.125rem 0.375rem 1.125rem;
+}
+.app-layout .message-bubble-other {
+	align-self: flex-start;
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: 1.125rem 1.125rem 1.125rem 0.375rem;
+}
+.app-layout .message-bubble-deleted p {
+	font-style: italic;
+	color: var(--muted);
+}
+.app-layout .message-bubble-meta {
+	margin-block-start: var(--space-3xs);
+	font-size: var(--step--2);
+}
+.app-layout .message-bubble-own .message-bubble-meta {
+	color: color-mix(in oklch, var(--accent-contrast), transparent 30%);
+}
+.app-layout .message-bubble-other .message-bubble-meta {
+	color: var(--muted);
+}
+/* Кнопки внутри пузыря ("Редактировать"/"Удалить") — тихие, наравне
+   с самим сообщением, не отдельные "кирпичи" среди текста. */
+.app-layout .message-bubble-meta button {
+	background: none;
+	border: none;
+	padding: 0;
+	color: inherit;
+	font-size: inherit;
+	font-weight: var(--weight-normal);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+/* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
+   язык, что VISUAL.md .compose/.field/.send. */
+.app-layout .message-compose {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: 1.5rem;
+	padding: var(--space-2xs);
+}
+.app-layout .message-compose-field {
+	flex: 1;
+	resize: none;
+	border: none;
+	background: none;
+	padding-block: var(--space-3xs);
+}
+.app-layout .message-compose-field:focus-visible {
+	outline: none;
+}
+.app-layout .message-compose-tool-btn,
+.app-layout .message-compose-send-btn {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border-radius: calc(infinity * 1px);
+	font-size: 1.1rem;
+}
+.app-layout .message-compose-tool-btn {
+	background: none;
+	border: none;
+	color: var(--muted);
+}
+.app-layout .message-compose-tool-btn:hover {
+	background-color: var(--surface);
+	color: var(--fg);
+}
+.app-layout .message-compose-send-btn {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border: none;
+	box-shadow: var(--shadow);
+}
+.app-layout .message-compose-send-btn:hover {
+	filter: brightness(1.06);
+}
+
+/* ================================================================== *
  *  Стартовый экран (вход/регистрация, unlock.jsx) — вёрстка          *
  *  предоставлена пользователем, перенесена из отдельного <style>     *
  *  на чистом HTML/CSS. Токены — те же переменные minimal.css, ничего *
