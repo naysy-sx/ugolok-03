@@ -168,9 +168,13 @@
 
 		/* Кириллице-безопасный системный стек: именованные фолбэки ловят те
        платформы, где `system-ui` резолвится в шрифт без нужных глифов. */
+		/* Golos Text — тело (кириллица-first, гуманистический, тёплый, OFL,
+     см. styles/fonts.css) — самый дешёвый и сильный рычаг "тёплой узнаваемости"
+     (VISUAL.md, Claude Opus): системный стек остаётся фолбэком на время
+     загрузки шрифта/для сред без него. */
 		--font-body:
-			system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-			"Noto Sans", sans-serif;
+			"Golos Text", system-ui, -apple-system, "Segoe UI", Roboto,
+			"Helvetica Neue", Arial, "Noto Sans", sans-serif;
 		--font-mono:
 			ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
 			"Liberation Mono", monospace;
@@ -178,6 +182,11 @@
        к blockquote/figcaption и к заголовкам .prose. Не нужен контраст?
        Поставь --font-serif: inherit, и засечки исчезнут везде разом. */
 		--font-serif: Georgia, "Times New Roman", Times, serif;
+		/* Unbounded — дисплейный (логотип/h1/пустые экраны, VISUAL.md — из двух
+     вариантов Opus выбран "геометричный, дерзкий", не серифно-литературный).
+     Точечно (.brand-heading/.empty-state), не на все заголовки подряд —
+     Opus прямо предупреждала не тратить смелость на каждый h2/h3. */
+		--font-display: "Unbounded", var(--font-body);
 
 		/* ---- Шкала отступов ---------------------------------------------
        Все gap'ы, паддинги и ритм потока выводятся из одной единицы. */
@@ -197,9 +206,15 @@
        color-mix(). light-dark() требует `color-scheme` (задан в `base`);
        перевернуть страницу или любой блок — поставить на него
        `color-scheme: light` / `dark`.                                   */
-		--hue: 250; /* нейтральный/UI-тон */
+		/* "Вечерний угол" (VISUAL.md, Claude Opus) — тёплые нейтрали вместо
+     серых: --hue сдвинут в янтарно-коричневую зону (было 250 — нейтрально-
+     синеватый), --chroma-ui чуть поднят, чтобы подтон реально читался, не
+     терялся. Дешёвый и сильный рычаг: --bg/--fg/--surface/--muted/--border
+     ниже ничего не знают про "тепло" явно — все выведены color-mix()'ом из
+     --bg/--fg, поэтому один сдвиг --hue прогревает ВСЮ палитру разом. */
+		--hue: 55; /* нейтральный/UI-тон — тёплый янтарь, не синеватый серый */
 		--accent-hue: 265;
-		--chroma-ui: 0.012; /* едва заметный подтон в нейтралях */
+		--chroma-ui: 0.022; /* едва заметный тёплый подтон в нейтралях */
 
 		--bg: light-dark(
 			oklch(0.99 var(--chroma-ui) var(--hue)),
@@ -207,9 +222,17 @@
 		);
 		--fg: light-dark(oklch(0.26 0.02 var(--hue)), oklch(0.92 0.015 var(--hue)));
 		--surface: color-mix(in oklch, var(--bg), var(--fg) 5%);
+		/* Приподнятые элементы (карточки поверх surface — этап 34, auth-layout) —
+     раньше жил ЛОКАЛЬНО только в .auth-layout с фолбэком var(--surface-raised,
+     var(--surface)) в паре мест (call-overlay); теперь глобальный токен —
+     один источник истины для всего приложения. */
+		--surface-raised: color-mix(in oklch, var(--surface), var(--fg) 6%);
 		--muted: color-mix(in oklch, var(--fg), var(--bg) 45%);
 		--border: color-mix(in oklch, var(--bg), var(--fg) 18%);
 
+		/* --accent — "лампа" (VISUAL.md): тепло, исходящие сообщения, primary-
+     кнопки. Управляется ЦЕЛИКОМ через --accent-hue (settings.jsx, 14 именованных
+     точек — accent-palette.js) — палитра пользователя не завязана на один цвет. */
 		--accent: light-dark(
 			oklch(0.55 0.17 var(--accent-hue)),
 			oklch(0.74 0.15 var(--accent-hue))
@@ -217,11 +240,29 @@
 		--accent-contrast: oklch(0.99 0 0);
 		--accent-hover: color-mix(in oklch, var(--accent), black 12%);
 
+		/* --accent-2 — "сквозняк" (VISUAL.md): холодный контраст лампе — ссылки,
+     кольцо фокуса, вторичные акценты. Смещение hue на фиксированный угол
+     (не жёсткий цвет) — тёплый/холодный конфликт остаётся при ЛЮБОЙ из 14
+     палитр accent-hue, не только при "фабричном" коричнево-янтарном варианте. */
+		--accent-2-hue: calc(var(--accent-hue) + 150);
+		--accent-2: light-dark(
+			oklch(0.58 0.13 var(--accent-2-hue)),
+			oklch(0.72 0.13 var(--accent-2-hue))
+		);
+		--accent-2-contrast: oklch(0.99 0 0);
+		--accent-2-hover: color-mix(in oklch, var(--accent-2), black 12%);
+
 		/* ---- Форма, глубина, движение ----------------------------------- */
-		--radius: 0; /* острые углы по умолчанию; кругли через эту переменную */
+		--radius: 0.625rem; /* "уютные" скруглённые углы (было 0 — острые) */
+		--radius-lg: 1.25rem; /* крупные панели/карточки-витрины */
 		--marker-color: currentColor; /* цвет маркеров списка; .prose ставит акцент */
 		--border-width: 1px;
-		--shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.08);
+		/* Тёплые тени (VISUAL.md) — не нейтрально-чёрные: тень окрашена той же
+     --hue, что и остальная сцена, поэтому карточка "садится" в неё, а не
+     холодит контраст постороннним серым/чёрным. */
+		--shadow:
+			0 1px 2px oklch(0.2 0.03 var(--hue) / 0.10),
+			0 6px 20px oklch(0.2 0.03 var(--hue) / 0.12);
 
 		--transition-speed: 150ms; /* одна крутилка на все hover/active-анимации */
 		--transition-ease: cubic-bezier(0.2, 0, 0.2, 1);
@@ -251,6 +292,18 @@
 		color-scheme: light dark; /* включает light-dark(); темит UI форм/скроллбары */
 		font-family: var(--font-body);
 		line-height: var(--line-height);
+	}
+
+	/* Переключатель тем (пользователь: "переключатель сверху стоит добавить") —
+     без него light-dark() слепо следует ТОЛЬКО системному prefers-color-scheme.
+     data-theme на html форсирует одну ветвь light-dark() независимо от ОС;
+     без атрибута (по умолчанию) поведение не меняется — та же color-scheme:
+     light dark, что и раньше. Атрибут ставит theme-toggle.js (app.jsx). */
+	html[data-theme="light"] {
+		color-scheme: light;
+	}
+	html[data-theme="dark"] {
+		color-scheme: dark;
 	}
 
 	@media (prefers-reduced-motion: no-preference) {

@@ -34,6 +34,7 @@ export const DEFAULT_NOTIFICATIONS = {
 export const DEFAULT_SETTINGS = {
 	accentColorId: "blue",
 	uiScale: "medium",
+	themeMode: null, // null = "как в системе" (prefers-color-scheme); "light"|"dark" = явный выбор
 	language: "ru",
 	notifications: DEFAULT_NOTIFICATIONS,
 	relayUrls: [],

@@ -1,0 +1,24 @@
+/*
+ * fonts.css — Golos Text (тело, кириллица-first, гуманистический, тёплый) +
+ * Unbounded (дисплей: логотип/заголовки/пустые экраны — геометричный, дерзкий).
+ * Оба — OFL-1.1 (Fontsource, self-hosted npm-пакеты), не Google Fonts CDN:
+ * проект разворачивается в ЛОКАЛЬНОЙ СЕТИ без публичного интернета (CLAUDE.md),
+ * поэтому шрифты ОБЯЗАНЫ попасть в собранный index.html как есть (vite-plugin-
+ * singlefile инлайнит @font-face url() как data:), а не подтягиваться извне
+ * во время работы приложения. Только нужные начертания/подмножества —
+ * 400+700 (совпадает с --weight-normal/--weight-bold, minimal.css), latin+
+ * cyrillic (кириллица для текста, latin — hex-ключи/npub/английские вставки).
+ *
+ * ВАЖНО: импортируем ИМЕННО файлы с префиксом latin-/cyrillic-, НЕ голые
+ * 400.css/700.css — те бандлят ВСЕ 4 подмножества сразу (cyrillic, cyrillic-ext,
+ * latin, latin-ext), включая ненужные latin-ext/cyrillic-ext (диакритика
+ * вьетнамского/сербского и т.п.) — вчетверо больше веса без всякой пользы
+ * для русскоязычного интерфейса (найдено живой сборкой: 342 KB -> 754 KB gzip
+ * на голых импортах, вернулось к ожидаемым ~380 KB на префиксных).
+ */
+@import "@fontsource/golos-text/latin-400.css";
+@import "@fontsource/golos-text/latin-700.css";
+@import "@fontsource/golos-text/cyrillic-400.css";
+@import "@fontsource/golos-text/cyrillic-700.css";
+@import "@fontsource/unbounded/latin-700.css";
+@import "@fontsource/unbounded/cyrillic-700.css";

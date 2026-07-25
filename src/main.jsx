@@ -1,3 +1,4 @@
+import "./styles/fonts.css";
 import "./styles/minimal.css";
 import "./styles/custom.css";
 import { render } from "preact";

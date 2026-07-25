@@ -60,6 +60,33 @@
 	flex-direction: column;
 }
 
+/* Переключатель темы (VISUAL.md, Claude Opus) — фиксированная кнопка в
+   правом верхнем углу, видна поверх любого экрана. z-index выше .call-overlay
+   (200, этап 48) — тема переключаема даже во время звонка. */
+.theme-toggle-btn {
+	position: fixed;
+	inset-block-start: var(--space-s);
+	inset-inline-end: var(--space-s);
+	z-index: 300;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border-radius: calc(infinity * 1px);
+	background-color: var(--surface-raised);
+	color: var(--fg);
+	border: var(--border-width) solid var(--border);
+	box-shadow: var(--shadow);
+	font-size: 1.1rem;
+}
+.theme-toggle-btn:hover {
+	background-color: var(--surface-raised);
+	filter: brightness(1.08);
+	color: var(--fg);
+}
+
 .app-layout {
 	flex: 1 1 auto;
 	min-height: 0; /* иначе flex-ребёнок не сжимается под .call-bar, весь .app-shell переполнился бы */

@@ -10,7 +10,12 @@ import Channels from "./ui/screens/channels.jsx";
 import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
-import { currentUser, lock, dbKeySig } from "./ui/signals/auth.js";
+import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
+import { publish } from "./ui/signals/transport.js";
+import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
+import { applyAccentColor } from "./ui/theme/accent-palette.js";
+import { applyUiScale } from "./ui/theme/ui-scale.js";
+import { applyThemeMode, resolveEffectiveTheme, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 import { activeChannelId } from "./ui/signals/channel-nav.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
@@ -33,6 +38,8 @@ import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
+import IconSun from "./ui/icons/sun.jsx";
+import IconMoon from "./ui/icons/moon.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -49,8 +56,39 @@ const NAV_ICONS = {
 
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
+	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js
 	const ownerPubkey = currentUser.value.id;
+	const privKey = privKeySig.value;
 	const dbKey = dbKeySig.value;
+
+	// Найдено пользователем (запрос переключателя тем) — раньше accentColorId/
+	// uiScale ТОЖЕ применялись лениво, только при первом визите на "Настройки" в
+	// этой сессии (settings.jsx's mount-эффект был единственной точкой). Тема —
+	// особенно заметный случай (вспышка чужой темы до первого визита в Настройки),
+	// поэтому применяем все три СРАЗУ здесь, как только открылся сам MainShell —
+	// не только theme, заодно закрывает тот же пробел для accent/scale.
+	useEffect(() => {
+		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
+			applyAccentColor(loaded.accentColorId);
+			applyUiScale(loaded.uiScale);
+			applyThemeMode(loaded.themeMode);
+			setThemeMode(loaded.themeMode);
+		});
+	}, [ownerPubkey]);
+
+	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает
+	// от ТЕКУЩЕЙ эффективной темы даже если пользователь ещё ни разу не выбирал
+	// явно (themeMode=null). saveUiSettings — best-effort здесь: локальный эффект
+	// (applyThemeMode) уже применён синхронно, сбой публикации не должен откатывать
+	// визуальный отклик пользователю (тот же принцип, что handleAccentClick).
+	function handleToggleTheme() {
+		const next = toggleThemeMode(themeMode);
+		applyThemeMode(next);
+		setThemeMode(next);
+		loadUiSettings(ownerPubkey, dbKey).then((current) => {
+			saveUiSettings(ownerPubkey, privKey, dbKey, { ...current, themeMode: next }, publish).catch(() => {});
+		});
+	}
 
 	// Этап 47-довесок — ОДИН раз подключаем свой тост + звуковой ассет к
 	// дефолтному backend'у notifier.js (domain-слой не знает о UI/тостах вовсе,
@@ -115,6 +153,17 @@ function MainShell() {
 			    block-элемент в потоке, сжимающий .app-layout по высоте, а не
 			    перекрывающий его (иначе плашка накрывала бы верх сайдбара). */}
 			<CallOverlay />
+			{/* Переключатель темы (пользователь: "переключатель сверху стоит
+			    добавить") — фиксированный в правом верхнем углу ВСЕГО приложения,
+			    виден на любом экране независимо от активной вкладки. */}
+			<button
+				type="button"
+				class="theme-toggle-btn"
+				onClick={handleToggleTheme}
+				aria-label={resolveEffectiveTheme(themeMode) === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+			>
+				{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
+			</button>
 			<div class="app-layout">
 			<aside class="sidebar" aria-label="Профиль и главное меню">
 				<SidebarProfileCard onEditProfile={() => setActiveId("profile")} />
