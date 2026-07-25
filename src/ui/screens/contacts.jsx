@@ -44,47 +44,23 @@ export function ContactIdentity({ pubkey, onClick }) {
 	const displayName = profile?.name || shortPubkey(pubkey);
 
 	const avatar = profile?.picture ? (
-		<img
-			src={profile.picture}
-			alt=""
-			width="40"
-			height="40"
-			style={{
-				width: "2.5rem",
-				height: "2.5rem",
-				borderRadius: "50%",
-				border: "var(--border-width) solid var(--border)",
-			}}
-		/>
+		<img src={profile.picture} alt="" width="40" height="40" class="contact-avatar" />
 	) : (
-		<div
-			aria-hidden="true"
-			style={{
-				width: "2.5rem",
-				height: "2.5rem",
-				borderRadius: "50%",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "var(--surface)",
-				border: "var(--border-width) solid var(--border)",
-				color: "var(--muted)",
-			}}
-		>
+		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback">
 			{(displayName || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);
 
 	const text = (
 		<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-			<span style={profile?.name ? {} : { fontFamily: "var(--font-mono)" }}>{displayName}</span>
-			{profile?.about && <small style={{ color: "var(--muted)" }}>{profile.about}</small>}
+			<span class={profile?.name ? undefined : "contact-identity-npub"}>{displayName}</span>
+			{profile?.about && <small>{profile.about}</small>}
 		</span>
 	);
 
 	if (!onClick) {
 		return (
-			<div class="cluster" style={{ alignItems: "center" }}>
+			<div class="contact-identity">
 				{avatar}
 				{text}
 			</div>
@@ -92,22 +68,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 	}
 
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			aria-label={`Открыть чат с ${displayName}`}
-			class="cluster"
-			style={{
-				alignItems: "center",
-				background: "none",
-				border: "none",
-				padding: 0,
-				cursor: "pointer",
-				textAlign: "left",
-				font: "inherit",
-				color: "inherit",
-			}}
-		>
+		<button type="button" onClick={onClick} aria-label={`Открыть чат с ${displayName}`} class="contact-identity contact-identity-btn">
 			{avatar}
 			{text}
 		</button>
@@ -286,45 +247,43 @@ export default function Contacts() {
 
 	return (
 		<Screen title="Контакты">
-			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-				Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
-			</p>
-			{connectionError && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					{connectionError}
+			<div class="contacts-toolbar">
+				<p class="cluster" style={{ alignItems: "center" }}>
+					Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
 				</p>
-			)}
+				{connectionError && (
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						{connectionError}
+					</p>
+				)}
 
-			<form class="cluster" onSubmit={handleAddContact} style={{ alignItems: "flex-end" }}>
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
-					<label for="add-contact-input">Добавить контакт (npub или hex-ключ)</label>
-					<input
-						id="add-contact-input"
-						type="text"
-						value={npubInput}
-						onInput={(e) => setNpubInput(e.currentTarget.value)}
-					/>
-				</div>
-				<button type="submit" disabled={busy}>
-					Добавить
-				</button>
-			</form>
-			{addError && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					{addError}
-				</p>
-			)}
+				<form class="cluster contacts-add-form" onSubmit={handleAddContact} style={{ alignItems: "flex-end" }}>
+					<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
+						<label for="add-contact-input">Добавить контакт (npub или hex-ключ)</label>
+						<input
+							id="add-contact-input"
+							type="text"
+							value={npubInput}
+							onInput={(e) => setNpubInput(e.currentTarget.value)}
+						/>
+					</div>
+					<button type="submit" disabled={busy}>
+						Добавить
+					</button>
+				</form>
+				{addError && (
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						{addError}
+					</p>
+				)}
+			</div>
 
-			<div class="cluster" style={{ alignItems: "flex-start" }}>
-				<section
-					class="flow"
-					aria-labelledby="groups-heading"
-					style={{ "--flow-space": "var(--space-s)", minWidth: "16rem" }}
-				>
+			<div class="contacts-layout">
+				<aside class="contacts-groups-aside" aria-labelledby="groups-heading">
 					<h2 id="groups-heading">Группы</h2>
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+					<ul role="list" class="group-filter-list">
 						<li>
-							<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+							<span class="group-filter-chip">
 								<input
 									id="group-filter-all"
 									type="checkbox"
@@ -336,7 +295,7 @@ export default function Contacts() {
 						</li>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+								<div class="group-filter-chip">
 									<input
 										id={`group-filter-${g.id}`}
 										type="checkbox"
@@ -420,28 +379,19 @@ export default function Contacts() {
 							{groupError}
 						</p>
 					)}
-				</section>
+				</aside>
 
-				<div class="flow" style={{ "--flow-space": "var(--space-l)", flex: 1 }}>
+				<div class="contacts-main">
 					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
 						<h2 id="requests-heading">Входящие заявки ({incomingRequests.value.length})</h2>
 						{incomingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
 						) : (
-							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+							<ul role="list" class="contact-row-list">
 								{incomingRequests.value.map((req) => (
-									<li
-										key={req.peerPubkey}
-										class="cluster"
-										style={{
-											alignItems: "center",
-											justifyContent: "space-between",
-											paddingBlock: "var(--space-s)",
-											borderBlockEnd: "var(--border-width) solid var(--border)",
-										}}
-									>
+									<li key={req.peerPubkey} class="contact-row">
 										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="cluster">
+										<div class="contact-row-actions">
 											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
 												Принять
 											</button>
@@ -460,22 +410,15 @@ export default function Contacts() {
 						{outgoingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
 						) : (
-							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+							<ul role="list" class="contact-row-list">
 								{outgoingRequests.value.map((req) => (
-									<li
-										key={req.peerPubkey}
-										class="cluster"
-										style={{
-											alignItems: "center",
-											justifyContent: "space-between",
-											paddingBlock: "var(--space-s)",
-											borderBlockEnd: "var(--border-width) solid var(--border)",
-										}}
-									>
+									<li key={req.peerPubkey} class="contact-row">
 										<ContactIdentity pubkey={req.peerPubkey} />
-										<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
-											Отменить
-										</button>
+										<div class="contact-row-actions">
+											<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
+												Отменить
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>
@@ -487,28 +430,21 @@ export default function Contacts() {
 						{rejectedByMe.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
 						) : (
-							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+							<ul role="list" class="contact-row-list">
 								{rejectedByMe.value.map((req) => (
-									<li
-										key={req.peerPubkey}
-										class="cluster"
-										style={{
-											alignItems: "center",
-											justifyContent: "space-between",
-											paddingBlock: "var(--space-s)",
-											borderBlockEnd: "var(--border-width) solid var(--border)",
-										}}
-									>
+									<li key={req.peerPubkey} class="contact-row">
 										<ContactIdentity pubkey={req.peerPubkey} />
 										{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
 										написать самому тому, чью заявку отклонил(а) раньше. */}
-										<button
-											type="button"
-											disabled={busy}
-											onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
-										>
-											Добавить всё же
-										</button>
+										<div class="contact-row-actions">
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
+											>
+												Добавить всё же
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>
@@ -522,23 +458,15 @@ export default function Contacts() {
 								{rowError}
 							</p>
 						)}
-						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						<ul role="list" class="contact-row-list">
 							{visibleContacts.map((pubkey) => {
 								const memberOfGroups = groupsForContact(pubkey);
 								const isExpanded = expandedPubkey === pubkey;
 								return (
-									<li
-										key={pubkey}
-										class="flow"
-										style={{
-											"--flow-space": "var(--space-2xs)",
-											paddingBlock: "var(--space-s)",
-											borderBlockEnd: "var(--border-width) solid var(--border)",
-										}}
-									>
-										<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+									<li key={pubkey} class="contact-row contact-row-expandable">
+										<div class="contact-row-main">
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
-											<div class="cluster">
+											<div class="contact-row-actions">
 												<button type="button" onClick={() => placeCall(pubkey)} aria-label={`Позвонить ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
 													<IconPhoneCall /> Позвонить
 												</button>
@@ -562,19 +490,9 @@ export default function Contacts() {
 											</div>
 										</div>
 
-										<div class="cluster">
+										<div class="contact-row-groups">
 											{memberOfGroups.map((g) => (
-												<span
-													key={g.id}
-													class="cluster"
-													style={{
-														"--cluster-gap": "var(--space-3xs)",
-														alignItems: "center",
-														background: "var(--surface)",
-														paddingInline: "var(--space-2xs)",
-														borderRadius: "var(--radius)",
-													}}
-												>
+												<span key={g.id} class="group-chip">
 													{g.name}
 													<button
 														type="button"
@@ -620,22 +538,15 @@ export default function Contacts() {
 
 					<section class="flow" aria-labelledby="blocked-heading" style={{ "--flow-space": "var(--space-s)" }}>
 						<h2 id="blocked-heading">Заблокированные ({blockedContacts.value.length})</h2>
-						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						<ul role="list" class="contact-row-list">
 							{blockedContacts.value.map((pubkey) => (
-								<li
-									key={pubkey}
-									class="cluster"
-									style={{
-										alignItems: "center",
-										justifyContent: "space-between",
-										paddingBlock: "var(--space-s)",
-										borderBlockEnd: "var(--border-width) solid var(--border)",
-									}}
-								>
+								<li key={pubkey} class="contact-row">
 									<ContactIdentity pubkey={pubkey} />
-									<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
-										Разблокировать
-									</button>
+									<div class="contact-row-actions">
+										<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
+											Разблокировать
+										</button>
+									</div>
 								</li>
 							))}
 						</ul>
