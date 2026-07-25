@@ -189,14 +189,18 @@ function MainShell() {
 									>
 										<ItemIcon />
 										{item.label}
-										{badgeCount > 0 && <span aria-label={`непрочитано: ${badgeCount}`}> [{badgeCount}]</span>}
+										{badgeCount > 0 && (
+											<span class="nav-badge" aria-label={`непрочитано: ${badgeCount}`}>
+												{badgeCount}
+											</span>
+										)}
 									</button>
 								</li>
 							);
 						})}
 					</ul>
 				</nav>
-				<button type="button" class="nav-item-btn" onClick={lock}>
+				<button type="button" class="nav-item-btn exit-btn" onClick={lock}>
 					<IconExit />
 					Выйти
 				</button>

@@ -7,13 +7,6 @@
  * (например is-active ниже), а не автогенерируемые инлайн-style.
  */
 
-/* Активный пункт главного меню (aside-навигация, app.jsx). Пока просто
-   заметный тестовый цвет — заменить на финальный дизайн по ходу вёрстки. */
-.is-active {
-	background-color: deeppink;
-	color: white;
-}
-
 /* Пункт главного меню с иконкой (Radix Icons, MIT — см. src/ui/icons/) —
    иконка перед подписью, размер иконки завязан на font-size кнопки (width/
    height: 1em на самой svg), поэтому отдельно ничего не масштабируем здесь. */
@@ -25,6 +18,71 @@
 }
 .nav-item-btn svg {
 	flex: none;
+}
+
+/* Пользователь: "главное меню выглядит как стопка кирпичей... пусть выглядят
+   как ссылки (но в разметке остаются кнопками), при наведении — красивая
+   анимация подчёркивания через псевдоэлемент". Разметка не меняется —
+   только внешний вид: прозрачный фон, подчёркивание растёт из скрытого
+   ::after слева направо. "Выйти" (.exit-btn) сюда НЕ входит — стилизуется
+   отдельно ниже, пользователь явно попросил оставить его кнопкой. */
+.app-layout .sidebar nav .nav-item-btn {
+	position: relative;
+	background: none;
+	border: none;
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+	padding-block: var(--space-2xs);
+	padding-inline: var(--space-3xs);
+	border-radius: 0;
+}
+.app-layout .sidebar nav .nav-item-btn::after {
+	content: "";
+	position: absolute;
+	inset-inline: var(--space-3xs);
+	inset-block-end: 0.2em;
+	block-size: 2px;
+	background-color: var(--accent);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform var(--transition-speed) var(--transition-ease);
+}
+.app-layout .sidebar nav .nav-item-btn:hover,
+.app-layout .sidebar nav .nav-item-btn:focus-visible,
+.app-layout .sidebar nav .nav-item-btn.is-active {
+	color: var(--accent);
+}
+.app-layout .sidebar nav .nav-item-btn:hover::after,
+.app-layout .sidebar nav .nav-item-btn:focus-visible::after,
+.app-layout .sidebar nav .nav-item-btn.is-active::after {
+	transform: scaleX(1);
+}
+
+/* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2),
+   прижата вправо (margin-inline-start:auto — .nav-item-btn уже flex-строка). */
+.app-layout .sidebar nav .nav-badge {
+	margin-inline-start: auto;
+	background-color: var(--accent-2);
+	color: var(--accent-2-contrast);
+	border-radius: calc(infinity * 1px);
+	padding-inline: var(--space-2xs);
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	line-height: 1.6;
+}
+
+/* "Выйти" — единственная кнопка главного меню, которая ОСТАЁТСЯ кнопкой
+   (пользователь: "просто подогнать под общий стиль") — тот же тихий
+   ghost-стиль, что у action-buttons/back-button, не сплошная заливка. */
+.app-layout .sidebar .exit-btn {
+	background-color: transparent;
+	color: var(--muted);
+	border: var(--border-width) solid var(--border);
+	font-weight: var(--weight-normal);
+}
+.app-layout .sidebar .exit-btn:hover {
+	background-color: var(--surface-raised);
+	color: var(--fg);
 }
 
 /* Radix Icons — заливка (fill), не обводка: у них нет stroke-width, чтобы
