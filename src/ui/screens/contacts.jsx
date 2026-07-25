@@ -9,14 +9,15 @@ import IconPhoneCall from "../icons/phone-call.jsx";
 import {
 	contacts,
 	blockedContacts,
+	outgoingRequests,
+	incomingRequests,
+	rejectedByMe,
 	groups,
 	profiles,
-	contactRequests,
 	refreshAll,
-	refreshContactRequests,
+	refreshGroups,
 	ensureProfilesFetched,
 	refreshProfiles,
-	addContactAction,
 	removeContactAction,
 	blockContactAction,
 	unblockContactAction,
@@ -28,9 +29,8 @@ import {
 	sendContactRequestAction,
 	acceptContactRequestAction,
 	rejectContactRequestAction,
+	cancelContactRequestAction,
 } from "../signals/contacts.js";
-import { messagingActivity } from "../signals/chats.js";
-import { outgoingRequests, refreshOutgoingRequests, cancelAcquaintanceRequestAction } from "../signals/discovery.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
@@ -138,11 +138,11 @@ export default function Contacts() {
 	const busyRef = useRef(false);
 
 	useEffect(() => {
-		refreshAll(ownerPubkey, dbKey);
-		refreshContactRequests(ownerPubkey, dbKey);
+		refreshAll();
 		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(async () => {
-				await refreshAll(ownerPubkey, dbKey);
+				refreshAll();
+				await refreshGroups(ownerPubkey, dbKey);
 				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
 				// (нет соединения). Экран открыт заново — refreshProfiles подтягивает
 				// СВЕЖИЕ данные (найденный баг: старое био/имя не обновлялись годами).
@@ -155,44 +155,25 @@ export default function Contacts() {
 			.catch((e) => setConnectionError(e?.message || String(e)));
 	}, [ownerPubkey]);
 
-	// F-CT-04: подтягиваем профиль и для контактов, добавленных ПОСЛЕ того, как
-	// соединение уже установлено (эффект выше покрывает только первичную загрузку).
-	// Пока соединения ещё нет, fetchProfiles бросает — ensureProfilesFetched тогда
-	// ничего не кэширует, .catch(() => {}) просто откладывает до следующего триггера.
+	// F-CT-04, этап 49 — сигналы (contacts/incomingRequests/outgoingRequests/
+	// rejectedByMe) теперь реактивны САМИ ПО СЕБЕ (EMIT из contact-runtime.js на
+	// каждый переход состояния peer'а) — отдельный "messagingActivity"-триггер
+	// (было раньше, ручной перечитыватель Dexie-таблиц) больше не нужен, этот эффект
+	// просто подтягивает профили для любых новых pubkey, появившихся в любом разделе.
 	useEffect(() => {
-		if (contacts.value.length > 0) {
-			ensureProfilesFetched(contacts.value, fetchProfiles).catch(() => {});
+		const pubkeys = [
+			...contacts.value,
+			...incomingRequests.value.map((r) => r.peerPubkey),
+			...outgoingRequests.value.map((r) => r.peerPubkey),
+			...rejectedByMe.value.map((r) => r.peerPubkey),
+		];
+		if (pubkeys.length > 0) {
+			ensureProfilesFetched(pubkeys, fetchProfiles).catch(() => {});
 			// Новый контакт — переподписка (идемпотентно, тот же приём, что
 			// refreshGroupMessageSubscription на каждую отправку) подхватывает его в live-набор.
 			refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 		}
-	}, [contacts.value]);
-
-	// Живое обновление входящих contact-request (этап 27, находка 2) — диспетчер
-	// transport.js инкрементирует messagingActivity при получении нового запроса,
-	// пока пользователь уже смотрит этот экран.
-	useEffect(() => {
-		refreshContactRequests(ownerPubkey, dbKey).then(() => {
-			if (contactRequests.value.length > 0) {
-				ensureProfilesFetched(
-					contactRequests.value.map((r) => r.senderPubkey),
-					fetchProfiles,
-				).catch(() => {});
-			}
-		});
-		// Этап 46 — CONTACT_ACCEPTED_KIND чистит outgoingAcquaintanceRequests
-		// (transport.js), ACQUAINT_CANCELLED_KIND не трогает эту сторону вовсе —
-		// обновляем на тот же триггер, что входящие запросы, чтобы список
-		// "Отправленные заявки" не расходился с реальностью на уже открытом экране.
-		refreshOutgoingRequests(ownerPubkey).then(() => {
-			if (outgoingRequests.value.length > 0) {
-				ensureProfilesFetched(
-					outgoingRequests.value.map((r) => r.targetPubkey),
-					fetchProfiles,
-				).catch(() => {});
-			}
-		});
-	}, [ownerPubkey, messagingActivity.value]);
+	}, [contacts.value, incomingRequests.value, outgoingRequests.value, rejectedByMe.value]);
 
 	// busy сериализует действия этого экрана намеренно — найдено адверсарной фазой:
 	// два быстрых клика подряд (напр. "Добавить" дважды с разными контактами) читают
@@ -206,10 +187,11 @@ export default function Contacts() {
 		setAddError("");
 		setBusy(true);
 		try {
-			// Находка 1 (CONTRACTS.md, этап 27): инициатор сразу видит адресата у себя
-			// (addContactAction внутри) И отправляет ему запрос — тот увидит его во
-			// "Входящих" и решит сам, добавлять ли взаимно.
-			await sendContactRequestAction(ownerPubkey, privKey, npubInput, "", publish);
+			// Находка 1 (CONTRACTS.md, этап 27) — теперь единая точка для ОБОИХ путей
+			// отправки заявки ("Добавить контакт" здесь И "Обзор", discovery.jsx, этап 49):
+			// адресат больше НЕ добавляется оптимистично — увидит заявку во "Входящих"
+			// и решит сам (это и убрало найденную дублирующуюся запись бага).
+			await sendContactRequestAction(npubInput, "");
 			setNpubInput("");
 		} catch (err) {
 			setAddError(err?.message || String(err));
@@ -219,13 +201,13 @@ export default function Contacts() {
 		}
 	}
 
-	async function handleAcceptContactRequest(senderPubkey) {
+	async function handleAcceptContactRequest(peerPubkey) {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setRowError("");
 		setBusy(true);
 		try {
-			await acceptContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish);
+			await acceptContactRequestAction(peerPubkey);
 		} catch (err) {
 			setRowError(err?.message || String(err));
 		} finally {
@@ -234,13 +216,13 @@ export default function Contacts() {
 		}
 	}
 
-	async function handleRejectContactRequest(senderPubkey) {
+	async function handleRejectContactRequest(peerPubkey) {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setRowError("");
 		setBusy(true);
 		try {
-			await rejectContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish);
+			await rejectContactRequestAction(peerPubkey);
 		} catch (err) {
 			setRowError(err?.message || String(err));
 		} finally {
@@ -294,14 +276,13 @@ export default function Contacts() {
 		}
 	}
 
-	// Контакты и заблокированные — взаимоисключающие категории в UI (blockContactAction
-	// уже гарантирует это на уровне данных, см. signals/contacts.js), но фильтр здесь
-	// не помешает, если данные пришли извне (другое устройство, будущий импорт).
-	const nonBlockedContacts = contacts.value.filter((pk) => !blockedContacts.value.includes(pk));
+	// Контакты и заблокированные теперь СТРУКТУРНО взаимоисключающие (единая
+	// contactRelationships, один state на peer — этап 49, CONTACTS-FSM.md) —
+	// отдельный фильтр здесь больше не нужен.
 	const visibleContacts =
 		selectedGroupIds.size === 0
-			? nonBlockedContacts
-			: nonBlockedContacts.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
+			? contacts.value
+			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
 
 	return (
 		<Screen title="Контакты">
@@ -443,14 +424,14 @@ export default function Contacts() {
 
 				<div class="flow" style={{ "--flow-space": "var(--space-l)", flex: 1 }}>
 					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="requests-heading">Запросы ({contactRequests.value.length})</h2>
-						{contactRequests.value.length === 0 ? (
+						<h2 id="requests-heading">Входящие заявки ({incomingRequests.value.length})</h2>
+						{incomingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
 						) : (
 							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-								{contactRequests.value.map((req) => (
+								{incomingRequests.value.map((req) => (
 									<li
-										key={req.senderPubkey}
+										key={req.peerPubkey}
 										class="cluster"
 										style={{
 											alignItems: "center",
@@ -459,12 +440,12 @@ export default function Contacts() {
 											borderBlockEnd: "var(--border-width) solid var(--border)",
 										}}
 									>
-										<ContactIdentity pubkey={req.senderPubkey} />
+										<ContactIdentity pubkey={req.peerPubkey} />
 										<div class="cluster">
-											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.senderPubkey)}>
+											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
 												Принять
 											</button>
-											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.senderPubkey)}>
+											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
 												Отклонить
 											</button>
 										</div>
@@ -482,7 +463,7 @@ export default function Contacts() {
 							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 								{outgoingRequests.value.map((req) => (
 									<li
-										key={req.targetPubkey}
+										key={req.peerPubkey}
 										class="cluster"
 										style={{
 											alignItems: "center",
@@ -491,15 +472,42 @@ export default function Contacts() {
 											borderBlockEnd: "var(--border-width) solid var(--border)",
 										}}
 									>
-										<ContactIdentity pubkey={req.targetPubkey} />
+										<ContactIdentity pubkey={req.peerPubkey} />
+										<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
+											Отменить
+										</button>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="rejected-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="rejected-heading">Отклонённые ({rejectedByMe.value.length})</h2>
+						{rejectedByMe.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
+						) : (
+							<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+								{rejectedByMe.value.map((req) => (
+									<li
+										key={req.peerPubkey}
+										class="cluster"
+										style={{
+											alignItems: "center",
+											justifyContent: "space-between",
+											paddingBlock: "var(--space-s)",
+											borderBlockEnd: "var(--border-width) solid var(--border)",
+										}}
+									>
+										<ContactIdentity pubkey={req.peerPubkey} />
+										{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
+										написать самому тому, чью заявку отклонил(а) раньше. */}
 										<button
 											type="button"
 											disabled={busy}
-											onClick={() =>
-												runRowAction(() => cancelAcquaintanceRequestAction(ownerPubkey, privKey, req.targetPubkey, publish))
-											}
+											onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
 										>
-											Отменить
+											Добавить всё же
 										</button>
 									</li>
 								))}
@@ -540,18 +548,14 @@ export default function Contacts() {
 												<button
 													type="button"
 													disabled={busy}
-													onClick={() =>
-														runRowAction(() => blockContactAction(ownerPubkey, privKey, pubkey, publish))
-													}
+													onClick={() => runRowAction(() => blockContactAction(pubkey))}
 												>
 													Заблокировать
 												</button>
 												<button
 													type="button"
 													disabled={busy}
-													onClick={() =>
-														runRowAction(() => removeContactAction(ownerPubkey, privKey, pubkey, publish))
-													}
+													onClick={() => runRowAction(() => removeContactAction(pubkey))}
 												>
 													Удалить
 												</button>
@@ -609,7 +613,7 @@ export default function Contacts() {
 						</ul>
 						{visibleContacts.length === 0 && (
 							<p style={{ color: "var(--muted)" }}>
-								{nonBlockedContacts.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
+								{contacts.value.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
 							</p>
 						)}
 					</section>
@@ -629,13 +633,7 @@ export default function Contacts() {
 									}}
 								>
 									<ContactIdentity pubkey={pubkey} />
-									<button
-										type="button"
-										disabled={busy}
-										onClick={() =>
-											runRowAction(() => unblockContactAction(ownerPubkey, privKey, pubkey, publish))
-										}
-									>
+									<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
 										Разблокировать
 									</button>
 								</li>

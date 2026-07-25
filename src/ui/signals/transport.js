@@ -6,13 +6,13 @@ import { createRelayConnection } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
-import { rebuildContactsAndGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
+import { rebuildGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
 import { createSubscriber } from "../../core/transport/subscriber.js";
 import { parseProfileEvent } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
-import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
+import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
 import { DISCOVERY_KIND, parseDiscoveryEvent } from "../../domain/discovery/discovery.js";
 import {
 	acceptWelcome,
@@ -27,7 +27,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { profiles, addContactAction, ensureProfilesFetched } from "./contacts.js";
+import { profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -44,8 +44,7 @@ import { notify } from "../../domain/notifications/notifier.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished } from "../../domain/identity/profile.js";
 import { currentUser } from "./auth.js";
-import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 function decodeBase64(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -205,9 +204,14 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
 	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
 	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish: publisher.publish, dbKey });
+	// Этап 49 — контакты: один contact-runtime на подключение, тот же принцип.
+	// load() внутри себя мигрирует legacy-таблицы (contacts/blockedContacts/
+	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).
+	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish: publisher.publish });
 
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
-	await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
+	await reconcileContactsFromEventLog(pubkeyHex);
+	await rebuildGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
 	await rebuildUiSettings(pubkeyHex, privKey, dbKey);
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
@@ -289,52 +293,22 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							});
 						}
 						activityChanged = true; // этап 27, находка 2 — UI (chat.jsx) узнаёт о новом Welcome/inbox-запросе
-					} else if (rumor.kind === CONTACT_REQUEST_KIND) {
-						const parsed = parseContactRequestRumor(rumor);
-						await db.table("contactRequests").put(
-							toEncryptedRow(
-								{
-									owner: pubkeyHex,
-									senderPubkey: parsed.senderPubkey,
-									greeting: parsed.greeting,
-									createdAt: parsed.createdAt,
-								},
-								CONTACT_REQUESTS_PLAINTEXT_FIELDS,
-								dbKey,
-							),
-						);
-						await ensureProfilesFetched([parsed.senderPubkey], fetchProfiles).catch(() => {});
-						notify(settings, "contacts", "newRequests", {
-							title: `Новый запрос в контакты от ${usernameFor(parsed.senderPubkey)}`,
-							body: parsed.greeting || "",
-							onClick: () => navigateFromNotification({ screen: "contacts" }),
-						});
-						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт о новом запросе
-					} else if (rumor.kind === CONTACT_ACCEPTED_KIND) {
-						// Этап 34 — сигнал "мой запрос приняли" (найденный пробел, см. requests.js).
+					} else if (
+						rumor.kind === CONTACT_REQUEST_KIND ||
+						rumor.kind === CONTACT_ACCEPTED_KIND ||
+						rumor.kind === CONTACT_REJECTED_KIND ||
+						rumor.kind === ACQUAINT_CANCELLED_KIND
+					) {
+						// Этап 49 — единая маршрутизация в contact-runtime.js (Map состояний +
+						// FSM, contact-fsm.js): I1/I2 внутри reduce() САМИ решают, применять ли
+						// событие (redelivery старого/уже решённого — игнор) — раньше именно
+						// отсутствие этой проверки здесь было причиной обеих найденных пользователем
+						// багов (лавина повторных заявок, дублирование во входящих+контактах).
+						// Уведомления теперь идут через LOG_JOURNAL -> onJournal (contacts.js),
+						// не отсюда — профиль должен быть закэширован ДО dispatch (там же usernameFor).
 						await ensureProfilesFetched([rumor.pubkey], fetchProfiles).catch(() => {});
-						notify(settings, "contacts", "accepted", {
-							title: "Запрос в контакты принят",
-							body: `${usernameFor(rumor.pubkey)} принял(а) ваш запрос`,
-							onClick: () => navigateFromNotification({ screen: "contacts" }),
-						});
-						// НАЙДЕНО ЖИВЫМ E2E (этап 46): sendAcquaintanceRequestAction (в отличие
-						// от sendContactRequestAction, форма "Добавить контакт") НЕ добавляет
-						// адресата в контакты оптимистично при отправке (инвариант DESIGN.md) —
-						// без этой строки принявший так и оставался бы НЕ контактом у отправителя,
-						// и его карточка не пропадала бы из "Обзора" (contacts-фильтр в discovery.js
-						// не сработал бы). Идемпотентно для старого flow (там уже добавлен).
-						await addContactAction(pubkeyHex, privKey, rumor.pubkey, publisher.publish);
-						// Приняли МОЮ заявку из "Обзора" (если она оттуда была) — pending-запись
-						// больше не актуальна.
-						await db.table("outgoingAcquaintanceRequests").delete([pubkeyHex, rumor.pubkey]);
-						activityChanged = true; // discovery.jsx/contacts.jsx узнают, что заявка закрылась
-					} else if (rumor.kind === ACQUAINT_CANCELLED_KIND) {
-						// Этап 46 — отправитель отозвал СВОЮ ещё не принятую заявку (DESIGN.md,
-						// переход pending--CANCELLED_BY(A)-->none). rumor.pubkey — аутентичный
-						// отправитель из unwrap, не из тега.
-						await db.table("contactRequests").delete([pubkeyHex, rumor.pubkey]);
-						activityChanged = true; // contacts.jsx узнаёт, что входящая заявка исчезла
+						await handleIncomingContactRumor(rumor);
+						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт об изменении
 					} else if (rumor.kind === CHANNEL_SUBSCRIBE_REQUEST_KIND) {
 						// Этап 30 — владелец канала автоматически подтверждает COMMENT-доступ
 						// (group-видимость уже была его решением при создании канала).
@@ -412,7 +386,8 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		},
 		onEvent: async (addedCount) => {
 			if (addedCount > 0) {
-				await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
+				await reconcileContactsFromEventLog(pubkeyHex);
+				await rebuildGroups(pubkeyHex, privKey, dbKey);
 				await rebuildEffectivePermissions(pubkeyHex, privKey);
 			}
 		},

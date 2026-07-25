@@ -1325,7 +1325,41 @@ blockContactAction) — добавлен переход в BLOCKED.
 21 новый тест (contact-runtime.test.js) + 1 (contact-fsm.js, NONE+BLOCK)
 + 2 (requests.js, CONTACT_REJECTED_KIND). Полная регрессия: 882/882.
 
-Осталось: вписать contact-runtime.js в transport.js (giftWrapSubscriber
-маршрутизация + kind-3/10000 reconcile вместо foldContactList/foldMuteList)
-и обновить contacts.jsx (п.4, 5 разделов по state-фильтрам). Затем отдельно
-N1 + "Журнал".
+**П.4 готово.** `contacts.jsx` переписан на 5 разделов по state-фильтрам:
+Отправленные заявки/Входящие заявки/Контакты/**Отклонённые (новый)**/
+Заблокированные. Единая точка отправки (`sendContactRequestAction`)
+используется ОБОИМИ путями — "Добавить контакт" (эта форма) И "Обзор"
+(discovery.jsx) — устранён сам источник бага дублирования (два независимых
+механизма для одного действия). `discovery.js` избавлен от собственной
+`outgoingAcquaintanceRequests`-машинерии (`sendAcquaintanceRequestAction`/
+`cancelAcquaintanceRequestAction`/`refreshOutgoingRequests` удалены,
+делегируют в contacts.js). `handlers.js`'s `rebuildContactsAndGroups`
+переименован в `rebuildGroups` (contacts/mute-часть вынесена в
+`reconcileContactsFromEventLog`, contacts.js) — `foldContactList`/
+`foldMuteList` удалены как мёртвый код.
+
+LOG_JOURNAL получил поле `category` (`newRequest`/`accepted`/`rejected`/
+`crossed`) — временный мост к notify() внутри contacts.js
+(`notifyContactJournalEntry`), пока полноценная фича "Журнал" не
+реализована отдельно. Новое: пользователь теперь ВИДИТ отказ (раньше
+`PUBLISH_REJECT` не существовало как сигнала вовсе).
+
+Обновлены/переписаны тесты: `contacts-signals.test.js`,
+`discovery-signals.test.js`, `handlers.test.js` (под новый API/переименование).
+Полная регрессия: **870/870**. Сборка: 339.46 KB gzip (бюджет 1304 KB).
+
+**Живая E2E-проверка (Playwright, 3 аккаунта, реальный relay strfry
+localhost:7777)** — воспроизведены и подтверждены исправленными ОБА
+исходных бага пользователя:
+- Alice → Bob: заявка → Bob видит во "Входящих" → принимает → оба видят
+  друг друга в "Контактах".
+- **Тройной relogin (Alice И Bob)** — "Контакты (1)" стабильно, "Входящие
+  заявки (0)" — заявка НЕ воскресает и НЕ дублируется (баг 1 и баг 2 из
+  исходного репорта пользователя, оба подтверждены исправленными).
+- Alice → Carol: заявка → Carol отклоняет → появляется в "Отклонённые" у
+  Carol → Alice (после relogin) видит "Отправленные заявки (0)" — узнаёт
+  об отказе (новая возможность, раньше сигнала попросту не было).
+
+Осталось (отдельно, не FSM, следующий заход): N1-инвариант для notify()
+(гейт по read-cursor для чатов/каналов — контактам он не нужен, I1 уже
+всё решает) + фича "Журнал" (персистентный лог, новый стартовый экран).

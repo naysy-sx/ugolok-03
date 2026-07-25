@@ -1,16 +1,17 @@
 import { useState, useEffect, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles } from "../signals/transport.js";
-import { contacts, profiles, refreshContacts, ensureProfilesFetched } from "../signals/contacts.js";
-import { ContactIdentity } from "./contacts.jsx";
 import {
-	discoveryProfiles,
+	contacts,
+	profiles,
+	refreshContacts,
+	ensureProfilesFetched,
 	outgoingRequests,
-	refreshDiscoveryProfiles,
-	refreshOutgoingRequests,
-	sendAcquaintanceRequestAction,
-	cancelAcquaintanceRequestAction,
-} from "../signals/discovery.js";
+	sendContactRequestAction,
+	cancelContactRequestAction,
+} from "../signals/contacts.js";
+import { ContactIdentity } from "./contacts.jsx";
+import { discoveryProfiles, refreshDiscoveryProfiles } from "../signals/discovery.js";
 import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import Screen from "../components/screen.jsx";
@@ -39,10 +40,9 @@ export default function Discovery() {
 				// refreshDiscoveryProfiles — иначе фильтр "скрыть уже существующих
 				// контактов" читает устаревший contacts.value и только что принятый
 				// контакт продолжает показываться карточкой.
-				await refreshContacts(ownerPubkey);
+				await refreshContacts();
 				await fetchDiscoveryProfiles();
 				await refreshDiscoveryProfiles(ownerPubkey);
-				await refreshOutgoingRequests(ownerPubkey);
 				const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
 				await ensureProfilesFetched(pubkeys, fetchProfiles).catch(() => {});
 			})
@@ -82,13 +82,12 @@ export default function Discovery() {
 		setBusy(true);
 		setError("");
 		try {
-			const alreadySent = outgoingRequests.value.some((r) => r.targetPubkey === pubkey);
+			const alreadySent = outgoingRequests.value.some((r) => r.peerPubkey === pubkey);
 			if (alreadySent) {
-				await cancelAcquaintanceRequestAction(ownerPubkey, privKey, pubkey, publish);
+				await cancelContactRequestAction(pubkey);
 			} else {
-				await sendAcquaintanceRequestAction(ownerPubkey, privKey, pubkey, publish);
+				await sendContactRequestAction(pubkey);
 			}
-			await refreshOutgoingRequests(ownerPubkey);
 		} catch (err) {
 			setError(err?.message || String(err));
 		} finally {
@@ -166,7 +165,7 @@ export default function Discovery() {
 				) : (
 					<div class="grid-auto" style={{ gap: "var(--space-s)" }}>
 						{discoveryProfiles.value.map((card) => {
-							const sent = outgoingRequests.value.some((r) => r.targetPubkey === card.pubkey);
+							const sent = outgoingRequests.value.some((r) => r.peerPubkey === card.pubkey);
 							return (
 								<article
 									key={card.pubkey}

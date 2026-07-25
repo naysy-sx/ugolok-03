@@ -18,6 +18,7 @@ export function reduce(peerState, event) {
           state: { ...peerState, name: "INCOMING_PENDING", greeting: event.greeting, resolvedAt: peerState.resolvedAt || 0 },
           commands: [
             { type: "UPSERT", peer: event.peer, fields: { greeting: event.greeting, createdAt: event.createdAt } },
+            { type: "LOG_JOURNAL", entry: { peer: event.peer, category: "newRequest", message: "прислал(а) вам заявку в контакты" } },
             { type: "EMIT", peer: event.peer, stateName: "INCOMING_PENDING" },
           ],
         };
@@ -41,7 +42,7 @@ export function reduce(peerState, event) {
           commands: [
             { type: "UPDATE_CONTACTS_LIST", peer: event.peer, action: "add" },
             { type: "UPSERT", peer: event.peer, fields: { resolvedAt: event.createdAt } },
-            { type: "LOG_JOURNAL", entry: { peer: event.peer, message: "принял(а) вашу заявку" } },
+            { type: "LOG_JOURNAL", entry: { peer: event.peer, category: "accepted", message: "принял(а) вашу заявку" } },
             { type: "EMIT", peer: event.peer, stateName: "CONTACT" },
           ],
         };
@@ -51,7 +52,7 @@ export function reduce(peerState, event) {
           state: { ...peerState, name: "NONE", resolvedAt: event.createdAt },
           commands: [
             { type: "DELETE", peer: event.peer },
-            { type: "LOG_JOURNAL", entry: { peer: event.peer, message: "отклонил(а) вашу заявку" } },
+            { type: "LOG_JOURNAL", entry: { peer: event.peer, category: "rejected", message: "отклонил(а) вашу заявку" } },
             { type: "EMIT", peer: event.peer, stateName: "NONE" },
           ],
         };
@@ -62,7 +63,7 @@ export function reduce(peerState, event) {
           commands: [
             { type: "UPDATE_CONTACTS_LIST", peer: event.peer, action: "add" },
             { type: "UPSERT", peer: event.peer, fields: { resolvedAt: event.createdAt } },
-            { type: "LOG_JOURNAL", entry: { peer: event.peer, message: "вы теперь контакты — заявки совпали" } },
+            { type: "LOG_JOURNAL", entry: { peer: event.peer, category: "crossed", message: "вы теперь контакты — заявки совпали" } },
             { type: "EMIT", peer: event.peer, stateName: "CONTACT" },
           ],
         };

@@ -8,38 +8,46 @@ import { npubEncode, nsecEncode } from "nostr-tools/nip19";
 import {
 	contacts,
 	blockedContacts,
+	outgoingRequests,
+	incomingRequests,
+	rejectedByMe,
 	groups,
 	profiles,
-	refreshContacts,
-	refreshBlockedContacts,
 	refreshGroups,
 	refreshAll,
 	ensureProfilesFetched,
 	refreshProfiles,
 	decodePubkeyInput,
-	addContactAction,
-	removeContactAction,
+	configureContactRuntime,
+	handleIncomingContactRumor,
+	sendContactRequestAction,
+	acceptContactRequestAction,
+	rejectContactRequestAction,
+	cancelContactRequestAction,
 	blockContactAction,
 	unblockContactAction,
+	removeContactAction,
 	createGroupAction,
 	renameGroupAction,
 	addGroupMemberAction,
 	removeGroupMemberAction,
 	deleteGroupAction,
-	contactRequests,
-	refreshContactRequests,
-	sendContactRequestAction,
-	acceptContactRequestAction,
-	rejectContactRequestAction,
 } from "../src/ui/signals/contacts.js";
-import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
-import { CONTACT_REQUEST_KIND, parseContactRequestRumor, CONTACT_ACCEPTED_KIND } from "../src/domain/contacts/requests.js";
+import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
+import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, buildContactRequestRumor } from "../src/domain/contacts/requests.js";
 import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { GROUPS_PLAINTEXT_FIELDS, CONTACT_REQUESTS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
 const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
+
+// Настоящие secp256k1-ключи (не "a".repeat(64) заглушки) — nip59.wrap делает
+// реальный ECDH, невалидная точка на кривой бросит исключение.
+const BOB_PRIV = new Uint8Array(32).fill(7);
+const BOB_PUBKEY = bytesToHex(getPublicKey(BOB_PRIV));
+const ALICE_PRIV = new Uint8Array(32).fill(9);
+const ALICE_PUBKEY = bytesToHex(getPublicKey(ALICE_PRIV));
 
 const okPublish = async () => ({ ok: true });
 const failPublish = async () => ({ ok: false, reason: "relay отклонил" });
@@ -49,22 +57,34 @@ before(async () => {
 });
 
 beforeEach(async () => {
-	contacts.value = [];
-	blockedContacts.value = [];
 	groups.value = [];
 	profiles.value = {};
-	contactRequests.value = [];
 	await db.table("contacts").clear();
 	await db.table("blockedContacts").clear();
+	await db.table("contactRequests").clear();
+	await db.table("contactRelationships").clear();
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
 	await db.table("events").clear();
-	await db.table("contactRequests").clear();
 });
 
 after(() => {
 	db.close();
 });
+
+// Этап 49 — configureContactRuntime — модульный синглтон (тот же приём, что
+// configureCallRuntime, call.js), каждый тест переконфигурирует его заново со
+// СВОИМ publish (для перехвата отправленных событий).
+async function setupRuntime(publish = okPublish) {
+	await configureContactRuntime({ ownerPubkey: OWNER_PUBKEY, privKey: PRIV_KEY, dbKey: DB_KEY, publish });
+}
+
+function incomingRequestRumor(senderPriv, greeting, createdAt) {
+	const rumor = nip59Wrap(buildContactRequestRumor(greeting), senderPriv, OWNER_PUBKEY);
+	const unwrapped = nip59Unwrap(rumor, PRIV_KEY);
+	if (createdAt !== undefined) unwrapped.created_at = createdAt;
+	return unwrapped;
+}
 
 test("decodePubkeyInput: 64-hex строка проходит как есть (lowercase)", () => {
 	const hex = "AB".repeat(32);
@@ -86,78 +106,184 @@ test("decodePubkeyInput: nsec (валидный bech32, но не npub) -> throw
 	assert.throws(() => decodePubkeyInput(nsec));
 });
 
-const ALICE_PK = "a".repeat(64);
-const BOB_PK = "b".repeat(64);
-const EVIL_PK = "e".repeat(64);
+// --- Единая точка отправки/приёма заявки (этап 49) ---
 
-test("addContactAction: publish ok -> фолдит локально и обновляет сигнал contacts", async () => {
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	assert.deepEqual(contacts.value, [ALICE_PK]);
-	const rows = await db.table("contacts").where("owner").equals(OWNER_PUBKEY).toArray();
-	assert.deepEqual(rows.map((r) => r.pubkey), [ALICE_PK]);
-});
-
-test("addContactAction: publish fail -> НЕ фолдит, НЕ обновляет сигнал, бросает", async () => {
-	await refreshContacts(OWNER_PUBKEY);
-	const before = contacts.value;
-	await assert.rejects(() => addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, failPublish));
-	assert.deepEqual(contacts.value, before);
-	const rows = await db.table("contacts").where("owner").equals(OWNER_PUBKEY).toArray();
-	assert.equal(rows.length, 0);
-});
-
-test("addContactAction: принимает npub, декодирует перед сборкой события", async () => {
-	const otherPriv = new Uint8Array(32).fill(9);
-	const otherPub = bytesToHex(getPublicKey(otherPriv));
-	const npub = npubEncode(otherPub);
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, npub, okPublish);
-	assert.deepEqual(contacts.value, [otherPub]);
-});
-
-test("removeContactAction: удаляет контакт и переиздаёт список", async () => {
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, BOB_PK, okPublish);
-	await removeContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	assert.deepEqual(contacts.value, [BOB_PK]);
-});
-
-test("blockContactAction/unblockContactAction: обновляют blockedContacts", async () => {
-	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, EVIL_PK, okPublish);
-	assert.deepEqual(blockedContacts.value, [EVIL_PK]);
-	await unblockContactAction(OWNER_PUBKEY, PRIV_KEY, EVIL_PK, okPublish);
-	assert.deepEqual(blockedContacts.value, []);
-});
-
-test("blockContactAction: если pubkey был в контактах — блокировка ОДНОВРЕМЕННО отписывает (взаимоисключающие категории)", async () => {
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	assert.deepEqual(contacts.value, [ALICE_PK]);
-
-	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-
-	assert.deepEqual(blockedContacts.value, [ALICE_PK]);
-	assert.deepEqual(contacts.value, [], "заблокированный контакт не должен оставаться в contacts");
-});
-
-test("blockContactAction: pubkey, которого не было в контактах — не публикует лишнее обновление contacts", async () => {
-	let contactsPublishCalls = 0;
-	const countingPublish = async (event) => {
-		if (event.kind === 3) contactsPublishCalls++;
+test("sendContactRequestAction: публикует gift-wrapped CONTACT_REQUEST_KIND, попадает в outgoingRequests (НЕ в contacts — до ответа адресата)", async () => {
+	let sentGiftWrap;
+	await setupRuntime(async (event) => {
+		if (event.kind === 1059) sentGiftWrap = event;
 		return { ok: true };
-	};
-	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, EVIL_PK, countingPublish);
-	assert.equal(contactsPublishCalls, 0);
+	});
+
+	await sendContactRequestAction(BOB_PUBKEY, "привет, добавь меня");
+
+	assert.deepEqual(contacts.value, [], "адресат НЕ должен появиться в контактах до его ответа — находка 1 больше не даёт ложный оптимизм");
+	assert.equal(outgoingRequests.value.length, 1);
+	assert.equal(outgoingRequests.value[0].peerPubkey, BOB_PUBKEY);
+
+	assert.ok(sentGiftWrap, "должен быть отправлен gift-wrap (kind 1059)");
+	const rumor = nip59Unwrap(sentGiftWrap, BOB_PRIV);
+	assert.equal(rumor.kind, CONTACT_REQUEST_KIND);
+	assert.equal(rumor.content, "привет, добавь меня");
+});
+
+test("sendContactRequestAction: принимает npub, декодирует перед сборкой события", async () => {
+	await setupRuntime();
+	const npub = npubEncode(BOB_PUBKEY);
+	await sendContactRequestAction(npub, "");
+	assert.equal(outgoingRequests.value[0].peerPubkey, BOB_PUBKEY);
+});
+
+test("sendContactRequestAction: невалидный ключ -> throw, ничего не публикуется", async () => {
+	let publishCount = 0;
+	await setupRuntime(async () => {
+		publishCount++;
+		return { ok: true };
+	});
+	await assert.rejects(() => sendContactRequestAction("мусор", "привет"));
+	assert.equal(publishCount, 0);
+});
+
+test("handleIncomingContactRumor: CONTACT_REQUEST_KIND -> появляется в incomingRequests с greeting", async () => {
+	await setupRuntime();
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "хочу дружить", 100));
+
+	assert.equal(incomingRequests.value.length, 1);
+	assert.equal(incomingRequests.value[0].peerPubkey, BOB_PUBKEY);
+	assert.equal(incomingRequests.value[0].greeting, "хочу дружить");
+});
+
+test("acceptContactRequestAction: переводит в contacts, публикует CONTACT_ACCEPTED_KIND отправителю (этап 34/49)", async () => {
+	const published = [];
+	await setupRuntime(async (event) => {
+		published.push(event);
+		return { ok: true };
+	});
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "hi", 100));
+
+	await acceptContactRequestAction(BOB_PUBKEY);
+
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+	assert.equal(incomingRequests.value.length, 0);
+
+	const giftWrap = published.find((e) => e.kind === 1059);
+	assert.ok(giftWrap, "должен быть отправлен gift-wrap отправителю запроса");
+	const rumor = nip59Unwrap(giftWrap, BOB_PRIV);
+	assert.equal(rumor.kind, CONTACT_ACCEPTED_KIND);
+
+	const contactListEvent = published.find((e) => e.kind === 3);
+	assert.ok(contactListEvent, "kind-3 обязан republish-нуться с новым контактом");
+});
+
+test("rejectContactRequestAction: публикует CONTACT_REJECTED_KIND, переводит в rejectedByMe (НЕ blockedContacts — раньше отказ реализовывался через блокировку)", async () => {
+	const published = [];
+	await setupRuntime(async (event) => {
+		published.push(event);
+		return { ok: true };
+	});
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "hi", 100));
+
+	await rejectContactRequestAction(BOB_PUBKEY);
+
+	assert.deepEqual(blockedContacts.value, [], "отказ — не блокировка (CONTACTS-FSM.md, разделены явно по решению пользователя)");
+	assert.equal(rejectedByMe.value.length, 1);
+	assert.equal(rejectedByMe.value[0].peerPubkey, BOB_PUBKEY);
+	assert.equal(incomingRequests.value.length, 0);
+
+	const giftWrap = published.find((e) => e.kind === 1059);
+	assert.ok(giftWrap, "PUBLISH_REJECT — раньше такого сигнала не существовало вовсе");
+	assert.equal(nip59Unwrap(giftWrap, BOB_PRIV).kind, CONTACT_REJECTED_KIND);
+});
+
+test("cancelContactRequestAction: OUTGOING_PENDING -> отзывается, пропадает из outgoingRequests", async () => {
+	await setupRuntime();
+	await sendContactRequestAction(BOB_PUBKEY, "");
+	assert.equal(outgoingRequests.value.length, 1);
+
+	await cancelContactRequestAction(BOB_PUBKEY);
+	assert.equal(outgoingRequests.value.length, 0);
+});
+
+test("crossed-requests (I3): обе стороны отправили заявку друг другу -> сразу CONTACT, без отдельного accept", async () => {
+	await setupRuntime();
+	await sendContactRequestAction(BOB_PUBKEY, "я первый");
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "и я тоже", 999999));
+
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+	assert.equal(outgoingRequests.value.length, 0);
+	assert.equal(incomingRequests.value.length, 0);
+});
+
+test("I2 (регресс-тест бага пользователя): CONTACT + повторный REMOTE_REQUEST -> остаётся CONTACT, НЕ дублируется во входящих", async () => {
+	await setupRuntime();
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "hi", 100));
+	await acceptContactRequestAction(BOB_PUBKEY);
+
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "снова привет", 99999999999));
+
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+	assert.equal(incomingRequests.value.length, 0, "уже принятый контакт не должен снова оказаться во входящих — найденный пользователем баг");
+});
+
+test("blockContactAction: из CONTACT — убирает из contacts И добавляет в blockedContacts одновременно", async () => {
+	await setupRuntime();
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "hi", 100));
+	await acceptContactRequestAction(BOB_PUBKEY);
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+
+	await blockContactAction(BOB_PUBKEY);
+
+	assert.deepEqual(blockedContacts.value, [BOB_PUBKEY]);
+	assert.deepEqual(contacts.value, [], "заблокированный контакт не должен оставаться в contacts — структурно взаимоисключающие состояния");
+});
+
+test("blockContactAction: работает и без предыстории (блокировка постороннего)", async () => {
+	await setupRuntime();
+	await blockContactAction(BOB_PUBKEY);
+	assert.deepEqual(blockedContacts.value, [BOB_PUBKEY]);
 });
 
 test("unblockContactAction: НЕ возвращает разблокированного обратно в contacts автоматически", async () => {
-	await addContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	await blockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
-	await unblockContactAction(OWNER_PUBKEY, PRIV_KEY, ALICE_PK, okPublish);
+	await setupRuntime();
+	await blockContactAction(BOB_PUBKEY);
+	await unblockContactAction(BOB_PUBKEY);
 	assert.deepEqual(blockedContacts.value, []);
 	assert.deepEqual(contacts.value, [], "разблокировка не должна сама по себе восстанавливать контакт");
 });
 
-// AC-16 (найдено пользователем прямым осмотром IndexedDB) — пользователь буквально
-// увидел название группы "Друзья" открытым текстом в этой таблице.
+test("removeContactAction: удаляет из contacts", async () => {
+	await setupRuntime();
+	await handleIncomingContactRumor(incomingRequestRumor(BOB_PRIV, "hi", 100));
+	await acceptContactRequestAction(BOB_PUBKEY);
+	await removeContactAction(BOB_PUBKEY);
+	assert.deepEqual(contacts.value, []);
+});
+
+test("refreshContacts/refreshAll: пересчитывают сигналы из уже загруженного runtime (без Dexie-запроса)", async () => {
+	await setupRuntime();
+	await sendContactRequestAction(BOB_PUBKEY, "");
+	await handleIncomingContactRumor(incomingRequestRumor(ALICE_PRIV, "hi", 100));
+
+	outgoingRequests.value = [];
+	incomingRequests.value = [];
+	await refreshAll();
+
+	assert.equal(outgoingRequests.value.length, 1);
+	assert.equal(incomingRequests.value.length, 1);
+});
+
+test("миграция (задача 3, этап 49): configureContactRuntime подхватывает legacy contacts/blockedContacts/contactRequests", async () => {
+	await db.table("contacts").put({ owner: OWNER_PUBKEY, pubkey: BOB_PUBKEY });
+	await db.table("blockedContacts").put({ owner: OWNER_PUBKEY, pubkey: ALICE_PUBKEY });
+
+	await setupRuntime();
+
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+	assert.deepEqual(blockedContacts.value, [ALICE_PUBKEY]);
+});
+
+// --- Группы (не затронуто этапом 49) ---
+
 test("AC-16: groups хранится зашифрованным — сырой дамп не содержит name", async () => {
 	await createGroupAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, "Секретная группа", okPublish);
 	const groupId = groups.value[0].id;
@@ -210,26 +336,27 @@ test("F-GR-02 через UI-действия: один pubkey в несколь�
 	assert.ok(groups.value.find((g) => g.id === g2.id).memberPubkeys.includes("shared-pk"));
 });
 
-test("refreshAll: подтягивает все три сигнала параллельно из БД без действий", async () => {
-	await db.table("contacts").add({ owner: OWNER_PUBKEY, pubkey: "x" });
-	await db.table("blockedContacts").add({ owner: OWNER_PUBKEY, pubkey: "y" });
+test("refreshGroups: подтягивает группы из БД без действий", async () => {
 	await db.table("groups").add(toEncryptedRow({ owner: OWNER_PUBKEY, id: "g1", name: "Z" }, GROUPS_PLAINTEXT_FIELDS, DB_KEY));
 	await db.table("groupMembers").add({ groupId: "g1", pubkey: "z" });
 
-	await refreshAll(OWNER_PUBKEY, DB_KEY);
+	await refreshGroups(OWNER_PUBKEY, DB_KEY);
 
-	assert.deepEqual(contacts.value, ["x"]);
-	assert.deepEqual(blockedContacts.value, ["y"]);
 	assert.deepEqual(groups.value, [{ id: "g1", name: "Z", memberPubkeys: ["z"] }]);
 });
 
+// --- Профили (не затронуто этапом 49) ---
+
+const ALICE_STUB_PK = "a".repeat(64);
+const BOB_STUB_PK = "b".repeat(64);
+
 test("ensureProfilesFetched: заполняет profiles найденными записями", async () => {
 	const fetchStub = async (pubkeys) => {
-		assert.deepEqual(pubkeys, [ALICE_PK]);
-		return new Map([[ALICE_PK, { name: "Алиса", about: "био" }]]);
+		assert.deepEqual(pubkeys, [ALICE_STUB_PK]);
+		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био" }]]);
 	};
-	await ensureProfilesFetched([ALICE_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса", about: "био" });
+	await ensureProfilesFetched([ALICE_STUB_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "био" });
 });
 
 test("ensureProfilesFetched: не найденный профиль кэшируется как null (не запрашивается повторно)", async () => {
@@ -238,164 +365,41 @@ test("ensureProfilesFetched: не найденный профиль кэширу
 		calls++;
 		return new Map();
 	};
-	await ensureProfilesFetched([BOB_PK], fetchStub);
-	assert.equal(profiles.value[BOB_PK], null);
-	await ensureProfilesFetched([BOB_PK], fetchStub);
+	await ensureProfilesFetched([BOB_STUB_PK], fetchStub);
+	assert.equal(profiles.value[BOB_STUB_PK], null);
+	await ensureProfilesFetched([BOB_STUB_PK], fetchStub);
 	assert.equal(calls, 1, "второй вызов не должен снова запрашивать уже известный (пусть и пустой) результат");
 });
 
 test("ensureProfilesFetched: уже закэшированные pubkey исключаются из запроса", async () => {
-	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
 	const fetchStub = async (pubkeys) => {
-		assert.deepEqual(pubkeys, [BOB_PK]);
-		return new Map([[BOB_PK, { name: "Боб" }]]);
+		assert.deepEqual(pubkeys, [BOB_STUB_PK]);
+		return new Map([[BOB_STUB_PK, { name: "Боб" }]]);
 	};
-	await ensureProfilesFetched([ALICE_PK, BOB_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса" });
-	assert.deepEqual(profiles.value[BOB_PK], { name: "Боб" });
+	await ensureProfilesFetched([ALICE_STUB_PK, BOB_STUB_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса" });
+	assert.deepEqual(profiles.value[BOB_STUB_PK], { name: "Боб" });
 });
 
 test("ensureProfilesFetched: пустой список отсутствующих pubkey не вызывает fetch вовсе", async () => {
-	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
 	let called = false;
-	await ensureProfilesFetched([ALICE_PK], async () => {
+	await ensureProfilesFetched([ALICE_STUB_PK], async () => {
 		called = true;
 		return new Map();
 	});
 	assert.equal(called, false);
 });
 
-// Настоящие secp256k1-ключи (не "a".repeat(64) заглушки выше) — nip59.wrap делает
-// реальный ECDH, невалидная точка на кривой бросит исключение.
-const BOB_REAL_PRIV = new Uint8Array(32).fill(7);
-const BOB_REAL_PUB = bytesToHex(getPublicKey(BOB_REAL_PRIV));
-
-test("sendContactRequestAction: добавляет адресата СЕБЕ и отправляет ему gift-wrapped запрос (находка 1)", async () => {
-	let sentGiftWrap;
-	const publish = async (event) => {
-		if (event.kind === 1059) sentGiftWrap = event;
-		return { ok: true };
-	};
-	await sendContactRequestAction(OWNER_PUBKEY, PRIV_KEY, BOB_REAL_PUB, "привет, добавь меня", publish);
-
-	assert.deepEqual(contacts.value, [BOB_REAL_PUB], "инициатор сразу видит адресата в своих контактах");
-	assert.ok(sentGiftWrap, "должен быть отправлен gift-wrap (kind 1059)");
-
-	const rumor = nip59Unwrap(sentGiftWrap, BOB_REAL_PRIV);
-	assert.equal(rumor.kind, CONTACT_REQUEST_KIND);
-	const parsed = parseContactRequestRumor(rumor);
-	assert.equal(parsed.greeting, "привет, добавь меня");
-	assert.equal(parsed.senderPubkey, OWNER_PUBKEY);
-});
-
-test("sendContactRequestAction: невалидный ключ -> throw, ничего не публикуется", async () => {
-	let publishCount = 0;
-	const publish = async () => {
-		publishCount++;
-		return { ok: true };
-	};
-	await assert.rejects(() => sendContactRequestAction(OWNER_PUBKEY, PRIV_KEY, "мусор", "привет", publish));
-	assert.equal(publishCount, 0);
-});
-
-// AC-16 (найдено пользователем прямым осмотром IndexedDB) — приветствие запроса в
-// контакты содержательный текст, та же категория, что contentText/greeting-поля
-// в других таблицах этого тира.
-test("AC-16: contactRequests хранится зашифрованным — сырой дамп не содержит greeting", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "секретное приветствие", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	const raw = await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]);
-	assert.equal(raw.senderPubkey, BOB_REAL_PUB);
-	assert.equal("greeting" in raw, false);
-	assert.ok(raw.nonce instanceof Uint8Array);
-	assert.ok(raw.ciphertext instanceof Uint8Array);
-
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-	assert.equal(contactRequests.value[0].greeting, "секретное приветствие");
-});
-
-test("refreshContactRequests: owner-scoped, читает contactRequests из БД", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({
-		owner: OWNER_PUBKEY,
-		senderPubkey: BOB_REAL_PUB,
-		greeting: "здравствуйте",
-		createdAt: 100,
-	}, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	const otherOwnerPub = "c".repeat(64);
-	await db.table("contactRequests").put(toEncryptedRow({ owner: otherOwnerPub, senderPubkey: BOB_REAL_PUB, greeting: "x", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-	assert.equal(contactRequests.value.length, 1);
-	assert.equal(contactRequests.value[0].senderPubkey, BOB_REAL_PUB);
-});
-
-test("acceptContactRequestAction: добавляет в контакты (взаимно) и удаляет запись", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, okPublish);
-
-	assert.deepEqual(contacts.value, [BOB_REAL_PUB]);
-	assert.equal(contactRequests.value.length, 0);
-	assert.equal(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), undefined);
-});
-
-test("acceptContactRequestAction (этап 34): дополнительно отправляет отправителю gift-wrap CONTACT_ACCEPTED_KIND — без него 'запрос принят' необнаружим", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-
-	const published = [];
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, async (event) => {
-		published.push(event);
-		return { ok: true };
-	});
-
-	const giftWrap = published.find((e) => e.kind === 1059);
-	assert.ok(giftWrap, "должен быть отправлен gift-wrap отправителю запроса");
-	const rumor = nip59Unwrap(giftWrap, BOB_REAL_PRIV);
-	assert.equal(rumor.kind, CONTACT_ACCEPTED_KIND);
-	assert.equal(rumor.pubkey, OWNER_PUBKEY, "Боб узнаёт, что именно этот владелец принял его запрос");
-});
-
-test("acceptContactRequestAction: сбой публикации уведомления НЕ мешает основному действию (добавлению в контакты)", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-
-	let callCount = 0;
-	await acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, async () => {
-		callCount += 1;
-		if (callCount === 1) return { ok: true }; // addContactAction — обязан пройти
-		throw new Error("сеть недоступна"); // gift-wrap уведомление — best-effort, ошибка проглатывается
-	});
-
-	assert.deepEqual(contacts.value, [BOB_REAL_PUB], "контакт добавлен, несмотря на сбой уведомления");
-});
-
-test("rejectContactRequestAction: блокирует отправителя и удаляет запись", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-
-	await rejectContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, okPublish);
-
-	assert.deepEqual(blockedContacts.value, [BOB_REAL_PUB]);
-	assert.equal(contactRequests.value.length, 0);
-});
-
-test("acceptContactRequestAction: сбой публикации -> throw, запись НЕ удаляется", async () => {
-	await db.table("contactRequests").put(toEncryptedRow({ owner: OWNER_PUBKEY, senderPubkey: BOB_REAL_PUB, greeting: "hi", createdAt: 1 }, CONTACT_REQUESTS_PLAINTEXT_FIELDS, DB_KEY));
-	await refreshContactRequests(OWNER_PUBKEY, DB_KEY);
-
-	await assert.rejects(() => acceptContactRequestAction(OWNER_PUBKEY, PRIV_KEY, DB_KEY, BOB_REAL_PUB, failPublish));
-	assert.ok(await db.table("contactRequests").get([OWNER_PUBKEY, BOB_REAL_PUB]), "запись должна остаться при сбое");
-});
-
 test("refreshProfiles: перезаписывает УЖЕ закэшированный профиль свежими данными (найденный баг — био не обновлялось)", async () => {
-	profiles.value = { [ALICE_PK]: { name: "Алиса", about: "старое био" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", about: "старое био" } };
 	const fetchStub = async (pubkeys) => {
-		assert.deepEqual(pubkeys, [ALICE_PK], "refreshProfiles НЕ должен исключать уже закэшированные из запроса");
-		return new Map([[ALICE_PK, { name: "Алиса", about: "новое био" }]]);
+		assert.deepEqual(pubkeys, [ALICE_STUB_PK], "refreshProfiles НЕ должен исключать уже закэшированные из запроса");
+		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "новое био" }]]);
 	};
-	await refreshProfiles([ALICE_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_PK], { name: "Алиса", about: "новое био" });
+	await refreshProfiles([ALICE_STUB_PK], fetchStub);
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "новое био" });
 });
 
 test("refreshProfiles: пустой список -> не вызывает fetch", async () => {
@@ -408,7 +412,7 @@ test("refreshProfiles: пустой список -> не вызывает fetch"
 });
 
 test("refreshProfiles: контакт больше не найден -> обновляет на null (не оставляет устаревшую запись)", async () => {
-	profiles.value = { [ALICE_PK]: { name: "Алиса" } };
-	await refreshProfiles([ALICE_PK], async () => new Map());
-	assert.equal(profiles.value[ALICE_PK], null);
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
+	await refreshProfiles([ALICE_STUB_PK], async () => new Map());
+	assert.equal(profiles.value[ALICE_STUB_PK], null);
 });

@@ -225,7 +225,12 @@ test("I2 (регресс, runtime): CONTACT + входящий REMOTE_REQUEST (�
 
 	const state = runtime.getPeerState(BOB_PUBKEY);
 	assert.equal(state.name, "CONTACT", "уже принятый контакт не должен снова попасть во входящие — это и есть найденный пользователем баг");
-	assert.equal(journal.length, 0, "USER_ACCEPT (сторона получателя) не порождает LOG_JOURNAL по дизайну — и уж точно не должен появиться новый после проигнорированного REMOTE_REQUEST");
+	assert.equal(
+		journal.length,
+		1,
+		"единственная запись — от ПЕРВОГО REMOTE_REQUEST (категория newRequest); USER_ACCEPT не порождает LOG_JOURNAL по дизайну, а второй (проигнорированный I2) REMOTE_REQUEST — тем более",
+	);
+	assert.equal(journal[0].category, "newRequest");
 });
 
 // --- I3, crossed-requests: LOG_JOURNAL должен реально дойти до onJournal ---

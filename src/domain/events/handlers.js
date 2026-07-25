@@ -1,5 +1,4 @@
 import { db } from '../../core/store/database.js';
-import { parseContactListEvent, parseMuteListEvent } from '../contacts/contacts.js';
 import { parseGroupEvent } from '../contacts/groups.js';
 import { sign } from '../../core/crypto/sign.js';
 import { getPublicKey } from '../../core/crypto/keys.js';
@@ -11,22 +10,6 @@ import { rebuildCache } from '../auth/engine.js';
 import { lwwWinner, pickLatest } from '../../core/sync/lww.js';
 import { toEncryptedRow } from '../../core/store/encrypted-table.js';
 import { GROUPS_PLAINTEXT_FIELDS } from '../../core/store/table-fields.js';
-
-export async function foldContactList(event) {
-  const pubkeys = parseContactListEvent(event);
-  await db.transaction('rw', db.contacts, async () => {
-    await db.contacts.where('owner').equals(event.pubkey).delete();
-    await db.contacts.bulkAdd(pubkeys.map(pk => ({ owner: event.pubkey, pubkey: pk })));
-  });
-}
-
-export async function foldMuteList(event) {
-  const pubkeys = parseMuteListEvent(event);
-  await db.transaction('rw', db.blockedContacts, async () => {
-    await db.blockedContacts.where('owner').equals(event.pubkey).delete();
-    await db.blockedContacts.bulkAdd(pubkeys.map(pk => ({ owner: event.pubkey, pubkey: pk })));
-  });
-}
 
 export function buildPermissionEvent(privKey, { subject, resource, allowMask = 0, denyMask = 0, lamportTs }) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
@@ -84,17 +67,12 @@ export function buildAddressableDeletionEvent(privKey, kind, dTag) {
   return sign(eventTemplate, privKey);
 }
 
-export async function rebuildContactsAndGroups(ownerPubkey, privKey, dbKey) {
-  const contactEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 3]).toArray();
-  if (contactEvents.length > 0) {
-    await foldContactList(pickLatest(contactEvents));
-  }
-
-  const muteEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 10000]).toArray();
-  if (muteEvents.length > 0) {
-    await foldMuteList(pickLatest(muteEvents));
-  }
-
+// Этап 49 — переименовано из rebuildContactsAndGroups: contacts/mute (kind
+// 3/10000) больше не folds-ятся сюда напрямую (contacts/blockedContacts —
+// legacy-таблицы, вытеснены contactRelationships), реконсиляция теперь идёт
+// через reconcileContactsFromEventLog (ui/signals/contacts.js) на contact-fsm.js
+// reconcileList, не через delete-all+bulkAdd. Эта функция — только группы (30050).
+export async function rebuildGroups(ownerPubkey, privKey, dbKey) {
   const groupEvents = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 30050]).toArray();
   const latestByDTag = new Map();
   for (const ev of groupEvents) {

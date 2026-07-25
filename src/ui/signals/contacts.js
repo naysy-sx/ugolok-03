@@ -1,39 +1,178 @@
 import { signal } from "@preact/signals";
 import { db } from "../../core/store/database.js";
 import { decode as nip19Decode } from "nostr-tools/nip19";
-import { buildContactListEvent, buildMuteListEvent, addContact, removeContact } from "../../domain/contacts/contacts.js";
+import { parseContactListEvent, parseMuteListEvent } from "../../domain/contacts/contacts.js";
 import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../domain/contacts/groups.js";
-import { foldContactList, foldMuteList, foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
-import { buildContactRequestRumor, buildContactAcceptedRumor } from "../../domain/contacts/requests.js";
-import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
+import { foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
+import { createContactRuntime } from "../../domain/contacts/contact-runtime.js";
+import { pickLatest } from "../../core/sync/lww.js";
 import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { loadUiSettings } from "../../domain/settings/ui-settings.js";
+import { notify } from "../../domain/notifications/notifier.js";
+import { navigateFromNotification } from "./notification-nav.js";
 
+// Этап 49 — contacts/blockedContacts остаются pubkey[] (форма, на которую уже
+// завязан остальной UI — discovery.jsx/settings.jsx/call.js), outgoingRequests/
+// incomingRequests/rejectedByMe — полные peerState[] (нужны greeting/sentAt/
+// resolvedAt для отображения, разделы новые или изменившие форму данных).
 export const contacts = signal([]);
 export const blockedContacts = signal([]);
+export const outgoingRequests = signal([]); // [{peerPubkey, name:"OUTGOING_PENDING", sentAt, resolvedAt}]
+export const incomingRequests = signal([]); // [{peerPubkey, name:"INCOMING_PENDING", greeting, resolvedAt}] — было contactRequests
+export const rejectedByMe = signal([]); // [{peerPubkey, name:"REJECTED_BY_ME", resolvedAt}] — НОВЫЙ раздел (CONTACTS-FSM.md)
 export const groups = signal([]);
 export const profiles = signal({}); // pubkey -> { name?, about?, picture? } | null (запрошен, но не найден)
-export const contactRequests = signal([]); // [{owner, senderPubkey, greeting, createdAt}]
 
-export async function refreshContacts(ownerPubkey) {
-	const rows = await db.table("contacts").where("owner").equals(ownerPubkey).toArray();
-	contacts.value = rows.map((r) => r.pubkey);
+let runtime = null;
+
+function recomputeContactSignals() {
+	if (!runtime) return;
+	contacts.value = runtime.listPeersByState("CONTACT").map((s) => s.peerPubkey);
+	blockedContacts.value = runtime.listPeersByState("BLOCKED").map((s) => s.peerPubkey);
+	outgoingRequests.value = runtime.listPeersByState("OUTGOING_PENDING");
+	incomingRequests.value = runtime.listPeersByState("INCOMING_PENDING");
+	rejectedByMe.value = runtime.listPeersByState("REJECTED_BY_ME");
 }
 
-export async function refreshBlockedContacts(ownerPubkey) {
-	const rows = await db.table("blockedContacts").where("owner").equals(ownerPubkey).toArray();
-	blockedContacts.value = rows.map((r) => r.pubkey);
+function requireRuntime() {
+	if (!runtime) throw new Error("contact-runtime не настроен — вызовите configureContactRuntime() после ensureConnected()");
+	return runtime;
 }
 
-export async function refreshGroups(ownerPubkey, dbKey) {
-	const groupRowsRaw = await db.table("groups").where("owner").equals(ownerPubkey).toArray();
-	const groupRows = groupRowsRaw.map((g) => fromEncryptedRow(g, dbKey));
-	const result = [];
-	for (const g of groupRows) {
-		const members = await db.table("groupMembers").where("groupId").equals(g.id).toArray();
-		result.push({ id: g.id, name: g.name, memberPubkeys: members.map((m) => m.pubkey) });
+let ownerPubkeyRef = null;
+let dbKeyRef = null;
+
+function usernameFor(pubkeyHex) {
+	const name = profiles.value[pubkeyHex]?.name?.trim();
+	return name || `${pubkeyHex.slice(0, 8)}…`;
+}
+
+// LOG_JOURNAL -> notify() (мост к будущей фиче "Журнал", этап 49 приложение Б —
+// сама персистентная запись появится отдельной задачей; пока это заменяет
+// три инлайновых notify()-вызова, которые раньше жили прямо в transport.js).
+// "newRequest"/"accepted" — существующие настраиваемые категории (settings.jsx);
+// "rejected"/"crossed" — новые по смыслу (раньше отказ вообще не сигнализировался
+// отправителю), сознательно повешены на тот же тумблер "accepted" — оба это
+// "моя исходящая заявка решилась", отдельный тумблер не заводим ради двух редких
+// случаев. Best-effort (тот же принцип, что notifyIncomingCall, call.js этап 48).
+async function notifyContactJournalEntry(entry) {
+	try {
+		const settings = await loadUiSettings(ownerPubkeyRef, dbKeyRef);
+		const title = entry.category === "newRequest" ? `Новый запрос в контакты от ${usernameFor(entry.peer)}` : `${usernameFor(entry.peer)} ${entry.message}`;
+		const subcategory = entry.category === "newRequest" ? "newRequests" : "accepted";
+		notify(settings, "contacts", subcategory, {
+			title,
+			body: "",
+			onClick: () => navigateFromNotification({ screen: "contacts" }),
+		});
+	} catch {
+		// нет настроек/сети — состояние уже применено (peerState/EMIT), уведомление необязательно
 	}
-	groups.value = result;
+}
+
+// Вызывается ОДИН раз из transport.js's connect() (тот же принцип, что
+// configureCallRuntime, этап 48) — publish уже готов на этот момент. load()
+// внутри себя мигрирует legacy-таблицы (contacts/blockedContacts/contactRequests)
+// и читает contactRelationships — см. contact-runtime.js.
+export async function configureContactRuntime({ ownerPubkey, privKey, dbKey, publish }) {
+	ownerPubkeyRef = ownerPubkey;
+	dbKeyRef = dbKey;
+	runtime = createContactRuntime({
+		ownerPubkey,
+		privKey,
+		dbKey,
+		publish,
+		onStateChange: () => recomputeContactSignals(),
+		onJournal: (entry) => {
+			notifyContactJournalEntry(entry);
+		},
+	});
+	await runtime.load();
+	recomputeContactSignals();
+}
+
+// transport.js's giftWrapSubscriber маршрутизирует сюда входящие contact-request
+// rumor'ы (kind 3001/3004/3005/3006) вместо прямой обработки в самом transport.js.
+export async function handleIncomingContactRumor(rumor) {
+	if (!runtime) return;
+	await runtime.handleIncomingRumor(rumor);
+}
+
+// Реконсиляция kind-3/kind-10000 (замена foldContactList/foldMuteList — этап 49
+// §1.6, CONTACTS-FSM.md) — вызывается из transport.js на тех же точках, что
+// раньше rebuildContactsAndGroups: подключение и каждый onEvent инкрементального
+// sync. pickLatest — та же LWW-семантика, что и раньше (см. lww.js).
+export async function reconcileContactsFromEventLog(ownerPubkey) {
+	if (!runtime) return;
+	const contactEvents = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, 3]).toArray();
+	if (contactEvents.length > 0) {
+		const winner = pickLatest(contactEvents);
+		await runtime.reconcileContactList(new Set(parseContactListEvent(winner)), winner.created_at);
+	}
+	const muteEvents = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, 10000]).toArray();
+	if (muteEvents.length > 0) {
+		const winner = pickLatest(muteEvents);
+		await runtime.reconcileMuteList(new Set(parseMuteListEvent(winner)), winner.created_at);
+	}
+}
+
+export function decodePubkeyInput(input) {
+	const trimmed = input.trim();
+	if (/^[0-9a-f]{64}$/i.test(trimmed)) return trimmed.toLowerCase();
+	const decoded = nip19Decode(trimmed);
+	if (decoded.type !== "npub") {
+		throw new Error("не похоже на npub или hex-ключ: " + decoded.type);
+	}
+	return decoded.data;
+}
+
+// Обратная совместимость с существующими вызывающими (discovery.jsx/settings.jsx
+// зовут refreshContacts()/refreshAll() ПОСЛЕ ensureConnected() — к этому моменту
+// runtime уже сконфигурирован внутри connect(), поэтому это просто пересчёт
+// сигналов из уже загруженной Map, без обращения к Dexie).
+export async function refreshContacts() {
+	recomputeContactSignals();
+}
+
+export async function refreshAll() {
+	recomputeContactSignals();
+}
+
+// --- Единая точка отправки заявки (этап 49 — полная унификация: раньше
+// "Добавить контакт" (эта форма) и "Обзор" (discovery.js) были ДВУМЯ разными
+// путями с разными побочными эффектами — источник обеих багов пользователя
+// (дублирование, заявки не синхронизировались). greeting="" для потока "Обзор".
+export async function sendContactRequestAction(peerPubkeyOrNpub, greeting = "") {
+	const peer = decodePubkeyInput(peerPubkeyOrNpub);
+	await requireRuntime().sendRequest(peer, greeting);
+}
+
+export async function acceptContactRequestAction(peer) {
+	await requireRuntime().accept(peer);
+}
+
+export async function rejectContactRequestAction(peer) {
+	await requireRuntime().reject(peer);
+}
+
+export async function cancelContactRequestAction(peer) {
+	await requireRuntime().cancel(peer);
+}
+
+export async function blockContactAction(peerPubkeyOrNpub) {
+	const peer = decodePubkeyInput(peerPubkeyOrNpub);
+	await requireRuntime().block(peer);
+}
+
+export async function unblockContactAction(peerPubkeyOrNpub) {
+	const peer = decodePubkeyInput(peerPubkeyOrNpub);
+	await requireRuntime().unblock(peer);
+}
+
+export async function removeContactAction(peerPubkeyOrNpub) {
+	const peer = decodePubkeyInput(peerPubkeyOrNpub);
+	await requireRuntime().removeContact(peer);
 }
 
 // F-CT-04 — запрос профиля контакта. fetchProfilesFn инъецируется (по образцу publish) —
@@ -64,18 +203,17 @@ export async function refreshProfiles(pubkeys, fetchProfilesFn) {
 	profiles.value = next;
 }
 
-export async function refreshAll(ownerPubkey, dbKey) {
-	await Promise.all([refreshContacts(ownerPubkey), refreshBlockedContacts(ownerPubkey), refreshGroups(ownerPubkey, dbKey)]);
-}
+// --- Группы (не затронуто этапом 49 — отдельная структура, kind 30050) ---
 
-export function decodePubkeyInput(input) {
-	const trimmed = input.trim();
-	if (/^[0-9a-f]{64}$/i.test(trimmed)) return trimmed.toLowerCase();
-	const decoded = nip19Decode(trimmed);
-	if (decoded.type !== "npub") {
-		throw new Error("не похоже на npub или hex-ключ: " + decoded.type);
+export async function refreshGroups(ownerPubkey, dbKey) {
+	const groupRowsRaw = await db.table("groups").where("owner").equals(ownerPubkey).toArray();
+	const groupRows = groupRowsRaw.map((g) => fromEncryptedRow(g, dbKey));
+	const result = [];
+	for (const g of groupRows) {
+		const members = await db.table("groupMembers").where("groupId").equals(g.id).toArray();
+		result.push({ id: g.id, name: g.name, memberPubkeys: members.map((m) => m.pubkey) });
 	}
-	return decoded.data;
+	groups.value = result;
 }
 
 async function requirePublishOk(publish, event) {
@@ -85,14 +223,10 @@ async function requirePublishOk(publish, event) {
 	}
 }
 
-// Монотонный created_at по kind — найдено адверсарной проверкой этапа 23-довеска:
-// два kind-3/kind-10000/kind-30050 события в ТУ ЖЕ wall-clock секунду (частые
-// последовательные действия — блокировка сразу после разблокировки и т.п.)
-// тай-брейкаются lww.js по id (AC-18, TECH.md §17.5 — контракт этапа 4, менять
-// нельзя), который никак не связан с реальным порядком публикации. Из-за этого
-// rebuildContactsAndGroups (полный пересчёт из журнала) мог "воскресить" более
-// старую версию. Устраняем коллизию В ИСТОЧНИКЕ — created_at строго не убывает
-// для последовательных публикаций одного kind в рамках этой вкладки/сессии.
+// Монотонный created_at по kind (только группы теперь — kind-3/kind-10000 обзавелись
+// СВОИМ монотонным счётчиком внутри contact-runtime.js). См. обоснование там же —
+// тот же класс коллизии (lww.js тай-брейкает по id, не связанному с реальным
+// порядком публикации, при совпадении created_at в ту же wall-clock секунду).
 const lastCreatedAtByKind = new Map();
 function nextCreatedAt(kind) {
 	const now = Math.floor(Date.now() / 1000);
@@ -101,60 +235,8 @@ function nextCreatedAt(kind) {
 	return value;
 }
 
-export async function addContactAction(ownerPubkey, privKey, npubOrHex, publish) {
-	const pubkeyToAdd = decodePubkeyInput(npubOrHex);
-	const updated = addContact(contacts.value, pubkeyToAdd);
-	const event = buildContactListEvent(privKey, updated, nextCreatedAt(3));
-	await requirePublishOk(publish, event);
-	await foldContactList(event);
-	await refreshContacts(ownerPubkey);
-}
-
-export async function removeContactAction(ownerPubkey, privKey, pubkeyToRemove, publish) {
-	const updated = removeContact(contacts.value, pubkeyToRemove);
-	const event = buildContactListEvent(privKey, updated, nextCreatedAt(3));
-	await requirePublishOk(publish, event);
-	await foldContactList(event);
-	await refreshContacts(ownerPubkey);
-}
-
-// Блокировка = заглушить (kind 10000) И отписаться (kind 3) одновременно —
-// по обратной связи пользователя: контакт либо "реальный", либо "заблокированный",
-// две категории взаимоисключающие, не показываются одновременно в UI.
-// Разблокировка (ниже) намеренно НЕ возвращает в контакты автоматически —
-// повторное добавление остаётся отдельным явным действием пользователя.
-export async function blockContactAction(ownerPubkey, privKey, npubOrHex, publish) {
-	const pubkeyToBlock = decodePubkeyInput(npubOrHex);
-
-	const updatedBlocked = addContact(blockedContacts.value, pubkeyToBlock);
-	const blockEvent = buildMuteListEvent(privKey, updatedBlocked, nextCreatedAt(10000));
-	await requirePublishOk(publish, blockEvent);
-	await foldMuteList(blockEvent);
-	await refreshBlockedContacts(ownerPubkey);
-
-	if (contacts.value.includes(pubkeyToBlock)) {
-		const updatedContacts = removeContact(contacts.value, pubkeyToBlock);
-		const contactsEvent = buildContactListEvent(privKey, updatedContacts, nextCreatedAt(3));
-		await requirePublishOk(publish, contactsEvent);
-		await foldContactList(contactsEvent);
-		await refreshContacts(ownerPubkey);
-	}
-}
-
-export async function unblockContactAction(ownerPubkey, privKey, npubOrHex, publish) {
-	const pubkeyToUnblock = decodePubkeyInput(npubOrHex);
-	const updated = removeContact(blockedContacts.value, pubkeyToUnblock);
-	const event = buildMuteListEvent(privKey, updated, nextCreatedAt(10000));
-	await requirePublishOk(publish, event);
-	await foldMuteList(event);
-	await refreshBlockedContacts(ownerPubkey);
-}
-
 export async function createGroupAction(ownerPubkey, privKey, dbKey, name, publish) {
 	const groupId = crypto.randomUUID();
-	// новая группа — свежий UUID, коллизия created_at с самой собой невозможна,
-	// но регистрируем в трекере сразу, чтобы последующие правки ЭТОЙ группы
-	// (переименование/добавление участника) корректно шли по возрастанию
 	const event = buildGroupEvent(privKey, { groupId, name, memberPubkeys: [] }, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey, dbKey);
@@ -204,41 +286,4 @@ export async function deleteGroupAction(ownerPubkey, privKey, dbKey, groupId, pu
 		await db.table("groupMembers").where("groupId").equals(groupId).delete();
 	});
 	await refreshGroups(ownerPubkey, dbKey);
-}
-
-export async function refreshContactRequests(ownerPubkey, dbKey) {
-	const raw = await db.table("contactRequests").where("owner").equals(ownerPubkey).toArray();
-	contactRequests.value = raw.map((r) => fromEncryptedRow(r, dbKey));
-}
-
-// Находка 1 (CONTRACTS.md, этап 27): тот, кто вводит чужой ключ в форму "Добавить
-// контакт", инициирует — сразу видит адресата в СВОИХ контактах (addContactAction,
-// как раньше) И отправляет gift-wrapped contact-request (kind 3001), чтобы адресат
-// узнал и мог решить (Принять/Отклонить/Игнорировать) взаимно.
-export async function sendContactRequestAction(ownerPubkey, privKey, npubOrHex, greeting, publish) {
-	const targetPubkey = decodePubkeyInput(npubOrHex);
-	await addContactAction(ownerPubkey, privKey, npubOrHex, publish);
-	const rumor = buildContactRequestRumor(greeting);
-	const giftWrap = nip59Wrap(rumor, privKey, targetPubkey);
-	await requirePublishOk(publish, giftWrap);
-}
-
-export async function acceptContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish) {
-	await addContactAction(ownerPubkey, privKey, senderPubkey, publish);
-	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
-	await refreshContactRequests(ownerPubkey, dbKey);
-	// Этап 34 — уведомление "запрос принят" (пункт настроек уведомлений) отправителю.
-	// Best-effort: основное действие (добавление в контакты) уже выполнено выше и не
-	// должно зависеть от доставки этого сигнала.
-	try {
-		await publish(nip59Wrap(buildContactAcceptedRumor(), privKey, senderPubkey));
-	} catch {
-		// сеть недоступна — переживёт до следующего onEvent контакта, не критично
-	}
-}
-
-export async function rejectContactRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, publish) {
-	await blockContactAction(ownerPubkey, privKey, senderPubkey, publish);
-	await db.table("contactRequests").delete([ownerPubkey, senderPubkey]);
-	await refreshContactRequests(ownerPubkey, dbKey);
 }
