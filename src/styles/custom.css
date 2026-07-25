@@ -1241,3 +1241,113 @@ button:has(> .icon),
 		animation: none;
 	}
 }
+
+/* ================================================================== *
+ *  Экран каналов (channels.jsx) — блоки вместо табов, "Доступные" в  *
+ *  постоянном aside справа (пользователь, item 8).                    *
+ * ================================================================== */
+
+.app-layout .channels-layout {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-l);
+}
+@media (min-width: 60em) {
+	.app-layout .channels-layout {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+	.app-layout .channels-main {
+		flex: 1;
+		min-width: 0;
+	}
+	.app-layout .channels-aside {
+		flex: 0 0 20rem;
+		position: sticky;
+		inset-block-start: 0;
+	}
+}
+
+.app-layout .channels-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-l);
+}
+.app-layout .channels-block h2 {
+	font-size: var(--step-1);
+	margin-block-end: var(--space-s);
+}
+
+/* "Доступные" — визуально отдельная панель (пользователь: "всегда видно"),
+   не просто ещё один блок в общем потоке. */
+.app-layout .channels-aside {
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: var(--space-m);
+}
+.app-layout .channels-aside h2 {
+	font-size: var(--step-0);
+	margin-block-start: 0;
+	margin-block-end: var(--space-s);
+}
+
+.app-layout .channel-list {
+	list-style: none;
+	padding-inline-start: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.app-layout .channel-card-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	padding-block: var(--space-s);
+	border-block-end: var(--border-width) solid var(--border);
+}
+.app-layout .channel-card-item:last-child {
+	border-block-end: none;
+}
+.app-layout .channel-card-link {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	flex: 1;
+	min-width: 0;
+	background: none;
+	border: none;
+	padding: 0;
+	text-align: left;
+	font: inherit;
+	color: inherit;
+}
+.app-layout .channel-card-link small {
+	display: block;
+	color: var(--muted);
+}
+.app-layout .channel-card-updated {
+	font-size: var(--step--2);
+}
+
+/* Квадратный аватар канала (тот же язык, что аватар в aside, этап 51-
+   довесок-2) — раньше это была ВСЕГДА одна и та же эмодзи-заглушка 🖼️,
+   реальная картинка не расшифровывалась и не показывалась вовсе. */
+.app-layout .channel-avatar-thumb {
+	flex: none;
+	width: 2.75rem;
+	height: 2.75rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+}
+.app-layout .channel-avatar-thumb-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}

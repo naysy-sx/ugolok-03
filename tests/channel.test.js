@@ -296,6 +296,32 @@ test("editChannel: republish kind-30060 (тот же d-tag), локальная 
 	assert.equal(owned[0].description, "новое описание");
 });
 
+test("editChannel: обновляет updatedAt владельца (для \"даты последнего обновления\" в списке каналов)", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const before = (await listOwnedChannels(ALICE_PUB, DB_KEY))[0];
+
+	await new Promise((resolve) => setTimeout(resolve, 1100)); // updatedAt — секундная точность (Unix ts)
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Новое имя" }, capturingPublish([]));
+
+	const after = (await listOwnedChannels(ALICE_PUB, DB_KEY))[0];
+	assert.ok(after.updatedAt > before.updatedAt, "updatedAt обязан увеличиться после редактирования");
+	assert.equal(before.updatedAt, before.createdAt, "сразу после создания updatedAt === createdAt");
+});
+
+test("editChannel: подписчик получает ТУ ЖЕ updatedAt через event.created_at (не свой локальный Date.now())", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const published = [];
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "x" }, capturingPublish(published));
+	const metaEvent = published.find((e) => e.kind === 30060);
+
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
+
+	const owned = (await listOwnedChannels(ALICE_PUB, DB_KEY))[0];
+	const available = (await listAvailableChannels(BOB_PUB, DB_KEY))[0];
+	assert.equal(available.updatedAt, owned.updatedAt);
+	assert.equal(available.updatedAt, metaEvent.created_at);
+});
+
 test("editChannel: частичное обновление — непереданные поля СОХРАНЯЮТ текущее значение", async () => {
 	const { channelId } = await setupOwnedChannelAndBobSubscriber();
 	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Только имя поменялось" }, capturingPublish([]));

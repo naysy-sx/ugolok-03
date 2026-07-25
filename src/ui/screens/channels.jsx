@@ -12,58 +12,83 @@ import {
 } from "../../domain/content/channel.js";
 import { validateAttachment } from "../../domain/attachments/validation.js";
 import { uploadAttachment } from "../../domain/attachments/upload.js";
+import { getOrDownloadAttachment } from "../../domain/attachments/cache.js";
+import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { activeChannelId, openChannel } from "../signals/channel-nav.js";
 import ChannelDetail from "./channel.jsx";
 import Screen from "../components/screen.jsx";
+import IconPlus from "../icons/plus.jsx";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
-function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
+function formatUpdatedDate(unixSeconds) {
+	if (typeof unixSeconds !== "number") return null;
+	return new Date(unixSeconds * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+// Найдено пользователем: "аватары каналов в списке каналов не отображаются" —
+// channel.avatar это ЗАШИФРОВАННЫЙ дескриптор вложения (Tier 1, тот же
+// {sha256, blossomUrl, encryptionKey, ...}, что вложения в чате), а не готовый
+// URL — раньше код просто проверял channel.avatar ? 🖼️-эмодзи вместо реальной
+// расшифровки. Тот же приём, что ImageAttachment (attachment-view.jsx), только
+// без модалки — это маленькая иконка списка, не полноэкранный просмотр.
+function ChannelAvatarThumb({ channel }) {
+	const ownerPubkey = currentUser.value.id;
+	const dbKey = dbKeySig.value;
+	const [url, setUrl] = useState(() => (channel.avatar ? (getMemoryCachedUrl(channel.avatar.sha256) ?? null) : null));
+
+	useEffect(() => {
+		if (!channel.avatar) {
+			setUrl(null);
+			return;
+		}
+		const memUrl = getMemoryCachedUrl(channel.avatar.sha256);
+		if (memUrl) {
+			setUrl(memUrl);
+			return;
+		}
+		let cancelled = false;
+		getOrDownloadAttachment(ownerPubkey, dbKey, channel.avatar)
+			.then((bytes) => {
+				if (!cancelled) setUrl(putMemoryCachedAttachment(channel.avatar.sha256, bytes, channel.avatar.mime));
+			})
+			.catch(() => {}); // тихо — остаётся буква-заглушка, не мешаем списку ошибкой
+		return () => {
+			cancelled = true;
+		};
+	}, [channel.avatar?.sha256]);
+
+	if (url) {
+		return <img src={url} alt="" class="channel-avatar-thumb" />;
+	}
 	return (
-		<li style={{ paddingBlock: "var(--space-s)", borderBlockEnd: "var(--border-width) solid var(--border)" }}>
-			<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-				<button
-					type="button"
-					onClick={() => onOpen(channel.id)}
-					class="cluster"
-					style={{ alignItems: "center", background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }}
-				>
-					{channel.avatar ? (
-						<span aria-hidden="true" style={{ fontSize: "1.5rem" }}>
-							🖼️
-						</span>
-					) : (
-						<div
-							aria-hidden="true"
-							style={{
-								width: "2rem",
-								height: "2rem",
-								borderRadius: "50%",
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								background: "var(--surface)",
-								border: "var(--border-width) solid var(--border)",
-							}}
-						>
-							{(channel.name || "?").trim().charAt(0).toUpperCase()}
-						</div>
-					)}
-					<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<strong>{channel.name || "(без названия)"}</strong>
-						{channel.description && <small style={{ color: "var(--muted)" }}>{channel.description}</small>}
-					</span>
+		<div class="channel-avatar-thumb channel-avatar-thumb-fallback" aria-hidden="true">
+			{(channel.name || "?").trim().charAt(0).toUpperCase()}
+		</div>
+	);
+}
+
+function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
+	const updated = formatUpdatedDate(channel.updatedAt);
+	return (
+		<li class="channel-card-item">
+			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link">
+				<ChannelAvatarThumb channel={channel} />
+				<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<strong>{channel.name || "(без названия)"}</strong>
+					{channel.description && <small>{channel.description}</small>}
+					{updated && <small class="channel-card-updated">Обновлено {updated}</small>}
+				</span>
+			</button>
+			{showSubscribe && (
+				<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
+					Подписаться
 				</button>
-				{showSubscribe && (
-					<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
-						Подписаться
-					</button>
-				)}
-			</div>
+			)}
 		</li>
 	);
 }
@@ -73,7 +98,7 @@ function ChannelList({ channels, emptyText, showSubscribe, onSubscribe, onOpen, 
 		return <p style={{ color: "var(--muted)" }}>{emptyText}</p>;
 	}
 	return (
-		<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+		<ul role="list" class="channel-list">
 			{channels.map((channel) => (
 				<ChannelCard key={channel.id} channel={channel} showSubscribe={showSubscribe} onSubscribe={onSubscribe} onOpen={onOpen} busy={busy} />
 			))}
@@ -252,7 +277,6 @@ function ChannelsList() {
 	const privKey = privKeySig.value;
 	const dbKey = dbKeySig.value;
 
-	const [tab, setTab] = useState("owned");
 	const [owned, setOwned] = useState([]);
 	const [subscribed, setSubscribed] = useState([]);
 	const [available, setAvailable] = useState([]);
@@ -289,56 +313,51 @@ function ChannelsList() {
 	}
 
 	return (
-		<Screen title="Каналы">
+		<Screen
+			title="Каналы"
+			actions={
+				!showCreateForm && (
+					<button type="button" onClick={() => setShowCreateForm(true)}>
+						<IconPlus /> Создать канал
+					</button>
+				)
+			}
+		>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 
-			<div class="cluster" role="tablist" aria-label="Каналы">
-				<button type="button" role="tab" aria-selected={tab === "owned"} onClick={() => setTab("owned")}>
-					Мои каналы ({owned.length})
-				</button>
-				<button type="button" role="tab" aria-selected={tab === "subscribed"} onClick={() => setTab("subscribed")}>
-					Подписки ({subscribed.length})
-				</button>
-				<button type="button" role="tab" aria-selected={tab === "available"} onClick={() => setTab("available")}>
-					Доступные ({available.length})
-				</button>
-			</div>
-
-			{tab === "owned" && (
-				<section class="flow" role="tabpanel" style={{ "--flow-space": "var(--space-s)" }}>
-					{!showCreateForm && (
-						<button type="button" onClick={() => setShowCreateForm(true)}>
-							Создать канал
-						</button>
-					)}
-					{showCreateForm && (
-						<CreateChannelForm
-							ownerPubkey={ownerPubkey}
-							privKey={privKey}
-							dbKey={dbKey}
-							onCreated={() => {
-								setShowCreateForm(false);
-								refreshLists();
-							}}
-							onCancel={() => setShowCreateForm(false)}
-						/>
-					)}
-					<ChannelList channels={owned} emptyText="У вас пока нет каналов." onOpen={openChannel} />
-				</section>
+			{showCreateForm && (
+				<CreateChannelForm
+					ownerPubkey={ownerPubkey}
+					privKey={privKey}
+					dbKey={dbKey}
+					onCreated={() => {
+						setShowCreateForm(false);
+						refreshLists();
+					}}
+					onCancel={() => setShowCreateForm(false)}
+				/>
 			)}
 
-			{tab === "subscribed" && (
-				<section role="tabpanel">
-					<ChannelList channels={subscribed} emptyText="Вы пока ни на что не подписаны." onOpen={openChannel} />
-				</section>
-			)}
-
-			{tab === "available" && (
-				<section role="tabpanel">
+			{/* Пользователь: "Мои каналы"/"Подписки" — не табы, а прямо блоки в
+			    контенте; "Доступные" — в дополнительном aside справа, чтобы всегда
+			    было видно. */}
+			<div class="channels-layout">
+				<div class="channels-main">
+					<section class="channels-block">
+						<h2>Мои каналы ({owned.length})</h2>
+						<ChannelList channels={owned} emptyText="У вас пока нет каналов." onOpen={openChannel} />
+					</section>
+					<section class="channels-block">
+						<h2>Подписки ({subscribed.length})</h2>
+						<ChannelList channels={subscribed} emptyText="Вы пока ни на что не подписаны." onOpen={openChannel} />
+					</section>
+				</div>
+				<aside class="channels-aside" aria-label="Доступные каналы">
+					<h2>Доступные ({available.length})</h2>
 					<ChannelList
 						channels={available}
 						emptyText="Нет доступных каналов."
@@ -347,8 +366,8 @@ function ChannelsList() {
 						onOpen={openChannel}
 						busy={busy}
 					/>
-				</section>
-			)}
+				</aside>
+			</div>
 		</Screen>
 	);
 }

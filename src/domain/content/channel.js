@@ -67,6 +67,7 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 				channelTopic: channelTopicHex,
 				role: "owner",
 				createdAt: Math.floor(Date.now() / 1000),
+				updatedAt: Math.floor(Date.now() / 1000),
 			},
 			CHANNELS_PLAINTEXT_FIELDS,
 			dbKey,
@@ -146,6 +147,7 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 					channelTopic: grant.channelTopic,
 					role: "available",
 					createdAt: Math.floor(Date.now() / 1000),
+					updatedAt: Math.floor(Date.now() / 1000),
 				},
 				CHANNELS_PLAINTEXT_FIELDS,
 				dbKey,
@@ -182,6 +184,10 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 		rules: parsed.rules,
 		avatar: parsed.avatar,
 		allowChatAttachments: parsed.allowChatAttachments ?? true,
+		// event.created_at (не Date.now() читателя) — одна и та же дата
+		// "последнего обновления" у владельца и у ВСЕХ читателей одного
+		// и того же republish, а не момент локальной обработки события.
+		updatedAt: event.created_at,
 	};
 	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
 }
@@ -201,6 +207,10 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 	const existing = fromEncryptedRow(raw, dbKey);
 	if (existing.role !== "owner") throw new Error("редактировать канал может только владелец");
 
+	// Одна и та же метка времени идёт и в подписанное событие (created_at), и
+	// в updatedAt локальной строки владельца — та же величина, что получат
+	// читатели через event.created_at в receiveChannelMetadata (см. выше).
+	const editedAt = Math.floor(Date.now() / 1000);
 	const merged = {
 		...existing,
 		name: name ?? existing.name,
@@ -208,6 +218,7 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 		rules: rules ?? existing.rules,
 		avatar: avatarDescriptor !== undefined ? avatarDescriptor : existing.avatar,
 		allowChatAttachments: allowChatAttachments ?? existing.allowChatAttachments,
+		updatedAt: editedAt,
 	};
 
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
@@ -231,7 +242,7 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 				["d", channelId],
 				["h", existing.channelTopic],
 			],
-			created_at: Math.floor(Date.now() / 1000),
+			created_at: editedAt,
 		},
 		ownerPrivKey,
 	);
