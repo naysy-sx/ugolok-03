@@ -8,10 +8,14 @@ import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
+import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
+import { validateAttachment } from "../../domain/attachments/validation.js";
+import { uploadAttachment } from "../../domain/attachments/upload.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
 import PostCard from "../components/post-card.jsx";
@@ -23,6 +27,130 @@ import Screen from "../components/screen.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
+// Те же лимиты, что CreateChannelForm (channels.jsx) — редактирование обязано
+// подчиняться тем же правилам, что создание.
+const NAME_MAX_LENGTH = 100;
+const DESCRIPTION_MAX_LENGTH = 500;
+const RULES_MAX_LENGTH = 1000;
+const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+
+// Этап 50-довесок-2 (найдено пользователем: канал нельзя было отредактировать/
+// удалить после создания) — та же вкладочная структура, что "Модерация"
+// (isOwner-only), подпись буквально по формулировке пользователя.
+function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRow, onSaved, onDeleted }) {
+	const [name, setName] = useState(channelRow.name || "");
+	const [description, setDescription] = useState(channelRow.description || "");
+	const [rules, setRules] = useState(channelRow.rules || "");
+	const [allowChatAttachments, setAllowChatAttachments] = useState(channelRow.allowChatAttachments ?? true);
+	const [avatarFile, setAvatarFile] = useState(null);
+	const [avatarError, setAvatarError] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+
+	function handleAvatarSelected(e) {
+		const file = e.currentTarget.files?.[0];
+		e.currentTarget.value = "";
+		if (!file) return;
+		setAvatarFile(file);
+		try {
+			validateAttachment({ mime: file.type, size: file.size });
+			setAvatarError("");
+		} catch (err) {
+			setAvatarError(err?.message || String(err));
+		}
+	}
+
+	async function handleSave(e) {
+		e.preventDefault();
+		if (busy || name.length === 0) return;
+		if (avatarFile && avatarError) return;
+		setBusy(true);
+		setError("");
+		try {
+			let avatarDescriptor;
+			if (avatarFile) {
+				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
+				avatarDescriptor = await uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+			}
+			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
+			onSaved();
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function handleDelete() {
+		if (busy) return;
+		if (!window.confirm(`Удалить канал «${channelRow.name}»? Действие необратимо — канал исчезнет у всех подписчиков.`)) return;
+		setBusy(true);
+		setError("");
+		try {
+			await deleteChannel(ownerPubkey, privKey, dbKey, channelId, publish);
+			onDeleted();
+		} catch (err) {
+			setError(err?.message || String(err));
+			setBusy(false);
+		}
+	}
+
+	return (
+		<form class="flow" onSubmit={handleSave} style={{ "--flow-space": "var(--space-s)" }}>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+
+			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<label for="edit-channel-name">Название канала</label>
+				<input id="edit-channel-name" type="text" value={name} maxLength={NAME_MAX_LENGTH} onInput={(e) => setName(e.currentTarget.value)} required />
+			</div>
+
+			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<label for="edit-channel-description">Описание</label>
+				<textarea id="edit-channel-description" value={description} maxLength={DESCRIPTION_MAX_LENGTH} onInput={(e) => setDescription(e.currentTarget.value)} rows={3} />
+			</div>
+
+			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<label for="edit-channel-rules">Правила канала</label>
+				<textarea id="edit-channel-rules" value={rules} maxLength={RULES_MAX_LENGTH} onInput={(e) => setRules(e.currentTarget.value)} rows={4} />
+			</div>
+
+			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<label for="edit-channel-avatar">Сменить аватар</label>
+				<input id="edit-channel-avatar" type="file" accept="image/*" onChange={handleAvatarSelected} />
+				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
+			</div>
+
+			<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
+				<label for="edit-channel-allow-chat-attachments">Разрешить вложения в общем чате канала</label>
+			</div>
+
+			<div class="cluster">
+				<button type="submit" disabled={busy || name.length === 0}>
+					{busy ? "Сохранение…" : "Сохранить"}
+				</button>
+				<button type="button" onClick={onSaved} disabled={busy}>
+					Отмена
+				</button>
+			</div>
+
+			<div style={{ paddingBlockStart: "var(--space-m)", borderBlockStart: "var(--border-width) solid var(--border)" }}>
+				<button
+					type="button"
+					disabled={busy}
+					onClick={handleDelete}
+					style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}
+				>
+					Удалить канал
+				</button>
+			</div>
+		</form>
+	);
+}
 
 function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPublished, onCancel }) {
 	const [text, setText] = useState("");
@@ -497,7 +625,29 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 						Модерация
 					</button>
 				)}
+				{isOwner && (
+					<button type="button" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
+						Редактировать канал «{channelRow.name || "(без названия)"}»
+					</button>
+				)}
 			</div>
+
+			{tab === "settings" && isOwner && (
+				<section role="tabpanel">
+					<ChannelSettingsForm
+						ownerPubkey={ownerPubkey}
+						privKey={privKey}
+						dbKey={dbKey}
+						channelId={channelId}
+						channelRow={channelRow}
+						onSaved={() => {
+							setTab("posts");
+							refresh();
+						}}
+						onDeleted={() => openChannel(null)}
+					/>
+				</section>
+			)}
 
 			{tab === "posts" && (
 				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>

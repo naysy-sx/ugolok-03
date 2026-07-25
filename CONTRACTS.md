@@ -7371,3 +7371,75 @@ channels.jsx) + `openJournalEntry` (помечает read, зовёт
 с `"messages"` на `"journal"` — не ломает существующие тосты/бейджи
 (остаются как есть, Журнал — дополнительный персистентный слой поверх
 той же точки диспетчеризации, `notifyAndLog`).
+
+## Этап 50-довесок-2 — редактирование и удаление каналов
+
+Источник — пользователь (живая проверка). Рутина (13a): kind 30060
+(метаданные канала) уже parameterized-replaceable (NIP-01, d-tag=channelId),
+`buildAddressableDeletionEvent`/kind-5-адресуемое удаление уже есть и
+используется для постов (kind 30061) и групп (kind 30050) — здесь тот же
+приём, применённый к каналу целиком. Единственная новая часть —
+каскадная локальная очистка на СТОРОНЕ ПОЛУЧАТЕЛЯ (уже существует как
+`deleteChannelLocally`, moderation.js — раньше вызывалась только при
+самобане, теперь экспортирована и переиспользуется для второго сценария).
+
+### `editChannel` (src/domain/content/channel.js)
+
+```js
+editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish)
+```
+Частичное обновление — необязательные поля (`undefined`) сохраняют текущее
+значение, не затираются. Только `role==="owner"` (иначе throw). Локальная
+строка `channels` обновляется СРАЗУ (decrypt-merge-encrypt, тот же приём,
+что `receiveChannelMetadata` на приёмной стороне) — не ждёт relay-эхо для
+собственного UI; republish kind-30060 с ТЕМ ЖЕ d-tag (channelId) лишь
+транслирует изменение подписчикам — `channelContentSubscriber` (transport.js)
+уже подписан на этот topic+kind для ВСЕХ локальных каналов независимо от
+role (включая собственные), плюс уже вызывает `receiveChannelMetadata`
+(existing pipeline, без изменений) — новой подписки/фильтра не требуется.
+
+### `deleteChannel` (src/domain/content/channel.js)
+
+```js
+deleteChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, publish)
+```
+Только `role==="owner"`. Публикует `buildAddressableDeletionEvent(privKey,
+30060, channelId)` (kind 5, тег `a: "30060:{ownerPubkey}:{channelId}"`),
+затем `deleteChannelLocally` (владелец не ждёт собственное эхо — тот же
+принцип, что `deletePost`).
+
+### Приём kind 5 на стороне подписчика (transport.js)
+
+`channelContentSubscriber`'s фильтр: `kinds: [30060, 30054, 30061, 30062,
+30063, CHANNEL_BAN_KIND, 5]` (добавлен `5`). Новая ветка: парсит `a`-тег,
+если префикс `"30060:"` — сверяет `event.pubkey` с ДВУМЯ вещами (защита от
+подделки, тот же принцип, что `validateDeletion`/`receiveBanAnnouncement`):
+(1) частью тега (`{pubkey}` в `30060:{pubkey}:{channelId}` совпадает с
+`event.pubkey` — подписант события — тот, кто его СФОРМИРОВАЛ, тег может
+солгать) и (2) `channelRow.creatorPubkey` (сверка с уже известным локально
+владельцем канала — тот же принцип, что `receivePost`/`receiveBanAnnouncement`
+не доверяют тегам напрямую). Совпадение обоих → `deleteChannelLocally` +
+`notifyAndLog` ("Канал «X» удалён владельцем", категория `channels`,
+navTarget `{screen:"channels"}` — открытого канала уже не существует, есть
+смысл лишь вернуться к списку). Название канала читается ДО удаления (тот
+же порядок, что `receiveBanAnnouncement`'s самобан-ветка не имела нужды
+удержать — здесь имя нужно для текста уведомления).
+
+**Осознанно вне охвата** (не запрошено пользователем, отдельный найденный,
+но НЕ исправляемый сейчас пробел): аналогичное kind-5-удаление ПОСТА
+(kind 30061, `deletePost`) публикуется, но `channelContentSubscriber` кind-5
+ветка обрабатывает ТОЛЬКО префикс `"30060:"` — удаление отдельного поста
+по-прежнему не долетает до подписчиков живьём (тот же класс пробела, что
+был у канала целиком, просто не тот, о котором просил пользователь).
+
+### UI (`src/ui/screens/channel.jsx`)
+
+Новая вкладка (только `isOwner`, тот же паттерн, что "Модерация"), подпись
+буквально по формулировке пользователя: `Редактировать канал «{name}»`.
+Внутри — форма с текущими значениями (name/description/rules/avatar/
+allowChatAttachments, те же лимиты длины, что `CreateChannelForm`,
+channels.jsx: `NAME_MAX_LENGTH=100/DESCRIPTION_MAX_LENGTH=500/
+RULES_MAX_LENGTH=1000`), кнопки "Сохранить"/"Отмена", и отдельно —
+"Удалить канал" (`window.confirm`, тот же паттерн, что `deletePost` в этом
+же файле) → после успеха `openChannel(null)` (канал больше не существует,
+возврат к списку).

@@ -10,6 +10,8 @@ import {
 } from "../../core/crypto/channel-key.js";
 import { parseAndVerifyAllowlist } from "../../core/crypto/comment-allowlist.js";
 import { sendViewGrant, sendSubscribeRequest } from "./channel-access.js";
+import { buildAddressableDeletionEvent } from "../events/handlers.js";
+import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
@@ -182,6 +184,99 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 		allowChatAttachments: parsed.allowChatAttachments ?? true,
 	};
 	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
+}
+
+// Этап 50-довесок-2 (найдено пользователем: канал нельзя было отредактировать
+// после создания) — kind 30060 уже parameterized-replaceable (тот же d-tag =
+// channelId, NIP-01), поэтому republish с новым содержимым обновляет канал у
+// ВСЕХ читателей через уже существующий приёмный пайплайн (receiveChannelMetadata
+// выше, transport.js подписан на этот topic+kind для собственных каналов тоже) —
+// новой подписки/kind не требуется. Частичное обновление: непереданные (undefined)
+// поля сохраняют текущее значение, а не затираются. Локальная строка обновляется
+// СРАЗУ (тот же decrypt-merge-encrypt приём, что receiveChannelMetadata) — владелец
+// не ждёт собственное relay-эхо для своего же UI.
+export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish) {
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!raw) throw new Error("канал не найден");
+	const existing = fromEncryptedRow(raw, dbKey);
+	if (existing.role !== "owner") throw new Error("редактировать канал может только владелец");
+
+	const merged = {
+		...existing,
+		name: name ?? existing.name,
+		description: description ?? existing.description,
+		rules: rules ?? existing.rules,
+		avatar: avatarDescriptor !== undefined ? avatarDescriptor : existing.avatar,
+		allowChatAttachments: allowChatAttachments ?? existing.allowChatAttachments,
+	};
+
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
+	const metaContent = encryptChannelContent(
+		JSON.stringify({
+			name: merged.name,
+			description: merged.description,
+			rules: merged.rules,
+			avatar: merged.avatar,
+			allowChatAttachments: merged.allowChatAttachments,
+		}),
+		keyRow.channelKey,
+		meta.currentVersion,
+	);
+	const metaEvent = sign(
+		{
+			kind: 30060,
+			content: metaContent,
+			tags: [
+				["d", channelId],
+				["h", existing.channelTopic],
+			],
+			created_at: Math.floor(Date.now() / 1000),
+		},
+		ownerPrivKey,
+	);
+	await requirePublishOk(publish, metaEvent);
+	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
+}
+
+// Этап 50-довесок-2 (найдено пользователем: канал нельзя было удалить) — тот же
+// приём, что deletePost (kind 5, NIP-09, АДРЕСУЕМОЕ удаление по a-тегу
+// "30060:{ownerPubkey}:{channelId}") — переживает republish/смену event.id при
+// правках метаданных, в отличие от удаления по конкретному "e"-тегу события.
+// Владелец не ждёт собственное эхо — deleteChannelLocally применяется сразу же.
+export async function deleteChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, publish) {
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!raw) throw new Error("канал не найден");
+	const existing = fromEncryptedRow(raw, dbKey);
+	if (existing.role !== "owner") throw new Error("удалить канал может только владелец");
+
+	const event = buildAddressableDeletionEvent(ownerPrivKey, 30060, channelId, [["h", existing.channelTopic]]);
+	await requirePublishOk(publish, event);
+	await deleteChannelLocally(ownerPubkey, dbKey, channelId);
+}
+
+// Приём kind-5 удаления канала подписчиком (transport.js маршрутизирует сюда).
+// ДВОЙНАЯ проверка авторства (тот же принцип, что receivePost/receiveBanAnnouncement
+// не доверяют тегам напрямую): (1) event.pubkey (реальный подписант, из unwrap/
+// verify, не подделываемый) обязан совпасть с pubkey, УКАЗАННЫМ в самом a-теге
+// (защита от "подписал одним ключом, сослался на другой канал в теге"), И (2) с
+// channelRow.creatorPubkey, уже известным ЛОКАЛЬНО из момента получения VIEW-гранта
+// (защита от подделки самого тега целиком третьей стороной). channelName читается
+// ДО deleteChannelLocally — нужен для текста уведомления (transport.js).
+export async function receiveChannelDeletion(ownerPubkey, dbKey, event) {
+	const aTag = event.tags.find((t) => t[0] === "a");
+	if (!aTag) return { applied: false };
+	const [kindStr, taggedPubkey, channelId] = aTag[1].split(":");
+	if (kindStr !== "30060") return { applied: false };
+
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!raw) return { applied: false };
+	const channelRow = fromEncryptedRow(raw, dbKey);
+	if (event.pubkey !== taggedPubkey || event.pubkey !== channelRow.creatorPubkey) return { applied: false };
+
+	const channelName = channelRow.name;
+	await deleteChannelLocally(ownerPubkey, dbKey, channelId);
+	return { applied: true, channelId, channelName };
 }
 
 // kind 30054 — если МОЙ pubkey появился в allowedAuthors и я ещё не owner — апгрейд

@@ -127,6 +127,13 @@ test("buildAddressableDeletionEvent: kind 5, a-тег в форме kind:pubkey:
 	assert.deepEqual(event.tags, [["a", `30050:${OWNER_PUBKEY}:group-1`]]);
 });
 
+// Этап 50-довесок-2 — extraTags (нужен h-тег для удаления канала, чтобы попасть
+// под фильтр channelContentSubscriber "#h": topics).
+test("buildAddressableDeletionEvent: extraTags добавляются ПОСЛЕ a-тега, существующие вызовы (без 4-го аргумента) не меняются", () => {
+	const event = buildAddressableDeletionEvent(PRIV_KEY, 30060, "chan-1", [["h", "topic-hex"]]);
+	assert.deepEqual(event.tags, [["a", `30060:${OWNER_PUBKEY}:chan-1`], ["h", "topic-hex"]]);
+});
+
 function rawGroupEvent(privKey, { groupId, name, memberPubkeys }, createdAt) {
 	const ownPubHex = bytesToHex(getPublicKey(privKey));
 	const content = nip44Encrypt(JSON.stringify({ name, memberPubkeys }), privKey, ownPubHex);

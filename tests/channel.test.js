@@ -16,6 +16,9 @@ import {
 	receiveChannelMetadata,
 	receiveAllowlistUpdate,
 	subscribeToChannelAction,
+	editChannel,
+	deleteChannel,
+	receiveChannelDeletion,
 } from "../src/domain/content/channel.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
@@ -259,4 +262,114 @@ test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный al
 	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, forged);
 	assert.equal((await listSubscribedChannels(BOB_PUB, DB_KEY)).length, 0, "поддельный allowlist не должен повышать роль");
 	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 1, "канал остаётся в 'Доступные'");
+});
+
+// --- editChannel/deleteChannel (этап 50-довесок-2, найдено пользователем: нельзя
+// было отредактировать/удалить канал после создания) ---
+
+async function setupOwnedChannelAndBobSubscriber() {
+	await seedGroupWithBob();
+	const aliceOutbox = [];
+	const { channelId } = await createChannel(
+		ALICE_PUB, ALICE_PRIV, DB_KEY,
+		{ name: "Котики", description: "старое описание", rules: "старые правила" },
+		["friends"], capturingPublish(aliceOutbox),
+	);
+	const grantEvent = aliceOutbox.find((e) => e.kind === 30053);
+	const metaEvent = aliceOutbox.find((e) => e.kind === 30060);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
+	return { channelId };
+}
+
+test("editChannel: republish kind-30060 (тот же d-tag), локальная строка владельца обновляется СРАЗУ", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const published = [];
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Новое имя", description: "новое описание" }, capturingPublish(published));
+
+	const metaEvent = published.find((e) => e.kind === 30060);
+	assert.ok(metaEvent, "обязан republish-нуть kind-30060");
+	assert.deepEqual(metaEvent.tags.find((t) => t[0] === "d"), ["d", channelId], "тот же d-tag — parameterized-replaceable заменяет предыдущую версию");
+
+	const owned = await listOwnedChannels(ALICE_PUB, DB_KEY);
+	assert.equal(owned[0].name, "Новое имя");
+	assert.equal(owned[0].description, "новое описание");
+});
+
+test("editChannel: частичное обновление — непереданные поля СОХРАНЯЮТ текущее значение", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Только имя поменялось" }, capturingPublish([]));
+
+	const owned = await listOwnedChannels(ALICE_PUB, DB_KEY);
+	assert.equal(owned[0].name, "Только имя поменялось");
+	assert.equal(owned[0].description, "старое описание", "description не передан -> не затёрт");
+	assert.equal(owned[0].rules, "старые правила", "rules не передан -> не затёрт");
+});
+
+test("editChannel: подписчик (Боб) получает обновление через уже существующий receiveChannelMetadata", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const published = [];
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Обновлено для всех" }, capturingPublish(published));
+
+	const metaEvent = published.find((e) => e.kind === 30060);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
+
+	const available = await listAvailableChannels(BOB_PUB, DB_KEY);
+	assert.equal(available[0].name, "Обновлено для всех");
+});
+
+test("editChannel: НЕ владелец (Боб) не может редактировать -> throw", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	await assert.rejects(() => editChannel(BOB_PUB, BOB_PRIV, DB_KEY, channelId, { name: "x" }, capturingPublish([])));
+});
+
+test("deleteChannel: публикует kind-5 адресуемое удаление (a-тег 30060:owner:channelId), локально канал исчезает у владельца", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const published = [];
+	await deleteChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+
+	const delEvent = published.find((e) => e.kind === 5);
+	assert.ok(delEvent);
+	assert.deepEqual(delEvent.tags.find((t) => t[0] === "a"), ["a", `30060:${ALICE_PUB}:${channelId}`]);
+
+	assert.equal((await listOwnedChannels(ALICE_PUB, DB_KEY)).length, 0);
+});
+
+test("deleteChannel: НЕ владелец (Боб) не может удалить -> throw", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	await assert.rejects(() => deleteChannel(BOB_PUB, BOB_PRIV, DB_KEY, channelId, capturingPublish([])));
+});
+
+test("receiveChannelDeletion: подписчик (Боб) получает kind-5 от владельца -> канал каскадно исчезает локально", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	const published = [];
+	await deleteChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+	const delEvent = published.find((e) => e.kind === 5);
+
+	const result = await receiveChannelDeletion(BOB_PUB, DB_KEY, delEvent);
+	assert.equal(result.applied, true);
+	assert.equal(result.channelName, "Котики", "имя нужно прочитать ДО удаления — для текста уведомления");
+	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 0, "канал исчез у подписчика");
+});
+
+test("АДВЕРСАРНЫЙ: receiveChannelDeletion — поддельное удаление (не от реального владельца канала) отклоняется", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	// Mallory подписывает kind-5 СВОИМ ключом, но с a-тегом, ссылающимся на канал Алисы
+	// (подделывает pubkey ВНУТРИ тега тоже, не только подпись, — двойная проверка обязана
+	// поймать обе попытки: event.pubkey реальный подписант ≠ то, что в теге; и ≠ настоящий владелец).
+	const { buildAddressableDeletionEvent } = await import("../src/domain/events/handlers.js");
+	const forged = buildAddressableDeletionEvent(MALLORY_PRIV, 30060, channelId);
+
+	const result = await receiveChannelDeletion(BOB_PUB, DB_KEY, forged);
+	assert.equal(result.applied, false);
+	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 1, "канал НЕ должен исчезнуть от поддельного удаления");
+});
+
+test("receiveChannelDeletion: неизвестный канал (нет локальной строки) -> no-op, не бросает", async () => {
+	const result = await receiveChannelDeletion(BOB_PUB, DB_KEY, {
+		kind: 5,
+		pubkey: ALICE_PUB,
+		tags: [["a", `30060:${ALICE_PUB}:no-such-channel`]],
+	});
+	assert.equal(result.applied, false);
 });

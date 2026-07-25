@@ -31,7 +31,7 @@ import { profiles, ensureProfilesFetched, configureContactRuntime, handleIncomin
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
-import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
+import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
@@ -838,6 +838,28 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									channelId,
 								);
 							}
+						} else if (event.kind === 5) {
+							// Этап 50-довесок-2 — владелец удалил канал целиком (kind-5 адресуемое
+							// удаление kind 30060). receiveChannelDeletion сама проверяет авторство
+							// (двойная сверка — тег И channelRow.creatorPubkey, см. channel.js) и
+							// каскадно чистит локальные данные (deleteChannelLocally). Читает имя
+							// ДО удаления — нужно для текста уведомления, после звать поздно.
+							const deletionResult = await receiveChannelDeletion(ownerPubkey, dbKey, event);
+							if (deletionResult.applied) {
+								// category "moderation" (не "channels" — там нет подходящей
+								// подкатегории под "канал исчез целиком", а notifications.channels.*
+								// без записи в settings всегда 'off', см. resolveNotificationLevel) —
+								// тот же bucket, что бан ("моё отношение к каналу необратимо
+								// изменилось, узнать обязан всегда"), поэтому ВСЕГДА 'sound'.
+								const deletedNavTarget = { screen: "channels" };
+								await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
+									title: `Канал «${deletionResult.channelName}» удалён владельцем`,
+									body: "",
+									navTarget: deletedNavTarget,
+									onClick: () => navigateFromNotification(deletedNavTarget),
+									occurredAt: event.created_at * 1000,
+								});
+							}
 						} else if (event.kind === CHANNEL_BAN_KIND) {
 							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
 							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация. Без
@@ -865,7 +887,7 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
-	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_BAN_KIND] }]);
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_BAN_KIND, 5] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

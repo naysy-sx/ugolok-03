@@ -141,7 +141,12 @@ export async function banMember(ownerPubkey, ownerPrivKey, dbKey, channelId, tar
 	await db.table("channelReaders").delete([ownerPubkey, channelId, targetPubkey]);
 }
 
-async function deleteChannelLocally(ownerPubkey, dbKey, channelId) {
+// Этап 50-довесок — экспортирована: та же каскадная очистка нужна ДЛЯ ДВУХ
+// сценариев (раньше — только самобан): подписчик узнаёт, что владелец УДАЛИЛ
+// канал целиком (kind 5 адресуемое удаление kind 30060, transport.js), не
+// только что забанил конкретно его. Один источник истины для "канал исчез
+// локально", не дублировать логику очистки.
+export async function deleteChannelLocally(ownerPubkey, dbKey, channelId) {
 	await db.table("channels").delete([ownerPubkey, channelId]);
 	await db.table("channelKeyMeta").delete([ownerPubkey, channelId]);
 	await db.table("channelKeys").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).delete();

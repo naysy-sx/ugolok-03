@@ -61,9 +61,15 @@ export function validateDeletion(deleteEvent, targetEvent) {
   return deleteEvent.kind === 5 && deleteEvent.pubkey === targetEvent.pubkey;
 }
 
-export function buildAddressableDeletionEvent(privKey, kind, dTag) {
+// extraTags — этап 50-довесок-2 (найдено при вписывании удаления канала в
+// channelContentSubscriber, transport.js): подписчики канала слушают по
+// фильтру {"#h": topics, kinds:[...]} — kind-5 БЕЗ h-тега никогда бы не
+// совпал с этим фильтром и не долетел бы до них вовсе. Опционален и
+// аддитивен — существующие вызовы (contacts.js/post.js, без 4-го аргумента)
+// не меняют поведение.
+export function buildAddressableDeletionEvent(privKey, kind, dTag, extraTags = []) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
-  const eventTemplate = { kind: 5, tags: [['a', `${kind}:${ownPubHex}:${dTag}`]], content: '', created_at: Math.floor(Date.now() / 1000) };
+  const eventTemplate = { kind: 5, tags: [['a', `${kind}:${ownPubHex}:${dTag}`], ...extraTags], content: '', created_at: Math.floor(Date.now() / 1000) };
   return sign(eventTemplate, privKey);
 }
 
