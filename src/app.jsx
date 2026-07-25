@@ -19,6 +19,7 @@ import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, r
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { pushToast } from "./ui/signals/toasts.js";
 import ToastHost from "./ui/components/toast-host.jsx";
+import CallOverlay from "./ui/components/call-overlay.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
 import IconChatBubble from "./ui/icons/chat-bubble.jsx";
@@ -98,8 +99,15 @@ function MainShell() {
 	}, [ownerPubkey, messagingActivity.value]);
 
 	return (
-		<div class="app-layout">
+		<div class="app-shell">
 			<ToastHost />
+			{/* Этап 48 — CallOverlay ВНЕ .app-layout: полноэкранные состояния
+			    (входящий/исходящий звонок) — намеренно фиксированный modal поверх
+			    ВСЕГО, включая сайдбар. Компактная плашка (CONNECTED) — обычный
+			    block-элемент в потоке, сжимающий .app-layout по высоте, а не
+			    перекрывающий его (иначе плашка накрывала бы верх сайдбара). */}
+			<CallOverlay />
+			<div class="app-layout">
 			<aside class="sidebar" aria-label="Профиль и главное меню">
 				<SidebarProfileCard onEditProfile={() => setActiveId("profile")} />
 				<nav role="navigation" aria-label="Главное меню" style={{ flex: "1 1 auto" }}>
@@ -144,6 +152,7 @@ function MainShell() {
 					activeId !== "channels" &&
 					activeId !== "discovery" &&
 					activeId !== "settings" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+			</div>
 			</div>
 		</div>
 	);

@@ -49,9 +49,20 @@
    глобальный скролл страницы не должен появляться вообще, только внутри
    .content-wrapper ниже. body/html не трогаем (там min-height, не height —
    стартовый экран, unlock.jsx, специально скроллится как обычная страница,
-   это другой сценарий) — ограничение живёт строго на .app-layout. */
-.app-layout {
+   это другой сценарий) — ограничение теперь живёт на .app-shell (этап 48:
+   компактная плашка звонка — обычный block-элемент НАД .app-layout, а не
+   fixed-оверлей поверх него, иначе накрывала бы верх сайдбара; .app-layout
+   сам занимает ТОЛЬКО оставшуюся высоту). */
+.app-shell {
 	height: 100dvh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-layout {
+	flex: 1 1 auto;
+	min-height: 0; /* иначе flex-ребёнок не сжимается под .call-bar, весь .app-shell переполнился бы */
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
@@ -697,4 +708,124 @@
 
 .auth-layout .site-footer p {
 	margin-block: 0;
+}
+
+/* Этап 48 — голосовая связь. Полноэкранный оверлей (входящий/исходящий/
+   соединение) и компактная закреплённая плашка (CONNECTED/RECONNECTING) —
+   тот же принцип, что .toast (этап 47), но крупнее и "бросающийся в глаза"
+   для звонящих состояний (пользователь: "хорошо видимый, очень заметный"). */
+.call-overlay {
+	position: fixed;
+	inset-inline: 0;
+	inset-block-start: 0;
+	z-index: 200;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-s);
+	padding: var(--space-l);
+	background: var(--surface);
+	border-block-end: var(--border-width) solid var(--border);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.call-overlay-ended {
+	padding: var(--space-s);
+	color: var(--muted);
+	font-size: 0.9em;
+}
+
+.call-overlay-avatar {
+	width: 4rem;
+	height: 4rem;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.5rem;
+	background: var(--surface-raised, var(--surface));
+	border: 3px solid var(--accent);
+	animation: call-pulse 1.4s ease-in-out infinite;
+}
+
+.call-overlay-title {
+	font-size: 1.1em;
+	font-weight: var(--weight-bold);
+	text-align: center;
+}
+
+.call-btn-accept,
+.call-btn-reject {
+	border-radius: 999px;
+	padding-inline: var(--space-m);
+	border: none;
+	color: white;
+	cursor: pointer;
+}
+.call-btn-accept {
+	background: var(--good, oklch(0.6 0.16 145));
+}
+.call-btn-reject {
+	background: var(--bad, oklch(0.58 0.21 25));
+}
+
+@keyframes call-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent) 45%, transparent);
+	}
+	50% {
+		box-shadow: 0 0 0 10px color-mix(in oklch, var(--accent) 0%, transparent);
+	}
+}
+
+/* Компактная плашка — во время разговора, не блокирует остальной интерфейс. */
+.call-bar {
+	flex: 0 0 auto; /* block-элемент НАД .app-layout (app.jsx) — не fixed-оверлей поверх сайдбара */
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	padding: var(--space-2xs) var(--space-s);
+	background: var(--surface);
+	border-block-end: var(--border-width) solid var(--border);
+}
+
+.call-bar-avatar {
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--surface-raised, var(--surface));
+	border: 2px solid var(--good, oklch(0.6 0.16 145));
+	flex-shrink: 0;
+}
+
+.call-bar-reconnecting .call-bar-avatar {
+	border-color: var(--warn, oklch(0.75 0.15 85));
+}
+
+.call-bar-hangup {
+	margin-inline-start: auto;
+	background: var(--bad, oklch(0.58 0.21 25));
+	color: white;
+	border: none;
+	border-radius: 50%;
+	width: 2rem;
+	height: 2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.call-waveform {
+	display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.call-overlay-avatar {
+		animation: none;
+	}
 }

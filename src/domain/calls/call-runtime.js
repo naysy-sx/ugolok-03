@@ -37,11 +37,18 @@ export function createCallRuntime(options = {}) {
 	let state = { name: "IDLE", role: null, sessionId: null, peerPubkey: null, polite: null, restartCount: 0, reason: null };
 	const timers = new Map(); // name -> timer id
 
-	function dispatch(event) {
+	// НАЙДЕНО ЖИВЫМ E2E — команды одного перехода ОБЯЗАНЫ исполняться строго
+	// последовательно, не "запустить и забыть": ACQUIRE_MIC добавляет трек в
+	// RTCPeerConnection, CREATE_OFFER следом должен УВИДЕТЬ уже добавленный трек.
+	// Без await'а оба вызова стартуют почти одновременно (оба — async-функции,
+	// синхронный код до первого await выполняется сразу) — CREATE_OFFER нередко
+	// успевал создать offer РАНЬШЕ, чем ACQUIRE_MIC's addTrack — SDP без media-
+	// секций, ICE вообще не собирался (звонок молча "тикал" 15с до CONNECT_TIMEOUT).
+	async function dispatch(event) {
 		const result = reduce(state, event);
 		state = result.state;
 		for (const command of result.commands) {
-			executeCommand(command);
+			await executeCommand(command);
 		}
 	}
 
@@ -73,16 +80,22 @@ export function createCallRuntime(options = {}) {
 		timers.set(name, id);
 	}
 
-	function executeCommand(command) {
+	async function executeCommand(command) {
 		if (MEDIA_COMMAND_TYPES.has(command.type)) {
 			if (command.type === "CLOSE_PC") clearAllTimers(); // защита от осиротевших grace/backoff таймеров
-			mediaController.execute(command).catch((e) => console.warn(`call-runtime: медиа-команда ${command.type} упала`, e));
+			try {
+				await mediaController.execute(command);
+			} catch (e) {
+				console.warn(`call-runtime: медиа-команда ${command.type} упала`, e);
+			}
 			return;
 		}
 		if (SIGNAL_COMMAND_TYPES.has(command.type)) {
-			signalingAdapter
-				.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish })
-				.catch((e) => console.warn(`call-runtime: сигнальная команда ${command.type} упала`, e));
+			try {
+				await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish });
+			} catch (e) {
+				console.warn(`call-runtime: сигнальная команда ${command.type} упала`, e);
+			}
 			return;
 		}
 		if (command.type === "START_TIMER") {

@@ -84,6 +84,12 @@ test("resolveNotificationLevel: moderation/НЕ-reports (бан/warn/delete) -> 
 	assert.equal(resolveNotificationLevel(settings, "moderation", null), "sound");
 });
 
+test("resolveNotificationLevel: calls (этап 48) -> ВСЕГДА 'sound', даже при enabled=false — пропущенный звонок нельзя заглушить", () => {
+	const settings = { ...DEFAULT_SETTINGS, notifications: { ...DEFAULT_SETTINGS.notifications, enabled: false } };
+	assert.equal(resolveNotificationLevel(settings, "calls", null), "sound");
+	assert.equal(resolveNotificationLevel(DEFAULT_SETTINGS, "calls", null), "sound");
+});
+
 test("resolveNotificationLevel: messages без override -> дефолт категории", () => {
 	const settings = {
 		...DEFAULT_SETTINGS,

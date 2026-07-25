@@ -29,6 +29,8 @@ import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
 import { profiles, addContactAction, ensureProfilesFetched } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
+import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
+import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
@@ -200,6 +202,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	connection.addMessageHandler(publisher.handleMessage);
 	drainOutboxSafely(publisher.publish, dbKey);
 
+	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
+	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
+	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish: publisher.publish, dbKey });
+
 	await runBootstrap(connection, pubkeyHex, { verifyBatch });
 	await rebuildContactsAndGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
@@ -370,6 +376,23 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	});
 	connection.addMessageHandler(giftWrapSubscriber.handleMessage);
 	giftWrapSubscriber.subscribe("incoming-giftwrap", [{ "#p": [pubkeyHex], kinds: [1059] }]);
+
+	// Этап 48 — сигналинг звонка (kind 20075, эфемерный, NIP-44 напрямую — CONTRACTS.md
+	// "Этап 48"). Постоянная подписка, тот же принцип, что giftWrapSubscriber выше —
+	// #p:[я], НЕ authors (звонить может любой контакт в любой момент). Дедуп по
+	// event.id (isNewEvent) — тот же приём, что везде в этом файле (довесок-4):
+	// эфемерные kind relay не обязан хранить, но защита не помешает.
+	const callSignalSubscriber = createSubscriber(connection, {
+		verifyBatch,
+		onBatch: (events) => {
+			for (const event of events) {
+				if (!isNewEvent(event.id)) continue;
+				handleIncomingCallSignal(event);
+			}
+		},
+	});
+	connection.addMessageHandler(callSignalSubscriber.handleMessage);
+	callSignalSubscriber.subscribe("call-signal", [{ "#p": [pubkeyHex], kinds: [CALL_SIGNAL_KIND] }]);
 
 	// Подписка на входящие kind 445 (Group Message) — по #h, не по authors (эфемерный
 	// отправитель на каждое сообщение, NIP-EE). Восстанавливает уже установленные чаты

@@ -33,6 +33,8 @@ function getDefaultBackend() {
 }
 
 // Приоритет разрешения (DESIGN.md, этап 47):
+// (0) category==="calls" -> "sound" ВСЕГДА (этап 48) — входящий звонок,
+//     тот же принцип, что moderation ниже: слишком дорого пропустить.
 // (1) category==="moderation" && subcategory!=="reports" -> "sound" ВСЕГДА,
 //     ДАЖЕ при notifications.enabled===false (бан/предупреждение/удаление
 //     канала — принудительно, вне settings целиком — поведение этапа 34
@@ -45,6 +47,10 @@ function getDefaultBackend() {
 export function resolveNotificationLevel(settings, category, subcategory, entityId) {
 	const notifications = settings.notifications;
 	if (category === "moderation" && subcategory !== "reports") return "sound";
+	// Этап 48 — входящий звонок принудительно "sound", тот же принцип, что
+	// бан/предупреждение выше: пропущенный звонок слишком дорог, чтобы дать
+	// заглушить его настройками уведомлений.
+	if (category === "calls") return "sound";
 	if (!notifications.enabled) return "off";
 
 	if (category === "moderation") {

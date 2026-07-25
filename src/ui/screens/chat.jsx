@@ -15,6 +15,8 @@ import {
 } from "../signals/transport.js";
 import { activeChatPubkey, openChat } from "../signals/chat.js";
 import { profiles, refreshProfiles } from "../signals/contacts.js";
+import { placeCall } from "../signals/call.js";
+import IconPhoneCall from "../icons/phone-call.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -580,9 +582,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			breadcrumb={{ label: "Сообщения", onBack: () => openChat(null) }}
 			title={displayName}
 			actions={
-				<button type="button" onClick={handleClearHistory}>
-					Очистить переписку
-				</button>
+				<>
+					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={`Позвонить ${displayName}`}>
+						<IconPhoneCall /> Позвонить
+					</button>
+					<button type="button" onClick={handleClearHistory}>
+						Очистить переписку
+					</button>
+				</>
 			}
 			feed
 			footer={

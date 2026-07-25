@@ -116,6 +116,16 @@ function buildDefaultBlossomServers(command) {
 	return command === "serve" ? ["http://127.0.0.1:8080"] : ["https://blossom.example"];
 }
 
+// Этап 48 — тот же приём, что relay/Blossom выше: свой STUN (coturn) — часть
+// self-hosted-трио (relay+Blossom+STUN, решение пользователя, PLAN.md "Этап 48"),
+// но в dev-окружении локального coturn нет (в отличие от strfry/blossom — свои
+// dev-серверы уже подняты), поэтому и в dev, и в проде дефолт — публичный STUN;
+// продовый деплой обязан переопределить через env, добавив свой coturn ПЕРВЫМ.
+function buildDefaultIceServers() {
+	if (process.env.BUILD_DEFAULT_ICE_SERVERS) return JSON.parse(process.env.BUILD_DEFAULT_ICE_SERVERS);
+	return [{ urls: "stun:stun.l.google.com:19302" }];
+}
+
 // SW не должен инлайниться в index.html, но БАНДЛИТЬ define-константы — должен.
 // Эмитим его отдельным ассетом, подставляя BUILD_HASH в плейсхолдер.
 function emitServiceWorker(buildHash) {
@@ -151,6 +161,7 @@ export default defineConfig(({ command }) => ({
 		__BUILD_HASH__: JSON.stringify(BUILD_HASH),
 		__BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays(command)),
 		__BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(buildDefaultBlossomServers(command)),
+		__BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
 	},
 	build: {
 		target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры

@@ -8,5 +8,9 @@ export const BUILD_DEFAULT_BLOSSOM_SERVERS =
 	typeof __BUILD_DEFAULT_BLOSSOM_SERVERS__ !== "undefined"
 		? __BUILD_DEFAULT_BLOSSOM_SERVERS__
 		: [];
+export const BUILD_DEFAULT_ICE_SERVERS =
+	typeof __BUILD_DEFAULT_ICE_SERVERS__ !== "undefined"
+		? __BUILD_DEFAULT_ICE_SERVERS__
+		: [];
 export const BUILD_HASH =
 	typeof __BUILD_HASH__ !== "undefined" ? __BUILD_HASH__ : "dev";

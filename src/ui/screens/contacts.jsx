@@ -4,6 +4,8 @@ import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, connState, synced } from "../signals/transport.js";
 import { openChat } from "../signals/chat.js";
+import { placeCall } from "../signals/call.js";
+import IconPhoneCall from "../icons/phone-call.jsx";
 import {
 	contacts,
 	blockedContacts,
@@ -529,6 +531,9 @@ export default function Contacts() {
 										<div class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
 											<div class="cluster">
+												<button type="button" onClick={() => placeCall(pubkey)} aria-label={`Позвонить ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
+													<IconPhoneCall /> Позвонить
+												</button>
 												<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
 													{isExpanded ? "Скрыть права" : "Права"}
 												</button>

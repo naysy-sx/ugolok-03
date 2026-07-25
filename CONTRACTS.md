@@ -6964,3 +6964,124 @@ export function createCallRuntime(options) -> { placeCall(peerPubkey), accept(),
 (детерминированные, без реального ожидания). Полный happy path caller и
 callee, ring-timeout, hangup/reject, ICE-restart (impolite-ветка), I1 на
 входящем сигналинге, устойчивость к событию не для нас (чужой получатель).
+
+## Этап 48, п.6-7 — UI звонка, уведомления, найденный и исправленный протокольный баг
+
+### UI (persistent-оверлей + кнопки)
+
+`src/ui/signals/call.js` — реактивный мост call-runtime.js↔Preact:
+`callState` (полный снимок FSM-состояния), `localMediaStream`/
+`remoteMediaStream` (для волновой визуализации), `configureCallRuntime`
+(вызывается ОДИН раз из `transport.js`'s `connect()`, тот же принцип, что
+`configureDefaultBackend` в app.jsx, этап 47), `placeCall`/`acceptCall`/
+`rejectCall`/`hangupCall`, `handleIncomingCallSignal` (вызывается
+transport.js на каждое kind 20075).
+
+`src/ui/components/call-overlay.jsx` — persistent-компонент в `app.jsx`
+(рядом с `ToastHost`, ВНЕ `.app-layout` — см. ниже про layout). Четыре
+визуальных режима по `callState.value.name`:
+- `OUTGOING_RINGING`/`INCOMING_RINGING` — полноэкранный modal
+  (`position:fixed`, намеренно поверх ВСЕГО включая сайдбар — решение
+  требует внимания пользователя), аватар с пульсирующей CSS-обводкой,
+  Принять/Отклонить или Отменить.
+- `CONNECTING` — краткий статус "Соединение…".
+- `CONNECTED`/`RECONNECTING` — компактная плашка `.call-bar` (обычный
+  block-элемент, НЕ fixed — см. layout ниже), зелёная/жёлтая обводка
+  аватара, тикающий таймер длительности (локальный `useRef`/`setInterval`
+  в компоненте — `callState` не несёт временных меток, §1.2 VOICE.md
+  заморожен, не трогаем), волновая визуализация (`AnalyserNode`, Web
+  Audio API, нативный — без библиотек), кнопка завершения.
+- `ENDED` — краткая надпись с причиной (`callEndReasonRu`), самоисчезает
+  вместе с сигналом при возврате в IDLE.
+
+Кнопка "Позвонить" — `contacts.jsx` (рядом с `ContactIdentity`) и
+`chat.jsx` (шапка, `Screen`'s `actions`).
+
+**Layout-находка (живой E2E, не домысел):** изначально `.call-bar` был
+`position:fixed` поверх ВСЕГО, включая сайдбар — реально перекрывал верх
+`SidebarProfileCard`. Исправлено: `app.jsx` обёрнут в новый `.app-shell`
+(несёт `height:100dvh; overflow:hidden`, раньше — на `.app-layout`),
+`CallOverlay` — ПЕРВЫЙ ребёнок `.app-shell`, ВНЕ `.app-layout`;
+`.app-layout` теперь `flex:1 1 auto; min-height:0` — компактная плашка
+звонка сжимает его по высоте (block-элемент в потоке), а не перекрывает.
+Полноэкранные состояния (`.call-overlay`) остаются `position:fixed` —
+это intentional modal, перекрытие сайдбара там корректно.
+
+### Уведомления (категория "calls")
+
+`notifier.js`'s `resolveNotificationLevel` — `category === "calls"` →
+всегда `"sound"`, ПЕРЕД проверкой `notifications.enabled` (тот же
+принцип, что `moderation`/не-`reports`: пропущенный звонок нельзя
+заглушить настройками). Без отдельного поля в `DEFAULT_NOTIFICATIONS`
+(как и `moderation.ban`/`warn` — принудительные категории не нуждаются в
+UI-тумблере). `call.js`'s `notifyIncomingCall` вызывается из
+`onStateChange` при переходе в `INCOMING_RINGING`, `onClick` — через уже
+существующий `navigateFromNotification({screen:"messages", contactPubkey})`.
+
+### ICE-серверы (конфигурация)
+
+`vite.config.js`'s `buildDefaultIceServers()` — тот же паттерн, что
+relay/Blossom; дефолт (dev И прод) — публичный STUN
+(`stun:stun.l.google.com:19302`), т.к. локального coturn в dev-окружении
+нет (в отличие от strfry/blossom); прод обязана переопределить через
+`BUILD_DEFAULT_ICE_SERVERS` env, добавив свой coturn ПЕРВЫМ. Экспортирован
+как `BUILD_DEFAULT_ICE_SERVERS` в `config.js`, потребляется
+`call.js`'s `configureCallRuntime`.
+
+### НАЙДЕННЫЙ И ИСПРАВЛЕННЫЙ ПРОТОКОЛЬНЫЙ БАГ (живой E2E, критично)
+
+Первый живой прогон (2 реальных браузера, `--use-fake-device-for-media-stream`)
+показал: оверлеи входящего/исходящего звонка и уведомления работали
+корректно, но `CONNECTED` НИКОГДА не достигался — звонок всегда
+"тикал" до `CONNECT_TIMEOUT` (15с) и автоматически завершался. Диагностика
+(добавлены временные `console.log` в `media-controller.js`/`call-runtime.js`,
+затем убраны) показала: `onicecandidate`/`oniceconnectionstatechange`
+НИ РАЗУ не срабатывали — ICE-кандидаты вообще не собирались. Отдельный
+sanity-тест голого `RTCPeerConnection` в той же Playwright-песочнице
+подтвердил, что ICE-gathering в среде исполнения работает нормально —
+проблема была не в окружении.
+
+**Корень:** `call-runtime.js`'s `dispatch()` исполнял команды ОДНОГО
+перехода параллельно ("запустить и забыть", `executeCommand(command)`
+без `await` в цикле) — `ACQUIRE_MIC` (добавляет трек в `RTCPeerConnection`
+после `await getUserMedia`) и `CREATE_OFFER` (вызывает `createOffer()`
+СРАЗУ, синхронно до первого `await`) гонялись между собой: `CREATE_OFFER`
+почти всегда "выигрывал" и создавал SDP-оффер ДО того, как трек
+микрофона был добавлен — получался offer без media-секций, ICE не
+собирался вовсе (WebRTC не гатерит кандидаты без media/data-каналов).
+
+**Fix:** `dispatch()` стал `async`, цикл по `commands` теперь
+`for (...) { await executeCommand(command); }` — команды ОДНОГО
+перехода исполняются строго последовательно, в порядке, заданном
+`reduce()` (`call-fsm.js`). Публичный API (`placeCall`/`accept`/
+`reject`/`hangup`/`handleIncomingSignal`) остался синхронным по
+сигнатуре (не await'ит `dispatch` сам) — `state` обновляется
+СИНХРОННО в начале `dispatch()`, до первого `await`, так что
+`getState()` сразу после вызова любого из этих методов по-прежнему
+отражает новое состояние немедленно; только ИСПОЛНЕНИЕ команд
+(медиа/сигналинг) теперь растянуто по микрозадачам в правильном
+порядке. Тесты `call-runtime.test.js` обновлены — добавлен `flush()`
+после каждого действия перед проверкой `media.calls`/`published`
+(раньше проверялись синхронно сразу после вызова, что маскировало бы
+эту гонку, а не ловило её).
+
+Живая E2E-проверка (2 браузера, fake media, реальный strfry) ПОСЛЕ
+фикса: полный цикл звонка (исходящий→входящий с уведомлением→приём→
+`CONNECTED` с корректными именами на обеих сторонах и волновой
+визуализацией→завершение с корректной причиной на обеих сторонах)
+пройден полностью, включая скриншот компактной плашки без наложения на
+сайдбар.
+
+### Побочная находка — сломанный `vite.config.js`
+
+В процессе работы обнаружено (не моя правка): сторонний
+инструмент/автоимпорт добавил в `vite.config.js` нерабочие импорты
+(`nostr-tools/lib/types/nip30` — несуществующий путь экспорта, плюс
+`node:assert`/`node:os`/`node:process`/`node:querystring` наивно
+подобранные по совпадению имени локальных идентификаторов) — билд падал
+полностью. Восстановлен из HEAD + применены только легитимные правки
+(ICE-серверы), табы вместо 4-пробельного форматирования вернулись к
+исходной конвенции проекта.
+
+Regression: `npm test` 825/825. `npm run build` 337.74 КБ gzip (бюджет
+1304 КБ, запас ~966 КБ).
