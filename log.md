@@ -3023,3 +3023,15 @@ reason-строки. Не патч — переписал файл целико�
 779/779 (было 744, +35). Замечена одна флейки-падавшая при полном
 прогоне (incremental-sync.test.js, живой EOSE-тест, таймингзависимый)
 — изолированно проходит стабильно, не связана с этим этапом, не трогал.
+
+## Этап 48, п.3 — media-controller.js
+
+Написан Claude напрямую (риск-точка glare-rollback, §2.1 VOICE.md,
+завязана на живой RTCPeerConnection.signalingState — не для воркера).
+19 тестов (FakeRTCPeerConnection, тот же DI-приём, что voice.js): ACQUIRE_MIC/
+CREATE_OFFER/CREATE_ANSWER/DO_ICE_RESTART/SET_REMOTE(+glare-rollback)/
+ADD_ICE(буферизация до и после SET_REMOTE)/CLOSE_PC/pc-singleton в рамках
+звонка, новый pc после CLOSE_PC/onicecandidate/oniceconnectionstatechange/
+ontrack-колбэки. Все 19 зелёные с первого прогона.
+
+Regression: npm test 798/798 (было 779, +19).

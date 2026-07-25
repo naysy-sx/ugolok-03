@@ -1175,5 +1175,8 @@ Claude Opus) VOICE.md — формальный FSM звонка (состоян�
 **Статус:** п.1 (контракты) и п.2 (`call-fsm.js` + 35 табличных тестов)
 — готовы. Воркер не справился (undefined-переменные, отсутствующий I1,
 сломанный glare) — переписано Claude напрямую (детали — log.md).
-Regression: `npm test` 779/779. Следующий шаг — п.3
-(`media-controller.js`).
+Regression: `npm test` 779/779.
+
+П.3 (`media-controller.js`, обёртка RTCPeerConnection) — готов, написан
+Claude напрямую (риск-точка glare-rollback). 19 тестов (FakeRTCPeerConnection).
+Regression: `npm test` 798/798. Следующий шаг — п.4 (`signaling-adapter.js`).

@@ -6831,3 +6831,51 @@ REMOTE_OFFER(sdp, sessionId, fromPubkey, myPubkey)
 Поле нужно ТОЛЬКО для вычисления `polite` в момент этого перехода — в
 `state` не оседает сверх уже описанных в §1.2 полей (`state.polite`
 хранит УЖЕ вычисленный булев результат, не сами pubkey для сравнения).
+
+## Этап 48, п.3 — `media-controller.js` (обёртка RTCPeerConnection)
+
+Пишет Claude напрямую (не воркер) — риск-точка glare-rollback (§2.1
+VOICE.md), завязанная на живой `signalingState`.
+
+```js
+export function createMediaController(options = {}) -> { execute(command) }
+```
+
+`options`: `RTCPeerConnectionImpl` (DI, по умолчанию `globalThis.RTCPeerConnection`),
+`getUserMediaImpl` (DI, тот же приём, что `voice.js`), `iceServers` (массив,
+см. `BUILD_DEFAULT_ICE_SERVERS`), `onEvent(event)` (обратный канал в
+`call-runtime.js` — эмитит Σ_in-события §1.3-C VOICE.md: `LOCAL_OFFER_READY`,
+`LOCAL_ANSWER_READY`, `LOCAL_ICE`, `ICE_CONNECTED`, `ICE_DISCONNECTED`,
+`ICE_FAILED`), `onLocalStream(stream)`/`onRemoteStream(stream)` (опционально,
+для будущего UI — волновая визуализация, контроллер сам их не использует).
+
+`execute(command)` — async, исполняет ОДНУ команду Σ_out, адресованную
+медиа-слою (`ACQUIRE_MIC`, `CREATE_OFFER`, `CREATE_ANSWER`, `SET_REMOTE`,
+`ADD_ICE`, `DO_ICE_RESTART`, `CLOSE_PC`) — остальные команды (`SEND_*`,
+`START_TIMER`, `CANCEL_TIMER`, `EMIT`) сюда не приходят, `call-runtime.js`
+их не пересылает.
+
+Внутреннее устройство:
+- `pc` — singleton `RTCPeerConnection` на звонок, создаётся лениво первой
+  командой, которой он нужен (`ACQUIRE_MIC` ИЛИ `SET_REMOTE` — у callee
+  offer приходит ДО `USER_ACCEPT`, значит ДО `ACQUIRE_MIC`). Пересоздаётся
+  заново после `CLOSE_PC` (новый звонок — чистый `pc`).
+- Буфер `pendingRemoteIce` — `ADD_ICE` до `setRemoteDescription` копится в
+  массиве, сливается ОДИН раз сразу после `SET_REMOTE`, в порядке
+  поступления. После первого `SET_REMOTE` (и всегда, пока `remoteDescription`
+  установлен) — `ADD_ICE` добавляется немедленно, без буферизации.
+- **Glare-rollback (риск-точка):** `SET_REMOTE` проверяет
+  `sdp.type === "offer" && pc.signalingState === "have-local-offer"` — если
+  да, СНАЧАЛА `setLocalDescription({type:"rollback"})`, потом
+  `setRemoteDescription`. `answer` никогда не откатывает (это нормальный
+  ответ на наш собственный offer).
+- `oniceconnectionstatechange`: `connected`/`completed` → `ICE_CONNECTED`,
+  `disconnected` → `ICE_DISCONNECTED`, `failed` → `ICE_FAILED`, остальные
+  (`checking`/`new` и т.п.) — не эмитятся вовсе.
+- `onicecandidate`: `candidate !== null` → `LOCAL_ICE(candidate)`; `null`
+  (конец сбора кандидатов) — не эмитится.
+
+Тесты — `tests/media-controller.test.js` (19), `RTCPeerConnectionImpl`
+застаблен (`FakeRTCPeerConnection`, тот же приём, что `FakeMediaRecorder`
+в `voice.test.js`) — реальное согласование ICE проверяется живым
+Playwright (`--use-fake-device-for-media-stream`), не юнит-тестами.
