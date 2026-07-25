@@ -40,6 +40,7 @@ import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
 import IconSun from "./ui/icons/sun.jsx";
 import IconMoon from "./ui/icons/moon.jsx";
+import IconMenu from "./ui/icons/menu.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -57,6 +58,7 @@ const NAV_ICONS = {
 function MainShell() {
 	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
 	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js
+	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
 	const dbKey = dbKeySig.value;
@@ -144,6 +146,23 @@ function MainShell() {
 
 	const unreadJournalCount = journalEntries.value.filter((e) => !e.read).length;
 
+	// Адаптив (< 768px, пользователь) — сайдбар прячется в выезжающую панель
+	// поверх контента, открывается бургером в углу. Esc закрывает — тот же
+	// приём, что уже есть в ImageModal.
+	useEffect(() => {
+		if (!sidebarOpen) return;
+		function handleKeyDown(e) {
+			if (e.key === "Escape") setSidebarOpen(false);
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [sidebarOpen]);
+
+	function selectNavItem(id) {
+		setActiveId(id);
+		setSidebarOpen(false);
+	}
+
 	return (
 		<div class="app-shell">
 			<ToastHost />
@@ -153,20 +172,34 @@ function MainShell() {
 			    block-элемент в потоке, сжимающий .app-layout по высоте, а не
 			    перекрывающий его (иначе плашка накрывала бы верх сайдбара). */}
 			<CallOverlay />
-			{/* Переключатель темы (пользователь: "переключатель сверху стоит
-			    добавить") — фиксированный в правом верхнем углу ВСЕГО приложения,
-			    виден на любом экране независимо от активной вкладки. */}
-			<button
-				type="button"
-				class="theme-toggle-btn"
-				onClick={handleToggleTheme}
-				aria-label={resolveEffectiveTheme(themeMode) === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
-			>
-				{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
-			</button>
+			{/* Угол сверху-справа — переключатель темы (пользователь: "переключатель
+			    сверху стоит добавить") + бургер адаптива (пользователь: "весь
+			    sidebar прятать в бургер-кнопку справа вверху") в одном фиксированном
+			    контейнере, чтобы не считать отступы вручную под каждую отдельно. */}
+			<div class="top-corner-actions">
+				<button
+					type="button"
+					class="sidebar-toggle-btn"
+					onClick={() => setSidebarOpen((v) => !v)}
+					aria-expanded={sidebarOpen}
+					aria-controls="app-sidebar"
+					aria-label={sidebarOpen ? "Закрыть меню" : "Открыть меню"}
+				>
+					{sidebarOpen ? "✕" : <IconMenu />}
+				</button>
+				<button
+					type="button"
+					class="theme-toggle-btn"
+					onClick={handleToggleTheme}
+					aria-label={resolveEffectiveTheme(themeMode) === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+				>
+					{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
+				</button>
+			</div>
 			<div class="app-layout">
-			<aside class="sidebar" aria-label="Профиль и главное меню">
-				<SidebarProfileCard onEditProfile={() => setActiveId("profile")} />
+			{sidebarOpen && <div class="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
+			<aside id="app-sidebar" class={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} aria-label="Профиль и главное меню">
+				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} />
 				<nav role="navigation" aria-label="Главное меню" style={{ flex: "1 1 auto" }}>
 					<ul role="list">
 						{NAV_ITEMS.map(item => {
@@ -184,7 +217,7 @@ function MainShell() {
 									<button
 										type="button"
 										class={`nav-item-btn${item.id === activeId ? " is-active" : ""}`}
-										onClick={() => setActiveId(item.id)}
+										onClick={() => selectNavItem(item.id)}
 										aria-current={item.id === activeId ? "page" : null}
 									>
 										<ItemIcon />

@@ -131,14 +131,21 @@ button:has(> .icon),
 	flex-direction: column;
 }
 
-/* Переключатель темы (VISUAL.md, Claude Opus) — фиксированная кнопка в
-   правом верхнем углу, видна поверх любого экрана. z-index выше .call-overlay
-   (200, этап 48) — тема переключаема даже во время звонка. */
-.theme-toggle-btn {
+/* Угол сверху-справа (VISUAL.md, Claude Opus + пользователь: "бургер
+   расположенную (внимание!) справа вверху") — переключатель темы и бургер
+   адаптива живут в ОДНОМ фиксированном контейнере, а не считают отступы
+   друг от друга по отдельности. z-index выше .call-overlay (200, этап 48) —
+   доступны даже во время звонка. */
+.top-corner-actions {
 	position: fixed;
 	inset-block-start: var(--space-s);
 	inset-inline-end: var(--space-s);
 	z-index: 300;
+	display: flex;
+	gap: var(--space-2xs);
+}
+.theme-toggle-btn,
+.sidebar-toggle-btn {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -152,10 +159,25 @@ button:has(> .icon),
 	box-shadow: var(--shadow);
 	font-size: 1.1rem;
 }
-.theme-toggle-btn:hover {
+.theme-toggle-btn:hover,
+.sidebar-toggle-btn:hover {
 	background-color: var(--surface-raised);
 	filter: brightness(1.08);
 	color: var(--fg);
+}
+/* Бургер виден только на узких экранах — на десктопе сайдбар всегда открыт
+   сбоку, прятать в панель нечего. Селектор с двумя классами (не просто
+   .sidebar-toggle-btn) — иначе в закрытом состоянии кнопка содержит
+   <IconMenu/> (svg.icon), и более специфичный button:has(> .icon) выше
+   (специфичность 0,1,1 против 0,1,0 у одного класса) перебивал бы
+   display:none НА ЛЮБОЙ ширине экрана. */
+.top-corner-actions .sidebar-toggle-btn {
+	display: none;
+}
+@media (max-width: 47.99em) {
+	.top-corner-actions .sidebar-toggle-btn {
+		display: flex;
+	}
 }
 
 .app-layout {
@@ -164,6 +186,7 @@ button:has(> .icon),
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
+	position: relative; /* якорь для .sidebar-backdrop ниже (< 768px) */
 }
 
 .app-layout .sidebar {
@@ -174,6 +197,41 @@ button:has(> .icon),
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-m);
+}
+
+/* Адаптив (пользователь: "весь sidebar я предлагаю прятать в бургер-кнопку")
+   — ниже 768px сайдбар больше не стоит в потоке над контентом (там он
+   раньше просто растягивал страницу вниз без ограничения высоты), а
+   выезжает поверх content-area фиксированной панелью, скрытой за левым
+   краем по умолчанию. section-header/content-area самого экрана остаются
+   на месте — открывает/закрывает только бургер в углу. */
+.sidebar-backdrop {
+	display: none;
+}
+@media (max-width: 47.99em) {
+	.app-layout .sidebar {
+		position: fixed;
+		inset-block: 0;
+		inset-inline-start: 0;
+		z-index: 250;
+		width: min(80vw, 20rem);
+		background-color: var(--bg);
+		border-block-end: none;
+		border-inline-end: var(--border-width) solid var(--border);
+		box-shadow: var(--shadow);
+		transform: translateX(-100%);
+		transition: transform var(--transition-speed) var(--transition-ease);
+	}
+	.app-layout .sidebar.sidebar-open {
+		transform: translateX(0);
+	}
+	.sidebar-backdrop {
+		display: block;
+		position: fixed;
+		inset: 0;
+		z-index: 240;
+		background-color: oklch(0.2 0.03 var(--hue) / 0.45);
+	}
 }
 
 .app-layout .main-content {
