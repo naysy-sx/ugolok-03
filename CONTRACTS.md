@@ -7160,3 +7160,75 @@ sudo) — не выполнено без явного согласия поль�
 `disconnected`/`failed`).
 
 Regression: `npm test` 828/828. `npm run build` 337.93 КБ gzip.
+
+## Этап 49 — контакты: контракты (Event/Command/State + единая таблица)
+
+Источник — CONTACTS-FSM.md (корень проекта, все три роли — Claude, в
+этой же сессии, без похода к Opus — пользователь явно попросил). 3
+развилки закрыты явными решениями пользователя (полная унификация
+таблиц; bootstrap resolvedAt = момент миграции; чистый старт для
+outgoingAcquaintanceRequests без переноса данных).
+
+### Файлы (Frisby, §3 CONTACTS-FSM.md)
+
+```
+src/domain/contacts/contact-fsm.js     — pure. reduce(peerState, event) -> {state, commands}
+                                          И reconcileList(relationships, listKind, pubkeySet, createdAt)
+                                          -> {relationships, commands}. Ноль I/O/async. Пишет ВОРКЕР.
+src/domain/contacts/contact-runtime.js — imperative shell: Map<peerPubkey, peerState>
+                                          для ВСЕХ peer'ов владельца, маршрутизация rumor'ов
+                                          + kind-3/kind-10000 reconciliation, исполнение команд.
+                                          Пишет Claude.
+```
+
+### State (peerState, §1.2 CONTACTS-FSM.md)
+
+```js
+peerState = {
+  name,          // "OUTGOING_PENDING"|"INCOMING_PENDING"|"CONTACT"|"REJECTED_BY_ME"|"BLOCKED"|"NONE"
+  peerPubkey,
+  resolvedAt,    // created_at последнего "решения" — НЕ обновляется на переходах в *_PENDING
+  greeting,      // только INCOMING_PENDING
+}
+```
+
+### Event (Σ_in, §1.3)
+
+Пользователь: `USER_SEND_REQUEST(peer,greeting)`, `USER_ACCEPT(peer)`,
+`USER_REJECT(peer)`, `USER_CANCEL(peer)`, `USER_BLOCK(peer)`,
+`USER_UNBLOCK(peer)`, `USER_REMOVE_CONTACT(peer)`.
+Сигналинг: `REMOTE_REQUEST(peer,greeting,createdAt)`, `REMOTE_ACCEPT(peer,createdAt)`,
+`REMOTE_REJECT(peer,createdAt)`, `REMOTE_CANCEL(peer,createdAt)`.
+
+### Command (Σ_out, §1.4)
+
+`PUBLISH_REQUEST/ACCEPT/REJECT/CANCEL(peer,...)`, `UPDATE_CONTACTS_LIST(peer,add|remove)`
+(republish kind-3), `UPDATE_MUTE_LIST(peer,add|remove)` (republish kind-10000),
+`UPSERT(peer,fields)`/`DELETE(peer)` (единая таблица, см. ниже), `EMIT(peerPubkey,stateName)`,
+`LOG_JOURNAL(entry)` (мост к фиче "Журнал", CONTACTS-FSM.md §7).
+
+Полная таблица переходов δ, инварианты I1-I6, kind-3/kind-10000
+reconciliation (§1.6) — см. CONTACTS-FSM.md буквально, не дублирую
+(ТЗ уже заморожено, воркер получит его через `--ctx CONTACTS-FSM.md`).
+
+### Единая таблица (замена contacts/contactRequests/blockedContacts/outgoingAcquaintanceRequests)
+
+```js
+// src/core/store/database.js — новая таблица
+contactRelationships: "[owner+peer], [owner+state]"
+// {owner, peer, state, resolvedAt, greeting?, sentAt?}
+```
+
+### Новый kind
+
+```js
+export const CONTACT_REJECTED_KIND = 3006; // следующий свободный в кластере 3001-3005
+```
+
+### UI (контракт, реализация — задача 4 §5 CONTACTS-FSM.md)
+
+`contacts.jsx` читает `contactRelationships` через 5 фильтров по `state`
+вместо 4 отдельных таблиц: "Отправленные заявки" (OUTGOING_PENDING),
+"Входящие заявки" (INCOMING_PENDING, было "Запросы"), "Контакты"
+(CONTACT), "Отклонённые" (REJECTED_BY_ME, НОВЫЙ раздел), "Заблокированные"
+(BLOCKED).
