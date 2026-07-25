@@ -14,6 +14,7 @@ import {
 	markChannelAsRead,
 	rebuildChannelReadStatus,
 	getChannelUnreadCount,
+	isChannelContentRead,
 } from "../src/domain/content/channel-read-status.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(21);
@@ -143,4 +144,25 @@ test("getChannelUnreadCount: удалённые (deleted=true) не считаю
 		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m1", channelId: CHAN_A, createdAt: 100, deleted: true, authorPubkey: BOB_PUB, text: "z", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
 	]);
 	assert.equal(await getChannelUnreadCount(ALICE_PUB, CHAN_A, DB_KEY), 0);
+});
+
+// Этап 50 — инвариант N1 (CONTACTS-FSM.md §6, приложение А).
+test("isChannelContentRead: нет курсора вовсе -> false", async () => {
+	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 1), false);
+});
+
+test("isChannelContentRead: createdAt <= курсора -> true (уже прочитано)", async () => {
+	await foldChannelReadStatus(buildChannelReadStatusEvent(ALICE_PRIV, { channelId: CHAN_A, lastReadAt: 500 }), ALICE_PRIV);
+	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 500), true, "ровно на курсоре");
+	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 100), true, "старее курсора");
+});
+
+test("isChannelContentRead: createdAt > курсора -> false", async () => {
+	await foldChannelReadStatus(buildChannelReadStatusEvent(ALICE_PRIV, { channelId: CHAN_A, lastReadAt: 500 }), ALICE_PRIV);
+	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 501), false);
+});
+
+test("isChannelContentRead: курсор ДРУГОГО канала не влияет", async () => {
+	await foldChannelReadStatus(buildChannelReadStatusEvent(ALICE_PRIV, { channelId: CHAN_B, lastReadAt: 999 }), ALICE_PRIV);
+	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 1), false);
 });

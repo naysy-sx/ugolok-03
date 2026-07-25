@@ -7279,3 +7279,95 @@ LOG_JOURNAL (entry = `{peer, message}`), runtime транслирует в
 δ, поэтому publish не блокирует локальную консистентность (тот же
 принцип, что `foldContactList` раньше — локально-оптимистично,
 kind-3-событие лишь транслирует изменение на другие устройства).
+
+## Этап 50 — N1 (read-cursor gating) + фича "Журнал"
+
+Источник — CONTACTS-FSM.md §6 (Приложение А, N1) и §7 (Приложение Б,
+"Журнал"), написанные на этапе 49. Не FSM, не требует design-записки
+(13a — рутина: недостающий guard + одна новая таблица + одна точка
+записи). Повод: два отдельных найденных пользователем пробела —
+(1) лавина уведомлений при релогине для ЧАТОВ/КАНАЛОВ (для контактов
+уже решено на этапе 49 инвариантом I1); (2) уведомления/тосты исчезают
+без следа — негде посмотреть, что произошло, пока не открыл нужный экран.
+
+### N1 — read-cursor gating (домен: `read-status.js`/`channel-read-status.js`)
+
+Курсоры прочтения УЖЕ существуют (`chatSyncState.lastReadLamportTs`,
+`channelSyncState.lastReadAt`) и уже надёжно продвигаются при просмотре
+экрана (`markChatAsRead`/`markChannelAsRead`, вызываются из
+`chat.jsx`/`channel.jsx`/`channel-chat.jsx` на каждый рендер окна) — и
+синхронизируются между устройствами ДО того, как могут сработать
+уведомления redelivery-потока (`rebuildReadStatus`/`rebuildChannelReadStatus`
+вызываются в начале `connect()`, до подписок на контент). Новых структур
+не нужно — только предикат-гейт перед уведомлением:
+
+```js
+// src/domain/messaging/read-status.js
+export async function isChatContentRead(ownerPubkey, contactPubkey, lamportTs) {
+  const row = await db.table("chatSyncState").get([ownerPubkey, contactPubkey]);
+  return lamportTs <= (row?.lastReadLamportTs ?? 0);
+}
+
+// src/domain/content/channel-read-status.js
+export async function isChannelContentRead(ownerPubkey, channelId, createdAt) {
+  const row = await db.table("channelSyncState").get([ownerPubkey, channelId]);
+  return createdAt <= (row?.lastReadAt ?? 0);
+}
+```
+
+Точки применения (`transport.js`, ПЕРЕД вызовом `notifyAndLog`, см. ниже):
+1:1-сообщение (`receivedResult.lamportTs`/`receivedResult.contactPubkey`),
+канал-пост/комментарий/чат канала (`event.created_at`/`channelId`) — если
+предикат вернул `true`, `notifyAndLog` не вызывается вовсе (ни тоста, ни
+записи в Журнал — контент уже был прочитан, включая "на другом устройстве"
+и "в прошлой сессии до релогина"). Контакты этого гейта НЕ требуют — I1
+(этап 49) уже полностью решает тот же класс проблемы для них.
+
+### "Журнал" — персистентный лог уведомлений
+
+```js
+// src/core/store/database.js — новая таблица (db.version(16))
+journalEntries: "id, owner, [owner+createdAt]"
+// {id (uuid), owner, createdAt, category, title, body, navTarget, read}
+```
+`title`/`body`/`navTarget` зашифрованы (`JOURNAL_ENTRIES_PLAINTEXT_FIELDS =
+["id","owner","createdAt","category","read"]`) — тот же Tier-принцип, что
+`contactRequests.greeting`/`contactRelationships.greeting`. `navTarget` —
+ТОТ ЖЕ plain-объект, что уже кладётся в `pendingNavTarget`
+(`{screen,contactPubkey}`/`{screen,channelId,postId?,commentId?,subTab?}`/
+`{screen}`) — не изобретаем новую форму, переиспользуем.
+
+```js
+// src/domain/notifications/journal.js — persistence + мост к notify()
+writeJournalEntry(ownerPubkey, dbKey, {category, title, body, navTarget}) -> Promise<entry>
+listJournalEntries(ownerPubkey, dbKey) -> Promise<entry[]>   // сортировка createdAt desc
+markJournalEntryRead(id) -> Promise<void>                    // read — plaintext поле,
+                                                               // update() не трогает ciphertext
+notifyAndLog(ownerPubkey, dbKey, settings, category, subcategory, {title, body, onClick, navTarget}, entityId, backend)
+  -> level   // зовёт notify() (notifier.js, НЕ меняется — остаётся чистым,
+             // backend-инъекция сохраняется, существующие тесты не трогаются),
+             // и, если level !== "off", best-effort пишет journalEntries.
+             // notify() держит собственный onClick (клик по тосту/native) —
+             // navTarget передаётся ОТДЕЛЬНЫМ полем (небольшое дублирование
+             // с телом onClick на каждом call site — механическое, не
+             // концептуальный риск, см. также I2-подобные ловушки).
+```
+
+Все текущие вызовы `notify(...)` (transport.js — 8 мест: inbox,
+moderation/reports, канал-пост/комментарий/comment-reply/чат канала,
+ban, 1:1-сообщение; `call.js` — входящий звонок; `contacts.js` —
+`notifyContactJournalEntry`, ранее было "мост-заглушка, no-op" — теперь
+реально пишет) заменяются на `notifyAndLog(...)` с добавлением
+`navTarget` (тот же объект, что уже строится для `onClick`).
+
+### UI (реализация — задача 4, не формализуется отдельно)
+
+`src/ui/signals/journal.js` — сигнал `journalEntries` + `refreshJournal`
+(тот же триггер `messagingActivity`, что уже используют contacts.jsx/
+channels.jsx) + `openJournalEntry` (помечает read, зовёт
+`navigateFromNotification(entry.navTarget)`). `src/ui/screens/journal.jsx`
+— новый экран, список recent-first, непрочитанные выделены. `nav-items.js`:
+новый пункт `{id:"journal", label:"Журнал"}`, `DEFAULT_ACTIVE` меняется
+с `"messages"` на `"journal"` — не ломает существующие тосты/бейджи
+(остаются как есть, Журнал — дополнительный персистентный слой поверх
+той же точки диспетчеризации, `notifyAndLog`).

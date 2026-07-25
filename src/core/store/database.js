@@ -186,6 +186,15 @@ db.version(15).stores({
   contactRelationships: "[owner+peer], [owner+state]"
 });
 
+// Этап 50 — фича "Журнал" (персистентный лог уведомлений, CONTACTS-FSM.md
+// §7). `id` — глобально уникальный uuid, отдельный owner-составной ключ не
+// нужен; `owner` и `[owner+createdAt]` — индексы под "список для владельца"
+// и "сортировка по времени" (read — plaintext-флаг, фильтр по нему в памяти,
+// объём таблицы для персонального мессенджера невелик).
+db.version(16).stores({
+  journalEntries: "id, owner, [owner+createdAt]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

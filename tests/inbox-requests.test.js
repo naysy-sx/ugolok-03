@@ -28,7 +28,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
-	await db.table("contacts").clear();
+	await db.table("contactRelationships").clear();
 	await db.table("inboxRequests").clear();
 	await db.table("mlsGroups").clear();
 	await db.table("ownKeyPackage").clear();
@@ -42,9 +42,18 @@ test("isKnownContact: false, если контакта нет в списке", 
 	assert.equal(await isKnownContact(ALICE_PUB, STRANGER_PUB), false);
 });
 
-test("isKnownContact: true, если контакт есть", async () => {
-	await db.table("contacts").put({ owner: ALICE_PUB, pubkey: STRANGER_PUB });
+test("isKnownContact: true, если peer в состоянии CONTACT (contactRelationships, этап 49)", async () => {
+	await db.table("contactRelationships").put({ owner: ALICE_PUB, peer: STRANGER_PUB, state: "CONTACT", resolvedAt: 1 });
 	assert.equal(await isKnownContact(ALICE_PUB, STRANGER_PUB), true);
+});
+
+// Найдено живым E2E (этап 50) — старая isKnownContact спрашивала перманентно
+// пустую после миграции таблицу contacts, из-за чего Welcome от УЖЕ принятого
+// контакта всегда шёл в inbox незнакомца. Здесь же — peer есть в таблице, но
+// НЕ в состоянии CONTACT (например ещё pending) — тоже не "known".
+test("isKnownContact: false, если peer есть в contactRelationships, но НЕ в состоянии CONTACT", async () => {
+	await db.table("contactRelationships").put({ owner: ALICE_PUB, peer: STRANGER_PUB, state: "INCOMING_PENDING", resolvedAt: 0, greeting: "x" });
+	assert.equal(await isKnownContact(ALICE_PUB, STRANGER_PUB), false);
 });
 
 // AC-16 (найдено пользователем прямым осмотром IndexedDB) — welcomeWireBytes несёт

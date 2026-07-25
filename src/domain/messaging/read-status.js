@@ -80,3 +80,13 @@ export async function getUnreadCount(ownerPubkey, contactPubkey) {
   const rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, contactPubkey]).toArray();
   return rows.filter(m => m.senderPubkey === contactPubkey && m.lamportTs > lastRead).length;
 }
+
+// Этап 50 (CONTACTS-FSM.md §6, приложение А — инвариант N1). rebuildReadStatus
+// (выше) уже подтягивает курсор с ДРУГИХ устройств/сессий ДО того, как могут
+// сработать уведомления redelivery-потока (вызывается в начале connect(), см.
+// transport.js) — поэтому сравнение с ЭТИМ курсором корректно гасит уведомление
+// о сообщении, уже прочитанном где угодно, а не только в этой сессии.
+export async function isChatContentRead(ownerPubkey, contactPubkey, lamportTs) {
+  const row = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
+  return lamportTs <= (row?.lastReadLamportTs ?? 0);
+}

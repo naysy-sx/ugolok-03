@@ -12,6 +12,7 @@ const REQUIRED_IDS = [
 	"profile",
 	"diagnostics",
 	"discovery", // этап 46
+	"journal", // этап 50
 ];
 
 test("NAV_ITEMS содержит обязательный минимум пунктов этапа 1", () => {
@@ -39,4 +40,9 @@ test("label — непустая строка у каждого пункта", (
 test("DEFAULT_ACTIVE указывает на существующий пункт", () => {
 	const ids = NAV_ITEMS.map((i) => i.id);
 	assert.ok(ids.includes(DEFAULT_ACTIVE));
+});
+
+// Этап 50 — "Журнал" стал стартовым экраном после логина (CONTACTS-FSM.md §7).
+test("DEFAULT_ACTIVE === 'journal' (этап 50)", () => {
+	assert.equal(DEFAULT_ACTIVE, "journal");
 });

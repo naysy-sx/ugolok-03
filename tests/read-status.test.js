@@ -11,6 +11,7 @@ import {
 	markChatAsRead,
 	getUnreadCount,
 	rebuildReadStatus,
+	isChatContentRead,
 } from "../src/domain/messaging/read-status.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -184,4 +185,25 @@ test("rebuildReadStatus: несколько версий для ОДНОГО ч�
 
 test("rebuildReadStatus АДВЕРСАРНО: нет ни одного kind 30070 в events — no-op, не бросает", async () => {
 	await assert.doesNotReject(() => rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY));
+});
+
+// Этап 50 — инвариант N1 (CONTACTS-FSM.md §6, приложение А).
+test("isChatContentRead: нет курсора вовсе -> false (ничего ещё не прочитано)", async () => {
+	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 1), false);
+});
+
+test("isChatContentRead: lamportTs <= курсора -> true (уже прочитано, не уведомлять)", async () => {
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 10 }), ALICE_PRIV, DB_KEY);
+	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 10), true, "ровно на курсоре — уже прочитано");
+	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 5), true, "старее курсора — тем более прочитано");
+});
+
+test("isChatContentRead: lamportTs > курсора -> false (свежее, уведомлять нужно)", async () => {
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 10 }), ALICE_PRIV, DB_KEY);
+	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 11), false);
+});
+
+test("isChatContentRead: курсор ДРУГОГО чата не влияет", async () => {
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: CAROL_PUB, lastReadLamportTs: 100 }), ALICE_PRIV, DB_KEY);
+	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 1), false);
 });

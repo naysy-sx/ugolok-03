@@ -7,7 +7,11 @@
 // НАМЕРЕННО без иконок здесь: этот файл — чистые данные, импортируется
 // напрямую в tests/nav-items.test.js через node --test, который не умеет
 // парсить JSX. Маппинг id → иконка живёт в app.jsx (только Vite его видит).
+// "journal" — первым (этап 50): персистентный лог уведомлений, новый стартовый
+// экран после логина (DEFAULT_ACTIVE ниже) — пользователь видит "что произошло"
+// раньше, чем открывает конкретный чат/канал.
 export const NAV_ITEMS = [
+  { id: "journal", label: "Журнал" },
   { id: "messages", label: "Сообщения" },
   { id: "channels", label: "Каналы" },
   { id: "contacts", label: "Контакты" },
@@ -17,4 +21,4 @@ export const NAV_ITEMS = [
   { id: "diagnostics", label: "Диагностика" },
 ];
 
-export const DEFAULT_ACTIVE = "messages";
+export const DEFAULT_ACTIVE = "journal";

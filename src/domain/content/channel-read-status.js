@@ -102,3 +102,13 @@ export async function getChannelUnreadCount(ownerPubkey, channelId, dbKey) {
 
 	return count;
 }
+
+// Этап 50 (CONTACTS-FSM.md §6, приложение А — инвариант N1) — тот же принцип,
+// что isChatContentRead (messaging/read-status.js): rebuildChannelReadStatus
+// подтягивает курсор с других устройств/сессий ДО подписок на контент
+// (transport.js, connect()), поэтому сравнение с НИМ гасит уведомление о
+// контенте, уже прочитанном где угодно — не только в текущей сессии.
+export async function isChannelContentRead(ownerPubkey, channelId, createdAt) {
+	const row = await db.table("channelSyncState").get([ownerPubkey, channelId]);
+	return createdAt <= (row?.lastReadAt ?? 0);
+}

@@ -58,3 +58,9 @@ export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
 // greeting — единственное содержательное поле (текст приветствия заявки), остаётся
 // зашифрованным — прямое продолжение CONTACT_REQUESTS_PLAINTEXT_FIELDS.
 export const CONTACT_RELATIONSHIPS_PLAINTEXT_FIELDS = ["owner", "peer", "state", "resolvedAt", "sentAt"];
+
+// Этап 50 — journalEntries (фича "Журнал", CONTACTS-FSM.md §7). id/owner/
+// createdAt/category/read — структурные метаданные и индексы; title/body/
+// navTarget — содержательные поля (текст уведомления + куда перейти),
+// остаются зашифрованными — прямое продолжение CONTACT_REQUESTS_PLAINTEXT_FIELDS.
+export const JOURNAL_ENTRIES_PLAINTEXT_FIELDS = ["id", "owner", "createdAt", "category", "read"];

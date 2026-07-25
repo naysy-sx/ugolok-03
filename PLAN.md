@@ -1363,3 +1363,57 @@ localhost:7777)** — воспроизведены и подтверждены �
 Осталось (отдельно, не FSM, следующий заход): N1-инвариант для notify()
 (гейт по read-cursor для чатов/каналов — контактам он не нужен, I1 уже
 всё решает) + фича "Журнал" (персистентный лог, новый стартовый экран).
+
+**Этап 50 — N1 + "Журнал" (план).** Контракты — CONTRACTS.md "Этап 50".
+Рутина (13a), design-записка не нужна.
+
+1. `isChatContentRead`/`isChannelContentRead` (read-status.js/
+   channel-read-status.js) — предикат по уже существующим курсорам
+   `chatSyncState.lastReadLamportTs`/`channelSyncState.lastReadAt`.
+2. Новая таблица `journalEntries` (db.version(16)) + `domain/notifications/
+   journal.js`: `writeJournalEntry`/`listJournalEntries`/
+   `markJournalEntryRead`/`notifyAndLog` (обёртка над `notify()`, которая
+   остаётся чистой и нетронутой — существующие тесты notifier.js не трогать).
+3. Все текущие вызовы `notify(...)` (transport.js ×8, call.js, contacts.js)
+   → `notifyAndLog(...)` + `navTarget`; перед message/channel-вызовами —
+   N1-гейт (п.1).
+4. UI: `ui/signals/journal.js` (сигнал + refresh + openJournalEntry),
+   `ui/screens/journal.jsx` (новый экран), `nav-items.js` (+"Журнал",
+   `DEFAULT_ACTIVE` → `"journal"`), `app.jsx` (иконка, ветка рендера,
+   бейдж непрочитанных).
+5. Регрессия + сборка (бюджет) + живая Playwright-проверка (Журнал
+   показывает записи, клик помечает read и переходит "к месту события",
+   N1 не даёт флуда при релогине для чатов/каналов).
+
+**Этап 50 — готово.** Все п.1-5 реализованы. `isChatContentRead`/
+`isChannelContentRead` (read-status.js/channel-read-status.js) — предикаты
+по уже существующим курсорам. `journalEntries` (db.version(16),
+title/body/navTarget зашифрованы) + `domain/notifications/journal.js`
+(`writeJournalEntry`/`listJournalEntries`/`markJournalEntryRead`/
+`notifyAndLog` — тонкая обёртка над `notify()`, который НЕ менялся, все
+его тесты прошли без правок). Все ~10 вызовов `notify(...)` в transport.js/
+call.js/contacts.js заменены на `notifyAndLog(...)` + `navTarget`; N1-гейт
+добавлен перед message/channel-post/comment/chat уведомлениями (не перед
+ban/moderation — не "контент"). UI: `ui/signals/journal.js`,
+`ui/screens/journal.jsx` (новый экран, непрочитанные выделены), новая
+иконка `bell.jsx` (hand-drawn, тот же принцип, что phone-call.jsx этапа 48),
+`nav-items.js` (+"Журнал" первым пунктом, `DEFAULT_ACTIVE` → `"journal"`),
+`app.jsx` (иконка/ветка рендера/бейдж непрочитанных, тот же паттерн, что
+messages/channels).
+
+**Найден и исправлен реальный регресс от этапа 49** (обнаружено ТОЛЬКО
+живым E2E, не юнит-тестами): `isKnownContact` (inbox-requests.js)
+по-прежнему спрашивала старую таблицу `contacts`, которая после унификации
+контактов (этап 49) перманентно пуста — из-за этого Welcome (MLS) от УЖЕ
+принятого контакта всегда считался "от незнакомца" и уходил в inbox вместо
+автопринятия. Исправлено на запрос к `contactRelationships` (`state ===
+"CONTACT"`, plaintext-поле, расшифровка не нужна) + 2 новых теста
+(`inbox-requests.test.js`).
+
+Регрессия: 892/892. Сборка: 340.28 KB gzip. Живая Playwright-проверка (2
+аккаунта, реальный relay) подтвердила: Журнал — стартовый экран; заявка в
+контакты → запись в Журнале у получателя → клик помечает read и переходит
+в "Контакты"; принятие → запись "принял" у отправителя; 1:1-сообщение →
+запись в Журнале, прочитанной стороной (markChatAsRead) → **тройной
+relogin НЕ создаёт дублирующихся записей** (счётчик остался 1 — N1
+работает).

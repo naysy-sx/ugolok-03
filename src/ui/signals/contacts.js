@@ -9,7 +9,7 @@ import { pickLatest } from "../../core/sync/lww.js";
 import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
-import { notify } from "../../domain/notifications/notifier.js";
+import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 
 // Этап 49 — contacts/blockedContacts остаются pubkey[] (форма, на которую уже
@@ -48,9 +48,8 @@ function usernameFor(pubkeyHex) {
 	return name || `${pubkeyHex.slice(0, 8)}…`;
 }
 
-// LOG_JOURNAL -> notify() (мост к будущей фиче "Журнал", этап 49 приложение Б —
-// сама персистентная запись появится отдельной задачей; пока это заменяет
-// три инлайновых notify()-вызова, которые раньше жили прямо в transport.js).
+// LOG_JOURNAL -> notifyAndLog() (этап 50 — реальная персистентная запись в
+// journalEntries появилась здесь, раньше был no-op-заглушка на будущее).
 // "newRequest"/"accepted" — существующие настраиваемые категории (settings.jsx);
 // "rejected"/"crossed" — новые по смыслу (раньше отказ вообще не сигнализировался
 // отправителю), сознательно повешены на тот же тумблер "accepted" — оба это
@@ -61,10 +60,12 @@ async function notifyContactJournalEntry(entry) {
 		const settings = await loadUiSettings(ownerPubkeyRef, dbKeyRef);
 		const title = entry.category === "newRequest" ? `Новый запрос в контакты от ${usernameFor(entry.peer)}` : `${usernameFor(entry.peer)} ${entry.message}`;
 		const subcategory = entry.category === "newRequest" ? "newRequests" : "accepted";
-		notify(settings, "contacts", subcategory, {
+		const navTarget = { screen: "contacts" };
+		await notifyAndLog(ownerPubkeyRef, dbKeyRef, settings, "contacts", subcategory, {
 			title,
 			body: "",
-			onClick: () => navigateFromNotification({ screen: "contacts" }),
+			navTarget,
+			onClick: () => navigateFromNotification(navTarget),
 		});
 	} catch {
 		// нет настроек/сети — состояние уже применено (peerState/EMIT), уведомление необязательно

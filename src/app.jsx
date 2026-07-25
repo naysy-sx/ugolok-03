@@ -9,12 +9,14 @@ import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
+import Journal from "./ui/screens/journal.jsx";
 import { currentUser, lock, dbKeySig } from "./ui/signals/auth.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 import { activeChannelId } from "./ui/signals/channel-nav.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
+import { journalEntries, refreshJournal } from "./ui/signals/journal.js";
 import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, refreshUnreadChannelsCount } from "./ui/signals/notifications.js";
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { pushToast } from "./ui/signals/toasts.js";
@@ -30,10 +32,12 @@ import IconPerson from "./ui/icons/person.jsx";
 import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
+import IconBell from "./ui/icons/bell.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
 const NAV_ICONS = {
+	journal: IconBell,
 	messages: IconChatBubble,
 	channels: IconReader,
 	contacts: IconPeople,
@@ -96,7 +100,11 @@ function MainShell() {
 	useEffect(() => {
 		refreshContacts(ownerPubkey).then(() => refreshUnreadMessagesCount(ownerPubkey));
 		refreshUnreadChannelsCount(ownerPubkey, dbKey);
+		// Этап 50 — тот же триггер, для бейджа "Журнал [N]" (непрочитанные записи).
+		refreshJournal(ownerPubkey, dbKey);
 	}, [ownerPubkey, messagingActivity.value]);
+
+	const unreadJournalCount = journalEntries.value.filter((e) => !e.read).length;
 
 	return (
 		<div class="app-shell">
@@ -114,7 +122,14 @@ function MainShell() {
 					<ul role="list">
 						{NAV_ITEMS.map(item => {
 							const ItemIcon = NAV_ICONS[item.id];
-							const badgeCount = item.id === "messages" ? unreadMessagesCount.value : item.id === "channels" ? unreadChannelsCount.value : 0;
+							const badgeCount =
+								item.id === "messages"
+									? unreadMessagesCount.value
+									: item.id === "channels"
+										? unreadChannelsCount.value
+										: item.id === "journal"
+											? unreadJournalCount
+											: 0;
 							return (
 								<li key={item.id}>
 									<button
@@ -145,13 +160,15 @@ function MainShell() {
 				{activeId === "channels" && <Channels />}
 				{activeId === "discovery" && <Discovery />}
 				{activeId === "settings" && <Settings />}
+				{activeId === "journal" && <Journal />}
 				{activeId !== "diagnostics" &&
 					activeId !== "profile" &&
 					activeId !== "contacts" &&
 					activeId !== "messages" &&
 					activeId !== "channels" &&
 					activeId !== "discovery" &&
-					activeId !== "settings" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+					activeId !== "settings" &&
+					activeId !== "journal" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 			</div>
 		</div>

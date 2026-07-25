@@ -2,7 +2,7 @@ import { signal } from "@preact/signals";
 import { createCallRuntime } from "../../domain/calls/call-runtime.js";
 import { BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
-import { notify } from "../../domain/notifications/notifier.js";
+import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { profiles } from "./contacts.js";
 
@@ -29,10 +29,12 @@ function usernameFor(pubkeyHex) {
 async function notifyIncomingCall(peerPubkey) {
 	try {
 		const settings = await loadUiSettings(myPubkeyRef, dbKeyRef);
-		notify(settings, "calls", null, {
+		const navTarget = { screen: "messages", contactPubkey: peerPubkey };
+		await notifyAndLog(myPubkeyRef, dbKeyRef, settings, "calls", null, {
 			title: `Входящий звонок от ${usernameFor(peerPubkey)}`,
 			body: "",
-			onClick: () => navigateFromNotification({ screen: "messages", contactPubkey: peerPubkey }),
+			navTarget,
+			onClick: () => navigateFromNotification(navTarget),
 		});
 	} catch {
 		// нет настроек/сети — звонок всё равно виден через CallOverlay, уведомление необязательно

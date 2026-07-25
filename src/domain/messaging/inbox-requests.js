@@ -3,9 +3,15 @@ import { acceptWelcome } from "./chat.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { INBOX_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
+// Этап 49-довесок (найдено живым E2E, этап 50) — таблица contacts вытеснена
+// единой contactRelationships (CONTACTS-FSM.md), но остаётся в схеме и
+// перманентно пуста после однократной миграции (contact-runtime.js). Запрос
+// к старой таблице здесь молча ломал автопринятие Welcome от УЖЕ принятых
+// контактов — каждый Welcome шёл в inbox незнакомца, даже от настоящего
+// контакта. state — plaintext поле индекса [owner+peer], расшифровка не нужна.
 export async function isKnownContact(ownerPubkey, candidatePubkey) {
-	const row = await db.table("contacts").get([ownerPubkey, candidatePubkey]);
-	return Boolean(row);
+	const row = await db.table("contactRelationships").get([ownerPubkey, candidatePubkey]);
+	return row?.state === "CONTACT";
 }
 
 // welcomeWireBytes хранится СЫРЫМ, joinFromWelcome НЕ вызывается здесь — Welcome
