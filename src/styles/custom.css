@@ -146,32 +146,125 @@ button:has(> .icon),
 	flex-direction: column;
 	align-items: center;
 	text-align: center;
-	gap: var(--space-2xs);
+	gap: var(--space-s);
 	padding-block-end: var(--space-m);
 	border-block-end: var(--border-width) solid var(--border);
 }
+
+/* Аватар в aside — найдено пользователем: этот класс раньше не имел ВООБЩЕ
+   никакого CSS вне .auth-layout (стартовый экран), поэтому реальное фото
+   рендерилось нативным img без ограничения размера — источник и "квадрат
+   вместо круга" (явное требование пользователя, в отличие от круглых
+   аватаров на unlock.jsx — там не трогаем), и вероятный источник "странных
+   отступов" в карточке (неограниченная высота реальной фотографии). */
+.app-layout .profile-card-avatar-btn {
+	display: block;
+	background: none;
+	border: none;
+	padding: 0;
+	border-radius: var(--radius);
+	cursor: pointer;
+	transition: filter var(--transition-speed) var(--transition-ease);
+}
+.app-layout .profile-card-avatar-btn:hover:not(:disabled) {
+	filter: brightness(1.06);
+}
+.app-layout .profile-card-avatar-btn:disabled {
+	cursor: default;
+}
+.app-layout .account-avatar-large {
+	display: block;
+	inline-size: 5rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface-raised);
+}
+.app-layout .account-avatar-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+	font-size: var(--step-3);
+	font-weight: var(--weight-bold);
+}
+
+.app-layout .profile-card-body {
+	max-inline-size: 100%;
+	min-inline-size: 0;
+}
 .app-layout .profile-card-body h2 {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-3xs);
 	font-size: var(--step-1);
 	margin-block: 0;
+	max-inline-size: 100%;
 }
-.app-layout .profile-card-body p {
+/* Длинный логин (например автосгенерированный) не должен раздвигать
+   фиксированную ширину сайдбара и прятать под собой кнопку-карандаш —
+   обрезаем троеточием, полное имя остаётся доступным через title. */
+.app-layout .profile-card-body h2 span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-inline-size: 0;
+}
+/* Компактная кнопка-карандаш вместо текстовой ссылки "Изменить профиль"
+   (пользователь: "ссылка выглядит стрёмно... сделать кнопочку с иконкой") —
+   рядом с именем, а не отдельной строкой снизу (была причиной лишнего
+   вертикального пространства). */
+.app-layout .profile-edit-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: none;
+	border: var(--border-width) solid transparent;
 	color: var(--muted);
-	font-size: var(--step--1);
-	margin-block-start: var(--space-3xs);
-}
-.app-layout .btn-link {
-	background-color: transparent;
-	border: 0;
 	padding: var(--space-3xs);
-	color: var(--accent);
-	font-weight: var(--weight-normal);
-	text-decoration: underline;
-	text-underline-offset: 0.15em;
-	cursor: pointer;
+	border-radius: calc(infinity * 1px);
 	font-size: var(--step--1);
+	flex: none;
 }
-.app-layout .btn-link:hover {
-	color: var(--accent-hover);
+.app-layout .profile-edit-btn:hover {
+	background-color: var(--surface-raised);
+	color: var(--accent);
+}
+
+/* Био в кавычках (идея пользователя) — крупные декоративные кавычки цветом
+   "сквозняка" (--accent-2, холодный компаньон лампового --accent),
+   курсивный serif для тёплого "разговор по душам" тона. */
+.app-layout .profile-bio {
+	position: relative;
+	color: var(--fg);
+	font-family: var(--font-serif);
+	font-style: italic;
+	font-size: var(--step--1);
+	margin-block: var(--space-2xs) 0;
+	padding-inline: var(--space-m);
+	text-wrap: pretty;
+}
+.app-layout .profile-bio::before,
+.app-layout .profile-bio::after {
+	position: absolute;
+	font-family: var(--font-display);
+	font-style: normal;
+	font-size: var(--step-3);
+	line-height: 0;
+	color: var(--accent-2);
+	opacity: 0.7;
+}
+.app-layout .profile-bio::before {
+	content: "“";
+	inset-inline-start: 0;
+	top: 0.6em;
+}
+.app-layout .profile-bio::after {
+	content: "”";
+	inset-inline-end: 0;
+	bottom: -0.2em;
 }
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
