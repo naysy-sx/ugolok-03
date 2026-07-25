@@ -1183,5 +1183,14 @@ Regression: `npm test` 798/798.
 
 П.4 (`signaling-adapter.js`, Nostr I/O) — готов, написан Claude напрямую
 (kind 20075 эфемерный, NIP-44 напрямую). 15 тестов (round-trip реальными
-ключами). Regression: `npm test` 813/813. Следующий шаг — п.5
-(`call-runtime.js` — склейка).
+ключами). Regression: `npm test` 813/813.
+
+П.5 (`call-runtime.js`, склейка) — готов, написан Claude напрямую
+(оркестрация). 10 тестов (реальные call-fsm.js+signaling-adapter.js,
+фейковые media-controller+таймеры). Regression: `npm test` 823/823.
+
+**Вся логика звонка готова** (VOICE.md §0 scope закрыт целиком: FSM +
+media-controller + signaling-adapter + runtime, 99 новых тестов суммарно
+по этим 4 файлам). Остаётся: п.6 (UI — persistent-оверлей + кнопки),
+п.7 (уведомления, категория "calls"), п.8 (живая E2E), п.9 (настройка
+ICE-серверов в settings.jsx).

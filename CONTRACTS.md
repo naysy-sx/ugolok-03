@@ -6914,3 +6914,53 @@ contact-request rumors). Подписка на входящие kind 20075 (REQ-
 secp256k1-ключи), содержимое реально нечитаемо как есть, чужой ключ не
 расшифровывает (бросает), все 4 SEND_*-команды, все 4 toFsmEvent-маппинга,
 неизвестный тип, сквозной цикл execute→parse→toFsmEvent.
+
+## Этап 48, п.5 — `call-runtime.js` (imperative shell, склейка)
+
+Написан Claude напрямую (оркестрация — §5 VOICE.md).
+
+```js
+export function createCallRuntime(options) -> { placeCall(peerPubkey), accept(), reject(), hangup(), handleIncomingSignal(event), getState() }
+```
+
+`options`: `myPubkey`, `privKey`, `publish`, `onStateChange(stateName, reason)`
+(UI-колбэк — EMIT), `createMediaController`/`signalingAdapter` (DI, по умолчанию
+реальные модули — тесты подставляют фейки), `setTimeoutImpl`/`clearTimeoutImpl`
+(DI для детерминированных тестов таймеров), остальные поля прокидываются в
+`createMediaController` (`iceServers`, `getUserMediaImpl`, `RTCPeerConnectionImpl`,
+`onLocalStream`, `onRemoteStream`).
+
+Держит ЕДИНСТВЕННЫЙ источник truth — `state` (замыкание), продвигается через
+`dispatch(event) = reduce(state, event)` + исполнение всех `commands`.
+Маршрутизация команд: `ACQUIRE_MIC`/`CREATE_OFFER`/`CREATE_ANSWER`/`SET_REMOTE`/
+`ADD_ICE`/`DO_ICE_RESTART`/`CLOSE_PC` → `mediaController.execute`; `SEND_*` →
+`signalingAdapter.execute` (с `peerPubkey`/`sessionId` из ТЕКУЩЕГО `state`);
+`START_TIMER`/`CANCEL_TIMER` → собственные именованные таймеры
+(`ring`→`RING_TIMEOUT`, `connect`→`CONNECT_TIMEOUT`, `grace`→`GRACE_EXPIRED`,
+`backoff`→`BACKOFF_EXPIRED`); `EMIT` → `onStateChange`.
+
+**Найденная защита сверх VOICE.md:** `CLOSE_PC` дополнительно чистит ВСЕ
+таймеры (`clearAllTimers()`), не только те, что явно упомянуты в конкретном
+переходе §2 — иначе осиротевший `grace`/`backoff`-таймер от предыдущего звонка
+мог бы выстрелить в разгар СЛЕДУЮЩЕГО (`sessionId` при этом другой — I1 его
+отфильтрует, но лишний cycle дешевле предотвратить, чем полагаться только на
+фильтр).
+
+**Известное ограничение (не решено, задокументировано, не блокирует v1):**
+события медиа-слоя (`LOCAL_*`, `ICE_*`) НЕ несут `sessionId` — они привязаны
+к конкретному `RTCPeerConnection`, а не к сессии напрямую; I1 их поэтому не
+проверяет вовсе (`needsSessionCheck` в `call-fsm.js` пропускает события без
+`sessionId`). Теоретическая гонка: асинхронная медиа-команда (напр.
+`CREATE_OFFER`) всё ещё летит, а звонок уже завершился и НАЧАЛСЯ новый — её
+результат может прийти "в разгар" нового звонка. На практике `CLOSE_PC`
+закрывает `pc` синхронно, что естественным образом валит любую операцию,
+ещё летящую на СТАРОМ `pc` (WebRTC не позволяет успешно завершить операцию
+на закрытом соединении) — считаем это достаточным для v1 без выделенного
+трекинга "к какому именно звонку относится этот asinc-результат".
+
+Тесты — `tests/call-runtime.test.js` (10): реальный `call-fsm.js` +
+реальный `signaling-adapter.js` (round-trip шифрования настоящими ключами,
+только `publish` застаблен) + фейковый `mediaController` + фейковые таймеры
+(детерминированные, без реального ожидания). Полный happy path caller и
+callee, ring-timeout, hangup/reject, ICE-restart (impolite-ветка), I1 на
+входящем сигналинге, устойчивость к событию не для нас (чужой получатель).
