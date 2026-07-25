@@ -114,7 +114,7 @@ test("mediaController эмитит LOCAL_OFFER_READY -> SEND_OFFER реальн�
 	assert.equal(published[0].pubkey, ALICE_PUB);
 });
 
-test("ring timeout: таймер срабатывает -> ENDED(no_answer), CLOSE_PC исполнен, таймеры очищены", async () => {
+test("ring timeout: таймер срабатывает -> ENDED(no_answer), CLOSE_PC исполнен, таймеры очищены (кроме нового ended-auto-reset)", async () => {
 	const { runtime, media, timers, stateChanges } = makeRuntime(ALICE_PRIV, ALICE_PUB);
 	runtime.placeCall(BOB_PUB);
 	await flush();
@@ -123,8 +123,54 @@ test("ring timeout: таймер срабатывает -> ENDED(no_answer), CLO
 	assert.equal(runtime.getState().name, "ENDED");
 	assert.equal(runtime.getState().reason, "no_answer");
 	assert.ok(media.calls.some((c) => c.type === "CLOSE_PC"));
-	assert.equal(timers.pendingCount, 0, "CLOSE_PC обязан очистить осиротевшие таймеры");
+	// CLOSE_PC чистит осиротевшие FSM-таймеры (ring/connect/grace/backoff), но
+	// EMIT(ENDED) сразу следом сам планирует РОВНО один новый — автовозврат в IDLE.
+	assert.equal(timers.pendingCount, 1, "остаётся только новый ended-auto-reset таймер");
 	assert.deepEqual(stateChanges.at(-1), { stateName: "ENDED", reason: "no_answer" });
+});
+
+test("ENDED автоматически возвращается в IDLE спустя паузу (VOICE.md §1.1) — иначе следующий звонок не проходил бы вовсе", async () => {
+	const { runtime, media, timers, stateChanges } = makeRuntime(ALICE_PRIV, ALICE_PUB);
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await timers.fireOldest(); // ring -> ENDED(no_answer)
+	assert.equal(runtime.getState().name, "ENDED");
+
+	await timers.fireOldest(); // ended-auto-reset
+	assert.equal(runtime.getState().name, "IDLE");
+	assert.deepEqual(stateChanges.at(-1), { stateName: "IDLE", reason: undefined });
+
+	// Раз мы снова в IDLE — новый звонок обязан пройти как обычный happy path,
+	// а не молча проигнорироваться (I5 — ENDED игнорирует ВСЁ, IDLE — нет).
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	assert.equal(runtime.getState().name, "OUTGOING_RINGING");
+	assert.deepEqual(
+		media.calls.slice(-2).map((c) => c.type),
+		["ACQUIRE_MIC", "CREATE_OFFER"],
+	);
+});
+
+test("dismissEnded(): ручной сброс ENDED -> IDLE сразу, не дожидаясь автотаймера, отменяет сам таймер", async () => {
+	const { runtime, timers } = makeRuntime(ALICE_PRIV, ALICE_PUB);
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await timers.fireOldest(); // ring -> ENDED
+	assert.equal(runtime.getState().name, "ENDED");
+	assert.equal(timers.pendingCount, 1);
+
+	runtime.dismissEnded();
+	assert.equal(runtime.getState().name, "IDLE");
+	assert.equal(timers.pendingCount, 0, "dismissEnded обязан отменить запланированный автовозврат");
+});
+
+test("dismissEnded() в состоянии, отличном от ENDED, — no-op", async () => {
+	const { runtime } = makeRuntime(ALICE_PRIV, ALICE_PUB);
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	const before = runtime.getState();
+	runtime.dismissEnded();
+	assert.deepEqual(runtime.getState(), before);
 });
 
 test("полный happy path caller: placeCall -> LOCAL_OFFER_READY -> входящий REMOTE_ANSWER (реальное шифрование) -> CONNECTING -> ICE_CONNECTED -> CONNECTED", async () => {

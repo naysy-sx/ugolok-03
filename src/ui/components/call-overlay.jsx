@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { callState, localMediaStream, remoteMediaStream, acceptCall, rejectCall, hangupCall } from "../signals/call.js";
+import { callState, localMediaStream, remoteMediaStream, acceptCall, rejectCall, hangupCall, dismissEndedCall } from "../signals/call.js";
 import { profiles } from "../signals/contacts.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 
@@ -57,6 +57,25 @@ function Waveform({ stream }) {
 	return <canvas ref={canvasRef} width={120} height={28} class="call-waveform" aria-hidden="true" />;
 }
 
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живое использование) — звука не было ВООБЩЕ: track
+// собеседника доходил (ontrack в media-controller.js), стрим сохранялся в
+// remoteMediaStream, но нигде реально НЕ проигрывался — Waveform выше только
+// АНАЛИЗИРУЕТ поток (AnalyserNode), не воспроизводит его. Без явного <audio>
+// с srcObject звук так и не звучит, сколько разрешений браузеру ни давай.
+function RemoteAudio({ stream }) {
+	const audioRef = useRef(null);
+	useEffect(() => {
+		const el = audioRef.current;
+		if (!el || !stream) return;
+		el.srcObject = stream;
+		el.play().catch(() => {}); // автоплей может потребовать жеста — клик "Принять"/"Позвонить" его уже дал
+		return () => {
+			el.srcObject = null;
+		};
+	}, [stream]);
+	return <audio ref={audioRef} autoPlay style={{ display: "none" }} />;
+}
+
 // Тикающий таймер длительности — callState (FSM) не несёт временных меток (§1.2
 // VOICE.md заморожен, не трогаем), поэтому "с какого момента считать" живёт
 // здесь, локально в UI, а не в состоянии автомата.
@@ -86,13 +105,17 @@ export default function CallOverlay() {
 		connectedAtRef.current = null;
 	}
 
-	// ENDED — краткая справка (переиспользуем визуальный язык тоста), затем
-	// уходит сама (call-runtime.js вернёт FSM в IDLE новым звонком, не таймером —
-	// оверлей просто перестаёт себя показывать после короткой паузы).
+	// ENDED — краткая справка; call-runtime.js сам возвращает FSM в IDLE спустя
+	// пару секунд (см. call-runtime.js — "после очистки ресурсов", VOICE.md
+	// §1.1), но НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ: до этого фикса не возвращал вовсе, плашка
+	// висела бесконечно — крестик даёт закрыть сразу, не дожидаясь автовозврата.
 	if (call.name === "ENDED") {
 		return (
 			<div class="call-overlay call-overlay-ended" role="status" aria-live="polite">
 				<p>Звонок завершён{call.reason ? `: ${callEndReasonRu(call.reason)}` : ""}</p>
+				<button type="button" class="call-overlay-ended-close" onClick={dismissEndedCall} aria-label="Закрыть">
+					×
+				</button>
 			</div>
 		);
 	}
@@ -154,6 +177,7 @@ export default function CallOverlay() {
 					</span>
 				)}
 			</div>
+			<RemoteAudio stream={remoteMediaStream.value} />
 			<button type="button" class="call-btn-reject call-bar-hangup" onClick={hangupCall} aria-label="Завершить звонок">
 				<IconPhoneCall />
 			</button>

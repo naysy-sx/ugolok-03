@@ -78,6 +78,9 @@ export function rejectCall() {
 export function hangupCall() {
 	runtime?.hangup();
 }
+export function dismissEndedCall() {
+	runtime?.dismissEnded();
+}
 
 // Вызывается transport.js на каждое входящее kind 20075 (сигналинг звонка).
 export function handleIncomingCallSignal(event) {

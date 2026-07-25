@@ -17,6 +17,19 @@ const TIMER_EVENT_BY_NAME = {
 const MEDIA_COMMAND_TYPES = new Set(["ACQUIRE_MIC", "CREATE_OFFER", "CREATE_ANSWER", "SET_REMOTE", "ADD_ICE", "DO_ICE_RESTART", "CLOSE_PC"]);
 const SIGNAL_COMMAND_TYPES = new Set(["SEND_OFFER", "SEND_ANSWER", "SEND_ICE", "SEND_HANGUP"]);
 
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живое использование) — ENDED терминален в чистом
+// call-fsm.js (игнорирует вообще все события, I5), но VOICE.md §1.1 буквально:
+// "ENDED после очистки ресурсов переходит в IDLE (новый звонок начинается из
+// IDLE)" — это ответственность runtime, не reduce(). Без явного возврата ни
+// следующий исходящий, ни входящий звонок не обрабатывался бы вовсе (плюс
+// UI-плашка "Звонок завершён" висела бы бесконечно — второй найденный баг,
+// закрыт тем же fix'ом). Короткая пауза даёт пользователю увидеть причину.
+const ENDED_AUTO_RESET_MS = 3000;
+
+function idleState() {
+	return { name: "IDLE", role: null, sessionId: null, peerPubkey: null, polite: null, restartCount: 0, reason: null };
+}
+
 // createMediaController/signalingAdapter — инъецируемые (тесты подставляют фейки,
 // тот же DI-приём, что media-controller.js/signaling-adapter.js сами используют
 // для RTCPeerConnection/getUserMedia). setTimeoutImpl/clearTimeoutImpl — DI по той
@@ -34,8 +47,19 @@ export function createCallRuntime(options = {}) {
 		...mediaOptions
 	} = options;
 
-	let state = { name: "IDLE", role: null, sessionId: null, peerPubkey: null, polite: null, restartCount: 0, reason: null };
+	let state = idleState();
 	const timers = new Map(); // name -> timer id
+	let endedResetTimerId = null;
+
+	function resetToIdle() {
+		if (endedResetTimerId !== null) {
+			clearTimeoutImpl(endedResetTimerId);
+			endedResetTimerId = null;
+		}
+		if (state.name !== "ENDED") return; // уже сброшено (ручной dismiss опередил таймер) или новый звонок
+		state = idleState();
+		onStateChange("IDLE");
+	}
 
 	// НАЙДЕНО ЖИВЫМ E2E — команды одного перехода ОБЯЗАНЫ исполняться строго
 	// последовательно, не "запустить и забыть": ACQUIRE_MIC добавляет трек в
@@ -108,6 +132,9 @@ export function createCallRuntime(options = {}) {
 		}
 		if (command.type === "EMIT") {
 			onStateChange(command.stateName, command.reason);
+			if (command.stateName === "ENDED") {
+				endedResetTimerId = setTimeoutImpl(resetToIdle, ENDED_AUTO_RESET_MS);
+			}
 		}
 	}
 
@@ -142,5 +169,5 @@ export function createCallRuntime(options = {}) {
 		return state;
 	}
 
-	return { placeCall, accept, reject, hangup, handleIncomingSignal, getState };
+	return { placeCall, accept, reject, hangup, handleIncomingSignal, getState, dismissEnded: resetToIdle };
 }

@@ -730,9 +730,27 @@
 }
 
 .call-overlay-ended {
-	padding: var(--space-s);
+	position: relative;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	padding: var(--space-s) var(--space-l);
 	color: var(--muted);
 	font-size: 0.9em;
+}
+
+.call-overlay-ended-close {
+	position: absolute;
+	inset-inline-end: var(--space-2xs);
+	inset-block-start: 50%;
+	transform: translateY(-50%);
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 1.3em;
+	line-height: 1;
+	padding: var(--space-3xs);
 }
 
 .call-overlay-avatar {
