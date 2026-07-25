@@ -37,6 +37,19 @@
 	stroke-width: 0.6;
 }
 
+/* Найдено пользователем: "иконки сталкивают текст после них вниз" — кнопка
+   с иконкой перед текстом (<IconX /> Текст) внутри обычного button (inline-
+   block, элементный слой minimal.css) укладывает svg и текст как два
+   строчных элемента без общей базовой линии, из-за чего текст переносится
+   строкой ниже иконки. Тот же приём, что уже используется в .nav-item-btn —
+   применяем его глобально к ЛЮБОЙ кнопке с иконкой, а не только в наве. */
+button:has(> .icon),
+[type="button"]:has(> .icon) {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+
 /* ================================================================== *
  *  Основной экран приложения (app.jsx, MainShell + screen.jsx) —     *
  *  каркас "шапка+один локальный скролл+подвал" на всех внутренних    *
@@ -173,59 +186,84 @@
 .app-layout .section-header {
 	flex: 0 0 auto;
 	padding: var(--space-m);
+	/* Резерв справа под .theme-toggle-btn (custom.css выше) — он fixed
+	   поверх ВСЕГО приложения в правом верхнем углу; без резерва крупный
+	   <h1> (--step-5 ниже) на короткий момент оказывался у него под низом
+	   (см. следующий комментарий про justify-content). */
+	padding-inline-end: calc(var(--space-m) + 2.75rem);
 	border-block-end: var(--border-width) solid var(--border);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2xs);
 }
+/* justify-content:flex-start, не space-between: на экранах с breadcrumb, но
+   БЕЗ actions (например channel.jsx) в строке всего два ребёнка —
+   back-button и <h1> — и space-between прижимал бы <h1> как ПОСЛЕДНИЙ
+   элемент к правому краю целиком (даже короткое название канала съезжало
+   вплотную к переключателю темы). Правый край теперь держит сама
+   .action-buttons через margin-inline-start:auto ниже — так заголовок
+   всегда остаётся сразу после стрелки "Назад", независимо от того, сколько
+   "средних" элементов в строке. */
 .app-layout .header-actions {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-start;
 	gap: var(--space-s);
 }
+/* Пользователь: "заголовок не отцентрирован по вертикали" — виновник
+   был margin-block-end у <h1> (элементный слой minimal.css), который
+   :first-child не снимает (снимает только margin-block-start). Плюс
+   пользователь явно просил максимальный размер (h1 = --step-5). */
 .app-layout .header-actions h1 {
-	font-size: var(--step-2);
+	font-size: var(--step-5);
+	margin-block: 0;
+	min-width: 0;
 }
 .app-layout .action-buttons {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--space-2xs);
+	margin-inline-start: auto;
+}
+/* Вторичные действия раздела рядом с крупным <h1> — тише, чем сплошная
+   заливка --accent (та зарезервирована за первичным CTA конкретного
+   экрана, см. VISUAL.md .btn-ghost): обводка + прозрачный фон, заливается
+   на hover. */
+.app-layout .action-buttons button,
+.app-layout .action-buttons [type="button"] {
+	background-color: transparent;
+	color: var(--fg);
+	border-color: var(--border);
+	font-weight: var(--weight-normal);
+}
+.app-layout .action-buttons button:hover,
+.app-layout .action-buttons [type="button"]:hover {
+	background-color: var(--surface-raised);
 }
 
-.app-layout .breadcrumbs ol {
-	display: flex;
-	flex-wrap: wrap;
+/* Кнопка "Назад" перед заголовком (пользователь: "большая красивая
+   стрелка Назад") — крупная стрелка + подпись, тихий ghost-стиль (как
+   .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
+.app-layout .back-button {
+	display: inline-flex;
 	align-items: center;
 	gap: var(--space-3xs);
-	list-style: none;
-	padding-inline-start: 0;
-	margin-block: 0;
+	flex: none;
+	background-color: transparent;
 	color: var(--muted);
-	font-size: var(--step--1);
+	border-color: transparent;
+	padding-inline: var(--space-2xs);
+	font-size: var(--step-3);
+	font-weight: var(--weight-normal);
 }
-.app-layout .breadcrumbs li:not(:last-child)::after {
-	content: "/";
-	margin-inline-start: var(--space-3xs);
-}
-.app-layout .breadcrumbs button {
-	background: none;
-	border: 0;
-	padding: 0;
-	margin: 0;
-	color: var(--accent);
-	text-decoration: underline;
-	text-underline-offset: 0.15em;
-	cursor: pointer;
-	font: inherit;
-	font-size: inherit;
-}
-.app-layout .breadcrumbs button:hover {
-	color: var(--accent-hover);
-}
-.app-layout .breadcrumbs [aria-current="page"] {
+.app-layout .back-button:hover {
+	background-color: var(--surface-raised);
 	color: var(--fg);
+}
+.app-layout .back-button span {
+	font-size: var(--step--1);
 }
 
 /* Приём "скроллится ровно то, что осталось от flex-родителя": content-area —
