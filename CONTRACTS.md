@@ -6683,3 +6683,151 @@ transport.js, который не покрыт юнит-тестами — тр�
 отдельным E2E не прогонялся — использует ТОТ ЖЕ `isNewEvent()` на том
 же архитектурном уровне, что уже верифицированный путь ЛС; регрессия
 744/744 не выявила косвенных поломок.
+
+## Этап 48 — голосовая связь: контракты (Event/Command/State/kind)
+
+Источник — VOICE.md (корень проекта, ТЗ подготовлено пользователем
+совместно с Claude Opus: формальный FSM, таблица переходов, инварианты,
+тест-спека). Пять развилок закрыты явными решениями пользователя (не
+домысел, см. PLAN.md, "Этап 48"): простой ICE-restart (impolite
+инициирует), новый эфемерный kind + NIP-44 напрямую для сигналинга,
+свой coturn (STUN) + публичный fallback, история звонков отложена,
+мультиустройство вне скоупа v1.
+
+### Файлы (Frisby, §3 VOICE.md)
+
+```
+src/domain/calls/call-fsm.js         — pure. reduce(state, event) -> {state, commands}.
+                                        Ноль I/O, ноль async. Пишет ВОРКЕР.
+src/domain/calls/media-controller.js — обёртка RTCPeerConnection: буфер ICE
+                                        до setRemoteDescription, glare-rollback.
+                                        Пишет Claude (риск-точка, triage 13a).
+src/domain/calls/signaling-adapter.js— Nostr in/out для сигналинга (kind ниже).
+                                        Пишет Claude.
+src/domain/calls/call-runtime.js     — imperative shell: подписан на media+
+                                        signaling, кормит reduce(), исполняет
+                                        commands. Пишет Claude (оркестрация).
+```
+
+### State (§1.2 VOICE.md, буквально)
+
+```js
+state = {
+  name,          // одно из: IDLE, OUTGOING_RINGING, INCOMING_RINGING,
+                 // CONNECTING, CONNECTED, RECONNECTING, ENDED
+  role,          // 'caller' | 'callee' | null
+  sessionId,     // uuid, генерит caller
+  peerPubkey,    // pubkey собеседника
+  polite,        // bool = (myPubkey < peerPubkey) — тайбрейкер glare/restart
+  restartCount,  // счётчик попыток ICE restart, сброс при возврате в CONNECTED
+  reason,        // причина завершения (только в ENDED)
+}
+```
+
+### Event (Σ_in, §1.3 VOICE.md)
+
+- Пользователь: `USER_PLACE_CALL(peerPubkey)`, `USER_ACCEPT`, `USER_REJECT`, `USER_HANGUP`
+- Сигналинг: `REMOTE_OFFER(sdp, sessionId, fromPubkey)`, `REMOTE_ANSWER(sdp)`, `REMOTE_ICE(candidate)`, `REMOTE_HANGUP`
+- Медиа (колбэки RTCPeerConnection): `LOCAL_OFFER_READY(sdp)`, `LOCAL_ANSWER_READY(sdp)`, `LOCAL_ICE(candidate)`, `ICE_CONNECTED`, `ICE_DISCONNECTED`, `ICE_FAILED`
+- Таймеры: `RING_TIMEOUT`, `CONNECT_TIMEOUT`, `GRACE_EXPIRED`, `BACKOFF_EXPIRED`
+
+Каждое событие несёт `sessionId`, кроме `USER_PLACE_CALL` и `REMOTE_OFFER`
+(они сессию создают/приносят). **I1**: событие с `sessionId ≠
+state.sessionId` — игнорируется (защита от дублей/устаревших событий).
+
+### Command (Σ_out, §1.4 VOICE.md)
+
+- Сигналинг наружу: `SEND_OFFER(sdp)`, `SEND_ANSWER(sdp)`, `SEND_ICE(candidate)`, `SEND_HANGUP`
+- Медиа: `ACQUIRE_MIC`, `CREATE_OFFER`, `CREATE_ANSWER`, `SET_REMOTE(sdp)`, `ADD_ICE(candidate)`, `DO_ICE_RESTART`, `CLOSE_PC`
+- Таймеры: `START_TIMER(name, ms)`, `CANCEL_TIMER(name)`
+- UI: `EMIT(stateName, reason?)`
+
+Таблица переходов δ, инварианты I1-I5, разрешение glare (§2.1) и ICE
+restart (§2.2) — см. VOICE.md буквально, переносить в CONTRACTS.md не
+дублирую (ТЗ уже заморожено, воркер получит его через `--ctx VOICE.md`).
+
+Константы (Erickson, §3 VOICE.md):
+```
+RING_TIMEOUT     = 30000
+CONNECT_TIMEOUT  = 15000
+DISCONNECT_GRACE = 4000
+MAX_RESTARTS     = 4
+backoff(n)       = min(1000 * 2**(n-1), 8000)
+```
+
+### Kind сигналинга (закрывает развилку №2)
+
+```js
+// src/domain/calls/signaling-adapter.js
+export const CALL_SIGNAL_KIND = 20075; // эфемерный диапазон NIP-01 (20000-29999)
+```
+
+Один kind на ВСЕ типы сигнальных сообщений (offer/answer/ice/hangup) —
+тип различается полем `type` внутри NIP-44-зашифрованного JSON, тот же
+приём, что d-tag-паттерны/маркеры уже применяются в проекте (delete/edit
+маркеры в kind 445, subtype в d-tag комментариев) — не плодим kind на
+каждый вариант. Тег `#p: [peerPubkey]` — адресация получателю (тот же
+принцип, что contact-request rumors). Шифрование — NIP-44 НАПРЯМУЮ (без
+gift-wrap, см. обоснование в PLAN.md "Этап 48"): дёшево на каждый
+ICE-кандидат, relay эфемерного диапазона не обязан хранить события
+вовсе — практическое следствие: сигналингу нечему передоставляться при
+resubscribe (тот же класс проблемы, что чинили в довеске-4, здесь не
+возникает по конструкции).
+
+Payload (JSON, после NIP-44-расшифровки):
+```js
+{ type: "offer" | "answer" | "ice" | "hangup", sessionId, sdp?, candidate? }
+```
+
+### ICE-серверы (закрывает развилку №3)
+
+```js
+// config.js — тот же паттерн, что BUILD_DEFAULT_RELAYS/BUILD_DEFAULT_BLOSSOM_SERVERS
+export const BUILD_DEFAULT_ICE_SERVERS = [
+  { urls: "stun:<свой-coturn-host>:3478" }, // свой — первым
+  { urls: "stun:stun.l.google.com:19302" }, // публичный — fallback
+];
+```
+
+Настройка списка — по паттерну `addRelayUrl`/`removeRelayUrl`/
+`setActiveRelayUrl` в ui-settings.js, НО без понятия "активного" (ICE
+пробует ВСЕ переданные серверы параллельно, не переключается на один) —
+проще: `iceServerUrls: string[]`, `addIceServerUrl`/`removeIceServerUrl`,
+без `activeIceServerUrl`. TURN — не подключаем в v1 (см. PLAN.md).
+
+### Интеграция с уведомлениями (этап 47)
+
+Новая категория `"calls"` в `DEFAULT_NOTIFICATIONS` — по аналогии с
+`moderation` (принудительный уровень, не в `notifications.enabled`
+общем рубильнике): пропущенный звонок не должен быть заглушаем
+настройками. `resolveNotificationLevel(settings, "calls", null)` →
+всегда `"sound"`, без ветки на `enabled`. `onClick` — через уже
+существующий `navigateFromNotification` (новый target
+`{screen: "messages", contactPubkey}` — уже поддержан).
+
+### UI (контракт, реализация — п.6 плана)
+
+Persistent-компонент на уровне `app.jsx` (рядом с `ToastHost`, НЕ внутри
+`chat.jsx`) — подписан на `callState` (новый сигнал, аналог
+`toasts`/`pendingNavTarget`). Кнопка "Позвонить" — `contacts.jsx` (рядом
+с `ContactIdentity`) и `chat.jsx` (шапка). Визуальные состояния — см.
+PLAN.md "Этап 48" (полноэкранный оверлей для \*_RINGING, компактная
+плашка для CONNECTED/RECONNECTING с волновой визуализацией через
+`AnalyserNode` и индикатором качества через `RTCPeerConnection.getStats()`).
+
+### Найденный и закрытый пробел контракта — откуда `reduce` берёт `myPubkey`
+
+VOICE.md §1.2 не включает `myPubkey` в state payload, но `polite =
+(myPubkey < peerPubkey)` вычисляется именно в `reduce` при переходе из
+`IDLE` (§2, ветки `USER_PLACE_CALL`/`REMOTE_OFFER`). Раз `reduce` чистая
+и не хранит внешний конфиг помимо `state`/`event`, решение (закрыто ДО
+вызова воркера, не домысел воркера): **события, создающие сессию, несут
+`myPubkey` дополнительным полем** — `call-runtime.js` его знает всегда
+(это identity текущего владельца) и подставляет при диспетчеризации.
+```
+USER_PLACE_CALL(peerPubkey, myPubkey)
+REMOTE_OFFER(sdp, sessionId, fromPubkey, myPubkey)
+```
+Поле нужно ТОЛЬКО для вычисления `polite` в момент этого перехода — в
+`state` не оседает сверх уже описанных в §1.2 полей (`state.polite`
+хранит УЖЕ вычисленный булев результат, не сами pubkey для сравнения).
