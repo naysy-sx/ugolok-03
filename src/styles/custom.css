@@ -2125,3 +2125,92 @@ button:has(> .icon),
 .app-layout .req__body {
 	padding: 0 var(--space-s) var(--space-s);
 }
+
+/* ================================================================== *
+ *  Экран "Профиль" — VISUAL.md v2, интеграция.                        *
+ * ================================================================== */
+.app-layout .sect-title {
+	font-family: var(--font-display);
+	font-size: var(--step-1);
+	letter-spacing: var(--heading-letter-spacing);
+	margin-block: 0 var(--space-s);
+}
+
+/* npub — код в рамке + отдельная кнопка-копия (реальная <button>, не
+   div с role="button"/tabIndex/onKeyDown — пользователь: "семантику не
+   нарушать", настоящая кнопка доступна с клавиатуры сама по себе). */
+.app-layout .keybox {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-s);
+}
+.app-layout .keybox code {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-mono);
+	font-size: var(--step--1);
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.app-layout .hint {
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block-start: var(--space-2xs);
+}
+
+.app-layout .srv__list {
+	list-style: none;
+	margin: 0 0 var(--space-s);
+	padding: 0;
+	display: grid;
+	gap: var(--space-2xs);
+}
+.app-layout .srv__item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-s);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+}
+.app-layout .srv__url {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-mono);
+	font-size: var(--step--1);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.app-layout .srv__add {
+	display: flex;
+	gap: var(--space-2xs);
+}
+.app-layout .srv__add .input,
+.app-layout .srv__add input {
+	flex: 1;
+}
+.app-layout .badge-on {
+	flex: none;
+	font-size: var(--step--2);
+	color: var(--accent-2);
+	background-color: color-mix(in oklch, var(--accent-2), transparent 84%);
+	padding: 2px var(--space-2xs);
+	border-radius: var(--radius-full);
+	white-space: nowrap;
+}
+.app-layout .files-empty {
+	border: 1px dashed var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-l);
+	color: var(--muted);
+	font-size: var(--step--1);
+	text-align: center;
+}

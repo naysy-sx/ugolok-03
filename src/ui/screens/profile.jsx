@@ -16,6 +16,9 @@ import {
 } from "../../domain/settings/ui-settings.js";
 import Screen from "../components/screen.jsx";
 import { bumpProfileActivity } from "../signals/profile.js";
+import IconCopy from "../icons/copy.jsx";
+import IconTrash from "../icons/trash.jsx";
+import IconPlus from "../icons/plus.jsx";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -58,34 +61,43 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 	}
 
 	return (
-		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-			<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{title}</h2>
+		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby={`srv-${title}`}>
+			<h2 id={`srv-${title}`} class="sect-title">
+				{title}
+			</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
-			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+			<ul role="list" class="srv__list">
 				{urls.map((url) => (
-					<li key={url} class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-						<span style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
-							{url} {url === activeUrl && <strong>(активный)</strong>}
-						</span>
-						<span class="cluster">
-							{url !== activeUrl && (
-								<button type="button" disabled={busy} onClick={() => runAction(() => onSetActive(url))}>
-									Сделать активным
-								</button>
-							)}
-							<button type="button" disabled={busy} onClick={() => runAction(() => onRemove(url))}>
-								Удалить
+					<li key={url} class="srv__item">
+						<span class="srv__url">{url}</span>
+						{url === activeUrl && <span class="badge-on">активный</span>}
+						{url !== activeUrl && (
+							<button type="button" class="btn--ghost" disabled={busy} onClick={() => runAction(() => onSetActive(url))}>
+								Сделать активным
 							</button>
-						</span>
+						)}
+						<button
+							type="button"
+							class="icon-btn"
+							disabled={busy}
+							onClick={() => runAction(() => onRemove(url))}
+							aria-label={`Удалить сервер ${url}`}
+						>
+							<IconTrash />
+						</button>
 					</li>
 				))}
-				{urls.length === 0 && <li style={{ color: "var(--muted)" }}>Список пуст.</li>}
+				{urls.length === 0 && (
+					<li style={{ color: "var(--muted)" }} class="srv__item">
+						Список пуст.
+					</li>
+				)}
 			</ul>
-			<form class="cluster" onSubmit={handleAdd}>
+			<form class="srv__add" onSubmit={handleAdd}>
 				<label class="visually-hidden" for={`${title}-new-url`}>
 					Добавить сервер
 				</label>
@@ -96,8 +108,8 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 					value={newUrl}
 					onInput={(e) => setNewUrl(e.currentTarget.value)}
 				/>
-				<button type="submit" disabled={busy || !newUrl.trim()}>
-					Добавить
+				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
+					<IconPlus /> Добавить
 				</button>
 			</form>
 		</section>
@@ -292,38 +304,21 @@ export default function Profile() {
 	return (
 		<Screen title={login || "Без имени"}>
 			<section class="flow" aria-labelledby="profile-npub-heading">
-				<h2 id="profile-npub-heading">Ваш идентификатор</h2>
-				<p class="cluster" style={{ alignItems: "center" }}>
-					<code
-						role="button"
-						tabIndex="0"
-						onClick={handleCopyNpub}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								handleCopyNpub();
-							}
-						}}
-						title="Нажмите, чтобы скопировать"
-						style={{
-							cursor: "pointer",
-							wordBreak: "break-all",
-							padding: "var(--space-3xs) var(--space-2xs)",
-							background: "var(--surface)",
-							borderRadius: "var(--radius)",
-						}}
-					>
-						{npubEncode(id)}
-					</code>
-					{copyStatus && (
-						<span role="status" style={{ color: "var(--muted)" }}>
-							{copyStatus}
-						</span>
-					)}
-				</p>
-				<small style={{ color: "var(--muted)" }}>
-					Вот этот ключ вы можете использовать, чтобы другие пользователи могли вас добавить.
-				</small>
+				<h2 id="profile-npub-heading" class="sect-title">
+					Ваш идентификатор
+				</h2>
+				<div class="keybox">
+					<code>{npubEncode(id)}</code>
+					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label="Скопировать ключ">
+						<IconCopy />
+					</button>
+				</div>
+				{copyStatus && (
+					<p role="status" style={{ color: "var(--muted)" }}>
+						{copyStatus}
+					</p>
+				)}
+				<p class="hint">Вот этот ключ вы можете использовать, чтобы другие пользователи могли вас добавить.</p>
 			</section>
 
 			{/* Пользователь: "перекомпоновать блоки с аватаром и о себе — две
@@ -360,7 +355,7 @@ export default function Profile() {
 
 				<form class="flow profile-bio-col" onSubmit={handleBioSubmit}>
 					<fieldset class="flow">
-						<legend>О себе</legend>
+						<legend class="sect-title">О себе</legend>
 						<label for="profile-bio">Био</label>
 						<textarea
 							id="profile-bio"
@@ -388,12 +383,10 @@ export default function Profile() {
 			</div>
 
 			<section class="flow" aria-labelledby="profile-files-heading">
-				<h2 id="profile-files-heading">Файлы</h2>
-				<p style={{ color: "var(--muted)" }}>
-					Загрузка и управление файлами появится позже.
-				</p>
-				<label for="profile-files-input">Добавить файлы</label>
-				<input id="profile-files-input" type="file" multiple disabled />
+				<h2 id="profile-files-heading" class="sect-title">
+					Файлы
+				</h2>
+				<div class="files-empty">Загрузка и управление файлами появится позже.</div>
 			</section>
 
 			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
