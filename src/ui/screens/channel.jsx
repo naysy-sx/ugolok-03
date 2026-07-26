@@ -24,6 +24,10 @@ import ModerationActions from "../components/moderation-actions.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import Screen from "../components/screen.jsx";
+import ActionsMenu from "../components/actions-menu.jsx";
+import IconChevronRight from "../icons/chevron-right.jsx";
+import IconPlus from "../icons/plus.jsx";
+import IconTrash from "../icons/trash.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -139,13 +143,8 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			</div>
 
 			<div style={{ paddingBlockStart: "var(--space-m)", borderBlockStart: "var(--border-width) solid var(--border)" }}>
-				<button
-					type="button"
-					disabled={busy}
-					onClick={handleDelete}
-					style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}
-				>
-					Удалить канал
+				<button type="button" class="btn--ghost btn--danger" disabled={busy} onClick={handleDelete}>
+					<IconTrash /> Удалить канал
 				</button>
 			</div>
 		</form>
@@ -602,9 +601,14 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title={channelRow.name || "(без названия)"}>
 			{channelRow.description && <p>{channelRow.description}</p>}
 			{channelRow.rules && (
-				<details>
-					<summary>Правила канала</summary>
-					<p style={{ whiteSpace: "pre-wrap" }}>{channelRow.rules}</p>
+				<details class="req">
+					<summary>
+						Правила канала
+						<IconChevronRight class="icon req__chev" aria-hidden="true" />
+					</summary>
+					<p class="req__body" style={{ whiteSpace: "pre-wrap" }}>
+						{channelRow.rules}
+					</p>
 				</details>
 			)}
 			{error && (
@@ -613,24 +617,24 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				</p>
 			)}
 
-			<div class="cluster" role="tablist" aria-label="Раздел канала">
-				<button type="button" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
+			<nav class="tabs" aria-label="Разделы канала">
+				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
 					Посты
 				</button>
-				<button type="button" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
+				<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
 					Чат
 				</button>
 				{isOwner && (
-					<button type="button" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
+					<button type="button" class="tab" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
 						Модерация
 					</button>
 				)}
 				{isOwner && (
-					<button type="button" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
+					<button type="button" class="tab" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
 						Редактировать канал «{channelRow.name || "(без названия)"}»
 					</button>
 				)}
-			</div>
+			</nav>
 
 			{tab === "settings" && isOwner && (
 				<section role="tabpanel">
@@ -653,7 +657,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>
 					{isOwner && !showComposer && (
 						<button type="button" onClick={() => setShowComposer(true)}>
-							Написать пост
+							<IconPlus /> Написать пост
 						</button>
 					)}
 					{isOwner && showComposer && (

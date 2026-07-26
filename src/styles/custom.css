@@ -125,6 +125,24 @@ button:has(> .icon),
 	color: var(--fg);
 	border-color: var(--border);
 	font-weight: var(--weight-normal);
+	/* Пользователь заметил в САМОМ демо-файле VISUAL.md v2: ссылка,
+	   завёрнутая в .btn--ghost (Opus кое-где использовал <a>, не
+	   <button>), сохраняла подчёркивание браузера по умолчанию — "тут
+	   подчёркивание точно лишнее". У нас .btn--ghost везде на реальных
+	   <button> (подчёркивания и так нет), но сбрасываем явно — на случай,
+	   если класс когда-нибудь окажется на <a>. */
+	text-decoration: none;
+}
+/* Разрушительное действие (напр. "Удалить канал") — обводка+текст тем же
+   цветом, что .menu__pop button.danger, не сплошная заливка (та за
+   первичным CTA) вперемешку с красным текстом (было раньше — читалось
+   как баг, синяя кнопка с красной надписью). */
+.app-layout .btn--danger {
+	color: var(--bad, oklch(0.58 0.21 25));
+	border-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 55%);
+}
+.app-layout .btn--danger:hover {
+	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 88%);
 }
 .app-layout .btn--ghost:hover {
 	background-color: var(--surface-raised);
@@ -2213,4 +2231,62 @@ button:has(> .icon),
 	color: var(--muted);
 	font-size: var(--step--1);
 	text-align: center;
+}
+
+/* ================================================================== *
+ *  Экран "Канал" — VISUAL.md v2, интеграция.                          *
+ * ================================================================== */
+
+/* Универсальный распорка-спейсер во флекс-рядах (VISUAL.md v2 .grow) —
+   толкает всё, что после него, к правому краю. */
+.app-layout .grow {
+	flex: 1;
+}
+
+/* Табы разделов канала — подчёркивание снизу вместо кнопок-кирпичей
+   (тот же язык, что уже есть у главного меню, этап 51-довесок-3, только
+   подчёркивание тут статичное на активной вкладке, не только по hover). */
+.app-layout .tabs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2xs);
+	border-block-end: var(--border-width) solid var(--border);
+	margin-block: var(--space-m);
+}
+.app-layout .tab {
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+	padding: var(--space-s);
+	border-radius: 0;
+	border-block-end: 2px solid transparent;
+	margin-block-end: -1px;
+	transition:
+		color var(--transition-speed) var(--transition-ease),
+		border-color var(--transition-speed) var(--transition-ease);
+}
+.app-layout .tab:hover {
+	color: var(--fg);
+}
+.app-layout .tab[aria-selected="true"] {
+	color: var(--fg);
+	border-block-end-color: var(--accent);
+}
+
+/* Карточка поста — было инлайн-стилем прямо в JSX, теперь общий .card-
+   образный класс (без .card самого — посты не "приподняты", просто в
+   рамке, тише aside-панелей). */
+.app-layout .post {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-m);
+}
+.app-layout .post__foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2xs);
+	margin-block-start: var(--space-m);
 }
