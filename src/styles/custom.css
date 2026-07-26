@@ -109,6 +109,63 @@ button:has(> .icon),
 }
 
 /* ================================================================== *
+ *  Переиспользуемые примитивы (VISUAL.md v2, Claude Opus) — .btn--ghost/
+ *  .icon-btn/.card формализуют паттерн, который до сих пор повторялся
+ *  ad-hoc в каждом экране по отдельности (action-buttons/back-button/
+ *  contact-row-actions/contacts-groups-aside и т.д.) — единая точка
+ *  правды для новых экранов (Журнал/Контакты/Профиль/Канал ниже),
+ *  старые точечные правила НЕ трогаем (риск регресса того, что уже
+ *  проверено вживую).                                                 *
+ * ================================================================== */
+
+/* Вторичное действие — тише сплошной заливки (та зарезервирована за
+   первичным CTA конкретного экрана). */
+.app-layout .btn--ghost {
+	background-color: transparent;
+	color: var(--fg);
+	border-color: var(--border);
+	font-weight: var(--weight-normal);
+}
+.app-layout .btn--ghost:hover {
+	background-color: var(--surface-raised);
+}
+.app-layout .btn--ghost:disabled {
+	background-color: transparent;
+}
+
+/* Круглая иконка-кнопка — карандаш/корзина/копировать и т.п., без
+   собственного текста (aria-label обязателен на вызывающей стороне). */
+.app-layout .icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 2.25rem;
+	height: 2.25rem;
+	padding: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	border: var(--border-width) solid transparent;
+	color: var(--muted);
+	font-size: 1.1rem;
+}
+.app-layout .icon-btn:hover {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+}
+
+/* Приподнятая карточка-контейнер — тот же язык, что уже был у
+   .contacts-groups-aside/.channels-aside по отдельности, теперь общий
+   класс + настоящая тень (--shadow), которой в тех точечных версиях не
+   было. */
+.app-layout .card {
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow);
+}
+
+/* ================================================================== *
  *  Основной экран приложения (app.jsx, MainShell + screen.jsx) —     *
  *  каркас "шапка+один локальный скролл+подвал" на всех внутренних    *
  *  экранах (обсуждено с пользователем). Идея вёрстки — от пользо-    *
@@ -287,6 +344,7 @@ button:has(> .icon),
 }
 
 .app-layout .profile-card {
+	container-type: inline-size; /* VISUAL.md v2 — cqi для заглушки-буквы аватара */
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -302,36 +360,78 @@ button:has(> .icon),
    вместо круга" (явное требование пользователя, в отличие от круглых
    аватаров на unlock.jsx — там не трогаем), и вероятный источник "странных
    отступов" в карточке (неограниченная высота реальной фотографии). */
+/* VISUAL.md v2 — во всю ширину колонки aside (не фиксированный 12rem):
+   на узком drawer'е (адаптив, min(80vw,20rem)) фиксированный размер мог
+   переполнить колонку на совсем маленьких телефонах, текучая ширина —
+   надёжнее. container-type на .profile-card (ниже) даёт cqi для
+   заглушки-буквы. */
 .app-layout .profile-card-avatar-btn {
+	position: relative;
 	display: block;
+	width: 100%;
 	background: none;
 	border: none;
 	padding: 0;
 	border-radius: var(--radius);
 	cursor: pointer;
-	transition: filter var(--transition-speed) var(--transition-ease);
-}
-.app-layout .profile-card-avatar-btn:hover:not(:disabled) {
-	filter: brightness(1.06);
+	overflow: hidden;
 }
 .app-layout .profile-card-avatar-btn:disabled {
 	cursor: default;
 }
 .app-layout .account-avatar-large {
 	display: block;
-	inline-size: 12rem;
+	width: 100%;
 	aspect-ratio: 1;
 	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
+	transition: filter var(--transition-speed) var(--transition-ease);
+}
+.app-layout .profile-card-avatar-btn:hover:not(:disabled) .account-avatar-large,
+.app-layout .profile-card-avatar-btn:focus-visible .account-avatar-large {
+	filter: brightness(1.06);
+}
+/* "Стеклянная" подсказка (VISUAL.md v2) — лупа проявляется снизу по
+   hover/фокусу, намекая "кликабельно, открыть фото"; pointer-events:none —
+   кликабельная цель ровно одна (сама кнопка), не оверлей поверх неё. */
+.app-layout .profile-card-avatar-glass {
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: 0;
+	block-size: 34%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding-block-end: var(--space-2xs);
+	background-image: linear-gradient(to top, oklch(0.15 0.03 var(--hue) / 0.72), transparent);
+	color: white;
+	font-size: 1.3rem;
+	opacity: 0;
+	transform: translateY(3px);
+	transition:
+		opacity 220ms var(--ease),
+		transform 220ms var(--ease);
+	pointer-events: none;
+}
+.app-layout .profile-card-avatar-btn:hover .profile-card-avatar-glass,
+.app-layout .profile-card-avatar-btn:focus-visible .profile-card-avatar-glass {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.app-layout .profile-card-avatar-glass {
+		transition: opacity 1ms linear;
+		transform: none;
+	}
 }
 .app-layout .account-avatar-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--muted);
-	font-size: var(--step-3);
+	font-size: clamp(1.8rem, 20cqi, 3rem); /* VISUAL.md v2 — контейнерная типографика */
 	font-weight: var(--weight-bold);
 }
 
@@ -1729,4 +1829,175 @@ button:has(> .icon),
 .app-layout .sidebar .connection-status-panel small {
 	display: block;
 	word-break: break-all;
+}
+
+/* ================================================================== *
+ *  Экран "Журнал" — VISUAL.md v2 (Claude Opus), интеграция.           *
+ *  SUBGRID: колонка иконок-типов и колонка времени/точки выровнены    *
+ *  по ВСЕЙ ленте одного дня, не только внутри своей строки.           *
+ * ================================================================== */
+.app-layout .journal {
+	container-type: inline-size;
+}
+
+.app-layout .date-field {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-full);
+	padding: var(--space-2xs) var(--space-s);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.app-layout .date-field input {
+	background: none;
+	border: none;
+	color: var(--fg);
+	font: inherit;
+	width: auto;
+	padding: 0;
+}
+/* Подпись "Отметить прочитанным" у кнопки — прячем в узком контейнере
+   (контейнерный запрос К ЭКРАНУ, не к вьюпорту — тот же элемент внутри
+   более широкого main-content на десктопе не обрежется, даже если
+   вьюпорт целиком узкий, но сайдбар/aside рядом остаются). */
+@container (max-width: 32em) {
+	.app-layout .journal .mark-txt {
+		display: none;
+	}
+}
+
+.app-layout .jgroup {
+	margin-block-start: var(--space-l);
+}
+.app-layout .jgroup:first-of-type {
+	margin-block-start: var(--space-m);
+}
+.app-layout .jgroup__date {
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	margin-block: 0 var(--space-2xs);
+}
+
+.app-layout .jfeed {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	gap: 2px;
+}
+.app-layout .jfeed > li {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
+}
+.app-layout .jitem__link {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: subgrid;
+	align-items: center;
+	gap: var(--space-s);
+	width: 100%;
+	padding: var(--space-s);
+	border-radius: var(--radius);
+	background: none;
+	border: none;
+	text-align: left;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.app-layout .jitem__link:hover {
+	background-color: var(--surface-raised);
+}
+
+.app-layout .jtype {
+	flex: none;
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: var(--radius);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1rem;
+	background-color: var(--surface);
+	color: var(--muted);
+}
+.app-layout .jtype--lamp {
+	color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), transparent 84%);
+}
+.app-layout .jtype--draught {
+	color: var(--accent-2);
+	background-color: color-mix(in oklch, var(--accent-2), transparent 84%);
+}
+.app-layout .jtype--bad {
+	color: var(--bad, oklch(0.58 0.21 25));
+	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 84%);
+}
+
+.app-layout .jbody {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.app-layout .jtitle {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: var(--weight-bold);
+}
+.app-layout .jmeta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+/* Прочитанные — заголовок приглушён, не жирный (VISUAL.md v2: "прочитанные
+   тише"). */
+.app-layout .jitem[data-read] .jtitle {
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+}
+
+.app-layout .jside {
+	display: grid;
+	justify-items: end;
+	align-content: center;
+	gap: var(--space-3xs);
+}
+.app-layout .jtime {
+	color: var(--muted);
+	font-size: var(--step--2);
+	white-space: nowrap;
+}
+.app-layout .jdot {
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	justify-self: end;
+}
+
+.app-layout .pager {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	margin-block-start: var(--space-l);
+	padding-block-start: var(--space-m);
+	border-block-start: var(--border-width) solid var(--border);
+}
+.app-layout .pager__status {
+	color: var(--muted);
+	font-size: var(--step--1);
 }

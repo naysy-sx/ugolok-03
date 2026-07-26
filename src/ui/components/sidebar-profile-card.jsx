@@ -5,6 +5,7 @@ import { getProfile } from "../../core/crypto/keystore.js";
 import AccountAvatar from "./account-avatar.jsx";
 import ImageModal from "./image-modal.jsx";
 import IconPencil from "../icons/pencil.jsx";
+import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 
 // Постоянная карточка "кто я" в aside — видна на любом внутреннем экране, не
 // только на вкладке "Профиль" (решение пользователя). Данные из того же
@@ -42,6 +43,14 @@ export default function SidebarProfileCard({ onEditProfile }) {
 				aria-label={avatar ? "Открыть фото профиля" : undefined}
 			>
 				<AccountAvatar avatar={avatar} login={login || id} large />
+				{/* VISUAL.md v2 — "стеклянная" подсказка: лупа проявляется снизу по
+				    hover/фокусу, намекая на кликабельность. Только когда фото
+				    реально есть — для заглушки-буквы кликать некуда. */}
+				{avatar && (
+					<span class="profile-card-avatar-glass" aria-hidden="true">
+						<IconMagnifyingGlass />
+					</span>
+				)}
 			</button>
 			<div class="profile-card-body">
 				<h2>

@@ -3,25 +3,42 @@ import { currentUser, dbKeySig } from "../signals/auth.js";
 import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../signals/journal.js";
 import { messagingActivity } from "../signals/chats.js";
 import Screen from "../components/screen.jsx";
+import IconEnvelopeClosed from "../icons/envelope-closed.jsx";
+import IconReader from "../icons/reader.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
+import IconPeople from "../icons/people.jsx";
+import IconPhoneCall from "../icons/phone-call.jsx";
+import IconLockClosed from "../icons/lock-closed.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconCalendar from "../icons/calendar.jsx";
+import IconCheck from "../icons/check.jsx";
+import IconChevronLeft from "../icons/chevron-left.jsx";
+import IconChevronRight from "../icons/chevron-right.jsx";
 
-// Этап 50 (CONTACTS-FSM.md §7) — категория -> заголовок раздела на русском,
-// тот же набор, что уже показывается в settings.jsx (per-категорийные тумблеры).
-const CATEGORY_LABELS = {
-	messages: "Сообщение",
-	channels: "Канал",
-	replies: "Ответ",
-	contacts: "Контакты",
-	calls: "Звонок",
-	moderation: "Модерация",
-	inbox: "Незнакомец",
+// Этап 50 (CONTACTS-FSM.md §7) — категория -> подпись + иконка + оттенок
+// чипа (VISUAL.md v2, Claude Opus: "разные типы записи узнаются по цвету
+// иконки, не только по тексту"). Тон — не декоративный произвол: lamp
+// (акцент) для прямого личного контакта (сообщения/звонки), draught
+// (акцент-компаньон) для социального/обратной связи (ответы/контакты),
+// bad для модерации (предупреждающий смысл), muted для остального.
+const CATEGORY_META = {
+	messages: { label: "Сообщение", Icon: IconEnvelopeClosed, tone: "lamp" },
+	channels: { label: "Канал", Icon: IconReader, tone: "muted" },
+	replies: { label: "Ответ", Icon: IconChatBubble, tone: "draught" },
+	contacts: { label: "Контакты", Icon: IconPeople, tone: "draught" },
+	calls: { label: "Звонок", Icon: IconPhoneCall, tone: "lamp" },
+	moderation: { label: "Модерация", Icon: IconLockClosed, tone: "bad" },
+	inbox: { label: "Незнакомец", Icon: IconPerson, tone: "muted" },
 };
 
 // Этап 50-довесок-N (пользователь, живая проверка пагинации подтверждена —
 // найден и исправлен реальный баг ниже, теперь разумное число на странице).
 const PAGE_SIZE = 15;
 
+// Только время — дата уже вынесена в заголовок группы дня (jgroup__date),
+// повторять её в каждой строке избыточно (VISUAL.md v2: .jtime "21:16").
 function formatEntryTime(ms) {
-	return new Date(ms).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+	return new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
 // Ключ календарного дня в ЛОКАЛЬНОМ времени (не UTC) — обязан совпадать с тем,
@@ -44,6 +61,24 @@ function findPageForDate(entries, dateStr, pageSize) {
 	const idx = entries.findIndex((e) => dayKey(e.occurredAt) <= dateStr);
 	if (idx === -1) return Math.max(0, Math.ceil(entries.length / pageSize) - 1);
 	return Math.floor(idx / pageSize);
+}
+
+// Группировка страницы по календарному дню — стабильный порядок (страница
+// уже отсортирована по occurredAt), каждая группа — отдельная <section> с
+// собственным заголовком (a11y: список читается как оглавление по дням, не
+// плоской лентой).
+function groupByDay(pageEntries) {
+	const groups = [];
+	let current = null;
+	for (const entry of pageEntries) {
+		const key = dayKey(entry.occurredAt);
+		if (!current || current.key !== key) {
+			current = { key, entries: [] };
+			groups.push(current);
+		}
+		current.entries.push(entry);
+	}
+	return groups;
 }
 
 // Стартовый экран после логина (nav-items.js, DEFAULT_ACTIVE) — персистентный
@@ -87,6 +122,7 @@ export default function Journal() {
 	const clampedPage = Math.min(page, totalPages - 1);
 	const pageEntries = entries.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
 	const hasUnread = entries.some((e) => !e.read);
+	const dayGroups = groupByDay(pageEntries);
 
 	const oldestDay = entries.length > 0 ? dayKey(entries[entries.length - 1].occurredAt) : null;
 	const newestDay = entries.length > 0 ? dayKey(entries[0].occurredAt) : null;
@@ -97,71 +133,21 @@ export default function Journal() {
 		setPage(findPageForDate(entries, dateStr, PAGE_SIZE));
 	}
 
-	const rows = [];
-	let lastDayKey = null;
-	for (const entry of pageEntries) {
-		const entryDayKey = dayKey(entry.occurredAt);
-		if (entryDayKey !== lastDayKey) {
-			rows.push(
-				<li key={`sep-${entryDayKey}-${entry.id}`} aria-hidden="true">
-					<p style={{ color: "var(--muted)", fontWeight: "var(--weight-bold)", paddingBlockStart: "var(--space-s)" }}>{formatDaySeparator(entry.occurredAt)}</p>
-				</li>,
-			);
-			lastDayKey = entryDayKey;
-		}
-		rows.push(
-			<li key={entry.id} style={{ borderBlockEnd: "var(--border-width) solid var(--border)" }}>
-				<button
-					type="button"
-					onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}
-					class="cluster"
-					style={{
-						width: "100%",
-						alignItems: "flex-start",
-						justifyContent: "space-between",
-						paddingBlock: "var(--space-s)",
-						background: entry.read ? "none" : "var(--surface)",
-						border: "none",
-						cursor: "pointer",
-						textAlign: "left",
-						font: "inherit",
-						color: "inherit",
-					}}
-				>
-					<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
-							{!entry.read && (
-								<span aria-label="непрочитано" style={{ color: "var(--accent)" }}>
-									●
-								</span>
-							)}
-							<strong>{entry.title}</strong>
-						</span>
-						{entry.body && <span style={{ color: "var(--muted)" }}>{entry.body}</span>}
-						<small style={{ color: "var(--muted)" }}>
-							{CATEGORY_LABELS[entry.category] ?? entry.category} · {formatEntryTime(entry.occurredAt)}
-						</small>
-					</span>
-				</button>
-			</li>,
-		);
-	}
-
 	return (
 		<Screen
 			title="Журнал"
 			actions={
 				<>
 					{oldestDay && (
-						<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
-							<label class="visually-hidden" for="journal-jump-date">
-								Перейти к дате
-							</label>
-							<input id="journal-jump-date" type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
-						</span>
+						<label class="date-field">
+							<IconCalendar />
+							<span class="visually-hidden">Перейти к дате</span>
+							<input type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
+						</label>
 					)}
 					<button type="button" disabled={!hasUnread} onClick={() => markAllRead(ownerPubkey, dbKey)}>
-						Отметить всё прочитанным
+						<IconCheck />
+						<span class="mark-txt">Отметить прочитанным</span>
 					</button>
 				</>
 			}
@@ -169,25 +155,53 @@ export default function Journal() {
 			{entries.length === 0 ? (
 				<p style={{ color: "var(--muted)" }}>Пока ничего не произошло — здесь будут появляться уведомления.</p>
 			) : (
-				<>
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-						{rows}
-					</ul>
+				<div class="journal">
+					{dayGroups.map((group) => (
+						<section class="jgroup" key={group.key} aria-labelledby={`jg-${group.key}`}>
+							<h2 class="jgroup__date" id={`jg-${group.key}`}>
+								{formatDaySeparator(group.entries[0].occurredAt)}
+							</h2>
+							<ol class="jfeed">
+								{group.entries.map((entry) => {
+									const meta = CATEGORY_META[entry.category] ?? { label: entry.category, Icon: IconPerson, tone: "muted" };
+									const Icon = meta.Icon;
+									return (
+										<li class="jitem" key={entry.id} data-read={entry.read || undefined}>
+											<button type="button" class="jitem__link" onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}>
+												<span class={`jtype jtype--${meta.tone}`} aria-hidden="true">
+													<Icon />
+												</span>
+												<span class="jbody">
+													<span class="jtitle">{entry.title}</span>
+													{entry.body && <span class="jmeta">{entry.body}</span>}
+													<span class="jmeta">{meta.label}</span>
+												</span>
+												<span class="jside">
+													<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
+													{!entry.read && <span class="jdot" aria-label="непрочитано" />}
+												</span>
+											</button>
+										</li>
+									);
+								})}
+							</ol>
+						</section>
+					))}
 
 					{totalPages > 1 && (
-						<nav class="cluster" aria-label="Страницы журнала" style={{ justifyContent: "space-between", alignItems: "center", paddingBlockStart: "var(--space-s)" }}>
-							<button type="button" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>
-								← Назад
+						<nav class="pager" aria-label="Страницы журнала">
+							<button type="button" class="btn btn--ghost" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>
+								<IconChevronLeft /> Назад
 							</button>
-							<span style={{ color: "var(--muted)" }}>
+							<span class="pager__status" aria-current="page">
 								Страница {clampedPage + 1} из {totalPages}
 							</span>
-							<button type="button" disabled={clampedPage >= totalPages - 1} onClick={() => setPage(clampedPage + 1)}>
-								Вперёд →
+							<button type="button" class="btn btn--ghost" disabled={clampedPage >= totalPages - 1} onClick={() => setPage(clampedPage + 1)}>
+								Вперёд <IconChevronRight />
 							</button>
 						</nav>
 					)}
-				</>
+				</div>
 			)}
 		</Screen>
 	);
