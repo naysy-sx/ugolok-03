@@ -1,10 +1,18 @@
-import { useState, useEffect, useId, useRef } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { openChat } from "../signals/chat.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
+import IconPencil from "../icons/pencil.jsx";
+import IconTrash from "../icons/trash.jsx";
+import IconGear from "../icons/gear.jsx";
+import IconLockClosed from "../icons/lock-closed.jsx";
+import IconChevronRight from "../icons/chevron-right.jsx";
+import IconPlus from "../icons/plus.jsx";
+import ActionsMenu from "../components/actions-menu.jsx";
+import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import {
 	contacts,
 	blockedContacts,
@@ -244,7 +252,7 @@ export default function Contacts() {
 
 	return (
 		<Screen title="Контакты">
-			<div class="contacts-toolbar">
+			<div class="card contacts-toolbar">
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
 				    здесь дублировать незачем (пользователь, item 4). */}
@@ -276,7 +284,7 @@ export default function Contacts() {
 			</div>
 
 			<div class="contacts-layout">
-				<aside class="contacts-groups-aside" aria-labelledby="groups-heading">
+				<aside class="card contacts-groups-aside" aria-labelledby="groups-heading">
 					<h2 id="groups-heading">Группы</h2>
 					<ul role="list" class="group-filter-list">
 						<li>
@@ -331,24 +339,27 @@ export default function Contacts() {
 											<label for={`group-filter-${g.id}`}>
 												{g.name} ({g.memberPubkeys.length})
 											</label>
-											<button
-												type="button"
-												onClick={() => {
-													setRenamingGroupId(g.id);
-													setRenameValue(g.name);
-												}}
-											>
-												Переименовать
-											</button>
-											<button
-												type="button"
-												disabled={busy}
-												onClick={() =>
-													runRowAction(() => deleteGroupAction(ownerPubkey, privKey, dbKey, g.id, publish))
-												}
-											>
-												Удалить
-											</button>
+											<ActionsMenu label={`Действия с группой «${g.name}»`}>
+												<button
+													type="button"
+													onClick={() => {
+														setRenamingGroupId(g.id);
+														setRenameValue(g.name);
+													}}
+												>
+													<IconPencil /> Переименовать
+												</button>
+												<button
+													type="button"
+													class="danger"
+													disabled={busy}
+													onClick={() =>
+														runRowAction(() => deleteGroupAction(ownerPubkey, privKey, dbKey, g.id, publish))
+													}
+												>
+													<IconTrash /> Удалить
+												</button>
+											</ActionsMenu>
 										</>
 									)}
 								</div>
@@ -383,7 +394,7 @@ export default function Contacts() {
 					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
 					    рамке (contacts-primary-section). */}
-					<section class="flow contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
+					<section class="flow card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
 						<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
 						{rowError && (
 							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -400,25 +411,28 @@ export default function Contacts() {
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
 											<div class="contact-row-actions">
 												<button type="button" onClick={() => placeCall(pubkey)} aria-label={`Позвонить ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
-													<IconPhoneCall /> Позвонить
+													<IconPhoneCall /> <span class="call-txt">Позвонить</span>
 												</button>
-												<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
-													{isExpanded ? "Скрыть права" : "Права"}
-												</button>
-												<button
-													type="button"
-													disabled={busy}
-													onClick={() => runRowAction(() => blockContactAction(pubkey))}
-												>
-													Заблокировать
-												</button>
-												<button
-													type="button"
-													disabled={busy}
-													onClick={() => runRowAction(() => removeContactAction(pubkey))}
-												>
-													Удалить
-												</button>
+												<ActionsMenu label={`Ещё действия для ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
+													<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
+														<IconGear /> {isExpanded ? "Скрыть права" : "Права"}
+													</button>
+													<button
+														type="button"
+														disabled={busy}
+														onClick={() => runRowAction(() => blockContactAction(pubkey))}
+													>
+														<IconLockClosed /> Заблокировать
+													</button>
+													<button
+														type="button"
+														class="danger"
+														disabled={busy}
+														onClick={() => runRowAction(() => removeContactAction(pubkey))}
+													>
+														<IconTrash /> Удалить
+													</button>
+												</ActionsMenu>
 											</div>
 										</div>
 
@@ -491,109 +505,120 @@ export default function Contacts() {
 						)}
 					</section>
 
-					<section class="flow" aria-labelledby="outgoing-requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="outgoing-requests-heading">Отправленные заявки ({outgoingRequests.value.length})</h2>
-						{outgoingRequests.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
-						) : (
-							<ul role="list" class="contact-row-list">
-								{outgoingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
-										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions">
-											<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
-												Отменить
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
+					{/* Пользователь: не диктовал явно, но "Входящие" остаётся всегда
+					    развёрнутым (требует решения) — эти два списка вторичны
+					    (редко нужны, обычно пусты), сворачиваем в <details>
+					    (VISUAL.md v2 .req), чтобы не отвлекали от главного. */}
+					<div class="requests">
+						<details class="req">
+							<summary>
+								Отправленные заявки <span class="req__count">{outgoingRequests.value.length}</span>
+								<IconChevronRight class="icon req__chev" aria-hidden="true" />
+							</summary>
+							<div class="req__body">
+								{outgoingRequests.value.length === 0 ? (
+									<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
+								) : (
+									<ul role="list" class="contact-row-list">
+										{outgoingRequests.value.map((req) => (
+											<li key={req.peerPubkey} class="contact-row">
+												<ContactIdentity pubkey={req.peerPubkey} />
+												<div class="contact-row-actions">
+													<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
+														Отменить
+													</button>
+												</div>
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+						</details>
 
-					<section class="flow" aria-labelledby="rejected-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="rejected-heading">Отклонённые ({rejectedByMe.value.length})</h2>
-						{rejectedByMe.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
-						) : (
-							<ul role="list" class="contact-row-list">
-								{rejectedByMe.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
-										<ContactIdentity pubkey={req.peerPubkey} />
-										{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
-										написать самому тому, чью заявку отклонил(а) раньше. */}
-										<div class="contact-row-actions">
-											<button
-												type="button"
-												disabled={busy}
-												onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
-											>
-												Добавить всё же
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
+						<details class="req">
+							<summary>
+								Отклонённые <span class="req__count">{rejectedByMe.value.length}</span>
+								<IconChevronRight class="icon req__chev" aria-hidden="true" />
+							</summary>
+							<div class="req__body">
+								{rejectedByMe.value.length === 0 ? (
+									<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
+								) : (
+									<ul role="list" class="contact-row-list">
+										{rejectedByMe.value.map((req) => (
+											<li key={req.peerPubkey} class="contact-row">
+												<ContactIdentity pubkey={req.peerPubkey} />
+												{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
+												написать самому тому, чью заявку отклонил(а) раньше. */}
+												<div class="contact-row-actions">
+													<button
+														type="button"
+														disabled={busy}
+														onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
+													>
+														Добавить всё же
+													</button>
+												</div>
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+						</details>
+					</div>
 
-					<section class="flow" aria-labelledby="blocked-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="blocked-heading">Заблокированные ({blockedContacts.value.length})</h2>
-						<ul role="list" class="contact-row-list">
-							{blockedContacts.value.map((pubkey) => (
-								<li key={pubkey} class="contact-row">
-									<ContactIdentity pubkey={pubkey} />
-									<div class="contact-row-actions">
-										<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
-											Разблокировать
-										</button>
-									</div>
-								</li>
-							))}
-						</ul>
-						{blockedContacts.value.length === 0 && (
-							<p style={{ color: "var(--muted)" }}>Нет заблокированных.</p>
-						)}
-					</section>
+					<div class="requests">
+						<details class="req">
+							<summary>
+								Заблокированные <span class="req__count">{blockedContacts.value.length}</span>
+								<IconChevronRight class="icon req__chev" aria-hidden="true" />
+							</summary>
+							<div class="req__body">
+								<ul role="list" class="contact-row-list">
+									{blockedContacts.value.map((pubkey) => (
+										<li key={pubkey} class="contact-row">
+											<ContactIdentity pubkey={pubkey} />
+											<div class="contact-row-actions">
+												<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
+													Разблокировать
+												</button>
+											</div>
+										</li>
+									))}
+								</ul>
+								{blockedContacts.value.length === 0 && (
+									<p style={{ color: "var(--muted)" }}>Нет заблокированных.</p>
+								)}
+							</div>
+						</details>
+					</div>
 				</div>
 			</div>
 		</Screen>
 	);
 }
 
+// VISUAL.md v2 — чип-триггер с чекбоксами вместо select+submit: можно
+// отметить сразу несколько групп без переоткрытия (useDetailsMenu не
+// закрывает меню по клику на чекбокс, только на кнопку/ссылку).
 function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
-	const instanceId = useId();
-	const [selected, setSelected] = useState("");
+	const { ref, handleMenuClick } = useDetailsMenu();
 	const available = groups.filter((g) => !excludeGroupIds.includes(g.id));
 	if (available.length === 0) return null;
 
-	const selectId = `add-to-group-select-${instanceId}`;
-
 	return (
-		<form
-			class="cluster"
-			style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}
-			onSubmit={(e) => {
-				e.preventDefault();
-				if (!selected) return;
-				onAdd(selected);
-				setSelected("");
-			}}
-		>
-			<label class="visually-hidden" for={selectId}>
-				Добавить в группу
-			</label>
-			<select id={selectId} value={selected} disabled={disabled} onChange={(e) => setSelected(e.currentTarget.value)}>
-				<option value="">+ в группу…</option>
+		<details class="menu" ref={ref} onClick={handleMenuClick}>
+			<summary class="chip" style={{ cursor: "pointer" }}>
+				<IconPlus /> в группу
+			</summary>
+			<div class="menu__pop">
 				{available.map((g) => (
-					<option key={g.id} value={g.id}>
+					<label key={g.id} class="menu-check">
+						<input type="checkbox" disabled={disabled} onChange={() => onAdd(g.id)} />
 						{g.name}
-					</option>
+					</label>
 				))}
-			</select>
-			<button type="submit" disabled={!selected || disabled}>
-				Добавить
-			</button>
-		</form>
+			</div>
+		</details>
 	);
 }

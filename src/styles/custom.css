@@ -616,6 +616,13 @@ button:has(> .icon),
 	min-height: 0;
 }
 .app-layout .content-wrapper {
+	/* VISUAL.md v2 (пользователь): "не забывай про адаптивность и для её
+	   реализации container queries" — контейнер один раз здесь, на общей
+	   скролл-зоне ЛЮБОГО экрана (не вьюпорт целиком: доступная ширина
+	   экрана отличается от вьюпорта на ширину сайдбара) — каждый экран
+	   ниже (Журнал/Контакты/Профиль/Канал) просто использует @container
+	   без собственного container-type. */
+	container-type: inline-size;
 	position: absolute;
 	inset: 0;
 	overflow-y: auto;
@@ -1492,9 +1499,6 @@ button:has(> .icon),
  * ================================================================== */
 
 .app-layout .contacts-toolbar {
-	background-color: var(--surface-raised);
-	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-lg);
 	padding: var(--space-m);
 	display: flex;
 	flex-direction: column;
@@ -1509,35 +1513,36 @@ button:has(> .icon),
 	background-color: var(--bg);
 }
 
+/* VISUAL.md v2 (пользователь): "юзай css grid на всю катушку, все эти
+   area штуки... container queries" — было flex-row + @media(min-width);
+   теперь grid-template-areas + @container (контейнер — .content-wrapper,
+   см. выше: отступ смотрит на РЕАЛЬНО доступную ширину экрана, не на
+   вьюпорт целиком — тот отличается на ширину сайдбара). */
 .app-layout .contacts-layout {
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	gap: var(--space-l);
+	grid-template-areas: "groups" "list";
+	align-items: start;
 }
-@media (min-width: 60em) {
+@container (min-width: 52em) {
 	.app-layout .contacts-layout {
-		flex-direction: row;
-		align-items: flex-start;
+		grid-template-columns: minmax(14rem, 16rem) 1fr;
+		grid-template-areas: "groups list";
 	}
 	.app-layout .contacts-groups-aside {
-		flex: 0 0 16rem;
 		position: sticky;
 		inset-block-start: 0;
 	}
-	.app-layout .contacts-main {
-		flex: 1;
-		min-width: 0;
-	}
 }
 .app-layout .contacts-main {
+	grid-area: list;
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
+	min-width: 0;
 }
 .app-layout .contacts-groups-aside {
-	background-color: var(--surface-raised);
-	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-lg);
+	grid-area: groups;
 	padding: var(--space-m);
 }
 .app-layout .contacts-groups-aside h2 {
@@ -1552,12 +1557,9 @@ button:has(> .icon),
 
 /* Пользователь: "Контакты" — главный рабочий блок, поднять над заявками/
    заблокированными и выделить рамкой. Тот же язык карточки, что aside
-   слева, плюс собственный отступ снизу (двойная сепарация: рамка ВОКРУГ
-   и явный зазор ПОСЛЕ — от следующего блока "Входящие заявки"). */
+   слева (.card), плюс собственный отступ снизу (двойная сепарация: рамка
+   ВОКРУГ и явный зазор ПОСЛЕ — от следующего блока "Входящие заявки"). */
 .app-layout .contacts-primary-section {
-	background-color: var(--surface-raised);
-	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-lg);
 	padding: var(--space-m);
 	margin-block-end: var(--space-l);
 }
@@ -1667,6 +1669,13 @@ button:has(> .icon),
 }
 .app-layout .contact-row-actions button:hover {
 	background-color: var(--surface-raised);
+}
+/* Подпись "Позвонить" прячется в узком контейнере (звонок остаётся
+   иконкой) — VISUAL.md v2 .call-txt, контейнер тот же .content-wrapper. */
+@container (max-width: 26em) {
+	.app-layout .contact-row-actions .call-txt {
+		display: none;
+	}
 }
 
 .app-layout .contact-row-groups {
@@ -1836,10 +1845,6 @@ button:has(> .icon),
  *  SUBGRID: колонка иконок-типов и колонка времени/точки выровнены    *
  *  по ВСЕЙ ленте одного дня, не только внутри своей строки.           *
  * ================================================================== */
-.app-layout .journal {
-	container-type: inline-size;
-}
-
 .app-layout .date-field {
 	display: inline-flex;
 	align-items: center;
@@ -2000,4 +2005,123 @@ button:has(> .icon),
 .app-layout .pager__status {
 	color: var(--muted);
 	font-size: var(--step--1);
+}
+
+/* ================================================================== *
+ *  Меню "ещё действия" (actions-menu.jsx) — нативный <details>, без   *
+ *  JS-библиотек. VISUAL.md v2.                                        *
+ * ================================================================== */
+.app-layout .menu {
+	position: relative;
+	display: inline-flex;
+}
+.app-layout .menu > summary {
+	list-style: none;
+}
+.app-layout .menu > summary::-webkit-details-marker {
+	display: none;
+}
+.app-layout .menu__pop {
+	position: absolute;
+	inset-inline-end: 0;
+	inset-block-start: calc(100% + var(--space-3xs));
+	z-index: 20;
+	min-width: 11rem;
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: var(--space-3xs);
+	display: grid;
+	gap: 2px;
+}
+.app-layout .menu__pop button,
+.app-layout .menu__pop .menu-check {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: none;
+	color: inherit;
+	font: inherit;
+	font-weight: var(--weight-normal);
+	cursor: pointer;
+	padding: var(--space-2xs) var(--space-s);
+	border-radius: var(--radius);
+}
+.app-layout .menu__pop button:hover,
+.app-layout .menu__pop .menu-check:hover {
+	background-color: var(--surface);
+}
+.app-layout .menu__pop button.danger {
+	color: var(--bad, oklch(0.58 0.21 25));
+}
+.app-layout .menu-check input {
+	width: auto;
+	accent-color: var(--accent);
+}
+
+/* Пилюля-триггер (VISUAL.md v2) — "+ в группу" и подобные компактные
+   всплывающие меню, где .icon-btn (круглая, только иконка) не подходит
+   — нужен видимый текстовый лейбл рядом с иконкой. */
+.app-layout .chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-full);
+	padding: 3px var(--space-2xs) 3px var(--space-s);
+	font-size: var(--step--1);
+	color: var(--muted);
+	white-space: nowrap;
+}
+.app-layout summary.chip:hover {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+}
+
+/* Секции "Отправленные заявки"/"Отклонённые" (VISUAL.md v2) — вторичные,
+   редко нужные списки, теперь свёрнуты в <details> (нативная раскрывашка,
+   доступна с клавиатуры) — не отвлекают от главного ("Контакты" и
+   "Входящие заявки", те остаются развёрнутыми всегда: первое — рабочий
+   список, второе — требует решения пользователя, прятать по умолчанию
+   было бы неверно). */
+.app-layout .requests {
+	display: grid;
+	gap: var(--space-2xs);
+	margin-block-start: var(--space-l);
+}
+.app-layout .req {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+}
+.app-layout .req > summary {
+	list-style: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-s);
+	font-weight: var(--weight-bold);
+}
+.app-layout .req > summary::-webkit-details-marker {
+	display: none;
+}
+.app-layout .req__count {
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+}
+.app-layout .req__chev {
+	margin-inline-start: auto;
+	color: var(--muted);
+	transition: transform var(--transition-speed) var(--transition-ease);
+}
+.app-layout .req[open] .req__chev {
+	transform: rotate(90deg);
+}
+.app-layout .req__body {
+	padding: 0 var(--space-s) var(--space-s);
 }
