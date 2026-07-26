@@ -1,5 +1,5 @@
 import { useId } from "preact/hooks";
-import IconArrowLeft from "../icons/arrow-left.jsx";
+import IconCornerBack from "../icons/corner-back.jsx";
 
 // Общий каркас внутреннего экрана (обсуждён с пользователем) — закреплённая
 // шапка (кнопка "назад" + заголовок + действия раздела) и опциональный
@@ -23,10 +23,12 @@ export default function Screen({ breadcrumb, title, actions, footer, feed, child
 		<section class="content-section">
 			<header class="section-header">
 				<div class="header-actions">
+					{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
+					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
+					    кнопки, видимого текста больше нет. */}
 					{breadcrumb && (
 						<button type="button" class="back-button" onClick={breadcrumb.onBack} aria-label={`Назад к разделу «${breadcrumb.label}»`}>
-							<IconArrowLeft />
-							<span>Назад</span>
+							<IconCornerBack />
 						</button>
 					)}
 					<h1 id={titleId}>{title}</h1>

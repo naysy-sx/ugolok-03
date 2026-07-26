@@ -5,7 +5,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { uploadBlob, downloadBlob } from "../src/core/transport/blossom-client.js";
+import { uploadBlob, downloadBlob, checkBlossomReachable } from "../src/core/transport/blossom-client.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -90,6 +90,38 @@ test("serverUrl с завершающим '/' не даёт двойной сл�
 	await downloadBlob("https://blossom.test/", "deadbeef", { fetchImpl });
 	assert.equal(calls[0], "https://blossom.test/upload");
 	assert.equal(calls[1], "https://blossom.test/deadbeef");
+});
+
+// checkBlossomReachable (пользователь, item 4 — статус соединения в наве) —
+// HEAD-запрос, любой ОТВЕТ = сервер жив, даже если сам HEAD не поддержан.
+test("checkBlossomReachable: HEAD {serverUrl}/, ответ (даже не ok) -> true", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push({ url, opts });
+		return { ok: false, status: 405 }; // HEAD не поддержан сервером — всё равно означает "жив"
+	};
+	const result = await checkBlossomReachable("https://blossom.test", { fetchImpl });
+	assert.equal(result, true);
+	assert.equal(calls[0].url, "https://blossom.test/");
+	assert.equal(calls[0].opts.method, "HEAD");
+});
+
+test("checkBlossomReachable: fetch бросает (сеть недоступна) -> false, не проброс исключения", async () => {
+	const fetchImpl = async () => {
+		throw new Error("ECONNREFUSED");
+	};
+	const result = await checkBlossomReachable("https://blossom.test", { fetchImpl });
+	assert.equal(result, false);
+});
+
+test("checkBlossomReachable: завершающий '/' у serverUrl не даёт двойной слэш", async () => {
+	const calls = [];
+	const fetchImpl = async (url) => {
+		calls.push(url);
+		return { ok: true, status: 200 };
+	};
+	await checkBlossomReachable("https://blossom.test/", { fetchImpl });
+	assert.equal(calls[0], "https://blossom.test/");
 });
 
 // Интеграционный тест на РЕАЛЬНОМ локальном HTTP-сервере (node:http, не мок функции) —

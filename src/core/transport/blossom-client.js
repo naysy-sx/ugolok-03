@@ -34,6 +34,21 @@ export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privateKe
   return await response.json();
 }
 
+// Найдено пользователем: нигде не было способа узнать, жив ли вообще
+// Blossom-сервер, пока не попробуешь реальную загрузку/скачивание файла.
+// Любой ОТВЕТ (даже 404/405, если HEAD не поддержан) означает, что сервер
+// на связи — бросает fetch только сетевая недоступность (DNS/отказ
+// соединения/таймаут), это и есть искомая "доступность", не конкретный код.
+export async function checkBlossomReachable(serverUrl, options = {}) {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  try {
+    await fetchImpl(stripTrailingSlash(serverUrl) + '/', { method: 'HEAD' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadBlob(serverUrl, sha256Hex, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/' + sha256Hex);

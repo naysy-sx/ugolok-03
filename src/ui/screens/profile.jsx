@@ -326,100 +326,66 @@ export default function Profile() {
 				</small>
 			</section>
 
-			<section class="flow" aria-labelledby="profile-avatar-heading">
-				<h2 id="profile-avatar-heading">Аватар</h2>
-				<div class="cluster">
+			{/* Пользователь: "перекомпоновать блоки с аватаром и о себе — две
+			    колонки: в первой маленькой квадратный аватар и кнопка 'Заменить'
+			    внизу, во второй большой — блок 'О себе'". aria-label вместо
+			    видимого <h2> "Аватар" — левая колонка теперь читается сама по
+			    себе (фото + кнопка под ним), а "О себе" остаётся единственным
+			    видимым заголовком блока. */}
+			<div class="profile-photo-layout">
+				<div class="profile-photo-col" aria-label="Аватар">
 					{avatar ? (
-						<img
-							src={avatar}
-							alt=""
-							width="96"
-							height="96"
-							class="cover"
-							style={{
-								width: "6rem",
-								height: "6rem",
-								borderRadius: "50%",
-								border: "var(--border-width) solid var(--border)",
-							}}
-						/>
+						<img src={avatar} alt="" class="profile-avatar-square" />
 					) : (
-						<div
-							role="img"
-							aria-label="Аватар не задан"
-							style={{
-								width: "6rem",
-								height: "6rem",
-								borderRadius: "50%",
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								background: "var(--surface)",
-								border: "var(--border-width) solid var(--border)",
-								fontSize: "var(--step-3)",
-								color: "var(--muted)",
-							}}
-						>
+						<div role="img" aria-label="Аватар не задан" class="profile-avatar-square profile-avatar-square-fallback">
 							{initial}
 						</div>
 					)}
-					<div class="flow">
-						<label
-							for="profile-avatar-input"
-							style={{
-								display: "inline-block",
-								cursor: "pointer",
-								backgroundColor: "var(--accent)",
-								color: "var(--accent-contrast)",
-								padding: "var(--space-2xs) var(--space-s)",
-								borderRadius: "var(--radius)",
-							}}
-						>
-							Заменить аватар
-						</label>
-						<input
-							id="profile-avatar-input"
-							class="visually-hidden"
-							type="file"
-							accept="image/*"
-							onChange={handleAvatarChange}
-						/>
-					</div>
-				</div>
-				{avatarError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-						{avatarError}
-					</p>
-				)}
-			</section>
-
-			<form class="flow" onSubmit={handleBioSubmit}>
-				<fieldset class="flow">
-					<legend>О себе</legend>
-					<label for="profile-bio">Био</label>
-					<textarea
-						id="profile-bio"
-						rows="4"
-						value={bio}
-						onInput={(e) => setBio(e.currentTarget.value)}
+					<label for="profile-avatar-input" class="profile-avatar-replace-btn">
+						Заменить
+					</label>
+					<input
+						id="profile-avatar-input"
+						class="visually-hidden"
+						type="file"
+						accept="image/*"
+						onChange={handleAvatarChange}
 					/>
-				</fieldset>
-				<div class="cluster">
-					<button type="submit" disabled={!bioIsDirty}>
-						Сохранить
-					</button>
-					{bioStatus && (
-						<span role="status" style={{ color: "var(--muted)" }}>
-							{bioStatus}
-						</span>
-					)}
-					{publishStatus && (
-						<span role="status" style={{ color: "var(--muted)" }}>
-							{publishStatus}
-						</span>
+					{avatarError && (
+						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+							{avatarError}
+						</p>
 					)}
 				</div>
-			</form>
+
+				<form class="flow profile-bio-col" onSubmit={handleBioSubmit}>
+					<fieldset class="flow">
+						<legend>О себе</legend>
+						<label for="profile-bio">Био</label>
+						<textarea
+							id="profile-bio"
+							rows="4"
+							value={bio}
+							onInput={(e) => setBio(e.currentTarget.value)}
+						/>
+					</fieldset>
+					<div class="cluster">
+						<button type="submit" disabled={!bioIsDirty}>
+							Сохранить
+						</button>
+						{bioStatus && (
+							<span role="status" style={{ color: "var(--muted)" }}>
+								{bioStatus}
+							</span>
+						)}
+						{publishStatus && (
+							<span role="status" style={{ color: "var(--muted)" }}>
+								{publishStatus}
+							</span>
+						)}
+					</div>
+				</form>
+			</div>
 
 			<section class="flow" aria-labelledby="profile-files-heading">
 				<h2 id="profile-files-heading">Файлы</h2>

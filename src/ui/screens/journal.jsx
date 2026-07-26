@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useState, useRef } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../signals/journal.js";
 import { messagingActivity } from "../signals/chats.js";
@@ -16,10 +16,9 @@ const CATEGORY_LABELS = {
 	inbox: "Незнакомец",
 };
 
-// Этап 50-довесок (пользователь, живая проверка) — временно маленькая страница
-// (3 записи), чтобы сразу увидеть работу пагинации на реальных данных; менять
-// на разумное число (20-30) можно одной строкой, когда пагинация подтверждена.
-const PAGE_SIZE = 3;
+// Этап 50-довесок-N (пользователь, живая проверка пагинации подтверждена —
+// найден и исправлен реальный баг ниже, теперь разумное число на странице).
+const PAGE_SIZE = 15;
 
 function formatEntryTime(ms) {
 	return new Date(ms).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -62,6 +61,26 @@ export default function Journal() {
 	}, [ownerPubkey, messagingActivity.value]);
 
 	const entries = journalEntries.value;
+
+	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живая проверка) — реальный баг был не в сортировке
+	// (occurredAt по убыванию и так верный, см. journal.js), а в том, что "page"
+	// это СТАТИЧНЫЙ числовой индекс в список, который растёт снизу вверх (новая
+	// запись — всегда entries[0], сортировка по времени убывающая): пока
+	// пользователь смотрел, скажем, страницу 2, новое событие сдвигало ВЕСЬ
+	// массив на одну позицию, и та же страница 2 начинала показывать СОВСЕМ
+	// другие (более старые) записи — новое событие визуально оказывалось "где-то
+	// в середине" вместо ожидаемого верха списка. prevLengthRef — рост длины
+	// однозначно означает "пришла новая запись" (записи в этой модели никогда не
+	// удаляются, только read-флаг меняется — длина иначе не меняется), сбрасываем
+	// на страницу 0, где и обязана быть самая свежая запись.
+	const prevLengthRef = useRef(entries.length);
+	useEffect(() => {
+		if (entries.length > prevLengthRef.current) {
+			setPage(0);
+		}
+		prevLengthRef.current = entries.length;
+	}, [entries.length]);
+
 	const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
 	// Страница могла "исчезнуть" (записи прочитаны/удалены на другом устройстве,
 	// список сократился) — не показывать пустую страницу молча.

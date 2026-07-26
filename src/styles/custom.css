@@ -180,6 +180,35 @@ button:has(> .icon),
 	}
 }
 
+/* Пользователь: переключатель темы — буквально в угол экрана, видна только
+   нижне-левая четверть кругляша. position:fixed игнорирует flex-раскладку
+   родителя (.top-corner-actions) — кнопка сама встаёт в угол независимо от
+   бургера рядом. top:0;right:0 + translate(50%,-50%) кладёт ЦЕНТР круга
+   ровно в угол вьюпорта — остальные 3/4 оказываются за пределами видимой
+   области (браузер их просто не рисует, без clip-path). */
+.theme-toggle-btn {
+	position: fixed;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	transform: translate(50%, -50%);
+}
+/* Иконка внутри сдвинута вниз-влево — иначе центр иконки совпадал бы с
+   центром круга (теперь ровно в углу экрана, за пределами видимой зоны)
+   и был бы не виден вовсе вместе с обрезанными 3/4 кнопки. */
+.theme-toggle-btn svg {
+	transform: translate(-30%, 30%);
+}
+
+/* Бургер — независимая фиксированная позиция НИЖЕ зоны, которую теперь
+   занимает переключатель темы в самом углу (иначе бы налезали друг на
+   друга): видимая четверть кругляша темы доходит примерно до 1.125rem
+   от верхнего края, отступ бургера — с запасом. */
+.sidebar-toggle-btn {
+	position: fixed;
+	inset-block-start: 2rem;
+	inset-inline-end: var(--space-s);
+}
+
 .app-layout {
 	flex: 1 1 auto;
 	min-height: 0; /* иначе flex-ребёнок не сжимается под .call-bar, весь .app-shell переполнился бы */
@@ -290,7 +319,7 @@ button:has(> .icon),
 }
 .app-layout .account-avatar-large {
 	display: block;
-	inline-size: 5rem;
+	inline-size: 12rem;
 	aspect-ratio: 1;
 	object-fit: cover;
 	border-radius: var(--radius);
@@ -333,16 +362,15 @@ button:has(> .icon),
    рядом с именем, а не отдельной строкой снизу (была причиной лишнего
    вертикального пространства). */
 .app-layout .profile-edit-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+	align-self: center;
+	margin-block-start: var(--space-2xs);
 	background: none;
-	border: var(--border-width) solid transparent;
+	border: var(--border-width) solid var(--border);
 	color: var(--muted);
-	padding: var(--space-3xs);
+	padding: var(--space-3xs) var(--space-s);
 	border-radius: calc(infinity * 1px);
 	font-size: var(--step--1);
-	flex: none;
+	font-weight: var(--weight-normal);
 }
 .app-layout .profile-edit-btn:hover {
 	background-color: var(--surface-raised);
@@ -367,7 +395,7 @@ button:has(> .icon),
 	position: absolute;
 	font-family: var(--font-display);
 	font-style: normal;
-	font-size: var(--step-3);
+	font-size: var(--step-2);
 	line-height: 0;
 	color: var(--accent-2);
 	opacity: 0.7;
@@ -455,24 +483,25 @@ button:has(> .icon),
 /* Кнопка "Назад" перед заголовком (пользователь: "большая красивая
    стрелка Назад") — крупная стрелка + подпись, тихий ghost-стиль (как
    .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
+/* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
+   завязан на width/height, не на padding вокруг текста (текста больше нет). */
 .app-layout .back-button {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-3xs);
+	justify-content: center;
 	flex: none;
+	width: 2.5rem;
+	height: 2.5rem;
+	padding: 0;
 	background-color: transparent;
 	color: var(--muted);
 	border-color: transparent;
-	padding-inline: var(--space-2xs);
-	font-size: var(--step-3);
-	font-weight: var(--weight-normal);
+	border-radius: calc(infinity * 1px);
+	font-size: var(--step-2);
 }
 .app-layout .back-button:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
-}
-.app-layout .back-button span {
-	font-size: var(--step--1);
 }
 
 /* Приём "скроллится ровно то, что осталось от flex-родителя": content-area —
@@ -1135,7 +1164,12 @@ button:has(> .icon),
 
 .call-overlay-ended-close {
 	position: absolute;
-	inset-inline-end: var(--space-2xs);
+	/* Найдено пользователем: крестик иногда "залезал под переключатель темы" —
+	   .call-overlay растянут на всю ширину (inset-inline:0), и крестик у самого
+	   правого края бара оказывался ровно там же, где .top-corner-actions
+	   (тема+бургер, z-index:300 — выше .call-overlay, 200), визуально/кликово
+	   перекрывая его. Резерв — тот же приём, что .section-header ранее. */
+	inset-inline-end: calc(var(--space-s) + 5rem);
 	inset-block-start: 50%;
 	transform: translateY(-50%);
 	background: none;
@@ -1416,6 +1450,18 @@ button:has(> .icon),
 	margin-block-end: var(--space-s);
 }
 
+/* Пользователь: "Контакты" — главный рабочий блок, поднять над заявками/
+   заблокированными и выделить рамкой. Тот же язык карточки, что aside
+   слева, плюс собственный отступ снизу (двойная сепарация: рамка ВОКРУГ
+   и явный зазор ПОСЛЕ — от следующего блока "Входящие заявки"). */
+.app-layout .contacts-primary-section {
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: var(--space-m);
+	margin-block-end: var(--space-l);
+}
+
 /* Фильтр по группам — чекбоксы как переключаемые чипы, не голые
    input+label в столбик. Чекбокс визуально спрятан, но остаётся в
    разметке/доступен с клавиатуры — :has(:checked) переключает вид. */
@@ -1588,4 +1634,99 @@ button:has(> .icon),
 }
 .app-layout .contact-identity-npub {
 	font-family: var(--font-mono);
+}
+
+/* ================================================================== *
+ *  Экран "Профиль" (profile.jsx) — аватар и "О себе" в две колонки   *
+ *  (пользователь, item 7): узкая слева (фото + "Заменить" под ним),  *
+ *  широкая справа ("О себе").                                        *
+ * ================================================================== */
+.app-layout .profile-photo-layout {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-l);
+	margin-block-end: var(--space-l);
+}
+@media (min-width: 40em) {
+	.app-layout .profile-photo-layout {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+	.app-layout .profile-photo-col {
+		flex: 0 0 12rem;
+	}
+	.app-layout .profile-bio-col {
+		flex: 1;
+		min-width: 0;
+	}
+}
+.app-layout .profile-photo-col {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-s);
+}
+.app-layout .profile-avatar-square {
+	width: 12rem;
+	height: 12rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface-raised);
+}
+.app-layout .profile-avatar-square-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: var(--step-4);
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}
+.app-layout .profile-avatar-replace-btn {
+	display: inline-block;
+	cursor: pointer;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	padding: var(--space-2xs) var(--space-l);
+	border-radius: calc(infinity * 1px);
+	font-weight: var(--weight-bold);
+}
+.app-layout .profile-avatar-replace-btn:hover {
+	background-color: var(--accent-hover);
+}
+
+/* Статусные цвета переиспользуются панелью соединения ниже — общие
+   утилитарные классы (не только для неё), тот же oklch-inline-fallback
+   приём, что уже используется точечно по проекту (var(--bad, oklch(...))). */
+.status-ok {
+	color: var(--good, oklch(0.6 0.15 145));
+}
+.status-warn {
+	color: var(--warn, oklch(0.75 0.15 85));
+}
+.status-bad {
+	color: var(--bad, oklch(0.58 0.21 25));
+}
+
+/* Панель статуса соединения (пользователь, item 4) — постоянно под главным
+   меню, на любом экране (раньше был ad-hoc "Соединение: ..." только на
+   Контактах/Сообщениях — теперь один источник правды). Мелкий шрифт (URL
+   не главное), цвет — на самом статусе, не на строке целиком. */
+.app-layout .sidebar .connection-status-panel {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3xs);
+	padding-block: var(--space-s);
+	margin-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--border);
+	font-size: var(--step--2);
+	color: var(--muted);
+}
+.app-layout .sidebar .connection-status-panel p {
+	margin: 0;
+}
+.app-layout .sidebar .connection-status-panel small {
+	display: block;
+	word-break: break-all;
 }

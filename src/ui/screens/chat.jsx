@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "preact/hooks";
-import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import {
@@ -10,8 +10,6 @@ import {
 	refreshGroupMessageSubscription,
 	refreshLiveProfileSubscription,
 	nextLamportTick,
-	connState,
-	synced,
 } from "../signals/transport.js";
 import { activeChatPubkey, openChat } from "../signals/chat.js";
 import { profiles, refreshProfiles } from "../signals/contacts.js";
@@ -38,7 +36,6 @@ import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { validateAttachment } from "../../domain/attachments/validation.js";
 import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { createVoiceRecorder, shouldInlineVoice } from "../../domain/attachments/voice.js";
-import SyncIndicator from "../components/sync-indicator.jsx";
 import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import Screen from "../components/screen.jsx";
@@ -123,9 +120,9 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 
 	return (
 		<Screen title="Сообщения" feed>
-			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-				Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={DEFAULT_RELAYS[0]} />
-			</p>
+			{/* "Соединение: ..." переехало в постоянную панель под главным меню
+			    (app.jsx, ConnectionStatusPanel) — видна на любом экране (пользователь,
+			    item 4). */}
 			{connectionError && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{connectionError}

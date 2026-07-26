@@ -46,17 +46,18 @@ export default function SidebarProfileCard({ onEditProfile }) {
 			<div class="profile-card-body">
 				<h2>
 					<span title={login || id}>{login || id.slice(0, 16) + "…"}</span>
-					{/* Пользователь: "'Изменить профиль' выглядит скучно... сделать
-					    компактную кнопочку с иконкой" — заменил текстовую ссылку
-					    иконкой рядом с именем, а не отдельной строкой снизу. */}
-					<button type="button" class="profile-edit-btn" onClick={onEditProfile} aria-label="Изменить профиль">
-						<IconPencil />
-					</button>
 				</h2>
 				{/* Декоративные кавычки вокруг био (пользователь предложил идею
 				    сам) — акцентным цветом-компаньоном (--accent-2/draught),
 				    тихо, без рамок вокруг всего блока. */}
 				{bio && <p class="profile-bio">{bio}</p>}
+				{/* Найдено пользователем: иконка-карандаш рядом с именем в узкой
+				    колонке h2 (флекс-строка с truncate-именем) пряталась у самого
+				    края сайдбара — фактически невидима/некликабельна. Своя строка
+				    ниже, с подписью — надёжнее компактной иконки-без-текста. */}
+				<button type="button" class="profile-edit-btn" onClick={onEditProfile}>
+					<IconPencil /> Изменить профиль
+				</button>
 			</div>
 			{showAvatarModal && avatar && <ImageModal src={avatar} alt="Фото профиля" onClose={() => setShowAvatarModal(false)} />}
 		</section>

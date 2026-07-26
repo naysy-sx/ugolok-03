@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { callState, localMediaStream, remoteMediaStream, acceptCall, rejectCall, hangupCall, dismissEndedCall } from "../signals/call.js";
 import { profiles } from "../signals/contacts.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
+import { RINGTONE_DATA_URI } from "../../domain/calls/ringtone-asset.js";
 
 // Этап 48, п.6 — persistent-компонент уровня app.jsx (тот же архитектурный
 // принцип, что ToastHost, этап 47): входящий звонок обязан быть виден с ЛЮБОГО
@@ -76,6 +77,28 @@ function RemoteAudio({ stream }) {
 	return <audio ref={audioRef} autoPlay style={{ display: "none" }} />;
 }
 
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живое использование) — во время дозвона не звучало
+// НИЧЕГО ни у звонящего (OUTGOING_RINGING, гудки/ринг-бэк), ни у принимающего
+// (INCOMING_RINGING, рингтон) — RemoteAudio выше начинает проигрывать голос
+// собеседника только ПОСЛЕ CONNECTED, до этого момента полная тишина. Один и
+// тот же файл на обеих сторонах (пользователь подтвердил), зациклен нативным
+// loop — не нужен JS-таймер перезапуска. Компонент монтируется ТОЛЬКО внутри
+// ветки рендера RINGING (см. ниже) — переход в любое другое состояние
+// размонтирует его вместе со всей веткой, что само по себе останавливает звук
+// (cleanup эффекта), без отдельной логики "стоп по состоянию".
+function RingtoneAudio() {
+	const audioRef = useRef(null);
+	useEffect(() => {
+		const el = audioRef.current;
+		if (!el) return;
+		el.play().catch(() => {}); // автоплей может потребовать жеста — тот же принцип, что RemoteAudio
+		return () => {
+			el.pause();
+		};
+	}, []);
+	return <audio ref={audioRef} src={RINGTONE_DATA_URI} loop style={{ display: "none" }} />;
+}
+
 // Тикающий таймер длительности — callState (FSM) не несёт временных меток (§1.2
 // VOICE.md заморожен, не трогаем), поэтому "с какого момента считать" живёт
 // здесь, локально в UI, а не в состоянии автомата.
@@ -126,6 +149,7 @@ export default function CallOverlay() {
 		const incoming = call.name === "INCOMING_RINGING";
 		return (
 			<div class="call-overlay call-overlay-ringing" role="dialog" aria-modal="true" aria-label={incoming ? "Входящий звонок" : "Исходящий звонок"}>
+				<RingtoneAudio />
 				<div class="call-overlay-avatar" aria-hidden="true">
 					{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 				</div>

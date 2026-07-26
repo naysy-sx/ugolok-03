@@ -29,6 +29,7 @@ import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
+import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
 import IconChatBubble from "./ui/icons/chat-bubble.jsx";
 import IconReader from "./ui/icons/reader.jsx";
 import IconPeople from "./ui/icons/people.jsx";
@@ -232,6 +233,10 @@ function MainShell() {
 							);
 						})}
 					</ul>
+					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
+					    главным меню, на любом экране, не только там, где раньше был
+					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
+					<ConnectionStatusPanel />
 				</nav>
 				<button type="button" class="nav-item-btn exit-btn" onClick={lock}>
 					<IconExit />

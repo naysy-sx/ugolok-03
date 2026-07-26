@@ -1,8 +1,7 @@
 import { useState, useEffect, useId, useRef } from "preact/hooks";
-import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, connState, synced } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { openChat } from "../signals/chat.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
@@ -31,7 +30,6 @@ import {
 	rejectContactRequestAction,
 	cancelContactRequestAction,
 } from "../signals/contacts.js";
-import SyncIndicator from "../components/sync-indicator.jsx";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
 
@@ -79,7 +77,6 @@ export default function Contacts() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
 	const dbKey = dbKeySig.value;
-	const relayUrl = DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 
 	const [connectionError, setConnectionError] = useState("");
 	const [npubInput, setNpubInput] = useState("");
@@ -248,9 +245,9 @@ export default function Contacts() {
 	return (
 		<Screen title="Контакты">
 			<div class="contacts-toolbar">
-				<p class="cluster" style={{ alignItems: "center" }}>
-					Соединение: <SyncIndicator state={connState.value} synced={synced.value} url={relayUrl} />
-				</p>
+				{/* "Соединение: ..." переехало в постоянную панель под главным
+				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
+				    здесь дублировать незачем (пользователь, item 4). */}
 				{connectionError && (
 					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 						{connectionError}
@@ -382,76 +379,11 @@ export default function Contacts() {
 				</aside>
 
 				<div class="contacts-main">
-					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="requests-heading">Входящие заявки ({incomingRequests.value.length})</h2>
-						{incomingRequests.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
-						) : (
-							<ul role="list" class="contact-row-list">
-								{incomingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
-										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions">
-											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
-												Принять
-											</button>
-											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
-												Отклонить
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-
-					<section class="flow" aria-labelledby="outgoing-requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="outgoing-requests-heading">Отправленные заявки ({outgoingRequests.value.length})</h2>
-						{outgoingRequests.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
-						) : (
-							<ul role="list" class="contact-row-list">
-								{outgoingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
-										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions">
-											<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
-												Отменить
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-
-					<section class="flow" aria-labelledby="rejected-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="rejected-heading">Отклонённые ({rejectedByMe.value.length})</h2>
-						{rejectedByMe.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
-						) : (
-							<ul role="list" class="contact-row-list">
-								{rejectedByMe.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
-										<ContactIdentity pubkey={req.peerPubkey} />
-										{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
-										написать самому тому, чью заявку отклонил(а) раньше. */}
-										<div class="contact-row-actions">
-											<button
-												type="button"
-												disabled={busy}
-												onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
-											>
-												Добавить всё же
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-
-					<section class="flow" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
+					{/* Пользователь: "существующие контакты — главный рабочий блок,
+					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
+					    и "Заблокированные" внизу страницы. Теперь первым, в своей
+					    рамке (contacts-primary-section). */}
+					<section class="flow contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
 						<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
 						{rowError && (
 							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -533,6 +465,75 @@ export default function Contacts() {
 							<p style={{ color: "var(--muted)" }}>
 								{contacts.value.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
 							</p>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="requests-heading">Входящие заявки ({incomingRequests.value.length})</h2>
+						{incomingRequests.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
+						) : (
+							<ul role="list" class="contact-row-list">
+								{incomingRequests.value.map((req) => (
+									<li key={req.peerPubkey} class="contact-row">
+										<ContactIdentity pubkey={req.peerPubkey} />
+										<div class="contact-row-actions">
+											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
+												Принять
+											</button>
+											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
+												Отклонить
+											</button>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="outgoing-requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="outgoing-requests-heading">Отправленные заявки ({outgoingRequests.value.length})</h2>
+						{outgoingRequests.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
+						) : (
+							<ul role="list" class="contact-row-list">
+								{outgoingRequests.value.map((req) => (
+									<li key={req.peerPubkey} class="contact-row">
+										<ContactIdentity pubkey={req.peerPubkey} />
+										<div class="contact-row-actions">
+											<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
+												Отменить
+											</button>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+
+					<section class="flow" aria-labelledby="rejected-heading" style={{ "--flow-space": "var(--space-s)" }}>
+						<h2 id="rejected-heading">Отклонённые ({rejectedByMe.value.length})</h2>
+						{rejectedByMe.value.length === 0 ? (
+							<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
+						) : (
+							<ul role="list" class="contact-row-list">
+								{rejectedByMe.value.map((req) => (
+									<li key={req.peerPubkey} class="contact-row">
+										<ContactIdentity pubkey={req.peerPubkey} />
+										{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
+										написать самому тому, чью заявку отклонил(а) раньше. */}
+										<div class="contact-row-actions">
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
+											>
+												Добавить всё же
+											</button>
+										</div>
+									</li>
+								))}
+							</ul>
 						)}
 					</section>
 
