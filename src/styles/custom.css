@@ -2290,3 +2290,146 @@ button:has(> .icon),
 	gap: var(--space-2xs);
 	margin-block-start: var(--space-m);
 }
+
+/* ================================================================== *
+ *  Пост + дерево комментариев — VISUAL.md v2, интеграция (пользователь *
+ *  оставил разворот внутри списка постов канала, не отдельным         *
+ *  экраном — см. PostWithComments, channel.jsx).                      *
+ * ================================================================== */
+.app-layout .section-label {
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	margin-block: 0;
+}
+
+.app-layout .composer {
+	display: grid;
+	gap: var(--space-2xs);
+}
+.app-layout .composer__row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+
+.app-layout .cmt-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: var(--space-m);
+}
+.app-layout .cmt__box {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: var(--space-s);
+	row-gap: var(--space-3xs);
+}
+.app-layout .cmt__ava {
+	grid-column: 1;
+	grid-row: 1 / 4;
+	align-self: start;
+	width: 2.125rem;
+	height: 2.125rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius-full);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+	font-size: 0.85rem;
+}
+.app-layout .cmt__ava-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}
+.app-layout .cmt__head {
+	grid-column: 2;
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2xs);
+	flex-wrap: wrap;
+}
+.app-layout .cmt__name {
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+}
+.app-layout .cmt__time {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+/* "автор" — оригинальный автор ПОСТА (не владелец канала) написал этот
+   комментарий; заливка --accent (та же "лампа", что исходящие сообщения —
+   "это твой свет", тот же смысл). */
+.app-layout .cmt__op {
+	font-size: var(--step--2);
+	color: var(--accent-contrast);
+	background-color: var(--accent);
+	padding: 1px var(--space-2xs);
+	border-radius: var(--radius-full);
+}
+.app-layout .cmt__text {
+	grid-column: 2;
+	font-size: var(--step--1);
+	line-height: 1.55;
+	white-space: pre-wrap;
+	margin: 0;
+}
+.app-layout .cmt__media {
+	grid-column: 2;
+	margin-block-start: var(--space-2xs);
+	max-width: 280px;
+}
+.app-layout .cmt__actions {
+	grid-column: 2;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	margin-block-start: var(--space-3xs);
+}
+.app-layout .cmt__actions .btn--ghost {
+	padding: var(--space-3xs) var(--space-2xs);
+	font-size: var(--step--2);
+}
+
+/* Ветка — нативное сворачивание + тёплая нить (подпись Уголка): левая
+   граница окрашена акцентом, тред читается как "нить разговора", не
+   просто отступ. */
+.app-layout .thread {
+	grid-column: 1 / -1;
+}
+.app-layout .thread > summary {
+	list-style: none;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	color: var(--muted);
+	font-size: var(--step--2);
+	padding: var(--space-3xs) var(--space-2xs);
+	margin-block-start: var(--space-2xs);
+	border-radius: var(--radius-full);
+}
+.app-layout .thread > summary::-webkit-details-marker {
+	display: none;
+}
+.app-layout .thread > summary:hover {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+}
+.app-layout .thread__chev {
+	transition: transform var(--transition-speed) var(--transition-ease);
+}
+.app-layout .thread[open] > summary .thread__chev {
+	transform: rotate(90deg);
+}
+.app-layout .thread > .cmt-list {
+	margin-block-start: var(--space-m);
+	padding-inline-start: var(--space-m);
+	border-inline-start: 2px solid color-mix(in oklch, var(--accent), var(--border) 68%);
+}

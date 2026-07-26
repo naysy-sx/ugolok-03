@@ -5,7 +5,8 @@ import { publish, fetchProfiles } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
-import { ensureProfilesFetched } from "../signals/contacts.js";
+import { ensureProfilesFetched, profiles } from "../signals/contacts.js";
+import { shortPubkey } from "../format.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
@@ -18,16 +19,16 @@ import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
-import PostCard from "../components/post-card.jsx";
+import PostCard, { formatDateTime } from "../components/post-card.jsx";
 import ChannelChat from "../components/channel-chat.jsx";
 import ModerationActions from "../components/moderation-actions.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
-import { ContactIdentity } from "./contacts.jsx";
 import Screen from "../components/screen.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
 import IconPlus from "../icons/plus.jsx";
 import IconTrash from "../icons/trash.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -37,6 +38,24 @@ const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+
+// VISUAL.md v2 ("Пост + комментарии") — .cmt__box раскладывает аватар/имя/
+// текст отдельными grid-областями (не единым блоком, как ContactIdentity в
+// Контактах), поэтому здесь достаём имя/аватар автора комментария напрямую
+// из уже закэшированных профилей, а не переиспользуем ContactIdentity целиком.
+function commentAuthorInfo(pubkey) {
+	const profile = profiles.value[pubkey];
+	return { name: profile?.name || shortPubkey(pubkey), avatar: profile?.picture };
+}
+
+// "ветка · N ответов" — русское склонение (1 ответ, 2-4 ответа, 5+ ответов).
+function pluralizeReplies(n) {
+	const mod10 = n % 10;
+	const mod100 = n % 100;
+	if (mod10 === 1 && mod100 !== 11) return `${n} ответ`;
+	if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} ответа`;
+	return `${n} ответов`;
+}
 
 // Этап 50-довесок-2 (найдено пользователем: канал нельзя было отредактировать/
 // удалить после создания) — та же вкладочная структура, что "Модерация"
@@ -244,7 +263,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	}
 
 	return (
-		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-3xs)" }}>
+		<form class="composer" onSubmit={handleSubmit} aria-label="Новый комментарий">
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -254,26 +273,29 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 				Комментарий
 			</label>
 			<textarea
+				class="input"
 				id={`comment-text-${parentId}`}
 				value={text}
 				maxLength={COMMENT_MAX_LENGTH}
 				onInput={(e) => setText(e.currentTarget.value)}
 				rows={2}
+				placeholder="Написать комментарий…"
 				autoFocus={autoFocus}
 			/>
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
-			<div class="cluster">
+			<div class="composer__row">
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-				<button type="button" onClick={() => attachment.inputRef.current?.click()}>
+				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label="Прикрепить файл">
 					📎
 				</button>
+				<span class="grow" />
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
 					{busy ? "Отправка…" : "Отправить"}
 				</button>
 				{onCancel && (
-					<button type="button" onClick={onCancel} disabled={busy}>
+					<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 						Отмена
 					</button>
 				)}
@@ -282,38 +304,57 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	);
 }
 
-function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, limiter, onChanged, depth, highlightCommentId }) {
+function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, postAuthorPubkey, limiter, onChanged, depth, highlightCommentId }) {
 	const [replying, setReplying] = useState(false);
 	const isOwnComment = comment.authorPubkey === ownerPubkey;
 	const isTarget = comment.id === highlightCommentId;
+	const isOP = comment.authorPubkey === postAuthorPubkey;
+	const author = commentAuthorInfo(comment.authorPubkey);
+
 	return (
-		<li
-			id={`comment-${comment.id}`}
-			class={isTarget ? "is-target-comment" : undefined}
-			style={{ marginInlineStart: depth > 0 ? "var(--space-m)" : 0, paddingBlockStart: "var(--space-2xs)" }}
-		>
-			<p style={{ whiteSpace: "pre-wrap" }}>{comment.text}</p>
-			{comment.attachments?.[0] && <AttachmentView attachment={comment.attachments[0]} />}
-			<div class="cluster" style={{ alignItems: "center" }}>
-				<ContactIdentity pubkey={comment.authorPubkey} />
-				{canComment && (
-					<button type="button" onClick={() => setReplying((v) => !v)}>
-						Ответить
-					</button>
+		<li id={`comment-${comment.id}`} class={`cmt${isTarget ? " is-target-comment" : ""}`}>
+			<article class="cmt__box">
+				{author.avatar ? (
+					<img src={author.avatar} alt="" class="cmt__ava" />
+				) : (
+					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback">
+						{(author.name || "?").trim().charAt(0).toUpperCase()}
+					</div>
 				)}
-				{!isOwnComment && (
-					<ModerationActions
-						viewerPubkey={ownerPubkey}
-						viewerPrivKey={privKey}
-						channelOwnerPubkey={channelOwnerPubkey}
-						channelId={channelId}
-						targetPubkey={comment.authorPubkey}
-						contentType="comment"
-						contentId={comment.id}
-						contentText={comment.text}
-					/>
+				<div class="cmt__head">
+					<span class="cmt__name">{author.name}</span>
+					{isOP && <span class="cmt__op">автор</span>}
+					<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
+				</div>
+				<p class="cmt__text">{comment.text}</p>
+				{comment.attachments?.[0] && (
+					<div class="cmt__media">
+						<AttachmentView attachment={comment.attachments[0]} />
+					</div>
 				)}
-			</div>
+				<div class="cmt__actions">
+					{canComment && (
+						<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
+							<IconChatBubble /> Ответить
+						</button>
+					)}
+					{!isOwnComment && (
+						<ActionsMenu label={`Ещё действия для ${author.name}`}>
+							<ModerationActions
+								viewerPubkey={ownerPubkey}
+								viewerPrivKey={privKey}
+								channelOwnerPubkey={channelOwnerPubkey}
+								channelId={channelId}
+								targetPubkey={comment.authorPubkey}
+								contentType="comment"
+								contentId={comment.id}
+								contentText={comment.text}
+							/>
+						</ActionsMenu>
+					)}
+				</div>
+			</article>
+
 			{replying && (
 				<CommentComposer
 					ownerPubkey={ownerPubkey}
@@ -331,26 +372,37 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					onCancel={() => setReplying(false)}
 				/>
 			)}
+
+			{/* Ветка — нативное сворачивание (VISUAL.md v2 "тёплая нить треда"),
+			    open по умолчанию: тот же эффект, что раньше (всегда видно), но
+			    теперь можно свернуть длинный тред вручную. */}
 			{comment.replies.length > 0 && (
-				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-					{comment.replies.map((reply) => (
-						<CommentNode
-							key={reply.id}
-							comment={reply}
-							canComment={canComment}
-							ownerPubkey={ownerPubkey}
-							privKey={privKey}
-							dbKey={dbKey}
-							channelId={channelId}
-							channelOwnerPubkey={channelOwnerPubkey}
-							postId={postId}
-							limiter={limiter}
-							onChanged={onChanged}
-							depth={depth + 1}
-							highlightCommentId={highlightCommentId}
-						/>
-					))}
-				</ul>
+				<details class="thread" open>
+					<summary>
+						<IconChevronRight class="icon thread__chev" aria-hidden="true" />
+						ветка · {pluralizeReplies(comment.replies.length)}
+					</summary>
+					<ul role="list" class="cmt-list">
+						{comment.replies.map((reply) => (
+							<CommentNode
+								key={reply.id}
+								comment={reply}
+								canComment={canComment}
+								ownerPubkey={ownerPubkey}
+								privKey={privKey}
+								dbKey={dbKey}
+								channelId={channelId}
+								channelOwnerPubkey={channelOwnerPubkey}
+								postId={postId}
+								postAuthorPubkey={postAuthorPubkey}
+								limiter={limiter}
+								onChanged={onChanged}
+								depth={depth + 1}
+								highlightCommentId={highlightCommentId}
+							/>
+						))}
+					</ul>
+				</details>
 			)}
 		</li>
 	);
@@ -466,10 +518,11 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 					) : (
 						<p style={{ color: "var(--muted)" }}>Только чтение — подпишитесь, чтобы комментировать.</p>
 					)}
+					<h3 class="section-label">Комментарии</h3>
 					{tree.length === 0 ? (
 						<p style={{ color: "var(--muted)" }}>Пока нет комментариев.</p>
 					) : (
-						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						<ul role="list" class="cmt-list">
 							{tree.map((c) => (
 								<CommentNode
 									key={c.id}
@@ -481,6 +534,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 									channelId={channelId}
 									channelOwnerPubkey={channelOwnerPubkey}
 									postId={post.id}
+									postAuthorPubkey={post.authorPubkey}
 									limiter={limiter}
 									onChanged={refreshComments}
 									depth={0}
