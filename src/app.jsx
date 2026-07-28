@@ -10,6 +10,7 @@ import Channels from "./ui/screens/channels.jsx";
 import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
+import Files from "./ui/screens/files.jsx";
 import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish } from "./ui/signals/transport.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
@@ -42,6 +43,7 @@ import IconBell from "./ui/icons/bell.jsx";
 import IconSun from "./ui/icons/sun.jsx";
 import IconMoon from "./ui/icons/moon.jsx";
 import IconMenu from "./ui/icons/menu.jsx";
+import IconFolder from "./ui/icons/folder.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -49,6 +51,7 @@ const NAV_ICONS = {
 	journal: IconBell,
 	messages: IconChatBubble,
 	channels: IconReader,
+	files: IconFolder,
 	contacts: IconPeople,
 	discovery: IconGlobe,
 	settings: IconGear,
@@ -252,6 +255,7 @@ function MainShell() {
 				{activeId === "discovery" && <Discovery />}
 				{activeId === "settings" && <Settings />}
 				{activeId === "journal" && <Journal />}
+				{activeId === "files" && <Files />}
 				{activeId !== "diagnostics" &&
 					activeId !== "profile" &&
 					activeId !== "contacts" &&
@@ -259,7 +263,8 @@ function MainShell() {
 					activeId !== "channels" &&
 					activeId !== "discovery" &&
 					activeId !== "settings" &&
-					activeId !== "journal" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+					activeId !== "journal" &&
+					activeId !== "files" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
 			</div>
 			</div>
 		</div>

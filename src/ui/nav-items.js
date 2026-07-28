@@ -14,6 +14,7 @@ export const NAV_ITEMS = [
   { id: "journal", label: "Журнал" },
   { id: "messages", label: "Сообщения" },
   { id: "channels", label: "Каналы" },
+  { id: "files", label: "Файлы" },
   { id: "contacts", label: "Контакты" },
   { id: "discovery", label: "Обзор" },
   { id: "settings", label: "Настройки" },

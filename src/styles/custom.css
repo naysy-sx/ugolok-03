@@ -2604,3 +2604,99 @@ button:has(> .icon),
 	padding-inline-start: var(--space-m);
 	border-inline-start: 2px solid color-mix(in oklch, var(--accent), var(--border) 68%);
 }
+
+/* ================================================================== *
+ *  Экран "Файлы" (files.jsx, этап 53) — тот же язык, что Контакты/    *
+ *  Каналы: .cluster для тулбаров, .icon-btn/.btn--ghost для действий, *
+ *  строки списка по прямому прецеденту .contact-row-list.             *
+ * ================================================================== */
+
+.app-layout .files-shell {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-m);
+}
+
+.app-layout .file-breadcrumbs {
+	flex-wrap: wrap;
+}
+.app-layout .file-breadcrumb-list {
+	flex-wrap: wrap;
+	gap: var(--space-3xs);
+}
+.app-layout .file-breadcrumb-item {
+	gap: var(--space-3xs);
+	color: var(--muted);
+}
+/* Последняя крошка — текущая папка, обычный текст, не кнопка (некуда
+   переходить из самой себя, тот же принцип, что "хлебная крошка" везде). */
+.app-layout .file-breadcrumb-item:last-child span {
+	color: var(--fg);
+	font-weight: var(--weight-bold);
+}
+.app-layout .file-breadcrumb-item .icon {
+	color: var(--border);
+}
+
+.app-layout .file-new-folder-form {
+	align-items: center;
+}
+.app-layout .file-new-folder-form input {
+	flex: 1 1 16rem;
+}
+
+.app-layout .file-selection-toolbar {
+	align-items: center;
+	padding: var(--space-2xs) var(--space-s);
+	background-color: var(--surface);
+	border-radius: var(--radius);
+}
+
+/* Строка списка — прямой прецедент .contact-row-list (contacts.jsx). */
+.app-layout .file-row-list {
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3xs);
+}
+.app-layout .file-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	padding: var(--space-2xs) var(--space-s);
+	border-radius: var(--radius);
+	flex-wrap: wrap;
+}
+.app-layout .file-row:hover {
+	background-color: var(--surface);
+}
+.app-layout .file-row-icon {
+	flex: none;
+	color: var(--muted);
+	font-size: 1.1rem;
+}
+.app-layout .file-row-name {
+	background: none;
+	border: none;
+	padding: var(--space-3xs) var(--space-2xs);
+	border-radius: var(--radius);
+	text-align: start;
+	font-weight: var(--weight-normal);
+	color: var(--fg);
+}
+.app-layout .file-row-name:hover {
+	background-color: var(--surface-raised);
+}
+.app-layout .file-row-status {
+	color: var(--muted);
+	font-style: italic;
+}
+.app-layout .file-rename-form {
+	align-items: center;
+	flex: 1 1 auto;
+}
+.app-layout .file-rename-form input {
+	flex: 1 1 12rem;
+}
