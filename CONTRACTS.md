@@ -7443,3 +7443,152 @@ RULES_MAX_LENGTH=1000`), кнопки "Сохранить"/"Отмена", и о
 "Удалить канал" (`window.confirm`, тот же паттерн, что `deletePost` в этом
 же файле) → после успеха `openChannel(null)` (канал больше не существует,
 возврат к списку).
+
+---
+
+## Этап 53 — раздел «Файлы»: И0 + заморозка §5 (FILES-DOCS/TASK.md)
+
+Источники: `FILES-DOCS/TASK.md` (ред. 2), `FILES-DOCS/MATH.md` (ред. 2),
+`FILES-DOCS/ALGO.MD`. И0 (§10 TASK.md, 8 проверок) выполнено ДО первой
+строки кода живым чтением семи существующих подсистем + одним реальным
+запросом к развёрнутому Blossom-серверу. Три из восьми (П-1/П-3/П-4)
+номинально способны отменить принятые решения — ни одна не отменила,
+но П-1/П-2 потребовали уточнения контрактов §5 TASK.md ниже.
+
+### Находки И0, повлиявшие на контракты
+
+**П-1 (`core/sync/lamport.js`).** `createLamportClock().tick()/receive()`
+возвращают голое число (`value = max(local, remote) + 1` на `receive` —
+семантика корректна), БЕЗ `deviceId` внутри метки. Тотальная метка
+`(counter, deviceId)`, которую требует L-TOTAL (MATH.md §5.1), нигде в
+проекте не собрана как пара — ближайший прецедент, `domain/auth/engine.js`
+`compareRecords`, использует `(lamportTs, eventId)`, не `deviceId`.
+**Решение пользователя:** для дерева файлов tie-break — честный
+`deviceId` (`domain/identity/device.js`, `getOrCreateDeviceId()` —
+случайный 128-бит, персистентный), не `eventId`, несмотря на лишнюю
+прошивку через каждую операцию.
+
+**Следствие для §5.1/5.2 TASK.md.** `tree.js`/`ops.js` обязаны оставаться
+чистыми (§3.3 TASK.md — без I/O), а получение `deviceId`/тика счётчика —
+эффект (чтение IndexedDB). Поэтому метка **не генерируется внутри**
+конструкторов операций, а передаётся вызывающей стороной готовой парой.
+Уточнённые сигнатуры (§5.2 TASK.md дополнен, не изменён):
+
+```js
+// domain/files/tree.js
+type Label = { counter: number, deviceId: string };   // deviceId = getOrCreateDeviceId()
+type LWW<T> = { value: T, label: Label };
+
+compareLabels(a: Label, b: Label) -> -1 | 0 | 1;
+// a.counter - b.counter, при равенстве — лексикографически по deviceId (строка).
+// Строгий тотальный порядок ⟺ deviceId уникален (даётся getOrCreateDeviceId).
+
+applyOp(S, op)   -> S'
+merge(S, delta)  -> S'
+project(S)       -> ProjectedTree   // R, см. §5.1 TASK.md — без изменений
+
+// domain/files/ops.js — конструкторы ПРИНИМАЮТ готовую метку, не создают её.
+// createFolder/copy ТАКЖЕ принимают готовый NodeId новых узлов (§4.2:
+// "создан пользователем — случайный идентификатор" — источник случайности
+// снаружи, tree.js/ops.js остаются детерминированными при фиксированных
+// входах, это и есть "чистая" в терминах §3.3, и это же нужно property-
+// тестам §11 (1.5): сценарий воспроизводится по номеру, включая id).
+createFolder(S, parentId, name, newId, label) -> Op | PreconditionError
+rename(S, id, name, label)                    -> Op | PreconditionError
+move(S, id, newParentId, label)               -> Op | PreconditionError
+copy(S, id, destId, newIds, label)            -> Op[]   // newIds: Map<NodeId,NodeId> старый->новый по всему поддереву
+remove(S, id, label)                          -> Op                  // = move в /trash
+purge(S, id, label)                           -> Op
+```
+
+Тик счётчика (`core/sync/lamport.js`, уже существует, per-owner
+персистентность) и `deviceId` (`domain/identity/device.js`, уже
+существует) читаются ОДИН раз в нечистом слое (`domain/files/index.js`
+или `ui/`), передаются в `ops.js` готовой парой. `tree-crdt.test.js`
+обязан включать сценарий с равными `counter` у разных `deviceId`
+(П-1: "есть ли тест с равными счётчиками у разных устройств" — сейчас
+такого теста нет нигде в проекте, будет первым).
+
+**П-2 (`core/sync/lww.js`).** `lwwWinner`/`pickLatest` сравнивают
+`event.created_at` (wall-clock на момент подписи — не `Date.now()` в
+момент сравнения, детерминизм формально не нарушен) + tie-break по
+`event.id`. Это НЕ Lamport-метка и **не переиспользуется** для полей
+`par`/`name`/`origin` узла — они используют `compareLabels` выше,
+единообразно по всем трём полям (смешение двух баз времени на одном
+узле — источник неотлаживаемого поведения, ровно то, от чего
+предостерегает П-2). Примитив `core/sync/lamport.js` (счётчик) —
+переиспользуется как есть; примитив `core/sync/lww.js` (компаратор) —
+НЕ переиспользуется, пишется свой на базе `compareLabels`.
+
+**П-3 (`core/crypto/file-crypto.js`).** Шифрует файл ОДНИМ блоком
+(один nonce, один тег ChaCha20-Poly1305 на весь файл) — буквально
+стоп-сценарий П-3. Не пересмотр: TASK.md уже закладывал ровно это
+(решение №11, §5.4, задачи 2.1/2.4/2.5) — `domain/files/crypto.js` с
+независимым шифрованием чанков пишется заново, `file-crypto.js` не
+трогается (нужен фасаду `attachments` до И7).
+
+**П-4 (Blossom `Range`).** Живой запрос к развёрнутому серверу
+(`server/blossom/`, `sebdeveloper6952/blossom-server`, Go) —
+`Range: bytes=10-50` → `206 Partial Content`, корректные
+`Content-Range`/`Accept-Ranges`. Вариант с ограничительным ACL не
+тестировался живым запросом (в этой реализации нет компонента с
+названием "whitelist-plugin", есть `access_control_rules`; сервер
+использовался активной сессией — перезапуск ради второстепенного
+варианта не оправдан). Базовый случай, единственный реально
+блокирующий (R-1), подтверждён.
+
+**П-7 (`domain/events/kinds.js`).** Файл НЕ является полным реестром —
+трекает только 7 кинд. Первый проход grep'а (по паттерну `KIND_*`) тоже
+оказался неполон — часть констант названы `*_KIND` (суффикс, не
+префикс: `CALL_SIGNAL_KIND`, `CONTACT_REQUEST_KIND` и т.д.), нашлись
+вторым проходом. Итоговый список — оба паттерна (`kind:\s*\d+` И
+`[A-Z_]*KIND[A-Z_]*\s*=\s*\d+`) по всему `src/`, объединено и
+дедуплицировано:
+
+`0` (профиль), `3` (контакты), `5` (удаление), `14` (DM rumor),
+`443/444/445/446` (MLS), `3001` (заявка в контакты), `3002` (подписка
+на канал), `3003` (`CHANNEL_REPORT_KIND` — жалоба, ЗАНЯТ), `3004`
+(принята), `3005` (отменена), `3006` (отклонена), `5051` (moderation/
+fold, обычный — не replaceable), `10000` (mute), `10002` (relay list),
+`10051` (MLS key package relays), `20075` (сигналинг звонка, эфемерный),
+`22242` (NIP-42 auth), `24242` (Blossom auth), `30050` (группа),
+`30051` (permission-fold, только в synthetic-fixtures — зарезервирован),
+`30053` (channel access/VIEW), `30054` (comment allowlist), `30060`
+(канал), `30061` (пост), `30062` (комментарий), `30063` (chat канала),
+`30064` (`CHANNEL_BAN_KIND`, ЗАНЯТ), `30070` (read-status), `30071`
+(draft), `30072` (ui-settings), `30073` (discovery), `30074`
+(`CHANNEL_READ_STATUS_KIND`, ЗАНЯТ — этот кинд НЕ в `kinds.js`, найден
+только вторым проходом).
+
+Свободные диапазоны для И5: parameterized-replaceable **`30075+`** (не
+`30074+` — первая версия этой находки ошиблась ровно на одну позицию,
+исправлено до фиксации в коде), эфемерный `20076+`, заявки `3007+`.
+Задача 5.1 (И5) обязана сверяться с этим списком, не только с
+`kinds.js`, и повторить grep обоими паттернами на момент начала И5 —
+список мог измениться.
+
+**П-8 (`service-worker.js`).** Есть в `dist/` (подтверждено сборкой),
+есть `fetch`-обработчик, но строка `if (url.origin !==
+self.location.origin) return;` явно пропускает Blossom (другой origin)
+мимо перехвата. Следствие для И4 (задача 4.1): плеер обращается к
+СВОЕМУ same-origin виртуальному пути (например
+`/files-content/<digest>?...`), который получает новую ветку в
+`fetch`-обработчике ДО этой строки; cross-origin запросы к Blossom
+внутри неё делает сам обработчик (`fetch()` из кода SW, не из
+исходного запроса страницы) — не требует перехвата чужого origin.
+
+### Размещение и таблицы — без изменений от TASK.md §3.3/§4.4
+
+`src/domain/files/{tree,ops,manifest,blob,crypto,content,share,mount,sync,store,index}.js`,
+`src/ui/screens/files/`, `src/ui/components/file-picker/`,
+`src/ui/components/media-player/`. Таблицы: `files_nodes`,
+`files_mounts`, `files_manifests`, `files_blobs`, `files_thumbs`
+(ключ — дайджест, не `NodeId`, П-5 подтвердил тот же приём уже
+используется в `attachment-memory-cache.js`/`domain/attachments/cache.js`).
+
+### Явное сужение скоупа
+
+И1 (эта сессия начинает с него) — `tree.js`/`ops.js`, целиком `[C]`,
+без воркера, ноль I/O, ноль сети, ноль UI. Остальные этапы (И2-И7) —
+по декомпозиции §11 TASK.md без изменений, контракты каждого
+замораживаются перед его началом отдельно.
