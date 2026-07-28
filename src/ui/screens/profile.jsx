@@ -329,8 +329,14 @@ export default function Profile() {
 			    видимым заголовком блока. */}
 			<div class="profile-photo-layout">
 				<div class="profile-photo-col" aria-label="Аватар">
-					{avatar ? (
-						<img src={avatar} alt="" class="profile-avatar-square" />
+					{/* avatarUrl (публичный Blossom URL) — фолбэк, когда локального
+					    data-url кэша ещё нет: НОВОЕ устройство подтягивает bio/avatarUrl
+					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
+					    но avatar (сам файл как data-url) — только через локальную загрузку;
+					    без фолбэка аватар выглядел бы пустым до первой замены на новом
+					    устройстве, хотя публичная копия уже известна. */}
+					{avatar || avatarUrl ? (
+						<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
 					) : (
 						<div role="img" aria-label="Аватар не задан" class="profile-avatar-square profile-avatar-square-fallback">
 							{initial}

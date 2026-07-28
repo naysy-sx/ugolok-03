@@ -5,7 +5,8 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { buildProfileEvent, parseProfileEvent, ensureProfilePublished } from "../src/domain/identity/profile.js";
+import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile } from "../src/domain/identity/profile.js";
+import { sign } from "../src/core/crypto/sign.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(11);
 
@@ -104,4 +105,62 @@ test("ensureProfilePublished АДВЕРСАРНО: publish бросает иск
 	);
 	const row = await db.table("keystore").get(OWNER_PUBKEY);
 	assert.equal(row.profileAutoPublished, true, "флаг ставится ДО попытки публикации — сбой сети не должен блокировать login/connect");
+});
+
+// Найдено пользователем: вход в существующий аккаунт с чистого устройства
+// (по мнемонике) — bootstrap (transport.js) тянет СВОЙ kind 0 в db.events
+// через authors:[я], но до этой находки ничто не читало его обратно —
+// avatar/bio оставались пустыми НАВСЕГДА на новом устройстве.
+async function seedProfileEvent(ownerPubkey, privKey, createdAt, { name, about, picture } = {}) {
+	const event = sign({ kind: 0, created_at: createdAt, tags: [], content: JSON.stringify({ name, about, picture }) }, privKey);
+	await db.table("events").add(event);
+	return event;
+}
+
+test("hydrateOwnProfile: пустая keystore -> bio/avatarUrl заполняются из своего же kind 0 в db.events", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { name: "Алиса", about: "Люблю котиков", picture: "https://blossom.test/a.png" });
+
+	const result = await hydrateOwnProfile(OWNER_PUBKEY);
+	assert.equal(result, true);
+
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "Люблю котиков");
+	assert.equal(row.avatarUrl, "https://blossom.test/a.png");
+});
+
+test("hydrateOwnProfile: несколько копий kind 0 (разные relay/подписки) -> берёт САМУЮ СВЕЖУЮ по created_at", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { about: "старое био" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 2000, { about: "новое био" });
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "новое био");
+});
+
+test("hydrateOwnProfile: нет ни одного kind 0 в db.events -> false, keystore не трогается", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+
+	const result = await hydrateOwnProfile(OWNER_PUBKEY);
+	assert.equal(result, false);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, undefined);
+});
+
+test("hydrateOwnProfile АДВЕРСАРНО: битый content (не JSON) — не бросает, возвращает false", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	const badEvent = sign({ kind: 0, created_at: 1000, tags: [], content: "не json{{{" }, PRIV_KEY);
+	await db.table("events").add(badEvent);
+
+	await assert.doesNotReject(() => hydrateOwnProfile(OWNER_PUBKEY));
+	assert.equal(await hydrateOwnProfile(OWNER_PUBKEY), false);
 });

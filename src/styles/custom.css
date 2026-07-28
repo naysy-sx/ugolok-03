@@ -2683,22 +2683,27 @@ button:has(> .icon),
 }
 
 /* Строка списка — прямой прецедент .contact-row-list (contacts.jsx). */
+/* Высота строки ФИКСИРОВАНА (задача 3.2 TASK.md — виртуализация требует
+   точного совпадения с ROW_HEIGHT_PX, files.jsx): без gap на списке,
+   разделитель — border-block-end на самой строке (тот же приём, что
+   .contact-row) — иначе gap добавлял бы к высоте слота, не учтённую
+   виртуализацией величину, и строки "дрожали" бы при скролле. */
 .app-layout .file-row-list {
 	list-style: none;
 	padding-inline-start: 0;
 	margin-block: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-3xs);
 }
 .app-layout .file-row {
 	display: flex;
 	align-items: center;
 	gap: var(--space-s);
-	padding: var(--space-2xs) var(--space-s);
-	border-radius: var(--radius);
-	flex-wrap: wrap;
+	height: 56px; /* = ROW_HEIGHT_PX, files.jsx */
+	padding-inline: var(--space-s);
+	border-block-end: var(--border-width) solid var(--border);
 }
+/* НЕ :last-child — с виртуализацией последняя строка В DOM не обязательно
+   последняя в списке (может быть просто последней ВИДИМОЙ). Граница под
+   каждой строкой, включая логически последнюю, — не проблема визуально. */
 .app-layout .file-row:hover {
 	background-color: var(--surface);
 }
@@ -2713,6 +2718,9 @@ button:has(> .icon),
 	padding: var(--space-3xs) var(--space-2xs);
 	border-radius: var(--radius);
 	text-align: start;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-weight: var(--weight-normal);
 	color: var(--fg);
 }
@@ -2729,4 +2737,57 @@ button:has(> .icon),
 }
 .app-layout .file-rename-form input {
 	flex: 1 1 12rem;
+}
+
+/* ================================================================== *
+ *  Индикатор долгой синхронизации (sync-progress-bar.jsx) —          *
+ *  появляется, только если "синхронизация…" (ConnectionStatusPanel)  *
+ *  длится дольше 3с (пользователь). z-index выше top-corner-actions  *
+ *  (300) — действительно "поверх всего", не только шапки.            *
+ * ================================================================== */
+.sync-progress-bar {
+	position: fixed;
+	inset-inline: 0;
+	inset-block-start: 0;
+	z-index: 500;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	pointer-events: none;
+}
+.sync-progress-bar-track {
+	width: 100%;
+	height: 3px;
+	background-color: color-mix(in oklch, var(--accent), transparent 75%);
+	overflow: hidden;
+	position: relative;
+}
+/* Неопределённый прогресс (нет процента — только факт "идёт") — скользящая
+   полоса, тот же приём, что нативные браузерные progress-бары без value. */
+.sync-progress-bar-track::after {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	width: 40%;
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+	animation: sync-progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes sync-progress-slide {
+	0% {
+		inset-inline-start: -40%;
+	}
+	100% {
+		inset-inline-start: 100%;
+	}
+}
+.sync-progress-bar-label {
+	margin-block-start: var(--space-2xs);
+	padding: var(--space-2xs) var(--space-m);
+	background-color: var(--surface-raised);
+	color: var(--fg);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-full);
+	box-shadow: var(--shadow);
+	font-size: var(--step--1);
 }

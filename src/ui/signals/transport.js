@@ -42,7 +42,8 @@ import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/rea
 import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/content/channel-read-status.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { drain } from "../../core/store/outbox.js";
-import { ensureProfilePublished } from "../../domain/identity/profile.js";
+import { ensureProfilePublished, hydrateOwnProfile } from "../../domain/identity/profile.js";
+import { bumpProfileActivity } from "./profile.js";
 import { currentUser } from "./auth.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
@@ -240,6 +241,20 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
 	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
 
+	// Найдено пользователем (живая проверка — вход с чистого устройства по
+	// мнемонике): bootstrap выше уже стянул kind 0 (профиль) в db.events через
+	// authors:[я], но ничто не читало его в keystore — avatar/bio оставались
+	// пустыми НАВСЕГДА, не временно (не гонка, отдельный пробел). Второе —
+	// bumpMessagingActivity()/bumpProfileActivity() здесь ни разу не звучали
+	// на этом отрезке: chat.jsx/app.jsx-бейджи перечитывают контакты/непрочитанное
+	// ТОЛЬКО по этим сигналам, а до сих пор их бампали только ЖИВЫЕ входящие
+	// события (см. ниже) — если экран уже смонтирован (чат/бейдж в сайдбаре
+	// видны сразу после логина), его эффект отработал ОДИН раз на ещё пустом
+	// состоянии и не перезапускался, даже когда bootstrap выше всё заполнил.
+	await hydrateOwnProfile(pubkeyHex);
+	bumpProfileActivity();
+	bumpMessagingActivity();
+
 	// DESIGN.md, этап 24, п.6 — ПЕРВАЯ в проекте подписка не по "authors: [я]",
 	// а по адресату: входящие gift wrap (kind 1059, #p: [я]). Один REQ, диспетчеризация
 	// по kind развёрнутого rumor — Welcome (444, MLS) и contact-request (3001) делят
@@ -387,6 +402,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		verifyBatch,
 		onCaughtUp: () => {
 			synced.value = true;
+			// Инкрементальная синхронизация — отдельный, более поздний рубеж, чем
+			// основной bootstrap выше (может донести то, что пришло уже во время
+			// него) — тот же бамп, та же причина: экраны/бейджи, смонтированные
+			// ДО этого момента, сами не перечитаются.
+			bumpMessagingActivity();
+			bumpProfileActivity();
 		},
 		onEvent: async (addedCount) => {
 			if (addedCount > 0) {

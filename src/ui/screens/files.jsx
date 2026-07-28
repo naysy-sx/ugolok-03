@@ -34,8 +34,10 @@ import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError } from "../../domain/files/ops.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
+const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
 
 // "Ремонт" (project(), tree.js) сделал что-то за пользователя молча —
 // показываем факт, не только результат (MATH.md §12.3: решение принято —
@@ -92,6 +94,15 @@ export default function Files() {
 	const entries = sortEntries(filterEntries(currentEntries.value, debouncedQuery), "name");
 	const path = breadcrumbPath.value;
 	const inTrash = currentFolderId.value === TRASH_ID;
+
+	// Виртуализация (задача 3.2 TASK.md): "папка на 10⁴ элементов не
+	// рендерится целиком". Рендерятся только entries[start:end] — окно
+	// строк, видимое (+overscan) в единственной скролл-зоне экрана.
+	const { anchorRef, start: windowStart, end: windowEnd } = useVirtualWindow({
+		count: entries.length,
+		rowHeight: ROW_HEIGHT_PX,
+	});
+	const visibleEntries = entries.slice(windowStart, windowEnd);
 
 	function toggleSelect(id) {
 		setSelected((prev) => {
@@ -318,8 +329,17 @@ export default function Files() {
 				{entries.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>{inTrash ? "Корзина пуста." : "Здесь пока ничего нет."}</p>
 				) : (
-					<ul role="list" class="file-row-list">
-						{entries.map((entry) => (
+					<>
+						<div ref={anchorRef} aria-hidden="true" />
+						<ul
+							role="list"
+							class="file-row-list"
+							style={{
+								paddingBlockStart: `${windowStart * ROW_HEIGHT_PX}px`,
+								paddingBlockEnd: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px`,
+							}}
+						>
+						{visibleEntries.map((entry) => (
 							<li key={entry.id} class="file-row">
 								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={`Выбрать «${entry.displayName}»`} />
 								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
@@ -370,7 +390,8 @@ export default function Files() {
 								)}
 							</li>
 						))}
-					</ul>
+						</ul>
+					</>
 				)}
 			</div>
 		</Screen>

@@ -15,6 +15,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 	const id = currentUser.value.id;
 	const login = currentUser.value.login;
 	const [avatar, setAvatar] = useState("");
+	const [avatarUrl, setAvatarUrl] = useState("");
 	const [bio, setBio] = useState("");
 	const [showAvatarModal, setShowAvatarModal] = useState(false);
 
@@ -23,6 +24,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 		getProfile(id).then((profile) => {
 			if (cancelled) return;
 			setAvatar(profile.avatar);
+			setAvatarUrl(profile.avatarUrl);
 			setBio(profile.bio);
 		});
 		return () => {
@@ -34,19 +36,22 @@ export default function SidebarProfileCard({ onEditProfile }) {
 		<section class="profile-card" aria-label="Профиль пользователя">
 			{/* Пользователь: "аватар строго квадратным, при клике — полная
 			    фотография в модальном окне" — кликабелен только если фото
-			    реально есть, заглушка-буква никуда не ведёт (disabled). */}
+			    реально есть, заглушка-буква никуда не ведёт (disabled).
+			    avatarUrl — фолбэк на публичный Blossom URL, когда локального
+			    data-url кэша ещё нет (новое устройство после hydrateOwnProfile,
+			    profile.js) — тот же приём, что profile.jsx. */}
 			<button
 				type="button"
 				class="profile-card-avatar-btn"
 				onClick={() => setShowAvatarModal(true)}
-				disabled={!avatar}
-				aria-label={avatar ? "Открыть фото профиля" : undefined}
+				disabled={!avatar && !avatarUrl}
+				aria-label={avatar || avatarUrl ? "Открыть фото профиля" : undefined}
 			>
-				<AccountAvatar avatar={avatar} login={login || id} large />
+				<AccountAvatar avatar={avatar || avatarUrl} login={login || id} large />
 				{/* VISUAL.md v2 — "стеклянная" подсказка: лупа проявляется снизу по
 				    hover/фокусу, намекая на кликабельность. Только когда фото
 				    реально есть — для заглушки-буквы кликать некуда. */}
-				{avatar && (
+				{(avatar || avatarUrl) && (
 					<span class="profile-card-avatar-glass" aria-hidden="true">
 						<IconMagnifyingGlass />
 					</span>
@@ -68,7 +73,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 					<IconPencil /> Изменить профиль
 				</button>
 			</div>
-			{showAvatarModal && avatar && <ImageModal src={avatar} alt="Фото профиля" onClose={() => setShowAvatarModal(false)} />}
+			{showAvatarModal && (avatar || avatarUrl) && <ImageModal src={avatar || avatarUrl} alt="Фото профиля" onClose={() => setShowAvatarModal(false)} />}
 		</section>
 	);
 }
