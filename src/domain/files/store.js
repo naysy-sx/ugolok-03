@@ -15,6 +15,7 @@
 // И3 миниатюры) — объявлять сейчас несуществующее поведение вокруг них
 // нечем наполнить осмысленными тестами.
 import { db } from "../../core/store/database.js";
+import { rebuildIndexes } from "./tree.js";
 
 function nodeToRow(ownerPubkey, node) {
 	return {
@@ -65,7 +66,11 @@ export async function loadTreeState(ownerPubkey) {
 	for (const row of rows) {
 		nodes.set(row.id, rowToNode(row));
 	}
-	return { nodes, pending: new Map() };
+	// children/namesInDir (tree.js) — производные индексы, персистируются НЕ
+	// они, а nodes; пересобираются один раз при загрузке (O(n), не на
+	// операцию — тот же принцип, что кэш project()).
+	const { children, namesInDir } = rebuildIndexes(nodes);
+	return { nodes, children, namesInDir, pending: new Map() };
 }
 
 export async function getCachedManifest(ownerPubkey, digest) {

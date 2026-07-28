@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createInitialState, applyOp, merge, project, ROOT_ID } from "../src/domain/files/tree.js";
+import { createInitialState, applyOp, merge, project, cloneState, ROOT_ID } from "../src/domain/files/tree.js";
 import { createFolder, rename, move, remove, PreconditionError } from "../src/domain/files/ops.js";
 
 // mulberry32 — зерно фиксируется, сценарий воспроизводится по номеру
@@ -46,7 +46,15 @@ function generateScenario(seed, numReplicas, opsPerReplica) {
 	const allOps = [];
 	for (let r = 0; r < numReplicas; r++) {
 		const deviceId = `device-${r}`;
-		let localS = S0;
+		// cloneState — НЕ просто localS = S0: applyOp теперь МУТИРУЕТ nodes/
+		// children/namesInDir внутри переданного состояния (найдено
+		// бенчмарком, задача 3.9 — полное клонирование на каждый вызов было
+		// Θ(n) и превращало массовую загрузку в Θ(n²)). Без явного клона
+		// здесь операции реплики 0 просачивались бы в "общую точку" S0,
+		// которую реплики 1/2 берут как СВОЙ старт — ломая независимость,
+		// без которой генератор вообще не находит настоящих конфликтов
+		// (см. комментарий выше о первой версии этого генератора).
+		let localS = cloneState(S0);
 		let counter = 0;
 		const knownIds = [...baseIds];
 		for (let step = 0; step < opsPerReplica; step++) {

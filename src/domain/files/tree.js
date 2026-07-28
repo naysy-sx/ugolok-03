@@ -35,6 +35,41 @@ function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null) 
 	};
 }
 
+// children/namesInDir — индексы по ЖИВЫМ (не purged) узлам, ALGO.MD §6:
+// "children... устраняет Θ(n) на листинг", "namesInDir... устраняет Θ(k²)
+// при массовой загрузке". Найдено этой сессией бенчмарком (задача 3.9,
+// TASK.md §11) — БЕЗ индекса ops.js's nameFree сканировал ВСЕ n узлов на
+// КАЖДЫЙ createFolder/rename/move, превращая массовую загрузку в Θ(n²).
+// Индексы — производные от nodes (как кэш project() — "не хранится в БД,
+// живёт в памяти"), поддерживаются ИНКРЕМЕНТАЛЬНО, O(1) на операцию.
+//
+// Мутируются ПРЯМО, без клонирования (см. applyOp ниже) — Set/Map для
+// одной папки МЕЛКИЕ (пропорциональны числу СОСЕДЕЙ в этой папке, не
+// общему n), но полное клонирование ВНЕШНЕЙ Map/nodes на каждый вызов —
+// именно то, что делало applyOp самим по себе Θ(n) за вызов (независимо
+// от индексов выше) и превращало массовую вставку k узлов в Θ(k·n) —
+// найдено ЭТИМ ЖЕ бенчмарком уже ПОСЛЕ добавления индексов (10⁴
+// последовательных createFolder всё ещё занимали ~5.7с).
+function addToIndex(children, namesInDir, parentId, id, name) {
+	if (!children.has(parentId)) children.set(parentId, new Set());
+	children.get(parentId).add(id);
+	if (!namesInDir.has(parentId)) namesInDir.set(parentId, new Map());
+	namesInDir.get(parentId).set(name, id);
+}
+function removeFromIndex(children, namesInDir, parentId, id, name) {
+	children.get(parentId)?.delete(id);
+	namesInDir.get(parentId)?.delete(name);
+}
+
+// Живые дети parentId — O(1) обращение к индексу вместо скана S.nodes.
+export function liveChildrenOf(S, parentId) {
+	return S.children.get(parentId) ?? new Set();
+}
+// Существует ли уже живой узел с именем name в parentId — O(1).
+export function nameOwnerInDir(S, parentId, name) {
+	return S.namesInDir.get(parentId)?.get(name);
+}
+
 // Начальное состояние — три системных узла, метка $system/0 (никогда не
 // участвует в реальном сравнении: ничто пользовательское не должно иметь
 // counter=0 у настоящего устройства, т.к. лампорт-часы стартуют с tick()=1,
@@ -42,55 +77,119 @@ function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null) 
 export function createInitialState() {
 	const sysLabel = { counter: 0, deviceId: "$system" };
 	const nodes = new Map();
-	nodes.set(ROOT_ID, mkNode(ROOT_ID, "dir", null, null, "", sysLabel));
-	nodes.set(TRASH_ID, mkNode(TRASH_ID, "dir", null, ROOT_ID, "Корзина", sysLabel));
-	nodes.set(LOST_FOUND_ID, mkNode(LOST_FOUND_ID, "dir", null, ROOT_ID, "lost+found", sysLabel));
-	return { nodes, pending: new Map() };
+	const children = new Map();
+	const namesInDir = new Map();
+
+	function insert(node) {
+		nodes.set(node.id, node);
+		addToIndex(children, namesInDir, node.par.value, node.id, node.name.value);
+	}
+	insert(mkNode(ROOT_ID, "dir", null, null, "", sysLabel));
+	insert(mkNode(TRASH_ID, "dir", null, ROOT_ID, "Корзина", sysLabel));
+	insert(mkNode(LOST_FOUND_ID, "dir", null, ROOT_ID, "lost+found", sysLabel));
+
+	return { nodes, children, namesInDir, pending: new Map() };
 }
 
-// applyOp — единственная точка изменения состояния. Порядок доставки
-// произволен (TASK.md §6): setPar/setName/setOrigin/purge на ещё не
-// увиденный NodeId буферизуются в S.pending и применяются, как только
-// приходит соответствующий create — иначе операция, обогнавшая свой
+// Пересобирает children/namesInDir с нуля из nodes — O(n), один раз (не на
+// операцию). Нужен store.js: персистируется только nodes (индексы —
+// производные, как и кэш project(), не хранятся в БД).
+export function rebuildIndexes(nodes) {
+	const children = new Map();
+	const namesInDir = new Map();
+	for (const node of nodes.values()) {
+		if (node.purged) continue;
+		addToIndex(children, namesInDir, node.par.value, node.id, node.name.value);
+	}
+	return { children, namesInDir };
+}
+
+// Независимая копия состояния — ЕДИНСТВЕННЫЙ способ получить снимок,
+// который применение операций к оригиналу не заденет (см. примечание про
+// мутацию у applyOp ниже). O(n) — используется редко и осознанно (тесты с
+// несколькими "параллельными" репликами от одной точки), не на каждую
+// операцию.
+export function cloneState(S) {
+	return {
+		nodes: new Map(S.nodes),
+		children: new Map([...S.children].map(([k, v]) => [k, new Set(v)])),
+		namesInDir: new Map([...S.namesInDir].map(([k, v]) => [k, new Map(v)])),
+		pending: new Map(S.pending),
+	};
+}
+
+// applyOp — единственная точка изменения состояния. МУТИРУЕТ nodes/
+// children/namesInDir/pending ВНУТРИ переданного S (не клонирует их) —
+// найдено бенчмарком (задача 3.9, TASK.md §11): полное клонирование Map
+// из n записей на КАЖДЫЙ вызов делало саму функцию Θ(n), а значит массовую
+// вставку k узлов — Θ(k·n) вместо Θ(k). Возвращается НОВАЯ обёртка (другая
+// ссылка верхнего уровня — нужно сигналам/@preact/signals, сравнивающим по
+// ссылке), но внутренние Map — ТЕ ЖЕ объекты: старая ссылка на S после
+// вызова больше не снимок, а алиас на уже изменившееся состояние. Кому
+// нужен настоящий независимый снимок ДО применения операций — cloneState()
+// явно (напр. property-тест с несколькими "репликами" от одной точки).
+//
+// Порядок доставки произволен (TASK.md §6): setPar/setName/setOrigin/purge
+// на ещё не увиденный NodeId буферизуются в S.pending и применяются, как
+// только приходит соответствующий create — иначе операция, обогнавшая свой
 // create, была бы потеряна навсегда (нарушение I-CONVERGE при
 // определённых перестановках доставки).
 export function applyOp(S, op) {
-	const nodes = new Map(S.nodes);
-	const pending = new Map(S.pending);
+	const { nodes, children, namesInDir, pending } = S;
 
 	if (op.type === "create") {
-		if (nodes.has(op.id)) return { nodes, pending }; // идемпотентный повтор
-		nodes.set(op.id, mkNode(op.id, op.kind, op.blob ?? null, op.parentId, op.name, op.label, op.origin ?? null));
+		if (nodes.has(op.id)) return { nodes, children, namesInDir, pending }; // идемпотентный повтор
+		const node = mkNode(op.id, op.kind, op.blob ?? null, op.parentId, op.name, op.label, op.origin ?? null);
+		nodes.set(op.id, node);
+		addToIndex(children, namesInDir, op.parentId, op.id, op.name);
 		const queued = pending.get(op.id);
 		if (queued) {
 			pending.delete(op.id);
-			let s = { nodes, pending };
+			let s = { nodes, children, namesInDir, pending };
 			for (const q of queued) s = applyOp(s, q);
 			return s;
 		}
-		return { nodes, pending };
+		return { nodes, children, namesInDir, pending };
 	}
 
 	if (op.type === "setPar" || op.type === "setName" || op.type === "setOrigin") {
 		const node = nodes.get(op.id);
 		if (!node) {
 			pending.set(op.id, [...(pending.get(op.id) ?? []), op]);
-			return { nodes, pending };
+			return { nodes, children, namesInDir, pending };
 		}
 		const field = op.type === "setPar" ? "par" : op.type === "setName" ? "name" : "origin";
-		nodes.set(op.id, { ...node, [field]: lwwMerge(node[field], op.value, op.label) });
-		return { nodes, pending };
+		const updatedReg = lwwMerge(node[field], op.value, op.label);
+		if (updatedReg === node[field]) {
+			// Метка не выиграла (устаревшая/повторная доставка) — индексы
+			// трогать нечего, значение не изменилось.
+			return { nodes, children, namesInDir, pending };
+		}
+		const updatedNode = { ...node, [field]: updatedReg };
+		nodes.set(op.id, updatedNode);
+
+		if (!node.purged) {
+			if (field === "par") {
+				removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
+				addToIndex(children, namesInDir, updatedReg.value, op.id, node.name.value);
+			} else if (field === "name") {
+				removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
+				addToIndex(children, namesInDir, node.par.value, op.id, updatedReg.value);
+			}
+		}
+		return { nodes, children, namesInDir, pending };
 	}
 
 	if (op.type === "purge") {
 		const node = nodes.get(op.id);
 		if (!node) {
 			pending.set(op.id, [...(pending.get(op.id) ?? []), op]);
-			return { nodes, pending };
+			return { nodes, children, namesInDir, pending };
 		}
-		if (node.purged) return { nodes, pending }; // монотонный флаг, идемпотентно
+		if (node.purged) return { nodes, children, namesInDir, pending }; // монотонный флаг, идемпотентно
 		nodes.set(op.id, { ...node, purged: true });
-		return { nodes, pending };
+		removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
+		return { nodes, children, namesInDir, pending };
 	}
 
 	throw new Error(`tree.js: неизвестный тип операции "${op.type}"`);
@@ -106,7 +205,10 @@ export function merge(S, delta) {
 
 // project(S) = R из MATH.md §5.5/ALGO.MD §5.1 (багфикс indexOf -> pos-карта).
 // Три шага в фиксированном порядке: разрыв циклов -> сироты (дети purged-
-// узлов) -> коллизии имён. Θ(n), без скрытых констант.
+// узлов) -> коллизии имён. Θ(n), без скрытых констант. Работает НАПРЯМУЮ
+// по nodes (не по children/namesInDir — те построены на ЖИВЫХ узлах в
+// ТЕКУЩЕЙ, ещё не отремонтированной структуре par; шаг 1 обязан видеть
+// ВСЕ узлы, включая с ещё не разорванными циклами).
 export function project(S) {
 	const { nodes } = S;
 	const color = new Map(); // отсутствует в Map = white

@@ -66,3 +66,31 @@ test("I-BATCH: saveTreeState пишет ОДНОЙ транзакцией нез
 	const loaded = await loadTreeState(OWNER);
 	assert.equal(loaded.nodes.size, 103, "100 новых файлов + 3 системных узла (root/trash/lost+found)");
 });
+
+// I-NO-QUADRATIC (задача 3.9, ALGO.MD §14 первая строка таблицы): найдено
+// РЕАЛЬНЫМ бенчмарком (scripts/files-tree-bench.mjs) — без индекса
+// namesInDir в tree.js/ops.js's nameFree сканировал ВСЕ узлы на каждый
+// createFolder, а applyOp клонировал ВЕСЬ nodes на каждый вызов — вместе
+// это давало Θ(n²) на последовательную вставку (10⁴ узлов — 5.7с вместо
+// единиц мс). Масштаб здесь маленький специально (не 10⁴, чтобы тест не
+// растягивал npm test и не завис БЫ на регрессии) — соотношение времени
+// при учетверении n всё равно чётко отличает Θ(n) от Θ(n²) (4× против 16×).
+test("I-NO-QUADRATIC: последовательная вставка растёт ЛИНЕЙНО по n, не квадратично", () => {
+	function timeInsert(n) {
+		let S = createInitialState();
+		const start = performance.now();
+		for (let i = 0; i < n; i++) {
+			const op = createFolder(S, ROOT_ID, `f${i}`, `id-${i}`, { counter: i + 1, deviceId: "d1" });
+			S = merge(S, [op]);
+		}
+		return performance.now() - start;
+	}
+
+	const small = timeInsert(1000);
+	const large = timeInsert(8000); // 8×
+	// Θ(n) дал бы ×8, Θ(n²) — ×64 (откалибровано вручную на реальной
+	// регрессии: с квадратичным nameFree это было ×57 при тех же n). Порог
+	// ×20 — с запасом выше линейного шума, но чётко ниже квадратичного роста.
+	const ratio = large / Math.max(small, 0.01);
+	assert.ok(ratio < 20, `рост похож на квадратичный: ×${ratio.toFixed(1)} при 8-кратном росте n (small=${small.toFixed(2)}мс, large=${large.toFixed(2)}мс)`);
+});

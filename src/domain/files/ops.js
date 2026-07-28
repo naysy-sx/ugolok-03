@@ -3,7 +3,7 @@
 // значения от вызывающей стороны (см. CONTRACTS.md: генерация случайности —
 // эффект, здесь недопустим). Предусловия — §4 TASK.md/MATH.md, ровно источник
 // unit-тестов tree-ops.test.js.
-import { TRASH_ID } from "./tree.js";
+import { TRASH_ID, liveChildrenOf, nameOwnerInDir } from "./tree.js";
 
 export class PreconditionError extends Error {
 	constructor(code, message) {
@@ -13,20 +13,13 @@ export class PreconditionError extends Error {
 	}
 }
 
-function liveChildren(S, parentId) {
-	const result = [];
-	for (const [id, node] of S.nodes) {
-		if (node.purged) continue;
-		if (node.par.value === parentId) result.push(id);
-	}
-	return result;
-}
-
+// O(1) через индекс S.namesInDir (tree.js) — НЕ скан S.nodes. Найдено
+// бенчмарком (задача 3.9): полный скан на каждый вызов давал Θ(n²) на
+// массовой загрузке (ровно ловушка ALGO.MD §14, первая строка таблицы) —
+// n=10⁵ не укладывался в разумное время.
 function nameFree(S, parentId, name, excludeId = null) {
-	for (const id of liveChildren(S, parentId)) {
-		if (id !== excludeId && S.nodes.get(id).name.value === name) return false;
-	}
-	return true;
+	const owner = nameOwnerInDir(S, parentId, name);
+	return owner === undefined || owner === excludeId;
 }
 
 // d ∉ subtree(n): восхождением от d, а не спуском по n (ALGO.MD §7) — O(D),
@@ -90,9 +83,7 @@ export function copy(S, n, destId, newIds, label) {
 	while (stack.length > 0) {
 		const cur = stack.pop();
 		subtreeIds.push(cur);
-		for (const [id, node] of S.nodes) {
-			if (!node.purged && node.par.value === cur) stack.push(id);
-		}
+		for (const id of liveChildrenOf(S, cur)) stack.push(id);
 	}
 
 	const rootOriginal = S.nodes.get(n);
