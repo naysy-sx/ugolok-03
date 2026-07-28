@@ -76,3 +76,19 @@ export async function getCachedManifest(ownerPubkey, digest) {
 export async function putCachedManifest(ownerPubkey, digest, manifest) {
 	await db.table("files_manifests").put({ ownerPubkey, digest, manifest });
 }
+
+// Собственный счётчик Лампорта раздела "Файлы" — НЕ переиспользует
+// domain/messaging'ов id='lamport' (тот же owner имеет РАЗНЫЕ причинные
+// потоки для чатов и для дерева файлов; общий счётчик означал бы, что
+// операция над файлом тратит "тик", видимый и messaging, без всякой пользы).
+// computeInitialLamportValue (lamport.js) не годится буквально — та жёстко
+// сканирует таблицу messages; здесь свой, отдельный ключ той же таблицы
+// clock (уже owner-scoped, [ownerPubkey+id]).
+export async function loadFilesClockValue(ownerPubkey) {
+	const row = await db.table("clock").get([ownerPubkey, "files-lamport"]);
+	return row?.value ?? 0;
+}
+
+export async function saveFilesClockValue(ownerPubkey, value) {
+	await db.table("clock").put({ ownerPubkey, id: "files-lamport", value });
+}

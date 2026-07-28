@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createInitialState, applyOp, ROOT_ID } from "../src/domain/files/tree.js";
 import { createFolder } from "../src/domain/files/ops.js";
-import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest } from "../src/domain/files/store.js";
+import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue } from "../src/domain/files/store.js";
 
 const OWNER_A = "owner-a-pubkey";
 const OWNER_B = "owner-b-pubkey";
@@ -12,6 +12,7 @@ const OWNER_B = "owner-b-pubkey";
 beforeEach(async () => {
 	await db.table("files_nodes").clear();
 	await db.table("files_manifests").clear();
+	await db.table("clock").clear();
 });
 
 function mkFolder(S, parentId, name, label) {
@@ -88,4 +89,14 @@ test("манифест-кеш: get/put, owner-scoped", async () => {
 
 	const gotForOtherOwner = await getCachedManifest(OWNER_B, "digest-1");
 	assert.equal(gotForOtherOwner, undefined);
+});
+
+test("счётчик Лампорта раздела Файлы: персистентность, owner-scoped, НЕ пересекается с messages", async () => {
+	assert.equal(await loadFilesClockValue(OWNER_A), 0, "нет записи -> 0");
+	await saveFilesClockValue(OWNER_A, 42);
+	assert.equal(await loadFilesClockValue(OWNER_A), 42);
+	assert.equal(await loadFilesClockValue(OWNER_B), 0, "другой владелец не видит значение A");
+
+	const messagesClockRow = await db.table("clock").get([OWNER_A, "lamport"]);
+	assert.equal(messagesClockRow, undefined, "files-lamport не создаёт/не путает ключ 'lamport' (messaging)");
 });
