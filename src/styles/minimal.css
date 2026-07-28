@@ -722,10 +722,18 @@
 	}
 
 	/* ---- Details / summary ------------------------------------------- */
+	/* padding убран (пользователь): глобальный отступ протекал во ВСЕ
+	   <details>, включая .menu (ActionsMenu, actions-menu.jsx) — тот не
+	   задаёт свой padding, т.к. задуман как маленькая круглая кнопка-меню
+	   (.icon-btn внутри), а получал раздутый бокс на var(--space-s) со
+	   всех сторон. border/border-radius остаются дефолтом для голых
+	   <details> без собственного класса; .req/.thread уже держат свои
+	   border/border-radius явно (custom.css) — эта правка их не касается.
+	   .req/.thread теряли ПАДДИНГ отсюда же — компенсировано их
+	   собственными правилами в custom.css (не молчаливый регресс). */
 	details {
 		border: var(--border-width) solid var(--border);
 		border-radius: var(--radius);
-		padding: var(--space-s);
 	}
 	summary {
 		cursor: pointer;

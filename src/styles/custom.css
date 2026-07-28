@@ -2262,6 +2262,11 @@ button:has(> .icon),
 .app-layout .req {
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
+	/* Раньше — дефолт голого <details> (minimal.css), убранный оттуда:
+	   протекал во ВСЕ <details>, включая .menu, где был не нужен и раздувал
+	   кнопку меню. Здесь компенсируем явно — .req__body полагается на этот
+	   верхний отступ (сам начинается с padding-top:0, см. ниже). */
+	padding: var(--space-s);
 }
 .app-layout .req > summary {
 	list-style: none;
@@ -2573,6 +2578,10 @@ button:has(> .icon),
    просто отступ. */
 .app-layout .thread {
 	grid-column: 1 / -1;
+	/* Раньше — дефолт голого <details> (minimal.css), убранный оттуда из-за
+	   утечки в .menu (см. .req выше) — border/border-radius там же
+	   остаются глобальным дефолтом, компенсируется здесь только padding. */
+	padding: var(--space-s);
 }
 .app-layout .thread > summary {
 	list-style: none;
