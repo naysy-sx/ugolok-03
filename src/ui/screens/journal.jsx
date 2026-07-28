@@ -10,7 +10,6 @@ import IconPeople from "../icons/people.jsx";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconPerson from "../icons/person.jsx";
-import IconCalendar from "../icons/calendar.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconChevronLeft from "../icons/chevron-left.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
@@ -140,7 +139,11 @@ export default function Journal() {
 				<>
 					{oldestDay && (
 						<label class="date-field">
-							<IconCalendar />
+							{/* Пользователь: убрать SVG-иконку (рядом с ней всё равно
+							    рисуется системная иконка календаря самого <input
+							    type="date">, две подряд — лишнее), вместо нёё —
+							    информативная текстовая подпись. */}
+							<span aria-hidden="true">Выбрать дату</span>
 							<span class="visually-hidden">Перейти к дате</span>
 							<input type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
 						</label>

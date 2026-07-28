@@ -11,6 +11,7 @@ import IconGear from "../icons/gear.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
 import IconPlus from "../icons/plus.jsx";
+import IconPersonAdd from "../icons/person-add.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import {
@@ -252,7 +253,7 @@ export default function Contacts() {
 
 	return (
 		<Screen title="Контакты">
-			<div class="card contacts-toolbar">
+			<div class="contacts-toolbar">
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
 				    здесь дублировать незачем (пользователь, item 4). */}
@@ -262,12 +263,16 @@ export default function Contacts() {
 					</p>
 				)}
 
-				<form class="cluster contacts-add-form" onSubmit={handleAddContact} style={{ alignItems: "flex-end" }}>
-					<div class="flow" style={{ "--flow-space": "var(--space-3xs)", flex: 1 }}>
-						<label for="add-contact-input">Добавить контакт (npub или hex-ключ)</label>
+				<form class="cluster contacts-add-form" onSubmit={handleAddContact}>
+					<div class="contact-add-field">
+						<IconPersonAdd aria-hidden="true" />
+						<label class="visually-hidden" for="add-contact-input">
+							Добавить контакт (npub или hex-ключ)
+						</label>
 						<input
 							id="add-contact-input"
 							type="text"
+							placeholder="Добавить контакт (npub или hex-ключ)"
 							value={npubInput}
 							onInput={(e) => setNpubInput(e.currentTarget.value)}
 						/>

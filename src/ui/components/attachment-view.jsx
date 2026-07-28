@@ -3,6 +3,10 @@ import { getOrDownloadAttachment } from "../../domain/attachments/cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import ImageModal from "./image-modal.jsx";
+import IconMusicNote from "../icons/music-note.jsx";
+import IconVideoCamera from "../icons/video-camera.jsx";
+import IconFileText from "../icons/file-text.jsx";
+import IconImage from "../icons/image-icon.jsx";
 
 function base64ToBytes(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -14,7 +18,7 @@ export function formatFileSize(bytes) {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
-const FILE_TYPE_ICONS = { video: "🎞️", audio: "🎵", file: "📄" };
+const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconMusicNote, file: IconFileText };
 
 // Картинка — EAGER-загрузка+расшифровка (не может быть иначе: E2E-шифрование не даёт
 // частичной/потоковой подгрузки, нужно скачать и расшифровать ПОЛНОСТЬЮ, прежде чем
@@ -132,90 +136,65 @@ function AudioAttachment({ attachment }) {
 	return <audio controls src={url} />;
 }
 
-// Видео — ЛЕНИВАЯ загрузка по клику (до 50 МБ, этап 29-довесок; автозагрузка каждого
-// видео в истории чата была бы избыточной — в отличие от картинок, ожидаемых видимыми
-// сразу).
+// Видео — EAGER-загрузка (item 9, пользователь: "не надо кнопку, пусть сразу
+// файл отображается"), тот же приём, что ImageAttachment. autoPlay убран
+// НАРОЧНО: при входе в чат с несколькими уже загруженными (закэшированными
+// в памяти) видео все они рендерятся одновременно — с autoPlay они играли бы
+// хором ("сливаются в какофонию", живая проверка пользователя); без autoPlay
+// каждое видео просто показывает первый кадр, воспроизведение — по клику на
+// нативные controls, как и ожидается от обычного плеера.
 function VideoAttachment({ attachment }) {
-	// Если это видео уже смотрели в этой вкладке — url есть сразу из памяти,
-	// клик "Воспроизвести" не нужен повторно (тот же приём, что ImageAttachment).
 	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.sha256) ?? null);
-	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 
-	function handleLoad() {
-		setLoading(true);
-		setError("");
+	useEffect(() => {
+		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		if (memUrl) {
+			setUrl(memUrl);
+			return;
+		}
+		let cancelled = false;
 		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
 			.then((bytes) => {
+				if (cancelled) return;
 				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
 			})
-			.catch((err) => setError(err?.message || String(err)))
-			.finally(() => setLoading(false));
-	}
-	// URL НЕ отзывается на unmount — им владеет attachment-memory-cache.js (см. ImageAttachment).
+			.catch((err) => {
+				if (!cancelled) setError(err?.message || String(err));
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [attachment]);
 
-	if (url) {
-		return <video controls autoPlay src={url} style={{ maxWidth: "100%", borderRadius: "var(--radius)", display: "block" }} />;
+	if (error) {
+		return (
+			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				Не удалось загрузить видео: {error}
+			</p>
+		);
 	}
-
-	return (
-		<p class="cluster" style={{ alignItems: "center" }}>
-			<span aria-hidden="true">{FILE_TYPE_ICONS.video}</span>
-			<span>
-				{attachment.name} ({formatFileSize(attachment.size)})
-			</span>
-			<button type="button" onClick={handleLoad} disabled={loading} class="cluster" style={{ alignItems: "center" }}>
-				{loading && <span class="spinner" aria-hidden="true" />}
-				{loading ? "Загрузка…" : "Воспроизвести"}
-			</button>
-			{error && (
-				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					{error}
-				</small>
-			)}
-		</p>
-	);
+	if (!url) {
+		return (
+			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+				<span class="spinner" aria-hidden="true" /> Загрузка видео…
+			</p>
+		);
+	}
+	return <video controls src={url} style={{ maxWidth: "100%", borderRadius: "var(--radius)", display: "block" }} />;
 }
 
-// Файл (не image/video/audio — документ/таблица/архив) — НИКОГДА не скачивается
-// автоматически, только по явному клику "Скачать".
+// Файл (не image/video/audio — документ/таблица) — статичная строка с
+// иконкой/именем/размером; скачивание теперь единой ссылкой "Скачать" в
+// футере сообщения (message-bubble.jsx, item 10), не отдельной кнопкой тут.
 function FileAttachment({ attachment }) {
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState("");
-
-	async function handleDownload() {
-		setLoading(true);
-		setError("");
-		try {
-			const bytes = await getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment);
-			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = attachment.name || "file";
-			a.click();
-			URL.revokeObjectURL(url);
-		} catch (err) {
-			setError(err?.message || String(err));
-		} finally {
-			setLoading(false);
-		}
-	}
-
+	const Icon = FILE_TYPE_ICONS.file;
 	return (
 		<p class="cluster" style={{ alignItems: "center" }}>
-			<span aria-hidden="true">{FILE_TYPE_ICONS.file}</span>
+			<Icon aria-hidden="true" />
 			<span>
 				{attachment.name} ({formatFileSize(attachment.size)})
 			</span>
-			<button type="button" onClick={handleDownload} disabled={loading} class="cluster" style={{ alignItems: "center" }}>
-				{loading && <span class="spinner" aria-hidden="true" />}
-				{loading ? "Скачивание…" : "Скачать"}
-			</button>
-			{error && (
-				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					{error}
-				</small>
-			)}
 		</p>
 	);
 }
@@ -228,4 +207,47 @@ export default function AttachmentView({ attachment }) {
 	if (attachment.type === "video") return <VideoAttachment attachment={attachment} />;
 	if (attachment.type === "audio") return <AudioAttachment attachment={attachment} />;
 	return <FileAttachment attachment={attachment} />;
+}
+
+// Единая ссылка "Скачать" (item 10, "ко всем вложениям... перед 'Удалить'") —
+// используется message-bubble.jsx в футере сообщения, ДО кнопки "Удалить".
+// Формат: {{иконка типа}} Скачать {{имя}} ({{размер}}). voiceInline (F-AT-08,
+// ≤32КБ) декодируется прямо из payload, без сети — как AudioAttachment.
+export function AttachmentDownloadLink({ attachment }) {
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
+
+	async function handleDownload() {
+		setBusy(true);
+		setError("");
+		try {
+			const bytes = attachment.voiceInline
+				? base64ToBytes(attachment.voiceInline)
+				: await getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment);
+			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = attachment.name || "file";
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return (
+		<>
+			<button type="button" onClick={handleDownload} disabled={busy}>
+				<Icon /> {busy ? "Скачивание…" : "Скачать"} {attachment.name} ({formatFileSize(attachment.size)})
+			</button>
+			{error && (
+				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</small>
+			)}
+		</>
+	);
 }

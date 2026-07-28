@@ -9,6 +9,7 @@ import { ensureProfilesFetched } from "../signals/contacts.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
 import AttachmentPreview from "./attachment-preview.jsx";
 import AttachmentView from "./attachment-view.jsx";
+import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
@@ -65,8 +66,8 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				{allowAttachments && (
 					<>
 						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-						<button type="button" onClick={() => attachment.inputRef.current?.click()}>
-							📎
+						<button type="button" onClick={() => attachment.inputRef.current?.click()} aria-label="Прикрепить файл">
+							<IconPaperclip />
 						</button>
 					</>
 				)}

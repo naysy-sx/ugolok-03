@@ -106,6 +106,10 @@ button:has(> .icon),
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-2xs);
+	/* Пользователь: кнопки с иконкой смотрелись непропорционально широкими
+	   с полным --space-m по бокам — --step-0 компактнее и не зависит от
+	   текучей шкалы отступов. */
+	padding-inline: var(--step-0);
 }
 
 /* ================================================================== *
@@ -541,11 +545,6 @@ button:has(> .icon),
 .app-layout .section-header {
 	flex: 0 0 auto;
 	padding: var(--space-m);
-	/* Резерв справа под .theme-toggle-btn (custom.css выше) — он fixed
-	   поверх ВСЕГО приложения в правом верхнем углу; без резерва крупный
-	   <h1> (--step-5 ниже) на короткий момент оказывался у него под низом
-	   (см. следующий комментарий про justify-content). */
-	padding-inline-end: calc(var(--space-m) + 2.75rem);
 	border-block-end: var(--border-width) solid var(--border);
 	display: flex;
 	flex-direction: column;
@@ -573,6 +572,12 @@ button:has(> .icon),
 .app-layout .header-actions h1 {
 	font-size: var(--step-5);
 	margin-block: 0;
+	/* Пользователь: заголовок всё ещё визуально чуть ниже центра строки —
+	   у крупного дисплейного шрифта над буквами есть лишнее "воздушное"
+	   пространство (line-box выше самих глифов); небольшой отрицательный
+	   отступ сверху компенсирует его на глаз, без влияния на реальную
+	   высоту строки. */
+	margin-block-start: calc(var(--step--1) * -1);
 	min-width: 0;
 }
 .app-layout .action-buttons {
@@ -592,6 +597,11 @@ button:has(> .icon),
 	color: var(--fg);
 	border-color: var(--border);
 	font-weight: var(--weight-normal);
+	/* Пользователь: тот же радиус, что у .date-field (пилюля) рядом в той
+	   же строке — раньше кнопка была --radius, соседний date-field —
+	   --radius-full, разные скругления в одной строке читались как
+	   недосмотр. */
+	border-radius: var(--radius-full);
 }
 .app-layout .action-buttons button:hover,
 .app-layout .action-buttons [type="button"]:hover {
@@ -771,6 +781,45 @@ button:has(> .icon),
 }
 .app-layout .message-compose-send-btn:hover {
 	filter: brightness(1.06);
+}
+
+/* Статус записи/загрузки голосового (пользователь, item 13) — верхний
+   дефолтный маргин <p> убран, кнопки прижаты вправо (margin-inline-start:
+   auto на первой из них), без единого inline style. */
+.app-layout .recording-status {
+	margin-block-start: 0;
+	align-items: center;
+	/* Глобальное p{max-width:var(--measure)} (типографика для прозы) душило
+	   строку — это управляющий UI-ряд, не текст для чтения, кнопкам справа
+	   некуда было "прижиматься". */
+	max-width: none;
+}
+.app-layout .recording-status button {
+	margin-inline-start: auto;
+}
+.app-layout .recording-status button + button {
+	margin-inline-start: 0;
+}
+/* Анимированный преloader вместо статичной 🔴 (item 12) — пульсирующая
+   точка, тот же смысл ("идёт запись"), но живая, не статичный эмодзи. */
+.app-layout .recording-dot {
+	flex: none;
+	width: 0.6em;
+	height: 0.6em;
+	border-radius: 50%;
+	background-color: var(--bad, oklch(0.58 0.21 25));
+	animation: recording-pulse 1.2s ease-in-out infinite;
+}
+@keyframes recording-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.35;
+		transform: scale(0.7);
+	}
 }
 
 /* ================================================================== *
@@ -1444,11 +1493,18 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-lg);
 	padding: var(--space-m);
+	margin-block-start: var(--step-5);
 }
 .app-layout .channels-aside h2 {
 	font-size: var(--step-0);
 	margin-block-start: 0;
 	margin-block-end: var(--space-s);
+}
+/* Пустое состояние ("Нет доступных каналов.") — без нижнего отступа (последний
+   элемент панели), с небольшим верхним (отделить от заголовка). */
+.app-layout .channels-aside p {
+	margin-block-start: var(--step--1);
+	margin-block-end: 0;
 }
 
 .app-layout .channel-list {
@@ -1512,12 +1568,62 @@ button:has(> .icon),
 }
 
 /* ================================================================== *
+ *  Внутренняя страница канала (channel.jsx)                          *
+ * ================================================================== */
+
+/* Описание канала — не проходной абзац, курсив + черта впереди (пользователь:
+   "подумай сам и реши как лучше"), тот же приём, что цитата, лёгкий акцент
+   слева тонкой линией по цвету границы. */
+.app-layout .channel-description {
+	margin-block-start: 0;
+	font-style: italic;
+	color: var(--muted);
+	border-inline-start: var(--border-width) solid var(--border);
+	padding-inline-start: var(--space-s);
+}
+
+/* "Написать пост" — главное действие канала (пользователь: "выглядит как
+   маленькая заурядная кнопочка"), крупнее обычной кнопки на ~25% и в акцентном
+   цвете, а не тихий ghost-стиль остальных действий. */
+.app-layout .channel-post-cta {
+	font-size: var(--step-1);
+	padding-block: var(--space-s);
+	padding-inline: var(--space-m);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border-color: transparent;
+	box-shadow: var(--shadow);
+}
+.app-layout .channel-post-cta:hover {
+	filter: brightness(1.06);
+}
+
+/* Поле поста — крупнее по умолчанию (пользователь: "сразу высоту побольше"),
+   фон "разлинованная бумага" (повторяющиеся горизонтальные линии по высоте
+   строки) + отступ снизу перед вложением/кнопками. */
+.app-layout .post-text-field {
+	min-height: 12rem;
+	margin-block-end: var(--space-s);
+	line-height: 1.6em;
+	background-image: repeating-linear-gradient(to bottom, transparent, transparent calc(1.6em - 1px), var(--border) calc(1.6em - 1px), var(--border) 1.6em);
+	background-attachment: local;
+}
+
+/* Вкладка "Редактировать канал" (пользователь, item 25) — внешний .flow
+   формы как flex-колонка с фиксированным gap вместо margin-block owl-приёма
+   (та же визуальная цель, другой механизм). */
+.app-layout .channel-settings-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--step-1);
+}
+
+/* ================================================================== *
  *  Экран контактов (contacts.jsx) — пользователь: "какой-то кобздец". *
  *  Тот же язык, что каналы (аside, ghost-кнопки строк, карточки).    *
  * ================================================================== */
 
 .app-layout .contacts-toolbar {
-	padding: var(--space-m);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-s);
@@ -1527,8 +1633,42 @@ button:has(> .icon),
 	color: var(--muted);
 	margin: 0;
 }
-.app-layout .contacts-add-form input {
-	background-color: var(--bg);
+/* Пользователь (item 26): без обёртки .card, поле ввода + кнопка визуально
+   слиты в один элемент — общая рамка, скругление обрезано на стыке, зазора
+   между ними нет. Подпись переехала в placeholder, шрифт крупнее (это
+   главное действие раздела). */
+.app-layout .contacts-add-form {
+	gap: 0;
+	align-items: stretch;
+}
+.app-layout .contact-add-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	flex: 1;
+	min-width: 12rem;
+	border: var(--border-width) solid var(--border);
+	border-inline-end: none;
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+	padding-inline: var(--space-s);
+	background-color: var(--surface);
+	color: var(--muted);
+}
+.app-layout .contact-add-field input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	background: none;
+	font-size: var(--step-1);
+	padding-block: var(--space-2xs);
+}
+.app-layout .contact-add-field input:focus-visible {
+	outline: none;
+}
+.app-layout .contacts-add-form button[type="submit"] {
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
 }
 
 /* VISUAL.md v2 (пользователь): "юзай css grid на всю катушку, все эти
@@ -1590,8 +1730,8 @@ button:has(> .icon),
 	padding-inline-start: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2xs);
-	margin-block-end: var(--space-s);
+	gap: 0;
+	margin-block: 0 var(--space-s);
 }
 .app-layout .group-filter-chip {
 	display: flex;
@@ -1642,6 +1782,9 @@ button:has(> .icon),
 .app-layout .contact-row-list {
 	list-style: none;
 	padding-inline-start: 0;
+	/* Глобальное ul{margin-block:var(--space-m)} (типографика для прозы,
+	   minimal.css) иначе просачивалось сюда — это список карточек, не текст. */
+	margin-block: 0;
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2xs);
@@ -1657,6 +1800,9 @@ button:has(> .icon),
 }
 .app-layout .contact-row-list .contact-row:last-child {
 	border-block-end: none;
+}
+.app-layout .contact-row-list .contact-row.contact-row-expandable:last-child {
+	padding-block-end: 0;
 }
 .app-layout .contact-row-expandable {
 	flex-direction: column;
@@ -1722,13 +1868,14 @@ button:has(> .icon),
 	line-height: 1;
 }
 
-/* Аватар контакта — круглый (в отличие от квадратного аватара владельца в
-   aside/каналов): контакт — человек, тот же язык, что VISUAL.md chat-head
-   .ava. */
+/* Аватар контакта (пользователь: не круглый, а --radius — тот же скруглённый
+   квадрат, что остальные карточки в приложении, не отдельный "человеческий"
+   мотив). */
 .app-layout .contact-identity {
 	display: flex;
 	align-items: center;
 	gap: var(--space-s);
+	text-align: left;
 }
 .app-layout .contact-identity-btn {
 	background: none;
@@ -1744,7 +1891,7 @@ button:has(> .icon),
 	height: 2.5rem;
 	aspect-ratio: 1;
 	object-fit: cover;
-	border-radius: calc(infinity * 1px);
+	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
 }
@@ -2089,7 +2236,7 @@ button:has(> .icon),
 	align-items: center;
 	gap: var(--space-3xs);
 	background-color: var(--surface);
-	border: var(--border-width) solid var(--border);
+	border: none;
 	border-radius: var(--radius-full);
 	padding: 3px var(--space-2xs) 3px var(--space-s);
 	font-size: var(--step--1);
@@ -2122,7 +2269,9 @@ button:has(> .icon),
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
-	padding: var(--space-s);
+	/* Пользователь: var(--space-s) делал строку огромной — заголовок
+	   раскрывашки, не отдельная кнопка с воздухом вокруг. */
+	padding: 0;
 	font-weight: var(--weight-bold);
 }
 .app-layout .req > summary::-webkit-details-marker {
@@ -2297,12 +2446,20 @@ button:has(> .icon),
  *  экраном — см. PostWithComments, channel.jsx).                      *
  * ================================================================== */
 .app-layout .section-label {
-	font-size: var(--step--1);
+	font-size: var(--step-1);
 	font-weight: var(--weight-bold);
 	color: var(--muted);
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
-	margin-block: 0;
+	margin-block-start: 0;
+	margin-block-end: var(--step--1);
+}
+
+/* Обёртка блока комментариев (пользователь, item 23a) — верхний padding,
+   отделяющий его от карточки поста над ним. */
+.app-layout .comment-section {
+	padding-inline-start: var(--space-m);
+	padding-block-start: var(--space-s);
 }
 
 .app-layout .composer {
@@ -2313,6 +2470,18 @@ button:has(> .icon),
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
+}
+/* Поле комментария — крупнее (пользователь: "чё так мелко") + фон "блокнот
+   в точечку" (сетка точек через var(--space-m), тот же приём, что лист в
+   линейку у поста, только точками вместо линий). */
+.app-layout .comment-text-field {
+	min-height: 5rem;
+	background-image: radial-gradient(circle, var(--muted) 1.5px, transparent 1.5px);
+	background-size: 22px 22px;
+	/* Глобальный reset (*{background-repeat:no-repeat}) иначе рисует всего
+	   ОДНУ точку в углу вместо повторяющейся сетки. */
+	background-repeat: repeat;
+	background-attachment: local;
 }
 
 .app-layout .cmt-list {
@@ -2336,7 +2505,9 @@ button:has(> .icon),
 	height: 2.125rem;
 	aspect-ratio: 1;
 	object-fit: cover;
-	border-radius: var(--radius-full);
+	/* Пользователь: маленький border-radius вместо круга — тот же язык, что
+	   .contact-avatar/.channel-avatar-thumb. */
+	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
 	font-size: 0.85rem;
@@ -2375,7 +2546,7 @@ button:has(> .icon),
 }
 .app-layout .cmt__text {
 	grid-column: 2;
-	font-size: var(--step--1);
+	font-size: var(--step-0);
 	line-height: 1.55;
 	white-space: pre-wrap;
 	margin: 0;
@@ -2393,8 +2564,8 @@ button:has(> .icon),
 	margin-block-start: var(--space-3xs);
 }
 .app-layout .cmt__actions .btn--ghost {
-	padding: var(--space-3xs) var(--space-2xs);
-	font-size: var(--step--2);
+	padding: var(--space-2xs) var(--space-s);
+	font-size: var(--step--1);
 }
 
 /* Ветка — нативное сворачивание + тёплая нить (подпись Уголка): левая

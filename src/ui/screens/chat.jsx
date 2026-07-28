@@ -16,6 +16,11 @@ import { profiles, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconSend from "../icons/send.jsx";
+import IconEraser from "../icons/eraser.jsx";
+import IconPaperclip from "../icons/paperclip.jsx";
+import IconMicrophone from "../icons/microphone.jsx";
+import IconStop from "../icons/stop.jsx";
+import IconCross from "../icons/cross.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -585,7 +590,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<IconPhoneCall /> Позвонить
 					</button>
 					<button type="button" onClick={handleClearHistory}>
-						Очистить переписку
+						<IconEraser /> Очистить переписку
 					</button>
 				</>
 			}
@@ -603,28 +608,28 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{recordingState === "recording" && (
-						<p class="cluster" role="status" style={{ alignItems: "center" }}>
-							<span aria-hidden="true">🔴</span> Идёт запись голосового…
+						<p class="cluster recording-status" role="status">
+							<span class="recording-dot" aria-hidden="true" /> Идёт запись голосового…
 							<button type="button" onClick={handleStopRecording}>
-								Остановить
+								<IconStop /> Остановить
 							</button>
 							<button type="button" onClick={handleCancelRecording}>
-								Отменить
+								<IconCross /> Отменить
 							</button>
 						</p>
 					)}
 
 					{recordingState === "recorded" && recordedVoiceUrl && (
-						<p class="cluster" style={{ alignItems: "center" }}>
+						<p class="cluster recording-status">
 							<audio controls src={recordedVoiceUrl} />
 							<button type="button" onClick={handleDiscardRecordedVoice}>
-								Удалить запись
+								<IconCross /> Удалить запись
 							</button>
 						</p>
 					)}
 
 					{uploadingAttachment && (
-						<p class="cluster" role="status" style={{ alignItems: "center" }}>
+						<p class="cluster recording-status" role="status">
 							<span class="spinner" aria-hidden="true" /> Загрузка вложения…
 						</p>
 					)}
@@ -638,7 +643,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							disabled={recordingState !== "idle"}
 							aria-label="Прикрепить файл"
 						>
-							📎
+							<IconPaperclip />
 						</button>
 						<button
 							type="button"
@@ -647,7 +652,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							disabled={recordingState !== "idle" || !!attachmentFile}
 							aria-label="Записать голосовое сообщение"
 						>
-							🎤
+							<IconMicrophone />
 						</button>
 						<label class="visually-hidden" for="chat-message-input">
 							Сообщение

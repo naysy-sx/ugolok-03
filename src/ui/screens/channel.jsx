@@ -26,9 +26,12 @@ import ModerationPanel from "../components/moderation-panel.jsx";
 import Screen from "../components/screen.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
-import IconPlus from "../icons/plus.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
+import IconPencil from "../icons/pencil.jsx";
+import IconPaperclip from "../icons/paperclip.jsx";
+import IconSend from "../icons/send.jsx";
+import IconCross from "../icons/cross.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -119,7 +122,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 	}
 
 	return (
-		<form class="flow" onSubmit={handleSave} style={{ "--flow-space": "var(--space-s)" }}>
+		<form class="flow channel-settings-form" onSubmit={handleSave} style={{ "--flow-space": "var(--space-s)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -212,20 +215,20 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 			<label class="visually-hidden" for="post-text">
 				Текст поста
 			</label>
-			<textarea id="post-text" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={6} />
+			<textarea id="post-text" class="post-text-field" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={10} />
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
 			<div class="cluster">
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
 				<button type="button" onClick={() => attachment.inputRef.current?.click()}>
-					📎 Прикрепить
+					<IconPaperclip /> Прикрепить
 				</button>
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					{busy ? "Публикация…" : "Опубликовать"}
+					<IconSend /> {busy ? "Публикация…" : "Опубликовать"}
 				</button>
 				<button type="button" onClick={onCancel} disabled={busy}>
-					Отмена
+					<IconCross /> Отмена
 				</button>
 			</div>
 		</form>
@@ -273,7 +276,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 				Комментарий
 			</label>
 			<textarea
-				class="input"
+				class="input comment-text-field"
 				id={`comment-text-${parentId}`}
 				value={text}
 				maxLength={COMMENT_MAX_LENGTH}
@@ -288,7 +291,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 			<div class="composer__row">
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
 				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label="Прикрепить файл">
-					📎
+					<IconPaperclip />
 				</button>
 				<span class="grow" />
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
@@ -503,7 +506,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				</p>
 			)}
 			{expanded && (
-				<div class="flow" style={{ "--flow-space": "var(--space-s)", paddingInlineStart: "var(--space-m)" }}>
+				<div class="flow comment-section" style={{ "--flow-space": "var(--space-s)" }}>
 					{canComment ? (
 						<CommentComposer
 							ownerPubkey={ownerPubkey}
@@ -653,7 +656,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	return (
 		<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title={channelRow.name || "(без названия)"}>
-			{channelRow.description && <p>{channelRow.description}</p>}
+			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details class="req">
 					<summary>
@@ -710,8 +713,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			{tab === "posts" && (
 				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>
 					{isOwner && !showComposer && (
-						<button type="button" onClick={() => setShowComposer(true)}>
-							<IconPlus /> Написать пост
+						<button type="button" class="channel-post-cta" onClick={() => setShowComposer(true)}>
+							<IconPencil /> Написать пост
 						</button>
 					)}
 					{isOwner && showComposer && (

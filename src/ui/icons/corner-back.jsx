@@ -1,28 +1,14 @@
-// Кнопка "Назад" в шапке экрана (screen.jsx) — пользователь: "не стрелка,
-// а стрелка в виде уголка, corner, который указывает направление назад" —
-// поворот на 90° (вертикаль -> горизонталь) с наконечником, тот же мотив,
-// что имя проекта. В отличие от остальных иконок (заливка) — здесь линия
-// (stroke), инлайн stroke-width перебивает общее .icon path{stroke-width:.6}
-// (та реинфорс-обводка для ЗАЛИТЫХ фигур, не подходит как основной штрих).
+// Кнопка "Назад" в шапке экрана (screen.jsx) — пользователь: прежний
+// "уголок" читался как повёрнутая стрелка неправильной формы, взамен —
+// его собственный SVG (шеврон влево, вставлен буквально как прислано).
 export default function IconCornerBack(props) {
 	return (
 		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
 			<path
-				d="M12.5 2.5v4.375a2.5 2.5 0 0 1-2.5 2.5H2.5"
-				stroke="currentColor"
-				stroke-width="1.4"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				style={{ strokeWidth: "1.4" }}
-			/>
-			<polyline
-				points="5.625 6.25 2.5 9.375 5.625 12.5"
-				stroke="currentColor"
-				stroke-width="1.4"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				fill="none"
-				style={{ strokeWidth: "1.4" }}
+				d="M8.84182 3.13514C9.04327 3.32401 9.05348 3.64042 8.86462 3.84188L5.43521 7.49991L8.86462 11.1579C9.05348 11.3594 9.04327 11.6758 8.84182 11.8647C8.64036 12.0535 8.32394 12.0433 8.13508 11.8419L4.38508 7.84188C4.20477 7.64955 4.20477 7.35027 4.38508 7.15794L8.13508 3.15794C8.32394 2.95648 8.64036 2.94628 8.84182 3.13514Z"
+				fill="currentColor"
+				fill-rule="evenodd"
+				clip-rule="evenodd"
 			/>
 		</svg>
 	);

@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import AttachmentView from "./attachment-view.jsx";
+import AttachmentView, { AttachmentDownloadLink } from "./attachment-view.jsx";
 
 const STATUS_LABELS = {
 	created: "черновик",
@@ -93,6 +93,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 								Редактировать
 							</button>
 						)}
+						{attachment && <AttachmentDownloadLink attachment={attachment} />}
 						{typeof onDeleteForMe === "function" && (
 							<button type="button" onClick={() => setMode("confirming-delete")}>
 								Удалить
