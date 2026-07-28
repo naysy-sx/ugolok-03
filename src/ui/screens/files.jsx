@@ -31,7 +31,11 @@ import {
 } from "../signals/files.js";
 import { ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
+import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError } from "../../domain/files/ops.js";
+import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+
+const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 
 // "Ремонт" (project(), tree.js) сделал что-то за пользователя молча —
 // показываем факт, не только результат (MATH.md §12.3: решение принято —
@@ -46,12 +50,11 @@ function errorMessage(result) {
 	return result instanceof PreconditionError ? result.message : null;
 }
 
-// Пока БЕЗ виртуализации (задача 3.2), фильтра (3.7) и миниатюр (3.8) —
-// первая функциональная волна: навигация, CRUD, буфер обмена, корзина,
-// отмена. Файлы (в отличие от папок) показывают общую иконку — размер/mime
-// живут в манифесте (content.js), не в самом узле дерева; подгрузка
-// манифеста по каждой строке — из той же серии, что миниатюры, следующим
-// шагом (3.8), не задача этого прохода.
+// Пока БЕЗ виртуализации (задача 3.2) и миниатюр (3.8) — вторая волна
+// добавила фильтр (3.7). Файлы (в отличие от папок) показывают общую
+// иконку — размер/mime живут в манифесте (content.js), не в самом узле
+// дерева; подгрузка манифеста по каждой строке — из той же серии, что
+// миниатюры, следующим шагом (3.8), не задача этого прохода.
 export default function Files() {
 	const ownerPubkey = currentUser.value.id;
 	const [ready, setReady] = useState(false);
@@ -61,13 +64,32 @@ export default function Files() {
 	const [renamingId, setRenamingId] = useState(null);
 	const [renameValue, setRenameValue] = useState("");
 	const [error, setError] = useState("");
+	const [searchInput, setSearchInput] = useState("");
+	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const containerRef = useRef(null);
 
 	useEffect(() => {
 		initFiles(ownerPubkey).then(() => setReady(true));
 	}, [ownerPubkey]);
 
-	const entries = sortEntries(currentEntries.value, "name");
+	// Дебаунс — по прецеденту chat.jsx (черновики): таймер, отменяется при
+	// следующем нажатии/размонтировании. ALGO.MD §13: линейный скан — Θ(n)
+	// на нажатие, при n=10⁴ порядка миллисекунды, строить индекс незачем;
+	// дебаунс нужен, только чтобы не пересчитывать список на КАЖДЫЙ символ.
+	useEffect(() => {
+		const timer = setTimeout(() => setDebouncedQuery(searchInput), FILTER_DEBOUNCE_MS);
+		return () => clearTimeout(timer);
+	}, [searchInput]);
+
+	// Смена папки — фильтр предыдущей папки не должен молча продолжать
+	// действовать в новой (пользователь его не видит, но список пуст без
+	// объяснения — читалось бы как баг).
+	useEffect(() => {
+		setSearchInput("");
+		setDebouncedQuery("");
+	}, [currentFolderId.value]);
+
+	const entries = sortEntries(filterEntries(currentEntries.value, debouncedQuery), "name");
 	const path = breadcrumbPath.value;
 	const inTrash = currentFolderId.value === TRASH_ID;
 
@@ -241,6 +263,20 @@ export default function Files() {
 							<IconTrash /> Корзина
 						</button>
 					)}
+				</div>
+
+				<div class="file-search-field">
+					<IconMagnifyingGlass aria-hidden="true" />
+					<label class="visually-hidden" for="file-search">
+						Фильтр по имени в этой папке
+					</label>
+					<input
+						id="file-search"
+						type="search"
+						value={searchInput}
+						onInput={(e) => setSearchInput(e.currentTarget.value)}
+						placeholder="Фильтр по имени…"
+					/>
 				</div>
 
 				{newFolderOpen && (

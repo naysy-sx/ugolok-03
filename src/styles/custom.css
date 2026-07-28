@@ -2647,6 +2647,27 @@ button:has(> .icon),
 	color: var(--border);
 }
 
+/* Поле фильтра (3.7 TASK.md) — тот же язык, что contact-add-field, но без
+   слияния с кнопкой (фильтр применяется на ввод, действия не требует). */
+.app-layout .file-search-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	max-width: 24rem;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding-inline: var(--space-s);
+	background-color: var(--surface);
+	color: var(--muted);
+}
+.app-layout .file-search-field input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	background: none;
+	padding-block: var(--space-2xs);
+}
+
 .app-layout .file-new-folder-form {
 	align-items: center;
 }
