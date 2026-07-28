@@ -3174,3 +3174,17 @@ skipTail) поймана. Regression: 953/953.
 offset в шифротексте — не было явно в доках, поймано до продакшна.
 Round-trip проверен и против фейкового, и против РЕАЛЬНОГО Blossom.
 9 тестов, 1 адверсарная мутация поймана. Regression: 962/962.
+
+## Этап 53, И2 п.2.6/2.7 — store.js, И2 завершён
+
+files_nodes/files_mounts/files_manifests/files_blobs/files_thumbs
+(database.js version(17), аддитивно). saveTreeState/loadTreeState +
+кеш манифестов. I-BATCH подтверждён тестом (счётчик вызовов project()
+и db.transaction()), не только рассуждением — оба свойства уже были
+в И1/2.6 по конструкции. 14 тестов, 2 адверсарные мутации (owner-
+scoping; N транзакций вместо 1) пойманы. Regression: 969/969.
+
+И2 закрыт целиком: content-пайплайн (blob/crypto/content/store) готов
+и живьём проверен против реального Blossom; attachments не тронут
+(решение пользователя) — переход messaging на узлы читаемого чанками
+формата остаётся задачей И7.

@@ -195,6 +195,26 @@ db.version(16).stores({
   journalEntries: "id, owner, [owner+createdAt]"
 });
 
+// Этап 53 — раздел "Файлы" (CONTRACTS.md, §4.4 TASK.md). Owner-scoped
+// составные ключи — тот же принцип, что contacts/groups/attachments:
+// несколько локальных аккаунтов в одной вкладке не должны видеть чужие
+// узлы/манифесты/миниатюры даже при совпадении digest. files_nodes хранит
+// LWW-регистры РАЗВЁРНУТО по столбцам (par*/name*/origin* отдельно), не
+// вложенным JSON — тот же стиль, что уже принят для похожих плоских
+// табличных состояний в проекте (permissions/effectivePerms). Поля пока НЕ
+// проходят через AC-16 Tier-классификацию (шифрование по полям) — по
+// прямому прецеденту проекта: похожие таблицы (permissions, mlsGroups)
+// тоже добавлялись сначала плейнтекстом, Tier-шифрование — отдельный
+// последующий этап (см. этапы 39-42 в log.md), не смешивается с этой
+// работой.
+db.version(17).stores({
+  files_nodes: "[ownerPubkey+id], ownerPubkey",
+  files_mounts: "[ownerPubkey+nodeId], ownerPubkey",
+  files_manifests: "[ownerPubkey+digest], ownerPubkey",
+  files_blobs: "[ownerPubkey+digest+chunkIndex], ownerPubkey, digest",
+  files_thumbs: "[ownerPubkey+digest], ownerPubkey"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }
