@@ -215,6 +215,20 @@ db.version(17).stores({
   files_thumbs: "[ownerPubkey+digest], ownerPubkey"
 });
 
+// Найдено при реализации миниатюр (этап 53, И3 3.8): content.putStream
+// возвращает fileKey ОТДЕЛЬНЫМ полем (CONTRACTS.md — "персистентность вне
+// ответственности content.js"), но ничто до сих пор не сохраняло его —
+// после перезагрузки страницы файл стал бы НЕРАСШИФРОВЫВАЕМ НАВСЕГДА
+// (ключ нигде, кроме памяти на момент putStream). files_keys закрывает
+// именно это — ключ владельца на своё же содержимое (не путать с share.js/
+// И6: там обёртки ключа ДЛЯ КОНТАКТОВ, здесь — обычный доступ владельца).
+// Шифруется dbKey перед записью (тот же приём, что domain/attachments/
+// cache.js) — это симметричный ключ РАСШИФРОВКИ файла, самая чувствительная
+// вещь во всём модуле, хранить в открытом виде в IndexedDB недопустимо.
+db.version(18).stores({
+  files_keys: "[ownerPubkey+digest], ownerPubkey"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

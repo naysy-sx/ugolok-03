@@ -5,8 +5,9 @@
 // Lamport-счётчик, undo-стек) — но принцип тот же.
 import { signal, computed } from "@preact/signals";
 import { createInitialState, merge, project, ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
-import { createFolder as opCreateFolder, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, PreconditionError } from "../../domain/files/ops.js";
-import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue } from "../../domain/files/store.js";
+import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, PreconditionError } from "../../domain/files/ops.js";
+import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey } from "../../domain/files/store.js";
+import { dbKeySig } from "./auth.js";
 import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard } from "../../domain/files/clipboard.js";
 import { createUndoStack, pushUndo, popUndo, canUndo as canUndoNow, recordMove, recordRename, recordCreate } from "../../domain/files/undo.js";
 import { createLamportClock } from "../../core/sync/lamport.js";
@@ -94,6 +95,28 @@ export async function createFolder(name) {
 	pushUndo(undoStack, [recordCreate(op.id)]);
 	canUndo.value = canUndoNow(undoStack);
 	return op;
+}
+
+// Узел-файл поверх уже загруженного содержимого (content.putStream, И2) —
+// сама загрузка (выбор файла с диска, прогресс) — задача И7, здесь только
+// связывание готового manifestDigest с деревом. fileKey сохраняется СРАЗУ
+// (store.js's saveFileKey, зашифрован dbKey) — без этого файл стал бы
+// нерасшифровываем после первой же перезагрузки (найдено при реализации
+// миниатюр, задача 3.8 — ключ раньше нигде не персистировался).
+export async function createFileEntry(name, blobDigest, fileKey, origin = null) {
+	const op = opCreateFile(treeState.value, currentFolderId.value, name, randomNodeId(), blobDigest, await label(), origin);
+	if (op instanceof PreconditionError) return op;
+	await saveFileKey(cachedOwnerPubkey, dbKeySig.value, blobDigest, fileKey);
+	await applyAndPersist([op]);
+	pushUndo(undoStack, [recordCreate(op.id)]);
+	canUndo.value = canUndoNow(undoStack);
+	return op;
+}
+
+// Для чтения (миниатюры, будущий плеер И4) — по digest, не по узлу
+// (несколько узлов, включая копии, могут ссылаться на один и тот же blob).
+export async function getFileKeyFor(digest) {
+	return getFileKey(cachedOwnerPubkey, dbKeySig.value, digest);
 }
 
 export async function renameNode(id, name) {

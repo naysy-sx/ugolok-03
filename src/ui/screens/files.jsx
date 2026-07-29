@@ -28,16 +28,97 @@ import {
 	pasteHere,
 	undo,
 	openFolder,
+	getFileKeyFor,
 } from "../signals/files.js";
 import { ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError } from "../../domain/files/ops.js";
+import { getManifest, getRange } from "../../domain/files/content.js";
+import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
+import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
+import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
+import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+// Общая на весь экран очередь — иначе каждая строка получила бы СВОЙ
+// параллелизм, и общее число одновременных задач росло бы с числом видимых
+// строк, а не оставалось 2-4 (ALGO.MD §15).
+const thumbnailQueue = createThumbnailQueue(3);
+
+// Миниатюра по видимости (IntersectionObserver) — задача 3.8 TASK.md.
+// Манифест (mime/size) неизвестен из самого узла дерева (Node.blob — только
+// дайджест, §4.1 TASK.md) — приходится сходить за ним (кэш в files_manifests,
+// store.js, сперва; сеть — только если кэш пуст). Отмена — если строка
+// покинула вьюпорт РАНЬШЕ, чем задание стартовало (thumbnail-queue.js);
+// уже стартовавшее докручивается, не прерывается на середине.
+function FileThumbnail({ entry, ownerPubkey }) {
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(entry.blob) ?? null);
+	const [failed, setFailed] = useState(false);
+	const elRef = useRef(null);
+
+	useEffect(() => {
+		if (url || failed || !entry.blob) return;
+		let handle = null;
+		let cancelled = false;
+
+		const observer = new IntersectionObserver(([observedEntry]) => {
+			if (observedEntry.isIntersecting && !handle) {
+				handle = thumbnailQueue.enqueue(async () => {
+					let manifest = await getCachedManifest(ownerPubkey, entry.blob);
+					if (!manifest) {
+						manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+						await putCachedManifest(ownerPubkey, entry.blob, manifest);
+					}
+					if (!isThumbnailable(manifest.mime)) return null;
+					const fileKey = await getFileKeyFor(entry.blob);
+					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
+					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
+					return createThumbnailBlob(bytes, manifest.mime);
+				});
+				handle.promise
+					.then((thumbBytes) => {
+						if (cancelled) return;
+						if (!thumbBytes) {
+							setFailed(true);
+							return;
+						}
+						setUrl(putMemoryCachedAttachment(entry.blob, thumbBytes, "image/jpeg"));
+					})
+					.catch(() => {
+						if (!cancelled) setFailed(true);
+					});
+			} else if (!observedEntry.isIntersecting && handle) {
+				handle.cancel();
+				handle = null;
+			}
+		});
+		if (elRef.current) observer.observe(elRef.current);
+
+		return () => {
+			cancelled = true;
+			observer.disconnect();
+			handle?.cancel();
+		};
+	}, [entry.blob, url, failed]);
+
+	if (url) return <img src={url} alt="" class="file-row-thumb" />;
+	// ref — на обычный <span>, не напрямую на иконку: IconFileText — простой
+	// функциональный компонент без forwardRef, ref на него не долетает до
+	// настоящего DOM-узла (найдено живой проверкой — IntersectionObserver
+	// падал на не-Element). Span визуально прозрачен (inline, без своих
+	// стилей), просто держит точку наблюдения.
+	return (
+		<span ref={elRef} style={{ display: "inline-flex" }}>
+			<IconFileText aria-hidden="true" class="file-row-icon" />
+		</span>
+	);
+}
 
 // "Ремонт" (project(), tree.js) сделал что-то за пользователя молча —
 // показываем факт, не только результат (MATH.md §12.3: решение принято —
@@ -342,7 +423,7 @@ export default function Files() {
 						{visibleEntries.map((entry) => (
 							<li key={entry.id} class="file-row">
 								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={`Выбрать «${entry.displayName}»`} />
-								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
+								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
 								{renamingId === entry.id ? (
 									<form class="cluster file-rename-form" onSubmit={submitRename}>
 										<label class="visually-hidden" for={`rename-${entry.id}`}>

@@ -48,6 +48,17 @@ export function createFolder(S, parentId, name, newId, label) {
 	return { type: "create", id: newId, kind: "dir", blob: null, parentId, name, origin: null, label };
 }
 
+// Узел-файл — та же проверка имени, что у папки; blob — дайджест манифеста
+// (content.js's putStream), НЕИЗМЕНЯЕМ после создания, как и kind (§4.1
+// TASK.md). origin — пассивная метка происхождения (§4.1: "узел из чата" и
+// т.п.), опциональна, по умолчанию null (обычная загрузка через "Файлы").
+export function createFile(S, parentId, name, newId, blob, label, origin = null) {
+	if (!nameFree(S, parentId, name)) {
+		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`);
+	}
+	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label };
+}
+
 export function rename(S, id, name, label) {
 	const node = S.nodes.get(id);
 	const parentId = node.par.value;

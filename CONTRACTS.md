@@ -7586,6 +7586,27 @@ self.location.origin) return;` явно пропускает Blossom (друго
 (ключ — дайджест, не `NodeId`, П-5 подтвердил тот же приём уже
 используется в `attachment-memory-cache.js`/`domain/attachments/cache.js`).
 
+**Правка по итогам И3 3.8 (миниатюры):** `files_thumbs` в итоге НЕ
+используется — декодированная миниатюра живёт только в оперативном
+кэше (`attachment-memory-cache.js`, тот же модуль, что вложения чатов),
+пересчитывается заново каждую сессию через `content.getManifest`/
+`getRange` по видимости строки (IntersectionObserver). Персист
+декодированной миниатюры на диск не был целью прохода — не исключает
+`files_thumbs` на будущее (например, для И4/плеера), просто пока не
+заполняется.
+
+Добавлена НЕ объявленная в TASK.md таблица `files_keys` (`db.version(18)`,
+аддитивно): `[ownerPubkey+digest], ownerPubkey`, значение —
+`fileKey` (из `content.putStream`), зашифрован `dbKey` (ChaCha20-Poly1305,
+тот же приём, что `attachments/cache.js`). Найдено реализацией, не
+предусмотрено спецификацией: `putStream` отдаёt `fileKey` отдельным
+полем и явно снимает с себя ответственность за его персистентность —
+без отдельного хранилища файл становится нерасшифровываем после
+перезагрузки страницы. НЕ путать с обёртками ключа ДЛЯ КОНТАКТОВ
+(`share.js`, И6) — это ключ владельца на своё же содержимое.
+`store.js`: `saveFileKey(ownerPubkey, dbKey, digest, fileKey)` /
+`getFileKey(ownerPubkey, dbKey, digest) -> Uint8Array | undefined`.
+
 ### Явное сужение скоупа
 
 И1 (эта сессия начинает с него) — `tree.js`/`ops.js`, целиком `[C]`,

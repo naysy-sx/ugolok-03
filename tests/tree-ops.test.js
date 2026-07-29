@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInitialState, applyOp, ROOT_ID, TRASH_ID } from "../src/domain/files/tree.js";
-import { createFolder, rename, move, copy, remove, purge, PreconditionError } from "../src/domain/files/ops.js";
+import { createFolder, createFile, rename, move, copy, remove, purge, PreconditionError } from "../src/domain/files/ops.js";
 
 let counter = 0;
 function label() {
@@ -171,4 +171,33 @@ test("purge: монотонный флаг, идемпотентен", () => {
 	assert.equal(S.nodes.get(x).purged, true);
 	S = applyOp(S, purge(S, x)); // повтор — не должен падать/менять
 	assert.equal(S.nodes.get(x).purged, true);
+});
+
+test("createFile: kind='file', blob=дайджест, неизменяемы после создания", () => {
+	let S = createInitialState();
+	const newId = id("file");
+	const op = createFile(S, ROOT_ID, "фото.jpg", newId, "digest-abc123", label());
+	assert.ok(!(op instanceof PreconditionError));
+	S = applyOp(S, op);
+	const node = S.nodes.get(newId);
+	assert.equal(node.kind, "file");
+	assert.equal(node.blob, "digest-abc123");
+});
+
+test("createFile: PreconditionError при занятом имени (та же проверка, что у папки)", () => {
+	let S = createInitialState();
+	[S] = mkFolder(S, ROOT_ID, "дубль");
+	const op = createFile(S, ROOT_ID, "дубль", id("file"), "digest-x", label());
+	assert.ok(op instanceof PreconditionError);
+});
+
+test("createFile: origin — пассивная метка, по умолчанию null, можно задать", () => {
+	let S = createInitialState();
+	const opNoOrigin = createFile(S, ROOT_ID, "a.jpg", id("file"), "d1", label());
+	S = applyOp(S, opNoOrigin);
+	assert.equal(S.nodes.get(opNoOrigin.id).origin.value, null);
+
+	const opWithOrigin = createFile(S, ROOT_ID, "b.jpg", id("file"), "d2", label(), "chat:alice");
+	S = applyOp(S, opWithOrigin);
+	assert.equal(S.nodes.get(opWithOrigin.id).origin.value, "chat:alice");
 });

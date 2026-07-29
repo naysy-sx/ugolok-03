@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createInitialState, applyOp, ROOT_ID } from "../src/domain/files/tree.js";
 import { createFolder } from "../src/domain/files/ops.js";
-import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue } from "../src/domain/files/store.js";
+import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey } from "../src/domain/files/store.js";
 
 const OWNER_A = "owner-a-pubkey";
 const OWNER_B = "owner-b-pubkey";
@@ -13,6 +13,7 @@ beforeEach(async () => {
 	await db.table("files_nodes").clear();
 	await db.table("files_manifests").clear();
 	await db.table("clock").clear();
+	await db.table("files_keys").clear();
 });
 
 function mkFolder(S, parentId, name, label) {
@@ -99,4 +100,40 @@ test("счётчик Лампорта раздела Файлы: персист�
 
 	const messagesClockRow = await db.table("clock").get([OWNER_A, "lamport"]);
 	assert.equal(messagesClockRow, undefined, "files-lamport не создаёт/не путает ключ 'lamport' (messaging)");
+});
+
+test("saveFileKey/getFileKey: round-trip, зашифровано в БД (сырой ключ не хранится открыто)", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey);
+
+	const got = await getFileKey(OWNER_A, dbKeyA, "digest-1");
+	assert.deepEqual(got, fileKey);
+
+	const row = await db.table("files_keys").get([OWNER_A, "digest-1"]);
+	assert.ok(row.ciphertext, "хранится шифротекст");
+	assert.notDeepEqual(new Uint8Array(row.ciphertext.buffer || row.ciphertext), fileKey, "сырой ключ НЕ хранится в открытом виде");
+});
+
+test("getFileKey: неверный dbKey -> throw (AES-GCM/ChaCha tag mismatch), не молча возвращает мусор", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const wrongKey = crypto.getRandomValues(new Uint8Array(32));
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey);
+
+	await assert.rejects(() => getFileKey(OWNER_A, wrongKey, "digest-1"));
+});
+
+test("getFileKey: нет записи -> undefined", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	assert.equal(await getFileKey(OWNER_A, dbKeyA, "digest-нет-такого"), undefined);
+});
+
+test("owner-scoping: ключ владельца A не читается владельцем B", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const dbKeyB = crypto.getRandomValues(new Uint8Array(32));
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey);
+
+	assert.equal(await getFileKey(OWNER_B, dbKeyB, "digest-1"), undefined);
 });

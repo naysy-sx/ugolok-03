@@ -3,6 +3,7 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { ROOT_ID, TRASH_ID } from "../src/domain/files/tree.js";
+import { dbKeySig } from "../src/ui/signals/auth.js";
 import {
 	initFiles,
 	treeState,
@@ -12,6 +13,8 @@ import {
 	clipboard,
 	canUndo,
 	createFolder,
+	createFileEntry,
+	getFileKeyFor,
 	renameNode,
 	moveNode,
 	removeNode,
@@ -32,6 +35,8 @@ before(async () => {
 beforeEach(async () => {
 	await db.table("files_nodes").clear();
 	await db.table("clock").clear();
+	await db.table("files_keys").clear();
+	dbKeySig.value = crypto.getRandomValues(new Uint8Array(32));
 	await initFiles(OWNER);
 });
 
@@ -71,6 +76,19 @@ test("createFolder: PreconditionError при занятом имени, не р�
 	const result = await createFolder("Дубль");
 	assert.equal(result.name, "PreconditionError");
 	assert.equal(currentEntries.value.length, 1, "второй вызов не создал узел");
+});
+
+test("createFileEntry: создаёт узел kind='file' с указанным digest, появляется в currentEntries, сохраняет ключ", async () => {
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	const op = await createFileEntry("фото.jpg", "digest-xyz", fileKey);
+	assert.ok(op.id);
+	const entry = currentEntries.value.find((e) => e.id === op.id);
+	assert.ok(entry);
+	assert.equal(entry.kind, "file");
+	assert.equal(entry.blob, "digest-xyz");
+
+	const gotKey = await getFileKeyFor("digest-xyz");
+	assert.deepEqual(gotKey, fileKey);
 });
 
 test("openFolder/breadcrumbPath: навигация внутрь и хлебные крошки отражают путь", async () => {

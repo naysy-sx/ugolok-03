@@ -15,6 +15,7 @@
 // И3 миниатюры) — объявлять сейчас несуществующее поведение вокруг них
 // нечем наполнить осмысленными тестами.
 import { db } from "../../core/store/database.js";
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { rebuildIndexes } from "./tree.js";
 
 function nodeToRow(ownerPubkey, node) {
@@ -96,4 +97,22 @@ export async function loadFilesClockValue(ownerPubkey) {
 
 export async function saveFilesClockValue(ownerPubkey, value) {
 	await db.table("clock").put({ ownerPubkey, id: "files-lamport", value });
+}
+
+// Ключ файла (content.js's putStream -> fileKey) — БЕЗ этого файл
+// нерасшифровываем после перезагрузки страницы (найдено при реализации
+// миниатюр, задача 3.8). Шифруется dbKey (тот же приём, что
+// domain/attachments/cache.js) — сырой симметричный ключ расшифровки
+// файла в открытом виде в IndexedDB недопустим. НЕ путать с share.js/И6
+// (обёртки ключа для КОНТАКТОВ) — это обычный доступ владельца к своему.
+export async function saveFileKey(ownerPubkey, dbKey, digest, fileKey) {
+	const nonce = crypto.getRandomValues(new Uint8Array(12));
+	const ciphertext = chacha20poly1305(dbKey, nonce).encrypt(fileKey);
+	await db.table("files_keys").put({ ownerPubkey, digest, nonce, ciphertext });
+}
+
+export async function getFileKey(ownerPubkey, dbKey, digest) {
+	const row = await db.table("files_keys").get([ownerPubkey, digest]);
+	if (!row) return undefined;
+	return chacha20poly1305(dbKey, row.nonce).decrypt(row.ciphertext);
 }

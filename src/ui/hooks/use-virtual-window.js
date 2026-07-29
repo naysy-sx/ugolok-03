@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect, useCallback } from "preact/hooks";
 
 // Виртуализация списка (задача 3.2 TASK.md): "папка на 10⁴ элементов не
 // рендерится целиком. Строка фиксированной высоты — экономит целую
@@ -13,16 +13,31 @@ import { useState, useEffect, useRef } from "preact/hooks";
 // CSS-позиционирования (getBoundingClientRect, не offsetTop — тот
 // завязан на offsetParent, который может оказаться не тем предком).
 export function useVirtualWindow({ count, rowHeight, overscan = 6 }) {
-	const anchorRef = useRef(null);
+	// Колбэк-реф (не useRef) — якорь монтируется/размонтируется вместе с
+	// условным рендером в files.jsx (entries.length===0 ? заглушка : список),
+	// в т.ч. посреди быстрой цепочки сигналов при initFiles (синхронный
+	// createInitialState(), следом асинхронный loadTreeState() поверх —
+	// currentEntries.value меняется дважды подряд ДО первой отрисовки якоря).
+	// useRef не уведомляет об изменении DOM-узла — эффект по [count,...] мог
+	// сработать ровно в момент, когда якорь ещё не примонтирован (early
+	// return), а к моменту, когда якорь появляется, count уже не меняется —
+	// новой смены зависимости для повторного запуска эффекта не будет, и
+	// окно навсегда остаётся на первом (пустом) расчёте. Колбэк-реф даёт
+	// anchorEl как ОТДЕЛЬНОЕ состояние, меняющееся именно в момент монтажа
+	// узла — добавлен в зависимости эффекта, чтобы всегда пересчитать при
+	// появлении якоря, независимо от того, менялся ли count в этот момент.
+	// Найдено живой проверкой (не тестами): реально сохранённый файл не
+	// показывался в списке после перезагрузки страницы.
+	const [anchorEl, setAnchorEl] = useState(null);
+	const anchorRef = useCallback((node) => setAnchorEl(node), []);
 	const [range, setRange] = useState({ start: 0, end: Math.min(count, 40) });
 
 	useEffect(() => {
-		const anchor = anchorRef.current;
-		if (!anchor) return;
-		const scrollEl = anchor.closest(".content-wrapper") ?? window;
+		if (!anchorEl) return;
+		const scrollEl = anchorEl.closest(".content-wrapper") ?? window;
 
 		function recompute() {
-			const anchorRect = anchor.getBoundingClientRect();
+			const anchorRect = anchorEl.getBoundingClientRect();
 			let scrollTop;
 			let viewportHeight;
 			let anchorTop;
@@ -51,7 +66,7 @@ export function useVirtualWindow({ count, rowHeight, overscan = 6 }) {
 			scrollEl.removeEventListener("scroll", recompute);
 			window.removeEventListener("resize", recompute);
 		};
-	}, [count, rowHeight, overscan]);
+	}, [anchorEl, count, rowHeight, overscan]);
 
 	// count может уменьшиться (фильтр/удаление) между рендерами — не ждать
 	// следующего скролл-события, чтобы не показать пустой "хвост" окна.
