@@ -3371,3 +3371,33 @@ duration/videoWidth/videoHeight корректны, перемотка (currentT
 
 52 новых теста (chunk-cache/player-session/player-bridge/content.getChunk).
 Regression: 1045/1045. Сборка: 544.92 КБ gzip (бюджет 1304 КБ).
+
+## Этап 53, И5 (5.1-5.3) — синхронизация своих устройств
+
+5.4/5.5 отложены в И7 по решению пользователя (найден конфликт формата:
+вложения чата — одним блоком, files/crypto.js — чанками, несовместимо).
+
+sync.js (KIND_FILES_OP=3007, NIP-44 себе, content=Op[]). Дребезг 300мс в
+applyAndPersist (единственная точка входа локальных мутаций). initFiles
+теперь принимает (ownerPubkey, privKey, publish) — publish явно, не
+импортируется (тестируемость), по прецеденту configureContactRuntime.
+rebuildFilesLog — фолд [pubkey+kind] db.events, один merge на пул,
+lamportClock.receive(max). Ленивая активация (initFiles + onEvent-хук
+transport.js, тот же узел, что contacts/groups/permissions).
+
+12 тестов, 2 адверсарные мутации (max→last; try/catch убран) пойманы.
+Regression: 1057/1057.
+
+Найдено живой двух-вкладочной проверкой, НЕ докопано до корня: бутстрап-
+синхронизация (открыть/переоткрыть "Файлы") надёжна, подтверждена
+многократно. Живая доставка в УЖЕ открытую вкладку без перезагрузки —
+ненадёжна (onEvent то не срабатывал, то срабатывал с addedCount=0 для
+события, которое тем не менее оседало в db.events). rebuildFilesLog сам
+по себе проверен верным изолированно (node-тесты + консоль). Похоже на
+пред-существующий пробел в incremental-sync.js/subscriber.js (общий узел
+для contacts/groups/permissions, не написан в этом проходе), но не
+исключено, что часть наблюдений — артефакт собственных live-edit/HMR
+правок во время отладки (files.js module state мог сбрасываться).
+Доложено пользователю, дальнейшее расследование — отдельная задача.
+
+Сборка: 545.24 КБ gzip.

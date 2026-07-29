@@ -10,7 +10,8 @@ import IconChevronRight from "../icons/chevron-right.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconCross from "../icons/cross.jsx";
-import { currentUser } from "../signals/auth.js";
+import { currentUser, privKeySig } from "../signals/auth.js";
+import { publish } from "../signals/transport.js";
 import {
 	initFiles,
 	currentFolderId,
@@ -154,7 +155,7 @@ export default function Files() {
 	const containerRef = useRef(null);
 
 	useEffect(() => {
-		initFiles(ownerPubkey).then(() => setReady(true));
+		initFiles(ownerPubkey, privKeySig.value, publish).then(() => setReady(true));
 	}, [ownerPubkey]);
 
 	// Дебаунс — по прецеденту chat.jsx (черновики): таймер, отменяется при

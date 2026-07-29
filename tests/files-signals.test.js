@@ -37,6 +37,9 @@ beforeEach(async () => {
 	await db.table("clock").clear();
 	await db.table("files_keys").clear();
 	dbKeySig.value = crypto.getRandomValues(new Uint8Array(32));
+	// privKey/publish не переданы (undefined) — этот файл тестирует ЛОКАЛЬНОЕ
+	// поведение сигнального моста, не сетевую синхронизацию (files-sync.test.js).
+	// initFiles/queueForPublish оба безопасно no-op без них (CONTRACTS.md, И5).
 	await initFiles(OWNER);
 });
 

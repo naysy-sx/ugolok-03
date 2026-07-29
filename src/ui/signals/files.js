@@ -7,11 +7,18 @@ import { signal, computed } from "@preact/signals";
 import { createInitialState, merge, project, ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
 import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, PreconditionError } from "../../domain/files/ops.js";
 import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey } from "../../domain/files/store.js";
+import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../../domain/files/sync.js";
+import { db } from "../../core/store/database.js";
 import { dbKeySig } from "./auth.js";
 import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard } from "../../domain/files/clipboard.js";
 import { createUndoStack, pushUndo, popUndo, canUndo as canUndoNow, recordMove, recordRename, recordCreate } from "../../domain/files/undo.js";
 import { createLamportClock } from "../../core/sync/lamport.js";
 import { getOrCreateDeviceId } from "../../domain/identity/device.js";
+
+// Дребезг публикации (CONTRACTS.md, этап 53 И5, задача 5.2) — середина
+// диапазона 200-500мс TASK.md §6. Серия быстрых правок ОДНОГО узла (или
+// нескольких подряд) даёт ОДНО сетевое событие, не одно на правку.
+const PUBLISH_DEBOUNCE_MS = 300;
 
 export const treeState = signal(createInitialState());
 export const currentFolderId = signal(ROOT_ID);
@@ -48,6 +55,32 @@ let undoStack = createUndoStack();
 let lamportClock = null;
 let cachedDeviceId = null;
 let cachedOwnerPubkey = null;
+let cachedPrivKey = null;
+let cachedPublish = null;
+let pendingOps = [];
+let publishTimer = null;
+
+// publish НЕ импортируется из signals/transport.js напрямую (иначе модуль
+// не тестируется без реальной сети) — передаётся явно через initFiles, по
+// прецеденту configureContactRuntime({ownerPubkey, privKey, dbKey, publish})
+// (ui/signals/contacts.js). Ошибка публикации — best-effort (тот же
+// принцип, что saveUiSettings): локальное состояние уже применено и
+// сохранено ДО постановки в очередь, сбой сети не откатывает его.
+function queueForPublish(ops) {
+	if (!cachedPublish || ops.length === 0) return;
+	pendingOps.push(...ops);
+	clearTimeout(publishTimer);
+	publishTimer = setTimeout(flushPendingOps, PUBLISH_DEBOUNCE_MS);
+}
+
+function flushPendingOps() {
+	publishTimer = null;
+	if (pendingOps.length === 0) return;
+	const ops = pendingOps;
+	pendingOps = [];
+	const event = buildFilesLogEvent(cachedPrivKey, ops);
+	cachedPublish(event).catch(() => {});
+}
 
 async function label() {
 	if (!lamportClock) throw new Error("files: initFiles() ещё не вызван");
@@ -56,8 +89,15 @@ async function label() {
 	return { counter, deviceId: cachedDeviceId };
 }
 
-export async function initFiles(ownerPubkey) {
+// privKey/publish — новые параметры (CONTRACTS.md, этап 53 И5, задача
+// 5.2/5.3): нужны для дребезг-публикации локальных операций и для фолда
+// уже осевшего в db.events сетевого журнала при первом открытии экрана в
+// сессии. Вызывающая сторона (files.jsx) передаёт privKeySig.value и
+// publish из transport.js.
+export async function initFiles(ownerPubkey, privKey, publish) {
 	cachedOwnerPubkey = ownerPubkey;
+	cachedPrivKey = privKey;
+	cachedPublish = publish;
 	cachedDeviceId = await getOrCreateDeviceId();
 	const initialCounter = await loadFilesClockValue(ownerPubkey);
 	lamportClock = createLamportClock(initialCounter);
@@ -77,11 +117,56 @@ export async function initFiles(ownerPubkey) {
 	currentFolderId.value = ROOT_ID;
 	undoStack = createUndoStack();
 	canUndo.value = false;
+
+	// Подтягиваем весь ранее накопленный сетевой журнал СРАЗУ при открытии
+	// экрана (не ждём живого onEvent) — если privKey ещё недоступен (не
+	// должно случаться в норме, но initFiles не обязан на это полагаться),
+	// пропускаем без падения.
+	if (privKey) await rebuildFilesLog(ownerPubkey, privKey);
 }
 
 async function applyAndPersist(ops) {
 	treeState.value = merge(treeState.value, ops);
 	await saveTreeState(cachedOwnerPubkey, treeState.value);
+	queueForPublish(ops);
+}
+
+// Фолд сетевого журнала (CONTRACTS.md/DESIGN.md, этап 53 И5, задача 5.3).
+// Ленивая активация — осознанное отличие от rebuildUiSettings/rebuildGroups
+// (те вызываются из ГЛОБАЛЬНОГО bootstrap независимо от экрана): дерево
+// файлов не отображается нигде, кроме самого экрана "Файлы", поэтому
+// no-op, если initFiles ещё не вызывался ДЛЯ ЭТОГО owner в этой сессии —
+// не тратим цикл на 100% no-op для тех, кто ни разу не открывал "Файлы".
+export async function rebuildFilesLog(ownerPubkey, privKey) {
+	if (cachedOwnerPubkey !== ownerPubkey) return;
+
+	const rows = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_FILES_OP]).toArray();
+	const allOps = [];
+	let maxCounter = 0;
+	for (const row of rows) {
+		try {
+			const ops = parseFilesLogEvent(row, privKey);
+			for (const op of ops) {
+				allOps.push(op);
+				if (op.label && op.label.counter > maxCounter) maxCounter = op.label.counter;
+			}
+		} catch {
+			// Повреждённое/нерасшифровываемое событие — пропустить, не ронять
+			// фолд остальных валидных (тот же приём, что getChunk/getRange И4:
+			// одна испорченная единица не портит весь результат).
+		}
+	}
+	if (allOps.length === 0) return;
+
+	// ОДИН merge на ВСЮ пачку, ОДИН saveTreeState — I-BATCH (тот же инвариант,
+	// что 2.7/3.9), не по одному пересчёту на событие.
+	treeState.value = merge(treeState.value, allOps);
+	await saveTreeState(ownerPubkey, treeState.value);
+
+	if (lamportClock) {
+		lamportClock.receive(maxCounter);
+		await saveFilesClockValue(ownerPubkey, lamportClock.getValue());
+	}
 }
 
 function randomNodeId() {

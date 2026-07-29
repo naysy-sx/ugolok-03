@@ -39,6 +39,7 @@ import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
+import { rebuildFilesLog } from "./files.js";
 import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/content/channel-read-status.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { drain } from "../../core/store/outbox.js";
@@ -414,6 +415,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 				await reconcileContactsFromEventLog(pubkeyHex);
 				await rebuildGroups(pubkeyHex, privKey, dbKey);
 				await rebuildEffectivePermissions(pubkeyHex, privKey);
+				// Этап 53 И5 (задача 5.3) — живой фолд журнала операций дерева
+				// файлов. Безопасный no-op, если экран "Файлы" ни разу не
+				// открывался в этой сессии (CONTRACTS.md — ленивая активация,
+				// осознанное отличие от трёх вызовов выше).
+				await rebuildFilesLog(pubkeyHex, privKey);
 			}
 		},
 	});
