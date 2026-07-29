@@ -229,6 +229,35 @@ db.version(18).stores({
   files_keys: "[ownerPubkey+digest], ownerPubkey"
 });
 
+// Этап 53 И6 (CONTRACTS.md/DESIGN.md) — шаринг и монтирование, по прямому
+// образцу channelKeys/channelKeyMeta/channelReaders (этапы 30/33).
+// files_shares/files_shareKeys — ownerPubkey ЗДЕСЬ означает "владелец
+// ДОЛИ" (тот, кто расшарил); зашифрованы dbKey, тот же приём, что
+// files_keys (subtreeKey — чувствительный симметричный ключ).
+// files_shareGrantees — список текущих читателей доли, НЕ шифруется
+// (тот же прецедент, что channelReaders — "голые" pubkey-списки, не
+// Tier-чувствительны).
+//
+// Сторона ПОЛУЧАТЕЛЯ (mount.js) — ownerPubkey в таблицах ниже означает
+// ПОЛУЧАТЕЛЯ, не владельца доли. files_mounts (уже объявлена, version(17))
+// хранит саму запись Mount (owner/rootId/currentVersion). files_mountKeys —
+// СВОЯ копия ключей по версиям (получатель может накопить НЕСКОЛЬКО версий:
+// revoke ДРУГОГО читателя той же доли ротирует ключ и переиздаёт ЭТОМУ
+// получателю тоже — та же форма, что files_shareKeys на стороне владельца).
+// files_mount_nodes — СОБСТВЕННОЕ CRDT-состояние смонтированной доли
+// (nodeId — узел-ссылка в ЕГО дереве, id — узел ВНУТРИ Mount.state),
+// по прямому образцу files_nodes (та же форма строки, тот же
+// nodeToRow/rowToNode) — НЕ смешивается с files_nodes того же владельца
+// (ALGO.MD §4.3: "исчезает как класс" открытая задача частичной видимости
+// именно потому, что состояния разделены).
+db.version(19).stores({
+  files_shares: "[ownerPubkey+nodeId], ownerPubkey",
+  files_shareKeys: "[ownerPubkey+nodeId+version], [ownerPubkey+nodeId]",
+  files_shareGrantees: "[ownerPubkey+nodeId+granteePubkey], [ownerPubkey+nodeId]",
+  files_mountKeys: "[ownerPubkey+nodeId+version], [ownerPubkey+nodeId]",
+  files_mount_nodes: "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

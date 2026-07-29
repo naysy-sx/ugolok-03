@@ -12,6 +12,13 @@ export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId"];
 
 export const CHANNEL_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion"];
 
+// Этап 53 И6 — по прямому образцу CHANNEL_KEYS/CHANNEL_KEY_META выше.
+export const FILES_SHARES_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId"];
+export const FILES_SHARE_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId", "version"];
+// Сторона получателя (mount.js) — ownerPubkey здесь означает получателя.
+export const FILES_MOUNTS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId"];
+export const FILES_MOUNT_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId", "version"];
+
 export const COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion"];
 
 // Этап 40 (Tier 1 — прямая находка пользователя, CONTRACTS.md).
