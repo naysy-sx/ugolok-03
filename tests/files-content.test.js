@@ -101,6 +101,19 @@ test("putStream: манифест содержит по одному дайдж�
 	assert.notEqual(manifest.keyId, Buffer.from(fileKey).toString("hex"), "keyId — непрозрачная ссылка, не сам ключ");
 });
 
+test("putStream: fileKey-оверрайд используется ВМЕСТО случайного (этап 53 И6, задача 6.6b — файлы доли шифруются производным ключом)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(2000);
+	crypto.getRandomValues(original);
+	const overrideKey = crypto.getRandomValues(new Uint8Array(32));
+
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "application/octet-stream", chunkSize: 400, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl, fileKey: overrideKey });
+
+	assert.deepEqual(fileKey, overrideKey, "putStream возвращает ИМЕННО переданный ключ, не подменяет его");
+	const got = await getRange(manifest, overrideKey, 0, original.length, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(got, original, "содержимое реально зашифровано ПЕРЕДАННЫМ ключом, не случайным");
+});
+
 test("getManifest: подменённый манифест на сервере — отклонён по digest (тот же приём, что downloadAttachment)", async () => {
 	const { fetchImpl, store } = makeFakeBlossom();
 	const original = new Uint8Array(500);

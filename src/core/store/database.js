@@ -258,6 +258,19 @@ db.version(19).stores({
   files_mount_nodes: "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
 });
 
+// Этап 53 И6, задача 6.6b (CONTRACTS.md) — сайдкар для деривации fileKey
+// файлов ВНУТРИ доли. plaintextDigest едет ТРАНЗИТНО в create-опе
+// (encryptSubtreeOp, уже зашифрованный канал) — tree.js's Node-тип его не
+// хранит (applyOp/mkNode его не читают, контракт И1 не меняется), поэтому
+// получателю нужно ОТДЕЛЬНОЕ место, иначе deriveShareFileKey нечем будет
+// вызвать при следующем открытии приложения. НЕ шифруется — тот же
+// прецедент, что files_mount_nodes (version(19) выше): структурные
+// метаданные дерева доли в этой сессии не шифруются целиком, plaintextDigest
+// без subtreeKey доступа к содержимому не даёт.
+db.version(20).stores({
+  files_mount_file_meta: "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

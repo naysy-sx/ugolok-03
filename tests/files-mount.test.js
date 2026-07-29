@@ -2,13 +2,15 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { sign } from "../src/core/crypto/sign.js";
 import { generateSubtreeKey, encryptShareGrant, encryptSubtreeOp } from "../src/core/crypto/share-key.js";
 import { FILE_SUBTREE_OP_KIND, snapshotSubtree } from "../src/domain/files/share.js";
-import { mount, applyMountSubtreeEvent, unmount } from "../src/domain/files/mount.js";
-import { loadMount, loadMountState } from "../src/domain/files/store.js";
+import { mount, applyMountSubtreeEvent, unmount, resolveMountFileKey } from "../src/domain/files/mount.js";
+import { loadMount, loadMountState, saveFileKey } from "../src/domain/files/store.js";
+import { putStream, getManifest, getRange } from "../src/domain/files/content.js";
 import { createInitialState, applyOp, project, liveChildrenOf, ROOT_ID } from "../src/domain/files/tree.js";
 import { createFolder, createFile } from "../src/domain/files/ops.js";
 
@@ -31,40 +33,86 @@ beforeEach(async () => {
 	await db.table("files_mounts").clear();
 	await db.table("files_mountKeys").clear();
 	await db.table("files_mount_nodes").clear();
+	await db.table("files_mount_file_meta").clear();
 	await db.table("files_nodes").clear();
+	await db.table("files_keys").clear();
 	counter = 0;
 });
 
-// Владелец расшаривает "Shared" (A.txt + Sub/B.txt), возвращает грант-событие
-// (адресованное Alice) и снимок-событие (FILE_SUBTREE_OP_KIND), как их
-// увидела бы Alice — прямое переиспользование share.js's snapshotSubtree.
-function buildShareGrantAndSnapshot() {
+const dbKey = crypto.getRandomValues(new Uint8Array(32));
+
+function makeFakeBlossom() {
+	const store = new Map();
+	async function sha256Hex(bytes) {
+		return bytesToHex(sha256(bytes));
+	}
+	const fetchImpl = async (url, opts = {}) => {
+		if (opts.method === "PUT") {
+			const body = new Uint8Array(opts.body);
+			const digest = await sha256Hex(body);
+			store.set(digest, body);
+			return { ok: true, status: 200, json: async () => ({ sha256: digest, size: body.length }), text: async () => "" };
+		}
+		const parts = url.split("/");
+		const key = parts[parts.length - 1];
+		const bytes = store.get(key);
+		if (!bytes) return { ok: false, status: 404, text: async () => "not found" };
+		if (opts.headers?.Range) {
+			const m = /bytes=(\d+)-(\d+)/.exec(opts.headers.Range);
+			const start = Number(m[1]);
+			const end = Number(m[2]);
+			const slice = bytes.subarray(start, end + 1);
+			return { ok: true, status: 206, arrayBuffer: async () => slice.buffer.slice(slice.byteOffset, slice.byteOffset + slice.byteLength) };
+		}
+		return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+	};
+	return { fetchImpl };
+}
+
+const netOpts = (fetchImpl) => ({ serverUrl: "https://blossom.test", privateKey: OWNER_PRIV, fetchImpl });
+
+// Владелец расшаривает "Shared" (A.txt + Sub/B.txt, реально залитые на
+// фейковый Blossom), возвращает грант-событие (адресованное Alice) и
+// снимок-событие (FILE_SUBTREE_OP_KIND), как их увидела бы Alice — прямое
+// переиспользование share.js's snapshotSubtree (6.6b: снимок честно
+// перезаливает файлы под производным ключом, поэтому нужен реальный сервер).
+async function buildShareGrantAndSnapshot(fetchImpl) {
 	let S = createInitialState();
 	const rootId = "n-shared";
 	S = applyOp(S, createFolder(S, ROOT_ID, "Shared", rootId, label()));
+
+	const bytesA = new Uint8Array(200);
+	crypto.getRandomValues(bytesA);
+	const { manifestDigest: digestA, fileKey: fileKeyA } = await putStream(bytesA, { ...netOpts(fetchImpl), name: "A.txt", mime: "text/plain" });
+	await saveFileKey(OWNER_PUB, dbKey, digestA, fileKeyA);
 	const fileA = "n-a";
-	S = applyOp(S, createFile(S, rootId, "A.txt", fileA, "digest-a", label()));
+	S = applyOp(S, createFile(S, rootId, "A.txt", fileA, digestA, label()));
+
 	const sub = "n-sub";
 	S = applyOp(S, createFolder(S, rootId, "Sub", sub, label()));
+
+	const bytesB = new Uint8Array(200);
+	crypto.getRandomValues(bytesB);
+	const { manifestDigest: digestB, fileKey: fileKeyB } = await putStream(bytesB, { ...netOpts(fetchImpl), name: "B.txt", mime: "text/plain" });
+	await saveFileKey(OWNER_PUB, dbKey, digestB, fileKeyB);
 	const fileB = "n-b";
-	S = applyOp(S, createFile(S, sub, "B.txt", fileB, "digest-b", label()));
+	S = applyOp(S, createFile(S, sub, "B.txt", fileB, digestB, label()));
 
 	const version = 1;
 	const subtreeKeyHex = bytesToHex(generateSubtreeKey());
 	const grantContent = encryptShareGrant(rootId, subtreeKeyHex, version, OWNER_PRIV, ALICE_PUB);
 	const grantEvent = sign({ kind: 30075, content: grantContent, tags: [["d", "irrelevant"], ["p", ALICE_PUB]], created_at: 1 }, OWNER_PRIV);
 
-	const snapshotOps = snapshotSubtree(S, rootId, label());
+	const snapshotOps = await snapshotSubtree(OWNER_PUB, dbKey, S, rootId, subtreeKeyHex, label(), netOpts(fetchImpl));
 	const snapshotContent = encryptSubtreeOp(JSON.stringify(snapshotOps), subtreeKeyHex, version);
 	const snapshotEvent = sign({ kind: FILE_SUBTREE_OP_KIND, content: snapshotContent, tags: [["h", rootId]], created_at: 2 }, OWNER_PRIV);
 
-	return { rootId, version, subtreeKeyHex, grantEvent, snapshotEvent, fileA, sub, fileB };
+	return { rootId, version, subtreeKeyHex, grantEvent, snapshotEvent, fileA, bytesA, sub, fileB, bytesB };
 }
 
-const dbKey = crypto.getRandomValues(new Uint8Array(32));
-
 test("mount: создаёт узел-ссылку в дереве получателя, сохраняет запись mounts/mountKeys, Mount.state стартует пустым", async () => {
-	const { rootId, version, grantEvent } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { rootId, version, grantEvent } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 
 	const result = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-1", label());
@@ -84,7 +132,8 @@ test("mount: создаёт узел-ссылку в дереве получат
 });
 
 test("mount: PreconditionError при коллизии имени в дереве получателя — DB не тронута", async () => {
-	const { grantEvent } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	recipientTree = applyOp(recipientTree, createFolder(recipientTree, ROOT_ID, "Уже занято", "n-existing", label()));
 
@@ -96,7 +145,8 @@ test("mount: PreconditionError при коллизии имени в дерев�
 });
 
 test("applyMountSubtreeEvent: разбирает снимок, Mount.state получает ВСЕ живые узлы доли, project() работает буквально как над обычным treeState", async () => {
-	const { grantEvent, snapshotEvent, fileA, sub, fileB } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent, snapshotEvent, fileA, sub, fileB } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-3", label());
 	recipientTree = treeState;
@@ -117,7 +167,8 @@ test("applyMountSubtreeEvent: разбирает снимок, Mount.state по�
 });
 
 test("applyMountSubtreeEvent: неизвестная версия ключа -> null, Mount.state не меняется (грант ещё не пришёл/уже отозван до неё)", async () => {
-	const { grantEvent } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-4", label());
 	recipientTree = treeState;
@@ -134,7 +185,8 @@ test("applyMountSubtreeEvent: неизвестная версия ключа -> 
 });
 
 test("Mount.state НЕ делит узлы с files_nodes того же получателя (owner-scoping)", async () => {
-	const { grantEvent, snapshotEvent } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent, snapshotEvent } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	recipientTree = applyOp(recipientTree, createFolder(recipientTree, ROOT_ID, "Своя папка", "n-own-folder", label()));
 	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-5", label());
@@ -152,8 +204,9 @@ test("Mount.state НЕ делит узлы с files_nodes того же полу
 	assert.ok(!mountIds.has("n-own-folder"), "своё дерево получателя не должно попасть в Mount.state");
 });
 
-test("unmount: purge узла-ссылки в дереве получателя, удаляет mounts/mountKeys/Mount.state целиком", async () => {
-	const { grantEvent, snapshotEvent } = buildShareGrantAndSnapshot();
+test("unmount: purge узла-ссылки в дереве получателя, удаляет mounts/mountKeys/Mount.state/file_meta целиком", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent, snapshotEvent } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-6", label());
 	recipientTree = treeState;
@@ -169,10 +222,13 @@ test("unmount: purge узла-ссылки в дереве получателя,
 	assert.equal(keyRows.length, 0);
 	const stateRows = await db.table("files_mount_nodes").where("[ownerPubkey+mountId]").equals([ALICE_PUB, "n-mount-6"]).toArray();
 	assert.equal(stateRows.length, 0);
+	const metaRows = await db.table("files_mount_file_meta").where("[ownerPubkey+mountId]").equals([ALICE_PUB, "n-mount-6"]).toArray();
+	assert.equal(metaRows.length, 0);
 });
 
 test("project() над Mount.state — та же проекция, что над эквивалентным treeState, построенным напрямую через ops.js (Mount.state буквально TreeState)", async () => {
-	const { grantEvent, snapshotEvent, fileA, sub, fileB } = buildShareGrantAndSnapshot();
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent, snapshotEvent, fileA, sub, fileB } = await buildShareGrantAndSnapshot(fetchImpl);
 	let recipientTree = createInitialState();
 	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-7", label());
 	recipientTree = treeState;
@@ -189,4 +245,32 @@ test("project() над Mount.state — та же проекция, что над
 	assert.equal(R1.nodes.get(fileA).parent, R2.nodes.get(fileA).parent);
 	assert.equal(R1.nodes.get(sub).parent, R2.nodes.get(sub).parent);
 	assert.equal(R1.nodes.get(fileB).parent, R2.nodes.get(fileB).parent);
+});
+
+test("resolveMountFileKey: пересчитывает fileKey файла ВНУТРИ доли, получатель реально расшифровывает содержимое (этап 53 И6, задача 6.6b)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent, snapshotEvent, fileA, bytesA } = await buildShareGrantAndSnapshot(fetchImpl);
+	let recipientTree = createInitialState();
+	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-8", label());
+	recipientTree = treeState;
+	const mountState = await applyMountSubtreeEvent(ALICE_PUB, dbKey, "n-mount-8", snapshotEvent);
+
+	const fileKey = await resolveMountFileKey(ALICE_PUB, dbKey, "n-mount-8", fileA);
+	assert.ok(fileKey, "ключ должен пересчитаться — сайдкар сохранён applyMountSubtreeEvent");
+
+	const node = mountState.nodes.get(fileA);
+	const manifest = await getManifest(node.blob, netOpts(fetchImpl));
+	const roundtrip = await getRange(manifest, fileKey, 0, manifest.size, netOpts(fetchImpl));
+	assert.deepEqual(roundtrip, bytesA, "Alice реально расшифровывает содержимое доли БЕЗ отдельного гранта на файл");
+});
+
+test("resolveMountFileKey: узел без сайдкара (никогда не приходил снимок) -> undefined, не throw", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { grantEvent } = await buildShareGrantAndSnapshot(fetchImpl);
+	let recipientTree = createInitialState();
+	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "Друг: Shared", "n-mount-9", label());
+	recipientTree = treeState;
+
+	const fileKey = await resolveMountFileKey(ALICE_PUB, dbKey, "n-mount-9", "n-never-seen");
+	assert.equal(fileKey, undefined);
 });

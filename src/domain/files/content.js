@@ -22,8 +22,13 @@ export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — р�
 // следующий проход (замечено ALGO.MD §9.3: "файл целиком в память не читается
 // никогда" — здесь это НЕ соблюдено буквально для v0.1 первого прохода;
 // явно фиксирую как сужение, не как решённое требование НФ-бюджета И2).
-export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl } = {}) {
-	const fileKey = generateFileKey();
+// fileKey — необязательный оверрайд (этап 53 И6, задача 6.6b): файлы
+// ВНУТРИ доли шифруются ключом, ПРОИЗВОДНЫМ от subtreeKey (share.js/
+// move-routing.js), не случайным — иначе получатель не смог бы
+// независимо его пересчитать. Без оверрайда — поведение НЕ меняется
+// (случайный ключ, как раньше).
+export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl, fileKey: overrideFileKey } = {}) {
+	const fileKey = overrideFileKey ?? generateFileKey();
 	const size = bytes.length;
 	const { count, lastChunkSize } = planChunks(size, chunkSize);
 

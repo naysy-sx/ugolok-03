@@ -5,10 +5,22 @@
 // ("сходимость R не доказана для наблюдателя с частичной видимостью")
 // не применяется к получателю доли — доказательство см. DESIGN.md, этап
 // 53 И6, п.3.
-import { decryptShareGrant, decryptSubtreeOp } from "../../core/crypto/share-key.js";
+import { decryptShareGrant, decryptSubtreeOp, peekSubtreeOpVersion, deriveShareFileKey } from "../../core/crypto/share-key.js";
 import { createFolder, purge } from "./ops.js";
 import { applyOp, createInitialState } from "./tree.js";
-import { saveMount, deleteMount, saveMountKey, getAllMountKeys, deleteAllMountKeys, saveMountState, loadMountState, deleteMountState } from "./store.js";
+import {
+	saveMount,
+	deleteMount,
+	saveMountKey,
+	getAllMountKeys,
+	deleteAllMountKeys,
+	saveMountState,
+	loadMountState,
+	deleteMountState,
+	saveMountFileMeta,
+	getMountFileMeta,
+	deleteMountFileMeta,
+} from "./store.js";
 
 // mount(): расшифровывает грант (event — сырое FILE_SHARE_GRANT_KIND
 // событие, event.pubkey — владелец доли, отправитель), создаёт узел-ссылку
@@ -50,13 +62,40 @@ export async function applyMountSubtreeEvent(recipientPubkey, dbKey, mountId, ev
 	const opsJson = decryptSubtreeOp(event.content, subtreeKeysByVersion);
 	if (opsJson === null) return null;
 
+	// Версия, которая ФАКТИЧЕСКИ расшифровала событие (6.6b) — decryptSubtreeOp
+	// её не возвращает, читаем заголовок отдельно (peekSubtreeOpVersion, без
+	// повторной расшифровки) — нужна, чтобы пометить сайдкар ПРАВИЛЬНОЙ
+	// эпохой subtreeKey (не обязательно текущей — revoke ротирует вперёд,
+	// старые файлы остаются производными от СВОЕЙ эпохи).
+	const matchedVersion = peekSubtreeOpVersion(event.content);
+
 	const ops = JSON.parse(opsJson);
 	let S = await loadMountState(recipientPubkey, mountId);
 	for (const op of ops) {
 		S = applyOp(S, op);
+		if (op.type === "create" && op.kind === "file" && op.plaintextDigest) {
+			await saveMountFileMeta(recipientPubkey, mountId, op.id, op.plaintextDigest, matchedVersion);
+		}
 	}
 	await saveMountState(recipientPubkey, mountId, S);
 	return S;
+}
+
+// Готовый resolveFileKey-резолвер (6.6, saveToOwn; будущий просмотр/плеер
+// доли, 6.7) — читает сайдкар (plaintextDigest + версия, ЧЕМ был
+// зашифрован ИМЕННО ЭТОТ файл, не обязательно текущая версия mount'а),
+// берёт subtreeKey ТОЙ ЖЕ версии, пересчитывает fileKey (DESIGN.md 6.6b —
+// детерминированная деривация, получатель ничего не спрашивает у сети).
+// undefined — файл ещё не пришёл (плейнтекст-дайджест неизвестен) ИЛИ его
+// версия ключа не сохранена (грант не покрывает эту эпоху) — рутинный
+// случай, не throw, тот же принцип, что decryptSubtreeOp.
+export async function resolveMountFileKey(recipientPubkey, dbKey, mountId, nodeId) {
+	const meta = await getMountFileMeta(recipientPubkey, mountId, nodeId);
+	if (!meta) return undefined;
+	const subtreeKeysByVersion = await getAllMountKeys(recipientPubkey, mountId, dbKey);
+	const subtreeKeyHex = subtreeKeysByVersion[meta.version];
+	if (subtreeKeyHex === undefined) return undefined;
+	return deriveShareFileKey(subtreeKeyHex, meta.plaintextDigest);
 }
 
 // unmount(): удаляет узел-ссылку ОБЫЧНЫМ purge (как любой узел получателя —
@@ -69,6 +108,7 @@ export async function unmount(recipientPubkey, dbKey, treeState, mountId) {
 	await deleteMount(recipientPubkey, mountId);
 	await deleteAllMountKeys(recipientPubkey, mountId);
 	await deleteMountState(recipientPubkey, mountId);
+	await deleteMountFileMeta(recipientPubkey, mountId);
 
 	return newTreeState;
 }

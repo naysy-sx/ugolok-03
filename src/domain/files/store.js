@@ -249,3 +249,22 @@ export async function loadMountState(ownerPubkey, mountId) {
 export async function deleteMountState(ownerPubkey, mountId) {
 	await db.table("files_mount_nodes").where("[ownerPubkey+mountId]").equals([ownerPubkey, mountId]).delete();
 }
+
+// Сайдкар для деривации fileKey файлов ВНУТРИ доли (CONTRACTS.md/DESIGN.md,
+// этап 53 И6, задача 6.6b) — plaintextDigest едет транзитно в create-опе,
+// tree.js's Node его не хранит (mkNode его не читает), поэтому получателю
+// нужно ОТДЕЛЬНОЕ место. version — версия subtreeKey, которая расшифровала
+// СОБЫТИЕ с этим опом (peekSubtreeOpVersion, share-key.js) — НЕ обязательно
+// текущая версия mount'а (revoke ротирует ключ вперёд, старые файлы
+// остаются производными от СВОЕЙ эпохи).
+export async function saveMountFileMeta(ownerPubkey, mountId, nodeId, plaintextDigest, version) {
+	await db.table("files_mount_file_meta").put({ ownerPubkey, mountId, id: nodeId, plaintextDigest, version });
+}
+
+export async function getMountFileMeta(ownerPubkey, mountId, nodeId) {
+	return db.table("files_mount_file_meta").get([ownerPubkey, mountId, nodeId]);
+}
+
+export async function deleteMountFileMeta(ownerPubkey, mountId) {
+	await db.table("files_mount_file_meta").where("[ownerPubkey+mountId]").equals([ownerPubkey, mountId]).delete();
+}

@@ -8,6 +8,8 @@ import {
 	decryptShareGrant,
 	encryptSubtreeOp,
 	decryptSubtreeOp,
+	peekSubtreeOpVersion,
+	deriveShareFileKey,
 } from "../src/core/crypto/share-key.js";
 
 const OWNER_PRIV = new Uint8Array(32).fill(1);
@@ -70,4 +72,33 @@ test("decryptSubtreeOp: отозванный читатель (только эп
 	const keyV2 = bytesToHex(generateSubtreeKey());
 	const contentV2 = encryptSubtreeOp("операция после revoke", keyV2, 2);
 	assert.equal(decryptSubtreeOp(contentV2, { 1: keyV1 }), null);
+});
+
+test("peekSubtreeOpVersion: читает версию из заголовка БЕЗ расшифровки, даже с заведомо неверным ключом карты", () => {
+	const keyHex = bytesToHex(generateSubtreeKey());
+	const content = encryptSubtreeOp("x", keyHex, 42);
+	assert.equal(peekSubtreeOpVersion(content), 42);
+});
+
+test("deriveShareFileKey: детерминирована — тот же (subtreeKey, plaintextDigest) даёт тот же fileKey", () => {
+	const subtreeKeyHex = bytesToHex(generateSubtreeKey());
+	const digest = "aa".repeat(32);
+	const a = deriveShareFileKey(subtreeKeyHex, digest);
+	const b = deriveShareFileKey(subtreeKeyHex, digest);
+	assert.equal(a.length, 32);
+	assert.deepEqual(a, b);
+});
+
+test("deriveShareFileKey: разный plaintextDigest -> разный fileKey (компрометация одного файла не раскрывает остальные)", () => {
+	const subtreeKeyHex = bytesToHex(generateSubtreeKey());
+	const a = deriveShareFileKey(subtreeKeyHex, "aa".repeat(32));
+	const b = deriveShareFileKey(subtreeKeyHex, "bb".repeat(32));
+	assert.notDeepEqual(a, b);
+});
+
+test("deriveShareFileKey: разный subtreeKey (другая доля/эпоха) -> разный fileKey при том же digest", () => {
+	const digest = "aa".repeat(32);
+	const a = deriveShareFileKey(bytesToHex(generateSubtreeKey()), digest);
+	const b = deriveShareFileKey(bytesToHex(generateSubtreeKey()), digest);
+	assert.notDeepEqual(a, b);
 });

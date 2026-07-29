@@ -5,11 +5,13 @@
 // CONTRACTS.md): d-тег гранта ОБЯЗАН быть уникален на читателя+версию,
 // иначе второй читатель замещает грант первого на relay.
 import { sign } from "../../core/crypto/sign.js";
-import { generateSubtreeKey, encryptShareGrant, encryptSubtreeOp } from "../../core/crypto/share-key.js";
+import { generateSubtreeKey, encryptShareGrant, encryptSubtreeOp, deriveShareFileKey } from "../../core/crypto/share-key.js";
 import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { liveChildrenOf, ROOT_ID } from "./tree.js";
-import { loadShareMeta, saveShareMeta, saveShareKey, getShareKey, addShareGrantee, removeShareGrantee, listShareGrantees } from "./store.js";
+import { loadShareMeta, saveShareMeta, saveShareKey, getShareKey, addShareGrantee, removeShareGrantee, listShareGrantees, getFileKey } from "./store.js";
+import { getManifest, getRange, putStream } from "./content.js";
 
 export const FILE_SHARE_GRANT_KIND = 30075;
 // regular kind, journal операций расшаренного поддерева (CONTRACTS.md,
@@ -17,19 +19,45 @@ export const FILE_SHARE_GRANT_KIND = 30075;
 // "#channel" не индексируется).
 export const FILE_SUBTREE_OP_KIND = 3008;
 
+// Честная перезаливка файла ПОД КЛЮЧОМ, ПРОИЗВОДНЫМ от subtreeKey
+// (CONTRACTS.md/DESIGN.md, этап 53 И6, задача 6.6b — закрытие находки
+// 6.6): владелец расшифровывает СВОЙ блоб СВОИМ ключом (files_keys, как
+// обычно), пересчитывает дайджест ОТКРЫТОГО текста (нужен как info для
+// HKDF — дайджест ШИФРОТЕКСТА появился бы только ПОСЛЕ шифрования,
+// циркулярность), заливает ЗАНОВО под производным ключом. Новый
+// manifestDigest НЕ совпадает со старым (владельца) — читатель никогда
+// не видит блоб владельца напрямую.
+export async function reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, opts) {
+	const ownerFileKey = await getFileKey(ownerPubkey, dbKey, node.blob);
+	const manifest = await getManifest(node.blob, opts);
+	const plaintext = await getRange(manifest, ownerFileKey, 0, manifest.size, opts);
+	const plaintextDigest = bytesToHex(sha256(plaintext));
+	const derivedKey = deriveShareFileKey(subtreeKeyHex, plaintextDigest);
+	const { manifestDigest } = await putStream(plaintext, { ...opts, name: node.name.value, mime: manifest.mime, fileKey: derivedKey });
+	return { blob: manifestDigest, plaintextDigest };
+}
+
 // Текущее содержимое nodeId (рекурсивно, только живые узлы) как пачка
 // синтетических create-операций для Mount.state НОВОГО читателя (CONTRACTS.md
 // 6.1: "снимок ОДИН РАЗ..., не переигровка сырых операций"). Прямые дети
 // nodeId получают parentId=ROOT_ID (виртуальный корень доли — Mount.state
 // использует ТУ ЖЕ tree.js-машинерию, у которой ROOT_ID жёстко "$root");
 // более глубокие потомки сохраняют СВОИ реальные id/parentId без изменений.
-export function snapshotSubtree(treeState, nodeId, label) {
+// Файлы (kind:"file") честно перезаливаются (reuploadUnderShareKey выше) —
+// op несёт NОВЫЙ blob + plaintextDigest (транзитное поле, только для
+// файлов, tree.js's applyOp его игнорирует). Папки — как раньше, без I/O.
+export async function snapshotSubtree(ownerPubkey, dbKey, treeState, nodeId, subtreeKeyHex, label, opts = {}) {
 	const ops = [];
 	const stack = [...liveChildrenOf(treeState, nodeId)].map((id) => ({ id, parentId: ROOT_ID }));
 	while (stack.length > 0) {
 		const { id, parentId } = stack.pop();
 		const node = treeState.nodes.get(id);
-		ops.push({ type: "create", id, kind: node.kind, blob: node.blob, parentId, name: node.name.value, origin: node.origin.value, label });
+		if (node.kind === "file") {
+			const { blob, plaintextDigest } = await reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, opts);
+			ops.push({ type: "create", id, kind: "file", blob, parentId, name: node.name.value, origin: node.origin.value, label, plaintextDigest });
+		} else {
+			ops.push({ type: "create", id, kind: node.kind, blob: null, parentId, name: node.name.value, origin: node.origin.value, label });
+		}
 		for (const childId of liveChildrenOf(treeState, id)) {
 			stack.push({ id: childId, parentId: id });
 		}
@@ -78,7 +106,7 @@ async function sendShareGrant(ownerPubkey, ownerPrivKey, nodeId, subtreeKeyHex, 
 // избыточен для СТАРЫХ читателей (тот же снимок ещё раз), но безвреден —
 // merge() идемпотентен, "рутина, не квадратично" (n мал для этого класса
 // операции — расшаривание, не массовая загрузка).
-export async function share(ownerPubkey, ownerPrivKey, dbKey, treeState, nodeId, pubkeys, label, publish) {
+export async function share(ownerPubkey, ownerPrivKey, dbKey, treeState, nodeId, pubkeys, label, publish, opts = {}) {
 	let meta = await loadShareMeta(ownerPubkey, nodeId, dbKey);
 	let version;
 	let subtreeKeyHex;
@@ -102,7 +130,7 @@ export async function share(ownerPubkey, ownerPrivKey, dbKey, treeState, nodeId,
 	}
 
 	if (newlyGranted.length > 0) {
-		const snapshotOps = snapshotSubtree(treeState, nodeId, label);
+		const snapshotOps = await snapshotSubtree(ownerPubkey, dbKey, treeState, nodeId, subtreeKeyHex, label, opts);
 		await publishSubtreeOps(ownerPrivKey, nodeId, subtreeKeyHex, version, snapshotOps, publish);
 	}
 	return { nodeId, version };

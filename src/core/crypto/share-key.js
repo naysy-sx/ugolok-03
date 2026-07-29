@@ -1,5 +1,7 @@
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { concatBytes } from "@noble/ciphers/utils.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "./nip44.js";
 
@@ -75,4 +77,23 @@ export function decryptSubtreeOp(base64Content, subtreeKeysByVersion) {
 	const ciphertext = bytes.subarray(16);
 	const plaintextBytes = chacha20poly1305(key, nonce).decrypt(ciphertext);
 	return new TextDecoder().decode(plaintextBytes);
+}
+
+// Читает ТОЛЬКО заголовок конверта (версия), без расшифровки — decryptSubtreeOp
+// не возвращает версию, которая ФАКТИЧЕСКИ расшифровала (нужна mount.js,
+// чтобы пометить сайдкар files_mount_file_meta правильной версией
+// subtreeKey, задача 53 И6 6.6b).
+export function peekSubtreeOpVersion(base64Content) {
+	const bytes = decodeBase64(base64Content);
+	return readUint32BE(bytes.subarray(0, 4));
+}
+
+// fileKey файла ВНУТРИ доли (CONTRACTS.md/DESIGN.md, этап 53 И6, задача
+// 6.6b) — HKDF, salt = домен-разделитель (константа), info = дайджест
+// ОТКРЫТОГО текста (per-file контекст — циркулярность с дайджестом
+// ШИФРОТЕКСТА разорвана: тот появляется только ПОСЛЕ шифрования, значит
+// не годится как вход в деривацию ключа ДЛЯ этого же шифрования).
+export function deriveShareFileKey(subtreeKeyHex, plaintextDigestHex) {
+	const subtreeKey = hexToBytes(subtreeKeyHex);
+	return hkdf(sha256, subtreeKey, utf8ToBytes("Ugolok/v1/share-file"), utf8ToBytes(plaintextDigestHex), 32);
 }

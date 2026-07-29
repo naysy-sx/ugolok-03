@@ -3,15 +3,21 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { putStream, getManifest } from "../src/domain/files/content.js";
+import { getPublicKey } from "../src/core/crypto/keys.js";
+import { sign } from "../src/core/crypto/sign.js";
+import { generateSubtreeKey, encryptShareGrant, encryptSubtreeOp } from "../src/core/crypto/share-key.js";
+import { putStream, getManifest, getRange } from "../src/domain/files/content.js";
 import { saveToOwn } from "../src/domain/files/save-to-own.js";
-import { createInitialState, applyOp, ROOT_ID, liveChildrenOf } from "../src/domain/files/tree.js";
+import { snapshotSubtree, FILE_SUBTREE_OP_KIND } from "../src/domain/files/share.js";
+import { mount, applyMountSubtreeEvent, resolveMountFileKey } from "../src/domain/files/mount.js";
+import { createInitialState, applyOp, ROOT_ID, liveChildrenOf, project } from "../src/domain/files/tree.js";
 import { createFolder, createFile } from "../src/domain/files/ops.js";
 import { db } from "../src/core/store/database.js";
-import { getFileKey } from "../src/domain/files/store.js";
+import { getFileKey, saveFileKey } from "../src/domain/files/store.js";
 
 const OWNER_PRIV = new Uint8Array(32).fill(9);
-const ALICE_PUB = bytesToHex(sha256(new Uint8Array(32).fill(10))); // произвольная "своя" pubkey, только для store-ключей
+const ALICE_PRIV = new Uint8Array(32).fill(11);
+const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
 
 let counter = 0;
 function label() {
@@ -194,4 +200,46 @@ test("saveToOwn: onProgress вызывается с filesDone/filesTotal по м
 	assert.equal(progressCalls.length, 2);
 	assert.deepEqual(progressCalls[0], { filesDone: 1, filesTotal: 2 });
 	assert.deepEqual(progressCalls[1], { filesDone: 2, filesTotal: 2 });
+});
+
+test("saveToOwn: полный пайплайн share() -> mount() -> applyMountSubtreeEvent() -> resolveMountFileKey() -> saveToOwn() — гап 6.6 закрыт end-to-end (этап 53 И6, задача 6.6b)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+
+	let ownerTree = createInitialState();
+	const sharedFolder = "n-e2e-shared";
+	ownerTree = applyOp(ownerTree, createFolder(ownerTree, ROOT_ID, "E2E", sharedFolder, label()));
+	const bytesOriginal = new Uint8Array(400);
+	crypto.getRandomValues(bytesOriginal);
+	const seeded = await seedOwnerFile(fetchImpl, bytesOriginal, "doc.bin");
+	const OWNER_PUB = bytesToHex(getPublicKey(OWNER_PRIV));
+	await saveFileKey(OWNER_PUB, dbKey, seeded.manifestDigest, seeded.fileKey);
+	const fileNodeId = "n-e2e-doc";
+	ownerTree = applyOp(ownerTree, createFile(ownerTree, sharedFolder, "doc.bin", fileNodeId, seeded.manifestDigest, label()));
+
+	const version = 1;
+	const subtreeKeyHex = bytesToHex(generateSubtreeKey());
+	const grantContent = encryptShareGrant(sharedFolder, subtreeKeyHex, version, OWNER_PRIV, ALICE_PUB);
+	const grantEvent = sign({ kind: 30075, content: grantContent, tags: [["d", "e2e"], ["p", ALICE_PUB]], created_at: 1 }, OWNER_PRIV);
+	const snapshotOps = await snapshotSubtree(OWNER_PUB, dbKey, ownerTree, sharedFolder, subtreeKeyHex, label(), { ...netOpts(), fetchImpl });
+	const snapshotContent = encryptSubtreeOp(JSON.stringify(snapshotOps), subtreeKeyHex, version);
+	const snapshotEvent = sign({ kind: FILE_SUBTREE_OP_KIND, content: snapshotContent, tags: [["h", sharedFolder]], created_at: 2 }, OWNER_PRIV);
+
+	let recipientTree = createInitialState();
+	const { treeState } = await mount(ALICE_PUB, ALICE_PRIV, dbKey, recipientTree, grantEvent, ROOT_ID, "От владельца: E2E", "n-e2e-mount", label());
+	recipientTree = treeState;
+	const mountState = await applyMountSubtreeEvent(ALICE_PUB, dbKey, "n-e2e-mount", snapshotEvent);
+
+	const destTree = createInitialState();
+	const newIds = new Map([[fileNodeId, "n-e2e-own-copy"]]);
+	const resolveFileKey = (node) => resolveMountFileKey(ALICE_PUB, dbKey, "n-e2e-mount", node.id);
+
+	const ops = await saveToOwn(ALICE_PUB, dbKey, mountState, fileNodeId, destTree, ROOT_ID, newIds, resolveFileKey, label(), { ...netOpts(), fetchImpl });
+
+	assert.equal(ops.length, 1);
+	assert.notEqual(ops[0].blob, seeded.manifestDigest, "своя копия — новый digest, не ссылка на блоб владельца");
+
+	const ownFileKey = await getFileKey(ALICE_PUB, dbKey, ops[0].blob);
+	const ownManifest = await getManifest(ops[0].blob, { ...netOpts(), fetchImpl });
+	const roundtrip = await getRange(ownManifest, ownFileKey, 0, ownManifest.size, { ...netOpts(), fetchImpl });
+	assert.deepEqual(roundtrip, bytesOriginal, "Alice владеет РАБОЧЕЙ копией целиком, независимо от владельца/доли");
 });
