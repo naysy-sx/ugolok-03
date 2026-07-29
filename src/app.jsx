@@ -12,7 +12,7 @@ import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
 import Files from "./ui/screens/files.jsx";
 import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
-import { publish } from "./ui/signals/transport.js";
+import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
 import { applyAccentColor } from "./ui/theme/accent-palette.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
@@ -81,6 +81,23 @@ function MainShell() {
 			applyThemeMode(loaded.themeMode);
 			setThemeMode(loaded.themeMode);
 		});
+	}, [ownerPubkey]);
+
+	// Найдено живой проверкой (этап 53-довесок): ensureConnected() вызывался
+	// только точечно изнутри отдельных экранов (Обзор/Контакты/Каналы/Чат/
+	// Профиль) — "Журнал"/"Файлы"/сам сайдбар соединение не инициировали
+	// вовсе. Пользователь, чей первый взгляд после логина/разблокировки
+	// приходится на один из этих экранов, видел "офлайн" и пустой
+	// профиль/список чатов, пока не переходил на "подключающий" экран —
+	// bootstrap (включая hydrateOwnProfile, kind 0/3/30050/…) не запускался.
+	// ensureConnected идемпотентен (см. transport.js — де-дуп по
+	// connectedForPubkey/connectPromise), поэтому безопасно вызвать его ещё
+	// раз здесь и ещё раз с каждого экрана ниже — повторные вызовы не
+	// пересоздают соединение. Ошибка — best-effort: ConnectionStatusPanel
+	// уже отражает connState реактивно, отдельный экран покажет её сам,
+	// если попытается что-то запросить без соединения.
+	useEffect(() => {
+		ensureConnected(ownerPubkey, privKey, dbKey).catch(() => {});
 	}, [ownerPubkey]);
 
 	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает
