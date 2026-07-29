@@ -42,6 +42,7 @@ import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-mem
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
+import FilePlayer from "../components/file-player.jsx";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
@@ -149,6 +150,7 @@ export default function Files() {
 	const [error, setError] = useState("");
 	const [searchInput, setSearchInput] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const [playingDigest, setPlayingDigest] = useState(null);
 	const containerRef = useRef(null);
 
 	useEffect(() => {
@@ -233,8 +235,9 @@ export default function Files() {
 		if (entry.kind === "dir") {
 			openFolder(entry.id);
 			setSelected(new Set());
+			return;
 		}
-		// Файлы: просмотр/плеер — задача И4, здесь пока не открываются кликом.
+		setPlayingDigest(entry.blob);
 	}
 
 	async function handleDelete(ids) {
@@ -313,6 +316,7 @@ export default function Files() {
 	if (!ready) return null;
 
 	return (
+		<>
 		<Screen
 			title="Файлы"
 			actions={
@@ -476,5 +480,7 @@ export default function Files() {
 				)}
 			</div>
 		</Screen>
+		{playingDigest && <FilePlayer digest={playingDigest} ownerPubkey={ownerPubkey} onClose={() => setPlayingDigest(null)} />}
+		</>
 	);
 }

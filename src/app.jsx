@@ -13,6 +13,7 @@ import Journal from "./ui/screens/journal.jsx";
 import Files from "./ui/screens/files.jsx";
 import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
+import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
 import { applyAccentColor } from "./ui/theme/accent-palette.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
@@ -99,6 +100,11 @@ function MainShell() {
 	useEffect(() => {
 		ensureConnected(ownerPubkey, privKey, dbKey).catch(() => {});
 	}, [ownerPubkey]);
+
+	// Этап 53 И4 (задача 4.1) — обработчик сообщений SW->страница для
+	// перехвата Range (CONTRACTS.md/DESIGN.md). Один раз на приложение,
+	// не завязан на ownerPubkey (реестр открытых файлов — player-bridge.js).
+	useEffect(() => startPlayerBridge(), []);
 
 	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает
 	// от ТЕКУЩЕЙ эффективной темы даже если пользователь ещё ни разу не выбирал

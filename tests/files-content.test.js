@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateFileKey, encryptChunk, decryptChunk, deriveChunkNonce } from "../src/domain/files/crypto.js";
-import { putStream, getManifest, getRange, DEFAULT_CHUNK_SIZE } from "../src/domain/files/content.js";
+import { putStream, getManifest, getRange, getChunk, DEFAULT_CHUNK_SIZE } from "../src/domain/files/content.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -150,4 +150,44 @@ test("deriveChunkNonce: детерминирован, различается п�
 
 test("DEFAULT_CHUNK_SIZE — 256 КБ (ALGO.MD §9.2, компромисс до замера)", () => {
 	assert.equal(DEFAULT_CHUNK_SIZE, 256 * 1024);
+});
+
+test("getChunk: чанк ЦЕЛИКОМ (не диапазон) совпадает с соответствующим срезом оригинала (этап 53 И4, задача 4.3)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(1000);
+	crypto.getRandomValues(original);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "application/octet-stream", chunkSize: 300, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+
+	// ceil(1000/300) = 4 чанка: [0,300) [300,600) [600,900) [900,1000) — последний короче.
+	const chunk0 = await getChunk(manifest, fileKey, 0, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(chunk0, original.subarray(0, 300));
+	const lastChunk = await getChunk(manifest, fileKey, 3, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(lastChunk, original.subarray(900, 1000));
+});
+
+test("getChunk: подменённый чанк на сервере — отклонён по digest, та же проверка, что getRange", async () => {
+	const { fetchImpl, store } = makeFakeBlossom();
+	const original = new Uint8Array(600);
+	crypto.getRandomValues(original);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "application/octet-stream", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+
+	const stored = store.get(manifest.blobSha256);
+	const corrupted = stored.slice();
+	corrupted[0] ^= 0xff;
+	store.set(manifest.blobSha256, corrupted);
+
+	await assert.rejects(() => getChunk(manifest, fileKey, 0, { serverUrl: "https://blossom.test", fetchImpl }), /подмен|digest/i);
+});
+
+test("getRange поверх getChunk: результат ИДЕНТИЧЕН прямой конкатенации getChunk по вычисленным границам (регрессия рефакторинга)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(2000);
+	crypto.getRandomValues(original);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "application/octet-stream", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+
+	const viaRange = await getRange(manifest, fileKey, 200, 400, { serverUrl: "https://blossom.test", fetchImpl });
+	const chunk0 = await getChunk(manifest, fileKey, 0, { serverUrl: "https://blossom.test", fetchImpl });
+	const chunk1 = await getChunk(manifest, fileKey, 1, { serverUrl: "https://blossom.test", fetchImpl });
+	const manual = new Uint8Array([...chunk0, ...chunk1]).subarray(200, 400);
+	assert.deepEqual(viaRange, manual);
 });

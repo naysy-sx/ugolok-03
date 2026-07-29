@@ -1,0 +1,113 @@
+import { useEffect, useState } from "preact/hooks";
+import { getManifest } from "../../domain/files/content.js";
+import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
+import { registerPlayerFile, unregisterPlayerFile } from "../../domain/files/player-bridge.js";
+import { getFileKeyFor } from "../signals/files.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+
+// Плеер (этап 53 И4, задача 4.4) — модалка по прецеденту image-modal.jsx
+// (этап 29: "модалка + кнопка закрыть", без lightbox-библиотеки). <video>/
+// <audio> нативные (тот же приём, что attachment-view.jsx) — src указывает
+// на СВОЙ same-origin virtual-путь, перехватываемый service worker'ом
+// (CONTRACTS.md/DESIGN.md), не на blob-URL: браузер сам шлёт Range по мере
+// перемотки, полный файл никогда не грузится разом.
+export default function FilePlayer({ digest, ownerPubkey, onClose }) {
+	const [manifest, setManifest] = useState(null);
+	const [error, setError] = useState("");
+
+	useEffect(() => {
+		function handleKeyDown(e) {
+			if (e.key === "Escape") onClose();
+		}
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [onClose]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		(async () => {
+			try {
+				let m = await getCachedManifest(ownerPubkey, digest);
+				if (!m) {
+					m = await getManifest(digest, { serverUrl: BLOSSOM_URL });
+					await putCachedManifest(ownerPubkey, digest, m);
+				}
+				const fileKey = await getFileKeyFor(digest);
+				if (cancelled) return;
+				if (!fileKey) {
+					setError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+					return;
+				}
+				// РЕГИСТРАЦИЯ ОБЯЗАНА завершиться ДО первого рендера <video>/<audio> с
+				// src (CONTRACTS.md/DESIGN.md "гонка 3") — иначе первый же запрос
+				// браузера придёт на ещё не зарегистрированный digest. setManifest
+				// (после register) — единственная точка, включающая рендер медиа-
+				// элемента, порядок гарантирован самим React/Preact-циклом рендера.
+				registerPlayerFile(digest, { manifest: m, fileKey, serverUrl: BLOSSOM_URL });
+				setManifest(m);
+			} catch (e) {
+				if (!cancelled) setError(e?.message || String(e));
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+			unregisterPlayerFile(digest);
+		};
+	}, [digest, ownerPubkey]);
+
+	const src = `/files-content/${digest}`;
+
+	return (
+		<div
+			role="dialog"
+			aria-modal="true"
+			aria-label="Плеер"
+			onClick={onClose}
+			style={{
+				position: "fixed",
+				inset: 0,
+				background: "rgba(0, 0, 0, 0.85)",
+				display: "flex",
+				alignItems: "center",
+				justifyContent: "center",
+				zIndex: 1000,
+				padding: "var(--space-m)",
+			}}
+		>
+			<div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "100%", maxHeight: "100%" }}>
+				{error && (
+					<p role="alert" style={{ color: "#fff", background: "var(--bad, oklch(0.58 0.21 25))", padding: "var(--space-s)", borderRadius: "var(--radius)" }}>
+						{error}
+					</p>
+				)}
+				{!error && !manifest && <p style={{ color: "#fff" }}>Загрузка…</p>}
+				{!error && manifest && manifest.mime?.startsWith("video/") && (
+					<video controls autoplay src={src} style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }} />
+				)}
+				{!error && manifest && manifest.mime?.startsWith("audio/") && <audio controls autoplay src={src} />}
+				{!error && manifest && !manifest.mime?.startsWith("video/") && !manifest.mime?.startsWith("audio/") && (
+					<p style={{ color: "#fff" }}>Нет предпросмотра для этого типа файла ({manifest.mime || "неизвестный тип"}).</p>
+				)}
+			</div>
+			<button
+				type="button"
+				onClick={onClose}
+				aria-label="Закрыть"
+				style={{
+					position: "fixed",
+					top: "var(--space-m)",
+					right: "var(--space-m)",
+					fontSize: "1.5rem",
+					lineHeight: 1,
+					padding: "var(--space-2xs) var(--space-s)",
+				}}
+			>
+				✕
+			</button>
+		</div>
+	);
+}

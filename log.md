@@ -3332,3 +3332,42 @@ connectPromise в transport.js) — повторные вызовы с экра�
 профиль. Regression: 1023/1023 (без изменений — app.jsx не покрыт
 node --test, DOM-зависим, конвенция — только Playwright). Сборка: 543.60
 КБ gzip.
+
+## Этап 53, И4 — плеер (перехват Range в service worker)
+
+Формализация (DESIGN.md, 13b): SW — тонкий протокольный адаптер
+(service-worker.js без сборки Vite, крипто там означало бы второй бандл),
+ключи/сеть остаются на странице; postMessage-мост с requestId-корреляцией
+(конкурентные Range одного видео) и адресацией по event.clientId (не
+broadcast — разные вкладки, разные аккаунты).
+
+4.1/4.2: content.js's getChunk (аддитивно, getRange отрефакторен поверх
+него, DRY по cipherChunkOffset-арифметике, регрессия files-content.test.js
+подтверждена) + player-session.js (readRange поверх кэша, упреждающая
+подкачка на 1 чанк вперёд) + player-bridge.js (реестр открытых файлов,
+registerPlayerFile/handleRangeRequest) + правка service-worker.js
+(/files-content/<digest>, парсинг Range, таймаут 15с, коды 404/416/500/504).
+
+4.3: chunk-cache.js — LRU по объёму (тот же Map-порядок-вставки паттерн,
+что attachment-memory-cache.js, этап 43). 8 тестов, адверсарная мутация
+(убран touch на get) поймана.
+
+Найдены и закрыты ДВЕ пред-существующие проблемы, блокирующие саму
+возможность feature'и: (1) service worker регистрировался только при
+заходе на "Диагностика" (diagnostics.jsx) — без визита туда /files-content/
+улетал бы в сеть с 404 у любого пользователя; перенесено в main.jsx,
+безусловно, при старте приложения (register() идемпотентен, диагностика
+не тронута). (2) BUILD_DEFAULT_BLOSSOM_SERVERS/RELAYS без env — плейсхолдеры
+example.com; учтено при живой проверке (пересборка с локальными адресами).
+
+Живая проверка на СОБРАННОЙ версии (DoD 4.1 явно требует не-dev — SW
+эмитится только при build): сырой fetch с Range вернул точные байты,
+корректные Content-Range/Accept-Ranges, коды 404 (неизвестный digest)/416
+(выход за границы). Дальше — реальный webm-видеофайл (canvas+MediaRecorder,
+3с/58КБ) через настоящий double-click UI: видео реально проигралось,
+duration/videoWidth/videoHeight корректны, перемотка (currentTime) работает
+без ошибок, 5 конкурентных запросов разных диапазонов не перепутались
+(requestId-корреляция, "гонка 1" DESIGN.md подтверждена живьём).
+
+52 новых теста (chunk-cache/player-session/player-bridge/content.getChunk).
+Regression: 1045/1045. Сборка: 544.92 КБ gzip (бюджет 1304 КБ).

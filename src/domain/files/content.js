@@ -84,10 +84,31 @@ function cipherChunkOffset(i, chunkSize) {
 	return i * (chunkSize + AEAD_TAG_BYTES);
 }
 
+// Один чанк ЦЕЛИКОМ, расшифрованный (CONTRACTS.md, этап 53 И4, задача 4.3) —
+// единица кэширования плеера (chunk-cache.js), в отличие от getRange ниже,
+// который отдаёт произвольный байтовый диапазон. Вынесено аддитивно из
+// getRange (было инлайном в цикле) — та же арифметика cipherChunkOffset,
+// DRY по ALGO.MD §0 ("ошибка на единицу даёт битое видео и не ловится
+// глазами" — не дублировать в двух местах).
+export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl } = {}) {
+	const count = manifest.chunks.length;
+	const lastChunkSize = manifest.size - (count - 1) * manifest.chunkSize;
+	const plainChunkSize = chunkIndex === count - 1 ? lastChunkSize : manifest.chunkSize;
+	const options = fetchImpl ? { fetchImpl } : {};
+	const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
+	const cipherEnd = cipherStart + plainChunkSize + AEAD_TAG_BYTES - 1; // включительно (Range)
+	const cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
+	const actualDigest = bytesToHex(sha256(cipherChunk));
+	if (actualDigest !== manifest.chunks[chunkIndex]) {
+		throw new Error(`Blossom-сервер вернул подменённый чанк ${chunkIndex} (digest не совпадает)`);
+	}
+	return decryptChunk(cipherChunk, fileKey, chunkIndex);
+}
+
 // start/end — байтовый диапазон В ИСХОДНОМ (расшифрованном) файле,
 // end ИСКЛЮЧАЮЩИЙ (как rangeToChunks). Возвращает ровно запрошенные байты,
 // не чанк(и) целиком.
-export async function getRange(manifest, fileKey, start, end, { serverUrl, fetchImpl } = {}) {
+export async function getRange(manifest, fileKey, start, end, opts = {}) {
 	const count = manifest.chunks.length;
 	const lastChunkSize = manifest.size - (count - 1) * manifest.chunkSize;
 	const { firstIdx, lastIdx, skipHead, skipTail } = rangeToChunks(start, end - start, {
@@ -96,18 +117,9 @@ export async function getRange(manifest, fileKey, start, end, { serverUrl, fetch
 		lastChunkSize,
 	});
 
-	const options = fetchImpl ? { fetchImpl } : {};
 	const decryptedChunks = [];
 	for (let i = firstIdx; i <= lastIdx; i++) {
-		const plainChunkSize = i === count - 1 ? lastChunkSize : manifest.chunkSize;
-		const cipherStart = cipherChunkOffset(i, manifest.chunkSize);
-		const cipherEnd = cipherStart + plainChunkSize + AEAD_TAG_BYTES - 1; // включительно (Range)
-		const cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
-		const actualDigest = bytesToHex(sha256(cipherChunk));
-		if (actualDigest !== manifest.chunks[i]) {
-			throw new Error(`Blossom-сервер вернул подменённый чанк ${i} (digest не совпадает)`);
-		}
-		decryptedChunks.push(decryptChunk(cipherChunk, fileKey, i));
+		decryptedChunks.push(await getChunk(manifest, fileKey, i, opts));
 	}
 
 	const joined = concatBytes(...decryptedChunks);
