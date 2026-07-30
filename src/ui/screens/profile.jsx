@@ -3,8 +3,10 @@ import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { uploadAvatarBlob } from "../../domain/attachments/upload.js";
+import { getManifest, getRange } from "../../domain/files/content.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";
+import { projected, getFileKeyFor } from "../signals/files.js";
 import {
 	loadUiSettings,
 	addRelayUrl,
@@ -14,11 +16,15 @@ import {
 	removeBlossomUrl,
 	setActiveBlossomUrl,
 } from "../../domain/settings/ui-settings.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
+import FilePicker from "../components/file-picker.jsx";
 import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
+
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -183,6 +189,7 @@ export default function Profile() {
 	const [bioStatus, setBioStatus] = useState("");
 	const [publishStatus, setPublishStatus] = useState("");
 	const [avatarError, setAvatarError] = useState("");
+	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	const [copyStatus, setCopyStatus] = useState("");
 	const statusTimerRef = useRef(null);
 	const copyTimerRef = useRef(null);
@@ -213,6 +220,36 @@ export default function Profile() {
 		copyTimerRef.current = setTimeout(() => setCopyStatus(""), 2000);
 	}
 
+	// Общий хвост обоих источников аватара (с диска/из хранилища) — публикация
+	// ПУБЛИЧНОЙ незашифрованной копии (этап 37) + republish kind 0. Best-effort
+	// (та же философия, что handleBioSubmit): локальное превью/кэш НЕ зависит
+	// от публикации.
+	async function publishAvatarBytes(fileBytes, mimeType) {
+		setPublishStatus("публикация…");
+		try {
+			const settings = await loadUiSettings(id, dbKeySig.value);
+			const serverUrl = settings.activeBlossomUrl;
+			if (!serverUrl) {
+				setPublishStatus("не опубликовано для других: нет активного Blossom-сервера");
+				return;
+			}
+			await ensureConnected(id, privKeySig.value, dbKeySig.value);
+			const url = await uploadAvatarBlob(serverUrl, fileBytes, mimeType, privKeySig.value);
+			// Персистируем ПУБЛИЧНЫЙ URL отдельно от dataUrl-превью (этап 38-довесок) —
+			// без этого handleBioSubmit не смогла бы включить picture в свой republish
+			// и молча стирала бы уже опубликованный аватар при следующем сохранении био.
+			setAvatarUrl(url);
+			await updateProfile(id, { avatarUrl: url });
+			// savedBio (не текущий черновик bio) — republish не должен затирать уже
+			// опубликованное био незасабмиченным черновиком в поле ввода.
+			const event = buildProfileEvent(privKeySig.value, { name: login, about: savedBio, picture: url });
+			const result = await publish(event);
+			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+		} catch (err) {
+			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+		}
+	}
+
 	async function handleAvatarChange(e) {
 		const input = e.currentTarget;
 		const file = input.files?.[0];
@@ -233,33 +270,51 @@ export default function Profile() {
 		await updateProfile(id, { avatar: dataUrl });
 		bumpProfileActivity();
 		input.value = "";
+		const fileBytes = new Uint8Array(await file.arrayBuffer());
+		await publishAvatarBytes(fileBytes, file.type);
+	}
 
-		// Best-effort (та же философия, что handleBioSubmit): локальное превью/кэш
-		// НЕ зависит от публикации. Аватар — публичный профиль, не сообщение,
-		// поэтому загружается БЕЗ шифрования (uploadAvatarBlob, этап 37).
-		setPublishStatus("публикация…");
+	// И7 7.2 — аватар ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). В отличие от
+	// "Заменить" (файл с диска, никогда не был приватным), файл ИЗ "Файлы"
+	// сейчас зашифрован — становясь аватаром, он публикуется НЕЗАШИФРОВАННЫМ
+	// НАВСЕГДА (решение №8 TASK.md, §7: "изображение станет общедоступным
+	// незашифрованным"). window.confirm() — то же решение, что необратимые
+	// действия в files.jsx (Удалить/unmountShare, этап 53 И3/И6) — простой
+	// нативный диалог, не кастомная модалка ради одного текста.
+	async function handleAvatarFromStorage([nodeId]) {
+		setAvatarPickerOpen(false);
+		setAvatarError("");
+		const node = projected.value.nodes.get(nodeId);
+		if (!node || node.kind !== "file") return;
 		try {
-			const settings = await loadUiSettings(id, dbKeySig.value);
-			const serverUrl = settings.activeBlossomUrl;
-			if (!serverUrl) {
-				setPublishStatus("не опубликовано для других: нет активного Blossom-сервера");
+			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			if (!manifest.mime?.startsWith("image/")) {
+				setAvatarError("Выберите файл изображения.");
 				return;
 			}
-			const fileBytes = new Uint8Array(await file.arrayBuffer());
-			await ensureConnected(id, privKeySig.value, dbKeySig.value);
-			const url = await uploadAvatarBlob(serverUrl, fileBytes, file.type, privKeySig.value);
-			// Персистируем ПУБЛИЧНЫЙ URL отдельно от dataUrl-превью (этап 38-довесок) —
-			// без этого handleBioSubmit не смогла бы включить picture в свой republish
-			// и молча стирала бы уже опубликованный аватар при следующем сохранении био.
-			setAvatarUrl(url);
-			await updateProfile(id, { avatarUrl: url });
-			// savedBio (не текущий черновик bio) — republish не должен затирать уже
-			// опубликованное био незасабмиченным черновиком в поле ввода.
-			const event = buildProfileEvent(privKeySig.value, { name: login, about: savedBio, picture: url });
-			const result = await publish(event);
-			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+			if (manifest.size > MAX_AVATAR_BYTES) {
+				setAvatarError("Файл слишком большой (максимум 2 МБ).");
+				return;
+			}
+			const fileKey = await getFileKeyFor(node.blob);
+			if (!fileKey) {
+				setAvatarError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+				return;
+			}
+			if (!window.confirm("Изображение станет общедоступным и больше не будет зашифровано. Продолжить?")) return;
+			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
+			const dataUrl = await new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(new Blob([bytes], { type: manifest.mime }));
+			});
+			setAvatar(dataUrl);
+			await updateProfile(id, { avatar: dataUrl });
+			bumpProfileActivity();
+			await publishAvatarBytes(bytes, manifest.mime);
 		} catch (err) {
-			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+			setAvatarError(err?.message || String(err));
 		}
 	}
 
@@ -352,12 +407,18 @@ export default function Profile() {
 						accept="image/*"
 						onChange={handleAvatarChange}
 					/>
+					<button type="button" class="btn--ghost" onClick={() => setAvatarPickerOpen(true)}>
+						Выбрать из хранилища
+					</button>
 					{avatarError && (
 						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 							{avatarError}
 						</p>
 					)}
 				</div>
+				{avatarPickerOpen && (
+					<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
+				)}
 
 				<form class="flow profile-bio-col" onSubmit={handleBioSubmit}>
 					<fieldset class="flow">
