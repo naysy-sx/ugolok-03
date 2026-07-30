@@ -58,3 +58,20 @@ export async function downloadBlob(serverUrl, sha256Hex, options = {}) {
   const arrayBuffer = await response.arrayBuffer();
   return new Uint8Array(arrayBuffer);
 }
+
+// Удаление аккаунта (профиль/файлы/вложения владельца) — BUD-02, тот же
+// auth-конверт, что uploadBlob (buildAuthEvent уже параметризована по action,
+// 'delete' ничем не отличается от 'upload' с точки зрения протокола: сервер
+// сverify'ит подпись pubkey, которому изначально принадлежал блоб). Сервер
+// может НЕ поддерживать удаление (404/405) — вызывающая сторона (best-effort
+// очистка аккаунта) обязана сама решать, критична ли ошибка, здесь — просто
+// честный fetch без специальной терпимости к отказу.
+export async function deleteBlob(serverUrl, sha256Hex, privateKey, options = {}) {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const authEvent = sign(buildAuthEvent('delete', sha256Hex), privateKey);
+  const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/' + sha256Hex, { method: 'DELETE', headers: { Authorization: encodeAuthHeader(authEvent) }, signal: options.signal });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error('Blossom delete failed: ' + response.status + ' ' + text);
+  }
+}

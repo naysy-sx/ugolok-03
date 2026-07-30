@@ -11,6 +11,7 @@ import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import Screen from "../components/screen.jsx";
 import MnemonicReveal from "../components/mnemonic-reveal.jsx";
+import DeleteAccountPanel from "../components/delete-account-panel.jsx";
 
 // Этап 47 — уровень уведомления как единый select (упорядоченная шкала off/badge/
 // popup/sound, DESIGN.md), не 3 независимых чекбокса.
@@ -409,6 +410,11 @@ export default function Settings() {
 						Заблокировать сейчас
 					</button>
 				</div>
+			</section>
+
+			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Опасная зона</h2>
+				<DeleteAccountPanel ownerPubkey={ownerPubkey} login={currentUser.value.login} privKey={privKey} dbKey={dbKey} />
 			</section>
 		</Screen>
 	);

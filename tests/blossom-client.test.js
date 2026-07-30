@@ -5,7 +5,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { uploadBlob, downloadBlob, checkBlossomReachable } from "../src/core/transport/blossom-client.js";
+import { uploadBlob, downloadBlob, deleteBlob, checkBlossomReachable } from "../src/core/transport/blossom-client.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -58,6 +58,42 @@ test("uploadBlob: PUT {serverUrl}/upload, Authorization: Nostr <base64 kind-2424
 test("uploadBlob: сервер вернул ошибку -> throw с текстом ответа, не проглатывает", async () => {
 	const fetchImpl = async () => fakeResponse({ ok: false, status: 413, textBody: "payload too large" });
 	await assert.rejects(() => uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl }), /413/);
+});
+
+// deleteBlob — этап 53, "Удалить аккаунт" (BUD-02). Тот же auth-конверт, что
+// uploadBlob (buildAuthEvent уже параметризована по action) — только method
+// DELETE и t-тег "delete" вместо "upload".
+test("deleteBlob: DELETE {serverUrl}/{sha256}, Authorization: Nostr <base64 kind-24242 событие с t=delete>", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push({ url, opts });
+		return fakeResponse({ ok: true, status: 200 });
+	};
+	await deleteBlob("https://blossom.test", "deadbeef", ALICE_PRIV, { fetchImpl });
+
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].url, "https://blossom.test/deadbeef");
+	assert.equal(calls[0].opts.method, "DELETE");
+
+	const authHeader = calls[0].opts.headers.Authorization;
+	assert.ok(authHeader.startsWith("Nostr "));
+	const event = JSON.parse(Buffer.from(authHeader.slice("Nostr ".length), "base64").toString("utf8"));
+	assert.equal(event.kind, 24242);
+	assert.equal(event.pubkey, ALICE_PUB);
+	assert.ok(verify(event), "auth-событие обязано иметь корректную подпись");
+	assert.deepEqual(
+		event.tags.find((t) => t[0] === "t"),
+		["t", "delete"],
+	);
+	assert.deepEqual(
+		event.tags.find((t) => t[0] === "x"),
+		["x", "deadbeef"],
+	);
+});
+
+test("deleteBlob: сервер вернул ошибку -> throw с текстом ответа, не проглатывает", async () => {
+	const fetchImpl = async () => fakeResponse({ ok: false, status: 404, textBody: "blob not found" });
+	await assert.rejects(() => deleteBlob("https://blossom.test", "x", ALICE_PRIV, { fetchImpl }), /404/);
 });
 
 test("downloadBlob: GET {serverUrl}/{sha256} БЕЗ Authorization (F-AT-10)", async () => {
