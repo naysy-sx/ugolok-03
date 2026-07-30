@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { getManifest } from "../../domain/files/content.js";
+import { getManifest, getRange } from "../../domain/files/content.js";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { registerPlayerFile, unregisterPlayerFile } from "../../domain/files/player-bridge.js";
 import { getFileKeyFor } from "../signals/files.js";
@@ -15,6 +15,7 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // перемотки, полный файл никогда не грузится разом.
 export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 	const [manifest, setManifest] = useState(null);
+	const [imageUrl, setImageUrl] = useState(null);
 	const [error, setError] = useState("");
 
 	useEffect(() => {
@@ -27,6 +28,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 
 	useEffect(() => {
 		let cancelled = false;
+		let objectUrl = null;
 
 		(async () => {
 			try {
@@ -41,12 +43,23 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 					setError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
 					return;
 				}
-				// РЕГИСТРАЦИЯ ОБЯЗАНА завершиться ДО первого рендера <video>/<audio> с
-				// src (CONTRACTS.md/DESIGN.md "гонка 3") — иначе первый же запрос
-				// браузера придёт на ещё не зарегистрированный digest. setManifest
-				// (после register) — единственная точка, включающая рендер медиа-
-				// элемента, порядок гарантирован самим React/Preact-циклом рендера.
-				registerPlayerFile(digest, { manifest: m, fileKey, serverUrl: BLOSSOM_URL });
+				if (m.mime?.startsWith("image/")) {
+					// Картинки — НЕ через SW virtual-путь (тот приём — для video/audio,
+					// где перемотка требует Range по мере воспроизведения): изображение
+					// целиком мало (та же логика, что thumbnails.js — "изображения малы,
+					// getRange(0, size) целиком — оправдано"), полный getRange в память +
+					// Blob URL — тот же приём, что миниатюры, но без downscale (полное
+					// качество, не 200px).
+					const bytes = await getRange(m, fileKey, 0, m.size, { serverUrl: BLOSSOM_URL });
+					if (cancelled) return;
+					objectUrl = URL.createObjectURL(new Blob([bytes], { type: m.mime }));
+					setImageUrl(objectUrl);
+				} else {
+					// РЕГИСТРАЦИЯ ОБЯЗАНА завершиться ДО первого рендера <video>/<audio> с
+					// src (CONTRACTS.md/DESIGN.md "гонка 3") — иначе первый же запрос
+					// браузера придёт на ещё не зарегистрированный digest.
+					registerPlayerFile(digest, { manifest: m, fileKey, serverUrl: BLOSSOM_URL });
+				}
 				setManifest(m);
 			} catch (e) {
 				if (!cancelled) setError(e?.message || String(e));
@@ -56,6 +69,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 		return () => {
 			cancelled = true;
 			unregisterPlayerFile(digest);
+			if (objectUrl) URL.revokeObjectURL(objectUrl);
 		};
 	}, [digest, ownerPubkey]);
 
@@ -85,13 +99,20 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 					</p>
 				)}
 				{!error && !manifest && <p style={{ color: "#fff" }}>Загрузка…</p>}
+				{!error && manifest && manifest.mime?.startsWith("image/") && imageUrl && (
+					<img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }} />
+				)}
 				{!error && manifest && manifest.mime?.startsWith("video/") && (
 					<video controls autoplay src={src} style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }} />
 				)}
 				{!error && manifest && manifest.mime?.startsWith("audio/") && <audio controls autoplay src={src} />}
-				{!error && manifest && !manifest.mime?.startsWith("video/") && !manifest.mime?.startsWith("audio/") && (
-					<p style={{ color: "#fff" }}>Нет предпросмотра для этого типа файла ({manifest.mime || "неизвестный тип"}).</p>
-				)}
+				{!error &&
+					manifest &&
+					!manifest.mime?.startsWith("video/") &&
+					!manifest.mime?.startsWith("audio/") &&
+					!manifest.mime?.startsWith("image/") && (
+						<p style={{ color: "#fff" }}>Нет предпросмотра для этого типа файла ({manifest.mime || "неизвестный тип"}).</p>
+					)}
 			</div>
 			<button
 				type="button"

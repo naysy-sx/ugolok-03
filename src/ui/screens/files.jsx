@@ -31,6 +31,7 @@ import {
 	undo,
 	openFolder,
 	getFileKeyFor,
+	treeState,
 } from "../signals/files.js";
 import { sharedNodeIds, initShares, shareFolder, revokeAccess, listGrantees } from "../signals/shares.js";
 import { activeMounts, mountProjections, ensureMountProjection, saveMountedItemToOwn, unmountShare } from "../signals/mounts.js";
@@ -39,7 +40,7 @@ import { dbKeySig } from "../signals/auth.js";
 import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
-import { PreconditionError } from "../../domain/files/ops.js";
+import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange, putStream } from "../../domain/files/content.js";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
@@ -189,6 +190,16 @@ export default function Files() {
 	const fileInputRef = useRef(null);
 	const uploadAbortRef = useRef(null);
 
+	// Drag-and-drop (§7 TASK.md, честно отложено в И3 — PLAN.md "перетаскивание
+	// мышью... drag — нет"). draggedIds — что тащим (весь selected, если тащим
+	// элемент ИЗ выделения размером >1, иначе только сам элемент); dragOverId —
+	// папка-цель под курсором, для подсветки. Валидность цели (d∉subtree(n))
+	// проверяется НА КАЖДЫЙ кадр наведения (§7 TASK.md п.211: восхождением, не
+	// спуском) — targetInsideSubtree (ops.js) переиспользован напрямую из
+	// предусловия move(), не переизобретён здесь.
+	const [draggedIds, setDraggedIds] = useState(null);
+	const [dragOverId, setDragOverId] = useState(null);
+
 	useEffect(() => {
 		Promise.all([initFiles(ownerPubkey, privKeySig.value, publish), initShares(ownerPubkey)]).then(() => setReady(true));
 	}, [ownerPubkey]);
@@ -235,6 +246,55 @@ export default function Files() {
 
 	function cancelUpload() {
 		uploadAbortRef.current?.abort();
+	}
+
+	function isValidDropTarget(targetId) {
+		if (!draggedIds) return false;
+		if (draggedIds.includes(targetId)) return false;
+		const S = treeState.value;
+		return !draggedIds.some((id) => targetInsideSubtree(S, id, targetId));
+	}
+
+	function handleRowDragStart(entry, e) {
+		const ids = selected.has(entry.id) && selected.size > 1 ? [...selected] : [entry.id];
+		setDraggedIds(ids);
+		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", entry.displayName);
+	}
+
+	function handleRowDragEnd() {
+		setDraggedIds(null);
+		setDragOverId(null);
+	}
+
+	function handleFolderDragOver(entry, e) {
+		if (!isValidDropTarget(entry.id)) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		if (dragOverId !== entry.id) setDragOverId(entry.id);
+	}
+
+	function handleFolderDragLeave(entry) {
+		setDragOverId((cur) => (cur === entry.id ? null : cur));
+	}
+
+	async function handleFolderDrop(entry, e) {
+		e.preventDefault();
+		const ids = draggedIds;
+		const valid = isValidDropTarget(entry.id);
+		setDraggedIds(null);
+		setDragOverId(null);
+		if (!ids || !valid) return;
+		for (const id of ids) {
+			const result = await moveNode(id, entry.id);
+			const message = errorMessage(result);
+			if (message) {
+				setError(message);
+				return;
+			}
+		}
+		setError("");
+		setSelected(new Set());
 	}
 
 	function openShareDialog(nodeId) {
@@ -476,7 +536,7 @@ export default function Files() {
 						Мои файлы
 					</button>
 					<button type="button" class={view === "mounts" ? undefined : "btn--ghost"} onClick={() => setView("mounts")}>
-						<IconGlobe aria-hidden="true" /> Полученные доли{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
+						<IconGlobe aria-hidden="true" /> Полученные папки{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
 					</button>
 					{view === "own" && (
 						<>
@@ -625,7 +685,16 @@ export default function Files() {
 							}}
 						>
 						{visibleEntries.map((entry) => (
-							<li key={entry.id} class="file-row">
+							<li
+								key={entry.id}
+								class={"file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
+								draggable={!inTrash && renamingId !== entry.id}
+								onDragStart={(e) => handleRowDragStart(entry, e)}
+								onDragEnd={handleRowDragEnd}
+								onDragOver={entry.kind === "dir" ? (e) => handleFolderDragOver(entry, e) : undefined}
+								onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
+								onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
+							>
 								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={`Выбрать «${entry.displayName}»`} />
 								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
 								{renamingId === entry.id ? (

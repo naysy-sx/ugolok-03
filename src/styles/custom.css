@@ -2707,6 +2707,13 @@ button:has(> .icon),
 .app-layout .file-row:hover {
 	background-color: var(--surface);
 }
+/* Drag-and-drop (§7 TASK.md) — подсветка ТОЛЬКО валидной цели (files.jsx
+   проверяет d∉subtree(n) до простановки класса, не после drop). */
+.app-layout .file-row--drag-over {
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+	outline: var(--border-width) dashed var(--accent);
+	outline-offset: -2px;
+}
 .app-layout .file-row-icon {
 	flex: none;
 	color: var(--muted);

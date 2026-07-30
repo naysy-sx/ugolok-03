@@ -27,8 +27,12 @@ function nameFree(S, parentId, name, excludeId = null) {
 // испорченном сыром S (ремонт ещё не применён); НЕ бросает при превышении —
 // предусловие обязано быть тотальной функцией даже на нарушенном I-ACYCLIC
 // состоянии (DESIGN.md, "Этап 53, И1").
+// Экспортирована (этап 53 И7-довесок, drag-and-drop): §7 TASK.md п.211
+// требует ЖИВУЮ проверку d∉subtree(n) "на каждый кадр наведения" — UI
+// подсвечивает недопустимую цель ДО drop, не только ловит PreconditionError
+// постфактум. Поведение move() не меняется — чистое добавление экспорта.
 const ASCEND_LIMIT = 128;
-function targetInsideSubtree(S, n, d) {
+export function targetInsideSubtree(S, n, d) {
 	let cur = d;
 	let steps = 0;
 	while (cur !== null && cur !== undefined && steps < ASCEND_LIMIT) {
