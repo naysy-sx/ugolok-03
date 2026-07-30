@@ -21,6 +21,7 @@ import IconPaperclip from "../icons/paperclip.jsx";
 import IconMicrophone from "../icons/microphone.jsx";
 import IconStop from "../icons/stop.jsx";
 import IconCross from "../icons/cross.jsx";
+import IconFolder from "../icons/folder.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -41,8 +42,11 @@ import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { validateAttachment } from "../../domain/attachments/validation.js";
 import { uploadAttachment } from "../../domain/attachments/upload.js";
 import { createVoiceRecorder, shouldInlineVoice } from "../../domain/attachments/voice.js";
+import { getManifest, getRange } from "../../domain/files/content.js";
+import { getFileKeyFor, projected } from "../signals/files.js";
 import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentPreview from "../components/attachment-preview.jsx";
+import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
@@ -260,6 +264,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [attachmentFile, setAttachmentFile] = useState(null);
 	const [attachmentPosition, setAttachmentPosition] = useState("below");
 	const [attachmentError, setAttachmentError] = useState("");
+	const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
 	const fileInputRef = useRef(null);
 
 	// recordingState: "idle" | "recording" | "recorded". voiceRecorderRef держит
@@ -362,10 +367,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	}
 
 	// Прикрепление/голосовое взаимоисключающие — выбор одного сбрасывает другое.
-	function handleFileSelected(e) {
-		const file = e.currentTarget.files?.[0];
-		e.currentTarget.value = ""; // иначе повторный выбор ТОГО ЖЕ файла не даёт onChange
-		if (!file) return;
+	// Общий хвост обоих источников (с диска/из хранилища, И7 7.3) — file уже
+	// готовый File/Blob-подобный объект (name/type/size/arrayBuffer()), откуда он
+	// взят — не важно ниже по стеку (uploadAttachment/validateAttachment/
+	// AttachmentPreview агностичны к происхождению).
+	function applySelectedFile(file) {
 		setRecordingState("idle");
 		setRecordedVoiceBlob(null);
 		setAttachmentFile(file);
@@ -378,6 +384,42 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			// пользователь должен понимать, ЧТО он выбрал и почему это не пройдёт, а не
 			// молча ничего не происходит.
 			setAttachmentError(err?.message || String(err));
+		}
+	}
+
+	function handleFileSelected(e) {
+		const file = e.currentTarget.files?.[0];
+		e.currentTarget.value = ""; // иначе повторный выбор ТОГО ЖЕ файла не даёт onChange
+		if (!file) return;
+		applySelectedFile(file);
+	}
+
+	// И7 7.3 — вложение ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). В отличие от
+	// файла с диска (никогда не был приватным для этого приложения), файл ИЗ
+	// "Файлы" сейчас зашифрован под fileKey поддерева; став вложением, он
+	// перезаливается ПОД СВОИМ НОВЫМ ключом (uploadAttachment's encryptFile —
+	// уже существующий код, ничего специально дозаписывать не нужно), но с
+	// момента отправки получатель держит ключ НАВСЕГДА — отозвать нельзя,
+	// в отличие от оригинала в "Файлы" (решение №9 TASK.md). Предупреждение —
+	// ДО расшифровки (нечего предупреждать, если пользователь передумает),
+	// window.confirm() — тот же принцип, что аватар (7.2)/файловые операции
+	// files.jsx: простой нативный диалог, не кастомная модалка.
+	async function handleAttachmentFromStorage([nodeId]) {
+		setAttachmentPickerOpen(false);
+		const node = projected.value.nodes.get(nodeId);
+		if (!node || node.kind !== "file") return;
+		if (!window.confirm("Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?")) return;
+		try {
+			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const fileKey = await getFileKeyFor(node.blob);
+			if (!fileKey) {
+				setError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+				return;
+			}
+			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_SERVER_URL });
+			applySelectedFile(new File([bytes], node.displayName, { type: manifest.mime }));
+		} catch (err) {
+			setError(err?.message || String(err));
 		}
 	}
 
@@ -648,6 +690,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<button
 							type="button"
 							class="message-compose-tool-btn"
+							onClick={() => setAttachmentPickerOpen(true)}
+							disabled={recordingState !== "idle"}
+							aria-label="Прикрепить файл из хранилища"
+						>
+							<IconFolder />
+						</button>
+						<button
+							type="button"
+							class="message-compose-tool-btn"
 							onClick={handleStartRecording}
 							disabled={recordingState !== "idle" || !!attachmentFile}
 							aria-label="Записать голосовое сообщение"
@@ -705,6 +756,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				})}
 				<div ref={bottomRef} />
 			</div>
+			{attachmentPickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setAttachmentPickerOpen(false)} />}
 		</Screen>
 	);
 }
