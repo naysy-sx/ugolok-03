@@ -114,6 +114,45 @@ test("putStream: fileKey-оверрайд используется ВМЕСТО 
 	assert.deepEqual(got, original, "содержимое реально зашифровано ПЕРЕДАННЫМ ключом, не случайным");
 });
 
+test("putStream: signal.abort() ДО начала — прерывает немедленно, ни одного байта не уходит на сервер (§7 TASK.md — отмена загрузки)", async () => {
+	const { fetchImpl, store } = makeFakeBlossom();
+	const original = new Uint8Array(2000);
+	const controller = new AbortController();
+	controller.abort();
+
+	await assert.rejects(
+		() => putStream(original, { name: "x", mime: "text/plain", chunkSize: 300, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl, signal: controller.signal }),
+		(err) => err.name === "AbortError",
+	);
+	assert.equal(store.size, 0, "ничего не залито — отмена сработала до первого чанка");
+});
+
+test("putStream: signal.abort() ПОСЛЕ нескольких чанков — прерывает на границе чанка, вызывает onProgress только до этого момента", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(2000);
+	const controller = new AbortController();
+	const progressCalls = [];
+
+	await assert.rejects(
+		() =>
+			putStream(original, {
+				name: "x",
+				mime: "text/plain",
+				chunkSize: 300,
+				serverUrl: "https://blossom.test",
+				privateKey: ALICE_PRIV,
+				fetchImpl,
+				signal: controller.signal,
+				onProgress: (p) => {
+					progressCalls.push(p);
+					if (p.chunksDone === 2) controller.abort();
+				},
+			}),
+		(err) => err.name === "AbortError",
+	);
+	assert.equal(progressCalls.length, 2, "остановилось сразу после 2-го чанка, не дошло до конца (7 чанков всего)");
+});
+
 test("getManifest: подменённый манифест на сервере — отклонён по digest (тот же приём, что downloadAttachment)", async () => {
 	const { fetchImpl, store } = makeFakeBlossom();
 	const original = new Uint8Array(500);

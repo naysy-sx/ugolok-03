@@ -27,7 +27,13 @@ export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — р�
 // move-routing.js), не случайным — иначе получатель не смог бы
 // независимо его пересчитать. Без оверрайда — поведение НЕ меняется
 // (случайный ключ, как раньше).
-export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl, fileKey: overrideFileKey } = {}) {
+// signal — необязательный AbortSignal (§7 TASK.md: "прогресс и отмена для
+// загрузки... без индикатора это выглядит как зависание") — проверяется
+// МЕЖДУ чанками шифрования (дёшево прервать на границе, не насильно
+// посреди одного чанка) и пробрасывается в fetch (uploadBlob) — отмена
+// во время самой сетевой передачи тоже срабатывает, тем же AbortError,
+// что и стандартный fetch.
+export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl, fileKey: overrideFileKey, signal } = {}) {
 	const fileKey = overrideFileKey ?? generateFileKey();
 	const size = bytes.length;
 	const { count, lastChunkSize } = planChunks(size, chunkSize);
@@ -35,6 +41,7 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 	const chunkDigests = [];
 	const cipherParts = [];
 	for (let i = 0; i < count; i++) {
+		if (signal?.aborted) throw new DOMException("Загрузка отменена", "AbortError");
 		const start = i * chunkSize;
 		const end = i === count - 1 ? start + lastChunkSize : start + chunkSize;
 		const cipherChunk = encryptChunk(bytes.subarray(start, end), fileKey, i);
@@ -44,7 +51,7 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 	}
 	const fullCiphertext = concatBytes(...cipherParts);
 	const blobSha256Local = bytesToHex(sha256(fullCiphertext));
-	const uploadOptions = fetchImpl ? { fetchImpl } : {};
+	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal };
 	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, uploadOptions);
 
 	// keyId — непрозрачная ССЫЛКА (§4.1 MATH.md: "Manifest.keyId : KeyId"), не

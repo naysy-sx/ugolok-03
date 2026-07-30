@@ -20,6 +20,7 @@ import {
 	clipboard,
 	canUndo,
 	createFolder,
+	createFileEntry,
 	renameNode,
 	removeNode,
 	purgeNode,
@@ -39,7 +40,7 @@ import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError } from "../../domain/files/ops.js";
-import { getManifest, getRange } from "../../domain/files/content.js";
+import { getManifest, getRange, putStream } from "../../domain/files/content.js";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
@@ -48,6 +49,7 @@ import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
 import IconPeople from "../icons/people.jsx";
+import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import FilePlayer from "../components/file-player.jsx";
 
@@ -175,9 +177,65 @@ export default function Files() {
 	const [mountFolderId, setMountFolderId] = useState(ROOT_ID);
 	const [saveProgress, setSaveProgress] = useState(null); // {filesDone, filesTotal} | null
 
+	// Загрузка с диска (§7 TASK.md: "прогресс и отмена для загрузки —
+	// хеширование нескольких гигабайт — десятки секунд; без индикатора это
+	// выглядит как зависание"). Несколько файлов — ОЧЕРЕДЬ, последовательно
+	// (не параллельно — не перегружать шифрование/сеть, прогресс остаётся
+	// понятным как "файл N из M"). uploadAbortRef — ОДИН AbortController на
+	// ТЕКУЩИЙ файл; отмена останавливает и его, и всю оставшуюся очередь
+	// (не переходит к следующему файлу молча).
+	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, chunksDone, chunksTotal} | null
+	const [uploadError, setUploadError] = useState("");
+	const fileInputRef = useRef(null);
+	const uploadAbortRef = useRef(null);
+
 	useEffect(() => {
 		Promise.all([initFiles(ownerPubkey, privKeySig.value, publish), initShares(ownerPubkey)]).then(() => setReady(true));
 	}, [ownerPubkey]);
+
+	function triggerFileUpload() {
+		fileInputRef.current?.click();
+	}
+
+	async function handleFilesSelected(e) {
+		const files = [...e.target.files];
+		e.target.value = ""; // тот же файл повторно — иначе повторный выбор того же файла не даст onChange
+		if (files.length === 0) return;
+		setUploadError("");
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+			const controller = new AbortController();
+			uploadAbortRef.current = controller;
+			setUploadState({ fileName: file.name, fileIndex: i + 1, filesTotal: files.length, chunksDone: 0, chunksTotal: 1 });
+			try {
+				const bytes = new Uint8Array(await file.arrayBuffer());
+				const { manifestDigest, fileKey } = await putStream(bytes, {
+					name: file.name,
+					mime: file.type || "application/octet-stream",
+					serverUrl: BLOSSOM_URL,
+					privateKey: privKeySig.value,
+					signal: controller.signal,
+					onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, ...p } : prev)),
+				});
+				const result = await createFileEntry(file.name, manifestDigest, fileKey);
+				const message = errorMessage(result);
+				if (message) {
+					setUploadError(`«${file.name}»: ${message}`);
+					break;
+				}
+			} catch (err) {
+				if (err.name === "AbortError") break;
+				setUploadError(`«${file.name}»: загрузка не удалась (сеть недоступна?).`);
+				break;
+			}
+		}
+		uploadAbortRef.current = null;
+		setUploadState(null);
+	}
+
+	function cancelUpload() {
+		uploadAbortRef.current?.abort();
+	}
 
 	function openShareDialog(nodeId) {
 		setShareDialogTarget(nodeId);
@@ -425,6 +483,17 @@ export default function Files() {
 							<button type="button" onClick={() => setNewFolderOpen((v) => !v)}>
 								<IconPlus /> Новая папка
 							</button>
+							<button type="button" class="btn--ghost" onClick={triggerFileUpload} disabled={!!uploadState}>
+								<IconPaperclip aria-hidden="true" /> Загрузить файл
+							</button>
+							<input
+								ref={fileInputRef}
+								type="file"
+								multiple
+								onChange={handleFilesSelected}
+								style={{ display: "none" }}
+								aria-label="Выбрать файлы для загрузки"
+							/>
 							{clipboard.value.state !== "empty" && (
 								<button type="button" class="btn--ghost" onClick={pasteHere}>
 									Вставить ({clipboard.value.selection.length})
@@ -505,6 +574,22 @@ export default function Files() {
 				{error && (
 					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 						{error}
+					</p>
+				)}
+				{uploadState && (
+					<div class="cluster file-upload-progress" role="status">
+						<span>
+							Загрузка «{uploadState.fileName}» ({uploadState.fileIndex}/{uploadState.filesTotal}):{" "}
+							{Math.round((uploadState.chunksDone / uploadState.chunksTotal) * 100)}%
+						</span>
+						<button type="button" class="btn--ghost" onClick={cancelUpload}>
+							Отменить
+						</button>
+					</div>
+				)}
+				{uploadError && (
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						{uploadError}
 					</p>
 				)}
 

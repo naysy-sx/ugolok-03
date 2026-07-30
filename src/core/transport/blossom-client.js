@@ -26,7 +26,7 @@ function encodeAuthHeader(event) {
 export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privateKey, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const authEvent = sign(buildAuthEvent('upload', sha256Hex), privateKey);
-  const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/upload', { method: 'PUT', headers: { Authorization: encodeAuthHeader(authEvent) }, body: encryptedBytes });
+  const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/upload', { method: 'PUT', headers: { Authorization: encodeAuthHeader(authEvent) }, body: encryptedBytes, signal: options.signal });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new Error('Blossom upload failed: ' + response.status + ' ' + text);
