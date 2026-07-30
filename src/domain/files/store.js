@@ -202,6 +202,15 @@ export async function deleteMount(ownerPubkey, nodeId) {
 	await db.table("files_mounts").delete([ownerPubkey, nodeId]);
 }
 
+// Все точки монтирования получателя (этап 53 И6, задача 6.7) — для
+// инициализации activeMounts (ui/signals/mounts.js) и для проверки "эта
+// доля (owner+rootId) уже смонтирована?" при входящем гранте (без этого
+// повторный грант того же владельца/узла монтировал бы ВТОРОЙ узел-ссылку).
+export async function listMounts(ownerPubkey, dbKey) {
+	const rows = await db.table("files_mounts").where("ownerPubkey").equals(ownerPubkey).toArray();
+	return rows.map((row) => fromEncryptedRow(row, dbKey));
+}
+
 export async function saveMountKey(ownerPubkey, nodeId, version, subtreeKeyHex, dbKey) {
 	await db.table("files_mountKeys").put(toEncryptedRow({ ownerPubkey, nodeId, version, subtreeKey: subtreeKeyHex }, FILES_MOUNT_KEYS_PLAINTEXT_FIELDS, dbKey));
 }

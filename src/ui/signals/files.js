@@ -82,10 +82,27 @@ function flushPendingOps() {
 	cachedPublish(event).catch(() => {});
 }
 
-async function label() {
-	if (!lamportClock) throw new Error("files: initFiles() ещё не вызван");
+// Экспортирована (этап 53 И6, задача 6.7) — ui/signals/mounts.js нужна ТА
+// ЖЕ метка Лампорта дерева файлов для mount()'s createFolder (узел-ссылка —
+// ОБЫЧНАЯ локальная операция над ЭТИМ ЖЕ деревом, CONTRACTS.md 6.3). Два
+// НЕЗАВИСИМЫХ счётчика для одного дерева расходились бы — единый источник
+// (эта функция) устраняет класс гонки целиком: JS однопоточен, lamportClock.tick()
+// синхронен, поэтому ЛЮБЫЕ два "параллельных" вызова label() (из UI-события
+// И из фонового подписчика гранта) гарантированно сериализуются на разные
+// counter. ownerPubkeyForInit — самоинициализация: входящий грант (mounts.js)
+// может прийти РАНЬШЕ, чем пользователь хоть раз откроет "Файлы" в сессии
+// (initFiles() тогда ещё не вызывалась) — без него label() бросала бы
+// "initFiles() ещё не вызван" для полностью легитимного фонового случая.
+export async function label(ownerPubkeyForInit) {
+	const ownerPubkey = cachedOwnerPubkey ?? ownerPubkeyForInit;
+	if (!ownerPubkey) throw new Error("files: initFiles() ещё не вызван и ownerPubkeyForInit не передан");
+	if (!lamportClock) {
+		cachedDeviceId = cachedDeviceId ?? (await getOrCreateDeviceId());
+		const initialCounter = await loadFilesClockValue(ownerPubkey);
+		lamportClock = createLamportClock(initialCounter);
+	}
 	const counter = lamportClock.tick();
-	await saveFilesClockValue(cachedOwnerPubkey, counter);
+	await saveFilesClockValue(ownerPubkey, counter);
 	return { counter, deviceId: cachedDeviceId };
 }
 
@@ -125,9 +142,16 @@ export async function initFiles(ownerPubkey, privKey, publish) {
 	if (privKey) await rebuildFilesLog(ownerPubkey, privKey);
 }
 
-async function applyAndPersist(ops) {
+// Экспортирована (этап 53 И6, задача 6.7) — тот же случай, что label() выше:
+// mounts.js применяет свои create/purge-опы (mount()/unmount()/saveToOwn) К
+// ЭТОМУ ЖЕ дереву файлов, переиспользуя ВСЮ существующую персистентность/
+// публикацию, а не дублируя её. ownerPubkeyForInit — тот же принцип
+// самоинициализации, что у label().
+export async function applyAndPersist(ops, ownerPubkeyForInit) {
+	const ownerPubkey = cachedOwnerPubkey ?? ownerPubkeyForInit;
+	if (!ownerPubkey) throw new Error("files: initFiles() ещё не вызван и ownerPubkeyForInit не передан");
 	treeState.value = merge(treeState.value, ops);
-	await saveTreeState(cachedOwnerPubkey, treeState.value);
+	await saveTreeState(ownerPubkey, treeState.value);
 	queueForPublish(ops);
 }
 
@@ -251,7 +275,9 @@ export async function copySelectionHere(nodeIds) {
 	canUndo.value = canUndoNow(undoStack);
 }
 
-function collectNewIds(S, rootId) {
+// Экспортирована (этап 53 И6, задача 6.7) — mounts.js's saveMountedItemToOwn
+// нужен тот же приём генерации новых id для целого поддерева, что copySelectionHere.
+export function collectNewIds(S, rootId) {
 	const map = new Map();
 	const stack = [rootId];
 	while (stack.length > 0) {

@@ -40,6 +40,8 @@ import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnounc
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
 import { rebuildFilesLog } from "./files.js";
+import { FILE_SHARE_GRANT_KIND, FILE_SUBTREE_OP_KIND } from "../../domain/files/share.js";
+import { initMounts, activeMountRootIds, handleIncomingShareGrant, handleIncomingSubtreeEvent } from "./mounts.js";
 import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/content/channel-read-status.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { drain } from "../../core/store/outbox.js";
@@ -398,6 +400,14 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// reload/переподключения, тот же принцип, что refreshGroupMessageSubscription выше.
 	await refreshChannelGrantSubscription(pubkeyHex, privKey, dbKey);
 	await refreshChannelContentSubscription(pubkeyHex, dbKey);
+
+	// Этап 53 И6, задача 6.7 — доли: восстанавливает activeMounts ИЗ ХРАНИЛИЩА
+	// (не из UI-состояния экрана "Файлы" — тот мог не открываться в этой
+	// сессии вовсе) ДО подписки на #h, иначе fileSubtreeOpSubscription не
+	// узнает rootId уже смонтированных долей.
+	await initMounts(pubkeyHex, dbKey);
+	await refreshFileShareGrantSubscription(pubkeyHex, privKey, dbKey);
+	await refreshFileSubtreeOpSubscription(pubkeyHex, dbKey);
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
@@ -915,6 +925,72 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
 	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_BAN_KIND, 5] }]);
+}
+
+let fileShareGrantSubscriber = null;
+
+// Этап 53 И6, задача 6.7 — FILE_SHARE_GRANT_KIND (тег #p:[я]), буквально
+// тот же паттерн, что refreshChannelGrantSubscription выше (постоянная
+// подписка, не ленивая активация — доля может прийти в любой момент,
+// независимо от того, открыт ли экран "Файлы"). handleIncomingShareGrant
+// (mounts.js) сама решает идемпотентность (owner+rootId уже смонтирован ->
+// no-op) и переиспользует ЕДИНЫЙ Лампорт-счётчик дерева файлов (files.js's
+// экспортированный label()) — без этого два независимых счётчика одного
+// дерева (свои операции vs монтирование доли) разошлись бы.
+export async function refreshFileShareGrantSubscription(ownerPubkey, privKey, dbKey) {
+	if (!connection) return;
+	if (!fileShareGrantSubscriber) {
+		fileShareGrantSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				let gotNewMount = false;
+				for (const event of events) {
+					if (!isNewEvent(event.id)) continue;
+					const beforeCount = activeMountRootIds.value.length;
+					// Имя по умолчанию — короткий hex владельца (человекочитаемое имя
+					// из контактов — решение UI-слоя при отображении, не здесь;
+					// пользователь всегда может переименовать узел-ссылку как любую
+					// другую папку, ops.js's rename не меняется).
+					await handleIncomingShareGrant(ownerPubkey, privKey, dbKey, event, `Общая папка (${event.pubkey.slice(0, 8)})`);
+					if (activeMountRootIds.value.length > beforeCount) gotNewMount = true;
+				}
+				if (gotNewMount) {
+					// Новая доля — переподписка на #h ОБЯЗАНА подхватить её rootId
+					// немедленно (тот же принцип, что refreshChannelContentSubscription
+					// после нового channel-грантa).
+					await refreshFileSubtreeOpSubscription(ownerPubkey, dbKey);
+				}
+			},
+		});
+		connection.addMessageHandler(fileShareGrantSubscriber.handleMessage);
+	}
+	fileShareGrantSubscriber.subscribe("file-share-grants", [{ "#p": [ownerPubkey], kinds: [FILE_SHARE_GRANT_KIND] }]);
+}
+
+let fileSubtreeOpSubscriber = null;
+
+// Этап 53 И6, задача 6.7 — FILE_SUBTREE_OP_KIND (тег #h:[rootId,...] всех
+// активных долей получателя), тот же паттерн, что refreshChannelContentSubscription
+// (топики меняются со временем — новые доли — переподписка тем же subId
+// идемпотентна).
+export async function refreshFileSubtreeOpSubscription(ownerPubkey, dbKey) {
+	if (!connection) return;
+	const rootIds = activeMountRootIds.value;
+	if (rootIds.length === 0) return;
+
+	if (!fileSubtreeOpSubscriber) {
+		fileSubtreeOpSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					if (!isNewEvent(event.id)) continue;
+					await handleIncomingSubtreeEvent(ownerPubkey, dbKey, event);
+				}
+			},
+		});
+		connection.addMessageHandler(fileSubtreeOpSubscriber.handleMessage);
+	}
+	fileSubtreeOpSubscriber.subscribe("file-subtree-ops", [{ "#h": rootIds, kinds: [FILE_SUBTREE_OP_KIND] }]);
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если

@@ -31,7 +31,11 @@ import {
 	openFolder,
 	getFileKeyFor,
 } from "../signals/files.js";
-import { ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
+import { sharedNodeIds, initShares, shareFolder, revokeAccess, listGrantees } from "../signals/shares.js";
+import { activeMounts, mountProjections, ensureMountProjection, saveMountedItemToOwn, unmountShare } from "../signals/mounts.js";
+import { contacts, profiles } from "../signals/contacts.js";
+import { dbKeySig } from "../signals/auth.js";
+import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError } from "../../domain/files/ops.js";
@@ -42,6 +46,8 @@ import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+import IconGlobe from "../icons/globe.jsx";
+import IconPeople from "../icons/people.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import FilePlayer from "../components/file-player.jsx";
 
@@ -154,9 +160,95 @@ export default function Files() {
 	const [playingDigest, setPlayingDigest] = useState(null);
 	const containerRef = useRef(null);
 
+	// 6.7 (сужение MVP, CONTRACTS.md) — "Полученные доли" ОТДЕЛЬНЫЙ раздел,
+	// своя локальная навигация (mountFolderId), не смешивается с основным
+	// деревом/буфером обмена/undo (read-only с точки зрения UI — share() в
+	// v0.1 производит только read-гранты).
+	const [view, setView] = useState("own"); // "own" | "mounts"
+	const [shareDialogTarget, setShareDialogTarget] = useState(null); // nodeId папки
+	const [shareSelectedPubkeys, setShareSelectedPubkeys] = useState(() => new Set());
+	const [shareBusy, setShareBusy] = useState(false);
+	const [shareError, setShareError] = useState("");
+	const [accessPanelTarget, setAccessPanelTarget] = useState(null); // nodeId папки
+	const [grantees, setGrantees] = useState([]);
+	const [openMountId, setOpenMountId] = useState(null);
+	const [mountFolderId, setMountFolderId] = useState(ROOT_ID);
+	const [saveProgress, setSaveProgress] = useState(null); // {filesDone, filesTotal} | null
+
 	useEffect(() => {
-		initFiles(ownerPubkey, privKeySig.value, publish).then(() => setReady(true));
+		Promise.all([initFiles(ownerPubkey, privKeySig.value, publish), initShares(ownerPubkey)]).then(() => setReady(true));
 	}, [ownerPubkey]);
+
+	function openShareDialog(nodeId) {
+		setShareDialogTarget(nodeId);
+		setShareSelectedPubkeys(new Set());
+		setShareError("");
+	}
+
+	function toggleShareRecipient(pubkey) {
+		setShareSelectedPubkeys((prev) => {
+			const next = new Set(prev);
+			if (next.has(pubkey)) next.delete(pubkey);
+			else next.add(pubkey);
+			return next;
+		});
+	}
+
+	async function submitShare() {
+		if (shareSelectedPubkeys.size === 0) return;
+		setShareBusy(true);
+		setShareError("");
+		try {
+			const result = await shareFolder(ownerPubkey, privKeySig.value, dbKeySig.value, shareDialogTarget, [...shareSelectedPubkeys], publish, {
+				serverUrl: BLOSSOM_URL,
+				privateKey: privKeySig.value,
+			});
+			if (result instanceof Error) {
+				setShareError(result.message || "Не удалось расшарить папку.");
+				return;
+			}
+			setShareDialogTarget(null);
+		} catch {
+			setShareError("Сеть недоступна — попробуйте позже.");
+		} finally {
+			setShareBusy(false);
+		}
+	}
+
+	async function openAccessPanel(nodeId) {
+		setAccessPanelTarget(nodeId);
+		setGrantees(await listGrantees(ownerPubkey, nodeId));
+	}
+
+	async function handleRevoke(nodeId, pubkey) {
+		await revokeAccess(ownerPubkey, privKeySig.value, dbKeySig.value, nodeId, pubkey, publish);
+		setGrantees(await listGrantees(ownerPubkey, nodeId));
+	}
+
+	async function openMountView(mountId) {
+		await ensureMountProjection(ownerPubkey, mountId);
+		setOpenMountId(mountId);
+		setMountFolderId(ROOT_ID);
+	}
+
+	async function handleSaveToOwn(mountId, nodeId) {
+		setSaveProgress({ filesDone: 0, filesTotal: 1 });
+		try {
+			await saveMountedItemToOwn(ownerPubkey, dbKeySig.value, mountId, nodeId, currentFolderId.value, {
+				serverUrl: BLOSSOM_URL,
+				privateKey: privKeySig.value,
+				onProgress: (p) => setSaveProgress(p),
+			});
+		} finally {
+			setSaveProgress(null);
+		}
+	}
+
+	async function handleUnmountShare(mountId) {
+		if (!window.confirm("Отключить эту общую папку? Уже сохранённые себе копии останутся.")) return;
+		await unmountShare(ownerPubkey, dbKeySig.value, mountId);
+		if (openMountId === mountId) setOpenMountId(null);
+	}
 
 	// Дебаунс — по прецеденту chat.jsx (черновики): таймер, отменяется при
 	// следующем нажатии/размонтировании. ALGO.MD §13: линейный скан — Θ(n)
@@ -322,22 +414,44 @@ export default function Files() {
 			title="Файлы"
 			actions={
 				<>
-					<button type="button" onClick={() => setNewFolderOpen((v) => !v)}>
-						<IconPlus /> Новая папка
+					<button type="button" class={view === "own" ? undefined : "btn--ghost"} onClick={() => setView("own")}>
+						Мои файлы
 					</button>
-					{clipboard.value.state !== "empty" && (
-						<button type="button" class="btn--ghost" onClick={pasteHere}>
-							Вставить ({clipboard.value.selection.length})
-						</button>
-					)}
-					{canUndo.value && (
-						<button type="button" class="btn--ghost" onClick={undo}>
-							Отменить
-						</button>
+					<button type="button" class={view === "mounts" ? undefined : "btn--ghost"} onClick={() => setView("mounts")}>
+						<IconGlobe aria-hidden="true" /> Полученные доли{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
+					</button>
+					{view === "own" && (
+						<>
+							<button type="button" onClick={() => setNewFolderOpen((v) => !v)}>
+								<IconPlus /> Новая папка
+							</button>
+							{clipboard.value.state !== "empty" && (
+								<button type="button" class="btn--ghost" onClick={pasteHere}>
+									Вставить ({clipboard.value.selection.length})
+								</button>
+							)}
+							{canUndo.value && (
+								<button type="button" class="btn--ghost" onClick={undo}>
+									Отменить
+								</button>
+							)}
+						</>
 					)}
 				</>
 			}
 		>
+			{view === "mounts" ? (
+				<MountsView
+					openMountId={openMountId}
+					mountFolderId={mountFolderId}
+					setMountFolderId={setMountFolderId}
+					openMountView={openMountView}
+					closeMountView={() => setOpenMountId(null)}
+					handleSaveToOwn={handleSaveToOwn}
+					handleUnmountShare={handleUnmountShare}
+					saveProgress={saveProgress}
+				/>
+			) : (
 			<div ref={containerRef} tabIndex={-1} class="files-shell">
 				<div class="cluster file-breadcrumbs">
 					<ol role="list" class="cluster file-breadcrumb-list">
@@ -448,6 +562,9 @@ export default function Files() {
 									</button>
 								)}
 								{STATUS_LABELS[entry.status] && <small class="file-row-status">{STATUS_LABELS[entry.status]}</small>}
+								{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
+									<IconGlobe aria-hidden="true" title="Общий доступ открыт" class="file-row-icon" />
+								)}
 								<span class="grow" />
 								{inTrash ? (
 									<>
@@ -469,6 +586,17 @@ export default function Files() {
 										<button type="button" onClick={() => cutSelection([entry.id])}>
 											Вырезать
 										</button>
+										{entry.kind === "dir" && (
+											sharedNodeIds.value.has(entry.id) ? (
+												<button type="button" onClick={() => openAccessPanel(entry.id)}>
+													<IconGlobe /> Управление доступом
+												</button>
+											) : (
+												<button type="button" onClick={() => openShareDialog(entry.id)}>
+													<IconGlobe /> Поделиться
+												</button>
+											)
+										)}
 										<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 											<IconTrash /> Удалить
 										</button>
@@ -480,8 +608,189 @@ export default function Files() {
 					</>
 				)}
 			</div>
+			)}
 		</Screen>
 		{playingDigest && <FilePlayer digest={playingDigest} ownerPubkey={ownerPubkey} onClose={() => setPlayingDigest(null)} />}
+		{shareDialogTarget && (
+			<ShareDialog
+				busy={shareBusy}
+				error={shareError}
+				selected={shareSelectedPubkeys}
+				onToggle={toggleShareRecipient}
+				onSubmit={submitShare}
+				onCancel={() => setShareDialogTarget(null)}
+			/>
+		)}
+		{accessPanelTarget && (
+			<AccessPanel grantees={grantees} onRevoke={(pubkey) => handleRevoke(accessPanelTarget, pubkey)} onClose={() => setAccessPanelTarget(null)} />
+		)}
 		</>
+	);
+}
+
+function ModalShell({ label, onClose, children }) {
+	return (
+		<div
+			role="dialog"
+			aria-modal="true"
+			aria-label={label}
+			onClick={onClose}
+			style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "var(--space-m)" }}
+		>
+			<div onClick={(e) => e.stopPropagation()} class="stack" style={{ background: "var(--surface, canvas)", borderRadius: "var(--radius)", padding: "var(--space-m)", maxWidth: "32rem", width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
+				{children}
+			</div>
+		</div>
+	);
+}
+
+// Диалог "Поделиться" (этап 53 И6, задача 6.7) — выбор контактов чекбоксами.
+// share() в v0.1 производит только read-гранты (CONTRACTS.md 6.2) — второй
+// уровень доступа выбирать не из чего, поэтому его в интерфейсе просто нет.
+function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
+	return (
+		<ModalShell label="Поделиться папкой" onClose={onCancel}>
+			<h2>Поделиться папкой</h2>
+			<p style={{ color: "var(--muted)" }}>Выбранные контакты получат доступ на чтение к содержимому папки и будут видеть последующие изменения.</p>
+			{contacts.value.length === 0 ? (
+				<p>Пока нет ни одного контакта.</p>
+			) : (
+				<ul role="list" class="stack">
+					{contacts.value.map((pubkey) => (
+						<li key={pubkey} class="cluster">
+							<label class="cluster">
+								<input type="checkbox" checked={selected.has(pubkey)} onChange={() => onToggle(pubkey)} />
+								{profiles.value[pubkey]?.name || pubkey.slice(0, 16)}
+							</label>
+						</li>
+					))}
+				</ul>
+			)}
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+			<div class="cluster">
+				<button type="button" disabled={busy || selected.size === 0} onClick={onSubmit}>
+					{busy ? "Заливка…" : "Поделиться"}
+				</button>
+				<button type="button" class="btn--ghost" onClick={onCancel}>
+					Отмена
+				</button>
+			</div>
+		</ModalShell>
+	);
+}
+
+// Панель "Управление доступом" — список текущих читателей + отзыв.
+function AccessPanel({ grantees, onRevoke, onClose }) {
+	return (
+		<ModalShell label="Управление доступом" onClose={onClose}>
+			<h2>Управление доступом</h2>
+			{grantees.length === 0 ? (
+				<p>Доступ никому не открыт.</p>
+			) : (
+				<ul role="list" class="stack">
+					{grantees.map((pubkey) => (
+						<li key={pubkey} class="cluster">
+							<IconPeople aria-hidden="true" />
+							<span class="grow">{profiles.value[pubkey]?.name || pubkey.slice(0, 16)}</span>
+							<button type="button" class="btn--ghost btn--danger" onClick={() => onRevoke(pubkey)}>
+								Отозвать
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+			<button type="button" class="btn--ghost" onClick={onClose}>
+				Закрыть
+			</button>
+		</ModalShell>
+	);
+}
+
+// Раздел "Полученные доли" (этап 53 И6, задача 6.7 — сужение MVP, CONTRACTS.md):
+// СВОЯ локальная навигация внутри ОДНОЙ доли, read-only (share() в v0.1 —
+// только read-гранты), получение содержимого — ТОЛЬКО через "Сохранить себе".
+function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountView, closeMountView, handleSaveToOwn, handleUnmountShare, saveProgress }) {
+	if (openMountId === null) {
+		return (
+			<div class="stack">
+				{activeMounts.value.length === 0 ? (
+					<p style={{ color: "var(--muted)" }}>Пока никто не поделился с вами папкой.</p>
+				) : (
+					<ul role="list" class="stack">
+						{activeMounts.value.map((m) => (
+							<li key={m.mountId} class="cluster file-row">
+								<IconGlobe aria-hidden="true" class="file-row-icon" />
+								<span class="grow">{profiles.value[m.ownerPubkey]?.name || `${m.ownerPubkey.slice(0, 16)}…`}</span>
+								<button type="button" class="btn--ghost" onClick={() => openMountView(m.mountId)}>
+									Открыть
+								</button>
+								<button type="button" class="btn--ghost btn--danger" onClick={() => handleUnmountShare(m.mountId)}>
+									Отключить
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
+		);
+	}
+
+	const R = mountProjections.value.get(openMountId);
+	if (!R) return null;
+	// Mount.state — createInitialState() СОЗДАЁТ $trash/$lost+found (тот же
+	// старт, что любой TreeState, mount.js) — это ТЕХНИЧЕСКИЕ узлы получателя
+	// (пустые, никогда не наполняются владельцем доли — snapshotSubtree/
+	// subtreeOpsRootedAt пишут только под ROOT_ID реального содержимого),
+	// показывать их в списке доли бессмысленно и вводит в заблуждение
+	// (найдено живым тестированием — пустая доля показывала "Корзину"/
+	// "lost+found", будто это содержимое владельца).
+	const entries = (R.children.get(mountFolderId) ?? [])
+		.filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID)
+		.map((id) => ({ id, ...R.nodes.get(id) }));
+
+	return (
+		<div class="stack">
+			<div class="cluster">
+				<button type="button" class="btn--ghost" onClick={closeMountView}>
+					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> К списку долей
+				</button>
+				{mountFolderId !== ROOT_ID && (
+					<button type="button" class="btn--ghost" onClick={() => setMountFolderId(ROOT_ID)}>
+						Корень доли
+					</button>
+				)}
+			</div>
+			{saveProgress && (
+				<p role="status">
+					Сохраняю: {saveProgress.filesDone}/{saveProgress.filesTotal}
+				</p>
+			)}
+			{entries.length === 0 ? (
+				<p style={{ color: "var(--muted)" }}>Здесь пока ничего нет.</p>
+			) : (
+				<ul role="list" class="file-row-list">
+					{entries.map((entry) => (
+						<li key={entry.id} class="file-row">
+							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
+							{entry.kind === "dir" ? (
+								<button type="button" class="file-row-name" onClick={() => setMountFolderId(entry.id)}>
+									{entry.displayName}
+								</button>
+							) : (
+								<span class="file-row-name">{entry.displayName}</span>
+							)}
+							<span class="grow" />
+							<button type="button" class="btn--ghost" onClick={() => handleSaveToOwn(openMountId, entry.id)} disabled={!!saveProgress}>
+								Сохранить себе
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
 	);
 }

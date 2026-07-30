@@ -45,7 +45,13 @@ export async function mount(recipientPubkey, recipientPrivKey, dbKey, treeState,
 	await saveMountKey(recipientPubkey, newLocalId, version, subtreeKey, dbKey);
 	await saveMountState(recipientPubkey, newLocalId, createInitialState());
 
-	return { treeState: newTreeState, mountId: newLocalId, ownerPubkey, rootId, version };
+	// op — для вызывающей стороны (ui/signals/mounts.js, этап 53 И6, задача
+	// 6.7): узел-ссылка публикуется/синхронизируется как ЛЮБАЯ другая
+	// операция дерева файлов (CONTRACTS.md 6.3), через ту же инфраструктуру,
+	// что обычные createFolder/rename — вызывающая сторона применяет op
+	// через files.js's applyAndPersist, не через treeState здесь (та уже
+	// применена ЛОКАЛЬНО, к переданному снимку, для newTreeState ниже).
+	return { treeState: newTreeState, op, mountId: newLocalId, ownerPubkey, rootId, version };
 }
 
 // Применяет ОДНО FILE_SUBTREE_OP_KIND-событие к Mount.state (снимок при
