@@ -186,7 +186,19 @@ function MainShell() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [sidebarOpen]);
 
+	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ: повторный клик по тому же контакту в "Контактах"
+	// после ухода со вкладки "Сообщения" ЧЕРЕЗ САЙДБАР (не стрелкой "назад"
+	// внутри чата, та уже сама вызывает openChat(null)) не переключал вкладку.
+	// Причина: activeChatPubkey.value оставался равен pubkey того же контакта,
+	// useEffect ниже завязан на ИЗМЕНЕНИЕ значения ([activeChatPubkey.value]),
+	// а повторное присваивание того же значения не считается изменением —
+	// эффект не срабатывает повторно. Тот же класс бага для activeChannelId.
+	// Починка — здесь, а не в contacts.jsx/chat.js: уход на ЛЮБУЮ ДРУГУЮ
+	// вкладку сбрасывает "открытый чат/канал", гарантируя, что следующий
+	// клик всегда будет РЕАЛЬНЫМ изменением значения.
 	function selectNavItem(id) {
+		if (id !== "messages") activeChatPubkey.value = null;
+		if (id !== "channels") activeChannelId.value = null;
 		setActiveId(id);
 		setSidebarOpen(false);
 	}

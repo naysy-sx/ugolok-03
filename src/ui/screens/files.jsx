@@ -68,8 +68,21 @@ const thumbnailQueue = createThumbnailQueue(3);
 // store.js, сперва; сеть — только если кэш пуст). Отмена — если строка
 // покинула вьюпорт РАНЬШЕ, чем задание стартовало (thumbnail-queue.js);
 // уже стартовавшее докручивается, не прерывается на середине.
+// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 53 И7 4.4-довесок): "отправитель видит
+// маленькую фотку, получатель — нормальную". Причина — ключ кэша здесь
+// (entry.blob = manifestDigest) СОВПАДАЛ с ключом, которым attachment-
+// view.jsx кэширует ПОЛНОРАЗМЕРНОЕ вложение чата (тот же manifestDigest,
+// если файл был отправлен через дедупликацию, И7 7.4 — один и тот же
+// блоб). Миниатюра (200px, downscale) — не то же самое содержимое, что
+// полный файл, но раньше делила с ним ОДИН слот в attachment-memory-
+// cache.js — кто первым закэшировал (превью в "Файлы" или полный
+// просмотр в чате), тот и "выигрывал" для ВСЕХ последующих чтений под
+// этим digest'ом. THUMB_CACHE_PREFIX — отдельный неймспейс, чтобы
+// уменьшенная и полная версии никогда не делили один ключ.
+const THUMB_CACHE_PREFIX = "thumb:";
+
 function FileThumbnail({ entry, ownerPubkey }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(entry.blob) ?? null);
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
 	const [failed, setFailed] = useState(false);
 	const elRef = useRef(null);
 
@@ -99,7 +112,7 @@ function FileThumbnail({ entry, ownerPubkey }) {
 							setFailed(true);
 							return;
 						}
-						setUrl(putMemoryCachedAttachment(entry.blob, thumbBytes, "image/jpeg"));
+						setUrl(putMemoryCachedAttachment(THUMB_CACHE_PREFIX + entry.blob, thumbBytes, "image/jpeg"));
 					})
 					.catch(() => {
 						if (!cancelled) setFailed(true);
