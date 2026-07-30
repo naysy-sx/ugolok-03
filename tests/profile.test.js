@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile } from "../src/domain/identity/profile.js";
+import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile, uploadAvatarBlob } from "../src/domain/identity/profile.js";
 import { sign } from "../src/core/crypto/sign.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(11);
@@ -163,4 +164,63 @@ test("hydrateOwnProfile АДВЕРСАРНО: битый content (не JSON) —
 
 	await assert.doesNotReject(() => hydrateOwnProfile(OWNER_PUBKEY));
 	assert.equal(await hydrateOwnProfile(OWNER_PUBKEY), false);
+});
+
+// uploadAvatarBlob — перенесено из tests/attachments-upload.test.js (этап 53
+// И7, задача 7.4 — снятие фасада attachments, DESIGN.md). Логика не менялась,
+// только импорт (uploadBlob из domain/files/blob.js, validateAttachment из
+// domain/files/attachment-validation.js — оба уже переиспользуемые примитивы,
+// без изменений в них самих).
+function fakeResponse({ jsonBody = {} } = {}) {
+	return { ok: true, status: 200, json: async () => jsonBody, text: async () => "" };
+}
+
+function makeUploadFetch(store) {
+	return async (url, opts) => {
+		const body = new Uint8Array(opts.body);
+		const sha256Hex = bytesToHex(sha256(body));
+		store.set(sha256Hex, body);
+		return fakeResponse({ jsonBody: { sha256: sha256Hex, size: body.length, url: `https://blossom.test/${sha256Hex}` } });
+	};
+}
+
+test("uploadAvatarBlob: НЕ шифрует — сервер получает те же байты, что переданы (публичный профиль, не сообщение)", async () => {
+	const store = new Map();
+	let sentBody;
+	const fetchImpl = async (url, opts) => {
+		sentBody = opts.body;
+		return makeUploadFetch(store)(url, opts);
+	};
+	const original = new TextEncoder().encode("картинка-аватар (условно)");
+	await uploadAvatarBlob("https://blossom.test", original, "image/png", PRIV_KEY, { fetchImpl });
+	assert.deepEqual(new Uint8Array(sentBody), original, "avatar публичный — байты идут как есть, без шифрования");
+});
+
+test("uploadAvatarBlob: возвращает СТРОКУ — публичный URL из ответа сервера (response.url), не дескриптор", async () => {
+	const store = new Map();
+	const fetchImpl = makeUploadFetch(store);
+	const url = await uploadAvatarBlob("https://blossom.test", new Uint8Array([1, 2, 3]), "image/jpeg", PRIV_KEY, { fetchImpl });
+	assert.equal(typeof url, "string");
+	assert.ok(url.startsWith("https://blossom.test/"));
+});
+
+test("uploadAvatarBlob: недопустимый MIME — throw ДО сети (переиспользует validateAttachment)", async () => {
+	let called = false;
+	const fetchImpl = async () => {
+		called = true;
+		return fakeResponse();
+	};
+	await assert.rejects(
+		() => uploadAvatarBlob("https://blossom.test", new Uint8Array([1]), "application/x-msdownload", PRIV_KEY, { fetchImpl }),
+		/тип/,
+	);
+	assert.equal(called, false);
+});
+
+test("uploadAvatarBlob: сервер не вернул response.url — фолбэк на serverUrl + '/' + sha256", async () => {
+	const original = new TextEncoder().encode("аватар без url в ответе");
+	const sha256Hex = bytesToHex(sha256(original));
+	const fetchImpl = async () => fakeResponse({ jsonBody: { sha256: sha256Hex, size: original.length } });
+	const url = await uploadAvatarBlob("https://blossom.test/", original, "image/png", PRIV_KEY, { fetchImpl });
+	assert.equal(url, `https://blossom.test/${sha256Hex}`);
 });

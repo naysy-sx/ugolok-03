@@ -8573,3 +8573,91 @@ preview`, реальный Blossom+strfry, `window.confirm` подменён н�
 чистая на ОБЕИХ сторонах.
 
 Regression: 1125/1125 (без новых unit-тестов). Сборка: 552.65 КБ gzip.
+
+## Этап 53, И7, задача 7.4 — messaging переходит на узлы, фасад attachments удалён
+
+Полное содержание решения — DESIGN.md "Этап 53, И7, задача 7.4" (два
+открытых вопроса TASK.md §15/MATH.md §7, закрытых явным решением
+пользователя, не додуманы). Кратко здесь — что изменилось физически.
+
+**Открытые вопросы закрыты пользователем:** (1) вложение из хранилища
+ссылается на ТОТ ЖЕ `manifestDigest`/`fileKey`, без повторной заливки
+(MATH.md §7 — дедупликация; закрывает находку 7.3, которая по ошибке
+создавала дубликат блоба под новым ключом); (2) НИ ОДНО вложение
+чата/канала не становится автоматически видимым узлом в "Файлы"
+(TASK.md §15, открытый вопрос №1 — авторы сами не выбрали критерий,
+"нужно смотреть на реальную переписку", реальной с историей нет,
+альфа). `pinned` (§5.6) сознательно НЕ реализован — единственный
+читатель (GC) не существует нигде в проекте, писать в непрочитанное
+множество без персистентности — неиспользуемая инфраструктура.
+
+**`domain/attachments/` удалён целиком.** Роль распределена:
+- `domain/messaging/attachments.js` (новый) — `uploadMessageAttachment`
+  (putStream внутри, чанкованное шифрование вместо целофайлового
+  encryptFile), `referenceStoredFile` (без сети — дедупликация),
+  `downloadMessageAttachment` (getManifest+getRange).
+- `domain/files/attachment-validation.js` — перенесённая без изменений
+  `validateAttachment`/`ALLOWED_MIME_TYPES` (общая для messaging И
+  identity, оба уже зависят от files по §3.4).
+- `domain/files/content-cache.js` — перенесённый `cache.js`, тот же
+  алгоритм LRU+TTL, ключ — `manifestDigest`, та же IndexedDB-таблица
+  `attachments` (схема НЕ меняется, версия БД не бампуется).
+- `domain/identity/profile.js` получил `uploadAvatarBlob` (без
+  изменений — публичный, нешифрованный путь, никогда не был частью
+  facade-шифрования).
+- `domain/messaging/voice.js`/`transfer-machine.js` — перенесены без
+  изменений (не часть facade, messaging-специфичная логика).
+
+**UI-потребители:** `attachment-view.jsx` (общий для чата/каналов) —
+единственная точка чтения, `getOrDownloadAttachment` → `getOrDownloadMessageAttachment`.
+`chat.jsx`/`channel.jsx`/`channels.jsx`/`pending-attachment.js` — точки
+записи. `chat.jsx`'s `handleAttachmentFromStorage` (7.3) переделан:
+вместо `getRange`+`new File`+повторной заливки — `attachmentSourceRef`
+(отдельное состояние, `{manifestDigest, fileKey, manifest}`) хранит
+ссылку на уже существующий блоб, `buildOutgoingAttachment` при её
+наличии собирает дескриптор через `referenceStoredFile` (без сети).
+
+**Реальный баг, найденный ТОЛЬКО живой проверкой** (не поймать unit-
+тестами — `attachment-view.jsx` не покрыт ими): новый дескриптор не
+несёт `blossomUrl` (в отличие от старого `{sha256,blossomUrl,
+encryptionKey}` — URL шёл В дескрипторе), но `attachment-view.jsx`
+вызывало `getOrDownloadMessageAttachment` БЕЗ `{serverUrl}` в опциях —
+`downloadMessageAttachment` внутри падал на `stripTrailingSlash(undefined)`
+("Cannot read properties of undefined (reading 'endsWith')"). Исправлено:
+`attachment-view.jsx`/`channels.jsx` передают `{serverUrl: BLOSSOM_URL}`
+явно (тот же сконфигурированный сервер, что везде в "Файлы" — единый
+источник, не per-вложение URL, как раньше).
+
+**Тесты переписаны осознанно** (правило И7, DESIGN.md): `attachments-
+upload.test.js` → `messaging-attachments.test.js` (новое поведение,
++ адверсарная мутация на дедупликацию — `referenceStoredFile` с
+подменённым digest ловится немедленно). `attachment-cache.test.js` →
+`files-content-cache.test.js` (тот же алгоритм, новый ключ/источник).
+`attachments-validation.test.js` → `files-attachment-validation.test.js`
+(только путь модуля). `uploadAvatarBlob`-тесты перенесены в
+`profile.test.js`. `voice.test.js`/`transfer-machine.test.js` — путь
+обновлён, логика не менялась. `attachment-memory-cache.test.js`/
+`blossom-client.test.js`/`file-crypto.test.js` — БЕЗ изменений
+(тестируемые модули не удалены и не меняют поведение).
+
+**Живая проверка — ПОЛНЫЙ E2E, два реальных аккаунта** (`vite preview`,
+реальный Blossom+strfry, свежий contact request принят по-настоящему):
+(1) вложение ИЗ хранилища (дедупликация) — отправлено, СЕТЕВОЙ ЛОГ
+подтвердил НОЛЬ `PUT`-запросов (только `GET`/`206` — манифест+чанк),
+получатель увидел картинку корректно, отправитель тоже (тот самый баг
+serverUrl пойман и исправлен именно на этом шаге); (2) вложение С ДИСКА
+(`uploadMessageAttachment`, честная новая заливка) — видео отправлено
+и воспроизведено на обеих сторонах; (3) канал с аватаром — создан,
+превью аватара отрендерилось в списке каналов (та же миграция
+`getOrDownloadMessageAttachment`+`serverUrl`, что чат). Консоль браузера
+чистая на всех участниках сценария. Честно НЕ проверено обратной
+совместимостью: сообщение, отправленное ДО этой миграции (старый
+формат `{sha256,blossomUrl,encryptionKey}`), падает с понятной ошибкой
+("Не удалось загрузить картинку: ..."), не крашит экран — ожидаемое,
+осознанно принятое пользователем следствие (TASK.md §3.1: "данных нет,
+мигрировать нечего", альфа).
+
+Regression: 1126/1126 (`incremental-sync.test.js` — одна ЗАМЕЧЕННАЯ
+нестабильность таймингов на полном прогоне, не воспроизводится в
+изоляции и на повторном прогоне, не связана с этим проходом — не
+трогается). Сборка: 552.72 КБ gzip.

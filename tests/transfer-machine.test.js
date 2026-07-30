@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TRANSFER_TRANSITIONS, transitionTransfer } from "../src/domain/attachments/transfer-machine.js";
+import { TRANSFER_TRANSITIONS, transitionTransfer } from "../src/domain/messaging/transfer-machine.js";
 
 const STATES = ["idle", "encrypting", "uploading", "completed", "failed"];
 const EVENTS = ["START", "ENCRYPTED", "UPLOADED", "ERROR", "RETRY"];

@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
-import { buildProfileEvent } from "../../domain/identity/profile.js";
-import { uploadAvatarBlob } from "../../domain/attachments/upload.js";
+import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";

@@ -10,9 +10,9 @@ import {
 	listAvailableChannels,
 	subscribeToChannelAction,
 } from "../../domain/content/channel.js";
-import { validateAttachment } from "../../domain/attachments/validation.js";
-import { uploadAttachment } from "../../domain/attachments/upload.js";
-import { getOrDownloadAttachment } from "../../domain/attachments/cache.js";
+import { validateAttachment } from "../../domain/files/attachment-validation.js";
+import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
+import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { activeChannelId, openChannel } from "../signals/channel-nav.js";
@@ -31,36 +31,37 @@ function formatUpdatedDate(unixSeconds) {
 }
 
 // Найдено пользователем: "аватары каналов в списке каналов не отображаются" —
-// channel.avatar это ЗАШИФРОВАННЫЙ дескриптор вложения (Tier 1, тот же
-// {sha256, blossomUrl, encryptionKey, ...}, что вложения в чате), а не готовый
-// URL — раньше код просто проверял channel.avatar ? 🖼️-эмодзи вместо реальной
-// расшифровки. Тот же приём, что ImageAttachment (attachment-view.jsx), только
-// без модалки — это маленькая иконка списка, не полноэкранный просмотр.
+// channel.avatar это ЗАШИФРОВАННЫЙ дескриптор вложения (тот же {manifestDigest,
+// fileKey, mime, ...}, что вложения в чате — этап 53 И7 7.4, переезд на
+// content.js), а не готовый URL — раньше код просто проверял channel.avatar ?
+// 🖼️-эмодзи вместо реальной расшифровки. Тот же приём, что ImageAttachment
+// (attachment-view.jsx), только без модалки — это маленькая иконка списка,
+// не полноэкранный просмотр.
 function ChannelAvatarThumb({ channel }) {
 	const ownerPubkey = currentUser.value.id;
 	const dbKey = dbKeySig.value;
-	const [url, setUrl] = useState(() => (channel.avatar ? (getMemoryCachedUrl(channel.avatar.sha256) ?? null) : null));
+	const [url, setUrl] = useState(() => (channel.avatar ? (getMemoryCachedUrl(channel.avatar.manifestDigest) ?? null) : null));
 
 	useEffect(() => {
 		if (!channel.avatar) {
 			setUrl(null);
 			return;
 		}
-		const memUrl = getMemoryCachedUrl(channel.avatar.sha256);
+		const memUrl = getMemoryCachedUrl(channel.avatar.manifestDigest);
 		if (memUrl) {
 			setUrl(memUrl);
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadAttachment(ownerPubkey, dbKey, channel.avatar)
+		getOrDownloadMessageAttachment(ownerPubkey, dbKey, channel.avatar, { serverUrl: BLOSSOM_SERVER_URL })
 			.then((bytes) => {
-				if (!cancelled) setUrl(putMemoryCachedAttachment(channel.avatar.sha256, bytes, channel.avatar.mime));
+				if (!cancelled) setUrl(putMemoryCachedAttachment(channel.avatar.manifestDigest, bytes, channel.avatar.mime));
 			})
 			.catch(() => {}); // тихо — остаётся буква-заглушка, не мешаем списку ошибкой
 		return () => {
 			cancelled = true;
 		};
-	}, [channel.avatar?.sha256]);
+	}, [channel.avatar?.manifestDigest]);
 
 	if (url) {
 		return <img src={url} alt="" class="channel-avatar-thumb" />;
@@ -154,7 +155,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
 			}
 			await createChannel(
 				ownerPubkey,

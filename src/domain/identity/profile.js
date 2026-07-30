@@ -1,7 +1,11 @@
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { sign } from '../../core/crypto/sign.js';
 import { db } from '../../core/store/database.js';
 import { pickLatest } from '../../core/sync/lww.js';
 import { updateProfile } from '../../core/crypto/keystore.js';
+import { uploadBlob } from '../files/blob.js';
+import { validateAttachment } from '../files/attachment-validation.js';
 
 // Этап 37 — правка контракта (было: picture сознательно не писалась, этап 26,
 // "локальный stand-in до Blossom"). JSON.stringify сам опускает undefined-поля —
@@ -18,6 +22,20 @@ export function buildProfileEvent(privKey, { name, about, picture } = {}) {
 
 export function parseProfileEvent(event) {
   return JSON.parse(event.content);
+}
+
+// Перенесено из domain/attachments/upload.js (этап 53 И7, задача 7.4 — снятие
+// фасада attachments). Логика НЕ меняется: параллель uploadMessageAttachment,
+// БЕЗ шифрования (публичный профиль — шифровать нечего и незачем), переиспользует
+// uploadBlob (files/blob.js, тот же, что чанкованная загрузка content.js —
+// сам по себе агностичен к тому, зашифрованы байты или нет) и validateAttachment.
+// Возвращает СТРОКУ (публичный URL), не дескриптор — avatar идёт через обычный
+// <img src>, не через downloadMessageAttachment's manifest-проверку.
+export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, options = {}) {
+  validateAttachment({ mime, size: fileBytes.length });
+  const sha256Hex = bytesToHex(sha256(fileBytes));
+  const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);
 }
 
 // Найдено пользователем (живая проверка — вход в существующий аккаунт с

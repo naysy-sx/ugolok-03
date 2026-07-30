@@ -1,6 +1,6 @@
 import { useState, useRef } from "preact/hooks";
-import { validateAttachment } from "../../domain/attachments/validation.js";
-import { uploadAttachment } from "../../domain/attachments/upload.js";
+import { validateAttachment } from "../../domain/files/attachment-validation.js";
+import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
@@ -36,5 +36,5 @@ export function usePendingAttachment() {
 
 export async function uploadPendingAttachment(file, privKey) {
 	const bytes = new Uint8Array(await file.arrayBuffer());
-	return uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: file.type, name: file.name }, privKey);
+	return uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: file.type, name: file.name }, privKey);
 }

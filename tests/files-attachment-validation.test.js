@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateAttachment, ALLOWED_MIME_TYPES, MAX_IMAGE_FILE_SIZE, MAX_VIDEO_SIZE, MAX_VOICE_SIZE } from "../src/domain/attachments/validation.js";
+import { validateAttachment, ALLOWED_MIME_TYPES, MAX_IMAGE_FILE_SIZE, MAX_VIDEO_SIZE, MAX_VOICE_SIZE } from "../src/domain/files/attachment-validation.js";
 
 test("validateAttachment: допустимый image в пределах лимита — не бросает (AC-AT-01)", () => {
 	assert.doesNotThrow(() => validateAttachment({ mime: "image/jpeg", size: 5 * 1024 * 1024 }));

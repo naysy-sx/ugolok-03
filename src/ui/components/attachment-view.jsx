@@ -1,12 +1,19 @@
 import { useState, useEffect } from "preact/hooks";
-import { getOrDownloadAttachment } from "../../domain/attachments/cache.js";
+import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import ImageModal from "./image-modal.jsx";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
+
+// Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
+// форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
+// через content.js — тот же ОДИН сконфигурированный Blossom-сервер, что везде
+// в разделе "Файлы" (files.jsx/file-player.jsx), не per-вложение URL.
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function base64ToBytes(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -29,21 +36,21 @@ function ImageAttachment({ attachment }) {
 	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
 	// без вспышки спиннера (найдено ревью: URL.revokeObjectURL на каждом unmount
 	// раньше заставлял пере-качивать и пере-расшифровывать уже виденное).
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.sha256) ?? null);
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.manifestDigest) ?? null);
 	const [error, setError] = useState("");
 	const [showModal, setShowModal] = useState(false);
 
 	useEffect(() => {
-		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
 		if (memUrl) {
 			setUrl(memUrl);
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
+		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
 			.then((bytes) => {
 				if (cancelled) return;
-				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
+				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(err?.message || String(err));
@@ -88,7 +95,7 @@ function ImageAttachment({ attachment }) {
 // видео — раньше был отдельный лимит 3 МБ, поднят по просьбе пользователя). voiceInline
 // (F-AT-08, ≤32КБ) вообще не ходит в сеть — декодируется прямо из base64 в payload.
 function AudioAttachment({ attachment }) {
-	const [url, setUrl] = useState(() => (attachment.voiceInline ? null : (getMemoryCachedUrl(attachment.sha256) ?? null)));
+	const [url, setUrl] = useState(() => (attachment.voiceInline ? null : (getMemoryCachedUrl(attachment.manifestDigest) ?? null)));
 	const [error, setError] = useState("");
 
 	useEffect(() => {
@@ -100,16 +107,16 @@ function AudioAttachment({ attachment }) {
 			setUrl(objectUrl);
 			return () => URL.revokeObjectURL(objectUrl);
 		}
-		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
 		if (memUrl) {
 			setUrl(memUrl);
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
+		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
 			.then((bytes) => {
 				if (cancelled) return;
-				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
+				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(err?.message || String(err));
@@ -144,20 +151,20 @@ function AudioAttachment({ attachment }) {
 // каждое видео просто показывает первый кадр, воспроизведение — по клику на
 // нативные controls, как и ожидается от обычного плеера.
 function VideoAttachment({ attachment }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.sha256) ?? null);
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.manifestDigest) ?? null);
 	const [error, setError] = useState("");
 
 	useEffect(() => {
-		const memUrl = getMemoryCachedUrl(attachment.sha256);
+		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
 		if (memUrl) {
 			setUrl(memUrl);
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment)
+		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
 			.then((bytes) => {
 				if (cancelled) return;
-				setUrl(putMemoryCachedAttachment(attachment.sha256, bytes, attachment.mime));
+				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(err?.message || String(err));
@@ -224,7 +231,7 @@ export function AttachmentDownloadLink({ attachment }) {
 		try {
 			const bytes = attachment.voiceInline
 				? base64ToBytes(attachment.voiceInline)
-				: await getOrDownloadAttachment(currentUser.value.id, dbKeySig.value, attachment);
+				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL });
 			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
 			const a = document.createElement("a");
 			a.href = url;

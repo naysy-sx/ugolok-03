@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { VOICE_INLINE_MAX_BYTES, shouldInlineVoice, createVoiceRecorder } from "../src/domain/attachments/voice.js";
+import { VOICE_INLINE_MAX_BYTES, shouldInlineVoice, createVoiceRecorder } from "../src/domain/messaging/voice.js";
 
 test("VOICE_INLINE_MAX_BYTES — 32 KB (F-AT-08)", () => {
 	assert.equal(VOICE_INLINE_MAX_BYTES, 32 * 1024);

@@ -14,8 +14,8 @@ import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
-import { validateAttachment } from "../../domain/attachments/validation.js";
-import { uploadAttachment } from "../../domain/attachments/upload.js";
+import { validateAttachment } from "../../domain/files/attachment-validation.js";
+import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
@@ -96,7 +96,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
 			}
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
 			onSaved();

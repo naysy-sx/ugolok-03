@@ -39,9 +39,9 @@ import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
 import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
 import { refreshUnreadMessagesCount } from "../signals/notifications.js";
-import { validateAttachment } from "../../domain/attachments/validation.js";
-import { uploadAttachment } from "../../domain/attachments/upload.js";
-import { createVoiceRecorder, shouldInlineVoice } from "../../domain/attachments/voice.js";
+import { validateAttachment } from "../../domain/files/attachment-validation.js";
+import { uploadMessageAttachment, referenceStoredFile } from "../../domain/messaging/attachments.js";
+import { createVoiceRecorder, shouldInlineVoice } from "../../domain/messaging/voice.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
 import MessageBubble from "../components/message-bubble.jsx";
@@ -265,6 +265,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [attachmentPosition, setAttachmentPosition] = useState("below");
 	const [attachmentError, setAttachmentError] = useState("");
 	const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
+	// Заполнено ТОЛЬКО когда attachmentFile пришёл из "Файлы" (не с диска/не
+	// запись) — {manifestDigest, fileKey, manifest}, уже известные узлу.
+	// Наличие этой ссылки означает: buildOutgoingAttachment ОБЯЗАН собрать
+	// дескриптор через referenceStoredFile (без сети, без повторной заливки —
+	// MATH.md §7 "передают Digest блоба, а не копию байтов"), а НЕ через
+	// uploadMessageAttachment. attachmentFile сам по себе (File, декодированный
+	// ЛОКАЛЬНО из этих же bytes) остаётся нужен ТОЛЬКО для превью
+	// (AttachmentPreview требует File-подобный объект с URL.createObjectURL).
+	const [attachmentSourceRef, setAttachmentSourceRef] = useState(null);
 	const fileInputRef = useRef(null);
 
 	// recordingState: "idle" | "recording" | "recorded". voiceRecorderRef держит
@@ -369,12 +378,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// Прикрепление/голосовое взаимоисключающие — выбор одного сбрасывает другое.
 	// Общий хвост обоих источников (с диска/из хранилища, И7 7.3) — file уже
 	// готовый File/Blob-подобный объект (name/type/size/arrayBuffer()), откуда он
-	// взят — не важно ниже по стеку (uploadAttachment/validateAttachment/
-	// AttachmentPreview агностичны к происхождению).
-	function applySelectedFile(file) {
+	// взят — не важно ниже по стеку для ПРЕВЬЮ (validateAttachment/AttachmentPreview
+	// агностичны к происхождению). sourceRef (не null, только из хранилища) —
+	// см. buildOutgoingAttachment: решает, заливать ли файл заново или сослаться
+	// на уже существующий digest (MATH.md §7 — дедупликация).
+	function applySelectedFile(file, sourceRef = null) {
 		setRecordingState("idle");
 		setRecordedVoiceBlob(null);
 		setAttachmentFile(file);
+		setAttachmentSourceRef(sourceRef);
 		setAttachmentPosition("below");
 		try {
 			validateAttachment({ mime: file.type, size: file.size });
@@ -394,16 +406,16 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		applySelectedFile(file);
 	}
 
-	// И7 7.3 — вложение ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). В отличие от
-	// файла с диска (никогда не был приватным для этого приложения), файл ИЗ
-	// "Файлы" сейчас зашифрован под fileKey поддерева; став вложением, он
-	// перезаливается ПОД СВОИМ НОВЫМ ключом (uploadAttachment's encryptFile —
-	// уже существующий код, ничего специально дозаписывать не нужно), но с
-	// момента отправки получатель держит ключ НАВСЕГДА — отозвать нельзя,
-	// в отличие от оригинала в "Файлы" (решение №9 TASK.md). Предупреждение —
-	// ДО расшифровки (нечего предупреждать, если пользователь передумает),
-	// window.confirm() — тот же принцип, что аватар (7.2)/файловые операции
-	// files.jsx: простой нативный диалог, не кастомная модалка.
+	// И7 7.3/7.4 — вложение ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). Дедупликация
+	// (MATH.md §7: "передают Digest блоба, а не копию байтов") — файл НЕ
+	// перезаливается заново под новым ключом (это создавало бы дубликат блоба,
+	// первая версия 7.3 так и делала — исправлено этим проходом), дескриптор
+	// вложения ссылается на ТОТ ЖЕ manifestDigest/fileKey узла. Расшифровка
+	// (getRange) здесь — ТОЛЬКО ради локального превью (AttachmentPreview),
+	// сети/повторной заливки не требует. С момента отправки получатель держит
+	// fileKey НАВСЕГДА — отозвать нельзя (решение №9 TASK.md), предупреждение —
+	// ДО расшифровки, простой window.confirm() (тот же приём, что аватар 7.2/
+	// необратимые действия files.jsx).
 	async function handleAttachmentFromStorage([nodeId]) {
 		setAttachmentPickerOpen(false);
 		const node = projected.value.nodes.get(nodeId);
@@ -417,7 +429,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				return;
 			}
 			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_SERVER_URL });
-			applySelectedFile(new File([bytes], node.displayName, { type: manifest.mime }));
+			applySelectedFile(new File([bytes], node.displayName, { type: manifest.mime }), { manifestDigest: node.blob, fileKey, manifest });
 		} catch (err) {
 			setError(err?.message || String(err));
 		}
@@ -425,12 +437,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 	function handleRemoveAttachment() {
 		setAttachmentFile(null);
+		setAttachmentSourceRef(null);
 		setAttachmentError("");
 	}
 
 	async function handleStartRecording() {
 		setError("");
 		setAttachmentFile(null); // взаимоисключение — начатая запись отменяет выбранный файл
+		setAttachmentSourceRef(null);
 		const recorder = createVoiceRecorder();
 		try {
 			await recorder.start();
@@ -493,9 +507,17 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// base64 прямо в сообщении; иначе — тот же uploadAttachment, что обычный файл.
 	async function buildOutgoingAttachment() {
 		if (attachmentFile) {
+			// attachmentSourceRef — файл пришёл из "Файлы" (handleAttachmentFromStorage):
+			// БЕЗ сети, ссылка на уже существующий блоб (MATH.md §7 — дедупликация,
+			// не повторная заливка под новым ключом).
+			if (attachmentSourceRef) {
+				const descriptor = referenceStoredFile(attachmentSourceRef.manifestDigest, attachmentSourceRef.fileKey, attachmentSourceRef.manifest);
+				if (descriptor.type === "image") descriptor.position = attachmentPosition;
+				return descriptor;
+			}
 			validateAttachment({ mime: attachmentFile.type, size: attachmentFile.size }); // повторно, defense-in-depth
 			const bytes = new Uint8Array(await attachmentFile.arrayBuffer());
-			const descriptor = await uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: attachmentFile.type, name: attachmentFile.name }, privKey);
+			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: attachmentFile.type, name: attachmentFile.name }, privKey);
 			if (descriptor.type === "image") descriptor.position = attachmentPosition;
 			return descriptor;
 		}
@@ -504,7 +526,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			if (shouldInlineVoice(bytes.length)) {
 				return { type: "audio", voice: true, mime: "audio/webm", name: "Голосовое сообщение", size: bytes.length, voiceInline: base64FromBytes(bytes) };
 			}
-			const descriptor = await uploadAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: "Голосовое сообщение" }, privKey);
+			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: "Голосовое сообщение" }, privKey);
 			descriptor.voice = true;
 			return descriptor;
 		}
@@ -548,6 +570,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 			setText("");
 			setAttachmentFile(null);
+			setAttachmentSourceRef(null);
 			setAttachmentError("");
 			setRecordedVoiceBlob(null);
 			setRecordingState("idle");
