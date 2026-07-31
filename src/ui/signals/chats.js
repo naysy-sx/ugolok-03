@@ -19,9 +19,17 @@ export function bumpMessagingActivity() {
 // НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра возвращал ЧАТЫ
 // ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey — второй
 // локальный аккаунт (мультиаккаунт, этап 11) видел чужую переписку в списке диалогов.
+// Этап 56 (найдено живой проверкой) — переписка, полученная ТОЛЬКО через
+// зеркалирование с другого устройства (syncMirroredHistory, этап 25), пишет
+// напрямую в messages, не создавая mlsGroups на этом устройстве (та появляется
+// лишь при первой ОТПРАВКЕ, ensureChatEstablished) — без объединения с messages
+// такая переписка была видна через "Контакты", но не в списке "Сообщения".
 export async function listChatPartners(ownerPubkey, dbKey) {
-	const rows = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
-	return [...new Set(rows.map((r) => fromEncryptedRow(r, dbKey).contactPubkey))];
+	const groupRows = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const fromGroups = groupRows.map((r) => fromEncryptedRow(r, dbKey).contactPubkey);
+	const messageRows = await db.table("messages").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const fromMessages = messageRows.map((r) => r.chatId);
+	return [...new Set([...fromGroups, ...fromMessages])];
 }
 
 // Находка 3 (CONTRACTS.md, этап 27): ensureChatEstablished не подписывает устройство

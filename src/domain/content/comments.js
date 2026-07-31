@@ -146,11 +146,41 @@ export async function getCommentsTree(ownerPubkey, dbKey, postId) {
 // addComment принимает postId явным аргументом независимо от глубины, см. выше)
 // указывает на пост целиком, а не на непосредственного родителя — parentId
 // нужен ТОЛЬКО buildTree для построения дерева, не для подсчёта общего числа.
+// Этап 56 (найдено живой проверкой, реальный аккаунт в Safari) — "осиротевший"
+// ответ (parentId указывает на комментарий, отсутствующий локально — не получен,
+// либо отброшен receiveComment'ом крипто-барьером на устаревшей версии ключа,
+// F-EV-06, штатное поведение безопасности, не баг) никогда не попадает в
+// buildTree — не рендерится НИГДЕ. Комментарий "достижим", если цепочка parentId
+// (через ДРУГИЕ неудалённые комментарии — postId один и тот же на всех уровнях
+// вложенности по построению addComment, глубина не важна) упирается ровно в
+// postId (дошли до настоящего верхнеуровневого комментария). Guard от цикла —
+// предел шагов nonDeletedComments.length + 1.
+export function computeReachableCommentIds(nonDeletedComments) {
+	const byId = new Map(nonDeletedComments.map((c) => [c.id, c]));
+	const reachable = new Set();
+	for (const comment of nonDeletedComments) {
+		let cur = comment;
+		let steps = 0;
+		while (steps++ < nonDeletedComments.length + 1) {
+			if (cur.parentId === cur.postId) {
+				reachable.add(comment.id);
+				break;
+			}
+			const parent = byId.get(cur.parentId);
+			if (!parent) break;
+			cur = parent;
+		}
+	}
+	return reachable;
+}
+
 export async function countCommentsByPost(ownerPubkey, postIds) {
 	const rows = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const nonDeleted = rows.filter((r) => !r.deleted);
+	const reachable = computeReachableCommentIds(nonDeleted);
 	const counts = new Map(postIds.map((id) => [id, 0]));
-	for (const r of rows) {
-		if (!r.deleted && counts.has(r.postId)) {
+	for (const r of nonDeleted) {
+		if (reachable.has(r.id) && counts.has(r.postId)) {
 			counts.set(r.postId, counts.get(r.postId) + 1);
 		}
 	}

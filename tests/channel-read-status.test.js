@@ -162,6 +162,27 @@ test("getChannelUnreadCount: удалённые (deleted=true) не считаю
 	assert.equal(await getChannelUnreadCount(ALICE_PUB, CHAN_A, DB_KEY), 0);
 });
 
+// Этап 56 (найдено живой проверкой, реальный аккаунт в Safari) — "осиротевший"
+// ответ на комментарий (родитель отсутствует локально — не получен либо отброшен
+// крипто-барьером receiveComment на устаревшей версии ключа) никогда не
+// отображается в дереве комментариев (buildTree не может его пристроить), поэтому
+// пользователь никогда не может его "прочитать" — бейдж "Каналы [N]" висел бы
+// навсегда без фикса.
+test("getChannelUnreadCount: 'осиротевший' комментарий (родитель отсутствует локально) НЕ считается непрочитанным", async () => {
+	await db.table("comments").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "orphan-1", postId: "p1", parentId: "missing-parent-id", deleted: false, channelId: CHAN_A, authorPubkey: BOB_PUB, createdAt: 150, text: "осиротевший ответ", attachments: [], keyVersion: 1 }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelUnreadCount(ALICE_PUB, CHAN_A, DB_KEY), 0, "недостижимый комментарий никогда не отобразится в дереве — не должен считаться непрочитанным");
+});
+
+test("getChannelUnreadCount: обычный достижимый ответ (родитель есть локально) по-прежнему считается", async () => {
+	await db.table("comments").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "root-1", postId: "p1", parentId: "p1", deleted: false, channelId: CHAN_A, authorPubkey: BOB_PUB, createdAt: 100, text: "корневой", attachments: [], keyVersion: 1 }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "reply-1", postId: "p1", parentId: "root-1", deleted: false, channelId: CHAN_A, authorPubkey: BOB_PUB, createdAt: 150, text: "ответ", attachments: [], keyVersion: 1 }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelUnreadCount(ALICE_PUB, CHAN_A, DB_KEY), 2, "оба комментария достижимы через цепочку parentId -> postId");
+});
+
 // Этап 50 — инвариант N1 (CONTACTS-FSM.md §6, приложение А).
 test("isChannelContentRead: нет курсора вовсе -> false", async () => {
 	assert.equal(await isChannelContentRead(ALICE_PUB, CHAN_A, 1), false);

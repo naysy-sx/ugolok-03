@@ -5,6 +5,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { pickLatest } from "../../core/sync/lww.js";
+import { computeReachableCommentIds } from "./comments.js";
 
 export const CHANNEL_READ_STATUS_KIND = 30074;
 
@@ -110,9 +111,15 @@ export async function getChannelUnreadCount(ownerPubkey, channelId, dbKey) {
 	// comments: НИ channelId, НИ authorPubkey, НИ createdAt не plaintext (Tier 1) —
 	// расшифровка ВСЕХ комментариев владельца, фильтр в памяти (тот же паттерн, что
 	// moderation.js's deleteChannelLocally).
+	// Этап 56 — "осиротевшие" ответы (родитель отсутствует локально) исключаются
+	// ДО подсчёта: они никогда не попадают в buildTree (comments.js), значит
+	// пользователь никогда не сможет их "прочитать" — без этого фильтра бейдж
+	// "Каналы [N]" висел бы навсегда.
 	const commentRows = await db.table("comments").where("ownerPubkey").equals(ownerPubkey).toArray();
-	const decryptedComments = commentRows.map((r) => fromEncryptedRow(r, dbKey));
-	count += decryptedComments.filter((c) => !c.deleted && c.channelId === channelId && c.createdAt > lastReadAt && c.authorPubkey !== ownerPubkey).length;
+	const nonDeletedCommentRows = commentRows.filter((r) => !r.deleted);
+	const reachableCommentIds = computeReachableCommentIds(nonDeletedCommentRows);
+	const decryptedComments = nonDeletedCommentRows.filter((r) => reachableCommentIds.has(r.id)).map((r) => fromEncryptedRow(r, dbKey));
+	count += decryptedComments.filter((c) => c.channelId === channelId && c.createdAt > lastReadAt && c.authorPubkey !== ownerPubkey).length;
 
 	return count;
 }

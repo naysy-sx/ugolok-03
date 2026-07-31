@@ -7,8 +7,9 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/channel.js";
 import { sendViewGrant, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
-import { addComment, receiveComment, getCommentsTree, countCommentsByPost } from "../src/domain/content/comments.js";
-import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { addComment, receiveComment, getCommentsTree, countCommentsByPost, computeReachableCommentIds } from "../src/domain/content/comments.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { COMMENTS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -168,4 +169,47 @@ test("countCommentsByPost: считает ВСЕ комментарии пост
 	assert.equal(counts.get(postA), 3, "2 верхнеуровневых + 1 ответ у post-a");
 	assert.equal(counts.get(postB), 1);
 	assert.equal(counts.get("post-без-комментариев"), 0);
+});
+
+// Этап 56 (найдено живой проверкой, реальный аккаунт в Safari) — "осиротевший"
+// ответ, чей родитель отсутствует локально (не получен, либо отброшен крипто-
+// барьером receiveComment на устаревшей версии ключа — F-EV-06, штатное поведение
+// безопасности), никогда не попадает в buildTree (не рендерится НИГДЕ), но старый
+// countCommentsByPost считал его наравне с обычными — счётчик "Комментарии (N)"
+// навсегда показывал бы лишнюю единицу, которую невозможно "прочитать".
+test("countCommentsByPost: НЕ считает 'осиротевший' ответ (родитель отсутствует локально)", async () => {
+	const { channelId } = await setupChannelWithBobSubscribed();
+	const postId = "post-1";
+	await addComment(BOB_PUB, BOB_PRIV, DB_KEY, channelId, postId, postId, "обычный верхнеуровневый", [], capturingPublish([]));
+	await db.table("comments").add(
+		toEncryptedRow(
+			{ ownerPubkey: BOB_PUB, id: "orphan-reply", postId, parentId: "missing-parent-never-received", deleted: false, authorPubkey: ALICE_PUB, text: "осиротевший ответ" },
+			COMMENTS_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
+	);
+	const counts = await countCommentsByPost(BOB_PUB, [postId]);
+	assert.equal(counts.get(postId), 1, "осиротевший ответ не считается — он никогда не отобразится в дереве, буквально недостижим");
+	const tree = await getCommentsTree(BOB_PUB, DB_KEY, postId);
+	assert.equal(tree.length, 1, "дерево тоже не содержит осиротевший ответ — счётчик теперь согласован с деревом");
+});
+
+test("computeReachableCommentIds: цепочка ответов любой глубины с известными родителями — все достижимы", () => {
+	const comments = [
+		{ id: "root", postId: "p1", parentId: "p1" },
+		{ id: "reply1", postId: "p1", parentId: "root" },
+		{ id: "reply2", postId: "p1", parentId: "reply1" },
+	];
+	const reachable = computeReachableCommentIds(comments);
+	assert.deepEqual([...reachable].sort(), ["reply1", "reply2", "root"].sort());
+});
+
+test("computeReachableCommentIds: обрыв цепочки (родитель отсутствует) -> недостижим ТОЛЬКО для этой ветки, соседние не затронуты", () => {
+	const comments = [
+		{ id: "root", postId: "p1", parentId: "p1" },
+		{ id: "orphan", postId: "p1", parentId: "missing" },
+		{ id: "reply-to-orphan", postId: "p1", parentId: "orphan" },
+	];
+	const reachable = computeReachableCommentIds(comments);
+	assert.deepEqual([...reachable], ["root"], "orphan и всё, что от него зависит, недостижимо; root — не затронут");
 });

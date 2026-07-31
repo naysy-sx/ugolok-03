@@ -69,6 +69,36 @@ test("listChatPartners: без активных чатов -> пустой ма�
 	assert.deepEqual(await listChatPartners(ALICE_PUB, DB_KEY), []);
 });
 
+// Этап 56 (найдено живой проверкой, реальный аккаунт в Safari) — переписка,
+// полученная ТОЛЬКО через зеркалирование с другого устройства (syncMirroredHistory,
+// этап 25), пишет напрямую в messages, НЕ создавая mlsGroups на этом устройстве —
+// та появляется лишь при первой ОТПРАВКЕ (ensureChatEstablished). Список "Сообщения"
+// смотрел только на mlsGroups — пассивно прочитанная зеркалом переписка была
+// невидима в списке, хотя открывалась и полностью работала через "Контакты".
+test("listChatPartners: партнёр без mlsGroups, но с историей в messages (зеркалирование) — тоже попадает в список", async () => {
+	await db.table("messages").bulkAdd([
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, msgId: "m1", id: "m1", lamportTs: 1, senderPubkey: BOB_PUB, status: "sent", deleted: false },
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, msgId: "m2", id: "m2", lamportTs: 2, senderPubkey: ALICE_PUB, status: "sent", deleted: false },
+	]);
+	const partners = await listChatPartners(ALICE_PUB, DB_KEY);
+	assert.deepEqual(partners, [BOB_PUB], "чат виден по messages, даже когда mlsGroups для этого владельца пуста");
+});
+
+test("listChatPartners: партнёр из mlsGroups И messages — не дублируется", async () => {
+	await db.table("mlsGroups").add(toEncryptedRow({ ownerPubkey: ALICE_PUB, groupId: "g1", contactPubkey: BOB_PUB, state: new Uint8Array([1]) }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
+	await db.table("messages").add({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, msgId: "m1", id: "m1", lamportTs: 1, senderPubkey: BOB_PUB, status: "sent", deleted: false });
+	const partners = await listChatPartners(ALICE_PUB, DB_KEY);
+	assert.deepEqual(partners, [BOB_PUB]);
+});
+
+test("listChatPartners: messages-источник тоже owner-scoped — не путает чаты разных локальных аккаунтов", async () => {
+	await db.table("messages").bulkAdd([
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, msgId: "m1", id: "m1", lamportTs: 1, senderPubkey: BOB_PUB, status: "sent", deleted: false },
+		{ ownerPubkey: "matero-pub", chatId: "someone-else", msgId: "m2", id: "m2", lamportTs: 1, senderPubkey: "someone-else", status: "sent", deleted: false },
+	]);
+	assert.deepEqual(await listChatPartners(ALICE_PUB, DB_KEY), [BOB_PUB], "Алиса не должна видеть чаты аккаунта matero через messages");
+});
+
 test("sendChatMessageAction: устанавливает чат при первой отправке (ensureChatEstablished no-op при повторе) и вызывает refresh-подписку", async () => {
 	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
 	const fetchKeyPackage = async () => bobKeyPackage.wireBytes;
