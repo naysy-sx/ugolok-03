@@ -108,15 +108,18 @@ test("revokeViewFromMember: ротирует channelKey, реиздаёт гра
 	const published = [];
 	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
+	// Этап 55 — владелец теперь ВСЕГДА в channelReaders (self-грант) — ротация
+	// перевыдаёт ключ Mallory И владельцу, не только Mallory.
 	const grants = published.filter((e) => e.kind === 30053);
-	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
-	assert.deepEqual(grants[0].tags.find((t) => t[0] === "p"), ["p", MALLORY_PUB]);
+	assert.equal(grants.length, 2, "новый грант — Mallory И владельцу (self), не Бобу");
+	const grantTargets = grants.map((e) => e.tags.find((t) => t[0] === "p")[1]).sort();
+	assert.deepEqual(grantTargets, [ALICE_PUB, MALLORY_PUB].sort());
 
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "версия ключа увеличена");
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.deepEqual(readers.map((r) => r.readerPubkey), [MALLORY_PUB]);
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, MALLORY_PUB].sort());
 
 	assert.ok(!published.some((e) => e.kind === CHANNEL_BAN_KIND), "это не бан — объявление о бане не публикуется");
 	const banRow = await db.table("bannedMembers").get([ALICE_PUB, channelId, BOB_PUB]);
@@ -145,7 +148,7 @@ test("revokeIfNoLongerVisible: pubkey состоял ТОЛЬКО в удаля�
 	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "friends", capturingPublish(published));
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.deepEqual(readers.map((r) => r.readerPubkey), [MALLORY_PUB], "Боб отозван, Mallory остаётся");
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, MALLORY_PUB].sort(), "Боб отозван, Mallory и владелец (self) остаются");
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "ключ ротирован");
 });
@@ -161,8 +164,8 @@ test("revokeIfNoLongerVisible: pubkey всё ещё виден через ДРУ
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(
 		readers.map((r) => r.readerPubkey).sort(),
-		[BOB_PUB, CAROL_PUB].sort(),
-		"Боб НЕ отозван — виден через family",
+		[ALICE_PUB, BOB_PUB, CAROL_PUB].sort(),
+		"Боб НЕ отозван — виден через family; владелец (self) — постоянная строка",
 	);
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 1, "ключ НЕ ротирован — отзыва не было");
@@ -182,7 +185,7 @@ test("revokeIfNoLongerVisible АДВЕРСАРНО: pubkey никогда не �
 	await revokeIfNoLongerVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, CAROL_PUB, "friends", capturingPublish(published));
 	assert.deepEqual(published, []);
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.equal(readers.length, 2, "существующие читатели не тронуты");
+	assert.equal(readers.length, 3, "существующие читатели не тронуты (Боб+Mallory+self владельца)");
 });
 
 test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реально отзывает VIEW у того, кто состоял только в одной группе, и НЕ трогает того, кто виден ещё и через другую", async () => {
@@ -208,10 +211,10 @@ test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реа
 	// Боб выходит из "Друзья" — остаётся видим через "Семья", отзыва быть не должно.
 	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, friendsId, BOB_PUB, capturingPublish(published));
 	let readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [BOB_PUB, CAROL_PUB].sort(), "Боб ещё виден через Семья");
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, BOB_PUB, CAROL_PUB].sort(), "Боб ещё виден через Семья; владелец (self) — постоянная строка");
 
 	// Кэрол выходит из "Семья" — это была её ЕДИНСТВЕННАЯ видящая группа, VIEW отзывается.
 	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, familyId, CAROL_PUB, capturingPublish(published));
 	readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.deepEqual(readers.map((r) => r.readerPubkey), [BOB_PUB], "Кэрол отозвана, Боб остаётся");
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, BOB_PUB].sort(), "Кэрол отозвана, Боб и владелец (self) остаются");
 });

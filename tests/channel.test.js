@@ -19,6 +19,7 @@ import {
 	editChannel,
 	deleteChannel,
 	receiveChannelDeletion,
+	backfillOwnChannelGrants,
 } from "../src/domain/content/channel.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
@@ -84,7 +85,7 @@ test("AC-16: channels хранится зашифрованным — сырой
 	assert.equal(decrypted.name, "Секретный канал");
 });
 
-test("createChannel: без групп -> ни одного VIEW-гранта, канал сугубо локальный (заметочник)", async () => {
+test("createChannel: без групп -> ни одного ЧУЖОГО VIEW-гранта (канал сугубо локальный-для-других), НО self-грант владельцу есть (этап 55)", async () => {
 	const published = [];
 	const { channelId } = await createChannel(
 		ALICE_PUB,
@@ -94,11 +95,15 @@ test("createChannel: без групп -> ни одного VIEW-гранта, �
 		capturingPublish(published),
 	);
 	assert.ok(channelId);
-	assert.equal(
-		published.filter((e) => e.kind === 30053).length,
-		0,
-		"без групп ни один VIEW-грант не публикуется",
-	);
+	// Этап 55 — владелец теперь ВСЕГДА получает self-грант (тот же kind 30053,
+	// адресованный самому себе), даже без единой группы, иначе второе устройство
+	// той же личности никогда не сможет расшифровать даже "заметочник".
+	const grants = published.filter((e) => e.kind === 30053);
+	assert.equal(grants.length, 1, "self-грант — единственный, чужих читателей нет");
+	assert.deepEqual(grants[0].tags.find((t) => t[0] === "p"), ["p", ALICE_PUB]);
+	const grant = decryptChannelKeyGrant(grants[0].content, ALICE_PRIV, ALICE_PUB);
+	assert.equal(grant.channelId, channelId, "self-грант расшифровывается собственным privKey (ECDH с самим собой валиден)");
+
 	const owned = await listOwnedChannels(ALICE_PUB, DB_KEY);
 	assert.equal(owned.length, 1);
 	assert.equal(owned[0].name, "Заметки");
@@ -111,11 +116,12 @@ test("НАЙДЕНО ЖИВЫМ E2E (этап 32): kind 30053 для РАЗНЫ�
 	const published = [];
 	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(published));
 
+	// Этап 55 — грантов теперь 3, не 2: Боб, Mallory И self-грант владельцу.
 	const grants = published.filter((e) => e.kind === 30053);
-	assert.equal(grants.length, 2, "по гранту на каждого читателя");
+	assert.equal(grants.length, 3, "по гранту на каждого читателя, включая self-грант владельцу");
 	const dTags = grants.map((e) => e.tags.find((t) => t[0] === "d")?.[1]);
 	assert.ok(dTags.every(Boolean), "у каждого гранта обязан быть d-тег (не implicit d='')");
-	assert.notEqual(dTags[0], dTags[1], "d-теги разных читателей ОБЯЗАНЫ различаться — иначе relay схлопывает их в один слот");
+	assert.equal(new Set(dTags).size, dTags.length, "d-теги ВСЕХ читателей (включая self) ОБЯЗАНЫ различаться — иначе relay схлопывает их в один слот");
 });
 
 test("createChannel: группа с Бобом -> Боб получает kind 30053 (VIEW), метаданные — kind 30060 channelKey-зашифрованы", async () => {
@@ -148,8 +154,9 @@ test("createChannel (этап 33, аддитивная правка): перси
 	await seedGroupWithBob();
 	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.equal(readers.length, 1);
-	assert.equal(readers[0].readerPubkey, BOB_PUB);
+	// Этап 55 — владелец теперь ТОЖЕ строка channelReaders (self), наравне с Бобом.
+	assert.equal(readers.length, 2);
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, BOB_PUB].sort());
 });
 
 test("Боб получает VIEW и метаданные -> канал появляется в 'Доступные', не в 'Подписки'", async () => {
@@ -398,4 +405,103 @@ test("receiveChannelDeletion: неизвестный канал (нет лока
 		tags: [["a", `30060:${ALICE_PUB}:no-such-channel`]],
 	});
 	assert.equal(result.applied, false);
+});
+
+// --- Этап 55: мультиустройственный баг каналов — self-грант, backfill ---
+
+test("receiveChannelKeyGrant: self-грант (channelOwnerPubkey === ownerPubkey) создаёт локальную строку с role='owner', не 'available'", async () => {
+	const published = [];
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Заметки", description: "d", rules: "" }, [], capturingPublish(published));
+	// Строка "channels" уже существует (создана локально createChannel) — стираем её,
+	// чтобы имитировать ВТОРОЕ устройство той же личности, получающее свой же
+	// self-грант ВПЕРВЫЕ (на первом устройстве receiveChannelKeyGrant для него не
+	// вызывается вовсе, роль уже "owner" из createChannel напрямую).
+	await db.table("channels").delete([ALICE_PUB, channelId]);
+
+	const selfGrant = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === ALICE_PUB);
+	assert.ok(selfGrant, "createChannel обязан публиковать self-грант");
+	await receiveChannelKeyGrant(ALICE_PUB, ALICE_PRIV, DB_KEY, ALICE_PUB, selfGrant);
+
+	const owned = await listOwnedChannels(ALICE_PUB, DB_KEY);
+	assert.equal(owned.length, 1, "канал обязан попасть в 'Мои каналы', не в 'Доступные'");
+	assert.equal(owned[0].name, "", "имя ещё не расшифровано без kind 30060 — заполнится receiveChannelMetadata отдельно");
+	assert.equal((await listAvailableChannels(ALICE_PUB, DB_KEY)).length, 0);
+});
+
+test("backfillOwnChannelGrants: канал создан ДО фикса (self отсутствует в channelReaders) -> добавляет self-грант, возвращает 1", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Старый канал", description: "d", rules: "" }, [], capturingPublish([]));
+	// Имитация "старых данных" (до этапа 55): удаляем self-строку channelReaders,
+	// как будто канал создан версией кода без self-гранта.
+	await db.table("channelReaders").delete([ALICE_PUB, channelId, ALICE_PUB]);
+
+	const published = [];
+	const count = await backfillOwnChannelGrants(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	assert.equal(count, 1, "один канал был дозаполнен");
+
+	const grant = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === ALICE_PUB);
+	assert.ok(grant, "обязан опубликовать self-грант текущей версией ключа");
+	const decrypted = decryptChannelKeyGrant(grant.content, ALICE_PRIV, ALICE_PUB);
+	assert.equal(decrypted.channelId, channelId);
+
+	const readerRow = await db.table("channelReaders").get([ALICE_PUB, channelId, ALICE_PUB]);
+	assert.ok(readerRow, "self добавлен обратно в channelReaders");
+});
+
+test("backfillOwnChannelGrants: канал уже содержит self в channelReaders (после этапа 55, обычный случай) -> идемпотентно, ничего не публикует, возвращает 0", async () => {
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Новый канал", description: "d", rules: "" }, [], capturingPublish([]));
+
+	const published = [];
+	const count = await backfillOwnChannelGrants(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	assert.equal(count, 0, "self-грант уже был выдан при создании — довыдавать нечего");
+	assert.equal(published.length, 0, "ни одного лишнего события не публикуется");
+});
+
+test("backfillOwnChannelGrants: владелец без единого канала -> возвращает 0, не бросает", async () => {
+	const count = await backfillOwnChannelGrants(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish([]));
+	assert.equal(count, 0);
+});
+
+test("backfillOwnChannelGrants: несколько каналов, только ЧАСТЬ без self-гранта -> дозаполняет только их, остальные не трогает", async () => {
+	const { channelId: freshId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Новый", description: "d", rules: "" }, [], capturingPublish([]));
+	const { channelId: oldId1 } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Старый 1", description: "d", rules: "" }, [], capturingPublish([]));
+	const { channelId: oldId2 } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Старый 2", description: "d", rules: "" }, [], capturingPublish([]));
+	await db.table("channelReaders").delete([ALICE_PUB, oldId1, ALICE_PUB]);
+	await db.table("channelReaders").delete([ALICE_PUB, oldId2, ALICE_PUB]);
+
+	const published = [];
+	const count = await backfillOwnChannelGrants(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	assert.equal(count, 2, "дозаполнены ровно 2 канала без self-гранта");
+
+	const grantedChannelIds = published
+		.filter((e) => e.kind === 30053)
+		.map((e) => decryptChannelKeyGrant(e.content, ALICE_PRIV, ALICE_PUB).channelId);
+	assert.deepEqual(grantedChannelIds.sort(), [oldId1, oldId2].sort());
+	assert.ok(!grantedChannelIds.includes(freshId), "у 'Новый' self-грант уже был — лишнего не публикуем");
+});
+
+test("АДВЕРСАРНЫЙ: backfillOwnChannelGrants — публикация для ОДНОГО канала падает, остальные всё равно дозаполняются (best-effort)", async () => {
+	const { channelId: badId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Сломанный", description: "d", rules: "" }, [], capturingPublish([]));
+	const { channelId: goodId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Целый", description: "d", rules: "" }, [], capturingPublish([]));
+	await db.table("channelReaders").delete([ALICE_PUB, badId, ALICE_PUB]);
+	await db.table("channelReaders").delete([ALICE_PUB, goodId, ALICE_PUB]);
+
+	// d-tag непрозрачен (HMAC, opaqueDTag) и p-tag одинаков для обоих self-грантов
+	// (оба адресованы ALICE_PUB) — единственный способ узнать, какому каналу
+	// принадлежит конкретное событие 30053, это расшифровать его (мок здесь
+	// играет роль тестовой инфраструктуры с полным доступом, а не внешнего relay).
+	const published = [];
+	const flakyPublish = async (event) => {
+		const channelId = decryptChannelKeyGrant(event.content, ALICE_PRIV, ALICE_PUB).channelId;
+		if (channelId === badId) throw new Error("relay недоступен для этого события");
+		published.push(event);
+		return { ok: true };
+	};
+
+	const count = await backfillOwnChannelGrants(ALICE_PUB, ALICE_PRIV, DB_KEY, flakyPublish);
+	assert.equal(count, 1, "только 'Целый' успешно дозаполнен, 'Сломанный' — сбой не должен ронять остальной проход");
+
+	const goodReader = await db.table("channelReaders").get([ALICE_PUB, goodId, ALICE_PUB]);
+	assert.ok(goodReader, "'Целый' канал — self добавлен несмотря на сбой соседнего канала");
+	const badReader = await db.table("channelReaders").get([ALICE_PUB, badId, ALICE_PUB]);
+	assert.equal(badReader, undefined, "'Сломанный' канал — self НЕ добавлен, публикация не прошла");
 });

@@ -31,7 +31,7 @@ import { profiles, ensureProfilesFetched, configureContactRuntime, handleIncomin
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
-import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion } from "../../domain/content/channel.js";
+import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion, backfillOwnChannelGrants } from "../../domain/content/channel.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
@@ -48,6 +48,7 @@ import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished, hydrateOwnProfile } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
 import { currentUser } from "./auth.js";
+import { resetSyncLog, logSync } from "./sync-log.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 function decodeBase64(str) {
@@ -177,6 +178,8 @@ function assertValidPubkeyHex(pubkeyHex) {
 
 async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
+	resetSyncLog();
+	logSync("Подключение к серверу…");
 	// Этап 34 — найденное решение (бутстрап-проблема): активный relay нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
 	// Локальный кэш — источник истины для ТЕКУЩЕГО подключения; build-time дефолт —
@@ -195,6 +198,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	});
 	connection.connect();
 	await waitForConnState(connection, (s) => s === "connected", 8000);
+	logSync("Подключение к серверу — готово");
 
 	cryptoWorker = new CryptoWorker();
 	const api = Comlink.wrap(cryptoWorker);
@@ -213,11 +217,20 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).
 	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish: publisher.publish });
 
-	await runBootstrap(connection, pubkeyHex, { verifyBatch });
+	logSync("Загрузка истории с сервера…");
+	const bootstrapResult = await runBootstrap(connection, pubkeyHex, { verifyBatch });
+	logSync(`Загрузка истории — готово (${bootstrapResult.addedCount} новых событий)`);
+	logSync("Контакты…");
 	await reconcileContactsFromEventLog(pubkeyHex);
+	logSync("Контакты — готово");
+	logSync("Права доступа…");
 	await rebuildGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
+	logSync("Права доступа — готово");
+	logSync("Настройки…");
 	await rebuildUiSettings(pubkeyHex, privKey, dbKey);
+	logSync("Настройки — готово");
+	logSync("Отметки прочтения…");
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
@@ -225,6 +238,8 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// Этап 47 — тот же класс кросс-device синхронизации, что AC-06 выше, но для
 	// read-tracking каналов (kind 30074), не личных чатов.
 	await rebuildChannelReadStatus(pubkeyHex, privKey);
+	logSync("Отметки прочтения — готово");
+	logSync("Публикация ключа и профиля…");
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publisher.publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
@@ -232,17 +247,22 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	if (currentUser.value?.login) {
 		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publisher.publish);
 	}
+	logSync("Публикация ключа и профиля — готово");
 
+	logSync("Устройства…");
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
 	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
 	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
 	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
+	logSync("Устройства — готово");
 
+	logSync("История переписки…");
 	// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
 	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
 	// переподключившееся устройство получило полный паритет истории чатов.
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
 	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
+	logSync("История переписки — готово");
 
 	// Найдено пользователем (живая проверка — вход с чистого устройства по
 	// мнемонике): bootstrap выше уже стянул kind 0 (профиль) в db.events через
@@ -254,7 +274,9 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// события (см. ниже) — если экран уже смонтирован (чат/бейдж в сайдбаре
 	// видны сразу после логина), его эффект отработал ОДИН раз на ещё пустом
 	// состоянии и не перезапускался, даже когда bootstrap выше всё заполнил.
+	logSync("Профиль…");
 	await hydrateOwnProfile(pubkeyHex);
+	logSync("Профиль — готово");
 	bumpProfileActivity();
 	bumpMessagingActivity();
 
@@ -396,11 +418,22 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// обновляет фильтр, когда появляется новый чат.
 	await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
 
+	logSync("Каналы…");
 	// Этап 30 — восстановление подписок на VIEW-гранты/контент каналов после
 	// reload/переподключения, тот же принцип, что refreshGroupMessageSubscription выше.
 	await refreshChannelGrantSubscription(pubkeyHex, privKey, dbKey);
 	await refreshChannelContentSubscription(pubkeyHex, dbKey);
+	// Этап 55 — довыдача self-гранта владельческим каналам, созданным ДО фикса
+	// (включая уже существующие реальные каналы) — без этого второе устройство
+	// той же личности никогда не расшифрует собственный канал.
+	const backfilledChannelCount = await backfillOwnChannelGrants(pubkeyHex, privKey, dbKey, publisher.publish);
+	if (backfilledChannelCount > 0) {
+		logSync(`Каналы: довыдан ключ для ${backfilledChannelCount} канала(ов)`);
+	} else {
+		logSync("Каналы — без изменений");
+	}
 
+	logSync("Файлы…");
 	// Этап 53 И6, задача 6.7 — доли: восстанавливает activeMounts ИЗ ХРАНИЛИЩА
 	// (не из UI-состояния экрана "Файлы" — тот мог не открываться в этой
 	// сессии вовсе) ДО подписки на #h, иначе fileSubtreeOpSubscription не
@@ -408,11 +441,13 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	await initMounts(pubkeyHex, dbKey);
 	await refreshFileShareGrantSubscription(pubkeyHex, privKey, dbKey);
 	await refreshFileSubtreeOpSubscription(pubkeyHex, dbKey);
+	logSync("Файлы — готово");
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
 		onCaughtUp: () => {
 			synced.value = true;
+			logSync("Синхронизация завершена");
 			// Инкрементальная синхронизация — отдельный, более поздний рубеж, чем
 			// основной bootstrap выше (может донести то, что пришло уже во время
 			// него) — тот же бамп, та же причина: экраны/бейджи, смонтированные

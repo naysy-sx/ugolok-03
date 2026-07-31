@@ -83,6 +83,11 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 		const members = await db.table("groupMembers").where("groupId").equals(groupId).toArray();
 		for (const m of members) readerPubkeys.add(m.pubkey);
 	}
+	// Этап 55 — владелец ВСЕГДА получает self-грант (независимо от groupIds), иначе
+	// другие устройства той же личности (тот же privKey) не смогут расшифровать
+	// даже собственный канал — второе устройство получает kind 30060 с relay, но
+	// channelKey нигде для него не эскроуирован.
+	readerPubkeys.add(ownerPubkey);
 	const channel = { channelId, channelTopic: channelTopicHex, channelKey: channelKeyHex };
 	for (const readerPubkey of readerPubkeys) {
 		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPubkey, version, publish);
@@ -131,6 +136,10 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 	const currentVersion = Math.max(existingMeta?.currentVersion ?? 0, version);
 	await db.table("channelKeyMeta").put(toEncryptedRow({ ownerPubkey, channelId: grant.channelId, currentVersion }, CHANNEL_KEY_META_PLAINTEXT_FIELDS, dbKey));
 
+	// Этап 55 — грант от САМОГО СЕБЕ (channelOwnerPubkey === ownerPubkey) значит канал
+	// МОЙ (другое устройство той же личности) -> role: "owner", не "available", как
+	// для обычного гранта от чужого владельца.
+	const role = channelOwnerPubkey === ownerPubkey ? "owner" : "available";
 	const existing = await db.table("channels").get([ownerPubkey, grant.channelId]);
 	if (!existing) {
 		await db.table("channels").put(
@@ -145,7 +154,7 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 					avatar: null,
 					allowChatAttachments: true,
 					channelTopic: grant.channelTopic,
-					role: "available",
+					role,
 					createdAt: Math.floor(Date.now() / 1000),
 					updatedAt: Math.floor(Date.now() / 1000),
 				},
@@ -334,4 +343,34 @@ export async function subscribeToChannelAction(ownerPubkey, ownerPrivKey, channe
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) throw new Error("канал не найден");
 	await sendSubscribeRequest(ownerPrivKey, channelRow.creatorPubkey, channelId, publish);
+}
+
+// Этап 55 — задним числом довыдаёт self-грант владельческим каналам, созданным ДО
+// этого фикса (createChannel выше теперь всегда шлёт self-грант при создании, но
+// уже существующие каналы, включая реальные каналы пользователя, никогда его не
+// получали). Вызывается из transport.js's connect() при каждом подключении —
+// дёшево и идемпотентно: канал, где self уже есть в channelReaders, пропускается
+// без единого сетевого запроса. Best-effort — сбой публикации для ОДНОГО канала
+// (например relay временно недоступен) не должен прерывать обработку остальных.
+export async function backfillOwnChannelGrants(ownerPubkey, ownerPrivKey, dbKey, publish) {
+	const owned = await listOwnedChannels(ownerPubkey, dbKey);
+	let backfilledCount = 0;
+
+	for (const channel of owned) {
+		const existingReader = await db.table("channelReaders").get([ownerPubkey, channel.id, ownerPubkey]);
+		if (existingReader) continue;
+
+		try {
+			const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channel.id]), dbKey);
+			const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channel.id, meta.currentVersion]), dbKey);
+			const channelForGrant = { channelId: channel.id, channelTopic: channel.channelTopic, channelKey: keyRow.channelKey };
+			await sendViewGrant(ownerPubkey, ownerPrivKey, channelForGrant, ownerPubkey, meta.currentVersion, publish);
+			await db.table("channelReaders").put({ ownerPubkey, channelId: channel.id, readerPubkey: ownerPubkey });
+			backfilledCount++;
+		} catch {
+			// сбой для этого канала (relay недоступен и т.п.) — не ронять обработку остальных
+		}
+	}
+
+	return backfilledCount;
 }

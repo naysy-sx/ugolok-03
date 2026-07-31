@@ -192,20 +192,24 @@ test("ignoreMember: повторный вызов идемпотентен ло�
 	assert.equal(rows.length, 1, "один и тот же ignoredPubkey не дублируется");
 });
 
-test("banMember: ротирует channelKey, реиздаёт грант ОСТАВШЕМУСЯ читателю (Mallory), НЕ забаненному (Боб)", async () => {
+test("banMember: ротирует channelKey, реиздаёт грант ОСТАВШИМСЯ читателям (Mallory + сам владелец), НЕ забаненному (Боб)", async () => {
 	const { channelId } = await setupChannelWithTwoReadersOneSubscribed();
 	const published = [];
 	await banMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
 
+	// Этап 55 — владелец теперь ВСЕГДА в channelReaders (self-грант, чтобы другие
+	// устройства той же личности не теряли доступ к каналу) — ротация ключа
+	// перевыдаёт его наравне с обычными читателями, не только Mallory.
 	const grants = published.filter((e) => e.kind === 30053);
-	assert.equal(grants.length, 1, "новый грант — только Mallory, не Бобу");
-	assert.deepEqual(grants[0].tags.find((t) => t[0] === "p"), ["p", MALLORY_PUB]);
+	assert.equal(grants.length, 2, "новый грант — Mallory И владельцу (self), не Бобу");
+	const grantTargets = grants.map((e) => e.tags.find((t) => t[0] === "p")[1]).sort();
+	assert.deepEqual(grantTargets, [ALICE_PUB, MALLORY_PUB].sort());
 
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
 	assert.equal(meta.currentVersion, 2, "версия ключа увеличена");
 
 	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
-	assert.deepEqual(readers.map((r) => r.readerPubkey), [MALLORY_PUB], "Боб удалён из channelReaders");
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, MALLORY_PUB].sort(), "Боб удалён из channelReaders, владелец остался");
 });
 
 test("banMember: переиздаёт allowlist БЕЗ забаненного (если он был подписчиком)", async () => {
@@ -292,7 +296,10 @@ test("АДВЕРСАРНЫЙ (крипто-барьер): после бана Б
 	// Mallory (честный клиент) получает переизданный грант v_new через свою подписку —
 	// её channelKeyMeta.currentVersion переходит на v_new (тот же путь, что receiveChannelKeyGrant
 	// уже покрыт тестами этапа 30, здесь он — предпосылка для проверки крипто-барьера).
-	const newGrant = banOutbox.find((e) => e.kind === 30053);
+	// Этап 55 — после бана в banOutbox теперь ДВА гранта (Mallory + self-грант
+	// владельцу) — фильтруем именно по адресату Mallory, .find() наугад больше
+	// не годится (мог бы поймать self-грант, адресованный Алисе).
+	const newGrant = banOutbox.filter((e) => e.kind === 30053).find((e) => e.tags.find((t) => t[0] === "p")[1] === MALLORY_PUB);
 	await receiveChannelKeyGrant(MALLORY_PUB, MALLORY_PRIV, DB_KEY, ALICE_PUB, newGrant);
 
 	// Боб — нечестный клиент, игнорирует объявление о своём бане и всё равно пытается
