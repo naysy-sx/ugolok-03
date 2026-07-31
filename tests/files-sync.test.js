@@ -2,11 +2,12 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { createFolder as opCreateFolder, rename as opRename, move as opMove, purge as opPurge } from "../src/domain/files/ops.js";
+import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, purge as opPurge } from "../src/domain/files/ops.js";
 import { createInitialState, ROOT_ID } from "../src/domain/files/tree.js";
 import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../src/domain/files/sync.js";
+import { getFileKey, listUnannouncedFileKeys } from "../src/domain/files/store.js";
 import { privKeySig, dbKeySig } from "../src/ui/signals/auth.js";
-import { initFiles, treeState, projected, createFolder, rebuildFilesLog } from "../src/ui/signals/files.js";
+import { initFiles, treeState, projected, createFolder, createFileEntry, rebuildFilesLog, backfillOwnFileKeys } from "../src/ui/signals/files.js";
 
 const OWNER_PRIV = new Uint8Array(32).fill(7);
 const { getPublicKey } = await import("../src/core/crypto/keys.js");
@@ -212,4 +213,96 @@ test("rebuildFilesLog: purge-операции (без label) не ломают �
 	await assert.doesNotReject(() => rebuildFilesLog(OWNER, OWNER_PRIV));
 	const op = await createFolder("После purge");
 	assert.ok(op.label.counter > 5, `purge не должен был обнулить/сломать maxCounter, получено ${op.label.counter}`);
+});
+
+// Этап 57 — журнал уже NIP-44-шифруется владельцем самому себе, поэтому
+// create-Op может безопасно нести fileKey; второе устройство, реплеивший этот
+// журнал (rebuildFilesLog), обязано сохранить ключ локально — без этого файл
+// виден в дереве, но НИКОГДА не расшифровывается (найдено живой проверкой).
+test("rebuildFilesLog: create-операция с fileKey из УДАЛЁННОГО события -> ключ сохраняется локально", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const fileKeyBytes = crypto.getRandomValues(new Uint8Array(32));
+	const fileKeyHex = bytesToHex(fileKeyBytes);
+	const op = opCreateFile(treeState.value, ROOT_ID, "фото-с-другого-устройства.jpg", "n-remote-file", "digest-remote", label(1), null, fileKeyHex);
+	await seedEvent([op]);
+
+	await rebuildFilesLog(OWNER, OWNER_PRIV);
+
+	const got = await getFileKey(OWNER, dbKeySig.value, "digest-remote");
+	assert.deepEqual(got, fileKeyBytes, "ключ из удалённой create-операции обязан оказаться в files_keys этого устройства");
+});
+
+test("rebuildFilesLog: create-операция БЕЗ fileKey -> files_keys не трогается (обычный случай, структура синкается, ключ — нет)", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const op = opCreateFile(treeState.value, ROOT_ID, "обычный.jpg", "n-remote-file-2", "digest-remote-2", label(1));
+	await seedEvent([op]);
+
+	await rebuildFilesLog(OWNER, OWNER_PRIV);
+
+	assert.equal(await getFileKey(OWNER, dbKeySig.value, "digest-remote-2"), undefined);
+});
+
+test("rebuildFilesLog: fileKey из удалённого события НЕ перезаписывает уже известный локально ключ того же digest", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const localKey = crypto.getRandomValues(new Uint8Array(32));
+	await createFileEntry("уже-есть.jpg", "digest-shared", localKey);
+
+	const foreignKeyHex = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+	const op = opCreateFile(treeState.value, ROOT_ID, "дубль-с-другого-устройства.jpg", "n-remote-file-3", "digest-shared", label(1), null, foreignKeyHex);
+	await seedEvent([op]);
+
+	await rebuildFilesLog(OWNER, OWNER_PRIV);
+
+	const got = await getFileKey(OWNER, dbKeySig.value, "digest-shared");
+	assert.deepEqual(got, localKey, "уже известный локально ключ не должен быть затёрт чужой версией из журнала");
+});
+
+// backfillOwnFileKeys — задним числом довыдаёт ключ файлам, чей create-Op был
+// опубликован ДО этого фикса (без fileKey).
+test("backfillOwnFileKeys: файл, чей create-Op не нёс fileKey — republish-ится с ключом, помечается announced", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	// createFileEntry уже помечает announced=true (ключ едет с самого начала) —
+	// имитируем "старый" файл, созданный ДО фикса: announced=false вручную.
+	const { saveFileKey } = await import("../src/domain/files/store.js");
+	await createFileEntry("старый-файл.jpg", "digest-old", fileKey);
+	await saveFileKey(OWNER, dbKeySig.value, "digest-old", fileKey, false);
+
+	const published = [];
+	const spyPublish = (event) => {
+		published.push(event);
+		return Promise.resolve({ ok: true });
+	};
+	const count = await backfillOwnFileKeys(OWNER, OWNER_PRIV, spyPublish);
+	assert.equal(count, 1);
+
+	assert.equal(published.length, 1);
+	const parsed = parseFilesLogEvent(published[0], OWNER_PRIV);
+	const createOp = parsed.find((o) => o.type === "create" && o.blob === "digest-old");
+	assert.ok(createOp, "republish обязан нести create-операцию с тем же digest");
+	assert.equal(createOp.fileKey, bytesToHex(fileKey));
+
+	assert.deepEqual(await listUnannouncedFileKeys(OWNER, dbKeySig.value), []);
+});
+
+test("backfillOwnFileKeys: уже announced ключ -> не публикует повторно, возвращает 0", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await createFileEntry("новый-файл.jpg", "digest-new", fileKey); // announced=true по умолчанию
+
+	const published = [];
+	const count = await backfillOwnFileKeys(OWNER, OWNER_PRIV, (e) => {
+		published.push(e);
+		return Promise.resolve({ ok: true });
+	});
+	assert.equal(count, 0);
+	assert.equal(published.length, 0);
+});
+
+test("backfillOwnFileKeys: нет файлов вовсе -> 0, не бросает", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	await assert.doesNotReject(async () => {
+		const count = await backfillOwnFileKeys(OWNER, OWNER_PRIV, noopPublish);
+		assert.equal(count, 0);
+	});
 });

@@ -93,6 +93,12 @@ test("saveToOwn: одиночный файл — новый digest, новый f
 	assert.ok(newFileKey);
 	assert.notDeepEqual(newFileKey, fileKey, "новый fileKey, не переиспользует ключ владельца");
 
+	// Этап 57 — журнал (KIND_FILES_OP) уже NIP-44-шифруется получателем самому
+	// себе, поэтому провезти fileKey прямо в create-Op безопасно: без этого
+	// второе устройство того же получателя видело бы файл в дереве, но никогда
+	// не смогло бы его расшифровать (найдено живой проверкой).
+	assert.equal(ops[0].fileKey, bytesToHex(newFileKey), "create-операция обязана нести новый fileKey для синхронизации на другие устройства получателя");
+
 	const newManifest = await getManifest(ops[0].blob, { ...netOpts(), fetchImpl });
 	const { getRange } = await import("../src/domain/files/content.js");
 	const roundtrip = await getRange(newManifest, newFileKey, 0, newManifest.size, { ...netOpts(), fetchImpl });

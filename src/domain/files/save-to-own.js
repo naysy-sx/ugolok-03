@@ -9,6 +9,7 @@
 // (новый fileKey, ГЕНЕРИРУЕТСЯ) -> Op[] на СВОЁ дерево, применяет вызывающая
 // сторона (тот же принцип, что ops.js's copy — случайность/применение
 // снаружи).
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { getManifest, getRange, putStream } from "./content.js";
 import { saveFileKey } from "./store.js";
 import { liveChildrenOf, nameOwnerInDir } from "./tree.js";
@@ -59,12 +60,18 @@ export async function saveToOwn(recipientPubkey, dbKey, mountState, sourceNodeId
 		const readKey = await resolveFileKey(node, manifest);
 		const plaintext = await getRange(manifest, readKey, 0, manifest.size, netOpts);
 		const { manifestDigest, fileKey: newFileKey } = await putStream(plaintext, { ...netOpts, name, mime: manifest.mime });
-		await saveFileKey(recipientPubkey, dbKey, manifestDigest, newFileKey);
+		// Этап 57 — announced: true сразу (ключ едет в этой же create-операции,
+		// довыдавать backfillOwnFileKeys нечего), тот же принцип, что createFileEntry.
+		await saveFileKey(recipientPubkey, dbKey, manifestDigest, newFileKey, true);
 
 		filesDone += 1;
 		onProgress?.({ filesDone, filesTotal });
 
-		ops.push({ type: "create", id: newId, kind: "file", blob: manifestDigest, parentId, name, origin: node.origin.value, label });
+		// fileKey — журнал (KIND_FILES_OP) уже NIP-44-шифруется получателем самому
+		// себе, поэтому провезти его прямо в create-Op безопасно: без этого другие
+		// устройства получателя видели бы файл в дереве, но не смогли бы его
+		// расшифровать (найдено живой проверкой, тот же класс, что этап 55 — каналы).
+		ops.push({ type: "create", id: newId, kind: "file", blob: manifestDigest, parentId, name, origin: node.origin.value, label, fileKey: bytesToHex(newFileKey) });
 	}
 
 	return ops;

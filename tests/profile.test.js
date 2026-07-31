@@ -166,6 +166,50 @@ test("hydrateOwnProfile АДВЕРСАРНО: битый content (не JSON) —
 	assert.equal(await hydrateOwnProfile(OWNER_PUBKEY), false);
 });
 
+// Этап 57 (найдено собственной тестовой методологией этой сессии — повторные
+// "чистые устройства" стирали keystore.profileAutoPublished, из-за чего
+// ensureProfilePublished переиздавал ГОЛЫЙ {name} поверх содержательного kind 0,
+// replaceable-семантика NIP-01 схлопывала старую версию с био/аватаром). Без
+// этого фикса ЛЮБОЙ такой инцидент (не обязательно тестовый — сбой публикации
+// вперемешку с гонкой между устройствами тоже мог бы дать пустой "последний по
+// created_at") безусловно стирал бы уже хорошие локальные данные.
+test("hydrateOwnProfile: пустое ВХОДЯЩЕЕ (about/picture отсутствуют) НЕ затирает уже непустые локальные bio/avatarUrl", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await db.table("keystore").put({ id: OWNER_PUBKEY, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин", bio: "уже хорошее био", avatarUrl: "https://blossom.test/good.png" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { name: "тест-логин" }); // голый republish, БЕЗ about/picture
+
+	const result = await hydrateOwnProfile(OWNER_PUBKEY);
+	assert.equal(result, true);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "уже хорошее био", "пустое about не должно было затереть локальное био");
+	assert.equal(row.avatarUrl, "https://blossom.test/good.png", "пустой picture не должен был затереть локальный аватар");
+});
+
+test("hydrateOwnProfile: непустое входящее ПО-ПРЕЖНЕМУ побеждает (настоящее обновление проходит)", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await db.table("keystore").put({ id: OWNER_PUBKEY, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин", bio: "старое био", avatarUrl: "https://blossom.test/old.png" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { about: "новое био с другого устройства", picture: "https://blossom.test/new.png" });
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "новое био с другого устройства");
+	assert.equal(row.avatarUrl, "https://blossom.test/new.png");
+});
+
+test("hydrateOwnProfile: и локально, и во входящем пусто -> остаётся пусто (не регрессия обычного случая)", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { name: "тест-логин" });
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "");
+	assert.equal(row.avatarUrl, "");
+});
+
 // uploadAvatarBlob — перенесено из tests/attachments-upload.test.js (этап 53
 // И7, задача 7.4 — снятие фасада attachments, DESIGN.md). Логика не менялась,
 // только импорт (uploadBlob из domain/files/blob.js, validateAttachment из

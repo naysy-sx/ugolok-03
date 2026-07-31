@@ -3,7 +3,7 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { sign } from '../../core/crypto/sign.js';
 import { db } from '../../core/store/database.js';
 import { pickLatest } from '../../core/sync/lww.js';
-import { updateProfile } from '../../core/crypto/keystore.js';
+import { getProfile, updateProfile } from '../../core/crypto/keystore.js';
 import { uploadBlob } from '../files/blob.js';
 import { validateAttachment } from '../files/attachment-validation.js';
 
@@ -51,6 +51,15 @@ export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, o
 // не сам avatar (тот — локальный data-url кэш конкретно этого устройства,
 // заполняется только загрузкой файла) — рендер аватара обязан сам решить
 // показать avatarUrl, когда avatar пуст (profile.jsx/sidebar-profile-card.jsx).
+// Этап 57 (найдено собственной тестовой методологией сессии — повторные
+// "чистые устройства" стирали keystore.profileAutoPublished, из-за чего
+// ensureProfilePublished переиздавал ГОЛЫЙ {name} поверх содержательного
+// kind 0 — replaceable-семантика NIP-01 схлопывала старую версию с био/
+// аватаром): пустое ВХОДЯЩЕЕ поле больше не побеждает уже непустое локальное —
+// иначе ЛЮБОЙ такой инцидент (не только тестовый — гонка между устройствами
+// или сбой публикации тоже могли бы дать пустой "самый свежий по created_at")
+// безусловно стирал бы уже хорошие локальные данные при каждом connect().
+// Настоящее обновление (непустое входящее значение) по-прежнему побеждает.
 export async function hydrateOwnProfile(ownerPubkey) {
   const events = await db.table('events').where('[pubkey+kind]').equals([ownerPubkey, 0]).toArray();
   if (events.length === 0) return false;
@@ -61,7 +70,8 @@ export async function hydrateOwnProfile(ownerPubkey) {
   } catch {
     return false; // повреждённый/чужеродный content — не роняем bootstrap
   }
-  await updateProfile(ownerPubkey, { bio: parsed.about ?? '', avatarUrl: parsed.picture ?? '' });
+  const current = await getProfile(ownerPubkey);
+  await updateProfile(ownerPubkey, { bio: parsed.about || current.bio || '', avatarUrl: parsed.picture || current.avatarUrl || '' });
   return true;
 }
 

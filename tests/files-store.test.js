@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createInitialState, applyOp, ROOT_ID } from "../src/domain/files/tree.js";
 import { createFolder } from "../src/domain/files/ops.js";
-import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey } from "../src/domain/files/store.js";
+import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey, listUnannouncedFileKeys, markFileKeyAnnounced } from "../src/domain/files/store.js";
 
 const OWNER_A = "owner-a-pubkey";
 const OWNER_B = "owner-b-pubkey";
@@ -136,4 +136,47 @@ test("owner-scoping: ключ владельца A не читается вла�
 	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey);
 
 	assert.equal(await getFileKey(OWNER_B, dbKeyB, "digest-1"), undefined);
+});
+
+// Этап 57 — announced: "этот ключ уже путешествует внутри опубликованного
+// create-Op, довыдавать (backfillOwnFileKeys) не нужно". По умолчанию false —
+// ключи, сохранённые ДО этого фикса (или без явного announced), нуждаются в
+// довыдаче.
+test("saveFileKey: announced по умолчанию false, если не передан", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey);
+
+	const [unannounced] = await listUnannouncedFileKeys(OWNER_A, dbKeyA);
+	assert.equal(unannounced.digest, "digest-1");
+	assert.deepEqual(unannounced.fileKey, fileKey);
+});
+
+test("saveFileKey: announced=true -> НЕ попадает в listUnannouncedFileKeys", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", fileKey, true);
+
+	assert.deepEqual(await listUnannouncedFileKeys(OWNER_A, dbKeyA), []);
+});
+
+test("listUnannouncedFileKeys: owner-scoped — не видит чужие неанонсированные ключи", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	const dbKeyB = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-a", crypto.getRandomValues(new Uint8Array(32)));
+	await saveFileKey(OWNER_B, dbKeyB, "digest-b", crypto.getRandomValues(new Uint8Array(32)));
+
+	const listA = await listUnannouncedFileKeys(OWNER_A, dbKeyA);
+	assert.deepEqual(listA.map((r) => r.digest), ["digest-a"]);
+});
+
+test("markFileKeyAnnounced: после пометки ключ пропадает из listUnannouncedFileKeys, не трогает другие ключи того же владельца", async () => {
+	const dbKeyA = crypto.getRandomValues(new Uint8Array(32));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-1", crypto.getRandomValues(new Uint8Array(32)));
+	await saveFileKey(OWNER_A, dbKeyA, "digest-2", crypto.getRandomValues(new Uint8Array(32)));
+
+	await markFileKeyAnnounced(OWNER_A, "digest-1");
+
+	const remaining = await listUnannouncedFileKeys(OWNER_A, dbKeyA);
+	assert.deepEqual(remaining.map((r) => r.digest), ["digest-2"]);
 });

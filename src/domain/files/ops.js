@@ -56,11 +56,15 @@ export function createFolder(S, parentId, name, newId, label) {
 // (content.js's putStream), НЕИЗМЕНЯЕМ после создания, как и kind (§4.1
 // TASK.md). origin — пассивная метка происхождения (§4.1: "узел из чата" и
 // т.п.), опциональна, по умолчанию null (обычная загрузка через "Файлы").
-export function createFile(S, parentId, name, newId, blob, label, origin = null) {
+// Этап 57 — fileKeyHex (необязательный) едет ВНУТРИ уже NIP-44-самошифрованного
+// журнала операций (sync.js) — второе устройство того же владельца иначе видит
+// digest, но никогда не сможет расшифровать содержимое (найдено живой проверкой).
+export function createFile(S, parentId, name, newId, blob, label, origin = null, fileKeyHex = null) {
 	if (!nameFree(S, parentId, name)) {
 		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`);
 	}
-	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label };
+	const fileKey = fileKeyHex !== undefined && fileKeyHex !== null ? { fileKey: fileKeyHex } : {};
+	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label, ...fileKey };
 }
 
 export function rename(S, id, name, label) {

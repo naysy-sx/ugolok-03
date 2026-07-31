@@ -201,3 +201,21 @@ test("createFile: origin — пассивная метка, по умолчан�
 	S = applyOp(S, opWithOrigin);
 	assert.equal(S.nodes.get(opWithOrigin.id).origin.value, "chat:alice");
 });
+
+// Этап 57 — журнал операций (KIND_FILES_OP) уже NIP-44-шифруется владельцем
+// самому себе, поэтому провезти fileKey прямо внутри create-операции безопасно
+// (без него второе устройство видит структуру/digest, но никогда не сможет
+// расшифровать содержимое — найдено живой проверкой реального аккаунта).
+test("createFile: необязательный fileKeyHex попадает в op, применение к дереву им не мешает (applyOp читает только известные поля)", () => {
+	let S = createInitialState();
+	const opWithKey = createFile(S, ROOT_ID, "секрет.jpg", id("file"), "digest-key", label(), null, "aabbcc");
+	assert.equal(opWithKey.fileKey, "aabbcc");
+	S = applyOp(S, opWithKey);
+	assert.equal(S.nodes.get(opWithKey.id).blob, "digest-key", "лишнее поле fileKey не мешает обычному применению create");
+});
+
+test("createFile: БЕЗ fileKeyHex — поле fileKey в op отсутствует вовсе (не undefined-значение, JSON.stringify не потащит мусор в журнал)", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "обычный.jpg", id("file"), "digest-plain", label());
+	assert.equal("fileKey" in op, false);
+});

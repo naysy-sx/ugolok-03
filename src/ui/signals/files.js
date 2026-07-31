@@ -4,9 +4,10 @@
 // пересохраняют и обновляют сигнал. Здесь чуть сложнее (собственный
 // Lamport-счётчик, undo-стек) — но принцип тот же.
 import { signal, computed } from "@preact/signals";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { createInitialState, merge, project, ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
 import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, PreconditionError } from "../../domain/files/ops.js";
-import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey } from "../../domain/files/store.js";
+import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey, listUnannouncedFileKeys, markFileKeyAnnounced } from "../../domain/files/store.js";
 import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../../domain/files/sync.js";
 import { db } from "../../core/store/database.js";
 import { dbKeySig } from "./auth.js";
@@ -139,7 +140,13 @@ export async function initFiles(ownerPubkey, privKey, publish) {
 	// экрана (не ждём живого onEvent) — если privKey ещё недоступен (не
 	// должно случаться в норме, но initFiles не обязан на это полагаться),
 	// пропускаем без падения.
-	if (privKey) await rebuildFilesLog(ownerPubkey, privKey);
+	if (privKey) {
+		await rebuildFilesLog(ownerPubkey, privKey);
+		// Этап 57 — довыдача fileKey файлам, созданным ДО этого фикса (см.
+		// backfillOwnFileKeys выше). publish может быть undefined (та же
+		// ситуация, что дребезг публикации без сети) — best-effort, не блокирует.
+		if (publish) await backfillOwnFileKeys(ownerPubkey, privKey, publish);
+	}
 }
 
 // Экспортирована (этап 53 И6, задача 6.7) — тот же случай, что label() выше:
@@ -182,6 +189,20 @@ export async function rebuildFilesLog(ownerPubkey, privKey) {
 	}
 	if (allOps.length === 0) return;
 
+	// Этап 57 — create-операция может нести fileKey (журнал уже NIP-44-
+	// шифруется владельцем самому себе, провезти секрет внутри безопасно) —
+	// без этого шага файл виден в дереве, но НИКОГДА не расшифруется на этом
+	// устройстве (найдено живой проверкой). Уже известный локально ключ не
+	// перезаписывается — эта ветка только ДОБАВЛЯЕТ то, чего не хватало.
+	for (const op of allOps) {
+		if (op.type === "create" && op.kind === "file" && op.fileKey) {
+			const existing = await getFileKey(ownerPubkey, dbKeySig.value, op.blob);
+			if (existing === undefined) {
+				await saveFileKey(ownerPubkey, dbKeySig.value, op.blob, hexToBytes(op.fileKey), true);
+			}
+		}
+	}
+
 	// ОДИН merge на ВСЮ пачку, ОДИН saveTreeState — I-BATCH (тот же инвариант,
 	// что 2.7/3.9), не по одному пересчёту на событие.
 	treeState.value = merge(treeState.value, allOps);
@@ -191,6 +212,47 @@ export async function rebuildFilesLog(ownerPubkey, privKey) {
 		lamportClock.receive(maxCounter);
 		await saveFilesClockValue(ownerPubkey, lamportClock.getValue());
 	}
+}
+
+// Этап 57 — задним числом довыдаёт fileKey файлам, чей create-Op был
+// опубликован ДО этого фикса (без fileKey) — иначе другие устройства того же
+// владельца никогда не расшифруют файл, даже с уже видимой структурой дерева.
+// republish ТОГО ЖЕ create-Op (тот же id) — applyOp уже идемпотентен на
+// повторный create с существующим id ("идемпотентный повтор", tree.js),
+// поэтому строим объект операции напрямую (не через createFile из ops.js —
+// тот отклонит с PreconditionError NAME_TAKEN, имя уже занято этим же узлом),
+// тот же приём, что save-to-own.js. Вызывается из initFiles сразу после
+// rebuildFilesLog — та же ленивая активация, что весь раздел "Файлы".
+export async function backfillOwnFileKeys(ownerPubkey, privKey, publish) {
+	const unannounced = await listUnannouncedFileKeys(ownerPubkey, dbKeySig.value);
+	let count = 0;
+	for (const { digest, fileKey } of unannounced) {
+		const node = Array.from(treeState.value.nodes.values()).find((n) => n.kind === "file" && n.blob === digest);
+		if (!node) continue; // файл не найден локально — пропустить, не бросать
+		const op = {
+			type: "create",
+			id: node.id,
+			kind: "file",
+			blob: digest,
+			parentId: node.par.value,
+			name: node.name.value,
+			origin: node.origin.value,
+			label: await label(),
+			fileKey: bytesToHex(fileKey),
+		};
+		try {
+			const event = buildFilesLogEvent(privKey, [op]);
+			const result = await publish(event);
+			if (result.ok) {
+				await markFileKeyAnnounced(ownerPubkey, digest);
+				count++;
+			}
+			// иначе — best-effort, попробуем на следующем connect(), не бросаем
+		} catch {
+			// сбой для этого файла (relay недоступен и т.п.) — не ронять обработку остальных
+		}
+	}
+	return count;
 }
 
 function randomNodeId() {
@@ -213,9 +275,12 @@ export async function createFolder(name) {
 // нерасшифровываем после первой же перезагрузки (найдено при реализации
 // миниатюр, задача 3.8 — ключ раньше нигде не персистировался).
 export async function createFileEntry(name, blobDigest, fileKey, origin = null) {
-	const op = opCreateFile(treeState.value, currentFolderId.value, name, randomNodeId(), blobDigest, await label(), origin);
+	// Этап 57 — fileKey едет прямо в create-Op (журнал уже NIP-44-самошифрован,
+	// провезти секрет внутри безопасно) — announced=true сразу, backfillOwnFileKeys
+	// нечего будет довыдавать для файлов, созданных с этого момента.
+	const op = opCreateFile(treeState.value, currentFolderId.value, name, randomNodeId(), blobDigest, await label(), origin, bytesToHex(fileKey));
 	if (op instanceof PreconditionError) return op;
-	await saveFileKey(cachedOwnerPubkey, dbKeySig.value, blobDigest, fileKey);
+	await saveFileKey(cachedOwnerPubkey, dbKeySig.value, blobDigest, fileKey, true);
 	await applyAndPersist([op]);
 	pushUndo(undoStack, [recordCreate(op.id)]);
 	canUndo.value = canUndoNow(undoStack);

@@ -112,16 +112,35 @@ export async function saveFilesClockValue(ownerPubkey, value) {
 // domain/attachments/cache.js) — сырой симметричный ключ расшифровки
 // файла в открытом виде в IndexedDB недопустим. НЕ путать с share.js/И6
 // (обёртки ключа для КОНТАКТОВ) — это обычный доступ владельца к своему.
-export async function saveFileKey(ownerPubkey, dbKey, digest, fileKey) {
+// Этап 57 — announced: "этот ключ уже путешествует внутри опубликованного
+// create-Op (sync.js), backfillOwnFileKeys довыдавать не должен". По умолчанию
+// false — ключи, сохранённые до этого фикса или без явного announced,
+// нуждаются в довыдаче (иначе второе устройство того же владельца никогда не
+// расшифрует файл — найдено живой проверкой).
+export async function saveFileKey(ownerPubkey, dbKey, digest, fileKey, announced = false) {
 	const nonce = crypto.getRandomValues(new Uint8Array(12));
 	const ciphertext = chacha20poly1305(dbKey, nonce).encrypt(fileKey);
-	await db.table("files_keys").put({ ownerPubkey, digest, nonce, ciphertext });
+	await db.table("files_keys").put({ ownerPubkey, digest, nonce, ciphertext, announced });
 }
 
 export async function getFileKey(ownerPubkey, dbKey, digest) {
 	const row = await db.table("files_keys").get([ownerPubkey, digest]);
 	if (!row) return undefined;
 	return chacha20poly1305(dbKey, row.nonce).decrypt(row.ciphertext);
+}
+
+export async function listUnannouncedFileKeys(ownerPubkey, dbKey) {
+	const rows = await db.table("files_keys").where("ownerPubkey").equals(ownerPubkey).toArray();
+	return rows
+		.filter((row) => row.announced !== true)
+		.map((row) => ({
+			digest: row.digest,
+			fileKey: chacha20poly1305(dbKey, row.nonce).decrypt(row.ciphertext),
+		}));
+}
+
+export async function markFileKeyAnnounced(ownerPubkey, digest) {
+	await db.table("files_keys").update([ownerPubkey, digest], { announced: true });
 }
 
 // Персистентность шаринга (CONTRACTS.md/DESIGN.md, этап 53 И6) — по
