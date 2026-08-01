@@ -1,9 +1,5 @@
 import { transition } from "../fsm/machine.js";
 
-// Автомат соединения — правка контракта TECH.md §9.3, обоснование в DESIGN.md
-// ("Этап 16"): connecting+OPEN ведёт сразу в connected (не authenticating),
-// AUTH_CHALLENGE входит в authenticating реактивно из connected/subscribed,
-// все три исхода authenticating (OK/FAIL/TIMEOUT) возвращают в connected.
 const TRANSITIONS = {
   disconnected: { CONNECT: "connecting" },
   connecting: { OPEN: "connected", TIMEOUT: "disconnected" },
@@ -12,10 +8,6 @@ const TRANSITIONS = {
     SUBSCRIBE_OK: "subscribed",
   },
   authenticating: {
-    // Повторный challenge поверх уже идущей аутентификации — самопереход
-    // (сохранено из исходного автомата TECH.md §9.3). NIP-42 прямо допускает
-    // новый challenge в любой момент; relay-auth.js обязан отправить ответ
-    // именно на ПОСЛЕДНИЙ — старый теряет силу (см. DESIGN.md/тесты этапа 17).
     AUTH_CHALLENGE: "authenticating",
     AUTH_OK: "connected",
     AUTH_FAIL: "connected",
@@ -53,12 +45,6 @@ export function createRelayConnection(url, options = {}) {
   let reconnectAttempt = 0;
   let reconnectTimer = null;
 
-  // Композиция message-interceptor'ов (relay-auth.js/publisher.js/subscriber.js,
-  // этапы 17-18) — правка контракта, этап 19. `onMessage` из options — сырой
-  // наблюдатель (видит ВСЁ, ни на что не влияет); handleMessage-функции
-  // регистрируются здесь и пробуются по очереди до первой, вернувшей true
-  // ("сообщение моё, обработано") — тот же паттерн first-match-wins, что уже
-  // используют сами interceptor'ы.
   const messageHandlers = [];
 
   function addMessageHandler(handler) {
@@ -110,10 +96,6 @@ export function createRelayConnection(url, options = {}) {
   }
 
   function send(msgArray) {
-    // "authenticating" тоже допустим: именно в этом состоянии relay-auth.js
-    // (этап 17) обязан отправить AUTH-ответ на challenge — WS реально открыт
-    // во всех трёх состояниях, различие только в том, что приложение считает
-    // уместным делать сейчас.
     if (state !== "connected" && state !== "subscribed" && state !== "authenticating") {
       throw new Error(`relay-pool: send() недоступен в состоянии "${state}"`);
     }
@@ -140,6 +122,145 @@ export function createRelayConnection(url, options = {}) {
     reportAuthFail: () => apply("AUTH_FAIL"),
     reportAuthTimeout: () => apply("TIMEOUT"),
     reportSubscribed: () => apply("SUBSCRIBE_OK"),
+    close,
+  };
+}
+
+// createRelayPool — DESIGN.md, раздел "Этап 58". Реализует РОВНО ТОТ ЖЕ
+// интерфейс, что createRelayConnection (getState/getUrl/addMessageHandler/
+// connect/send/close) — publisher.js/subscriber.js и весь signals/transport.js
+// не отличают пул от одного соединения (инвариант "fake-connection", см.
+// DESIGN.md). entries[i] и connections[i] — параллельные массивы, индекс
+// связывает роль (read/write) с конкретным createRelayConnection.
+const STATE_RANK = ["disconnected", "connecting", "authenticating", "connected", "subscribed"];
+
+export function createRelayPool(entries, options = {}) {
+  if (entries.length === 0) {
+    throw new Error("relay-pool: createRelayPool требует непустой список entries");
+  }
+
+  const WebSocketImpl = options.WebSocketImpl ?? globalThis.WebSocket;
+  const backoff = { ...DEFAULT_BACKOFF, ...options.backoff };
+  const autoReconnect = options.autoReconnect ?? true;
+  const onStateChange = options.onStateChange;
+
+  // Инвариант П1 (DESIGN.md) — состояние пула ВСЕГДА пересчитывается заново
+  // как max по STATE_RANK среди ЖИВЫХ состояний членов, не защёлкивается.
+  function aggregateState() {
+    let best = "disconnected";
+    for (const connection of connections) {
+      if (STATE_RANK.indexOf(connection.getState()) > STATE_RANK.indexOf(best)) {
+        best = connection.getState();
+      }
+    }
+    return best;
+  }
+
+  let lastReportedState = "disconnected";
+  function handleMemberStateChange() {
+    const next = aggregateState();
+    if (next !== lastReportedState) {
+      const prev = lastReportedState;
+      lastReportedState = next;
+      onStateChange?.(next, prev);
+    }
+  }
+
+  const connections = entries.map((entry) =>
+    createRelayConnection(entry.url, {
+      WebSocketImpl,
+      backoff,
+      autoReconnect,
+      onStateChange: handleMemberStateChange,
+    }),
+  );
+
+  // Инвариант П3/П4 (DESIGN.md) — дедуп EVENT по (subId,id), EOSE "первый —
+  // финальный". Общее для ВСЕХ зарегистрированных через addMessageHandler
+  // обработчиков пула (не per-registration — иначе вторая регистрация видела
+  // бы событие как "уже поглощённое" первой, ломая first-match-wins).
+  const seenEventIds = new Map(); // subId -> Set<eventId>
+  const seenEose = new Set(); // subId, для которых EOSE уже проброшен наверх
+
+  const poolHandlers = [];
+  function addMessageHandler(handler) {
+    poolHandlers.push(handler);
+  }
+
+  function dispatchToPoolHandlers(msg) {
+    for (const handler of poolHandlers) {
+      if (handler(msg)) break;
+    }
+  }
+
+  function onMemberMessage(msg) {
+    const type = msg[0];
+    if (type === "EVENT") {
+      const subId = msg[1];
+      const event = msg[2];
+      let seen = seenEventIds.get(subId);
+      if (!seen) {
+        seen = new Set();
+        seenEventIds.set(subId, seen);
+      }
+      if (seen.has(event.id)) return true; // поглощено — не давать остальным обработчикам ЭТОГО соединения увидеть тоже
+      seen.add(event.id);
+      dispatchToPoolHandlers(msg);
+      return true;
+    }
+    if (type === "EOSE") {
+      const subId = msg[1];
+      if (seenEose.has(subId)) return true;
+      seenEose.add(subId);
+      dispatchToPoolHandlers(msg);
+      return true;
+    }
+    dispatchToPoolHandlers(msg);
+    return true;
+  }
+
+  for (const connection of connections) {
+    connection.addMessageHandler(onMemberMessage);
+  }
+
+  function send(msgArray) {
+    const role = msgArray[0] === "REQ" || msgArray[0] === "CLOSE" ? "read" : "write";
+    let sentToAny = false;
+    for (let i = 0; i < entries.length; i++) {
+      if (!entries[i][role]) continue;
+      try {
+        connections[i].send(msgArray);
+        sentToAny = true;
+      } catch {
+        // это конкретное соединение не готово — не наша забота, пробуем остальные (DESIGN.md П2)
+      }
+    }
+    if (!sentToAny) {
+      throw new Error(`relay-pool: нет готового ${role}-соединения`);
+    }
+  }
+
+  function connect() {
+    for (const connection of connections) connection.connect();
+  }
+
+  function close() {
+    for (const connection of connections) connection.close();
+  }
+
+  function getUrl() {
+    return entries
+      .filter((e) => e.write)
+      .map((e) => e.url)
+      .join(",");
+  }
+
+  return {
+    getState: aggregateState,
+    getUrl,
+    addMessageHandler,
+    connect,
+    send,
     close,
   };
 }

@@ -2,7 +2,7 @@ import { signal } from "@preact/signals";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
-import { createRelayConnection } from "../../core/transport/relay-pool.js";
+import { createRelayPool } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
@@ -152,6 +152,20 @@ function teardown() {
 	publisher = null;
 	verifyBatchFn = null;
 	groupMessageSubscriber = null;
+	// Найдено живой проверкой (этап 58 — reconnectWithNewSettings, вызываемый из
+	// новой relay-настроек UI, до этого пути редко доходили с уже установленными
+	// подписками): эти пять singleton-подписчиков, в отличие от groupMessageSubscriber
+	// выше, не сбрасывались здесь — каждый держит closure над СТАРЫМ (уже закрытым
+	// после connection.close() ниже) connection/pool. Следующий вызов их refresh*
+	// (после нового connect()) видел "уже создан" и переиспользовал протухший
+	// объект, чей .send() бросал на закрытом соединении — тот же класс пробела,
+	// что уже чинился для groupMessageSubscriber, просто для этих пяти не был
+	// закрыт тогда же.
+	profileSubscriber = null;
+	channelGrantSubscriber = null;
+	channelContentSubscriber = null;
+	fileShareGrantSubscriber = null;
+	fileSubtreeOpSubscriber = null;
 	processedEventIds.clear();
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
@@ -180,13 +194,16 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	resetSyncLog();
 	logSync("Подключение к серверу…");
-	// Этап 34 — найденное решение (бутстрап-проблема): активный relay нужен ДО того, как
+	// Этап 34 — найденное решение (бутстрап-проблема): relay-список нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
 	// Локальный кэш — источник истины для ТЕКУЩЕГО подключения; build-time дефолт —
 	// только фолбэк на первый запуск, пока локальной записи ещё нет вовсе.
+	// Этап 58 — мультирелейный транспорт: пул реализует ТОТ ЖЕ интерфейс, что одно
+	// соединение (DESIGN.md, "ключевое архитектурное решение") — весь код ниже,
+	// обращающийся к `connection`, не меняется ни строкой.
 	const localSettings = await loadUiSettings(pubkeyHex, dbKey);
-	const relayUrl = localSettings.activeRelayUrl ?? DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
-	connection = createRelayConnection(relayUrl, {
+	const relayEntries = localSettings.relayUrls.length > 0 ? localSettings.relayUrls : [{ url: DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777", read: true, write: true }];
+	connection = createRelayPool(relayEntries, {
 		onStateChange: (s) => {
 			connState.value = s;
 			// Повторное подключение после обрыва (relay-pool.js's autoReconnect) —
@@ -506,12 +523,13 @@ export async function ensureConnected(pubkeyHex, privKey, dbKey) {
 	return connectPromise;
 }
 
-// Этап 34 — явное переподключение после смены активного relay в настройках. Полный
-// разрыв (teardown) + сброс кэша ensureConnected, чтобы новый connect() не вернул
-// старый connectPromise для того же pubkeyHex — connect() сам прочитает уже сохранённый
-// новый activeRelayUrl из локального кэша. Вызывающий UI-код (profile.jsx/settings.jsx)
-// обязан вызвать это САМ после setActiveRelayUrl — не скрытый побочный эффект внутри
-// доменной функции (CONTRACTS.md, этап 34).
+// Этап 34 — явное переподключение после смены relay-настроек. Полный разрыв
+// (teardown) + сброс кэша ensureConnected, чтобы новый connect() не вернул
+// старый connectPromise для того же pubkeyHex — connect() сам прочитает уже
+// сохранённый новый relayUrls из локального кэша (этап 58 — весь список, не
+// одно активное). Вызывающий UI-код (profile.jsx) обязан вызвать это САМ
+// после addRelayUrl/removeRelayUrl/setRelayRole — не скрытый побочный эффект
+// внутри доменной функции (CONTRACTS.md, этап 34).
 export async function reconnectWithNewSettings(pubkeyHex, privKey, dbKey) {
 	teardown();
 	connectedForPubkey = null;

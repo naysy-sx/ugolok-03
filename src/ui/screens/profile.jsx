@@ -10,7 +10,7 @@ import {
 	loadUiSettings,
 	addRelayUrl,
 	removeRelayUrl,
-	setActiveRelayUrl,
+	setRelayRole,
 	addBlossomUrl,
 	removeBlossomUrl,
 	setActiveBlossomUrl,
@@ -121,6 +121,99 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 	);
 }
 
+// Этап 58 — мультирелейный транспорт: relayUrls теперь {url,read,write}[],
+// "один активный" не имеет смысла при одновременной работе с несколькими
+// (CONTRACTS.md/DESIGN.md, этап 58). Blossom остаётся single-active
+// (ServerListEditor выше, без изменений) — это отдельный, более поздний
+// вопрос (этап 62/63), не путать.
+function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
+	const [newUrl, setNewUrl] = useState("");
+	const [error, setError] = useState("");
+
+	async function handleAdd(e) {
+		e.preventDefault();
+		const trimmed = newUrl.trim();
+		if (!trimmed) return;
+		setError("");
+		try {
+			await onAdd(trimmed);
+			setNewUrl("");
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	async function runAction(fn) {
+		setError("");
+		try {
+			await fn();
+		} catch (err) {
+			setError(err?.message || String(err));
+		}
+	}
+
+	return (
+		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="srv-relay">
+			<h2 id="srv-relay" class="sect-title">
+				Relay-серверы
+			</h2>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+			<ul role="list" class="srv__list">
+				{urls.map((r) => (
+					<li key={r.url} class="srv__item">
+						<span class="srv__url">{r.url}</span>
+						<label>
+							<input
+								type="checkbox"
+								checked={r.read}
+								disabled={busy}
+								onChange={(e) => runAction(() => onSetRole(r.url, { read: e.currentTarget.checked, write: r.write }))}
+							/>
+							чтение
+						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={r.write}
+								disabled={busy}
+								onChange={(e) => runAction(() => onSetRole(r.url, { read: r.read, write: e.currentTarget.checked }))}
+							/>
+							запись
+						</label>
+						<button
+							type="button"
+							class="icon-btn"
+							disabled={busy}
+							onClick={() => runAction(() => onRemove(r.url))}
+							aria-label={`Удалить сервер ${r.url}`}
+						>
+							<IconTrash />
+						</button>
+					</li>
+				))}
+				{urls.length === 0 && (
+					<li style={{ color: "var(--muted)" }} class="srv__item">
+						Список пуст.
+					</li>
+				)}
+			</ul>
+			<form class="srv__add" onSubmit={handleAdd}>
+				<label class="visually-hidden" for="relay-new-url">
+					Добавить сервер
+				</label>
+				<input id="relay-new-url" type="text" placeholder="wss://relay.example.com" value={newUrl} onInput={(e) => setNewUrl(e.currentTarget.value)} />
+				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
+					<IconPlus /> Добавить
+				</button>
+			</form>
+		</section>
+	);
+}
+
 function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 	const [settings, setSettings] = useState(null);
 	const [busy, setBusy] = useState(false);
@@ -147,17 +240,14 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 
 	return (
 		<div class="flow" style={{ "--flow-space": "var(--space-m)" }}>
-			<ServerListEditor
-				title="Relay-серверы"
-				urlPlaceholder="wss://relay.example.com"
+			<RelayListEditor
 				urls={settings.relayUrls}
-				activeUrl={settings.activeRelayUrl}
 				busy={busy}
 				onAdd={(url) => withBusy(() => addRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
 				onRemove={(url) => withBusy(() => removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onSetActive={(url) =>
+				onSetRole={(url, role) =>
 					withBusy(async () => {
-						await setActiveRelayUrl(ownerPubkey, privKey, dbKey, url, publish);
+						await setRelayRole(ownerPubkey, privKey, dbKey, url, role, publish);
 						await reconnectWithNewSettings(ownerPubkey, privKey, dbKeySig.value);
 					})
 				}

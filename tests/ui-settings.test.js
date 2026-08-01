@@ -14,7 +14,7 @@ import {
 	rebuildUiSettings,
 	addRelayUrl,
 	removeRelayUrl,
-	setActiveRelayUrl,
+	setRelayRole,
 	addBlossomUrl,
 	removeBlossomUrl,
 	setActiveBlossomUrl,
@@ -99,26 +99,38 @@ test("saveUiSettings: сохраняет локально СРАЗУ, даже �
 	assert.equal(loaded.accentColorId, "violet", "локальное сохранение не зависит от результата публикации");
 });
 
-test("addRelayUrl/setActiveRelayUrl/removeRelayUrl: полный цикл", async () => {
+test("addRelayUrl/setRelayRole/removeRelayUrl: полный цикл (этап 58 — {url,read,write}, не одно активное)", async () => {
 	const published = [];
 	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
 	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
 	let settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.deepEqual(settings.relayUrls, ["wss://relay-a.example", "wss://relay-b.example"]);
+	assert.deepEqual(settings.relayUrls, [
+		{ url: "wss://relay-a.example", read: true, write: true },
+		{ url: "wss://relay-b.example", read: true, write: true },
+	]);
 
-	await setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	await setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", { read: true, write: false }, capturingPublish(published));
 	settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.equal(settings.activeRelayUrl, "wss://relay-b.example");
-
-	await assert.rejects(
-		() => removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published)),
-		/активный/,
-		"нельзя удалить активный relay",
+	assert.deepEqual(
+		settings.relayUrls.find((r) => r.url === "wss://relay-b.example"),
+		{ url: "wss://relay-b.example", read: true, write: false },
+	);
+	// relay-a остаётся read+write — иначе следующий шаг (снятие read+write с b) не нарушил бы
+	// инвариант "хотя бы один write" сам по себе, но проверяем именно точечную правку одной записи
+	assert.deepEqual(
+		settings.relayUrls.find((r) => r.url === "wss://relay-a.example"),
+		{ url: "wss://relay-a.example", read: true, write: true },
 	);
 
 	await removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
 	settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.deepEqual(settings.relayUrls, ["wss://relay-b.example"]);
+	assert.deepEqual(settings.relayUrls, [{ url: "wss://relay-b.example", read: true, write: false }]);
+
+	await assert.rejects(
+		() => removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published)),
+		/последн/i,
+		"нельзя удалить последний relay — список не должен опустеть",
+	);
 });
 
 test("addRelayUrl: повторное добавление того же URL идемпотентно (не дублирует)", async () => {
@@ -126,11 +138,32 @@ test("addRelayUrl: повторное добавление того же URL и�
 	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
 	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.deepEqual(settings.relayUrls, ["wss://relay-a.example"]);
+	assert.deepEqual(settings.relayUrls, [{ url: "wss://relay-a.example", read: true, write: true }]);
 });
 
-test("setActiveRelayUrl: URL, которого нет в списке -> throw", async () => {
-	await assert.rejects(() => setActiveRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://unknown.example", capturingPublish([])), /отсутствует/);
+test("setRelayRole: URL, которого нет в списке -> throw", async () => {
+	await assert.rejects(
+		() => setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://unknown.example", { read: true, write: true }, capturingPublish([])),
+		/отсутствует/,
+	);
+});
+
+test("setRelayRole: нельзя оставить список без единого read:true", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://only.example", capturingPublish(published));
+	await assert.rejects(
+		() => setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://only.example", { read: false, write: true }, capturingPublish(published)),
+		/read/,
+	);
+});
+
+test("setRelayRole: нельзя оставить список без единого write:true", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://only.example", capturingPublish(published));
+	await assert.rejects(
+		() => setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://only.example", { read: true, write: false }, capturingPublish(published)),
+		/write/,
+	);
 });
 
 test("addBlossomUrl/setActiveBlossomUrl/removeBlossomUrl: тот же цикл, что relay", async () => {
@@ -163,7 +196,13 @@ test("rebuildUiSettings: нет событий -> no-op, не бросает", a
 // AC-16, Tier 4 (этап 45) — сырой дамп таблицы не должен содержать relay/Blossom
 // URL в открытом виде; только ownerPubkey остаётся plaintext (индекс).
 test("AC-16: сырая запись uiSettings в IndexedDB не содержит relayUrls/blossomUrls в открытом виде", async () => {
-	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, relayUrls: ["wss://secret-relay.example"] }, capturingPublish([]));
+	await saveUiSettings(
+		ALICE_PUB,
+		ALICE_PRIV,
+		DB_KEY,
+		{ ...DEFAULT_SETTINGS, relayUrls: [{ url: "wss://secret-relay.example", read: true, write: true }] },
+		capturingPublish([]),
+	);
 	const row = await db.table("uiSettings").get(ALICE_PUB);
 	assert.equal(row.ownerPubkey, ALICE_PUB);
 	assert.equal(row.relayUrls, undefined, "поля настроек не должны лежать top-level в открытом виде");

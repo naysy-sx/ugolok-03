@@ -9093,3 +9093,96 @@ NIP-44 "себе". Причина: `generateFileKey()` (crypto.js) — чист�
 идемпотентность пометки). `profile.test.js` (или где лежат текущие
 тесты `hydrateOwnProfile`) — пустое входящее не затирает непустое
 локальное, непустое входящее побеждает, оба пустых -> пусто.
+
+## Этап 58 — Мультирелейный транспорт (запись+чтение)
+
+Формализация (агрегатное состояние, дедуп EVENT, EOSE-агрегация) —
+DESIGN.md, раздел "Этап 58". Здесь — сигнатуры и правки принятых
+контрактов.
+
+### `src/core/transport/relay-pool.js` — новая функция (`createRelayConnection` не меняется)
+
+```js
+export function createRelayPool(entries, options = {});
+// entries: {url: string, read: boolean, write: boolean}[] — непустой (throw на пустом массиве)
+// options: те же поля, что createRelayConnection (WebSocketImpl, backoff, autoReconnect, onStateChange) —
+//   применяются одинаково к каждому внутреннему createRelayConnection(entry.url, ...)
+// -> РОВНО ТОТ ЖЕ интерфейс, что createRelayConnection (протокольно неотличим для publisher.js/subscriber.js):
+//   {
+//     getState(): string,      // max по порядку disconnected<connecting<authenticating<connected<subscribed среди всех членов (DESIGN.md П1)
+//     getUrl(): string,        // урлы всех write-entries через запятую — только для логов/диагностики, не для протокольной логики
+//     addMessageHandler(handler): void,  // регистрируется НА ПУЛЕ, а не на членах — получает уже дедуплицированный/агрегированный поток (см. ниже)
+//     connect(): void,         // connect() на КАЖДОМ члене
+//     send(msgArray): void,    // fan-out по роли (read: REQ/CLOSE, write: остальное), пропускает неготовые соединения, throw если НИ ОДНО не готово (DESIGN.md П2)
+//     close(): void,           // close() на КАЖДОМ члене
+//   }
+// Дедупликация EVENT по (subId, event.id) и EOSE "первый — финальный" — DESIGN.md П3/П4,
+// реализуются ВНУТРИ пула перед вызовом зарегистрированных addMessageHandler-обработчиков.
+// AUTH-обработчики (relay-auth.js) НЕ регистрируются на пуле — они per-relay по своей природе
+// (challenge одного relay не имеет смысла для другого) и остаются вне скоупа этого этапа
+// (createAuthHandler сегодня не подключён нигде в реальном connect(), см. лог этапа).
+```
+
+### `src/domain/settings/ui-settings.js` — правка принятого контракта (этап 34)
+
+**Было:** `relayUrls: string[]` + `activeRelayUrl: string|null` (одно
+"активное" соединение). **Стало:** `relayUrls: {url, read, write}[]`,
+поле `activeRelayUrl` УДАЛЕНО (сама идея "одно активное" не имеет
+смысла при одновременной работе с несколькими). `blossomUrls`/
+`activeBlossomUrl` НЕ ТРОГАЮТСЯ — Blossom остаётся single-active,
+это отдельный, более поздний вопрос (этап 62/63), не путать.
+Правка принята явно (Claude, п.13 skill), немедленная полная регрессия
+обязательна (см. DoD). Без обратной совместимости со старой формой —
+dev-стадия, нет прод-данных (прецедент — этапы 36/42).
+
+```js
+export function addRelayUrl(ownerPubkey, privKey, dbKey, url, publish);
+// добавляет {url, read: true, write: true} — идемпотентно (url уже есть по .url — no-op)
+
+export function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish);
+// throw, если это ПОСЛЕДНИЙ relay в списке (нельзя остаться вовсе без транспорта) — было "нельзя удалить активный"
+
+export function setRelayRole(ownerPubkey, privKey, dbKey, url, { read, write }, publish);
+// заменяет setActiveRelayUrl. throw, если url отсутствует в списке (как раньше).
+// throw, если применение оставило бы список БЕЗ единого read:true (нечего будет читать)
+// ИЛИ БЕЗ единого write:true (нечего будет публиковать) — эти два предусловия
+// защищают от полностью нерабочей конфигурации, не протокольная необходимость,
+// решение Claude по аналогии с духом старого "нельзя удалить активный".
+```
+
+`setActiveRelayUrl` — УДАЛЕНА (заменена `setRelayRole`).
+
+### `src/ui/signals/transport.js` — единственная точка переключения на пул
+
+`connect()`: `connection = createRelayConnection(relayUrl, {...})` →
+`connection = createRelayPool(localSettings.relayUrls, {...})` (fallback
+на первый запуск — `BUILD_DEFAULT_RELAYS.map(url => ({url, read:true, write:true}))`,
+тот же принцип, что `loadUiSettings`'s собственный fallback).
+`reconnectWithNewSettings` — поведение не меняется (полный
+teardown+`ensureConnected`, `connect()` сам перечитает актуальный
+`relayUrls` из настроек — тот же приём, что уже был для смены
+`activeRelayUrl`).
+Все ~15 подписчиков ниже по файлу (`giftWrapSubscriber`,
+`channelGrantSubscriber`, `fetchProfiles` и т.д.) — БЕЗ ИЗМЕНЕНИЙ,
+они обращаются к `connection`, который теперь ссылается на пул, но
+не знают и не обязаны знать об этом (DESIGN.md, "ключевое
+архитектурное решение").
+
+### `src/core/transport/transport.js` — удалено (мёртвый код)
+
+`createEndpointList` не имел ни одного реального вызывающего кода вне
+собственного теста с этапа 16 (контракт прямо предполагал "первого
+реального потребителя" — им стал этап 58, но решением другим путём:
+пул заменяет саму идею "один активный + переключение на следующий"
+на "несколько одновременно активных"). Файл и `tests/transport.test.js`
+удалены целиком, не оставлены как мёртвый код.
+
+### `src/ui/screens/profile.jsx` — новый `RelayListEditor` (Blossom-часть не меняется)
+
+`ServerListEditor` (общий компонент "список + один активный") остаётся
+БЕЗ ИЗМЕНЕНИЙ, теперь используется только Blossom-секцией. Relay-секция
+переходит на новый `RelayListEditor` (тот же файл): список
+`{url, read, write}`, чекбоксы read/write на каждой строке вместо
+кнопки "Сделать активным"; изменение любого чекбокса вызывает
+`setRelayRole` + `reconnectWithNewSettings` (тот же порядок вызовов,
+что раньше был у `setActiveRelayUrl`).

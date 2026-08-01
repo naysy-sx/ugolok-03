@@ -38,7 +38,6 @@ export const DEFAULT_SETTINGS = {
 	language: "ru",
 	notifications: DEFAULT_NOTIFICATIONS,
 	relayUrls: [],
-	activeRelayUrl: null,
 	blossomUrls: [],
 	activeBlossomUrl: null,
 };
@@ -81,8 +80,7 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 	const row = fromEncryptedRow(await db.table("uiSettings").get(ownerPubkey), dbKey);
 	if (!row) {
 		return mergeWithDefaults({
-			relayUrls: [...BUILD_DEFAULT_RELAYS],
-			activeRelayUrl: BUILD_DEFAULT_RELAYS[0] ?? null,
+			relayUrls: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true })),
 			blossomUrls: [...BUILD_DEFAULT_BLOSSOM_SERVERS],
 			activeBlossomUrl: BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? null,
 		});
@@ -115,26 +113,36 @@ export async function rebuildUiSettings(ownerPubkey, privKey, dbKey) {
 	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 }
 
+// Этап 58 — мультирелейный транспорт: relayUrls теперь {url,read,write}[],
+// "одно активное" соединение не имеет смысла при одновременной работе с
+// несколькими (см. CONTRACTS.md/DESIGN.md, этап 58).
 export async function addRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
-	if (settings.relayUrls.includes(url)) return; // идемпотентно
-	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: [...settings.relayUrls, url] }, publish);
+	if (settings.relayUrls.some((r) => r.url === url)) return; // идемпотентно
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: [...settings.relayUrls, { url, read: true, write: true }] }, publish);
 }
 
 export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
-	if (url === settings.activeRelayUrl) {
-		throw new Error("нельзя удалить активный relay — сначала переключитесь на другой");
+	if (settings.relayUrls.length <= 1) {
+		throw new Error("нельзя удалить последний relay — список не может быть пустым");
 	}
-	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: settings.relayUrls.filter((u) => u !== url) }, publish);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: settings.relayUrls.filter((r) => r.url !== url) }, publish);
 }
 
-export async function setActiveRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
+export async function setRelayRole(ownerPubkey, privKey, dbKey, url, { read, write }, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
-	if (!settings.relayUrls.includes(url)) {
+	if (!settings.relayUrls.some((r) => r.url === url)) {
 		throw new Error("URL отсутствует в списке — сначала добавьте");
 	}
-	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, activeRelayUrl: url }, publish);
+	const nextRelayUrls = settings.relayUrls.map((r) => (r.url === url ? { url, read, write } : r));
+	if (!nextRelayUrls.some((r) => r.read)) {
+		throw new Error("нельзя оставить список без единого read-relay — нечего будет читать");
+	}
+	if (!nextRelayUrls.some((r) => r.write)) {
+		throw new Error("нельзя оставить список без единого write-relay — нечего будет публиковать");
+	}
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
 }
 
 export async function addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
