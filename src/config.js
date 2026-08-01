@@ -4,6 +4,10 @@ export const BUILD_DEFAULT_RELAYS =
 	typeof __BUILD_DEFAULT_RELAYS__ !== "undefined"
 		? __BUILD_DEFAULT_RELAYS__
 		: [];
+export const BUILD_BOOTSTRAP_RELAYS =
+	typeof __BUILD_BOOTSTRAP_RELAYS__ !== "undefined"
+		? __BUILD_BOOTSTRAP_RELAYS__
+		: [];
 export const BUILD_DEFAULT_BLOSSOM_SERVERS =
 	typeof __BUILD_DEFAULT_BLOSSOM_SERVERS__ !== "undefined"
 		? __BUILD_DEFAULT_BLOSSOM_SERVERS__

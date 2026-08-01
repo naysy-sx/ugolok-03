@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeBackoffDelay, createRelayConnection, createRelayPool, publishToRelay } from "../src/core/transport/relay-pool.js";
+import { computeBackoffDelay, createRelayConnection, createRelayPool, publishToRelay, fetchFromRelay } from "../src/core/transport/relay-pool.js";
 
 class FakeWebSocket {
 	static instances = [];
@@ -453,4 +453,62 @@ test("publishToRelay: не переиспользует createRelayPool — ро
 	assert.equal(WS.instances.length, 1);
 	WS.instances[0].onmessage({ data: JSON.stringify(["OK", "e4", true, ""]) });
 	await resultPromise;
+});
+
+// Этап 61 — fetchFromRelay: эфемерное one-shot REQ+EOSE, симметрично publishToRelay.
+
+test("fetchFromRelay: connect -> REQ -> собирает EVENT до EOSE -> резолвится массивом -> close()", async () => {
+	const WS = freshWS();
+	const resultPromise = fetchFromRelay("wss://x", [{ kinds: [10002] }], { WebSocketImpl: WS });
+	WS.instances[0]._open();
+	assert.equal(WS.instances[0].sent.length, 1, "REQ должен быть отправлен сразу после connected");
+	const [type, subId] = JSON.parse(WS.instances[0].sent[0]);
+	assert.equal(type, "REQ");
+
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", subId, { id: "e1", kind: 10002 }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", subId, { id: "e2", kind: 10002 }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", subId]) });
+
+	const result = await resultPromise;
+	assert.deepEqual(
+		result.map((e) => e.id),
+		["e1", "e2"],
+	);
+	assert.equal(WS.instances[0].readyState, 3, "соединение должно закрыться сразу после EOSE");
+});
+
+test("fetchFromRelay: EOSE без единого EVENT -> резолвится пустым массивом (валидный исход, не ошибка)", async () => {
+	const WS = freshWS();
+	const resultPromise = fetchFromRelay("wss://x", [{ kinds: [10002] }], { WebSocketImpl: WS });
+	WS.instances[0]._open();
+	const [, subId] = JSON.parse(WS.instances[0].sent[0]);
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", subId]) });
+	const result = await resultPromise;
+	assert.deepEqual(result, []);
+});
+
+test("fetchFromRelay: таймаут подключения -> reject (отличимо от 'нашли 0 событий')", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const resultPromise = fetchFromRelay("wss://unreachable.example", [{ kinds: [10002] }], { WebSocketImpl: WS, timeoutMs: 5000 });
+	t.mock.timers.tick(5000);
+	await assert.rejects(() => resultPromise, /таймаут/);
+	assert.equal(WS.instances[0].readyState, 3);
+	t.mock.timers.reset();
+});
+
+test("fetchFromRelay: игнорирует EVENT/EOSE с чужим subId", async () => {
+	const WS = freshWS();
+	const resultPromise = fetchFromRelay("wss://x", [{ kinds: [10002] }], { WebSocketImpl: WS });
+	WS.instances[0]._open();
+	const [, subId] = JSON.parse(WS.instances[0].sent[0]);
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "чужой-subid", { id: "foreign" }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", "чужой-subid"]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", subId, { id: "e1" }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", subId]) });
+	const result = await resultPromise;
+	assert.deepEqual(
+		result.map((e) => e.id),
+		["e1"],
+	);
 });

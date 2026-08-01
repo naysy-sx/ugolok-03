@@ -1,8 +1,8 @@
 import { signal } from "@preact/signals";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
-import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
-import { createRelayPool, publishToRelay } from "../../core/transport/relay-pool.js";
+import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
+import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
@@ -38,8 +38,8 @@ import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
-import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
-import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
+import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
 import { buildDmRelayListEvent, parseDmRelayListEvent } from "../../domain/identity/dm-relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
 import { rebuildFilesLog } from "./files.js";
@@ -201,6 +201,25 @@ function assertValidPubkeyHex(pubkeyHex) {
 	}
 }
 
+// Этап 61 — bootstrap-обнаружение: первый вход НА ЭТОМ устройстве для
+// данного pubkey (нет ни одной локальной записи ui-settings — не отличить
+// "новый аккаунт" от "мнемоника на чистом устройстве" иначе) не должен
+// слепо подключаться к build-time дефолту, если у pubkey уже есть РЕАЛЬНЫЙ
+// опубликованный relay-список (kind:10002) на одном из общеизвестных
+// bootstrap-relay. Параллельно (Promise.allSettled) — один недоступный
+// bootstrap-relay не должен блокировать остальных (тот же принцип, что
+// createRelayPool, этап 58). pickLatest — kind:10002 replaceable, берём
+// ОДНУ самую свежую версию, не мёрджим теги нескольких копий.
+async function discoverOwnRelaysViaBootstrap(pubkeyHex) {
+	if (BUILD_BOOTSTRAP_RELAYS.length === 0) return [];
+	const results = await Promise.allSettled(
+		BUILD_BOOTSTRAP_RELAYS.map((url) => fetchFromRelay(url, [{ authors: [pubkeyHex], kinds: [10002] }])),
+	);
+	const events = results.filter((r) => r.status === "fulfilled").flatMap((r) => r.value);
+	if (events.length === 0) return [];
+	return parseRelayListEvent(pickLatest(events));
+}
+
 async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	resetSyncLog();
@@ -213,7 +232,34 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// соединение (DESIGN.md, "ключевое архитектурное решение") — весь код ниже,
 	// обращающийся к `connection`, не меняется ни строкой.
 	const localSettings = await loadUiSettings(pubkeyHex, dbKey);
-	const relayEntries = localSettings.relayUrls.length > 0 ? localSettings.relayUrls : [{ url: DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777", read: true, write: true }];
+	let relayEntries = localSettings.relayUrls;
+	// Этап 61 — ни разу не подключались с ЭТОГО устройства этим pubkey: прежде
+	// чем упасть на build-time дефолт, спросить bootstrap-relay — вдруг у
+	// аккаунта уже есть настоящий relay-список (переезд/мнемоника на новом
+	// устройстве). Брендово-новый аккаунт тоже пройдёт этот путь (kind:10002
+	// ещё не публиковался нигде) — обнаружится пустой список, ничего не сломается,
+	// просто один быстрый round-trip (bootstrap-relay по умолчанию — тот же
+	// сервер, что и обычный relay, см. CONTRACTS.md, этап 61).
+	if (!(await hasLocalUiSettings(pubkeyHex))) {
+		logSync("Поиск вашего relay…");
+		const discovered = await discoverOwnRelaysViaBootstrap(pubkeyHex).catch(() => []);
+		if (discovered.length > 0) {
+			relayEntries = discovered;
+			logSync(`Найден ваш relay (${discovered.length})`);
+			// Сохранить локально СРАЗУ — иначе следующий вход снова делал бы
+			// bootstrap-запрос. publisher на этот момент ещё не создан — publish
+			// заведомо падает, best-effort (тот же принцип, что и everywhere в
+			// этом файле: локальное сохранение не зависит от результата публикации).
+			await saveUiSettings(pubkeyHex, privKey, dbKey, { ...localSettings, relayUrls: discovered }, async () => {
+				throw new Error("publisher ещё не создан на этот момент connect()");
+			});
+		} else {
+			logSync("Свой relay не найден — используется relay по умолчанию");
+		}
+	}
+	if (relayEntries.length === 0) {
+		relayEntries = [{ url: DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777", read: true, write: true }];
+	}
 	connection = createRelayPool(relayEntries, {
 		onStateChange: (s) => {
 			connState.value = s;

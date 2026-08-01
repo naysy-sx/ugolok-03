@@ -91,6 +91,15 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 	return mergeWithDefaults(settings);
 }
 
+// Этап 61 — прямая проверка "есть ли локальная запись НА ЭТОМ устройстве".
+// loadUiSettings намеренно неотличима снаружи (фолбэк смёрджен с дефолтом
+// точно так же, как настоящая запись) — bootstrap-обнаружение (transport.js)
+// должно знать именно это: "первый вход для этого pubkey на этом устройстве"
+// vs "уже была локальная история", а не "какие в итоге получились settings".
+export async function hasLocalUiSettings(ownerPubkey) {
+	return (await db.table("uiSettings").get(ownerPubkey)) !== undefined;
+}
+
 // Локально — сразу (офлайн-first), публикация — best-effort и НЕ бросает наружу
 // (тот же принцип, что profile.jsx: локальное сохранение не зависит от публикации).
 // dbKey (этап 45, Tier 4) — только для ЛОКАЛЬНОГО кэша на этом устройстве; kind 30072

@@ -313,3 +313,52 @@ export function publishToRelay(url, event, options = {}) {
     connection.connect();
   });
 }
+
+// Этап 61 — симметрично publishToRelay: эфемерное one-shot соединение, но
+// для ЧТЕНИЯ (bootstrap-обнаружение relay-списка при первом входе на
+// устройстве). REQ со случайным subId -> собрать EVENT до EOSE -> close().
+// Пустой массив — валидный исход ("ничего не нашлось"), отличим от таймаута
+// подключения (reject) — вызывающая сторона обязана различать эти два случая.
+export function fetchFromRelay(url, filters, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 8000;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const events = [];
+
+    const connection = createRelayConnection(url, {
+      WebSocketImpl: options.WebSocketImpl,
+      autoReconnect: false,
+      onStateChange: (state) => {
+        if (settled || state !== "connected") return;
+        const subId = "fetch-" + Math.random().toString(36).slice(2);
+        connection.addMessageHandler((msg) => {
+          if (msg[0] === "EVENT" && msg[1] === subId) {
+            events.push(msg[2]);
+            return true;
+          }
+          if (msg[0] === "EOSE" && msg[1] === subId) {
+            if (settled) return true;
+            settled = true;
+            clearTimeout(timer);
+            connection.close();
+            resolve(events);
+            return true;
+          }
+          return false;
+        });
+        connection.send(["REQ", subId, ...filters]);
+      },
+    });
+
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      connection.close();
+      reject(new Error(`fetchFromRelay: таймаут подключения к ${url}`));
+    }, timeoutMs);
+
+    connection.connect();
+  });
+}

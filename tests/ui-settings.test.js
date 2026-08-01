@@ -12,6 +12,7 @@ import {
 	loadUiSettings,
 	saveUiSettings,
 	rebuildUiSettings,
+	hasLocalUiSettings,
 	addRelayUrl,
 	removeRelayUrl,
 	setRelayRole,
@@ -92,6 +93,24 @@ test("loadUiSettings: без локальной записи -> дефолт", a
 	assert.equal(settings.accentColorId, "blue");
 	assert.equal(settings.uiScale, "medium");
 	assert.deepEqual(settings.notifications, DEFAULT_SETTINGS.notifications);
+});
+
+// Этап 61 — hasLocalUiSettings: loadUiSettings сама неотличима снаружи (фолбэк
+// смёрджен с дефолтом так же, как настоящая запись) — нужна прямая проверка.
+test("hasLocalUiSettings: false, пока не было ни одного saveUiSettings", async () => {
+	assert.equal(await hasLocalUiSettings(ALICE_PUB), false);
+});
+
+test("hasLocalUiSettings: true сразу после первого saveUiSettings", async () => {
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, DEFAULT_SETTINGS, failingPublish());
+	assert.equal(await hasLocalUiSettings(ALICE_PUB), true);
+});
+
+test("hasLocalUiSettings: не путает разных владельцев", async () => {
+	const BOB_PRIV = new Uint8Array(32).fill(2);
+	const BOB_PUB = bytesToHex(getPublicKey(BOB_PRIV));
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, DEFAULT_SETTINGS, failingPublish());
+	assert.equal(await hasLocalUiSettings(BOB_PUB), false);
 });
 
 test("saveUiSettings: сохраняет локально СРАЗУ, даже если publish бросает ошибку (best-effort)", async () => {

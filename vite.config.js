@@ -107,6 +107,15 @@ function buildDefaultRelays(command) {
 	return command === "serve" ? ["ws://127.0.0.1:7777"] : ["wss://relay.example"];
 }
 
+// Этап 61 — тот же приём, что buildDefaultRelays: отдельная env-ручка на
+// будущее (когда bootstrap-координатор ugolok.tech разойдётся с собственным
+// relay пользователя, см. память проекта, staged rollout), но сегодня это
+// физически один и тот же сервер — дефолт совпадает с buildDefaultRelays.
+function buildBootstrapRelays(command) {
+	if (process.env.BUILD_BOOTSTRAP_RELAYS) return JSON.parse(process.env.BUILD_BOOTSTRAP_RELAYS);
+	return buildDefaultRelays(command);
+}
+
 // Этап 29 — тот же приём, что buildDefaultRelays выше: F-AT-09 (список Blossom-серверов
 // в settings) — только этап 32, а вложения отправлять уже нужно сейчас. dev — локальный
 // сервер (server/blossom/, довесок этапа 28), прод — плейсхолдер, обязана переопределить
@@ -160,6 +169,7 @@ export default defineConfig(({ command }) => ({
 	define: {
 		__BUILD_HASH__: JSON.stringify(BUILD_HASH),
 		__BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays(command)),
+		__BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(buildBootstrapRelays(command)),
 		__BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(buildDefaultBlossomServers(command)),
 		__BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
 	},
