@@ -268,3 +268,35 @@ test("uploadAvatarBlob: сервер не вернул response.url — фолб
 	const url = await uploadAvatarBlob("https://blossom.test/", original, "image/png", PRIV_KEY, { fetchImpl });
 	assert.equal(url, `https://blossom.test/${sha256Hex}`);
 });
+
+// Этап 62 — BUD-06-предпроверка (checkUploadRequirements) ПЕРЕД реальной PUT-
+// загрузкой аватара, тот же приём, что uploadMessageAttachment/putStream.
+test("uploadAvatarBlob: спрашивает BUD-06 (HEAD /upload) ПЕРЕД реальной загрузкой", async () => {
+	const store = new Map();
+	const headCalls = [];
+	const fetchImpl = async (url, opts) => {
+		if (opts.method === "HEAD") {
+			headCalls.push({ url, opts });
+			return { ok: true, status: 200, headers: { get: () => null } };
+		}
+		return makeUploadFetch(store)(url, opts);
+	};
+	await uploadAvatarBlob("https://blossom.test", new Uint8Array([1, 2, 3]), "image/png", PRIV_KEY, { fetchImpl });
+	assert.equal(headCalls.length, 1);
+	assert.equal(headCalls[0].url, "https://blossom.test/upload");
+	assert.equal(headCalls[0].opts.headers["X-Content-Type"], "image/png");
+});
+
+test("uploadAvatarBlob: сервер отклонил по BUD-06 (413) -> throw ДО реальной загрузки, PUT не вызывается", async () => {
+	let putCalled = false;
+	const fetchImpl = async (url, opts) => {
+		if (opts.method === "HEAD") return { ok: false, status: 413, headers: { get: (n) => (n === "X-Reason" ? "слишком большой" : null) } };
+		putCalled = true;
+		return fakeResponse({ jsonBody: {} });
+	};
+	await assert.rejects(
+		() => uploadAvatarBlob("https://blossom.test", new Uint8Array([1, 2, 3]), "image/png", PRIV_KEY, { fetchImpl }),
+		/413|слишком большой/,
+	);
+	assert.equal(putCalled, false);
+});

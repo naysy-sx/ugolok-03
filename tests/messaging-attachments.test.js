@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getManifest } from "../src/domain/files/content.js";
 import { uploadMessageAttachment, downloadMessageAttachment, referenceStoredFile } from "../src/domain/messaging/attachments.js";
+import { MAX_SANITY_FILE_SIZE } from "../src/domain/files/attachment-validation.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -61,13 +62,20 @@ test("uploadMessageAttachment: валидирует ДО сети — недоп
 	assert.equal(called, false, "validateAttachment должен отклонить ДО сетевого вызова");
 });
 
-test("uploadMessageAttachment: превышение размера -> throw, fetch не вызывается", async () => {
+// Этап 62 — раздельные лимиты по типу удалены из клиента (decisive-проверка
+// теперь server-side, BUD-06/checkUploadRequirements); здесь остаётся только
+// щедрый санити-потолок MAX_SANITY_FILE_SIZE (1 ГБ) на ВСЕ MIME — 25 MB image
+// (старая граница MAX_IMAGE_FILE_SIZE) теперь ДОПУСТИМ, отказ проверяется на
+// границе нового единого потолка. { length } вместо реального Uint8Array —
+// validateAttachment бросает ДО обращения к самим байтам, гигабайтный буфер
+// в памяти теста не нужен.
+test("uploadMessageAttachment: превышение MAX_SANITY_FILE_SIZE -> throw, fetch не вызывается", async () => {
 	let called = false;
 	const fetchImpl = async () => {
 		called = true;
 		return { ok: true, status: 200, json: async () => ({}), text: async () => "" };
 	};
-	const big = new Uint8Array(25 * 1024 * 1024);
+	const big = { length: MAX_SANITY_FILE_SIZE + 1 };
 	await assert.rejects(() => uploadMessageAttachment("https://blossom.test", big, { mime: "image/jpeg", name: "big.jpg" }, ALICE_PRIV, { fetchImpl }));
 	assert.equal(called, false);
 });

@@ -5,7 +5,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { uploadBlob, downloadBlob, deleteBlob, checkBlossomReachable } from "../src/core/transport/blossom-client.js";
+import { uploadBlob, downloadBlob, deleteBlob, checkBlossomReachable, checkUploadRequirements } from "../src/core/transport/blossom-client.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -158,6 +158,79 @@ test("checkBlossomReachable: завершающий '/' у serverUrl не даё
 	};
 	await checkBlossomReachable("https://blossom.test/", { fetchImpl });
 	assert.equal(calls[0], "https://blossom.test/");
+});
+
+// checkUploadRequirements (этап 62, BUD-06 upload-requirements) — HEAD-предпроверка
+// ДО реальной PUT-загрузки, спрашивает у сервера, примет ли он ИМЕННО этот файл
+// (по факту его СОБСТВЕННОГО конфига), не полагаясь на клиентскую константу.
+test("checkUploadRequirements: HEAD {serverUrl}/upload с X-SHA-256/X-Content-Type/X-Content-Length + Authorization", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push({ url, opts });
+		return { ok: true, status: 200, headers: { get: () => null } };
+	};
+	const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "deadbeef", mime: "image/jpeg", size: 12345 }, ALICE_PRIV, { fetchImpl });
+
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].url, "https://blossom.test/upload");
+	assert.equal(calls[0].opts.method, "HEAD");
+	assert.equal(calls[0].opts.headers["X-SHA-256"], "deadbeef");
+	assert.equal(calls[0].opts.headers["X-Content-Type"], "image/jpeg");
+	assert.equal(calls[0].opts.headers["X-Content-Length"], "12345");
+
+	const authHeader = calls[0].opts.headers.Authorization;
+	assert.ok(authHeader.startsWith("Nostr "));
+	const event = JSON.parse(Buffer.from(authHeader.slice("Nostr ".length), "base64").toString("utf8"));
+	assert.equal(event.kind, 24242);
+	assert.ok(verify(event));
+	assert.deepEqual(
+		event.tags.find((t) => t[0] === "t"),
+		["t", "upload"],
+	);
+	assert.deepEqual(
+		event.tags.find((t) => t[0] === "x"),
+		["x", "deadbeef"],
+	);
+
+	assert.deepEqual(result, { ok: true });
+});
+
+test("checkUploadRequirements: сервер вернул 413 (свой лимит превышен) -> { ok:false, status:413, reason }", async () => {
+	const fetchImpl = async () => ({ ok: false, status: 413, headers: { get: (name) => (name === "X-Reason" ? "file too large" : null) } });
+	const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "x", mime: "video/mp4", size: 999 }, ALICE_PRIV, { fetchImpl });
+	assert.deepEqual(result, { ok: false, status: 413, reason: "file too large" });
+});
+
+test("checkUploadRequirements: сервер вернул 401/403/415/400 -> { ok:false, status, reason:null } без заголовка X-Reason", async () => {
+	const fetchImpl = async () => ({ ok: false, status: 401, headers: { get: () => null } });
+	const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "x", mime: "video/mp4", size: 999 }, ALICE_PRIV, { fetchImpl });
+	assert.deepEqual(result, { ok: false, status: 401, reason: null });
+});
+
+test("checkUploadRequirements: сервер не поддерживает BUD-06 (404/405) -> { ok:true, unknown:true } — прогрессивное улучшение, не хардстоп", async () => {
+	for (const status of [404, 405]) {
+		const fetchImpl = async () => ({ ok: false, status, headers: { get: () => null } });
+		const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "x", mime: "video/mp4", size: 999 }, ALICE_PRIV, { fetchImpl });
+		assert.deepEqual(result, { ok: true, unknown: true }, `статус ${status} обязан трактоваться как "неизвестно", не как отказ`);
+	}
+});
+
+test("checkUploadRequirements: сеть недоступна (fetch бросает) -> { ok:true, unknown:true }, не пробрасывает исключение", async () => {
+	const fetchImpl = async () => {
+		throw new Error("ECONNREFUSED");
+	};
+	const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "x", mime: "video/mp4", size: 999 }, ALICE_PRIV, { fetchImpl });
+	assert.deepEqual(result, { ok: true, unknown: true });
+});
+
+test("checkUploadRequirements: serverUrl с завершающим '/' не даёт двойной слэш", async () => {
+	const calls = [];
+	const fetchImpl = async (url) => {
+		calls.push(url);
+		return { ok: true, status: 200, headers: { get: () => null } };
+	};
+	await checkUploadRequirements("https://blossom.test/", { sha256Hex: "x", mime: "image/png", size: 1 }, ALICE_PRIV, { fetchImpl });
+	assert.equal(calls[0], "https://blossom.test/upload");
 });
 
 // Интеграционный тест на РЕАЛЬНОМ локальном HTTP-сервере (node:http, не мок функции) —

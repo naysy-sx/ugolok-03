@@ -1,8 +1,5 @@
 import { sign } from '../crypto/sign.js';
 
-// Найдено адверсарной фазой (не гипотеза): serverUrl с завершающим "/" (пользователь
-// вставит с ним или без — этап 32, F-AT-09, список серверов вводится вручную) давал
-// "//upload" — некоторые Blossom-серверы трактуют это как ДРУГОЙ путь, не "/upload".
 function stripTrailingSlash(url) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
@@ -34,11 +31,6 @@ export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privateKe
   return await response.json();
 }
 
-// Найдено пользователем: нигде не было способа узнать, жив ли вообще
-// Blossom-сервер, пока не попробуешь реальную загрузку/скачивание файла.
-// Любой ОТВЕТ (даже 404/405, если HEAD не поддержан) означает, что сервер
-// на связи — бросает fetch только сетевая недоступность (DNS/отказ
-// соединения/таймаут), это и есть искомая "доступность", не конкретный код.
 export async function checkBlossomReachable(serverUrl, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   try {
@@ -59,13 +51,6 @@ export async function downloadBlob(serverUrl, sha256Hex, options = {}) {
   return new Uint8Array(arrayBuffer);
 }
 
-// Удаление аккаунта (профиль/файлы/вложения владельца) — BUD-02, тот же
-// auth-конверт, что uploadBlob (buildAuthEvent уже параметризована по action,
-// 'delete' ничем не отличается от 'upload' с точки зрения протокола: сервер
-// сverify'ит подпись pubkey, которому изначально принадлежал блоб). Сервер
-// может НЕ поддерживать удаление (404/405) — вызывающая сторона (best-effort
-// очистка аккаунта) обязана сама решать, критична ли ошибка, здесь — просто
-// честный fetch без специальной терпимости к отказу.
 export async function deleteBlob(serverUrl, sha256Hex, privateKey, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const authEvent = sign(buildAuthEvent('delete', sha256Hex), privateKey);
@@ -73,5 +58,22 @@ export async function deleteBlob(serverUrl, sha256Hex, privateKey, options = {})
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new Error('Blossom delete failed: ' + response.status + ' ' + text);
+  }
+}
+
+export async function checkUploadRequirements(serverUrl, { sha256Hex, mime, size }, privateKey, options = {}) {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  try {
+    const authEvent = sign(buildAuthEvent('upload', sha256Hex), privateKey);
+    const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/upload', { method: 'HEAD', headers: { Authorization: encodeAuthHeader(authEvent), 'X-SHA-256': sha256Hex, 'X-Content-Type': mime, 'X-Content-Length': String(size) }, signal: options.signal });
+    if (response.status === 404 || response.status === 405) {
+      return { ok: true, unknown: true };
+    }
+    if (response.ok) {
+      return { ok: true };
+    }
+    return { ok: false, status: response.status, reason: response.headers.get('X-Reason') ?? null };
+  } catch {
+    return { ok: true, unknown: true };
   }
 }

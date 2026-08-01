@@ -9668,3 +9668,91 @@ self-hoster получил тонкую настройку "из коробки"
 можно рассмотреть отдельно, если появится реальный спрос от self-
 hoster'ов; сегодня достаточно, что простое единое число уже даёт им
 полную свободу.
+
+### Финализация клиентского контракта (перед реализацией, по факту чтения кода)
+
+Проверено чтением реального кода на момент старта реализации:
+`putStream` (content.js) и `uploadAvatarBlob` (identity/profile.js) — ЕДИНСТВЕННЫЕ
+два места, где реально идёт `PUT /upload` содержательного (не manifest) блоба;
+оба используют `uploadBlob`, реэкспортированный через `domain/files/blob.js`
+(тонкая обёртка над `core/transport/blossom-client.js` — CONTRACTS.md, этап 53).
+"6 вызывающих мест `validateAttachment`" (chat.jsx×2, channel.jsx, channels.jsx,
+pending-attachment.js, profile.js, messaging/attachments.js) — НЕ требуют правки
+сигнатур вызова: это ранний UI-санити-чек ДО сети (превью, `attachmentError`),
+он остаётся как есть, меняются только константы, которые он использует.
+Решающая BUD-06-проверка добавляется НЕ на уровне этих 6 мест, а В ДВУХ точках,
+где реально идёт сеть: `content.js:putStream` и `identity/profile.js:uploadAvatarBlob`
+(рядом с уже существующим `uploadBlob`).
+
+**`checkUploadRequirements`** (`core/transport/blossom-client.js`, экспорт,
+реэкспортируется через `domain/files/blob.js` как и остальные примитивы):
+
+```js
+export async function checkUploadRequirements(serverUrl, { sha256Hex, mime, size }, privateKey, options = {})
+// HEAD {serverUrl}/upload, заголовки:
+//   Authorization: Nostr <base64 kind:24242, buildAuthEvent('upload', sha256Hex) — ТОТ ЖЕ конверт, что uploadBlob>
+//   X-SHA-256: sha256Hex
+//   X-Content-Type: mime
+//   X-Content-Length: String(size)
+// (имена заголовков — буквально internal/httpapi/headers.go blossom-src, не придуманы)
+// -> { ok: true }                                — response.ok (200)
+// -> { ok: true, unknown: true }                  — 404/405 (BUD-06 не поддержан) ИЛИ fetch бросил
+//                                                    (сетевая недоступность) — прогрессивное улучшение,
+//                                                    НЕ хардстоп
+// -> { ok: false, status, reason }                — иной не-ok статус (401/403/413/415/400),
+//                                                    reason — response.headers.get('X-Reason') ?? null
+```
+
+**`attachment-validation.js`** — правка контракта (заменяет три раздельные
+константы одной): `MAX_IMAGE_FILE_SIZE`/`MAX_VIDEO_SIZE`/`MAX_VOICE_SIZE`
+удаляются, вместо них `MAX_SANITY_FILE_SIZE = 1 * 1024 * 1024 * 1024` (1 ГБ) —
+единый щедрый потолок для ВСЕХ MIME без разделения по типу (санити-чек "файл
+вообще неадекватен", не мнение о лимите конкретного сервера — тот теперь
+проверяется `checkUploadRequirements`). `validateAttachment` — тот же MIME-чек
+(`ALLOWED_MIME_TYPES`, не меняется) + один size-чек против `MAX_SANITY_FILE_SIZE`.
+
+**Проводка `checkUploadRequirements` в реальный путь загрузки:**
+- `content.js:putStream` — вызов ПЕРЕД `uploadBlob(serverUrl, fullCiphertext, blobSha256Local, ...)`,
+  аргументы `{ sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }`
+  (размер и digest — ШИФРОТЕКСТА, реально идущего по сети, не исходного файла).
+  `!ok` -> `throw new Error` с `status`/`reason`, если есть — до реальной загрузки,
+  экономит round-trip на заведомо обречённый файл.
+- `identity/profile.js:uploadAvatarBlob` — тот же приём, аргументы
+  `{ sha256Hex, mime, size: fileBytes.length }` (avatar не шифруется, байты как есть).
+
+Разделы 2/3 (серверный патч ugolok.tech per-MIME-лимитов, TTL/last-accessed job)
+— в ОТДЕЛЬНОМ репозитории (`server/blossom/blossom-src` — сторонний upstream
+`sebdeveloper6952/blossom-server`, свой `.git`/`origin`, НЕ отслеживается родительским
+репозиторием, `git ls-files` подтверждает отсутствие). Другой язык (Go), нет
+`node --test`/`worker.sh`-конвейера для него — эта работа откладывается до
+реального деплоя ugolok.tech (self-hoster'ы уже сегодня полностью свободны через
+`config.yml` апстрима, ничего не блокирует их прямо сейчас). Этой сессией
+реализуется ТОЛЬКО клиентская часть (п.1 разделения труда выше).
+
+### Реализация клиентской части (после дизайна выше) — DoD
+
+Клиентская часть Этапа 62 реализована и закоммичена: `checkUploadRequirements`
+(blossom-client.js) + реэкспорт (blob.js) + `attachment-validation.js` (три
+раздельных константы -> один `MAX_SANITY_FILE_SIZE`) + проводка в
+`content.js:putStream` и `identity/profile.js:uploadAvatarBlob`. Полная
+регрессия: 1208/1208 (npm test).
+
+**Адверсарная фаза — находки, не блокирующие, записаны:**
+- Загрузка МАНИФЕСТА (`content.js`, вторая `uploadBlob` в `putStream`) НЕ
+  проходит `checkUploadRequirements` — сознательно: манифест — единицы-
+  десятки КБ (ALGO.MD §9.4), риск отказа по размеру пренебрежимо мал; реальный
+  `uploadBlob` всё равно остаётся источником истины и бросит понятную ошибку,
+  если сервер всё-таки откажет.
+- `options.signal`, уже отменённый (aborted) ДО вызова `checkUploadRequirements`,
+  даёт `{ok:true, unknown:true}` (fetch бросает AbortError -> перехвачено тем
+  же catch, что и сетевая недоступность) — НЕ баг: реальный `uploadBlob` сразу
+  следом получает тот же отменённый `signal` и корректно бросает `AbortError`
+  сам — отмена загрузки по-прежнему срабатывает, просто через один лишний (не
+  вредный) обходной классификационный шаг.
+- Серверный патч ugolok.tech (per-MIME лимиты, TTL/last-accessed job) —
+  сознательно ОТЛОЖЕН, не реализуется в этой сессии (другой репозиторий/язык —
+  см. выше). Self-hoster'ская гибкость уже полностью достигнута текущей
+  клиентской частью (BUD-06-дискавери уважает ЛЮБОЙ `max_upload_size_bytes`
+  чужого сервера) — откладываемая часть нужна ТОЛЬКО для собственного деплоя
+  ugolok.tech с его специфичным разделением по MIME-категориям, не для общей
+  корректности клиента.

@@ -1,20 +1,8 @@
-// putStream/getRange — единственные точки записи/чтения содержимого
-// (CONTRACTS.md, этап 53, §5.4 TASK.md). Решение №11 TASK.md: чанки — НЕ
-// отдельные блобы, а внутреннее деление ОДНОГО блоба файла; чтение чанка —
-// HTTP Range по этому же блобу (blob.js, П-4 подтвердил живым запросом).
-// Манифест — отдельный, отдельно адресуемый маленький блоб (§3.6 MATH.md).
-//
-// Сужение скоупа (эта сессия, зафиксировано, не молчаливый пробел):
-// манифест загружается ОТКРЫТЫМ текстом (не шифруется отдельно) — метаданные
-// (mime/size/число чанков) заметно менее чувствительны, чем содержимое
-// (которое шифруется чанково), и уже сейчас так же доступны по хэшу, как и
-// сам шифротекст, при текущей permissive-конфигурации Blossom (CONTRACTS.md,
-// П-4). Пересмотреть при И6 (шаринг), если модель доступа изменится.
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, concatBytes } from "@noble/hashes/utils.js";
 import { generateFileKey, encryptChunk, decryptChunk } from "./crypto.js";
 import { planChunks, rangeToChunks } from "./manifest.js";
-import { uploadBlob, downloadBlob, downloadBlobRange } from "./blob.js";
+import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } from "./blob.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
 
@@ -52,6 +40,10 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 	const fullCiphertext = concatBytes(...cipherParts);
 	const blobSha256Local = bytesToHex(sha256(fullCiphertext));
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal };
+	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }, privateKey, uploadOptions);
+	if (!requirements.ok) {
+		throw new Error('Blossom-сервер отклонил файл' + (requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : ''));
+	}
 	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, uploadOptions);
 
 	// keyId — непрозрачная ССЫЛКА (§4.1 MATH.md: "Manifest.keyId : KeyId"), не

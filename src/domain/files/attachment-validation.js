@@ -1,9 +1,3 @@
-// Перенесено из domain/attachments/validation.js (этап 53 И7, задача 7.4 —
-// снятие фасада attachments). Логика НЕ меняется — общая политика mime/
-// размера для вложений в чат/каналы (domain/messaging/attachments.js) и
-// для аватара (domain/identity/profile.js's uploadAvatarBlob), оба уже
-// зависят от domain/files (§3.4 TASK.md), поэтому общий модуль живёт здесь,
-// а не в domain/messaging (identity его импортировать не смог бы).
 export const ALLOWED_MIME_TYPES = new Set([
 	"image/jpeg", "image/png", "image/gif", "image/webp",
 	"video/mp4", "video/webm",
@@ -15,29 +9,14 @@ export const ALLOWED_MIME_TYPES = new Set([
 	"text/plain", "text/markdown", "text/csv", "application/json",
 ]);
 
-export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024;
-// Этап 29-довесок — по просьбе пользователя: 20 МБ (F-AT-04) оказалось мало для
-// реального видео/музыки, поднято до 50 МБ. MAX_VOICE_SIZE (имя сохранено ради
-// обратной совместимости) отвечает за ВЕСЬ audio/* — и голосовые, и музыкальные
-// файлы; голосовые записи (обычно единицы МБ) новый потолок не задевают.
-export const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
-export const MAX_VOICE_SIZE = 50 * 1024 * 1024;
+export const MAX_SANITY_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1 ГБ
 
 export function validateAttachment({ mime, size }) {
 	if (!ALLOWED_MIME_TYPES.has(mime)) {
 		throw new Error(`недопустимый тип файла: ${mime}`);
 	}
 
-	let maxSize;
-	if (mime.startsWith("video/")) {
-		maxSize = MAX_VIDEO_SIZE;
-	} else if (mime.startsWith("audio/")) {
-		maxSize = MAX_VOICE_SIZE;
-	} else {
-		maxSize = MAX_IMAGE_FILE_SIZE;
-	}
-
-	if (size > maxSize) {
+	if (size > MAX_SANITY_FILE_SIZE) {
 		throw new Error(`файл превышает лимит размера`);
 	}
 }

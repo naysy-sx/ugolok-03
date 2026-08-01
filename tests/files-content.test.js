@@ -153,6 +153,53 @@ test("putStream: signal.abort() ПОСЛЕ нескольких чанков —
 	assert.equal(progressCalls.length, 2, "остановилось сразу после 2-го чанка, не дошло до конца (7 чанков всего)");
 });
 
+// Этап 62 — putStream обязан спросить BUD-06 (checkUploadRequirements) у сервера
+// ПЕРЕД PUT самого блоба (не манифеста), уважая ЕГО решение, а не собственное
+// мнение о лимите.
+test("putStream: спрашивает BUD-06 (HEAD /upload) ПЕРЕД реальной загрузкой блоба, с корректным size/sha256/mime", async () => {
+	const { fetchImpl: baseFetch } = makeFakeBlossom();
+	const headCalls = [];
+	const spyFetch = async (url, opts = {}) => {
+		if (opts.method === "HEAD") headCalls.push({ url, opts });
+		if (opts.method === "HEAD" && url.endsWith("/upload")) return { ok: true, status: 200, headers: { get: () => null } };
+		return baseFetch(url, opts);
+	};
+	const original = new Uint8Array(1000);
+	crypto.getRandomValues(original);
+	await putStream(original, { name: "x", mime: "video/mp4", chunkSize: 300, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl: spyFetch });
+
+	assert.equal(headCalls.length, 1, "ровно один BUD-06-запрос на весь файл (не по чанку)");
+	assert.equal(headCalls[0].url, "https://blossom.test/upload");
+	assert.equal(headCalls[0].opts.headers["X-Content-Type"], "video/mp4");
+	assert.ok(Number(headCalls[0].opts.headers["X-Content-Length"]) > 0);
+});
+
+test("putStream: сервер отклонил файл по BUD-06 (413) -> throw ДО реальной PUT-загрузки, ничего не уходит на сервер", async () => {
+	const { fetchImpl: baseFetch, store } = makeFakeBlossom();
+	let putCalled = false;
+	const fetchImpl = async (url, opts = {}) => {
+		if (opts.method === "HEAD" && url.endsWith("/upload")) return { ok: false, status: 413, headers: { get: (n) => (n === "X-Reason" ? "слишком большой файл" : null) } };
+		if (opts.method === "PUT") putCalled = true;
+		return baseFetch(url, opts);
+	};
+	const original = new Uint8Array(1000);
+
+	await assert.rejects(
+		() => putStream(original, { name: "x", mime: "video/mp4", chunkSize: 300, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl }),
+		/413|слишком большой/,
+	);
+	assert.equal(putCalled, false, "PUT не должен вызываться после отказа BUD-06");
+	assert.equal(store.size, 0);
+});
+
+test("putStream: сервер не поддерживает BUD-06 (404 на HEAD) -> прогрессивное улучшение, загрузка всё равно проходит", async () => {
+	const { fetchImpl } = makeFakeBlossom(); // база уже отвечает 404 на любой неизвестный путь, включая HEAD /upload
+	const original = new Uint8Array(500);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "text/plain", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+	const got = await getRange(manifest, fileKey, 0, original.length, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(got, original);
+});
+
 test("getManifest: подменённый манифест на сервере — отклонён по digest (тот же приём, что downloadAttachment)", async () => {
 	const { fetchImpl, store } = makeFakeBlossom();
 	const original = new Uint8Array(500);

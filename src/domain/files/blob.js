@@ -4,9 +4,9 @@
 // переиспользованы как есть) + НОВОЕ: Range-GET для чтения отдельного
 // чанка (нужен content.getRange/плееру, П-4 подтвердил живым запросом,
 // что Blossom-сервер проекта отвечает 206 на Range).
-import { uploadBlob, downloadBlob, deleteBlob } from "../../core/transport/blossom-client.js";
+import { uploadBlob, downloadBlob, deleteBlob, checkUploadRequirements } from "../../core/transport/blossom-client.js";
 
-export { uploadBlob, downloadBlob, deleteBlob };
+export { uploadBlob, downloadBlob, deleteBlob, checkUploadRequirements };
 
 function stripTrailingSlash(url) {
 	return url.endsWith("/") ? url.slice(0, -1) : url;
