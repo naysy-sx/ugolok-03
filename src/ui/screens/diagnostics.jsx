@@ -574,7 +574,7 @@ function useTransportSyncCheck() {
 			const pub = createPublisher(conn);
 			conn.addMessageHandler(pub.handleMessage);
 			const profileEvent = buildProfileEvent(privKey, { name: "diag-self-check", about: "этап 20, самопроверка" });
-			const relayListEvent = buildRelayListEvent(privKey, [relayUrl]);
+			const relayListEvent = buildRelayListEvent(privKey, [{ url: relayUrl, read: true, write: true }]);
 			const [profileResult, relayListResult] = await Promise.all([pub.publish(profileEvent), pub.publish(relayListEvent)]);
 			if (!profileResult.ok || !relayListResult.ok) {
 				throw new Error("relay отклонил публикацию (не в whitelist? см. server/strfry/whitelist.json)");

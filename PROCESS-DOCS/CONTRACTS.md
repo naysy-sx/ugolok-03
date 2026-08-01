@@ -9186,3 +9186,84 @@ teardown+`ensureConnected`, `connect()` сам перечитает актуал
 кнопки "Сделать активным"; изменение любого чекбокса вызывает
 `setRelayRole` + `reconnectWithNewSettings` (тот же порядок вызовов,
 что раньше был у `setActiveRelayUrl`).
+
+## Этап 59 — NIP-65 в деле: реальная публикация/чтение kind:10002
+
+Триаж (п.13a): **рутинная** — отображение уже принятой доменной формы
+(`{url,read,write}[]`, этап 58) в протокольные теги NIP-65 и обратно,
+плюс проводка вызова `publish` в уже существующие точки мутации
+настроек. Никакого нового пространства состояний — DESIGN.md не
+дополняется.
+
+**Уточнение скоупа относительно PLAN.md-формулировки этапа** (записано
+явно, чтобы не переспрашивать в будущей сессии): PLAN.md для этапа 59
+среди прочего упоминало "bootstrap.js — расширить... при входе уметь
+запросить kind:10002 по pubkey у bootstrap-relay и подключиться к
+найденным" — при реализации это оказалось ПРЕЖДЕВРЕМЕННЫМ и
+фактически дублирующим этап 61: чтение СВОЕГО же kind:10002 в рамках
+уже существующего `runBootstrap`'s `authors:[pubkey]`-фильтра ничего
+не даёт сверх того, что уже даёт kind 30072 (`ui-settings.js`,
+приватная синхронизация между СВОИМИ устройствами, тот же фильтр, тот
+же relay) — оба события лежат на ОДНОМ И ТОМ ЖЕ relay, к которому
+клиент и так уже подключился. Настоящая польза kind:10002 —
+ВНЕШНЯЯ: чтобы ДРУГИЕ участники (не сам владелец) или bootstrap-
+координатор могли найти relay-список ПО pubkey, не имея приватного
+ключа для расшифровки kind 30072. Это ровно то, что нужно этапу 61
+(вход по мнемонике С ДРУГОГО relay, до которого клиент ещё не
+подключён — там chicken-and-egg, здесь его нет) и этапу 60
+(обнаружение ЧУЖОГО inbox-relay). Поэтому этап 59 ограничен ЗАПИСЬЮ:
+kind:10002 становится реальным и точным; чтение чужого/бутстрап-
+координатора — соответственно этапы 60/61, без спекулятивного
+"на будущее" ридера сейчас (YAGNI — нет вызывающего кода).
+
+### `src/domain/identity/relay-list.js` — правка принятого контракта (этап 16/34)
+
+**Было:** `buildRelayListEvent(privKey, relayUrls: string[])` — один
+тег `['r', url]` на URL, без read/write. `parseRelayListEvent(event)`
+-> `string[]`. **Стало:** отражает форму `{url,read,write}[]`
+(этап 58), с NIP-65 read/write маркерами.
+
+```js
+export function buildRelayListEvent(privKey, relayEntries);
+// relayEntries: {url, read, write}[]
+// Записи с read:false И write:false ОДНОВРЕМЕННО — пропускаются целиком
+// (NIP-65 не имеет маркера "отключено", публиковать такую запись было бы
+// неверно интерпретировано читателем как "и read и write").
+// Тег на запись: read&&write -> ['r', url] (маркер опущен = оба, по NIP-65);
+//                read&&!write -> ['r', url, 'read'];
+//                !read&&write -> ['r', url, 'write'].
+// -> подписанное kind:10002 событие (content: '', как и раньше).
+
+export function parseRelayListEvent(event);
+// -> {url, read, write}[] — обратное отображение: тег без 3-го элемента
+// или с посторонним 3-м элементом -> {read:true,write:true} (NIP-65:
+// отсутствие маркера = оба); маркер 'read' -> {read:true,write:false};
+// маркер 'write' -> {read:false,write:true}. Игнорирует теги, отличные от 'r'
+// (не меняется относительно старого поведения).
+```
+
+### `src/domain/settings/ui-settings.js` — довесок к принятому контракту (этап 58)
+
+`addRelayUrl`/`removeRelayUrl`/`setRelayRole` — после успешного
+`saveUiSettings` дополнительно публикуют РЕАЛЬНЫЙ `kind:10002`
+(`buildRelayListEvent(privKey, nextRelayUrls)`) через тот же `publish`,
+best-effort (try/catch, не бросает наружу — тот же принцип, что
+`saveUiSettings`'s собственная best-effort публикация kind 30072:
+локальное состояние не зависит от сети). Публикуется именно
+`nextRelayUrls` (список ПОСЛЕ применения мутации), не старый.
+
+### `src/ui/signals/transport.js` — backfill на каждый connect()
+
+После `rebuildUiSettings` (свежий `localSettings.relayUrls` уже
+восстановлен, в том числе на новом устройстве через kind 30072) —
+best-effort публикация `buildRelayListEvent(privKey, localSettings.relayUrls)`.
+БЕЗ флага "announced" (в отличие от этапа 57's file-key backfill) —
+kind:10002 replaceable (NIP-01) и дешёвый, republish на каждый вход
+безопасен и идемпотентен по своей протокольной природе, отдельный
+трекинг избыточен.
+
+### `src/ui/screens/diagnostics.jsx` — правка вызова (не контракта)
+
+`buildRelayListEvent(privKey, [relayUrl])` -> `buildRelayListEvent(privKey, [{url: relayUrl, read: true, write: true}])`
+— единственное место, зависевшее от старой сигнатуры (self-check,
+этап 20), само поведение самопроверки не меняется.

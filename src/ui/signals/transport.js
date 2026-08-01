@@ -38,6 +38,7 @@ import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
 import { rebuildFilesLog } from "./files.js";
 import { FILE_SHARE_GRANT_KIND, FILE_SUBTREE_OP_KIND } from "../../domain/files/share.js";
@@ -247,6 +248,13 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	logSync("Настройки…");
 	await rebuildUiSettings(pubkeyHex, privKey, dbKey);
 	logSync("Настройки — готово");
+	// Этап 59 — backfill: делает kind:10002 реальным для аккаунтов, заведённых
+	// до этапа 59 (relayUrls до сих пор нигде публично не анонсировался, кроме
+	// куцего self-check'а diagnostics.jsx). Без флага "announced" (в отличие от
+	// этапа 57's file-key backfill) — kind:10002 replaceable (NIP-01) и дешёвый,
+	// republish на каждый вход безопасен и идемпотентен по протокольной природе.
+	const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
+	publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
 	logSync("Отметки прочтения…");
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем

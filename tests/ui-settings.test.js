@@ -19,6 +19,7 @@ import {
 	removeBlossomUrl,
 	setActiveBlossomUrl,
 } from "../src/domain/settings/ui-settings.js";
+import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -164,6 +165,50 @@ test("setRelayRole: нельзя оставить список без едино
 		() => setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://only.example", { read: true, write: false }, capturingPublish(published)),
 		/write/,
 	);
+});
+
+// Этап 59 — addRelayUrl/removeRelayUrl/setRelayRole дополнительно публикуют
+// РЕАЛЬНЫЙ kind:10002 (NIP-65), отражающий список ПОСЛЕ применения мутации.
+test("addRelayUrl: публикует kind:10002 с полным текущим списком relay", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	const relayListEvents = published.filter((e) => e.kind === 10002);
+	assert.equal(relayListEvents.length, 1);
+	assert.deepEqual(parseRelayListEvent(relayListEvents[0]), [{ url: "wss://relay-a.example", read: true, write: true }]);
+
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	const secondRelayListEvent = published.filter((e) => e.kind === 10002).at(-1);
+	assert.deepEqual(parseRelayListEvent(secondRelayListEvent), [
+		{ url: "wss://relay-a.example", read: true, write: true },
+		{ url: "wss://relay-b.example", read: true, write: true },
+	]);
+});
+
+test("setRelayRole: опубликованный kind:10002 отражает НОВУЮ роль (read/write маркер)", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	await setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", { read: true, write: false }, capturingPublish(published));
+	const lastRelayListEvent = published.filter((e) => e.kind === 10002).at(-1);
+	assert.deepEqual(parseRelayListEvent(lastRelayListEvent), [
+		{ url: "wss://relay-a.example", read: true, write: false },
+		{ url: "wss://relay-b.example", read: true, write: true },
+	]);
+});
+
+test("removeRelayUrl: опубликованный kind:10002 не содержит удалённый relay", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	await removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	const lastRelayListEvent = published.filter((e) => e.kind === 10002).at(-1);
+	assert.deepEqual(parseRelayListEvent(lastRelayListEvent), [{ url: "wss://relay-b.example", read: true, write: true }]);
+});
+
+test("addRelayUrl: сбой publish (нет сети) не бросает наружу — kind:10002 best-effort, как и kind 30072", async () => {
+	await assert.doesNotReject(() => addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", failingPublish()));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.deepEqual(settings.relayUrls, [{ url: "wss://relay-a.example", read: true, write: true }], "локальное сохранение не зависит от результата публикации");
 });
 
 test("addBlossomUrl/setActiveBlossomUrl/removeBlossomUrl: тот же цикл, что relay", async () => {

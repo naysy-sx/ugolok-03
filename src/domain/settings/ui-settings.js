@@ -5,6 +5,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { buildRelayListEvent } from "../identity/relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
@@ -116,10 +117,27 @@ export async function rebuildUiSettings(ownerPubkey, privKey, dbKey) {
 // Этап 58 — мультирелейный транспорт: relayUrls теперь {url,read,write}[],
 // "одно активное" соединение не имеет смысла при одновременной работе с
 // несколькими (см. CONTRACTS.md/DESIGN.md, этап 58).
+// Этап 59 — сверх локального сохранения+приватной синхронизации (kind 30072,
+// уже делает saveUiSettings) каждая мутация ДОПОЛНИТЕЛЬНО публикует РЕАЛЬНЫЙ
+// kind:10002 (NIP-65) — единственный способ для ДРУГИХ участников/bootstrap-
+// координатора узнать relay-список по pubkey, не имея приватного ключа для
+// расшифровки kind 30072 (см. CONTRACTS.md, этап 59). Best-effort — тот же
+// принцип, что публикация kind 30072 внутри saveUiSettings: сеть недоступна
+// -> локальное состояние всё равно уже сохранено.
+async function publishRelayList(privKey, relayUrls, publish) {
+	try {
+		await publish(buildRelayListEvent(privKey, relayUrls));
+	} catch {
+		// relay недоступен/отклонил — kind:10002 не критичен для локальной работы
+	}
+}
+
 export async function addRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (settings.relayUrls.some((r) => r.url === url)) return; // идемпотентно
-	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: [...settings.relayUrls, { url, read: true, write: true }] }, publish);
+	const nextRelayUrls = [...settings.relayUrls, { url, read: true, write: true }];
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
+	await publishRelayList(privKey, nextRelayUrls, publish);
 }
 
 export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
@@ -127,7 +145,9 @@ export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) 
 	if (settings.relayUrls.length <= 1) {
 		throw new Error("нельзя удалить последний relay — список не может быть пустым");
 	}
-	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: settings.relayUrls.filter((r) => r.url !== url) }, publish);
+	const nextRelayUrls = settings.relayUrls.filter((r) => r.url !== url);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
+	await publishRelayList(privKey, nextRelayUrls, publish);
 }
 
 export async function setRelayRole(ownerPubkey, privKey, dbKey, url, { read, write }, publish) {
@@ -143,6 +163,7 @@ export async function setRelayRole(ownerPubkey, privKey, dbKey, url, { read, wri
 		throw new Error("нельзя оставить список без единого write-relay — нечего будет публиковать");
 	}
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
+	await publishRelayList(privKey, nextRelayUrls, publish);
 }
 
 export async function addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {

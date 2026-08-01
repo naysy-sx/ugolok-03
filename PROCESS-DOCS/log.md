@@ -4103,3 +4103,20 @@ first-match-wins при повторной регистрации, getState() �
 что уже был у groupMessageSubscriber). Перепроверено живьём — ок.
 
 Regression: 1175/1175 (было 1167). Сборка: 555.90 КБ gzip.
+
+## Этап 59 — NIP-65: реальная публикация kind:10002
+
+Уточнение скоупа при реализации: "читать своё kind:10002 при входе"
+(PLAN.md формулировка) оказалось избыточным поверх уже существующей
+приватной синхронизации kind 30072 — отложено правильным местом,
+этапы 60/61 (там нужно чужое/до-подключения). Этап 59 — только запись.
+
+relay-list.js: buildRelayListEvent/parseRelayListEvent на {url,read,write}[]
+с NIP-65 read/write маркерами (было string[], голый 'r'-тег).
+ui-settings.js: addRelayUrl/removeRelayUrl/setRelayRole публикуют
+реальный kind:10002 best-effort. signals/transport.js: backfill-
+republish на каждый connect() (без флага announced — replaceable).
+
+Живая проверка: strfry scan '{"kinds":[10002]}' на реальном relay
+показал корректные теги после логина+смены ролей на тестовом
+аккаунте. Регрессия: 1182/1182. Сборка: 556.07 КБ gzip.
