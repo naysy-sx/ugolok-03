@@ -1,4 +1,5 @@
 import { transition } from "../fsm/machine.js";
+import { createPublisher } from "./publisher.js";
 
 const TRANSITIONS = {
   disconnected: { CONNECT: "connecting" },
@@ -263,4 +264,52 @@ export function createRelayPool(entries, options = {}) {
     send,
     close,
   };
+}
+
+// Этап 60 — доставка на relay ПОЛУЧАТЕЛЯ (не входящий в собственный пул,
+// этап 58): эфемерное one-shot соединение, не постоянное. connect() ->
+// дождаться "connected" реактивно (через onStateChange, БЕЗ поллинга) ->
+// publish(event) -> close() сразу после ответа, успешного или нет.
+export function publishToRelay(url, event, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 8000;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+
+    const connection = createRelayConnection(url, {
+      WebSocketImpl: options.WebSocketImpl,
+      autoReconnect: false,
+      onStateChange: (state) => {
+        if (settled || state !== "connected") return;
+        settled = true;
+        clearTimeout(timer);
+        // batchSize:1 — НАЙДЕНО ПРИ НАПИСАНИИ ТЕСТА: publisher.js's дефолтный
+        // batchWindowMs (200мс) означал бы, что одиночное событие ждёт таймер,
+        // а не отправляется сразу же после connected. Здесь батчить нечего —
+        // ровно одно событие на эфемерное соединение, которое сразу закрывается.
+        const publisher = createPublisher(connection, { batchSize: 1 });
+        connection.addMessageHandler(publisher.handleMessage);
+        publisher.publish(event).then(
+          (result) => {
+            connection.close();
+            resolve(result);
+          },
+          (err) => {
+            connection.close();
+            reject(err);
+          },
+        );
+      },
+    });
+
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      connection.close();
+      reject(new Error(`publishToRelay: таймаут подключения к ${url}`));
+    }, timeoutMs);
+
+    connection.connect();
+  });
 }

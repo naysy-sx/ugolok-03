@@ -6,6 +6,7 @@ import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
+import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
@@ -124,11 +125,19 @@ export async function rebuildUiSettings(ownerPubkey, privKey, dbKey) {
 // расшифровки kind 30072 (см. CONTRACTS.md, этап 59). Best-effort — тот же
 // принцип, что публикация kind 30072 внутри saveUiSettings: сеть недоступна
 // -> локальное состояние всё равно уже сохранено.
+// Этап 60 — рядом с kind:10002 публикуется kind:10050 (NIP-17, "DM Relay
+// List") со списком read-relay ("сюда мне присылайте" — read-сторона
+// получателя; write-only relay сюда не входят, на них нечего слушать).
 async function publishRelayList(privKey, relayUrls, publish) {
 	try {
 		await publish(buildRelayListEvent(privKey, relayUrls));
 	} catch {
 		// relay недоступен/отклонил — kind:10002 не критичен для локальной работы
+	}
+	try {
+		await publish(buildDmRelayListEvent(privKey, relayUrls.filter((r) => r.read).map((r) => r.url)));
+	} catch {
+		// то же — kind:10050 best-effort
 	}
 }
 

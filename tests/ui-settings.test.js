@@ -20,6 +20,7 @@ import {
 	setActiveBlossomUrl,
 } from "../src/domain/settings/ui-settings.js";
 import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
+import { parseDmRelayListEvent } from "../src/domain/identity/dm-relay-list.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -203,6 +204,21 @@ test("removeRelayUrl: опубликованный kind:10002 не содерж�
 	await removeRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
 	const lastRelayListEvent = published.filter((e) => e.kind === 10002).at(-1);
 	assert.deepEqual(parseRelayListEvent(lastRelayListEvent), [{ url: "wss://relay-b.example", read: true, write: true }]);
+});
+
+// Этап 60 — рядом с kind:10002 та же мутация публикует kind:10050 (NIP-17),
+// но только read-relay (write-only исключаются — "сюда мне присылайте" имеет
+// смысл лишь для того, что реально слушается).
+test("addRelayUrl/setRelayRole: публикует kind:10050 только с read-relay", async () => {
+	const published = [];
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-a.example", capturingPublish(published));
+	await addRelayUrl(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", capturingPublish(published));
+	let lastDmRelayEvent = published.filter((e) => e.kind === 10050).at(-1);
+	assert.deepEqual(parseDmRelayListEvent(lastDmRelayEvent), ["wss://relay-a.example", "wss://relay-b.example"]);
+
+	await setRelayRole(ALICE_PUB, ALICE_PRIV, DB_KEY, "wss://relay-b.example", { read: false, write: true }, capturingPublish(published));
+	lastDmRelayEvent = published.filter((e) => e.kind === 10050).at(-1);
+	assert.deepEqual(parseDmRelayListEvent(lastDmRelayEvent), ["wss://relay-a.example"], "write-only relay исключён из kind:10050");
 });
 
 test("addRelayUrl: сбой publish (нет сети) не бросает наружу — kind:10002 best-effort, как и kind 30072", async () => {

@@ -5,6 +5,7 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import {
 	ensureConnected,
 	publish,
+	publishToContact,
 	fetchProfiles,
 	fetchKeyPackage,
 	refreshGroupMessageSubscription,
@@ -231,6 +232,12 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 }
 
 function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
+	// Этап 60 — kind:445 (MLS group message, отправка/удаление/правка — все три
+	// используют chat.js's sendMessage под капотом, см. deletions.js/edits.js)
+	// не несёт тега #p (адресация по #h группы, эфемерный отправитель), поэтому
+	// generic publish()'s auto-детект получателя тут не сработает — получатель
+	// передаётся явно.
+	const publishToChatPartner = (event) => publishToContact(event, contactPubkey);
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [text, setText] = useState("");
@@ -562,7 +569,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				contactPubkey,
 				text,
 				lamportTs,
-				publish,
+				publishToChatPartner,
 				fetchKeyPackage,
 				refreshGroupMessageSubscription,
 				attachment,
@@ -591,7 +598,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		setBusy(true);
 		try {
 			const lamportTs = await nextLamportTick(ownerPubkey);
-			await deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish);
+			await deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publishToChatPartner);
 			await reloadWindow();
 		} catch (err) {
 			setError(err?.message || String(err));
@@ -632,7 +639,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		setBusy(true);
 		try {
 			const lamportTs = await nextLamportTick(ownerPubkey);
-			await editChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish);
+			await editChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publishToChatPartner);
 			await reloadWindow();
 		} catch (err) {
 			setError(err?.message || String(err));

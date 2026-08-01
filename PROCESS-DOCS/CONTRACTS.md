@@ -9267,3 +9267,142 @@ kind:10002 replaceable (NIP-01) и дешёвый, republish на каждый �
 `buildRelayListEvent(privKey, [relayUrl])` -> `buildRelayListEvent(privKey, [{url: relayUrl, read: true, write: true}])`
 — единственное место, зависевшее от старой сигнатуры (self-check,
 этап 20), само поведение самопроверки не меняется.
+
+## Этап 60 — Inbox-релеи для входящих (доставка на relay ПОЛУЧАТЕЛЯ)
+
+Триаж (п.13a): пограничная, в основном рутинная (переиспользование
+уже принятых примитивов — `createRelayConnection`/`createPublisher`,
+паттерн `fetchProfiles`), но с одним настоящим архитектурным решением
+(где перехватывать доставку, не трогая ~10 доменных модулей) —
+обоснование ниже, без отдельного DESIGN.md-раздела (решение
+однострочно проверяемо, не требует формализации пространства
+состояний).
+
+**Настоящая причина "переписка не доходит" между relay** (см. память
+продукта, обсуждение с Claude 5): входящее событие подписано
+ОТПРАВИТЕЛЕМ и попадает на relay ПОЛУЧАТЕЛЯ, только если отправитель
+явно туда его положил. До этого этапа `publish()`/`publisher.publish`
+кладут событие ИСКЛЮЧИТЕЛЬНО на СВОИ (отправителя) write-relay —
+если у собеседника нет ни одного общего relay с отправителем, событие
+физически не долетает, и это не редкий edge case, а ожидаемое
+следствие self-hosting (этапы 62-63).
+
+**Kind, номер сверен по спеке (NIP-17, не угадан):** `10050` — "DM
+Relay List", тег `["relay", url]` (НЕ `"r"`, как у NIP-65 kind:10002 —
+разные NIP, разное имя тега). Без read/write маркеров (сам смысл
+события — "сюда мне присылайте", т.е. read-сторона получателя).
+
+### `src/domain/identity/dm-relay-list.js` — новый файл
+
+```js
+export function buildDmRelayListEvent(privKey, relayUrls);
+// relayUrls: string[] (URLs, НЕ {url,read,write} — этот kind проще kind:10002,
+// маркеров ролей не несёт). -> подписанное kind:10050 событие, content: ''.
+
+export function parseDmRelayListEvent(event);
+// -> string[] — тег 'relay' -> url. Игнорирует прочие теги.
+```
+
+### `src/core/transport/relay-pool.js` — новый примитив (существующие не меняются)
+
+```js
+export function publishToRelay(url, event, options = {});
+// Эфемерное one-shot соединение: connect() -> дождаться "connected" (реактивно
+// через onStateChange, БЕЗ поллинга) -> createPublisher(...).publish(event) ->
+// close() сразу после ответа (успех ИЛИ ошибка). options.timeoutMs (default 8000) —
+// таймаут ожидания "connected"; истёк -> connection.close() + reject.
+// options.WebSocketImpl — та же инъекция для тестов, что у createRelayConnection.
+// -> Promise<{ok, reason}> (та же форма, что publisher.js's publish()).
+// НЕ использует createRelayPool — это ВСЕГДА ровно один относительный к событию
+// URL, множественности здесь не требуется (в отличие от этапа 58's своих relay).
+```
+
+### `src/domain/settings/ui-settings.js` — довесок к этапу 59
+
+`addRelayUrl`/`removeRelayUrl`/`setRelayRole` — ДОПОЛНИТЕЛЬНО (рядом с
+уже существующей публикацией kind:10002) best-effort публикуют
+kind:10050 со списком URL тех entries, где `read === true` (это и есть
+"куда мне присылайте" — read-сторона). Тот же принцип best-effort,
+что и kind:10002.
+
+### `src/ui/signals/transport.js` — доставка получателю + backfill
+
+- `connect()`: рядом с backfill kind:10002 (этап 59) — та же backfill-
+  публикация kind:10050 (read-relays), без флага announced (те же
+  причины, что этап 59).
+- Новый `fetchInboxRelays(pubkeyHex)` — one-shot REQ+EOSE по
+  `{authors:[pubkeyHex], kinds:[10050]}` (тот же паттерн, что
+  `fetchProfiles`), с `pickLatest` (`core/sync/lww.js`, replaceable
+  событие — берём ОДНУ, самую свежую версию, не мёрджим теги из
+  нескольких копий с разных relay пула). In-memory кэш
+  `Map<pubkeyHex,{relays,fetchedAt}>`, TTL 5 минут (константа
+  `INBOX_RELAY_CACHE_TTL_MS`) — иначе КАЖДОЕ сообщение в чате делало
+  бы новый REQ+EOSE round-trip перед попыткой доставки. Сбрасывается
+  в `teardown()`.
+- Новая внутренняя (не экспортируется) `deliverToInboxRelays(recipientPubkeyHex, event)` —
+  `fetchInboxRelays` + `Promise.allSettled(relays.map(url => publishToRelay(url, event)))`,
+  целиком в try/catch (получатель не объявил kind:10050 или сеть
+  недоступна — не критично, событие уже доставлено на СВОИ relay).
+  Не фильтрует relay, уже входящие в собственный `relayUrls`
+  отправителя (известная, сознательно принятая неоптимальность —
+  изредка избыточный повторный publish на relay, где событие УЖЕ есть;
+  relay дедуплицирует по id, вреда нет, а фильтрация потребовала бы
+  протаскивать `dbKey`/`ownerPubkey` в module-level состояние ради
+  экономии одного лишнего WS-коннекта — не оправдано в этом этапе).
+- Правка контракта `publish(event)`: после обычной публикации на СВОИ
+  relay (поведение не изменилось) — если у `event.tags` есть тег `#p`,
+  fire-and-forget (не await, не блокирует возврат/AC-09 outbox-путь)
+  `deliverToInboxRelays(pTag[1], event)`. Покрывает ВСЕ существующие
+  gift-wrap отправки (Welcome/contact-request/channel-subscribe-request/
+  report — все kind:1059, все несут `#p` по протоколу NIP-59) И
+  kind:30053 (channel VIEW-грант, `channel-access.js`, уже несёт
+  открытый `#p`-тег — см. backlog "утечка метаданных через kind 30053",
+  этот баг НЕ решается здесь, но ровно то же поле теперь используется и
+  для доставки).
+
+  **НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (не домысел, реальный баг в первой версии
+  этого этапа):** предположение "contacts.jsx/channels.jsx/moderation-panel.jsx
+  и т.д. продолжают вызывать `publish(event)` буквально как раньше, ничего
+  менять не нужно" — оказалось ЛОЖНЫМ. `configureContactRuntime`/
+  `configureCallRuntime`/`ensureOwnKeyPackagePublished`/`ensureProfilePublished`/
+  `syncDeviceMembership`/`refreshGroupMessageSubscription`/
+  `handleIncomingSubscribeRequest`/`backfillOwnChannelGrants` (все — `connect()`,
+  этот же файл) получали `publisher.publish` НАПРЯМУЮ (сырой примитив
+  публикации на свои relay), а НЕ обогащённый модульный `publish` — то
+  есть ни один из этих путей НЕ проходил через новую логику доставки
+  вовсе. Обнаружено живым E2E (два реальных изолированных strfry-relay,
+  два аккаунта БЕЗ единого общего relay): заявка в контакты не долетала
+  ни до своего же relay отправителя, ни тем более до relay получателя;
+  временный `console.log` внутри `publish()` подтвердил — функция вообще
+  не вызывалась для этого пути. Исправлено: все восемь мест инъекции в
+  `connect()` заменены с `publisher.publish` на модульный `publish`
+  (кроме двух заведомо намеренных исключений — базовый вызов внутри
+  самой `publish()` и внутри `publishToContact()`, где `publisher.publish`
+  вызывается напрямую по конструкции). Два backfill-вызова (kind:10002/
+  kind:10050 self-announce) сознательно оставлены на `publisher.publish` —
+  эти события не несут `#p`, разница в поведении отсутствует.
+- Новый экспорт `publishToContact(event, contactPubkeyHex)` — для
+  kind:445 (MLS group message), у которого НЕТ `#p` тега (адресация по
+  `#h` группы, эфемерный отправитель — сознательное решение этапа 24,
+  не регрессия). Вызывает `publisher.publish(event)` НАПРЯМУЮ (не
+  through `publish()`, чтобы не задвоить доставку, если событие
+  случайно имеет и `#p`) + безусловный `deliverToInboxRelays(contactPubkeyHex, event)`.
+
+### `src/ui/screens/chat.jsx` — правка вызывающего кода (найдено при реализации: три места, не одно)
+
+`ChatWindow`: локальная обёртка `publishToChatPartner = (event) => publishToContact(event, contactPubkey)`,
+объявлена один раз в компоненте. Заменяет `publish` в ТРЁХ местах —
+`sendChatMessageAction` (сам kind:445 и Welcome через `ensureChatEstablished`,
+тот же параметр прокидывается неизменным), `deleteChatMessageAction` и
+`editChatMessageAction` — `deletions.js`/`edits.js` переиспользуют `chat.js`'s
+`sendMessage` под капотом (delete/edit-маркер — тоже kind:445 без `#p`, не
+отдельный тип события, см. DESIGN.md, "Этап 25"/"Этап 27-довесок-6"), поэтому
+нуждаются в той же явной доставке, что и обычное сообщение. Остальные
+вызовы `publish` в этом же файле (`markChatReadAction`/`saveChatDraftAction`/
+`acceptInboxRequestAction`) НЕ заменены — kind:30070/kind:30071 приватные,
+для СВОИХ устройств, без адресации собеседнику; `acceptInboxRequestAction`
+отправляет Welcome через `publish` напрямую (kind:1059, `#p` есть) — уже
+покрыт автоопределением в `publish()`, менять не нужно.
+Остальные экраны (`contacts.jsx`/`channels.jsx`/`moderation-panel.jsx`/
+`permission-editor.jsx` и т.д.) не трогаются вовсе — `publish()` уже
+покрывает их через `#p`-автоопределение.

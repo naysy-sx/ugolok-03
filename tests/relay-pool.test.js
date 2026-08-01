@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeBackoffDelay, createRelayConnection, createRelayPool } from "../src/core/transport/relay-pool.js";
+import { computeBackoffDelay, createRelayConnection, createRelayPool, publishToRelay } from "../src/core/transport/relay-pool.js";
 
 class FakeWebSocket {
 	static instances = [];
@@ -406,4 +406,51 @@ test("createRelayPool: connect()/close() применяются ко всем ч
 	t.mock.timers.tick(60000);
 	assert.equal(WS.instances.length, 2, "close() — намеренное закрытие, без автопереподключения ни на одном члене");
 	t.mock.timers.reset();
+});
+
+// Этап 60 — publishToRelay: эфемерное one-shot соединение для доставки на
+// relay ПОЛУЧАТЕЛЯ (не входящий в собственный пул, этап 58).
+
+test("publishToRelay: connect -> send EVENT -> resolve на OK -> close()", async () => {
+	const WS = freshWS();
+	const event = { id: "e1", kind: 1 };
+	const resultPromise = publishToRelay("wss://recipient-relay.example", event, { WebSocketImpl: WS });
+
+	WS.instances[0]._open();
+	assert.deepEqual(JSON.parse(WS.instances[0].sent[0]), ["EVENT", event], "событие должно быть отправлено сразу после connected");
+
+	WS.instances[0].onmessage({ data: JSON.stringify(["OK", "e1", true, ""]) });
+	const result = await resultPromise;
+	assert.deepEqual(result, { ok: true, reason: "" });
+	assert.equal(WS.instances[0].readyState, 3, "соединение должно закрыться сразу после ответа");
+});
+
+test("publishToRelay: OK с ok:false резолвится (не reject) с {ok:false,reason}, соединение всё равно закрывается", async () => {
+	const WS = freshWS();
+	const event = { id: "e2", kind: 1 };
+	const resultPromise = publishToRelay("wss://recipient-relay.example", event, { WebSocketImpl: WS });
+	WS.instances[0]._open();
+	WS.instances[0].onmessage({ data: JSON.stringify(["OK", "e2", false, "blocked: spam"]) });
+	const result = await resultPromise;
+	assert.deepEqual(result, { ok: false, reason: "blocked: spam" });
+	assert.equal(WS.instances[0].readyState, 3);
+});
+
+test("publishToRelay: таймаут подключения -> reject, соединение закрыто", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const resultPromise = publishToRelay("wss://unreachable.example", { id: "e3" }, { WebSocketImpl: WS, timeoutMs: 5000 });
+	t.mock.timers.tick(5000);
+	await assert.rejects(() => resultPromise, /таймаут/);
+	assert.equal(WS.instances[0].readyState, 3);
+	t.mock.timers.reset();
+});
+
+test("publishToRelay: не переиспользует createRelayPool — ровно одно соединение на вызов", async () => {
+	const WS = freshWS();
+	const resultPromise = publishToRelay("wss://x", { id: "e4" }, { WebSocketImpl: WS });
+	WS.instances[0]._open();
+	assert.equal(WS.instances.length, 1);
+	WS.instances[0].onmessage({ data: JSON.stringify(["OK", "e4", true, ""]) });
+	await resultPromise;
 });

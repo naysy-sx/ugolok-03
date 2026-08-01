@@ -2,8 +2,9 @@ import { signal } from "@preact/signals";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
-import { createRelayPool } from "../../core/transport/relay-pool.js";
+import { createRelayPool, publishToRelay } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
+import { pickLatest } from "../../core/sync/lww.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { rebuildGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
@@ -39,6 +40,7 @@ import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
+import { buildDmRelayListEvent, parseDmRelayListEvent } from "../../domain/identity/dm-relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
 import { rebuildFilesLog } from "./files.js";
 import { FILE_SHARE_GRANT_KIND, FILE_SUBTREE_OP_KIND } from "../../domain/files/share.js";
@@ -149,6 +151,13 @@ function isNewEvent(eventId) {
 	return true;
 }
 
+// Этап 60 — кэш обнаруженных inbox-relay (kind:10050) получателей: без него
+// КАЖДОЕ сообщение в чате делало бы новый REQ+EOSE round-трип перед попыткой
+// доставки. TTL, не "навсегда" — получатель может сменить relay-список в
+// любой момент сессии, а наша копия не узнает об этом сама по себе.
+const INBOX_RELAY_CACHE_TTL_MS = 5 * 60 * 1000;
+const inboxRelayCache = new Map(); // pubkeyHex -> { relays: string[], fetchedAt: number }
+
 function teardown() {
 	publisher = null;
 	verifyBatchFn = null;
@@ -168,6 +177,7 @@ function teardown() {
 	fileShareGrantSubscriber = null;
 	fileSubtreeOpSubscriber = null;
 	processedEventIds.clear();
+	inboxRelayCache.clear();
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
 		cryptoWorker = null;
@@ -211,7 +221,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			// publisher уже существует на этот момент (пережил обрыв, message-
 			// handler'ы не сбрасываются). На САМОМ первом "connected" publisher
 			// ещё null — этот случай покрыт явным вызовом ниже, после его создания.
-			if (s === "connected" && publisher) drainOutboxSafely(publisher.publish, dbKey);
+			if (s === "connected" && publisher) drainOutboxSafely(publish, dbKey);
 		},
 	});
 	connection.connect();
@@ -225,15 +235,15 @@ async function connect(pubkeyHex, privKey, dbKey) {
 
 	publisher = createPublisher(connection);
 	connection.addMessageHandler(publisher.handleMessage);
-	drainOutboxSafely(publisher.publish, dbKey);
+	drainOutboxSafely(publish, dbKey);
 
 	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
 	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
-	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish: publisher.publish, dbKey });
+	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish, dbKey });
 	// Этап 49 — контакты: один contact-runtime на подключение, тот же принцип.
 	// load() внутри себя мигрирует legacy-таблицы (contacts/blockedContacts/
 	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).
-	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish: publisher.publish });
+	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish });
 
 	logSync("Загрузка истории с сервера…");
 	const bootstrapResult = await runBootstrap(connection, pubkeyHex, { verifyBatch });
@@ -255,6 +265,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// republish на каждый вход безопасен и идемпотентен по протокольной природе.
 	const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
 	publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
+	// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
+	// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
+	publisher
+		.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
+		.catch(() => {});
 	logSync("Отметки прочтения…");
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
@@ -265,12 +280,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	await rebuildChannelReadStatus(pubkeyHex, privKey);
 	logSync("Отметки прочтения — готово");
 	logSync("Публикация ключа и профиля…");
-	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publisher.publish);
+	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
 	// best-effort (сбой сети не блокирует остальной connect()).
 	if (currentUser.value?.login) {
-		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publisher.publish);
+		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish);
 	}
 	logSync("Публикация ключа и профиля — готово");
 
@@ -278,7 +293,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
 	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
 	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
-	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publisher.publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
+	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
 	logSync("Устройства — готово");
 
 	logSync("История переписки…");
@@ -343,7 +358,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// без создания MLS-группы, пока пользователь не примет решение явно.
 						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
 							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content));
-							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
+							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
 						} else {
 							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА
@@ -381,7 +396,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// (group-видимость уже была его решением при создании канала).
 						const channelIdTag = rumor.tags.find((t) => t[0] === "channel_id");
 						if (channelIdTag) {
-							await handleIncomingSubscribeRequest(pubkeyHex, privKey, dbKey, channelIdTag[1], rumor.pubkey, publisher.publish);
+							await handleIncomingSubscribeRequest(pubkeyHex, privKey, dbKey, channelIdTag[1], rumor.pubkey, publish);
 						}
 						activityChanged = true; // channels.jsx узнаёт о новом подписчике
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
@@ -441,7 +456,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// отправитель на каждое сообщение, NIP-EE). Восстанавливает уже установленные чаты
 	// после reload; refreshGroupMessageSubscription (вызывается и выше, при Welcome)
 	// обновляет фильтр, когда появляется новый чат.
-	await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publisher.publish);
+	await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
 
 	logSync("Каналы…");
 	// Этап 30 — восстановление подписок на VIEW-гранты/контент каналов после
@@ -451,7 +466,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// Этап 55 — довыдача self-гранта владельческим каналам, созданным ДО фикса
 	// (включая уже существующие реальные каналы) — без этого второе устройство
 	// той же личности никогда не расшифрует собственный канал.
-	const backfilledChannelCount = await backfillOwnChannelGrants(pubkeyHex, privKey, dbKey, publisher.publish);
+	const backfilledChannelCount = await backfillOwnChannelGrants(pubkeyHex, privKey, dbKey, publish);
 	if (backfilledChannelCount > 0) {
 		logSync(`Каналы: довыдан ключ для ${backfilledChannelCount} канала(ов)`);
 	} else {
@@ -545,11 +560,86 @@ export async function reconnectWithNewSettings(pubkeyHex, privKey, dbKey) {
 	return ensureConnected(pubkeyHex, privKey, dbKey);
 }
 
+// Этап 60 — one-shot REQ+EOSE по kind:10050 (NIP-17) конкретного pubkey, тот
+// же паттерн, что fetchProfiles. pickLatest (не merge нескольких копий) —
+// replaceable событие, при запросе через собственный пул (несколько СВОИХ
+// read-relay, этап 58) разные relay пула МОГУТ вернуть разные по свежести
+// версии одного и того же kind:10050 автора; берём ровно одну, самую свежую.
+// Кэш (INBOX_RELAY_CACHE_TTL_MS) — иначе каждое сообщение делало бы новый
+// round-трип перед попыткой доставки.
+export async function fetchInboxRelays(pubkeyHex) {
+	const cached = inboxRelayCache.get(pubkeyHex);
+	if (cached && Date.now() - cached.fetchedAt < INBOX_RELAY_CACHE_TTL_MS) return cached.relays;
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchInboxRelays()");
+	}
+	const subId = "inbox-relays-" + Math.random().toString(36).slice(2);
+	const collected = [];
+
+	await new Promise((resolve) => {
+		const subscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: (events) => {
+				collected.push(...events);
+			},
+			onEose: () => {
+				subscriber.unsubscribe(subId);
+				resolve();
+			},
+		});
+		connection.addMessageHandler(subscriber.handleMessage);
+		subscriber.subscribe(subId, [{ authors: [pubkeyHex], kinds: [10050] }]);
+	});
+
+	const relays = collected.length > 0 ? parseDmRelayListEvent(pickLatest(collected)) : [];
+	inboxRelayCache.set(pubkeyHex, { relays, fetchedAt: Date.now() });
+	return relays;
+}
+
+// Этап 60 — фактическая доставка НА RELAY ПОЛУЧАТЕЛЯ: получатель мог не
+// объявить kind:10050 вовсе, или сеть недоступна — best-effort целиком, не
+// должно мешать основному publish() на СВОИ relay (см. publish()/
+// publishToContact() ниже — вызывается fire-and-forget, не await).
+// Не фильтрует relay, уже входящие в собственный список отправителя (см.
+// CONTRACTS.md, этап 60 — сознательно, изредка избыточный повторный publish,
+// relay дедуплицирует по id).
+async function deliverToInboxRelays(recipientPubkeyHex, event) {
+	try {
+		const relays = await fetchInboxRelays(recipientPubkeyHex);
+		await Promise.allSettled(relays.map((url) => publishToRelay(url, event)));
+	} catch {
+		// получатель не объявил inbox-relay / сеть недоступна — не критично
+	}
+}
+
+// Правка контракта (этап 60) — сверх публикации на СВОИ relay (поведение не
+// изменилось, тот же publisher.publish) теперь дополнительно best-effort
+// доставляет на relay получателя, если у события есть тег #p (ЛЮБОЙ такой
+// тег — не только gift wrap: kind:1059 несёт #p по протоколу NIP-59 всегда,
+// kind:30053 channel VIEW-грант — тоже, см. CONTRACTS.md, этап 60). Не await —
+// не должно задерживать/влиять на возврат publish() (AC-09 outbox-путь
+// chat.js полагается на его текущий тайминг).
 export async function publish(event) {
 	if (!publisher) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед publish()");
 	}
-	return publisher.publish(event);
+	const result = await publisher.publish(event);
+	const recipientTag = event.tags?.find((t) => t[0] === "p");
+	if (recipientTag) deliverToInboxRelays(recipientTag[1], event);
+	return result;
+}
+
+// Этап 60 — для kind:445 (MLS group message), у которого НЕТ тега #p
+// (адресация по #h группы, эфемерный отправитель — сознательное решение
+// этапа 24). Вызывает publisher.publish НАПРЯМУЮ, не через publish() выше —
+// иначе Welcome (несёт #p САМ, kind:1059) получил бы двойную доставку.
+export async function publishToContact(event, contactPubkeyHex) {
+	if (!publisher) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед publishToContact()");
+	}
+	const result = await publisher.publish(event);
+	deliverToInboxRelays(contactPubkeyHex, event);
+	return result;
 }
 
 // Единый Lamport-счётчик на сессию (TECH.md §4.4) — НЕ создаётся заново в каждом
