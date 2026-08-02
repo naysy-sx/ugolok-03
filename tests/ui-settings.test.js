@@ -19,6 +19,9 @@ import {
 	addBlossomUrl,
 	removeBlossomUrl,
 	setActiveBlossomUrl,
+	pairSelfHostedServer,
+	unpairSelfHostedServer,
+	SelfHostedFingerprintMismatchError,
 } from "../src/domain/settings/ui-settings.js";
 import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
 import { parseDmRelayListEvent } from "../src/domain/identity/dm-relay-list.js";
@@ -295,4 +298,69 @@ test("неверный dbKey -> loadUiSettings бросает (AES-GCM/ChaCha ta
 	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, accentColorId: "violet" }, capturingPublish([]));
 	const wrongKey = crypto.getRandomValues(new Uint8Array(32));
 	await assert.rejects(() => loadUiSettings(ALICE_PUB, wrongKey));
+});
+
+// Этап 63, И3 — сопряжение с self-hosted сервером, TOFU-проверка отпечатка.
+const SAMPLE_PAIRING = { host: "203.0.113.42", port: 8443, token: "deadbeef", fingerprint: "cafe0001" };
+
+test("pairSelfHostedServer: сохраняет пейринг + pairedAt (unix-секунды)", async () => {
+	const before = Math.floor(Date.now() / 1000);
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer.host, SAMPLE_PAIRING.host);
+	assert.equal(settings.selfHostedServer.port, SAMPLE_PAIRING.port);
+	assert.equal(settings.selfHostedServer.token, SAMPLE_PAIRING.token);
+	assert.equal(settings.selfHostedServer.fingerprint, SAMPLE_PAIRING.fingerprint);
+	assert.ok(settings.selfHostedServer.pairedAt >= before);
+});
+
+test("pairSelfHostedServer: НЕТ предыдущего сопряжения -> просто сохраняет, без TOFU-конфликта", async () => {
+	await assert.doesNotReject(() => pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([])));
+});
+
+test("pairSelfHostedServer: тот же host:port, ТОТ ЖЕ отпечаток -> не конфликт (переподключение/обновление токена)", async () => {
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	const updated = { ...SAMPLE_PAIRING, token: "newtoken" };
+	await assert.doesNotReject(() => pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, updated, capturingPublish([])));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer.token, "newtoken");
+});
+
+test("pairSelfHostedServer: тот же host:port, ДРУГОЙ отпечаток -> SelfHostedFingerprintMismatchError, не сохраняет молча", async () => {
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	const differentFingerprint = { ...SAMPLE_PAIRING, fingerprint: "differentfp" };
+	await assert.rejects(
+		() => pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, differentFingerprint, capturingPublish([])),
+		SelfHostedFingerprintMismatchError,
+	);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer.fingerprint, SAMPLE_PAIRING.fingerprint, "старое сопряжение не должно быть перезаписано без force");
+});
+
+test("pairSelfHostedServer: другой отпечаток, НО force:true -> перезаписывает (пользователь подтвердил)", async () => {
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	const differentFingerprint = { ...SAMPLE_PAIRING, fingerprint: "differentfp" };
+	await assert.doesNotReject(() =>
+		pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, differentFingerprint, capturingPublish([]), { force: true }),
+	);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer.fingerprint, "differentfp");
+});
+
+test("pairSelfHostedServer: другой host (тот же порт) -> не конфликт, TOFU привязан к host:port вместе", async () => {
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	const differentHost = { ...SAMPLE_PAIRING, host: "203.0.113.99", fingerprint: "totallydifferent" };
+	await assert.doesNotReject(() => pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, differentHost, capturingPublish([])));
+});
+
+test("unpairSelfHostedServer: сбрасывает в null", async () => {
+	await pairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, SAMPLE_PAIRING, capturingPublish([]));
+	await unpairSelfHostedServer(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish([]));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer, null);
+});
+
+test("DEFAULT_SETTINGS.selfHostedServer — null по умолчанию (старые записи без этого поля не ломаются)", async () => {
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.selfHostedServer, null);
 });

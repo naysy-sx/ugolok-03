@@ -17,7 +17,10 @@ import (
 	"ugolok.tech/agent/internal/pairing"
 	"ugolok.tech/agent/internal/render"
 	"ugolok.tech/agent/internal/tlscert"
+	"ugolok.tech/agent/internal/turncreds"
 )
+
+const turnCredentialsTTL = 12 * time.Hour
 
 // Версия агента — заполняется при сборке (-ldflags "-X main.version=..."),
 // "dev" — значение по умолчанию для локальной разработки без флага сборки.
@@ -82,6 +85,7 @@ func main() {
 	startTime := time.Now()
 
 	var statusFn func() httpapi.Status
+	var turnCredsFn func() (turncreds.Credentials, error)
 	if *composeDir == "" {
 		// И1-совместимость: без --compose-dir агент не трогает docker вовсе.
 		statusFn = func() httpapi.Status {
@@ -138,9 +142,17 @@ func main() {
 			}
 			return httpapi.Status{Version: version, UptimeSeconds: int64(time.Since(startTime).Seconds()), Services: services}
 		}
+
+		turnURIs := []string{
+			"turn:" + *turnExternalIP + ":3478",
+			"turns:" + *turnExternalIP + ":5349",
+		}
+		turnCredsFn = func() (turncreds.Credentials, error) {
+			return turncreds.Mint(turnSecret, turnCredentialsTTL, time.Now(), turnURIs), nil
+		}
 	}
 
-	mux := httpapi.NewServer(token, statusFn)
+	mux := httpapi.NewServer(token, statusFn, turnCredsFn)
 
 	server := &http.Server{
 		Addr:      net.JoinHostPort("", fmt.Sprintf("%d", *port)),

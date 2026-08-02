@@ -14,7 +14,11 @@ import {
 	addBlossomUrl,
 	removeBlossomUrl,
 	setActiveBlossomUrl,
+	pairSelfHostedServer,
+	unpairSelfHostedServer,
+	SelfHostedFingerprintMismatchError,
 } from "../../domain/settings/ui-settings.js";
+import { decodePairingCode, fetchAgentStatus } from "../../domain/selfhost/pairing.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
 import FilePicker from "../components/file-picker.jsx";
@@ -210,6 +214,157 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 					<IconPlus /> Добавить
 				</button>
 			</form>
+		</section>
+	);
+}
+
+// Этап 63, И3 — экран сопряжения с self-hosted инстансом (agent/install.sh).
+// Вставка пейринг-кода ДЕКОДИРУЕТСЯ и ПРОВЕРЯЕТСЯ живым запросом /status
+// ДО сохранения (pairSelfHostedServer) — не сохраняем то, до чего не смогли
+// достучаться (частая причина отказа — пользователь ещё не открыл https://
+// host:port/ в отдельной вкладке и не принял самоподписанный сертификат,
+// см. CONTRACTS.md "Этап 63, И3": браузер не даёт JS проверить TLS-
+// сертификат напрямую, единственный реальный путь — штатный browser-flow).
+function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
+	const [settings, setSettings] = useState(null);
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+	const [code, setCode] = useState("");
+	const [status, setStatus] = useState(null);
+
+	async function refresh() {
+		setSettings(await loadUiSettings(ownerPubkey, dbKey));
+	}
+
+	useEffect(() => {
+		refresh().catch(() => {});
+	}, [ownerPubkey]);
+
+	async function attemptPair(force) {
+		setError("");
+		setBusy(true);
+		try {
+			const pairing = decodePairingCode(code.trim());
+			const agentStatus = await fetchAgentStatus(pairing);
+			await pairSelfHostedServer(ownerPubkey, privKey, dbKey, pairing, publish, { force });
+			setStatus(agentStatus);
+			setCode("");
+			await refresh();
+		} catch (err) {
+			if (err instanceof SelfHostedFingerprintMismatchError) {
+				const confirmed = window.confirm(
+					"Отпечаток сервера отличается от сохранённого ранее для этого адреса — возможно, сервер подменили. Всё равно продолжить?",
+				);
+				if (confirmed) {
+					setBusy(false);
+					await attemptPair(true);
+					return;
+				}
+				setError("Сопряжение отменено — отпечаток не совпадает с сохранённым ранее.");
+			} else {
+				setError(err?.message || String(err));
+			}
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function handlePairSubmit(e) {
+		e.preventDefault();
+		if (!code.trim() || busy) return;
+		await attemptPair(false);
+	}
+
+	async function handleUnpair() {
+		if (!window.confirm("Отсоединить self-hosted сервер? Настройки на самом сервере не меняются, только локальная привязка в приложении.")) return;
+		setBusy(true);
+		setError("");
+		try {
+			await unpairSelfHostedServer(ownerPubkey, privKey, dbKey, publish);
+			setStatus(null);
+			await refresh();
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function handleRefreshStatus() {
+		if (!settings?.selfHostedServer) return;
+		setBusy(true);
+		setError("");
+		try {
+			setStatus(await fetchAgentStatus(settings.selfHostedServer));
+		} catch (err) {
+			setError(err?.message || String(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	if (!settings) return null;
+	const paired = settings.selfHostedServer;
+
+	return (
+		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="selfhost-heading">
+			<h2 id="selfhost-heading" class="sect-title">
+				Свой сервер
+			</h2>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					{error}
+				</p>
+			)}
+			{paired ? (
+				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<p>
+						Подключено:{" "}
+						<strong>
+							{paired.host}:{paired.port}
+						</strong>
+					</p>
+					<p style={{ color: "var(--muted)", fontSize: "0.85em" }}>Отпечаток: {paired.fingerprint}</p>
+					{status && (
+						<ul role="list">
+							{(status.services || []).map((s) => (
+								<li key={s.Service}>
+									{s.Service}: {s.State}
+								</li>
+							))}
+						</ul>
+					)}
+					<div style={{ display: "flex", gap: "var(--space-2xs)" }}>
+						<button type="button" class="btn--ghost" disabled={busy} onClick={handleRefreshStatus}>
+							Обновить статус
+						</button>
+						<button type="button" class="btn--ghost" disabled={busy} onClick={handleUnpair}>
+							Отсоединить
+						</button>
+					</div>
+				</div>
+			) : (
+				<form class="flow" style={{ "--flow-space": "var(--space-2xs)" }} onSubmit={handlePairSubmit}>
+					<p style={{ color: "var(--muted)" }}>
+						Выполните <code>install.sh</code> на своём VPS, откройте адрес сервера в новой вкладке браузера и примите
+						предупреждение о сертификате (самоподписанный — это ожидаемо для собственного сервера), затем вставьте пейринг-код
+						ниже.
+					</p>
+					<label class="visually-hidden" for="pairing-code">
+						Пейринг-код
+					</label>
+					<textarea
+						id="pairing-code"
+						rows={3}
+						placeholder="Вставьте пейринг-код из install.sh"
+						value={code}
+						onInput={(e) => setCode(e.currentTarget.value)}
+					/>
+					<button type="submit" class="btn--ghost" disabled={busy || !code.trim()}>
+						Подключиться
+					</button>
+				</form>
+			)}
 		</section>
 	);
 }
@@ -546,6 +701,7 @@ export default function Profile() {
 			</section>
 
 			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
+			<SelfHostedSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 		</Screen>
 	);
 }

@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS = {
 	relayUrls: [],
 	blossomUrls: [],
 	activeBlossomUrl: null,
+	selfHostedServer: null, // null | {host, port, token, fingerprint, pairedAt} — Этап 63, И3
 };
 
 // Глубокое слияние с дефолтом — старый/неполный payload (например, сохранённый до
@@ -204,4 +205,40 @@ export async function setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publ
 		throw new Error("URL отсутствует в списке — сначала добавьте");
 	}
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, activeBlossomUrl: url }, publish);
+}
+
+// Этап 63, И3 — TOFU (trust-on-first-use): если для ЭТОГО ЖЕ host:port уже
+// есть сопряжение с ДРУГИМ отпечатком сертификата, это подозрительно (сервер
+// подменили, или пользователь ошибся кодом) — по умолчанию отказ, вызывающая
+// сторона (UI) обязана явно передать force:true после подтверждения
+// пользователем, тот же принцип, что необратимые действия в chat.jsx
+// (window.confirm перед реальным действием).
+export class SelfHostedFingerprintMismatchError extends Error {
+	constructor(previousFingerprint, newFingerprint) {
+		super("отпечаток сервера отличается от сохранённого ранее для этого адреса — возможно, сервер подменили");
+		this.name = "SelfHostedFingerprintMismatchError";
+		this.previousFingerprint = previousFingerprint;
+		this.newFingerprint = newFingerprint;
+	}
+}
+
+export async function pairSelfHostedServer(ownerPubkey, privKey, dbKey, pairing, publish, { force = false } = {}) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
+	const existing = settings.selfHostedServer;
+	if (
+		!force &&
+		existing &&
+		existing.host === pairing.host &&
+		existing.port === pairing.port &&
+		existing.fingerprint !== pairing.fingerprint
+	) {
+		throw new SelfHostedFingerprintMismatchError(existing.fingerprint, pairing.fingerprint);
+	}
+	const selfHostedServer = { ...pairing, pairedAt: Math.floor(Date.now() / 1000) };
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, selfHostedServer }, publish);
+}
+
+export async function unpairSelfHostedServer(ownerPubkey, privKey, dbKey, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, selfHostedServer: null }, publish);
 }
