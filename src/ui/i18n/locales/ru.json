@@ -17,7 +17,10 @@
 		"add": "Добавить",
 		"call": "Позвонить",
 		"delete": "Удалить",
-		"stop": "Остановить"
+		"stop": "Остановить",
+		"undo": "Отменить",
+		"copy": "Копировать",
+		"close": "Закрыть"
 	},
 	"nav": {
 		"journal": "Журнал",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Загрузка аудио…",
 		"downloading": "Скачивание…",
 		"download": "Скачать"
+	},
+	"files": {
+		"status": {
+			"repaired": "перемещено в корень (конфликт синхронизации)",
+			"orphaned": "перемещено сюда (папка-родитель удалена)",
+			"renamed": "переименовано (совпадение имён после синхронизации)"
+		},
+		"uploadFailedError": "«{{name}}»: загрузка не удалась (сеть недоступна?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "Не удалось расшарить папку.",
+		"networkUnavailable": "Сеть недоступна — попробуйте позже.",
+		"unmountConfirm": "Отключить эту общую папку? Уже сохранённые себе копии останутся.",
+		"myFilesTab": "Мои файлы",
+		"receivedFoldersTab": "Полученные папки",
+		"newFolderButton": "Новая папка",
+		"uploadFileButton": "Загрузить файл",
+		"selectFilesAria": "Выбрать файлы для загрузки",
+		"pasteButton": "Вставить ({{count}})",
+		"trashButton": "Корзина",
+		"filterLabel": "Фильтр по имени в этой папке",
+		"filterPlaceholder": "Фильтр по имени…",
+		"folderNameLabel": "Имя папки",
+		"uploadingProgress": "Загрузка «{{name}}» ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} выбрано",
+		"cutButton": "Вырезать",
+		"clearSelectionButton": "Снять выделение",
+		"trashEmpty": "Корзина пуста.",
+		"folderEmpty": "Здесь пока ничего нет.",
+		"selectRowAria": "Выбрать «{{name}}»",
+		"newNameLabel": "Новое имя",
+		"cancelRenameAria": "Отменить переименование",
+		"sharedTooltip": "Общий доступ открыт",
+		"restoreButton": "Восстановить",
+		"purgeButton": "Удалить навсегда",
+		"rowActionsAria": "Действия с «{{name}}»",
+		"manageAccessButton": "Управление доступом",
+		"shareButton": "Поделиться",
+		"shareDialogHint": "Выбранные контакты получат доступ на чтение к содержимому папки и будут видеть последующие изменения.",
+		"uploading": "Заливка…",
+		"noAccessGranted": "Доступ никому не открыт.",
+		"revokeButton": "Отозвать",
+		"noSharedWithYou": "Пока никто не поделился с вами папкой.",
+		"openButton": "Открыть",
+		"disconnectButton": "Отключить",
+		"backToMountsList": "К списку долей",
+		"mountRootButton": "Корень доли",
+		"savingProgress": "Сохраняю: {{done}}/{{total}}",
+		"saveToOwnButton": "Сохранить себе",
+		"moveToTrashConfirm": "Переместить в корзину?",
+		"moveManyToTrashConfirm": "Переместить {{count}} объектов в корзину?",
+		"purgeConfirm": "Удалить безвозвратно? Это необратимо."
+	},
+	"filePlayer": {
+		"ariaLabel": "Плеер",
+		"noPreview": "Нет предпросмотра для этого типа файла ({{mime}}).",
+		"unknownType": "неизвестный тип"
 	}
 }

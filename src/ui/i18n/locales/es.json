@@ -17,7 +17,10 @@
 		"add": "Añadir",
 		"call": "Llamar",
 		"delete": "Eliminar",
-		"stop": "Detener"
+		"stop": "Detener",
+		"undo": "Deshacer",
+		"copy": "Copiar",
+		"close": "Cerrar"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Cargando audio…",
 		"downloading": "Descargando…",
 		"download": "Descargar"
+	},
+	"files": {
+		"status": {
+			"repaired": "movido a la raíz (conflicto de sincronización)",
+			"orphaned": "movido aquí (carpeta principal eliminada)",
+			"renamed": "renombrado (coincidencia de nombre tras sincronizar)"
+		},
+		"uploadFailedError": "«{{name}}»: la subida falló (¿sin conexión?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "No se pudo compartir la carpeta.",
+		"networkUnavailable": "Sin conexión — inténtalo más tarde.",
+		"unmountConfirm": "¿Desconectar esta carpeta compartida? Las copias que ya guardaste permanecerán.",
+		"myFilesTab": "Mis archivos",
+		"receivedFoldersTab": "Carpetas recibidas",
+		"newFolderButton": "Nueva carpeta",
+		"uploadFileButton": "Subir archivo",
+		"selectFilesAria": "Seleccionar archivos para subir",
+		"pasteButton": "Pegar ({{count}})",
+		"trashButton": "Papelera",
+		"filterLabel": "Filtrar por nombre en esta carpeta",
+		"filterPlaceholder": "Filtrar por nombre…",
+		"folderNameLabel": "Nombre de la carpeta",
+		"uploadingProgress": "Subiendo «{{name}}» ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} seleccionados",
+		"cutButton": "Cortar",
+		"clearSelectionButton": "Deseleccionar",
+		"trashEmpty": "La papelera está vacía.",
+		"folderEmpty": "Todavía no hay nada aquí.",
+		"selectRowAria": "Seleccionar «{{name}}»",
+		"newNameLabel": "Nuevo nombre",
+		"cancelRenameAria": "Cancelar cambio de nombre",
+		"sharedTooltip": "Compartido",
+		"restoreButton": "Restaurar",
+		"purgeButton": "Eliminar definitivamente",
+		"rowActionsAria": "Acciones para «{{name}}»",
+		"manageAccessButton": "Gestionar acceso",
+		"shareButton": "Compartir",
+		"shareDialogHint": "Los contactos seleccionados obtendrán acceso de lectura al contenido de la carpeta y verán los cambios futuros.",
+		"uploading": "Subiendo…",
+		"noAccessGranted": "Nadie tiene acceso.",
+		"revokeButton": "Revocar",
+		"noSharedWithYou": "Todavía nadie ha compartido una carpeta contigo.",
+		"openButton": "Abrir",
+		"disconnectButton": "Desconectar",
+		"backToMountsList": "Volver a la lista de comparticiones",
+		"mountRootButton": "Raíz de la compartición",
+		"savingProgress": "Guardando: {{done}}/{{total}}",
+		"saveToOwnButton": "Guardar en mis archivos",
+		"moveToTrashConfirm": "¿Mover a la papelera?",
+		"moveManyToTrashConfirm": "¿Mover {{count}} elementos a la papelera?",
+		"purgeConfirm": "¿Eliminar definitivamente? Esta acción es irreversible."
+	},
+	"filePlayer": {
+		"ariaLabel": "Reproductor",
+		"noPreview": "No hay vista previa disponible para este tipo de archivo ({{mime}}).",
+		"unknownType": "tipo desconocido"
 	}
 }

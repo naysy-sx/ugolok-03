@@ -17,7 +17,10 @@
 		"add": "Add",
 		"call": "Call",
 		"delete": "Delete",
-		"stop": "Stop"
+		"stop": "Stop",
+		"undo": "Undo",
+		"copy": "Copy",
+		"close": "Close"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Loading audio…",
 		"downloading": "Downloading…",
 		"download": "Download"
+	},
+	"files": {
+		"status": {
+			"repaired": "moved to root (sync conflict)",
+			"orphaned": "moved here (parent folder deleted)",
+			"renamed": "renamed (name collision after sync)"
+		},
+		"uploadFailedError": "«{{name}}»: upload failed (network unavailable?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "Failed to share the folder.",
+		"networkUnavailable": "Network unavailable — try again later.",
+		"unmountConfirm": "Disconnect this shared folder? Copies you already saved will remain.",
+		"myFilesTab": "My files",
+		"receivedFoldersTab": "Received folders",
+		"newFolderButton": "New folder",
+		"uploadFileButton": "Upload file",
+		"selectFilesAria": "Select files to upload",
+		"pasteButton": "Paste ({{count}})",
+		"trashButton": "Trash",
+		"filterLabel": "Filter by name in this folder",
+		"filterPlaceholder": "Filter by name…",
+		"folderNameLabel": "Folder name",
+		"uploadingProgress": "Uploading «{{name}}» ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} selected",
+		"cutButton": "Cut",
+		"clearSelectionButton": "Clear selection",
+		"trashEmpty": "Trash is empty.",
+		"folderEmpty": "There's nothing here yet.",
+		"selectRowAria": "Select «{{name}}»",
+		"newNameLabel": "New name",
+		"cancelRenameAria": "Cancel renaming",
+		"sharedTooltip": "Sharing is on",
+		"restoreButton": "Restore",
+		"purgeButton": "Delete permanently",
+		"rowActionsAria": "Actions for «{{name}}»",
+		"manageAccessButton": "Manage access",
+		"shareButton": "Share",
+		"shareDialogHint": "Selected contacts will get read access to the folder's contents and will see future changes.",
+		"uploading": "Uploading…",
+		"noAccessGranted": "No one has access.",
+		"revokeButton": "Revoke",
+		"noSharedWithYou": "No one has shared a folder with you yet.",
+		"openButton": "Open",
+		"disconnectButton": "Disconnect",
+		"backToMountsList": "Back to shares list",
+		"mountRootButton": "Share root",
+		"savingProgress": "Saving: {{done}}/{{total}}",
+		"saveToOwnButton": "Save to my files",
+		"moveToTrashConfirm": "Move to trash?",
+		"moveManyToTrashConfirm": "Move {{count}} items to trash?",
+		"purgeConfirm": "Delete permanently? This is irreversible."
+	},
+	"filePlayer": {
+		"ariaLabel": "Player",
+		"noPreview": "No preview available for this file type ({{mime}}).",
+		"unknownType": "unknown type"
 	}
 }

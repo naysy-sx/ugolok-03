@@ -17,7 +17,10 @@
 		"add": "Aggiungi",
 		"call": "Chiama",
 		"delete": "Elimina",
-		"stop": "Ferma"
+		"stop": "Ferma",
+		"undo": "Annulla",
+		"copy": "Copia",
+		"close": "Chiudi"
 	},
 	"nav": {
 		"journal": "Diario",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Caricamento audio…",
 		"downloading": "Download in corso…",
 		"download": "Scarica"
+	},
+	"files": {
+		"status": {
+			"repaired": "spostato nella radice (conflitto di sincronizzazione)",
+			"orphaned": "spostato qui (cartella principale eliminata)",
+			"renamed": "rinominato (collisione di nomi dopo la sincronizzazione)"
+		},
+		"uploadFailedError": "«{{name}}»: caricamento non riuscito (rete non disponibile?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "Impossibile condividere la cartella.",
+		"networkUnavailable": "Rete non disponibile — riprova più tardi.",
+		"unmountConfirm": "Disconnettere questa cartella condivisa? Le copie già salvate rimarranno.",
+		"myFilesTab": "I miei file",
+		"receivedFoldersTab": "Cartelle ricevute",
+		"newFolderButton": "Nuova cartella",
+		"uploadFileButton": "Carica file",
+		"selectFilesAria": "Seleziona i file da caricare",
+		"pasteButton": "Incolla ({{count}})",
+		"trashButton": "Cestino",
+		"filterLabel": "Filtra per nome in questa cartella",
+		"filterPlaceholder": "Filtra per nome…",
+		"folderNameLabel": "Nome della cartella",
+		"uploadingProgress": "Caricamento di «{{name}}» ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} selezionati",
+		"cutButton": "Taglia",
+		"clearSelectionButton": "Deseleziona",
+		"trashEmpty": "Il cestino è vuoto.",
+		"folderEmpty": "Qui non c'è ancora nulla.",
+		"selectRowAria": "Seleziona «{{name}}»",
+		"newNameLabel": "Nuovo nome",
+		"cancelRenameAria": "Annulla rinomina",
+		"sharedTooltip": "Condivisione attiva",
+		"restoreButton": "Ripristina",
+		"purgeButton": "Elimina definitivamente",
+		"rowActionsAria": "Azioni per «{{name}}»",
+		"manageAccessButton": "Gestisci accesso",
+		"shareButton": "Condividi",
+		"shareDialogHint": "I contatti selezionati otterranno l'accesso in lettura al contenuto della cartella e vedranno le modifiche future.",
+		"uploading": "Caricamento…",
+		"noAccessGranted": "Nessuno ha accesso.",
+		"revokeButton": "Revoca",
+		"noSharedWithYou": "Nessuno ha ancora condiviso una cartella con te.",
+		"openButton": "Apri",
+		"disconnectButton": "Disconnetti",
+		"backToMountsList": "Torna all'elenco delle condivisioni",
+		"mountRootButton": "Radice della condivisione",
+		"savingProgress": "Salvataggio: {{done}}/{{total}}",
+		"saveToOwnButton": "Salva nei miei file",
+		"moveToTrashConfirm": "Spostare nel cestino?",
+		"moveManyToTrashConfirm": "Spostare {{count}} elementi nel cestino?",
+		"purgeConfirm": "Eliminare definitivamente? Questa azione è irreversibile."
+	},
+	"filePlayer": {
+		"ariaLabel": "Lettore",
+		"noPreview": "Nessuna anteprima disponibile per questo tipo di file ({{mime}}).",
+		"unknownType": "tipo sconosciuto"
 	}
 }

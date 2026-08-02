@@ -53,6 +53,7 @@ import IconPeople from "../icons/people.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import FilePlayer from "../components/file-player.jsx";
+import { t } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
@@ -147,10 +148,10 @@ function FileThumbnail({ entry, ownerPubkey }) {
 // "Ремонт" (project(), tree.js) сделал что-то за пользователя молча —
 // показываем факт, не только результат (MATH.md §12.3: решение принято —
 // показывать, данные для этого уже есть в поле status бесплатно).
-const STATUS_LABELS = {
-	repaired: "перемещено в корень (конфликт синхронизации)",
-	orphaned: "перемещено сюда (папка-родитель удалена)",
-	renamed: "переименовано (совпадение имён после синхронизации)",
+const STATUS_LABEL_KEYS = {
+	repaired: "files.status.repaired",
+	orphaned: "files.status.orphaned",
+	renamed: "files.status.renamed",
 };
 
 function errorMessage(result) {
@@ -244,12 +245,12 @@ export default function Files() {
 				const result = await createFileEntry(file.name, manifestDigest, fileKey);
 				const message = errorMessage(result);
 				if (message) {
-					setUploadError(`«${file.name}»: ${message}`);
+					setUploadError(t("files.uploadEntryError", { name: file.name, message }));
 					break;
 				}
 			} catch (err) {
 				if (err.name === "AbortError") break;
-				setUploadError(`«${file.name}»: загрузка не удалась (сеть недоступна?).`);
+				setUploadError(t("files.uploadFailedError", { name: file.name }));
 				break;
 			}
 		}
@@ -335,12 +336,12 @@ export default function Files() {
 				privateKey: privKeySig.value,
 			});
 			if (result instanceof Error) {
-				setShareError(result.message || "Не удалось расшарить папку.");
+				setShareError(result.message || t("files.shareFailedGeneric"));
 				return;
 			}
 			setShareDialogTarget(null);
 		} catch {
-			setShareError("Сеть недоступна — попробуйте позже.");
+			setShareError(t("files.networkUnavailable"));
 		} finally {
 			setShareBusy(false);
 		}
@@ -376,7 +377,7 @@ export default function Files() {
 	}
 
 	async function handleUnmountShare(mountId) {
-		if (!window.confirm("Отключить эту общую папку? Уже сохранённые себе копии останутся.")) return;
+		if (!window.confirm(t("files.unmountConfirm"))) return;
 		await unmountShare(ownerPubkey, dbKeySig.value, mountId);
 		if (openMountId === mountId) setOpenMountId(null);
 	}
@@ -465,13 +466,13 @@ export default function Files() {
 	}
 
 	async function handleDelete(ids) {
-		if (!window.confirm(ids.length > 1 ? `Переместить ${ids.length} объектов в корзину?` : "Переместить в корзину?")) return;
+		if (!window.confirm(ids.length > 1 ? t("files.moveManyToTrashConfirm", { count: ids.length }) : t("files.moveToTrashConfirm"))) return;
 		for (const id of ids) await removeNode(id);
 		setSelected(new Set());
 	}
 
 	async function handlePurge(id) {
-		if (!window.confirm("Удалить безвозвратно? Это необратимо.")) return;
+		if (!window.confirm(t("files.purgeConfirm"))) return;
 		await purgeNode(id);
 	}
 
@@ -542,22 +543,22 @@ export default function Files() {
 	return (
 		<>
 		<Screen
-			title="Файлы"
+			title={t("nav.files")}
 			actions={
 				<>
 					<button type="button" class={view === "own" ? undefined : "btn--ghost"} onClick={() => setView("own")}>
-						Мои файлы
+						{t("files.myFilesTab")}
 					</button>
 					<button type="button" class={view === "mounts" ? undefined : "btn--ghost"} onClick={() => setView("mounts")}>
-						<IconGlobe aria-hidden="true" /> Полученные папки{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
+						<IconGlobe aria-hidden="true" /> {t("files.receivedFoldersTab")}{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
 					</button>
 					{view === "own" && (
 						<>
 							<button type="button" onClick={() => setNewFolderOpen((v) => !v)}>
-								<IconPlus /> Новая папка
+								<IconPlus /> {t("files.newFolderButton")}
 							</button>
 							<button type="button" class="btn--ghost" onClick={triggerFileUpload} disabled={!!uploadState}>
-								<IconPaperclip aria-hidden="true" /> Загрузить файл
+								<IconPaperclip aria-hidden="true" /> {t("files.uploadFileButton")}
 							</button>
 							<input
 								ref={fileInputRef}
@@ -565,16 +566,16 @@ export default function Files() {
 								multiple
 								onChange={handleFilesSelected}
 								style={{ display: "none" }}
-								aria-label="Выбрать файлы для загрузки"
+								aria-label={t("files.selectFilesAria")}
 							/>
 							{clipboard.value.state !== "empty" && (
 								<button type="button" class="btn--ghost" onClick={pasteHere}>
-									Вставить ({clipboard.value.selection.length})
+									{t("files.pasteButton", { count: clipboard.value.selection.length })}
 								</button>
 							)}
 							{canUndo.value && (
 								<button type="button" class="btn--ghost" onClick={undo}>
-									Отменить
+									{t("common.undo")}
 								</button>
 							)}
 						</>
@@ -613,7 +614,7 @@ export default function Files() {
 					<span class="grow" />
 					{!inTrash && (
 						<button type="button" class="btn--ghost" onClick={() => openFolder(TRASH_ID)}>
-							<IconTrash /> Корзина
+							<IconTrash /> {t("files.trashButton")}
 						</button>
 					)}
 				</div>
@@ -621,26 +622,26 @@ export default function Files() {
 				<div class="file-search-field">
 					<IconMagnifyingGlass aria-hidden="true" />
 					<label class="visually-hidden" for="file-search">
-						Фильтр по имени в этой папке
+						{t("files.filterLabel")}
 					</label>
 					<input
 						id="file-search"
 						type="search"
 						value={searchInput}
 						onInput={(e) => setSearchInput(e.currentTarget.value)}
-						placeholder="Фильтр по имени…"
+						placeholder={t("files.filterPlaceholder")}
 					/>
 				</div>
 
 				{newFolderOpen && (
 					<form class="cluster file-new-folder-form" onSubmit={handleCreateFolder}>
 						<label class="visually-hidden" for="new-folder-name">
-							Имя папки
+							{t("files.folderNameLabel")}
 						</label>
-						<input id="new-folder-name" type="text" value={newFolderName} onInput={(e) => setNewFolderName(e.currentTarget.value)} placeholder="Имя папки" autoFocus />
-						<button type="submit">Создать</button>
+						<input id="new-folder-name" type="text" value={newFolderName} onInput={(e) => setNewFolderName(e.currentTarget.value)} placeholder={t("files.folderNameLabel")} autoFocus />
+						<button type="submit">{t("common.create")}</button>
 						<button type="button" class="btn--ghost" onClick={() => setNewFolderOpen(false)}>
-							Отмена
+							{t("common.cancel")}
 						</button>
 					</form>
 				)}
@@ -652,11 +653,15 @@ export default function Files() {
 				{uploadState && (
 					<div class="cluster file-upload-progress" role="status">
 						<span>
-							Загрузка «{uploadState.fileName}» ({uploadState.fileIndex}/{uploadState.filesTotal}):{" "}
-							{Math.round((uploadState.chunksDone / uploadState.chunksTotal) * 100)}%
+							{t("files.uploadingProgress", {
+								name: uploadState.fileName,
+								index: uploadState.fileIndex,
+								total: uploadState.filesTotal,
+								percent: Math.round((uploadState.chunksDone / uploadState.chunksTotal) * 100),
+							})}
 						</span>
 						<button type="button" class="btn--ghost" onClick={cancelUpload}>
-							Отменить
+							{t("common.undo")}
 						</button>
 					</div>
 				)}
@@ -668,24 +673,24 @@ export default function Files() {
 
 				{selected.size > 0 && (
 					<div class="cluster file-selection-toolbar">
-						<span>{selected.size} выбрано</span>
+						<span>{t("files.selectionCount", { count: selected.size })}</span>
 						<button type="button" class="btn--ghost" onClick={copySelected}>
-							<IconCopy /> Копировать
+							<IconCopy /> {t("common.copy")}
 						</button>
 						<button type="button" class="btn--ghost" onClick={cutSelected}>
-							Вырезать
+							{t("files.cutButton")}
 						</button>
 						<button type="button" class="btn--ghost btn--danger" onClick={() => handleDelete([...selected])}>
-							<IconTrash /> Удалить
+							<IconTrash /> {t("common.delete")}
 						</button>
 						<button type="button" class="btn--ghost" onClick={() => setSelected(new Set())}>
-							Снять выделение
+							{t("files.clearSelectionButton")}
 						</button>
 					</div>
 				)}
 
 				{entries.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{inTrash ? "Корзина пуста." : "Здесь пока ничего нет."}</p>
+					<p style={{ color: "var(--muted)" }}>{inTrash ? t("files.trashEmpty") : t("files.folderEmpty")}</p>
 				) : (
 					<>
 						<div ref={anchorRef} aria-hidden="true" />
@@ -708,18 +713,18 @@ export default function Files() {
 								onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
 								onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
 							>
-								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={`Выбрать «${entry.displayName}»`} />
+								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={t("files.selectRowAria", { name: entry.displayName })} />
 								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
 								{renamingId === entry.id ? (
 									<form class="cluster file-rename-form" onSubmit={submitRename}>
 										<label class="visually-hidden" for={`rename-${entry.id}`}>
-											Новое имя
+											{t("files.newNameLabel")}
 										</label>
 										<input id={`rename-${entry.id}`} type="text" value={renameValue} onInput={(e) => setRenameValue(e.currentTarget.value)} autoFocus />
-										<button type="submit" class="icon-btn" aria-label="Сохранить">
+										<button type="submit" class="icon-btn" aria-label={t("common.save")}>
 											<IconCheck />
 										</button>
-										<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label="Отменить переименование">
+										<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label={t("files.cancelRenameAria")}>
 											<IconCross />
 										</button>
 									</form>
@@ -728,44 +733,44 @@ export default function Files() {
 										{entry.displayName}
 									</button>
 								)}
-								{STATUS_LABELS[entry.status] && <small class="file-row-status">{STATUS_LABELS[entry.status]}</small>}
+								{STATUS_LABEL_KEYS[entry.status] && <small class="file-row-status">{t(STATUS_LABEL_KEYS[entry.status])}</small>}
 								{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
-									<IconGlobe aria-hidden="true" title="Общий доступ открыт" class="file-row-icon" />
+									<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
 								)}
 								<span class="grow" />
 								{inTrash ? (
 									<>
 										<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)}>
-											Восстановить
+											{t("files.restoreButton")}
 										</button>
 										<button type="button" class="btn--ghost btn--danger" onClick={() => handlePurge(entry.id)}>
-											Удалить навсегда
+											{t("files.purgeButton")}
 										</button>
 									</>
 								) : (
-									<ActionsMenu label={`Действия с «${entry.displayName}»`}>
+									<ActionsMenu label={t("files.rowActionsAria", { name: entry.displayName })}>
 										<button type="button" onClick={() => startRename(entry)}>
-											<IconPencil /> Переименовать
+											<IconPencil /> {t("contacts.renameAction")}
 										</button>
 										<button type="button" onClick={() => copySelection([entry.id])}>
-											<IconCopy /> Копировать
+											<IconCopy /> {t("common.copy")}
 										</button>
 										<button type="button" onClick={() => cutSelection([entry.id])}>
-											Вырезать
+											{t("files.cutButton")}
 										</button>
 										{entry.kind === "dir" && (
 											sharedNodeIds.value.has(entry.id) ? (
 												<button type="button" onClick={() => openAccessPanel(entry.id)}>
-													<IconGlobe /> Управление доступом
+													<IconGlobe /> {t("files.manageAccessButton")}
 												</button>
 											) : (
 												<button type="button" onClick={() => openShareDialog(entry.id)}>
-													<IconGlobe /> Поделиться
+													<IconGlobe /> {t("files.shareButton")}
 												</button>
 											)
 										)}
 										<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
-											<IconTrash /> Удалить
+											<IconTrash /> {t("common.delete")}
 										</button>
 									</ActionsMenu>
 								)}
@@ -816,11 +821,11 @@ function ModalShell({ label, onClose, children }) {
 // уровень доступа выбирать не из чего, поэтому его в интерфейсе просто нет.
 function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 	return (
-		<ModalShell label="Поделиться папкой" onClose={onCancel}>
-			<h2>Поделиться папкой</h2>
-			<p style={{ color: "var(--muted)" }}>Выбранные контакты получат доступ на чтение к содержимому папки и будут видеть последующие изменения.</p>
+		<ModalShell label={t("files.shareButton")} onClose={onCancel}>
+			<h2>{t("files.shareButton")}</h2>
+			<p style={{ color: "var(--muted)" }}>{t("files.shareDialogHint")}</p>
 			{contacts.value.length === 0 ? (
-				<p>Пока нет ни одного контакта.</p>
+				<p>{t("contacts.noContactsAtAll")}</p>
 			) : (
 				<ul role="list" class="stack">
 					{contacts.value.map((pubkey) => (
@@ -840,10 +845,10 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 			)}
 			<div class="cluster">
 				<button type="button" disabled={busy || selected.size === 0} onClick={onSubmit}>
-					{busy ? "Заливка…" : "Поделиться"}
+					{busy ? t("files.uploading") : t("files.shareButton")}
 				</button>
 				<button type="button" class="btn--ghost" onClick={onCancel}>
-					Отмена
+					{t("common.cancel")}
 				</button>
 			</div>
 		</ModalShell>
@@ -853,10 +858,10 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 // Панель "Управление доступом" — список текущих читателей + отзыв.
 function AccessPanel({ grantees, onRevoke, onClose }) {
 	return (
-		<ModalShell label="Управление доступом" onClose={onClose}>
-			<h2>Управление доступом</h2>
+		<ModalShell label={t("files.manageAccessButton")} onClose={onClose}>
+			<h2>{t("files.manageAccessButton")}</h2>
 			{grantees.length === 0 ? (
-				<p>Доступ никому не открыт.</p>
+				<p>{t("files.noAccessGranted")}</p>
 			) : (
 				<ul role="list" class="stack">
 					{grantees.map((pubkey) => (
@@ -864,14 +869,14 @@ function AccessPanel({ grantees, onRevoke, onClose }) {
 							<IconPeople aria-hidden="true" />
 							<span class="grow">{profiles.value[pubkey]?.name || pubkey.slice(0, 16)}</span>
 							<button type="button" class="btn--ghost btn--danger" onClick={() => onRevoke(pubkey)}>
-								Отозвать
+								{t("files.revokeButton")}
 							</button>
 						</li>
 					))}
 				</ul>
 			)}
 			<button type="button" class="btn--ghost" onClick={onClose}>
-				Закрыть
+				{t("common.close")}
 			</button>
 		</ModalShell>
 	);
@@ -885,7 +890,7 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 		return (
 			<div class="stack">
 				{activeMounts.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>Пока никто не поделился с вами папкой.</p>
+					<p style={{ color: "var(--muted)" }}>{t("files.noSharedWithYou")}</p>
 				) : (
 					<ul role="list" class="stack">
 						{activeMounts.value.map((m) => (
@@ -893,10 +898,10 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 								<IconGlobe aria-hidden="true" class="file-row-icon" />
 								<span class="grow">{profiles.value[m.ownerPubkey]?.name || `${m.ownerPubkey.slice(0, 16)}…`}</span>
 								<button type="button" class="btn--ghost" onClick={() => openMountView(m.mountId)}>
-									Открыть
+									{t("files.openButton")}
 								</button>
 								<button type="button" class="btn--ghost btn--danger" onClick={() => handleUnmountShare(m.mountId)}>
-									Отключить
+									{t("files.disconnectButton")}
 								</button>
 							</li>
 						))}
@@ -923,21 +928,21 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 		<div class="stack">
 			<div class="cluster">
 				<button type="button" class="btn--ghost" onClick={closeMountView}>
-					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> К списку долей
+					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> {t("files.backToMountsList")}
 				</button>
 				{mountFolderId !== ROOT_ID && (
 					<button type="button" class="btn--ghost" onClick={() => setMountFolderId(ROOT_ID)}>
-						Корень доли
+						{t("files.mountRootButton")}
 					</button>
 				)}
 			</div>
 			{saveProgress && (
 				<p role="status">
-					Сохраняю: {saveProgress.filesDone}/{saveProgress.filesTotal}
+					{t("files.savingProgress", { done: saveProgress.filesDone, total: saveProgress.filesTotal })}
 				</p>
 			)}
 			{entries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>Здесь пока ничего нет.</p>
+				<p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>
 			) : (
 				<ul role="list" class="file-row-list">
 					{entries.map((entry) => (
@@ -952,7 +957,7 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 							)}
 							<span class="grow" />
 							<button type="button" class="btn--ghost" onClick={() => handleSaveToOwn(openMountId, entry.id)} disabled={!!saveProgress}>
-								Сохранить себе
+								{t("files.saveToOwnButton")}
 							</button>
 						</li>
 					))}

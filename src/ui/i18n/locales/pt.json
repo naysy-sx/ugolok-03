@@ -17,7 +17,10 @@
 		"add": "Adicionar",
 		"call": "Ligar",
 		"delete": "Excluir",
-		"stop": "Parar"
+		"stop": "Parar",
+		"undo": "Desfazer",
+		"copy": "Copiar",
+		"close": "Fechar"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Carregando áudio…",
 		"downloading": "Baixando…",
 		"download": "Baixar"
+	},
+	"files": {
+		"status": {
+			"repaired": "movido para a raiz (conflito de sincronização)",
+			"orphaned": "movido para cá (pasta pai excluída)",
+			"renamed": "renomeado (colisão de nome após sincronização)"
+		},
+		"uploadFailedError": "«{{name}}»: falha no envio (rede indisponível?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "Não foi possível compartilhar a pasta.",
+		"networkUnavailable": "Rede indisponível — tente novamente mais tarde.",
+		"unmountConfirm": "Desconectar esta pasta compartilhada? As cópias já salvas permanecerão.",
+		"myFilesTab": "Meus arquivos",
+		"receivedFoldersTab": "Pastas recebidas",
+		"newFolderButton": "Nova pasta",
+		"uploadFileButton": "Enviar arquivo",
+		"selectFilesAria": "Selecionar arquivos para enviar",
+		"pasteButton": "Colar ({{count}})",
+		"trashButton": "Lixeira",
+		"filterLabel": "Filtrar por nome nesta pasta",
+		"filterPlaceholder": "Filtrar por nome…",
+		"folderNameLabel": "Nome da pasta",
+		"uploadingProgress": "Enviando «{{name}}» ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} selecionado(s)",
+		"cutButton": "Recortar",
+		"clearSelectionButton": "Limpar seleção",
+		"trashEmpty": "A lixeira está vazia.",
+		"folderEmpty": "Ainda não há nada aqui.",
+		"selectRowAria": "Selecionar «{{name}}»",
+		"newNameLabel": "Novo nome",
+		"cancelRenameAria": "Cancelar renomeação",
+		"sharedTooltip": "Compartilhamento ativo",
+		"restoreButton": "Restaurar",
+		"purgeButton": "Excluir permanentemente",
+		"rowActionsAria": "Ações para «{{name}}»",
+		"manageAccessButton": "Gerenciar acesso",
+		"shareButton": "Compartilhar",
+		"shareDialogHint": "Os contatos selecionados terão acesso de leitura ao conteúdo da pasta e verão alterações futuras.",
+		"uploading": "Enviando…",
+		"noAccessGranted": "Ninguém tem acesso.",
+		"revokeButton": "Revogar",
+		"noSharedWithYou": "Ainda ninguém compartilhou uma pasta com você.",
+		"openButton": "Abrir",
+		"disconnectButton": "Desconectar",
+		"backToMountsList": "Voltar à lista de compartilhamentos",
+		"mountRootButton": "Raiz do compartilhamento",
+		"savingProgress": "Salvando: {{done}}/{{total}}",
+		"saveToOwnButton": "Salvar nos meus arquivos",
+		"moveToTrashConfirm": "Mover para a lixeira?",
+		"moveManyToTrashConfirm": "Mover {{count}} itens para a lixeira?",
+		"purgeConfirm": "Excluir permanentemente? Esta ação é irreversível."
+	},
+	"filePlayer": {
+		"ariaLabel": "Reprodutor",
+		"noPreview": "Não há pré-visualização disponível para este tipo de arquivo ({{mime}}).",
+		"unknownType": "tipo desconhecido"
 	}
 }

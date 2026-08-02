@@ -17,7 +17,10 @@
 		"add": "Ekle",
 		"call": "Ara",
 		"delete": "Sil",
-		"stop": "Durdur"
+		"stop": "Durdur",
+		"undo": "Geri al",
+		"copy": "Kopyala",
+		"close": "Kapat"
 	},
 	"nav": {
 		"journal": "Günlük",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Ses yükleniyor…",
 		"downloading": "İndiriliyor…",
 		"download": "İndir"
+	},
+	"files": {
+		"status": {
+			"repaired": "köke taşındı (senkronizasyon çakışması)",
+			"orphaned": "buraya taşındı (üst klasör silindi)",
+			"renamed": "yeniden adlandırıldı (senkronizasyon sonrası ad çakışması)"
+		},
+		"uploadFailedError": "«{{name}}»: yükleme başarısız oldu (ağ yok mu?).",
+		"uploadEntryError": "«{{name}}»: {{message}}",
+		"shareFailedGeneric": "Klasör paylaşılamadı.",
+		"networkUnavailable": "Ağ yok — daha sonra tekrar deneyin.",
+		"unmountConfirm": "Bu paylaşılan klasörün bağlantısı kesilsin mi? Zaten kaydettiğiniz kopyalar kalacaktır.",
+		"myFilesTab": "Dosyalarım",
+		"receivedFoldersTab": "Alınan klasörler",
+		"newFolderButton": "Yeni klasör",
+		"uploadFileButton": "Dosya yükle",
+		"selectFilesAria": "Yüklenecek dosyaları seçin",
+		"pasteButton": "Yapıştır ({{count}})",
+		"trashButton": "Çöp kutusu",
+		"filterLabel": "Bu klasörde ada göre filtrele",
+		"filterPlaceholder": "Ada göre filtrele…",
+		"folderNameLabel": "Klasör adı",
+		"uploadingProgress": "«{{name}}» yükleniyor ({{index}}/{{total}}): %{{percent}}",
+		"selectionCount": "{{count}} seçildi",
+		"cutButton": "Kes",
+		"clearSelectionButton": "Seçimi kaldır",
+		"trashEmpty": "Çöp kutusu boş.",
+		"folderEmpty": "Burada henüz bir şey yok.",
+		"selectRowAria": "«{{name}}» öğesini seç",
+		"newNameLabel": "Yeni ad",
+		"cancelRenameAria": "Yeniden adlandırmayı iptal et",
+		"sharedTooltip": "Paylaşım açık",
+		"restoreButton": "Geri yükle",
+		"purgeButton": "Kalıcı olarak sil",
+		"rowActionsAria": "«{{name}}» için işlemler",
+		"manageAccessButton": "Erişimi yönet",
+		"shareButton": "Paylaş",
+		"shareDialogHint": "Seçilen kişiler klasör içeriğine okuma erişimi kazanır ve gelecekteki değişiklikleri görür.",
+		"uploading": "Yükleniyor…",
+		"noAccessGranted": "Kimsenin erişimi yok.",
+		"revokeButton": "İptal et",
+		"noSharedWithYou": "Henüz kimse sizinle bir klasör paylaşmadı.",
+		"openButton": "Aç",
+		"disconnectButton": "Bağlantıyı kes",
+		"backToMountsList": "Paylaşım listesine dön",
+		"mountRootButton": "Paylaşım kökü",
+		"savingProgress": "Kaydediliyor: {{done}}/{{total}}",
+		"saveToOwnButton": "Kendi dosyalarıma kaydet",
+		"moveToTrashConfirm": "Çöp kutusuna taşınsın mı?",
+		"moveManyToTrashConfirm": "{{count}} öğe çöp kutusuna taşınsın mı?",
+		"purgeConfirm": "Kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
+	},
+	"filePlayer": {
+		"ariaLabel": "Oynatıcı",
+		"noPreview": "Bu dosya türü için önizleme yok ({{mime}}).",
+		"unknownType": "bilinmeyen tür"
 	}
 }

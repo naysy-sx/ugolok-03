@@ -17,7 +17,10 @@
 		"add": "Toevoegen",
 		"call": "Bellen",
 		"delete": "Verwijderen",
-		"stop": "Stoppen"
+		"stop": "Stoppen",
+		"undo": "Ongedaan maken",
+		"copy": "Kopiëren",
+		"close": "Sluiten"
 	},
 	"nav": {
 		"journal": "Journaal",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Audio laden…",
 		"downloading": "Downloaden…",
 		"download": "Downloaden"
+	},
+	"files": {
+		"status": {
+			"repaired": "verplaatst naar hoofdmap (synchronisatieconflict)",
+			"orphaned": "hierheen verplaatst (bovenliggende map verwijderd)",
+			"renamed": "hernoemd (naamconflict na synchronisatie)"
+		},
+		"uploadFailedError": "‘{{name}}’: uploaden mislukt (geen netwerk?).",
+		"uploadEntryError": "‘{{name}}’: {{message}}",
+		"shareFailedGeneric": "De map delen is mislukt.",
+		"networkUnavailable": "Geen netwerk — probeer het later opnieuw.",
+		"unmountConfirm": "Deze gedeelde map loskoppelen? Al opgeslagen kopieën blijven behouden.",
+		"myFilesTab": "Mijn bestanden",
+		"receivedFoldersTab": "Ontvangen mappen",
+		"newFolderButton": "Nieuwe map",
+		"uploadFileButton": "Bestand uploaden",
+		"selectFilesAria": "Bestanden selecteren om te uploaden",
+		"pasteButton": "Plakken ({{count}})",
+		"trashButton": "Prullenbak",
+		"filterLabel": "Filteren op naam in deze map",
+		"filterPlaceholder": "Filteren op naam…",
+		"folderNameLabel": "Mapnaam",
+		"uploadingProgress": "‘{{name}}’ uploaden ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} geselecteerd",
+		"cutButton": "Knippen",
+		"clearSelectionButton": "Selectie opheffen",
+		"trashEmpty": "De prullenbak is leeg.",
+		"folderEmpty": "Hier is nog niets.",
+		"selectRowAria": "‘{{name}}’ selecteren",
+		"newNameLabel": "Nieuwe naam",
+		"cancelRenameAria": "Hernoemen annuleren",
+		"sharedTooltip": "Delen actief",
+		"restoreButton": "Herstellen",
+		"purgeButton": "Definitief verwijderen",
+		"rowActionsAria": "Acties voor ‘{{name}}’",
+		"manageAccessButton": "Toegang beheren",
+		"shareButton": "Delen",
+		"shareDialogHint": "Geselecteerde contacten krijgen leestoegang tot de inhoud van de map en zien toekomstige wijzigingen.",
+		"uploading": "Uploaden…",
+		"noAccessGranted": "Niemand heeft toegang.",
+		"revokeButton": "Intrekken",
+		"noSharedWithYou": "Nog niemand heeft een map met je gedeeld.",
+		"openButton": "Openen",
+		"disconnectButton": "Loskoppelen",
+		"backToMountsList": "Terug naar lijst met gedeelde mappen",
+		"mountRootButton": "Hoofdmap van share",
+		"savingProgress": "Opslaan: {{done}}/{{total}}",
+		"saveToOwnButton": "Opslaan bij mijn bestanden",
+		"moveToTrashConfirm": "Naar de prullenbak verplaatsen?",
+		"moveManyToTrashConfirm": "{{count}} items naar de prullenbak verplaatsen?",
+		"purgeConfirm": "Definitief verwijderen? Dit kan niet ongedaan worden gemaakt."
+	},
+	"filePlayer": {
+		"ariaLabel": "Speler",
+		"noPreview": "Geen voorbeeld beschikbaar voor dit bestandstype ({{mime}}).",
+		"unknownType": "onbekend type"
 	}
 }

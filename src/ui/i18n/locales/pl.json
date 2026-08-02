@@ -17,7 +17,10 @@
 		"add": "Dodaj",
 		"call": "Zadzwoń",
 		"delete": "Usuń",
-		"stop": "Zatrzymaj"
+		"stop": "Zatrzymaj",
+		"undo": "Cofnij",
+		"copy": "Kopiuj",
+		"close": "Zamknij"
 	},
 	"nav": {
 		"journal": "Dziennik",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Wczytywanie dźwięku…",
 		"downloading": "Pobieranie…",
 		"download": "Pobierz"
+	},
+	"files": {
+		"status": {
+			"repaired": "przeniesiono do katalogu głównego (konflikt synchronizacji)",
+			"orphaned": "przeniesiono tutaj (folder nadrzędny usunięty)",
+			"renamed": "zmieniono nazwę (kolizja nazw po synchronizacji)"
+		},
+		"uploadFailedError": "„{{name}}”: przesyłanie nie powiodło się (brak sieci?).",
+		"uploadEntryError": "„{{name}}”: {{message}}",
+		"shareFailedGeneric": "Nie udało się udostępnić folderu.",
+		"networkUnavailable": "Brak sieci — spróbuj ponownie później.",
+		"unmountConfirm": "Odłączyć ten udostępniony folder? Już zapisane kopie pozostaną.",
+		"myFilesTab": "Moje pliki",
+		"receivedFoldersTab": "Otrzymane foldery",
+		"newFolderButton": "Nowy folder",
+		"uploadFileButton": "Prześlij plik",
+		"selectFilesAria": "Wybierz pliki do przesłania",
+		"pasteButton": "Wklej ({{count}})",
+		"trashButton": "Kosz",
+		"filterLabel": "Filtruj po nazwie w tym folderze",
+		"filterPlaceholder": "Filtruj po nazwie…",
+		"folderNameLabel": "Nazwa folderu",
+		"uploadingProgress": "Przesyłanie „{{name}}” ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "Zaznaczono: {{count}}",
+		"cutButton": "Wytnij",
+		"clearSelectionButton": "Wyczyść zaznaczenie",
+		"trashEmpty": "Kosz jest pusty.",
+		"folderEmpty": "Tutaj nie ma jeszcze niczego.",
+		"selectRowAria": "Zaznacz „{{name}}”",
+		"newNameLabel": "Nowa nazwa",
+		"cancelRenameAria": "Anuluj zmianę nazwy",
+		"sharedTooltip": "Udostępnianie włączone",
+		"restoreButton": "Przywróć",
+		"purgeButton": "Usuń trwale",
+		"rowActionsAria": "Działania dla „{{name}}”",
+		"manageAccessButton": "Zarządzaj dostępem",
+		"shareButton": "Udostępnij",
+		"shareDialogHint": "Wybrani kontakty uzyskają dostęp do odczytu zawartości folderu i będą widzieć przyszłe zmiany.",
+		"uploading": "Przesyłanie…",
+		"noAccessGranted": "Nikt nie ma dostępu.",
+		"revokeButton": "Odbierz",
+		"noSharedWithYou": "Nikt jeszcze nie udostępnił Ci folderu.",
+		"openButton": "Otwórz",
+		"disconnectButton": "Odłącz",
+		"backToMountsList": "Wróć do listy udostępnień",
+		"mountRootButton": "Katalog główny udostępnienia",
+		"savingProgress": "Zapisywanie: {{done}}/{{total}}",
+		"saveToOwnButton": "Zapisz u siebie",
+		"moveToTrashConfirm": "Przenieść do kosza?",
+		"moveManyToTrashConfirm": "Przenieść {{count}} obiektów do kosza?",
+		"purgeConfirm": "Usunąć trwale? Tej operacji nie można cofnąć."
+	},
+	"filePlayer": {
+		"ariaLabel": "Odtwarzacz",
+		"noPreview": "Brak podglądu dla tego typu pliku ({{mime}}).",
+		"unknownType": "nieznany typ"
 	}
 }

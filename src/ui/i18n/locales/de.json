@@ -17,7 +17,10 @@
 		"add": "Hinzufügen",
 		"call": "Anrufen",
 		"delete": "Löschen",
-		"stop": "Stoppen"
+		"stop": "Stoppen",
+		"undo": "Rückgängig",
+		"copy": "Kopieren",
+		"close": "Schließen"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Audio wird geladen…",
 		"downloading": "Wird heruntergeladen…",
 		"download": "Herunterladen"
+	},
+	"files": {
+		"status": {
+			"repaired": "in den Stammordner verschoben (Synchronisationskonflikt)",
+			"orphaned": "hierher verschoben (übergeordneter Ordner gelöscht)",
+			"renamed": "umbenannt (Namenskollision nach Synchronisierung)"
+		},
+		"uploadFailedError": "„{{name}}“: Upload fehlgeschlagen (Netzwerk nicht verfügbar?).",
+		"uploadEntryError": "„{{name}}“: {{message}}",
+		"shareFailedGeneric": "Der Ordner konnte nicht freigegeben werden.",
+		"networkUnavailable": "Netzwerk nicht verfügbar — später erneut versuchen.",
+		"unmountConfirm": "Diesen freigegebenen Ordner trennen? Bereits gespeicherte Kopien bleiben erhalten.",
+		"myFilesTab": "Meine Dateien",
+		"receivedFoldersTab": "Erhaltene Ordner",
+		"newFolderButton": "Neuer Ordner",
+		"uploadFileButton": "Datei hochladen",
+		"selectFilesAria": "Dateien zum Hochladen auswählen",
+		"pasteButton": "Einfügen ({{count}})",
+		"trashButton": "Papierkorb",
+		"filterLabel": "Nach Name in diesem Ordner filtern",
+		"filterPlaceholder": "Nach Name filtern…",
+		"folderNameLabel": "Ordnername",
+		"uploadingProgress": "Lade „{{name}}“ hoch ({{index}}/{{total}}): {{percent}}%",
+		"selectionCount": "{{count}} ausgewählt",
+		"cutButton": "Ausschneiden",
+		"clearSelectionButton": "Auswahl aufheben",
+		"trashEmpty": "Der Papierkorb ist leer.",
+		"folderEmpty": "Hier ist noch nichts.",
+		"selectRowAria": "„{{name}}“ auswählen",
+		"newNameLabel": "Neuer Name",
+		"cancelRenameAria": "Umbenennen abbrechen",
+		"sharedTooltip": "Freigabe aktiv",
+		"restoreButton": "Wiederherstellen",
+		"purgeButton": "Endgültig löschen",
+		"rowActionsAria": "Aktionen für „{{name}}“",
+		"manageAccessButton": "Zugriff verwalten",
+		"shareButton": "Teilen",
+		"shareDialogHint": "Ausgewählte Kontakte erhalten Lesezugriff auf den Ordnerinhalt und sehen zukünftige Änderungen.",
+		"uploading": "Wird hochgeladen…",
+		"noAccessGranted": "Niemand hat Zugriff.",
+		"revokeButton": "Entziehen",
+		"noSharedWithYou": "Noch niemand hat einen Ordner mit Ihnen geteilt.",
+		"openButton": "Öffnen",
+		"disconnectButton": "Trennen",
+		"backToMountsList": "Zurück zur Freigabenliste",
+		"mountRootButton": "Freigabe-Stammordner",
+		"savingProgress": "Speichere: {{done}}/{{total}}",
+		"saveToOwnButton": "In meinen Dateien speichern",
+		"moveToTrashConfirm": "In den Papierkorb verschieben?",
+		"moveManyToTrashConfirm": "{{count}} Objekte in den Papierkorb verschieben?",
+		"purgeConfirm": "Endgültig löschen? Dies ist unwiderruflich."
+	},
+	"filePlayer": {
+		"ariaLabel": "Player",
+		"noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar ({{mime}}).",
+		"unknownType": "unbekannter Typ"
 	}
 }

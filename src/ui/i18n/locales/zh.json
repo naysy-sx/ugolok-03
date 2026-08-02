@@ -17,7 +17,10 @@
 		"add": "添加",
 		"call": "呼叫",
 		"delete": "删除",
-		"stop": "停止"
+		"stop": "停止",
+		"undo": "撤销",
+		"copy": "复制",
+		"close": "关闭"
 	},
 	"nav": {
 		"journal": "动态",
@@ -332,5 +335,61 @@
 		"loadingAudio": "正在加载音频…",
 		"downloading": "下载中…",
 		"download": "下载"
+	},
+	"files": {
+		"status": {
+			"repaired": "已移动到根目录（同步冲突）",
+			"orphaned": "已移动到此处（父文件夹已删除）",
+			"renamed": "已重命名（同步后名称冲突）"
+		},
+		"uploadFailedError": "“{{name}}”：上传失败（网络不可用？）。",
+		"uploadEntryError": "“{{name}}”：{{message}}",
+		"shareFailedGeneric": "无法共享该文件夹。",
+		"networkUnavailable": "网络不可用——请稍后重试。",
+		"unmountConfirm": "断开此共享文件夹？已保存到本地的副本将保留。",
+		"myFilesTab": "我的文件",
+		"receivedFoldersTab": "收到的文件夹",
+		"newFolderButton": "新建文件夹",
+		"uploadFileButton": "上传文件",
+		"selectFilesAria": "选择要上传的文件",
+		"pasteButton": "粘贴（{{count}}）",
+		"trashButton": "回收站",
+		"filterLabel": "在此文件夹中按名称筛选",
+		"filterPlaceholder": "按名称筛选…",
+		"folderNameLabel": "文件夹名称",
+		"uploadingProgress": "正在上传“{{name}}”（{{index}}/{{total}}）：{{percent}}%",
+		"selectionCount": "已选择 {{count}} 项",
+		"cutButton": "剪切",
+		"clearSelectionButton": "取消选择",
+		"trashEmpty": "回收站是空的。",
+		"folderEmpty": "这里还什么都没有。",
+		"selectRowAria": "选择“{{name}}”",
+		"newNameLabel": "新名称",
+		"cancelRenameAria": "取消重命名",
+		"sharedTooltip": "共享已开启",
+		"restoreButton": "恢复",
+		"purgeButton": "永久删除",
+		"rowActionsAria": "对“{{name}}”的操作",
+		"manageAccessButton": "管理访问权限",
+		"shareButton": "共享",
+		"shareDialogHint": "所选联系人将获得该文件夹内容的读取权限，并能看到之后的更改。",
+		"uploading": "上传中…",
+		"noAccessGranted": "尚未授予任何人访问权限。",
+		"revokeButton": "撤销",
+		"noSharedWithYou": "还没有人与您共享文件夹。",
+		"openButton": "打开",
+		"disconnectButton": "断开连接",
+		"backToMountsList": "返回共享列表",
+		"mountRootButton": "共享根目录",
+		"savingProgress": "正在保存：{{done}}/{{total}}",
+		"saveToOwnButton": "保存到我的文件",
+		"moveToTrashConfirm": "移动到回收站？",
+		"moveManyToTrashConfirm": "将 {{count}} 个对象移动到回收站？",
+		"purgeConfirm": "永久删除？此操作不可撤销。"
+	},
+	"filePlayer": {
+		"ariaLabel": "播放器",
+		"noPreview": "此文件类型（{{mime}}）没有预览。",
+		"unknownType": "未知类型"
 	}
 }

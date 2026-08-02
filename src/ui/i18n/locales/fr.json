@@ -17,7 +17,10 @@
 		"add": "Ajouter",
 		"call": "Appeler",
 		"delete": "Supprimer",
-		"stop": "Arrêter"
+		"stop": "Arrêter",
+		"undo": "Annuler",
+		"copy": "Copier",
+		"close": "Fermer"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -332,5 +335,61 @@
 		"loadingAudio": "Chargement de l'audio…",
 		"downloading": "Téléchargement…",
 		"download": "Télécharger"
+	},
+	"files": {
+		"status": {
+			"repaired": "déplacé à la racine (conflit de synchronisation)",
+			"orphaned": "déplacé ici (dossier parent supprimé)",
+			"renamed": "renommé (collision de nom après synchronisation)"
+		},
+		"uploadFailedError": "« {{name}} » : échec de l'envoi (réseau indisponible ?).",
+		"uploadEntryError": "« {{name}} » : {{message}}",
+		"shareFailedGeneric": "Impossible de partager le dossier.",
+		"networkUnavailable": "Réseau indisponible — réessayez plus tard.",
+		"unmountConfirm": "Déconnecter ce dossier partagé ? Les copies déjà enregistrées seront conservées.",
+		"myFilesTab": "Mes fichiers",
+		"receivedFoldersTab": "Dossiers reçus",
+		"newFolderButton": "Nouveau dossier",
+		"uploadFileButton": "Envoyer un fichier",
+		"selectFilesAria": "Sélectionner les fichiers à envoyer",
+		"pasteButton": "Coller ({{count}})",
+		"trashButton": "Corbeille",
+		"filterLabel": "Filtrer par nom dans ce dossier",
+		"filterPlaceholder": "Filtrer par nom…",
+		"folderNameLabel": "Nom du dossier",
+		"uploadingProgress": "Envoi de « {{name}} » ({{index}}/{{total}}) : {{percent}}%",
+		"selectionCount": "{{count}} sélectionné(s)",
+		"cutButton": "Couper",
+		"clearSelectionButton": "Désélectionner",
+		"trashEmpty": "La corbeille est vide.",
+		"folderEmpty": "Il n'y a encore rien ici.",
+		"selectRowAria": "Sélectionner « {{name}} »",
+		"newNameLabel": "Nouveau nom",
+		"cancelRenameAria": "Annuler le renommage",
+		"sharedTooltip": "Partage activé",
+		"restoreButton": "Restaurer",
+		"purgeButton": "Supprimer définitivement",
+		"rowActionsAria": "Actions pour « {{name}} »",
+		"manageAccessButton": "Gérer l'accès",
+		"shareButton": "Partager",
+		"shareDialogHint": "Les contacts sélectionnés obtiendront un accès en lecture au contenu du dossier et verront les modifications futures.",
+		"uploading": "Envoi…",
+		"noAccessGranted": "Personne n'a accès.",
+		"revokeButton": "Révoquer",
+		"noSharedWithYou": "Personne ne vous a encore partagé de dossier.",
+		"openButton": "Ouvrir",
+		"disconnectButton": "Déconnecter",
+		"backToMountsList": "Retour à la liste des partages",
+		"mountRootButton": "Racine du partage",
+		"savingProgress": "Enregistrement : {{done}}/{{total}}",
+		"saveToOwnButton": "Enregistrer dans mes fichiers",
+		"moveToTrashConfirm": "Déplacer vers la corbeille ?",
+		"moveManyToTrashConfirm": "Déplacer {{count}} éléments vers la corbeille ?",
+		"purgeConfirm": "Supprimer définitivement ? Cette action est irréversible."
+	},
+	"filePlayer": {
+		"ariaLabel": "Lecteur",
+		"noPreview": "Aucun aperçu disponible pour ce type de fichier ({{mime}}).",
+		"unknownType": "type inconnu"
 	}
 }

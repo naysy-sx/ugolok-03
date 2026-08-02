@@ -17,7 +17,10 @@
 		"add": "追加",
 		"call": "通話",
 		"delete": "削除",
-		"stop": "停止"
+		"stop": "停止",
+		"undo": "元に戻す",
+		"copy": "コピー",
+		"close": "閉じる"
 	},
 	"nav": {
 		"journal": "ジャーナル",
@@ -332,5 +335,61 @@
 		"loadingAudio": "音声を読み込み中…",
 		"downloading": "ダウンロード中…",
 		"download": "ダウンロード"
+	},
+	"files": {
+		"status": {
+			"repaired": "ルートに移動しました（同期の競合）",
+			"orphaned": "ここに移動しました（親フォルダが削除されました）",
+			"renamed": "名前が変更されました（同期後の名前の衝突）"
+		},
+		"uploadFailedError": "「{{name}}」: アップロードに失敗しました（ネットワーク接続を確認してください）。",
+		"uploadEntryError": "「{{name}}」: {{message}}",
+		"shareFailedGeneric": "フォルダの共有に失敗しました。",
+		"networkUnavailable": "ネットワークに接続できません — 後でもう一度お試しください。",
+		"unmountConfirm": "この共有フォルダを切断しますか？ 既に保存したコピーはそのまま残ります。",
+		"myFilesTab": "自分のファイル",
+		"receivedFoldersTab": "受け取ったフォルダ",
+		"newFolderButton": "新しいフォルダ",
+		"uploadFileButton": "ファイルをアップロード",
+		"selectFilesAria": "アップロードするファイルを選択",
+		"pasteButton": "貼り付け（{{count}}）",
+		"trashButton": "ゴミ箱",
+		"filterLabel": "このフォルダ内を名前で絞り込む",
+		"filterPlaceholder": "名前で絞り込む…",
+		"folderNameLabel": "フォルダ名",
+		"uploadingProgress": "「{{name}}」をアップロード中（{{index}}/{{total}}）: {{percent}}%",
+		"selectionCount": "{{count}} 件選択中",
+		"cutButton": "切り取り",
+		"clearSelectionButton": "選択を解除",
+		"trashEmpty": "ゴミ箱は空です。",
+		"folderEmpty": "ここにはまだ何もありません。",
+		"selectRowAria": "「{{name}}」を選択",
+		"newNameLabel": "新しい名前",
+		"cancelRenameAria": "名前の変更をキャンセル",
+		"sharedTooltip": "共有が有効です",
+		"restoreButton": "復元",
+		"purgeButton": "完全に削除",
+		"rowActionsAria": "「{{name}}」の操作",
+		"manageAccessButton": "アクセスを管理",
+		"shareButton": "共有する",
+		"shareDialogHint": "選択した連絡先はフォルダの内容への読み取りアクセス権を得て、以降の変更も見られるようになります。",
+		"uploading": "アップロード中…",
+		"noAccessGranted": "誰にもアクセス権がありません。",
+		"revokeButton": "取り消す",
+		"noSharedWithYou": "まだ誰もあなたにフォルダを共有していません。",
+		"openButton": "開く",
+		"disconnectButton": "切断",
+		"backToMountsList": "共有一覧に戻る",
+		"mountRootButton": "共有のルート",
+		"savingProgress": "保存中: {{done}}/{{total}}",
+		"saveToOwnButton": "自分のファイルに保存",
+		"moveToTrashConfirm": "ゴミ箱に移動しますか？",
+		"moveManyToTrashConfirm": "{{count}} 件のオブジェクトをゴミ箱に移動しますか？",
+		"purgeConfirm": "完全に削除しますか？ この操作は取り消せません。"
+	},
+	"filePlayer": {
+		"ariaLabel": "プレーヤー",
+		"noPreview": "このファイル形式（{{mime}}）のプレビューはありません。",
+		"unknownType": "不明な形式"
 	}
 }

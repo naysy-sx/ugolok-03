@@ -4,6 +4,7 @@ import { getCachedManifest, putCachedManifest } from "../../domain/files/store.j
 import { registerPlayerFile, unregisterPlayerFile } from "../../domain/files/player-bridge.js";
 import { getFileKeyFor } from "../signals/files.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { t } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -40,7 +41,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 				const fileKey = await getFileKeyFor(digest);
 				if (cancelled) return;
 				if (!fileKey) {
-					setError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+					setError(t("chat.window.fileKeyNotFoundError"));
 					return;
 				}
 				if (m.mime?.startsWith("image/")) {
@@ -79,7 +80,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 		<div
 			role="dialog"
 			aria-modal="true"
-			aria-label="Плеер"
+			aria-label={t("filePlayer.ariaLabel")}
 			onClick={onClose}
 			style={{
 				position: "fixed",
@@ -98,7 +99,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 						{error}
 					</p>
 				)}
-				{!error && !manifest && <p style={{ color: "#fff" }}>Загрузка…</p>}
+				{!error && !manifest && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
 				{!error && manifest && manifest.mime?.startsWith("image/") && imageUrl && (
 					<img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }} />
 				)}
@@ -111,13 +112,13 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 					!manifest.mime?.startsWith("video/") &&
 					!manifest.mime?.startsWith("audio/") &&
 					!manifest.mime?.startsWith("image/") && (
-						<p style={{ color: "#fff" }}>Нет предпросмотра для этого типа файла ({manifest.mime || "неизвестный тип"}).</p>
+						<p style={{ color: "#fff" }}>{t("filePlayer.noPreview", { mime: manifest.mime || t("filePlayer.unknownType") })}</p>
 					)}
 			</div>
 			<button
 				type="button"
 				onClick={onClose}
-				aria-label="Закрыть"
+				aria-label={t("common.close")}
 				style={{
 					position: "fixed",
 					top: "var(--space-m)",
