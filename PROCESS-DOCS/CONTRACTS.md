@@ -9756,3 +9756,107 @@ export async function checkUploadRequirements(serverUrl, { sha256Hex, mime, size
   чужого сервера) — откладываемая часть нужна ТОЛЬКО для собственного деплоя
   ugolok.tech с его специфичным разделением по MIME-категориям, не для общей
   корректности клиента.
+
+## Этап 63 — Контейнер и агент управления self-hosted инстансом
+
+Разбит на итерации (по образцу этапа 53, И1..). Новый Go-модуль
+`agent/` (repo root, module `ugolok.tech/agent`) — ОТДЕЛЬНО от `server/`
+(тот — явно "не часть клиентского продукта", dev/test-инфра); `agent/` —
+настоящий продакшен-компонент, разворачивается на VPS self-hoster'а
+bootstrap-скриптом (сам скрипт — И4, не в скоупе И1). Дизайн авторизации/
+TLS — DESIGN.md, "Этап 63, И1".
+
+### И1 — агент: авторизация, TLS, /status (заглушка)
+
+**`agent/internal/auth`**
+```go
+func GenerateToken() ([]byte, error)              // 32 случайных байта, crypto/rand
+func EncodeToken(token []byte) string             // hex, 64 символа
+func DecodeToken(s string) ([]byte, error)        // hex-decode; ошибка при len(decoded)!=32
+func ConstantTimeEqual(a, b []byte) bool          // len-check + subtle.ConstantTimeCompare
+func LoadOrCreateToken(path string) ([]byte, error) // читает path; при отсутствии — генерирует
+                                                     // и пишет hex-строку, perm 0600
+func RequireBearerToken(expected []byte, next http.Handler) http.Handler
+    // парсит "Authorization: Bearer <hex>", DecodeToken, ConstantTimeEqual;
+    // 401 при отсутствии заголовка/неверном формате/несовпадении
+```
+
+**`agent/internal/tlscert`**
+```go
+func LoadOrGenerate(certPath, keyPath string) (tls.Certificate, error)
+    // читает существующую PEM-пару; при отсутствии — ECDSA P-256,
+    // самоподписанный, срок 10 лет, пишет PEM (0600 оба файла)
+func Fingerprint(cert tls.Certificate) (string, error)
+    // sha256(cert.Certificate[0]) (DER, первый сертификат в цепочке), hex, 64 символа
+```
+
+**`agent/internal/pairing`**
+```go
+type Code struct {
+    Host        string `json:"host"`
+    Port        int    `json:"port"`
+    Token       string `json:"token"`       // hex, из EncodeToken
+    Fingerprint string `json:"fingerprint"` // hex, из tlscert.Fingerprint
+}
+func Encode(c Code) (string, error)  // JSON -> base64.RawURLEncoding
+func Decode(s string) (Code, error)  // обратное; ошибка на битом base64/JSON
+```
+
+**`agent/internal/httpapi`**
+```go
+type Status struct {
+    Version       string `json:"version"`
+    UptimeSeconds int64  `json:"uptimeSeconds"`
+}
+func NewServer(token []byte, statusFn func() Status) *http.ServeMux
+    // GET /status (защищён RequireBearerToken) -> 200 JSON Status
+    // всё остальное -> 404 (реальная docker-оркестрация — И2)
+```
+
+**`agent/cmd/agent/main.go`** — склейка (рутинная, микротаск воркеру не
+нужен — Claude пишет сам, как во всех предыдущих этапах "точка входа"):
+на старте `LoadOrCreateToken`/`tlscert.LoadOrGenerate` по фиксированным
+путям (`state/token.hex`, `state/cert.pem`, `state/key.pem` относительно
+рабочей директории — тот же принцип, что `strfry.conf`'s `db`), при
+ПЕРВОМ создании (файлов не было) печатает пейринг-код в stdout,
+поднимает `http.ListenAndServeTLS` на порту из флага (дефолт 8443).
+
+### Явно НЕ в скоупе И1
+
+Реальная оркестрация `docker compose` (И2) — `statusFn` в И1 передаётся
+как заглушка (например возвращающая фиксированную `Status{Version:"dev"}`)
+из `main.go`, не читает реальные контейнеры. Docker Compose/TURN/Caddy-
+конфиги — И2. Веб-экран сопряжения (Preact, парсинг `pairing.Code`,
+TOFU-проверка отпечатка) — И3. Bootstrap-скрипт (`install.sh`,
+устанавливает Docker + сам бинарник агента) — И4.
+
+### И1 — реализация: DoD и живая проверка
+
+Все 4 пакета (`auth`, `tlscert`, `pairing`, `httpapi`) + `cmd/agent/main.go`
+реализованы, `go vet ./...` чист, `go test ./...` зелёный (27 тестов).
+Живая проверка реальным бинарником (не только юнит-тесты): первый запуск
+печатает пейринг-код РОВНО один раз, `state/` создаётся с правами 0700/0600;
+`GET /status` без токена -> 401, с верным токеном -> 200 + корректный JSON,
+с неверным токеном -> 401, неизвестный путь -> 404; отпечаток из пейринг-кода
+СОВПАДАЕТ с `openssl x509 -fingerprint -sha256` реального сертификата;
+перезапуск агента переиспользует ТОТ ЖЕ токен (не печатает пейринг-код
+повторно) — персистентность подтверждена, не только логикой кода.
+
+**Адверсарная фаза — находка, записана, не блокирует И1:** если
+`cert.pem`/`key.pem` исчезнут (ручное вмешательство/повреждение диска), а
+`token.hex` уцелеет — `main.go`'s `firstRun` считается ТОЛЬКО по
+`token.hex` (пейринг-код печатается ровно один раз в жизни токена), а
+`tlscert.LoadOrGenerate` независимо перевыпустит сертификат с НОВЫМ
+отпечатком МОЛЧА (без нового пейринг-кода). Уже сопряжённый веб-клиент
+(TOFU-pinning, И3) корректно ОТКАЖЕТ такому соединению (fail-closed, не
+дыра безопасности) — но пользователю потребуется вручную повторить
+сопряжение, без явной диагностики "почему". Backlog: либо привязать
+firstRun-детекцию к обоим наборам файлов сразу, либо явно логировать
+"сертификат пересоздан — реквизиты пейринга неактуальны" при таком
+рассинхроне. Не реализовано сейчас — редкий edge case (случайная потеря
+части state, не штатный сценарий), не стоит эксплуатации в момент, когда
+веб-сторона пейринга (И3) ещё не существует и проверять нечем.
+
+DoD И1: [x] тесты зелёные [x] `go vet` чист [x] живая проверка бинарником
+[x] адверсарная находка записана [x] полная регрессия (JS 1208/1208
+не затронута + Go 27/27) [x] PLAN.md обновлён [ ] коммит.

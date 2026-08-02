@@ -1,0 +1,92 @@
+package main
+
+import (
+	"crypto/tls"
+	"flag"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
+	"ugolok.tech/agent/internal/auth"
+	"ugolok.tech/agent/internal/httpapi"
+	"ugolok.tech/agent/internal/pairing"
+	"ugolok.tech/agent/internal/tlscert"
+)
+
+// Версия агента — заполняется при сборке (-ldflags "-X main.version=..."),
+// "dev" — значение по умолчанию для локальной разработки без флага сборки.
+var version = "dev"
+
+func main() {
+	stateDir := flag.String("state-dir", "state", "директория для token.hex/cert.pem/key.pem")
+	port := flag.Int("port", 8443, "TCP-порт HTTPS-сервера агента")
+	host := flag.String("host", "", "публичный адрес/домен агента — печатается в пейринг-коде, сам агент его не угадывает")
+	flag.Parse()
+
+	if *host == "" {
+		log.Fatal("--host обязателен (публичный IP/домен этого VPS — агент не умеет угадывать его сам)")
+	}
+
+	if err := os.MkdirAll(*stateDir, 0o700); err != nil {
+		log.Fatalf("не удалось создать %s: %v", *stateDir, err)
+	}
+
+	tokenPath := filepath.Join(*stateDir, "token.hex")
+	certPath := filepath.Join(*stateDir, "cert.pem")
+	keyPath := filepath.Join(*stateDir, "key.pem")
+
+	_, statErr := os.Stat(tokenPath)
+	firstRun := statErr != nil && os.IsNotExist(statErr)
+
+	token, err := auth.LoadOrCreateToken(tokenPath)
+	if err != nil {
+		log.Fatalf("не удалось загрузить/создать токен: %v", err)
+	}
+
+	cert, err := tlscert.LoadOrGenerate(certPath, keyPath)
+	if err != nil {
+		log.Fatalf("не удалось загрузить/создать TLS-сертификат: %v", err)
+	}
+
+	if firstRun {
+		fingerprint, err := tlscert.Fingerprint(cert)
+		if err != nil {
+			log.Fatalf("не удалось вычислить отпечаток сертификата: %v", err)
+		}
+		code, err := pairing.Encode(pairing.Code{
+			Host:        *host,
+			Port:        *port,
+			Token:       auth.EncodeToken(token),
+			Fingerprint: fingerprint,
+		})
+		if err != nil {
+			log.Fatalf("не удалось закодировать пейринг-код: %v", err)
+		}
+		fmt.Println("=== Пейринг-код (вставьте в приложение Уголок при сопряжении, показывается только один раз) ===")
+		fmt.Println(code)
+		fmt.Println("=================================================================================")
+	}
+
+	startTime := time.Now()
+	statusFn := func() httpapi.Status {
+		return httpapi.Status{
+			Version:       version,
+			UptimeSeconds: int64(time.Since(startTime).Seconds()),
+		}
+	}
+
+	mux := httpapi.NewServer(token, statusFn)
+
+	server := &http.Server{
+		Addr:      net.JoinHostPort("", fmt.Sprintf("%d", *port)),
+		Handler:   mux,
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+	}
+
+	log.Printf("агент слушает :%d (host=%s)", *port, *host)
+	log.Fatal(server.ListenAndServeTLS("", ""))
+}
