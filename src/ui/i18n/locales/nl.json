@@ -16,7 +16,8 @@
 		"rateLimitError": "Te snel — wacht even",
 		"add": "Toevoegen",
 		"call": "Bellen",
-		"delete": "Verwijderen"
+		"delete": "Verwijderen",
+		"stop": "Stoppen"
 	},
 	"nav": {
 		"journal": "Journaal",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Geblokkeerd",
 		"unblockButton": "Deblokkeren",
 		"noBlocked": "Geen geblokkeerde contacten."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Inbox ({{count}})",
+			"noInboxRequests": "Geen nieuwe gespreksverzoeken van onbekenden.",
+			"chatsHeading": "Chats ({{count}})",
+			"noChatsYet": "Je hebt nog geen chats — open een gesprek via de bijnaam van een contact in de sectie ‘{{contactsLabel}}’.",
+			"unreadAria": "Ongelezen: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Gesprek wissen",
+			"recordingStatus": "Spraakbericht opnemen…",
+			"deleteRecordingButton": "Opname verwijderen",
+			"uploadingAttachment": "Bijlage uploaden…",
+			"attachFileAria": "Bestand bijvoegen",
+			"attachFromStorageAria": "Bestand uit opslag bijvoegen",
+			"recordVoiceAria": "Spraakbericht opnemen",
+			"messageLabel": "Bericht",
+			"loadOlderButton": "Oudere berichten laden",
+			"noMessagesYet": "Nog geen berichten — schrijf het eerste!",
+			"messageTooLong": "Bericht is te lang (maximaal {{max}} tekens)",
+			"clearHistoryConfirm": "Gesprek wissen? Berichten worden alleen bij jou verwijderd — je contact behoudt alles.",
+			"fileKeyNotFoundError": "Bestandssleutel niet gevonden — het bestand is mogelijk nog niet volledig gesynchroniseerd.",
+			"sendAttachmentConfirm": "Het bestand wordt als bijlage verzonden — na verzending gaat de sleutel naar de ontvanger en kan dit niet ongedaan worden gemaakt. Doorgaan?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "concept",
+			"sending": "verzenden…",
+			"sent": "verzonden",
+			"read": "gelezen",
+			"failed": "niet bezorgd",
+			"discarded": "verworpen"
+		},
+		"deletedNotice": "Bericht verwijderd",
+		"editedLabel": "(bewerkt)",
+		"editButton": "Bewerken",
+		"deleteForMeButton": "Verwijderen voor mij",
+		"deleteForBothButton": "Verwijderen voor iedereen"
+	},
+	"attachment": {
+		"audioLoadError": "Kon audio niet laden: {{error}}",
+		"loadingVoice": "Spraakbericht laden…",
+		"loadingAudio": "Audio laden…",
+		"downloading": "Downloaden…",
+		"download": "Downloaden"
 	}
 }

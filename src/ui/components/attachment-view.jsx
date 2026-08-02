@@ -8,6 +8,7 @@ import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
+import { t } from "../signals/i18n.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
@@ -129,14 +130,14 @@ function AudioAttachment({ attachment }) {
 	if (error) {
 		return (
 			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-				Не удалось загрузить аудио: {error}
+				{t("attachment.audioLoadError", { error })}
 			</p>
 		);
 	}
 	if (!url) {
 		return (
 			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> Загрузка{attachment.voice ? " голосового" : " аудио"}…
+				<span class="spinner" aria-hidden="true" /> {attachment.voice ? t("attachment.loadingVoice") : t("attachment.loadingAudio")}
 			</p>
 		);
 	}
@@ -248,7 +249,7 @@ export function AttachmentDownloadLink({ attachment }) {
 	return (
 		<>
 			<button type="button" onClick={handleDownload} disabled={busy}>
-				<Icon /> {busy ? "Скачивание…" : "Скачать"} {attachment.name} ({formatFileSize(attachment.size)})
+				<Icon /> {busy ? t("attachment.downloading") : t("attachment.download")} {attachment.name} ({formatFileSize(attachment.size)})
 			</button>
 			{error && (
 				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>

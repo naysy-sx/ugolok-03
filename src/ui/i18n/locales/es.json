@@ -16,7 +16,8 @@
 		"rateLimitError": "Demasiado rápido — espera un momento",
 		"add": "Añadir",
 		"call": "Llamar",
-		"delete": "Eliminar"
+		"delete": "Eliminar",
+		"stop": "Detener"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Bloqueados",
 		"unblockButton": "Desbloquear",
 		"noBlocked": "No hay contactos bloqueados."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Recibidos ({{count}})",
+			"noInboxRequests": "No hay nuevas solicitudes de conversación de desconocidos.",
+			"chatsHeading": "Chats ({{count}})",
+			"noChatsYet": "Todavía no tienes ningún chat — abre una conversación desde el apodo de un contacto en la sección «{{contactsLabel}}».",
+			"unreadAria": "Sin leer: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Borrar conversación",
+			"recordingStatus": "Grabando mensaje de voz…",
+			"deleteRecordingButton": "Eliminar grabación",
+			"uploadingAttachment": "Subiendo adjunto…",
+			"attachFileAria": "Adjuntar archivo",
+			"attachFromStorageAria": "Adjuntar archivo desde el almacenamiento",
+			"recordVoiceAria": "Grabar mensaje de voz",
+			"messageLabel": "Mensaje",
+			"loadOlderButton": "Cargar mensajes anteriores",
+			"noMessagesYet": "Todavía no hay mensajes — ¡escribe el primero!",
+			"messageTooLong": "El mensaje es demasiado largo (máximo {{max}} caracteres)",
+			"clearHistoryConfirm": "¿Borrar la conversación? Los mensajes se eliminarán solo para ti — tu contacto conservará todo.",
+			"fileKeyNotFoundError": "No se encontró la clave del archivo — puede que el archivo aún no esté totalmente sincronizado.",
+			"sendAttachmentConfirm": "El archivo se enviará como adjunto — una vez enviado, la clave pasará al destinatario y no se puede deshacer. ¿Continuar?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "borrador",
+			"sending": "enviando…",
+			"sent": "enviado",
+			"read": "leído",
+			"failed": "no entregado",
+			"discarded": "descartado"
+		},
+		"deletedNotice": "Mensaje eliminado",
+		"editedLabel": "(editado)",
+		"editButton": "Editar",
+		"deleteForMeButton": "Eliminar para mí",
+		"deleteForBothButton": "Eliminar para todos"
+	},
+	"attachment": {
+		"audioLoadError": "No se pudo cargar el audio: {{error}}",
+		"loadingVoice": "Cargando mensaje de voz…",
+		"loadingAudio": "Cargando audio…",
+		"downloading": "Descargando…",
+		"download": "Descargar"
 	}
 }

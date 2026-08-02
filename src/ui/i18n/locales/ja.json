@@ -16,7 +16,8 @@
 		"rateLimitError": "早すぎます — 少しお待ちください",
 		"add": "追加",
 		"call": "通話",
-		"delete": "削除"
+		"delete": "削除",
+		"stop": "停止"
 	},
 	"nav": {
 		"journal": "ジャーナル",
@@ -284,5 +285,52 @@
 		"blockedSummary": "ブロック済み",
 		"unblockButton": "ブロック解除",
 		"noBlocked": "ブロックした連絡先はありません。"
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "受信箱（{{count}}）",
+			"noInboxRequests": "見知らぬ相手からの新しい会話リクエストはありません。",
+			"chatsHeading": "チャット（{{count}}）",
+			"noChatsYet": "まだチャットはありません — 「{{contactsLabel}}」セクションで連絡先のニックネームから会話を開始してください。",
+			"unreadAria": "未読: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "会話を消去",
+			"recordingStatus": "音声メッセージを録音中…",
+			"deleteRecordingButton": "録音を削除",
+			"uploadingAttachment": "添付ファイルをアップロード中…",
+			"attachFileAria": "ファイルを添付",
+			"attachFromStorageAria": "ストレージからファイルを添付",
+			"recordVoiceAria": "音声メッセージを録音",
+			"messageLabel": "メッセージ",
+			"loadOlderButton": "過去のメッセージを読み込む",
+			"noMessagesYet": "まだメッセージはありません — 最初のメッセージを書きましょう！",
+			"messageTooLong": "メッセージが長すぎます（最大 {{max}} 文字）",
+			"clearHistoryConfirm": "会話を消去しますか？ メッセージはあなた側だけで削除され、相手にはそのまま残ります。",
+			"fileKeyNotFoundError": "ファイルキーが見つかりません — ファイルがまだ完全に同期されていない可能性があります。",
+			"sendAttachmentConfirm": "ファイルは添付として送信されます — 送信後、鍵は相手に渡り、取り消せません。続けますか？"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "下書き",
+			"sending": "送信中…",
+			"sent": "送信済み",
+			"read": "既読",
+			"failed": "未達",
+			"discarded": "破棄済み"
+		},
+		"deletedNotice": "メッセージは削除されました",
+		"editedLabel": "（編集済み）",
+		"editButton": "編集",
+		"deleteForMeButton": "自分だけ削除",
+		"deleteForBothButton": "全員から削除"
+	},
+	"attachment": {
+		"audioLoadError": "音声を読み込めませんでした: {{error}}",
+		"loadingVoice": "音声メッセージを読み込み中…",
+		"loadingAudio": "音声を読み込み中…",
+		"downloading": "ダウンロード中…",
+		"download": "ダウンロード"
 	}
 }

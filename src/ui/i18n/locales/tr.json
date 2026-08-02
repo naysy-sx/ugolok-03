@@ -16,7 +16,8 @@
 		"rateLimitError": "Çok hızlı — lütfen biraz bekleyin",
 		"add": "Ekle",
 		"call": "Ara",
-		"delete": "Sil"
+		"delete": "Sil",
+		"stop": "Durdur"
 	},
 	"nav": {
 		"journal": "Günlük",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Engellenenler",
 		"unblockButton": "Engeli kaldır",
 		"noBlocked": "Engellenen kişi yok."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Gelen kutusu ({{count}})",
+			"noInboxRequests": "Yabancılardan yeni sohbet isteği yok.",
+			"chatsHeading": "Sohbetler ({{count}})",
+			"noChatsYet": "Henüz hiç sohbetiniz yok — «{{contactsLabel}}» bölümünde bir kişinin takma adından sohbet açın.",
+			"unreadAria": "Okunmamış: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Sohbeti temizle",
+			"recordingStatus": "Sesli mesaj kaydediliyor…",
+			"deleteRecordingButton": "Kaydı sil",
+			"uploadingAttachment": "Ek yükleniyor…",
+			"attachFileAria": "Dosya ekle",
+			"attachFromStorageAria": "Depodan dosya ekle",
+			"recordVoiceAria": "Sesli mesaj kaydet",
+			"messageLabel": "Mesaj",
+			"loadOlderButton": "Daha eski mesajları yükle",
+			"noMessagesYet": "Henüz mesaj yok — ilkini yazın!",
+			"messageTooLong": "Mesaj çok uzun (en fazla {{max}} karakter)",
+			"clearHistoryConfirm": "Sohbet temizlensin mi? Mesajlar yalnızca sizde silinir — kişideki her şey kalır.",
+			"fileKeyNotFoundError": "Dosya anahtarı bulunamadı — dosya henüz tam olarak senkronize edilmemiş olabilir.",
+			"sendAttachmentConfirm": "Dosya ek olarak gönderilecek — gönderildikten sonra anahtar alıcıya gider ve geri alınamaz. Devam edilsin mi?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "taslak",
+			"sending": "gönderiliyor…",
+			"sent": "gönderildi",
+			"read": "okundu",
+			"failed": "iletilmedi",
+			"discarded": "iptal edildi"
+		},
+		"deletedNotice": "Mesaj silindi",
+		"editedLabel": "(düzenlendi)",
+		"editButton": "Düzenle",
+		"deleteForMeButton": "Benden sil",
+		"deleteForBothButton": "Herkesten sil"
+	},
+	"attachment": {
+		"audioLoadError": "Ses yüklenemedi: {{error}}",
+		"loadingVoice": "Sesli mesaj yükleniyor…",
+		"loadingAudio": "Ses yükleniyor…",
+		"downloading": "İndiriliyor…",
+		"download": "İndir"
 	}
 }

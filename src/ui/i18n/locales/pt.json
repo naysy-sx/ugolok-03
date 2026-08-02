@@ -16,7 +16,8 @@
 		"rateLimitError": "Rápido demais — aguarde um momento",
 		"add": "Adicionar",
 		"call": "Ligar",
-		"delete": "Excluir"
+		"delete": "Excluir",
+		"stop": "Parar"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Bloqueados",
 		"unblockButton": "Desbloquear",
 		"noBlocked": "Nenhum contato bloqueado."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Recebidas ({{count}})",
+			"noInboxRequests": "Nenhuma nova solicitação de conversa de desconhecidos.",
+			"chatsHeading": "Conversas ({{count}})",
+			"noChatsYet": "Você ainda não tem nenhuma conversa — abra uma conversa pelo apelido de um contato na seção «{{contactsLabel}}».",
+			"unreadAria": "Não lidas: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Limpar conversa",
+			"recordingStatus": "Gravando mensagem de voz…",
+			"deleteRecordingButton": "Excluir gravação",
+			"uploadingAttachment": "Enviando anexo…",
+			"attachFileAria": "Anexar arquivo",
+			"attachFromStorageAria": "Anexar arquivo do armazenamento",
+			"recordVoiceAria": "Gravar mensagem de voz",
+			"messageLabel": "Mensagem",
+			"loadOlderButton": "Carregar mensagens mais antigas",
+			"noMessagesYet": "Ainda não há mensagens — escreva a primeira!",
+			"messageTooLong": "Mensagem muito longa (máximo de {{max}} caracteres)",
+			"clearHistoryConfirm": "Limpar a conversa? As mensagens serão excluídas apenas para você — seu contato manterá tudo.",
+			"fileKeyNotFoundError": "Chave do arquivo não encontrada — o arquivo pode ainda não estar totalmente sincronizado.",
+			"sendAttachmentConfirm": "O arquivo será enviado como anexo — após o envio, a chave irá para o destinatário e não poderá ser desfeita. Continuar?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "rascunho",
+			"sending": "enviando…",
+			"sent": "enviado",
+			"read": "lido",
+			"failed": "não entregue",
+			"discarded": "descartado"
+		},
+		"deletedNotice": "Mensagem excluída",
+		"editedLabel": "(editado)",
+		"editButton": "Editar",
+		"deleteForMeButton": "Excluir para mim",
+		"deleteForBothButton": "Excluir para todos"
+	},
+	"attachment": {
+		"audioLoadError": "Não foi possível carregar o áudio: {{error}}",
+		"loadingVoice": "Carregando mensagem de voz…",
+		"loadingAudio": "Carregando áudio…",
+		"downloading": "Baixando…",
+		"download": "Baixar"
 	}
 }

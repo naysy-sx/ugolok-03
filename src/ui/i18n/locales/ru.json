@@ -16,7 +16,8 @@
 		"rateLimitError": "Слишком быстро — подождите немного",
 		"add": "Добавить",
 		"call": "Позвонить",
-		"delete": "Удалить"
+		"delete": "Удалить",
+		"stop": "Остановить"
 	},
 	"nav": {
 		"journal": "Журнал",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Заблокированные",
 		"unblockButton": "Разблокировать",
 		"noBlocked": "Нет заблокированных."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Входящие ({{count}})",
+			"noInboxRequests": "Нет новых запросов на переписку от незнакомцев.",
+			"chatsHeading": "Чаты ({{count}})",
+			"noChatsYet": "Пока нет ни одного чата — откройте переписку по никнейму контакта в разделе «{{contactsLabel}}».",
+			"unreadAria": "Непрочитанных: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Очистить переписку",
+			"recordingStatus": "Идёт запись голосового…",
+			"deleteRecordingButton": "Удалить запись",
+			"uploadingAttachment": "Загрузка вложения…",
+			"attachFileAria": "Прикрепить файл",
+			"attachFromStorageAria": "Прикрепить файл из хранилища",
+			"recordVoiceAria": "Записать голосовое сообщение",
+			"messageLabel": "Сообщение",
+			"loadOlderButton": "Загрузить более старые сообщения",
+			"noMessagesYet": "Сообщений пока нет — напишите первое!",
+			"messageTooLong": "Сообщение слишком длинное (максимум {{max}} символов)",
+			"clearHistoryConfirm": "Очистить переписку? Сообщения удалятся только у вас, у собеседника всё останется.",
+			"fileKeyNotFoundError": "Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.",
+			"sendAttachmentConfirm": "Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "черновик",
+			"sending": "отправка…",
+			"sent": "отправлено",
+			"read": "прочитано",
+			"failed": "не доставлено",
+			"discarded": "отменено"
+		},
+		"deletedNotice": "Сообщение удалено",
+		"editedLabel": "(изменено)",
+		"editButton": "Редактировать",
+		"deleteForMeButton": "Удалить у себя",
+		"deleteForBothButton": "Удалить у обоих"
+	},
+	"attachment": {
+		"audioLoadError": "Не удалось загрузить аудио: {{error}}",
+		"loadingVoice": "Загрузка голосового…",
+		"loadingAudio": "Загрузка аудио…",
+		"downloading": "Скачивание…",
+		"download": "Скачать"
 	}
 }

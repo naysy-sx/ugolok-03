@@ -49,6 +49,7 @@ import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
+import { t } from "../signals/i18n.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
@@ -129,7 +130,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 	}
 
 	return (
-		<Screen title="Сообщения" feed>
+		<Screen title={t("nav.messages")} feed>
 			{/* "Соединение: ..." переехало в постоянную панель под главным меню
 			    (app.jsx, ConnectionStatusPanel) — видна на любом экране (пользователь,
 			    item 4). */}
@@ -145,9 +146,9 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 			)}
 
 			<section class="flow" aria-labelledby="inbox-heading" style={{ "--flow-space": "var(--space-s)" }}>
-				<h2 id="inbox-heading">Входящие ({inboxList.length})</h2>
+				<h2 id="inbox-heading">{t("chat.list.inboxHeading", { count: inboxList.length })}</h2>
 				{inboxList.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>Нет новых запросов на переписку от незнакомцев.</p>
+					<p style={{ color: "var(--muted)" }}>{t("chat.list.noInboxRequests")}</p>
 				) : (
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{inboxList.map((req) => (
@@ -164,10 +165,10 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 								<ContactIdentity pubkey={req.senderPubkey} />
 								<div class="cluster">
 									<button type="button" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
-										Принять
+										{t("contacts.acceptButton")}
 									</button>
 									<button type="button" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
-										Отклонить
+										{t("contacts.rejectButton")}
 									</button>
 								</div>
 							</li>
@@ -177,10 +178,10 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 			</section>
 
 			<section class="flow" aria-labelledby="chats-heading" style={{ "--flow-space": "var(--space-s)" }}>
-				<h2 id="chats-heading">Чаты ({chatPartners.length})</h2>
+				<h2 id="chats-heading">{t("chat.list.chatsHeading", { count: chatPartners.length })}</h2>
 				{chatPartners.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>
-						Пока нет ни одного чата — откройте переписку по никнейму контакта в разделе "Контакты".
+						{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}
 					</p>
 				) : (
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
@@ -192,7 +193,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 								<button
 									type="button"
 									onClick={() => openChat(pubkey)}
-									aria-label={`Открыть чат с ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}
+									aria-label={t("contacts.openChatAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}
 									class="cluster"
 									style={{
 										alignItems: "center",
@@ -209,7 +210,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 									<ContactIdentity pubkey={pubkey} />
 									{unreadByPartner[pubkey] > 0 && (
 										<span
-											aria-label={`Непрочитанных: ${unreadByPartner[pubkey]}`}
+											aria-label={t("chat.list.unreadAria", { count: unreadByPartner[pubkey] })}
 											style={{
 												background: "var(--bad, oklch(0.58 0.21 25))",
 												color: "white",
@@ -427,12 +428,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		setAttachmentPickerOpen(false);
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
-		if (!window.confirm("Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?")) return;
+		if (!window.confirm(t("chat.window.sendAttachmentConfirm"))) return;
 		try {
 			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
-				setError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+				setError(t("chat.window.fileKeyNotFoundError"));
 				return;
 			}
 			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_SERVER_URL });
@@ -546,7 +547,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		if (text.length === 0 && !attachmentFile && !recordedVoiceBlob) return; // нечего отправлять
 		if (attachmentFile && attachmentError) return; // невалидное вложение — сначала убрать/заменить
 		if (text.length > MAX_MESSAGE_LENGTH) {
-			setError(`Сообщение слишком длинное (максимум ${MAX_MESSAGE_LENGTH} символов)`);
+			setError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
 			return;
 		}
 		busyRef.current = true;
@@ -620,7 +621,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	}
 
 	async function handleClearHistory() {
-		if (!window.confirm("Очистить переписку? Сообщения удалятся только у вас, у собеседника всё останется.")) return;
+		if (!window.confirm(t("chat.window.clearHistoryConfirm"))) return;
 		try {
 			await clearChatHistoryAction(ownerPubkey, contactPubkey);
 			await reloadWindow();
@@ -632,7 +633,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	async function handleEdit(msgId, newText) {
 		if (busyRef.current) return;
 		if (newText.length > MAX_MESSAGE_LENGTH) {
-			setError(`Сообщение слишком длинное (максимум ${MAX_MESSAGE_LENGTH} символов)`);
+			setError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
 			return;
 		}
 		busyRef.current = true;
@@ -654,15 +655,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 	return (
 		<Screen
-			breadcrumb={{ label: "Сообщения", onBack: () => openChat(null) }}
+			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
 			title={displayName}
 			actions={
 				<>
-					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={`Позвонить ${displayName}`}>
-						<IconPhoneCall /> Позвонить
+					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
+						<IconPhoneCall /> {t("common.call")}
 					</button>
 					<button type="button" onClick={handleClearHistory}>
-						<IconEraser /> Очистить переписку
+						<IconEraser /> {t("chat.window.clearHistoryButton")}
 					</button>
 				</>
 			}
@@ -681,12 +682,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 					{recordingState === "recording" && (
 						<p class="cluster recording-status" role="status">
-							<span class="recording-dot" aria-hidden="true" /> Идёт запись голосового…
+							<span class="recording-dot" aria-hidden="true" /> {t("chat.window.recordingStatus")}
 							<button type="button" onClick={handleStopRecording}>
-								<IconStop /> Остановить
+								<IconStop /> {t("common.stop")}
 							</button>
 							<button type="button" onClick={handleCancelRecording}>
-								<IconCross /> Отменить
+								<IconCross /> {t("contacts.cancelRequestButton")}
 							</button>
 						</p>
 					)}
@@ -695,14 +696,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<p class="cluster recording-status">
 							<audio controls src={recordedVoiceUrl} />
 							<button type="button" onClick={handleDiscardRecordedVoice}>
-								<IconCross /> Удалить запись
+								<IconCross /> {t("chat.window.deleteRecordingButton")}
 							</button>
 						</p>
 					)}
 
 					{uploadingAttachment && (
 						<p class="cluster recording-status" role="status">
-							<span class="spinner" aria-hidden="true" /> Загрузка вложения…
+							<span class="spinner" aria-hidden="true" /> {t("chat.window.uploadingAttachment")}
 						</p>
 					)}
 
@@ -713,7 +714,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							class="message-compose-tool-btn"
 							onClick={() => fileInputRef.current?.click()}
 							disabled={recordingState !== "idle"}
-							aria-label="Прикрепить файл"
+							aria-label={t("chat.window.attachFileAria")}
 						>
 							<IconPaperclip />
 						</button>
@@ -722,7 +723,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							class="message-compose-tool-btn"
 							onClick={() => setAttachmentPickerOpen(true)}
 							disabled={recordingState !== "idle"}
-							aria-label="Прикрепить файл из хранилища"
+							aria-label={t("chat.window.attachFromStorageAria")}
 						>
 							<IconFolder />
 						</button>
@@ -731,12 +732,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							class="message-compose-tool-btn"
 							onClick={handleStartRecording}
 							disabled={recordingState !== "idle" || !!attachmentFile}
-							aria-label="Записать голосовое сообщение"
+							aria-label={t("chat.window.recordVoiceAria")}
 						>
 							<IconMicrophone />
 						</button>
 						<label class="visually-hidden" for="chat-message-input">
-							Сообщение
+							{t("chat.window.messageLabel")}
 						</label>
 						<textarea
 							id="chat-message-input"
@@ -750,7 +751,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							type="submit"
 							class="message-compose-send-btn"
 							disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
-							aria-label="Отправить"
+							aria-label={t("common.send")}
 						>
 							<IconSend />
 						</button>
@@ -765,10 +766,10 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			)}
 			{hasMore && (
 				<button type="button" onClick={handleLoadMore}>
-					Загрузить более старые сообщения
+					{t("chat.window.loadOlderButton")}
 				</button>
 			)}
-			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>Сообщений пока нет — напишите первое!</p>}
+			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>{t("chat.window.noMessagesYet")}</p>}
 			<div class="message-list">
 				{messages.map((message) => {
 					const isOwn = message.senderPubkey === ownerPubkey;

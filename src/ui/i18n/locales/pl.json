@@ -16,7 +16,8 @@
 		"rateLimitError": "Zbyt szybko — poczekaj chwilę",
 		"add": "Dodaj",
 		"call": "Zadzwoń",
-		"delete": "Usuń"
+		"delete": "Usuń",
+		"stop": "Zatrzymaj"
 	},
 	"nav": {
 		"journal": "Dziennik",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Zablokowani",
 		"unblockButton": "Odblokuj",
 		"noBlocked": "Brak zablokowanych kontaktów."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Odebrane ({{count}})",
+			"noInboxRequests": "Brak nowych próśb o rozmowę od nieznajomych.",
+			"chatsHeading": "Czaty ({{count}})",
+			"noChatsYet": "Nie masz jeszcze żadnego czatu — otwórz rozmowę z poziomu pseudonimu kontaktu w sekcji „{{contactsLabel}}”.",
+			"unreadAria": "Nieprzeczytane: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Wyczyść rozmowę",
+			"recordingStatus": "Nagrywanie wiadomości głosowej…",
+			"deleteRecordingButton": "Usuń nagranie",
+			"uploadingAttachment": "Przesyłanie załącznika…",
+			"attachFileAria": "Załącz plik",
+			"attachFromStorageAria": "Załącz plik z magazynu",
+			"recordVoiceAria": "Nagraj wiadomość głosową",
+			"messageLabel": "Wiadomość",
+			"loadOlderButton": "Wczytaj starsze wiadomości",
+			"noMessagesYet": "Jeszcze brak wiadomości — napisz pierwszą!",
+			"messageTooLong": "Wiadomość jest zbyt długa (maksymalnie {{max}} znaków)",
+			"clearHistoryConfirm": "Wyczyścić rozmowę? Wiadomości zostaną usunięte tylko u Ciebie — Twój rozmówca zachowa wszystko.",
+			"fileKeyNotFoundError": "Nie znaleziono klucza pliku — plik mógł jeszcze nie zostać w pełni zsynchronizowany.",
+			"sendAttachmentConfirm": "Plik zostanie wysłany jako załącznik — po wysłaniu klucz trafi do odbiorcy i nie da się tego cofnąć. Kontynuować?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "szkic",
+			"sending": "wysyłanie…",
+			"sent": "wysłano",
+			"read": "przeczytano",
+			"failed": "niedostarczono",
+			"discarded": "odrzucono"
+		},
+		"deletedNotice": "Wiadomość usunięta",
+		"editedLabel": "(edytowano)",
+		"editButton": "Edytuj",
+		"deleteForMeButton": "Usuń u mnie",
+		"deleteForBothButton": "Usuń u wszystkich"
+	},
+	"attachment": {
+		"audioLoadError": "Nie udało się wczytać dźwięku: {{error}}",
+		"loadingVoice": "Wczytywanie wiadomości głosowej…",
+		"loadingAudio": "Wczytywanie dźwięku…",
+		"downloading": "Pobieranie…",
+		"download": "Pobierz"
 	}
 }

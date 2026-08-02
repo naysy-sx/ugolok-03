@@ -1,20 +1,21 @@
 import { useState } from "preact/hooks";
 import AttachmentView, { AttachmentDownloadLink } from "./attachment-view.jsx";
+import { t, currentLocale } from "../signals/i18n.js";
 
-const STATUS_LABELS = {
-	created: "черновик",
-	sending: "отправка…",
-	sent: "отправлено",
-	read: "прочитано",
-	failed: "не доставлено",
-	discarded: "отменено",
+const STATUS_LABEL_KEYS = {
+	created: "message.status.created",
+	sending: "message.status.sending",
+	sent: "message.status.sent",
+	read: "message.status.read",
+	failed: "message.status.failed",
+	discarded: "message.status.discarded",
 };
 
 // sentAt (этап 29) — wall-clock время отправки, ОТСУТСТВУЕТ у сообщений старого формата
 // (до этого этапа) — тогда просто не показываем метку, не 'Invalid Date'.
 function formatTimestamp(sentAt) {
 	if (typeof sentAt !== "number") return null;
-	return new Date(sentAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+	return new Date(sentAt * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
 // "Удалить у обоих"/"Редактировать" технически возможны ТОЛЬКО для своих сообщений
@@ -35,12 +36,12 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	if (message.deleted) {
 		return (
 			<div class={`${bubbleClass} message-bubble-deleted`}>
-				<p>Сообщение удалено</p>
+				<p>{t("message.deletedNotice")}</p>
 			</div>
 		);
 	}
 
-	const statusLabel = STATUS_LABELS[message.status];
+	const statusLabel = STATUS_LABEL_KEYS[message.status] ? t(STATUS_LABEL_KEYS[message.status]) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
 	// position (F-AT-02, CONTRACTS.md этап 29) — ТОЛЬКО для type==="image"; остальные
 	// типы вложений всегда рендерятся под текстом (переключатель им не показывается).
@@ -61,7 +62,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 							onEdit(message.msgId, editText);
 						}}
 					>
-						Сохранить
+						{t("common.save")}
 					</button>
 					<button
 						type="button"
@@ -70,7 +71,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 							setEditText(message.text);
 						}}
 					>
-						Отмена
+						{t("common.cancel")}
 					</button>
 				</footer>
 			</div>
@@ -85,18 +86,18 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 			<footer class="cluster message-bubble-meta" style={{ alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}
 				{isOwn && statusLabel && <small>{statusLabel}</small>}
-				{message.edited && <small>(изменено)</small>}
+				{message.edited && <small>{t("message.editedLabel")}</small>}
 				{mode !== "confirming-delete" && (
 					<>
 						{isOwn && typeof onEdit === "function" && (
 							<button type="button" onClick={() => setMode("editing")}>
-								Редактировать
+								{t("message.editButton")}
 							</button>
 						)}
 						{attachment && <AttachmentDownloadLink attachment={attachment} />}
 						{typeof onDeleteForMe === "function" && (
 							<button type="button" onClick={() => setMode("confirming-delete")}>
-								Удалить
+								{t("common.delete")}
 							</button>
 						)}
 					</>
@@ -110,7 +111,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 								onDeleteForMe(message.msgId);
 							}}
 						>
-							Удалить у себя
+							{t("message.deleteForMeButton")}
 						</button>
 						{isOwn && typeof onDeleteForBoth === "function" && (
 							<button
@@ -120,11 +121,11 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 									onDeleteForBoth(message.msgId);
 								}}
 							>
-								Удалить у обоих
+								{t("message.deleteForBothButton")}
 							</button>
 						)}
 						<button type="button" onClick={() => setMode(null)}>
-							Отмена
+							{t("common.cancel")}
 						</button>
 					</>
 				)}

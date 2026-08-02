@@ -16,7 +16,8 @@
 		"rateLimitError": "Zu schnell — bitte einen Moment warten",
 		"add": "Hinzufügen",
 		"call": "Anrufen",
-		"delete": "Löschen"
+		"delete": "Löschen",
+		"stop": "Stoppen"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Blockiert",
 		"unblockButton": "Entsperren",
 		"noBlocked": "Keine blockierten Kontakte."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Eingang ({{count}})",
+			"noInboxRequests": "Keine neuen Gesprächsanfragen von Unbekannten.",
+			"chatsHeading": "Chats ({{count}})",
+			"noChatsYet": "Sie haben noch keinen Chat — öffnen Sie ein Gespräch über den Spitznamen eines Kontakts im Bereich „{{contactsLabel}}“.",
+			"unreadAria": "Ungelesen: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Verlauf löschen",
+			"recordingStatus": "Sprachnachricht wird aufgenommen…",
+			"deleteRecordingButton": "Aufnahme löschen",
+			"uploadingAttachment": "Anhang wird hochgeladen…",
+			"attachFileAria": "Datei anhängen",
+			"attachFromStorageAria": "Datei aus dem Speicher anhängen",
+			"recordVoiceAria": "Sprachnachricht aufnehmen",
+			"messageLabel": "Nachricht",
+			"loadOlderButton": "Ältere Nachrichten laden",
+			"noMessagesYet": "Noch keine Nachrichten — schreiben Sie die erste!",
+			"messageTooLong": "Die Nachricht ist zu lang (maximal {{max}} Zeichen)",
+			"clearHistoryConfirm": "Verlauf löschen? Nachrichten werden nur bei Ihnen gelöscht — Ihr Kontakt behält alles.",
+			"fileKeyNotFoundError": "Dateischlüssel nicht gefunden — die Datei ist möglicherweise noch nicht vollständig synchronisiert.",
+			"sendAttachmentConfirm": "Die Datei wird als Anhang gesendet — nach dem Senden geht der Schlüssel an den Empfänger und kann nicht rückgängig gemacht werden. Fortfahren?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "Entwurf",
+			"sending": "wird gesendet…",
+			"sent": "gesendet",
+			"read": "gelesen",
+			"failed": "nicht zugestellt",
+			"discarded": "verworfen"
+		},
+		"deletedNotice": "Nachricht gelöscht",
+		"editedLabel": "(bearbeitet)",
+		"editButton": "Bearbeiten",
+		"deleteForMeButton": "Für mich löschen",
+		"deleteForBothButton": "Für alle löschen"
+	},
+	"attachment": {
+		"audioLoadError": "Audio konnte nicht geladen werden: {{error}}",
+		"loadingVoice": "Sprachnachricht wird geladen…",
+		"loadingAudio": "Audio wird geladen…",
+		"downloading": "Wird heruntergeladen…",
+		"download": "Herunterladen"
 	}
 }

@@ -16,7 +16,8 @@
 		"rateLimitError": "Trop rapide — veuillez patienter un instant",
 		"add": "Ajouter",
 		"call": "Appeler",
-		"delete": "Supprimer"
+		"delete": "Supprimer",
+		"stop": "Arrêter"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Bloqués",
 		"unblockButton": "Débloquer",
 		"noBlocked": "Aucun contact bloqué."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Reçus ({{count}})",
+			"noInboxRequests": "Aucune nouvelle demande de conversation d'inconnus.",
+			"chatsHeading": "Discussions ({{count}})",
+			"noChatsYet": "Vous n'avez encore aucune discussion — ouvrez une conversation depuis le pseudo d'un contact dans la section « {{contactsLabel}} ».",
+			"unreadAria": "Non lus : {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Effacer la conversation",
+			"recordingStatus": "Enregistrement du message vocal…",
+			"deleteRecordingButton": "Supprimer l'enregistrement",
+			"uploadingAttachment": "Envoi de la pièce jointe…",
+			"attachFileAria": "Joindre un fichier",
+			"attachFromStorageAria": "Joindre un fichier depuis le stockage",
+			"recordVoiceAria": "Enregistrer un message vocal",
+			"messageLabel": "Message",
+			"loadOlderButton": "Charger les messages plus anciens",
+			"noMessagesYet": "Pas encore de messages — écrivez le premier !",
+			"messageTooLong": "Le message est trop long (maximum {{max}} caractères)",
+			"clearHistoryConfirm": "Effacer la conversation ? Les messages seront supprimés uniquement chez vous — votre contact gardera tout.",
+			"fileKeyNotFoundError": "Clé du fichier introuvable — le fichier n'est peut-être pas encore entièrement synchronisé.",
+			"sendAttachmentConfirm": "Le fichier sera envoyé en pièce jointe — une fois envoyée, la clé sera transmise au destinataire et cela ne pourra pas être annulé. Continuer ?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "brouillon",
+			"sending": "envoi…",
+			"sent": "envoyé",
+			"read": "lu",
+			"failed": "non distribué",
+			"discarded": "abandonné"
+		},
+		"deletedNotice": "Message supprimé",
+		"editedLabel": "(modifié)",
+		"editButton": "Modifier",
+		"deleteForMeButton": "Supprimer pour moi",
+		"deleteForBothButton": "Supprimer pour tout le monde"
+	},
+	"attachment": {
+		"audioLoadError": "Impossible de charger l'audio : {{error}}",
+		"loadingVoice": "Chargement du message vocal…",
+		"loadingAudio": "Chargement de l'audio…",
+		"downloading": "Téléchargement…",
+		"download": "Télécharger"
 	}
 }

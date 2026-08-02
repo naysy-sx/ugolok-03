@@ -16,7 +16,8 @@
 		"rateLimitError": "Too fast — please wait a moment",
 		"add": "Add",
 		"call": "Call",
-		"delete": "Delete"
+		"delete": "Delete",
+		"stop": "Stop"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -284,5 +285,52 @@
 		"blockedSummary": "Blocked",
 		"unblockButton": "Unblock",
 		"noBlocked": "No blocked contacts."
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "Inbox ({{count}})",
+			"noInboxRequests": "No new conversation requests from strangers.",
+			"chatsHeading": "Chats ({{count}})",
+			"noChatsYet": "You don't have any chats yet — open a conversation from a contact's nickname in the «{{contactsLabel}}» section.",
+			"unreadAria": "Unread: {{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "Clear history",
+			"recordingStatus": "Recording voice message…",
+			"deleteRecordingButton": "Delete recording",
+			"uploadingAttachment": "Uploading attachment…",
+			"attachFileAria": "Attach a file",
+			"attachFromStorageAria": "Attach a file from storage",
+			"recordVoiceAria": "Record a voice message",
+			"messageLabel": "Message",
+			"loadOlderButton": "Load older messages",
+			"noMessagesYet": "No messages yet — write the first one!",
+			"messageTooLong": "Message is too long (maximum {{max}} characters)",
+			"clearHistoryConfirm": "Clear the conversation? Messages will be deleted only for you — your contact will keep everything.",
+			"fileKeyNotFoundError": "File key not found — the file may not be fully synced yet.",
+			"sendAttachmentConfirm": "The file will be sent as an attachment — once sent, the key goes to the recipient and can't be undone. Continue?"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "draft",
+			"sending": "sending…",
+			"sent": "sent",
+			"read": "read",
+			"failed": "not delivered",
+			"discarded": "discarded"
+		},
+		"deletedNotice": "Message deleted",
+		"editedLabel": "(edited)",
+		"editButton": "Edit",
+		"deleteForMeButton": "Delete for me",
+		"deleteForBothButton": "Delete for everyone"
+	},
+	"attachment": {
+		"audioLoadError": "Failed to load audio: {{error}}",
+		"loadingVoice": "Loading voice message…",
+		"loadingAudio": "Loading audio…",
+		"downloading": "Downloading…",
+		"download": "Download"
 	}
 }

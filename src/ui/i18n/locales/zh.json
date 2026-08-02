@@ -16,7 +16,8 @@
 		"rateLimitError": "太快了——请稍等片刻",
 		"add": "添加",
 		"call": "呼叫",
-		"delete": "删除"
+		"delete": "删除",
+		"stop": "停止"
 	},
 	"nav": {
 		"journal": "动态",
@@ -284,5 +285,52 @@
 		"blockedSummary": "已屏蔽",
 		"unblockButton": "取消屏蔽",
 		"noBlocked": "没有已屏蔽的联系人。"
+	},
+	"chat": {
+		"list": {
+			"inboxHeading": "收件箱（{{count}}）",
+			"noInboxRequests": "没有来自陌生人的新聊天请求。",
+			"chatsHeading": "聊天（{{count}}）",
+			"noChatsYet": "您还没有任何聊天——请从“{{contactsLabel}}”部分的联系人昵称开始对话。",
+			"unreadAria": "未读：{{count}}"
+		},
+		"window": {
+			"clearHistoryButton": "清空聊天记录",
+			"recordingStatus": "正在录制语音消息…",
+			"deleteRecordingButton": "删除录音",
+			"uploadingAttachment": "正在上传附件…",
+			"attachFileAria": "添加附件",
+			"attachFromStorageAria": "从存储中添加附件",
+			"recordVoiceAria": "录制语音消息",
+			"messageLabel": "消息",
+			"loadOlderButton": "加载更早的消息",
+			"noMessagesYet": "暂无消息——写下第一条吧！",
+			"messageTooLong": "消息过长（最多 {{max}} 个字符）",
+			"clearHistoryConfirm": "清空聊天记录？消息仅会从您这里删除——对方仍会保留全部内容。",
+			"fileKeyNotFoundError": "未找到文件密钥——该文件可能尚未完全同步。",
+			"sendAttachmentConfirm": "文件将作为附件发送——发送后密钥将交给接收方，无法撤销。是否继续？"
+		}
+	},
+	"message": {
+		"status": {
+			"created": "草稿",
+			"sending": "发送中…",
+			"sent": "已发送",
+			"read": "已读",
+			"failed": "未送达",
+			"discarded": "已放弃"
+		},
+		"deletedNotice": "消息已删除",
+		"editedLabel": "（已编辑）",
+		"editButton": "编辑",
+		"deleteForMeButton": "仅对我删除",
+		"deleteForBothButton": "对所有人删除"
+	},
+	"attachment": {
+		"audioLoadError": "无法加载音频：{{error}}",
+		"loadingVoice": "正在加载语音消息…",
+		"loadingAudio": "正在加载音频…",
+		"downloading": "下载中…",
+		"download": "下载"
 	}
 }
