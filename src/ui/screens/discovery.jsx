@@ -15,6 +15,7 @@ import { discoveryProfiles, refreshDiscoveryProfiles } from "../signals/discover
 import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import Screen from "../components/screen.jsx";
+import { t } from "../signals/i18n.js";
 
 // Раздел "Обзор" (этап 46, CONTRACTS.md/DESIGN.md) — публичное знакомство: тумблер
 // видимости + опциональный список СВОИХ каналов сверху, карточки чужих
@@ -97,14 +98,14 @@ export default function Discovery() {
 
 	if (!settings) {
 		return (
-			<Screen title="Обзор">
-				<p style={{ color: "var(--muted)" }}>Загрузка…</p>
+			<Screen title={t("nav.discovery")}>
+				<p style={{ color: "var(--muted)" }}>{t("common.loading")}</p>
 			</Screen>
 		);
 	}
 
 	return (
-		<Screen title="Обзор">
+		<Screen title={t("nav.discovery")}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -114,7 +115,7 @@ export default function Discovery() {
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
 				<label class="cluster" style={{ alignItems: "center" }}>
 					<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
-					Показывать меня в обзоре
+					{t("discovery.showMeToggle")}
 				</label>
 
 				{settings.visible && (
@@ -125,14 +126,14 @@ export default function Discovery() {
 								checked={settings.showChannels}
 								onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
 							/>
-							Показывать список моих каналов
+							{t("discovery.showChannelsToggle")}
 						</label>
 
 						{settings.showChannels && (
 							<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>
-								<legend>Какие каналы показывать</legend>
+								<legend>{t("discovery.whichChannelsLegend")}</legend>
 								{ownedChannels.length === 0 ? (
-									<p style={{ color: "var(--muted)" }}>У вас пока нет своих каналов.</p>
+									<p style={{ color: "var(--muted)" }}>{t("discovery.noOwnChannels")}</p>
 								) : (
 									ownedChannels.map((c) => (
 										<label key={c.id} class="cluster" style={{ alignItems: "center" }}>
@@ -159,9 +160,9 @@ export default function Discovery() {
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Хотят познакомиться</h2>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("discovery.wantToMeetTitle")}</h2>
 				{discoveryProfiles.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>Пока никого не видно.</p>
+					<p style={{ color: "var(--muted)" }}>{t("discovery.noOneVisible")}</p>
 				) : (
 					<div class="grid-auto" style={{ gap: "var(--space-s)" }}>
 						{discoveryProfiles.value.map((card) => {
@@ -183,7 +184,7 @@ export default function Discovery() {
 										disabled={busy}
 										onClick={() => handleToggleCard(card.pubkey)}
 										aria-pressed={sent}
-										aria-label={sent ? "Отменить заявку на знакомство" : "Отправить заявку на знакомство"}
+										aria-label={sent ? t("discovery.cancelRequestAria") : t("discovery.sendRequestAria")}
 										style={{
 											position: "absolute",
 											top: "var(--space-2xs)",

@@ -19,6 +19,7 @@ import { activeChannelId, openChannel } from "../signals/channel-nav.js";
 import ChannelDetail from "./channel.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
+import { t, currentLocale } from "../signals/i18n.js";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -27,7 +28,7 @@ const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function formatUpdatedDate(unixSeconds) {
 	if (typeof unixSeconds !== "number") return null;
-	return new Date(unixSeconds * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
+	return new Date(unixSeconds * 1000).toLocaleDateString(currentLocale.value, { day: "2-digit", month: "long", year: "numeric" });
 }
 
 // Найдено пользователем: "аватары каналов в списке каналов не отображаются" —
@@ -80,14 +81,14 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link">
 				<ChannelAvatarThumb channel={channel} />
 				<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<strong>{channel.name || "(без названия)"}</strong>
+					<strong>{channel.name || t("channels.card.untitled")}</strong>
 					{channel.description && <small>{channel.description}</small>}
-					{updated && <small class="channel-card-updated">Обновлено {updated}</small>}
+					{updated && <small class="channel-card-updated">{t("channels.card.updated", { date: updated })}</small>}
 				</span>
 			</button>
 			{showSubscribe && (
 				<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
-					Подписаться
+					{t("channels.card.subscribeButton")}
 				</button>
 			)}
 		</li>
@@ -176,7 +177,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 
 	return (
 		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-s)", border: "var(--border-width) solid var(--border)", padding: "var(--space-m)", borderRadius: "var(--radius)" }}>
-			<h2>Создать канал</h2>
+			<h2>{t("channels.create.title")}</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -184,7 +185,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			)}
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for={`${instanceId}-name`}>Название канала</label>
+				<label for={`${instanceId}-name`}>{t("channels.create.nameLabel")}</label>
 				<input
 					id={`${instanceId}-name`}
 					type="text"
@@ -196,7 +197,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for={`${instanceId}-description`}>Описание</label>
+				<label for={`${instanceId}-description`}>{t("channels.create.descriptionLabel")}</label>
 				<textarea
 					id={`${instanceId}-description`}
 					value={description}
@@ -207,7 +208,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for={`${instanceId}-rules`}>Правила канала</label>
+				<label for={`${instanceId}-rules`}>{t("channels.create.rulesLabel")}</label>
 				<textarea
 					id={`${instanceId}-rules`}
 					value={rules}
@@ -218,7 +219,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for={`${instanceId}-avatar`}>Аватар канала</label>
+				<label for={`${instanceId}-avatar`}>{t("channels.create.avatarLabel")}</label>
 				<input id={`${instanceId}-avatar`} type="file" accept="image/*" onChange={handleAvatarSelected} />
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
@@ -230,16 +231,16 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 					checked={allowChatAttachments}
 					onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)}
 				/>
-				<label for={`${instanceId}-allow-chat-attachments`}>Разрешить вложения в общем чате канала</label>
+				<label for={`${instanceId}-allow-chat-attachments`}>{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
 
 			<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>
-				<legend>Видимость по группам контактов</legend>
+				<legend>{t("channels.create.visibilityLegend")}</legend>
 				<p style={{ color: "var(--muted)" }}>
-					Канал увидят участники отмеченных групп. Если не отметить ни одной — канал останется только у вас (заметочник).
+					{t("channels.create.visibilityHint")}
 				</p>
 				{groups.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>Групп контактов пока нет.</p>
+					<p style={{ color: "var(--muted)" }}>{t("channels.create.noGroups")}</p>
 				) : (
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{groups.value.map((g) => (
@@ -252,7 +253,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 										onChange={() => toggleGroup(g.id)}
 									/>
 									<label for={`${instanceId}-group-${g.id}`}>
-										{g.name} ({g.memberPubkeys.length})
+										{t("channels.create.groupWithCount", { name: g.name, count: g.memberPubkeys.length })}
 									</label>
 								</span>
 							</li>
@@ -263,10 +264,10 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 
 			<div class="cluster">
 				<button type="submit" disabled={busy || name.length === 0}>
-					{busy ? "Создание…" : "Создать"}
+					{busy ? t("channels.create.submitting") : t("common.create")}
 				</button>
 				<button type="button" onClick={onCancel} disabled={busy}>
-					Отмена
+					{t("common.cancel")}
 				</button>
 			</div>
 		</form>
@@ -315,11 +316,11 @@ function ChannelsList() {
 
 	return (
 		<Screen
-			title="Каналы"
+			title={t("nav.channels")}
 			actions={
 				!showCreateForm && (
 					<button type="button" onClick={() => setShowCreateForm(true)}>
-						<IconPlus /> Создать канал
+						<IconPlus /> {t("channels.createChannelButton")}
 					</button>
 				)
 			}
@@ -349,19 +350,19 @@ function ChannelsList() {
 			<div class="channels-layout">
 				<div class="channels-main">
 					<section class="channels-block">
-						<h2>Мои каналы ({owned.length})</h2>
-						<ChannelList channels={owned} emptyText="У вас пока нет каналов." onOpen={openChannel} />
+						<h2>{t("channels.list.myChannelsTitle", { count: owned.length })}</h2>
+						<ChannelList channels={owned} emptyText={t("channels.list.myChannelsEmpty")} onOpen={openChannel} />
 					</section>
 					<section class="channels-block">
-						<h2>Подписки ({subscribed.length})</h2>
-						<ChannelList channels={subscribed} emptyText="Вы пока ни на что не подписаны." onOpen={openChannel} />
+						<h2>{t("channels.list.subscriptionsTitle", { count: subscribed.length })}</h2>
+						<ChannelList channels={subscribed} emptyText={t("channels.list.subscriptionsEmpty")} onOpen={openChannel} />
 					</section>
 				</div>
-				<aside class="channels-aside" aria-label="Доступные каналы">
-					<h2>Доступные ({available.length})</h2>
+				<aside class="channels-aside" aria-label={t("channels.list.availableAriaLabel")}>
+					<h2>{t("channels.list.availableTitle", { count: available.length })}</h2>
 					<ChannelList
 						channels={available}
-						emptyText="Нет доступных каналов."
+						emptyText={t("channels.list.availableEmpty")}
 						showSubscribe
 						onSubscribe={handleSubscribe}
 						onOpen={openChannel}

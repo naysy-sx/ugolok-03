@@ -40,3 +40,28 @@ export function t(key, vars) {
 	}
 	return interpolate(value, vars);
 }
+
+const PLURAL_RULES_CACHE = {};
+function getPluralRules(locale) {
+	if (!PLURAL_RULES_CACHE[locale]) PLURAL_RULES_CACHE[locale] = new Intl.PluralRules(locale);
+	return PLURAL_RULES_CACHE[locale];
+}
+
+// Ключ -> объект CLDR-категорий ({one, few, many, other, ...}), не готовая
+// строка (см. i18n locale-файлы, узел "repliesCount" и т.п.) — русский/
+// польский различают one/few/many/other, большинство языков — только
+// one/other, часть (ja/zh) не различают вовсе (везде "other"). Категория
+// выбирается Intl.PluralRules(locale) — правильные CLDR-правила для КАЖДОГО
+// языка "из коробки", без ручного переноса грамматики (см. CONTRACTS.md,
+// этап 64: pluralizeReplies было единственной ad-hoc реализацией на весь
+// проект, только под русский — заменено на generic-механизм).
+export function tPlural(key, count, vars) {
+	const category = getPluralRules(currentLocale.value).select(count);
+	const node = lookup(DICTIONARIES[currentLocale.value], key) ?? lookup(DICTIONARIES[DEFAULT_LOCALE], key);
+	if (node === undefined || typeof node !== "object") {
+		console.warn(`i18n: отсутствует перевод для ключа множественного числа "${key}"`);
+		return key;
+	}
+	const template = node[category] ?? node.other;
+	return interpolate(template, { count, ...vars });
+}

@@ -7,7 +7,13 @@
 		"continue": "继续",
 		"cancel": "取消",
 		"save": "保存",
-		"confirm": "确认"
+		"confirm": "确认",
+		"forward": "前进",
+		"loading": "加载中…",
+		"create": "创建",
+		"saving": "保存中…",
+		"send": "发送",
+		"rateLimitError": "太快了——请稍等片刻"
 	},
 	"nav": {
 		"journal": "动态",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "此屏幕正在开发中"
+	},
+	"journal": {
+		"selectDate": "选择日期",
+		"jumpToDate": "跳转到日期",
+		"markAllRead": "标记为已读",
+		"empty": "目前还没有发生任何事情——通知将显示在这里。",
+		"unreadDot": "未读",
+		"pagerAriaLabel": "日志页面",
+		"pageStatus": "第 {{current}} 页，共 {{total}} 页",
+		"category": {
+			"messages": "消息",
+			"channels": "频道",
+			"replies": "回复",
+			"contacts": "联系人",
+			"calls": "通话",
+			"moderation": "管理",
+			"inbox": "陌生人"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "在发现中显示我",
+		"showChannelsToggle": "显示我的频道列表",
+		"whichChannelsLegend": "显示哪些频道",
+		"noOwnChannels": "您还没有自己的频道。",
+		"wantToMeetTitle": "想要认识你",
+		"noOneVisible": "暂时还没有人可见。",
+		"cancelRequestAria": "取消联系人请求",
+		"sendRequestAria": "发送联系人请求"
+	},
+	"channels": {
+		"createChannelButton": "创建频道",
+		"card": {
+			"untitled": "（无标题）",
+			"updated": "更新于 {{date}}",
+			"subscribeButton": "订阅"
+		},
+		"create": {
+			"title": "创建频道",
+			"nameLabel": "频道名称",
+			"descriptionLabel": "描述",
+			"rulesLabel": "频道规则",
+			"avatarLabel": "频道头像",
+			"allowChatAttachmentsLabel": "允许在频道公共聊天中发送附件",
+			"visibilityLegend": "按联系人分组设置可见性",
+			"visibilityHint": "已勾选分组的成员将能看到该频道。如果一个都不勾选，该频道将只属于你自己（记事本）。",
+			"noGroups": "您还没有联系人分组。",
+			"submitting": "正在创建…",
+			"groupWithCount": "{{name}}（{{count}}）"
+		},
+		"list": {
+			"myChannelsTitle": "我的频道（{{count}}）",
+			"myChannelsEmpty": "您还没有任何频道。",
+			"subscriptionsTitle": "订阅（{{count}}）",
+			"subscriptionsEmpty": "您还没有订阅任何内容。",
+			"availableAriaLabel": "可用频道",
+			"availableTitle": "可用（{{count}}）",
+			"availableEmpty": "没有可用的频道。"
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "更改头像",
+			"deleteButton": "删除频道",
+			"deleteConfirm": "删除频道“{{name}}”？此操作不可撤销——该频道将从所有订阅者处消失。"
+		},
+		"composer": {
+			"newPostTitle": "新帖子",
+			"postTextLabel": "帖子内容",
+			"attachButton": "添加附件",
+			"publishingButton": "发布中…",
+			"publishButton": "发布"
+		},
+		"commentComposer": {
+			"ariaLabel": "新评论",
+			"label": "评论",
+			"placeholder": "写评论…",
+			"attachAria": "添加附件",
+			"sendingButton": "发送中…"
+		},
+		"comment": {
+			"authorBadge": "作者",
+			"replyButton": "回复",
+			"moreActionsAria": "对 {{name}} 的更多操作"
+		},
+		"repliesCount": {
+			"one": "{{count}} 条回复",
+			"few": "{{count}} 条回复",
+			"many": "{{count}} 条回复",
+			"other": "{{count}} 条回复"
+		},
+		"threadLabel": "话题 · {{count}}",
+		"readOnlyNotice": "只读——订阅后才能评论。",
+		"commentsTitle": "评论",
+		"noComments": "暂无评论。",
+		"deletePostConfirm": "删除这条帖子？此操作不可撤销。",
+		"defaultTitle": "频道",
+		"unavailableTitle": "频道不可用",
+		"unavailableMessage": "该频道已不可用——所有者可能已将您封禁或删除了该频道。",
+		"tabsAriaLabel": "频道分区",
+		"tabs": {
+			"posts": "帖子",
+			"chat": "聊天",
+			"moderation": "管理",
+			"editChannelWithName": "编辑频道“{{name}}”"
+		},
+		"writePostButton": "撰写帖子",
+		"loadOlderButton": "加载更早的帖子",
+		"noPosts": "该频道还没有帖子。"
 	}
 }

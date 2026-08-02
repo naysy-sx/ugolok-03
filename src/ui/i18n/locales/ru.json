@@ -7,7 +7,13 @@
 		"continue": "Продолжить",
 		"cancel": "Отмена",
 		"save": "Сохранить",
-		"confirm": "Подтвердить"
+		"confirm": "Подтвердить",
+		"forward": "Вперёд",
+		"loading": "Загрузка…",
+		"create": "Создать",
+		"saving": "Сохранение…",
+		"send": "Отправить",
+		"rateLimitError": "Слишком быстро — подождите немного"
 	},
 	"nav": {
 		"journal": "Журнал",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Экран в разработке"
+	},
+	"journal": {
+		"selectDate": "Выбрать дату",
+		"jumpToDate": "Перейти к дате",
+		"markAllRead": "Отметить прочитанным",
+		"empty": "Пока ничего не произошло — здесь будут появляться уведомления.",
+		"unreadDot": "непрочитано",
+		"pagerAriaLabel": "Страницы журнала",
+		"pageStatus": "Страница {{current}} из {{total}}",
+		"category": {
+			"messages": "Сообщение",
+			"channels": "Канал",
+			"replies": "Ответ",
+			"contacts": "Контакты",
+			"calls": "Звонок",
+			"moderation": "Модерация",
+			"inbox": "Незнакомец"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Показывать меня в обзоре",
+		"showChannelsToggle": "Показывать список моих каналов",
+		"whichChannelsLegend": "Какие каналы показывать",
+		"noOwnChannels": "У вас пока нет своих каналов.",
+		"wantToMeetTitle": "Хотят познакомиться",
+		"noOneVisible": "Пока никого не видно.",
+		"cancelRequestAria": "Отменить заявку на знакомство",
+		"sendRequestAria": "Отправить заявку на знакомство"
+	},
+	"channels": {
+		"createChannelButton": "Создать канал",
+		"card": {
+			"untitled": "(без названия)",
+			"updated": "Обновлено {{date}}",
+			"subscribeButton": "Подписаться"
+		},
+		"create": {
+			"title": "Создать канал",
+			"nameLabel": "Название канала",
+			"descriptionLabel": "Описание",
+			"rulesLabel": "Правила канала",
+			"avatarLabel": "Аватар канала",
+			"allowChatAttachmentsLabel": "Разрешить вложения в общем чате канала",
+			"visibilityLegend": "Видимость по группам контактов",
+			"visibilityHint": "Канал увидят участники отмеченных групп. Если не отметить ни одной — канал останется только у вас (заметочник).",
+			"noGroups": "Групп контактов пока нет.",
+			"submitting": "Создание…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Мои каналы ({{count}})",
+			"myChannelsEmpty": "У вас пока нет каналов.",
+			"subscriptionsTitle": "Подписки ({{count}})",
+			"subscriptionsEmpty": "Вы пока ни на что не подписаны.",
+			"availableAriaLabel": "Доступные каналы",
+			"availableTitle": "Доступные ({{count}})",
+			"availableEmpty": "Нет доступных каналов."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Сменить аватар",
+			"deleteButton": "Удалить канал",
+			"deleteConfirm": "Удалить канал «{{name}}»? Действие необратимо — канал исчезнет у всех подписчиков."
+		},
+		"composer": {
+			"newPostTitle": "Новый пост",
+			"postTextLabel": "Текст поста",
+			"attachButton": "Прикрепить",
+			"publishingButton": "Публикация…",
+			"publishButton": "Опубликовать"
+		},
+		"commentComposer": {
+			"ariaLabel": "Новый комментарий",
+			"label": "Комментарий",
+			"placeholder": "Написать комментарий…",
+			"attachAria": "Прикрепить файл",
+			"sendingButton": "Отправка…"
+		},
+		"comment": {
+			"authorBadge": "автор",
+			"replyButton": "Ответить",
+			"moreActionsAria": "Ещё действия для {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} ответ",
+			"few": "{{count}} ответа",
+			"many": "{{count}} ответов",
+			"other": "{{count}} ответа"
+		},
+		"threadLabel": "ветка · {{count}}",
+		"readOnlyNotice": "Только чтение — подпишитесь, чтобы комментировать.",
+		"commentsTitle": "Комментарии",
+		"noComments": "Пока нет комментариев.",
+		"deletePostConfirm": "Удалить пост? Действие необратимо.",
+		"defaultTitle": "Канал",
+		"unavailableTitle": "Канал недоступен",
+		"unavailableMessage": "Этот канал больше недоступен — возможно, владелец забанил вас или удалил канал.",
+		"tabsAriaLabel": "Разделы канала",
+		"tabs": {
+			"posts": "Посты",
+			"chat": "Чат",
+			"moderation": "Модерация",
+			"editChannelWithName": "Редактировать канал «{{name}}»"
+		},
+		"writePostButton": "Написать пост",
+		"loadOlderButton": "Загрузить более старые посты",
+		"noPosts": "В этом канале пока нет постов."
 	}
 }

@@ -32,6 +32,7 @@ import IconPencil from "../icons/pencil.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import IconSend from "../icons/send.jsx";
 import IconCross from "../icons/cross.jsx";
+import { t, tPlural } from "../signals/i18n.js";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -49,15 +50,6 @@ const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 function commentAuthorInfo(pubkey) {
 	const profile = profiles.value[pubkey];
 	return { name: profile?.name || shortPubkey(pubkey), avatar: profile?.picture };
-}
-
-// "ветка · N ответов" — русское склонение (1 ответ, 2-4 ответа, 5+ ответов).
-function pluralizeReplies(n) {
-	const mod10 = n % 10;
-	const mod100 = n % 100;
-	if (mod10 === 1 && mod100 !== 11) return `${n} ответ`;
-	if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} ответа`;
-	return `${n} ответов`;
 }
 
 // Этап 50-довесок-2 (найдено пользователем: канал нельзя было отредактировать/
@@ -109,7 +101,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 
 	async function handleDelete() {
 		if (busy) return;
-		if (!window.confirm(`Удалить канал «${channelRow.name}»? Действие необратимо — канал исчезнет у всех подписчиков.`)) return;
+		if (!window.confirm(t("channel.settings.deleteConfirm", { name: channelRow.name }))) return;
 		setBusy(true);
 		setError("");
 		try {
@@ -130,43 +122,43 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			)}
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for="edit-channel-name">Название канала</label>
+				<label for="edit-channel-name">{t("channels.create.nameLabel")}</label>
 				<input id="edit-channel-name" type="text" value={name} maxLength={NAME_MAX_LENGTH} onInput={(e) => setName(e.currentTarget.value)} required />
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for="edit-channel-description">Описание</label>
+				<label for="edit-channel-description">{t("channels.create.descriptionLabel")}</label>
 				<textarea id="edit-channel-description" value={description} maxLength={DESCRIPTION_MAX_LENGTH} onInput={(e) => setDescription(e.currentTarget.value)} rows={3} />
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for="edit-channel-rules">Правила канала</label>
+				<label for="edit-channel-rules">{t("channels.create.rulesLabel")}</label>
 				<textarea id="edit-channel-rules" value={rules} maxLength={RULES_MAX_LENGTH} onInput={(e) => setRules(e.currentTarget.value)} rows={4} />
 			</div>
 
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<label for="edit-channel-avatar">Сменить аватар</label>
+				<label for="edit-channel-avatar">{t("channel.settings.changeAvatarLabel")}</label>
 				<input id="edit-channel-avatar" type="file" accept="image/*" onChange={handleAvatarSelected} />
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
 			<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
 				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
-				<label for="edit-channel-allow-chat-attachments">Разрешить вложения в общем чате канала</label>
+				<label for="edit-channel-allow-chat-attachments">{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
 
 			<div class="cluster">
 				<button type="submit" disabled={busy || name.length === 0}>
-					{busy ? "Сохранение…" : "Сохранить"}
+					{busy ? t("common.saving") : t("common.save")}
 				</button>
 				<button type="button" onClick={onSaved} disabled={busy}>
-					Отмена
+					{t("common.cancel")}
 				</button>
 			</div>
 
 			<div style={{ paddingBlockStart: "var(--space-m)", borderBlockStart: "var(--border-width) solid var(--border)" }}>
 				<button type="button" class="btn--ghost btn--danger" disabled={busy} onClick={handleDelete}>
-					<IconTrash /> Удалить канал
+					<IconTrash /> {t("channel.settings.deleteButton")}
 				</button>
 			</div>
 		</form>
@@ -184,7 +176,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
 		if (!limiter.tryAction("post")) {
-			setError("Слишком быстро — подождите немного");
+			setError(t("common.rateLimitError"));
 			return;
 		}
 		setBusy(true);
@@ -206,14 +198,14 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 
 	return (
 		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-3xs)", border: "var(--border-width) solid var(--border)", padding: "var(--space-m)", borderRadius: "var(--radius)" }}>
-			<h2>Новый пост</h2>
+			<h2>{t("channel.composer.newPostTitle")}</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 			<label class="visually-hidden" for="post-text">
-				Текст поста
+				{t("channel.composer.postTextLabel")}
 			</label>
 			<textarea id="post-text" class="post-text-field" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={10} />
 			{attachment.file && (
@@ -222,13 +214,13 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 			<div class="cluster">
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
 				<button type="button" onClick={() => attachment.inputRef.current?.click()}>
-					<IconPaperclip /> Прикрепить
+					<IconPaperclip /> {t("channel.composer.attachButton")}
 				</button>
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					<IconSend /> {busy ? "Публикация…" : "Опубликовать"}
+					<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 				</button>
 				<button type="button" onClick={onCancel} disabled={busy}>
-					<IconCross /> Отмена
+					<IconCross /> {t("common.cancel")}
 				</button>
 			</div>
 		</form>
@@ -246,7 +238,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
 		if (!limiter.tryAction("comment")) {
-			setError("Слишком быстро — подождите немного");
+			setError(t("common.rateLimitError"));
 			return;
 		}
 		setBusy(true);
@@ -266,14 +258,14 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	}
 
 	return (
-		<form class="composer" onSubmit={handleSubmit} aria-label="Новый комментарий">
+		<form class="composer" onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 			<label class="visually-hidden" for={`comment-text-${parentId}`}>
-				Комментарий
+				{t("channel.commentComposer.label")}
 			</label>
 			<textarea
 				class="input comment-text-field"
@@ -282,7 +274,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 				maxLength={COMMENT_MAX_LENGTH}
 				onInput={(e) => setText(e.currentTarget.value)}
 				rows={2}
-				placeholder="Написать комментарий…"
+				placeholder={t("channel.commentComposer.placeholder")}
 				autoFocus={autoFocus}
 			/>
 			{attachment.file && (
@@ -290,16 +282,16 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 			)}
 			<div class="composer__row">
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label="Прикрепить файл">
+				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
 					<IconPaperclip />
 				</button>
 				<span class="grow" />
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					{busy ? "Отправка…" : "Отправить"}
+					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
 				</button>
 				{onCancel && (
 					<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
-						Отмена
+						{t("common.cancel")}
 					</button>
 				)}
 			</div>
@@ -326,7 +318,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 				)}
 				<div class="cmt__head">
 					<span class="cmt__name">{author.name}</span>
-					{isOP && <span class="cmt__op">автор</span>}
+					{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 					<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
 				</div>
 				<p class="cmt__text">{comment.text}</p>
@@ -338,11 +330,11 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 				<div class="cmt__actions">
 					{canComment && (
 						<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
-							<IconChatBubble /> Ответить
+							<IconChatBubble /> {t("channel.comment.replyButton")}
 						</button>
 					)}
 					{!isOwnComment && (
-						<ActionsMenu label={`Ещё действия для ${author.name}`}>
+						<ActionsMenu label={t("channel.comment.moreActionsAria", { name: author.name })}>
 							<ModerationActions
 								viewerPubkey={ownerPubkey}
 								viewerPrivKey={privKey}
@@ -383,7 +375,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 				<details class="thread" open>
 					<summary>
 						<IconChevronRight class="icon thread__chev" aria-hidden="true" />
-						ветка · {pluralizeReplies(comment.replies.length)}
+						{t("channel.threadLabel", { count: tPlural("channel.repliesCount", comment.replies.length) })}
 					</summary>
 					<ul role="list" class="cmt-list">
 						{comment.replies.map((reply) => (
@@ -497,7 +489,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {
-					if (window.confirm("Удалить пост? Действие необратимо.")) runAction(() => deletePost(ownerPubkey, privKey, post.id, publish));
+					if (window.confirm(t("channel.deletePostConfirm"))) runAction(() => deletePost(ownerPubkey, privKey, post.id, publish));
 				}}
 			/>
 			{error && (
@@ -519,11 +511,11 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 							onSubmitted={refreshComments}
 						/>
 					) : (
-						<p style={{ color: "var(--muted)" }}>Только чтение — подпишитесь, чтобы комментировать.</p>
+						<p style={{ color: "var(--muted)" }}>{t("channel.readOnlyNotice")}</p>
 					)}
-					<h3 class="section-label">Комментарии</h3>
+					<h3 class="section-label">{t("channel.commentsTitle")}</h3>
 					{tree.length === 0 ? (
-						<p style={{ color: "var(--muted)" }}>Пока нет комментариев.</p>
+						<p style={{ color: "var(--muted)" }}>{t("channel.noComments")}</p>
 					) : (
 						<ul role="list" class="cmt-list">
 							{tree.map((c) => (
@@ -632,8 +624,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	if (loading) {
 		return (
-			<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title="Канал">
-				<p style={{ color: "var(--muted)" }}>Загрузка…</p>
+			<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={t("channel.defaultTitle")}>
+				<p style={{ color: "var(--muted)" }}>{t("common.loading")}</p>
 			</Screen>
 		);
 	}
@@ -643,9 +635,9 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// этого пользователя (receiveBanAnnouncement удаляет строку channels целиком).
 	if (!channelRow) {
 		return (
-			<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title="Канал недоступен">
+			<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={t("channel.unavailableTitle")}>
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					Этот канал больше недоступен — возможно, владелец забанил вас или удалил канал.
+					{t("channel.unavailableMessage")}
 				</p>
 			</Screen>
 		);
@@ -655,12 +647,12 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const canComment = channelRow.role === "owner" || channelRow.role === "subscriber";
 
 	return (
-		<Screen breadcrumb={{ label: "Каналы", onBack: () => openChannel(null) }} title={channelRow.name || "(без названия)"}>
+		<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={channelRow.name || t("channels.card.untitled")}>
 			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details class="req">
 					<summary>
-						Правила канала
+						{t("channels.create.rulesLabel")}
 						<IconChevronRight class="icon req__chev" aria-hidden="true" />
 					</summary>
 					<p class="req__body" style={{ whiteSpace: "pre-wrap" }}>
@@ -674,21 +666,21 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				</p>
 			)}
 
-			<nav class="tabs" aria-label="Разделы канала">
+			<nav class="tabs" aria-label={t("channel.tabsAriaLabel")}>
 				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
-					Посты
+					{t("channel.tabs.posts")}
 				</button>
 				<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
-					Чат
+					{t("channel.tabs.chat")}
 				</button>
 				{isOwner && (
 					<button type="button" class="tab" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
-						Модерация
+						{t("channel.tabs.moderation")}
 					</button>
 				)}
 				{isOwner && (
 					<button type="button" class="tab" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
-						Редактировать канал «{channelRow.name || "(без названия)"}»
+						{t("channel.tabs.editChannelWithName", { name: channelRow.name || t("channels.card.untitled") })}
 					</button>
 				)}
 			</nav>
@@ -714,7 +706,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>
 					{isOwner && !showComposer && (
 						<button type="button" class="channel-post-cta" onClick={() => setShowComposer(true)}>
-							<IconPencil /> Написать пост
+							<IconPencil /> {t("channel.writePostButton")}
 						</button>
 					)}
 					{isOwner && showComposer && (
@@ -734,11 +726,11 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 					{hasMore && (
 						<button type="button" onClick={handleLoadMore}>
-							Загрузить более старые посты
+							{t("channel.loadOlderButton")}
 						</button>
 					)}
 					{posts.length === 0 ? (
-						<p style={{ color: "var(--muted)" }}>В этом канале пока нет постов.</p>
+						<p style={{ color: "var(--muted)" }}>{t("channel.noPosts")}</p>
 					) : (
 						<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
 							{[...posts].reverse().map((post) => (

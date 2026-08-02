@@ -7,7 +7,13 @@
 		"continue": "Doorgaan",
 		"cancel": "Annuleren",
 		"save": "Opslaan",
-		"confirm": "Bevestigen"
+		"confirm": "Bevestigen",
+		"forward": "Vooruit",
+		"loading": "Laden…",
+		"create": "Aanmaken",
+		"saving": "Opslaan…",
+		"send": "Verzenden",
+		"rateLimitError": "Te snel — wacht even"
 	},
 	"nav": {
 		"journal": "Journaal",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Scherm in ontwikkeling"
+	},
+	"journal": {
+		"selectDate": "Datum kiezen",
+		"jumpToDate": "Naar datum gaan",
+		"markAllRead": "Als gelezen markeren",
+		"empty": "Er is nog niets gebeurd — hier verschijnen meldingen.",
+		"unreadDot": "ongelezen",
+		"pagerAriaLabel": "Journaalpagina's",
+		"pageStatus": "Pagina {{current}} van {{total}}",
+		"category": {
+			"messages": "Bericht",
+			"channels": "Kanaal",
+			"replies": "Antwoord",
+			"contacts": "Contacten",
+			"calls": "Oproep",
+			"moderation": "Moderatie",
+			"inbox": "Onbekende"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Mij tonen in ontdekken",
+		"showChannelsToggle": "Mijn lijst met kanalen tonen",
+		"whichChannelsLegend": "Welke kanalen tonen",
+		"noOwnChannels": "Je hebt nog geen eigen kanalen.",
+		"wantToMeetTitle": "Willen kennismaken",
+		"noOneVisible": "Nog niemand zichtbaar.",
+		"cancelRequestAria": "Contactverzoek annuleren",
+		"sendRequestAria": "Contactverzoek versturen"
+	},
+	"channels": {
+		"createChannelButton": "Kanaal aanmaken",
+		"card": {
+			"untitled": "(naamloos)",
+			"updated": "Bijgewerkt {{date}}",
+			"subscribeButton": "Abonneren"
+		},
+		"create": {
+			"title": "Kanaal aanmaken",
+			"nameLabel": "Kanaalnaam",
+			"descriptionLabel": "Beschrijving",
+			"rulesLabel": "Kanaalregels",
+			"avatarLabel": "Kanaalavatar",
+			"allowChatAttachmentsLabel": "Bijlagen toestaan in de gedeelde chat van het kanaal",
+			"visibilityLegend": "Zichtbaarheid per contactgroep",
+			"visibilityHint": "Leden van de aangevinkte groepen zien het kanaal. Vink je er geen aan, dan blijft het kanaal alleen bij jou (notitieboekje).",
+			"noGroups": "Je hebt nog geen contactgroepen.",
+			"submitting": "Bezig met aanmaken…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Mijn kanalen ({{count}})",
+			"myChannelsEmpty": "Je hebt nog geen kanalen.",
+			"subscriptionsTitle": "Abonnementen ({{count}})",
+			"subscriptionsEmpty": "Je bent nog nergens op geabonneerd.",
+			"availableAriaLabel": "Beschikbare kanalen",
+			"availableTitle": "Beschikbaar ({{count}})",
+			"availableEmpty": "Geen beschikbare kanalen."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Avatar wijzigen",
+			"deleteButton": "Kanaal verwijderen",
+			"deleteConfirm": "Kanaal ‘{{name}}’ verwijderen? Onomkeerbaar — het kanaal verdwijnt voor alle abonnees."
+		},
+		"composer": {
+			"newPostTitle": "Nieuw bericht",
+			"postTextLabel": "Berichttekst",
+			"attachButton": "Bijvoegen",
+			"publishingButton": "Publiceren…",
+			"publishButton": "Publiceren"
+		},
+		"commentComposer": {
+			"ariaLabel": "Nieuwe reactie",
+			"label": "Reactie",
+			"placeholder": "Schrijf een reactie…",
+			"attachAria": "Bestand bijvoegen",
+			"sendingButton": "Verzenden…"
+		},
+		"comment": {
+			"authorBadge": "auteur",
+			"replyButton": "Reageren",
+			"moreActionsAria": "Meer acties voor {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} reactie",
+			"few": "{{count}} reacties",
+			"many": "{{count}} reacties",
+			"other": "{{count}} reacties"
+		},
+		"threadLabel": "thread · {{count}}",
+		"readOnlyNotice": "Alleen-lezen — abonneer om te reageren.",
+		"commentsTitle": "Reacties",
+		"noComments": "Nog geen reacties.",
+		"deletePostConfirm": "Dit bericht verwijderen? Onomkeerbaar.",
+		"defaultTitle": "Kanaal",
+		"unavailableTitle": "Kanaal niet beschikbaar",
+		"unavailableMessage": "Dit kanaal is niet meer beschikbaar — de eigenaar heeft je mogelijk geband of het kanaal verwijderd.",
+		"tabsAriaLabel": "Kanaalonderdelen",
+		"tabs": {
+			"posts": "Berichten",
+			"chat": "Chat",
+			"moderation": "Moderatie",
+			"editChannelWithName": "Kanaal ‘{{name}}’ bewerken"
+		},
+		"writePostButton": "Bericht schrijven",
+		"loadOlderButton": "Oudere berichten laden",
+		"noPosts": "Dit kanaal heeft nog geen berichten."
 	}
 }

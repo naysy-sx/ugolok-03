@@ -7,7 +7,13 @@
 		"continue": "続ける",
 		"cancel": "キャンセル",
 		"save": "保存",
-		"confirm": "確認"
+		"confirm": "確認",
+		"forward": "次へ",
+		"loading": "読み込み中…",
+		"create": "作成",
+		"saving": "保存中…",
+		"send": "送信",
+		"rateLimitError": "早すぎます — 少しお待ちください"
 	},
 	"nav": {
 		"journal": "ジャーナル",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "この画面は開発中です"
+	},
+	"journal": {
+		"selectDate": "日付を選択",
+		"jumpToDate": "日付に移動",
+		"markAllRead": "既読にする",
+		"empty": "まだ何も起きていません — ここに通知が表示されます。",
+		"unreadDot": "未読",
+		"pagerAriaLabel": "ジャーナルのページ",
+		"pageStatus": "{{current}} / {{total}} ページ",
+		"category": {
+			"messages": "メッセージ",
+			"channels": "チャンネル",
+			"replies": "返信",
+			"contacts": "連絡先",
+			"calls": "通話",
+			"moderation": "モデレーション",
+			"inbox": "未知のユーザー"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "発見に自分を表示する",
+		"showChannelsToggle": "自分のチャンネル一覧を表示する",
+		"whichChannelsLegend": "表示するチャンネル",
+		"noOwnChannels": "まだ自分のチャンネルがありません。",
+		"wantToMeetTitle": "知り合いたい人たち",
+		"noOneVisible": "まだ誰も表示されていません。",
+		"cancelRequestAria": "つながりリクエストを取り消す",
+		"sendRequestAria": "つながりリクエストを送る"
+	},
+	"channels": {
+		"createChannelButton": "チャンネルを作成",
+		"card": {
+			"untitled": "（無題）",
+			"updated": "{{date}} に更新",
+			"subscribeButton": "登録する"
+		},
+		"create": {
+			"title": "チャンネルを作成",
+			"nameLabel": "チャンネル名",
+			"descriptionLabel": "説明",
+			"rulesLabel": "チャンネルのルール",
+			"avatarLabel": "チャンネルのアバター",
+			"allowChatAttachmentsLabel": "チャンネルの共通チャットで添付ファイルを許可する",
+			"visibilityLegend": "連絡先グループによる公開範囲",
+			"visibilityHint": "チェックしたグループのメンバーがこのチャンネルを見られます。何もチェックしない場合、チャンネルは自分専用（メモ帳）になります。",
+			"noGroups": "連絡先グループはまだありません。",
+			"submitting": "作成中…",
+			"groupWithCount": "{{name}}（{{count}}）"
+		},
+		"list": {
+			"myChannelsTitle": "自分のチャンネル（{{count}}）",
+			"myChannelsEmpty": "まだチャンネルがありません。",
+			"subscriptionsTitle": "登録中（{{count}}）",
+			"subscriptionsEmpty": "まだ何も登録していません。",
+			"availableAriaLabel": "利用可能なチャンネル",
+			"availableTitle": "利用可能（{{count}}）",
+			"availableEmpty": "利用可能なチャンネルはありません。"
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "アバターを変更",
+			"deleteButton": "チャンネルを削除",
+			"deleteConfirm": "チャンネル「{{name}}」を削除しますか？ この操作は取り消せません — チャンネルはすべての購読者から消えます。"
+		},
+		"composer": {
+			"newPostTitle": "新しい投稿",
+			"postTextLabel": "投稿本文",
+			"attachButton": "添付",
+			"publishingButton": "公開中…",
+			"publishButton": "公開する"
+		},
+		"commentComposer": {
+			"ariaLabel": "新しいコメント",
+			"label": "コメント",
+			"placeholder": "コメントを書く…",
+			"attachAria": "ファイルを添付",
+			"sendingButton": "送信中…"
+		},
+		"comment": {
+			"authorBadge": "投稿者",
+			"replyButton": "返信",
+			"moreActionsAria": "{{name}} へのその他の操作"
+		},
+		"repliesCount": {
+			"one": "{{count}} 件の返信",
+			"few": "{{count}} 件の返信",
+			"many": "{{count}} 件の返信",
+			"other": "{{count}} 件の返信"
+		},
+		"threadLabel": "スレッド · {{count}}",
+		"readOnlyNotice": "閲覧のみ — コメントするには登録してください。",
+		"commentsTitle": "コメント",
+		"noComments": "まだコメントはありません。",
+		"deletePostConfirm": "この投稿を削除しますか？ この操作は取り消せません。",
+		"defaultTitle": "チャンネル",
+		"unavailableTitle": "チャンネルは利用できません",
+		"unavailableMessage": "このチャンネルはもう利用できません — オーナーがあなたをBANしたか、チャンネルを削除した可能性があります。",
+		"tabsAriaLabel": "チャンネルのセクション",
+		"tabs": {
+			"posts": "投稿",
+			"chat": "チャット",
+			"moderation": "モデレーション",
+			"editChannelWithName": "チャンネル「{{name}}」を編集"
+		},
+		"writePostButton": "投稿を書く",
+		"loadOlderButton": "過去の投稿を読み込む",
+		"noPosts": "このチャンネルにはまだ投稿がありません。"
 	}
 }

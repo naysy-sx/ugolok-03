@@ -13,6 +13,7 @@ import IconPerson from "../icons/person.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconChevronLeft from "../icons/chevron-left.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
+import { t, currentLocale } from "../signals/i18n.js";
 
 // Этап 50 (CONTACTS-FSM.md §7) — категория -> подпись + иконка + оттенок
 // чипа (VISUAL.md v2, Claude Opus: "разные типы записи узнаются по цвету
@@ -20,14 +21,18 @@ import IconChevronRight from "../icons/chevron-right.jsx";
 // (акцент) для прямого личного контакта (сообщения/звонки), draught
 // (акцент-компаньон) для социального/обратной связи (ответы/контакты),
 // bad для модерации (предупреждающий смысл), muted для остального.
+//
+// Этап 64 — labelKey (не готовый текст), переводится t(meta.labelKey) В
+// РЕНДЕРЕ (не здесь — это модульная константа, вычисляется один раз при
+// импорте, реактивности на смену языка тут нет).
 const CATEGORY_META = {
-	messages: { label: "Сообщение", Icon: IconEnvelopeClosed, tone: "lamp" },
-	channels: { label: "Канал", Icon: IconReader, tone: "muted" },
-	replies: { label: "Ответ", Icon: IconChatBubble, tone: "draught" },
-	contacts: { label: "Контакты", Icon: IconPeople, tone: "draught" },
-	calls: { label: "Звонок", Icon: IconPhoneCall, tone: "lamp" },
-	moderation: { label: "Модерация", Icon: IconLockClosed, tone: "bad" },
-	inbox: { label: "Незнакомец", Icon: IconPerson, tone: "muted" },
+	messages: { labelKey: "journal.category.messages", Icon: IconEnvelopeClosed, tone: "lamp" },
+	channels: { labelKey: "journal.category.channels", Icon: IconReader, tone: "muted" },
+	replies: { labelKey: "journal.category.replies", Icon: IconChatBubble, tone: "draught" },
+	contacts: { labelKey: "journal.category.contacts", Icon: IconPeople, tone: "draught" },
+	calls: { labelKey: "journal.category.calls", Icon: IconPhoneCall, tone: "lamp" },
+	moderation: { labelKey: "journal.category.moderation", Icon: IconLockClosed, tone: "bad" },
+	inbox: { labelKey: "journal.category.inbox", Icon: IconPerson, tone: "muted" },
 };
 
 // Этап 50-довесок-N (пользователь, живая проверка пагинации подтверждена —
@@ -37,7 +42,7 @@ const PAGE_SIZE = 15;
 // Только время — дата уже вынесена в заголовок группы дня (jgroup__date),
 // повторять её в каждой строке избыточно (VISUAL.md v2: .jtime "21:16").
 function formatEntryTime(ms) {
-	return new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+	return new Date(ms).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
 // Ключ календарного дня в ЛОКАЛЬНОМ времени (не UTC) — обязан совпадать с тем,
@@ -50,7 +55,7 @@ function dayKey(ms) {
 }
 
 function formatDaySeparator(ms) {
-	return new Date(ms).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
+	return new Date(ms).toLocaleDateString(currentLocale.value, { day: "2-digit", month: "long", year: "numeric" });
 }
 
 // Список отсортирован по occurredAt по убыванию (journal.js) — переход к дате
@@ -134,7 +139,7 @@ export default function Journal() {
 
 	return (
 		<Screen
-			title="Журнал"
+			title={t("nav.journal")}
 			actions={
 				<>
 					{oldestDay && (
@@ -143,20 +148,20 @@ export default function Journal() {
 							    рисуется системная иконка календаря самого <input
 							    type="date">, две подряд — лишнее), вместо нёё —
 							    информативная текстовая подпись. */}
-							<span aria-hidden="true">Выбрать дату</span>
-							<span class="visually-hidden">Перейти к дате</span>
+							<span aria-hidden="true">{t("journal.selectDate")}</span>
+							<span class="visually-hidden">{t("journal.jumpToDate")}</span>
 							<input type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
 						</label>
 					)}
 					<button type="button" disabled={!hasUnread} onClick={() => markAllRead(ownerPubkey, dbKey)}>
 						<IconCheck />
-						<span class="mark-txt">Отметить прочитанным</span>
+						<span class="mark-txt">{t("journal.markAllRead")}</span>
 					</button>
 				</>
 			}
 		>
 			{entries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>Пока ничего не произошло — здесь будут появляться уведомления.</p>
+				<p style={{ color: "var(--muted)" }}>{t("journal.empty")}</p>
 			) : (
 				<div class="journal">
 					{dayGroups.map((group) => (
@@ -166,22 +171,23 @@ export default function Journal() {
 							</h2>
 							<ol class="jfeed">
 								{group.entries.map((entry) => {
-									const meta = CATEGORY_META[entry.category] ?? { label: entry.category, Icon: IconPerson, tone: "muted" };
-									const Icon = meta.Icon;
+									const meta = CATEGORY_META[entry.category];
+									const Icon = meta?.Icon ?? IconPerson;
+									const categoryLabel = meta ? t(meta.labelKey) : entry.category;
 									return (
 										<li class="jitem" key={entry.id} data-read={entry.read || undefined}>
 											<button type="button" class="jitem__link" onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}>
-												<span class={`jtype jtype--${meta.tone}`} aria-hidden="true">
+												<span class={`jtype jtype--${meta?.tone ?? "muted"}`} aria-hidden="true">
 													<Icon />
 												</span>
 												<span class="jbody">
 													<span class="jtitle">{entry.title}</span>
 													{entry.body && <span class="jmeta">{entry.body}</span>}
-													<span class="jmeta">{meta.label}</span>
+													<span class="jmeta">{categoryLabel}</span>
 												</span>
 												<span class="jside">
 													<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
-													{!entry.read && <span class="jdot" aria-label="непрочитано" />}
+													{!entry.read && <span class="jdot" aria-label={t("journal.unreadDot")} />}
 												</span>
 											</button>
 										</li>
@@ -192,15 +198,15 @@ export default function Journal() {
 					))}
 
 					{totalPages > 1 && (
-						<nav class="pager" aria-label="Страницы журнала">
+						<nav class="pager" aria-label={t("journal.pagerAriaLabel")}>
 							<button type="button" class="btn btn--ghost" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>
-								<IconChevronLeft /> Назад
+								<IconChevronLeft /> {t("common.back")}
 							</button>
 							<span class="pager__status" aria-current="page">
-								Страница {clampedPage + 1} из {totalPages}
+								{t("journal.pageStatus", { current: clampedPage + 1, total: totalPages })}
 							</span>
 							<button type="button" class="btn btn--ghost" disabled={clampedPage >= totalPages - 1} onClick={() => setPage(clampedPage + 1)}>
-								Вперёд <IconChevronRight />
+								{t("common.forward")} <IconChevronRight />
 							</button>
 						</nav>
 					)}

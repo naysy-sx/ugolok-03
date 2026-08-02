@@ -7,7 +7,13 @@
 		"continue": "Devam et",
 		"cancel": "İptal",
 		"save": "Kaydet",
-		"confirm": "Onayla"
+		"confirm": "Onayla",
+		"forward": "İleri",
+		"loading": "Yükleniyor…",
+		"create": "Oluştur",
+		"saving": "Kaydediliyor…",
+		"send": "Gönder",
+		"rateLimitError": "Çok hızlı — lütfen biraz bekleyin"
 	},
 	"nav": {
 		"journal": "Günlük",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Bu ekran geliştirme aşamasında"
+	},
+	"journal": {
+		"selectDate": "Tarih seç",
+		"jumpToDate": "Tarihe git",
+		"markAllRead": "Okundu olarak işaretle",
+		"empty": "Henüz bir şey olmadı — bildirimler burada görünecek.",
+		"unreadDot": "okunmamış",
+		"pagerAriaLabel": "Günlük sayfaları",
+		"pageStatus": "Sayfa {{current}} / {{total}}",
+		"category": {
+			"messages": "Mesaj",
+			"channels": "Kanal",
+			"replies": "Yanıt",
+			"contacts": "Kişiler",
+			"calls": "Arama",
+			"moderation": "Moderasyon",
+			"inbox": "Yabancı"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Beni keşfette göster",
+		"showChannelsToggle": "Kanal listemi göster",
+		"whichChannelsLegend": "Hangi kanallar gösterilsin",
+		"noOwnChannels": "Henüz kendi kanalınız yok.",
+		"wantToMeetTitle": "Tanışmak istiyor",
+		"noOneVisible": "Henüz kimse görünmüyor.",
+		"cancelRequestAria": "Bağlantı isteğini iptal et",
+		"sendRequestAria": "Bağlantı isteği gönder"
+	},
+	"channels": {
+		"createChannelButton": "Kanal oluştur",
+		"card": {
+			"untitled": "(başlıksız)",
+			"updated": "{{date}} tarihinde güncellendi",
+			"subscribeButton": "Abone ol"
+		},
+		"create": {
+			"title": "Kanal oluştur",
+			"nameLabel": "Kanal adı",
+			"descriptionLabel": "Açıklama",
+			"rulesLabel": "Kanal kuralları",
+			"avatarLabel": "Kanal avatarı",
+			"allowChatAttachmentsLabel": "Kanalın ortak sohbetinde eklere izin ver",
+			"visibilityLegend": "Kişi gruplarına göre görünürlük",
+			"visibilityHint": "İşaretlenen grupların üyeleri kanalı görebilir. Hiçbiri işaretlenmezse kanal yalnızca sizde kalır (not defteri).",
+			"noGroups": "Henüz kişi grubunuz yok.",
+			"submitting": "Oluşturuluyor…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Kanallarım ({{count}})",
+			"myChannelsEmpty": "Henüz kanalınız yok.",
+			"subscriptionsTitle": "Abonelikler ({{count}})",
+			"subscriptionsEmpty": "Henüz hiçbir şeye abone değilsiniz.",
+			"availableAriaLabel": "Kullanılabilir kanallar",
+			"availableTitle": "Kullanılabilir ({{count}})",
+			"availableEmpty": "Kullanılabilir kanal yok."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Avatarı değiştir",
+			"deleteButton": "Kanalı sil",
+			"deleteConfirm": "«{{name}}» kanalı silinsin mi? Geri alınamaz — kanal tüm aboneler için kaybolur."
+		},
+		"composer": {
+			"newPostTitle": "Yeni gönderi",
+			"postTextLabel": "Gönderi metni",
+			"attachButton": "Ekle",
+			"publishingButton": "Yayınlanıyor…",
+			"publishButton": "Yayınla"
+		},
+		"commentComposer": {
+			"ariaLabel": "Yeni yorum",
+			"label": "Yorum",
+			"placeholder": "Bir yorum yazın…",
+			"attachAria": "Dosya ekle",
+			"sendingButton": "Gönderiliyor…"
+		},
+		"comment": {
+			"authorBadge": "yazar",
+			"replyButton": "Yanıtla",
+			"moreActionsAria": "{{name}} için diğer işlemler"
+		},
+		"repliesCount": {
+			"one": "{{count}} yanıt",
+			"few": "{{count}} yanıt",
+			"many": "{{count}} yanıt",
+			"other": "{{count}} yanıt"
+		},
+		"threadLabel": "konu · {{count}}",
+		"readOnlyNotice": "Salt okunur — yorum yapmak için abone olun.",
+		"commentsTitle": "Yorumlar",
+		"noComments": "Henüz yorum yok.",
+		"deletePostConfirm": "Bu gönderi silinsin mi? Geri alınamaz.",
+		"defaultTitle": "Kanal",
+		"unavailableTitle": "Kanal kullanılamıyor",
+		"unavailableMessage": "Bu kanal artık kullanılamıyor — sahibi sizi engellemiş veya kanalı silmiş olabilir.",
+		"tabsAriaLabel": "Kanal bölümleri",
+		"tabs": {
+			"posts": "Gönderiler",
+			"chat": "Sohbet",
+			"moderation": "Moderasyon",
+			"editChannelWithName": "«{{name}}» kanalını düzenle"
+		},
+		"writePostButton": "Gönderi yaz",
+		"loadOlderButton": "Daha eski gönderileri yükle",
+		"noPosts": "Bu kanalda henüz gönderi yok."
 	}
 }

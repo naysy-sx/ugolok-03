@@ -1,6 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE, currentLocale, detectSystemLocale, setLocale, t } from "../src/ui/signals/i18n.js";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE, currentLocale, detectSystemLocale, setLocale, t, tPlural } from "../src/ui/signals/i18n.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,6 +108,28 @@ test("все 12 файлов локализации имеют ИДЕНТИЧН�
 		assert.deepEqual(missing, [], `${file} не хватает ключей (относительно ${firstFile}): ${missing.join(", ")}`);
 		assert.deepEqual(extra, [], `${file} содержит лишние ключи (относительно ${firstFile}): ${extra.join(", ")}`);
 	}
+});
+
+test("tPlural(): выбирает правильную CLDR-категорию для русского (one/few/many)", () => {
+	setLocale("ru");
+	assert.equal(tPlural("channel.repliesCount", 1), "1 ответ");
+	assert.equal(tPlural("channel.repliesCount", 2), "2 ответа");
+	assert.equal(tPlural("channel.repliesCount", 5), "5 ответов");
+	assert.equal(tPlural("channel.repliesCount", 21), "21 ответ");
+});
+
+test("tPlural(): английский различает только one/other", () => {
+	setLocale("en");
+	assert.equal(tPlural("channel.repliesCount", 1), "1 reply");
+	assert.equal(tPlural("channel.repliesCount", 2), "2 replies");
+	assert.equal(tPlural("channel.repliesCount", 0), "0 replies");
+});
+
+test("tPlural(): китайский/японский не различают число (всегда 'other' -> одинаковый шаблон)", () => {
+	setLocale("zh");
+	const one = tPlural("channel.repliesCount", 1).replace("1", "{{count}}");
+	const five = tPlural("channel.repliesCount", 5).replace("5", "{{count}}");
+	assert.equal(one, five, "шаблон вокруг числа должен быть одинаковым для любого count в zh");
 });
 
 test("SUPPORTED_LOCALES.code соответствует ровно набору файлов локализации", () => {

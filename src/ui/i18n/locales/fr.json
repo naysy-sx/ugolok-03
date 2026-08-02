@@ -7,7 +7,13 @@
 		"continue": "Continuer",
 		"cancel": "Annuler",
 		"save": "Enregistrer",
-		"confirm": "Confirmer"
+		"confirm": "Confirmer",
+		"forward": "Suivant",
+		"loading": "Chargement…",
+		"create": "Créer",
+		"saving": "Enregistrement…",
+		"send": "Envoyer",
+		"rateLimitError": "Trop rapide — veuillez patienter un instant"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Écran en cours de développement"
+	},
+	"journal": {
+		"selectDate": "Choisir une date",
+		"jumpToDate": "Aller à la date",
+		"markAllRead": "Marquer comme lu",
+		"empty": "Rien ne s'est encore passé — les notifications apparaîtront ici.",
+		"unreadDot": "non lu",
+		"pagerAriaLabel": "Pages du journal",
+		"pageStatus": "Page {{current}} sur {{total}}",
+		"category": {
+			"messages": "Message",
+			"channels": "Chaîne",
+			"replies": "Réponse",
+			"contacts": "Contacts",
+			"calls": "Appel",
+			"moderation": "Modération",
+			"inbox": "Inconnu"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "M'afficher dans découvrir",
+		"showChannelsToggle": "Afficher la liste de mes chaînes",
+		"whichChannelsLegend": "Quelles chaînes afficher",
+		"noOwnChannels": "Vous n'avez pas encore de chaîne à vous.",
+		"wantToMeetTitle": "Souhaitent faire connaissance",
+		"noOneVisible": "Personne n'est visible pour l'instant.",
+		"cancelRequestAria": "Annuler la demande de contact",
+		"sendRequestAria": "Envoyer une demande de contact"
+	},
+	"channels": {
+		"createChannelButton": "Créer une chaîne",
+		"card": {
+			"untitled": "(sans titre)",
+			"updated": "Mis à jour {{date}}",
+			"subscribeButton": "S'abonner"
+		},
+		"create": {
+			"title": "Créer une chaîne",
+			"nameLabel": "Nom de la chaîne",
+			"descriptionLabel": "Description",
+			"rulesLabel": "Règles de la chaîne",
+			"avatarLabel": "Avatar de la chaîne",
+			"allowChatAttachmentsLabel": "Autoriser les pièces jointes dans le chat commun de la chaîne",
+			"visibilityLegend": "Visibilité par groupes de contacts",
+			"visibilityHint": "Les membres des groupes cochés verront la chaîne. Si aucun n'est coché, la chaîne restera seulement chez vous (bloc-notes).",
+			"noGroups": "Vous n'avez pas encore de groupes de contacts.",
+			"submitting": "Création…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Mes chaînes ({{count}})",
+			"myChannelsEmpty": "Vous n'avez pas encore de chaîne.",
+			"subscriptionsTitle": "Abonnements ({{count}})",
+			"subscriptionsEmpty": "Vous n'êtes encore abonné à rien.",
+			"availableAriaLabel": "Chaînes disponibles",
+			"availableTitle": "Disponibles ({{count}})",
+			"availableEmpty": "Aucune chaîne disponible."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Changer l'avatar",
+			"deleteButton": "Supprimer la chaîne",
+			"deleteConfirm": "Supprimer la chaîne « {{name}} » ? Action irréversible — la chaîne disparaîtra pour tous les abonnés."
+		},
+		"composer": {
+			"newPostTitle": "Nouvelle publication",
+			"postTextLabel": "Texte de la publication",
+			"attachButton": "Joindre",
+			"publishingButton": "Publication…",
+			"publishButton": "Publier"
+		},
+		"commentComposer": {
+			"ariaLabel": "Nouveau commentaire",
+			"label": "Commentaire",
+			"placeholder": "Écrire un commentaire…",
+			"attachAria": "Joindre un fichier",
+			"sendingButton": "Envoi…"
+		},
+		"comment": {
+			"authorBadge": "auteur",
+			"replyButton": "Répondre",
+			"moreActionsAria": "Plus d'actions pour {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} réponse",
+			"few": "{{count}} réponses",
+			"many": "{{count}} réponses",
+			"other": "{{count}} réponses"
+		},
+		"threadLabel": "fil · {{count}}",
+		"readOnlyNotice": "Lecture seule — abonnez-vous pour commenter.",
+		"commentsTitle": "Commentaires",
+		"noComments": "Pas encore de commentaires.",
+		"deletePostConfirm": "Supprimer cette publication ? Action irréversible.",
+		"defaultTitle": "Chaîne",
+		"unavailableTitle": "Chaîne indisponible",
+		"unavailableMessage": "Cette chaîne n'est plus disponible — le propriétaire vous a peut-être banni ou a supprimé la chaîne.",
+		"tabsAriaLabel": "Sections de la chaîne",
+		"tabs": {
+			"posts": "Publications",
+			"chat": "Chat",
+			"moderation": "Modération",
+			"editChannelWithName": "Modifier la chaîne « {{name}} »"
+		},
+		"writePostButton": "Écrire une publication",
+		"loadOlderButton": "Charger les publications plus anciennes",
+		"noPosts": "Il n'y a pas encore de publications dans cette chaîne."
 	}
 }

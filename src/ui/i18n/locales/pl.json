@@ -7,7 +7,13 @@
 		"continue": "Dalej",
 		"cancel": "Anuluj",
 		"save": "Zapisz",
-		"confirm": "Potwierdź"
+		"confirm": "Potwierdź",
+		"forward": "Dalej",
+		"loading": "Ładowanie…",
+		"create": "Utwórz",
+		"saving": "Zapisywanie…",
+		"send": "Wyślij",
+		"rateLimitError": "Zbyt szybko — poczekaj chwilę"
 	},
 	"nav": {
 		"journal": "Dziennik",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Ekran w budowie"
+	},
+	"journal": {
+		"selectDate": "Wybierz datę",
+		"jumpToDate": "Przejdź do daty",
+		"markAllRead": "Oznacz jako przeczytane",
+		"empty": "Jeszcze nic się nie wydarzyło — tutaj będą pojawiać się powiadomienia.",
+		"unreadDot": "nieprzeczytane",
+		"pagerAriaLabel": "Strony dziennika",
+		"pageStatus": "Strona {{current}} z {{total}}",
+		"category": {
+			"messages": "Wiadomość",
+			"channels": "Kanał",
+			"replies": "Odpowiedź",
+			"contacts": "Kontakty",
+			"calls": "Połączenie",
+			"moderation": "Moderacja",
+			"inbox": "Nieznajomy"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Pokazuj mnie w odkrywaniu",
+		"showChannelsToggle": "Pokazuj listę moich kanałów",
+		"whichChannelsLegend": "Które kanały pokazywać",
+		"noOwnChannels": "Nie masz jeszcze własnych kanałów.",
+		"wantToMeetTitle": "Chcą się poznać",
+		"noOneVisible": "Nikogo jeszcze nie widać.",
+		"cancelRequestAria": "Anuluj zaproszenie do kontaktów",
+		"sendRequestAria": "Wyślij zaproszenie do kontaktów"
+	},
+	"channels": {
+		"createChannelButton": "Utwórz kanał",
+		"card": {
+			"untitled": "(bez nazwy)",
+			"updated": "Zaktualizowano {{date}}",
+			"subscribeButton": "Subskrybuj"
+		},
+		"create": {
+			"title": "Utwórz kanał",
+			"nameLabel": "Nazwa kanału",
+			"descriptionLabel": "Opis",
+			"rulesLabel": "Zasady kanału",
+			"avatarLabel": "Awatar kanału",
+			"allowChatAttachmentsLabel": "Zezwól na załączniki we wspólnym czacie kanału",
+			"visibilityLegend": "Widoczność według grup kontaktów",
+			"visibilityHint": "Kanał zobaczą uczestnicy zaznaczonych grup. Jeśli nie zaznaczysz żadnej, kanał zostanie tylko u Ciebie (notatnik).",
+			"noGroups": "Nie masz jeszcze grup kontaktów.",
+			"submitting": "Tworzenie…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Moje kanały ({{count}})",
+			"myChannelsEmpty": "Nie masz jeszcze żadnych kanałów.",
+			"subscriptionsTitle": "Subskrypcje ({{count}})",
+			"subscriptionsEmpty": "Nie masz jeszcze żadnych subskrypcji.",
+			"availableAriaLabel": "Dostępne kanały",
+			"availableTitle": "Dostępne ({{count}})",
+			"availableEmpty": "Brak dostępnych kanałów."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Zmień awatar",
+			"deleteButton": "Usuń kanał",
+			"deleteConfirm": "Usunąć kanał „{{name}}”? Działanie nieodwracalne — kanał zniknie u wszystkich subskrybentów."
+		},
+		"composer": {
+			"newPostTitle": "Nowy post",
+			"postTextLabel": "Treść posta",
+			"attachButton": "Załącz",
+			"publishingButton": "Publikowanie…",
+			"publishButton": "Opublikuj"
+		},
+		"commentComposer": {
+			"ariaLabel": "Nowy komentarz",
+			"label": "Komentarz",
+			"placeholder": "Napisz komentarz…",
+			"attachAria": "Załącz plik",
+			"sendingButton": "Wysyłanie…"
+		},
+		"comment": {
+			"authorBadge": "autor",
+			"replyButton": "Odpowiedz",
+			"moreActionsAria": "Więcej działań dla {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} odpowiedź",
+			"few": "{{count}} odpowiedzi",
+			"many": "{{count}} odpowiedzi",
+			"other": "{{count}} odpowiedzi"
+		},
+		"threadLabel": "wątek · {{count}}",
+		"readOnlyNotice": "Tylko do odczytu — zasubskrybuj, aby komentować.",
+		"commentsTitle": "Komentarze",
+		"noComments": "Jeszcze brak komentarzy.",
+		"deletePostConfirm": "Usunąć ten post? Działanie nieodwracalne.",
+		"defaultTitle": "Kanał",
+		"unavailableTitle": "Kanał niedostępny",
+		"unavailableMessage": "Ten kanał nie jest już dostępny — właściciel mógł Cię zbanować lub usunąć kanał.",
+		"tabsAriaLabel": "Sekcje kanału",
+		"tabs": {
+			"posts": "Posty",
+			"chat": "Czat",
+			"moderation": "Moderacja",
+			"editChannelWithName": "Edytuj kanał „{{name}}”"
+		},
+		"writePostButton": "Napisz post",
+		"loadOlderButton": "Wczytaj starsze posty",
+		"noPosts": "Na tym kanale nie ma jeszcze postów."
 	}
 }

@@ -7,7 +7,13 @@
 		"continue": "Continue",
 		"cancel": "Cancel",
 		"save": "Save",
-		"confirm": "Confirm"
+		"confirm": "Confirm",
+		"forward": "Forward",
+		"loading": "Loading…",
+		"create": "Create",
+		"saving": "Saving…",
+		"send": "Send",
+		"rateLimitError": "Too fast — please wait a moment"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "This screen is under development"
+	},
+	"journal": {
+		"selectDate": "Select date",
+		"jumpToDate": "Jump to date",
+		"markAllRead": "Mark as read",
+		"empty": "Nothing has happened yet — notifications will appear here.",
+		"unreadDot": "unread",
+		"pagerAriaLabel": "Journal pages",
+		"pageStatus": "Page {{current}} of {{total}}",
+		"category": {
+			"messages": "Message",
+			"channels": "Channel",
+			"replies": "Reply",
+			"contacts": "Contacts",
+			"calls": "Call",
+			"moderation": "Moderation",
+			"inbox": "Stranger"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Show me in discovery",
+		"showChannelsToggle": "Show my list of channels",
+		"whichChannelsLegend": "Which channels to show",
+		"noOwnChannels": "You don't have any channels of your own yet.",
+		"wantToMeetTitle": "Want to connect",
+		"noOneVisible": "No one visible yet.",
+		"cancelRequestAria": "Cancel connection request",
+		"sendRequestAria": "Send connection request"
+	},
+	"channels": {
+		"createChannelButton": "Create channel",
+		"card": {
+			"untitled": "(untitled)",
+			"updated": "Updated {{date}}",
+			"subscribeButton": "Subscribe"
+		},
+		"create": {
+			"title": "Create channel",
+			"nameLabel": "Channel name",
+			"descriptionLabel": "Description",
+			"rulesLabel": "Channel rules",
+			"avatarLabel": "Channel avatar",
+			"allowChatAttachmentsLabel": "Allow attachments in the channel's shared chat",
+			"visibilityLegend": "Visibility by contact groups",
+			"visibilityHint": "Members of the checked groups will see the channel. If none are checked, the channel stays only with you (a notebook).",
+			"noGroups": "You don't have any contact groups yet.",
+			"submitting": "Creating…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "My channels ({{count}})",
+			"myChannelsEmpty": "You don't have any channels yet.",
+			"subscriptionsTitle": "Subscriptions ({{count}})",
+			"subscriptionsEmpty": "You're not subscribed to anything yet.",
+			"availableAriaLabel": "Available channels",
+			"availableTitle": "Available ({{count}})",
+			"availableEmpty": "No available channels."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Change avatar",
+			"deleteButton": "Delete channel",
+			"deleteConfirm": "Delete channel «{{name}}»? This is irreversible — the channel will disappear for all subscribers."
+		},
+		"composer": {
+			"newPostTitle": "New post",
+			"postTextLabel": "Post text",
+			"attachButton": "Attach",
+			"publishingButton": "Publishing…",
+			"publishButton": "Publish"
+		},
+		"commentComposer": {
+			"ariaLabel": "New comment",
+			"label": "Comment",
+			"placeholder": "Write a comment…",
+			"attachAria": "Attach a file",
+			"sendingButton": "Sending…"
+		},
+		"comment": {
+			"authorBadge": "author",
+			"replyButton": "Reply",
+			"moreActionsAria": "More actions for {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} reply",
+			"few": "{{count}} replies",
+			"many": "{{count}} replies",
+			"other": "{{count}} replies"
+		},
+		"threadLabel": "thread · {{count}}",
+		"readOnlyNotice": "Read-only — subscribe to comment.",
+		"commentsTitle": "Comments",
+		"noComments": "No comments yet.",
+		"deletePostConfirm": "Delete this post? This is irreversible.",
+		"defaultTitle": "Channel",
+		"unavailableTitle": "Channel unavailable",
+		"unavailableMessage": "This channel is no longer available — the owner may have banned you or deleted the channel.",
+		"tabsAriaLabel": "Channel sections",
+		"tabs": {
+			"posts": "Posts",
+			"chat": "Chat",
+			"moderation": "Moderation",
+			"editChannelWithName": "Edit channel «{{name}}»"
+		},
+		"writePostButton": "Write a post",
+		"loadOlderButton": "Load older posts",
+		"noPosts": "There are no posts in this channel yet."
 	}
 }

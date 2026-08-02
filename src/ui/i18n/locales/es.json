@@ -7,7 +7,13 @@
 		"continue": "Continuar",
 		"cancel": "Cancelar",
 		"save": "Guardar",
-		"confirm": "Confirmar"
+		"confirm": "Confirmar",
+		"forward": "Adelante",
+		"loading": "Cargando…",
+		"create": "Crear",
+		"saving": "Guardando…",
+		"send": "Enviar",
+		"rateLimitError": "Demasiado rápido — espera un momento"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Pantalla en desarrollo"
+	},
+	"journal": {
+		"selectDate": "Elegir fecha",
+		"jumpToDate": "Ir a la fecha",
+		"markAllRead": "Marcar como leído",
+		"empty": "Todavía no ha pasado nada — aquí aparecerán las notificaciones.",
+		"unreadDot": "sin leer",
+		"pagerAriaLabel": "Páginas del registro",
+		"pageStatus": "Página {{current}} de {{total}}",
+		"category": {
+			"messages": "Mensaje",
+			"channels": "Canal",
+			"replies": "Respuesta",
+			"contacts": "Contactos",
+			"calls": "Llamada",
+			"moderation": "Moderación",
+			"inbox": "Desconocido"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Mostrarme en explorar",
+		"showChannelsToggle": "Mostrar mi lista de canales",
+		"whichChannelsLegend": "Qué canales mostrar",
+		"noOwnChannels": "Todavía no tienes canales propios.",
+		"wantToMeetTitle": "Quieren conocerte",
+		"noOneVisible": "Todavía no se ve a nadie.",
+		"cancelRequestAria": "Cancelar solicitud de contacto",
+		"sendRequestAria": "Enviar solicitud de contacto"
+	},
+	"channels": {
+		"createChannelButton": "Crear canal",
+		"card": {
+			"untitled": "(sin título)",
+			"updated": "Actualizado {{date}}",
+			"subscribeButton": "Suscribirse"
+		},
+		"create": {
+			"title": "Crear canal",
+			"nameLabel": "Nombre del canal",
+			"descriptionLabel": "Descripción",
+			"rulesLabel": "Reglas del canal",
+			"avatarLabel": "Avatar del canal",
+			"allowChatAttachmentsLabel": "Permitir adjuntos en el chat general del canal",
+			"visibilityLegend": "Visibilidad por grupos de contactos",
+			"visibilityHint": "Los miembros de los grupos marcados verán el canal. Si no marcas ninguno, el canal quedará solo para ti (bloc de notas).",
+			"noGroups": "Todavía no tienes grupos de contactos.",
+			"submitting": "Creando…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Mis canales ({{count}})",
+			"myChannelsEmpty": "Todavía no tienes canales.",
+			"subscriptionsTitle": "Suscripciones ({{count}})",
+			"subscriptionsEmpty": "Todavía no estás suscrito a nada.",
+			"availableAriaLabel": "Canales disponibles",
+			"availableTitle": "Disponibles ({{count}})",
+			"availableEmpty": "No hay canales disponibles."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Cambiar avatar",
+			"deleteButton": "Eliminar canal",
+			"deleteConfirm": "¿Eliminar el canal «{{name}}»? Esta acción es irreversible — el canal desaparecerá para todos los suscriptores."
+		},
+		"composer": {
+			"newPostTitle": "Nueva publicación",
+			"postTextLabel": "Texto de la publicación",
+			"attachButton": "Adjuntar",
+			"publishingButton": "Publicando…",
+			"publishButton": "Publicar"
+		},
+		"commentComposer": {
+			"ariaLabel": "Nuevo comentario",
+			"label": "Comentario",
+			"placeholder": "Escribe un comentario…",
+			"attachAria": "Adjuntar archivo",
+			"sendingButton": "Enviando…"
+		},
+		"comment": {
+			"authorBadge": "autor",
+			"replyButton": "Responder",
+			"moreActionsAria": "Más acciones para {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} respuesta",
+			"few": "{{count}} respuestas",
+			"many": "{{count}} respuestas",
+			"other": "{{count}} respuestas"
+		},
+		"threadLabel": "hilo · {{count}}",
+		"readOnlyNotice": "Solo lectura — suscríbete para comentar.",
+		"commentsTitle": "Comentarios",
+		"noComments": "Todavía no hay comentarios.",
+		"deletePostConfirm": "¿Eliminar esta publicación? Esta acción es irreversible.",
+		"defaultTitle": "Canal",
+		"unavailableTitle": "Canal no disponible",
+		"unavailableMessage": "Este canal ya no está disponible — puede que el propietario te haya bloqueado o haya eliminado el canal.",
+		"tabsAriaLabel": "Secciones del canal",
+		"tabs": {
+			"posts": "Publicaciones",
+			"chat": "Chat",
+			"moderation": "Moderación",
+			"editChannelWithName": "Editar canal «{{name}}»"
+		},
+		"writePostButton": "Escribir publicación",
+		"loadOlderButton": "Cargar publicaciones anteriores",
+		"noPosts": "Todavía no hay publicaciones en este canal."
 	}
 }

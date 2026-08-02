@@ -7,7 +7,13 @@
 		"continue": "Weiter",
 		"cancel": "Abbrechen",
 		"save": "Speichern",
-		"confirm": "Bestätigen"
+		"confirm": "Bestätigen",
+		"forward": "Weiter",
+		"loading": "Wird geladen…",
+		"create": "Erstellen",
+		"saving": "Wird gespeichert…",
+		"send": "Senden",
+		"rateLimitError": "Zu schnell — bitte einen Moment warten"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -134,5 +140,113 @@
 	},
 	"placeholder": {
 		"inDevelopment": "Bildschirm in Entwicklung"
+	},
+	"journal": {
+		"selectDate": "Datum wählen",
+		"jumpToDate": "Zum Datum springen",
+		"markAllRead": "Als gelesen markieren",
+		"empty": "Noch ist nichts passiert — hier erscheinen Benachrichtigungen.",
+		"unreadDot": "ungelesen",
+		"pagerAriaLabel": "Journalseiten",
+		"pageStatus": "Seite {{current}} von {{total}}",
+		"category": {
+			"messages": "Nachricht",
+			"channels": "Kanal",
+			"replies": "Antwort",
+			"contacts": "Kontakte",
+			"calls": "Anruf",
+			"moderation": "Moderation",
+			"inbox": "Unbekannt"
+		}
+	},
+	"discovery": {
+		"showMeToggle": "Mich in der Entdeckung anzeigen",
+		"showChannelsToggle": "Meine Kanalliste anzeigen",
+		"whichChannelsLegend": "Welche Kanäle anzeigen",
+		"noOwnChannels": "Sie haben noch keine eigenen Kanäle.",
+		"wantToMeetTitle": "Möchten sich kennenlernen",
+		"noOneVisible": "Noch niemand sichtbar.",
+		"cancelRequestAria": "Kontaktanfrage zurückziehen",
+		"sendRequestAria": "Kontaktanfrage senden"
+	},
+	"channels": {
+		"createChannelButton": "Kanal erstellen",
+		"card": {
+			"untitled": "(ohne Titel)",
+			"updated": "Aktualisiert {{date}}",
+			"subscribeButton": "Abonnieren"
+		},
+		"create": {
+			"title": "Kanal erstellen",
+			"nameLabel": "Kanalname",
+			"descriptionLabel": "Beschreibung",
+			"rulesLabel": "Kanalregeln",
+			"avatarLabel": "Kanal-Avatar",
+			"allowChatAttachmentsLabel": "Anhänge im gemeinsamen Kanal-Chat erlauben",
+			"visibilityLegend": "Sichtbarkeit nach Kontaktgruppen",
+			"visibilityHint": "Mitglieder der markierten Gruppen sehen den Kanal. Ist keine markiert, bleibt der Kanal nur bei Ihnen (Notizbuch).",
+			"noGroups": "Sie haben noch keine Kontaktgruppen.",
+			"submitting": "Wird erstellt…",
+			"groupWithCount": "{{name}} ({{count}})"
+		},
+		"list": {
+			"myChannelsTitle": "Meine Kanäle ({{count}})",
+			"myChannelsEmpty": "Sie haben noch keine Kanäle.",
+			"subscriptionsTitle": "Abonnements ({{count}})",
+			"subscriptionsEmpty": "Sie haben noch nichts abonniert.",
+			"availableAriaLabel": "Verfügbare Kanäle",
+			"availableTitle": "Verfügbar ({{count}})",
+			"availableEmpty": "Keine verfügbaren Kanäle."
+		}
+	},
+	"channel": {
+		"settings": {
+			"changeAvatarLabel": "Avatar ändern",
+			"deleteButton": "Kanal löschen",
+			"deleteConfirm": "Kanal „{{name}}“ löschen? Dies ist unwiderruflich — der Kanal verschwindet für alle Abonnenten."
+		},
+		"composer": {
+			"newPostTitle": "Neuer Beitrag",
+			"postTextLabel": "Beitragstext",
+			"attachButton": "Anhängen",
+			"publishingButton": "Wird veröffentlicht…",
+			"publishButton": "Veröffentlichen"
+		},
+		"commentComposer": {
+			"ariaLabel": "Neuer Kommentar",
+			"label": "Kommentar",
+			"placeholder": "Kommentar schreiben…",
+			"attachAria": "Datei anhängen",
+			"sendingButton": "Wird gesendet…"
+		},
+		"comment": {
+			"authorBadge": "Autor",
+			"replyButton": "Antworten",
+			"moreActionsAria": "Weitere Aktionen für {{name}}"
+		},
+		"repliesCount": {
+			"one": "{{count}} Antwort",
+			"few": "{{count}} Antworten",
+			"many": "{{count}} Antworten",
+			"other": "{{count}} Antworten"
+		},
+		"threadLabel": "Thread · {{count}}",
+		"readOnlyNotice": "Nur Lesezugriff — abonnieren, um zu kommentieren.",
+		"commentsTitle": "Kommentare",
+		"noComments": "Noch keine Kommentare.",
+		"deletePostConfirm": "Beitrag löschen? Dies ist unwiderruflich.",
+		"defaultTitle": "Kanal",
+		"unavailableTitle": "Kanal nicht verfügbar",
+		"unavailableMessage": "Dieser Kanal ist nicht mehr verfügbar — der Besitzer hat Sie möglicherweise gesperrt oder den Kanal gelöscht.",
+		"tabsAriaLabel": "Kanalbereiche",
+		"tabs": {
+			"posts": "Beiträge",
+			"chat": "Chat",
+			"moderation": "Moderation",
+			"editChannelWithName": "Kanal „{{name}}“ bearbeiten"
+		},
+		"writePostButton": "Beitrag schreiben",
+		"loadOlderButton": "Ältere Beiträge laden",
+		"noPosts": "In diesem Kanal gibt es noch keine Beiträge."
 	}
 }
