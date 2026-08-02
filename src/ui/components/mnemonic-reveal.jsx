@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { decryptMnemonic } from "../../core/crypto/keystore.js";
 import MnemonicDisplay from "./mnemonic-display.jsx";
+import { t } from "../signals/i18n.js";
 
 export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
   const [phrase, setPhrase] = useState(null);
@@ -11,7 +12,7 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
   if (!hasMnemonic) {
     return (
       <p style={{ color: "var(--muted)" }}>
-        Для этого аккаунта фраза восстановления недоступна.
+        {t("settings.mnemonicUnavailable")}
       </p>
     );
   }
@@ -31,7 +32,7 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
       setPhrase(mnemonic);
       setShowForm(false);
     } catch {
-      setError("Неверный пароль.");
+      setError(t("unlock.main.loginForm.wrongPasswordError"));
       setPassword("");
     }
   };
@@ -44,11 +45,11 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Введите пароль"
+            placeholder={t("settings.enterPasswordPlaceholder")}
             required
           />
-          <button type="submit">Подтвердить</button>
-          <button type="button" onClick={handleCancel}>Отмена</button>
+          <button type="submit">{t("common.confirm")}</button>
+          <button type="button" onClick={handleCancel}>{t("common.cancel")}</button>
           {error && (
             <p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
               {error}
@@ -58,10 +59,10 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
       ) : phrase ? (
         <>
           <MnemonicDisplay words={phrase.split(" ")} />
-          <button type="button" onClick={handleCancel}>Скрыть</button>
+          <button type="button" onClick={handleCancel}>{t("settings.hidePhraseButton")}</button>
         </>
       ) : (
-        <button type="button" onClick={handleShowPhrase}>Показать фразу</button>
+        <button type="button" onClick={handleShowPhrase}>{t("settings.showPhraseButton")}</button>
       )}
     </>
   );

@@ -16,11 +16,11 @@ import DeleteAccountPanel from "../components/delete-account-panel.jsx";
 
 // Этап 47 — уровень уведомления как единый select (упорядоченная шкала off/badge/
 // popup/sound, DESIGN.md), не 3 независимых чекбокса.
-const LEVEL_LABELS = {
-	off: "Выключено",
-	badge: "Только счётчик",
-	popup: "Всплывающее",
-	sound: "Звук",
+const LEVEL_LABEL_KEYS = {
+	off: "settings.level.off",
+	badge: "settings.level.badge",
+	popup: "settings.level.popup",
+	sound: "settings.level.sound",
 };
 
 const DEFAULT_SENTINEL = "__default__";
@@ -31,7 +31,7 @@ function LevelSelect({ id, value, onChange, disabled }) {
 		<select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.currentTarget.value)}>
 			{NOTIFICATION_LEVELS.map((level) => (
 				<option key={level} value={level}>
-					{LEVEL_LABELS[level]}
+					{t(LEVEL_LABEL_KEYS[level])}
 				</option>
 			))}
 		</select>
@@ -43,10 +43,10 @@ function LevelSelect({ id, value, onChange, disabled }) {
 function OverrideSelect({ id, override, onChange, disabled }) {
 	return (
 		<select id={id} value={override ?? DEFAULT_SENTINEL} disabled={disabled} onChange={(e) => onChange(e.currentTarget.value === DEFAULT_SENTINEL ? undefined : e.currentTarget.value)}>
-			<option value={DEFAULT_SENTINEL}>(по умолчанию)</option>
+			<option value={DEFAULT_SENTINEL}>{t("settings.level.default")}</option>
 			{NOTIFICATION_LEVELS.map((level) => (
 				<option key={level} value={level}>
-					{LEVEL_LABELS[level]}
+					{t(LEVEL_LABEL_KEYS[level])}
 				</option>
 			))}
 		</select>
@@ -129,7 +129,7 @@ export default function Settings() {
 		const permission = await requestNotificationPermission();
 		setBrowserPermission(permission);
 		if (permission !== "granted") {
-			setError("Уведомления не разрешены в браузере — проверьте настройки сайта и попробуйте снова.");
+			setError(t("settings.permissionDeniedError"));
 		}
 	}
 
@@ -187,8 +187,8 @@ export default function Settings() {
 
 	if (!settings) {
 		return (
-			<Screen title="Настройки">
-				<p style={{ color: "var(--muted)" }}>Загрузка настроек…</p>
+			<Screen title={t("nav.settings")}>
+				<p style={{ color: "var(--muted)" }}>{t("settings.loadingSettings")}</p>
 			</Screen>
 		);
 	}
@@ -196,7 +196,7 @@ export default function Settings() {
 	const n = settings.notifications;
 
 	return (
-		<Screen title="Настройки">
+		<Screen title={t("nav.settings")}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -204,7 +204,7 @@ export default function Settings() {
 			)}
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<label for={`${instanceId}-scale`}>Масштаб интерфейса</label>
+				<label for={`${instanceId}-scale`}>{t("settings.scaleLabel")}</label>
 				<select id={`${instanceId}-scale`} value={settings.uiScale} onChange={(e) => handleScaleChange(e.currentTarget.value)}>
 					{SCALE_OPTIONS.map((opt) => (
 						<option key={opt.id} value={opt.id}>
@@ -215,8 +215,8 @@ export default function Settings() {
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Акцентный цвет</h2>
-				<div class="cluster" role="group" aria-label="Акцентный цвет">
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.accentColorTitle")}</h2>
+				<div class="cluster" role="group" aria-label={t("settings.accentColorTitle")}>
 					{ACCENT_COLORS.map((c) => (
 						<button
 							key={c.id}
@@ -259,11 +259,11 @@ export default function Settings() {
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Уведомления</h2>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.notificationsTitle")}</h2>
 
 				<label class="cluster" style={{ alignItems: "center" }}>
 					<input type="checkbox" checked={n.enabled} onChange={(e) => handleToggleEnabled(e.currentTarget.checked)} />
-					Включить уведомления
+					{t("settings.enableNotifications")}
 				</label>
 
 				{n.enabled && browserPermission !== "granted" && browserPermission !== "unsupported" && (
@@ -273,11 +273,11 @@ export default function Settings() {
 						style={{ alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
 					>
 						{browserPermission === "denied"
-							? "Браузер заблокировал уведомления для этого сайта — разрешите вручную в настройках сайта браузера."
-							: "Браузер ещё не спрашивал разрешение на всплывающие уведомления — без него они не покажутся."}
+							? t("settings.browserBlockedNotifications")
+							: t("settings.browserNotAskedNotifications")}
 						{browserPermission !== "denied" && (
 							<button type="button" onClick={handleRequestPermission}>
-								Запросить разрешение
+								{t("settings.requestPermissionButton")}
 							</button>
 						)}
 					</p>
@@ -285,30 +285,30 @@ export default function Settings() {
 
 				<div class="flow" style={{ "--flow-space": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Контакты</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.contacts")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Новые запросы в контакты
+							{t("settings.newContactRequestsLabel")}
 							<LevelSelect id={`${instanceId}-contacts-newRequests`} value={n.contacts.newRequests} onChange={(l) => handleContactLevel("newRequests", l)} />
 						</label>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Запрос принят
+							{t("settings.requestAcceptedLabel")}
 							<LevelSelect id={`${instanceId}-contacts-accepted`} value={n.contacts.accepted} onChange={(l) => handleContactLevel("accepted", l)} />
 						</label>
 					</section>
 
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Сообщения</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.messages")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							По умолчанию для новых
+							{t("settings.defaultForNewLabel")}
 							<LevelSelect id={`${instanceId}-messages-default`} value={n.messages.default} onChange={handleMessagesDefault} />
 						</label>
 						{contacts.value.length > 0 && (
 							<table>
-								<caption class="visually-hidden">Уведомления по каждому контакту</caption>
+								<caption class="visually-hidden">{t("settings.perContactNotificationsCaption")}</caption>
 								<thead>
 									<tr>
-										<th scope="col">Контакт</th>
-										<th scope="col">Уведомление</th>
+										<th scope="col">{t("nav.contacts")}</th>
+										<th scope="col">{t("settings.notificationColumnHeader")}</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -332,36 +332,36 @@ export default function Settings() {
 					</section>
 
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Каналы</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.channels")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Посты — по умолчанию
+							{t("settings.postsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-posts`} value={n.channels.posts} onChange={(l) => handleChannelsDefault("posts", l)} />
 						</label>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Комментарии — по умолчанию
+							{t("settings.commentsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-comments`} value={n.channels.comments} onChange={(l) => handleChannelsDefault("comments", l)} />
 						</label>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Общий чат — по умолчанию
+							{t("settings.chatDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-chat`} value={n.channels.chat} onChange={(l) => handleChannelsDefault("chat", l)} />
 						</label>
 						{myChannels.length > 0 && (
 							// Находка пользователя — список каналов пишется РОВНО ОДИН РАЗ, три
 							// колонки (не три отдельных списка), CONTRACTS.md этап 47.
 							<table>
-								<caption class="visually-hidden">Уведомления по каждому каналу — посты/комментарии/общий чат</caption>
+								<caption class="visually-hidden">{t("settings.perChannelNotificationsCaption")}</caption>
 								<thead>
 									<tr>
-										<th scope="col">Канал</th>
-										<th scope="col">Посты</th>
-										<th scope="col">Комментарии</th>
-										<th scope="col">Общий чат</th>
+										<th scope="col">{t("nav.channels")}</th>
+										<th scope="col">{t("settings.postsColumnHeader")}</th>
+										<th scope="col">{t("settings.commentsColumnHeader")}</th>
+										<th scope="col">{t("settings.chatColumnHeader")}</th>
 									</tr>
 								</thead>
 								<tbody>
 									{myChannels.map((c) => (
 										<tr key={c.id}>
-											<td>{c.name || "(без названия)"}</td>
+											<td>{c.name || t("channels.card.untitled")}</td>
 											{["posts", "comments", "chat"].map((sub) => (
 												<td key={sub}>
 													<OverrideSelect
@@ -379,50 +379,50 @@ export default function Settings() {
 					</section>
 
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Ответы</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.repliesSectionTitle")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Кто-то ответил на мой пост/комментарий
+							{t("settings.replyReceivedLabel")}
 							<LevelSelect id={`${instanceId}-replies`} value={n.replies} onChange={handleRepliesLevel} />
 						</label>
 					</section>
 
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Заявки от незнакомцев</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.strangersSectionTitle")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Кто-то незнакомый хочет написать вам
+							{t("settings.strangerWantsToWriteLabel")}
 							<LevelSelect id={`${instanceId}-inbox`} value={n.inbox} onChange={handleInboxLevel} />
 						</label>
 					</section>
 
 					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Модерация</h3>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("journal.category.moderation")}</h3>
 						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-							Новая жалоба
+							{t("settings.newReportLabel")}
 							<LevelSelect id={`${instanceId}-moderation-reports`} value={n.moderation.reports} onChange={handleModerationReportsLevel} />
 						</label>
 						<p style={{ color: "var(--muted)", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}>
-							Предупреждения, бан и удаление канала показываются всегда — это не настраивается.
+							{t("settings.moderationAlwaysShownHint")}
 						</p>
 					</section>
 				</div>
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Секретная фраза восстановления</h2>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.mnemonicSectionTitle")}</h2>
 				<MnemonicReveal ownerPubkey={ownerPubkey} hasMnemonic={hasMnemonic} />
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Сеанс</h2>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.sessionSectionTitle")}</h2>
 				<div>
 					<button type="button" onClick={() => lock()}>
-						Заблокировать сейчас
+						{t("settings.lockNowButton")}
 					</button>
 				</div>
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Опасная зона</h2>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.dangerZoneTitle")}</h2>
 				<DeleteAccountPanel ownerPubkey={ownerPubkey} login={currentUser.value.login} privKey={privKey} dbKey={dbKey} />
 			</section>
 		</Screen>

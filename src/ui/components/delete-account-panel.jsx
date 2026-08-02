@@ -4,6 +4,7 @@ import { deleteAccountEverywhere } from "../../domain/identity/account-deletion.
 import { lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { t } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -39,7 +40,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 	async function handleSubmit(e) {
 		e.preventDefault();
 		if (loginInput !== login) {
-			setError("Логин не совпадает — набор символов должен совпадать буквально.");
+			setError(t("settings.deleteAccount.loginMismatchError"));
 			return;
 		}
 		setBusy(true);
@@ -47,7 +48,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 		try {
 			await decryptPrivateKey(password, ownerPubkey); // гейт: бросает на неверном пароле
 		} catch {
-			setError("Неверный пароль.");
+			setError(t("unlock.main.loginForm.wrongPasswordError"));
 			setBusy(false);
 			return;
 		}
@@ -63,7 +64,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 	if (!open) {
 		return (
 			<button type="button" class="btn--danger" onClick={handleOpen}>
-				Удалить аккаунт
+				{t("settings.deleteAccount.openButton")}
 			</button>
 		);
 	}
@@ -71,16 +72,14 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 	return (
 		<form class="flow" style={{ "--flow-space": "var(--space-2xs)" }} onSubmit={handleSubmit}>
 			<p style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-				Это необратимо. Все ваши данные на этом устройстве (чаты, контакты, каналы, файлы) будут удалены. Отправленные
-				вами сообщения и вложения у собеседников — <strong>останутся у них</strong> (отозвать уже доставленное нельзя).
-				Если этот же аккаунт открыт на другом устройстве — там ничего не изменится.
+				{t("settings.deleteAccount.warningBeforeStrong")} <strong>{t("settings.deleteAccount.warningStrong")}</strong> {t("settings.deleteAccount.warningAfterStrong")}
 			</p>
 			<label>
-				Введите логин «{login}» для подтверждения
+				{t("settings.deleteAccount.confirmLoginLabel", { login })}
 				<input type="text" value={loginInput} onInput={(e) => setLoginInput(e.currentTarget.value)} disabled={busy} required autoComplete="off" />
 			</label>
 			<label>
-				Пароль
+				{t("settings.deleteAccount.passwordLabel")}
 				<input type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} disabled={busy} required autoComplete="current-password" />
 			</label>
 			{error && (
@@ -90,10 +89,10 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 			)}
 			<div class="cluster">
 				<button type="submit" class="btn--danger" disabled={busy}>
-					{busy ? "Удаление…" : "Удалить безвозвратно"}
+					{busy ? t("settings.deleteAccount.deletingButton") : t("settings.deleteAccount.deletePermanentlyButton")}
 				</button>
 				<button type="button" class="btn--ghost" onClick={handleCancel} disabled={busy}>
-					Отмена
+					{t("common.cancel")}
 				</button>
 			</div>
 		</form>
