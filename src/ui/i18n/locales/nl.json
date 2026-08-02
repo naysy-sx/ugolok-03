@@ -13,7 +13,10 @@
 		"create": "Aanmaken",
 		"saving": "Opslaan…",
 		"send": "Verzenden",
-		"rateLimitError": "Te snel — wacht even"
+		"rateLimitError": "Te snel — wacht even",
+		"add": "Toevoegen",
+		"call": "Bellen",
+		"delete": "Verwijderen"
 	},
 	"nav": {
 		"journal": "Journaal",
@@ -248,5 +251,38 @@
 		"writePostButton": "Bericht schrijven",
 		"loadOlderButton": "Oudere berichten laden",
 		"noPosts": "Dit kanaal heeft nog geen berichten."
+	},
+	"contacts": {
+		"openChatAria": "Chat met {{name}} openen",
+		"addContactLabel": "Contact toevoegen (npub of hex-sleutel)",
+		"groupsHeading": "Groepen",
+		"allGroupsLabel": "Alle groepen",
+		"renameGroupLabel": "Nieuwe groepsnaam",
+		"groupActionsAria": "Acties voor groep ‘{{name}}’",
+		"renameAction": "Naam wijzigen",
+		"newGroupNameLabel": "Naam van nieuwe groep",
+		"newGroupPlaceholder": "Nieuwe groep…",
+		"heading": "Contacten ({{count}})",
+		"callAria": "{{name}} bellen",
+		"hidePermissions": "Rechten verbergen",
+		"showPermissions": "Rechten",
+		"blockAction": "Blokkeren",
+		"removeFromGroupAria": "Verwijderen uit groep {{name}}",
+		"addToGroupLabel": "naar groep",
+		"noContactsAtAll": "Je hebt nog geen contacten.",
+		"noContactsInGroups": "Geen enkel contact behoort tot de geselecteerde groepen.",
+		"incomingHeading": "Ontvangen verzoeken ({{count}})",
+		"noIncoming": "Geen ontvangen contactverzoeken.",
+		"acceptButton": "Accepteren",
+		"rejectButton": "Weigeren",
+		"outgoingSummary": "Verzonden verzoeken",
+		"noOutgoing": "Geen verzonden contactverzoeken.",
+		"cancelRequestButton": "Intrekken",
+		"rejectedSummary": "Geweigerd",
+		"noRejected": "Geen geweigerde verzoeken.",
+		"addAnywayButton": "Toch toevoegen",
+		"blockedSummary": "Geblokkeerd",
+		"unblockButton": "Deblokkeren",
+		"noBlocked": "Geen geblokkeerde contacten."
 	}
 }

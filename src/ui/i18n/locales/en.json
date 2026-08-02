@@ -13,7 +13,10 @@
 		"create": "Create",
 		"saving": "Saving…",
 		"send": "Send",
-		"rateLimitError": "Too fast — please wait a moment"
+		"rateLimitError": "Too fast — please wait a moment",
+		"add": "Add",
+		"call": "Call",
+		"delete": "Delete"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -248,5 +251,38 @@
 		"writePostButton": "Write a post",
 		"loadOlderButton": "Load older posts",
 		"noPosts": "There are no posts in this channel yet."
+	},
+	"contacts": {
+		"openChatAria": "Open chat with {{name}}",
+		"addContactLabel": "Add contact (npub or hex key)",
+		"groupsHeading": "Groups",
+		"allGroupsLabel": "All groups",
+		"renameGroupLabel": "New group name",
+		"groupActionsAria": "Actions for group «{{name}}»",
+		"renameAction": "Rename",
+		"newGroupNameLabel": "New group name",
+		"newGroupPlaceholder": "New group…",
+		"heading": "Contacts ({{count}})",
+		"callAria": "Call {{name}}",
+		"hidePermissions": "Hide permissions",
+		"showPermissions": "Permissions",
+		"blockAction": "Block",
+		"removeFromGroupAria": "Remove from group {{name}}",
+		"addToGroupLabel": "to group",
+		"noContactsAtAll": "You don't have any contacts yet.",
+		"noContactsInGroups": "No contact belongs to the selected groups.",
+		"incomingHeading": "Incoming requests ({{count}})",
+		"noIncoming": "No incoming contact requests.",
+		"acceptButton": "Accept",
+		"rejectButton": "Decline",
+		"outgoingSummary": "Sent requests",
+		"noOutgoing": "No sent connection requests.",
+		"cancelRequestButton": "Cancel",
+		"rejectedSummary": "Declined",
+		"noRejected": "No declined requests.",
+		"addAnywayButton": "Add anyway",
+		"blockedSummary": "Blocked",
+		"unblockButton": "Unblock",
+		"noBlocked": "No blocked contacts."
 	}
 }

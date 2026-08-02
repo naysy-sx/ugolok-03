@@ -13,7 +13,10 @@
 		"create": "Erstellen",
 		"saving": "Wird gespeichert…",
 		"send": "Senden",
-		"rateLimitError": "Zu schnell — bitte einen Moment warten"
+		"rateLimitError": "Zu schnell — bitte einen Moment warten",
+		"add": "Hinzufügen",
+		"call": "Anrufen",
+		"delete": "Löschen"
 	},
 	"nav": {
 		"journal": "Journal",
@@ -248,5 +251,38 @@
 		"writePostButton": "Beitrag schreiben",
 		"loadOlderButton": "Ältere Beiträge laden",
 		"noPosts": "In diesem Kanal gibt es noch keine Beiträge."
+	},
+	"contacts": {
+		"openChatAria": "Chat mit {{name}} öffnen",
+		"addContactLabel": "Kontakt hinzufügen (npub oder Hex-Schlüssel)",
+		"groupsHeading": "Gruppen",
+		"allGroupsLabel": "Alle Gruppen",
+		"renameGroupLabel": "Neuer Gruppenname",
+		"groupActionsAria": "Aktionen für Gruppe „{{name}}“",
+		"renameAction": "Umbenennen",
+		"newGroupNameLabel": "Name der neuen Gruppe",
+		"newGroupPlaceholder": "Neue Gruppe…",
+		"heading": "Kontakte ({{count}})",
+		"callAria": "{{name}} anrufen",
+		"hidePermissions": "Berechtigungen ausblenden",
+		"showPermissions": "Berechtigungen",
+		"blockAction": "Blockieren",
+		"removeFromGroupAria": "Aus Gruppe {{name}} entfernen",
+		"addToGroupLabel": "zur Gruppe",
+		"noContactsAtAll": "Sie haben noch keine Kontakte.",
+		"noContactsInGroups": "Kein Kontakt gehört zu den ausgewählten Gruppen.",
+		"incomingHeading": "Eingehende Anfragen ({{count}})",
+		"noIncoming": "Keine eingehenden Kontaktanfragen.",
+		"acceptButton": "Annehmen",
+		"rejectButton": "Ablehnen",
+		"outgoingSummary": "Gesendete Anfragen",
+		"noOutgoing": "Keine gesendeten Kontaktanfragen.",
+		"cancelRequestButton": "Zurückziehen",
+		"rejectedSummary": "Abgelehnt",
+		"noRejected": "Keine abgelehnten Anfragen.",
+		"addAnywayButton": "Trotzdem hinzufügen",
+		"blockedSummary": "Blockiert",
+		"unblockButton": "Entsperren",
+		"noBlocked": "Keine blockierten Kontakte."
 	}
 }

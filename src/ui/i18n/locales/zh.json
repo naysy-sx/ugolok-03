@@ -13,7 +13,10 @@
 		"create": "创建",
 		"saving": "保存中…",
 		"send": "发送",
-		"rateLimitError": "太快了——请稍等片刻"
+		"rateLimitError": "太快了——请稍等片刻",
+		"add": "添加",
+		"call": "呼叫",
+		"delete": "删除"
 	},
 	"nav": {
 		"journal": "动态",
@@ -248,5 +251,38 @@
 		"writePostButton": "撰写帖子",
 		"loadOlderButton": "加载更早的帖子",
 		"noPosts": "该频道还没有帖子。"
+	},
+	"contacts": {
+		"openChatAria": "与 {{name}} 开始聊天",
+		"addContactLabel": "添加联系人（npub 或十六进制密钥）",
+		"groupsHeading": "分组",
+		"allGroupsLabel": "所有分组",
+		"renameGroupLabel": "新的分组名称",
+		"groupActionsAria": "分组“{{name}}”的操作",
+		"renameAction": "重命名",
+		"newGroupNameLabel": "新分组的名称",
+		"newGroupPlaceholder": "新分组…",
+		"heading": "联系人（{{count}}）",
+		"callAria": "呼叫 {{name}}",
+		"hidePermissions": "隐藏权限",
+		"showPermissions": "权限",
+		"blockAction": "屏蔽",
+		"removeFromGroupAria": "从分组 {{name}} 中移除",
+		"addToGroupLabel": "添加到分组",
+		"noContactsAtAll": "您还没有任何联系人。",
+		"noContactsInGroups": "没有联系人属于所选分组。",
+		"incomingHeading": "收到的请求（{{count}}）",
+		"noIncoming": "没有收到的联系人请求。",
+		"acceptButton": "接受",
+		"rejectButton": "拒绝",
+		"outgoingSummary": "已发送的请求",
+		"noOutgoing": "没有已发送的联系人请求。",
+		"cancelRequestButton": "撤销",
+		"rejectedSummary": "已拒绝",
+		"noRejected": "没有被拒绝的请求。",
+		"addAnywayButton": "仍然添加",
+		"blockedSummary": "已屏蔽",
+		"unblockButton": "取消屏蔽",
+		"noBlocked": "没有已屏蔽的联系人。"
 	}
 }

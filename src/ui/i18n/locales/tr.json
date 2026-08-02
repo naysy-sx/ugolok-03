@@ -13,7 +13,10 @@
 		"create": "Oluştur",
 		"saving": "Kaydediliyor…",
 		"send": "Gönder",
-		"rateLimitError": "Çok hızlı — lütfen biraz bekleyin"
+		"rateLimitError": "Çok hızlı — lütfen biraz bekleyin",
+		"add": "Ekle",
+		"call": "Ara",
+		"delete": "Sil"
 	},
 	"nav": {
 		"journal": "Günlük",
@@ -248,5 +251,38 @@
 		"writePostButton": "Gönderi yaz",
 		"loadOlderButton": "Daha eski gönderileri yükle",
 		"noPosts": "Bu kanalda henüz gönderi yok."
+	},
+	"contacts": {
+		"openChatAria": "{{name}} ile sohbeti aç",
+		"addContactLabel": "Kişi ekle (npub veya onaltılık anahtar)",
+		"groupsHeading": "Gruplar",
+		"allGroupsLabel": "Tüm gruplar",
+		"renameGroupLabel": "Yeni grup adı",
+		"groupActionsAria": "«{{name}}» grubu için işlemler",
+		"renameAction": "Yeniden adlandır",
+		"newGroupNameLabel": "Yeni grubun adı",
+		"newGroupPlaceholder": "Yeni grup…",
+		"heading": "Kişiler ({{count}})",
+		"callAria": "{{name}} kişisini ara",
+		"hidePermissions": "İzinleri gizle",
+		"showPermissions": "İzinler",
+		"blockAction": "Engelle",
+		"removeFromGroupAria": "{{name}} grubundan çıkar",
+		"addToGroupLabel": "gruba",
+		"noContactsAtAll": "Henüz hiç kişiniz yok.",
+		"noContactsInGroups": "Seçili gruplara ait hiçbir kişi yok.",
+		"incomingHeading": "Gelen istekler ({{count}})",
+		"noIncoming": "Gelen kişi isteği yok.",
+		"acceptButton": "Kabul et",
+		"rejectButton": "Reddet",
+		"outgoingSummary": "Gönderilen istekler",
+		"noOutgoing": "Gönderilen bağlantı isteği yok.",
+		"cancelRequestButton": "İptal et",
+		"rejectedSummary": "Reddedilenler",
+		"noRejected": "Reddedilen istek yok.",
+		"addAnywayButton": "Yine de ekle",
+		"blockedSummary": "Engellenenler",
+		"unblockButton": "Engeli kaldır",
+		"noBlocked": "Engellenen kişi yok."
 	}
 }

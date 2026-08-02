@@ -41,6 +41,7 @@ import {
 } from "../signals/contacts.js";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
+import { t } from "../signals/i18n.js";
 
 // F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
@@ -75,7 +76,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 	}
 
 	return (
-		<button type="button" onClick={onClick} aria-label={`Открыть чат с ${displayName}`} class="contact-identity contact-identity-btn">
+		<button type="button" onClick={onClick} aria-label={t("contacts.openChatAria", { name: displayName })} class="contact-identity contact-identity-btn">
 			{avatar}
 			{text}
 		</button>
@@ -252,7 +253,7 @@ export default function Contacts() {
 			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
 
 	return (
-		<Screen title="Контакты">
+		<Screen title={t("nav.contacts")}>
 			<div class="contacts-toolbar">
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
@@ -267,18 +268,18 @@ export default function Contacts() {
 					<div class="contact-add-field">
 						<IconPersonAdd aria-hidden="true" />
 						<label class="visually-hidden" for="add-contact-input">
-							Добавить контакт (npub или hex-ключ)
+							{t("contacts.addContactLabel")}
 						</label>
 						<input
 							id="add-contact-input"
 							type="text"
-							placeholder="Добавить контакт (npub или hex-ключ)"
+							placeholder={t("contacts.addContactLabel")}
 							value={npubInput}
 							onInput={(e) => setNpubInput(e.currentTarget.value)}
 						/>
 					</div>
 					<button type="submit" disabled={busy}>
-						Добавить
+						{t("common.add")}
 					</button>
 				</form>
 				{addError && (
@@ -290,7 +291,7 @@ export default function Contacts() {
 
 			<div class="contacts-layout">
 				<aside class="card contacts-groups-aside" aria-labelledby="groups-heading">
-					<h2 id="groups-heading">Группы</h2>
+					<h2 id="groups-heading">{t("contacts.groupsHeading")}</h2>
 					<ul role="list" class="group-filter-list">
 						<li>
 							<span class="group-filter-chip">
@@ -300,7 +301,7 @@ export default function Contacts() {
 									checked={selectedGroupIds.size === 0}
 									onChange={() => setSelectedGroupIds(new Set())}
 								/>
-								<label for="group-filter-all">Все группы</label>
+								<label for="group-filter-all">{t("contacts.allGroupsLabel")}</label>
 							</span>
 						</li>
 						{groups.value.map((g) => (
@@ -324,7 +325,7 @@ export default function Contacts() {
 											}}
 										>
 											<label class="visually-hidden" for={`rename-group-${g.id}`}>
-												Новое имя группы
+												{t("contacts.renameGroupLabel")}
 											</label>
 											<input
 												id={`rename-group-${g.id}`}
@@ -333,18 +334,18 @@ export default function Contacts() {
 												onInput={(e) => setRenameValue(e.currentTarget.value)}
 											/>
 											<button type="submit" disabled={busy}>
-												Сохранить
+												{t("common.save")}
 											</button>
 											<button type="button" onClick={() => setRenamingGroupId(null)}>
-												Отмена
+												{t("common.cancel")}
 											</button>
 										</form>
 									) : (
 										<>
 											<label for={`group-filter-${g.id}`}>
-												{g.name} ({g.memberPubkeys.length})
+												{t("channels.create.groupWithCount", { name: g.name, count: g.memberPubkeys.length })}
 											</label>
-											<ActionsMenu label={`Действия с группой «${g.name}»`}>
+											<ActionsMenu label={t("contacts.groupActionsAria", { name: g.name })}>
 												<button
 													type="button"
 													onClick={() => {
@@ -352,7 +353,7 @@ export default function Contacts() {
 														setRenameValue(g.name);
 													}}
 												>
-													<IconPencil /> Переименовать
+													<IconPencil /> {t("contacts.renameAction")}
 												</button>
 												<button
 													type="button"
@@ -362,7 +363,7 @@ export default function Contacts() {
 														runRowAction(() => deleteGroupAction(ownerPubkey, privKey, dbKey, g.id, publish))
 													}
 												>
-													<IconTrash /> Удалить
+													<IconTrash /> {t("common.delete")}
 												</button>
 											</ActionsMenu>
 										</>
@@ -374,17 +375,17 @@ export default function Contacts() {
 
 					<form class="cluster" onSubmit={handleCreateGroup}>
 						<label class="visually-hidden" for="new-group-name">
-							Название новой группы
+							{t("contacts.newGroupNameLabel")}
 						</label>
 						<input
 							id="new-group-name"
 							type="text"
-							placeholder="Новая группа…"
+							placeholder={t("contacts.newGroupPlaceholder")}
 							value={newGroupName}
 							onInput={(e) => setNewGroupName(e.currentTarget.value)}
 						/>
 						<button type="submit" disabled={busy}>
-							Добавить
+							{t("common.add")}
 						</button>
 					</form>
 					{groupError && (
@@ -400,7 +401,7 @@ export default function Contacts() {
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
 					    рамке (contacts-primary-section). */}
 					<section class="flow card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="contacts-heading">Контакты ({visibleContacts.length})</h2>
+						<h2 id="contacts-heading">{t("contacts.heading", { count: visibleContacts.length })}</h2>
 						{rowError && (
 							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 								{rowError}
@@ -415,19 +416,19 @@ export default function Contacts() {
 										<div class="contact-row-main">
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
 											<div class="contact-row-actions">
-												<button type="button" onClick={() => placeCall(pubkey)} aria-label={`Позвонить ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
-													<IconPhoneCall /> <span class="call-txt">Позвонить</span>
+												<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
+													<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
 												</button>
-												<ActionsMenu label={`Ещё действия для ${profiles.value[pubkey]?.name || shortPubkey(pubkey)}`}>
+												<ActionsMenu label={t("channel.comment.moreActionsAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
 													<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
-														<IconGear /> {isExpanded ? "Скрыть права" : "Права"}
+														<IconGear /> {isExpanded ? t("contacts.hidePermissions") : t("contacts.showPermissions")}
 													</button>
 													<button
 														type="button"
 														disabled={busy}
 														onClick={() => runRowAction(() => blockContactAction(pubkey))}
 													>
-														<IconLockClosed /> Заблокировать
+														<IconLockClosed /> {t("contacts.blockAction")}
 													</button>
 													<button
 														type="button"
@@ -435,7 +436,7 @@ export default function Contacts() {
 														disabled={busy}
 														onClick={() => runRowAction(() => removeContactAction(pubkey))}
 													>
-														<IconTrash /> Удалить
+														<IconTrash /> {t("common.delete")}
 													</button>
 												</ActionsMenu>
 											</div>
@@ -448,7 +449,7 @@ export default function Contacts() {
 													<button
 														type="button"
 														disabled={busy}
-														aria-label={`Убрать из группы ${g.name}`}
+														aria-label={t("contacts.removeFromGroupAria", { name: g.name })}
 														onClick={() =>
 															runRowAction(() =>
 																removeGroupMemberAction(ownerPubkey, privKey, dbKey, g.id, pubkey, publish),
@@ -482,15 +483,15 @@ export default function Contacts() {
 						</ul>
 						{visibleContacts.length === 0 && (
 							<p style={{ color: "var(--muted)" }}>
-								{contacts.value.length === 0 ? "Пока нет ни одного контакта." : "Ни один контакт не входит в выбранные группы."}
+								{contacts.value.length === 0 ? t("contacts.noContactsAtAll") : t("contacts.noContactsInGroups")}
 							</p>
 						)}
 					</section>
 
 					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
-						<h2 id="requests-heading">Входящие заявки ({incomingRequests.value.length})</h2>
+						<h2 id="requests-heading">{t("contacts.incomingHeading", { count: incomingRequests.value.length })}</h2>
 						{incomingRequests.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>Нет входящих запросов на добавление в контакты.</p>
+							<p style={{ color: "var(--muted)" }}>{t("contacts.noIncoming")}</p>
 						) : (
 							<ul role="list" class="contact-row-list">
 								{incomingRequests.value.map((req) => (
@@ -498,10 +499,10 @@ export default function Contacts() {
 										<ContactIdentity pubkey={req.peerPubkey} />
 										<div class="contact-row-actions">
 											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
-												Принять
+												{t("contacts.acceptButton")}
 											</button>
 											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
-												Отклонить
+												{t("contacts.rejectButton")}
 											</button>
 										</div>
 									</li>
@@ -517,12 +518,12 @@ export default function Contacts() {
 					<div class="requests">
 						<details class="req">
 							<summary>
-								Отправленные заявки <span class="req__count">{outgoingRequests.value.length}</span>
+								{t("contacts.outgoingSummary")} <span class="req__count">{outgoingRequests.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
 								{outgoingRequests.value.length === 0 ? (
-									<p style={{ color: "var(--muted)" }}>Нет отправленных заявок на знакомство.</p>
+									<p style={{ color: "var(--muted)" }}>{t("contacts.noOutgoing")}</p>
 								) : (
 									<ul role="list" class="contact-row-list">
 										{outgoingRequests.value.map((req) => (
@@ -530,7 +531,7 @@ export default function Contacts() {
 												<ContactIdentity pubkey={req.peerPubkey} />
 												<div class="contact-row-actions">
 													<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
-														Отменить
+														{t("contacts.cancelRequestButton")}
 													</button>
 												</div>
 											</li>
@@ -542,12 +543,12 @@ export default function Contacts() {
 
 						<details class="req">
 							<summary>
-								Отклонённые <span class="req__count">{rejectedByMe.value.length}</span>
+								{t("contacts.rejectedSummary")} <span class="req__count">{rejectedByMe.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
 								{rejectedByMe.value.length === 0 ? (
-									<p style={{ color: "var(--muted)" }}>Нет отклонённых заявок.</p>
+									<p style={{ color: "var(--muted)" }}>{t("contacts.noRejected")}</p>
 								) : (
 									<ul role="list" class="contact-row-list">
 										{rejectedByMe.value.map((req) => (
@@ -561,7 +562,7 @@ export default function Contacts() {
 														disabled={busy}
 														onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
 													>
-														Добавить всё же
+														{t("contacts.addAnywayButton")}
 													</button>
 												</div>
 											</li>
@@ -575,7 +576,7 @@ export default function Contacts() {
 					<div class="requests">
 						<details class="req">
 							<summary>
-								Заблокированные <span class="req__count">{blockedContacts.value.length}</span>
+								{t("contacts.blockedSummary")} <span class="req__count">{blockedContacts.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
@@ -585,14 +586,14 @@ export default function Contacts() {
 											<ContactIdentity pubkey={pubkey} />
 											<div class="contact-row-actions">
 												<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
-													Разблокировать
+													{t("contacts.unblockButton")}
 												</button>
 											</div>
 										</li>
 									))}
 								</ul>
 								{blockedContacts.value.length === 0 && (
-									<p style={{ color: "var(--muted)" }}>Нет заблокированных.</p>
+									<p style={{ color: "var(--muted)" }}>{t("contacts.noBlocked")}</p>
 								)}
 							</div>
 						</details>
@@ -614,7 +615,7 @@ function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
 	return (
 		<details class="menu" ref={ref} onClick={handleMenuClick}>
 			<summary class="chip" style={{ cursor: "pointer" }}>
-				<IconPlus /> в группу
+				<IconPlus /> {t("contacts.addToGroupLabel")}
 			</summary>
 			<div class="menu__pop">
 				{available.map((g) => (

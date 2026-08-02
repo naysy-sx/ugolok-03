@@ -13,7 +13,10 @@
 		"create": "Utwórz",
 		"saving": "Zapisywanie…",
 		"send": "Wyślij",
-		"rateLimitError": "Zbyt szybko — poczekaj chwilę"
+		"rateLimitError": "Zbyt szybko — poczekaj chwilę",
+		"add": "Dodaj",
+		"call": "Zadzwoń",
+		"delete": "Usuń"
 	},
 	"nav": {
 		"journal": "Dziennik",
@@ -248,5 +251,38 @@
 		"writePostButton": "Napisz post",
 		"loadOlderButton": "Wczytaj starsze posty",
 		"noPosts": "Na tym kanale nie ma jeszcze postów."
+	},
+	"contacts": {
+		"openChatAria": "Otwórz czat z {{name}}",
+		"addContactLabel": "Dodaj kontakt (npub lub klucz hex)",
+		"groupsHeading": "Grupy",
+		"allGroupsLabel": "Wszystkie grupy",
+		"renameGroupLabel": "Nowa nazwa grupy",
+		"groupActionsAria": "Działania dla grupy „{{name}}”",
+		"renameAction": "Zmień nazwę",
+		"newGroupNameLabel": "Nazwa nowej grupy",
+		"newGroupPlaceholder": "Nowa grupa…",
+		"heading": "Kontakty ({{count}})",
+		"callAria": "Zadzwoń do {{name}}",
+		"hidePermissions": "Ukryj uprawnienia",
+		"showPermissions": "Uprawnienia",
+		"blockAction": "Zablokuj",
+		"removeFromGroupAria": "Usuń z grupy {{name}}",
+		"addToGroupLabel": "do grupy",
+		"noContactsAtAll": "Nie masz jeszcze żadnych kontaktów.",
+		"noContactsInGroups": "Żaden kontakt nie należy do wybranych grup.",
+		"incomingHeading": "Otrzymane zaproszenia ({{count}})",
+		"noIncoming": "Brak otrzymanych zaproszeń do kontaktów.",
+		"acceptButton": "Akceptuj",
+		"rejectButton": "Odrzuć",
+		"outgoingSummary": "Wysłane zaproszenia",
+		"noOutgoing": "Brak wysłanych zaproszeń do kontaktów.",
+		"cancelRequestButton": "Anuluj",
+		"rejectedSummary": "Odrzucone",
+		"noRejected": "Brak odrzuconych zaproszeń.",
+		"addAnywayButton": "Dodaj mimo to",
+		"blockedSummary": "Zablokowani",
+		"unblockButton": "Odblokuj",
+		"noBlocked": "Brak zablokowanych kontaktów."
 	}
 }

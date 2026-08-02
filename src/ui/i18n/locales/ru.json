@@ -13,7 +13,10 @@
 		"create": "Создать",
 		"saving": "Сохранение…",
 		"send": "Отправить",
-		"rateLimitError": "Слишком быстро — подождите немного"
+		"rateLimitError": "Слишком быстро — подождите немного",
+		"add": "Добавить",
+		"call": "Позвонить",
+		"delete": "Удалить"
 	},
 	"nav": {
 		"journal": "Журнал",
@@ -248,5 +251,38 @@
 		"writePostButton": "Написать пост",
 		"loadOlderButton": "Загрузить более старые посты",
 		"noPosts": "В этом канале пока нет постов."
+	},
+	"contacts": {
+		"openChatAria": "Открыть чат с {{name}}",
+		"addContactLabel": "Добавить контакт (npub или hex-ключ)",
+		"groupsHeading": "Группы",
+		"allGroupsLabel": "Все группы",
+		"renameGroupLabel": "Новое имя группы",
+		"groupActionsAria": "Действия с группой «{{name}}»",
+		"renameAction": "Переименовать",
+		"newGroupNameLabel": "Название новой группы",
+		"newGroupPlaceholder": "Новая группа…",
+		"heading": "Контакты ({{count}})",
+		"callAria": "Позвонить {{name}}",
+		"hidePermissions": "Скрыть права",
+		"showPermissions": "Права",
+		"blockAction": "Заблокировать",
+		"removeFromGroupAria": "Убрать из группы {{name}}",
+		"addToGroupLabel": "в группу",
+		"noContactsAtAll": "Пока нет ни одного контакта.",
+		"noContactsInGroups": "Ни один контакт не входит в выбранные группы.",
+		"incomingHeading": "Входящие заявки ({{count}})",
+		"noIncoming": "Нет входящих запросов на добавление в контакты.",
+		"acceptButton": "Принять",
+		"rejectButton": "Отклонить",
+		"outgoingSummary": "Отправленные заявки",
+		"noOutgoing": "Нет отправленных заявок на знакомство.",
+		"cancelRequestButton": "Отменить",
+		"rejectedSummary": "Отклонённые",
+		"noRejected": "Нет отклонённых заявок.",
+		"addAnywayButton": "Добавить всё же",
+		"blockedSummary": "Заблокированные",
+		"unblockButton": "Разблокировать",
+		"noBlocked": "Нет заблокированных."
 	}
 }

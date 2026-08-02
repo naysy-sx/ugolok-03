@@ -13,7 +13,10 @@
 		"create": "Crear",
 		"saving": "Guardando…",
 		"send": "Enviar",
-		"rateLimitError": "Demasiado rápido — espera un momento"
+		"rateLimitError": "Demasiado rápido — espera un momento",
+		"add": "Añadir",
+		"call": "Llamar",
+		"delete": "Eliminar"
 	},
 	"nav": {
 		"journal": "Registro",
@@ -248,5 +251,38 @@
 		"writePostButton": "Escribir publicación",
 		"loadOlderButton": "Cargar publicaciones anteriores",
 		"noPosts": "Todavía no hay publicaciones en este canal."
+	},
+	"contacts": {
+		"openChatAria": "Abrir chat con {{name}}",
+		"addContactLabel": "Añadir contacto (npub o clave hex)",
+		"groupsHeading": "Grupos",
+		"allGroupsLabel": "Todos los grupos",
+		"renameGroupLabel": "Nuevo nombre del grupo",
+		"groupActionsAria": "Acciones para el grupo «{{name}}»",
+		"renameAction": "Renombrar",
+		"newGroupNameLabel": "Nombre del nuevo grupo",
+		"newGroupPlaceholder": "Nuevo grupo…",
+		"heading": "Contactos ({{count}})",
+		"callAria": "Llamar a {{name}}",
+		"hidePermissions": "Ocultar permisos",
+		"showPermissions": "Permisos",
+		"blockAction": "Bloquear",
+		"removeFromGroupAria": "Quitar del grupo {{name}}",
+		"addToGroupLabel": "al grupo",
+		"noContactsAtAll": "Todavía no tienes ningún contacto.",
+		"noContactsInGroups": "Ningún contacto pertenece a los grupos seleccionados.",
+		"incomingHeading": "Solicitudes recibidas ({{count}})",
+		"noIncoming": "No hay solicitudes de contacto recibidas.",
+		"acceptButton": "Aceptar",
+		"rejectButton": "Rechazar",
+		"outgoingSummary": "Solicitudes enviadas",
+		"noOutgoing": "No hay solicitudes de contacto enviadas.",
+		"cancelRequestButton": "Cancelar",
+		"rejectedSummary": "Rechazadas",
+		"noRejected": "No hay solicitudes rechazadas.",
+		"addAnywayButton": "Añadir de todos modos",
+		"blockedSummary": "Bloqueados",
+		"unblockButton": "Desbloquear",
+		"noBlocked": "No hay contactos bloqueados."
 	}
 }

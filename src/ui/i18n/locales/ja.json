@@ -13,7 +13,10 @@
 		"create": "作成",
 		"saving": "保存中…",
 		"send": "送信",
-		"rateLimitError": "早すぎます — 少しお待ちください"
+		"rateLimitError": "早すぎます — 少しお待ちください",
+		"add": "追加",
+		"call": "通話",
+		"delete": "削除"
 	},
 	"nav": {
 		"journal": "ジャーナル",
@@ -248,5 +251,38 @@
 		"writePostButton": "投稿を書く",
 		"loadOlderButton": "過去の投稿を読み込む",
 		"noPosts": "このチャンネルにはまだ投稿がありません。"
+	},
+	"contacts": {
+		"openChatAria": "{{name}} とのチャットを開く",
+		"addContactLabel": "連絡先を追加（npub または16進鍵）",
+		"groupsHeading": "グループ",
+		"allGroupsLabel": "すべてのグループ",
+		"renameGroupLabel": "新しいグループ名",
+		"groupActionsAria": "グループ「{{name}}」の操作",
+		"renameAction": "名前を変更",
+		"newGroupNameLabel": "新しいグループの名前",
+		"newGroupPlaceholder": "新しいグループ…",
+		"heading": "連絡先（{{count}}）",
+		"callAria": "{{name}} に発信",
+		"hidePermissions": "権限を隠す",
+		"showPermissions": "権限",
+		"blockAction": "ブロック",
+		"removeFromGroupAria": "グループ {{name}} から削除",
+		"addToGroupLabel": "グループへ",
+		"noContactsAtAll": "まだ連絡先がありません。",
+		"noContactsInGroups": "選択したグループに属する連絡先はありません。",
+		"incomingHeading": "受信したリクエスト（{{count}}）",
+		"noIncoming": "受信した連絡先リクエストはありません。",
+		"acceptButton": "承認",
+		"rejectButton": "拒否",
+		"outgoingSummary": "送信したリクエスト",
+		"noOutgoing": "送信したリクエストはありません。",
+		"cancelRequestButton": "取り消す",
+		"rejectedSummary": "拒否済み",
+		"noRejected": "拒否したリクエストはありません。",
+		"addAnywayButton": "それでも追加する",
+		"blockedSummary": "ブロック済み",
+		"unblockButton": "ブロック解除",
+		"noBlocked": "ブロックした連絡先はありません。"
 	}
 }

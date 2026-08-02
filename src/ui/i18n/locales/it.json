@@ -13,7 +13,10 @@
 		"create": "Crea",
 		"saving": "Salvataggio…",
 		"send": "Invia",
-		"rateLimitError": "Troppo veloce — attendi un momento"
+		"rateLimitError": "Troppo veloce — attendi un momento",
+		"add": "Aggiungi",
+		"call": "Chiama",
+		"delete": "Elimina"
 	},
 	"nav": {
 		"journal": "Diario",
@@ -248,5 +251,38 @@
 		"writePostButton": "Scrivi un post",
 		"loadOlderButton": "Carica post più vecchi",
 		"noPosts": "In questo canale non ci sono ancora post."
+	},
+	"contacts": {
+		"openChatAria": "Apri chat con {{name}}",
+		"addContactLabel": "Aggiungi contatto (npub o chiave hex)",
+		"groupsHeading": "Gruppi",
+		"allGroupsLabel": "Tutti i gruppi",
+		"renameGroupLabel": "Nuovo nome del gruppo",
+		"groupActionsAria": "Azioni per il gruppo «{{name}}»",
+		"renameAction": "Rinomina",
+		"newGroupNameLabel": "Nome del nuovo gruppo",
+		"newGroupPlaceholder": "Nuovo gruppo…",
+		"heading": "Contatti ({{count}})",
+		"callAria": "Chiama {{name}}",
+		"hidePermissions": "Nascondi permessi",
+		"showPermissions": "Permessi",
+		"blockAction": "Blocca",
+		"removeFromGroupAria": "Rimuovi dal gruppo {{name}}",
+		"addToGroupLabel": "al gruppo",
+		"noContactsAtAll": "Non hai ancora nessun contatto.",
+		"noContactsInGroups": "Nessun contatto appartiene ai gruppi selezionati.",
+		"incomingHeading": "Richieste ricevute ({{count}})",
+		"noIncoming": "Nessuna richiesta di contatto ricevuta.",
+		"acceptButton": "Accetta",
+		"rejectButton": "Rifiuta",
+		"outgoingSummary": "Richieste inviate",
+		"noOutgoing": "Nessuna richiesta di contatto inviata.",
+		"cancelRequestButton": "Annulla",
+		"rejectedSummary": "Rifiutate",
+		"noRejected": "Nessuna richiesta rifiutata.",
+		"addAnywayButton": "Aggiungi comunque",
+		"blockedSummary": "Bloccati",
+		"unblockButton": "Sblocca",
+		"noBlocked": "Nessun contatto bloccato."
 	}
 }
