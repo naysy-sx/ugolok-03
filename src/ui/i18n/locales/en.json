@@ -543,5 +543,65 @@
 			"remoteHangup": "ended by the other party",
 			"connectionLost": "connection lost"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Report",
+			"ignore": "Ignore"
+		},
+		"banConfirm": "Ban this member? They will lose access to the channel and their content will be hidden from others. This is irreversible (there's no unban).",
+		"totalReports": "Total reports: {{total}}, unviewed: {{unviewed}}",
+		"markAllViewed": "Mark all as viewed",
+		"topIgnoredTitle": "Most ignored",
+		"ignoredByCount": "ignored by {{count}} members",
+		"bannedTitle": "Banned ({{count}})",
+		"reportsTitle": "Reports",
+		"noReports": "No reports yet.",
+		"newLabel": "new",
+		"fromLabel": "From:",
+		"toLabel": "To:",
+		"markViewedButton": "Mark as viewed",
+		"banButton": "Ban",
+		"reportPromptMessage": "Describe the reason for the report (optional):",
+		"reportSentToast": "Report sent",
+		"reportFailedToast": "Failed to send the report",
+		"ignoreConfirm": "Ignore this member in this channel? This is irreversible (only the owner can undo it).",
+		"memberIgnoredToast": "Member ignored",
+		"ignoreFailedToast": "Failed to ignore the member",
+		"reportButton": "Report",
+		"ignoreButton": "Ignore"
+	},
+	"permissions": {
+		"resourceRequiredError": "Enter a resource identifier.",
+		"relayRejectedPublish": "the relay rejected the publication",
+		"resourceIdLabel": "Resource identifier",
+		"legend": "Permissions",
+		"viewLabel": "View",
+		"commentLabel": "Comment"
+	},
+	"postCard": {
+		"archivedLabel": "(archived)",
+		"commentsButton": "Comments ({{count}})",
+		"actionsAria": "Actions for post «{{excerpt}}»",
+		"noTextFallback": "no text",
+		"archiveButton": "Archive",
+		"unpublishButton": "Unpublish"
+	},
+	"channelChat": {
+		"messageLabel": "Message in the channel chat",
+		"noMessages": "No messages in the channel chat yet.",
+		"readOnlyNotice": "Read-only — subscribe to write in the chat."
+	},
+	"filePicker": {
+		"dialogAria": "File selection",
+		"selectButton": "Select",
+		"breadcrumbAria": "Breadcrumbs"
+	},
+	"imageModal": {
+		"viewAria": "Image preview"
+	},
+	"syncProgress": {
+		"defaultLabel": "Syncing data with the network…",
+		"toggleLogTitle": "Show/hide sync log"
 	}
 }

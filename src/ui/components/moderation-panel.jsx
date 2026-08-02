@@ -10,8 +10,9 @@ import {
 	banMember,
 } from "../../domain/content/moderation.js";
 import { ContactIdentity } from "../screens/contacts.jsx";
+import { t } from "../signals/i18n.js";
 
-const REASON_LABEL = { report: "Жалоба", ignore: "Игнор" };
+const REASON_LABEL_KEYS = { report: "moderation.reasonLabel.report", ignore: "moderation.reasonLabel.ignore" };
 
 // ТЗ: третья вкладка канала, только владелец. Список отчётов (жалобы+игноры), статистика,
 // пометка просмотренных, бан прямо из строки репорта.
@@ -33,7 +34,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	}, [ownerPubkey, channelId, messagingActivity.value]);
 
 	async function handleBan(targetPubkey) {
-		if (!window.confirm("Забанить этого участника? Он потеряет доступ к каналу, его контент будет скрыт у остальных. Действие необратимо (разбан не предусмотрен).")) return;
+		if (!window.confirm(t("moderation.banConfirm"))) return;
 		setBusy(true);
 		setError("");
 		try {
@@ -56,23 +57,23 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 
 			<div class="cluster" style={{ alignItems: "center" }}>
 				<p>
-					Всего отчётов: <strong>{stats.total}</strong>, непросмотрено: <strong>{stats.unviewed}</strong>
+					{t("moderation.totalReports", { total: stats.total, unviewed: stats.unviewed })}
 				</p>
 				{stats.unviewed > 0 && (
 					<button type="button" onClick={() => markAllReportsViewed(ownerPubkey, channelId).then(refresh)}>
-						Пометить всё просмотренным
+						{t("moderation.markAllViewed")}
 					</button>
 				)}
 			</div>
 
 			{stats.topIgnored.length > 0 && (
 				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<h3>Топ игнорируемых</h3>
+					<h3>{t("moderation.topIgnoredTitle")}</h3>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{stats.topIgnored.map((entry) => (
 							<li key={entry.pubkey} class="cluster" style={{ alignItems: "center" }}>
 								<ContactIdentity pubkey={entry.pubkey} />
-								<small style={{ color: "var(--muted)" }}>проигнорирован {entry.count} участниками</small>
+								<small style={{ color: "var(--muted)" }}>{t("moderation.ignoredByCount", { count: entry.count })}</small>
 							</li>
 						))}
 					</ul>
@@ -81,7 +82,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 
 			{banned.length > 0 && (
 				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-					<h3>Забаненные ({banned.length})</h3>
+					<h3>{t("moderation.bannedTitle", { count: banned.length })}</h3>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{banned.map((pubkey) => (
 							<li key={pubkey}>
@@ -93,9 +94,9 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 			)}
 
 			<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h3>Отчёты</h3>
+				<h3>{t("moderation.reportsTitle")}</h3>
 				{reports.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>Пока нет ни одной жалобы.</p>
+					<p style={{ color: "var(--muted)" }}>{t("moderation.noReports")}</p>
 				) : (
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
 						{reports.map((r) => (
@@ -111,27 +112,27 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 								}}
 							>
 								<div class="cluster" style={{ alignItems: "center" }}>
-									<strong>{REASON_LABEL[r.reason] || r.reason}</strong>
-									{!r.viewed && <small style={{ color: "var(--accent)" }}>новое</small>}
+									<strong>{REASON_LABEL_KEYS[r.reason] ? t(REASON_LABEL_KEYS[r.reason]) : r.reason}</strong>
+									{!r.viewed && <small style={{ color: "var(--accent)" }}>{t("moderation.newLabel")}</small>}
 								</div>
 								<div class="cluster" style={{ alignItems: "center" }}>
-									<span>От:</span>
+									<span>{t("moderation.fromLabel")}</span>
 									<ContactIdentity pubkey={r.reporterPubkey} />
 								</div>
 								<div class="cluster" style={{ alignItems: "center" }}>
-									<span>На:</span>
+									<span>{t("moderation.toLabel")}</span>
 									<ContactIdentity pubkey={r.targetPubkey} />
 								</div>
 								<p style={{ whiteSpace: "pre-wrap", color: "var(--muted)" }}>{r.contentText}</p>
 								<div class="cluster">
 									{!r.viewed && (
 										<button type="button" onClick={() => markReportViewed(ownerPubkey, r.id).then(refresh)}>
-											Пометить просмотренным
+											{t("moderation.markViewedButton")}
 										</button>
 									)}
 									{!banned.includes(r.targetPubkey) && (
 										<button type="button" disabled={busy} onClick={() => handleBan(r.targetPubkey)}>
-											Забанить
+											{t("moderation.banButton")}
 										</button>
 									)}
 								</div>

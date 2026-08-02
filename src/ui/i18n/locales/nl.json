@@ -543,5 +543,65 @@
 			"remoteHangup": "door de ander beëindigd",
 			"connectionLost": "verbinding verloren"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Melding",
+			"ignore": "Genegeerd"
+		},
+		"banConfirm": "Dit lid verbannen? Diegene verliest toegang tot het kanaal en de inhoud wordt voor anderen verborgen. Dit is onomkeerbaar (geen ontbanning mogelijk).",
+		"totalReports": "Totaal aantal meldingen: {{total}}, ongezien: {{unviewed}}",
+		"markAllViewed": "Alles als gezien markeren",
+		"topIgnoredTitle": "Meest genegeerd",
+		"ignoredByCount": "genegeerd door {{count}} leden",
+		"bannedTitle": "Verbannen ({{count}})",
+		"reportsTitle": "Meldingen",
+		"noReports": "Nog geen meldingen.",
+		"newLabel": "nieuw",
+		"fromLabel": "Van:",
+		"toLabel": "Aan:",
+		"markViewedButton": "Als gezien markeren",
+		"banButton": "Verbannen",
+		"reportPromptMessage": "Beschrijf de reden van de melding (optioneel):",
+		"reportSentToast": "Melding verzonden",
+		"reportFailedToast": "Melding kon niet worden verzonden",
+		"ignoreConfirm": "Dit lid in dit kanaal negeren? Dit is onomkeerbaar (alleen de eigenaar kan het ongedaan maken).",
+		"memberIgnoredToast": "Lid genegeerd",
+		"ignoreFailedToast": "Kon lid niet negeren",
+		"reportButton": "Melden",
+		"ignoreButton": "Negeren"
+	},
+	"permissions": {
+		"resourceRequiredError": "Geef een resource-ID op.",
+		"relayRejectedPublish": "de relay heeft de publicatie geweigerd",
+		"resourceIdLabel": "Resource-ID",
+		"legend": "Rechten",
+		"viewLabel": "Bekijken",
+		"commentLabel": "Reageren"
+	},
+	"postCard": {
+		"archivedLabel": "(gearchiveerd)",
+		"commentsButton": "Reacties ({{count}})",
+		"actionsAria": "Acties voor bericht ‘{{excerpt}}’",
+		"noTextFallback": "geen tekst",
+		"archiveButton": "Archiveren",
+		"unpublishButton": "Publicatie intrekken"
+	},
+	"channelChat": {
+		"messageLabel": "Bericht in de kanaalchat",
+		"noMessages": "Nog geen berichten in de kanaalchat.",
+		"readOnlyNotice": "Alleen-lezen — abonneer om in de chat te schrijven."
+	},
+	"filePicker": {
+		"dialogAria": "Bestand selecteren",
+		"selectButton": "Selecteren",
+		"breadcrumbAria": "Kruimelpad"
+	},
+	"imageModal": {
+		"viewAria": "Afbeeldingsvoorbeeld"
+	},
+	"syncProgress": {
+		"defaultLabel": "Gegevens synchroniseren met het netwerk…",
+		"toggleLogTitle": "Synchronisatielogboek tonen/verbergen"
 	}
 }

@@ -13,6 +13,7 @@ import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
+import { t } from "../signals/i18n.js";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
@@ -27,7 +28,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 		if (busy || text.length === 0) return;
 		if (attachment.file && attachment.error) return;
 		if (!limiter.tryAction("chat")) {
-			setError("Слишком быстро — подождите немного");
+			setError(t("common.rateLimitError"));
 			return;
 		}
 		setBusy(true);
@@ -56,7 +57,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				</p>
 			)}
 			<label class="visually-hidden" for="channel-chat-text">
-				Сообщение в чат канала
+				{t("channelChat.messageLabel")}
 			</label>
 			<textarea id="channel-chat-text" value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
 			{attachment.file && (
@@ -66,13 +67,13 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				{allowAttachments && (
 					<>
 						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-						<button type="button" onClick={() => attachment.inputRef.current?.click()} aria-label="Прикрепить файл">
+						<button type="button" onClick={() => attachment.inputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
 							<IconPaperclip />
 						</button>
 					</>
 				)}
 				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					{busy ? "Отправка…" : "Отправить"}
+					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
 				</button>
 			</div>
 		</form>
@@ -133,11 +134,11 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 			)}
 			{hasMore && (
 				<button type="button" onClick={handleLoadMore}>
-					Загрузить более старые сообщения
+					{t("chat.window.loadOlderButton")}
 				</button>
 			)}
 			{messages.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>Пока нет сообщений в чате канала.</p>
+				<p style={{ color: "var(--muted)" }}>{t("channelChat.noMessages")}</p>
 			) : (
 				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
 					{messages.map((m) => (
@@ -168,7 +169,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 			{canWrite ? (
 				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} allowAttachments={allowAttachments} limiter={limiter} onSent={refresh} />
 			) : (
-				<p style={{ color: "var(--muted)" }}>Только чтение — подпишитесь, чтобы писать в чат.</p>
+				<p style={{ color: "var(--muted)" }}>{t("channelChat.readOnlyNotice")}</p>
 			)}
 		</div>
 	);

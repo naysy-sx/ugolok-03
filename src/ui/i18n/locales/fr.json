@@ -543,5 +543,65 @@
 			"remoteHangup": "terminé par l'autre partie",
 			"connectionLost": "connexion perdue"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Signalement",
+			"ignore": "Ignoré"
+		},
+		"banConfirm": "Bannir ce participant ? Il perdra l'accès à la chaîne et son contenu sera masqué pour les autres. Cette action est irréversible (aucun débannissement prévu).",
+		"totalReports": "Total des signalements : {{total}}, non consultés : {{unviewed}}",
+		"markAllViewed": "Marquer tout comme consulté",
+		"topIgnoredTitle": "Les plus ignorés",
+		"ignoredByCount": "ignoré par {{count}} participants",
+		"bannedTitle": "Bannis ({{count}})",
+		"reportsTitle": "Signalements",
+		"noReports": "Aucun signalement pour l'instant.",
+		"newLabel": "nouveau",
+		"fromLabel": "De :",
+		"toLabel": "À :",
+		"markViewedButton": "Marquer comme consulté",
+		"banButton": "Bannir",
+		"reportPromptMessage": "Décrivez le motif du signalement (facultatif) :",
+		"reportSentToast": "Signalement envoyé",
+		"reportFailedToast": "Échec de l'envoi du signalement",
+		"ignoreConfirm": "Ignorer ce participant dans cette chaîne ? Cette action est irréversible (seul le propriétaire peut l'annuler).",
+		"memberIgnoredToast": "Participant ignoré",
+		"ignoreFailedToast": "Échec de l'ignorance du participant",
+		"reportButton": "Signaler",
+		"ignoreButton": "Ignorer"
+	},
+	"permissions": {
+		"resourceRequiredError": "Indiquez l'identifiant de la ressource.",
+		"relayRejectedPublish": "le relay a rejeté la publication",
+		"resourceIdLabel": "Identifiant de la ressource",
+		"legend": "Autorisations",
+		"viewLabel": "Voir",
+		"commentLabel": "Commenter"
+	},
+	"postCard": {
+		"archivedLabel": "(archivé)",
+		"commentsButton": "Commentaires ({{count}})",
+		"actionsAria": "Actions pour la publication « {{excerpt}} »",
+		"noTextFallback": "sans texte",
+		"archiveButton": "Archiver",
+		"unpublishButton": "Dépublier"
+	},
+	"channelChat": {
+		"messageLabel": "Message dans le chat de la chaîne",
+		"noMessages": "Pas encore de messages dans le chat de la chaîne.",
+		"readOnlyNotice": "Lecture seule — abonnez-vous pour écrire dans le chat."
+	},
+	"filePicker": {
+		"dialogAria": "Sélection de fichier",
+		"selectButton": "Sélectionner",
+		"breadcrumbAria": "Fil d'Ariane"
+	},
+	"imageModal": {
+		"viewAria": "Aperçu de l'image"
+	},
+	"syncProgress": {
+		"defaultLabel": "Synchronisation des données avec le réseau…",
+		"toggleLogTitle": "Afficher/masquer le journal de synchronisation"
 	}
 }

@@ -543,5 +543,65 @@
 			"remoteHangup": "vom Gesprächspartner beendet",
 			"connectionLost": "Verbindung verloren"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Meldung",
+			"ignore": "Ignoriert"
+		},
+		"banConfirm": "Diesen Teilnehmer sperren? Er verliert den Zugriff auf den Kanal, sein Inhalt wird für andere ausgeblendet. Dies ist unwiderruflich (keine Entsperrung vorgesehen).",
+		"totalReports": "Meldungen insgesamt: {{total}}, ungesehen: {{unviewed}}",
+		"markAllViewed": "Alle als gesehen markieren",
+		"topIgnoredTitle": "Meist ignoriert",
+		"ignoredByCount": "von {{count}} Teilnehmern ignoriert",
+		"bannedTitle": "Gesperrt ({{count}})",
+		"reportsTitle": "Meldungen",
+		"noReports": "Noch keine Meldungen.",
+		"newLabel": "neu",
+		"fromLabel": "Von:",
+		"toLabel": "An:",
+		"markViewedButton": "Als gesehen markieren",
+		"banButton": "Sperren",
+		"reportPromptMessage": "Beschreiben Sie den Grund der Meldung (optional):",
+		"reportSentToast": "Meldung gesendet",
+		"reportFailedToast": "Meldung konnte nicht gesendet werden",
+		"ignoreConfirm": "Diesen Teilnehmer in diesem Kanal ignorieren? Dies ist unwiderruflich (nur der Besitzer kann es aufheben).",
+		"memberIgnoredToast": "Teilnehmer ignoriert",
+		"ignoreFailedToast": "Teilnehmer konnte nicht ignoriert werden",
+		"reportButton": "Melden",
+		"ignoreButton": "Ignorieren"
+	},
+	"permissions": {
+		"resourceRequiredError": "Geben Sie eine Ressourcen-ID an.",
+		"relayRejectedPublish": "das Relay hat die Veröffentlichung abgelehnt",
+		"resourceIdLabel": "Ressourcen-ID",
+		"legend": "Berechtigungen",
+		"viewLabel": "Ansehen",
+		"commentLabel": "Kommentieren"
+	},
+	"postCard": {
+		"archivedLabel": "(archiviert)",
+		"commentsButton": "Kommentare ({{count}})",
+		"actionsAria": "Aktionen für Beitrag „{{excerpt}}“",
+		"noTextFallback": "kein Text",
+		"archiveButton": "Archivieren",
+		"unpublishButton": "Veröffentlichung zurückziehen"
+	},
+	"channelChat": {
+		"messageLabel": "Nachricht im Kanal-Chat",
+		"noMessages": "Noch keine Nachrichten im Kanal-Chat.",
+		"readOnlyNotice": "Nur Lesezugriff — abonnieren, um im Chat zu schreiben."
+	},
+	"filePicker": {
+		"dialogAria": "Dateiauswahl",
+		"selectButton": "Auswählen",
+		"breadcrumbAria": "Breadcrumb-Navigation"
+	},
+	"imageModal": {
+		"viewAria": "Bildvorschau"
+	},
+	"syncProgress": {
+		"defaultLabel": "Daten werden mit dem Netzwerk synchronisiert…",
+		"toggleLogTitle": "Sync-Protokoll ein-/ausblenden"
 	}
 }

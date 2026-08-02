@@ -1,6 +1,7 @@
 import { publish } from "../signals/transport.js";
 import { reportContent, ignoreMember } from "../../domain/content/moderation.js";
 import { pushToast } from "../signals/toasts.js";
+import { t } from "../signals/i18n.js";
 
 // Кнопки "Пожаловаться"/"Игнорировать" у комментария/сообщения чата (не у СВОИХ —
 // проверка isOwnContent на уровне вызывающего кода, CommentNode/ChannelChat).
@@ -14,7 +15,7 @@ import { pushToast } from "../signals/toasts.js";
 // не зависит от того, открыт ли ещё попап.
 export default function ModerationActions({ viewerPubkey, viewerPrivKey, channelOwnerPubkey, channelId, targetPubkey, contentType, contentId, contentText }) {
 	async function handleReport() {
-		const reason = window.prompt("Опишите причину жалобы (необязательно):", "");
+		const reason = window.prompt(t("moderation.reportPromptMessage"), "");
 		if (reason === null) return; // отмена
 		try {
 			await reportContent(
@@ -23,29 +24,29 @@ export default function ModerationActions({ viewerPubkey, viewerPrivKey, channel
 				{ channelId, targetPubkey, contentType, contentId, contentText: reason || contentText, reason: "report" },
 				publish,
 			);
-			pushToast({ title: "Жалоба отправлена" });
+			pushToast({ title: t("moderation.reportSentToast") });
 		} catch (err) {
-			pushToast({ title: "Не удалось отправить жалобу", body: err?.message || String(err) });
+			pushToast({ title: t("moderation.reportFailedToast"), body: err?.message || String(err) });
 		}
 	}
 
 	async function handleIgnore() {
-		if (!window.confirm("Игнорировать этого участника в этом канале? Действие необратимо (снять может только владелец).")) return;
+		if (!window.confirm(t("moderation.ignoreConfirm"))) return;
 		try {
 			await ignoreMember(viewerPubkey, viewerPrivKey, channelOwnerPubkey, { channelId, targetPubkey, contentType, contentId, contentText }, publish);
-			pushToast({ title: "Участник проигнорирован" });
+			pushToast({ title: t("moderation.memberIgnoredToast") });
 		} catch (err) {
-			pushToast({ title: "Не удалось проигнорировать участника", body: err?.message || String(err) });
+			pushToast({ title: t("moderation.ignoreFailedToast"), body: err?.message || String(err) });
 		}
 	}
 
 	return (
 		<>
 			<button type="button" onClick={handleReport}>
-				Пожаловаться
+				{t("moderation.reportButton")}
 			</button>
 			<button type="button" onClick={handleIgnore}>
-				Игнорировать
+				{t("moderation.ignoreButton")}
 			</button>
 		</>
 	);

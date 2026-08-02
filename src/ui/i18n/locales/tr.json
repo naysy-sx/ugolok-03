@@ -543,5 +543,65 @@
 			"remoteHangup": "karşı taraf tarafından sonlandırıldı",
 			"connectionLost": "bağlantı koptu"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Şikayet",
+			"ignore": "Yoksayma"
+		},
+		"banConfirm": "Bu katılımcı yasaklansın mı? Kanala erişimini kaybedecek, içeriği diğerlerinden gizlenecek. Bu işlem geri alınamaz (yasağı kaldırma yok).",
+		"totalReports": "Toplam şikayet: {{total}}, incelenmemiş: {{unviewed}}",
+		"markAllViewed": "Tümünü incelendi olarak işaretle",
+		"topIgnoredTitle": "En çok yok sayılanlar",
+		"ignoredByCount": "{{count}} katılımcı tarafından yok sayıldı",
+		"bannedTitle": "Yasaklılar ({{count}})",
+		"reportsTitle": "Şikayetler",
+		"noReports": "Henüz şikayet yok.",
+		"newLabel": "yeni",
+		"fromLabel": "Kimden:",
+		"toLabel": "Kime:",
+		"markViewedButton": "İncelendi olarak işaretle",
+		"banButton": "Yasakla",
+		"reportPromptMessage": "Şikayet nedenini açıklayın (isteğe bağlı):",
+		"reportSentToast": "Şikayet gönderildi",
+		"reportFailedToast": "Şikayet gönderilemedi",
+		"ignoreConfirm": "Bu katılımcı bu kanalda yok sayılsın mı? Bu işlem geri alınamaz (yalnızca sahibi geri alabilir).",
+		"memberIgnoredToast": "Katılımcı yok sayıldı",
+		"ignoreFailedToast": "Katılımcı yok sayılamadı",
+		"reportButton": "Şikayet et",
+		"ignoreButton": "Yok say"
+	},
+	"permissions": {
+		"resourceRequiredError": "Bir kaynak kimliği girin.",
+		"relayRejectedPublish": "röle yayını reddetti",
+		"resourceIdLabel": "Kaynak kimliği",
+		"legend": "İzinler",
+		"viewLabel": "Görüntüleme",
+		"commentLabel": "Yorum yapma"
+	},
+	"postCard": {
+		"archivedLabel": "(arşivlendi)",
+		"commentsButton": "Yorumlar ({{count}})",
+		"actionsAria": "«{{excerpt}}» gönderisi için işlemler",
+		"noTextFallback": "metin yok",
+		"archiveButton": "Arşivle",
+		"unpublishButton": "Yayından kaldır"
+	},
+	"channelChat": {
+		"messageLabel": "Kanal sohbetine mesaj",
+		"noMessages": "Kanal sohbetinde henüz mesaj yok.",
+		"readOnlyNotice": "Salt okunur — sohbete yazmak için abone olun."
+	},
+	"filePicker": {
+		"dialogAria": "Dosya seçimi",
+		"selectButton": "Seç",
+		"breadcrumbAria": "Gezinme yolu"
+	},
+	"imageModal": {
+		"viewAria": "Görsel önizleme"
+	},
+	"syncProgress": {
+		"defaultLabel": "Veriler ağ ile eşitleniyor…",
+		"toggleLogTitle": "Eşitleme günlüğünü göster/gizle"
 	}
 }

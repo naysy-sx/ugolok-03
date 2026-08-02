@@ -543,5 +543,65 @@
 			"remoteHangup": "terminata dall'altra parte",
 			"connectionLost": "connessione persa"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Segnalazione",
+			"ignore": "Ignorato"
+		},
+		"banConfirm": "Bannare questo partecipante? Perderà l'accesso al canale e i suoi contenuti saranno nascosti agli altri. Questa azione è irreversibile (nessun sban previsto).",
+		"totalReports": "Segnalazioni totali: {{total}}, non visualizzate: {{unviewed}}",
+		"markAllViewed": "Segna tutto come visualizzato",
+		"topIgnoredTitle": "Più ignorati",
+		"ignoredByCount": "ignorato da {{count}} partecipanti",
+		"bannedTitle": "Bannati ({{count}})",
+		"reportsTitle": "Segnalazioni",
+		"noReports": "Ancora nessuna segnalazione.",
+		"newLabel": "nuovo",
+		"fromLabel": "Da:",
+		"toLabel": "A:",
+		"markViewedButton": "Segna come visualizzato",
+		"banButton": "Banna",
+		"reportPromptMessage": "Descrivi il motivo della segnalazione (facoltativo):",
+		"reportSentToast": "Segnalazione inviata",
+		"reportFailedToast": "Impossibile inviare la segnalazione",
+		"ignoreConfirm": "Ignorare questo partecipante in questo canale? Questa azione è irreversibile (solo il proprietario può annullarla).",
+		"memberIgnoredToast": "Partecipante ignorato",
+		"ignoreFailedToast": "Impossibile ignorare il partecipante",
+		"reportButton": "Segnala",
+		"ignoreButton": "Ignora"
+	},
+	"permissions": {
+		"resourceRequiredError": "Indica l'identificatore della risorsa.",
+		"relayRejectedPublish": "il relay ha rifiutato la pubblicazione",
+		"resourceIdLabel": "Identificatore della risorsa",
+		"legend": "Permessi",
+		"viewLabel": "Visualizza",
+		"commentLabel": "Commenta"
+	},
+	"postCard": {
+		"archivedLabel": "(archiviato)",
+		"commentsButton": "Commenti ({{count}})",
+		"actionsAria": "Azioni per il post «{{excerpt}}»",
+		"noTextFallback": "senza testo",
+		"archiveButton": "Archivia",
+		"unpublishButton": "Rimuovi pubblicazione"
+	},
+	"channelChat": {
+		"messageLabel": "Messaggio nella chat del canale",
+		"noMessages": "Ancora nessun messaggio nella chat del canale.",
+		"readOnlyNotice": "Sola lettura — iscriviti per scrivere in chat."
+	},
+	"filePicker": {
+		"dialogAria": "Selezione file",
+		"selectButton": "Seleziona",
+		"breadcrumbAria": "Percorso di navigazione"
+	},
+	"imageModal": {
+		"viewAria": "Anteprima immagine"
+	},
+	"syncProgress": {
+		"defaultLabel": "Sincronizzazione dei dati con la rete…",
+		"toggleLogTitle": "Mostra/nascondi il registro di sincronizzazione"
 	}
 }

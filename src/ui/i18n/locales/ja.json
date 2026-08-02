@@ -543,5 +543,65 @@
 			"remoteHangup": "相手が終了しました",
 			"connectionLost": "接続が失われました"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "通報",
+			"ignore": "無視"
+		},
+		"banConfirm": "この参加者をBANしますか？ チャンネルへのアクセスを失い、その投稿は他の人から非表示になります。この操作は取り消せません（BAN解除の機能はありません）。",
+		"totalReports": "通報件数: {{total}}件、未確認: {{unviewed}}件",
+		"markAllViewed": "すべて既読にする",
+		"topIgnoredTitle": "無視されている上位",
+		"ignoredByCount": "{{count}} 人に無視されています",
+		"bannedTitle": "BAN済み（{{count}}）",
+		"reportsTitle": "通報一覧",
+		"noReports": "まだ通報はありません。",
+		"newLabel": "新規",
+		"fromLabel": "通報者:",
+		"toLabel": "対象:",
+		"markViewedButton": "既読にする",
+		"banButton": "BANする",
+		"reportPromptMessage": "通報の理由を記入してください（任意）:",
+		"reportSentToast": "通報を送信しました",
+		"reportFailedToast": "通報を送信できませんでした",
+		"ignoreConfirm": "このチャンネルでこの参加者を無視しますか？ この操作は取り消せません（オーナーのみ解除可能）。",
+		"memberIgnoredToast": "参加者を無視しました",
+		"ignoreFailedToast": "参加者を無視できませんでした",
+		"reportButton": "通報する",
+		"ignoreButton": "無視する"
+	},
+	"permissions": {
+		"resourceRequiredError": "リソースIDを指定してください。",
+		"relayRejectedPublish": "リレーが公開を拒否しました",
+		"resourceIdLabel": "リソースID",
+		"legend": "権限",
+		"viewLabel": "閲覧",
+		"commentLabel": "コメント"
+	},
+	"postCard": {
+		"archivedLabel": "（アーカイブ済み）",
+		"commentsButton": "コメント（{{count}}）",
+		"actionsAria": "投稿「{{excerpt}}」の操作",
+		"noTextFallback": "テキストなし",
+		"archiveButton": "アーカイブ",
+		"unpublishButton": "公開を取り消す"
+	},
+	"channelChat": {
+		"messageLabel": "チャンネルチャットへのメッセージ",
+		"noMessages": "まだチャンネルチャットにメッセージはありません。",
+		"readOnlyNotice": "閲覧のみ — チャットに書き込むには登録してください。"
+	},
+	"filePicker": {
+		"dialogAria": "ファイル選択",
+		"selectButton": "選択",
+		"breadcrumbAria": "パンくずリスト"
+	},
+	"imageModal": {
+		"viewAria": "画像のプレビュー"
+	},
+	"syncProgress": {
+		"defaultLabel": "ネットワークとデータを同期中…",
+		"toggleLogTitle": "同期ログを表示/非表示"
 	}
 }

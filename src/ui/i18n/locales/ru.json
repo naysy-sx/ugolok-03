@@ -543,5 +543,65 @@
 			"remoteHangup": "завершён собеседником",
 			"connectionLost": "связь потеряна"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Жалоба",
+			"ignore": "Игнор"
+		},
+		"banConfirm": "Забанить этого участника? Он потеряет доступ к каналу, его контент будет скрыт у остальных. Действие необратимо (разбан не предусмотрен).",
+		"totalReports": "Всего отчётов: {{total}}, непросмотрено: {{unviewed}}",
+		"markAllViewed": "Пометить всё просмотренным",
+		"topIgnoredTitle": "Топ игнорируемых",
+		"ignoredByCount": "проигнорирован {{count}} участниками",
+		"bannedTitle": "Забаненные ({{count}})",
+		"reportsTitle": "Отчёты",
+		"noReports": "Пока нет ни одной жалобы.",
+		"newLabel": "новое",
+		"fromLabel": "От:",
+		"toLabel": "На:",
+		"markViewedButton": "Пометить просмотренным",
+		"banButton": "Забанить",
+		"reportPromptMessage": "Опишите причину жалобы (необязательно):",
+		"reportSentToast": "Жалоба отправлена",
+		"reportFailedToast": "Не удалось отправить жалобу",
+		"ignoreConfirm": "Игнорировать этого участника в этом канале? Действие необратимо (снять может только владелец).",
+		"memberIgnoredToast": "Участник проигнорирован",
+		"ignoreFailedToast": "Не удалось проигнорировать участника",
+		"reportButton": "Пожаловаться",
+		"ignoreButton": "Игнорировать"
+	},
+	"permissions": {
+		"resourceRequiredError": "Укажите идентификатор ресурса.",
+		"relayRejectedPublish": "relay отклонил публикацию",
+		"resourceIdLabel": "Идентификатор ресурса",
+		"legend": "Права",
+		"viewLabel": "Просмотр",
+		"commentLabel": "Комментирование"
+	},
+	"postCard": {
+		"archivedLabel": "(в архиве)",
+		"commentsButton": "Комментарии ({{count}})",
+		"actionsAria": "Действия с постом «{{excerpt}}»",
+		"noTextFallback": "без текста",
+		"archiveButton": "Архивировать",
+		"unpublishButton": "Снять с публикации"
+	},
+	"channelChat": {
+		"messageLabel": "Сообщение в чат канала",
+		"noMessages": "Пока нет сообщений в чате канала.",
+		"readOnlyNotice": "Только чтение — подпишитесь, чтобы писать в чат."
+	},
+	"filePicker": {
+		"dialogAria": "Выбор файла",
+		"selectButton": "Выбрать",
+		"breadcrumbAria": "Хлебные крошки"
+	},
+	"imageModal": {
+		"viewAria": "Просмотр изображения"
+	},
+	"syncProgress": {
+		"defaultLabel": "Синхронизация данных с сетью…",
+		"toggleLogTitle": "Показать/скрыть журнал синхронизации"
 	}
 }

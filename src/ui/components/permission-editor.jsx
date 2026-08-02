@@ -3,6 +3,7 @@ import { db } from "../../core/store/database.js";
 import { ACTIONS, can } from "../../domain/auth/bitset.js";
 import { buildPermissionEvent, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { publish, nextLamportTick } from "../signals/transport.js";
+import { t } from "../signals/i18n.js";
 
 // Реального resource-picker'а (каналы) ещё нет (этапы 28/30) — свободный текстовый
 // ввод идентификатора ресурса сознательно временный, не выдаётся за готовый продукт.
@@ -32,7 +33,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 		setError("");
 		setStatus("");
 		if (!resourceInput) {
-			setError("Укажите идентификатор ресурса.");
+			setError(t("permissions.resourceRequiredError"));
 			return;
 		}
 		try {
@@ -46,12 +47,12 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 			});
 			const result = await publish(event);
 			if (!result.ok) {
-				throw new Error(result.reason || "relay отклонил публикацию");
+				throw new Error(result.reason || t("permissions.relayRejectedPublish"));
 			}
 			await rebuildEffectivePermissions(ownerPubkey, privKey);
 			const row = await db.table("effectivePerms").get([ownerPubkey, subject, resourceInput]);
 			setMask(row?.mask ?? 0);
-			setStatus("Сохранено");
+			setStatus(t("profile.savedStatus"));
 		} catch (e) {
 			setError(e?.message || String(e));
 		}
@@ -63,7 +64,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 
 	return (
 		<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-			<label for={resourceInputId}>Идентификатор ресурса</label>
+			<label for={resourceInputId}>{t("permissions.resourceIdLabel")}</label>
 			<input
 				id={resourceInputId}
 				type="text"
@@ -72,7 +73,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 			/>
 
 			<fieldset class="cluster" disabled={!resourceInput}>
-				<legend>Права</legend>
+				<legend>{t("permissions.legend")}</legend>
 				<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
 					<input
 						id={viewId}
@@ -80,7 +81,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 						checked={can(mask, ACTIONS.VIEW)}
 						onChange={(e) => toggleAction(ACTIONS.VIEW, e.currentTarget.checked)}
 					/>
-					<label for={viewId}>Просмотр</label>
+					<label for={viewId}>{t("permissions.viewLabel")}</label>
 				</span>
 				<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
 					<input
@@ -89,7 +90,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 						checked={can(mask, ACTIONS.COMMENT)}
 						onChange={(e) => toggleAction(ACTIONS.COMMENT, e.currentTarget.checked)}
 					/>
-					<label for={commentId}>Комментирование</label>
+					<label for={commentId}>{t("permissions.commentLabel")}</label>
 				</span>
 			</fieldset>
 

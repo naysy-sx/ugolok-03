@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import { t } from "../signals/i18n.js";
 
 // CONTRACTS.md, этап 29 — решение против lightbox-библиотеки: требование buквально
 // "модалка + кнопка закрыть", без галерей/зума/свайпов. ~30 строк Preact вместо
@@ -16,7 +17,7 @@ export default function ImageModal({ src, alt, onClose }) {
 		<div
 			role="dialog"
 			aria-modal="true"
-			aria-label="Просмотр изображения"
+			aria-label={t("imageModal.viewAria")}
 			onClick={onClose}
 			style={{
 				position: "fixed",
@@ -38,7 +39,7 @@ export default function ImageModal({ src, alt, onClose }) {
 			<button
 				type="button"
 				onClick={onClose}
-				aria-label="Закрыть"
+				aria-label={t("common.close")}
 				style={{
 					position: "fixed",
 					top: "var(--space-m)",

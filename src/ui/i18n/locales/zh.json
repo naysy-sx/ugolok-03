@@ -543,5 +543,65 @@
 			"remoteHangup": "已被对方结束",
 			"connectionLost": "连接已断开"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "举报",
+			"ignore": "已忽略"
+		},
+		"banConfirm": "封禁此成员？该成员将失去对频道的访问权限，其内容对其他人隐藏。此操作不可撤销（没有解封功能）。",
+		"totalReports": "举报总数：{{total}}，未查看：{{unviewed}}",
+		"markAllViewed": "全部标记为已查看",
+		"topIgnoredTitle": "被忽略最多",
+		"ignoredByCount": "被 {{count}} 名成员忽略",
+		"bannedTitle": "已封禁（{{count}}）",
+		"reportsTitle": "举报",
+		"noReports": "暂无举报。",
+		"newLabel": "新",
+		"fromLabel": "举报人：",
+		"toLabel": "对象：",
+		"markViewedButton": "标记为已查看",
+		"banButton": "封禁",
+		"reportPromptMessage": "请描述举报原因（可选）：",
+		"reportSentToast": "举报已发送",
+		"reportFailedToast": "举报发送失败",
+		"ignoreConfirm": "在此频道忽略此成员？此操作不可撤销（只有所有者可以取消）。",
+		"memberIgnoredToast": "成员已忽略",
+		"ignoreFailedToast": "无法忽略该成员",
+		"reportButton": "举报",
+		"ignoreButton": "忽略"
+	},
+	"permissions": {
+		"resourceRequiredError": "请指定资源标识符。",
+		"relayRejectedPublish": "中继拒绝了发布",
+		"resourceIdLabel": "资源标识符",
+		"legend": "权限",
+		"viewLabel": "查看",
+		"commentLabel": "评论"
+	},
+	"postCard": {
+		"archivedLabel": "（已归档）",
+		"commentsButton": "评论（{{count}}）",
+		"actionsAria": "对帖子“{{excerpt}}”的操作",
+		"noTextFallback": "无文本",
+		"archiveButton": "归档",
+		"unpublishButton": "取消发布"
+	},
+	"channelChat": {
+		"messageLabel": "频道聊天消息",
+		"noMessages": "频道聊天中暂无消息。",
+		"readOnlyNotice": "只读——订阅后才能在聊天中发言。"
+	},
+	"filePicker": {
+		"dialogAria": "选择文件",
+		"selectButton": "选择",
+		"breadcrumbAria": "面包屑导航"
+	},
+	"imageModal": {
+		"viewAria": "图片预览"
+	},
+	"syncProgress": {
+		"defaultLabel": "正在与网络同步数据…",
+		"toggleLogTitle": "显示/隐藏同步日志"
 	}
 }

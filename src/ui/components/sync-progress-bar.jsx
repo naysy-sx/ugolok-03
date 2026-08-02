@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { connState, synced } from "../signals/transport.js";
 import { syncLog } from "../signals/sync-log.js";
+import { t, currentLocale } from "../signals/i18n.js";
 
 const SLOW_SYNC_THRESHOLD_MS = 3000; // пользователь: "если требует больше 3 секунд"
 
@@ -30,7 +31,7 @@ export default function SyncProgressBar() {
 	if (!visible || !isSyncing) return null;
 
 	const lastEntry = syncLog.value[syncLog.value.length - 1];
-	const labelText = lastEntry ? lastEntry.text : "Синхронизация данных с сетью…";
+	const labelText = lastEntry ? lastEntry.text : t("syncProgress.defaultLabel");
 
 	return (
 		<div class="sync-progress-bar" role="status" aria-live="polite">
@@ -39,7 +40,7 @@ export default function SyncProgressBar() {
 				class="sync-progress-bar-label" 
 				onClick={() => setExpanded((v) => !v)} 
 				style={{ cursor: "pointer" }} 
-				title="Показать/скрыть журнал синхронизации"
+				title={t("syncProgress.toggleLogTitle")}
 			>
 				{labelText}
 			</span>
@@ -48,7 +49,7 @@ export default function SyncProgressBar() {
 					<ul>
 						{syncLog.value.map((entry, i) => (
 							<li key={i}>
-								{new Date(entry.ts).toLocaleTimeString()} {entry.text}
+								{new Date(entry.ts).toLocaleTimeString(currentLocale.value)} {entry.text}
 							</li>
 						))}
 					</ul>

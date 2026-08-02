@@ -7,6 +7,7 @@ import { sortEntries } from "../../domain/files/sort.js";
 import IconFolder from "../icons/folder.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
+import { t } from "../signals/i18n.js";
 
 // FilePicker (§5.7 TASK.md) — ЕДИНАЯ реализация выбора узла из хранилища,
 // два потребителя (аватар — И7 7.2, вложение в чат — И7 7.3). "Второй
@@ -76,7 +77,7 @@ export default function FilePicker({ predicate = () => true, multiple = false, o
 		<div
 			role="dialog"
 			aria-modal="true"
-			aria-label="Выбор файла"
+			aria-label={t("filePicker.dialogAria")}
 			onClick={onCancel}
 			style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "var(--space-m)" }}
 		>
@@ -85,20 +86,20 @@ export default function FilePicker({ predicate = () => true, multiple = false, o
 				class="stack"
 				style={{ background: "var(--surface, canvas)", borderRadius: "var(--radius)", padding: "var(--space-m)", maxWidth: "36rem", width: "100%", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
 			>
-				<h2>Выбрать из хранилища</h2>
+				<h2>{t("profile.chooseFromStorageButton")}</h2>
 				{!ready ? (
-					<p>Загрузка…</p>
+					<p>{t("common.loading")}</p>
 				) : (
 					<PickerBody folderId={folderId} setFolderId={setFolderId} predicate={predicate} selected={selected} multiple={multiple} onOpenEntry={openEntry} />
 				)}
 				<div class="cluster" style={{ justifyContent: "flex-end" }}>
 					{multiple && (
 						<button type="button" onClick={confirmSelection} disabled={selected.size === 0}>
-							Выбрать {selected.size > 0 ? `(${selected.size})` : ""}
+							{t("filePicker.selectButton")} {selected.size > 0 ? `(${selected.size})` : ""}
 						</button>
 					)}
 					<button type="button" class="btn--ghost" onClick={onCancel}>
-						Отмена
+						{t("common.cancel")}
 					</button>
 				</div>
 			</div>
@@ -116,7 +117,7 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 		while (cur !== null && cur !== undefined && steps < 128) {
 			const node = R.nodes.get(cur);
 			if (!node) break;
-			path.unshift({ id: cur, name: cur === ROOT_ID ? "Файлы" : node.displayName });
+			path.unshift({ id: cur, name: cur === ROOT_ID ? t("nav.files") : node.displayName });
 			cur = node.parent;
 			steps += 1;
 		}
@@ -131,7 +132,7 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 
 	return (
 		<>
-			<nav class="cluster" aria-label="Хлебные крошки" style={{ flexWrap: "wrap" }}>
+			<nav class="cluster" aria-label={t("filePicker.breadcrumbAria")} style={{ flexWrap: "wrap" }}>
 				{path.map((crumb, i) => (
 					<span key={crumb.id} class="cluster" style={{ gap: "var(--space-2xs)" }}>
 						{i > 0 && <IconChevronRight aria-hidden="true" />}
@@ -142,7 +143,7 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 				))}
 			</nav>
 			<ul role="list" class="file-row-list" style={{ overflowY: "auto", flex: 1 }}>
-				{entries.length === 0 && <p style={{ color: "var(--muted)" }}>Здесь пока ничего нет.</p>}
+				{entries.length === 0 && <p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>}
 				{entries.map((entry) => {
 					const selectable = entry.kind === "dir" || predicate(entry);
 					return (
@@ -153,7 +154,7 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 									checked={selected.has(entry.id)}
 									disabled={!selectable}
 									onChange={() => onOpenEntry(entry)}
-									aria-label={`Выбрать «${entry.displayName}»`}
+									aria-label={t("files.selectRowAria", { name: entry.displayName })}
 								/>
 							)}
 							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}

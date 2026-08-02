@@ -543,5 +543,65 @@
 			"remoteHangup": "zakończone przez rozmówcę",
 			"connectionLost": "utracono połączenie"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Zgłoszenie",
+			"ignore": "Ignorowanie"
+		},
+		"banConfirm": "Zbanować tego uczestnika? Straci dostęp do kanału, a jego treści zostaną ukryte przed innymi. Działanie nieodwracalne (brak odbanowania).",
+		"totalReports": "Łącznie zgłoszeń: {{total}}, nieprzejrzanych: {{unviewed}}",
+		"markAllViewed": "Oznacz wszystko jako przejrzane",
+		"topIgnoredTitle": "Najczęściej ignorowani",
+		"ignoredByCount": "zignorowany przez {{count}} uczestników",
+		"bannedTitle": "Zbanowani ({{count}})",
+		"reportsTitle": "Zgłoszenia",
+		"noReports": "Jeszcze brak zgłoszeń.",
+		"newLabel": "nowe",
+		"fromLabel": "Od:",
+		"toLabel": "Do:",
+		"markViewedButton": "Oznacz jako przejrzane",
+		"banButton": "Zbanuj",
+		"reportPromptMessage": "Opisz powód zgłoszenia (opcjonalnie):",
+		"reportSentToast": "Zgłoszenie wysłane",
+		"reportFailedToast": "Nie udało się wysłać zgłoszenia",
+		"ignoreConfirm": "Zignorować tego uczestnika na tym kanale? Działanie nieodwracalne (może cofnąć tylko właściciel).",
+		"memberIgnoredToast": "Uczestnik zignorowany",
+		"ignoreFailedToast": "Nie udało się zignorować uczestnika",
+		"reportButton": "Zgłoś",
+		"ignoreButton": "Ignoruj"
+	},
+	"permissions": {
+		"resourceRequiredError": "Podaj identyfikator zasobu.",
+		"relayRejectedPublish": "relay odrzucił publikację",
+		"resourceIdLabel": "Identyfikator zasobu",
+		"legend": "Uprawnienia",
+		"viewLabel": "Podgląd",
+		"commentLabel": "Komentowanie"
+	},
+	"postCard": {
+		"archivedLabel": "(zarchiwizowano)",
+		"commentsButton": "Komentarze ({{count}})",
+		"actionsAria": "Działania dla posta „{{excerpt}}”",
+		"noTextFallback": "bez tekstu",
+		"archiveButton": "Archiwizuj",
+		"unpublishButton": "Cofnij publikację"
+	},
+	"channelChat": {
+		"messageLabel": "Wiadomość na czacie kanału",
+		"noMessages": "Jeszcze brak wiadomości na czacie kanału.",
+		"readOnlyNotice": "Tylko do odczytu — zasubskrybuj, aby pisać na czacie."
+	},
+	"filePicker": {
+		"dialogAria": "Wybór pliku",
+		"selectButton": "Wybierz",
+		"breadcrumbAria": "Ścieżka nawigacji"
+	},
+	"imageModal": {
+		"viewAria": "Podgląd obrazu"
+	},
+	"syncProgress": {
+		"defaultLabel": "Synchronizowanie danych z siecią…",
+		"toggleLogTitle": "Pokaż/ukryj dziennik synchronizacji"
 	}
 }

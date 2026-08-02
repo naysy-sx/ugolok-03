@@ -543,5 +543,65 @@
 			"remoteHangup": "encerrada pelo outro contato",
 			"connectionLost": "conexão perdida"
 		}
+	},
+	"moderation": {
+		"reasonLabel": {
+			"report": "Denúncia",
+			"ignore": "Ignorado"
+		},
+		"banConfirm": "Banir este participante? Ele perderá o acesso ao canal e seu conteúdo ficará oculto para os demais. Esta ação é irreversível (não há como desbanir).",
+		"totalReports": "Total de denúncias: {{total}}, não vistas: {{unviewed}}",
+		"markAllViewed": "Marcar tudo como visto",
+		"topIgnoredTitle": "Mais ignorados",
+		"ignoredByCount": "ignorado por {{count}} participantes",
+		"bannedTitle": "Banidos ({{count}})",
+		"reportsTitle": "Denúncias",
+		"noReports": "Ainda não há nenhuma denúncia.",
+		"newLabel": "novo",
+		"fromLabel": "De:",
+		"toLabel": "Para:",
+		"markViewedButton": "Marcar como visto",
+		"banButton": "Banir",
+		"reportPromptMessage": "Descreva o motivo da denúncia (opcional):",
+		"reportSentToast": "Denúncia enviada",
+		"reportFailedToast": "Não foi possível enviar a denúncia",
+		"ignoreConfirm": "Ignorar este participante neste canal? Esta ação é irreversível (somente o proprietário pode reverter).",
+		"memberIgnoredToast": "Participante ignorado",
+		"ignoreFailedToast": "Não foi possível ignorar o participante",
+		"reportButton": "Denunciar",
+		"ignoreButton": "Ignorar"
+	},
+	"permissions": {
+		"resourceRequiredError": "Informe o identificador do recurso.",
+		"relayRejectedPublish": "o relay rejeitou a publicação",
+		"resourceIdLabel": "Identificador do recurso",
+		"legend": "Permissões",
+		"viewLabel": "Visualizar",
+		"commentLabel": "Comentar"
+	},
+	"postCard": {
+		"archivedLabel": "(arquivado)",
+		"commentsButton": "Comentários ({{count}})",
+		"actionsAria": "Ações para a publicação «{{excerpt}}»",
+		"noTextFallback": "sem texto",
+		"archiveButton": "Arquivar",
+		"unpublishButton": "Remover publicação"
+	},
+	"channelChat": {
+		"messageLabel": "Mensagem no chat do canal",
+		"noMessages": "Ainda não há mensagens no chat do canal.",
+		"readOnlyNotice": "Somente leitura — inscreva-se para escrever no chat."
+	},
+	"filePicker": {
+		"dialogAria": "Seleção de arquivo",
+		"selectButton": "Selecionar",
+		"breadcrumbAria": "Trilha de navegação"
+	},
+	"imageModal": {
+		"viewAria": "Visualização da imagem"
+	},
+	"syncProgress": {
+		"defaultLabel": "Sincronizando dados com a rede…",
+		"toggleLogTitle": "Mostrar/ocultar o registro de sincronização"
 	}
 }
