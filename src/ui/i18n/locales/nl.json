@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Gegevens synchroniseren met het netwerk…",
 		"toggleLogTitle": "Synchronisatielogboek tonen/verbergen"
+	},
+	"help": {
+		"topicsAria": "Hulponderwerpen",
+		"topics": {
+			"oProekte": "Over het project",
+			"kontaktyIKanaly": "Contacten en kanalen",
+			"privatnost": "Privacy",
+			"stek": "Technologie",
+			"iskhodnyjKod": "Broncode"
+		}
 	}
 }

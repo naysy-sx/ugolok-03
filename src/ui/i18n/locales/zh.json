@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "正在与网络同步数据…",
 		"toggleLogTitle": "显示/隐藏同步日志"
+	},
+	"help": {
+		"topicsAria": "帮助主题",
+		"topics": {
+			"oProekte": "关于项目",
+			"kontaktyIKanaly": "联系人与频道",
+			"privatnost": "隐私",
+			"stek": "技术",
+			"iskhodnyjKod": "源代码"
+		}
 	}
 }

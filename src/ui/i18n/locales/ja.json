@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "ネットワークとデータを同期中…",
 		"toggleLogTitle": "同期ログを表示/非表示"
+	},
+	"help": {
+		"topicsAria": "ヘルプのトピック",
+		"topics": {
+			"oProekte": "プロジェクトについて",
+			"kontaktyIKanaly": "連絡先とチャンネル",
+			"privatnost": "プライバシー",
+			"stek": "技術",
+			"iskhodnyjKod": "ソースコード"
+		}
 	}
 }

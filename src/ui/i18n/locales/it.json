@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Sincronizzazione dei dati con la rete…",
 		"toggleLogTitle": "Mostra/nascondi il registro di sincronizzazione"
+	},
+	"help": {
+		"topicsAria": "Argomenti della guida",
+		"topics": {
+			"oProekte": "Informazioni sul progetto",
+			"kontaktyIKanaly": "Contatti e canali",
+			"privatnost": "Privacy",
+			"stek": "Tecnologie",
+			"iskhodnyjKod": "Codice sorgente"
+		}
 	}
 }

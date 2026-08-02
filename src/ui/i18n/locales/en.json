@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Syncing data with the network…",
 		"toggleLogTitle": "Show/hide sync log"
+	},
+	"help": {
+		"topicsAria": "Help topics",
+		"topics": {
+			"oProekte": "About the project",
+			"kontaktyIKanaly": "Contacts and channels",
+			"privatnost": "Privacy",
+			"stek": "Technology",
+			"iskhodnyjKod": "Source code"
+		}
 	}
 }

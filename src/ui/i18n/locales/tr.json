@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Veriler ağ ile eşitleniyor…",
 		"toggleLogTitle": "Eşitleme günlüğünü göster/gizle"
+	},
+	"help": {
+		"topicsAria": "Yardım konuları",
+		"topics": {
+			"oProekte": "Proje hakkında",
+			"kontaktyIKanaly": "Kişiler ve kanallar",
+			"privatnost": "Gizlilik",
+			"stek": "Teknoloji",
+			"iskhodnyjKod": "Kaynak kod"
+		}
 	}
 }

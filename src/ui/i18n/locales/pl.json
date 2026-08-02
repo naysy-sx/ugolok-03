@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Synchronizowanie danych z siecią…",
 		"toggleLogTitle": "Pokaż/ukryj dziennik synchronizacji"
+	},
+	"help": {
+		"topicsAria": "Tematy pomocy",
+		"topics": {
+			"oProekte": "O projekcie",
+			"kontaktyIKanaly": "Kontakty i kanały",
+			"privatnost": "Prywatność",
+			"stek": "Technologia",
+			"iskhodnyjKod": "Kod źródłowy"
+		}
 	}
 }

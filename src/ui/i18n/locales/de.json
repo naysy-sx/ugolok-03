@@ -603,5 +603,15 @@
 	"syncProgress": {
 		"defaultLabel": "Daten werden mit dem Netzwerk synchronisiert…",
 		"toggleLogTitle": "Sync-Protokoll ein-/ausblenden"
+	},
+	"help": {
+		"topicsAria": "Hilfethemen",
+		"topics": {
+			"oProekte": "Über das Projekt",
+			"kontaktyIKanaly": "Kontakte und Kanäle",
+			"privatnost": "Datenschutz",
+			"stek": "Technik",
+			"iskhodnyjKod": "Quellcode"
+		}
 	}
 }
