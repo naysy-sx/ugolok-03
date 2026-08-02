@@ -25,14 +25,20 @@ RUN --mount=type=cache,target=/build/.cache \
     make -j4
 
 FROM alpine:3.18.3
+# su-exec — сбросить root до strfry ПОСЛЕ chown volume (см. entrypoint ниже).
+# Именованный docker-том (relay-data:/app/strfry-db) создаётся Docker'ом с
+# правами root:root ДО первого запуска — непривилегированный strfry не может
+# открыть LMDB там без chown в рантайме (найдено живой проверкой, не
+# гипотезой: "mdb_env_open: Permission denied" при первом docker compose up).
 RUN apk --no-cache add \
-    lmdb flatbuffers libsecp256k1 libb2 zstd libressl \
+    lmdb flatbuffers libsecp256k1 libb2 zstd libressl su-exec \
   && rm -rf /var/cache/apk/*
 RUN adduser -D -h /app -s /bin/sh strfry && \
     chown -R strfry:strfry /app
-USER strfry
 COPY --from=build --chown=strfry:strfry /build/strfry /app/strfry
+RUN printf '#!/bin/sh\nset -e\nchown -R strfry:strfry /app/strfry-db\nexec su-exec strfry /app/strfry "$@"\n' > /entrypoint.sh \
+  && chmod +x /entrypoint.sh
 EXPOSE 7777
 WORKDIR /app
-ENTRYPOINT ["/app/strfry"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["relay"]

@@ -10062,3 +10062,58 @@ DoD блокера: [x] причина установлена экспериме
 (`--no-cache`) подтвердила успех [x] живая проверка реальным контейнером
 (запуск + WS-хендшейк) [x] находки записаны, включая ПОЧЕМУ причина 2 не
 актуальна для реального VPS-деплоя.
+
+### Завершение проводки И2 (перед И4) — main.go реально рендерит и запускает
+
+При подготовке к И4 обнаружен и закрыт пробел, оставшийся от И2:
+`main.go` вызывал `orchestrator.ComposeUp`, но НИКОГДА не вызывал
+`render.RenderAll` — рендеринг шаблонов проверялся только во временном
+тестовом коде (`live-verify-tmp`), не в реальной точке входа. Закрыто:
+
+- Новые флаги `main.go`: `--relay-domain`, `--relay-name` (дефолт
+  `ugolok-relay`), `--blossom-domain`, `--turn-realm` (дефолт
+  `ugolok.local`), `--turn-external-ip` — обязательны при указанном
+  `--compose-dir` (иначе `log.Fatal` с понятным сообщением).
+- TURN-секрет — персистентный (`state/turn-secret.hex`, тот же
+  `auth.LoadOrCreateToken`, что и agent-токен — переиспользование
+  примитива, не новый механизм).
+- Перед `ComposeUp`: `render.RenderAll(composeDir, composeDir/rendered,
+  cfg)` — рендерит `*.tmpl` в реальные конфиги; `tlscert.LoadOrGenerate`
+  для TURN-сертификата (`rendered/turn-certs/{cert,key}.pem`).
+
+**Найдены и исправлены живой проверкой (не гипотезой) ДВЕ РЕАЛЬНЫЕ ошибки:**
+
+1. **`docker-compose.yml`'s `${RELAY_DOMAIN}`/`${BLOSSOM_DOMAIN}` — это
+   ОТДЕЛЬНЫЙ механизм от Go `text/template`.** Compose сам подставляет
+   переменные ИЗ ОКРУЖЕНИЯ ПРОЦЕССА (или `.env`-файла), не из
+   отрендеренных `*.tmpl`-файлов. `main.go` их нигде не устанавливал —
+   `docker compose up` падал на интерполяции `caddy.environment`.
+   Фикс: `os.Setenv("RELAY_DOMAIN", ...)`/`os.Setenv("BLOSSOM_DOMAIN", ...)`
+   перед вызовом `orchestrator.ComposeUp`/`ComposeStatus` — `RealRunner`
+   (`exec.Command`, `cmd.Env == nil`) наследует окружение процесса
+   автоматически, отдельный `.env`-файл не нужен.
+
+2. **Именованный docker-том создаётся с правами root, непривилегированный
+   `strfry` не может открыть LMDB.** `relay-data:/app/strfry-db` —
+   Docker создаёт volume `root:root` при первом использовании; строка
+   `USER strfry` (было в Dockerfile) не даёт процессу прав на chown
+   ПОСЛЕ монтирования volume в рантайме. Живой запуск дал `strfry error:
+   mdb_env_open: Permission denied`, контейнер уходил в `Restarting`.
+   Фикс (`agent/compose/relay.Dockerfile`): `su-exec` вместо `USER
+   strfry`, entrypoint-скрипт (вписан прямо в Dockerfile через `RUN
+   printf ... > /entrypoint.sh`, без внешнего файла — build context это
+   `./relay-src`, чужой файл туда не подложить обычным `COPY`) делает
+   `chown -R strfry:strfry /app/strfry-db && exec su-exec strfry
+   /app/strfry "$@"` — root ТОЛЬКО для chown, реальный процесс — всё
+   ещё непривилегированный.
+
+**Живая проверка ПОЛНОГО цикла реальным бинарником агента (не тестовым
+кодом):** `render.RenderAll` → `tlscert.LoadOrGenerate` (TURN-сертификат)
+→ `orchestrator.ComposeUp` → все 4 сервиса (`relay`/`blossom`/`coturn`/
+`caddy`) реально поднялись; `GET /status` (реальный HTTPS-запрос с
+Bearer-токеном) отдал `{"services":[{"Service":"relay","State":"running"},
+...]}` для ВСЕХ четырёх; сквозная связность подтверждена — Caddy→relay
+(WS-хендшейк через TLS-прокси, `101 Switching Protocols`), Caddy→Blossom
+(HTTPS-прокси, `401` — тот же код, что и напрямую), relay напрямую (WS-
+хендшейк), Blossom напрямую (`401`), coturn (порт 3478 принимает
+соединения). Регрессия: `go test ./...` — 41/41 не затронуты.

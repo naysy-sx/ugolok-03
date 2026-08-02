@@ -15,6 +15,7 @@ import (
 	"ugolok.tech/agent/internal/httpapi"
 	"ugolok.tech/agent/internal/orchestrator"
 	"ugolok.tech/agent/internal/pairing"
+	"ugolok.tech/agent/internal/render"
 	"ugolok.tech/agent/internal/tlscert"
 )
 
@@ -26,7 +27,12 @@ func main() {
 	stateDir := flag.String("state-dir", "state", "директория для token.hex/cert.pem/key.pem")
 	port := flag.Int("port", 8443, "TCP-порт HTTPS-сервера агента")
 	host := flag.String("host", "", "публичный адрес/домен агента — печатается в пейринг-коде, сам агент его не угадывает")
-	composeDir := flag.String("compose-dir", "", "директория с отрендеренным docker-compose.yml (Этап 63, И2) — пусто = заглушка статуса (совместимость с И1, без docker)")
+	composeDir := flag.String("compose-dir", "", "директория с docker-compose.yml/*.tmpl (Этап 63, И2) — пусто = заглушка статуса (совместимость с И1, без docker)")
+	relayDomain := flag.String("relay-domain", "", "домен/IP relay (WSS) — подставляется в strfry.conf.tmpl/Caddyfile")
+	relayName := flag.String("relay-name", "ugolok-relay", "имя relay в info-блоке strfry.conf")
+	blossomDomain := flag.String("blossom-domain", "", "домен/IP Blossom (HTTPS) — подставляется в blossom-config.yml.tmpl/Caddyfile")
+	turnRealm := flag.String("turn-realm", "ugolok.local", "TURN realm (coturn.conf.tmpl)")
+	turnExternalIP := flag.String("turn-external-ip", "", "публичный IP этого VPS для coturn external-ip (ICE-кандидаты)")
 	flag.Parse()
 
 	if *host == "" {
@@ -82,6 +88,45 @@ func main() {
 			return httpapi.Status{Version: version, UptimeSeconds: int64(time.Since(startTime).Seconds())}
 		}
 	} else {
+		if *relayDomain == "" || *blossomDomain == "" || *turnExternalIP == "" {
+			log.Fatal("--relay-domain, --blossom-domain и --turn-external-ip обязательны при указанном --compose-dir")
+		}
+
+		// docker-compose.yml's ${RELAY_DOMAIN}/${BLOSSOM_DOMAIN} — это переменные
+		// ОКРУЖЕНИЯ САМОГО docker compose (native-подстановка Compose), ОТДЕЛЬНЫЙ
+		// механизм от Go text/template ({{.RelayDomain}} в *.tmpl, см. render.Config
+		// ниже) — RealRunner наследует окружение процесса (exec.Cmd.Env == nil),
+		// поэтому достаточно Setenv здесь, без отдельного .env файла.
+		os.Setenv("RELAY_DOMAIN", *relayDomain)
+		os.Setenv("BLOSSOM_DOMAIN", *blossomDomain)
+
+		turnSecretPath := filepath.Join(*stateDir, "turn-secret.hex")
+		turnSecret, err := auth.LoadOrCreateToken(turnSecretPath)
+		if err != nil {
+			log.Fatalf("не удалось загрузить/создать TURN-секрет: %v", err)
+		}
+
+		renderedDir := filepath.Join(*composeDir, "rendered")
+		cfg := render.Config{
+			RelayDomain:    *relayDomain,
+			RelayName:      *relayName,
+			BlossomDomain:  *blossomDomain,
+			TurnSecret:     auth.EncodeToken(turnSecret),
+			TurnRealm:      *turnRealm,
+			TurnExternalIP: *turnExternalIP,
+		}
+		if err := render.RenderAll(*composeDir, renderedDir, cfg); err != nil {
+			log.Fatalf("не удалось отрендерить конфиги compose-бандла: %v", err)
+		}
+
+		turnCertsDir := filepath.Join(renderedDir, "turn-certs")
+		if err := os.MkdirAll(turnCertsDir, 0o700); err != nil {
+			log.Fatalf("не удалось создать %s: %v", turnCertsDir, err)
+		}
+		if _, err := tlscert.LoadOrGenerate(filepath.Join(turnCertsDir, "cert.pem"), filepath.Join(turnCertsDir, "key.pem")); err != nil {
+			log.Fatalf("не удалось загрузить/создать TLS-сертификат TURN: %v", err)
+		}
+
 		if err := orchestrator.ComposeUp(orchestrator.RealRunner, *composeDir); err != nil {
 			log.Fatalf("не удалось поднять docker compose стек (%s): %v", *composeDir, err)
 		}
