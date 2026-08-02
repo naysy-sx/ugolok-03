@@ -11,6 +11,7 @@ import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
 import Files from "./ui/screens/files.jsx";
+import Help from "./ui/screens/help.jsx";
 import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
@@ -46,6 +47,7 @@ import IconSun from "./ui/icons/sun.jsx";
 import IconMoon from "./ui/icons/moon.jsx";
 import IconMenu from "./ui/icons/menu.jsx";
 import IconFolder from "./ui/icons/folder.jsx";
+import IconHelpCircle from "./ui/icons/help-circle.jsx";
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -58,6 +60,7 @@ const NAV_ICONS = {
 	discovery: IconGlobe,
 	settings: IconGear,
 	profile: IconPerson,
+	help: IconHelpCircle,
 	diagnostics: IconActivityLog,
 };
 
@@ -286,6 +289,7 @@ function MainShell() {
 			<div class="main-content">
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
+				{activeId === "help" && <Help />}
 				{activeId === "contacts" && <Contacts />}
 				{activeId === "messages" && <Chat />}
 				{activeId === "channels" && <Channels />}

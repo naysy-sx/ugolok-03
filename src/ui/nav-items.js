@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
   { id: "discovery", label: "Обзор" },
   { id: "settings", label: "Настройки" },
   { id: "profile", label: "Профиль" },
+  { id: "help", label: "Справка" },
   { id: "diagnostics", label: "Диагностика" },
 ];
 
