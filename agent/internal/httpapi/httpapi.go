@@ -3,18 +3,21 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+
 	"ugolok.tech/agent/internal/auth"
+	"ugolok.tech/agent/internal/orchestrator"
 )
 
 type Status struct {
-	Version       string `json:"version"`
-	UptimeSeconds int64  `json:"uptimeSeconds"`
+	Version       string                       `json:"version"`
+	UptimeSeconds int64                        `json:"uptimeSeconds"`
+	Services      []orchestrator.ServiceStatus `json:"services"`
 }
 
 func NewServer(token []byte, statusFn func() Status) *http.ServeMux {
 	mux := http.NewServeMux()
-	
-statusHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	statusHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		status := statusFn()
 		jsonData, err := json.Marshal(status)
 		if err != nil {
@@ -24,8 +27,8 @@ statusHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonData)
 	})
-	
+
 	mux.Handle("/status", auth.RequireBearerToken(token, statusHandler))
-	
+
 	return mux
 }

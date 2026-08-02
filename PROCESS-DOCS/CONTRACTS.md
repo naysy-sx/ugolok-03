@@ -9860,3 +9860,145 @@ firstRun-детекцию к обоим наборам файлов сразу, 
 DoD И1: [x] тесты зелёные [x] `go vet` чист [x] живая проверка бинарником
 [x] адверсарная находка записана [x] полная регрессия (JS 1208/1208
 не затронута + Go 27/27) [x] PLAN.md обновлён [ ] коммит.
+
+### И2 — реальная docker compose оркестрация (relay+Blossom+TURN+Caddy)
+
+**Артефакты бандла (`agent/compose/`, версионируются):**
+- `docker-compose.yml` — 4 сервиса: `relay` (свой `relay.Dockerfile` — upstream
+  `strfry-src/Dockerfile` падает на линковке uWebSockets на Alpine/musl, см.
+  "живая проверка" ниже), `blossom` (свой `blossom.Dockerfile` — upstream
+  ссылается на приватный registry `dhi.io`, недоступный без платной подписки),
+  `coturn` (официальный образ `coturn/coturn`), `caddy` (официальный образ).
+- `*.conf.tmpl`/`*-config.yml.tmpl`/Caddyfile — Caddyfile использует РОДНУЮ
+  подстановку переменных окружения Caddy (`{$VAR}`), остальные — Go
+  `text/template` (`{{.Field}}`), рендерятся агентом в `./rendered/` (gitignore,
+  НЕ версионируется — содержит секреты/домены конкретного деплоя) ПЕРЕД
+  `docker compose up`.
+- Контексты сборки `relay-src`/`blossom-src` — placeholder-имена директорий,
+  которые склонирует bootstrap-скрипт (И4); для локальной проверки этой
+  итерации созданы вручную (`ln -s`/`cp -r` от `server/*/​*-src`).
+
+**`agent/internal/render`**
+```go
+type Config struct {
+    RelayDomain, RelayName, BlossomDomain string
+    TurnSecret, TurnRealm, TurnExternalIP string
+}
+func RenderAll(templatesDir, outputDir string, cfg Config) error
+    // Для каждого *.tmpl файла в templatesDir — text/template.Parse + Execute(cfg),
+    // пишет результат в outputDir/<имя без .tmpl>, создаёт outputDir (MkdirAll 0700).
+```
+
+**`agent/internal/orchestrator`**
+```go
+type ServiceStatus struct {
+    Service string `json:"Service"`
+    State   string `json:"State"`
+    Health  string `json:"Health"`
+}
+type Runner func(dir string, args ...string) ([]byte, error)
+    // Реальная реализация — exec.Command("docker", args...), cmd.Dir = dir,
+    // CombinedOutput(). Внедряется параметром (DI) — тот же принцип, что
+    // fetchImpl в JS-части проекта, для тестируемости без реального docker.
+
+func ComposeUp(run Runner, composeDir string) error
+    // run(composeDir, "compose", "up", "-d"); ошибка — обёрнута с телом вывода
+func ComposeDown(run Runner, composeDir string) error
+    // run(composeDir, "compose", "down")
+func ComposeStatus(run Runner, composeDir string) ([]ServiceStatus, error)
+    // run(composeDir, "compose", "ps", "--format", "json") — вывод ЭТО NDJSON
+    // (один JSON-объект на строку, ПОДТВЕРЖДЕНО живым запуском docker compose
+    // v2.39.4, НЕ единый JSON-массив), разбить по '\n', пропустить пустые
+    // строки, json.Unmarshal каждую в ServiceStatus.
+```
+
+`httpapi.NewServer`'s `statusFn` (было — заглушка `Status{Version:"dev"}`,
+И1) заменяется на реальный вызов `orchestrator.ComposeStatus` — `Status`
+получает новое поле `Services []orchestrator.ServiceStatus`.
+
+**Явно НЕ в скоупе И2:**
+- Минтинг TURN credentials (HMAC-SHA1 короткоживущих username/password по
+  `TURN_SECRET`, use-auth-secret) — сервер (coturn.conf.tmpl) уже настроен
+  на этот механизм, но Go-функция генерации и HTTP-эндпоинт для клиента —
+  отдельная задача (следующая итерация или часть И3, когда появится реальный
+  потребитель — voice-звонки на клиенте).
+- SNI-passthrough на 443 для TURNS (`caddy-l4`/nginx `stream {}`) — coturn
+  слушает свои порты 3478/5349 напрямую, не через Caddy.
+- Домен vs самоподписанный/IP-режим для Caddy (`tls internal`) — Caddyfile
+  сейчас предполагает РЕАЛЬНЫЙ домен (автоматический Let's Encrypt); ветка
+  "только IP" — решение bootstrap-скрипта (И4), не Caddyfile.
+- Per-MIME-category лимиты Blossom (Этап 62, серверный патч) — `blossom-
+  config.yml.tmpl` временно использует ОДНО значение (300 МБ, наибольшая
+  категория) вместо честного разделения — записано как известное сужение,
+  не тихий пробел.
+
+### Найденный блокер (И2, не решён, зафиксирован) — сборка relay (strfry) из исходника
+
+Vendored `server/strfry/strfry-src` (сторонний форк, атрибуция "Akito" в
+шапке его же `Dockerfile`) НЕ линкуется в Docker НИ на Alpine (упомянутый
+upstream `Dockerfile`), НИ на Ubuntu 22.04 (собственная попытка этой сессии,
+`relay-build-test.Dockerfile`) — ОДНА И ТА ЖЕ ошибка линковки
+(`undefined reference to uWS::Group<...>::Group`, `uWS::Hub::...`,
+`uS::Node::~Node()`) на ОБЕИХ базовых системах. Значит проблема НЕ в
+Alpine/musl (первоначальная гипотеза отвергнута экспериментом), а в самом
+vendored дереве — похоже, `golpe/external/uWebSockets` (git submodule)
+рассинхронизирован с остальным кодом ЛИБО его сборка (`make setup-golpe`)
+не производит нужный `.a`/`.o` в контейнерном окружении по причине, не
+установленной за время этой итерации. `server/strfry/setup.sh` СОБИРАЕТ
+рабочий бинарник НАТИВНО на macOS (arm64, Homebrew) — это единственный
+ПРОВЕРЕННЫЙ работающий путь на сегодня, но он даёт `Mach-O arm64`
+бинарник, непригодный для Linux-контейнера/VPS.
+
+**Решение по скоупу И2:** не тратить дальнейшее время этой итерации на
+отладку чужого C++-билда (не относится к Go-агенту, который и есть предмет
+Этапа 63). Живая проверка `orchestrator`/`render` пакетов проведена на 3 из
+4 сервисов бандла (`blossom`, `coturn`, `caddy` — все либо собираются,
+либо тянутся официальным образом без проблем); `relay` — известный
+незакрытый блокер, требует отдельного расследования (возможно: правильный
+Linux-хост вместо Docker Desktop for Mac's QEMU-эмуляции, актуализация
+`golpe`-сабмодуля, или сборка НАТИВНО на реальном Ubuntu/Debian VPS через
+`setup.sh`-эквивалент — на боевом железе, не в эмуляции — что и будет
+делать bootstrap-скрипт, И4, по факту это даже совпадает с изначальным
+планом "клонировать+собрать на VPS", а не "собрать образ на dev-машине").
+Не блокирует приёмку И2 (Go-код), но ОБЯЗАТЕЛЬНО к решению до И4
+(bootstrap-скрипт не может ставить сервис, который не собирается).
+
+### И2 — реализация: DoD и живая проверка
+
+Пакеты `render` (5 тестов) и `orchestrator` (9 тестов) реализованы,
+`httpapi.Status` получил поле `Services []orchestrator.ServiceStatus`,
+`main.go` — флаг `--compose-dir` (пусто = поведение И1 без docker,
+обратная совместимость сохранена). `go vet ./...` чист, `go test ./...`
+зелёный (41 тест). JS-регрессия не затронута (1208/1208).
+
+**Живая проверка реальным Docker (не только юнит-тесты с фейковым Runner):**
+полный жизненный цикл — `render.RenderAll` -> `tlscert.LoadOrGenerate`
+(TURN-сертификат) -> `orchestrator.ComposeUp` -> `orchestrator.ComposeStatus`
+-> `orchestrator.ComposeDown`, через РЕАЛЬНЫЙ `RealRunner` (`os/exec`,
+не фейк) против реального `docker compose`, на 3 из 4 сервисов бандла
+(`blossom` — собран собственным `Dockerfile`, `coturn` — официальный образ,
+`caddy` — официальный образ; `relay` исключён — см. ниже, известный блокер).
+Подтверждена РЕАЛЬНАЯ связность, не только "статус running": `HEAD /upload`
+через Caddy (TLS-терминация + reverse_proxy) до Blossom -> `401` (тот же
+код, что и напрямую к Blossom, минуя Caddy, — доказывает, что запрос
+реально дошёл через весь путь); порт TURN (3478/tcp) реально принимает
+соединения. `ComposeDown` подтверждён — `docker ps` пуст после.
+
+**Адверсарная находка, ИСПРАВЛЕНА (не просто записана):** `render.RenderAll`
+создавала выходные файлы с правами по умолчанию (`os.Create`, ~0644) внутри
+директории с секретами (`TURN_SECRET` и т.п. попадают в отрендеренный
+`coturn.conf`) — несогласованно с уже принятым паттерном 0600 для
+`state/token.hex` (И1). Исправлено на `os.OpenFile(..., 0600)`, добавлен
+тест `TestRenderAll_OutputFilePermissions`.
+
+**Известный блокер (не исправлен, требует отдельной задачи до И4)** —
+сборка `relay` (strfry) из vendored исходника падает НА ЛЮБОЙ базовой
+системе (Alpine И Ubuntu — эксперимент этой сессии, не гипотеза) с одной
+и той же ошибкой линковки `uWebSockets`. Подробности — раздел "Найденный
+блокер" выше. `docker-compose.yml`/`relay.Dockerfile`/`strfry.conf.tmpl`
+УЖЕ зафиксированы как контракт (пути, имена сервисов) для когда блокер
+будет решён — переписывать их не потребуется, только чинить сборку.
+
+DoD И2: [x] тесты зелёные (41/41 Go + 1208/1208 JS) [x] `go vet` чист
+[x] живая проверка реальным docker (3/4 сервисов, relay — известный блокер)
+[x] адверсарная находка исправлена [x] PLAN.md обновлён [ ] коммит.

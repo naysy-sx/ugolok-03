@@ -13,6 +13,7 @@ import (
 
 	"ugolok.tech/agent/internal/auth"
 	"ugolok.tech/agent/internal/httpapi"
+	"ugolok.tech/agent/internal/orchestrator"
 	"ugolok.tech/agent/internal/pairing"
 	"ugolok.tech/agent/internal/tlscert"
 )
@@ -25,6 +26,7 @@ func main() {
 	stateDir := flag.String("state-dir", "state", "директория для token.hex/cert.pem/key.pem")
 	port := flag.Int("port", 8443, "TCP-порт HTTPS-сервера агента")
 	host := flag.String("host", "", "публичный адрес/домен агента — печатается в пейринг-коде, сам агент его не угадывает")
+	composeDir := flag.String("compose-dir", "", "директория с отрендеренным docker-compose.yml (Этап 63, И2) — пусто = заглушка статуса (совместимость с И1, без docker)")
 	flag.Parse()
 
 	if *host == "" {
@@ -72,10 +74,24 @@ func main() {
 	}
 
 	startTime := time.Now()
-	statusFn := func() httpapi.Status {
-		return httpapi.Status{
-			Version:       version,
-			UptimeSeconds: int64(time.Since(startTime).Seconds()),
+
+	var statusFn func() httpapi.Status
+	if *composeDir == "" {
+		// И1-совместимость: без --compose-dir агент не трогает docker вовсе.
+		statusFn = func() httpapi.Status {
+			return httpapi.Status{Version: version, UptimeSeconds: int64(time.Since(startTime).Seconds())}
+		}
+	} else {
+		if err := orchestrator.ComposeUp(orchestrator.RealRunner, *composeDir); err != nil {
+			log.Fatalf("не удалось поднять docker compose стек (%s): %v", *composeDir, err)
+		}
+		statusFn = func() httpapi.Status {
+			services, err := orchestrator.ComposeStatus(orchestrator.RealRunner, *composeDir)
+			if err != nil {
+				log.Printf("ошибка получения статуса docker compose: %v", err)
+				services = nil
+			}
+			return httpapi.Status{Version: version, UptimeSeconds: int64(time.Since(startTime).Seconds()), Services: services}
 		}
 	}
 

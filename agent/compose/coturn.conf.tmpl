@@ -1,0 +1,37 @@
+# coturn — конфиг self-hosted TURN-сервера (Этап 63, И2). Аутентификация —
+# use-auth-secret (RFC-style long-term REST credentials): единый секрет
+# известен ТОЛЬКО серверу (coturn) и агенту (генерирует короткоживущие
+# username/password ПО ЗАПРОСУ, HMAC-SHA1 от секрета — agent/internal/turncreds,
+# отдельная итерация, см. CONTRACTS.md "Этап 63, И2" — "явно НЕ в скоупе").
+# Секрет передаётся агентом (agent/internal/orchestrator, text/template) —
+# рендерит этот .tmpl в реальный turnserver.conf ПЕРЕД docker compose up,
+# версионируется ШАБЛОН, не секрет и не отрендеренный файл (gitignore).
+use-auth-secret
+static-auth-secret={{.TurnSecret}}
+realm={{.TurnRealm}}
+
+# Стандартные TURN/TURNS-порты — НЕ порт 443 (см. CONTRACTS.md "Этап 63, И2":
+# SNI-passthrough на 443 для TURNS требует caddy-l4/nginx-stream, сознательно
+# отложено отдельным решением, не тихий пробел).
+listening-port=3478
+tls-listening-port=5349
+
+# Самоподписанный сертификат TURNS — генерируется тем же bootstrap-скриптом
+# (И4), что и агент, ПОКА без домена (self-hoster может позже заменить на
+# настоящий, положив cert.pem/key.pem по этим путям).
+cert=/etc/coturn/certs/cert.pem
+pkey=/etc/coturn/certs/key.pem
+
+# Без этого coturn пытается слушать на ВСЕХ интерфейсах контейнера, включая
+# внутренний docker-сетевой адрес — relay-address нужен явно, иначе кандидаты
+# ICE будут содержать внутренний docker IP, бесполезный для внешних клиентов.
+external-ip={{.TurnExternalIP}}
+
+# Разумные дефолты для self-hosted messenger-нагрузки (голос, не видео-конференции
+# на сотни человек) — НЕ тюнинг под нагрузку, пересмотреть при реальных метриках.
+min-port=49152
+max-port=65535
+
+no-cli
+no-tlsv1
+no-tlsv1_1

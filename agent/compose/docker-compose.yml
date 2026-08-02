@@ -1,0 +1,72 @@
+# Этап 63, И2 — self-hosted бандл: relay (strfry) + Blossom + TURN (coturn) +
+# reverse-proxy (Caddy). Контексты сборки relay/blossom — СОСЕДНИЕ директории
+# ./relay-src, ./blossom-src, которые клонирует bootstrap-скрипт (И4, ещё не
+# реализован); ИМЕНА путей УЖЕ зафиксированы здесь как контракт для И4, чтобы
+# не рассинхронизировать позже. Для локальной разработки/теста этой итерации
+# они временно создаются вручную (копия/симлинк на server/*/​*-src) — см.
+# CONTRACTS.md "Этап 63, И2", раздел "живая проверка".
+#
+# ./rendered/* — НЕ версионируется (gitignore): агент (orchestrator.Render)
+# рендерит *.tmpl из этой директории в ./rendered/ ПЕРЕД docker compose up,
+# подставляя домены/секреты/IP. relay.Dockerfile — СОБСТВЕННЫЙ (не upstream
+# strfry-src/Dockerfile — тот падает на линковке uWebSockets на Alpine/musl,
+# см. CONTRACTS.md "Этап 63, И2", "живая проверка").
+services:
+  relay:
+    build:
+      context: ./relay-src
+      dockerfile: ../relay.Dockerfile
+    volumes:
+      - ./rendered/strfry.conf:/app/strfry.conf:ro
+      - relay-data:/app/strfry-db
+    ports:
+      - "127.0.0.1:7777:7777"
+    restart: unless-stopped
+
+  blossom:
+    build:
+      context: ./blossom-src
+      dockerfile: ../blossom.Dockerfile
+    volumes:
+      - ./rendered/blossom-config.yml:/app/config.yml:ro
+      - blossom-data:/app/db
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    volumes:
+      - ./rendered/coturn.conf:/etc/coturn/turnserver.conf:ro
+      - ./rendered/turn-certs:/etc/coturn/certs:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "49152-65535:49152-65535/udp"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:latest
+    environment:
+      - RELAY_DOMAIN=${RELAY_DOMAIN:?RELAY_DOMAIN обязателен}
+      - BLOSSOM_DOMAIN=${BLOSSOM_DOMAIN:?BLOSSOM_DOMAIN обязателен}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      - relay
+      - blossom
+    restart: unless-stopped
+
+volumes:
+  relay-data:
+  blossom-data:
+  caddy-data:
+  caddy-config:
