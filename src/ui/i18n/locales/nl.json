@@ -391,5 +391,57 @@
 		"ariaLabel": "Speler",
 		"noPreview": "Geen voorbeeld beschikbaar voor dit bestandstype ({{mime}}).",
 		"unknownType": "onbekend type"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "actief",
+			"makeActiveButton": "Actief maken",
+			"deleteAria": "Server {{url}} verwijderen",
+			"emptyList": "De lijst is leeg.",
+			"addLabel": "Server toevoegen"
+		},
+		"relay": {
+			"heading": "Relay-servers",
+			"readLabel": "lezen",
+			"writeLabel": "schrijven"
+		},
+		"selfHosted": {
+			"heading": "Eigen server",
+			"fingerprintMismatchConfirm": "De vingerafdruk van de server wijkt af van de eerder opgeslagen vingerafdruk voor dit adres — de server is mogelijk vervangen. Toch doorgaan?",
+			"pairingCancelled": "Koppeling geannuleerd — de vingerafdruk komt niet overeen met de eerder opgeslagen vingerafdruk.",
+			"unpairConfirm": "Deze self-hosted server loskoppelen? Instellingen op de server zelf veranderen niet, alleen de lokale koppeling in de app.",
+			"connectedLabel": "Verbonden:",
+			"fingerprintLabel": "Vingerafdruk: {{fingerprint}}",
+			"refreshStatusButton": "Status vernieuwen",
+			"disconnectButton": "Loskoppelen",
+			"instructionsBeforeCode": "Voer",
+			"instructionsAfterCode": "uit op je VPS, open het serveradres in een nieuw browsertabblad en accepteer de certificaatwaarschuwing (zelfondertekend — dit is normaal voor je eigen server), plak daarna hieronder de koppelcode.",
+			"pairingCodeLabel": "Koppelcode",
+			"pairingCodePlaceholder": "Plak de koppelcode uit install.sh",
+			"connectButton": "Verbinden"
+		},
+		"blossomServersTitle": "Blossom-servers (bestanden/bijlagen)",
+		"copiedStatus": "Gekopieerd",
+		"copyFailedStatus": "Kopiëren mislukt — kopieer het handmatig",
+		"publishingStatus": "publiceren…",
+		"notPublishedNoBlossom": "niet gepubliceerd voor anderen: geen actieve Blossom-server",
+		"notPublishedReason": "niet gepubliceerd voor anderen: {{reason}}",
+		"relayRejected": "geweigerd door de relay",
+		"selectImageError": "Kies een afbeeldingsbestand.",
+		"fileTooLargeError": "Het bestand is te groot (maximaal 2 MB).",
+		"avatarPublicConfirm": "De afbeelding wordt openbaar toegankelijk en niet meer versleuteld. Doorgaan?",
+		"savedStatus": "Opgeslagen",
+		"loadingTitle": "Profiel laden…",
+		"noNameFallback": "Geen naam",
+		"identifierHeading": "Jouw identificatie",
+		"copyKeyAria": "Sleutel kopiëren",
+		"identifierHint": "Je kunt deze sleutel gebruiken zodat andere gebruikers je kunnen toevoegen.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Geen avatar ingesteld",
+		"replaceAvatarLabel": "Vervangen",
+		"chooseFromStorageButton": "Kiezen uit opslag",
+		"aboutMeLegend": "Over mij",
+		"bioLabel": "Bio",
+		"filesComingSoon": "Bestanden uploaden en beheren verschijnt later."
 	}
 }

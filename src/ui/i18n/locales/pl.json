@@ -391,5 +391,57 @@
 		"ariaLabel": "Odtwarzacz",
 		"noPreview": "Brak podglądu dla tego typu pliku ({{mime}}).",
 		"unknownType": "nieznany typ"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "aktywny",
+			"makeActiveButton": "Ustaw jako aktywny",
+			"deleteAria": "Usuń serwer {{url}}",
+			"emptyList": "Lista jest pusta.",
+			"addLabel": "Dodaj serwer"
+		},
+		"relay": {
+			"heading": "Serwery relay",
+			"readLabel": "odczyt",
+			"writeLabel": "zapis"
+		},
+		"selfHosted": {
+			"heading": "Własny serwer",
+			"fingerprintMismatchConfirm": "Odcisk serwera różni się od zapisanego wcześniej dla tego adresu — serwer mógł zostać podmieniony. Kontynuować mimo to?",
+			"pairingCancelled": "Parowanie anulowane — odcisk nie zgadza się z wcześniej zapisanym.",
+			"unpairConfirm": "Odłączyć ten własny serwer? Ustawienia na samym serwerze się nie zmieniają, tylko lokalne powiązanie w aplikacji.",
+			"connectedLabel": "Połączono:",
+			"fingerprintLabel": "Odcisk: {{fingerprint}}",
+			"refreshStatusButton": "Odśwież status",
+			"disconnectButton": "Odłącz",
+			"instructionsBeforeCode": "Uruchom",
+			"instructionsAfterCode": "na swoim VPS, otwórz adres serwera w nowej karcie przeglądarki i zaakceptuj ostrzeżenie o certyfikacie (samopodpisany — to normalne dla własnego serwera), a następnie wklej poniżej kod parowania.",
+			"pairingCodeLabel": "Kod parowania",
+			"pairingCodePlaceholder": "Wklej kod parowania z install.sh",
+			"connectButton": "Połącz"
+		},
+		"blossomServersTitle": "Serwery Blossom (pliki/załączniki)",
+		"copiedStatus": "Skopiowano",
+		"copyFailedStatus": "Nie udało się skopiować — skopiuj ręcznie",
+		"publishingStatus": "publikowanie…",
+		"notPublishedNoBlossom": "nieopublikowane dla innych: brak aktywnego serwera Blossom",
+		"notPublishedReason": "nieopublikowane dla innych: {{reason}}",
+		"relayRejected": "odrzucone przez relay",
+		"selectImageError": "Wybierz plik obrazu.",
+		"fileTooLargeError": "Plik jest zbyt duży (maksymalnie 2 MB).",
+		"avatarPublicConfirm": "Obraz stanie się publicznie dostępny i nie będzie już szyfrowany. Kontynuować?",
+		"savedStatus": "Zapisano",
+		"loadingTitle": "Wczytywanie profilu…",
+		"noNameFallback": "Bez nazwy",
+		"identifierHeading": "Twój identyfikator",
+		"copyKeyAria": "Skopiuj klucz",
+		"identifierHint": "Możesz użyć tego klucza, aby inni użytkownicy mogli Cię dodać.",
+		"avatarColumnAria": "Awatar",
+		"avatarNotSetAria": "Nie ustawiono awatara",
+		"replaceAvatarLabel": "Zmień",
+		"chooseFromStorageButton": "Wybierz z magazynu",
+		"aboutMeLegend": "O mnie",
+		"bioLabel": "Bio",
+		"filesComingSoon": "Przesyłanie i zarządzanie plikami pojawi się później."
 	}
 }

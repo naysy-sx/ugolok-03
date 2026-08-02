@@ -391,5 +391,57 @@
 		"ariaLabel": "Плеер",
 		"noPreview": "Нет предпросмотра для этого типа файла ({{mime}}).",
 		"unknownType": "неизвестный тип"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "активный",
+			"makeActiveButton": "Сделать активным",
+			"deleteAria": "Удалить сервер {{url}}",
+			"emptyList": "Список пуст.",
+			"addLabel": "Добавить сервер"
+		},
+		"relay": {
+			"heading": "Relay-серверы",
+			"readLabel": "чтение",
+			"writeLabel": "запись"
+		},
+		"selfHosted": {
+			"heading": "Свой сервер",
+			"fingerprintMismatchConfirm": "Отпечаток сервера отличается от сохранённого ранее для этого адреса — возможно, сервер подменили. Всё равно продолжить?",
+			"pairingCancelled": "Сопряжение отменено — отпечаток не совпадает с сохранённым ранее.",
+			"unpairConfirm": "Отсоединить self-hosted сервер? Настройки на самом сервере не меняются, только локальная привязка в приложении.",
+			"connectedLabel": "Подключено:",
+			"fingerprintLabel": "Отпечаток: {{fingerprint}}",
+			"refreshStatusButton": "Обновить статус",
+			"disconnectButton": "Отсоединить",
+			"instructionsBeforeCode": "Выполните",
+			"instructionsAfterCode": "на своём VPS, откройте адрес сервера в новой вкладке браузера и примите предупреждение о сертификате (самоподписанный — это ожидаемо для собственного сервера), затем вставьте пейринг-код ниже.",
+			"pairingCodeLabel": "Пейринг-код",
+			"pairingCodePlaceholder": "Вставьте пейринг-код из install.sh",
+			"connectButton": "Подключиться"
+		},
+		"blossomServersTitle": "Blossom-серверы (файлы/вложения)",
+		"copiedStatus": "Скопировано",
+		"copyFailedStatus": "Не удалось скопировать — скопируйте вручную",
+		"publishingStatus": "публикация…",
+		"notPublishedNoBlossom": "не опубликовано для других: нет активного Blossom-сервера",
+		"notPublishedReason": "не опубликовано для других: {{reason}}",
+		"relayRejected": "relay отклонил",
+		"selectImageError": "Выберите файл изображения.",
+		"fileTooLargeError": "Файл слишком большой (максимум 2 МБ).",
+		"avatarPublicConfirm": "Изображение станет общедоступным и больше не будет зашифровано. Продолжить?",
+		"savedStatus": "Сохранено",
+		"loadingTitle": "Загрузка профиля…",
+		"noNameFallback": "Без имени",
+		"identifierHeading": "Ваш идентификатор",
+		"copyKeyAria": "Скопировать ключ",
+		"identifierHint": "Вот этот ключ вы можете использовать, чтобы другие пользователи могли вас добавить.",
+		"avatarColumnAria": "Аватар",
+		"avatarNotSetAria": "Аватар не задан",
+		"replaceAvatarLabel": "Заменить",
+		"chooseFromStorageButton": "Выбрать из хранилища",
+		"aboutMeLegend": "О себе",
+		"bioLabel": "Био",
+		"filesComingSoon": "Загрузка и управление файлами появится позже."
 	}
 }

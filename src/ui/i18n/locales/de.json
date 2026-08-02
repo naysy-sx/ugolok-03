@@ -391,5 +391,57 @@
 		"ariaLabel": "Player",
 		"noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar ({{mime}}).",
 		"unknownType": "unbekannter Typ"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "aktiv",
+			"makeActiveButton": "Aktivieren",
+			"deleteAria": "Server {{url}} entfernen",
+			"emptyList": "Die Liste ist leer.",
+			"addLabel": "Server hinzufügen"
+		},
+		"relay": {
+			"heading": "Relay-Server",
+			"readLabel": "Lesen",
+			"writeLabel": "Schreiben"
+		},
+		"selfHosted": {
+			"heading": "Eigener Server",
+			"fingerprintMismatchConfirm": "Der Server-Fingerabdruck weicht von dem zuvor für diese Adresse gespeicherten ab — der Server wurde möglicherweise ausgetauscht. Trotzdem fortfahren?",
+			"pairingCancelled": "Kopplung abgebrochen — der Fingerabdruck stimmt nicht mit dem zuvor gespeicherten überein.",
+			"unpairConfirm": "Diesen selbst gehosteten Server trennen? Die Einstellungen auf dem Server selbst ändern sich nicht, nur die lokale Verknüpfung in der App.",
+			"connectedLabel": "Verbunden:",
+			"fingerprintLabel": "Fingerabdruck: {{fingerprint}}",
+			"refreshStatusButton": "Status aktualisieren",
+			"disconnectButton": "Trennen",
+			"instructionsBeforeCode": "Führen Sie",
+			"instructionsAfterCode": "auf Ihrem VPS aus, öffnen Sie die Serveradresse in einem neuen Browser-Tab und akzeptieren Sie die Zertifikatswarnung (selbstsigniert — das ist bei einem eigenen Server zu erwarten), fügen Sie dann unten den Kopplungscode ein.",
+			"pairingCodeLabel": "Kopplungscode",
+			"pairingCodePlaceholder": "Kopplungscode aus install.sh einfügen",
+			"connectButton": "Verbinden"
+		},
+		"blossomServersTitle": "Blossom-Server (Dateien/Anhänge)",
+		"copiedStatus": "Kopiert",
+		"copyFailedStatus": "Kopieren fehlgeschlagen — bitte manuell kopieren",
+		"publishingStatus": "wird veröffentlicht…",
+		"notPublishedNoBlossom": "nicht für andere veröffentlicht: kein aktiver Blossom-Server",
+		"notPublishedReason": "nicht für andere veröffentlicht: {{reason}}",
+		"relayRejected": "vom Relay abgelehnt",
+		"selectImageError": "Wählen Sie eine Bilddatei.",
+		"fileTooLargeError": "Die Datei ist zu groß (maximal 2 MB).",
+		"avatarPublicConfirm": "Das Bild wird öffentlich zugänglich und nicht mehr verschlüsselt. Fortfahren?",
+		"savedStatus": "Gespeichert",
+		"loadingTitle": "Profil wird geladen…",
+		"noNameFallback": "Kein Name",
+		"identifierHeading": "Ihre Kennung",
+		"copyKeyAria": "Schlüssel kopieren",
+		"identifierHint": "Diesen Schlüssel können Sie verwenden, damit andere Nutzer Sie hinzufügen können.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Kein Avatar festgelegt",
+		"replaceAvatarLabel": "Ersetzen",
+		"chooseFromStorageButton": "Aus dem Speicher wählen",
+		"aboutMeLegend": "Über mich",
+		"bioLabel": "Bio",
+		"filesComingSoon": "Datei-Upload und -Verwaltung erscheinen später."
 	}
 }

@@ -391,5 +391,57 @@
 		"ariaLabel": "Oynatıcı",
 		"noPreview": "Bu dosya türü için önizleme yok ({{mime}}).",
 		"unknownType": "bilinmeyen tür"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "etkin",
+			"makeActiveButton": "Etkinleştir",
+			"deleteAria": "{{url}} sunucusunu kaldır",
+			"emptyList": "Liste boş.",
+			"addLabel": "Sunucu ekle"
+		},
+		"relay": {
+			"heading": "Röle sunucuları",
+			"readLabel": "okuma",
+			"writeLabel": "yazma"
+		},
+		"selfHosted": {
+			"heading": "Kendi sunucunuz",
+			"fingerprintMismatchConfirm": "Sunucu parmak izi bu adres için daha önce kaydedilenden farklı — sunucu değiştirilmiş olabilir. Yine de devam edilsin mi?",
+			"pairingCancelled": "Eşleştirme iptal edildi — parmak izi daha önce kaydedilenle eşleşmiyor.",
+			"unpairConfirm": "Bu self-hosted sunucunun bağlantısı kesilsin mi? Sunucudaki ayarlar değişmez, yalnızca uygulamadaki yerel bağlantı kaldırılır.",
+			"connectedLabel": "Bağlandı:",
+			"fingerprintLabel": "Parmak izi: {{fingerprint}}",
+			"refreshStatusButton": "Durumu yenile",
+			"disconnectButton": "Bağlantıyı kes",
+			"instructionsBeforeCode": "VPS'inizde",
+			"instructionsAfterCode": "çalıştırın, sunucu adresini yeni bir tarayıcı sekmesinde açın ve sertifika uyarısını kabul edin (kendinden imzalı — kendi sunucunuz için bu beklenen bir durumdur), ardından aşağıya eşleştirme kodunu yapıştırın.",
+			"pairingCodeLabel": "Eşleştirme kodu",
+			"pairingCodePlaceholder": "install.sh'dan eşleştirme kodunu yapıştırın",
+			"connectButton": "Bağlan"
+		},
+		"blossomServersTitle": "Blossom sunucuları (dosyalar/ekler)",
+		"copiedStatus": "Kopyalandı",
+		"copyFailedStatus": "Kopyalanamadı — manuel olarak kopyalayın",
+		"publishingStatus": "yayınlanıyor…",
+		"notPublishedNoBlossom": "başkaları için yayınlanmadı: etkin Blossom sunucusu yok",
+		"notPublishedReason": "başkaları için yayınlanmadı: {{reason}}",
+		"relayRejected": "röle tarafından reddedildi",
+		"selectImageError": "Bir resim dosyası seçin.",
+		"fileTooLargeError": "Dosya çok büyük (en fazla 2 MB).",
+		"avatarPublicConfirm": "Görsel herkese açık hale gelecek ve artık şifrelenmeyecek. Devam edilsin mi?",
+		"savedStatus": "Kaydedildi",
+		"loadingTitle": "Profil yükleniyor…",
+		"noNameFallback": "İsim yok",
+		"identifierHeading": "Tanımlayıcınız",
+		"copyKeyAria": "Anahtarı kopyala",
+		"identifierHint": "Diğer kullanıcıların sizi ekleyebilmesi için bu anahtarı kullanabilirsiniz.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Avatar ayarlanmadı",
+		"replaceAvatarLabel": "Değiştir",
+		"chooseFromStorageButton": "Depodan seç",
+		"aboutMeLegend": "Hakkımda",
+		"bioLabel": "Biyografi",
+		"filesComingSoon": "Dosya yükleme ve yönetimi daha sonra eklenecek."
 	}
 }

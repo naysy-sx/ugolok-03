@@ -391,5 +391,57 @@
 		"ariaLabel": "播放器",
 		"noPreview": "此文件类型（{{mime}}）没有预览。",
 		"unknownType": "未知类型"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "活跃",
+			"makeActiveButton": "设为活跃",
+			"deleteAria": "删除服务器 {{url}}",
+			"emptyList": "列表为空。",
+			"addLabel": "添加服务器"
+		},
+		"relay": {
+			"heading": "中继服务器",
+			"readLabel": "读取",
+			"writeLabel": "写入"
+		},
+		"selfHosted": {
+			"heading": "您自己的服务器",
+			"fingerprintMismatchConfirm": "服务器指纹与之前为此地址保存的指纹不同——服务器可能已被替换。仍要继续吗？",
+			"pairingCancelled": "配对已取消——指纹与之前保存的不匹配。",
+			"unpairConfirm": "断开此自托管服务器？服务器本身的设置不会改变，只会移除应用中的本地关联。",
+			"connectedLabel": "已连接：",
+			"fingerprintLabel": "指纹：{{fingerprint}}",
+			"refreshStatusButton": "刷新状态",
+			"disconnectButton": "断开连接",
+			"instructionsBeforeCode": "在您的VPS上运行",
+			"instructionsAfterCode": "，在浏览器新标签页中打开服务器地址并接受证书警告（自签名证书——对于您自己的服务器这是正常现象），然后在下方粘贴配对码。",
+			"pairingCodeLabel": "配对码",
+			"pairingCodePlaceholder": "粘贴来自 install.sh 的配对码",
+			"connectButton": "连接"
+		},
+		"blossomServersTitle": "Blossom 服务器（文件/附件）",
+		"copiedStatus": "已复制",
+		"copyFailedStatus": "无法复制——请手动复制",
+		"publishingStatus": "发布中…",
+		"notPublishedNoBlossom": "未向他人发布：没有活跃的 Blossom 服务器",
+		"notPublishedReason": "未向他人发布：{{reason}}",
+		"relayRejected": "中继拒绝",
+		"selectImageError": "请选择图片文件。",
+		"fileTooLargeError": "文件过大（最大 2 MB）。",
+		"avatarPublicConfirm": "该图片将变为公开可见且不再加密。是否继续？",
+		"savedStatus": "已保存",
+		"loadingTitle": "正在加载个人资料…",
+		"noNameFallback": "无名称",
+		"identifierHeading": "您的标识符",
+		"copyKeyAria": "复制密钥",
+		"identifierHint": "您可以使用此密钥让其他用户添加您。",
+		"avatarColumnAria": "头像",
+		"avatarNotSetAria": "未设置头像",
+		"replaceAvatarLabel": "更换",
+		"chooseFromStorageButton": "从存储中选择",
+		"aboutMeLegend": "关于我",
+		"bioLabel": "简介",
+		"filesComingSoon": "文件上传与管理功能将在稍后推出。"
 	}
 }

@@ -391,5 +391,57 @@
 		"ariaLabel": "Lettore",
 		"noPreview": "Nessuna anteprima disponibile per questo tipo di file ({{mime}}).",
 		"unknownType": "tipo sconosciuto"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "attivo",
+			"makeActiveButton": "Rendi attivo",
+			"deleteAria": "Rimuovi server {{url}}",
+			"emptyList": "L'elenco è vuoto.",
+			"addLabel": "Aggiungi server"
+		},
+		"relay": {
+			"heading": "Server relay",
+			"readLabel": "lettura",
+			"writeLabel": "scrittura"
+		},
+		"selfHosted": {
+			"heading": "Il tuo server",
+			"fingerprintMismatchConfirm": "L'impronta del server differisce da quella salvata in precedenza per questo indirizzo — il server potrebbe essere stato sostituito. Continuare comunque?",
+			"pairingCancelled": "Associazione annullata — l'impronta non corrisponde a quella salvata in precedenza.",
+			"unpairConfirm": "Disconnettere questo server self-hosted? Le impostazioni sul server stesso non cambiano, solo il collegamento locale nell'app.",
+			"connectedLabel": "Connesso:",
+			"fingerprintLabel": "Impronta: {{fingerprint}}",
+			"refreshStatusButton": "Aggiorna stato",
+			"disconnectButton": "Disconnetti",
+			"instructionsBeforeCode": "Esegui",
+			"instructionsAfterCode": "sul tuo VPS, apri l'indirizzo del server in una nuova scheda del browser e accetta l'avviso del certificato (autofirmato — è normale per il tuo server), quindi incolla il codice di associazione qui sotto.",
+			"pairingCodeLabel": "Codice di associazione",
+			"pairingCodePlaceholder": "Incolla il codice di associazione da install.sh",
+			"connectButton": "Connetti"
+		},
+		"blossomServersTitle": "Server Blossom (file/allegati)",
+		"copiedStatus": "Copiato",
+		"copyFailedStatus": "Impossibile copiare — copia manualmente",
+		"publishingStatus": "pubblicazione…",
+		"notPublishedNoBlossom": "non pubblicato per gli altri: nessun server Blossom attivo",
+		"notPublishedReason": "non pubblicato per gli altri: {{reason}}",
+		"relayRejected": "rifiutato dal relay",
+		"selectImageError": "Scegli un file immagine.",
+		"fileTooLargeError": "Il file è troppo grande (massimo 2 MB).",
+		"avatarPublicConfirm": "L'immagine diventerà pubblica e non sarà più cifrata. Continuare?",
+		"savedStatus": "Salvato",
+		"loadingTitle": "Caricamento profilo…",
+		"noNameFallback": "Senza nome",
+		"identifierHeading": "Il tuo identificatore",
+		"copyKeyAria": "Copia chiave",
+		"identifierHint": "Puoi usare questa chiave per permettere ad altri utenti di aggiungerti.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Nessun avatar impostato",
+		"replaceAvatarLabel": "Sostituisci",
+		"chooseFromStorageButton": "Scegli dall'archivio",
+		"aboutMeLegend": "Su di me",
+		"bioLabel": "Biografia",
+		"filesComingSoon": "Il caricamento e la gestione dei file appariranno più avanti."
 	}
 }

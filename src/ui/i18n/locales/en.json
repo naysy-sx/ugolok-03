@@ -391,5 +391,57 @@
 		"ariaLabel": "Player",
 		"noPreview": "No preview available for this file type ({{mime}}).",
 		"unknownType": "unknown type"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "active",
+			"makeActiveButton": "Make active",
+			"deleteAria": "Remove server {{url}}",
+			"emptyList": "The list is empty.",
+			"addLabel": "Add server"
+		},
+		"relay": {
+			"heading": "Relay servers",
+			"readLabel": "read",
+			"writeLabel": "write"
+		},
+		"selfHosted": {
+			"heading": "Your own server",
+			"fingerprintMismatchConfirm": "The server's fingerprint differs from the one saved earlier for this address — the server may have been swapped. Continue anyway?",
+			"pairingCancelled": "Pairing cancelled — the fingerprint doesn't match the one saved earlier.",
+			"unpairConfirm": "Disconnect this self-hosted server? Settings on the server itself don't change — only the local link in the app.",
+			"connectedLabel": "Connected:",
+			"fingerprintLabel": "Fingerprint: {{fingerprint}}",
+			"refreshStatusButton": "Refresh status",
+			"disconnectButton": "Disconnect",
+			"instructionsBeforeCode": "Run",
+			"instructionsAfterCode": "on your VPS, open the server's address in a new browser tab and accept the certificate warning (self-signed — this is expected for your own server), then paste the pairing code below.",
+			"pairingCodeLabel": "Pairing code",
+			"pairingCodePlaceholder": "Paste the pairing code from install.sh",
+			"connectButton": "Connect"
+		},
+		"blossomServersTitle": "Blossom servers (files/attachments)",
+		"copiedStatus": "Copied",
+		"copyFailedStatus": "Couldn't copy — copy it manually",
+		"publishingStatus": "publishing…",
+		"notPublishedNoBlossom": "not published for others: no active Blossom server",
+		"notPublishedReason": "not published for others: {{reason}}",
+		"relayRejected": "relay rejected it",
+		"selectImageError": "Choose an image file.",
+		"fileTooLargeError": "File is too large (maximum 2 MB).",
+		"avatarPublicConfirm": "The image will become publicly accessible and will no longer be encrypted. Continue?",
+		"savedStatus": "Saved",
+		"loadingTitle": "Loading profile…",
+		"noNameFallback": "No name",
+		"identifierHeading": "Your identifier",
+		"copyKeyAria": "Copy key",
+		"identifierHint": "You can use this key so other users can add you.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "No avatar set",
+		"replaceAvatarLabel": "Replace",
+		"chooseFromStorageButton": "Choose from storage",
+		"aboutMeLegend": "About me",
+		"bioLabel": "Bio",
+		"filesComingSoon": "File upload and management will appear later."
 	}
 }

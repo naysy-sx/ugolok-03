@@ -26,6 +26,7 @@ import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
+import { t } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -83,10 +84,10 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 				{urls.map((url) => (
 					<li key={url} class="srv__item">
 						<span class="srv__url">{url}</span>
-						{url === activeUrl && <span class="badge-on">активный</span>}
+						{url === activeUrl && <span class="badge-on">{t("profile.server.activeLabel")}</span>}
 						{url !== activeUrl && (
 							<button type="button" class="btn--ghost" disabled={busy} onClick={() => runAction(() => onSetActive(url))}>
-								Сделать активным
+								{t("profile.server.makeActiveButton")}
 							</button>
 						)}
 						<button
@@ -94,7 +95,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 							class="icon-btn"
 							disabled={busy}
 							onClick={() => runAction(() => onRemove(url))}
-							aria-label={`Удалить сервер ${url}`}
+							aria-label={t("profile.server.deleteAria", { url })}
 						>
 							<IconTrash />
 						</button>
@@ -102,13 +103,13 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 				))}
 				{urls.length === 0 && (
 					<li style={{ color: "var(--muted)" }} class="srv__item">
-						Список пуст.
+						{t("profile.server.emptyList")}
 					</li>
 				)}
 			</ul>
 			<form class="srv__add" onSubmit={handleAdd}>
 				<label class="visually-hidden" for={`${title}-new-url`}>
-					Добавить сервер
+					{t("profile.server.addLabel")}
 				</label>
 				<input
 					id={`${title}-new-url`}
@@ -118,7 +119,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 					onInput={(e) => setNewUrl(e.currentTarget.value)}
 				/>
 				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
-					<IconPlus /> Добавить
+					<IconPlus /> {t("common.add")}
 				</button>
 			</form>
 		</section>
@@ -159,7 +160,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 	return (
 		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="srv-relay">
 			<h2 id="srv-relay" class="sect-title">
-				Relay-серверы
+				{t("profile.relay.heading")}
 			</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -177,7 +178,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 								disabled={busy}
 								onChange={(e) => runAction(() => onSetRole(r.url, { read: e.currentTarget.checked, write: r.write }))}
 							/>
-							чтение
+							{t("profile.relay.readLabel")}
 						</label>
 						<label>
 							<input
@@ -186,14 +187,14 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 								disabled={busy}
 								onChange={(e) => runAction(() => onSetRole(r.url, { read: r.read, write: e.currentTarget.checked }))}
 							/>
-							запись
+							{t("profile.relay.writeLabel")}
 						</label>
 						<button
 							type="button"
 							class="icon-btn"
 							disabled={busy}
 							onClick={() => runAction(() => onRemove(r.url))}
-							aria-label={`Удалить сервер ${r.url}`}
+							aria-label={t("profile.server.deleteAria", { url: r.url })}
 						>
 							<IconTrash />
 						</button>
@@ -201,17 +202,17 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 				))}
 				{urls.length === 0 && (
 					<li style={{ color: "var(--muted)" }} class="srv__item">
-						Список пуст.
+						{t("profile.server.emptyList")}
 					</li>
 				)}
 			</ul>
 			<form class="srv__add" onSubmit={handleAdd}>
 				<label class="visually-hidden" for="relay-new-url">
-					Добавить сервер
+					{t("profile.server.addLabel")}
 				</label>
 				<input id="relay-new-url" type="text" placeholder="wss://relay.example.com" value={newUrl} onInput={(e) => setNewUrl(e.currentTarget.value)} />
 				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
-					<IconPlus /> Добавить
+					<IconPlus /> {t("common.add")}
 				</button>
 			</form>
 		</section>
@@ -252,15 +253,13 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 			await refresh();
 		} catch (err) {
 			if (err instanceof SelfHostedFingerprintMismatchError) {
-				const confirmed = window.confirm(
-					"Отпечаток сервера отличается от сохранённого ранее для этого адреса — возможно, сервер подменили. Всё равно продолжить?",
-				);
+				const confirmed = window.confirm(t("profile.selfHosted.fingerprintMismatchConfirm"));
 				if (confirmed) {
 					setBusy(false);
 					await attemptPair(true);
 					return;
 				}
-				setError("Сопряжение отменено — отпечаток не совпадает с сохранённым ранее.");
+				setError(t("profile.selfHosted.pairingCancelled"));
 			} else {
 				setError(err?.message || String(err));
 			}
@@ -276,7 +275,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 	}
 
 	async function handleUnpair() {
-		if (!window.confirm("Отсоединить self-hosted сервер? Настройки на самом сервере не меняются, только локальная привязка в приложении.")) return;
+		if (!window.confirm(t("profile.selfHosted.unpairConfirm"))) return;
 		setBusy(true);
 		setError("");
 		try {
@@ -309,7 +308,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 	return (
 		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="selfhost-heading">
 			<h2 id="selfhost-heading" class="sect-title">
-				Свой сервер
+				{t("profile.selfHosted.heading")}
 			</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -319,12 +318,12 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 			{paired ? (
 				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
 					<p>
-						Подключено:{" "}
+						{t("profile.selfHosted.connectedLabel")}{" "}
 						<strong>
 							{paired.host}:{paired.port}
 						</strong>
 					</p>
-					<p style={{ color: "var(--muted)", fontSize: "0.85em" }}>Отпечаток: {paired.fingerprint}</p>
+					<p style={{ color: "var(--muted)", fontSize: "0.85em" }}>{t("profile.selfHosted.fingerprintLabel", { fingerprint: paired.fingerprint })}</p>
 					{status && (
 						<ul role="list">
 							{(status.services || []).map((s) => (
@@ -336,32 +335,30 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 					)}
 					<div style={{ display: "flex", gap: "var(--space-2xs)" }}>
 						<button type="button" class="btn--ghost" disabled={busy} onClick={handleRefreshStatus}>
-							Обновить статус
+							{t("profile.selfHosted.refreshStatusButton")}
 						</button>
 						<button type="button" class="btn--ghost" disabled={busy} onClick={handleUnpair}>
-							Отсоединить
+							{t("profile.selfHosted.disconnectButton")}
 						</button>
 					</div>
 				</div>
 			) : (
 				<form class="flow" style={{ "--flow-space": "var(--space-2xs)" }} onSubmit={handlePairSubmit}>
 					<p style={{ color: "var(--muted)" }}>
-						Выполните <code>install.sh</code> на своём VPS, откройте адрес сервера в новой вкладке браузера и примите
-						предупреждение о сертификате (самоподписанный — это ожидаемо для собственного сервера), затем вставьте пейринг-код
-						ниже.
+						{t("profile.selfHosted.instructionsBeforeCode")} <code>install.sh</code> {t("profile.selfHosted.instructionsAfterCode")}
 					</p>
 					<label class="visually-hidden" for="pairing-code">
-						Пейринг-код
+						{t("profile.selfHosted.pairingCodeLabel")}
 					</label>
 					<textarea
 						id="pairing-code"
 						rows={3}
-						placeholder="Вставьте пейринг-код из install.sh"
+						placeholder={t("profile.selfHosted.pairingCodePlaceholder")}
 						value={code}
 						onInput={(e) => setCode(e.currentTarget.value)}
 					/>
 					<button type="submit" class="btn--ghost" disabled={busy || !code.trim()}>
-						Подключиться
+						{t("profile.selfHosted.connectButton")}
 					</button>
 				</form>
 			)}
@@ -408,7 +405,7 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 				}
 			/>
 			<ServerListEditor
-				title="Blossom-серверы (файлы/вложения)"
+				title={t("profile.blossomServersTitle")}
 				urlPlaceholder="https://blossom.example.com"
 				urls={settings.blossomUrls}
 				activeUrl={settings.activeBlossomUrl}
@@ -456,9 +453,9 @@ export default function Profile() {
 	async function handleCopyNpub() {
 		try {
 			await navigator.clipboard.writeText(npubEncode(id));
-			setCopyStatus("Скопировано");
+			setCopyStatus(t("profile.copiedStatus"));
 		} catch {
-			setCopyStatus("Не удалось скопировать — скопируйте вручную");
+			setCopyStatus(t("profile.copyFailedStatus"));
 		}
 		clearTimeout(copyTimerRef.current);
 		copyTimerRef.current = setTimeout(() => setCopyStatus(""), 2000);
@@ -469,12 +466,12 @@ export default function Profile() {
 	// (та же философия, что handleBioSubmit): локальное превью/кэш НЕ зависит
 	// от публикации.
 	async function publishAvatarBytes(fileBytes, mimeType) {
-		setPublishStatus("публикация…");
+		setPublishStatus(t("profile.publishingStatus"));
 		try {
 			const settings = await loadUiSettings(id, dbKeySig.value);
 			const serverUrl = settings.activeBlossomUrl;
 			if (!serverUrl) {
-				setPublishStatus("не опубликовано для других: нет активного Blossom-сервера");
+				setPublishStatus(t("profile.notPublishedNoBlossom"));
 				return;
 			}
 			await ensureConnected(id, privKeySig.value, dbKeySig.value);
@@ -488,9 +485,9 @@ export default function Profile() {
 			// опубликованное био незасабмиченным черновиком в поле ввода.
 			const event = buildProfileEvent(privKeySig.value, { name: login, about: savedBio, picture: url });
 			const result = await publish(event);
-			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+			setPublishStatus(result.ok ? "" : t("profile.notPublishedReason", { reason: result.reason || t("profile.relayRejected") }));
 		} catch (err) {
-			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+			setPublishStatus(t("profile.notPublishedReason", { reason: err?.message || String(err) }));
 		}
 	}
 
@@ -499,12 +496,12 @@ export default function Profile() {
 		const file = input.files?.[0];
 		if (!file) return;
 		if (!file.type.startsWith("image/")) {
-			setAvatarError("Выберите файл изображения.");
+			setAvatarError(t("profile.selectImageError"));
 			input.value = "";
 			return;
 		}
 		if (file.size > MAX_AVATAR_BYTES) {
-			setAvatarError("Файл слишком большой (максимум 2 МБ).");
+			setAvatarError(t("profile.fileTooLargeError"));
 			input.value = "";
 			return;
 		}
@@ -533,19 +530,19 @@ export default function Profile() {
 		try {
 			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
 			if (!manifest.mime?.startsWith("image/")) {
-				setAvatarError("Выберите файл изображения.");
+				setAvatarError(t("profile.selectImageError"));
 				return;
 			}
 			if (manifest.size > MAX_AVATAR_BYTES) {
-				setAvatarError("Файл слишком большой (максимум 2 МБ).");
+				setAvatarError(t("profile.fileTooLargeError"));
 				return;
 			}
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
-				setAvatarError("Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.");
+				setAvatarError(t("chat.window.fileKeyNotFoundError"));
 				return;
 			}
-			if (!window.confirm("Изображение станет общедоступным и больше не будет зашифровано. Продолжить?")) return;
+			if (!window.confirm(t("profile.avatarPublicConfirm"))) return;
 			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
 			const dataUrl = await new Promise((resolve, reject) => {
 				const reader = new FileReader();
@@ -567,7 +564,7 @@ export default function Profile() {
 		await updateProfile(id, { bio });
 		bumpProfileActivity();
 		setSavedBio(bio);
-		setBioStatus("Сохранено");
+		setBioStatus(t("profile.savedStatus"));
 		clearTimeout(statusTimerRef.current);
 		statusTimerRef.current = setTimeout(() => setBioStatus(""), 2000);
 
@@ -575,7 +572,7 @@ export default function Profile() {
 		// keystore-запись, не fold из журнала событий, в отличие от contacts/groups) —
 		// публикация в relay отдельный, best-effort шаг: другие пользователи видят
 		// никнейм/био через kind 0 (F-CT-04), но офлайн-редактирование остаётся рабочим.
-		setPublishStatus("публикация…");
+		setPublishStatus(t("profile.publishingStatus"));
 		try {
 			await ensureConnected(id, privKeySig.value, dbKeySig.value);
 			// avatarUrl (этап 38-довесок, найденный реальным использованием баг): БЕЗ
@@ -583,16 +580,16 @@ export default function Profile() {
 			// replaceable, отсутствие поля в новой версии = "поля больше нет".
 			const event = buildProfileEvent(privKeySig.value, { name: login, about: bio, picture: avatarUrl || undefined });
 			const result = await publish(event);
-			setPublishStatus(result.ok ? "" : "не опубликовано для других: " + (result.reason || "relay отклонил"));
+			setPublishStatus(result.ok ? "" : t("profile.notPublishedReason", { reason: result.reason || t("profile.relayRejected") }));
 		} catch (err) {
-			setPublishStatus("не опубликовано для других: " + (err?.message || String(err)));
+			setPublishStatus(t("profile.notPublishedReason", { reason: err?.message || String(err) }));
 		}
 	}
 
 	if (loading) {
 		return (
-			<Screen title="Профиль">
-				<p style={{ color: "var(--muted)" }}>Загрузка профиля…</p>
+			<Screen title={t("nav.profile")}>
+				<p style={{ color: "var(--muted)" }}>{t("profile.loadingTitle")}</p>
 			</Screen>
 		);
 	}
@@ -601,14 +598,14 @@ export default function Profile() {
 	const bioIsDirty = bio !== savedBio;
 
 	return (
-		<Screen title={login || "Без имени"}>
+		<Screen title={login || t("profile.noNameFallback")}>
 			<section class="flow" aria-labelledby="profile-npub-heading">
 				<h2 id="profile-npub-heading" class="sect-title">
-					Ваш идентификатор
+					{t("profile.identifierHeading")}
 				</h2>
 				<div class="keybox">
 					<code>{npubEncode(id)}</code>
-					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label="Скопировать ключ">
+					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
 						<IconCopy />
 					</button>
 				</div>
@@ -617,7 +614,7 @@ export default function Profile() {
 						{copyStatus}
 					</p>
 				)}
-				<p class="hint">Вот этот ключ вы можете использовать, чтобы другие пользователи могли вас добавить.</p>
+				<p class="hint">{t("profile.identifierHint")}</p>
 			</section>
 
 			{/* Пользователь: "перекомпоновать блоки с аватаром и о себе — две
@@ -627,7 +624,7 @@ export default function Profile() {
 			    себе (фото + кнопка под ним), а "О себе" остаётся единственным
 			    видимым заголовком блока. */}
 			<div class="profile-photo-layout">
-				<div class="profile-photo-col" aria-label="Аватар">
+				<div class="profile-photo-col" aria-label={t("profile.avatarColumnAria")}>
 					{/* avatarUrl (публичный Blossom URL) — фолбэк, когда локального
 					    data-url кэша ещё нет: НОВОЕ устройство подтягивает bio/avatarUrl
 					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
@@ -637,12 +634,12 @@ export default function Profile() {
 					{avatar || avatarUrl ? (
 						<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
 					) : (
-						<div role="img" aria-label="Аватар не задан" class="profile-avatar-square profile-avatar-square-fallback">
+						<div role="img" aria-label={t("profile.avatarNotSetAria")} class="profile-avatar-square profile-avatar-square-fallback">
 							{initial}
 						</div>
 					)}
 					<label for="profile-avatar-input" class="profile-avatar-replace-btn">
-						Заменить
+						{t("profile.replaceAvatarLabel")}
 					</label>
 					<input
 						id="profile-avatar-input"
@@ -652,7 +649,7 @@ export default function Profile() {
 						onChange={handleAvatarChange}
 					/>
 					<button type="button" class="btn--ghost" onClick={() => setAvatarPickerOpen(true)}>
-						Выбрать из хранилища
+						{t("profile.chooseFromStorageButton")}
 					</button>
 					{avatarError && (
 						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -666,8 +663,8 @@ export default function Profile() {
 
 				<form class="flow profile-bio-col" onSubmit={handleBioSubmit}>
 					<fieldset class="flow">
-						<legend class="sect-title">О себе</legend>
-						<label for="profile-bio">Био</label>
+						<legend class="sect-title">{t("profile.aboutMeLegend")}</legend>
+						<label for="profile-bio">{t("profile.bioLabel")}</label>
 						<textarea
 							id="profile-bio"
 							rows="4"
@@ -677,7 +674,7 @@ export default function Profile() {
 					</fieldset>
 					<div class="cluster">
 						<button type="submit" disabled={!bioIsDirty}>
-							Сохранить
+							{t("common.save")}
 						</button>
 						{bioStatus && (
 							<span role="status" style={{ color: "var(--muted)" }}>
@@ -695,9 +692,9 @@ export default function Profile() {
 
 			<section class="flow" aria-labelledby="profile-files-heading">
 				<h2 id="profile-files-heading" class="sect-title">
-					Файлы
+					{t("nav.files")}
 				</h2>
-				<div class="files-empty">Загрузка и управление файлами появится позже.</div>
+				<div class="files-empty">{t("profile.filesComingSoon")}</div>
 			</section>
 
 			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />

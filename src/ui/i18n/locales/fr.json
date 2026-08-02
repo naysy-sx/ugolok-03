@@ -391,5 +391,57 @@
 		"ariaLabel": "Lecteur",
 		"noPreview": "Aucun aperçu disponible pour ce type de fichier ({{mime}}).",
 		"unknownType": "type inconnu"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "actif",
+			"makeActiveButton": "Rendre actif",
+			"deleteAria": "Supprimer le serveur {{url}}",
+			"emptyList": "La liste est vide.",
+			"addLabel": "Ajouter un serveur"
+		},
+		"relay": {
+			"heading": "Serveurs relay",
+			"readLabel": "lecture",
+			"writeLabel": "écriture"
+		},
+		"selfHosted": {
+			"heading": "Votre propre serveur",
+			"fingerprintMismatchConfirm": "L'empreinte du serveur diffère de celle enregistrée précédemment pour cette adresse — le serveur a peut-être été remplacé. Continuer quand même ?",
+			"pairingCancelled": "Appairage annulé — l'empreinte ne correspond pas à celle enregistrée précédemment.",
+			"unpairConfirm": "Déconnecter ce serveur auto-hébergé ? Les paramètres sur le serveur lui-même ne changent pas, seule la liaison locale dans l'application est supprimée.",
+			"connectedLabel": "Connecté :",
+			"fingerprintLabel": "Empreinte : {{fingerprint}}",
+			"refreshStatusButton": "Actualiser le statut",
+			"disconnectButton": "Déconnecter",
+			"instructionsBeforeCode": "Exécutez",
+			"instructionsAfterCode": "sur votre VPS, ouvrez l'adresse du serveur dans un nouvel onglet du navigateur et acceptez l'avertissement de certificat (auto-signé — c'est normal pour votre propre serveur), puis collez le code d'appairage ci-dessous.",
+			"pairingCodeLabel": "Code d'appairage",
+			"pairingCodePlaceholder": "Collez le code d'appairage depuis install.sh",
+			"connectButton": "Se connecter"
+		},
+		"blossomServersTitle": "Serveurs Blossom (fichiers/pièces jointes)",
+		"copiedStatus": "Copié",
+		"copyFailedStatus": "Impossible de copier — copiez-le manuellement",
+		"publishingStatus": "publication…",
+		"notPublishedNoBlossom": "non publié pour les autres : aucun serveur Blossom actif",
+		"notPublishedReason": "non publié pour les autres : {{reason}}",
+		"relayRejected": "rejeté par le relay",
+		"selectImageError": "Choisissez un fichier image.",
+		"fileTooLargeError": "Le fichier est trop volumineux (2 Mo maximum).",
+		"avatarPublicConfirm": "L'image deviendra publique et ne sera plus chiffrée. Continuer ?",
+		"savedStatus": "Enregistré",
+		"loadingTitle": "Chargement du profil…",
+		"noNameFallback": "Sans nom",
+		"identifierHeading": "Votre identifiant",
+		"copyKeyAria": "Copier la clé",
+		"identifierHint": "Vous pouvez utiliser cette clé pour que d'autres utilisateurs puissent vous ajouter.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Aucun avatar défini",
+		"replaceAvatarLabel": "Remplacer",
+		"chooseFromStorageButton": "Choisir depuis le stockage",
+		"aboutMeLegend": "À propos de moi",
+		"bioLabel": "Bio",
+		"filesComingSoon": "L'envoi et la gestion de fichiers apparaîtront plus tard."
 	}
 }

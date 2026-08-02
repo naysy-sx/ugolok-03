@@ -391,5 +391,57 @@
 		"ariaLabel": "Reproductor",
 		"noPreview": "No hay vista previa disponible para este tipo de archivo ({{mime}}).",
 		"unknownType": "tipo desconocido"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "activo",
+			"makeActiveButton": "Hacer activo",
+			"deleteAria": "Eliminar servidor {{url}}",
+			"emptyList": "La lista está vacía.",
+			"addLabel": "Añadir servidor"
+		},
+		"relay": {
+			"heading": "Servidores relay",
+			"readLabel": "lectura",
+			"writeLabel": "escritura"
+		},
+		"selfHosted": {
+			"heading": "Tu propio servidor",
+			"fingerprintMismatchConfirm": "La huella del servidor difiere de la guardada anteriormente para esta dirección — es posible que el servidor haya sido suplantado. ¿Continuar de todos modos?",
+			"pairingCancelled": "Emparejamiento cancelado — la huella no coincide con la guardada anteriormente.",
+			"unpairConfirm": "¿Desconectar este servidor autoalojado? La configuración del propio servidor no cambia, solo el enlace local en la aplicación.",
+			"connectedLabel": "Conectado:",
+			"fingerprintLabel": "Huella: {{fingerprint}}",
+			"refreshStatusButton": "Actualizar estado",
+			"disconnectButton": "Desconectar",
+			"instructionsBeforeCode": "Ejecuta",
+			"instructionsAfterCode": "en tu VPS, abre la dirección del servidor en una nueva pestaña del navegador y acepta la advertencia del certificado (autofirmado — esto es normal para tu propio servidor), luego pega el código de emparejamiento a continuación.",
+			"pairingCodeLabel": "Código de emparejamiento",
+			"pairingCodePlaceholder": "Pega el código de emparejamiento de install.sh",
+			"connectButton": "Conectar"
+		},
+		"blossomServersTitle": "Servidores Blossom (archivos/adjuntos)",
+		"copiedStatus": "Copiado",
+		"copyFailedStatus": "No se pudo copiar — cópialo manualmente",
+		"publishingStatus": "publicando…",
+		"notPublishedNoBlossom": "no publicado para otros: no hay servidor Blossom activo",
+		"notPublishedReason": "no publicado para otros: {{reason}}",
+		"relayRejected": "el relay lo rechazó",
+		"selectImageError": "Elige un archivo de imagen.",
+		"fileTooLargeError": "El archivo es demasiado grande (máximo 2 MB).",
+		"avatarPublicConfirm": "La imagen pasará a ser de acceso público y dejará de estar cifrada. ¿Continuar?",
+		"savedStatus": "Guardado",
+		"loadingTitle": "Cargando perfil…",
+		"noNameFallback": "Sin nombre",
+		"identifierHeading": "Tu identificador",
+		"copyKeyAria": "Copiar clave",
+		"identifierHint": "Puedes usar esta clave para que otros usuarios te añadan.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Sin avatar",
+		"replaceAvatarLabel": "Reemplazar",
+		"chooseFromStorageButton": "Elegir del almacenamiento",
+		"aboutMeLegend": "Sobre mí",
+		"bioLabel": "Biografía",
+		"filesComingSoon": "La subida y gestión de archivos aparecerá más adelante."
 	}
 }

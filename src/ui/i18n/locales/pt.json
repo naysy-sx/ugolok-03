@@ -391,5 +391,57 @@
 		"ariaLabel": "Reprodutor",
 		"noPreview": "Não há pré-visualização disponível para este tipo de arquivo ({{mime}}).",
 		"unknownType": "tipo desconhecido"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "ativo",
+			"makeActiveButton": "Tornar ativo",
+			"deleteAria": "Remover servidor {{url}}",
+			"emptyList": "A lista está vazia.",
+			"addLabel": "Adicionar servidor"
+		},
+		"relay": {
+			"heading": "Servidores relay",
+			"readLabel": "leitura",
+			"writeLabel": "escrita"
+		},
+		"selfHosted": {
+			"heading": "Seu próprio servidor",
+			"fingerprintMismatchConfirm": "A impressão digital do servidor difere da salva anteriormente para este endereço — o servidor pode ter sido substituído. Continuar mesmo assim?",
+			"pairingCancelled": "Pareamento cancelado — a impressão digital não corresponde à salva anteriormente.",
+			"unpairConfirm": "Desconectar este servidor autogerenciado? As configurações no próprio servidor não mudam, apenas o vínculo local no aplicativo.",
+			"connectedLabel": "Conectado:",
+			"fingerprintLabel": "Impressão digital: {{fingerprint}}",
+			"refreshStatusButton": "Atualizar status",
+			"disconnectButton": "Desconectar",
+			"instructionsBeforeCode": "Execute",
+			"instructionsAfterCode": "no seu VPS, abra o endereço do servidor em uma nova aba do navegador e aceite o aviso de certificado (autoassinado — isso é esperado para seu próprio servidor), depois cole o código de pareamento abaixo.",
+			"pairingCodeLabel": "Código de pareamento",
+			"pairingCodePlaceholder": "Cole o código de pareamento do install.sh",
+			"connectButton": "Conectar"
+		},
+		"blossomServersTitle": "Servidores Blossom (arquivos/anexos)",
+		"copiedStatus": "Copiado",
+		"copyFailedStatus": "Não foi possível copiar — copie manualmente",
+		"publishingStatus": "publicando…",
+		"notPublishedNoBlossom": "não publicado para outros: nenhum servidor Blossom ativo",
+		"notPublishedReason": "não publicado para outros: {{reason}}",
+		"relayRejected": "rejeitado pelo relay",
+		"selectImageError": "Escolha um arquivo de imagem.",
+		"fileTooLargeError": "O arquivo é muito grande (máximo de 2 MB).",
+		"avatarPublicConfirm": "A imagem se tornará pública e deixará de ser criptografada. Continuar?",
+		"savedStatus": "Salvo",
+		"loadingTitle": "Carregando perfil…",
+		"noNameFallback": "Sem nome",
+		"identifierHeading": "Seu identificador",
+		"copyKeyAria": "Copiar chave",
+		"identifierHint": "Você pode usar esta chave para que outros usuários possam adicioná-lo.",
+		"avatarColumnAria": "Avatar",
+		"avatarNotSetAria": "Nenhum avatar definido",
+		"replaceAvatarLabel": "Substituir",
+		"chooseFromStorageButton": "Escolher do armazenamento",
+		"aboutMeLegend": "Sobre mim",
+		"bioLabel": "Bio",
+		"filesComingSoon": "O envio e gerenciamento de arquivos aparecerão mais tarde."
 	}
 }

@@ -391,5 +391,57 @@
 		"ariaLabel": "プレーヤー",
 		"noPreview": "このファイル形式（{{mime}}）のプレビューはありません。",
 		"unknownType": "不明な形式"
+	},
+	"profile": {
+		"server": {
+			"activeLabel": "アクティブ",
+			"makeActiveButton": "アクティブにする",
+			"deleteAria": "サーバー {{url}} を削除",
+			"emptyList": "リストは空です。",
+			"addLabel": "サーバーを追加"
+		},
+		"relay": {
+			"heading": "リレーサーバー",
+			"readLabel": "読み取り",
+			"writeLabel": "書き込み"
+		},
+		"selfHosted": {
+			"heading": "自分のサーバー",
+			"fingerprintMismatchConfirm": "サーバーのフィンガープリントがこのアドレスで以前保存されたものと異なります — サーバーがすり替えられた可能性があります。それでも続けますか？",
+			"pairingCancelled": "ペアリングをキャンセルしました — フィンガープリントが以前保存したものと一致しません。",
+			"unpairConfirm": "このセルフホストサーバーを切断しますか？ サーバー自体の設定は変わらず、アプリ内のローカルな紐付けだけが解除されます。",
+			"connectedLabel": "接続済み:",
+			"fingerprintLabel": "フィンガープリント: {{fingerprint}}",
+			"refreshStatusButton": "ステータスを更新",
+			"disconnectButton": "切断",
+			"instructionsBeforeCode": "ご自身のVPSで",
+			"instructionsAfterCode": "を実行し、新しいブラウザタブでサーバーのアドレスを開いて証明書の警告（自己署名証明書 — 自分のサーバーでは想定内です）を承認し、下にペアリングコードを貼り付けてください。",
+			"pairingCodeLabel": "ペアリングコード",
+			"pairingCodePlaceholder": "install.sh のペアリングコードを貼り付け",
+			"connectButton": "接続する"
+		},
+		"blossomServersTitle": "Blossomサーバー（ファイル/添付）",
+		"copiedStatus": "コピーしました",
+		"copyFailedStatus": "コピーできませんでした — 手動でコピーしてください",
+		"publishingStatus": "公開中…",
+		"notPublishedNoBlossom": "他の人には公開されていません: アクティブなBlossomサーバーがありません",
+		"notPublishedReason": "他の人には公開されていません: {{reason}}",
+		"relayRejected": "リレーに拒否されました",
+		"selectImageError": "画像ファイルを選んでください。",
+		"fileTooLargeError": "ファイルが大きすぎます（最大2MB）。",
+		"avatarPublicConfirm": "この画像は一般公開され、暗号化されなくなります。続けますか？",
+		"savedStatus": "保存しました",
+		"loadingTitle": "プロフィールを読み込み中…",
+		"noNameFallback": "名前なし",
+		"identifierHeading": "あなたの識別子",
+		"copyKeyAria": "鍵をコピー",
+		"identifierHint": "この鍵を使うと、他のユーザーがあなたを追加できます。",
+		"avatarColumnAria": "アバター",
+		"avatarNotSetAria": "アバター未設定",
+		"replaceAvatarLabel": "変更",
+		"chooseFromStorageButton": "ストレージから選択",
+		"aboutMeLegend": "自己紹介",
+		"bioLabel": "自己紹介文",
+		"filesComingSoon": "ファイルのアップロードと管理は後日追加されます。"
 	}
 }
