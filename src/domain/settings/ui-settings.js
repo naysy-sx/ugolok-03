@@ -9,6 +9,7 @@ import { buildRelayListEvent } from "../identity/relay-list.js";
 import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { detectSystemLocale } from "./locale-detection.js";
 
 // F-SY-03 (TECH.md) — d-tag='settings' буквально, не opaque (не privacy-чувствительно,
 // тот же принцип, что read-status/drafts этапа 26).
@@ -82,7 +83,12 @@ export function parseUiSettingsEvent(event, privKey) {
 export async function loadUiSettings(ownerPubkey, dbKey) {
 	const row = fromEncryptedRow(await db.table("uiSettings").get(ownerPubkey), dbKey);
 	if (!row) {
+		// Этап 64 — первый запуск ДЛЯ ЭТОГО pubkey на этом устройстве: язык
+		// интерфейса определяется системным языком, а не жёстко зашитым "ru"
+		// (DEFAULT_SETTINGS.language) — тот же принцип, что relayUrls/
+		// blossomUrls уже получают build-time дефолт именно в этой ветке.
 		return mergeWithDefaults({
+			language: detectSystemLocale(),
 			relayUrls: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true })),
 			blossomUrls: [...BUILD_DEFAULT_BLOSSOM_SERVERS],
 			activeBlossomUrl: BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? null,

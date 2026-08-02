@@ -19,6 +19,7 @@ import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js
 import { applyAccentColor } from "./ui/theme/accent-palette.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
 import { applyThemeMode, resolveEffectiveTheme, toggleThemeMode } from "./ui/theme/theme-mode.js";
+import { setLocale, t } from "./ui/signals/i18n.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 import { activeChannelId } from "./ui/signals/channel-nav.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
@@ -84,6 +85,12 @@ function MainShell() {
 			applyUiScale(loaded.uiScale);
 			applyThemeMode(loaded.themeMode);
 			setThemeMode(loaded.themeMode);
+			// Этап 64 — тот же принцип, что accent/scale/theme выше: применить СРАЗУ
+			// при заходе в MainShell, не ждать, пока пользователь откроет Настройки
+			// (иначе после логина интерфейс на секунду показывает язык, определённый
+			// currentLocale's дефолтом при загрузке модуля, вместо явного выбора
+			// пользователя, сохранённого для ЭТОГО аккаунта).
+			setLocale(loaded.language);
 		});
 	}, [ownerPubkey]);
 
@@ -227,7 +234,7 @@ function MainShell() {
 					onClick={() => setSidebarOpen((v) => !v)}
 					aria-expanded={sidebarOpen}
 					aria-controls="app-sidebar"
-					aria-label={sidebarOpen ? "Закрыть меню" : "Открыть меню"}
+					aria-label={sidebarOpen ? t("shell.closeMenu") : t("shell.openMenu")}
 				>
 					{sidebarOpen ? "✕" : <IconMenu />}
 				</button>
@@ -235,16 +242,16 @@ function MainShell() {
 					type="button"
 					class="theme-toggle-btn"
 					onClick={handleToggleTheme}
-					aria-label={resolveEffectiveTheme(themeMode) === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+					aria-label={resolveEffectiveTheme(themeMode) === "dark" ? t("shell.switchToLightTheme") : t("shell.switchToDarkTheme")}
 				>
 					{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
 				</button>
 			</div>
 			<div class="app-layout">
 			{sidebarOpen && <div class="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
-			<aside id="app-sidebar" class={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} aria-label="Профиль и главное меню">
+			<aside id="app-sidebar" class={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} aria-label={t("shell.sidebarAriaLabel")}>
 				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} />
-				<nav role="navigation" aria-label="Главное меню" style={{ flex: "1 1 auto" }}>
+				<nav role="navigation" aria-label={t("shell.navAriaLabel")} style={{ flex: "1 1 auto" }}>
 					<ul role="list">
 						{NAV_ITEMS.map(item => {
 							const ItemIcon = NAV_ICONS[item.id];
@@ -265,9 +272,9 @@ function MainShell() {
 										aria-current={item.id === activeId ? "page" : null}
 									>
 										<ItemIcon />
-										{item.label}
+										{t(item.labelKey)}
 										{badgeCount > 0 && (
-											<span class="nav-badge" aria-label={`непрочитано: ${badgeCount}`}>
+											<span class="nav-badge" aria-label={t("shell.unreadAriaLabel", { count: badgeCount })}>
 												{badgeCount}
 											</span>
 										)}
@@ -283,7 +290,7 @@ function MainShell() {
 				</nav>
 				<button type="button" class="nav-item-btn exit-btn" onClick={lock}>
 					<IconExit />
-					Выйти
+					{t("shell.logout")}
 				</button>
 			</aside>
 			<div class="main-content">
@@ -305,7 +312,7 @@ function MainShell() {
 					activeId !== "discovery" &&
 					activeId !== "settings" &&
 					activeId !== "journal" &&
-					activeId !== "files" && <Placeholder title={NAV_ITEMS.find(item => item.id === activeId).label} />}
+					activeId !== "files" && <Placeholder title={t(NAV_ITEMS.find(item => item.id === activeId).labelKey)} />}
 			</div>
 			</div>
 		</div>

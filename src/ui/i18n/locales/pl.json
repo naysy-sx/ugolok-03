@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Wstecz",
+		"continue": "Dalej",
+		"cancel": "Anuluj",
+		"save": "Zapisz",
+		"confirm": "Potwierdź"
+	},
+	"nav": {
+		"journal": "Dziennik",
+		"messages": "Wiadomości",
+		"channels": "Kanały",
+		"files": "Pliki",
+		"contacts": "Kontakty",
+		"discovery": "Odkrywaj",
+		"settings": "Ustawienia",
+		"profile": "Profil",
+		"help": "Pomoc",
+		"diagnostics": "Diagnostyka"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Język",
+			"label": "Język interfejsu"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profil i menu główne",
+		"navAriaLabel": "Menu główne",
+		"logout": "Wyloguj się",
+		"unreadAriaLabel": "nieprzeczytane: {{count}}",
+		"openMenu": "Otwórz menu",
+		"closeMenu": "Zamknij menu",
+		"switchToLightTheme": "Przełącz na jasny motyw",
+		"switchToDarkTheme": "Przełącz na ciemny motyw"
+	},
+	"unlock": {
+		"checking": "Sprawdzanie…",
+		"dbError": {
+			"message": "Nie udało się otworzyć lokalnej bazy danych — mogła pozostać w niekompatybilnym formacie po aktualizacji aplikacji.",
+			"warning": "Spowoduje to usunięcie wszystkich lokalnych danych na tym urządzeniu (kont, rozmów, kanałów) i będzie wymagać ponownego logowania lub rejestracji.",
+			"resetButton": "Wyczyść dane lokalne i zacznij od nowa"
+		},
+		"createGenerate": {
+			"title": "Fraza odzyskiwania",
+			"instructions": "Zapisz te 12 słów w bezpiecznym miejscu. To jedyny sposób na odzyskanie dostępu do konta.",
+			"savedButton": "Zapisałem frazę"
+		},
+		"createConfirm": {
+			"title": "Potwierdź frazę",
+			"instructions": "Wpisz frazę ponownie, aby potwierdzić, że ją zapisałeś.",
+			"label": "Fraza odzyskiwania (12 słów oddzielonych spacjami)",
+			"mismatchError": "Fraza się nie zgadza. Sprawdź ją i spróbuj ponownie."
+		},
+		"importMnemonic": {
+			"title": "Zaloguj się frazą odzyskiwania",
+			"instructions": "Wpisz swoją frazę odzyskiwania (12 słów oddzielonych spacjami).",
+			"label": "Fraza odzyskiwania",
+			"invalidError": "Nieprawidłowa fraza odzyskiwania (nie przeszła weryfikacji sumy kontrolnej)."
+		},
+		"importKey": {
+			"title": "Zaloguj się kluczem",
+			"instructions": "Wpisz swój klucz prywatny w formacie nsec1... lub jako ciąg szesnastkowy (64 znaki).",
+			"explanation": "Klucz prywatny to tajny ciąg znaków, który daje pełny dostęp do Twojego konta. Nigdy nikomu go nie pokazuj. W formacie nsec (NIP-19, bech32) zaczyna się od nsec1 i wygląda mniej więcej tak:",
+			"exampleNote": "(to tylko przykład formatu, nie prawdziwy klucz)",
+			"label": "Klucz prywatny",
+			"wrongTypeError": "To nie jest klucz prywatny (nsec), tylko {{type}}. Sprawdź, co skopiowałeś.",
+			"parseError": "Nie udało się rozpoznać klucza: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Dane konta",
+			"loginLabel": "Login",
+			"passwordLabel": "Hasło (co najmniej {{min}} znaków)",
+			"passwordConfirmLabel": "Powtórz hasło"
+		},
+		"done": {
+			"title": "Gotowe",
+			"message": "Gotowe! Twój publiczny identyfikator:",
+			"quickRegisterWarning": "Szybka rejestracja: Twoja tajna fraza odzyskiwania nie została nigdzie wyświetlona ani zapisana. Jeśli to urządzenie lub pamięć przeglądarki zostaną utracone, nie będzie sposobu na odzyskanie dostępu do konta. Frazę do kopii zapasowej będzie można wyświetlić później w ustawieniach.",
+			"continueButton": "Przejdź do aplikacji"
+		},
+		"main": {
+			"navAriaLabel": "Menu główne",
+			"navHome": "Strona główna",
+			"navTempChat": "Czat tymczasowy",
+			"createSpaceButton": "Utwórz przestrzeń",
+			"accountsWidget": {
+				"title": "Konta na tym urządzeniu",
+				"empty": "Nie ma jeszcze żadnego lokalnego konta — utwórz pierwsze po prawej.",
+				"ariaLabel": "Wybór profilu"
+			},
+			"loginForm": {
+				"passwordLabel": "Hasło do tej przestrzeni",
+				"submitButton": "Zaloguj się do {{appName}}",
+				"switchAccountButton": "Wybierz inne konto",
+				"selectAccountError": "Wybierz konto.",
+				"wrongPasswordError": "Nieprawidłowe hasło."
+			},
+			"registerBox": {
+				"title": "Utwórz nową przestrzeń",
+				"subtitle": "Konto zostanie utworzone lokalnie na tym urządzeniu.",
+				"loginLabel": "Wybierz unikalny pseudonim",
+				"passwordLabel": "Hasło główne (do szyfrowania Twoich danych)",
+				"submitButton": "Zarejestruj się",
+				"loginRequiredError": "Wpisz login.",
+				"passwordTooShortError": "Hasło jest za krótkie (co najmniej {{min}} znaków).",
+				"passwordMismatchError": "Hasła się nie zgadzają."
+			},
+			"otherWays": {
+				"title": "Inne sposoby",
+				"subtitle": "Dla zaawansowanych użytkowników.",
+				"createWithPhrase": "Utwórz z wyświetleniem frazy odzyskiwania",
+				"importMnemonic": "Zaloguj się frazą odzyskiwania",
+				"importKey": "Zaloguj się kluczem (nsec)"
+			},
+			"hero": {
+				"title": "Prywatna przestrzeń do komunikacji bez serwera centralnego",
+				"lead": "{{appName}} to komunikator zbudowany na protokole Nostr z szyfrowaniem end-to-end (MLS) dla rozmów oraz szyfrowaniem bazy danych na urządzeniu. Działa w sieci lokalnej, bez publicznego internetu."
+			},
+			"tempChat": {
+				"title": "Czat tymczasowy",
+				"lead1": "Wkrótce będzie można tu utworzyć jednorazowy pokój i zaprosić do niego innych gości — tekstem lub głosem, bez rejestracji i bez wcześniejszej wymiany kluczy. Pokój zniknie sam godzinę po opustoszeniu.",
+				"lead2": "Ta sekcja nie została jeszcze zaimplementowana — ta strona pojawiła się wcześniej niż sama funkcja."
+			},
+			"footer": {
+				"tagline": "{{appName}} — prywatny komunikator.",
+				"alphaNotice": "Testy alfa. Dane są szyfrowane kluczem pochodzącym z Twojego hasła głównego i przechowywane lokalnie na tym urządzeniu."
+			},
+			"sidebarAriaLabel": "Zarządzanie kontami i dostępem"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Ekran w budowie"
+	}
+}

@@ -10,6 +10,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
+import { t } from "../signals/i18n.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -102,7 +103,7 @@ export default function Unlock() {
 	async function handleLoginSubmit(e) {
 		e.preventDefault();
 		if (!openLoginForId) {
-			setError("Выберите аккаунт.");
+			setError(t("unlock.main.loginForm.selectAccountError"));
 			return;
 		}
 		try {
@@ -112,22 +113,22 @@ export default function Unlock() {
 			setRememberedAccountId(openLoginForId);
 			navigate("/main");
 		} catch {
-			setError("Неверный пароль.");
+			setError(t("unlock.main.loginForm.wrongPasswordError"));
 		}
 	}
 
 	async function handleRegisterSubmit(e) {
 		e.preventDefault();
 		if (!regLogin.trim()) {
-			setError("Введите логин.");
+			setError(t("unlock.main.registerBox.loginRequiredError"));
 			return;
 		}
 		if (regPassword.length < MIN_PASSWORD_LENGTH) {
-			setError(`Пароль слишком короткий (минимум ${MIN_PASSWORD_LENGTH} символов).`);
+			setError(t("unlock.main.registerBox.passwordTooShortError", { min: MIN_PASSWORD_LENGTH }));
 			return;
 		}
 		if (regPassword !== regPasswordConfirm) {
-			setError("Пароли не совпадают.");
+			setError(t("unlock.main.registerBox.passwordMismatchError"));
 			return;
 		}
 		setError("");
@@ -170,15 +171,15 @@ export default function Unlock() {
 	async function handleAdvancedPasswordSubmit(e) {
 		e.preventDefault();
 		if (!advLogin.trim()) {
-			setError("Введите логин.");
+			setError(t("unlock.main.registerBox.loginRequiredError"));
 			return;
 		}
 		if (password.length < MIN_PASSWORD_LENGTH) {
-			setError(`Пароль слишком короткий (минимум ${MIN_PASSWORD_LENGTH} символов).`);
+			setError(t("unlock.main.registerBox.passwordTooShortError", { min: MIN_PASSWORD_LENGTH }));
 			return;
 		}
 		if (password !== passwordConfirm) {
-			setError("Пароли не совпадают.");
+			setError(t("unlock.main.registerBox.passwordMismatchError"));
 			return;
 		}
 		setError("");
@@ -196,10 +197,10 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Уголок</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("app.name")}</h1>
 				</header>
-				<p style={{ color: "var(--muted)" }}>Проверка…</p>
+				<p style={{ color: "var(--muted)" }}>{t("unlock.checking")}</p>
 			</main>
 		);
 	}
@@ -208,20 +209,18 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Уголок</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("app.name")}</h1>
 				</header>
 				<div class="flow">
 					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-						Не удалось открыть локальную базу данных — возможно, она осталась в
-						несовместимом формате после обновления приложения.
+						{t("unlock.dbError.message")}
 					</p>
 					<p style={{ color: "var(--muted)" }}>
-						Это стирает все локальные данные на этом устройстве (аккаунты,
-						переписку, каналы) и потребует повторного входа или регистрации.
+						{t("unlock.dbError.warning")}
 					</p>
 					<button type="button" onClick={handleResetDatabase}>
-						Очистить локальные данные и начать заново
+						{t("unlock.dbError.resetButton")}
 					</button>
 				</div>
 			</main>
@@ -232,11 +231,11 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Фраза восстановления</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.createGenerate.title")}</h1>
 				</header>
 				<div class="flow">
-					<p>Запишите эти 12 слов в надёжном месте. Это единственный способ восстановить доступ к аккаунту.</p>
+					<p>{t("unlock.createGenerate.instructions")}</p>
 					<MnemonicDisplay words={mnemonic.split(" ")} />
 					<button
 						type="button"
@@ -245,7 +244,7 @@ export default function Unlock() {
 							setStep("create-confirm");
 						}}
 					>
-						Я сохранил фразу
+						{t("unlock.createGenerate.savedButton")}
 					</button>
 				</div>
 			</main>
@@ -256,12 +255,12 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Подтверждение фразы</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.createConfirm.title")}</h1>
 				</header>
 				<div class="flow">
-					<p>Введите фразу ещё раз, чтобы подтвердить, что вы её сохранили.</p>
-					<label for="confirm-mnemonic">Мнемоническая фраза (12 слов через пробел)</label>
+					<p>{t("unlock.createConfirm.instructions")}</p>
+					<label for="confirm-mnemonic">{t("unlock.createConfirm.label")}</label>
 					<textarea id="confirm-mnemonic" value={confirmInput} onInput={(e) => setConfirmInput(e.currentTarget.value)} />
 					<div class="cluster">
 						<button
@@ -269,7 +268,7 @@ export default function Unlock() {
 							onClick={async () => {
 								const normalize = (s) => s.trim().toLowerCase().split(/\s+/).filter(Boolean).join(" ");
 								if (normalize(confirmInput) !== normalize(mnemonic)) {
-									setError("Фраза не совпадает. Проверьте и попробуйте снова.");
+									setError(t("unlock.createConfirm.mismatchError"));
 									return;
 								}
 								setError("");
@@ -278,10 +277,10 @@ export default function Unlock() {
 								setStep("advanced-password");
 							}}
 						>
-							Подтвердить
+							{t("common.confirm")}
 						</button>
 						<button type="button" onClick={() => setStep("create-generate")}>
-							Назад
+							{t("common.back")}
 						</button>
 					</div>
 					{error && (
@@ -298,12 +297,12 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Вход по мнемонике</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.importMnemonic.title")}</h1>
 				</header>
 				<div class="flow">
-					<p>Введите вашу мнемоническую фразу (12 слов через пробел).</p>
-					<label for="import-mnemonic">Мнемоническая фраза</label>
+					<p>{t("unlock.importMnemonic.instructions")}</p>
+					<label for="import-mnemonic">{t("unlock.importMnemonic.label")}</label>
 					<textarea id="import-mnemonic" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
 					<div class="cluster">
 						<button
@@ -311,7 +310,7 @@ export default function Unlock() {
 							onClick={async () => {
 								const trimmed = importInput.trim();
 								if (!validateMnemonic(trimmed)) {
-									setError("Неверная мнемоническая фраза (не проходит проверку контрольной суммы).");
+									setError(t("unlock.importMnemonic.invalidError"));
 									return;
 								}
 								setError("");
@@ -321,10 +320,10 @@ export default function Unlock() {
 								setStep("advanced-password");
 							}}
 						>
-							Продолжить
+							{t("common.continue")}
 						</button>
 						<button type="button" onClick={() => setStep("main")}>
-							Назад
+							{t("common.back")}
 						</button>
 					</div>
 					{error && (
@@ -341,22 +340,20 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Вход по ключу</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.importKey.title")}</h1>
 				</header>
 				<div class="flow">
-					<p>Введите приватный ключ в формате nsec1... или как hex-строку (64 символа).</p>
+					<p>{t("unlock.importKey.instructions")}</p>
 					<p style={{ color: "var(--muted)" }}>
-						Приватный ключ — секретная строка, которая даёт полный доступ к вашему аккаунту. Никогда и никому её не
-						показывайте. В формате <code>nsec</code> (NIP-19, bech32) она начинается с <code>nsec1</code> и выглядит
-						примерно так:
+						{t("unlock.importKey.explanation")}
 					</p>
 					<p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
 						<code>nsec1zh0anykm9v3grv0wmw56pauv3yks03pz8jdgj4agcyg85xqumq3qn8lrhz</code>
 						<br />
-						<small style={{ color: "var(--muted)" }}>(это лишь пример формата, не настоящий ключ)</small>
+						<small style={{ color: "var(--muted)" }}>{t("unlock.importKey.exampleNote")}</small>
 					</p>
-					<label for="import-key">Приватный ключ</label>
+					<label for="import-key">{t("unlock.importKey.label")}</label>
 					<input id="import-key" type="password" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
 					<div class="cluster">
 						<button
@@ -369,7 +366,7 @@ export default function Unlock() {
 									} else {
 										const decoded = nip19Decode(trimmed);
 										if (decoded.type !== "nsec") {
-											setError("Это не приватный ключ (nsec), а " + decoded.type + ". Проверьте, что вы скопировали.");
+											setError(t("unlock.importKey.wrongTypeError", { type: decoded.type }));
 											return;
 										}
 										setPrivKey(decoded.data);
@@ -377,14 +374,14 @@ export default function Unlock() {
 									setError("");
 									setStep("advanced-password");
 								} catch (e) {
-									setError("Не удалось распознать ключ: " + (e?.message || e));
+									setError(t("unlock.importKey.parseError", { message: e?.message || e }));
 								}
 							}}
 						>
-							Продолжить
+							{t("common.continue")}
 						</button>
 						<button type="button" onClick={() => setStep("main")}>
-							Назад
+							{t("common.back")}
 						</button>
 					</div>
 					{error && (
@@ -401,17 +398,17 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Данные аккаунта</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.advancedPassword.title")}</h1>
 				</header>
 				<form class="flow" onSubmit={handleAdvancedPasswordSubmit}>
 					<fieldset class="flow">
-						<legend>Данные аккаунта</legend>
-						<label for="adv-login">Логин</label>
+						<legend>{t("unlock.advancedPassword.title")}</legend>
+						<label for="adv-login">{t("unlock.advancedPassword.loginLabel")}</label>
 						<input id="adv-login" type="text" autocomplete="username" value={advLogin} onInput={(e) => setAdvLogin(e.currentTarget.value)} />
-						<label for="adv-password">Пароль (минимум {MIN_PASSWORD_LENGTH} символов)</label>
+						<label for="adv-password">{t("unlock.advancedPassword.passwordLabel", { min: MIN_PASSWORD_LENGTH })}</label>
 						<input id="adv-password" type="password" autocomplete="new-password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} />
-						<label for="adv-password-confirm">Повторите пароль</label>
+						<label for="adv-password-confirm">{t("unlock.advancedPassword.passwordConfirmLabel")}</label>
 						<input
 							id="adv-password-confirm"
 							type="password"
@@ -420,7 +417,7 @@ export default function Unlock() {
 							onInput={(e) => setPasswordConfirm(e.currentTarget.value)}
 						/>
 					</fieldset>
-					<button type="submit">Сохранить</button>
+					<button type="submit">{t("common.save")}</button>
 					{error && (
 						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 							{error}
@@ -435,20 +432,18 @@ export default function Unlock() {
 		return (
 			<main class="center flow" style={{ "--container": "44rem" }}>
 				<header class="flow">
-					<p class="eyebrow">Уголок</p>
-					<h1>Готово</h1>
+					<p class="eyebrow">{t("app.name")}</p>
+					<h1>{t("unlock.done.title")}</h1>
 				</header>
 				<div class="flow">
-					<p>Готово! Ваш публичный идентификатор:</p>
+					<p>{t("unlock.done.message")}</p>
 					<p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{npub}</p>
 					{isQuickRegister && (
 						<p
 							role="alert"
 							style={{ padding: "var(--space-m)", background: "var(--surface)", borderInlineStart: "3px solid var(--accent)" }}
 						>
-							Быстрая регистрация: секретная фраза восстановления не показывалась и нигде не сохранялась вами. Если это
-							устройство или браузерное хранилище будет потеряно — восстановить доступ к аккаунту будет нечем. Показать
-							фразу для резервной копии можно будет позже в настройках.
+							{t("unlock.done.quickRegisterWarning")}
 						</p>
 					)}
 					<button
@@ -460,7 +455,7 @@ export default function Unlock() {
 							navigate("/main");
 						}}
 					>
-						Перейти в приложение
+						{t("unlock.done.continueButton")}
 					</button>
 				</div>
 			</main>
@@ -474,16 +469,16 @@ export default function Unlock() {
 		<div class="auth-layout">
 			<header class="site-header">
 				<div class="logo">
-					<span class="logo-name">Уголок</span>
+					<span class="logo-name">{t("app.name")}</span>
 				</div>
-				<nav class="main-nav" aria-label="Главное меню">
+				<nav class="main-nav" aria-label={t("unlock.main.navAriaLabel")}>
 					{/* Кнопки, не ссылки — переключают содержимое <main> этой же страницы,
 					    не настоящая навигация (тот же принцип, что везде в проекте:
 					    реальное действие — реальный <button>, не div/a с подложной ролью). */}
 					<ul class="nav-links">
 						<li>
 							<button type="button" class={mainView === "home" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("home")}>
-								Главная
+								{t("unlock.main.navHome")}
 							</button>
 						</li>
 						<li>
@@ -492,12 +487,12 @@ export default function Unlock() {
 								class={mainView === "temp-chat" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"}
 								onClick={() => setMainView("temp-chat")}
 							>
-								Временный чат
+								{t("unlock.main.navTempChat")}
 							</button>
 						</li>
 						<li>
 							<button type="button" class={mainView === "help" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("help")}>
-								Справка
+								{t("nav.help")}
 							</button>
 						</li>
 					</ul>
@@ -509,16 +504,16 @@ export default function Unlock() {
 				)}
 				<div class="header-actions">
 					<button type="button" class="btn" onClick={openRegisterBox}>
-						Создать пространство
+						{t("unlock.main.createSpaceButton")}
 					</button>
 				</div>
 			</header>
 
-			<aside class="sidebar" aria-label="Управление аккаунтами и доступ">
-				<section class="widget accounts-widget" aria-label="Выбор профиля">
-					<h3>Аккаунты на устройстве</h3>
+			<aside class="sidebar" aria-label={t("unlock.main.sidebarAriaLabel")}>
+				<section class="widget accounts-widget" aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
+					<h3>{t("unlock.main.accountsWidget.title")}</h3>
 					{accounts.length === 0 ? (
-						<p class="widget-subtitle">Пока нет ни одного локального аккаунта — создайте первый справа.</p>
+						<p class="widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
 					) : (
 						<ul class="accounts-list">
 							{accounts.map((acc) => (
@@ -546,7 +541,7 @@ export default function Unlock() {
 						</div>
 						<form class="auth-form" onSubmit={handleLoginSubmit}>
 							<div class="form-group">
-								<label for="login-password">Пароль от этого пространства</label>
+								<label for="login-password">{t("unlock.main.loginForm.passwordLabel")}</label>
 								<input
 									id="login-password"
 									type="password"
@@ -556,11 +551,11 @@ export default function Unlock() {
 								/>
 							</div>
 							<button type="submit" class="btn btn-block">
-								Войти в Уголок
+								{t("unlock.main.loginForm.submitButton", { appName: t("app.name") })}
 							</button>
 							{accounts.length > 1 && (
 								<button type="button" class="btn-link" onClick={() => setOpenLoginForId(null)}>
-									Выбрать другой аккаунт
+									{t("unlock.main.loginForm.switchAccountButton")}
 								</button>
 							)}
 						</form>
@@ -569,11 +564,11 @@ export default function Unlock() {
 
 				{registerBoxOpen && (
 					<section class="widget auth-box" aria-live="polite">
-						<h4>Создать новое пространство</h4>
-						<p class="widget-subtitle">Аккаунт будет создан локально на этом устройстве.</p>
+						<h4>{t("unlock.main.registerBox.title")}</h4>
+						<p class="widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
 						<form class="auth-form" onSubmit={handleRegisterSubmit}>
 							<div class="form-group">
-								<label for="reg-login">Придумайте уникальный никнейм</label>
+								<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
 								<input
 									id="reg-login"
 									type="text"
@@ -583,7 +578,7 @@ export default function Unlock() {
 								/>
 							</div>
 							<div class="form-group">
-								<label for="reg-password">Мастер-пароль (для шифрования данных)</label>
+								<label for="reg-password">{t("unlock.main.registerBox.passwordLabel")}</label>
 								<input
 									id="reg-password"
 									type="password"
@@ -593,7 +588,7 @@ export default function Unlock() {
 								/>
 							</div>
 							<div class="form-group">
-								<label for="reg-password-confirm">Повторите пароль</label>
+								<label for="reg-password-confirm">{t("unlock.advancedPassword.passwordConfirmLabel")}</label>
 								<input
 									id="reg-password-confirm"
 									type="password"
@@ -603,11 +598,11 @@ export default function Unlock() {
 								/>
 							</div>
 							<button type="submit" class="btn btn-block">
-								Зарегистрироваться
+								{t("unlock.main.registerBox.submitButton")}
 							</button>
 							{accounts.length > 0 && (
 								<button type="button" class="btn-link" onClick={() => setRegisterBoxOpen(false)}>
-									Отмена
+									{t("common.cancel")}
 								</button>
 							)}
 						</form>
@@ -615,22 +610,22 @@ export default function Unlock() {
 				)}
 
 				<section class="widget">
-					<h3>Другие способы</h3>
-					<p class="widget-subtitle">Для опытных пользователей.</p>
+					<h3>{t("unlock.main.otherWays.title")}</h3>
+					<p class="widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
 					<ul class="link-list">
 						<li>
 							<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>
-								Создать с показом фразы восстановления
+								{t("unlock.main.otherWays.createWithPhrase")}
 							</button>
 						</li>
 						<li>
 							<button type="button" class="link-list-item" onClick={() => openAdvanced("import-mnemonic")}>
-								Войти по мнемонике
+								{t("unlock.main.otherWays.importMnemonic")}
 							</button>
 						</li>
 						<li>
 							<button type="button" class="link-list-item" onClick={() => openAdvanced("import-key")}>
-								Войти по ключу (nsec)
+								{t("unlock.main.otherWays.importKey")}
 							</button>
 						</li>
 					</ul>
@@ -640,32 +635,28 @@ export default function Unlock() {
 			<main>
 				{mainView === "home" && (
 					<section class="hero-section">
-						<h1>Приватное пространство для общения без центрального сервера</h1>
+						<h1>{t("unlock.main.hero.title")}</h1>
 						<p class="hero-lead">
-							Уголок — мессенджер на протоколе Nostr с сквозным шифрованием (MLS) для переписки и шифрованием базы
-							данных на устройстве. Работает в локальной сети, без публичного интернета.
+							{t("unlock.main.hero.lead", { appName: t("app.name") })}
 						</p>
 					</section>
 				)}
 				{mainView === "temp-chat" && (
 					<section class="hero-section flow">
-						<h1>Временный чат</h1>
+						<h1>{t("unlock.main.tempChat.title")}</h1>
 						<p class="hero-lead">
-							Скоро здесь можно будет создать одноразовую комнату и позвать в неё других гостей — текстом или голосом,
-							без регистрации и без обмена ключами заранее. Комната исчезнет сама через час, если в ней никого не
-							останется.
+							{t("unlock.main.tempChat.lead1")}
 						</p>
-						<p class="hero-lead">Раздел ещё не реализован — эта страница появилась раньше самой функции.</p>
+						<p class="hero-lead">{t("unlock.main.tempChat.lead2")}</p>
 					</section>
 				)}
 				{mainView === "help" && <HelpContent />}
 			</main>
 
 			<footer class="site-footer">
-				<p>Уголок — приватный мессенджер.</p>
+				<p>{t("unlock.main.footer.tagline", { appName: t("app.name") })}</p>
 				<p>
-					Альфа-тестирование. Данные шифруются ключом, производным от вашего мастер-пароля, и хранятся локально на
-					этом устройстве.
+					{t("unlock.main.footer.alphaNotice")}
 				</p>
 			</footer>
 		</div>

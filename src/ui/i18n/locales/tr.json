@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Geri",
+		"continue": "Devam et",
+		"cancel": "İptal",
+		"save": "Kaydet",
+		"confirm": "Onayla"
+	},
+	"nav": {
+		"journal": "Günlük",
+		"messages": "Mesajlar",
+		"channels": "Kanallar",
+		"files": "Dosyalar",
+		"contacts": "Kişiler",
+		"discovery": "Keşfet",
+		"settings": "Ayarlar",
+		"profile": "Profil",
+		"help": "Yardım",
+		"diagnostics": "Tanılama"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Dil",
+			"label": "Arayüz dili"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profil ve ana menü",
+		"navAriaLabel": "Ana menü",
+		"logout": "Çıkış yap",
+		"unreadAriaLabel": "okunmamış: {{count}}",
+		"openMenu": "Menüyü aç",
+		"closeMenu": "Menüyü kapat",
+		"switchToLightTheme": "Açık temaya geç",
+		"switchToDarkTheme": "Koyu temaya geç"
+	},
+	"unlock": {
+		"checking": "Kontrol ediliyor…",
+		"dbError": {
+			"message": "Yerel veritabanı açılamadı — uygulama güncellemesinden sonra uyumsuz bir biçimde kalmış olabilir.",
+			"warning": "Bu işlem, bu cihazdaki tüm yerel verileri (hesaplar, sohbetler, kanallar) silecek ve yeniden giriş yapmanızı veya kayıt olmanızı gerektirecektir.",
+			"resetButton": "Yerel verileri temizle ve yeniden başla"
+		},
+		"createGenerate": {
+			"title": "Kurtarma ifadesi",
+			"instructions": "Bu 12 kelimeyi güvenli bir yere yazın. Hesabınıza erişimi kurtarmanın tek yolu budur.",
+			"savedButton": "İfadeyi kaydettim"
+		},
+		"createConfirm": {
+			"title": "İfadeyi onayla",
+			"instructions": "Kaydettiğinizi doğrulamak için ifadeyi tekrar girin.",
+			"label": "Kurtarma ifadesi (boşluklarla ayrılmış 12 kelime)",
+			"mismatchError": "İfade eşleşmiyor. Kontrol edip tekrar deneyin."
+		},
+		"importMnemonic": {
+			"title": "Kurtarma ifadesiyle giriş yap",
+			"instructions": "Kurtarma ifadenizi girin (boşluklarla ayrılmış 12 kelime).",
+			"label": "Kurtarma ifadesi",
+			"invalidError": "Geçersiz kurtarma ifadesi (sağlama toplamı doğrulaması başarısız)."
+		},
+		"importKey": {
+			"title": "Anahtarla giriş yap",
+			"instructions": "Özel anahtarınızı nsec1... biçiminde veya onaltılık bir dize (64 karakter) olarak girin.",
+			"explanation": "Özel anahtar, hesabınıza tam erişim sağlayan gizli bir dizedir. Kimseye asla göstermeyin. nsec biçiminde (NIP-19, bech32) nsec1 ile başlar ve şuna benzer görünür:",
+			"exampleNote": "(bu yalnızca bir biçim örneğidir, gerçek bir anahtar değildir)",
+			"label": "Özel anahtar",
+			"wrongTypeError": "Bu bir özel anahtar (nsec) değil, {{type}}. Neyi kopyaladığınızı kontrol edin.",
+			"parseError": "Anahtar ayrıştırılamadı: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Hesap bilgileri",
+			"loginLabel": "Kullanıcı adı",
+			"passwordLabel": "Parola (en az {{min}} karakter)",
+			"passwordConfirmLabel": "Parolayı tekrar girin"
+		},
+		"done": {
+			"title": "Tamamlandı",
+			"message": "Tamamlandı! Genel tanımlayıcınız:",
+			"quickRegisterWarning": "Hızlı kayıt: gizli kurtarma ifadeniz hiçbir yerde gösterilmedi veya kaydedilmedi. Bu cihaz veya tarayıcı deposu kaybolursa, hesabınıza erişimi kurtarmanın bir yolu olmayacaktır. Yedekleme için ifadeyi daha sonra ayarlardan gösterebilirsiniz.",
+			"continueButton": "Uygulamaya git"
+		},
+		"main": {
+			"navAriaLabel": "Ana menü",
+			"navHome": "Ana sayfa",
+			"navTempChat": "Geçici sohbet",
+			"createSpaceButton": "Alan oluştur",
+			"accountsWidget": {
+				"title": "Bu cihazdaki hesaplar",
+				"empty": "Henüz yerel bir hesap yok — sağdan ilkini oluşturun.",
+				"ariaLabel": "Profil seç"
+			},
+			"loginForm": {
+				"passwordLabel": "Bu alanın parolası",
+				"submitButton": "{{appName}} uygulamasına giriş yap",
+				"switchAccountButton": "Başka bir hesap seç",
+				"selectAccountError": "Bir hesap seçin.",
+				"wrongPasswordError": "Yanlış parola."
+			},
+			"registerBox": {
+				"title": "Yeni bir alan oluştur",
+				"subtitle": "Hesap bu cihazda yerel olarak oluşturulacaktır.",
+				"loginLabel": "Benzersiz bir takma ad seçin",
+				"passwordLabel": "Ana parola (verilerinizi şifrelemek için)",
+				"submitButton": "Kayıt ol",
+				"loginRequiredError": "Bir kullanıcı adı girin.",
+				"passwordTooShortError": "Parola çok kısa (en az {{min}} karakter).",
+				"passwordMismatchError": "Parolalar eşleşmiyor."
+			},
+			"otherWays": {
+				"title": "Diğer yollar",
+				"subtitle": "Gelişmiş kullanıcılar için.",
+				"createWithPhrase": "Kurtarma ifadesini göstererek oluştur",
+				"importMnemonic": "Kurtarma ifadesiyle giriş yap",
+				"importKey": "Anahtarla giriş yap (nsec)"
+			},
+			"hero": {
+				"title": "Merkezi sunucu olmadan iletişim için özel bir alan",
+				"lead": "{{appName}}, sohbetler için uçtan uca şifreleme (MLS) ve cihazda veritabanı şifrelemesi sağlayan, Nostr protokolü üzerine kurulu bir mesajlaşma uygulamasıdır. Genel internet olmadan, yerel ağda çalışır."
+			},
+			"tempChat": {
+				"title": "Geçici sohbet",
+				"lead1": "Yakında burada tek kullanımlık bir oda oluşturup diğer misafirleri metin veya sesle davet edebileceksiniz — kayıt olmadan ve önceden anahtar değişimi yapmadan. Oda, boşaldıktan bir saat sonra kendiliğinden kaybolacak.",
+				"lead2": "Bu bölüm henüz uygulanmadı — bu sayfa özelliğin kendisinden önce ortaya çıktı."
+			},
+			"footer": {
+				"tagline": "{{appName}} — özel bir mesajlaşma uygulaması.",
+				"alphaNotice": "Alfa test aşaması. Veriler, ana parolanızdan türetilen bir anahtarla şifrelenir ve bu cihazda yerel olarak saklanır."
+			},
+			"sidebarAriaLabel": "Hesap ve erişim yönetimi"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Bu ekran geliştirme aşamasında"
+	}
+}

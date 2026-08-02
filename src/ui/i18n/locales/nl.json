@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Terug",
+		"continue": "Doorgaan",
+		"cancel": "Annuleren",
+		"save": "Opslaan",
+		"confirm": "Bevestigen"
+	},
+	"nav": {
+		"journal": "Journaal",
+		"messages": "Berichten",
+		"channels": "Kanalen",
+		"files": "Bestanden",
+		"contacts": "Contacten",
+		"discovery": "Ontdekken",
+		"settings": "Instellingen",
+		"profile": "Profiel",
+		"help": "Help",
+		"diagnostics": "Diagnostiek"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Taal",
+			"label": "Taal van de interface"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profiel en hoofdmenu",
+		"navAriaLabel": "Hoofdmenu",
+		"logout": "Uitloggen",
+		"unreadAriaLabel": "ongelezen: {{count}}",
+		"openMenu": "Menu openen",
+		"closeMenu": "Menu sluiten",
+		"switchToLightTheme": "Overschakelen naar licht thema",
+		"switchToDarkTheme": "Overschakelen naar donker thema"
+	},
+	"unlock": {
+		"checking": "Bezig met controleren…",
+		"dbError": {
+			"message": "Kan de lokale database niet openen — deze is mogelijk in een onverenigbaar formaat achtergebleven na een app-update.",
+			"warning": "Hierdoor worden alle lokale gegevens op dit apparaat gewist (accounts, gesprekken, kanalen) en moet je opnieuw inloggen of registreren.",
+			"resetButton": "Lokale gegevens wissen en opnieuw beginnen"
+		},
+		"createGenerate": {
+			"title": "Herstelzin",
+			"instructions": "Schrijf deze 12 woorden op een veilige plek op. Dit is de enige manier om toegang tot je account te herstellen.",
+			"savedButton": "Ik heb de zin opgeslagen"
+		},
+		"createConfirm": {
+			"title": "Zin bevestigen",
+			"instructions": "Voer de zin nogmaals in om te bevestigen dat je hem hebt opgeslagen.",
+			"label": "Herstelzin (12 woorden gescheiden door spaties)",
+			"mismatchError": "De zin komt niet overeen. Controleer hem en probeer het opnieuw."
+		},
+		"importMnemonic": {
+			"title": "Inloggen met herstelzin",
+			"instructions": "Voer je herstelzin in (12 woorden gescheiden door spaties).",
+			"label": "Herstelzin",
+			"invalidError": "Ongeldige herstelzin (checksumcontrole mislukt)."
+		},
+		"importKey": {
+			"title": "Inloggen met een sleutel",
+			"instructions": "Voer je privésleutel in als nsec1...-formaat of als hexadecimale tekenreeks (64 tekens).",
+			"explanation": "Een privésleutel is een geheime tekenreeks die volledige toegang geeft tot je account. Laat hem nooit aan iemand zien. In nsec-formaat (NIP-19, bech32) begint hij met nsec1 en ziet er ongeveer zo uit:",
+			"exampleNote": "(dit is slechts een voorbeeldformaat, geen echte sleutel)",
+			"label": "Privésleutel",
+			"wrongTypeError": "Dit is geen privésleutel (nsec), maar {{type}}. Controleer wat je hebt gekopieerd.",
+			"parseError": "Kon de sleutel niet herkennen: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Accountgegevens",
+			"loginLabel": "Login",
+			"passwordLabel": "Wachtwoord (minstens {{min}} tekens)",
+			"passwordConfirmLabel": "Herhaal wachtwoord"
+		},
+		"done": {
+			"title": "Klaar",
+			"message": "Klaar! Je publieke identifier:",
+			"quickRegisterWarning": "Snelle registratie: je geheime herstelzin is niet getoond of ergens opgeslagen. Als dit apparaat of de browseropslag verloren gaat, is er geen manier om toegang tot je account te herstellen. Je kunt de zin later in de instellingen tonen voor een back-up.",
+			"continueButton": "Naar de app"
+		},
+		"main": {
+			"navAriaLabel": "Hoofdmenu",
+			"navHome": "Home",
+			"navTempChat": "Tijdelijke chat",
+			"createSpaceButton": "Ruimte aanmaken",
+			"accountsWidget": {
+				"title": "Accounts op dit apparaat",
+				"empty": "Nog geen lokaal account — maak de eerste rechts aan.",
+				"ariaLabel": "Profiel kiezen"
+			},
+			"loginForm": {
+				"passwordLabel": "Wachtwoord voor deze ruimte",
+				"submitButton": "Inloggen bij {{appName}}",
+				"switchAccountButton": "Ander account kiezen",
+				"selectAccountError": "Kies een account.",
+				"wrongPasswordError": "Onjuist wachtwoord."
+			},
+			"registerBox": {
+				"title": "Nieuwe ruimte aanmaken",
+				"subtitle": "Het account wordt lokaal op dit apparaat aangemaakt.",
+				"loginLabel": "Kies een unieke bijnaam",
+				"passwordLabel": "Hoofdwachtwoord (voor het versleutelen van je gegevens)",
+				"submitButton": "Registreren",
+				"loginRequiredError": "Voer een login in.",
+				"passwordTooShortError": "Het wachtwoord is te kort (minstens {{min}} tekens).",
+				"passwordMismatchError": "De wachtwoorden komen niet overeen."
+			},
+			"otherWays": {
+				"title": "Andere manieren",
+				"subtitle": "Voor gevorderde gebruikers.",
+				"createWithPhrase": "Aanmaken met weergave van de herstelzin",
+				"importMnemonic": "Inloggen met herstelzin",
+				"importKey": "Inloggen met een sleutel (nsec)"
+			},
+			"hero": {
+				"title": "Een privéruimte om te communiceren zonder centrale server",
+				"lead": "{{appName}} is een messenger gebouwd op het Nostr-protocol met end-to-end-encryptie (MLS) voor gesprekken en versleuteling van de database op het apparaat. Werkt op een lokaal netwerk, zonder openbaar internet."
+			},
+			"tempChat": {
+				"title": "Tijdelijke chat",
+				"lead1": "Binnenkort kun je hier een wegwerpruimte aanmaken en andere gasten uitnodigen — via tekst of spraak, zonder registratie en zonder vooraf sleutels uit te wisselen. De ruimte verdwijnt vanzelf een uur nadat hij leeg is geraakt.",
+				"lead2": "Dit onderdeel is nog niet gebouwd — deze pagina verscheen eerder dan de functie zelf."
+			},
+			"footer": {
+				"tagline": "{{appName}} — een privémessenger.",
+				"alphaNotice": "Alfatest. Gegevens worden versleuteld met een sleutel afgeleid van je hoofdwachtwoord en lokaal op dit apparaat opgeslagen."
+			},
+			"sidebarAriaLabel": "Accounts en toegang beheren"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Scherm in ontwikkeling"
+	}
+}

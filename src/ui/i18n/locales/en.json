@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Back",
+		"continue": "Continue",
+		"cancel": "Cancel",
+		"save": "Save",
+		"confirm": "Confirm"
+	},
+	"nav": {
+		"journal": "Journal",
+		"messages": "Messages",
+		"channels": "Channels",
+		"files": "Files",
+		"contacts": "Contacts",
+		"discovery": "Discovery",
+		"settings": "Settings",
+		"profile": "Profile",
+		"help": "Help",
+		"diagnostics": "Diagnostics"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Language",
+			"label": "Interface language"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profile and main menu",
+		"navAriaLabel": "Main menu",
+		"logout": "Log out",
+		"unreadAriaLabel": "unread: {{count}}",
+		"openMenu": "Open menu",
+		"closeMenu": "Close menu",
+		"switchToLightTheme": "Switch to light theme",
+		"switchToDarkTheme": "Switch to dark theme"
+	},
+	"unlock": {
+		"checking": "Checking…",
+		"dbError": {
+			"message": "Could not open the local database — it may be in an incompatible format left over from an app update.",
+			"warning": "This will erase all local data on this device (accounts, conversations, channels) and require signing in or registering again.",
+			"resetButton": "Clear local data and start over"
+		},
+		"createGenerate": {
+			"title": "Recovery phrase",
+			"instructions": "Write down these 12 words somewhere safe. This is the only way to recover access to your account.",
+			"savedButton": "I've saved the phrase"
+		},
+		"createConfirm": {
+			"title": "Confirm the phrase",
+			"instructions": "Enter the phrase again to confirm that you've saved it.",
+			"label": "Recovery phrase (12 words separated by spaces)",
+			"mismatchError": "The phrase doesn't match. Check it and try again."
+		},
+		"importMnemonic": {
+			"title": "Sign in with recovery phrase",
+			"instructions": "Enter your recovery phrase (12 words separated by spaces).",
+			"label": "Recovery phrase",
+			"invalidError": "Invalid recovery phrase (fails checksum verification)."
+		},
+		"importKey": {
+			"title": "Sign in with a key",
+			"instructions": "Enter your private key in nsec1... format or as a hex string (64 characters).",
+			"explanation": "A private key is a secret string that gives full access to your account. Never show it to anyone. In nsec format (NIP-19, bech32) it starts with nsec1 and looks something like this:",
+			"exampleNote": "(this is just an example format, not a real key)",
+			"label": "Private key",
+			"wrongTypeError": "This isn't a private key (nsec), it's {{type}}. Check what you copied.",
+			"parseError": "Couldn't parse the key: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Account details",
+			"loginLabel": "Login",
+			"passwordLabel": "Password (at least {{min}} characters)",
+			"passwordConfirmLabel": "Repeat password"
+		},
+		"done": {
+			"title": "Done",
+			"message": "Done! Your public identifier:",
+			"quickRegisterWarning": "Quick registration: your secret recovery phrase was not shown or saved anywhere. If this device or browser storage is lost, there will be no way to recover access to your account. You can show the phrase for backup later in settings.",
+			"continueButton": "Go to the app"
+		},
+		"main": {
+			"navAriaLabel": "Main menu",
+			"navHome": "Home",
+			"navTempChat": "Temporary chat",
+			"createSpaceButton": "Create a space",
+			"accountsWidget": {
+				"title": "Accounts on this device",
+				"empty": "No local accounts yet — create the first one on the right.",
+				"ariaLabel": "Choose a profile"
+			},
+			"loginForm": {
+				"passwordLabel": "Password for this space",
+				"submitButton": "Sign in to {{appName}}",
+				"switchAccountButton": "Choose another account",
+				"selectAccountError": "Choose an account.",
+				"wrongPasswordError": "Wrong password."
+			},
+			"registerBox": {
+				"title": "Create a new space",
+				"subtitle": "The account will be created locally on this device.",
+				"loginLabel": "Choose a unique nickname",
+				"passwordLabel": "Master password (for encrypting your data)",
+				"submitButton": "Register",
+				"loginRequiredError": "Enter a login.",
+				"passwordTooShortError": "Password is too short (at least {{min}} characters).",
+				"passwordMismatchError": "Passwords don't match."
+			},
+			"otherWays": {
+				"title": "Other ways",
+				"subtitle": "For advanced users.",
+				"createWithPhrase": "Create with recovery phrase shown",
+				"importMnemonic": "Sign in with recovery phrase",
+				"importKey": "Sign in with a key (nsec)"
+			},
+			"hero": {
+				"title": "A private space for messaging without a central server",
+				"lead": "{{appName}} is a messenger built on the Nostr protocol with end-to-end encryption (MLS) for conversations and device-side database encryption. Works on a local network, without the public internet."
+			},
+			"tempChat": {
+				"title": "Temporary chat",
+				"lead1": "Soon you'll be able to create a disposable room here and invite other guests into it — by text or voice, without registration and without exchanging keys beforehand. The room will disappear on its own an hour after it's empty.",
+				"lead2": "This section isn't built yet — this page arrived before the feature itself."
+			},
+			"footer": {
+				"tagline": "{{appName}} — a private messenger.",
+				"alphaNotice": "Alpha testing. Data is encrypted with a key derived from your master password and stored locally on this device."
+			},
+			"sidebarAriaLabel": "Account and access management"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "This screen is under development"
+	}
+}

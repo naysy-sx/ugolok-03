@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "../src/ui/nav-items.js";
+import ru from "../src/ui/i18n/locales/ru.json" with { type: "json" };
 
 // "subscriptions" переименован в "channels" на этапе 30 (пожелание пользователя —
 // полноценный экран каналов вместо пустой заглушки-placeholder).
@@ -30,10 +31,14 @@ test("id уникальны и в формате kebab-case", () => {
 	}
 });
 
-test("label — непустая строка у каждого пункта", () => {
+// Этап 64 — label заменён на labelKey (dot-path в src/ui/i18n/locales/*.json),
+// перевод происходит в месте рендера через t(). Проверяем, что ключ
+// действительно резолвится в ru.json (источник истины), не просто непустая строка.
+test("labelKey — резолвится в ru.json у каждого пункта", () => {
 	for (const item of NAV_ITEMS) {
-		assert.equal(typeof item.label, "string");
-		assert.ok(item.label.trim().length > 0, `пустой label у "${item.id}"`);
+		const value = item.labelKey.split(".").reduce((node, seg) => node?.[seg], ru);
+		assert.equal(typeof value, "string", `labelKey "${item.labelKey}" не резолвится в ru.json (пункт "${item.id}")`);
+		assert.ok(value.trim().length > 0, `пустой перевод у "${item.id}"`);
 	}
 });
 

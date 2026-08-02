@@ -9,6 +9,7 @@ import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/
 import { ContactIdentity } from "./contacts.jsx";
 import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
+import { SUPPORTED_LOCALES, setLocale, t } from "../signals/i18n.js";
 import Screen from "../components/screen.jsx";
 import MnemonicReveal from "../components/mnemonic-reveal.jsx";
 import DeleteAccountPanel from "../components/delete-account-panel.jsx";
@@ -79,6 +80,7 @@ export default function Settings() {
 			setSettings(loaded);
 			applyAccentColor(loaded.accentColorId);
 			applyUiScale(loaded.uiScale);
+			setLocale(loaded.language);
 		});
 		listAccounts().then((accounts) => {
 			setHasMnemonic(!!accounts.find((a) => a.id === ownerPubkey)?.hasMnemonic);
@@ -109,6 +111,11 @@ export default function Settings() {
 	function handleScaleChange(scaleId) {
 		applyUiScale(scaleId);
 		persist({ ...settings, uiScale: scaleId });
+	}
+
+	function handleLanguageChange(code) {
+		setLocale(code); // мгновенный визуальный отклик, тот же паттерн, что applyAccentColor
+		persist({ ...settings, language: code });
 	}
 
 	async function handleToggleEnabled(checked) {
@@ -240,12 +247,14 @@ export default function Settings() {
 			</section>
 
 			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>Язык</h2>
-				<label for={`${instanceId}-language`}>Язык интерфейса</label>
-				{/* Единственная опция — намеренно: в проекте нет i18n-инфраструктуры (все строки
-				    зашиты по-русски), это честный список валидных значений, не фиктивный переключатель. */}
-				<select id={`${instanceId}-language`} value={settings.language} disabled>
-					<option value="ru">Русский</option>
+				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.language.sectionTitle")}</h2>
+				<label for={`${instanceId}-language`}>{t("settings.language.label")}</label>
+				<select id={`${instanceId}-language`} value={settings.language} onChange={(e) => handleLanguageChange(e.currentTarget.value)}>
+					{SUPPORTED_LOCALES.map((locale) => (
+						<option key={locale.code} value={locale.code}>
+							{locale.nativeName}
+						</option>
+					))}
 				</select>
 			</section>
 

@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "返回",
+		"continue": "继续",
+		"cancel": "取消",
+		"save": "保存",
+		"confirm": "确认"
+	},
+	"nav": {
+		"journal": "动态",
+		"messages": "消息",
+		"channels": "频道",
+		"files": "文件",
+		"contacts": "联系人",
+		"discovery": "发现",
+		"settings": "设置",
+		"profile": "个人资料",
+		"help": "帮助",
+		"diagnostics": "诊断"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "语言",
+			"label": "界面语言"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "个人资料与主菜单",
+		"navAriaLabel": "主菜单",
+		"logout": "退出登录",
+		"unreadAriaLabel": "未读：{{count}}",
+		"openMenu": "打开菜单",
+		"closeMenu": "关闭菜单",
+		"switchToLightTheme": "切换到浅色主题",
+		"switchToDarkTheme": "切换到深色主题"
+	},
+	"unlock": {
+		"checking": "正在检查…",
+		"dbError": {
+			"message": "无法打开本地数据库——应用更新后，它可能停留在了不兼容的格式中。",
+			"warning": "此操作将清除此设备上的所有本地数据（账户、聊天记录、频道），并需要重新登录或注册。",
+			"resetButton": "清除本地数据并重新开始"
+		},
+		"createGenerate": {
+			"title": "恢复助记词",
+			"instructions": "请将这12个单词记录在安全的地方。这是恢复账户访问权限的唯一方法。",
+			"savedButton": "我已保存助记词"
+		},
+		"createConfirm": {
+			"title": "确认助记词",
+			"instructions": "请再次输入助记词，以确认您已保存。",
+			"label": "恢复助记词（12个单词，用空格分隔）",
+			"mismatchError": "助记词不匹配，请检查后重试。"
+		},
+		"importMnemonic": {
+			"title": "使用恢复助记词登录",
+			"instructions": "请输入您的恢复助记词（12个单词，用空格分隔）。",
+			"label": "恢复助记词",
+			"invalidError": "恢复助记词无效（未通过校验和验证）。"
+		},
+		"importKey": {
+			"title": "使用密钥登录",
+			"instructions": "请输入您的私钥，格式为 nsec1... 或64位十六进制字符串。",
+			"explanation": "私钥是一串可完全访问您账户的秘密字符串。切勿向任何人展示它。以 nsec 格式（NIP-19，bech32）表示时，它以 nsec1 开头，形式大致如下：",
+			"exampleNote": "（这只是格式示例，并非真实密钥）",
+			"label": "私钥",
+			"wrongTypeError": "这不是私钥（nsec），而是 {{type}}。请检查您复制的内容。",
+			"parseError": "无法解析密钥：{{message}}"
+		},
+		"advancedPassword": {
+			"title": "账户信息",
+			"loginLabel": "登录名",
+			"passwordLabel": "密码（至少 {{min}} 个字符）",
+			"passwordConfirmLabel": "重复密码"
+		},
+		"done": {
+			"title": "完成",
+			"message": "完成！您的公开标识符：",
+			"quickRegisterWarning": "快速注册：您的秘密恢复助记词未被展示，也未保存在任何地方。如果丢失此设备或浏览器存储数据，将无法恢复对账户的访问。稍后可以在设置中显示助记词以进行备份。",
+			"continueButton": "进入应用"
+		},
+		"main": {
+			"navAriaLabel": "主菜单",
+			"navHome": "首页",
+			"navTempChat": "临时聊天",
+			"createSpaceButton": "创建空间",
+			"accountsWidget": {
+				"title": "此设备上的账户",
+				"empty": "此设备上还没有本地账户——请在右侧创建第一个。",
+				"ariaLabel": "选择个人资料"
+			},
+			"loginForm": {
+				"passwordLabel": "此空间的密码",
+				"submitButton": "登录 {{appName}}",
+				"switchAccountButton": "选择其他账户",
+				"selectAccountError": "请选择一个账户。",
+				"wrongPasswordError": "密码错误。"
+			},
+			"registerBox": {
+				"title": "创建新空间",
+				"subtitle": "账户将在此设备上本地创建。",
+				"loginLabel": "请选择一个唯一的昵称",
+				"passwordLabel": "主密码（用于加密您的数据）",
+				"submitButton": "注册",
+				"loginRequiredError": "请输入登录名。",
+				"passwordTooShortError": "密码太短（至少 {{min}} 个字符）。",
+				"passwordMismatchError": "两次输入的密码不一致。"
+			},
+			"otherWays": {
+				"title": "其他方式",
+				"subtitle": "适用于高级用户。",
+				"createWithPhrase": "创建并显示恢复助记词",
+				"importMnemonic": "使用恢复助记词登录",
+				"importKey": "使用密钥登录（nsec）"
+			},
+			"hero": {
+				"title": "无需中心服务器即可通信的私密空间",
+				"lead": "{{appName}} 是基于 Nostr 协议构建的即时通讯工具，聊天采用端到端加密（MLS），设备端数据库也进行加密。可在本地网络中运行，无需公共互联网。"
+			},
+			"tempChat": {
+				"title": "临时聊天",
+				"lead1": "很快您将可以在此创建一次性房间，并邀请其他访客加入——支持文字或语音，无需注册，也无需事先交换密钥。房间在无人使用一小时后会自动消失。",
+				"lead2": "此功能尚未实现——此页面在功能本身之前就已出现。"
+			},
+			"footer": {
+				"tagline": "{{appName}} —— 私密即时通讯工具。",
+				"alphaNotice": "内测阶段。数据使用由您的主密码派生的密钥加密，并在此设备上本地存储。"
+			},
+			"sidebarAriaLabel": "账户与访问管理"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "此屏幕正在开发中"
+	}
+}

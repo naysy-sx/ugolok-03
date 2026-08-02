@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { detectSystemLocale } from "../src/domain/settings/locale-detection.js";
 import {
 	KIND_UI_SETTINGS,
 	DEFAULT_SETTINGS,
@@ -96,6 +97,15 @@ test("loadUiSettings: без локальной записи -> дефолт", a
 	assert.equal(settings.accentColorId, "blue");
 	assert.equal(settings.uiScale, "medium");
 	assert.deepEqual(settings.notifications, DEFAULT_SETTINGS.notifications);
+});
+
+// Этап 64 — первый запуск определяет язык системным языком (detectSystemLocale),
+// не жёстко зашитым DEFAULT_SETTINGS.language="ru". Node сам предоставляет
+// глобальный navigator.language (окружение среды выполнения) — сравниваем с
+// detectSystemLocale() напрямую, а не с зашитым в тест кодом.
+test("loadUiSettings: без локальной записи -> язык через detectSystemLocale, не жёсткий 'ru'", async () => {
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.language, detectSystemLocale());
 });
 
 // Этап 61 — hasLocalUiSettings: loadUiSettings сама неотличима снаружи (фолбэк

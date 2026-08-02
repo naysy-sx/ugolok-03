@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Zurück",
+		"continue": "Weiter",
+		"cancel": "Abbrechen",
+		"save": "Speichern",
+		"confirm": "Bestätigen"
+	},
+	"nav": {
+		"journal": "Journal",
+		"messages": "Nachrichten",
+		"channels": "Kanäle",
+		"files": "Dateien",
+		"contacts": "Kontakte",
+		"discovery": "Entdecken",
+		"settings": "Einstellungen",
+		"profile": "Profil",
+		"help": "Hilfe",
+		"diagnostics": "Diagnose"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Sprache",
+			"label": "Sprache der Oberfläche"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profil und Hauptmenü",
+		"navAriaLabel": "Hauptmenü",
+		"logout": "Abmelden",
+		"unreadAriaLabel": "ungelesen: {{count}}",
+		"openMenu": "Menü öffnen",
+		"closeMenu": "Menü schließen",
+		"switchToLightTheme": "Zum hellen Design wechseln",
+		"switchToDarkTheme": "Zum dunklen Design wechseln"
+	},
+	"unlock": {
+		"checking": "Wird geprüft…",
+		"dbError": {
+			"message": "Die lokale Datenbank konnte nicht geöffnet werden — sie liegt möglicherweise noch in einem nach einem App-Update inkompatiblen Format vor.",
+			"warning": "Dadurch werden alle lokalen Daten auf diesem Gerät gelöscht (Konten, Unterhaltungen, Kanäle) und eine erneute Anmeldung oder Registrierung ist erforderlich.",
+			"resetButton": "Lokale Daten löschen und neu beginnen"
+		},
+		"createGenerate": {
+			"title": "Wiederherstellungsphrase",
+			"instructions": "Notieren Sie sich diese 12 Wörter an einem sicheren Ort. Dies ist die einzige Möglichkeit, den Zugriff auf Ihr Konto wiederherzustellen.",
+			"savedButton": "Ich habe die Phrase gespeichert"
+		},
+		"createConfirm": {
+			"title": "Phrase bestätigen",
+			"instructions": "Geben Sie die Phrase erneut ein, um zu bestätigen, dass Sie sie gespeichert haben.",
+			"label": "Wiederherstellungsphrase (12 Wörter, durch Leerzeichen getrennt)",
+			"mismatchError": "Die Phrase stimmt nicht überein. Bitte überprüfen und erneut versuchen."
+		},
+		"importMnemonic": {
+			"title": "Mit Wiederherstellungsphrase anmelden",
+			"instructions": "Geben Sie Ihre Wiederherstellungsphrase ein (12 Wörter, durch Leerzeichen getrennt).",
+			"label": "Wiederherstellungsphrase",
+			"invalidError": "Ungültige Wiederherstellungsphrase (Prüfsummenkontrolle fehlgeschlagen)."
+		},
+		"importKey": {
+			"title": "Mit Schlüssel anmelden",
+			"instructions": "Geben Sie Ihren privaten Schlüssel im Format nsec1... oder als Hex-Zeichenfolge (64 Zeichen) ein.",
+			"explanation": "Ein privater Schlüssel ist eine geheime Zeichenfolge, die vollen Zugriff auf Ihr Konto gewährt. Zeigen Sie ihn niemals jemandem. Im nsec-Format (NIP-19, bech32) beginnt er mit nsec1 und sieht etwa so aus:",
+			"exampleNote": "(dies ist nur ein Beispiel für das Format, kein echter Schlüssel)",
+			"label": "Privater Schlüssel",
+			"wrongTypeError": "Das ist kein privater Schlüssel (nsec), sondern {{type}}. Überprüfen Sie, was Sie kopiert haben.",
+			"parseError": "Der Schlüssel konnte nicht erkannt werden: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Kontodaten",
+			"loginLabel": "Login",
+			"passwordLabel": "Passwort (mindestens {{min}} Zeichen)",
+			"passwordConfirmLabel": "Passwort wiederholen"
+		},
+		"done": {
+			"title": "Fertig",
+			"message": "Fertig! Ihre öffentliche Kennung:",
+			"quickRegisterWarning": "Schnellregistrierung: Ihre geheime Wiederherstellungsphrase wurde nicht angezeigt oder irgendwo gespeichert. Wenn dieses Gerät oder der Browserspeicher verloren geht, gibt es keine Möglichkeit, den Zugriff auf Ihr Konto wiederherzustellen. Die Phrase für ein Backup können Sie später in den Einstellungen anzeigen lassen.",
+			"continueButton": "Zur App"
+		},
+		"main": {
+			"navAriaLabel": "Hauptmenü",
+			"navHome": "Start",
+			"navTempChat": "Temporärer Chat",
+			"createSpaceButton": "Bereich erstellen",
+			"accountsWidget": {
+				"title": "Konten auf diesem Gerät",
+				"empty": "Noch kein lokales Konto vorhanden — erstellen Sie das erste rechts.",
+				"ariaLabel": "Profil auswählen"
+			},
+			"loginForm": {
+				"passwordLabel": "Passwort für diesen Bereich",
+				"submitButton": "Bei {{appName}} anmelden",
+				"switchAccountButton": "Anderes Konto wählen",
+				"selectAccountError": "Wählen Sie ein Konto.",
+				"wrongPasswordError": "Falsches Passwort."
+			},
+			"registerBox": {
+				"title": "Neuen Bereich erstellen",
+				"subtitle": "Das Konto wird lokal auf diesem Gerät erstellt.",
+				"loginLabel": "Wählen Sie einen eindeutigen Spitznamen",
+				"passwordLabel": "Master-Passwort (zur Verschlüsselung Ihrer Daten)",
+				"submitButton": "Registrieren",
+				"loginRequiredError": "Geben Sie einen Login ein.",
+				"passwordTooShortError": "Das Passwort ist zu kurz (mindestens {{min}} Zeichen).",
+				"passwordMismatchError": "Die Passwörter stimmen nicht überein."
+			},
+			"otherWays": {
+				"title": "Andere Möglichkeiten",
+				"subtitle": "Für fortgeschrittene Nutzer.",
+				"createWithPhrase": "Erstellen mit Anzeige der Wiederherstellungsphrase",
+				"importMnemonic": "Mit Wiederherstellungsphrase anmelden",
+				"importKey": "Mit Schlüssel anmelden (nsec)"
+			},
+			"hero": {
+				"title": "Ein privater Raum für Kommunikation ohne zentralen Server",
+				"lead": "{{appName}} ist ein auf dem Nostr-Protokoll basierender Messenger mit Ende-zu-Ende-Verschlüsselung (MLS) für Unterhaltungen und geräteseitiger Datenbankverschlüsselung. Funktioniert im lokalen Netzwerk, ohne öffentliches Internet."
+			},
+			"tempChat": {
+				"title": "Temporärer Chat",
+				"lead1": "Bald können Sie hier einen Einwegraum erstellen und andere Gäste einladen — per Text oder Sprache, ohne Registrierung und ohne vorherigen Schlüsselaustausch. Der Raum verschwindet von selbst, eine Stunde nachdem er leer geworden ist.",
+				"lead2": "Dieser Bereich ist noch nicht umgesetzt — diese Seite erschien vor der Funktion selbst."
+			},
+			"footer": {
+				"tagline": "{{appName}} — ein privater Messenger.",
+				"alphaNotice": "Alpha-Test. Daten werden mit einem von Ihrem Master-Passwort abgeleiteten Schlüssel verschlüsselt und lokal auf diesem Gerät gespeichert."
+			},
+			"sidebarAriaLabel": "Konten- und Zugriffsverwaltung"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Bildschirm in Entwicklung"
+	}
+}

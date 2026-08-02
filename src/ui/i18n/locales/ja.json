@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "戻る",
+		"continue": "続ける",
+		"cancel": "キャンセル",
+		"save": "保存",
+		"confirm": "確認"
+	},
+	"nav": {
+		"journal": "ジャーナル",
+		"messages": "メッセージ",
+		"channels": "チャンネル",
+		"files": "ファイル",
+		"contacts": "連絡先",
+		"discovery": "発見",
+		"settings": "設定",
+		"profile": "プロフィール",
+		"help": "ヘルプ",
+		"diagnostics": "診断"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "言語",
+			"label": "インターフェースの言語"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "プロフィールとメインメニュー",
+		"navAriaLabel": "メインメニュー",
+		"logout": "ログアウト",
+		"unreadAriaLabel": "未読: {{count}}",
+		"openMenu": "メニューを開く",
+		"closeMenu": "メニューを閉じる",
+		"switchToLightTheme": "ライトテーマに切り替える",
+		"switchToDarkTheme": "ダークテーマに切り替える"
+	},
+	"unlock": {
+		"checking": "確認中…",
+		"dbError": {
+			"message": "ローカルデータベースを開けませんでした。アプリの更新後、互換性のない形式のまま残っている可能性があります。",
+			"warning": "この操作を行うと、この端末上のすべてのローカルデータ（アカウント、会話、チャンネル）が削除され、再度サインインまたは登録が必要になります。",
+			"resetButton": "ローカルデータを消去してやり直す"
+		},
+		"createGenerate": {
+			"title": "回復フレーズ",
+			"instructions": "この12個の単語を安全な場所に書き留めてください。アカウントへのアクセスを回復する唯一の方法です。",
+			"savedButton": "フレーズを保存しました"
+		},
+		"createConfirm": {
+			"title": "フレーズの確認",
+			"instructions": "保存したことを確認するため、もう一度フレーズを入力してください。",
+			"label": "回復フレーズ（スペース区切りの12単語）",
+			"mismatchError": "フレーズが一致しません。確認してもう一度お試しください。"
+		},
+		"importMnemonic": {
+			"title": "回復フレーズでサインイン",
+			"instructions": "回復フレーズを入力してください（スペース区切りの12単語）。",
+			"label": "回復フレーズ",
+			"invalidError": "回復フレーズが無効です（チェックサムの検証に失敗しました）。"
+		},
+		"importKey": {
+			"title": "鍵でサインイン",
+			"instructions": "秘密鍵を nsec1... 形式、または16進文字列（64文字）で入力してください。",
+			"explanation": "秘密鍵は、あなたのアカウントへの完全なアクセス権を与える秘密の文字列です。誰にも見せないでください。nsec形式（NIP-19、bech32）では nsec1 で始まり、次のような見た目になります。",
+			"exampleNote": "（これは形式の例であり、実際の鍵ではありません）",
+			"label": "秘密鍵",
+			"wrongTypeError": "これは秘密鍵（nsec）ではなく、{{type}} です。コピーした内容を確認してください。",
+			"parseError": "鍵を解析できませんでした: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "アカウント情報",
+			"loginLabel": "ログイン名",
+			"passwordLabel": "パスワード（{{min}}文字以上）",
+			"passwordConfirmLabel": "パスワードを再入力"
+		},
+		"done": {
+			"title": "完了",
+			"message": "完了しました！あなたの公開識別子:",
+			"quickRegisterWarning": "クイック登録: 秘密の回復フレーズは表示も保存もされていません。この端末やブラウザのストレージが失われた場合、アカウントへのアクセスを回復する手段はありません。バックアップ用のフレーズは、後で設定画面から表示できます。",
+			"continueButton": "アプリを開く"
+		},
+		"main": {
+			"navAriaLabel": "メインメニュー",
+			"navHome": "ホーム",
+			"navTempChat": "一時チャット",
+			"createSpaceButton": "スペースを作成",
+			"accountsWidget": {
+				"title": "この端末のアカウント",
+				"empty": "ローカルアカウントはまだありません。右側から最初のアカウントを作成してください。",
+				"ariaLabel": "プロフィールを選択"
+			},
+			"loginForm": {
+				"passwordLabel": "このスペースのパスワード",
+				"submitButton": "{{appName}} にサインイン",
+				"switchAccountButton": "別のアカウントを選ぶ",
+				"selectAccountError": "アカウントを選択してください。",
+				"wrongPasswordError": "パスワードが違います。"
+			},
+			"registerBox": {
+				"title": "新しいスペースを作成",
+				"subtitle": "アカウントはこの端末上にローカルで作成されます。",
+				"loginLabel": "固有のニックネームを決めてください",
+				"passwordLabel": "マスターパスワード（データの暗号化用）",
+				"submitButton": "登録する",
+				"loginRequiredError": "ログイン名を入力してください。",
+				"passwordTooShortError": "パスワードが短すぎます（{{min}}文字以上）。",
+				"passwordMismatchError": "パスワードが一致しません。"
+			},
+			"otherWays": {
+				"title": "その他の方法",
+				"subtitle": "上級者向け。",
+				"createWithPhrase": "回復フレーズを表示しながら作成",
+				"importMnemonic": "回復フレーズでサインイン",
+				"importKey": "鍵（nsec）でサインイン"
+			},
+			"hero": {
+				"title": "中央サーバーなしでやり取りできるプライベートな空間",
+				"lead": "{{appName}} は Nostr プロトコル上に構築されたメッセンジャーで、会話にはエンドツーエンド暗号化（MLS）、端末側のデータベースには暗号化を施しています。パブリックインターネットを使わず、ローカルネットワークで動作します。"
+			},
+			"tempChat": {
+				"title": "一時チャット",
+				"lead1": "近日中に、ここで使い捨てのルームを作成し、他のゲストをテキストや音声で招待できるようになります。事前の登録や鍵交換は不要です。ルームは誰もいなくなってから1時間後に自動的に消えます。",
+				"lead2": "この機能はまだ実装されていません。機能自体より先にこのページが用意されました。"
+			},
+			"footer": {
+				"tagline": "{{appName}} — プライベートなメッセンジャー。",
+				"alphaNotice": "アルファテスト中です。データはマスターパスワードから導出された鍵で暗号化され、この端末にローカルに保存されます。"
+			},
+			"sidebarAriaLabel": "アカウントとアクセスの管理"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "この画面は開発中です"
+	}
+}

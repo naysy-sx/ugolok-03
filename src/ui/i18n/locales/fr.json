@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Retour",
+		"continue": "Continuer",
+		"cancel": "Annuler",
+		"save": "Enregistrer",
+		"confirm": "Confirmer"
+	},
+	"nav": {
+		"journal": "Journal",
+		"messages": "Messages",
+		"channels": "Chaînes",
+		"files": "Fichiers",
+		"contacts": "Contacts",
+		"discovery": "Découvrir",
+		"settings": "Paramètres",
+		"profile": "Profil",
+		"help": "Aide",
+		"diagnostics": "Diagnostic"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Langue",
+			"label": "Langue de l'interface"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Profil et menu principal",
+		"navAriaLabel": "Menu principal",
+		"logout": "Se déconnecter",
+		"unreadAriaLabel": "non lus : {{count}}",
+		"openMenu": "Ouvrir le menu",
+		"closeMenu": "Fermer le menu",
+		"switchToLightTheme": "Passer au thème clair",
+		"switchToDarkTheme": "Passer au thème sombre"
+	},
+	"unlock": {
+		"checking": "Vérification…",
+		"dbError": {
+			"message": "Impossible d'ouvrir la base de données locale — elle est peut-être restée dans un format incompatible après une mise à jour de l'application.",
+			"warning": "Cette action effacera toutes les données locales sur cet appareil (comptes, conversations, chaînes) et nécessitera une nouvelle connexion ou inscription.",
+			"resetButton": "Effacer les données locales et recommencer"
+		},
+		"createGenerate": {
+			"title": "Phrase de récupération",
+			"instructions": "Notez ces 12 mots dans un endroit sûr. C'est le seul moyen de récupérer l'accès à votre compte.",
+			"savedButton": "J'ai enregistré la phrase"
+		},
+		"createConfirm": {
+			"title": "Confirmer la phrase",
+			"instructions": "Saisissez à nouveau la phrase pour confirmer que vous l'avez bien enregistrée.",
+			"label": "Phrase de récupération (12 mots séparés par des espaces)",
+			"mismatchError": "La phrase ne correspond pas. Vérifiez-la et réessayez."
+		},
+		"importMnemonic": {
+			"title": "Connexion avec la phrase de récupération",
+			"instructions": "Saisissez votre phrase de récupération (12 mots séparés par des espaces).",
+			"label": "Phrase de récupération",
+			"invalidError": "Phrase de récupération invalide (échec de la vérification de la somme de contrôle)."
+		},
+		"importKey": {
+			"title": "Connexion avec une clé",
+			"instructions": "Saisissez votre clé privée au format nsec1... ou sous forme de chaîne hexadécimale (64 caractères).",
+			"explanation": "Une clé privée est une chaîne secrète qui donne un accès complet à votre compte. Ne la montrez jamais à personne. Au format nsec (NIP-19, bech32), elle commence par nsec1 et ressemble à ceci :",
+			"exampleNote": "(ceci n'est qu'un exemple de format, pas une véritable clé)",
+			"label": "Clé privée",
+			"wrongTypeError": "Ceci n'est pas une clé privée (nsec), mais {{type}}. Vérifiez ce que vous avez copié.",
+			"parseError": "Impossible d'interpréter la clé : {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Informations du compte",
+			"loginLabel": "Identifiant",
+			"passwordLabel": "Mot de passe (au moins {{min}} caractères)",
+			"passwordConfirmLabel": "Répétez le mot de passe"
+		},
+		"done": {
+			"title": "Terminé",
+			"message": "Terminé ! Votre identifiant public :",
+			"quickRegisterWarning": "Inscription rapide : votre phrase de récupération secrète n'a été ni affichée ni enregistrée nulle part. Si cet appareil ou le stockage du navigateur est perdu, il n'y aura aucun moyen de récupérer l'accès à votre compte. Vous pourrez afficher la phrase pour une sauvegarde plus tard, dans les paramètres.",
+			"continueButton": "Aller à l'application"
+		},
+		"main": {
+			"navAriaLabel": "Menu principal",
+			"navHome": "Accueil",
+			"navTempChat": "Discussion temporaire",
+			"createSpaceButton": "Créer un espace",
+			"accountsWidget": {
+				"title": "Comptes sur cet appareil",
+				"empty": "Aucun compte local pour l'instant — créez le premier à droite.",
+				"ariaLabel": "Choisir un profil"
+			},
+			"loginForm": {
+				"passwordLabel": "Mot de passe de cet espace",
+				"submitButton": "Se connecter à {{appName}}",
+				"switchAccountButton": "Choisir un autre compte",
+				"selectAccountError": "Choisissez un compte.",
+				"wrongPasswordError": "Mot de passe incorrect."
+			},
+			"registerBox": {
+				"title": "Créer un nouvel espace",
+				"subtitle": "Le compte sera créé localement sur cet appareil.",
+				"loginLabel": "Choisissez un pseudonyme unique",
+				"passwordLabel": "Mot de passe principal (pour chiffrer vos données)",
+				"submitButton": "S'inscrire",
+				"loginRequiredError": "Saisissez un identifiant.",
+				"passwordTooShortError": "Le mot de passe est trop court (au moins {{min}} caractères).",
+				"passwordMismatchError": "Les mots de passe ne correspondent pas."
+			},
+			"otherWays": {
+				"title": "Autres méthodes",
+				"subtitle": "Pour les utilisateurs avancés.",
+				"createWithPhrase": "Créer avec affichage de la phrase de récupération",
+				"importMnemonic": "Connexion avec la phrase de récupération",
+				"importKey": "Connexion avec une clé (nsec)"
+			},
+			"hero": {
+				"title": "Un espace privé pour communiquer sans serveur central",
+				"lead": "{{appName}} est une messagerie basée sur le protocole Nostr avec chiffrement de bout en bout (MLS) pour les conversations et chiffrement de la base de données sur l'appareil. Fonctionne sur un réseau local, sans internet public."
+			},
+			"tempChat": {
+				"title": "Discussion temporaire",
+				"lead1": "Bientôt, vous pourrez créer ici un salon à usage unique et y inviter d'autres invités — par texte ou par voix, sans inscription ni échange de clés au préalable. Le salon disparaîtra de lui-même une heure après s'être vidé.",
+				"lead2": "Cette section n'est pas encore implémentée — cette page est apparue avant la fonctionnalité elle-même."
+			},
+			"footer": {
+				"tagline": "{{appName}} — une messagerie privée.",
+				"alphaNotice": "Phase de test alpha. Les données sont chiffrées avec une clé dérivée de votre mot de passe principal et stockées localement sur cet appareil."
+			},
+			"sidebarAriaLabel": "Gestion des comptes et de l'accès"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Écran en cours de développement"
+	}
+}

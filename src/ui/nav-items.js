@@ -10,17 +10,22 @@
 // "journal" — первым (этап 50): персистентный лог уведомлений, новый стартовый
 // экран после логина (DEFAULT_ACTIVE ниже) — пользователь видит "что произошло"
 // раньше, чем открывает конкретный чат/канал.
+//
+// Этап 64 — labelKey (не готовый текст label): dot-path ключ в
+// src/ui/i18n/locales/*.json ("nav.*"), переводится вызовом t(item.labelKey)
+// в месте рендера (app.jsx) — сам файл остаётся чистыми данными без
+// зависимости от i18n-модуля.
 export const NAV_ITEMS = [
-  { id: "journal", label: "Журнал" },
-  { id: "messages", label: "Сообщения" },
-  { id: "channels", label: "Каналы" },
-  { id: "files", label: "Файлы" },
-  { id: "contacts", label: "Контакты" },
-  { id: "discovery", label: "Обзор" },
-  { id: "settings", label: "Настройки" },
-  { id: "profile", label: "Профиль" },
-  { id: "help", label: "Справка" },
-  { id: "diagnostics", label: "Диагностика" },
+  { id: "journal", labelKey: "nav.journal" },
+  { id: "messages", labelKey: "nav.messages" },
+  { id: "channels", labelKey: "nav.channels" },
+  { id: "files", labelKey: "nav.files" },
+  { id: "contacts", labelKey: "nav.contacts" },
+  { id: "discovery", labelKey: "nav.discovery" },
+  { id: "settings", labelKey: "nav.settings" },
+  { id: "profile", labelKey: "nav.profile" },
+  { id: "help", labelKey: "nav.help" },
+  { id: "diagnostics", labelKey: "nav.diagnostics" },
 ];
 
 export const DEFAULT_ACTIVE = "journal";

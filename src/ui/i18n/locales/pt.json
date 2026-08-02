@@ -1,0 +1,138 @@
+{
+	"app": {
+		"name": "Ugolok"
+	},
+	"common": {
+		"back": "Voltar",
+		"continue": "Continuar",
+		"cancel": "Cancelar",
+		"save": "Salvar",
+		"confirm": "Confirmar"
+	},
+	"nav": {
+		"journal": "Registro",
+		"messages": "Mensagens",
+		"channels": "Canais",
+		"files": "Arquivos",
+		"contacts": "Contatos",
+		"discovery": "Descobrir",
+		"settings": "Configurações",
+		"profile": "Perfil",
+		"help": "Ajuda",
+		"diagnostics": "Diagnóstico"
+	},
+	"settings": {
+		"language": {
+			"sectionTitle": "Idioma",
+			"label": "Idioma da interface"
+		}
+	},
+	"shell": {
+		"sidebarAriaLabel": "Perfil e menu principal",
+		"navAriaLabel": "Menu principal",
+		"logout": "Sair",
+		"unreadAriaLabel": "não lidas: {{count}}",
+		"openMenu": "Abrir menu",
+		"closeMenu": "Fechar menu",
+		"switchToLightTheme": "Mudar para o tema claro",
+		"switchToDarkTheme": "Mudar para o tema escuro"
+	},
+	"unlock": {
+		"checking": "Verificando…",
+		"dbError": {
+			"message": "Não foi possível abrir o banco de dados local — ele pode ter permanecido em um formato incompatível após uma atualização do aplicativo.",
+			"warning": "Isso apagará todos os dados locais neste dispositivo (contas, conversas, canais) e exigirá novo login ou registro.",
+			"resetButton": "Limpar dados locais e começar de novo"
+		},
+		"createGenerate": {
+			"title": "Frase de recuperação",
+			"instructions": "Anote estas 12 palavras em um lugar seguro. Esta é a única forma de recuperar o acesso à sua conta.",
+			"savedButton": "Salvei a frase"
+		},
+		"createConfirm": {
+			"title": "Confirmar a frase",
+			"instructions": "Digite a frase novamente para confirmar que você a salvou.",
+			"label": "Frase de recuperação (12 palavras separadas por espaços)",
+			"mismatchError": "A frase não corresponde. Verifique e tente novamente."
+		},
+		"importMnemonic": {
+			"title": "Entrar com frase de recuperação",
+			"instructions": "Digite sua frase de recuperação (12 palavras separadas por espaços).",
+			"label": "Frase de recuperação",
+			"invalidError": "Frase de recuperação inválida (falha na verificação de checksum)."
+		},
+		"importKey": {
+			"title": "Entrar com uma chave",
+			"instructions": "Digite sua chave privada no formato nsec1... ou como string hexadecimal (64 caracteres).",
+			"explanation": "Uma chave privada é uma string secreta que dá acesso total à sua conta. Nunca a mostre a ninguém. No formato nsec (NIP-19, bech32) ela começa com nsec1 e se parece com isto:",
+			"exampleNote": "(isto é apenas um exemplo de formato, não uma chave real)",
+			"label": "Chave privada",
+			"wrongTypeError": "Isto não é uma chave privada (nsec), e sim {{type}}. Verifique o que você copiou.",
+			"parseError": "Não foi possível interpretar a chave: {{message}}"
+		},
+		"advancedPassword": {
+			"title": "Dados da conta",
+			"loginLabel": "Login",
+			"passwordLabel": "Senha (mínimo de {{min}} caracteres)",
+			"passwordConfirmLabel": "Repita a senha"
+		},
+		"done": {
+			"title": "Pronto",
+			"message": "Pronto! Seu identificador público:",
+			"quickRegisterWarning": "Registro rápido: sua frase de recuperação secreta não foi mostrada nem salva em nenhum lugar. Se este dispositivo ou o armazenamento do navegador for perdido, não haverá como recuperar o acesso à sua conta. Você poderá exibir a frase para backup mais tarde, nas configurações.",
+			"continueButton": "Ir para o aplicativo"
+		},
+		"main": {
+			"navAriaLabel": "Menu principal",
+			"navHome": "Início",
+			"navTempChat": "Chat temporário",
+			"createSpaceButton": "Criar espaço",
+			"accountsWidget": {
+				"title": "Contas neste dispositivo",
+				"empty": "Ainda não há nenhuma conta local — crie a primeira à direita.",
+				"ariaLabel": "Escolher perfil"
+			},
+			"loginForm": {
+				"passwordLabel": "Senha deste espaço",
+				"submitButton": "Entrar no {{appName}}",
+				"switchAccountButton": "Escolher outra conta",
+				"selectAccountError": "Escolha uma conta.",
+				"wrongPasswordError": "Senha incorreta."
+			},
+			"registerBox": {
+				"title": "Criar um novo espaço",
+				"subtitle": "A conta será criada localmente neste dispositivo.",
+				"loginLabel": "Escolha um apelido único",
+				"passwordLabel": "Senha mestra (para criptografar seus dados)",
+				"submitButton": "Registrar",
+				"loginRequiredError": "Digite um login.",
+				"passwordTooShortError": "A senha é muito curta (mínimo de {{min}} caracteres).",
+				"passwordMismatchError": "As senhas não coincidem."
+			},
+			"otherWays": {
+				"title": "Outras formas",
+				"subtitle": "Para usuários avançados.",
+				"createWithPhrase": "Criar exibindo a frase de recuperação",
+				"importMnemonic": "Entrar com frase de recuperação",
+				"importKey": "Entrar com uma chave (nsec)"
+			},
+			"hero": {
+				"title": "Um espaço privado para se comunicar sem servidor central",
+				"lead": "{{appName}} é um mensageiro construído sobre o protocolo Nostr, com criptografia de ponta a ponta (MLS) para conversas e criptografia do banco de dados no dispositivo. Funciona em rede local, sem internet pública."
+			},
+			"tempChat": {
+				"title": "Chat temporário",
+				"lead1": "Em breve você poderá criar aqui uma sala descartável e convidar outros convidados — por texto ou voz, sem registro e sem troca prévia de chaves. A sala desaparecerá sozinha uma hora depois de ficar vazia.",
+				"lead2": "Esta seção ainda não foi implementada — esta página surgiu antes da própria funcionalidade."
+			},
+			"footer": {
+				"tagline": "{{appName}} — um mensageiro privado.",
+				"alphaNotice": "Teste alfa. Os dados são criptografados com uma chave derivada da sua senha mestra e armazenados localmente neste dispositivo."
+			},
+			"sidebarAriaLabel": "Gerenciamento de contas e acesso"
+		}
+	},
+	"placeholder": {
+		"inDevelopment": "Tela em desenvolvimento"
+	}
+}
