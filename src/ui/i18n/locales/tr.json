@@ -496,5 +496,52 @@
 		"aboutMeLegend": "Hakkımda",
 		"bioLabel": "Biyografi",
 		"filesComingSoon": "Dosya yükleme ve yönetimi daha sonra eklenecek."
+	},
+	"screen": {
+		"backToSectionAria": "«{{label}}» bölümüne dön",
+		"sectionActionsAria": "Bölüm işlemleri"
+	},
+	"sidebarCard": {
+		"profileAria": "Kullanıcı profili",
+		"openPhotoAria": "Profil fotoğrafını aç",
+		"editProfileButton": "Profili düzenle",
+		"photoAlt": "Profil fotoğrafı"
+	},
+	"connectionStatus": {
+		"offline": "çevrimdışı",
+		"connecting": "bağlanıyor…",
+		"syncing": "eşitleniyor…",
+		"connected": "bağlı",
+		"checking": "kontrol ediliyor…",
+		"reachable": "erişilebilir",
+		"unreachable": "erişilemiyor",
+		"panelAria": "Bağlantı durumu"
+	},
+	"toast": {
+		"regionAria": "Bildirimler",
+		"closeAria": "Bildirimi kapat"
+	},
+	"call": {
+		"ended": "Arama sona erdi",
+		"endedWithReason": "Arama sona erdi: {{reason}}",
+		"incomingAria": "Gelen arama",
+		"outgoingAria": "Giden arama",
+		"incomingFrom": "{{name}} kişisinden gelen arama",
+		"callingTo": "{{name}} aranıyor…",
+		"connectingTo": "{{name}} ile bağlanılıyor…",
+		"reconnecting": "Yeniden bağlanıyor…",
+		"connectedWith": "{{name}} ile görüşmede",
+		"hangupAria": "Aramayı sonlandır",
+		"reason": {
+			"noAnswer": "yanıt yok",
+			"missed": "cevapsız",
+			"rejected": "reddedildi",
+			"cancelled": "iptal edildi",
+			"cancelledByCaller": "arayan tarafından iptal edildi",
+			"connectFailed": "bağlantı kurulamadı",
+			"hangup": "sizin tarafınızdan sonlandırıldı",
+			"remoteHangup": "karşı taraf tarafından sonlandırıldı",
+			"connectionLost": "bağlantı koptu"
+		}
 	}
 }

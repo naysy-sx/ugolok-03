@@ -1,4 +1,5 @@
 import { toasts, dismissToast } from "../signals/toasts.js";
+import { t } from "../signals/i18n.js";
 
 // Этап 47-довесок — рендер очереди тостов. Монтируется один раз в корне
 // (app.jsx), сама очередь — глобальный сигнал, наполняется из notifier.js's
@@ -9,30 +10,30 @@ import { toasts, dismissToast } from "../signals/toasts.js";
 export default function ToastHost() {
 	if (toasts.value.length === 0) return null;
 	return (
-		<div class="toast-host" role="region" aria-label="Уведомления" aria-live="polite">
-			{toasts.value.map((t) => (
+		<div class="toast-host" role="region" aria-label={t("toast.regionAria")} aria-live="polite">
+			{toasts.value.map((toast) => (
 				<div
-					key={t.id}
-					class={`toast${t.leaving ? " is-leaving" : ""}${t.onClick ? " is-clickable" : ""}`}
+					key={toast.id}
+					class={`toast${toast.leaving ? " is-leaving" : ""}${toast.onClick ? " is-clickable" : ""}`}
 					style={{ position: "relative" }}
-					role={t.onClick ? "button" : undefined}
-					tabIndex={t.onClick ? 0 : undefined}
-					onClick={t.onClick ? () => t.onClick() : undefined}
-					onKeyDown={t.onClick ? (e) => (e.key === "Enter" || e.key === " ") && t.onClick() : undefined}
+					role={toast.onClick ? "button" : undefined}
+					tabIndex={toast.onClick ? 0 : undefined}
+					onClick={toast.onClick ? () => toast.onClick() : undefined}
+					onKeyDown={toast.onClick ? (e) => (e.key === "Enter" || e.key === " ") && toast.onClick() : undefined}
 				>
 					<button
 						type="button"
 						class="toast-close"
-						aria-label="Закрыть уведомление"
+						aria-label={t("toast.closeAria")}
 						onClick={(e) => {
 							e.stopPropagation();
-							dismissToast(t.id);
+							dismissToast(toast.id);
 						}}
 					>
 						×
 					</button>
-					<p class="toast-title">{t.title}</p>
-					{t.body && <p class="toast-body">{t.body}</p>}
+					<p class="toast-title">{toast.title}</p>
+					{toast.body && <p class="toast-body">{toast.body}</p>}
 				</div>
 			))}
 		</div>

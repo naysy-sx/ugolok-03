@@ -496,5 +496,52 @@
 		"aboutMeLegend": "O mnie",
 		"bioLabel": "Bio",
 		"filesComingSoon": "Przesyłanie i zarządzanie plikami pojawi się później."
+	},
+	"screen": {
+		"backToSectionAria": "Wróć do „{{label}}”",
+		"sectionActionsAria": "Działania sekcji"
+	},
+	"sidebarCard": {
+		"profileAria": "Profil użytkownika",
+		"openPhotoAria": "Otwórz zdjęcie profilowe",
+		"editProfileButton": "Edytuj profil",
+		"photoAlt": "Zdjęcie profilowe"
+	},
+	"connectionStatus": {
+		"offline": "offline",
+		"connecting": "łączenie…",
+		"syncing": "synchronizacja…",
+		"connected": "połączono",
+		"checking": "sprawdzanie…",
+		"reachable": "dostępny",
+		"unreachable": "niedostępny",
+		"panelAria": "Stan połączenia"
+	},
+	"toast": {
+		"regionAria": "Powiadomienia",
+		"closeAria": "Zamknij powiadomienie"
+	},
+	"call": {
+		"ended": "Połączenie zakończone",
+		"endedWithReason": "Połączenie zakończone: {{reason}}",
+		"incomingAria": "Połączenie przychodzące",
+		"outgoingAria": "Połączenie wychodzące",
+		"incomingFrom": "Połączenie przychodzące od {{name}}",
+		"callingTo": "Dzwonię do {{name}}…",
+		"connectingTo": "Łączenie z {{name}}…",
+		"reconnecting": "Ponowne łączenie…",
+		"connectedWith": "Połączenie z {{name}}",
+		"hangupAria": "Zakończ połączenie",
+		"reason": {
+			"noAnswer": "brak odpowiedzi",
+			"missed": "nieodebrane",
+			"rejected": "odrzucone",
+			"cancelled": "anulowane",
+			"cancelledByCaller": "anulowane przez dzwoniącego",
+			"connectFailed": "nie udało się połączyć",
+			"hangup": "zakończone przez Ciebie",
+			"remoteHangup": "zakończone przez rozmówcę",
+			"connectionLost": "utracono połączenie"
+		}
 	}
 }

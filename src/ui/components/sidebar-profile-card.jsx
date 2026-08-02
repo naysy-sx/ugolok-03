@@ -6,6 +6,7 @@ import AccountAvatar from "./account-avatar.jsx";
 import ImageModal from "./image-modal.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+import { t } from "../signals/i18n.js";
 
 // Постоянная карточка "кто я" в aside — видна на любом внутреннем экране, не
 // только на вкладке "Профиль" (решение пользователя). Данные из того же
@@ -33,7 +34,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 	}, [id, profileActivity.value]);
 
 	return (
-		<section class="profile-card" aria-label="Профиль пользователя">
+		<section class="profile-card" aria-label={t("sidebarCard.profileAria")}>
 			{/* Пользователь: "аватар строго квадратным, при клике — полная
 			    фотография в модальном окне" — кликабелен только если фото
 			    реально есть, заглушка-буква никуда не ведёт (disabled).
@@ -45,7 +46,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 				class="profile-card-avatar-btn"
 				onClick={() => setShowAvatarModal(true)}
 				disabled={!avatar && !avatarUrl}
-				aria-label={avatar || avatarUrl ? "Открыть фото профиля" : undefined}
+				aria-label={avatar || avatarUrl ? t("sidebarCard.openPhotoAria") : undefined}
 			>
 				<AccountAvatar avatar={avatar || avatarUrl} login={login || id} large />
 				{/* VISUAL.md v2 — "стеклянная" подсказка: лупа проявляется снизу по
@@ -70,10 +71,10 @@ export default function SidebarProfileCard({ onEditProfile }) {
 				    края сайдбара — фактически невидима/некликабельна. Своя строка
 				    ниже, с подписью — надёжнее компактной иконки-без-текста. */}
 				<button type="button" class="profile-edit-btn" onClick={onEditProfile}>
-					<IconPencil /> Изменить профиль
+					<IconPencil /> {t("sidebarCard.editProfileButton")}
 				</button>
 			</div>
-			{showAvatarModal && (avatar || avatarUrl) && <ImageModal src={avatar || avatarUrl} alt="Фото профиля" onClose={() => setShowAvatarModal(false)} />}
+			{showAvatarModal && (avatar || avatarUrl) && <ImageModal src={avatar || avatarUrl} alt={t("sidebarCard.photoAlt")} onClose={() => setShowAvatarModal(false)} />}
 		</section>
 	);
 }

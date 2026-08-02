@@ -496,5 +496,52 @@
 		"aboutMeLegend": "关于我",
 		"bioLabel": "简介",
 		"filesComingSoon": "文件上传与管理功能将在稍后推出。"
+	},
+	"screen": {
+		"backToSectionAria": "返回“{{label}}”",
+		"sectionActionsAria": "版块操作"
+	},
+	"sidebarCard": {
+		"profileAria": "用户资料",
+		"openPhotoAria": "打开头像照片",
+		"editProfileButton": "编辑个人资料",
+		"photoAlt": "头像照片"
+	},
+	"connectionStatus": {
+		"offline": "离线",
+		"connecting": "连接中…",
+		"syncing": "同步中…",
+		"connected": "在线",
+		"checking": "检查中…",
+		"reachable": "可访问",
+		"unreachable": "不可访问",
+		"panelAria": "连接状态"
+	},
+	"toast": {
+		"regionAria": "通知",
+		"closeAria": "关闭通知"
+	},
+	"call": {
+		"ended": "通话已结束",
+		"endedWithReason": "通话已结束：{{reason}}",
+		"incomingAria": "来电",
+		"outgoingAria": "去电",
+		"incomingFrom": "来自 {{name}} 的来电",
+		"callingTo": "正在呼叫 {{name}}…",
+		"connectingTo": "正在连接 {{name}}…",
+		"reconnecting": "正在重新连接…",
+		"connectedWith": "正在与 {{name}} 通话",
+		"hangupAria": "结束通话",
+		"reason": {
+			"noAnswer": "无人接听",
+			"missed": "未接听",
+			"rejected": "已拒绝",
+			"cancelled": "已取消",
+			"cancelledByCaller": "已被呼叫方取消",
+			"connectFailed": "连接失败",
+			"hangup": "已被您结束",
+			"remoteHangup": "已被对方结束",
+			"connectionLost": "连接已断开"
+		}
 	}
 }

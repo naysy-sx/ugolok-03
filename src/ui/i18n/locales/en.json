@@ -496,5 +496,52 @@
 		"aboutMeLegend": "About me",
 		"bioLabel": "Bio",
 		"filesComingSoon": "File upload and management will appear later."
+	},
+	"screen": {
+		"backToSectionAria": "Back to «{{label}}»",
+		"sectionActionsAria": "Section actions"
+	},
+	"sidebarCard": {
+		"profileAria": "User profile",
+		"openPhotoAria": "Open profile photo",
+		"editProfileButton": "Edit profile",
+		"photoAlt": "Profile photo"
+	},
+	"connectionStatus": {
+		"offline": "offline",
+		"connecting": "connecting…",
+		"syncing": "syncing…",
+		"connected": "online",
+		"checking": "checking…",
+		"reachable": "reachable",
+		"unreachable": "unreachable",
+		"panelAria": "Connection status"
+	},
+	"toast": {
+		"regionAria": "Notifications",
+		"closeAria": "Dismiss notification"
+	},
+	"call": {
+		"ended": "Call ended",
+		"endedWithReason": "Call ended: {{reason}}",
+		"incomingAria": "Incoming call",
+		"outgoingAria": "Outgoing call",
+		"incomingFrom": "Incoming call from {{name}}",
+		"callingTo": "Calling {{name}}…",
+		"connectingTo": "Connecting to {{name}}…",
+		"reconnecting": "Reconnecting…",
+		"connectedWith": "In call with {{name}}",
+		"hangupAria": "End call",
+		"reason": {
+			"noAnswer": "no answer",
+			"missed": "missed",
+			"rejected": "declined",
+			"cancelled": "cancelled",
+			"cancelledByCaller": "cancelled by caller",
+			"connectFailed": "connection failed",
+			"hangup": "ended by you",
+			"remoteHangup": "ended by the other party",
+			"connectionLost": "connection lost"
+		}
 	}
 }

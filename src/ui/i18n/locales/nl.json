@@ -496,5 +496,52 @@
 		"aboutMeLegend": "Over mij",
 		"bioLabel": "Bio",
 		"filesComingSoon": "Bestanden uploaden en beheren verschijnt later."
+	},
+	"screen": {
+		"backToSectionAria": "Terug naar ‘{{label}}’",
+		"sectionActionsAria": "Sectieacties"
+	},
+	"sidebarCard": {
+		"profileAria": "Gebruikersprofiel",
+		"openPhotoAria": "Profielfoto openen",
+		"editProfileButton": "Profiel bewerken",
+		"photoAlt": "Profielfoto"
+	},
+	"connectionStatus": {
+		"offline": "offline",
+		"connecting": "verbinden…",
+		"syncing": "synchroniseren…",
+		"connected": "verbonden",
+		"checking": "controleren…",
+		"reachable": "bereikbaar",
+		"unreachable": "onbereikbaar",
+		"panelAria": "Verbindingsstatus"
+	},
+	"toast": {
+		"regionAria": "Meldingen",
+		"closeAria": "Melding sluiten"
+	},
+	"call": {
+		"ended": "Gesprek beëindigd",
+		"endedWithReason": "Gesprek beëindigd: {{reason}}",
+		"incomingAria": "Inkomend gesprek",
+		"outgoingAria": "Uitgaand gesprek",
+		"incomingFrom": "Inkomend gesprek van {{name}}",
+		"callingTo": "Bellen naar {{name}}…",
+		"connectingTo": "Verbinden met {{name}}…",
+		"reconnecting": "Opnieuw verbinden…",
+		"connectedWith": "In gesprek met {{name}}",
+		"hangupAria": "Gesprek beëindigen",
+		"reason": {
+			"noAnswer": "geen antwoord",
+			"missed": "gemist",
+			"rejected": "geweigerd",
+			"cancelled": "geannuleerd",
+			"cancelledByCaller": "geannuleerd door beller",
+			"connectFailed": "verbinding mislukt",
+			"hangup": "door jou beëindigd",
+			"remoteHangup": "door de ander beëindigd",
+			"connectionLost": "verbinding verloren"
+		}
 	}
 }

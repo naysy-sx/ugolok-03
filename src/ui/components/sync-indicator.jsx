@@ -1,8 +1,10 @@
+import { t } from "../signals/i18n.js";
+
 function label(state, synced) {
-	if (state === "disconnected") return "офлайн";
-	if (state === "connecting" || state === "authenticating") return "подключение…";
-	if ((state === "connected" || state === "subscribed") && !synced) return "синхронизация…";
-	if ((state === "connected" || state === "subscribed") && synced) return "на связи";
+	if (state === "disconnected") return t("connectionStatus.offline");
+	if (state === "connecting" || state === "authenticating") return t("connectionStatus.connecting");
+	if ((state === "connected" || state === "subscribed") && !synced) return t("connectionStatus.syncing");
+	if ((state === "connected" || state === "subscribed") && synced) return t("connectionStatus.connected");
 	return state;
 }
 

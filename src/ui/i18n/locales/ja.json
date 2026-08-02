@@ -496,5 +496,52 @@
 		"aboutMeLegend": "自己紹介",
 		"bioLabel": "自己紹介文",
 		"filesComingSoon": "ファイルのアップロードと管理は後日追加されます。"
+	},
+	"screen": {
+		"backToSectionAria": "「{{label}}」に戻る",
+		"sectionActionsAria": "セクションの操作"
+	},
+	"sidebarCard": {
+		"profileAria": "ユーザープロフィール",
+		"openPhotoAria": "プロフィール写真を開く",
+		"editProfileButton": "プロフィールを編集",
+		"photoAlt": "プロフィール写真"
+	},
+	"connectionStatus": {
+		"offline": "オフライン",
+		"connecting": "接続中…",
+		"syncing": "同期中…",
+		"connected": "接続済み",
+		"checking": "確認中…",
+		"reachable": "到達可能",
+		"unreachable": "到達不可",
+		"panelAria": "接続状態"
+	},
+	"toast": {
+		"regionAria": "通知",
+		"closeAria": "通知を閉じる"
+	},
+	"call": {
+		"ended": "通話が終了しました",
+		"endedWithReason": "通話が終了しました: {{reason}}",
+		"incomingAria": "着信",
+		"outgoingAria": "発信",
+		"incomingFrom": "{{name}} から着信",
+		"callingTo": "{{name}} に発信中…",
+		"connectingTo": "{{name}} に接続中…",
+		"reconnecting": "再接続中…",
+		"connectedWith": "{{name}} と通話中",
+		"hangupAria": "通話を終了",
+		"reason": {
+			"noAnswer": "応答なし",
+			"missed": "不在着信",
+			"rejected": "拒否されました",
+			"cancelled": "キャンセルされました",
+			"cancelledByCaller": "発信者によりキャンセルされました",
+			"connectFailed": "接続できませんでした",
+			"hangup": "あなたが終了しました",
+			"remoteHangup": "相手が終了しました",
+			"connectionLost": "接続が失われました"
+		}
 	}
 }

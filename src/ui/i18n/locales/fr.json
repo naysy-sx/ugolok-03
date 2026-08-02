@@ -496,5 +496,52 @@
 		"aboutMeLegend": "À propos de moi",
 		"bioLabel": "Bio",
 		"filesComingSoon": "L'envoi et la gestion de fichiers apparaîtront plus tard."
+	},
+	"screen": {
+		"backToSectionAria": "Retour à « {{label}} »",
+		"sectionActionsAria": "Actions de la section"
+	},
+	"sidebarCard": {
+		"profileAria": "Profil utilisateur",
+		"openPhotoAria": "Ouvrir la photo de profil",
+		"editProfileButton": "Modifier le profil",
+		"photoAlt": "Photo de profil"
+	},
+	"connectionStatus": {
+		"offline": "hors ligne",
+		"connecting": "connexion…",
+		"syncing": "synchronisation…",
+		"connected": "connecté",
+		"checking": "vérification…",
+		"reachable": "accessible",
+		"unreachable": "inaccessible",
+		"panelAria": "État de la connexion"
+	},
+	"toast": {
+		"regionAria": "Notifications",
+		"closeAria": "Fermer la notification"
+	},
+	"call": {
+		"ended": "Appel terminé",
+		"endedWithReason": "Appel terminé : {{reason}}",
+		"incomingAria": "Appel entrant",
+		"outgoingAria": "Appel sortant",
+		"incomingFrom": "Appel entrant de {{name}}",
+		"callingTo": "Appel de {{name}}…",
+		"connectingTo": "Connexion à {{name}}…",
+		"reconnecting": "Reconnexion…",
+		"connectedWith": "En appel avec {{name}}",
+		"hangupAria": "Terminer l'appel",
+		"reason": {
+			"noAnswer": "pas de réponse",
+			"missed": "manqué",
+			"rejected": "refusé",
+			"cancelled": "annulé",
+			"cancelledByCaller": "annulé par l'appelant",
+			"connectFailed": "échec de la connexion",
+			"hangup": "terminé par vous",
+			"remoteHangup": "terminé par l'autre partie",
+			"connectionLost": "connexion perdue"
+		}
 	}
 }

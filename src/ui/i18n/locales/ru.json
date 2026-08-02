@@ -496,5 +496,52 @@
 		"aboutMeLegend": "О себе",
 		"bioLabel": "Био",
 		"filesComingSoon": "Загрузка и управление файлами появится позже."
+	},
+	"screen": {
+		"backToSectionAria": "Назад к разделу «{{label}}»",
+		"sectionActionsAria": "Действия раздела"
+	},
+	"sidebarCard": {
+		"profileAria": "Профиль пользователя",
+		"openPhotoAria": "Открыть фото профиля",
+		"editProfileButton": "Изменить профиль",
+		"photoAlt": "Фото профиля"
+	},
+	"connectionStatus": {
+		"offline": "офлайн",
+		"connecting": "подключение…",
+		"syncing": "синхронизация…",
+		"connected": "на связи",
+		"checking": "проверка…",
+		"reachable": "доступен",
+		"unreachable": "недоступен",
+		"panelAria": "Статус соединения"
+	},
+	"toast": {
+		"regionAria": "Уведомления",
+		"closeAria": "Закрыть уведомление"
+	},
+	"call": {
+		"ended": "Звонок завершён",
+		"endedWithReason": "Звонок завершён: {{reason}}",
+		"incomingAria": "Входящий звонок",
+		"outgoingAria": "Исходящий звонок",
+		"incomingFrom": "Входящий звонок от {{name}}",
+		"callingTo": "Звоним {{name}}…",
+		"connectingTo": "Соединение с {{name}}…",
+		"reconnecting": "Переподключение…",
+		"connectedWith": "Связь с {{name}}",
+		"hangupAria": "Завершить звонок",
+		"reason": {
+			"noAnswer": "не ответили",
+			"missed": "пропущен",
+			"rejected": "отклонён",
+			"cancelled": "отменён",
+			"cancelledByCaller": "отменён звонящим",
+			"connectFailed": "не удалось соединиться",
+			"hangup": "завершён вами",
+			"remoteHangup": "завершён собеседником",
+			"connectionLost": "связь потеряна"
+		}
 	}
 }

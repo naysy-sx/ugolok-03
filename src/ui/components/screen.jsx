@@ -1,5 +1,6 @@
 import { useId } from "preact/hooks";
 import IconCornerBack from "../icons/corner-back.jsx";
+import { t } from "../signals/i18n.js";
 
 // Общий каркас внутреннего экрана (обсуждён с пользователем) — закреплённая
 // шапка (кнопка "назад" + заголовок + действия раздела) и опциональный
@@ -27,13 +28,13 @@ export default function Screen({ breadcrumb, title, actions, footer, feed, child
 					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
 					    кнопки, видимого текста больше нет. */}
 					{breadcrumb && (
-						<button type="button" class="back-button" onClick={breadcrumb.onBack} aria-label={`Назад к разделу «${breadcrumb.label}»`}>
+						<button type="button" class="back-button" onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
 							<IconCornerBack />
 						</button>
 					)}
 					<h1 id={titleId}>{title}</h1>
 					{actions && (
-						<div class="action-buttons" role="group" aria-label="Действия раздела">
+						<div class="action-buttons" role="group" aria-label={t("screen.sectionActionsAria")}>
 							{actions}
 						</div>
 					)}

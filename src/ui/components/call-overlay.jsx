@@ -3,6 +3,7 @@ import { callState, localMediaStream, remoteMediaStream, acceptCall, rejectCall,
 import { profiles } from "../signals/contacts.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import { RINGTONE_DATA_URI } from "../../domain/calls/ringtone-asset.js";
+import { t } from "../signals/i18n.js";
 
 // Этап 48, п.6 — persistent-компонент уровня app.jsx (тот же архитектурный
 // принцип, что ToastHost, этап 47): входящий звонок обязан быть виден с ЛЮБОГО
@@ -135,8 +136,8 @@ export default function CallOverlay() {
 	if (call.name === "ENDED") {
 		return (
 			<div class="call-overlay call-overlay-ended" role="status" aria-live="polite">
-				<p>Звонок завершён{call.reason ? `: ${callEndReasonRu(call.reason)}` : ""}</p>
-				<button type="button" class="call-overlay-ended-close" onClick={dismissEndedCall} aria-label="Закрыть">
+				<p>{call.reason ? t("call.endedWithReason", { reason: callEndReasonLabel(call.reason) }) : t("call.ended")}</p>
+				<button type="button" class="call-overlay-ended-close" onClick={dismissEndedCall} aria-label={t("common.close")}>
 					×
 				</button>
 			</div>
@@ -148,27 +149,27 @@ export default function CallOverlay() {
 	if (call.name === "OUTGOING_RINGING" || call.name === "INCOMING_RINGING") {
 		const incoming = call.name === "INCOMING_RINGING";
 		return (
-			<div class="call-overlay call-overlay-ringing" role="dialog" aria-modal="true" aria-label={incoming ? "Входящий звонок" : "Исходящий звонок"}>
+			<div class="call-overlay call-overlay-ringing" role="dialog" aria-modal="true" aria-label={incoming ? t("call.incomingAria") : t("call.outgoingAria")}>
 				<RingtoneAudio />
 				<div class="call-overlay-avatar" aria-hidden="true">
 					{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 				</div>
 				<p class="call-overlay-title">
-					{incoming ? `Входящий звонок от ${displayName(call.peerPubkey)}` : `Звоним ${displayName(call.peerPubkey)}…`}
+					{incoming ? t("call.incomingFrom", { name: displayName(call.peerPubkey) }) : t("call.callingTo", { name: displayName(call.peerPubkey) })}
 				</p>
 				<div class="cluster" style={{ justifyContent: "center" }}>
 					{incoming ? (
 						<>
 							<button type="button" class="call-btn-accept" onClick={acceptCall}>
-								Принять
+								{t("contacts.acceptButton")}
 							</button>
 							<button type="button" class="call-btn-reject" onClick={rejectCall}>
-								Отклонить
+								{t("contacts.rejectButton")}
 							</button>
 						</>
 					) : (
 						<button type="button" class="call-btn-reject" onClick={hangupCall}>
-							Отменить
+							{t("contacts.cancelRequestButton")}
 						</button>
 					)}
 				</div>
@@ -179,7 +180,7 @@ export default function CallOverlay() {
 	if (call.name === "CONNECTING") {
 		return (
 			<div class="call-overlay call-overlay-ringing" role="status" aria-live="polite">
-				<p class="call-overlay-title">Соединение с {displayName(call.peerPubkey)}…</p>
+				<p class="call-overlay-title">{t("call.connectingTo", { name: displayName(call.peerPubkey) })}</p>
 			</div>
 		);
 	}
@@ -193,7 +194,7 @@ export default function CallOverlay() {
 				{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 			</div>
 			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
-				<strong>{reconnecting ? "Переподключение…" : `Связь с ${displayName(call.peerPubkey)}`}</strong>
+				<strong>{reconnecting ? t("call.reconnecting") : t("call.connectedWith", { name: displayName(call.peerPubkey) })}</strong>
 				{!reconnecting && connectedAtRef.current && (
 					<span class="cluster" style={{ alignItems: "center" }}>
 						<CallDuration startedAt={connectedAtRef.current} />
@@ -202,24 +203,25 @@ export default function CallOverlay() {
 				)}
 			</div>
 			<RemoteAudio stream={remoteMediaStream.value} />
-			<button type="button" class="call-btn-reject call-bar-hangup" onClick={hangupCall} aria-label="Завершить звонок">
+			<button type="button" class="call-btn-reject call-bar-hangup" onClick={hangupCall} aria-label={t("call.hangupAria")}>
 				<IconPhoneCall />
 			</button>
 		</div>
 	);
 }
 
-function callEndReasonRu(reason) {
-	const map = {
-		no_answer: "не ответили",
-		missed: "пропущен",
-		rejected: "отклонён",
-		cancelled: "отменён",
-		cancelled_by_caller: "отменён звонящим",
-		connect_failed: "не удалось соединиться",
-		hangup: "завершён вами",
-		remote_hangup: "завершён собеседником",
-		connection_lost: "связь потеряна",
-	};
-	return map[reason] || reason;
+const CALL_END_REASON_KEYS = {
+	no_answer: "call.reason.noAnswer",
+	missed: "call.reason.missed",
+	rejected: "call.reason.rejected",
+	cancelled: "call.reason.cancelled",
+	cancelled_by_caller: "call.reason.cancelledByCaller",
+	connect_failed: "call.reason.connectFailed",
+	hangup: "call.reason.hangup",
+	remote_hangup: "call.reason.remoteHangup",
+	connection_lost: "call.reason.connectionLost",
+};
+
+function callEndReasonLabel(reason) {
+	return CALL_END_REASON_KEYS[reason] ? t(CALL_END_REASON_KEYS[reason]) : reason;
 }
