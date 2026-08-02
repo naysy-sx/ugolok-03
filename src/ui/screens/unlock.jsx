@@ -9,6 +9,7 @@ import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
+import HelpContent from "../components/help-content.jsx";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -19,6 +20,14 @@ const MIN_PASSWORD_LENGTH = 8;
 export default function Unlock() {
 	const [step, setStep] = useState("loading");
 	const [accounts, setAccounts] = useState([]);
+
+	// Какой раздел показан в <main> стартовой страницы (не связано с "step" —
+	// тот управляет всем экраном целиком: логин/регистрация/раскрытие мнемоники
+	// и т.п., этот — только контентом <main> ВНУТРИ step === "main").
+	// "temp-chat" — пока заглушка (пользователь: "отдельная масштабная задача"),
+	// "help" — переиспользует ту же справку, что и залогиненный раздел
+	// (см. components/help-content.jsx).
+	const [mainView, setMainView] = useState("home");
 
 	// Какой из виджетов сейчас раскрыт — взаимоисключающе (тот же принцип, что
 	// showRegisterForm()/openLoginFor() в исходном прототипе: открытие одного
@@ -468,12 +477,29 @@ export default function Unlock() {
 					<span class="logo-name">Уголок</span>
 				</div>
 				<nav class="main-nav" aria-label="Главное меню">
-					{/* Пока пустые — приложение под Android будет скачиваться именно
-					    с этой страницы, ссылки займут места заранее. */}
+					{/* Кнопки, не ссылки — переключают содержимое <main> этой же страницы,
+					    не настоящая навигация (тот же принцип, что везде в проекте:
+					    реальное действие — реальный <button>, не div/a с подложной ролью). */}
 					<ul class="nav-links">
-						<li><a href="#">Главная</a></li>
-						<li><a href="#">Возможности</a></li>
-						<li><a href="#">Скачать APK</a></li>
+						<li>
+							<button type="button" class={mainView === "home" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("home")}>
+								Главная
+							</button>
+						</li>
+						<li>
+							<button
+								type="button"
+								class={mainView === "temp-chat" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"}
+								onClick={() => setMainView("temp-chat")}
+							>
+								Временный чат
+							</button>
+						</li>
+						<li>
+							<button type="button" class={mainView === "help" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("help")}>
+								Справка
+							</button>
+						</li>
 					</ul>
 				</nav>
 				{error && (
@@ -612,13 +638,27 @@ export default function Unlock() {
 			</aside>
 
 			<main>
-				<section class="hero-section">
-					<h1>Приватное пространство для общения без центрального сервера</h1>
-					<p class="hero-lead">
-						Уголок — мессенджер на протоколе Nostr с сквозным шифрованием (MLS) для переписки и шифрованием базы
-						данных на устройстве. Работает в локальной сети, без публичного интернета.
-					</p>
-				</section>
+				{mainView === "home" && (
+					<section class="hero-section">
+						<h1>Приватное пространство для общения без центрального сервера</h1>
+						<p class="hero-lead">
+							Уголок — мессенджер на протоколе Nostr с сквозным шифрованием (MLS) для переписки и шифрованием базы
+							данных на устройстве. Работает в локальной сети, без публичного интернета.
+						</p>
+					</section>
+				)}
+				{mainView === "temp-chat" && (
+					<section class="hero-section flow">
+						<h1>Временный чат</h1>
+						<p class="hero-lead">
+							Скоро здесь можно будет создать одноразовую комнату и позвать в неё других гостей — текстом или голосом,
+							без регистрации и без обмена ключами заранее. Комната исчезнет сама через час, если в ней никого не
+							останется.
+						</p>
+						<p class="hero-lead">Раздел ещё не реализован — эта страница появилась раньше самой функции.</p>
+					</section>
+				)}
+				{mainView === "help" && <HelpContent />}
 			</main>
 
 			<footer class="site-footer">

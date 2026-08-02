@@ -928,11 +928,23 @@ button:has(> .icon),
 .auth-layout .nav-links li {
 	margin-block: 0;
 }
-.auth-layout .nav-links a {
+.auth-layout .nav-links a,
+.auth-layout .nav-link-btn {
 	color: var(--fg);
 	text-decoration: none;
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: inherit;
+	font-family: inherit;
+	cursor: pointer;
 }
-.auth-layout .nav-links a:hover {
+.auth-layout .nav-link-btn--active {
+	color: var(--accent);
+	font-weight: 600;
+}
+.auth-layout .nav-links a:hover,
+.auth-layout .nav-link-btn:hover {
 	color: var(--accent);
 }
 
@@ -2840,20 +2852,27 @@ button:has(> .icon),
 }
 
 /* ================================================================== *
- *  Экран "Справка" — рубрикатор + рендер markdown-контента.           *
+ *  Экран "Справка" — рубрикатор + рендер markdown-контента.
+ *  Оба селектора (.app-layout — залогиненный экран, .auth-layout —
+ *  стартовая страница ДО логина) — контент переиспользуется в обоих
+ *  местах (components/help-content.jsx), см. CONTRACTS.md, "Раздел
+ *  Справка".                                                          *
  * ================================================================== */
-.app-layout .help-layout {
+.app-layout .help-layout,
+.auth-layout .help-layout {
 	display: grid;
 	grid-template-columns: 220px 1fr;
 	gap: var(--space-m);
 	align-items: start;
 }
 @media (max-width: 720px) {
-	.app-layout .help-layout {
+	.app-layout .help-layout,
+	.auth-layout .help-layout {
 		grid-template-columns: 1fr;
 	}
 }
-.app-layout .help-rubricator ul {
+.app-layout .help-rubricator ul,
+.auth-layout .help-rubricator ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -2862,7 +2881,8 @@ button:has(> .icon),
 	position: sticky;
 	top: var(--space-s);
 }
-.app-layout .help-topic-btn {
+.app-layout .help-topic-btn,
+.auth-layout .help-topic-btn {
 	display: block;
 	width: 100%;
 	text-align: left;
@@ -2874,16 +2894,19 @@ button:has(> .icon),
 	cursor: pointer;
 	font-size: var(--step--1);
 }
-.app-layout .help-topic-btn:hover {
+.app-layout .help-topic-btn:hover,
+.auth-layout .help-topic-btn:hover {
 	background-color: var(--surface-raised);
 }
-.app-layout .help-topic-btn--active {
+.app-layout .help-topic-btn--active,
+.auth-layout .help-topic-btn--active {
 	background-color: var(--surface-raised);
 	border-color: var(--border);
 	font-weight: 600;
 	color: var(--accent-2);
 }
-.app-layout .help-content {
+.app-layout .help-content,
+.auth-layout .help-content {
 	min-width: 0;
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--border);
@@ -2892,49 +2915,62 @@ button:has(> .icon),
 }
 .app-layout .md-view h1,
 .app-layout .md-view h2,
-.app-layout .md-view h3 {
+.app-layout .md-view h3,
+.auth-layout .md-view h1,
+.auth-layout .md-view h2,
+.auth-layout .md-view h3 {
 	font-family: var(--font-display);
 	letter-spacing: var(--heading-letter-spacing);
 }
-.app-layout .md-view h1 {
+.app-layout .md-view h1,
+.auth-layout .md-view h1 {
 	font-size: var(--step-2);
 }
-.app-layout .md-view h2 {
+.app-layout .md-view h2,
+.auth-layout .md-view h2 {
 	font-size: var(--step-1);
 	margin-block-start: var(--space-m);
 }
-.app-layout .md-view h3 {
+.app-layout .md-view h3,
+.auth-layout .md-view h3 {
 	font-size: var(--step-0);
 	margin-block-start: var(--space-s);
 }
-.app-layout .md-view p {
+.app-layout .md-view p,
+.auth-layout .md-view p {
 	line-height: 1.6;
 }
 .app-layout .md-view ul,
-.app-layout .md-view ol {
+.app-layout .md-view ol,
+.auth-layout .md-view ul,
+.auth-layout .md-view ol {
 	padding-inline-start: var(--space-m);
 	display: grid;
 	gap: var(--space-3xs);
 }
-.app-layout .md-view blockquote {
+.app-layout .md-view blockquote,
+.auth-layout .md-view blockquote {
 	margin: 0;
 	padding-inline-start: var(--space-s);
 	border-inline-start: 3px solid var(--border);
 	color: var(--muted);
 }
-.app-layout .md-view hr {
+.app-layout .md-view hr,
+.auth-layout .md-view hr {
 	border: none;
 	border-block-start: var(--border-width) solid var(--border);
 	margin-block: var(--space-m);
 }
-.app-layout .md-code-inline {
+.app-layout .md-code-inline,
+.auth-layout .md-code-inline {
 	font-family: var(--font-mono);
 	font-size: 0.9em;
 	background-color: var(--surface-raised);
 	padding: 0.1em 0.4em;
 	border-radius: var(--radius-sm, 4px);
 }
-.app-layout .md-code-block {
+.app-layout .md-code-block,
+.auth-layout .md-code-block {
 	font-family: var(--font-mono);
 	font-size: var(--step--1);
 	background-color: var(--surface-raised);
