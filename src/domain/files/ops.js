@@ -5,11 +5,16 @@
 // unit-тестов tree-ops.test.js.
 import { TRASH_ID, liveChildrenOf, nameOwnerInDir } from "./tree.js";
 
+// key/params (этап 65, i18n доменных ошибок) — опциональны, для UI-рендера
+// через errorMessage()/t(); code — как раньше, для программной проверки
+// причины (NAME_TAKEN/CYCLE), не для отображения.
 export class PreconditionError extends Error {
-	constructor(code, message) {
+	constructor(code, message, key, params) {
 		super(message);
 		this.name = "PreconditionError";
 		this.code = code;
+		this.key = key;
+		this.params = params;
 	}
 }
 
@@ -47,7 +52,7 @@ export function targetInsideSubtree(S, n, d) {
 
 export function createFolder(S, parentId, name, newId, label) {
 	if (!nameFree(S, parentId, name)) {
-		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`);
+		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`, "errors.nameTakenInFolder", { name });
 	}
 	return { type: "create", id: newId, kind: "dir", blob: null, parentId, name, origin: null, label };
 }
@@ -61,7 +66,7 @@ export function createFolder(S, parentId, name, newId, label) {
 // digest, но никогда не сможет расшифровать содержимое (найдено живой проверкой).
 export function createFile(S, parentId, name, newId, blob, label, origin = null, fileKeyHex = null) {
 	if (!nameFree(S, parentId, name)) {
-		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`);
+		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`, "errors.nameTakenInFolder", { name });
 	}
 	const fileKey = fileKeyHex !== undefined && fileKeyHex !== null ? { fileKey: fileKeyHex } : {};
 	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label, ...fileKey };
@@ -71,18 +76,18 @@ export function rename(S, id, name, label) {
 	const node = S.nodes.get(id);
 	const parentId = node.par.value;
 	if (!nameFree(S, parentId, name, id)) {
-		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`);
+		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`, "errors.nameTakenInFolder", { name });
 	}
 	return { type: "setName", id, value: name, label };
 }
 
 export function move(S, id, newParentId, label) {
 	if (targetInsideSubtree(S, id, newParentId)) {
-		return new PreconditionError("CYCLE", "Нельзя переместить папку саму в себя или в своё поддерево");
+		return new PreconditionError("CYCLE", "Нельзя переместить папку саму в себя или в своё поддерево", "errors.cannotMoveIntoOwnSubtree");
 	}
 	const name = S.nodes.get(id).name.value;
 	if (!nameFree(S, newParentId, name, id)) {
-		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в целевой папке`);
+		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в целевой папке`, "errors.nameTakenInTargetFolder", { name });
 	}
 	return { type: "setPar", id, value: newParentId, label };
 }

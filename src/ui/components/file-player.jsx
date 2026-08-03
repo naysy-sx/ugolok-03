@@ -4,7 +4,7 @@ import { getCachedManifest, putCachedManifest } from "../../domain/files/store.j
 import { registerPlayerFile, unregisterPlayerFile } from "../../domain/files/player-bridge.js";
 import { getFileKeyFor } from "../signals/files.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -63,7 +63,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 				}
 				setManifest(m);
 			} catch (e) {
-				if (!cancelled) setError(e?.message || String(e));
+				if (!cancelled) setError(errorMessage(e));
 			}
 		})();
 

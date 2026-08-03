@@ -10,6 +10,7 @@ import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { detectSystemLocale } from "./locale-detection.js";
+import { DomainError } from "../errors.js";
 
 // F-SY-03 (TECH.md) — d-tag='settings' буквально, не opaque (не privacy-чувствительно,
 // тот же принцип, что read-status/drafts этапа 26).
@@ -168,7 +169,7 @@ export async function addRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
 export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (settings.relayUrls.length <= 1) {
-		throw new Error("нельзя удалить последний relay — список не может быть пустым");
+		throw new DomainError("нельзя удалить последний relay — список не может быть пустым", "errors.lastRelayCannotBeRemoved");
 	}
 	const nextRelayUrls = settings.relayUrls.filter((r) => r.url !== url);
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
@@ -178,14 +179,14 @@ export async function removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish) 
 export async function setRelayRole(ownerPubkey, privKey, dbKey, url, { read, write }, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (!settings.relayUrls.some((r) => r.url === url)) {
-		throw new Error("URL отсутствует в списке — сначала добавьте");
+		throw new DomainError("URL отсутствует в списке — сначала добавьте", "errors.urlNotInList");
 	}
 	const nextRelayUrls = settings.relayUrls.map((r) => (r.url === url ? { url, read, write } : r));
 	if (!nextRelayUrls.some((r) => r.read)) {
-		throw new Error("нельзя оставить список без единого read-relay — нечего будет читать");
+		throw new DomainError("нельзя оставить список без единого read-relay — нечего будет читать", "errors.noReadRelay");
 	}
 	if (!nextRelayUrls.some((r) => r.write)) {
-		throw new Error("нельзя оставить список без единого write-relay — нечего будет публиковать");
+		throw new DomainError("нельзя оставить список без единого write-relay — нечего будет публиковать", "errors.noWriteRelay");
 	}
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, relayUrls: nextRelayUrls }, publish);
 	await publishRelayList(privKey, nextRelayUrls, publish);
@@ -200,7 +201,7 @@ export async function addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
 export async function removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (url === settings.activeBlossomUrl) {
-		throw new Error("нельзя удалить активный Blossom-сервер — сначала переключитесь на другой");
+		throw new DomainError("нельзя удалить активный Blossom-сервер — сначала переключитесь на другой", "errors.cannotRemoveActiveBlossom");
 	}
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, blossomUrls: settings.blossomUrls.filter((u) => u !== url) }, publish);
 }
@@ -208,7 +209,7 @@ export async function removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish
 export async function setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	if (!settings.blossomUrls.includes(url)) {
-		throw new Error("URL отсутствует в списке — сначала добавьте");
+		throw new DomainError("URL отсутствует в списке — сначала добавьте", "errors.urlNotInList");
 	}
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, activeBlossomUrl: url }, publish);
 }
@@ -225,6 +226,7 @@ export class SelfHostedFingerprintMismatchError extends Error {
 		this.name = "SelfHostedFingerprintMismatchError";
 		this.previousFingerprint = previousFingerprint;
 		this.newFingerprint = newFingerprint;
+		this.key = "errors.selfHostedFingerprintMismatch";
 	}
 }
 

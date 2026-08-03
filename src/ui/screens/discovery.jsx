@@ -15,7 +15,7 @@ import { discoveryProfiles, refreshDiscoveryProfiles } from "../signals/discover
 import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import Screen from "../components/screen.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 // Раздел "Обзор" (этап 46, CONTRACTS.md/DESIGN.md) — публичное знакомство: тумблер
 // видимости + опциональный список СВОИХ каналов сверху, карточки чужих
@@ -47,7 +47,7 @@ export default function Discovery() {
 				const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
 				await ensureProfilesFetched(pubkeys, fetchProfiles).catch(() => {});
 			})
-			.catch((e) => setError(e?.message || String(e)));
+			.catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey]);
 
 	async function persist(next) {
@@ -55,7 +55,7 @@ export default function Discovery() {
 		try {
 			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -90,7 +90,7 @@ export default function Discovery() {
 				await sendContactRequestAction(pubkey);
 			}
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}

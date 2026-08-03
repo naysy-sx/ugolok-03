@@ -26,7 +26,7 @@ import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -57,7 +57,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 			await onAdd(trimmed);
 			setNewUrl("");
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -66,7 +66,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 		try {
 			await fn();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -144,7 +144,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 			await onAdd(trimmed);
 			setNewUrl("");
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -153,7 +153,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 		try {
 			await fn();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -261,7 +261,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 				}
 				setError(t("profile.selfHosted.pairingCancelled"));
 			} else {
-				setError(err?.message || String(err));
+				setError(errorMessage(err));
 			}
 		} finally {
 			setBusy(false);
@@ -283,7 +283,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 			setStatus(null);
 			await refresh();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -296,7 +296,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 		try {
 			setStatus(await fetchAgentStatus(settings.selfHostedServer));
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -487,7 +487,7 @@ export default function Profile() {
 			const result = await publish(event);
 			setPublishStatus(result.ok ? "" : t("profile.notPublishedReason", { reason: result.reason || t("profile.relayRejected") }));
 		} catch (err) {
-			setPublishStatus(t("profile.notPublishedReason", { reason: err?.message || String(err) }));
+			setPublishStatus(t("profile.notPublishedReason", { reason: errorMessage(err) }));
 		}
 	}
 
@@ -555,7 +555,7 @@ export default function Profile() {
 			bumpProfileActivity();
 			await publishAvatarBytes(bytes, manifest.mime);
 		} catch (err) {
-			setAvatarError(err?.message || String(err));
+			setAvatarError(errorMessage(err));
 		}
 	}
 
@@ -582,7 +582,7 @@ export default function Profile() {
 			const result = await publish(event);
 			setPublishStatus(result.ok ? "" : t("profile.notPublishedReason", { reason: result.reason || t("profile.relayRejected") }));
 		} catch (err) {
-			setPublishStatus(t("profile.notPublishedReason", { reason: err?.message || String(err) }));
+			setPublishStatus(t("profile.notPublishedReason", { reason: errorMessage(err) }));
 		}
 	}
 

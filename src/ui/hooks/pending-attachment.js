@@ -2,6 +2,7 @@ import { useState, useRef } from "preact/hooks";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -22,7 +23,7 @@ export function usePendingAttachment() {
 			validateAttachment({ mime: picked.type, size: picked.size });
 			setError("");
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 

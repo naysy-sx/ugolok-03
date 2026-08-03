@@ -3,7 +3,7 @@ import { db } from "../../core/store/database.js";
 import { ACTIONS, can } from "../../domain/auth/bitset.js";
 import { buildPermissionEvent, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { publish, nextLamportTick } from "../signals/transport.js";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 // Реального resource-picker'а (каналы) ещё нет (этапы 28/30) — свободный текстовый
 // ввод идентификатора ресурса сознательно временный, не выдаётся за готовый продукт.
@@ -54,7 +54,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 			setMask(row?.mask ?? 0);
 			setStatus(t("profile.savedStatus"));
 		} catch (e) {
-			setError(e?.message || String(e));
+			setError(errorMessage(e));
 		}
 	}
 

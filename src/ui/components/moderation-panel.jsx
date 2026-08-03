@@ -10,7 +10,7 @@ import {
 	banMember,
 } from "../../domain/content/moderation.js";
 import { ContactIdentity } from "../screens/contacts.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const REASON_LABEL_KEYS = { report: "moderation.reasonLabel.report", ignore: "moderation.reasonLabel.ignore" };
 
@@ -30,7 +30,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	}
 
 	useEffect(() => {
-		refresh().catch((e) => setError(e?.message || String(e)));
+		refresh().catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey, channelId, messagingActivity.value]);
 
 	async function handleBan(targetPubkey) {
@@ -41,7 +41,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 			await banMember(ownerPubkey, privKey, dbKey, channelId, targetPubkey, publish);
 			await refresh();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}

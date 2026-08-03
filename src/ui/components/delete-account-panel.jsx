@@ -4,7 +4,7 @@ import { deleteAccountEverywhere } from "../../domain/identity/account-deletion.
 import { lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -56,7 +56,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 			await deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, BLOSSOM_URL);
 			lock();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 			setBusy(false);
 		}
 	}

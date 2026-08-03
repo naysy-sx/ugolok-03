@@ -2,6 +2,7 @@ import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 const DELETE_MARKER_PREFIX = "__ugolok_delete__:";
 
@@ -21,7 +22,7 @@ export async function deleteMessage(ownerPubkey, privKey, dbKey, contactPubkey, 
 	// [ownerPubkey+chatId+msgId] (db.version(4), owner-scoping — см. database.js).
 	const raw = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
 	if (!raw || raw.senderPubkey !== ownerPubkey) {
-		throw new Error("нельзя удалить чужое сообщение");
+		throw new DomainError("нельзя удалить чужое сообщение", "errors.cannotDeleteOthersMessage");
 	}
 	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildDeletionText(msgId), lamportTs, publish);
 	// text — sensitive поле (CONTRACTS.md, Tier 1): decrypt-merge-encrypt, не modify()

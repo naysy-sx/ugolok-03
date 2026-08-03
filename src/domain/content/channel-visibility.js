@@ -6,11 +6,13 @@ import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { sendViewGrant } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 

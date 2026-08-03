@@ -6,6 +6,7 @@ import { pickLatest } from '../../core/sync/lww.js';
 import { getProfile, updateProfile } from '../../core/crypto/keystore.js';
 import { uploadBlob, checkUploadRequirements } from '../files/blob.js';
 import { validateAttachment } from '../files/attachment-validation.js';
+import { DomainError } from '../errors.js';
 
 // Этап 37 — правка контракта (было: picture сознательно не писалась, этап 26,
 // "локальный stand-in до Blossom"). JSON.stringify сам опускает undefined-поля —
@@ -36,7 +37,8 @@ export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, o
   const sha256Hex = bytesToHex(sha256(fileBytes));
   const requirements = await checkUploadRequirements(serverUrl, { sha256Hex, mime, size: fileBytes.length }, privateKey, options);
   if (!requirements.ok) {
-    throw new Error('Blossom-сервер отклонил файл' + (requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : ''));
+    const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
+    throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
   }
   const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
   return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);

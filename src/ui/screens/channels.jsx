@@ -19,7 +19,7 @@ import { activeChannelId, openChannel } from "../signals/channel-nav.js";
 import ChannelDetail from "./channel.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
-import { t, currentLocale } from "../signals/i18n.js";
+import { t, currentLocale, errorMessage } from "../signals/i18n.js";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -133,7 +133,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			validateAttachment({ mime: file.type, size: file.size });
 			setAvatarError("");
 		} catch (err) {
-			setAvatarError(err?.message || String(err));
+			setAvatarError(errorMessage(err));
 		}
 	}
 
@@ -169,7 +169,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			await refreshChannelContentSubscription(ownerPubkey, dbKey);
 			onCreated();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -287,7 +287,7 @@ function ChannelsList() {
 	const [busy, setBusy] = useState(false);
 
 	useEffect(() => {
-		ensureConnected(ownerPubkey, privKey, dbKey).catch((e) => setError(e?.message || String(e)));
+		ensureConnected(ownerPubkey, privKey, dbKey).catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey]);
 
 	async function refreshLists() {
@@ -299,7 +299,7 @@ function ChannelsList() {
 	// messagingActivity — тот же диспетчерский сигнал, что чат/контакты (этап 27,
 	// находка 2): transport.js бампает его на новый VIEW-грант/метаданные/allowlist.
 	useEffect(() => {
-		refreshLists().catch((e) => setError(e?.message || String(e)));
+		refreshLists().catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey, messagingActivity.value]);
 
 	async function handleSubscribe(channelId) {
@@ -308,7 +308,7 @@ function ChannelsList() {
 		try {
 			await subscribeToChannelAction(ownerPubkey, privKey, channelId, publish);
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}

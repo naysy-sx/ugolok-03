@@ -53,7 +53,7 @@ import IconPeople from "../icons/people.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import FilePlayer from "../components/file-player.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage as translateErrorMessage } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
@@ -155,7 +155,7 @@ const STATUS_LABEL_KEYS = {
 };
 
 function errorMessage(result) {
-	return result instanceof PreconditionError ? result.message : null;
+	return result instanceof PreconditionError ? translateErrorMessage(result) : null;
 }
 
 // Пока БЕЗ виртуализации (задача 3.2) и миниатюр (3.8) — вторая волна
@@ -336,7 +336,7 @@ export default function Files() {
 				privateKey: privKeySig.value,
 			});
 			if (result instanceof Error) {
-				setShareError(result.message || t("files.shareFailedGeneric"));
+				setShareError(translateErrorMessage(result) || t("files.shareFailedGeneric"));
 				return;
 			}
 			setShareDialogTarget(null);

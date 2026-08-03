@@ -3,6 +3,7 @@ import { bytesToHex, concatBytes } from "@noble/hashes/utils.js";
 import { generateFileKey, encryptChunk, decryptChunk } from "./crypto.js";
 import { planChunks, rangeToChunks } from "./manifest.js";
 import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } from "./blob.js";
+import { DomainError } from "../errors.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
 
@@ -42,7 +43,8 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal };
 	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }, privateKey, uploadOptions);
 	if (!requirements.ok) {
-		throw new Error('Blossom-сервер отклонил файл' + (requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : ''));
+		const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
+		throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
 	}
 	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, uploadOptions);
 
@@ -72,7 +74,7 @@ export async function getManifest(manifestDigest, { serverUrl, fetchImpl } = {})
 	const bytes = await downloadBlob(serverUrl, manifestDigest, options);
 	const actualDigest = bytesToHex(sha256(bytes));
 	if (actualDigest !== manifestDigest) {
-		throw new Error("Blossom-сервер вернул подменённый манифест (digest не совпадает)");
+		throw new DomainError("Blossom-сервер вернул подменённый манифест (digest не совпадает)", "errors.blossomManifestTampered");
 	}
 	return JSON.parse(new TextDecoder().decode(bytes));
 }
@@ -104,7 +106,7 @@ export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetch
 	const cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
 	const actualDigest = bytesToHex(sha256(cipherChunk));
 	if (actualDigest !== manifest.chunks[chunkIndex]) {
-		throw new Error(`Blossom-сервер вернул подменённый чанк ${chunkIndex} (digest не совпадает)`);
+		throw new DomainError(`Blossom-сервер вернул подменённый чанк ${chunkIndex} (digest не совпадает)`, "errors.blossomChunkTampered", { chunkIndex });
 	}
 	return decryptChunk(cipherChunk, fileKey, chunkIndex);
 }

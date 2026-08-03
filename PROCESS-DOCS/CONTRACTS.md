@@ -10690,3 +10690,90 @@ it/tr, « {{x}} » с пробелами fr, „ " de/pl, 「」 ja, ‘’ nl, 
 юнит-тестами. Оба аккаунта удалены после проверки.
 
 Regression: 1272/1272. Сборка: 697.88 КБ gzip (было 691, лимит 1304).
+
+## Этап 65 — i18n доменных ошибок
+
+Пользователь выбрал охват: только user-facing (не внутренние
+протокольные/FSM-инварианты вроде relay-pool.js/mls-session.js/
+keystore.js/machine.js/nip44.js — они уже частично на английском и в
+норме не долетают до пользователя, сигнализируют баг, а не
+ожидаемый UX-сценарий).
+
+### `src/domain/errors.js` (новый файл)
+
+`class DomainError extends Error { constructor(message, key, params) }`
+— message НЕ меняется (существующие тесты матчат его regex'ом на
+фрагмент через `assert.throws(fn, /паттерн/)`, factual-проверка
+показала: НИ ОДНОГО `assert.equal(error.message, "точный текст")` во
+всей кодовой базе нет — риск оказался ниже, чем предполагалось на
+момент планирования, но подход "message не трогать" сохранён как
+самый безопасный). key/params — ДОПОЛНИТЕЛЬНЫЕ поля для UI.
+
+Тот же приём применён к уже существующим кастомным классам:
+`PreconditionError` (files/ops.js — `return new PreconditionError(code,
+message, key, params)`, НЕ throw, см. этап 53 §5.2) и
+`SelfHostedFingerprintMismatchError` (settings/ui-settings.js — key
+фиксирован в конструкторе, у неё message не параметризуется извне).
+
+### `errorMessage(err)` (src/ui/signals/i18n.js)
+
+`err?.key ? t(err.key, err.params) : err?.message || String(err)` —
+единая точка вместо разбросанного по ~15 файлам UI (`screens/*.jsx` +
+`components/*.jsx` + `hooks/pending-attachment.js`) паттерна
+`err?.message || String(err)`. `diagnostics.jsx` НЕ тронут — пользователь
+ранее (этап 64ч2) явно исключил его из i18n ("не трогай, потом
+переделаем"), решение распространено и на доменные ошибки в этом файле.
+
+`files.jsx` уже имел одноимённую локальную функцию `errorMessage(result)`
+(PreconditionError-специфичную) — переименована внутренняя логика на
+вызов импортированного хелпера под алиасом `translateErrorMessage`, имя
+`errorMessage` в файле сохранено (сигнатура/вызовы снаружи не менялись).
+
+### Разделение "переводимо целиком" / "чужой контент внутри"
+
+Общий паттерн `requirePublishOk` (буквально продублирован в 10 файлах:
+channel.js, moderation.js, channel-chat.js, channel-access.js,
+channel-visibility.js, comments.js, post.js, devices.js, chat.js,
+share.js + 2 инлайн-версии — drafts.js, read-status.js) — `result.reason`
+(текст ОТ relay, недоверенный/непереводимый) остаётся сырым `throw new
+Error(result.reason)`, а статичный fallback "relay отклонил публикацию"
+стал `DomainError` с ключом `errors.relayRejected`:
+```js
+if (result.reason) throw new Error(result.reason);
+throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
+```
+Тот же принцип — `identity/profile.js`/`files/content.js` (Blossom
+`status`/`reason` от сервера — параметр `detail`, сам текст не
+переводится, только каркас "Blossom-сервер отклонил файл{{detail}}"),
+`selfhost/pairing.js` (`err.message` вложенного network-исключения —
+параметр `message`, статус-код ответа — параметр `status`).
+
+### Сознательно НЕ переведено (в т.ч. внутри "user-facing" файлов)
+
+- `messaging/chat.js:159,183` — developer-hint тексты ("вызовите
+  ensureOwnKeyPackagePublished() раньше") — сигнал программисту о
+  неверном порядке вызовов, не user-facing по смыслу, несмотря на файл.
+- `files/blob.js` (Range/206/sha256 — HTTP-протокольный debug-текст).
+- `files/content.js`'s `DOMException("Загрузка отменена", "AbortError")`
+  — проверено: `files.jsx:252` перехватывает по `err.name==="AbortError"`
+  и тихо гасит (`break`), пользователь текст никогда не видит.
+- `diagnostics.jsx` целиком (решение пользователя, этап 64ч2).
+
+### Ключи
+
+30 уникальных ключей в неймспейсе `errors.*` × 12 языков (кавычки —
+по установленной ранее конвенции на локаль, этап 64: « » en/es/pt/it/tr,
+« {{x}} » с пробелами fr, „ " de/pl, 「」 ja, ‘’ nl, "" zh, «» ru).
+
+Живая проверка: throwaway-аккаунт на японской локали, две реальные
+доменные ошибки спровоцированы вручную в браузере через локальный
+relay — удаление единственного relay в Настройках
+(`errors.lastRelayCannotBeRemoved`, статичная фраза) и создание папки
+с уже занятым именем в Файлах (`errors.nameTakenInFolder`, с
+параметром `{{name}}`) — обе отрендерились корректно на японском
+("最後のrelayは削除できません…", "名前「lost+found」はこのフォルダで既に
+使用されています"). Аккаунт удалён после проверки.
+
+Regression: 1272/1272 (message ни у одной ошибки не изменился —
+предсказуемо, ни один тест не потребовал правки). Сборка: 705.73 КБ
+gzip (было 697.88, лимит 1304).

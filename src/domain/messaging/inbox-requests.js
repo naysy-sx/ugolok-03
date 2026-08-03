@@ -2,6 +2,7 @@ import { db } from "../../core/store/database.js";
 import { acceptWelcome } from "./chat.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { INBOX_REQUESTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 // Этап 49-довесок (найдено живым E2E, этап 50) — таблица contacts вытеснена
 // единой contactRelationships (CONTACTS-FSM.md), но остаётся в схеме и
@@ -27,7 +28,7 @@ export async function listInboxRequests(ownerPubkey, dbKey) {
 
 export async function acceptInboxRequest(ownerPubkey, dbKey, senderPubkey) {
 	const raw = await db.table("inboxRequests").get([ownerPubkey, senderPubkey]);
-	if (!raw) throw new Error("нет такого входящего запроса");
+	if (!raw) throw new DomainError("нет такого входящего запроса", "errors.noSuchInboxRequest");
 	const row = fromEncryptedRow(raw, dbKey);
 	await acceptWelcome(ownerPubkey, dbKey, senderPubkey, row.welcomeWireBytes);
 	await db.table("inboxRequests").delete([ownerPubkey, senderPubkey]);

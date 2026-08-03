@@ -1,7 +1,7 @@
 import { publish } from "../signals/transport.js";
 import { reportContent, ignoreMember } from "../../domain/content/moderation.js";
 import { pushToast } from "../signals/toasts.js";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 // Кнопки "Пожаловаться"/"Игнорировать" у комментария/сообщения чата (не у СВОИХ —
 // проверка isOwnContent на уровне вызывающего кода, CommentNode/ChannelChat).
@@ -26,7 +26,7 @@ export default function ModerationActions({ viewerPubkey, viewerPrivKey, channel
 			);
 			pushToast({ title: t("moderation.reportSentToast") });
 		} catch (err) {
-			pushToast({ title: t("moderation.reportFailedToast"), body: err?.message || String(err) });
+			pushToast({ title: t("moderation.reportFailedToast"), body: errorMessage(err) });
 		}
 	}
 
@@ -36,7 +36,7 @@ export default function ModerationActions({ viewerPubkey, viewerPrivKey, channel
 			await ignoreMember(viewerPubkey, viewerPrivKey, channelOwnerPubkey, { channelId, targetPubkey, contentType, contentId, contentText }, publish);
 			pushToast({ title: t("moderation.memberIgnoredToast") });
 		} catch (err) {
-			pushToast({ title: t("moderation.ignoreFailedToast"), body: err?.message || String(err) });
+			pushToast({ title: t("moderation.ignoreFailedToast"), body: errorMessage(err) });
 		}
 	}
 

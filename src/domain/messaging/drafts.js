@@ -5,6 +5,7 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { db } from '../../core/store/database.js';
 import { toEncryptedRow, fromEncryptedRow } from '../../core/store/encrypted-table.js';
 import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../../core/store/table-fields.js';
+import { DomainError } from '../errors.js';
 
 export function buildDraftEvent(privKey, { chatId, text }, createdAt = Math.floor(Date.now() / 1000)) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
@@ -40,7 +41,8 @@ export async function saveDraft(ownerPubkey, privKey, dbKey, contactPubkey, text
   const event = buildDraftEvent(privKey, { chatId: contactPubkey, text });
   const result = await publish(event);
   if (!result.ok) {
-    throw new Error(result.reason || 'relay отклонил публикацию');
+    if (result.reason) throw new Error(result.reason);
+    throw new DomainError('relay отклонил публикацию', 'errors.relayRejected');
   } else {
     await foldDraft(event, privKey, dbKey);
   }

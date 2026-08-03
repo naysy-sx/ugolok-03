@@ -5,11 +5,13 @@ import { buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { transitionPost } from "./post-machine.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { POSTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 
@@ -43,9 +45,9 @@ export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, att
 // не partial .update() (тот же класс находки, что messages/edits.js).
 export async function updateDraftPost(ownerPubkey, dbKey, postId, { text, attachments }) {
 	const raw = await db.table("posts").get([ownerPubkey, postId]);
-	if (!raw) throw new Error("пост не найден");
+	if (!raw) throw new DomainError("пост не найден", "errors.postNotFound");
 	if (raw.status !== "draft") {
-		throw new Error("редактировать можно только черновик (unpublish уже опубликованный, затем редактировать)");
+		throw new DomainError("редактировать можно только черновик (unpublish уже опубликованный, затем редактировать)", "errors.onlyDraftEditable");
 	}
 	const merged = { ...fromEncryptedRow(raw, dbKey), text, attachments };
 	await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
@@ -56,7 +58,7 @@ export async function updateDraftPost(ownerPubkey, dbKey, postId, { text, attach
 // параметризованно-replaceable, NIP-01) заменяет предыдущую версию у всех читателей.
 async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsmEvent, publish) {
 	const raw = await db.table("posts").get([ownerPubkey, postId]);
-	if (!raw) throw new Error("пост не найден");
+	if (!raw) throw new DomainError("пост не найден", "errors.postNotFound");
 	const newStatus = transitionPost(raw.status, fsmEvent); // бросает на недопустимый переход
 	const row = fromEncryptedRow(raw, dbKey); // text/attachments — sensitive, нужны для republish-контента
 
@@ -104,7 +106,7 @@ export async function unpublishPost(ownerPubkey, ownerPrivKey, dbKey, postId, pu
 // отзывать на relay, только локальная отметка.
 export async function deletePost(ownerPubkey, ownerPrivKey, postId, publish) {
 	const row = await db.table("posts").get([ownerPubkey, postId]);
-	if (!row) throw new Error("пост не найден");
+	if (!row) throw new DomainError("пост не найден", "errors.postNotFound");
 	if (row.status !== "draft") {
 		const dTag = `${row.channelId}:${postId}`;
 		const event = buildAddressableDeletionEvent(ownerPrivKey, 30061, dTag);

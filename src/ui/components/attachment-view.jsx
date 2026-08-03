@@ -8,7 +8,7 @@ import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
@@ -65,7 +65,7 @@ function ImageAttachment({ attachment }) {
 				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
-				if (!cancelled) setError(err?.message || String(err));
+				if (!cancelled) setError(errorMessage(err));
 			});
 		// URL НЕ отзывается здесь — им теперь владеет attachment-memory-cache.js
 		// (вытесняется по LRU/бюджету или полностью в lock()), не жизненный цикл
@@ -131,7 +131,7 @@ function AudioAttachment({ attachment }) {
 				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
-				if (!cancelled) setError(err?.message || String(err));
+				if (!cancelled) setError(errorMessage(err));
 			});
 		return () => {
 			cancelled = true;
@@ -179,7 +179,7 @@ function VideoAttachment({ attachment }) {
 				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
 			})
 			.catch((err) => {
-				if (!cancelled) setError(err?.message || String(err));
+				if (!cancelled) setError(errorMessage(err));
 			});
 		return () => {
 			cancelled = true;
@@ -251,7 +251,7 @@ export function AttachmentDownloadLink({ attachment }) {
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}

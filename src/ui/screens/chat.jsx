@@ -49,7 +49,7 @@ import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentPreview from "../components/attachment-preview.jsx";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
@@ -92,7 +92,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 					await refreshProfiles(allPubkeys, fetchProfiles).catch(() => {});
 				}
 			} catch (err) {
-				if (!cancelled) setListError(err?.message || String(err));
+				if (!cancelled) setListError(errorMessage(err));
 			}
 		}
 		refresh();
@@ -109,7 +109,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 		try {
 			await fn();
 		} catch (err) {
-			setListError(err?.message || String(err));
+			setListError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -403,7 +403,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			// Файл ВСЁ РАВНО показывается (AttachmentPreview покажет причину отказа) —
 			// пользователь должен понимать, ЧТО он выбрал и почему это не пройдёт, а не
 			// молча ничего не происходит.
-			setAttachmentError(err?.message || String(err));
+			setAttachmentError(errorMessage(err));
 		}
 	}
 
@@ -439,7 +439,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_SERVER_URL });
 			applySelectedFile(new File([bytes], node.displayName, { type: manifest.mime }), { manifestDigest: node.blob, fileKey, manifest });
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -459,7 +459,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			voiceRecorderRef.current = recorder;
 			setRecordingState("recording");
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -470,7 +470,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			setRecordedVoiceBlob(blob);
 			setRecordingState("recorded");
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 			setRecordingState("idle");
 		} finally {
 			voiceRecorderRef.current = null;
@@ -585,7 +585,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
 			await reloadWindow();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setUploadingAttachment(false);
 			busyRef.current = false;
@@ -602,7 +602,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publishToChatPartner);
 			await reloadWindow();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -616,7 +616,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await deleteMessageForMeAction(ownerPubkey, contactPubkey, msgId);
 			await reloadWindow();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -626,7 +626,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await clearChatHistoryAction(ownerPubkey, contactPubkey);
 			await reloadWindow();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -643,7 +643,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await editChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publishToChatPartner);
 			await reloadWindow();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -802,7 +802,7 @@ export default function Chat() {
 	useEffect(() => {
 		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(() => refreshLiveProfileSubscription(ownerPubkey))
-			.catch((e) => setConnectionError(e?.message || String(e)));
+			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
 
 	if (activeChatPubkey.value) {

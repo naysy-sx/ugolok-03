@@ -41,6 +41,16 @@ export function t(key, vars) {
 	return interpolate(value, vars);
 }
 
+// Этап 65 — доменные ошибки (DomainError/PreconditionError/
+// SelfHostedFingerprintMismatchError) несут key/params РЯДОМ с message
+// (см. domain/errors.js) — единая точка для UI-катч-блоков экранов вместо
+// разбросанного err?.message || String(err). key есть -> перевод в текущей
+// локали; key нет (ошибка не из "переводимого" списка — например, чужой
+// текст от relay) -> message как раньше, без изменений в поведении.
+export function errorMessage(err) {
+	return err?.key ? t(err.key, err.params) : err?.message || String(err);
+}
+
 const PLURAL_RULES_CACHE = {};
 function getPluralRules(locale) {
 	if (!PLURAL_RULES_CACHE[locale]) PLURAL_RULES_CACHE[locale] = new Intl.PluralRules(locale);

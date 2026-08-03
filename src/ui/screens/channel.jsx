@@ -32,7 +32,7 @@ import IconPencil from "../icons/pencil.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import IconSend from "../icons/send.jsx";
 import IconCross from "../icons/cross.jsx";
-import { t, tPlural } from "../signals/i18n.js";
+import { t, tPlural, errorMessage } from "../signals/i18n.js";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -74,7 +74,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			validateAttachment({ mime: file.type, size: file.size });
 			setAvatarError("");
 		} catch (err) {
-			setAvatarError(err?.message || String(err));
+			setAvatarError(errorMessage(err));
 		}
 	}
 
@@ -93,7 +93,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
 			onSaved();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -108,7 +108,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			await deleteChannel(ownerPubkey, privKey, dbKey, channelId, publish);
 			onDeleted();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 			setBusy(false);
 		}
 	}
@@ -190,7 +190,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -251,7 +251,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, text, attachments, publish);
 			onSubmitted();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -449,7 +449,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 	}
 
 	useEffect(() => {
-		if (expanded) refreshComments().catch((e) => setError(e?.message || String(e)));
+		if (expanded) refreshComments().catch((e) => setError(errorMessage(e)));
 	}, [expanded, ownerPubkey, post.id, messagingActivity.value]);
 
 	// Этап 47-довесок-3 — клик по уведомлению о посте/комментарии/ответе передаёт
@@ -475,7 +475,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 			await fn();
 			onPostChanged();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 
@@ -590,7 +590,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	}
 
 	useEffect(() => {
-		refresh().catch((e) => setError(e?.message || String(e)));
+		refresh().catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey, channelId, messagingActivity.value]);
 
 	async function handleLoadMore() {

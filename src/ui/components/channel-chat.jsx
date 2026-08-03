@@ -13,7 +13,7 @@ import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
@@ -43,7 +43,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			attachment.reset();
 			onSent();
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		} finally {
 			setBusy(false);
 		}
@@ -108,7 +108,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	}
 
 	useEffect(() => {
-		refresh().catch((e) => setError(e?.message || String(e)));
+		refresh().catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey, channelId, messagingActivity.value]);
 
 	useEffect(() => {

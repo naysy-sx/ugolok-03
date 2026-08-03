@@ -8,6 +8,7 @@ import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { sendViewGrant } from "./channel-access.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_REPORTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 // DESIGN.md, этап 33 — следующий свободный parameterized-replaceable kind после
 // общего чата (30063). Контент шифруется channelKey[v_OLD] (не v_new!) — единственный
@@ -23,7 +24,8 @@ export const CHANNEL_REPORT_KIND = 3003;
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 
@@ -92,7 +94,7 @@ export async function getIgnoredSet(viewerPubkey, channelId) {
 // ротация и уведомление всё равно применяются).
 export async function banMember(ownerPubkey, ownerPrivKey, dbKey, channelId, targetPubkey, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!channelRow) throw new Error("канал не найден");
+	if (!channelRow) throw new DomainError("канал не найден", "errors.channelNotFound");
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const oldKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 	const vOld = meta.currentVersion;

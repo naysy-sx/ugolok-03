@@ -41,7 +41,7 @@ import {
 } from "../signals/contacts.js";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 // F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
@@ -120,7 +120,7 @@ export default function Contacts() {
 				// было уйти и вернуться (только тогда refreshProfiles вызывался заново).
 				await refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 			})
-			.catch((e) => setConnectionError(e?.message || String(e)));
+			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
 
 	// F-CT-04, этап 49 — сигналы (contacts/incomingRequests/outgoingRequests/
@@ -162,7 +162,7 @@ export default function Contacts() {
 			await sendContactRequestAction(npubInput, "");
 			setNpubInput("");
 		} catch (err) {
-			setAddError(err?.message || String(err));
+			setAddError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -177,7 +177,7 @@ export default function Contacts() {
 		try {
 			await acceptContactRequestAction(peerPubkey);
 		} catch (err) {
-			setRowError(err?.message || String(err));
+			setRowError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -192,7 +192,7 @@ export default function Contacts() {
 		try {
 			await rejectContactRequestAction(peerPubkey);
 		} catch (err) {
-			setRowError(err?.message || String(err));
+			setRowError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -209,7 +209,7 @@ export default function Contacts() {
 			await createGroupAction(ownerPubkey, privKey, dbKey, newGroupName, publish);
 			setNewGroupName("");
 		} catch (err) {
-			setGroupError(err?.message || String(err));
+			setGroupError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -237,7 +237,7 @@ export default function Contacts() {
 		try {
 			await fn();
 		} catch (err) {
-			setRowError(err?.message || String(err));
+			setRowError(errorMessage(err));
 		} finally {
 			busyRef.current = false;
 			setBusy(false);

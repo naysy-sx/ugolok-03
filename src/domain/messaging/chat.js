@@ -22,6 +22,7 @@ import { getOrCreateDeviceId } from "../identity/device.js";
 import { enqueue } from "../../core/store/outbox.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -41,7 +42,8 @@ export function computeGroupId(pubkeyHexA, pubkeyHexB) {
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 

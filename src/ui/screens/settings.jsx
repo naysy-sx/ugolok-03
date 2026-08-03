@@ -9,7 +9,7 @@ import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/
 import { ContactIdentity } from "./contacts.jsx";
 import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
-import { SUPPORTED_LOCALES, setLocale, t } from "../signals/i18n.js";
+import { SUPPORTED_LOCALES, setLocale, t, errorMessage } from "../signals/i18n.js";
 import Screen from "../components/screen.jsx";
 import MnemonicReveal from "../components/mnemonic-reveal.jsx";
 import DeleteAccountPanel from "../components/delete-account-panel.jsx";
@@ -99,7 +99,7 @@ export default function Settings() {
 		try {
 			await saveUiSettings(ownerPubkey, privKey, dbKey, next, publish);
 		} catch (err) {
-			setError(err?.message || String(err));
+			setError(errorMessage(err));
 		}
 	}
 

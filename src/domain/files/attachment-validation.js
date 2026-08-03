@@ -1,3 +1,5 @@
+import { DomainError } from "../errors.js";
+
 export const ALLOWED_MIME_TYPES = new Set([
 	"image/jpeg", "image/png", "image/gif", "image/webp",
 	"video/mp4", "video/webm",
@@ -13,10 +15,10 @@ export const MAX_SANITY_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1 ГБ
 
 export function validateAttachment({ mime, size }) {
 	if (!ALLOWED_MIME_TYPES.has(mime)) {
-		throw new Error(`недопустимый тип файла: ${mime}`);
+		throw new DomainError(`недопустимый тип файла: ${mime}`, "errors.invalidFileType", { mime });
 	}
 
 	if (size > MAX_SANITY_FILE_SIZE) {
-		throw new Error(`файл превышает лимит размера`);
+		throw new DomainError(`файл превышает лимит размера`, "errors.fileTooLarge");
 	}
 }

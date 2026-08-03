@@ -8,6 +8,7 @@ import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -15,7 +16,10 @@ function encodeBase64(bytes) {
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
-	if (!result.ok) throw new Error(result.reason || "relay отклонил публикацию");
+	if (!result.ok) {
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
+	}
 }
 
 // Добавляет один sibling-KeyPackage в ОДНУ группу. Вынесено в отдельную функцию, чтобы

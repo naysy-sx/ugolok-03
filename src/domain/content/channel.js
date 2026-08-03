@@ -14,11 +14,13 @@ import { buildAddressableDeletionEvent } from "../events/handlers.js";
 import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 
@@ -212,9 +214,9 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 // не ждёт собственное relay-эхо для своего же UI.
 export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish) {
 	const raw = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!raw) throw new Error("канал не найден");
+	if (!raw) throw new DomainError("канал не найден", "errors.channelNotFound");
 	const existing = fromEncryptedRow(raw, dbKey);
-	if (existing.role !== "owner") throw new Error("редактировать канал может только владелец");
+	if (existing.role !== "owner") throw new DomainError("редактировать канал может только владелец", "errors.onlyOwnerCanEditChannel");
 
 	// Одна и та же метка времени идёт и в подписанное событие (created_at), и
 	// в updatedAt локальной строки владельца — та же величина, что получат
@@ -266,9 +268,9 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 // Владелец не ждёт собственное эхо — deleteChannelLocally применяется сразу же.
 export async function deleteChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, publish) {
 	const raw = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!raw) throw new Error("канал не найден");
+	if (!raw) throw new DomainError("канал не найден", "errors.channelNotFound");
 	const existing = fromEncryptedRow(raw, dbKey);
-	if (existing.role !== "owner") throw new Error("удалить канал может только владелец");
+	if (existing.role !== "owner") throw new DomainError("удалить канал может только владелец", "errors.onlyOwnerCanDeleteChannel");
 
 	const event = buildAddressableDeletionEvent(ownerPrivKey, 30060, channelId, [["h", existing.channelTopic]]);
 	await requirePublishOk(publish, event);
@@ -341,7 +343,7 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 
 export async function subscribeToChannelAction(ownerPubkey, ownerPrivKey, channelId, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!channelRow) throw new Error("канал не найден");
+	if (!channelRow) throw new DomainError("канал не найден", "errors.channelNotFound");
 	await sendSubscribeRequest(ownerPrivKey, channelRow.creatorPubkey, channelId, publish);
 }
 

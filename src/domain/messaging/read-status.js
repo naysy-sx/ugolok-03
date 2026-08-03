@@ -7,6 +7,7 @@ import { transitionMessage } from './machine.js';
 import { pickLatest } from '../../core/sync/lww.js';
 import { toEncryptedRow, fromEncryptedRow } from '../../core/store/encrypted-table.js';
 import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../../core/store/table-fields.js';
+import { DomainError } from '../errors.js';
 
 export function buildReadStatusEvent(privKey, { chatId, lastReadLamportTs }, createdAt = Math.floor(Date.now()/1000)) {
   const ownPubHex = bytesToHex(getPublicKey(privKey));
@@ -47,7 +48,10 @@ export async function foldReadStatus(event, privKey, dbKey) {
 export async function markChatAsRead(ownerPubkey, privKey, dbKey, contactPubkey, lastReadLamportTs, publish) {
   const event = buildReadStatusEvent(privKey, { chatId: contactPubkey, lastReadLamportTs });
   const result = await publish(event);
-  if (!result.ok) throw new Error(result.reason || 'relay отклонил публикацию');
+  if (!result.ok) {
+    if (result.reason) throw new Error(result.reason);
+    throw new DomainError('relay отклонил публикацию', 'errors.relayRejected');
+  }
   await foldReadStatus(event, privKey, dbKey);
 }
 

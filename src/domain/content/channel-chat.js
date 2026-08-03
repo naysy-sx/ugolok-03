@@ -4,11 +4,13 @@ import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 
@@ -18,7 +20,7 @@ async function requirePublishOk(publish, event) {
 // как посты/комментарии — сообщение не редактируется в этом этапе, d-tag просто уникален).
 export async function sendChannelMessage(ownerPubkey, ownerPrivKey, dbKey, channelId, text, attachments, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!channelRow) throw new Error("канал не найден");
+	if (!channelRow) throw new DomainError("канал не найден", "errors.channelNotFound");
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
 

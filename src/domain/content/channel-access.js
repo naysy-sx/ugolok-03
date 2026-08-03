@@ -6,6 +6,7 @@ import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 // Новый rumor kind (gift-wrap, kind 1059) — по прямому прецеденту CONTACT_REQUEST_KIND
 // (3001, contacts/requests.js): не публичный, владелец узнаёт запросившего через unwrap.
@@ -14,7 +15,8 @@ export const CHANNEL_SUBSCRIBE_REQUEST_KIND = 3002;
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 

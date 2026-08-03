@@ -10,7 +10,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
-import { t } from "../signals/i18n.js";
+import { t, errorMessage } from "../signals/i18n.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -374,7 +374,7 @@ export default function Unlock() {
 									setError("");
 									setStep("advanced-password");
 								} catch (e) {
-									setError(t("unlock.importKey.parseError", { message: e?.message || e }));
+									setError(t("unlock.importKey.parseError", { message: errorMessage(e) }));
 								}
 							}}
 						>

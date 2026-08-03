@@ -2,6 +2,7 @@ import { sendMessage } from "./chat.js";
 import { db } from "../../core/store/database.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { DomainError } from "../errors.js";
 
 const EDIT_MARKER_PREFIX = "__ugolok_edit__:";
 
@@ -29,10 +30,10 @@ export function parseEditText(text) {
 export async function editMessage(ownerPubkey, privKey, dbKey, contactPubkey, msgId, newText, lamportTs, publish) {
 	const raw = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
 	if (!raw || raw.senderPubkey !== ownerPubkey) {
-		throw new Error("нельзя редактировать чужое сообщение");
+		throw new DomainError("нельзя редактировать чужое сообщение", "errors.cannotEditOthersMessage");
 	}
 	if (raw.deleted) {
-		throw new Error("нельзя редактировать удалённое сообщение");
+		throw new DomainError("нельзя редактировать удалённое сообщение", "errors.cannotEditDeletedMessage");
 	}
 	const result = await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, buildEditText(msgId, newText), lamportTs, publish);
 	// text/edited/editedAt — sensitive поля (CONTRACTS.md, Tier 1): partial .modify()

@@ -12,6 +12,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { liveChildrenOf, ROOT_ID } from "./tree.js";
 import { loadShareMeta, saveShareMeta, saveShareKey, getShareKey, addShareGrantee, removeShareGrantee, listShareGrantees, getFileKey } from "./store.js";
 import { getManifest, getRange, putStream } from "./content.js";
+import { DomainError } from "../errors.js";
 
 export const FILE_SHARE_GRANT_KIND = 30075;
 // regular kind, journal операций расшаренного поддерева (CONTRACTS.md,
@@ -79,7 +80,8 @@ export async function publishSubtreeOps(ownerPrivKey, rootId, subtreeKeyHex, ver
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
-		throw new Error(result.reason || "relay отклонил публикацию");
+		if (result.reason) throw new Error(result.reason);
+		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
 }
 
