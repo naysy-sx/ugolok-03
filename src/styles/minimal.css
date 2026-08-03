@@ -7,7 +7,14 @@
  *      tokens   — публичный API: каждая «крутилка» живёт здесь как --переменная
  *      base     — html/body, цветовая схема, фокус, ритм документа
  *      elements — вменяемые дефолты для голых тегов, все на переменных
- *      utilities — тонкий opt-in слой классов (.flow, .cluster, .grid-auto, .prose …)
+ *      utilities — тонкий opt-in слой классов (.flow, .cluster, .grid-auto, .prose …).
+ *                  ПЕРЕХОДНЫЙ — .flow/.cluster/.grid-auto/.center уходят, когда
+ *                  последний файл в src/ui смигрирует на слой `composition`
+ *                  (PROCESS-DOCS/CONTRACTS.md, "Переверстка на REGLAMENT.md").
+ *      composition — обязательный слой раскладки (PROCESS-DOCS/REGLAMENT.md).
+ *                  .center здесь временно называется .measure — .center в
+ *                  utilities ещё жив, второе имя того же класса дало бы тихую
+ *                  коллизию. Переименовать вместе с зачисткой utilities.
  *
  *  Твои собственные стили, написанные ВНЕ слоёв, по правилу каскада бьют
  *  всё перечисленное выше — без войн специфичности и без !important.
@@ -15,7 +22,7 @@
  *  Чтобы перекрасить/перешить тему: меняешь токены. Остального почти не касаешься.
  */
 
-@layer reset, tokens, base, elements, utilities;
+@layer reset, tokens, base, elements, utilities, composition;
 
 /* ============================================================== *
  *  reset                                                         *
@@ -893,6 +900,61 @@
 	details[open]::details-content {
 		block-size: auto;
 	}
+}
+
+/* ============================================================== *
+ *  composition — обязательный слой раскладки, PROCESS-DOCS/       *
+ *  REGLAMENT.md. Ничего, кроме display/flex/grid/gap/overflow/    *
+ *  размера — ни одного цвета, шрифта, радиуса, тени (раздел 1).   *
+ *  Параметры — через --переменные на элементе, не через классы    *
+ *  (.stack-sm и т.п. запрещены регламентом).                      *
+ * ============================================================== */
+@layer composition {
+	.stack  { display: flex; flex-direction: column; gap: var(--gap, 0); }
+	.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
+	.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0); }
+	.reel   { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
+	          overflow-x: auto; } /* REGLAMENT.md §5 — overflow-inline не существует как свойство */
+	.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
+	/* Формула Хейдона Пикерина ("The Switcher") — см. REGLAMENT.md §5 за разбором. */
+	.switch > * { flex-basis: calc((var(--threshold, 30rem) - 100%) * 999);
+	              flex-grow: 1; }
+	.grid   { display: grid; gap: var(--gap, 0);
+	          grid-template-columns: repeat(auto-fit,
+	            minmax(min(var(--min, 16rem), 100%), 1fr)); }
+	/* --h без фолбэка НАРОЧНО — без явной высоты колонкам некуда переносить. */
+	.columns{ display: flex; flex-direction: column; flex-wrap: wrap;
+	          block-size: var(--h); gap: var(--gap, 0); }
+	.canvas { overflow: auto; }
+	.layer  { display: grid; }
+	.layer > * { grid-area: 1 / 1; }
+
+	.grow   { flex: 1 1 auto; min-inline-size: 0; min-block-size: 0; }
+	.rigid  { flex: 0 0 auto; }
+	.self-start  { align-self: start; }
+	.self-center { align-self: center; }
+	.self-end    { align-self: end; }
+	.over        { z-index: 1; }
+
+	.screen   { min-block-size: 100dvh;
+	            padding-block-end: env(safe-area-inset-bottom); }
+	.shell    { block-size: 100dvh; overflow: hidden;
+	            padding-block-end: env(safe-area-inset-bottom); }
+	.scroller { overflow-y: auto; overscroll-behavior: contain; } /* REGLAMENT.md §5 — overflow-block не существует как свойство */
+	.stick    { position: sticky; inset-block-start: 0; }
+	.anchored { overflow-anchor: auto; }
+
+	.box      { padding: var(--pad, 0); }
+	/* .measure = .center из REGLAMENT.md, временно под другим именем — см. шапку файла. */
+	.measure  { max-inline-size: var(--measure, 65ch); margin-inline: auto; }
+	/* --aspect, не --ratio: --ratio уже глобальный токен модульной шкалы
+	   шрифта (см. `tokens`, --step-*) — совпадение имён унаследовало бы
+	   1.2/1.25 внутрь любого голого .ratio, фолбэк 16/9 не сработал бы
+	   никогда (переменная не "не задана", она задана на :root). */
+	.ratio    { aspect-ratio: var(--aspect, 16/9); }
+	.truncate { overflow: hidden; text-overflow: ellipsis;
+	            display: -webkit-box; -webkit-box-orient: vertical;
+	            -webkit-line-clamp: var(--lines, 1); }
 }
 
 /* ============================================================== *

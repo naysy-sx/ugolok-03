@@ -21,9 +21,9 @@ export default function Screen({ breadcrumb, title, actions, footer, feed, child
 	const titleId = useId();
 
 	return (
-		<section class="content-section">
-			<header class="section-header">
-				<div class="header-actions">
+		<section class="content-section stack">
+			<header class="section-header rigid stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
+				<div class="header-actions row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
 					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
 					    кнопки, видимого текста больше нет. */}
@@ -34,18 +34,22 @@ export default function Screen({ breadcrumb, title, actions, footer, feed, child
 					)}
 					<h1 id={titleId}>{title}</h1>
 					{actions && (
-						<div class="action-buttons" role="group" aria-label={t("screen.sectionActionsAria")}>
+						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
 							{actions}
 						</div>
 					)}
 				</div>
 			</header>
 
-			<div class="content-area" role={feed ? "feed" : undefined} aria-labelledby={titleId}>
-				<div class="content-wrapper">{children}</div>
+			{/* content-area/content-wrapper — REGLAMENT.md §3 п.3: наложение это
+			    .layer (display:grid, grid-area:1/1 на единственного ребёнка), не
+			    position:absolute;inset:0. .grow даёт min-block-size:0 — ровно то,
+			    ради чего раньше обходили флекс position'ом (см. историю правок). */}
+			<div class="content-area grow layer" role={feed ? "feed" : undefined} aria-labelledby={titleId}>
+				<div class="content-wrapper scroller box" style={{ "--pad": "var(--space-m)" }}>{children}</div>
 			</div>
 
-			{footer && <footer class="section-footer">{footer}</footer>}
+			{footer && <footer class="section-footer rigid box" style={{ "--pad": "var(--space-m)" }}>{footer}</footer>}
 		</section>
 	);
 }

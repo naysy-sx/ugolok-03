@@ -199,16 +199,11 @@ button:has(> .icon),
    глобальный скролл страницы не должен появляться вообще, только внутри
    .content-wrapper ниже. body/html не трогаем (там min-height, не height —
    стартовый экран, unlock.jsx, специально скроллится как обычная страница,
-   это другой сценарий) — ограничение теперь живёт на .app-shell (этап 48:
-   компактная плашка звонка — обычный block-элемент НАД .app-layout, а не
-   fixed-оверлей поверх него, иначе накрывала бы верх сайдбара; .app-layout
-   сам занимает ТОЛЬКО оставшуюся высоту). */
-.app-shell {
-	height: 100dvh;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-}
+   это другой сценарий) — этап 48: компактная плашка звонка — обычный
+   block-элемент НАД .app-layout, а не fixed-оверлей поверх него, иначе
+   накрывала бы верх сайдбара; .app-layout сам занимает ТОЛЬКО оставшуюся
+   высоту. Этап 66 — вся эта раскладка теперь `.shell.stack` в JSX
+   (PROCESS-DOCS/REGLAMENT.md); правило `.app-shell` больше не нужно. */
 
 /* Угол сверху-справа (VISUAL.md, Claude Opus + пользователь: "бургер
    расположенную (внимание!) справа вверху") — переключатель темы и бургер
@@ -288,24 +283,19 @@ button:has(> .icon),
 	inset-inline-end: var(--space-s);
 }
 
+/* .grow (раскладка, "ем остаток от .shell") уже в JSX — display:flex
+   здесь ОСТАЁТСЯ: строка/столбик переключает медиазапрос ниже (REGLAMENT.md
+   §6 — "сайдбар превращается в выдвижную панель" это состояние компонента,
+   не раскладка контейнера, регламент её сознательно не покрывает). */
 .app-layout {
-	flex: 1 1 auto;
-	min-height: 0; /* иначе flex-ребёнок не сжимается под .call-bar, весь .app-shell переполнился бы */
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	position: relative; /* якорь для .sidebar-backdrop ниже (< 768px) */
 }
 
-.app-layout .sidebar {
-	flex: 0 0 auto;
-	overflow-y: auto;
-	padding: var(--space-m);
-	border-block-end: var(--border-width) solid var(--border);
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-m);
-}
+/* .rigid/.stack/.scroller/.box (раскладка) уже в JSX — здесь то, что
+   регламент не покрывает: адаптивное превращение в выдвижную панель. */
 
 /* Адаптив (пользователь: "весь sidebar я предлагаю прятать в бургер-кнопку")
    — ниже 768px сайдбар больше не стоит в потоке над контентом (там он
@@ -342,9 +332,8 @@ button:has(> .icon),
 	}
 }
 
+/* .grow (раскладка) уже в JSX — здесь только делегирование скролла вниз. */
 .app-layout .main-content {
-	flex: 1;
-	min-height: 0; /* без этого flex-ребёнок не сжался бы под контент, см. .content-area ниже */
 	overflow: hidden;
 }
 
@@ -535,36 +524,24 @@ button:has(> .icon),
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
    прокручиваемой зоны. content-section заполняет .main-content целиком. */
+/* .stack (раскладка) уже в JSX — здесь только собственный размер/скролл. */
 .app-layout .content-section {
 	height: 100%;
 	overflow: hidden;
-	display: flex;
-	flex-direction: column;
 }
 
+/* .rigid/.stack/.box (раскладка) уже в JSX — здесь только граница. */
 .app-layout .section-header {
-	flex: 0 0 auto;
-	padding: var(--space-m);
 	border-block-end: var(--border-width) solid var(--border);
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
 }
-/* justify-content:flex-start, не space-between: на экранах с breadcrumb, но
-   БЕЗ actions (например channel.jsx) в строке всего два ребёнка —
-   back-button и <h1> — и space-between прижимал бы <h1> как ПОСЛЕДНИЙ
-   элемент к правому краю целиком (даже короткое название канала съезжало
-   вплотную к переключателю темы). Правый край теперь держит сама
-   .action-buttons через margin-inline-start:auto ниже — так заголовок
-   всегда остаётся сразу после стрелки "Назад", независимо от того, сколько
-   "средних" элементов в строке. */
-.app-layout .header-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: flex-start;
-	gap: var(--space-s);
-}
+/* .header-actions — теперь просто .row в JSX (align-items:center инлайн,
+   раскладка не задаёт justify-content: initial-значение и так flex-start,
+   этого достаточно — БЕЗ space-between: на экранах с breadcrumb, но без
+   actions (channel.jsx), в строке два ребёнка — back-button и <h1> —
+   и space-between прижал бы <h1> к правому краю целиком. Правый край
+   держит сама .action-buttons через margin-inline-start:auto ниже — так
+   заголовок остаётся сразу после стрелки "Назад" независимо от числа
+   "средних" элементов в строке). */
 /* Пользователь: "заголовок не отцентрирован по вертикали" — виновник
    был margin-block-end у <h1> (элементный слой minimal.css), который
    :first-child не снимает (снимает только margin-block-start). Плюс
@@ -580,11 +557,12 @@ button:has(> .icon),
 	margin-block-start: calc(var(--step--1) * -1);
 	min-width: 0;
 }
+/* .row (раскладка) уже в JSX — margin-inline-start:auto здесь НЕ
+   раскладка (REGLAMENT.md её не покрывает, см. §6): это третий механизм
+   распределения остатка, наравне с flex-grow/fr, просто выраженный через
+   margin — толкает .action-buttons к правому краю .row независимо от
+   числа элементов слева. Проектная поправка, не композиционный класс. */
 .app-layout .action-buttons {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2xs);
 	margin-inline-start: auto;
 }
 /* Вторичные действия раздела рядом с крупным <h1> — тише, чем сплошная
@@ -632,17 +610,13 @@ button:has(> .icon),
 	color: var(--fg);
 }
 
-/* Приём "скроллится ровно то, что осталось от flex-родителя": content-area —
-   position:relative + flex:1 + min-height:0, content-wrapper — абсолютно
-   спозиционирован на все 4 края (inset:0) и сам скроллится. Не зависит от
-   капризов flexbox-переполнения в разных браузерах — тот же приём, что на
-   стартовом экране (.auth-layout .sidebar), только тут это САМА суть задачи,
-   не второстепенная деталь. */
-.app-layout .content-area {
-	position: relative;
-	flex: 1;
-	min-height: 0;
-}
+/* Этап 66 — было position:relative+flex:1+min-height:0 (content-area) /
+   position:absolute;inset:0 (content-wrapper): обход капризов флекс-
+   переполнения через ручное наложение. REGLAMENT.md §3 п.3 называет это
+   прямо: наложение — .layer (display:grid, grid-area:1/1 на ребёнка), не
+   absolute; а min-block-size:0 у .grow и есть тот самый обход капризов,
+   ради которого раньше городили position. Раскладка теперь в JSX
+   (.grow.layer / .scroller), здесь — только то, что модель не покрывает. */
 .app-layout .content-wrapper {
 	/* VISUAL.md v2 (пользователь): "не забывай про адаптивность и для её
 	   реализации container queries" — контейнер один раз здесь, на общей
@@ -651,15 +625,10 @@ button:has(> .icon),
 	   ниже (Журнал/Контакты/Профиль/Канал) просто использует @container
 	   без собственного container-type. */
 	container-type: inline-size;
-	position: absolute;
-	inset: 0;
-	overflow-y: auto;
-	padding: var(--space-m);
 }
 
+/* .rigid/.box (раскладка) уже в JSX — здесь только граница. */
 .app-layout .section-footer {
-	flex: 0 0 auto;
-	padding: var(--space-m);
 	border-block-start: var(--border-width) solid var(--border);
 }
 

@@ -214,7 +214,7 @@ function MainShell() {
 	}
 
 	return (
-		<div class="app-shell">
+		<div class="shell stack">
 			<ToastHost />
 			<SyncProgressBar />
 			{/* Этап 48 — CallOverlay ВНЕ .app-layout: полноэкранные состояния
@@ -247,11 +247,16 @@ function MainShell() {
 					{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
 				</button>
 			</div>
-			<div class="app-layout">
+			<div class="app-layout grow">
 			{sidebarOpen && <div class="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
-			<aside id="app-sidebar" class={`sidebar${sidebarOpen ? " sidebar-open" : ""}`} aria-label={t("shell.sidebarAriaLabel")}>
+			<aside
+				id="app-sidebar"
+				class={`sidebar rigid stack scroller box${sidebarOpen ? " sidebar-open" : ""}`}
+				style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}
+				aria-label={t("shell.sidebarAriaLabel")}
+			>
 				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} />
-				<nav role="navigation" aria-label={t("shell.navAriaLabel")} style={{ flex: "1 1 auto" }}>
+				<nav role="navigation" class="grow" aria-label={t("shell.navAriaLabel")}>
 					<ul role="list">
 						{NAV_ITEMS.map(item => {
 							const ItemIcon = NAV_ICONS[item.id];
@@ -293,7 +298,7 @@ function MainShell() {
 					{t("shell.logout")}
 				</button>
 			</aside>
-			<div class="main-content">
+			<div class="main-content grow">
 				{activeId === "diagnostics" && <Diagnostics />}
 				{activeId === "profile" && <Profile />}
 				{activeId === "help" && <Help />}
