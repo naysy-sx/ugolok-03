@@ -217,7 +217,25 @@
 			"calls": "Appel",
 			"moderation": "Modération",
 			"inbox": "Inconnu"
-		}
+		},
+		"strangerRequestTitle": "Nouvelle demande d'un inconnu",
+		"strangerRequestBody": "{{username}} souhaite vous écrire",
+		"reportTitle": "Nouveau signalement dans la chaîne « {{channel}} »",
+		"newPostTitle": "Nouvelle publication dans la chaîne « {{channel}} »",
+		"newCommentTitle": "Commentaire dans la chaîne « {{channel}} »",
+		"replyTitle": "{{channel}} : {{username}} vous a répondu",
+		"quotedText": "« {{text}} »",
+		"chatMessageTitle": "Message dans le chat de la chaîne « {{channel}} »",
+		"userPrefixedText": "{{username}} : {{text}}",
+		"channelDeletedTitle": "La chaîne « {{channel}} » a été supprimée par le propriétaire",
+		"channelModerationTitle": "Modération dans la chaîne « {{channel}} »",
+		"channelModerationBody": "Changements dans la chaîne — voir l'onglet Modération",
+		"newMessageTitle": "Nouveau message de {{username}}",
+		"contactNewRequestTitle": "Nouvelle demande de contact de {{username}}",
+		"contactAcceptedTitle": "{{username}} a accepté votre demande",
+		"contactRejectedTitle": "{{username}} a refusé votre demande",
+		"contactCrossedTitle": "{{username}} — vous êtes désormais contacts, les demandes se sont croisées",
+		"incomingCallTitle": "Appel entrant de {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "M'afficher dans découvrir",

@@ -217,7 +217,25 @@
 			"calls": "通話",
 			"moderation": "モデレーション",
 			"inbox": "未知のユーザー"
-		}
+		},
+		"strangerRequestTitle": "見知らぬ相手からの新しいリクエスト",
+		"strangerRequestBody": "{{username}}さんがあなたにメッセージを送りたがっています",
+		"reportTitle": "チャンネル「{{channel}}」に新しい通報",
+		"newPostTitle": "チャンネル「{{channel}}」に新しい投稿",
+		"newCommentTitle": "チャンネル「{{channel}}」にコメント",
+		"replyTitle": "{{channel}}：{{username}}さんが返信しました",
+		"quotedText": "「{{text}}」",
+		"chatMessageTitle": "チャンネルチャット「{{channel}}」にメッセージ",
+		"userPrefixedText": "{{username}}：{{text}}",
+		"channelDeletedTitle": "チャンネル「{{channel}}」がオーナーによって削除されました",
+		"channelModerationTitle": "チャンネル「{{channel}}」でモデレーション",
+		"channelModerationBody": "チャンネルに変更あり — モデレーションタブを確認してください",
+		"newMessageTitle": "{{username}}さんから新しいメッセージ",
+		"contactNewRequestTitle": "{{username}}さんから新しい連絡先リクエスト",
+		"contactAcceptedTitle": "{{username}}さんがあなたのリクエストを承認しました",
+		"contactRejectedTitle": "{{username}}さんがあなたのリクエストを拒否しました",
+		"contactCrossedTitle": "{{username}}さん — これで連絡先になりました、リクエストが一致しました",
+		"incomingCallTitle": "{{username}}さんからの着信"
 	},
 	"discovery": {
 		"showMeToggle": "発見に自分を表示する",

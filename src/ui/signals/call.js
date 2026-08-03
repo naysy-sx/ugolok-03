@@ -5,6 +5,7 @@ import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { profiles } from "./contacts.js";
+import { t } from "./i18n.js";
 
 // Этап 48, п.6 — реактивный мост между call-runtime.js (UI-агностичный imperative
 // shell) и Preact-компонентами. callState — ПОЛНЫЙ снимок FSM-состояния (не только
@@ -30,9 +31,13 @@ async function notifyIncomingCall(peerPubkey) {
 	try {
 		const settings = await loadUiSettings(myPubkeyRef, dbKeyRef);
 		const navTarget = { screen: "messages", contactPubkey: peerPubkey };
+		const titleKey = "journal.incomingCallTitle";
+		const titleParams = { username: usernameFor(peerPubkey) };
 		await notifyAndLog(myPubkeyRef, dbKeyRef, settings, "calls", null, {
-			title: `Входящий звонок от ${usernameFor(peerPubkey)}`,
+			title: t(titleKey, titleParams),
 			body: "",
+			titleKey,
+			titleParams,
 			navTarget,
 			onClick: () => navigateFromNotification(navTarget),
 		});

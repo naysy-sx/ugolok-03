@@ -217,7 +217,25 @@
 			"calls": "Chamada",
 			"moderation": "Moderação",
 			"inbox": "Desconhecido"
-		}
+		},
+		"strangerRequestTitle": "Nova solicitação de um desconhecido",
+		"strangerRequestBody": "{{username}} quer falar com você",
+		"reportTitle": "Nova denúncia no canal «{{channel}}»",
+		"newPostTitle": "Nova publicação no canal «{{channel}}»",
+		"newCommentTitle": "Comentário no canal «{{channel}}»",
+		"replyTitle": "{{channel}}: {{username}} respondeu você",
+		"quotedText": "«{{text}}»",
+		"chatMessageTitle": "Mensagem no chat do canal «{{channel}}»",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "O canal «{{channel}}» foi excluído pelo proprietário",
+		"channelModerationTitle": "Moderação no canal «{{channel}}»",
+		"channelModerationBody": "Alterações no canal — veja a aba Moderação",
+		"newMessageTitle": "Nova mensagem de {{username}}",
+		"contactNewRequestTitle": "Nova solicitação de contato de {{username}}",
+		"contactAcceptedTitle": "{{username}} aceitou sua solicitação",
+		"contactRejectedTitle": "{{username}} recusou sua solicitação",
+		"contactCrossedTitle": "{{username}} — agora vocês são contatos, as solicitações coincidiram",
+		"incomingCallTitle": "Chamada recebida de {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "Mostrar-me em descobrir",

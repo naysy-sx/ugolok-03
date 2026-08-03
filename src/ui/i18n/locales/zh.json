@@ -217,7 +217,25 @@
 			"calls": "通话",
 			"moderation": "管理",
 			"inbox": "陌生人"
-		}
+		},
+		"strangerRequestTitle": "陌生人发来新请求",
+		"strangerRequestBody": "{{username}} 想给您发消息",
+		"reportTitle": "频道“{{channel}}”中有新举报",
+		"newPostTitle": "频道“{{channel}}”中有新帖子",
+		"newCommentTitle": "频道“{{channel}}”中有新评论",
+		"replyTitle": "{{channel}}：{{username}} 回复了您",
+		"quotedText": "“{{text}}”",
+		"chatMessageTitle": "频道聊天“{{channel}}”中有新消息",
+		"userPrefixedText": "{{username}}：{{text}}",
+		"channelDeletedTitle": "频道“{{channel}}”已被所有者删除",
+		"channelModerationTitle": "频道“{{channel}}”中的管理操作",
+		"channelModerationBody": "频道有变更——请查看管理标签页",
+		"newMessageTitle": "来自 {{username}} 的新消息",
+		"contactNewRequestTitle": "来自 {{username}} 的新联系人请求",
+		"contactAcceptedTitle": "{{username}} 接受了您的请求",
+		"contactRejectedTitle": "{{username}} 拒绝了您的请求",
+		"contactCrossedTitle": "{{username}} ——你们现在是联系人了，请求相互匹配",
+		"incomingCallTitle": "来自 {{username}} 的来电"
 	},
 	"discovery": {
 		"showMeToggle": "在发现中显示我",

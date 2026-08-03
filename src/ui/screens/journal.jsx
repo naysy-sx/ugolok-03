@@ -174,6 +174,12 @@ export default function Journal() {
 									const meta = CATEGORY_META[entry.category];
 									const Icon = meta?.Icon ?? IconPerson;
 									const categoryLabel = meta ? t(meta.labelKey) : entry.category;
+									// Этап 64 — titleKey/bodyKey (записи ПОСЛЕ этого этапа) рендерятся
+									// t()'ом в ТЕКУЩЕЙ локали читателя; записи без ключа (старый формат,
+									// ДО этого этапа) показывают уже сохранённый title/body как есть —
+									// они навсегда остаются на русском (пользователь подтвердил, без миграции).
+									const entryTitle = entry.titleKey ? t(entry.titleKey, entry.titleParams) : entry.title;
+									const entryBody = entry.bodyKey ? t(entry.bodyKey, entry.bodyParams) : entry.body;
 									return (
 										<li class="jitem" key={entry.id} data-read={entry.read || undefined}>
 											<button type="button" class="jitem__link" onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}>
@@ -181,8 +187,8 @@ export default function Journal() {
 													<Icon />
 												</span>
 												<span class="jbody">
-													<span class="jtitle">{entry.title}</span>
-													{entry.body && <span class="jmeta">{entry.body}</span>}
+													<span class="jtitle">{entryTitle}</span>
+													{entryBody && <span class="jmeta">{entryBody}</span>}
 													<span class="jmeta">{categoryLabel}</span>
 												</span>
 												<span class="jside">

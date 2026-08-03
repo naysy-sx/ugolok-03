@@ -217,7 +217,25 @@
 			"calls": "Arama",
 			"moderation": "Moderasyon",
 			"inbox": "Yabancı"
-		}
+		},
+		"strangerRequestTitle": "Bir yabancıdan yeni istek",
+		"strangerRequestBody": "{{username}} size yazmak istiyor",
+		"reportTitle": "«{{channel}}» kanalında yeni şikayet",
+		"newPostTitle": "«{{channel}}» kanalında yeni gönderi",
+		"newCommentTitle": "«{{channel}}» kanalında yorum",
+		"replyTitle": "{{channel}}: {{username}} size yanıt verdi",
+		"quotedText": "«{{text}}»",
+		"chatMessageTitle": "«{{channel}}» kanal sohbetinde mesaj",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "«{{channel}}» kanalı sahibi tarafından silindi",
+		"channelModerationTitle": "«{{channel}}» kanalında moderasyon",
+		"channelModerationBody": "Kanalda değişiklikler — Moderasyon sekmesine bakın",
+		"newMessageTitle": "{{username}} kişisinden yeni mesaj",
+		"contactNewRequestTitle": "{{username}} kişisinden yeni kişi isteği",
+		"contactAcceptedTitle": "{{username}} isteğinizi kabul etti",
+		"contactRejectedTitle": "{{username}} isteğinizi reddetti",
+		"contactCrossedTitle": "{{username}} — artık kişisiniz, istekler eşleşti",
+		"incomingCallTitle": "{{username}} kişisinden gelen çağrı"
 	},
 	"discovery": {
 		"showMeToggle": "Beni keşfette göster",

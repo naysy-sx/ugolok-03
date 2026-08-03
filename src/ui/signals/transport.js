@@ -413,9 +413,15 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							// заметно лишь если пользователь уже был на вкладке "Сообщения"). Профиль
 							// незнакомца обычно ещё не закэширован — та же оговорка, что usernameFor.
 							await ensureProfilesFetched([welcomeContactPubkey], fetchProfiles).catch(() => {});
+							const strangerTitleKey = "journal.strangerRequestTitle";
+							const strangerBodyKey = "journal.strangerRequestBody";
+							const strangerBodyParams = { username: usernameFor(welcomeContactPubkey) };
 							await notifyAndLog(pubkeyHex, dbKey, settings, "inbox", null, {
-								title: "Новый запрос от незнакомца",
-								body: `${usernameFor(welcomeContactPubkey)} хочет написать вам`,
+								title: t(strangerTitleKey),
+								body: t(strangerBodyKey, strangerBodyParams),
+								titleKey: strangerTitleKey,
+								bodyKey: strangerBodyKey,
+								bodyParams: strangerBodyParams,
 								navTarget: { screen: "messages" },
 								onClick: () => navigateFromNotification({ screen: "messages" }),
 								occurredAt: rumor.created_at * 1000,
@@ -462,13 +468,19 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						});
 						// Этап 47 — "reports" единственная moderation-подкатегория, ставшая
 						// настраиваемой (бан/warn/delete по-прежнему принудительны, см. notifier.js).
-						await notifyAndLog(pubkeyHex, dbKey, settings, "moderation", "reports", {
-							title: `Новая жалоба в канале «${await channelNameFor(pubkeyHex, dbKey, reportChannelId)}»`,
-							body: truncateForNotification(rumor.content),
-							navTarget: { screen: "channels", channelId: reportChannelId, subTab: "moderation" },
-							onClick: () => navigateFromNotification({ screen: "channels", channelId: reportChannelId, subTab: "moderation" }),
-							occurredAt: rumor.created_at * 1000,
-						});
+						{
+							const reportTitleKey = "journal.reportTitle";
+							const reportTitleParams = { channel: await channelNameFor(pubkeyHex, dbKey, reportChannelId) };
+							await notifyAndLog(pubkeyHex, dbKey, settings, "moderation", "reports", {
+								title: t(reportTitleKey, reportTitleParams),
+								body: truncateForNotification(rumor.content),
+								titleKey: reportTitleKey,
+								titleParams: reportTitleParams,
+								navTarget: { screen: "channels", channelId: reportChannelId, subTab: "moderation" },
+								onClick: () => navigateFromNotification({ screen: "channels", channelId: reportChannelId, subTab: "moderation" }),
+								occurredAt: rumor.created_at * 1000,
+							});
+						}
 						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
 					}
 					// иначе — будущий kind, discard
@@ -975,6 +987,8 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 								const postId = dTag?.slice(dTag.indexOf(":") + 1);
 								const postRow = postId ? fromEncryptedRow(await db.table("posts").get([ownerPubkey, postId]), dbKey) : null;
 								const navTarget = { screen: "channels", channelId, postId, subTab: "posts" };
+								const postTitleKey = "journal.newPostTitle";
+								const postTitleParams = { channel: channelName };
 								await notifyAndLog(
 									ownerPubkey,
 									dbKey,
@@ -982,8 +996,10 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									"channels",
 									"posts",
 									{
-										title: `Новый пост в канале «${channelName}»`,
+										title: t(postTitleKey, postTitleParams),
 										body: truncateForNotification(postRow?.text),
+										titleKey: postTitleKey,
+										titleParams: postTitleParams,
 										navTarget,
 										onClick: () => navigateFromNotification(navTarget),
 										occurredAt: event.created_at * 1000,
@@ -1006,6 +1022,8 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 								const commentId = dTag?.slice(dTag.indexOf(":") + 1);
 								const storedComment = commentId ? fromEncryptedRow(await db.table("comments").get([ownerPubkey, commentId]), dbKey) : null;
 								const commentNavTarget = { screen: "channels", channelId, postId: storedComment?.postId, commentId, subTab: "posts" };
+								const commentTitleKey = "journal.newCommentTitle";
+								const commentTitleParams = { channel: channelName };
 								await notifyAndLog(
 									ownerPubkey,
 									dbKey,
@@ -1013,8 +1031,10 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									"channels",
 									"comments",
 									{
-										title: `Комментарий в канале «${channelName}»`,
+										title: t(commentTitleKey, commentTitleParams),
 										body: truncateForNotification(storedComment?.text),
+										titleKey: commentTitleKey,
+										titleParams: commentTitleParams,
 										navTarget: commentNavTarget,
 										onClick: () => navigateFromNotification(commentNavTarget),
 										occurredAt: event.created_at * 1000,
@@ -1034,9 +1054,17 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 											: null;
 									if (parentAuthor === ownerPubkey) {
 										await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
+										const replyTitleKey = "journal.replyTitle";
+										const replyTitleParams = { channel: channelName, username: usernameFor(event.pubkey) };
+										const replyBodyKey = "journal.quotedText";
+										const replyBodyParams = { text: truncateForNotification(storedComment?.text) };
 										await notifyAndLog(ownerPubkey, dbKey, settings, "replies", null, {
-											title: `${channelName}: ${usernameFor(event.pubkey)} вам ответил`,
-											body: `«${truncateForNotification(storedComment?.text)}»`,
+											title: t(replyTitleKey, replyTitleParams),
+											body: t(replyBodyKey, replyBodyParams),
+											titleKey: replyTitleKey,
+											titleParams: replyTitleParams,
+											bodyKey: replyBodyKey,
+											bodyParams: replyBodyParams,
 											navTarget: commentNavTarget,
 											onClick: () => navigateFromNotification(commentNavTarget),
 											occurredAt: event.created_at * 1000,
@@ -1057,6 +1085,10 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									: null;
 								await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
 								const chatNavTarget = { screen: "channels", channelId, subTab: "chat" };
+								const chatMsgTitleKey = "journal.chatMessageTitle";
+								const chatMsgTitleParams = { channel: channelName };
+								const chatMsgBodyKey = "journal.userPrefixedText";
+								const chatMsgBodyParams = { username: usernameFor(event.pubkey), text: truncateForNotification(messageRow?.text) };
 								await notifyAndLog(
 									ownerPubkey,
 									dbKey,
@@ -1064,8 +1096,12 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 									"channels",
 									"chat",
 									{
-										title: `Сообщение в чате канала «${channelName}»`,
-										body: `${usernameFor(event.pubkey)}: ${truncateForNotification(messageRow?.text)}`,
+										title: t(chatMsgTitleKey, chatMsgTitleParams),
+										body: t(chatMsgBodyKey, chatMsgBodyParams),
+										titleKey: chatMsgTitleKey,
+										titleParams: chatMsgTitleParams,
+										bodyKey: chatMsgBodyKey,
+										bodyParams: chatMsgBodyParams,
 										navTarget: chatNavTarget,
 										onClick: () => navigateFromNotification(chatNavTarget),
 										occurredAt: event.created_at * 1000,
@@ -1087,9 +1123,13 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 								// тот же bucket, что бан ("моё отношение к каналу необратимо
 								// изменилось, узнать обязан всегда"), поэтому ВСЕГДА 'sound'.
 								const deletedNavTarget = { screen: "channels" };
+								const deletedTitleKey = "journal.channelDeletedTitle";
+								const deletedTitleParams = { channel: deletionResult.channelName };
 								await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
-									title: `Канал «${deletionResult.channelName}» удалён владельцем`,
+									title: t(deletedTitleKey, deletedTitleParams),
 									body: "",
+									titleKey: deletedTitleKey,
+									titleParams: deletedTitleParams,
 									navTarget: deletedNavTarget,
 									onClick: () => navigateFromNotification(deletedNavTarget),
 									occurredAt: event.created_at * 1000,
@@ -1103,9 +1143,15 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 							const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
 							if (applied && event.pubkey !== ownerPubkey) {
 								const banNavTarget = { screen: "channels", channelId, subTab: "moderation" };
+								const banTitleKey = "journal.channelModerationTitle";
+								const banTitleParams = { channel: channelName };
+								const banBodyKey = "journal.channelModerationBody";
 								await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
-									title: `Модерация канала «${channelName}»`,
-									body: "Изменения в канале — см. вкладку Модерация",
+									title: t(banTitleKey, banTitleParams),
+									body: t(banBodyKey),
+									titleKey: banTitleKey,
+									titleParams: banTitleParams,
+									bodyKey: banBodyKey,
 									navTarget: banNavTarget,
 									onClick: () => navigateFromNotification(banNavTarget),
 									occurredAt: event.created_at * 1000,
@@ -1283,6 +1329,8 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						) {
 							await ensureProfilesFetched([receivedResult.contactPubkey], fetchProfiles).catch(() => {});
 							const messageNavTarget = { screen: "messages", contactPubkey: receivedResult.contactPubkey };
+							const newMsgTitleKey = "journal.newMessageTitle";
+							const newMsgTitleParams = { username: usernameFor(receivedResult.contactPubkey) };
 							await notifyAndLog(
 								ownerPubkey,
 								dbKey,
@@ -1290,8 +1338,10 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 								"messages",
 								null,
 								{
-									title: `Новое сообщение от ${usernameFor(receivedResult.contactPubkey)}`,
+									title: t(newMsgTitleKey, newMsgTitleParams),
 									body: receivedResult.text,
+									titleKey: newMsgTitleKey,
+									titleParams: newMsgTitleParams,
 									navTarget: messageNavTarget,
 									onClick: () => navigateFromNotification(messageNavTarget),
 									occurredAt: event.created_at * 1000,

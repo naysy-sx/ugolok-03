@@ -15,7 +15,13 @@ import { notify } from "./notifier.js";
 // occurredAt — опционален у вызывающего (options.occurredAt в notifyAndLog);
 // если не передан (звонки — событие ВСЕГДА "сейчас", либо вызывающий код ещё
 // не прокинул), по умолчанию равен createdAt.
-export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, body, navTarget, occurredAt }) {
+//
+// Этап 64 (i18n генерируемого контента) — titleKey/titleParams/bodyKey/bodyParams
+// (опциональны) хранятся РЯДОМ с уже отрендеренными title/body, не вместо них:
+// journal.jsx предпочитает *Key (рендер через t() в ТЕКУЩЕЙ локали читателя),
+// title/body — резерв для записей без ключа (старый формат, записанный ДО этого
+// этапа — миграция не нужна, пользователь подтвердил, что они остаются на русском).
+export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, body, navTarget, occurredAt, titleKey, titleParams, bodyKey, bodyParams }) {
 	const createdAt = Date.now();
 	const entry = {
 		id: crypto.randomUUID(),
@@ -25,6 +31,10 @@ export async function writeJournalEntry(ownerPubkey, dbKey, { category, title, b
 		category,
 		title,
 		body,
+		titleKey,
+		titleParams,
+		bodyKey,
+		bodyParams,
 		navTarget,
 		read: false,
 	};
@@ -64,6 +74,10 @@ export async function notifyAndLog(ownerPubkey, dbKey, settings, category, subca
 				body: options.body,
 				navTarget: options.navTarget,
 				occurredAt: options.occurredAt,
+				titleKey: options.titleKey,
+				titleParams: options.titleParams,
+				bodyKey: options.bodyKey,
+				bodyParams: options.bodyParams,
 			});
 		} catch {
 			// персистентность Журнала — best-effort, тот же принцип, что остальные

@@ -217,7 +217,25 @@
 			"calls": "Oproep",
 			"moderation": "Moderatie",
 			"inbox": "Onbekende"
-		}
+		},
+		"strangerRequestTitle": "Nieuw verzoek van een onbekende",
+		"strangerRequestBody": "{{username}} wil u schrijven",
+		"reportTitle": "Nieuwe melding in kanaal ‘{{channel}}’",
+		"newPostTitle": "Nieuwe post in kanaal ‘{{channel}}’",
+		"newCommentTitle": "Reactie in kanaal ‘{{channel}}’",
+		"replyTitle": "{{channel}}: {{username}} heeft u geantwoord",
+		"quotedText": "‘{{text}}’",
+		"chatMessageTitle": "Bericht in kanaalchat ‘{{channel}}’",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "Kanaal ‘{{channel}}’ is verwijderd door de eigenaar",
+		"channelModerationTitle": "Moderatie in kanaal ‘{{channel}}’",
+		"channelModerationBody": "Wijzigingen in het kanaal — zie het tabblad Moderatie",
+		"newMessageTitle": "Nieuw bericht van {{username}}",
+		"contactNewRequestTitle": "Nieuw contactverzoek van {{username}}",
+		"contactAcceptedTitle": "{{username}} heeft uw verzoek geaccepteerd",
+		"contactRejectedTitle": "{{username}} heeft uw verzoek afgewezen",
+		"contactCrossedTitle": "{{username}} — u bent nu contacten, verzoeken kwamen overeen",
+		"incomingCallTitle": "Inkomend gesprek van {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "Mij tonen in ontdekken",

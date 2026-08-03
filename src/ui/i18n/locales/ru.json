@@ -217,7 +217,25 @@
 			"calls": "Звонок",
 			"moderation": "Модерация",
 			"inbox": "Незнакомец"
-		}
+		},
+		"strangerRequestTitle": "Новый запрос от незнакомца",
+		"strangerRequestBody": "{{username}} хочет написать вам",
+		"reportTitle": "Новая жалоба в канале «{{channel}}»",
+		"newPostTitle": "Новый пост в канале «{{channel}}»",
+		"newCommentTitle": "Комментарий в канале «{{channel}}»",
+		"replyTitle": "{{channel}}: {{username}} вам ответил",
+		"quotedText": "«{{text}}»",
+		"chatMessageTitle": "Сообщение в чате канала «{{channel}}»",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "Канал «{{channel}}» удалён владельцем",
+		"channelModerationTitle": "Модерация канала «{{channel}}»",
+		"channelModerationBody": "Изменения в канале — см. вкладку Модерация",
+		"newMessageTitle": "Новое сообщение от {{username}}",
+		"contactNewRequestTitle": "Новый запрос в контакты от {{username}}",
+		"contactAcceptedTitle": "{{username}} принял(а) вашу заявку",
+		"contactRejectedTitle": "{{username}} отклонил(а) вашу заявку",
+		"contactCrossedTitle": "{{username}} вы теперь контакты — заявки совпали",
+		"incomingCallTitle": "Входящий звонок от {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "Показывать меня в обзоре",

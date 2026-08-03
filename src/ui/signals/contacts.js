@@ -11,6 +11,7 @@ import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
+import { t } from "./i18n.js";
 
 // Этап 49 — contacts/blockedContacts остаются pubkey[] (форма, на которую уже
 // завязан остальной UI — discovery.jsx/settings.jsx/call.js), outgoingRequests/
@@ -55,15 +56,29 @@ function usernameFor(pubkeyHex) {
 // отправителю), сознательно повешены на тот же тумблер "accepted" — оба это
 // "моя исходящая заявка решилась", отдельный тумблер не заводим ради двух редких
 // случаев. Best-effort (тот же принцип, что notifyIncomingCall, call.js этап 48).
+// Этап 64 — titleKey берётся из entry.category напрямую (уже однозначно
+// определяет один из 4 вариантов, contact-fsm.js), а не из entry.message
+// (тот остаётся как есть, "message" — часть форм-контракта FSM, свой тест —
+// не трогаем ради этого этапа, см. tests/contact-fsm.test.js).
+const CONTACT_TITLE_KEY = {
+	newRequest: "journal.contactNewRequestTitle",
+	accepted: "journal.contactAcceptedTitle",
+	rejected: "journal.contactRejectedTitle",
+	crossed: "journal.contactCrossedTitle",
+};
+
 async function notifyContactJournalEntry(entry) {
 	try {
 		const settings = await loadUiSettings(ownerPubkeyRef, dbKeyRef);
-		const title = entry.category === "newRequest" ? `Новый запрос в контакты от ${usernameFor(entry.peer)}` : `${usernameFor(entry.peer)} ${entry.message}`;
+		const titleKey = CONTACT_TITLE_KEY[entry.category];
+		const titleParams = { username: usernameFor(entry.peer) };
 		const subcategory = entry.category === "newRequest" ? "newRequests" : "accepted";
 		const navTarget = { screen: "contacts" };
 		await notifyAndLog(ownerPubkeyRef, dbKeyRef, settings, "contacts", subcategory, {
-			title,
+			title: t(titleKey, titleParams),
 			body: "",
+			titleKey,
+			titleParams,
 			navTarget,
 			onClick: () => navigateFromNotification(navTarget),
 			occurredAt: entry.createdAt * 1000,

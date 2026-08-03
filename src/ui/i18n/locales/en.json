@@ -217,7 +217,25 @@
 			"calls": "Call",
 			"moderation": "Moderation",
 			"inbox": "Stranger"
-		}
+		},
+		"strangerRequestTitle": "New request from a stranger",
+		"strangerRequestBody": "{{username}} wants to message you",
+		"reportTitle": "New report in channel «{{channel}}»",
+		"newPostTitle": "New post in channel «{{channel}}»",
+		"newCommentTitle": "Comment in channel «{{channel}}»",
+		"replyTitle": "{{channel}}: {{username}} replied to you",
+		"quotedText": "«{{text}}»",
+		"chatMessageTitle": "Message in channel chat «{{channel}}»",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "Channel «{{channel}}» was deleted by the owner",
+		"channelModerationTitle": "Moderation in channel «{{channel}}»",
+		"channelModerationBody": "Changes in the channel — see the Moderation tab",
+		"newMessageTitle": "New message from {{username}}",
+		"contactNewRequestTitle": "New contact request from {{username}}",
+		"contactAcceptedTitle": "{{username}} accepted your request",
+		"contactRejectedTitle": "{{username}} declined your request",
+		"contactCrossedTitle": "{{username}} — you're now contacts, requests matched",
+		"incomingCallTitle": "Incoming call from {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "Show me in discovery",

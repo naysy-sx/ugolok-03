@@ -217,7 +217,25 @@
 			"calls": "Llamada",
 			"moderation": "Moderación",
 			"inbox": "Desconocido"
-		}
+		},
+		"strangerRequestTitle": "Nueva solicitud de un desconocido",
+		"strangerRequestBody": "{{username}} quiere escribirte",
+		"reportTitle": "Nueva denuncia en el canal «{{channel}}»",
+		"newPostTitle": "Nueva publicación en el canal «{{channel}}»",
+		"newCommentTitle": "Comentario en el canal «{{channel}}»",
+		"replyTitle": "{{channel}}: {{username}} te ha respondido",
+		"quotedText": "«{{text}}»",
+		"chatMessageTitle": "Mensaje en el chat del canal «{{channel}}»",
+		"userPrefixedText": "{{username}}: {{text}}",
+		"channelDeletedTitle": "El canal «{{channel}}» fue eliminado por el propietario",
+		"channelModerationTitle": "Moderación en el canal «{{channel}}»",
+		"channelModerationBody": "Cambios en el canal — ver la pestaña Moderación",
+		"newMessageTitle": "Nuevo mensaje de {{username}}",
+		"contactNewRequestTitle": "Nueva solicitud de contacto de {{username}}",
+		"contactAcceptedTitle": "{{username}} aceptó tu solicitud",
+		"contactRejectedTitle": "{{username}} rechazó tu solicitud",
+		"contactCrossedTitle": "{{username}} — ahora sois contactos, las solicitudes coincidieron",
+		"incomingCallTitle": "Llamada entrante de {{username}}"
 	},
 	"discovery": {
 		"showMeToggle": "Mostrarme en explorar",
