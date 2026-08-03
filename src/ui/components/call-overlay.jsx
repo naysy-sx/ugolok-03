@@ -157,7 +157,7 @@ export default function CallOverlay() {
 				<p class="call-overlay-title">
 					{incoming ? t("call.incomingFrom", { name: displayName(call.peerPubkey) }) : t("call.callingTo", { name: displayName(call.peerPubkey) })}
 				</p>
-				<div class="cluster" style={{ justifyContent: "center" }}>
+				<div class="row" style={{ "--gap": "var(--space-s)", justifyContent: "center" }}>
 					{incoming ? (
 						<>
 							<button type="button" class="call-btn-accept" onClick={acceptCall}>
@@ -193,10 +193,10 @@ export default function CallOverlay() {
 			<div class="call-bar-avatar" aria-hidden="true">
 				{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 			</div>
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<strong>{reconnecting ? t("call.reconnecting") : t("call.connectedWith", { name: displayName(call.peerPubkey) })}</strong>
 				{!reconnecting && connectedAtRef.current && (
-					<span class="cluster" style={{ alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						<CallDuration startedAt={connectedAtRef.current} />
 						<Waveform stream={remoteMediaStream.value || localMediaStream.value} />
 					</span>

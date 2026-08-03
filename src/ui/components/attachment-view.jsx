@@ -84,7 +84,7 @@ function ImageAttachment({ attachment }) {
 	}
 	if (!url) {
 		return (
-			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
 				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingImage")}
 			</p>
 		);
@@ -147,7 +147,7 @@ function AudioAttachment({ attachment }) {
 	}
 	if (!url) {
 		return (
-			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
 				<span class="spinner" aria-hidden="true" /> {attachment.voice ? t("attachment.loadingVoice") : t("attachment.loadingAudio")}
 			</p>
 		);
@@ -195,7 +195,7 @@ function VideoAttachment({ attachment }) {
 	}
 	if (!url) {
 		return (
-			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
+			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
 				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingVideo")}
 			</p>
 		);
@@ -209,7 +209,7 @@ function VideoAttachment({ attachment }) {
 function FileAttachment({ attachment }) {
 	const Icon = FILE_TYPE_ICONS.file;
 	return (
-		<p class="cluster" style={{ alignItems: "center" }}>
+		<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 			<Icon aria-hidden="true" />
 			<span>
 				{attachment.name} ({formatFileSize(attachment.size)})

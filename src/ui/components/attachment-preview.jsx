@@ -39,8 +39,8 @@ export default function AttachmentPreview({ file, position, onPositionChange, on
 
 	return (
 		<div
-			class="cluster"
-			style={{ alignItems: "center", padding: "var(--space-2xs)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
+			class="row box"
+			style={{ "--gap": "var(--space-s)", "--pad": "var(--space-2xs)", alignItems: "center", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
 		>
 			{type === "image" ? (
 				<img src={objectUrl} alt="" style={{ maxWidth: "6rem", maxHeight: "6rem", borderRadius: "var(--radius)" }} />
@@ -49,7 +49,7 @@ export default function AttachmentPreview({ file, position, onPositionChange, on
 					{FILE_TYPE_ICONS[type]}
 				</span>
 			)}
-			<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<span>{file.name}</span>
 				<small style={{ color: "var(--muted)" }}>{formatFileSize(file.size)}</small>
 				{error && (
@@ -59,9 +59,9 @@ export default function AttachmentPreview({ file, position, onPositionChange, on
 				)}
 			</span>
 			{type === "image" && (
-				<fieldset class="cluster" style={{ border: "none", padding: 0, alignItems: "center" }}>
+				<fieldset class="row" style={{ "--gap": "var(--space-s)", border: "none", padding: 0, alignItems: "center" }}>
 					<legend class="visually-hidden">Положение картинки относительно текста</legend>
-					<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 						<input
 							id={`${instanceId}-above`}
 							type="radio"
@@ -71,7 +71,7 @@ export default function AttachmentPreview({ file, position, onPositionChange, on
 						/>
 						<label for={`${instanceId}-above`}>Над сообщением</label>
 					</span>
-					<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 						<input
 							id={`${instanceId}-below`}
 							type="radio"

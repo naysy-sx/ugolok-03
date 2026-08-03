@@ -15,10 +15,10 @@ function formatDateTime(unixSeconds) {
 // нужен для этого MVP-прохода) + одно опциональное вложение + владельческие действия.
 export default function PostCard({ post, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount }) {
 	return (
-		<article class="flow post">
+		<article class="stack post box" style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}>
 			<p style={{ whiteSpace: "pre-wrap" }}>{post.text}</p>
 			{post.attachments?.[0] && <AttachmentView attachment={post.attachments[0]} />}
-			<footer class="post__foot">
+			<footer class="post__foot row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<small style={{ color: "var(--muted)" }}>{formatDateTime(post.createdAt)}</small>
 				{post.status === "archived" && <small style={{ color: "var(--muted)" }}>{t("postCard.archivedLabel")}</small>}
 				{/* Пользователь заметил в демо-файле VISUAL.md v2: комментарии,

@@ -31,11 +31,12 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	// поджато справа-снизу, входящее зеркально слева-снизу; сам скруглённый
 	// радиус живёт в CSS (.message-bubble-own/-other), не инлайн-стилем —
 	// нужен был класс, а не style, чтобы завязать цвета/радиус на палитру.
-	const bubbleClass = `message-bubble ${isOwn ? "message-bubble-own" : "message-bubble-other"}`;
+	const bubbleClass = `message-bubble stack box ${isOwn ? "message-bubble-own self-end" : "message-bubble-other self-start"}`;
+	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs) var(--space-s)" };
 
 	if (message.deleted) {
 		return (
-			<div class={`${bubbleClass} message-bubble-deleted`}>
+			<div class={`${bubbleClass} message-bubble-deleted`} style={bubbleStyle}>
 				<p>{t("message.deletedNotice")}</p>
 			</div>
 		);
@@ -51,9 +52,9 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	if (mode === "editing") {
 		return (
-			<div class={bubbleClass}>
+			<div class={bubbleClass} style={bubbleStyle}>
 				<textarea value={editText} maxLength={maxLength} rows={2} onInput={(e) => setEditText(e.currentTarget.value)} />
-				<footer class="cluster" style={{ alignItems: "center" }}>
+				<footer class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					<button
 						type="button"
 						disabled={editText.length === 0}
@@ -79,11 +80,11 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	}
 
 	return (
-		<div class={bubbleClass}>
+		<div class={bubbleClass} style={bubbleStyle}>
 			{attachmentAbove && <AttachmentView attachment={attachment} />}
 			{message.text && <p>{message.text}</p>}
 			{attachmentBelow && <AttachmentView attachment={attachment} />}
-			<footer class="cluster message-bubble-meta" style={{ alignItems: "center" }}>
+			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}
 				{isOwn && statusLabel && <small>{statusLabel}</small>}
 				{message.edited && <small>{t("message.editedLabel")}</small>}

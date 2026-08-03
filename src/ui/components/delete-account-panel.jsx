@@ -70,7 +70,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 	}
 
 	return (
-		<form class="flow" style={{ "--flow-space": "var(--space-2xs)" }} onSubmit={handleSubmit}>
+		<form class="stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit}>
 			<p style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 				{t("settings.deleteAccount.warningBeforeStrong")} <strong>{t("settings.deleteAccount.warningStrong")}</strong> {t("settings.deleteAccount.warningAfterStrong")}
 			</p>
@@ -87,7 +87,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 					{error}
 				</p>
 			)}
-			<div class="cluster">
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<button type="submit" class="btn--danger" disabled={busy}>
 					{busy ? t("settings.deleteAccount.deletingButton") : t("settings.deleteAccount.deletePermanentlyButton")}
 				</button>

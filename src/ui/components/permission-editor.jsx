@@ -63,7 +63,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 	const commentId = `perm-comment-${instanceId}`;
 
 	return (
-		<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+		<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 			<label for={resourceInputId}>{t("permissions.resourceIdLabel")}</label>
 			<input
 				id={resourceInputId}
@@ -72,9 +72,9 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 				onInput={(e) => setResourceInput(e.currentTarget.value)}
 			/>
 
-			<fieldset class="cluster" disabled={!resourceInput}>
+			<fieldset class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }} disabled={!resourceInput}>
 				<legend>{t("permissions.legend")}</legend>
-				<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+				<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 					<input
 						id={viewId}
 						type="checkbox"
@@ -83,7 +83,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 					/>
 					<label for={viewId}>{t("permissions.viewLabel")}</label>
 				</span>
-				<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+				<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 					<input
 						id={commentId}
 						type="checkbox"

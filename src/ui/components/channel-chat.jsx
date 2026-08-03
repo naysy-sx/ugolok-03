@@ -50,7 +50,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 	}
 
 	return (
-		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-3xs)" }}>
+		<form class="stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -63,7 +63,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
-			<div class="cluster">
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{allowAttachments && (
 					<>
 						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
@@ -126,7 +126,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	}
 
 	return (
-		<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -140,10 +140,10 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 			{messages.length === 0 ? (
 				<p style={{ color: "var(--muted)" }}>{t("channelChat.noMessages")}</p>
 			) : (
-				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
 					{messages.map((m) => (
 						<li key={m.id}>
-							<div class="cluster" style={{ alignItems: "center" }}>
+							<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 								<ContactIdentity pubkey={m.authorPubkey} />
 								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
 								{m.authorPubkey !== ownerPubkey && (

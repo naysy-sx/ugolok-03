@@ -48,14 +48,14 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	}
 
 	return (
-		<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 
-			<div class="cluster" style={{ alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<p>
 					{t("moderation.totalReports", { total: stats.total, unviewed: stats.unviewed })}
 				</p>
@@ -67,11 +67,11 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 			</div>
 
 			{stats.topIgnored.length > 0 && (
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<h3>{t("moderation.topIgnoredTitle")}</h3>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{stats.topIgnored.map((entry) => (
-							<li key={entry.pubkey} class="cluster" style={{ alignItems: "center" }}>
+							<li key={entry.pubkey} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 								<ContactIdentity pubkey={entry.pubkey} />
 								<small style={{ color: "var(--muted)" }}>{t("moderation.ignoredByCount", { count: entry.count })}</small>
 							</li>
@@ -81,7 +81,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 			)}
 
 			{banned.length > 0 && (
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<h3>{t("moderation.bannedTitle", { count: banned.length })}</h3>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{banned.map((pubkey) => (
@@ -93,38 +93,38 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 				</div>
 			)}
 
-			<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h3>{t("moderation.reportsTitle")}</h3>
 				{reports.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>{t("moderation.noReports")}</p>
 				) : (
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
 						{reports.map((r) => (
 							<li
 								key={r.id}
-								class="flow"
+								class="stack box"
 								style={{
-									"--flow-space": "var(--space-3xs)",
-									padding: "var(--space-s)",
+									"--gap": "var(--space-3xs)",
+									"--pad": "var(--space-s)",
 									border: "var(--border-width) solid var(--border)",
 									borderRadius: "var(--radius)",
 									opacity: r.viewed ? 0.7 : 1,
 								}}
 							>
-								<div class="cluster" style={{ alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									<strong>{REASON_LABEL_KEYS[r.reason] ? t(REASON_LABEL_KEYS[r.reason]) : r.reason}</strong>
 									{!r.viewed && <small style={{ color: "var(--accent)" }}>{t("moderation.newLabel")}</small>}
 								</div>
-								<div class="cluster" style={{ alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									<span>{t("moderation.fromLabel")}</span>
 									<ContactIdentity pubkey={r.reporterPubkey} />
 								</div>
-								<div class="cluster" style={{ alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									<span>{t("moderation.toLabel")}</span>
 									<ContactIdentity pubkey={r.targetPubkey} />
 								</div>
 								<p style={{ whiteSpace: "pre-wrap", color: "var(--muted)" }}>{r.contentText}</p>
-								<div class="cluster">
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									{!r.viewed && (
 										<button type="button" onClick={() => markReportViewed(ownerPubkey, r.id).then(refresh)}>
 											{t("moderation.markViewedButton")}
