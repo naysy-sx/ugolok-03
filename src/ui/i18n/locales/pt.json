@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Limpar a conversa? As mensagens serão excluídas apenas para você — seu contato manterá tudo.",
 			"fileKeyNotFoundError": "Chave do arquivo não encontrada — o arquivo pode ainda não estar totalmente sincronizado.",
 			"sendAttachmentConfirm": "O arquivo será enviado como anexo — após o envio, a chave irá para o destinatário e não poderá ser desfeita. Continuar?"
-		}
+		},
+		"voiceMessageName": "Mensagem de voz"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Carregando mensagem de voz…",
 		"loadingAudio": "Carregando áudio…",
 		"downloading": "Baixando…",
-		"download": "Baixar"
+		"download": "Baixar",
+		"imageLoadError": "Não foi possível carregar a imagem: {{error}}",
+		"loadingImage": "Carregando imagem…",
+		"videoLoadError": "Não foi possível carregar o vídeo: {{error}}",
+		"loadingVideo": "Carregando vídeo…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Salvar nos meus arquivos",
 		"moveToTrashConfirm": "Mover para a lixeira?",
 		"moveManyToTrashConfirm": "Mover {{count}} itens para a lixeira?",
-		"purgeConfirm": "Excluir permanentemente? Esta ação é irreversível."
+		"purgeConfirm": "Excluir permanentemente? Esta ação é irreversível.",
+		"sharedFolderDefaultName": "Pasta compartilhada ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Reprodutor",
@@ -613,5 +624,36 @@
 			"stek": "Tecnologia",
 			"iskhodnyjKod": "Código-fonte"
 		}
+	},
+	"syncLog": {
+		"connecting": "Conectando ao servidor…",
+		"searchingRelay": "Procurando seu relay…",
+		"relayFound": "Seu relay foi encontrado ({{count}})",
+		"relayNotFoundDefault": "Seu relay não foi encontrado — usando o relay padrão",
+		"connectingDone": "Conexão ao servidor — concluída",
+		"loadingHistory": "Carregando histórico do servidor…",
+		"loadingHistoryDone": "Carregamento do histórico — concluído ({{count}} novos eventos)",
+		"contacts": "Contatos…",
+		"contactsDone": "Contatos — concluído",
+		"permissions": "Permissões…",
+		"permissionsDone": "Permissões — concluído",
+		"settings": "Configurações…",
+		"settingsDone": "Configurações — concluído",
+		"readMarks": "Marcas de leitura…",
+		"readMarksDone": "Marcas de leitura — concluído",
+		"publishingKeyProfile": "Publicando chave e perfil…",
+		"publishingKeyProfileDone": "Publicação de chave e perfil — concluída",
+		"devices": "Dispositivos…",
+		"devicesDone": "Dispositivos — concluído",
+		"chatHistory": "Histórico de conversas…",
+		"chatHistoryDone": "Histórico de conversas — concluído",
+		"profile": "Perfil…",
+		"profileDone": "Perfil — concluído",
+		"channels": "Canais…",
+		"channelsBackfilled": "Canais: chave reemitida para {{count}} canal(is)",
+		"channelsNoChanges": "Canais — sem alterações",
+		"files": "Arquivos…",
+		"filesDone": "Arquivos — concluído",
+		"complete": "Sincronização concluída"
 	}
 }

@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Gesprek wissen? Berichten worden alleen bij jou verwijderd — je contact behoudt alles.",
 			"fileKeyNotFoundError": "Bestandssleutel niet gevonden — het bestand is mogelijk nog niet volledig gesynchroniseerd.",
 			"sendAttachmentConfirm": "Het bestand wordt als bijlage verzonden — na verzending gaat de sleutel naar de ontvanger en kan dit niet ongedaan worden gemaakt. Doorgaan?"
-		}
+		},
+		"voiceMessageName": "Spraakbericht"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Spraakbericht laden…",
 		"loadingAudio": "Audio laden…",
 		"downloading": "Downloaden…",
-		"download": "Downloaden"
+		"download": "Downloaden",
+		"imageLoadError": "Kon afbeelding niet laden: {{error}}",
+		"loadingImage": "Afbeelding laden…",
+		"videoLoadError": "Kon video niet laden: {{error}}",
+		"loadingVideo": "Video laden…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Opslaan bij mijn bestanden",
 		"moveToTrashConfirm": "Naar de prullenbak verplaatsen?",
 		"moveManyToTrashConfirm": "{{count}} items naar de prullenbak verplaatsen?",
-		"purgeConfirm": "Definitief verwijderen? Dit kan niet ongedaan worden gemaakt."
+		"purgeConfirm": "Definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
+		"sharedFolderDefaultName": "Gedeelde map ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Speler",
@@ -613,5 +624,36 @@
 			"stek": "Technologie",
 			"iskhodnyjKod": "Broncode"
 		}
+	},
+	"syncLog": {
+		"connecting": "Verbinding maken met server…",
+		"searchingRelay": "Je relay wordt gezocht…",
+		"relayFound": "Je relay is gevonden ({{count}})",
+		"relayNotFoundDefault": "Je relay is niet gevonden — standaard relay wordt gebruikt",
+		"connectingDone": "Verbinding met server — gereed",
+		"loadingHistory": "Geschiedenis van server laden…",
+		"loadingHistoryDone": "Geschiedenis laden — gereed ({{count}} nieuwe gebeurtenissen)",
+		"contacts": "Contacten…",
+		"contactsDone": "Contacten — gereed",
+		"permissions": "Rechten…",
+		"permissionsDone": "Rechten — gereed",
+		"settings": "Instellingen…",
+		"settingsDone": "Instellingen — gereed",
+		"readMarks": "Leesmarkeringen…",
+		"readMarksDone": "Leesmarkeringen — gereed",
+		"publishingKeyProfile": "Sleutel en profiel publiceren…",
+		"publishingKeyProfileDone": "Publiceren van sleutel en profiel — gereed",
+		"devices": "Apparaten…",
+		"devicesDone": "Apparaten — gereed",
+		"chatHistory": "Chatgeschiedenis…",
+		"chatHistoryDone": "Chatgeschiedenis — gereed",
+		"profile": "Profiel…",
+		"profileDone": "Profiel — gereed",
+		"channels": "Kanalen…",
+		"channelsBackfilled": "Kanalen: sleutel opnieuw uitgegeven voor {{count}} kanaal/kanalen",
+		"channelsNoChanges": "Kanalen — geen wijzigingen",
+		"files": "Bestanden…",
+		"filesDone": "Bestanden — gereed",
+		"complete": "Synchronisatie voltooid"
 	}
 }

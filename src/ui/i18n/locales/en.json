@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Clear the conversation? Messages will be deleted only for you — your contact will keep everything.",
 			"fileKeyNotFoundError": "File key not found — the file may not be fully synced yet.",
 			"sendAttachmentConfirm": "The file will be sent as an attachment — once sent, the key goes to the recipient and can't be undone. Continue?"
-		}
+		},
+		"voiceMessageName": "Voice message"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Loading voice message…",
 		"loadingAudio": "Loading audio…",
 		"downloading": "Downloading…",
-		"download": "Download"
+		"download": "Download",
+		"imageLoadError": "Failed to load the image: {{error}}",
+		"loadingImage": "Loading image…",
+		"videoLoadError": "Failed to load the video: {{error}}",
+		"loadingVideo": "Loading video…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Save to my files",
 		"moveToTrashConfirm": "Move to trash?",
 		"moveManyToTrashConfirm": "Move {{count}} items to trash?",
-		"purgeConfirm": "Delete permanently? This is irreversible."
+		"purgeConfirm": "Delete permanently? This is irreversible.",
+		"sharedFolderDefaultName": "Shared folder ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Player",
@@ -613,5 +624,36 @@
 			"stek": "Technology",
 			"iskhodnyjKod": "Source code"
 		}
+	},
+	"syncLog": {
+		"connecting": "Connecting to server…",
+		"searchingRelay": "Looking for your relay…",
+		"relayFound": "Your relay found ({{count}})",
+		"relayNotFoundDefault": "Your relay wasn't found — using the default relay",
+		"connectingDone": "Connecting to server — done",
+		"loadingHistory": "Loading history from server…",
+		"loadingHistoryDone": "Loading history — done ({{count}} new events)",
+		"contacts": "Contacts…",
+		"contactsDone": "Contacts — done",
+		"permissions": "Permissions…",
+		"permissionsDone": "Permissions — done",
+		"settings": "Settings…",
+		"settingsDone": "Settings — done",
+		"readMarks": "Read marks…",
+		"readMarksDone": "Read marks — done",
+		"publishingKeyProfile": "Publishing key and profile…",
+		"publishingKeyProfileDone": "Publishing key and profile — done",
+		"devices": "Devices…",
+		"devicesDone": "Devices — done",
+		"chatHistory": "Chat history…",
+		"chatHistoryDone": "Chat history — done",
+		"profile": "Profile…",
+		"profileDone": "Profile — done",
+		"channels": "Channels…",
+		"channelsBackfilled": "Channels: key reissued for {{count}} channel(s)",
+		"channelsNoChanges": "Channels — no changes",
+		"files": "Files…",
+		"filesDone": "Files — done",
+		"complete": "Sync complete"
 	}
 }

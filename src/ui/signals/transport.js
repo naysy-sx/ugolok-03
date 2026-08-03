@@ -52,6 +52,7 @@ import { ensureProfilePublished, hydrateOwnProfile } from "../../domain/identity
 import { bumpProfileActivity } from "./profile.js";
 import { currentUser } from "./auth.js";
 import { resetSyncLog, logSync } from "./sync-log.js";
+import { t } from "./i18n.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 
 function decodeBase64(str) {
@@ -223,7 +224,7 @@ async function discoverOwnRelaysViaBootstrap(pubkeyHex) {
 async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	resetSyncLog();
-	logSync("Подключение к серверу…");
+	logSync(t("syncLog.connecting"));
 	// Этап 34 — найденное решение (бутстрап-проблема): relay-список нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
 	// Локальный кэш — источник истины для ТЕКУЩЕГО подключения; build-time дефолт —
@@ -241,11 +242,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// просто один быстрый round-trip (bootstrap-relay по умолчанию — тот же
 	// сервер, что и обычный relay, см. CONTRACTS.md, этап 61).
 	if (!(await hasLocalUiSettings(pubkeyHex))) {
-		logSync("Поиск вашего relay…");
+		logSync(t("syncLog.searchingRelay"));
 		const discovered = await discoverOwnRelaysViaBootstrap(pubkeyHex).catch(() => []);
 		if (discovered.length > 0) {
 			relayEntries = discovered;
-			logSync(`Найден ваш relay (${discovered.length})`);
+			logSync(t("syncLog.relayFound", { count: discovered.length }));
 			// Сохранить локально СРАЗУ — иначе следующий вход снова делал бы
 			// bootstrap-запрос. publisher на этот момент ещё не создан — publish
 			// заведомо падает, best-effort (тот же принцип, что и everywhere в
@@ -254,7 +255,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 				throw new Error("publisher ещё не создан на этот момент connect()");
 			});
 		} else {
-			logSync("Свой relay не найден — используется relay по умолчанию");
+			logSync(t("syncLog.relayNotFoundDefault"));
 		}
 	}
 	if (relayEntries.length === 0) {
@@ -272,7 +273,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	});
 	connection.connect();
 	await waitForConnState(connection, (s) => s === "connected", 8000);
-	logSync("Подключение к серверу — готово");
+	logSync(t("syncLog.connectingDone"));
 
 	cryptoWorker = new CryptoWorker();
 	const api = Comlink.wrap(cryptoWorker);
@@ -291,19 +292,19 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).
 	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish });
 
-	logSync("Загрузка истории с сервера…");
+	logSync(t("syncLog.loadingHistory"));
 	const bootstrapResult = await runBootstrap(connection, pubkeyHex, { verifyBatch });
-	logSync(`Загрузка истории — готово (${bootstrapResult.addedCount} новых событий)`);
-	logSync("Контакты…");
+	logSync(t("syncLog.loadingHistoryDone", { count: bootstrapResult.addedCount }));
+	logSync(t("syncLog.contacts"));
 	await reconcileContactsFromEventLog(pubkeyHex);
-	logSync("Контакты — готово");
-	logSync("Права доступа…");
+	logSync(t("syncLog.contactsDone"));
+	logSync(t("syncLog.permissions"));
 	await rebuildGroups(pubkeyHex, privKey, dbKey);
 	await rebuildEffectivePermissions(pubkeyHex, privKey);
-	logSync("Права доступа — готово");
-	logSync("Настройки…");
+	logSync(t("syncLog.permissionsDone"));
+	logSync(t("syncLog.settings"));
 	await rebuildUiSettings(pubkeyHex, privKey, dbKey);
-	logSync("Настройки — готово");
+	logSync(t("syncLog.settingsDone"));
 	// Этап 59 — backfill: делает kind:10002 реальным для аккаунтов, заведённых
 	// до этапа 59 (relayUrls до сих пор нигде публично не анонсировался, кроме
 	// куцего self-check'а diagnostics.jsx). Без флага "announced" (в отличие от
@@ -316,7 +317,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	publisher
 		.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
 		.catch(() => {});
-	logSync("Отметки прочтения…");
+	logSync(t("syncLog.readMarks"));
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
 	// kind 30070, второе устройство той же identity никогда не читало его обратно.
@@ -324,8 +325,8 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// Этап 47 — тот же класс кросс-device синхронизации, что AC-06 выше, но для
 	// read-tracking каналов (kind 30074), не личных чатов.
 	await rebuildChannelReadStatus(pubkeyHex, privKey);
-	logSync("Отметки прочтения — готово");
-	logSync("Публикация ключа и профиля…");
+	logSync(t("syncLog.readMarksDone"));
+	logSync(t("syncLog.publishingKeyProfile"));
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
@@ -333,22 +334,22 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	if (currentUser.value?.login) {
 		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish);
 	}
-	logSync("Публикация ключа и профиля — готово");
+	logSync(t("syncLog.publishingKeyProfileDone"));
 
-	logSync("Устройства…");
+	logSync(t("syncLog.devices"));
 	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
 	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
 	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
 	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
-	logSync("Устройства — готово");
+	logSync(t("syncLog.devicesDone"));
 
-	logSync("История переписки…");
+	logSync(t("syncLog.chatHistory"));
 	// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
 	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
 	// переподключившееся устройство получило полный паритет истории чатов.
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
 	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
-	logSync("История переписки — готово");
+	logSync(t("syncLog.chatHistoryDone"));
 
 	// Найдено пользователем (живая проверка — вход с чистого устройства по
 	// мнемонике): bootstrap выше уже стянул kind 0 (профиль) в db.events через
@@ -360,9 +361,9 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// события (см. ниже) — если экран уже смонтирован (чат/бейдж в сайдбаре
 	// видны сразу после логина), его эффект отработал ОДИН раз на ещё пустом
 	// состоянии и не перезапускался, даже когда bootstrap выше всё заполнил.
-	logSync("Профиль…");
+	logSync(t("syncLog.profile"));
 	await hydrateOwnProfile(pubkeyHex);
-	logSync("Профиль — готово");
+	logSync(t("syncLog.profileDone"));
 	bumpProfileActivity();
 	bumpMessagingActivity();
 
@@ -504,7 +505,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// обновляет фильтр, когда появляется новый чат.
 	await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
 
-	logSync("Каналы…");
+	logSync(t("syncLog.channels"));
 	// Этап 30 — восстановление подписок на VIEW-гранты/контент каналов после
 	// reload/переподключения, тот же принцип, что refreshGroupMessageSubscription выше.
 	await refreshChannelGrantSubscription(pubkeyHex, privKey, dbKey);
@@ -514,12 +515,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// той же личности никогда не расшифрует собственный канал.
 	const backfilledChannelCount = await backfillOwnChannelGrants(pubkeyHex, privKey, dbKey, publish);
 	if (backfilledChannelCount > 0) {
-		logSync(`Каналы: довыдан ключ для ${backfilledChannelCount} канала(ов)`);
+		logSync(t("syncLog.channelsBackfilled", { count: backfilledChannelCount }));
 	} else {
-		logSync("Каналы — без изменений");
+		logSync(t("syncLog.channelsNoChanges"));
 	}
 
-	logSync("Файлы…");
+	logSync(t("syncLog.files"));
 	// Этап 53 И6, задача 6.7 — доли: восстанавливает activeMounts ИЗ ХРАНИЛИЩА
 	// (не из UI-состояния экрана "Файлы" — тот мог не открываться в этой
 	// сессии вовсе) ДО подписки на #h, иначе fileSubtreeOpSubscription не
@@ -527,13 +528,13 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	await initMounts(pubkeyHex, dbKey);
 	await refreshFileShareGrantSubscription(pubkeyHex, privKey, dbKey);
 	await refreshFileSubtreeOpSubscription(pubkeyHex, dbKey);
-	logSync("Файлы — готово");
+	logSync(t("syncLog.filesDone"));
 
 	await startIncrementalSync(connection, pubkeyHex, {
 		verifyBatch,
 		onCaughtUp: () => {
 			synced.value = true;
-			logSync("Синхронизация завершена");
+			logSync(t("syncLog.complete"));
 			// Инкрементальная синхронизация — отдельный, более поздний рубеж, чем
 			// основной bootstrap выше (может донести то, что пришло уже во время
 			// него) — тот же бамп, та же причина: экраны/бейджи, смонтированные
@@ -1148,7 +1149,7 @@ export async function refreshFileShareGrantSubscription(ownerPubkey, privKey, db
 					// из контактов — решение UI-слоя при отображении, не здесь;
 					// пользователь всегда может переименовать узел-ссылку как любую
 					// другую папку, ops.js's rename не меняется).
-					await handleIncomingShareGrant(ownerPubkey, privKey, dbKey, event, `Общая папка (${event.pubkey.slice(0, 8)})`);
+					await handleIncomingShareGrant(ownerPubkey, privKey, dbKey, event, t("files.sharedFolderDefaultName", { pubkey: event.pubkey.slice(0, 8) }));
 					if (activeMountRootIds.value.length > beforeCount) gotNewMount = true;
 				}
 				if (gotNewMount) {

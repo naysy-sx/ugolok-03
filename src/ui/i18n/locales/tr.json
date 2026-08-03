@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Sohbet temizlensin mi? Mesajlar yalnızca sizde silinir — kişideki her şey kalır.",
 			"fileKeyNotFoundError": "Dosya anahtarı bulunamadı — dosya henüz tam olarak senkronize edilmemiş olabilir.",
 			"sendAttachmentConfirm": "Dosya ek olarak gönderilecek — gönderildikten sonra anahtar alıcıya gider ve geri alınamaz. Devam edilsin mi?"
-		}
+		},
+		"voiceMessageName": "Sesli mesaj"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Sesli mesaj yükleniyor…",
 		"loadingAudio": "Ses yükleniyor…",
 		"downloading": "İndiriliyor…",
-		"download": "İndir"
+		"download": "İndir",
+		"imageLoadError": "Görsel yüklenemedi: {{error}}",
+		"loadingImage": "Görsel yükleniyor…",
+		"videoLoadError": "Video yüklenemedi: {{error}}",
+		"loadingVideo": "Video yükleniyor…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Kendi dosyalarıma kaydet",
 		"moveToTrashConfirm": "Çöp kutusuna taşınsın mı?",
 		"moveManyToTrashConfirm": "{{count}} öğe çöp kutusuna taşınsın mı?",
-		"purgeConfirm": "Kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
+		"purgeConfirm": "Kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
+		"sharedFolderDefaultName": "Paylaşılan klasör ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Oynatıcı",
@@ -613,5 +624,36 @@
 			"stek": "Teknoloji",
 			"iskhodnyjKod": "Kaynak kod"
 		}
+	},
+	"syncLog": {
+		"connecting": "Sunucuya bağlanılıyor…",
+		"searchingRelay": "Röleniz aranıyor…",
+		"relayFound": "Röleniz bulundu ({{count}})",
+		"relayNotFoundDefault": "Röleniz bulunamadı — varsayılan röle kullanılıyor",
+		"connectingDone": "Sunucuya bağlantı — tamamlandı",
+		"loadingHistory": "Sunucudan geçmiş yükleniyor…",
+		"loadingHistoryDone": "Geçmiş yükleme — tamamlandı ({{count}} yeni olay)",
+		"contacts": "Kişiler…",
+		"contactsDone": "Kişiler — tamamlandı",
+		"permissions": "İzinler…",
+		"permissionsDone": "İzinler — tamamlandı",
+		"settings": "Ayarlar…",
+		"settingsDone": "Ayarlar — tamamlandı",
+		"readMarks": "Okundu işaretleri…",
+		"readMarksDone": "Okundu işaretleri — tamamlandı",
+		"publishingKeyProfile": "Anahtar ve profil yayınlanıyor…",
+		"publishingKeyProfileDone": "Anahtar ve profil yayınlama — tamamlandı",
+		"devices": "Cihazlar…",
+		"devicesDone": "Cihazlar — tamamlandı",
+		"chatHistory": "Sohbet geçmişi…",
+		"chatHistoryDone": "Sohbet geçmişi — tamamlandı",
+		"profile": "Profil…",
+		"profileDone": "Profil — tamamlandı",
+		"channels": "Kanallar…",
+		"channelsBackfilled": "Kanallar: {{count}} kanal için anahtar yeniden verildi",
+		"channelsNoChanges": "Kanallar — değişiklik yok",
+		"files": "Dosyalar…",
+		"filesDone": "Dosyalar — tamamlandı",
+		"complete": "Senkronizasyon tamamlandı"
 	}
 }

@@ -21,9 +21,20 @@ function base64ToBytes(str) {
 }
 
 export function formatFileSize(bytes) {
-	if (bytes < 1024) return `${bytes} Б`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+	if (bytes < 1024) return t("attachment.units.bytes", { count: bytes });
+	if (bytes < 1024 * 1024) return t("attachment.units.kb", { count: (bytes / 1024).toFixed(1) });
+	return t("attachment.units.mb", { count: (bytes / (1024 * 1024)).toFixed(1) });
+}
+
+// voice (F-AT-08) — имя вложения не годится для отображения: оно приходит
+// зашифрованным ВНУТРИ сообщения от отправителя буквальным текстом на ЕГО
+// языке (см. chat.jsx buildOutgoingAttachment) — получатель не может
+// "перевести" чужие данные через свой t(). Вместо этого для голосовых вообще
+// игнорируем attachment.name и показываем нейтральную подпись на языке
+// ПРОСМАТРИВАЮЩЕГО, определяя голосовое по флагу attachment.voice (уже
+// существующее булево поле, не зависит от текста).
+function attachmentDisplayName(attachment) {
+	return attachment.voice ? t("chat.voiceMessageName") : attachment.name;
 }
 
 const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconMusicNote, file: IconFileText };
@@ -67,14 +78,14 @@ function ImageAttachment({ attachment }) {
 	if (error) {
 		return (
 			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-				Не удалось загрузить картинку: {error}
+				{t("attachment.imageLoadError", { error })}
 			</p>
 		);
 	}
 	if (!url) {
 		return (
 			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> Загрузка картинки…
+				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingImage")}
 			</p>
 		);
 	}
@@ -178,14 +189,14 @@ function VideoAttachment({ attachment }) {
 	if (error) {
 		return (
 			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-				Не удалось загрузить видео: {error}
+				{t("attachment.videoLoadError", { error })}
 			</p>
 		);
 	}
 	if (!url) {
 		return (
 			<p class="cluster" style={{ alignItems: "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> Загрузка видео…
+				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingVideo")}
 			</p>
 		);
 	}
@@ -236,7 +247,7 @@ export function AttachmentDownloadLink({ attachment }) {
 			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
 			const a = document.createElement("a");
 			a.href = url;
-			a.download = attachment.name || "file";
+			a.download = attachmentDisplayName(attachment) || "file";
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (err) {
@@ -249,7 +260,7 @@ export function AttachmentDownloadLink({ attachment }) {
 	return (
 		<>
 			<button type="button" onClick={handleDownload} disabled={busy}>
-				<Icon /> {busy ? t("attachment.downloading") : t("attachment.download")} {attachment.name} ({formatFileSize(attachment.size)})
+				<Icon /> {busy ? t("attachment.downloading") : t("attachment.download")} {attachmentDisplayName(attachment)} ({formatFileSize(attachment.size)})
 			</button>
 			{error && (
 				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>

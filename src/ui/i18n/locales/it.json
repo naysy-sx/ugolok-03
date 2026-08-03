@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Cancellare la conversazione? I messaggi verranno eliminati solo per te — il tuo contatto manterrà tutto.",
 			"fileKeyNotFoundError": "Chiave del file non trovata — il file potrebbe non essere ancora completamente sincronizzato.",
 			"sendAttachmentConfirm": "Il file verrà inviato come allegato — una volta inviato, la chiave passerà al destinatario e non potrà essere annullato. Continuare?"
-		}
+		},
+		"voiceMessageName": "Messaggio vocale"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Caricamento messaggio vocale…",
 		"loadingAudio": "Caricamento audio…",
 		"downloading": "Download in corso…",
-		"download": "Scarica"
+		"download": "Scarica",
+		"imageLoadError": "Impossibile caricare l'immagine: {{error}}",
+		"loadingImage": "Caricamento immagine…",
+		"videoLoadError": "Impossibile caricare il video: {{error}}",
+		"loadingVideo": "Caricamento video…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Salva nei miei file",
 		"moveToTrashConfirm": "Spostare nel cestino?",
 		"moveManyToTrashConfirm": "Spostare {{count}} elementi nel cestino?",
-		"purgeConfirm": "Eliminare definitivamente? Questa azione è irreversibile."
+		"purgeConfirm": "Eliminare definitivamente? Questa azione è irreversibile.",
+		"sharedFolderDefaultName": "Cartella condivisa ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Lettore",
@@ -613,5 +624,36 @@
 			"stek": "Tecnologie",
 			"iskhodnyjKod": "Codice sorgente"
 		}
+	},
+	"syncLog": {
+		"connecting": "Connessione al server…",
+		"searchingRelay": "Ricerca del tuo relay…",
+		"relayFound": "Relay trovato ({{count}})",
+		"relayNotFoundDefault": "Il tuo relay non è stato trovato — verrà usato il relay predefinito",
+		"connectingDone": "Connessione al server — completata",
+		"loadingHistory": "Caricamento della cronologia dal server…",
+		"loadingHistoryDone": "Caricamento della cronologia — completato ({{count}} nuovi eventi)",
+		"contacts": "Contatti…",
+		"contactsDone": "Contatti — completato",
+		"permissions": "Permessi…",
+		"permissionsDone": "Permessi — completato",
+		"settings": "Impostazioni…",
+		"settingsDone": "Impostazioni — completato",
+		"readMarks": "Contrassegni di lettura…",
+		"readMarksDone": "Contrassegni di lettura — completato",
+		"publishingKeyProfile": "Pubblicazione di chiave e profilo…",
+		"publishingKeyProfileDone": "Pubblicazione di chiave e profilo — completata",
+		"devices": "Dispositivi…",
+		"devicesDone": "Dispositivi — completato",
+		"chatHistory": "Cronologia chat…",
+		"chatHistoryDone": "Cronologia chat — completato",
+		"profile": "Profilo…",
+		"profileDone": "Profilo — completato",
+		"channels": "Canali…",
+		"channelsBackfilled": "Canali: chiave riemessa per {{count}} canale/i",
+		"channelsNoChanges": "Canali — nessuna modifica",
+		"files": "File…",
+		"filesDone": "File — completato",
+		"complete": "Sincronizzazione completata"
 	}
 }

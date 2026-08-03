@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Verlauf löschen? Nachrichten werden nur bei Ihnen gelöscht — Ihr Kontakt behält alles.",
 			"fileKeyNotFoundError": "Dateischlüssel nicht gefunden — die Datei ist möglicherweise noch nicht vollständig synchronisiert.",
 			"sendAttachmentConfirm": "Die Datei wird als Anhang gesendet — nach dem Senden geht der Schlüssel an den Empfänger und kann nicht rückgängig gemacht werden. Fortfahren?"
-		}
+		},
+		"voiceMessageName": "Sprachnachricht"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Sprachnachricht wird geladen…",
 		"loadingAudio": "Audio wird geladen…",
 		"downloading": "Wird heruntergeladen…",
-		"download": "Herunterladen"
+		"download": "Herunterladen",
+		"imageLoadError": "Bild konnte nicht geladen werden: {{error}}",
+		"loadingImage": "Bild wird geladen…",
+		"videoLoadError": "Video konnte nicht geladen werden: {{error}}",
+		"loadingVideo": "Video wird geladen…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "In meinen Dateien speichern",
 		"moveToTrashConfirm": "In den Papierkorb verschieben?",
 		"moveManyToTrashConfirm": "{{count}} Objekte in den Papierkorb verschieben?",
-		"purgeConfirm": "Endgültig löschen? Dies ist unwiderruflich."
+		"purgeConfirm": "Endgültig löschen? Dies ist unwiderruflich.",
+		"sharedFolderDefaultName": "Freigegebener Ordner ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Player",
@@ -613,5 +624,36 @@
 			"stek": "Technik",
 			"iskhodnyjKod": "Quellcode"
 		}
+	},
+	"syncLog": {
+		"connecting": "Verbindung zum Server wird hergestellt…",
+		"searchingRelay": "Ihr Relay wird gesucht…",
+		"relayFound": "Ihr Relay gefunden ({{count}})",
+		"relayNotFoundDefault": "Ihr Relay wurde nicht gefunden — Standard-Relay wird verwendet",
+		"connectingDone": "Verbindung zum Server — fertig",
+		"loadingHistory": "Verlauf vom Server wird geladen…",
+		"loadingHistoryDone": "Verlauf laden — fertig ({{count}} neue Ereignisse)",
+		"contacts": "Kontakte…",
+		"contactsDone": "Kontakte — fertig",
+		"permissions": "Berechtigungen…",
+		"permissionsDone": "Berechtigungen — fertig",
+		"settings": "Einstellungen…",
+		"settingsDone": "Einstellungen — fertig",
+		"readMarks": "Lesemarkierungen…",
+		"readMarksDone": "Lesemarkierungen — fertig",
+		"publishingKeyProfile": "Schlüssel und Profil werden veröffentlicht…",
+		"publishingKeyProfileDone": "Veröffentlichung von Schlüssel und Profil — fertig",
+		"devices": "Geräte…",
+		"devicesDone": "Geräte — fertig",
+		"chatHistory": "Chatverlauf…",
+		"chatHistoryDone": "Chatverlauf — fertig",
+		"profile": "Profil…",
+		"profileDone": "Profil — fertig",
+		"channels": "Kanäle…",
+		"channelsBackfilled": "Kanäle: Schlüssel neu ausgestellt für {{count}} Kanal/Kanäle",
+		"channelsNoChanges": "Kanäle — keine Änderungen",
+		"files": "Dateien…",
+		"filesDone": "Dateien — fertig",
+		"complete": "Synchronisierung abgeschlossen"
 	}
 }

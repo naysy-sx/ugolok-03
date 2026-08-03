@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "会話を消去しますか？ メッセージはあなた側だけで削除され、相手にはそのまま残ります。",
 			"fileKeyNotFoundError": "ファイルキーが見つかりません — ファイルがまだ完全に同期されていない可能性があります。",
 			"sendAttachmentConfirm": "ファイルは添付として送信されます — 送信後、鍵は相手に渡り、取り消せません。続けますか？"
-		}
+		},
+		"voiceMessageName": "音声メッセージ"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "音声メッセージを読み込み中…",
 		"loadingAudio": "音声を読み込み中…",
 		"downloading": "ダウンロード中…",
-		"download": "ダウンロード"
+		"download": "ダウンロード",
+		"imageLoadError": "画像を読み込めませんでした: {{error}}",
+		"loadingImage": "画像を読み込み中…",
+		"videoLoadError": "動画を読み込めませんでした: {{error}}",
+		"loadingVideo": "動画を読み込み中…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "自分のファイルに保存",
 		"moveToTrashConfirm": "ゴミ箱に移動しますか？",
 		"moveManyToTrashConfirm": "{{count}} 件のオブジェクトをゴミ箱に移動しますか？",
-		"purgeConfirm": "完全に削除しますか？ この操作は取り消せません。"
+		"purgeConfirm": "完全に削除しますか？ この操作は取り消せません。",
+		"sharedFolderDefaultName": "共有フォルダ（{{pubkey}}）"
 	},
 	"filePlayer": {
 		"ariaLabel": "プレーヤー",
@@ -613,5 +624,36 @@
 			"stek": "技術",
 			"iskhodnyjKod": "ソースコード"
 		}
+	},
+	"syncLog": {
+		"connecting": "サーバーに接続中…",
+		"searchingRelay": "あなたのリレーを検索中…",
+		"relayFound": "リレーが見つかりました（{{count}}）",
+		"relayNotFoundDefault": "自分のリレーが見つかりません — デフォルトのリレーを使用します",
+		"connectingDone": "サーバーへの接続 — 完了",
+		"loadingHistory": "サーバーから履歴を読み込み中…",
+		"loadingHistoryDone": "履歴の読み込み — 完了（新規イベント {{count}} 件）",
+		"contacts": "連絡先…",
+		"contactsDone": "連絡先 — 完了",
+		"permissions": "アクセス権…",
+		"permissionsDone": "アクセス権 — 完了",
+		"settings": "設定…",
+		"settingsDone": "設定 — 完了",
+		"readMarks": "既読マーク…",
+		"readMarksDone": "既読マーク — 完了",
+		"publishingKeyProfile": "鍵とプロフィールを公開中…",
+		"publishingKeyProfileDone": "鍵とプロフィールの公開 — 完了",
+		"devices": "デバイス…",
+		"devicesDone": "デバイス — 完了",
+		"chatHistory": "チャット履歴…",
+		"chatHistoryDone": "チャット履歴 — 完了",
+		"profile": "プロフィール…",
+		"profileDone": "プロフィール — 完了",
+		"channels": "チャンネル…",
+		"channelsBackfilled": "チャンネル: {{count}} 件のチャンネルに鍵を再発行しました",
+		"channelsNoChanges": "チャンネル — 変更なし",
+		"files": "ファイル…",
+		"filesDone": "ファイル — 完了",
+		"complete": "同期完了"
 	}
 }

@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Wyczyścić rozmowę? Wiadomości zostaną usunięte tylko u Ciebie — Twój rozmówca zachowa wszystko.",
 			"fileKeyNotFoundError": "Nie znaleziono klucza pliku — plik mógł jeszcze nie zostać w pełni zsynchronizowany.",
 			"sendAttachmentConfirm": "Plik zostanie wysłany jako załącznik — po wysłaniu klucz trafi do odbiorcy i nie da się tego cofnąć. Kontynuować?"
-		}
+		},
+		"voiceMessageName": "Wiadomość głosowa"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Wczytywanie wiadomości głosowej…",
 		"loadingAudio": "Wczytywanie dźwięku…",
 		"downloading": "Pobieranie…",
-		"download": "Pobierz"
+		"download": "Pobierz",
+		"imageLoadError": "Nie udało się wczytać obrazu: {{error}}",
+		"loadingImage": "Wczytywanie obrazu…",
+		"videoLoadError": "Nie udało się wczytać wideo: {{error}}",
+		"loadingVideo": "Wczytywanie wideo…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Zapisz u siebie",
 		"moveToTrashConfirm": "Przenieść do kosza?",
 		"moveManyToTrashConfirm": "Przenieść {{count}} obiektów do kosza?",
-		"purgeConfirm": "Usunąć trwale? Tej operacji nie można cofnąć."
+		"purgeConfirm": "Usunąć trwale? Tej operacji nie można cofnąć.",
+		"sharedFolderDefaultName": "Udostępniony folder ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Odtwarzacz",
@@ -613,5 +624,36 @@
 			"stek": "Technologia",
 			"iskhodnyjKod": "Kod źródłowy"
 		}
+	},
+	"syncLog": {
+		"connecting": "Łączenie z serwerem…",
+		"searchingRelay": "Wyszukiwanie Twojego relaya…",
+		"relayFound": "Znaleziono Twój relay ({{count}})",
+		"relayNotFoundDefault": "Nie znaleziono Twojego relaya — używany jest domyślny relay",
+		"connectingDone": "Łączenie z serwerem — gotowe",
+		"loadingHistory": "Wczytywanie historii z serwera…",
+		"loadingHistoryDone": "Wczytywanie historii — gotowe ({{count}} nowych zdarzeń)",
+		"contacts": "Kontakty…",
+		"contactsDone": "Kontakty — gotowe",
+		"permissions": "Uprawnienia…",
+		"permissionsDone": "Uprawnienia — gotowe",
+		"settings": "Ustawienia…",
+		"settingsDone": "Ustawienia — gotowe",
+		"readMarks": "Znaczniki przeczytania…",
+		"readMarksDone": "Znaczniki przeczytania — gotowe",
+		"publishingKeyProfile": "Publikowanie klucza i profilu…",
+		"publishingKeyProfileDone": "Publikowanie klucza i profilu — gotowe",
+		"devices": "Urządzenia…",
+		"devicesDone": "Urządzenia — gotowe",
+		"chatHistory": "Historia czatu…",
+		"chatHistoryDone": "Historia czatu — gotowe",
+		"profile": "Profil…",
+		"profileDone": "Profil — gotowe",
+		"channels": "Kanały…",
+		"channelsBackfilled": "Kanały: ponownie wydano klucz dla {{count}} kanału(ów)",
+		"channelsNoChanges": "Kanały — brak zmian",
+		"files": "Pliki…",
+		"filesDone": "Pliki — gotowe",
+		"complete": "Synchronizacja zakończona"
 	}
 }

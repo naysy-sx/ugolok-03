@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Очистить переписку? Сообщения удалятся только у вас, у собеседника всё останется.",
 			"fileKeyNotFoundError": "Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.",
 			"sendAttachmentConfirm": "Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?"
-		}
+		},
+		"voiceMessageName": "Голосовое сообщение"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Загрузка голосового…",
 		"loadingAudio": "Загрузка аудио…",
 		"downloading": "Скачивание…",
-		"download": "Скачать"
+		"download": "Скачать",
+		"imageLoadError": "Не удалось загрузить картинку: {{error}}",
+		"loadingImage": "Загрузка картинки…",
+		"videoLoadError": "Не удалось загрузить видео: {{error}}",
+		"loadingVideo": "Загрузка видео…",
+		"units": {
+			"bytes": "{{count}} Б",
+			"kb": "{{count}} КБ",
+			"mb": "{{count}} МБ"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Сохранить себе",
 		"moveToTrashConfirm": "Переместить в корзину?",
 		"moveManyToTrashConfirm": "Переместить {{count}} объектов в корзину?",
-		"purgeConfirm": "Удалить безвозвратно? Это необратимо."
+		"purgeConfirm": "Удалить безвозвратно? Это необратимо.",
+		"sharedFolderDefaultName": "Общая папка ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Плеер",
@@ -613,5 +624,36 @@
 			"stek": "Технологии",
 			"iskhodnyjKod": "Исходный код"
 		}
+	},
+	"syncLog": {
+		"connecting": "Подключение к серверу…",
+		"searchingRelay": "Поиск вашего relay…",
+		"relayFound": "Найден ваш relay ({{count}})",
+		"relayNotFoundDefault": "Свой relay не найден — используется relay по умолчанию",
+		"connectingDone": "Подключение к серверу — готово",
+		"loadingHistory": "Загрузка истории с сервера…",
+		"loadingHistoryDone": "Загрузка истории — готово ({{count}} новых событий)",
+		"contacts": "Контакты…",
+		"contactsDone": "Контакты — готово",
+		"permissions": "Права доступа…",
+		"permissionsDone": "Права доступа — готово",
+		"settings": "Настройки…",
+		"settingsDone": "Настройки — готово",
+		"readMarks": "Отметки прочтения…",
+		"readMarksDone": "Отметки прочтения — готово",
+		"publishingKeyProfile": "Публикация ключа и профиля…",
+		"publishingKeyProfileDone": "Публикация ключа и профиля — готово",
+		"devices": "Устройства…",
+		"devicesDone": "Устройства — готово",
+		"chatHistory": "История переписки…",
+		"chatHistoryDone": "История переписки — готово",
+		"profile": "Профиль…",
+		"profileDone": "Профиль — готово",
+		"channels": "Каналы…",
+		"channelsBackfilled": "Каналы: довыдан ключ для {{count}} канала(ов)",
+		"channelsNoChanges": "Каналы — без изменений",
+		"files": "Файлы…",
+		"filesDone": "Файлы — готово",
+		"complete": "Синхронизация завершена"
 	}
 }

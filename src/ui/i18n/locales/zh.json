@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "清空聊天记录？消息仅会从您这里删除——对方仍会保留全部内容。",
 			"fileKeyNotFoundError": "未找到文件密钥——该文件可能尚未完全同步。",
 			"sendAttachmentConfirm": "文件将作为附件发送——发送后密钥将交给接收方，无法撤销。是否继续？"
-		}
+		},
+		"voiceMessageName": "语音消息"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "正在加载语音消息…",
 		"loadingAudio": "正在加载音频…",
 		"downloading": "下载中…",
-		"download": "下载"
+		"download": "下载",
+		"imageLoadError": "图片加载失败：{{error}}",
+		"loadingImage": "正在加载图片…",
+		"videoLoadError": "视频加载失败：{{error}}",
+		"loadingVideo": "正在加载视频…",
+		"units": {
+			"bytes": "{{count}} B",
+			"kb": "{{count}} KB",
+			"mb": "{{count}} MB"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "保存到我的文件",
 		"moveToTrashConfirm": "移动到回收站？",
 		"moveManyToTrashConfirm": "将 {{count}} 个对象移动到回收站？",
-		"purgeConfirm": "永久删除？此操作不可撤销。"
+		"purgeConfirm": "永久删除？此操作不可撤销。",
+		"sharedFolderDefaultName": "共享文件夹（{{pubkey}}）"
 	},
 	"filePlayer": {
 		"ariaLabel": "播放器",
@@ -613,5 +624,36 @@
 			"stek": "技术",
 			"iskhodnyjKod": "源代码"
 		}
+	},
+	"syncLog": {
+		"connecting": "正在连接服务器…",
+		"searchingRelay": "正在查找您的中继…",
+		"relayFound": "已找到您的中继（{{count}}）",
+		"relayNotFoundDefault": "未找到您的中继——使用默认中继",
+		"connectingDone": "连接服务器——完成",
+		"loadingHistory": "正在从服务器加载历史记录…",
+		"loadingHistoryDone": "加载历史记录——完成（{{count}} 个新事件）",
+		"contacts": "联系人…",
+		"contactsDone": "联系人——完成",
+		"permissions": "权限…",
+		"permissionsDone": "权限——完成",
+		"settings": "设置…",
+		"settingsDone": "设置——完成",
+		"readMarks": "已读标记…",
+		"readMarksDone": "已读标记——完成",
+		"publishingKeyProfile": "正在发布密钥和个人资料…",
+		"publishingKeyProfileDone": "发布密钥和个人资料——完成",
+		"devices": "设备…",
+		"devicesDone": "设备——完成",
+		"chatHistory": "聊天记录…",
+		"chatHistoryDone": "聊天记录——完成",
+		"profile": "个人资料…",
+		"profileDone": "个人资料——完成",
+		"channels": "频道…",
+		"channelsBackfilled": "频道：已为 {{count}} 个频道重新颁发密钥",
+		"channelsNoChanges": "频道——无变化",
+		"files": "文件…",
+		"filesDone": "文件——完成",
+		"complete": "同步完成"
 	}
 }

@@ -532,9 +532,9 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		if (recordedVoiceBlob) {
 			const bytes = new Uint8Array(await recordedVoiceBlob.arrayBuffer());
 			if (shouldInlineVoice(bytes.length)) {
-				return { type: "audio", voice: true, mime: "audio/webm", name: "Голосовое сообщение", size: bytes.length, voiceInline: base64FromBytes(bytes) };
+				return { type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) };
 			}
-			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: "Голосовое сообщение" }, privKey);
+			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey);
 			descriptor.voice = true;
 			return descriptor;
 		}

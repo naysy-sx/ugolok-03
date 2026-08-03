@@ -365,7 +365,8 @@
 			"clearHistoryConfirm": "Effacer la conversation ? Les messages seront supprimés uniquement chez vous — votre contact gardera tout.",
 			"fileKeyNotFoundError": "Clé du fichier introuvable — le fichier n'est peut-être pas encore entièrement synchronisé.",
 			"sendAttachmentConfirm": "Le fichier sera envoyé en pièce jointe — une fois envoyée, la clé sera transmise au destinataire et cela ne pourra pas être annulé. Continuer ?"
-		}
+		},
+		"voiceMessageName": "Message vocal"
 	},
 	"message": {
 		"status": {
@@ -387,7 +388,16 @@
 		"loadingVoice": "Chargement du message vocal…",
 		"loadingAudio": "Chargement de l'audio…",
 		"downloading": "Téléchargement…",
-		"download": "Télécharger"
+		"download": "Télécharger",
+		"imageLoadError": "Impossible de charger l'image : {{error}}",
+		"loadingImage": "Chargement de l'image…",
+		"videoLoadError": "Impossible de charger la vidéo : {{error}}",
+		"loadingVideo": "Chargement de la vidéo…",
+		"units": {
+			"bytes": "{{count}} o",
+			"kb": "{{count}} Ko",
+			"mb": "{{count}} Mo"
+		}
 	},
 	"files": {
 		"status": {
@@ -438,7 +448,8 @@
 		"saveToOwnButton": "Enregistrer dans mes fichiers",
 		"moveToTrashConfirm": "Déplacer vers la corbeille ?",
 		"moveManyToTrashConfirm": "Déplacer {{count}} éléments vers la corbeille ?",
-		"purgeConfirm": "Supprimer définitivement ? Cette action est irréversible."
+		"purgeConfirm": "Supprimer définitivement ? Cette action est irréversible.",
+		"sharedFolderDefaultName": "Dossier partagé ({{pubkey}})"
 	},
 	"filePlayer": {
 		"ariaLabel": "Lecteur",
@@ -613,5 +624,36 @@
 			"stek": "Technologies",
 			"iskhodnyjKod": "Code source"
 		}
+	},
+	"syncLog": {
+		"connecting": "Connexion au serveur…",
+		"searchingRelay": "Recherche de votre relay…",
+		"relayFound": "Votre relay a été trouvé ({{count}})",
+		"relayNotFoundDefault": "Votre relay n'a pas été trouvé — utilisation du relay par défaut",
+		"connectingDone": "Connexion au serveur — terminée",
+		"loadingHistory": "Chargement de l'historique depuis le serveur…",
+		"loadingHistoryDone": "Chargement de l'historique — terminé ({{count}} nouveaux événements)",
+		"contacts": "Contacts…",
+		"contactsDone": "Contacts — terminé",
+		"permissions": "Autorisations…",
+		"permissionsDone": "Autorisations — terminé",
+		"settings": "Paramètres…",
+		"settingsDone": "Paramètres — terminé",
+		"readMarks": "Marques de lecture…",
+		"readMarksDone": "Marques de lecture — terminé",
+		"publishingKeyProfile": "Publication de la clé et du profil…",
+		"publishingKeyProfileDone": "Publication de la clé et du profil — terminée",
+		"devices": "Appareils…",
+		"devicesDone": "Appareils — terminé",
+		"chatHistory": "Historique des discussions…",
+		"chatHistoryDone": "Historique des discussions — terminé",
+		"profile": "Profil…",
+		"profileDone": "Profil — terminé",
+		"channels": "Chaînes…",
+		"channelsBackfilled": "Chaînes : clé réémise pour {{count}} chaîne(s)",
+		"channelsNoChanges": "Chaînes — aucun changement",
+		"files": "Fichiers…",
+		"filesDone": "Fichiers — terminé",
+		"complete": "Synchronisation terminée"
 	}
 }
