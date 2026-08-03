@@ -112,15 +112,15 @@ export default function Discovery() {
 				</p>
 			)}
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
-				<label class="cluster" style={{ alignItems: "center" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+				<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
 					{t("discovery.showMeToggle")}
 				</label>
 
 				{settings.visible && (
-					<div class="flow" style={{ "--flow-space": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
-						<label class="cluster" style={{ alignItems: "center" }}>
+					<div class="stack" style={{ "--gap": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 							<input
 								type="checkbox"
 								checked={settings.showChannels}
@@ -130,13 +130,13 @@ export default function Discovery() {
 						</label>
 
 						{settings.showChannels && (
-							<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>
+							<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
 								<legend>{t("discovery.whichChannelsLegend")}</legend>
 								{ownedChannels.length === 0 ? (
 									<p style={{ color: "var(--muted)" }}>{t("discovery.noOwnChannels")}</p>
 								) : (
 									ownedChannels.map((c) => (
-										<label key={c.id} class="cluster" style={{ alignItems: "center" }}>
+										<label key={c.id} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 											<input
 												id={`${instanceId}-ch-${c.id}`}
 												type="checkbox"
@@ -159,24 +159,24 @@ export default function Discovery() {
 				)}
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-s)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("discovery.wantToMeetTitle")}</h2>
 				{discoveryProfiles.value.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>{t("discovery.noOneVisible")}</p>
 				) : (
-					<div class="grid-auto" style={{ gap: "var(--space-s)" }}>
+					<div class="grid" style={{ "--gap": "var(--space-s)" }}>
 						{discoveryProfiles.value.map((card) => {
 							const sent = outgoingRequests.value.some((r) => r.peerPubkey === card.pubkey);
 							return (
 								<article
 									key={card.pubkey}
-									class="flow"
+									class="stack box"
 									style={{
-										"--flow-space": "var(--space-2xs)",
+										"--gap": "var(--space-2xs)",
+										"--pad": "var(--space-s)",
 										position: "relative",
 										border: "var(--border-width) solid var(--border)",
 										borderRadius: "var(--radius)",
-										padding: "var(--space-s)",
 									}}
 								>
 									<button
@@ -200,7 +200,7 @@ export default function Discovery() {
 									</button>
 									<ContactIdentity pubkey={card.pubkey} />
 									{card.showChannels && card.channels.length > 0 && (
-										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }} class="flow">
+										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
 											{card.channels.map((c) => (
 												<li key={c.id}>
 													<strong>{c.name}</strong>

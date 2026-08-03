@@ -71,7 +71,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 	}
 
 	return (
-		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby={`srv-${title}`}>
+		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby={`srv-${title}`}>
 			<h2 id={`srv-${title}`} class="sect-title">
 				{title}
 			</h2>
@@ -158,7 +158,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 	}
 
 	return (
-		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="srv-relay">
+		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby="srv-relay">
 			<h2 id="srv-relay" class="sect-title">
 				{t("profile.relay.heading")}
 			</h2>
@@ -306,7 +306,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 	const paired = settings.selfHostedServer;
 
 	return (
-		<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }} aria-labelledby="selfhost-heading">
+		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby="selfhost-heading">
 			<h2 id="selfhost-heading" class="sect-title">
 				{t("profile.selfHosted.heading")}
 			</h2>
@@ -316,7 +316,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 				</p>
 			)}
 			{paired ? (
-				<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<p>
 						{t("profile.selfHosted.connectedLabel")}{" "}
 						<strong>
@@ -343,7 +343,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 					</div>
 				</div>
 			) : (
-				<form class="flow" style={{ "--flow-space": "var(--space-2xs)" }} onSubmit={handlePairSubmit}>
+				<form class="stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handlePairSubmit}>
 					<p style={{ color: "var(--muted)" }}>
 						{t("profile.selfHosted.instructionsBeforeCode")} <code>install.sh</code> {t("profile.selfHosted.instructionsAfterCode")}
 					</p>
@@ -391,7 +391,7 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 	if (!settings) return null;
 
 	return (
-		<div class="flow" style={{ "--flow-space": "var(--space-m)" }}>
+		<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 			<RelayListEditor
 				urls={settings.relayUrls}
 				busy={busy}
@@ -599,7 +599,7 @@ export default function Profile() {
 
 	return (
 		<Screen title={login || t("profile.noNameFallback")}>
-			<section class="flow" aria-labelledby="profile-npub-heading">
+			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-npub-heading">
 				<h2 id="profile-npub-heading" class="sect-title">
 					{t("profile.identifierHeading")}
 				</h2>
@@ -661,8 +661,8 @@ export default function Profile() {
 					<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
 				)}
 
-				<form class="flow profile-bio-col" onSubmit={handleBioSubmit}>
-					<fieldset class="flow">
+				<form class="stack profile-bio-col" style={{ "--gap": "var(--space-m)" }} onSubmit={handleBioSubmit}>
+					<fieldset class="stack" style={{ "--gap": "var(--space-m)" }}>
 						<legend class="sect-title">{t("profile.aboutMeLegend")}</legend>
 						<label for="profile-bio">{t("profile.bioLabel")}</label>
 						<textarea
@@ -672,7 +672,7 @@ export default function Profile() {
 							onInput={(e) => setBio(e.currentTarget.value)}
 						/>
 					</fieldset>
-					<div class="cluster">
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						<button type="submit" disabled={!bioIsDirty}>
 							{t("common.save")}
 						</button>
@@ -690,7 +690,7 @@ export default function Profile() {
 				</form>
 			</div>
 
-			<section class="flow" aria-labelledby="profile-files-heading">
+			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-files-heading">
 				<h2 id="profile-files-heading" class="sect-title">
 					{t("nav.files")}
 				</h2>
