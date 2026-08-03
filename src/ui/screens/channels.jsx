@@ -80,7 +80,7 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 		<li class="channel-card-item">
 			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link">
 				<ChannelAvatarThumb channel={channel} />
-				<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<strong>{channel.name || t("channels.card.untitled")}</strong>
 					{channel.description && <small>{channel.description}</small>}
 					{updated && <small class="channel-card-updated">{t("channels.card.updated", { date: updated })}</small>}
@@ -176,7 +176,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 	}
 
 	return (
-		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-s)", border: "var(--border-width) solid var(--border)", padding: "var(--space-m)", borderRadius: "var(--radius)" }}>
+		<form class="stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
 			<h2>{t("channels.create.title")}</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -184,7 +184,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				</p>
 			)}
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-name`}>{t("channels.create.nameLabel")}</label>
 				<input
 					id={`${instanceId}-name`}
@@ -196,7 +196,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				/>
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-description`}>{t("channels.create.descriptionLabel")}</label>
 				<textarea
 					id={`${instanceId}-description`}
@@ -207,7 +207,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				/>
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-rules`}>{t("channels.create.rulesLabel")}</label>
 				<textarea
 					id={`${instanceId}-rules`}
@@ -218,13 +218,13 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				/>
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-avatar`}>{t("channels.create.avatarLabel")}</label>
 				<input id={`${instanceId}-avatar`} type="file" accept="image/*" onChange={handleAvatarSelected} />
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
-			<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 				<input
 					id={`${instanceId}-allow-chat-attachments`}
 					type="checkbox"
@@ -234,7 +234,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				<label for={`${instanceId}-allow-chat-attachments`}>{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
 
-			<fieldset class="flow" style={{ "--flow-space": "var(--space-3xs)", border: "none", padding: 0 }}>
+			<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
 				<legend>{t("channels.create.visibilityLegend")}</legend>
 				<p style={{ color: "var(--muted)" }}>
 					{t("channels.create.visibilityHint")}
@@ -245,7 +245,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<span class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+								<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 									<input
 										id={`${instanceId}-group-${g.id}`}
 										type="checkbox"
@@ -262,7 +262,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				)}
 			</fieldset>
 
-			<div class="cluster">
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<button type="submit" disabled={busy || name.length === 0}>
 					{busy ? t("channels.create.submitting") : t("common.create")}
 				</button>

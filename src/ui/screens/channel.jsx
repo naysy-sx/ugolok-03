@@ -114,40 +114,40 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 	}
 
 	return (
-		<form class="flow channel-settings-form" onSubmit={handleSave} style={{ "--flow-space": "var(--space-s)" }}>
+		<form class="stack channel-settings-form" onSubmit={handleSave} style={{ "--gap": "var(--space-s)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for="edit-channel-name">{t("channels.create.nameLabel")}</label>
 				<input id="edit-channel-name" type="text" value={name} maxLength={NAME_MAX_LENGTH} onInput={(e) => setName(e.currentTarget.value)} required />
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for="edit-channel-description">{t("channels.create.descriptionLabel")}</label>
 				<textarea id="edit-channel-description" value={description} maxLength={DESCRIPTION_MAX_LENGTH} onInput={(e) => setDescription(e.currentTarget.value)} rows={3} />
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for="edit-channel-rules">{t("channels.create.rulesLabel")}</label>
 				<textarea id="edit-channel-rules" value={rules} maxLength={RULES_MAX_LENGTH} onInput={(e) => setRules(e.currentTarget.value)} rows={4} />
 			</div>
 
-			<div class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for="edit-channel-avatar">{t("channel.settings.changeAvatarLabel")}</label>
 				<input id="edit-channel-avatar" type="file" accept="image/*" onChange={handleAvatarSelected} />
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
-			<div class="cluster" style={{ "--cluster-gap": "var(--space-3xs)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
 				<label for="edit-channel-allow-chat-attachments">{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
 
-			<div class="cluster">
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<button type="submit" disabled={busy || name.length === 0}>
 					{busy ? t("common.saving") : t("common.save")}
 				</button>
@@ -197,7 +197,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	}
 
 	return (
-		<form class="flow" onSubmit={handleSubmit} style={{ "--flow-space": "var(--space-3xs)", border: "var(--border-width) solid var(--border)", padding: "var(--space-m)", borderRadius: "var(--radius)" }}>
+		<form class="stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)", "--pad": "var(--space-m)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
 			<h2>{t("channel.composer.newPostTitle")}</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -211,7 +211,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
-			<div class="cluster">
+			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
 				<button type="button" onClick={() => attachment.inputRef.current?.click()}>
 					<IconPaperclip /> {t("channel.composer.attachButton")}
@@ -498,7 +498,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				</p>
 			)}
 			{expanded && (
-				<div class="flow comment-section" style={{ "--flow-space": "var(--space-s)" }}>
+				<div class="stack comment-section" style={{ "--gap": "var(--space-s)" }}>
 					{canComment ? (
 						<CommentComposer
 							ownerPubkey={ownerPubkey}
@@ -703,7 +703,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			)}
 
 			{tab === "posts" && (
-				<section role="tabpanel" class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+				<section role="tabpanel" class="stack" style={{ "--gap": "var(--space-s)" }}>
 					{isOwner && !showComposer && (
 						<button type="button" class="channel-post-cta" onClick={() => setShowComposer(true)}>
 							<IconPencil /> {t("channel.writePostButton")}
@@ -732,7 +732,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 					{posts.length === 0 ? (
 						<p style={{ color: "var(--muted)" }}>{t("channel.noPosts")}</p>
 					) : (
-						<div class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+						<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 							{[...posts].reverse().map((post) => (
 								<PostWithComments
 									key={post.id}
