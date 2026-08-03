@@ -60,7 +60,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 	);
 
 	const text = (
-		<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+		<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 			<span class={profile?.name ? undefined : "contact-identity-npub"}>{displayName}</span>
 			{profile?.about && <small>{profile.about}</small>}
 		</span>
@@ -264,8 +264,8 @@ export default function Contacts() {
 					</p>
 				)}
 
-				<form class="cluster contacts-add-form" onSubmit={handleAddContact}>
-					<div class="contact-add-field">
+				<form class="row contacts-add-form" style={{ "--gap": "0", alignItems: "stretch" }} onSubmit={handleAddContact}>
+					<div class="row grow contact-add-field" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 						<IconPersonAdd aria-hidden="true" />
 						<label class="visually-hidden" for="add-contact-input">
 							{t("contacts.addContactLabel")}
@@ -315,7 +315,8 @@ export default function Contacts() {
 									/>
 									{renamingGroupId === g.id ? (
 										<form
-											class="cluster"
+											class="row"
+											style={{ "--gap": "var(--space-s)", alignItems: "center" }}
 											onSubmit={(e) => {
 												e.preventDefault();
 												runRowAction(async () => {
@@ -373,7 +374,7 @@ export default function Contacts() {
 						))}
 					</ul>
 
-					<form class="cluster" onSubmit={handleCreateGroup}>
+					<form class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }} onSubmit={handleCreateGroup}>
 						<label class="visually-hidden" for="new-group-name">
 							{t("contacts.newGroupNameLabel")}
 						</label>
@@ -400,7 +401,7 @@ export default function Contacts() {
 					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
 					    рамке (contacts-primary-section). */}
-					<section class="flow card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--flow-space": "var(--space-s)" }}>
+					<section class="stack card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--gap": "var(--space-s)" }}>
 						<h2 id="contacts-heading">{t("contacts.heading", { count: visibleContacts.length })}</h2>
 						{rowError && (
 							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
@@ -488,7 +489,7 @@ export default function Contacts() {
 						)}
 					</section>
 
-					<section class="flow" aria-labelledby="requests-heading" style={{ "--flow-space": "var(--space-s)" }}>
+					<section class="stack" aria-labelledby="requests-heading" style={{ "--gap": "var(--space-s)" }}>
 						<h2 id="requests-heading">{t("contacts.incomingHeading", { count: incomingRequests.value.length })}</h2>
 						{incomingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>{t("contacts.noIncoming")}</p>
