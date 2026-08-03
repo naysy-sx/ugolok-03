@@ -145,7 +145,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 				</p>
 			)}
 
-			<section class="flow" aria-labelledby="inbox-heading" style={{ "--flow-space": "var(--space-s)" }}>
+			<section class="stack" aria-labelledby="inbox-heading" style={{ "--gap": "var(--space-s)" }}>
 				<h2 id="inbox-heading">{t("chat.list.inboxHeading", { count: inboxList.length })}</h2>
 				{inboxList.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>{t("chat.list.noInboxRequests")}</p>
@@ -154,8 +154,9 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 						{inboxList.map((req) => (
 							<li
 								key={req.senderPubkey}
-								class="cluster"
+								class="row"
 								style={{
+									"--gap": "var(--space-s)",
 									alignItems: "center",
 									justifyContent: "space-between",
 									paddingBlock: "var(--space-s)",
@@ -163,7 +164,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 								}}
 							>
 								<ContactIdentity pubkey={req.senderPubkey} />
-								<div class="cluster">
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									<button type="button" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
 										{t("contacts.acceptButton")}
 									</button>
@@ -177,7 +178,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 				)}
 			</section>
 
-			<section class="flow" aria-labelledby="chats-heading" style={{ "--flow-space": "var(--space-s)" }}>
+			<section class="stack" aria-labelledby="chats-heading" style={{ "--gap": "var(--space-s)" }}>
 				<h2 id="chats-heading">{t("chat.list.chatsHeading", { count: chatPartners.length })}</h2>
 				{chatPartners.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>
@@ -194,8 +195,9 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 									type="button"
 									onClick={() => openChat(pubkey)}
 									aria-label={t("contacts.openChatAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}
-									class="cluster"
+									class="row"
 									style={{
+										"--gap": "var(--space-s)",
 										alignItems: "center",
 										justifyContent: "space-between",
 										width: "100%",
@@ -669,7 +671,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			}
 			feed
 			footer={
-				<div class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 					{attachmentFile && (
 						<AttachmentPreview
 							file={attachmentFile}
@@ -681,7 +683,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{recordingState === "recording" && (
-						<p class="cluster recording-status" role="status">
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status">
 							<span class="recording-dot" aria-hidden="true" /> {t("chat.window.recordingStatus")}
 							<button type="button" onClick={handleStopRecording}>
 								<IconStop /> {t("common.stop")}
@@ -693,7 +695,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{recordingState === "recorded" && recordedVoiceUrl && (
-						<p class="cluster recording-status">
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 							<audio controls src={recordedVoiceUrl} />
 							<button type="button" onClick={handleDiscardRecordedVoice}>
 								<IconCross /> {t("chat.window.deleteRecordingButton")}
@@ -702,7 +704,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{uploadingAttachment && (
-						<p class="cluster recording-status" role="status">
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status">
 							<span class="spinner" aria-hidden="true" /> {t("chat.window.uploadingAttachment")}
 						</p>
 					)}

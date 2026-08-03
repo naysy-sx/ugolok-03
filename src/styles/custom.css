@@ -755,9 +755,9 @@ button:has(> .icon),
 /* Статус записи/загрузки голосового (пользователь, item 13) — верхний
    дефолтный маргин <p> убран, кнопки прижаты вправо (margin-inline-start:
    auto на первой из них), без единого inline style. */
+/* .row (раскладка, align-items:center инлайн) уже в JSX. */
 .app-layout .recording-status {
 	margin-block-start: 0;
-	align-items: center;
 	/* Глобальное p{max-width:var(--measure)} (типографика для прозы) душило
 	   строку — это управляющий UI-ряд, не текст для чтения, кнопкам справа
 	   некуда было "прижиматься". */
