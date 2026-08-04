@@ -862,7 +862,7 @@ button:has(> .icon),
 .site-header {
 	grid-area: header;
 }
-.auth-layout main {
+.main {
 	grid-area: main;
 }
 .auth-sidebar {

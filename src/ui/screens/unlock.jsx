@@ -663,7 +663,7 @@ export default function Unlock() {
 				</section>
 			</aside>
 
-			<main>
+			<main class="main">
 				{mainView === "home" && (
 					<section class="hero-section">
 						<h1>{t("unlock.main.hero.title")}</h1>
