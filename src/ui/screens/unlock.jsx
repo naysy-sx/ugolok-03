@@ -1,7 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
-import { encryptAndStore, decryptPrivateKey, listAccounts } from "../../core/crypto/keystore.js";
+import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile } from "../../core/crypto/keystore.js";
 import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { login, setRememberedAccountId, getRememberedAccountId } from "../signals/auth.js";
@@ -53,6 +53,12 @@ export default function Unlock() {
 	const [isQuickRegister, setIsQuickRegister] = useState(false);
 	const [pendingLogin, setPendingLogin] = useState("");
 	const [error, setError] = useState("");
+	// Био под именем в раскрытой карточке входа (пользователь) — listAccounts()
+	// его не даёт (только id/login/avatar/hasMnemonic), отдельный запрос
+	// getProfile per id. Тот же уровень доступа, что уже есть у avatar в
+	// этом же списке — bio лежит в keystore нешифрованным, читать до входа
+	// не новый прецедент.
+	const [openAccountBio, setOpenAccountBio] = useState("");
 
 	useEffect(() => {
 		(async () => {
@@ -78,6 +84,27 @@ export default function Unlock() {
 			}
 		})();
 	}, []);
+
+	// Био для раскрытой карточки входа — отдельно от listAccounts() (тот его
+	// не отдаёт), запрашивается заново при смене openLoginForId. Хук должен
+	// стоять здесь, а не рядом с использованием (JSX ниже, "step === main") —
+	// там уже прошли несколько ранних return для других step, порядок хуков
+	// нарушился бы.
+	useEffect(() => {
+		if (!openLoginForId) {
+			setOpenAccountBio("");
+			return;
+		}
+		let cancelled = false;
+		getProfile(openLoginForId)
+			.then((profile) => {
+				if (!cancelled) setOpenAccountBio(profile.bio);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [openLoginForId]);
 
 	async function handleResetDatabase() {
 		await resetLocalDatabase();
@@ -510,17 +537,18 @@ export default function Unlock() {
 			</header>
 
 			<aside class="sidebar" aria-label={t("unlock.main.sidebarAriaLabel")}>
-				<section class="widget accounts-widget" aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
+				<section class="widget accounts-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
 					<h3>{t("unlock.main.accountsWidget.title")}</h3>
 					{accounts.length === 0 ? (
 						<p class="widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
 					) : (
-						<ul class="accounts-list">
+						<ul class="accounts-list stack" style={{ "--gap": "var(--space-3xs)" }}>
 							{accounts.map((acc) => (
 								<li key={acc.id}>
 									<button
 										type="button"
-										class="account-picker-btn"
+										class="account-picker-btn row"
+										style={{ "--gap": "var(--space-s)", alignItems: "center" }}
 										aria-current={openLoginForId === acc.id ? "true" : undefined}
 										onClick={() => openLoginFor(acc.id)}
 									>
@@ -534,12 +562,15 @@ export default function Unlock() {
 				</section>
 
 				{openAccount && (
-					<section class="widget auth-box" aria-live="polite">
-						<div class="auth-box-header">
+					<section class="widget auth-box stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-live="polite">
+						<div class="auth-box-header row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 							<AccountAvatar avatar={openAccount.avatar} login={openAccount.login || openAccount.id} large />
-							<h4>{openAccount.login || openAccount.id.slice(0, 16) + "…"}</h4>
+							<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+								<h4>{openAccount.login || openAccount.id.slice(0, 16) + "…"}</h4>
+								{openAccountBio && <small class="widget-subtitle">{openAccountBio}</small>}
+							</div>
 						</div>
-						<form class="auth-form" onSubmit={handleLoginSubmit}>
+						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleLoginSubmit}>
 							<div class="form-group">
 								<label for="login-password">{t("unlock.main.loginForm.passwordLabel")}</label>
 								<input
@@ -563,10 +594,10 @@ export default function Unlock() {
 				)}
 
 				{registerBoxOpen && (
-					<section class="widget auth-box" aria-live="polite">
+					<section class="widget auth-box stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-live="polite">
 						<h4>{t("unlock.main.registerBox.title")}</h4>
 						<p class="widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
-						<form class="auth-form" onSubmit={handleRegisterSubmit}>
+						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
 							<div class="form-group">
 								<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
 								<input
@@ -609,10 +640,10 @@ export default function Unlock() {
 					</section>
 				)}
 
-				<section class="widget">
+				<section class="widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
 					<h3>{t("unlock.main.otherWays.title")}</h3>
 					<p class="widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
-					<ul class="link-list">
+					<ul class="link-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<li>
 							<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>
 								{t("unlock.main.otherWays.createWithPhrase")}

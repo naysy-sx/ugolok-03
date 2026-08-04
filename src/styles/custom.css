@@ -957,27 +957,26 @@ button:has(> .icon),
 	align-content: start;
 }
 
+/* .stack/.box (раскладка/паддинг) уже в JSX — здесь только оформление.
+   Тень убрана (пользователь). container-type — реально используется только
+   старым @container ниже (.contacts-groups-aside и т.п. в других частях
+   файла его не трогают), оставлен на случай будущей адаптации виджета. */
 .auth-layout .widget {
 	container-type: inline-size;
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
-	padding: var(--space-m);
-	box-shadow: var(--shadow);
 }
-
+/* margin:0 — .stack родителя (--gap в JSX) теперь единственный источник
+   вертикального ритма внутри виджета; собственный margin на h3/h4/p
+   складывался бы С gap (flex-элементы не схлопывают свои margin друг
+   с другом, в отличие от обычного block-потока, где это работало раньше). */
 .auth-layout .widget :is(h3, h4) {
 	font-size: var(--step-1);
-	margin-block: 0 var(--space-2xs);
+	margin-block: 0;
 }
 .auth-layout .widget p {
-	margin-block: var(--space-2xs);
-}
-.auth-layout .widget > :first-child {
-	margin-block-start: 0;
-}
-.auth-layout .widget > :last-child {
-	margin-block-end: 0;
+	margin-block: 0;
 }
 
 .auth-layout .widget-subtitle {
@@ -986,13 +985,11 @@ button:has(> .icon),
 }
 
 /* "Другие способы" — простой список ссылок, не кнопки: действие второстепенное
-   (переход к редким сценариям входа), шрифт нарочно чуть мельче обычного текста. */
+   (переход к редким сценариям входа), шрифт нарочно чуть мельче обычного текста.
+   .stack (раскладка) уже в JSX — здесь только сброс дефолтов списка. */
 .auth-layout .link-list {
 	list-style: none;
 	padding-inline-start: 0;
-	margin-block: var(--space-s) 0;
-	display: grid;
-	gap: var(--space-2xs);
 }
 .auth-layout .link-list li {
 	margin-block: 0;
@@ -1015,89 +1012,79 @@ button:has(> .icon),
 	color: var(--accent-hover);
 }
 
+/* Было subgrid (grid-template-columns:auto 1fr + grid-template-columns:subgrid
+   у каждой строки) — приём нужен был, чтобы аватар/имя выравнивались колонкой
+   по ВСЕМ строкам сразу. Аватар теперь фиксированного размера (не переменной
+   ширины) — subgrid для этого не нужен, простой .stack (список) + .row
+   (строка) достаточно. Заодно убран второй вариант раскладки на широких
+   контейнерах (@container — плитки-пилюли вместо строк): противоречил бы
+   новому "аватар прижат к краю" — на пилюле прижимать не к чему. */
 .auth-layout .accounts-list {
 	list-style: none;
 	padding-inline-start: 0;
-	margin-block: var(--space-s) 0;
-	display: grid;
-	grid-template-columns: auto 1fr;
-	row-gap: var(--space-3xs);
 }
 .auth-layout .accounts-list li {
-	grid-column: 1 / -1;
-	display: grid;
-	grid-template-columns: subgrid;
 	margin-block: 0;
 }
 
+/* .row (раскладка) уже в JSX — здесь оформление: без border (пользователь),
+   вместо него — фон ЛИШЬ немного отличный от фона виджета (--surface-raised,
+   тот же токен, что уже даёт "чуть светлее/темнее подложки" по всему
+   auth-layout). overflow:hidden — обрезает острые углы плоского аватара
+   точно по скруглению самой кнопки (аватар прижат к левому/верхнему/
+   нижнему краю без своего отступа, иначе торчал бы за скруглённый угол). */
 .auth-layout .account-picker-btn {
-	grid-column: 1 / -1;
-	display: grid;
-	grid-template-columns: subgrid;
-	align-items: center;
-	column-gap: var(--space-s);
-
-	background-color: transparent;
+	background-color: var(--surface-raised);
 	color: var(--fg);
 	font-weight: var(--weight-normal);
 	text-align: start;
-	padding: var(--space-2xs);
-	border: var(--border-width) solid transparent;
+	padding-block: 0;
+	padding-inline: 0 var(--space-s);
 	border-radius: var(--radius);
+	overflow: hidden;
 	transition:
 		background-color var(--transition-speed) var(--transition-ease),
-		border-color var(--transition-speed) var(--transition-ease);
+		filter var(--transition-speed) var(--transition-ease);
 }
 .auth-layout .account-picker-btn:hover {
-	background-color: var(--surface-raised);
-	border-color: var(--border);
+	filter: brightness(1.08);
 }
 .auth-layout .account-picker-btn:hover .account-name,
 .auth-layout .account-picker-btn[aria-current="true"] .account-name {
 	color: var(--accent);
 }
 .auth-layout .account-picker-btn[aria-current="true"] {
-	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), var(--surface-raised) 85%);
 }
 
-.auth-layout .account-avatar,
+/* background:var(--surface), НЕ --surface-raised — тот совпал бы с фоном
+   самой кнопки (.account-picker-btn ниже), буква-заглушка (нет фото)
+   стала бы не видна на одинаковом фоне. */
+.auth-layout .account-avatar {
+	aspect-ratio: 1;
+	object-fit: cover;
+	background-color: var(--surface);
+	inline-size: var(--avatar-size);
+}
+/* Квадратный с лёгким закруглением (пользователь) — не общий border-radius
+   с .account-avatar (та — острые углы, обрезаются overflow:hidden кнопки). */
 .auth-layout .account-avatar-large {
 	aspect-ratio: 1;
 	object-fit: cover;
-	border-radius: calc(infinity * 1px);
+	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
-}
-.auth-layout .account-avatar {
-	inline-size: var(--avatar-size);
-}
-.auth-layout .account-avatar-large {
 	inline-size: var(--avatar-size-l);
 }
 
 /* Заглушка вместо фото, пока у аккаунта нет сохранённого аватара — первая
-   буква логина на цветном круге, тот же приём, что ContactIdentity в чате. */
+   буква логина на цветном фоне, тот же приём, что ContactIdentity в чате. */
 .auth-layout .account-avatar-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--muted);
 	font-weight: var(--weight-bold);
-}
-
-@container (min-width: 24rem) {
-	.auth-layout .accounts-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-2xs);
-	}
-	.auth-layout .account-picker-btn {
-		display: flex;
-		gap: var(--space-2xs);
-		padding-inline-end: var(--space-s);
-		border-color: var(--border);
-		border-radius: calc(infinity * 1px);
-	}
 }
 
 .auth-layout .auth-box {
@@ -1113,21 +1100,15 @@ button:has(> .icon),
 	}
 }
 
-.auth-layout .auth-box-header {
-	display: flex;
-	align-items: center;
-	gap: var(--space-s);
-	margin-block-end: var(--space-s);
-}
+/* .row (раскладка) уже в JSX — margin-block-end убран, .stack родителя
+   (.auth-box) сам разделяет header/form через свой --gap. */
 .auth-layout .auth-box-header h4 {
 	margin-block: 0;
 }
 
-.auth-layout .auth-form {
-	display: grid;
-	gap: var(--space-s);
-	margin-block: 0;
-}
+/* .stack (раскладка) уже в JSX — было display:grid (не flex) ИМЕННО
+   ради .btn-link ниже (justify-self:center, grid-only свойство) — тот
+   переведён на align-self:center, работающий и в этом flex-контексте. */
 .auth-layout .form-group {
 	margin-block: 0;
 }
@@ -1169,7 +1150,7 @@ button:has(> .icon),
 	font-weight: var(--weight-normal);
 	text-decoration: underline;
 	text-underline-offset: 0.15em;
-	justify-self: center;
+	align-self: center;
 	cursor: pointer;
 	transition: color var(--transition-speed) var(--transition-ease);
 }
