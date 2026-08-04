@@ -26,7 +26,7 @@
    только внешний вид: прозрачный фон, подчёркивание растёт из скрытого
    ::after слева направо. "Выйти" (.exit-btn) сюда НЕ входит — стилизуется
    отдельно ниже, пользователь явно попросил оставить его кнопкой. */
-.app-layout .sidebar nav .nav-item-btn {
+.sidebar nav .nav-item-btn {
 	position: relative;
 	background: none;
 	border: none;
@@ -36,7 +36,7 @@
 	padding-inline: var(--space-3xs);
 	border-radius: 0;
 }
-.app-layout .sidebar nav .nav-item-btn::after {
+.sidebar nav .nav-item-btn::after {
 	content: "";
 	position: absolute;
 	inset-inline: var(--space-3xs);
@@ -47,20 +47,20 @@
 	transform-origin: left;
 	transition: transform var(--transition-speed) var(--transition-ease);
 }
-.app-layout .sidebar nav .nav-item-btn:hover,
-.app-layout .sidebar nav .nav-item-btn:focus-visible,
-.app-layout .sidebar nav .nav-item-btn.is-active {
+.sidebar nav .nav-item-btn:hover,
+.sidebar nav .nav-item-btn:focus-visible,
+.sidebar nav .nav-item-btn.is-active {
 	color: var(--accent);
 }
-.app-layout .sidebar nav .nav-item-btn:hover::after,
-.app-layout .sidebar nav .nav-item-btn:focus-visible::after,
-.app-layout .sidebar nav .nav-item-btn.is-active::after {
+.sidebar nav .nav-item-btn:hover::after,
+.sidebar nav .nav-item-btn:focus-visible::after,
+.sidebar nav .nav-item-btn.is-active::after {
 	transform: scaleX(1);
 }
 
 /* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2),
    прижата вправо (margin-inline-start:auto — .nav-item-btn уже flex-строка). */
-.app-layout .sidebar nav .nav-badge {
+.sidebar nav .nav-badge {
 	margin-inline-start: auto;
 	background-color: var(--accent-2);
 	color: var(--accent-2-contrast);
@@ -74,13 +74,13 @@
 /* "Выйти" — единственная кнопка главного меню, которая ОСТАЁТСЯ кнопкой
    (пользователь: "просто подогнать под общий стиль") — тот же тихий
    ghost-стиль, что у action-buttons/back-button, не сплошная заливка. */
-.app-layout .sidebar .exit-btn {
+.sidebar .exit-btn {
 	background-color: transparent;
 	color: var(--muted);
 	border: var(--border-width) solid var(--border);
 	font-weight: var(--weight-normal);
 }
-.app-layout .sidebar .exit-btn:hover {
+.sidebar .exit-btn:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
@@ -124,7 +124,7 @@ button:has(> .icon),
 
 /* Вторичное действие — тише сплошной заливки (та зарезервирована за
    первичным CTA конкретного экрана). */
-.app-layout .btn--ghost {
+.btn--ghost {
 	background-color: transparent;
 	color: var(--fg);
 	border-color: var(--border);
@@ -141,23 +141,23 @@ button:has(> .icon),
    цветом, что .menu__pop button.danger, не сплошная заливка (та за
    первичным CTA) вперемешку с красным текстом (было раньше — читалось
    как баг, синяя кнопка с красной надписью). */
-.app-layout .btn--danger {
+.btn--danger {
 	color: var(--bad, oklch(0.58 0.21 25));
 	border-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 55%);
 }
-.app-layout .btn--danger:hover {
+.btn--danger:hover {
 	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 88%);
 }
-.app-layout .btn--ghost:hover {
+.btn--ghost:hover {
 	background-color: var(--surface-raised);
 }
-.app-layout .btn--ghost:disabled {
+.btn--ghost:disabled {
 	background-color: transparent;
 }
 
 /* Круглая иконка-кнопка — карандаш/корзина/копировать и т.п., без
    собственного текста (aria-label обязателен на вызывающей стороне). */
-.app-layout .icon-btn {
+.icon-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -171,7 +171,7 @@ button:has(> .icon),
 	color: var(--muted);
 	font-size: 1.1rem;
 }
-.app-layout .icon-btn:hover {
+.icon-btn:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
@@ -180,7 +180,7 @@ button:has(> .icon),
    .contacts-groups-aside/.channels-aside по отдельности, теперь общий
    класс + настоящая тень (--shadow), которой в тех точечных версиях не
    было. */
-.app-layout .card {
+.card {
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-lg);
@@ -336,7 +336,7 @@ button:has(> .icon),
 	display: none;
 }
 @media (max-width: 47.99em) {
-	.app-layout .sidebar {
+	.sidebar {
 		position: fixed;
 		inset-block: 0;
 		inset-inline-start: 0;
@@ -349,7 +349,7 @@ button:has(> .icon),
 		transform: translateX(-100%);
 		transition: transform var(--transition-speed) var(--transition-ease);
 	}
-	.app-layout .sidebar.sidebar-open {
+	.sidebar.sidebar-open {
 		transform: translateX(0);
 	}
 	.sidebar-backdrop {
@@ -362,7 +362,7 @@ button:has(> .icon),
 }
 
 /* .grow (раскладка) уже в JSX — здесь только делегирование скролла вниз. */
-.app-layout .main-content {
+.main-content {
 	overflow: hidden;
 }
 
@@ -375,7 +375,7 @@ button:has(> .icon),
 	.app-layout {
 		flex-direction: row;
 	}
-	.app-layout .sidebar {
+	.sidebar {
 		flex: 0 0 auto;
 		width: 15rem;
 		border-block-end: none;
@@ -383,7 +383,7 @@ button:has(> .icon),
 	}
 }
 
-.app-layout .profile-card {
+.profile-card {
 	container-type: inline-size; /* VISUAL.md v2 — cqi для заглушки-буквы аватара */
 	display: flex;
 	flex-direction: column;
@@ -405,7 +405,7 @@ button:has(> .icon),
    переполнить колонку на совсем маленьких телефонах, текучая ширина —
    надёжнее. container-type на .profile-card (ниже) даёт cqi для
    заглушки-буквы. */
-.app-layout .profile-card-avatar-btn {
+.profile-card-avatar-btn {
 	position: relative;
 	display: block;
 	width: 100%;
@@ -416,7 +416,7 @@ button:has(> .icon),
 	cursor: pointer;
 	overflow: hidden;
 }
-.app-layout .profile-card-avatar-btn:disabled {
+.profile-card-avatar-btn:disabled {
 	cursor: default;
 }
 .app-layout .account-avatar-large {
@@ -429,14 +429,14 @@ button:has(> .icon),
 	background-color: var(--surface-raised);
 	transition: filter var(--transition-speed) var(--transition-ease);
 }
-.app-layout .profile-card-avatar-btn:hover:not(:disabled) .account-avatar-large,
-.app-layout .profile-card-avatar-btn:focus-visible .account-avatar-large {
+.profile-card-avatar-btn:hover:not(:disabled) .account-avatar-large,
+.profile-card-avatar-btn:focus-visible .account-avatar-large {
 	filter: brightness(1.06);
 }
 /* "Стеклянная" подсказка (VISUAL.md v2) — лупа проявляется снизу по
    hover/фокусу, намекая "кликабельно, открыть фото"; pointer-events:none —
    кликабельная цель ровно одна (сама кнопка), не оверлей поверх неё. */
-.app-layout .profile-card-avatar-glass {
+.profile-card-avatar-glass {
 	position: absolute;
 	inset-inline: 0;
 	inset-block-end: 0;
@@ -455,13 +455,13 @@ button:has(> .icon),
 		transform 220ms var(--ease);
 	pointer-events: none;
 }
-.app-layout .profile-card-avatar-btn:hover .profile-card-avatar-glass,
-.app-layout .profile-card-avatar-btn:focus-visible .profile-card-avatar-glass {
+.profile-card-avatar-btn:hover .profile-card-avatar-glass,
+.profile-card-avatar-btn:focus-visible .profile-card-avatar-glass {
 	opacity: 1;
 	transform: none;
 }
 @media (prefers-reduced-motion: reduce) {
-	.app-layout .profile-card-avatar-glass {
+	.profile-card-avatar-glass {
 		transition: opacity 1ms linear;
 		transform: none;
 	}
@@ -475,11 +475,11 @@ button:has(> .icon),
 	font-weight: var(--weight-bold);
 }
 
-.app-layout .profile-card-body {
+.profile-card-body {
 	max-inline-size: 100%;
 	min-inline-size: 0;
 }
-.app-layout .profile-card-body h2 {
+.profile-card-body h2 {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -491,7 +491,7 @@ button:has(> .icon),
 /* Длинный логин (например автосгенерированный) не должен раздвигать
    фиксированную ширину сайдбара и прятать под собой кнопку-карандаш —
    обрезаем троеточием, полное имя остаётся доступным через title. */
-.app-layout .profile-card-body h2 span {
+.profile-card-body h2 span {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -501,7 +501,7 @@ button:has(> .icon),
    (пользователь: "ссылка выглядит стрёмно... сделать кнопочку с иконкой") —
    рядом с именем, а не отдельной строкой снизу (была причиной лишнего
    вертикального пространства). */
-.app-layout .profile-edit-btn {
+.profile-edit-btn {
 	align-self: center;
 	margin-block-start: var(--space-2xs);
 	background: none;
@@ -512,7 +512,7 @@ button:has(> .icon),
 	font-size: var(--step--1);
 	font-weight: var(--weight-normal);
 }
-.app-layout .profile-edit-btn:hover {
+.profile-edit-btn:hover {
 	background-color: var(--surface-raised);
 	color: var(--accent);
 }
@@ -520,7 +520,7 @@ button:has(> .icon),
 /* Био в кавычках (идея пользователя) — крупные декоративные кавычки цветом
    "сквозняка" (--accent-2, холодный компаньон лампового --accent),
    курсивный serif для тёплого "разговор по душам" тона. */
-.app-layout .profile-bio {
+.profile-bio {
 	position: relative;
 	color: var(--fg);
 	font-family: var(--font-serif);
@@ -530,8 +530,8 @@ button:has(> .icon),
 	padding-inline: var(--space-m);
 	text-wrap: pretty;
 }
-.app-layout .profile-bio::before,
-.app-layout .profile-bio::after {
+.profile-bio::before,
+.profile-bio::after {
 	position: absolute;
 	font-family: var(--font-display);
 	font-style: normal;
@@ -540,12 +540,12 @@ button:has(> .icon),
 	color: var(--accent-2);
 	opacity: 0.7;
 }
-.app-layout .profile-bio::before {
+.profile-bio::before {
 	content: "“";
 	inset-inline-start: 0;
 	top: 0.6em;
 }
-.app-layout .profile-bio::after {
+.profile-bio::after {
 	content: "”";
 	inset-inline-end: 0;
 	bottom: -0.2em;
@@ -554,13 +554,13 @@ button:has(> .icon),
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
    прокручиваемой зоны. content-section заполняет .main-content целиком. */
 /* .stack (раскладка) уже в JSX — здесь только собственный размер/скролл. */
-.app-layout .content-section {
+.content-section {
 	height: 100%;
 	overflow: hidden;
 }
 
 /* .rigid/.stack/.box (раскладка) уже в JSX — здесь только граница. */
-.app-layout .section-header {
+.section-header {
 	border-block-end: var(--border-width) solid var(--border);
 }
 /* .header-actions — теперь просто .row в JSX (align-items:center инлайн,
@@ -591,15 +591,15 @@ button:has(> .icon),
    распределения остатка, наравне с flex-grow/fr, просто выраженный через
    margin — толкает .action-buttons к правому краю .row независимо от
    числа элементов слева. Проектная поправка, не композиционный класс. */
-.app-layout .action-buttons {
+.action-buttons {
 	margin-inline-start: auto;
 }
 /* Вторичные действия раздела рядом с крупным <h1> — тише, чем сплошная
    заливка --accent (та зарезервирована за первичным CTA конкретного
    экрана, см. VISUAL.md .btn-ghost): обводка + прозрачный фон, заливается
    на hover. */
-.app-layout .action-buttons button,
-.app-layout .action-buttons [type="button"] {
+.action-buttons button,
+.action-buttons [type="button"] {
 	background-color: transparent;
 	color: var(--fg);
 	border-color: var(--border);
@@ -610,8 +610,8 @@ button:has(> .icon),
 	   недосмотр. */
 	border-radius: var(--radius-full);
 }
-.app-layout .action-buttons button:hover,
-.app-layout .action-buttons [type="button"]:hover {
+.action-buttons button:hover,
+.action-buttons [type="button"]:hover {
 	background-color: var(--surface-raised);
 }
 
@@ -620,7 +620,7 @@ button:has(> .icon),
    .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
 /* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
    завязан на width/height, не на padding вокруг текста (текста больше нет). */
-.app-layout .back-button {
+.back-button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -634,7 +634,7 @@ button:has(> .icon),
 	border-radius: calc(infinity * 1px);
 	font-size: var(--step-2);
 }
-.app-layout .back-button:hover {
+.back-button:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
@@ -646,7 +646,7 @@ button:has(> .icon),
    absolute; а min-block-size:0 у .grow и есть тот самый обход капризов,
    ради которого раньше городили position. Раскладка теперь в JSX
    (.grow.layer / .scroller), здесь — только то, что модель не покрывает. */
-.app-layout .content-wrapper {
+.content-wrapper {
 	/* VISUAL.md v2 (пользователь): "не забывай про адаптивность и для её
 	   реализации container queries" — контейнер один раз здесь, на общей
 	   скролл-зоне ЛЮБОГО экрана (не вьюпорт целиком: доступная ширина
@@ -657,7 +657,7 @@ button:has(> .icon),
 }
 
 /* .rigid/.box (раскладка) уже в JSX — здесь только граница. */
-.app-layout .section-footer {
+.section-footer {
 	border-block-start: var(--border-width) solid var(--border);
 }
 
@@ -666,7 +666,7 @@ button:has(> .icon),
  *  пузыри + компоуз-бар пилюлей (VISUAL.md, Claude Opus).             *
  * ================================================================== */
 
-.app-layout .message-list {
+.message-list {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2xs);
@@ -678,11 +678,11 @@ button:has(> .icon),
 }
 
 /* .stack/.box (раскладка) уже в JSX — здесь только размер/тень. */
-.app-layout .message-bubble {
+.message-bubble {
 	max-width: 70%;
 	box-shadow: var(--shadow);
 }
-.app-layout .message-bubble p {
+.message-bubble p {
 	margin-block: 0;
 	max-width: none;
 }
@@ -691,34 +691,34 @@ button:has(> .icon),
    слева-снизу. Асимметрия читается как "хвостик" реплики без рисованного
    хвоста (VISUAL.md). */
 /* .self-end/.self-start (раскладка) уже в JSX. */
-.app-layout .message-bubble-own {
+.message-bubble-own {
 	background-color: var(--accent);
 	color: var(--accent-contrast);
 	border-radius: 1.125rem 1.125rem 0.375rem 1.125rem;
 }
-.app-layout .message-bubble-other {
+.message-bubble-other {
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: 1.125rem 1.125rem 1.125rem 0.375rem;
 }
-.app-layout .message-bubble-deleted p {
+.message-bubble-deleted p {
 	font-style: italic;
 	color: var(--muted);
 }
 /* margin-block-start убран — .stack родителя (message-bubble) уже даёт
    зазор через --gap, второй хозяин отступа не нужен. */
-.app-layout .message-bubble-meta {
+.message-bubble-meta {
 	font-size: var(--step--2);
 }
-.app-layout .message-bubble-own .message-bubble-meta {
+.message-bubble-own .message-bubble-meta {
 	color: color-mix(in oklch, var(--accent-contrast), transparent 30%);
 }
-.app-layout .message-bubble-other .message-bubble-meta {
+.message-bubble-other .message-bubble-meta {
 	color: var(--muted);
 }
 /* Кнопки внутри пузыря ("Редактировать"/"Удалить") — тихие, наравне
    с самим сообщением, не отдельные "кирпичи" среди текста. */
-.app-layout .message-bubble-meta button {
+.message-bubble-meta button {
 	background: none;
 	border: none;
 	padding: 0;
@@ -731,7 +731,7 @@ button:has(> .icon),
 
 /* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
    язык, что VISUAL.md .compose/.field/.send. */
-.app-layout .message-compose {
+.message-compose {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -740,18 +740,18 @@ button:has(> .icon),
 	border-radius: 1.5rem;
 	padding: var(--space-2xs);
 }
-.app-layout .message-compose-field {
+.message-compose-field {
 	flex: 1;
 	resize: none;
 	border: none;
 	background: none;
 	padding-block: var(--space-3xs);
 }
-.app-layout .message-compose-field:focus-visible {
+.message-compose-field:focus-visible {
 	outline: none;
 }
-.app-layout .message-compose-tool-btn,
-.app-layout .message-compose-send-btn {
+.message-compose-tool-btn,
+.message-compose-send-btn {
 	flex: none;
 	display: flex;
 	align-items: center;
@@ -762,22 +762,22 @@ button:has(> .icon),
 	border-radius: calc(infinity * 1px);
 	font-size: 1.1rem;
 }
-.app-layout .message-compose-tool-btn {
+.message-compose-tool-btn {
 	background: none;
 	border: none;
 	color: var(--muted);
 }
-.app-layout .message-compose-tool-btn:hover {
+.message-compose-tool-btn:hover {
 	background-color: var(--surface);
 	color: var(--fg);
 }
-.app-layout .message-compose-send-btn {
+.message-compose-send-btn {
 	background-color: var(--accent);
 	color: var(--accent-contrast);
 	border: none;
 	box-shadow: var(--shadow);
 }
-.app-layout .message-compose-send-btn:hover {
+.message-compose-send-btn:hover {
 	filter: brightness(1.06);
 }
 
@@ -785,22 +785,22 @@ button:has(> .icon),
    дефолтный маргин <p> убран, кнопки прижаты вправо (margin-inline-start:
    auto на первой из них), без единого inline style. */
 /* .row (раскладка, align-items:center инлайн) уже в JSX. */
-.app-layout .recording-status {
+.recording-status {
 	margin-block-start: 0;
 	/* Глобальное p{max-width:var(--measure)} (типографика для прозы) душило
 	   строку — это управляющий UI-ряд, не текст для чтения, кнопкам справа
 	   некуда было "прижиматься". */
 	max-width: none;
 }
-.app-layout .recording-status button {
+.recording-status button {
 	margin-inline-start: auto;
 }
-.app-layout .recording-status button + button {
+.recording-status button + button {
 	margin-inline-start: 0;
 }
 /* Анимированный преloader вместо статичной 🔴 (item 12) — пульсирующая
    точка, тот же смысл ("идёт запись"), но живая, не статичный эмодзи. */
-.app-layout .recording-dot {
+.recording-dot {
 	flex: none;
 	width: 0.6em;
 	height: 0.6em;
@@ -889,7 +889,7 @@ button:has(> .icon),
 	/* Липкий + скроллящийся внутри себя, но ТОЛЬКО на широких экранах —
 	   состояние, включаемое медиа-запросом, не статическая раскладка;
 	   REGLAMENT.md сознательно не покрывает такие переключения (тот же
-	   принцип, что .app-layout .sidebar ниже, превращающийся в выезжающую
+	   принцип, что .sidebar ниже, превращающийся в выезжающую
 	   панель) — .stick/.self-start/.scroller как JSX-классы работали бы
 	   ВСЕГДА, а не только с этого брейкпоинта. */
 	.auth-sidebar {
@@ -1132,7 +1132,7 @@ button:has(> .icon),
 	margin-block: 0;
 }
 
-.auth-layout .btn {
+.btn {
 	display: inline-block;
 	padding: var(--space-2xs) var(--space-m);
 	border: var(--border-width) solid transparent;
@@ -1147,11 +1147,11 @@ button:has(> .icon),
 		background-color var(--transition-speed) var(--transition-ease),
 		transform var(--transition-speed) var(--transition-ease);
 }
-.auth-layout .btn:hover {
+.btn:hover {
 	background-color: var(--accent-hover);
 	color: var(--accent-contrast);
 }
-.auth-layout .btn:active {
+.btn:active {
 	transform: translateY(var(--border-width));
 }
 
@@ -1475,66 +1475,66 @@ button:has(> .icon),
  *  постоянном aside справа (пользователь, item 8).                    *
  * ================================================================== */
 
-.app-layout .channels-layout {
+.channels-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
 }
 @media (min-width: 60em) {
-	.app-layout .channels-layout {
+	.channels-layout {
 		flex-direction: row;
 		align-items: flex-start;
 	}
-	.app-layout .channels-main {
+	.channels-main {
 		flex: 1;
 		min-width: 0;
 	}
-	.app-layout .channels-aside {
+	.channels-aside {
 		flex: 0 0 20rem;
 		position: sticky;
 		inset-block-start: 0;
 	}
 }
 
-.app-layout .channels-main {
+.channels-main {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
 }
-.app-layout .channels-block h2 {
+.channels-block h2 {
 	font-size: var(--step-1);
 	margin-block-end: var(--space-s);
 }
 
 /* "Доступные" — визуально отдельная панель (пользователь: "всегда видно"),
    не просто ещё один блок в общем потоке. */
-.app-layout .channels-aside {
+.channels-aside {
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-lg);
 	padding: var(--space-m);
 	margin-block-start: var(--step-5);
 }
-.app-layout .channels-aside h2 {
+.channels-aside h2 {
 	font-size: var(--step-0);
 	margin-block-start: 0;
 	margin-block-end: var(--space-s);
 }
 /* Пустое состояние ("Нет доступных каналов.") — без нижнего отступа (последний
    элемент панели), с небольшим верхним (отделить от заголовка). */
-.app-layout .channels-aside p {
+.channels-aside p {
 	margin-block-start: var(--step--1);
 	margin-block-end: 0;
 }
 
-.app-layout .channel-list {
+.channel-list {
 	list-style: none;
 	padding-inline-start: 0;
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2xs);
 }
-.app-layout .channel-card-item {
+.channel-card-item {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1542,10 +1542,10 @@ button:has(> .icon),
 	padding-block: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
 }
-.app-layout .channel-card-item:last-child {
+.channel-card-item:last-child {
 	border-block-end: none;
 }
-.app-layout .channel-card-link {
+.channel-card-link {
 	display: flex;
 	align-items: center;
 	gap: var(--space-s);
@@ -1558,18 +1558,18 @@ button:has(> .icon),
 	font: inherit;
 	color: inherit;
 }
-.app-layout .channel-card-link small {
+.channel-card-link small {
 	display: block;
 	color: var(--muted);
 }
-.app-layout .channel-card-updated {
+.channel-card-updated {
 	font-size: var(--step--2);
 }
 
 /* Квадратный аватар канала (тот же язык, что аватар в aside, этап 51-
    довесок-2) — раньше это была ВСЕГДА одна и та же эмодзи-заглушка 🖼️,
    реальная картинка не расшифровывалась и не показывалась вовсе. */
-.app-layout .channel-avatar-thumb {
+.channel-avatar-thumb {
 	flex: none;
 	width: 2.75rem;
 	height: 2.75rem;
@@ -1579,7 +1579,7 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
 }
-.app-layout .channel-avatar-thumb-fallback {
+.channel-avatar-thumb-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1594,7 +1594,7 @@ button:has(> .icon),
 /* Описание канала — не проходной абзац, курсив + черта впереди (пользователь:
    "подумай сам и реши как лучше"), тот же приём, что цитата, лёгкий акцент
    слева тонкой линией по цвету границы. */
-.app-layout .channel-description {
+.channel-description {
 	margin-block-start: 0;
 	font-style: italic;
 	color: var(--muted);
@@ -1605,7 +1605,7 @@ button:has(> .icon),
 /* "Написать пост" — главное действие канала (пользователь: "выглядит как
    маленькая заурядная кнопочка"), крупнее обычной кнопки на ~25% и в акцентном
    цвете, а не тихий ghost-стиль остальных действий. */
-.app-layout .channel-post-cta {
+.channel-post-cta {
 	font-size: var(--step-1);
 	padding-block: var(--space-s);
 	padding-inline: var(--space-m);
@@ -1614,14 +1614,14 @@ button:has(> .icon),
 	border-color: transparent;
 	box-shadow: var(--shadow);
 }
-.app-layout .channel-post-cta:hover {
+.channel-post-cta:hover {
 	filter: brightness(1.06);
 }
 
 /* Поле поста — крупнее по умолчанию (пользователь: "сразу высоту побольше"),
    фон "разлинованная бумага" (повторяющиеся горизонтальные линии по высоте
    строки) + отступ снизу перед вложением/кнопками. */
-.app-layout .post-text-field {
+.post-text-field {
 	min-height: 12rem;
 	margin-block-end: var(--space-s);
 	line-height: 1.6em;
@@ -1632,7 +1632,7 @@ button:has(> .icon),
 /* Вкладка "Редактировать канал" (пользователь, item 25) — внешний .flow
    формы как flex-колонка с фиксированным gap вместо margin-block owl-приёма
    (та же визуальная цель, другой механизм). */
-.app-layout .channel-settings-form {
+.channel-settings-form {
 	display: flex;
 	flex-direction: column;
 	gap: var(--step-1);
@@ -1643,13 +1643,13 @@ button:has(> .icon),
  *  Тот же язык, что каналы (аside, ghost-кнопки строк, карточки).    *
  * ================================================================== */
 
-.app-layout .contacts-toolbar {
+.contacts-toolbar {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-s);
 	margin-block-end: var(--space-l);
 }
-.app-layout .contacts-toolbar p {
+.contacts-toolbar p {
 	color: var(--muted);
 	margin: 0;
 }
@@ -1659,7 +1659,7 @@ button:has(> .icon),
    главное действие раздела). */
 /* .row (раскладка, --gap:0 + alignItems:stretch) уже в JSX. */
 /* .row/.grow (раскладка) уже в JSX — здесь только оформление/сайзинг. */
-.app-layout .contact-add-field {
+.contact-add-field {
 	min-width: 12rem;
 	border: var(--border-width) solid var(--border);
 	border-inline-end: none;
@@ -1669,7 +1669,7 @@ button:has(> .icon),
 	background-color: var(--surface);
 	color: var(--muted);
 }
-.app-layout .contact-add-field input {
+.contact-add-field input {
 	flex: 1;
 	min-width: 0;
 	border: none;
@@ -1677,10 +1677,10 @@ button:has(> .icon),
 	font-size: var(--step-1);
 	padding-block: var(--space-2xs);
 }
-.app-layout .contact-add-field input:focus-visible {
+.contact-add-field input:focus-visible {
 	outline: none;
 }
-.app-layout .contacts-add-form button[type="submit"] {
+.contacts-add-form button[type="submit"] {
 	border-start-start-radius: 0;
 	border-end-start-radius: 0;
 }
@@ -1690,39 +1690,39 @@ button:has(> .icon),
    теперь grid-template-areas + @container (контейнер — .content-wrapper,
    см. выше: отступ смотрит на РЕАЛЬНО доступную ширину экрана, не на
    вьюпорт целиком — тот отличается на ширину сайдбара). */
-.app-layout .contacts-layout {
+.contacts-layout {
 	display: grid;
 	gap: var(--space-l);
 	grid-template-areas: "groups" "list";
 	align-items: start;
 }
 @container (min-width: 52em) {
-	.app-layout .contacts-layout {
+	.contacts-layout {
 		grid-template-columns: minmax(14rem, 16rem) 1fr;
 		grid-template-areas: "groups list";
 	}
-	.app-layout .contacts-groups-aside {
+	.contacts-groups-aside {
 		position: sticky;
 		inset-block-start: 0;
 	}
 }
-.app-layout .contacts-main {
+.contacts-main {
 	grid-area: list;
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
 	min-width: 0;
 }
-.app-layout .contacts-groups-aside {
+.contacts-groups-aside {
 	grid-area: groups;
 	padding: var(--space-m);
 }
-.app-layout .contacts-groups-aside h2 {
+.contacts-groups-aside h2 {
 	font-size: var(--step-0);
 	margin-block-start: 0;
 	margin-block-end: var(--space-s);
 }
-.app-layout .contacts-main section h2 {
+.contacts-main section h2 {
 	font-size: var(--step-1);
 	margin-block-end: var(--space-s);
 }
@@ -1731,7 +1731,7 @@ button:has(> .icon),
    заблокированными и выделить рамкой. Тот же язык карточки, что aside
    слева (.card), плюс собственный отступ снизу (двойная сепарация: рамка
    ВОКРУГ и явный зазор ПОСЛЕ — от следующего блока "Входящие заявки"). */
-.app-layout .contacts-primary-section {
+.contacts-primary-section {
 	padding: var(--space-m);
 	margin-block-end: var(--space-l);
 }
@@ -1739,7 +1739,7 @@ button:has(> .icon),
 /* Фильтр по группам — чекбоксы как переключаемые чипы, не голые
    input+label в столбик. Чекбокс визуально спрятан, но остаётся в
    разметке/доступен с клавиатуры — :has(:checked) переключает вид. */
-.app-layout .group-filter-list {
+.group-filter-list {
 	list-style: none;
 	padding-inline-start: 0;
 	display: flex;
@@ -1747,13 +1747,13 @@ button:has(> .icon),
 	gap: 0;
 	margin-block: 0 var(--space-s);
 }
-.app-layout .group-filter-chip {
+.group-filter-chip {
 	display: flex;
 	align-items: center;
 	gap: var(--space-3xs);
 	flex-wrap: wrap;
 }
-.app-layout .group-filter-chip label {
+.group-filter-chip label {
 	/* flex:1 (=1 1 0%) даёт нулевой flex-basis — когда соседние кнопки
 	   "Переименовать"/"Удалить" не сжимаются (свой min-content), label
 	   схлопывался почти до нуля и текст переносился ПО БУКВЕ. flex-basis:
@@ -1764,12 +1764,12 @@ button:has(> .icon),
 	border-radius: var(--radius);
 	cursor: pointer;
 }
-.app-layout .group-filter-chip:has(:checked) label {
+.group-filter-chip:has(:checked) label {
 	background-color: color-mix(in oklch, var(--accent), transparent 85%);
 	color: var(--accent);
 	font-weight: var(--weight-bold);
 }
-.app-layout .group-filter-chip input {
+.group-filter-chip input {
 	width: auto;
 	accent-color: var(--accent);
 }
@@ -1778,7 +1778,7 @@ button:has(> .icon),
    приём, что .contact-row-actions. Без этого длинное "Переименовать"
    в узком aside рендерилось жирной залитой кнопкой во всю ширину
    собственной строки — тяжелее самого фильтра, который она обслуживает. */
-.app-layout .group-filter-chip button {
+.group-filter-chip button {
 	background-color: transparent;
 	color: var(--muted);
 	border-color: var(--border);
@@ -1786,14 +1786,14 @@ button:has(> .icon),
 	font-size: var(--step--2);
 	padding: var(--space-3xs) var(--space-2xs);
 }
-.app-layout .group-filter-chip button:hover {
+.group-filter-chip button:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
 
 /* Карточка строки (заявка/контакт/заблокированный) — тот же язык, что
    .channel-card-item. */
-.app-layout .contact-row-list {
+.contact-row-list {
 	list-style: none;
 	padding-inline-start: 0;
 	/* Глобальное ul{margin-block:var(--space-m)} (типографика для прозы,
@@ -1803,7 +1803,7 @@ button:has(> .icon),
 	flex-direction: column;
 	gap: var(--space-2xs);
 }
-.app-layout .contact-row {
+.contact-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1812,18 +1812,18 @@ button:has(> .icon),
 	border-block-end: var(--border-width) solid var(--border);
 	flex-wrap: wrap;
 }
-.app-layout .contact-row-list .contact-row:last-child {
+.contact-row-list .contact-row:last-child {
 	border-block-end: none;
 }
-.app-layout .contact-row-list .contact-row.contact-row-expandable:last-child {
+.contact-row-list .contact-row.contact-row-expandable:last-child {
 	padding-block-end: 0;
 }
-.app-layout .contact-row-expandable {
+.contact-row-expandable {
 	flex-direction: column;
 	align-items: stretch;
 	gap: var(--space-2xs);
 }
-.app-layout .contact-row-main {
+.contact-row-main {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1833,36 +1833,36 @@ button:has(> .icon),
 /* Действия строки — тише сплошной заливки (тот же приём, что
    .action-buttons в шапке экрана, этап 51-довесок), не спорят по весу
    с самой карточкой контакта. */
-.app-layout .contact-row-actions {
+.contact-row-actions {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2xs);
 }
-.app-layout .contact-row-actions button {
+.contact-row-actions button {
 	background-color: transparent;
 	color: var(--fg);
 	border-color: var(--border);
 	font-weight: var(--weight-normal);
 }
-.app-layout .contact-row-actions button:hover {
+.contact-row-actions button:hover {
 	background-color: var(--surface-raised);
 }
 /* Подпись "Позвонить" прячется в узком контейнере (звонок остаётся
    иконкой) — VISUAL.md v2 .call-txt, контейнер тот же .content-wrapper. */
 @container (max-width: 26em) {
-	.app-layout .contact-row-actions .call-txt {
+	.contact-row-actions .call-txt {
 		display: none;
 	}
 }
 
-.app-layout .contact-row-groups {
+.contact-row-groups {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2xs);
 }
-.app-layout .group-chip {
+.group-chip {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-3xs);
@@ -1873,7 +1873,7 @@ button:has(> .icon),
 	font-size: var(--step--1);
 	font-weight: var(--weight-bold);
 }
-.app-layout .group-chip button {
+.group-chip button {
 	background: none;
 	border: none;
 	padding: 0;
@@ -1885,13 +1885,13 @@ button:has(> .icon),
 /* Аватар контакта (пользователь: не круглый, а --radius — тот же скруглённый
    квадрат, что остальные карточки в приложении, не отдельный "человеческий"
    мотив). */
-.app-layout .contact-identity {
+.contact-identity {
 	display: flex;
 	align-items: center;
 	gap: var(--space-s);
 	text-align: left;
 }
-.app-layout .contact-identity-btn {
+.contact-identity-btn {
 	background: none;
 	border: none;
 	padding: 0;
@@ -1899,7 +1899,7 @@ button:has(> .icon),
 	font: inherit;
 	color: inherit;
 }
-.app-layout .contact-avatar {
+.contact-avatar {
 	flex: none;
 	width: 2.5rem;
 	height: 2.5rem;
@@ -1909,18 +1909,18 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
 }
-.app-layout .contact-avatar-fallback {
+.contact-avatar-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
-.app-layout .contact-identity small {
+.contact-identity small {
 	display: block;
 	color: var(--muted);
 }
-.app-layout .contact-identity-npub {
+.contact-identity-npub {
 	font-family: var(--font-mono);
 }
 
@@ -1934,31 +1934,31 @@ button:has(> .icon),
    раньше он держался на этом единственном ручном margin, из-за чего
    секции БЕЗ такого патча (например "Relay-серверы") слипались с
    соседом — баг был и до REGLAMENT.md, не регрессия миграции. */
-.app-layout .profile-photo-layout {
+.profile-photo-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
 }
 @media (min-width: 40em) {
-	.app-layout .profile-photo-layout {
+	.profile-photo-layout {
 		flex-direction: row;
 		align-items: flex-start;
 	}
-	.app-layout .profile-photo-col {
+	.profile-photo-col {
 		flex: 0 0 12rem;
 	}
-	.app-layout .profile-bio-col {
+	.profile-bio-col {
 		flex: 1;
 		min-width: 0;
 	}
 }
-.app-layout .profile-photo-col {
+.profile-photo-col {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	gap: var(--space-s);
 }
-.app-layout .profile-avatar-square {
+.profile-avatar-square {
 	width: 12rem;
 	height: 12rem;
 	aspect-ratio: 1;
@@ -1967,7 +1967,7 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
 }
-.app-layout .profile-avatar-square-fallback {
+.profile-avatar-square-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1975,7 +1975,7 @@ button:has(> .icon),
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
-.app-layout .profile-avatar-replace-btn {
+.profile-avatar-replace-btn {
 	display: inline-block;
 	cursor: pointer;
 	background-color: var(--accent);
@@ -1984,7 +1984,7 @@ button:has(> .icon),
 	border-radius: calc(infinity * 1px);
 	font-weight: var(--weight-bold);
 }
-.app-layout .profile-avatar-replace-btn:hover {
+.profile-avatar-replace-btn:hover {
 	background-color: var(--accent-hover);
 }
 
@@ -2010,28 +2010,28 @@ button:has(> .icon),
    этой панелью) — общий border-block-start только у неё (первая в паре,
    отделяет ОБЕ панели вместе от списка меню выше), связка панелей —
    через margin-block-start у .connection-status-panel. */
-.app-layout .sidebar .theme-status-panel,
-.app-layout .sidebar .connection-status-panel {
+.sidebar .theme-status-panel,
+.sidebar .connection-status-panel {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-3xs);
 	font-size: var(--step--2);
 	color: var(--muted);
 }
-.app-layout .sidebar .theme-status-panel p,
-.app-layout .sidebar .connection-status-panel p {
+.sidebar .theme-status-panel p,
+.sidebar .connection-status-panel p {
 	margin: 0;
 }
-.app-layout .sidebar .connection-status-panel small {
+.sidebar .connection-status-panel small {
 	display: block;
 	word-break: break-all;
 }
-.app-layout .sidebar .theme-status-panel {
+.sidebar .theme-status-panel {
 	padding-block-start: var(--space-s);
 	margin-block-start: var(--space-s);
 	border-block-start: var(--border-width) solid var(--border);
 }
-.app-layout .sidebar .connection-status-panel {
+.sidebar .connection-status-panel {
 	margin-block-start: var(--space-s);
 	padding-block-end: var(--space-s);
 }
@@ -2039,7 +2039,7 @@ button:has(> .icon),
    стартовом экране (auth-layout), но без justify-self:center (здесь
    обычный текстовый поток, не CSS-grid форма). Иконка — тот же размер
    шрифта, что текст (1em), выровнена по строке через inline-flex. */
-.app-layout .sidebar .theme-status-toggle {
+.sidebar .theme-status-toggle {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-3xs);
@@ -2053,7 +2053,7 @@ button:has(> .icon),
 	text-underline-offset: 0.15em;
 	cursor: pointer;
 }
-.app-layout .sidebar .theme-status-toggle:hover {
+.sidebar .theme-status-toggle:hover {
 	color: var(--accent-hover);
 }
 
@@ -2062,7 +2062,7 @@ button:has(> .icon),
  *  SUBGRID: колонка иконок-типов и колонка времени/точки выровнены    *
  *  по ВСЕЙ ленте одного дня, не только внутри своей строки.           *
  * ================================================================== */
-.app-layout .date-field {
+.date-field {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2073,7 +2073,7 @@ button:has(> .icon),
 	color: var(--muted);
 	font-size: var(--step--1);
 }
-.app-layout .date-field input {
+.date-field input {
 	background: none;
 	border: none;
 	color: var(--fg);
@@ -2086,18 +2086,18 @@ button:has(> .icon),
    более широкого main-content на десктопе не обрежется, даже если
    вьюпорт целиком узкий, но сайдбар/aside рядом остаются). */
 @container (max-width: 32em) {
-	.app-layout .journal .mark-txt {
+	.journal .mark-txt {
 		display: none;
 	}
 }
 
-.app-layout .jgroup {
+.jgroup {
 	margin-block-start: var(--space-l);
 }
-.app-layout .jgroup:first-of-type {
+.jgroup:first-of-type {
 	margin-block-start: var(--space-m);
 }
-.app-layout .jgroup__date {
+.jgroup__date {
 	font-size: var(--step--1);
 	font-weight: var(--weight-bold);
 	color: var(--muted);
@@ -2106,7 +2106,7 @@ button:has(> .icon),
 	margin-block: 0 var(--space-2xs);
 }
 
-.app-layout .jfeed {
+.jfeed {
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -2114,12 +2114,12 @@ button:has(> .icon),
 	grid-template-columns: auto 1fr auto;
 	gap: 2px;
 }
-.app-layout .jfeed > li {
+.jfeed > li {
 	display: grid;
 	grid-column: 1 / -1;
 	grid-template-columns: subgrid;
 }
-.app-layout .jitem__link {
+.jitem__link {
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: subgrid;
@@ -2136,11 +2136,11 @@ button:has(> .icon),
 	cursor: pointer;
 	transition: background-color var(--transition-speed) var(--transition-ease);
 }
-.app-layout .jitem__link:hover {
+.jitem__link:hover {
 	background-color: var(--surface-raised);
 }
 
-.app-layout .jtype {
+.jtype {
 	flex: none;
 	width: 2.25rem;
 	height: 2.25rem;
@@ -2152,32 +2152,32 @@ button:has(> .icon),
 	background-color: var(--surface);
 	color: var(--muted);
 }
-.app-layout .jtype--lamp {
+.jtype--lamp {
 	color: var(--accent);
 	background-color: color-mix(in oklch, var(--accent), transparent 84%);
 }
-.app-layout .jtype--draught {
+.jtype--draught {
 	color: var(--accent-2);
 	background-color: color-mix(in oklch, var(--accent-2), transparent 84%);
 }
-.app-layout .jtype--bad {
+.jtype--bad {
 	color: var(--bad, oklch(0.58 0.21 25));
 	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 84%);
 }
 
-.app-layout .jbody {
+.jbody {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
 }
-.app-layout .jtitle {
+.jtitle {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-weight: var(--weight-bold);
 }
-.app-layout .jmeta {
+.jmeta {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -2186,23 +2186,23 @@ button:has(> .icon),
 }
 /* Прочитанные — заголовок приглушён, не жирный (VISUAL.md v2: "прочитанные
    тише"). */
-.app-layout .jitem[data-read] .jtitle {
+.jitem[data-read] .jtitle {
 	color: var(--muted);
 	font-weight: var(--weight-normal);
 }
 
-.app-layout .jside {
+.jside {
 	display: grid;
 	justify-items: end;
 	align-content: center;
 	gap: var(--space-3xs);
 }
-.app-layout .jtime {
+.jtime {
 	color: var(--muted);
 	font-size: var(--step--2);
 	white-space: nowrap;
 }
-.app-layout .jdot {
+.jdot {
 	width: 0.5rem;
 	height: 0.5rem;
 	border-radius: var(--radius-full);
@@ -2210,7 +2210,7 @@ button:has(> .icon),
 	justify-self: end;
 }
 
-.app-layout .pager {
+.pager {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -2219,7 +2219,7 @@ button:has(> .icon),
 	padding-block-start: var(--space-m);
 	border-block-start: var(--border-width) solid var(--border);
 }
-.app-layout .pager__status {
+.pager__status {
 	color: var(--muted);
 	font-size: var(--step--1);
 }
@@ -2228,17 +2228,17 @@ button:has(> .icon),
  *  Меню "ещё действия" (actions-menu.jsx) — нативный <details>, без   *
  *  JS-библиотек. VISUAL.md v2.                                        *
  * ================================================================== */
-.app-layout .menu {
+.menu {
 	position: relative;
 	display: inline-flex;
 }
-.app-layout .menu > summary {
+.menu > summary {
 	list-style: none;
 }
-.app-layout .menu > summary::-webkit-details-marker {
+.menu > summary::-webkit-details-marker {
 	display: none;
 }
-.app-layout .menu__pop {
+.menu__pop {
 	position: absolute;
 	inset-inline-end: 0;
 	inset-block-start: calc(100% + var(--space-3xs));
@@ -2252,8 +2252,8 @@ button:has(> .icon),
 	display: grid;
 	gap: 2px;
 }
-.app-layout .menu__pop button,
-.app-layout .menu__pop .menu-check {
+.menu__pop button,
+.menu__pop .menu-check {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2268,14 +2268,14 @@ button:has(> .icon),
 	padding: var(--space-2xs) var(--space-s);
 	border-radius: var(--radius);
 }
-.app-layout .menu__pop button:hover,
-.app-layout .menu__pop .menu-check:hover {
+.menu__pop button:hover,
+.menu__pop .menu-check:hover {
 	background-color: var(--surface);
 }
-.app-layout .menu__pop button.danger {
+.menu__pop button.danger {
 	color: var(--bad, oklch(0.58 0.21 25));
 }
-.app-layout .menu-check input {
+.menu-check input {
 	width: auto;
 	accent-color: var(--accent);
 }
@@ -2283,7 +2283,7 @@ button:has(> .icon),
 /* Пилюля-триггер (VISUAL.md v2) — "+ в группу" и подобные компактные
    всплывающие меню, где .icon-btn (круглая, только иконка) не подходит
    — нужен видимый текстовый лейбл рядом с иконкой. */
-.app-layout .chip {
+.chip {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-3xs);
@@ -2306,12 +2306,12 @@ button:has(> .icon),
    "Входящие заявки", те остаются развёрнутыми всегда: первое — рабочий
    список, второе — требует решения пользователя, прятать по умолчанию
    было бы неверно). */
-.app-layout .requests {
+.requests {
 	display: grid;
 	gap: var(--space-2xs);
 	margin-block-start: var(--space-l);
 }
-.app-layout .req {
+.req {
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
 	/* Раньше — дефолт голого <details> (minimal.css), убранный оттуда:
@@ -2320,7 +2320,7 @@ button:has(> .icon),
 	   верхний отступ (сам начинается с padding-top:0, см. ниже). */
 	padding: var(--space-s);
 }
-.app-layout .req > summary {
+.req > summary {
 	list-style: none;
 	cursor: pointer;
 	display: flex;
@@ -2331,29 +2331,29 @@ button:has(> .icon),
 	padding: 0;
 	font-weight: var(--weight-bold);
 }
-.app-layout .req > summary::-webkit-details-marker {
+.req > summary::-webkit-details-marker {
 	display: none;
 }
-.app-layout .req__count {
+.req__count {
 	color: var(--muted);
 	font-weight: var(--weight-normal);
 }
-.app-layout .req__chev {
+.req__chev {
 	margin-inline-start: auto;
 	color: var(--muted);
 	transition: transform var(--transition-speed) var(--transition-ease);
 }
-.app-layout .req[open] .req__chev {
+.req[open] .req__chev {
 	transform: rotate(90deg);
 }
-.app-layout .req__body {
+.req__body {
 	padding: 0 var(--space-s) var(--space-s);
 }
 
 /* ================================================================== *
  *  Экран "Профиль" — VISUAL.md v2, интеграция.                        *
  * ================================================================== */
-.app-layout .sect-title {
+.sect-title {
 	font-family: var(--font-display);
 	font-size: var(--step-1);
 	letter-spacing: var(--heading-letter-spacing);
@@ -2363,7 +2363,7 @@ button:has(> .icon),
 /* npub — код в рамке + отдельная кнопка-копия (реальная <button>, не
    div с role="button"/tabIndex/onKeyDown — пользователь: "семантику не
    нарушать", настоящая кнопка доступна с клавиатуры сама по себе). */
-.app-layout .keybox {
+.keybox {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2372,7 +2372,7 @@ button:has(> .icon),
 	border-radius: var(--radius);
 	padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-s);
 }
-.app-layout .keybox code {
+.keybox code {
 	flex: 1;
 	min-width: 0;
 	font-family: var(--font-mono);
@@ -2382,20 +2382,20 @@ button:has(> .icon),
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.app-layout .hint {
+.hint {
 	color: var(--muted);
 	font-size: var(--step--1);
 	margin-block-start: var(--space-2xs);
 }
 
-.app-layout .srv__list {
+.srv__list {
 	list-style: none;
 	margin: 0 0 var(--space-s);
 	padding: 0;
 	display: grid;
 	gap: var(--space-2xs);
 }
-.app-layout .srv__item {
+.srv__item {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2404,7 +2404,7 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
 }
-.app-layout .srv__url {
+.srv__url {
 	flex: 1;
 	min-width: 0;
 	font-family: var(--font-mono);
@@ -2413,15 +2413,15 @@ button:has(> .icon),
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.app-layout .srv__add {
+.srv__add {
 	display: flex;
 	gap: var(--space-2xs);
 }
-.app-layout .srv__add .input,
-.app-layout .srv__add input {
+.srv__add .input,
+.srv__add input {
 	flex: 1;
 }
-.app-layout .badge-on {
+.badge-on {
 	flex: none;
 	font-size: var(--step--2);
 	color: var(--accent-2);
@@ -2430,7 +2430,7 @@ button:has(> .icon),
 	border-radius: var(--radius-full);
 	white-space: nowrap;
 }
-.app-layout .files-empty {
+.files-empty {
 	border: 1px dashed var(--border);
 	border-radius: var(--radius);
 	padding: var(--space-l);
@@ -2455,7 +2455,7 @@ button:has(> .icon),
 /* Табы разделов канала — подчёркивание снизу вместо кнопок-кирпичей
    (тот же язык, что уже есть у главного меню, этап 51-довесок-3, только
    подчёркивание тут статичное на активной вкладке, не только по hover). */
-.app-layout .tabs {
+.tabs {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -2463,7 +2463,7 @@ button:has(> .icon),
 	border-block-end: var(--border-width) solid var(--border);
 	margin-block: var(--space-m);
 }
-.app-layout .tab {
+.tab {
 	background: none;
 	border: none;
 	color: var(--muted);
@@ -2476,10 +2476,10 @@ button:has(> .icon),
 		color var(--transition-speed) var(--transition-ease),
 		border-color var(--transition-speed) var(--transition-ease);
 }
-.app-layout .tab:hover {
+.tab:hover {
 	color: var(--fg);
 }
-.app-layout .tab[aria-selected="true"] {
+.tab[aria-selected="true"] {
 	color: var(--fg);
 	border-block-end-color: var(--accent);
 }
@@ -2488,7 +2488,7 @@ button:has(> .icon),
    образный класс (без .card самого — посты не "приподняты", просто в
    рамке, тише aside-панелей). */
 /* .stack/.box (раскладка) уже в JSX — здесь только граница. */
-.app-layout .post {
+.post {
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
 }
@@ -2501,7 +2501,7 @@ button:has(> .icon),
  *  оставил разворот внутри списка постов канала, не отдельным         *
  *  экраном — см. PostWithComments, channel.jsx).                      *
  * ================================================================== */
-.app-layout .section-label {
+.section-label {
 	font-size: var(--step-1);
 	font-weight: var(--weight-bold);
 	color: var(--muted);
@@ -2513,16 +2513,16 @@ button:has(> .icon),
 
 /* Обёртка блока комментариев (пользователь, item 23a) — верхний padding,
    отделяющий его от карточки поста над ним. */
-.app-layout .comment-section {
+.comment-section {
 	padding-inline-start: var(--space-m);
 	padding-block-start: var(--space-s);
 }
 
-.app-layout .composer {
+.composer {
 	display: grid;
 	gap: var(--space-2xs);
 }
-.app-layout .composer__row {
+.composer__row {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2530,7 +2530,7 @@ button:has(> .icon),
 /* Поле комментария — крупнее (пользователь: "чё так мелко") + фон "блокнот
    в точечку" (сетка точек через var(--space-m), тот же приём, что лист в
    линейку у поста, только точками вместо линий). */
-.app-layout .comment-text-field {
+.comment-text-field {
 	min-height: 5rem;
 	background-image: radial-gradient(circle, var(--muted) 1.5px, transparent 1.5px);
 	background-size: 22px 22px;
@@ -2540,20 +2540,20 @@ button:has(> .icon),
 	background-attachment: local;
 }
 
-.app-layout .cmt-list {
+.cmt-list {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	display: grid;
 	gap: var(--space-m);
 }
-.app-layout .cmt__box {
+.cmt__box {
 	display: grid;
 	grid-template-columns: auto 1fr;
 	column-gap: var(--space-s);
 	row-gap: var(--space-3xs);
 }
-.app-layout .cmt__ava {
+.cmt__ava {
 	grid-column: 1;
 	grid-row: 1 / 4;
 	align-self: start;
@@ -2568,58 +2568,58 @@ button:has(> .icon),
 	background-color: var(--surface);
 	font-size: 0.85rem;
 }
-.app-layout .cmt__ava-fallback {
+.cmt__ava-fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
-.app-layout .cmt__head {
+.cmt__head {
 	grid-column: 2;
 	display: flex;
 	align-items: baseline;
 	gap: var(--space-2xs);
 	flex-wrap: wrap;
 }
-.app-layout .cmt__name {
+.cmt__name {
 	font-weight: var(--weight-bold);
 	font-size: var(--step--1);
 }
-.app-layout .cmt__time {
+.cmt__time {
 	color: var(--muted);
 	font-size: var(--step--2);
 }
 /* "автор" — оригинальный автор ПОСТА (не владелец канала) написал этот
    комментарий; заливка --accent (та же "лампа", что исходящие сообщения —
    "это твой свет", тот же смысл). */
-.app-layout .cmt__op {
+.cmt__op {
 	font-size: var(--step--2);
 	color: var(--accent-contrast);
 	background-color: var(--accent);
 	padding: 1px var(--space-2xs);
 	border-radius: var(--radius-full);
 }
-.app-layout .cmt__text {
+.cmt__text {
 	grid-column: 2;
 	font-size: var(--step-0);
 	line-height: 1.55;
 	white-space: pre-wrap;
 	margin: 0;
 }
-.app-layout .cmt__media {
+.cmt__media {
 	grid-column: 2;
 	margin-block-start: var(--space-2xs);
 	max-width: 280px;
 }
-.app-layout .cmt__actions {
+.cmt__actions {
 	grid-column: 2;
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
 	margin-block-start: var(--space-3xs);
 }
-.app-layout .cmt__actions .btn--ghost {
+.cmt__actions .btn--ghost {
 	padding: var(--space-2xs) var(--space-s);
 	font-size: var(--step--1);
 }
@@ -2627,14 +2627,14 @@ button:has(> .icon),
 /* Ветка — нативное сворачивание + тёплая нить (подпись Уголка): левая
    граница окрашена акцентом, тред читается как "нить разговора", не
    просто отступ. */
-.app-layout .thread {
+.thread {
 	grid-column: 1 / -1;
 	/* Раньше — дефолт голого <details> (minimal.css), убранный оттуда из-за
 	   утечки в .menu (см. .req выше) — border/border-radius там же
 	   остаются глобальным дефолтом, компенсируется здесь только padding. */
 	padding: var(--space-s);
 }
-.app-layout .thread > summary {
+.thread > summary {
 	list-style: none;
 	cursor: pointer;
 	display: inline-flex;
@@ -2646,20 +2646,20 @@ button:has(> .icon),
 	margin-block-start: var(--space-2xs);
 	border-radius: var(--radius-full);
 }
-.app-layout .thread > summary::-webkit-details-marker {
+.thread > summary::-webkit-details-marker {
 	display: none;
 }
-.app-layout .thread > summary:hover {
+.thread > summary:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
-.app-layout .thread__chev {
+.thread__chev {
 	transition: transform var(--transition-speed) var(--transition-ease);
 }
-.app-layout .thread[open] > summary .thread__chev {
+.thread[open] > summary .thread__chev {
 	transform: rotate(90deg);
 }
-.app-layout .thread > .cmt-list {
+.thread > .cmt-list {
 	margin-block-start: var(--space-m);
 	padding-inline-start: var(--space-m);
 	border-inline-start: 2px solid color-mix(in oklch, var(--accent), var(--border) 68%);
@@ -2671,29 +2671,29 @@ button:has(> .icon),
  *  строки списка по прямому прецеденту .contact-row-list.             *
  * ================================================================== */
 
-.app-layout .files-shell {
+.files-shell {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-m);
 }
 
 /* .row (раскладка) уже в JSX везде ниже. */
-.app-layout .file-breadcrumb-item {
+.file-breadcrumb-item {
 	color: var(--muted);
 }
 /* Последняя крошка — текущая папка, обычный текст, не кнопка (некуда
    переходить из самой себя, тот же принцип, что "хлебная крошка" везде). */
-.app-layout .file-breadcrumb-item:last-child span {
+.file-breadcrumb-item:last-child span {
 	color: var(--fg);
 	font-weight: var(--weight-bold);
 }
-.app-layout .file-breadcrumb-item .icon {
+.file-breadcrumb-item .icon {
 	color: var(--border);
 }
 
 /* Поле фильтра (3.7 TASK.md) — тот же язык, что contact-add-field, но без
    слияния с кнопкой (фильтр применяется на ввод, действия не требует). */
-.app-layout .file-search-field {
+.file-search-field {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -2704,7 +2704,7 @@ button:has(> .icon),
 	background-color: var(--surface);
 	color: var(--muted);
 }
-.app-layout .file-search-field input {
+.file-search-field input {
 	flex: 1;
 	min-width: 0;
 	border: none;
@@ -2713,12 +2713,12 @@ button:has(> .icon),
 }
 
 /* .row (раскладка) уже в JSX. */
-.app-layout .file-new-folder-form input {
+.file-new-folder-form input {
 	flex: 1 1 16rem;
 }
 
 /* .row (раскладка) уже в JSX. */
-.app-layout .file-selection-toolbar {
+.file-selection-toolbar {
 	padding: var(--space-2xs) var(--space-s);
 	background-color: var(--surface);
 	border-radius: var(--radius);
@@ -2730,7 +2730,7 @@ button:has(> .icon),
    разделитель — border-block-end на самой строке (тот же приём, что
    .contact-row) — иначе gap добавлял бы к высоте слота, не учтённую
    виртуализацией величину, и строки "дрожали" бы при скролле. */
-.app-layout .file-row-list {
+.file-row-list {
 	list-style: none;
 	padding-inline-start: 0;
 	margin-block: 0;
@@ -2738,7 +2738,7 @@ button:has(> .icon),
 /* .row (раскладка) уже в JSX — height ЗДЕСЬ, не через .box (тот даёт
    padding на все стороны, а высота строки — точное число ROW_HEIGHT_PX
    для виртуализации, .box лишний block-padding эту точность сломал бы). */
-.app-layout .file-row {
+.file-row {
 	height: 56px; /* = ROW_HEIGHT_PX, files.jsx */
 	padding-inline: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
@@ -2746,17 +2746,17 @@ button:has(> .icon),
 /* НЕ :last-child — с виртуализацией последняя строка В DOM не обязательно
    последняя в списке (может быть просто последней ВИДИМОЙ). Граница под
    каждой строкой, включая логически последнюю, — не проблема визуально. */
-.app-layout .file-row:hover {
+.file-row:hover {
 	background-color: var(--surface);
 }
 /* Drag-and-drop (§7 TASK.md) — подсветка ТОЛЬКО валидной цели (files.jsx
    проверяет d∉subtree(n) до простановки класса, не после drop). */
-.app-layout .file-row--drag-over {
+.file-row--drag-over {
 	background-color: color-mix(in oklch, var(--accent), transparent 88%);
 	outline: var(--border-width) dashed var(--accent);
 	outline-offset: -2px;
 }
-.app-layout .file-row-icon {
+.file-row-icon {
 	flex: none;
 	color: var(--muted);
 	font-size: 1.1rem;
@@ -2764,7 +2764,7 @@ button:has(> .icon),
 /* Миниатюра (задача 3.8 TASK.md) — тот же слот в строке, что file-row-icon,
    но сама картинка, не иконка типа. Квадратная, чуть больше просто иконки
    (иначе изображение неразличимо), обрезана по центру (object-fit). */
-.app-layout .file-row-thumb {
+.file-row-thumb {
 	flex: none;
 	width: 1.75rem;
 	height: 1.75rem;
@@ -2772,7 +2772,7 @@ button:has(> .icon),
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 }
-.app-layout .file-row-name {
+.file-row-name {
 	background: none;
 	border: none;
 	padding: var(--space-3xs) var(--space-2xs);
@@ -2784,15 +2784,15 @@ button:has(> .icon),
 	font-weight: var(--weight-normal);
 	color: var(--fg);
 }
-.app-layout .file-row-name:hover {
+.file-row-name:hover {
 	background-color: var(--surface-raised);
 }
-.app-layout .file-row-status {
+.file-row-status {
 	color: var(--muted);
 	font-style: italic;
 }
 /* .row/.grow (раскладка) уже в JSX. */
-.app-layout .file-rename-form input {
+.file-rename-form input {
 	flex: 1 1 12rem;
 }
 
