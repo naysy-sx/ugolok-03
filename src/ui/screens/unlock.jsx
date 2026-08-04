@@ -195,7 +195,7 @@ export default function Unlock() {
 	// без сайдбар-сетки (нечего показывать рядом, отвлекало бы). ──────────────
 	if (step === "loading") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("app.name")}</h1>
@@ -207,7 +207,7 @@ export default function Unlock() {
 
 	if (step === "db-error") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("app.name")}</h1>
@@ -229,7 +229,7 @@ export default function Unlock() {
 
 	if (step === "create-generate") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createGenerate.title")}</h1>
@@ -253,7 +253,7 @@ export default function Unlock() {
 
 	if (step === "create-confirm") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createConfirm.title")}</h1>
@@ -295,7 +295,7 @@ export default function Unlock() {
 
 	if (step === "import-mnemonic") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importMnemonic.title")}</h1>
@@ -338,7 +338,7 @@ export default function Unlock() {
 
 	if (step === "import-key") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importKey.title")}</h1>
@@ -396,7 +396,7 @@ export default function Unlock() {
 
 	if (step === "advanced-password") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.advancedPassword.title")}</h1>
@@ -430,7 +430,7 @@ export default function Unlock() {
 
 	if (step === "done") {
 		return (
-			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.done.title")}</h1>

@@ -3263,3 +3263,37 @@ permission-editor(4)/post-card(1). Плюс `app.jsx` (или где живёт
 `.app-shell` — не в screens/, отдельно) — на `.shell`, и весь
 `custom.css` (~3000 строк, 34 компонента) на предмет раскладки,
 смешанной с оформлением, которую нужно разнести по слоям.
+
+**Этап B — закрыт (66Б.1—66Б.9, файл за файлом, каждый отдельным
+коммитом).** Компоненты — 66Б.2 (11 файлов). Экраны: app.jsx+screen.jsx
+(66А+Б.1), placeholder+contacts (66Б.3), discovery+profile (66Б.4),
+channels+channel (66Б.5), chat (66Б.6), files (66Б.7), settings
+(66Б.8), unlock (66Б.9). diagnostics.jsx и markdown-view.jsx —
+изначально сознательно отложены (диагностику пользователь просил "не
+трогать, потом переделать"; markdown-view не ложился в модель
+REGLAMENT.md — дифференцированная типографская отбивка блоков вне
+композиции), домигрированы отдельно перед этапом C по решению
+пользователя (см. log.md).
+
+Попутно найден и исправлен класс багов — верхнеуровневые секции
+экрана лежат прямыми детьми `content-wrapper` (обычный `display:block`,
+без gap), и если ни у одной стороны стыка нет собственного margin, они
+визуально слипаются. Не всегда регресс миграции: в `profile.jsx` баг
+существовал ещё ДО REGLAMENT.md (проверено на коммите до этапа 66,
+git worktree) — держался на редких точечных патчах
+`margin-block-*:var(--space-l)` (`.contacts-toolbar`,
+`.profile-photo-layout`, `.jgroup`, `.pager`, `.requests`), расставленных
+не везде. В `placeholder.jsx` (66Б.3) — уже настоящий регресс: голый
+`class="flow"` держался на глобальном дефолте `--flow-space` (`:root`),
+а `.stack` такого дефолта не имеет (`--gap:0`). Пофикшено явной
+обёрткой-`.stack` (`--gap:var(--space-l)`) в `profile.jsx`/`settings.jsx`/
+`discovery.jsx`/`chat.jsx`(список)/`unlock.jsx`/`placeholder.jsx`.
+
+**Этап C — закрыт.** `grep -rn '\.flow\b|\.cluster\b|\.grid-auto\b'
+src/ui` вернул пусто → `.flow`/`.cluster`/`.grid-auto`/старый `.center`
+удалены из `utilities` (minimal.css) одним коммитом вместе с токенами
+`--flow-space`/`--cluster-gap` (более не читаются нигде); `--grid-min`/
+`--container` оставлены — их напрямую использует `custom.css`
+(`.auth-layout`, `.sidebar`), не только удалённые классы. `.measure` →
+`.center` (CSS и оба файла-потребителя, unlock.jsx/placeholder.jsx).
+CONTRACTS.md, "Этап 66" обновлён — временная коллизия имён закрыта.

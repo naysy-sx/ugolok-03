@@ -7,14 +7,12 @@
  *      tokens   — публичный API: каждая «крутилка» живёт здесь как --переменная
  *      base     — html/body, цветовая схема, фокус, ритм документа
  *      elements — вменяемые дефолты для голых тегов, все на переменных
- *      utilities — тонкий opt-in слой классов (.flow, .cluster, .grid-auto, .prose …).
- *                  ПЕРЕХОДНЫЙ — .flow/.cluster/.grid-auto/.center уходят, когда
- *                  последний файл в src/ui смигрирует на слой `composition`
- *                  (PROCESS-DOCS/CONTRACTS.md, "Переверстка на REGLAMENT.md").
+ *      utilities — тонкий opt-in слой классов, не относящихся к раскладке
+ *                  (.prose, .eyebrow, .visually-hidden, .spinner …). Раскладочные
+ *                  .flow/.cluster/.grid-auto/старый .center отсюда удалены —
+ *                  этап 66В, PROCESS-DOCS/PLAN.md — все экраны src/ui на слое
+ *                  `composition` ниже.
  *      composition — обязательный слой раскладки (PROCESS-DOCS/REGLAMENT.md).
- *                  .center здесь временно называется .measure — .center в
- *                  utilities ещё жив, второе имя того же класса дало бы тихую
- *                  коллизию. Переименовать вместе с зачисткой utilities.
  *
  *  Твои собственные стили, написанные ВНЕ слоёв, по правилу каскада бьют
  *  всё перечисленное выше — без войн специфичности и без !important.
@@ -297,11 +295,9 @@
 		--ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 		--ease-io: cubic-bezier(0.65, 0, 0.35, 1);
 
-		/* ---- Layout-крутилки для утилит --------------------------------- */
-		--flow-space: var(--space-m); /* вертикальный ритм для .flow */
-		--cluster-gap: var(--space-s); /* gap для .cluster */
-		--grid-min: 16rem; /* мин. ширина колонки для .grid-auto */
-		--container: 70rem; /* макс. ширина для .center */
+		/* ---- Layout-крутилки для авторских раскладок (custom.css) ------- */
+		--grid-min: 16rem; /* мин. ширина колонки в auto-fit сетках */
+		--container: 70rem; /* макс. ширина .auth-layout */
 	}
 
 	/* Широкие экраны: более драматичная шкала. Меняется только --ratio,
@@ -755,38 +751,6 @@
  *  utilities — тонкий opt-in слой классов                       *
  * ============================================================== */
 @layer utilities {
-	/* Вертикальный ритм: отступ только между соседями («совёнок»), так
-     первый ребёнок сохраняет чистый верхний край. Под scope крутится
-     через --flow-space. */
-	.flow > * + * {
-		margin-block-start: var(--flow-space);
-	}
-
-	/* Горизонтальный кластер: переносит, ровные gap'ы, центр по вертикали. */
-	.cluster {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--cluster-gap);
-		align-items: center;
-	}
-
-	/* Готовая адаптивная сетка: столько колонок по --grid-min, сколько влезет. */
-	.grid-auto {
-		display: grid;
-		gap: var(--cluster-gap);
-		grid-template-columns: repeat(
-			auto-fit,
-			minmax(min(var(--grid-min), 100%), 1fr)
-		);
-	}
-
-	/* Центрированная колонка чтения с ограничением ширины и боковыми полями. */
-	.center {
-		max-width: var(--container);
-		margin-inline: auto;
-		padding-inline: var(--space-m);
-	}
-
 	/* Заполнить произвольный бокс без искажений (opt-in, никогда не глобально). */
 	.cover {
 		width: 100%;
@@ -945,8 +909,7 @@
 	.anchored { overflow-anchor: auto; }
 
 	.box      { padding: var(--pad, 0); }
-	/* .measure = .center из REGLAMENT.md, временно под другим именем — см. шапку файла. */
-	.measure  { max-inline-size: var(--measure, 65ch); margin-inline: auto; }
+	.center   { max-inline-size: var(--measure, 65ch); margin-inline: auto; }
 	/* --aspect, не --ratio: --ratio уже глобальный токен модульной шкалы
 	   шрифта (см. `tokens`, --step-*) — совпадение имён унаследовало бы
 	   1.2/1.25 внутрь любого голого .ratio, фолбэк 16/9 не сработал бы
