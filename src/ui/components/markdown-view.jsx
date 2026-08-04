@@ -63,5 +63,5 @@ function renderBlock(block, i) {
 
 export default function MarkdownView({ source }) {
 	const blocks = parseMarkdown(source ?? "");
-	return <div class="md-view flow">{blocks.map(renderBlock)}</div>;
+	return <div class="md-view">{blocks.map(renderBlock)}</div>;
 }

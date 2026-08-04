@@ -618,9 +618,9 @@ function Row({ c }) {
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
 	return (
 		<li
-			class="cluster"
+			class="row"
 			style={{
-				"--cluster-gap": "var(--space-s)",
+				"--gap": "var(--space-s)",
 				alignItems: "flex-start",
 				paddingBlock: "var(--space-s)",
 				borderBlockEnd: "var(--border-width) solid var(--border)",
@@ -632,7 +632,7 @@ function Row({ c }) {
 			>
 				{mark}
 			</span>
-			<span class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+			<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<span>{c.label}</span>
 				{c.hint && <small style={{ color: "var(--muted)" }}>{c.hint}</small>}
 			</span>
@@ -648,15 +648,15 @@ function Row({ c }) {
 function StatusRow({ label, status, tone, action, hint }) {
 	return (
 		<li
-			class="flow"
+			class="stack"
 			style={{
-				"--flow-space": "var(--space-3xs)",
+				"--gap": "var(--space-3xs)",
 				paddingBlock: "var(--space-s)",
 				borderBlockEnd: "var(--border-width) solid var(--border)",
 			}}
 		>
-			<span class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
-				<span class="cluster" style={{ "--cluster-gap": "var(--space-s)", alignItems: "center" }}>
+			<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+				<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					<span aria-hidden="true" style={{ color: tone }}>●</span>
 					<span>{label}</span>
 				</span>
@@ -672,7 +672,7 @@ function StatusRow({ label, status, tone, action, hint }) {
 
 function Section({ title, children }) {
 	return (
-		<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+		<section class="stack" style={{ "--gap": "var(--space-s)" }}>
 			<h2
 				style={{
 					fontSize: "0.8rem",
@@ -713,8 +713,9 @@ export default function Diagnostics() {
 	return (
 		<Screen title="Проверка движка">
 		<div
-			class="flow"
+			class="stack"
 			style={{
+				"--gap": "var(--space-m)",
 				"--ok": "oklch(0.62 0.17 150)",
 				"--bad": "oklch(0.58 0.21 25)",
 				"--warn": "oklch(0.72 0.15 85)",
@@ -784,7 +785,7 @@ export default function Diagnostics() {
 						</button>
 					}
 				/>
-				<li class="cluster" style={{ alignItems: "center", paddingBlock: "var(--space-s)" }}>
+				<li class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", paddingBlock: "var(--space-s)" }}>
 					Соединение:{" "}
 					<SyncIndicator state={transportSync.connState} synced={transportSync.synced} url={transportSync.relayUrl} />
 				</li>
