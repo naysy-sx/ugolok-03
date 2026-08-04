@@ -45,7 +45,6 @@ import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
-import IconMenu from "./ui/icons/menu.jsx";
 import IconFolder from "./ui/icons/folder.jsx";
 import IconHelpCircle from "./ui/icons/help-circle.jsx";
 
@@ -236,13 +235,15 @@ function MainShell() {
 			<div class="top-corner-actions">
 				<button
 					type="button"
-					class="sidebar-toggle-btn"
+					class={`sidebar-toggle-btn${sidebarOpen ? " is-open" : ""}`}
 					onClick={() => setSidebarOpen((v) => !v)}
 					aria-expanded={sidebarOpen}
 					aria-controls="app-sidebar"
 					aria-label={sidebarOpen ? t("shell.closeMenu") : t("shell.openMenu")}
 				>
-					{sidebarOpen ? "✕" : <IconMenu />}
+					<span class="hamburger-bar" aria-hidden="true" />
+					<span class="hamburger-bar" aria-hidden="true" />
+					<span class="hamburger-bar" aria-hidden="true" />
 				</button>
 			</div>
 			<div class="app-layout grow">
