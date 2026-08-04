@@ -106,6 +106,7 @@ export default function Discovery() {
 
 	return (
 		<Screen title={t("nav.discovery")}>
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -215,6 +216,7 @@ export default function Discovery() {
 					</div>
 				)}
 			</section>
+			</div>
 		</Screen>
 	);
 }

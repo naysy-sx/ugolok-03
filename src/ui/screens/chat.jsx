@@ -131,6 +131,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 
 	return (
 		<Screen title={t("nav.messages")} feed>
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{/* "Соединение: ..." переехало в постоянную панель под главным меню
 			    (app.jsx, ConnectionStatusPanel) — видна на любом экране (пользователь,
 			    item 4). */}
@@ -230,6 +231,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 					</ul>
 				)}
 			</section>
+			</div>
 		</Screen>
 	);
 }
