@@ -197,13 +197,14 @@ export default function Settings() {
 
 	return (
 		<Screen title={t("nav.settings")}>
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<label for={`${instanceId}-scale`}>{t("settings.scaleLabel")}</label>
 				<select id={`${instanceId}-scale`} value={settings.uiScale} onChange={(e) => handleScaleChange(e.currentTarget.value)}>
 					{SCALE_OPTIONS.map((opt) => (
@@ -214,18 +215,18 @@ export default function Settings() {
 				</select>
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.accentColorTitle")}</h2>
-				<div class="cluster" role="group" aria-label={t("settings.accentColorTitle")}>
+				<div class="row" style={{ "--gap": "var(--space-s)" }} role="group" aria-label={t("settings.accentColorTitle")}>
 					{ACCENT_COLORS.map((c) => (
 						<button
 							key={c.id}
 							type="button"
 							aria-pressed={settings.accentColorId === c.id}
 							onClick={() => handleAccentClick(c.id)}
-							class="cluster"
+							class="row"
 							style={{
-								"--cluster-gap": "var(--space-3xs)",
+								"--gap": "var(--space-3xs)",
 								alignItems: "center",
 								border: settings.accentColorId === c.id ? "2px solid var(--fg)" : "var(--border-width) solid var(--border)",
 							}}
@@ -246,7 +247,7 @@ export default function Settings() {
 				</div>
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.language.sectionTitle")}</h2>
 				<label for={`${instanceId}-language`}>{t("settings.language.label")}</label>
 				<select id={`${instanceId}-language`} value={settings.language} onChange={(e) => handleLanguageChange(e.currentTarget.value)}>
@@ -258,10 +259,10 @@ export default function Settings() {
 				</select>
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-s)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-s)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.notificationsTitle")}</h2>
 
-				<label class="cluster" style={{ alignItems: "center" }}>
+				<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					<input type="checkbox" checked={n.enabled} onChange={(e) => handleToggleEnabled(e.currentTarget.checked)} />
 					{t("settings.enableNotifications")}
 				</label>
@@ -269,8 +270,8 @@ export default function Settings() {
 				{n.enabled && browserPermission !== "granted" && browserPermission !== "unsupported" && (
 					<p
 						role="alert"
-						class="cluster"
-						style={{ alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
+						class="row"
+						style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
 					>
 						{browserPermission === "denied"
 							? t("settings.browserBlockedNotifications")
@@ -283,22 +284,22 @@ export default function Settings() {
 					</p>
 				)}
 
-				<div class="flow" style={{ "--flow-space": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+				<div class="stack" style={{ "--gap": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.contacts")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.newContactRequestsLabel")}
 							<LevelSelect id={`${instanceId}-contacts-newRequests`} value={n.contacts.newRequests} onChange={(l) => handleContactLevel("newRequests", l)} />
 						</label>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.requestAcceptedLabel")}
 							<LevelSelect id={`${instanceId}-contacts-accepted`} value={n.contacts.accepted} onChange={(l) => handleContactLevel("accepted", l)} />
 						</label>
 					</section>
 
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.messages")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.defaultForNewLabel")}
 							<LevelSelect id={`${instanceId}-messages-default`} value={n.messages.default} onChange={handleMessagesDefault} />
 						</label>
@@ -331,17 +332,17 @@ export default function Settings() {
 						)}
 					</section>
 
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.channels")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.postsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-posts`} value={n.channels.posts} onChange={(l) => handleChannelsDefault("posts", l)} />
 						</label>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.commentsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-comments`} value={n.channels.comments} onChange={(l) => handleChannelsDefault("comments", l)} />
 						</label>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.chatDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-chat`} value={n.channels.chat} onChange={(l) => handleChannelsDefault("chat", l)} />
 						</label>
@@ -378,25 +379,25 @@ export default function Settings() {
 						)}
 					</section>
 
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.repliesSectionTitle")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.replyReceivedLabel")}
 							<LevelSelect id={`${instanceId}-replies`} value={n.replies} onChange={handleRepliesLevel} />
 						</label>
 					</section>
 
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.strangersSectionTitle")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.strangerWantsToWriteLabel")}
 							<LevelSelect id={`${instanceId}-inbox`} value={n.inbox} onChange={handleInboxLevel} />
 						</label>
 					</section>
 
-					<section class="flow" style={{ "--flow-space": "var(--space-3xs)" }}>
+					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("journal.category.moderation")}</h3>
-						<label class="cluster" style={{ alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 							{t("settings.newReportLabel")}
 							<LevelSelect id={`${instanceId}-moderation-reports`} value={n.moderation.reports} onChange={handleModerationReportsLevel} />
 						</label>
@@ -407,12 +408,12 @@ export default function Settings() {
 				</div>
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.mnemonicSectionTitle")}</h2>
 				<MnemonicReveal ownerPubkey={ownerPubkey} hasMnemonic={hasMnemonic} />
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.sessionSectionTitle")}</h2>
 				<div>
 					<button type="button" onClick={() => lock()}>
@@ -421,10 +422,11 @@ export default function Settings() {
 				</div>
 			</section>
 
-			<section class="flow" style={{ "--flow-space": "var(--space-2xs)" }}>
+			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.dangerZoneTitle")}</h2>
 				<DeleteAccountPanel ownerPubkey={ownerPubkey} login={currentUser.value.login} privKey={privKey} dbKey={dbKey} />
 			</section>
+			</div>
 		</Screen>
 	);
 }
