@@ -2600,15 +2600,8 @@ button:has(> .icon),
 	gap: var(--space-m);
 }
 
-.app-layout .file-breadcrumbs {
-	flex-wrap: wrap;
-}
-.app-layout .file-breadcrumb-list {
-	flex-wrap: wrap;
-	gap: var(--space-3xs);
-}
+/* .row (раскладка) уже в JSX везде ниже. */
 .app-layout .file-breadcrumb-item {
-	gap: var(--space-3xs);
 	color: var(--muted);
 }
 /* Последняя крошка — текущая папка, обычный текст, не кнопка (некуда
@@ -2642,15 +2635,13 @@ button:has(> .icon),
 	padding-block: var(--space-2xs);
 }
 
-.app-layout .file-new-folder-form {
-	align-items: center;
-}
+/* .row (раскладка) уже в JSX. */
 .app-layout .file-new-folder-form input {
 	flex: 1 1 16rem;
 }
 
+/* .row (раскладка) уже в JSX. */
 .app-layout .file-selection-toolbar {
-	align-items: center;
 	padding: var(--space-2xs) var(--space-s);
 	background-color: var(--surface);
 	border-radius: var(--radius);
@@ -2667,10 +2658,10 @@ button:has(> .icon),
 	padding-inline-start: 0;
 	margin-block: 0;
 }
+/* .row (раскладка) уже в JSX — height ЗДЕСЬ, не через .box (тот даёт
+   padding на все стороны, а высота строки — точное число ROW_HEIGHT_PX
+   для виртуализации, .box лишний block-padding эту точность сломал бы). */
 .app-layout .file-row {
-	display: flex;
-	align-items: center;
-	gap: var(--space-s);
 	height: 56px; /* = ROW_HEIGHT_PX, files.jsx */
 	padding-inline: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
@@ -2723,10 +2714,7 @@ button:has(> .icon),
 	color: var(--muted);
 	font-style: italic;
 }
-.app-layout .file-rename-form {
-	align-items: center;
-	flex: 1 1 auto;
-}
+/* .row/.grow (раскладка) уже в JSX. */
 .app-layout .file-rename-form input {
 	flex: 1 1 12rem;
 }
