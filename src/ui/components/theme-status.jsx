@@ -11,11 +11,11 @@ export default function ThemeStatusPanel({ themeMode, onToggle }) {
 	const isDark = effective === "dark";
 
 	return (
-		<div class="theme-status-panel" aria-label={t("themeStatus.panelAria")}>
+		<div class="theme-status-panel stack" style={{ "--gap": "var(--space-3xs)" }} aria-label={t("themeStatus.panelAria")}>
 			<p>
 				{t("themeStatus.label")}: <span>{isDark ? t("themeStatus.dark") : t("themeStatus.light")}</span>
 			</p>
-			<button type="button" class="theme-status-toggle" onClick={onToggle}>
+			<button type="button" class="theme-status-toggle row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={onToggle}>
 				{isDark ? <IconSun /> : <IconMoon />} {t("themeStatus.toggleLink")}
 			</button>
 		</div>

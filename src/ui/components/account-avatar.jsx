@@ -8,7 +8,7 @@ export default function AccountAvatar({ avatar, login, large }) {
 		return <img src={avatar} alt="" class={sizeClass} />;
 	}
 	return (
-		<div class={`${sizeClass} account-avatar-fallback`} aria-hidden="true">
+		<div class={`${sizeClass} account-avatar-fallback row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
 			{(login || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);

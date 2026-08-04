@@ -258,7 +258,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	}
 
 	return (
-		<form class="composer" onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
+		<form class="composer stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
@@ -280,7 +280,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
-			<div class="composer__row">
+			<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
 				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
 					<IconPaperclip />
@@ -312,11 +312,11 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 				{author.avatar ? (
 					<img src={author.avatar} alt="" class="cmt__ava" />
 				) : (
-					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback">
+					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback row" style={{ alignItems: "center", justifyContent: "center" }}>
 						{(author.name || "?").trim().charAt(0).toUpperCase()}
 					</div>
 				)}
-				<div class="cmt__head">
+				<div class="cmt__head row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
 					<span class="cmt__name">{author.name}</span>
 					{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 					<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
@@ -327,7 +327,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 						<AttachmentView attachment={comment.attachments[0]} />
 					</div>
 				)}
-				<div class="cmt__actions">
+				<div class="cmt__actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 					{canComment && (
 						<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
 							<IconChatBubble /> {t("channel.comment.replyButton")}
@@ -373,11 +373,11 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 			    теперь можно свернуть длинный тред вручную. */}
 			{comment.replies.length > 0 && (
 				<details class="thread" open>
-					<summary>
+					<summary class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 						<IconChevronRight class="icon thread__chev" aria-hidden="true" />
 						{t("channel.threadLabel", { count: tPlural("channel.repliesCount", comment.replies.length) })}
 					</summary>
-					<ul role="list" class="cmt-list">
+					<ul role="list" class="cmt-list stack" style={{ "--gap": "var(--space-m)" }}>
 						{comment.replies.map((reply) => (
 							<CommentNode
 								key={reply.id}
@@ -517,7 +517,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 					{tree.length === 0 ? (
 						<p style={{ color: "var(--muted)" }}>{t("channel.noComments")}</p>
 					) : (
-						<ul role="list" class="cmt-list">
+						<ul role="list" class="cmt-list stack" style={{ "--gap": "var(--space-m)" }}>
 							{tree.map((c) => (
 								<CommentNode
 									key={c.id}
@@ -666,7 +666,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				</p>
 			)}
 
-			<nav class="tabs" aria-label={t("channel.tabsAriaLabel")}>
+			<nav class="tabs row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-label={t("channel.tabsAriaLabel")}>
 				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
 					{t("channel.tabs.posts")}
 				</button>

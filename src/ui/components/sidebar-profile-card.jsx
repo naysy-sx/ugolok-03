@@ -34,7 +34,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 	}, [id, profileActivity.value]);
 
 	return (
-		<section class="profile-card" aria-label={t("sidebarCard.profileAria")}>
+		<section class="profile-card stack" style={{ "--gap": "var(--space-s)", alignItems: "center" }} aria-label={t("sidebarCard.profileAria")}>
 			{/* Пользователь: "аватар строго квадратным, при клике — полная
 			    фотография в модальном окне" — кликабелен только если фото
 			    реально есть, заглушка-буква никуда не ведёт (disabled).
@@ -53,13 +53,13 @@ export default function SidebarProfileCard({ onEditProfile }) {
 				    hover/фокусу, намекая на кликабельность. Только когда фото
 				    реально есть — для заглушки-буквы кликать некуда. */}
 				{(avatar || avatarUrl) && (
-					<span class="profile-card-avatar-glass" aria-hidden="true">
+					<span class="profile-card-avatar-glass row" style={{ alignItems: "flex-end", justifyContent: "center" }} aria-hidden="true">
 						<IconMagnifyingGlass />
 					</span>
 				)}
 			</button>
 			<div class="profile-card-body">
-				<h2>
+				<h2 class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", justifyContent: "center" }}>
 					<span title={login || id}>{login || id.slice(0, 16) + "…"}</span>
 				</h2>
 				{/* Декоративные кавычки вокруг био (пользователь предложил идею

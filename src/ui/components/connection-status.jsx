@@ -38,7 +38,7 @@ export default function ConnectionStatusPanel() {
 	const blossom = BLOSSOM_LABEL_KEYS[blossomStatus.value];
 
 	return (
-		<div class="connection-status-panel" aria-label={t("connectionStatus.panelAria")}>
+		<div class="connection-status-panel stack" style={{ "--gap": "var(--space-3xs)" }} aria-label={t("connectionStatus.panelAria")}>
 			<p>
 				Relay: <span class={`status-${relay.tone}`}>{relay.labelKey ? t(relay.labelKey) : relay.label}</span>
 				<small> {RELAY_URL}</small>

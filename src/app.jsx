@@ -232,7 +232,7 @@ function MainShell() {
 			    убран (пользователь) — переехал в сайдбар отдельной панелью
 			    (ThemeStatusPanel), над ConnectionStatusPanel, тот же визуальный
 			    язык. */}
-			<div class="top-corner-actions">
+			<div class="top-corner-actions row" style={{ "--gap": "var(--space-2xs)" }}>
 				<button
 					type="button"
 					class={`sidebar-toggle-btn${sidebarOpen ? " is-open" : ""}`}
@@ -271,7 +271,8 @@ function MainShell() {
 								<li key={item.id}>
 									<button
 										type="button"
-										class={`nav-item-btn${item.id === activeId ? " is-active" : ""}`}
+										class={`nav-item-btn row${item.id === activeId ? " is-active" : ""}`}
+										style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
 										onClick={() => selectNavItem(item.id)}
 										aria-current={item.id === activeId ? "page" : null}
 									>
@@ -296,7 +297,7 @@ function MainShell() {
 					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
 					<ConnectionStatusPanel />
 				</nav>
-				<button type="button" class="nav-item-btn exit-btn" onClick={lock}>
+				<button type="button" class="nav-item-btn exit-btn row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={lock}>
 					<IconExit />
 					{t("shell.logout")}
 				</button>

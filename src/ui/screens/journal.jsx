@@ -143,7 +143,7 @@ export default function Journal() {
 			actions={
 				<>
 					{oldestDay && (
-						<label class="date-field">
+						<label class="date-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 							{/* Пользователь: убрать SVG-иконку (рядом с ней всё равно
 							    рисуется системная иконка календаря самого <input
 							    type="date">, две подряд — лишнее), вместо нёё —
@@ -183,15 +183,15 @@ export default function Journal() {
 									return (
 										<li class="jitem" key={entry.id} data-read={entry.read || undefined}>
 											<button type="button" class="jitem__link" onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}>
-												<span class={`jtype jtype--${meta?.tone ?? "muted"}`} aria-hidden="true">
+												<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
 													<Icon />
 												</span>
-												<span class="jbody">
+												<span class="jbody stack" style={{ "--gap": "2px" }}>
 													<span class="jtitle">{entryTitle}</span>
 													{entryBody && <span class="jmeta">{entryBody}</span>}
 													<span class="jmeta">{categoryLabel}</span>
 												</span>
-												<span class="jside">
+												<span class="jside stack" style={{ "--gap": "var(--space-3xs)", alignItems: "flex-end", justifyContent: "center" }}>
 													<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
 													{!entry.read && <span class="jdot" aria-label={t("journal.unreadDot")} />}
 												</span>
@@ -204,7 +204,7 @@ export default function Journal() {
 					))}
 
 					{totalPages > 1 && (
-						<nav class="pager" aria-label={t("journal.pagerAriaLabel")}>
+						<nav class="pager row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }} aria-label={t("journal.pagerAriaLabel")}>
 							<button type="button" class="btn btn--ghost" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>
 								<IconChevronLeft /> {t("common.back")}
 							</button>

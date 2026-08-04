@@ -10,10 +10,9 @@
 /* Пункт главного меню с иконкой (Radix Icons, MIT — см. src/ui/icons/) —
    иконка перед подписью, размер иконки завязан на font-size кнопки (width/
    height: 1em на самой svg), поэтому отдельно ничего не масштабируем здесь. */
+/* .row (раскладка) уже в JSX — здесь только полная ширина (не покрыта
+   composition-моделью, это не gap/direction, а inline-size). */
 .nav-item-btn {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
 	width: 100%;
 }
 .nav-item-btn svg {
@@ -235,13 +234,12 @@ button:has(> .icon),
    .app-shell-inner (было fixed к вьюпорту — до ограничения ширины на
    широких мониторах разницы не было, .app-shell-inner занимал весь
    вьюпорт). */
+/* .row (раскладка) уже в JSX. */
 .top-corner-actions {
 	position: absolute;
 	inset-block-start: var(--space-s);
 	inset-inline-end: var(--space-s);
 	z-index: 300;
-	display: flex;
-	gap: var(--space-2xs);
 }
 /* padding-inline:0 ЯВНО — без него побеждает глобальное правило
    button:has(> .icon) (padding-inline:var(--step-0)) выше по файлу:
@@ -384,12 +382,9 @@ button:has(> .icon),
 }
 
 .profile-card {
+	/* .stack (раскладка) уже в JSX. */
 	container-type: inline-size; /* VISUAL.md v2 — cqi для заглушки-буквы аватара */
-	display: flex;
-	flex-direction: column;
-	align-items: center;
 	text-align: center;
-	gap: var(--space-s);
 	padding-block-end: var(--space-m);
 	border-block-end: var(--border-width) solid var(--border);
 }
@@ -437,13 +432,11 @@ button:has(> .icon),
    hover/фокусу, намекая "кликабельно, открыть фото"; pointer-events:none —
    кликабельная цель ровно одна (сама кнопка), не оверлей поверх неё. */
 .profile-card-avatar-glass {
+	/* .row (раскладка) уже в JSX. */
 	position: absolute;
 	inset-inline: 0;
 	inset-block-end: 0;
 	block-size: 34%;
-	display: flex;
-	align-items: flex-end;
-	justify-content: center;
 	padding-block-end: var(--space-2xs);
 	background-image: linear-gradient(to top, oklch(0.15 0.03 var(--hue) / 0.72), transparent);
 	color: white;
@@ -467,9 +460,7 @@ button:has(> .icon),
 	}
 }
 .app-layout .account-avatar-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX (account-avatar.jsx). */
 	color: var(--muted);
 	font-size: clamp(1.8rem, 20cqi, 3rem); /* VISUAL.md v2 — контейнерная типографика */
 	font-weight: var(--weight-bold);
@@ -480,10 +471,7 @@ button:has(> .icon),
 	min-inline-size: 0;
 }
 .profile-card-body h2 {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: var(--space-3xs);
+	/* .row (раскладка) уже в JSX. */
 	font-size: var(--step-1);
 	margin-block: 0;
 	max-inline-size: 100%;
@@ -621,9 +609,7 @@ button:has(> .icon),
 /* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
    завязан на width/height, не на padding вокруг текста (текста больше нет). */
 .back-button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX. */
 	flex: none;
 	width: 2.5rem;
 	height: 2.5rem;
@@ -667,9 +653,7 @@ button:has(> .icon),
  * ================================================================== */
 
 .message-list {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
+	/* .stack (раскладка) уже в JSX. */
 	/* Свет, "наливающийся" из угла (подпись VISUAL.md) — тихо, едва
 	   заметно: тот же приём, что фон всего приложения (см. body в
 	   minimal.css), только локально в ленте сообщений. color-mix, не
@@ -732,9 +716,7 @@ button:has(> .icon),
 /* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
    язык, что VISUAL.md .compose/.field/.send. */
 .message-compose {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: 1.5rem;
@@ -752,10 +734,8 @@ button:has(> .icon),
 }
 .message-compose-tool-btn,
 .message-compose-send-btn {
+	/* .row (раскладка) уже в JSX. */
 	flex: none;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	width: 2.25rem;
 	height: 2.25rem;
 	padding: 0;
@@ -904,18 +884,13 @@ button:has(> .icon),
 }
 
 .site-header {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-s) var(--space-m);
+	/* .row (раскладка, включая flex-wrap) уже в JSX. */
 	padding-block: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
 }
 
 .logo {
-	display: flex;
-	align-items: baseline;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 }
 .logo-name {
 	font-size: var(--step-3);
@@ -928,9 +903,7 @@ button:has(> .icon),
 	margin-inline: auto;
 }
 .nav-links {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-2xs) var(--space-m);
+	/* .row (раскладка, включая flex-wrap) уже в JSX. */
 	margin-block: 0;
 	padding-inline-start: 0;
 	list-style: none;
@@ -1099,9 +1072,7 @@ button:has(> .icon),
 /* Заглушка вместо фото, пока у аккаунта нет сохранённого аватара — первая
    буква логина на цветном фоне, тот же приём, что ContactIdentity в чате. */
 .auth-layout .account-avatar-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX (account-avatar.jsx). */
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
@@ -1217,12 +1188,10 @@ button:has(> .icon),
 /* Этап 47-довесок — свои тосты уведомлений (не системный Notification API,
    который мы не можем стилизовать) — плавный fade+slide вход/выход. */
 .toast-host {
+	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
 	inset-block-start: var(--space-m);
 	inset-inline-end: var(--space-m);
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
 	z-index: 1000;
 	pointer-events: none;
 	max-width: min(24rem, calc(100vw - var(--space-m) * 2));
@@ -1332,14 +1301,12 @@ button:has(> .icon),
    тот же принцип, что .toast (этап 47), но крупнее и "бросающийся в глаза"
    для звонящих состояний (пользователь: "хорошо видимый, очень заметный"). */
 .call-overlay {
+	/* .stack/.row (раскладка) уже в JSX — у каждого состояния звонка свой
+	   вариант (столбик для входящего/исходящего, строка для "завершён"). */
 	position: fixed;
 	inset-inline: 0;
 	inset-block-start: 0;
 	z-index: 200;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: var(--space-s);
 	padding: var(--space-l);
 	background: var(--surface);
 	border-block-end: var(--border-width) solid var(--border);
@@ -1348,9 +1315,6 @@ button:has(> .icon),
 
 .call-overlay-ended {
 	position: relative;
-	flex-direction: row;
-	align-items: center;
-	justify-content: center;
 	padding: var(--space-s) var(--space-l);
 	color: var(--muted);
 	font-size: 0.9em;
@@ -1376,12 +1340,10 @@ button:has(> .icon),
 }
 
 .call-overlay-avatar {
+	/* .row (раскладка) уже в JSX. */
 	width: 4rem;
 	height: 4rem;
 	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	font-size: 1.5rem;
 	background: var(--surface-raised, var(--surface));
 	border: 3px solid var(--accent);
@@ -1421,22 +1383,18 @@ button:has(> .icon),
 
 /* Компактная плашка — во время разговора, не блокирует остальной интерфейс. */
 .call-bar {
+	/* .row (раскладка) уже в JSX. */
 	flex: 0 0 auto; /* block-элемент НАД .app-layout (app.jsx) — не fixed-оверлей поверх сайдбара */
-	display: flex;
-	align-items: center;
-	gap: var(--space-s);
 	padding: var(--space-2xs) var(--space-s);
 	background: var(--surface);
 	border-block-end: var(--border-width) solid var(--border);
 }
 
 .call-bar-avatar {
+	/* .row (раскладка) уже в JSX. */
 	width: 2.25rem;
 	height: 2.25rem;
 	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	background: var(--surface-raised, var(--surface));
 	border: 2px solid var(--good, oklch(0.6 0.16 145));
 	flex-shrink: 0;
@@ -1447,6 +1405,7 @@ button:has(> .icon),
 }
 
 .call-bar-hangup {
+	/* .row (раскладка) уже в JSX. */
 	margin-inline-start: auto;
 	background: var(--bad, oklch(0.58 0.21 25));
 	color: white;
@@ -1454,9 +1413,6 @@ button:has(> .icon),
 	border-radius: 50%;
 	width: 2rem;
 	height: 2rem;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	cursor: pointer;
 }
 
@@ -1475,6 +1431,9 @@ button:has(> .icon),
  *  постоянном aside справа (пользователь, item 8).                    *
  * ================================================================== */
 
+/* display:flex ОСТАЁТСЯ (не .stack) — на ≥60em (медиазапрос ниже) строка
+   вместо столбика с aside сбоку, это переключение состояния по брейкпоинту,
+   REGLAMENT.md сознательно не покрывает (тот же принцип, что .app-layout). */
 .channels-layout {
 	display: flex;
 	flex-direction: column;
@@ -1496,11 +1455,7 @@ button:has(> .icon),
 	}
 }
 
-.channels-main {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-l);
-}
+/* .stack (раскладка) уже в JSX. */
 .channels-block h2 {
 	font-size: var(--step-1);
 	margin-block-end: var(--space-s);
@@ -1527,30 +1482,21 @@ button:has(> .icon),
 	margin-block-end: 0;
 }
 
+/* .stack (раскладка) уже в JSX. */
 .channel-list {
 	list-style: none;
 	padding-inline-start: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
 }
+/* .row (раскладка) уже в JSX. */
 .channel-card-item {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-s);
 	padding-block: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
 }
 .channel-card-item:last-child {
 	border-block-end: none;
 }
+/* .row/.grow (раскладка) уже в JSX. */
 .channel-card-link {
-	display: flex;
-	align-items: center;
-	gap: var(--space-s);
-	flex: 1;
-	min-width: 0;
 	background: none;
 	border: none;
 	padding: 0;
@@ -1580,9 +1526,7 @@ button:has(> .icon),
 	background-color: var(--surface);
 }
 .channel-avatar-thumb-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX. */
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
@@ -1629,14 +1573,7 @@ button:has(> .icon),
 	background-attachment: local;
 }
 
-/* Вкладка "Редактировать канал" (пользователь, item 25) — внешний .flow
-   формы как flex-колонка с фиксированным gap вместо margin-block owl-приёма
-   (та же визуальная цель, другой механизм). */
-.channel-settings-form {
-	display: flex;
-	flex-direction: column;
-	gap: var(--step-1);
-}
+/* .stack (раскладка) уже в JSX. */
 
 /* ================================================================== *
  *  Экран контактов (contacts.jsx) — пользователь: "какой-то кобздец". *
@@ -1644,9 +1581,7 @@ button:has(> .icon),
  * ================================================================== */
 
 .contacts-toolbar {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-s);
+	/* .stack (раскладка) уже в JSX. */
 	margin-block-end: var(--space-l);
 }
 .contacts-toolbar p {
@@ -1707,10 +1642,8 @@ button:has(> .icon),
 	}
 }
 .contacts-main {
+	/* .stack (раскладка) уже в JSX. */
 	grid-area: list;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-l);
 	min-width: 0;
 }
 .contacts-groups-aside {
@@ -1739,20 +1672,14 @@ button:has(> .icon),
 /* Фильтр по группам — чекбоксы как переключаемые чипы, не голые
    input+label в столбик. Чекбокс визуально спрятан, но остаётся в
    разметке/доступен с клавиатуры — :has(:checked) переключает вид. */
+/* .stack (раскладка) уже в JSX. */
 .group-filter-list {
 	list-style: none;
 	padding-inline-start: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 0;
 	margin-block: 0 var(--space-s);
 }
-.group-filter-chip {
-	display: flex;
-	align-items: center;
-	gap: var(--space-3xs);
-	flex-wrap: wrap;
-}
+/* .group-filter-chip — .row (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
 .group-filter-chip label {
 	/* flex:1 (=1 1 0%) даёт нулевой flex-basis — когда соседние кнопки
 	   "Переименовать"/"Удалить" не сжимаются (свой min-content), label
@@ -1793,24 +1720,18 @@ button:has(> .icon),
 
 /* Карточка строки (заявка/контакт/заблокированный) — тот же язык, что
    .channel-card-item. */
+/* .stack (раскладка) уже в JSX. */
 .contact-row-list {
 	list-style: none;
 	padding-inline-start: 0;
 	/* Глобальное ul{margin-block:var(--space-m)} (типографика для прозы,
 	   minimal.css) иначе просачивалось сюда — это список карточек, не текст. */
 	margin-block: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
 }
+/* .row (раскладка) уже в JSX. */
 .contact-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-s);
 	padding-block: var(--space-s);
 	border-block-end: var(--border-width) solid var(--border);
-	flex-wrap: wrap;
 }
 .contact-row-list .contact-row:last-child {
 	border-block-end: none;
@@ -1818,27 +1739,20 @@ button:has(> .icon),
 .contact-row-list .contact-row.contact-row-expandable:last-child {
 	padding-block-end: 0;
 }
+/* Вариант-состояние (развёрнутая карточка) — переключает раскладку строки
+   на столбик, поверх .row из JSX; REGLAMENT.md сознательно не покрывает
+   такие переключения (тот же принцип, что .app-layout). */
 .contact-row-expandable {
 	flex-direction: column;
 	align-items: stretch;
 	gap: var(--space-2xs);
 }
-.contact-row-main {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-s);
-	flex-wrap: wrap;
-}
+/* .contact-row-main — .row (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
 /* Действия строки — тише сплошной заливки (тот же приём, что
    .action-buttons в шапке экрана, этап 51-довесок), не спорят по весу
-   с самой карточкой контакта. */
-.contact-row-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2xs);
-}
+   с самой карточкой контакта. .contact-row-actions — .row (раскладка) уже
+   в JSX, собственных декоративных свойств не осталось. */
 .contact-row-actions button {
 	background-color: transparent;
 	color: var(--fg);
@@ -1856,16 +1770,10 @@ button:has(> .icon),
 	}
 }
 
-.contact-row-groups {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2xs);
-}
+/* .contact-row-groups — .row (раскладка) уже в JSX, собственных
+   декоративных свойств не осталось. */
 .group-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-3xs);
+	/* .row (раскладка) уже в JSX. */
 	background-color: color-mix(in oklch, var(--accent-2), transparent 85%);
 	color: var(--accent-2);
 	padding-inline: var(--space-2xs);
@@ -1886,9 +1794,7 @@ button:has(> .icon),
    квадрат, что остальные карточки в приложении, не отдельный "человеческий"
    мотив). */
 .contact-identity {
-	display: flex;
-	align-items: center;
-	gap: var(--space-s);
+	/* .row (раскладка) уже в JSX. */
 	text-align: left;
 }
 .contact-identity-btn {
@@ -1910,9 +1816,7 @@ button:has(> .icon),
 	background-color: var(--surface);
 }
 .contact-avatar-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX. */
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
@@ -1934,6 +1838,9 @@ button:has(> .icon),
    раньше он держался на этом единственном ручном margin, из-за чего
    секции БЕЗ такого патча (например "Relay-серверы") слипались с
    соседом — баг был и до REGLAMENT.md, не регрессия миграции. */
+/* display:flex ОСТАЁТСЯ (не .stack) — на ≥40em (медиазапрос ниже) строка
+   вместо столбика, это переключение состояния по брейкпоинту, REGLAMENT.md
+   сознательно не покрывает (тот же принцип, что .app-layout). */
 .profile-photo-layout {
 	display: flex;
 	flex-direction: column;
@@ -1952,12 +1859,7 @@ button:has(> .icon),
 		min-width: 0;
 	}
 }
-.profile-photo-col {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: var(--space-s);
-}
+/* .stack (раскладка) уже в JSX. */
 .profile-avatar-square {
 	width: 12rem;
 	height: 12rem;
@@ -1968,9 +1870,7 @@ button:has(> .icon),
 	background-color: var(--surface-raised);
 }
 .profile-avatar-square-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX. */
 	font-size: var(--step-4);
 	color: var(--muted);
 	font-weight: var(--weight-bold);
@@ -2010,11 +1910,9 @@ button:has(> .icon),
    этой панелью) — общий border-block-start только у неё (первая в паре,
    отделяет ОБЕ панели вместе от списка меню выше), связка панелей —
    через margin-block-start у .connection-status-panel. */
+/* .stack (раскладка) уже в JSX. */
 .sidebar .theme-status-panel,
 .sidebar .connection-status-panel {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-3xs);
 	font-size: var(--step--2);
 	color: var(--muted);
 }
@@ -2040,9 +1938,7 @@ button:has(> .icon),
    обычный текстовый поток, не CSS-grid форма). Иконка — тот же размер
    шрифта, что текст (1em), выровнена по строке через inline-flex. */
 .sidebar .theme-status-toggle {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-3xs);
+	/* .row (раскладка) уже в JSX. */
 	background: none;
 	border: none;
 	padding: 0;
@@ -2063,9 +1959,7 @@ button:has(> .icon),
  *  по ВСЕЙ ленте одного дня, не только внутри своей строки.           *
  * ================================================================== */
 .date-field {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-full);
@@ -2141,13 +2035,11 @@ button:has(> .icon),
 }
 
 .jtype {
+	/* .row (раскладка) уже в JSX. */
 	flex: none;
 	width: 2.25rem;
 	height: 2.25rem;
 	border-radius: var(--radius);
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	font-size: 1rem;
 	background-color: var(--surface);
 	color: var(--muted);
@@ -2166,10 +2058,8 @@ button:has(> .icon),
 }
 
 .jbody {
+	/* .stack (раскладка) уже в JSX. */
 	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
 }
 .jtitle {
 	overflow: hidden;
@@ -2191,30 +2081,23 @@ button:has(> .icon),
 	font-weight: var(--weight-normal);
 }
 
-.jside {
-	display: grid;
-	justify-items: end;
-	align-content: center;
-	gap: var(--space-3xs);
-}
+/* .stack (раскладка) уже в JSX. */
 .jtime {
 	color: var(--muted);
 	font-size: var(--step--2);
 	white-space: nowrap;
 }
 .jdot {
+	/* .stack родителя (.jside) уже прижимает вправо (alignItems:flex-end в
+	   JSX) — justify-self:end (grid-only) убран, в .stack (flex) не работал бы. */
 	width: 0.5rem;
 	height: 0.5rem;
 	border-radius: var(--radius-full);
 	background-color: var(--accent);
-	justify-self: end;
 }
 
 .pager {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-s);
+	/* .row (раскладка) уже в JSX. */
 	margin-block-start: var(--space-l);
 	padding-block-start: var(--space-m);
 	border-block-start: var(--border-width) solid var(--border);
@@ -2239,6 +2122,7 @@ button:has(> .icon),
 	display: none;
 }
 .menu__pop {
+	/* .stack (раскладка) уже в JSX. */
 	position: absolute;
 	inset-inline-end: 0;
 	inset-block-start: calc(100% + var(--space-3xs));
@@ -2249,9 +2133,10 @@ button:has(> .icon),
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
 	padding: var(--space-3xs);
-	display: grid;
-	gap: 2px;
 }
+/* display:flex ОСТАЁТСЯ (не .row) — children произвольные, приходят от
+   десятков вызывающих мест (ActionsMenu.children), менять каждое ради
+   composition-класса непропорционально риску. */
 .menu__pop button,
 .menu__pop .menu-check {
 	display: flex;
@@ -2284,9 +2169,7 @@ button:has(> .icon),
    всплывающие меню, где .icon-btn (круглая, только иконка) не подходит
    — нужен видимый текстовый лейбл рядом с иконкой. */
 .chip {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-3xs);
+	/* .row (раскладка) уже в JSX. */
 	background-color: var(--surface);
 	border: none;
 	border-radius: var(--radius-full);
@@ -2307,8 +2190,7 @@ button:has(> .icon),
    список, второе — требует решения пользователя, прятать по умолчанию
    было бы неверно). */
 .requests {
-	display: grid;
-	gap: var(--space-2xs);
+	/* .stack (раскладка) уже в JSX. */
 	margin-block-start: var(--space-l);
 }
 .req {
@@ -2321,11 +2203,9 @@ button:has(> .icon),
 	padding: var(--space-s);
 }
 .req > summary {
+	/* .row (раскладка) уже в JSX. */
 	list-style: none;
 	cursor: pointer;
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
 	/* Пользователь: var(--space-s) делал строку огромной — заголовок
 	   раскрывашки, не отдельная кнопка с воздухом вокруг. */
 	padding: 0;
@@ -2364,9 +2244,7 @@ button:has(> .icon),
    div с role="button"/tabIndex/onKeyDown — пользователь: "семантику не
    нарушать", настоящая кнопка доступна с клавиатуры сама по себе). */
 .keybox {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
@@ -2388,17 +2266,15 @@ button:has(> .icon),
 	margin-block-start: var(--space-2xs);
 }
 
+/* .stack (раскладка) уже в JSX. */
 .srv__list {
 	list-style: none;
 	margin: 0 0 var(--space-s);
 	padding: 0;
-	display: grid;
-	gap: var(--space-2xs);
 }
+/* .row (раскладка) уже в JSX — у пустого состояния (только текст) отсутствие
+   .row не влияет на вид, но общее правило одно на оба варианта. */
 .srv__item {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
 	padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-s);
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
@@ -2413,10 +2289,7 @@ button:has(> .icon),
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.srv__add {
-	display: flex;
-	gap: var(--space-2xs);
-}
+/* .row (раскладка) уже в JSX. */
 .srv__add .input,
 .srv__add input {
 	flex: 1;
@@ -2456,10 +2329,7 @@ button:has(> .icon),
    (тот же язык, что уже есть у главного меню, этап 51-довесок-3, только
    подчёркивание тут статичное на активной вкладке, не только по hover). */
 .tabs {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 	border-block-end: var(--border-width) solid var(--border);
 	margin-block: var(--space-m);
 }
@@ -2518,15 +2388,10 @@ button:has(> .icon),
 	padding-block-start: var(--space-s);
 }
 
-.composer {
-	display: grid;
-	gap: var(--space-2xs);
-}
-.composer__row {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
-}
+/* .composer — .stack (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
+/* .composer__row — .row (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
 /* Поле комментария — крупнее (пользователь: "чё так мелко") + фон "блокнот
    в точечку" (сетка точек через var(--space-m), тот же приём, что лист в
    линейку у поста, только точками вместо линий). */
@@ -2540,13 +2405,16 @@ button:has(> .icon),
 	background-attachment: local;
 }
 
+/* .stack (раскладка) уже в JSX. */
 .cmt-list {
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: grid;
-	gap: var(--space-m);
 }
+/* display:grid ОСТАЁТСЯ (не .grid) — двухколоночная раскладка
+   аватар/контент с grid-row-span аватара на 3 строки (см. .cmt__ava
+   ниже), .grid (composition) даёт только auto-fit колонки, не покрывает
+   фиксированную сетку auto/1fr с ручными grid-row у детей. */
 .cmt__box {
 	display: grid;
 	grid-template-columns: auto 1fr;
@@ -2569,18 +2437,13 @@ button:has(> .icon),
 	font-size: 0.85rem;
 }
 .cmt__ava-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	/* .row (раскладка) уже в JSX. */
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
 .cmt__head {
+	/* .row (раскладка) уже в JSX. */
 	grid-column: 2;
-	display: flex;
-	align-items: baseline;
-	gap: var(--space-2xs);
-	flex-wrap: wrap;
 }
 .cmt__name {
 	font-weight: var(--weight-bold);
@@ -2613,10 +2476,8 @@ button:has(> .icon),
 	max-width: 280px;
 }
 .cmt__actions {
+	/* .row (раскладка) уже в JSX. */
 	grid-column: 2;
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
 	margin-block-start: var(--space-3xs);
 }
 .cmt__actions .btn--ghost {
@@ -2635,11 +2496,9 @@ button:has(> .icon),
 	padding: var(--space-s);
 }
 .thread > summary {
+	/* .row (раскладка) уже в JSX. */
 	list-style: none;
 	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-3xs);
 	color: var(--muted);
 	font-size: var(--step--2);
 	padding: var(--space-3xs) var(--space-2xs);
@@ -2671,11 +2530,7 @@ button:has(> .icon),
  *  строки списка по прямому прецеденту .contact-row-list.             *
  * ================================================================== */
 
-.files-shell {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-m);
-}
+/* .stack (раскладка) уже в JSX. */
 
 /* .row (раскладка) уже в JSX везде ниже. */
 .file-breadcrumb-item {
@@ -2694,9 +2549,7 @@ button:has(> .icon),
 /* Поле фильтра (3.7 TASK.md) — тот же язык, что contact-add-field, но без
    слияния с кнопкой (фильтр применяется на ввод, действия не требует). */
 .file-search-field {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2xs);
+	/* .row (раскладка) уже в JSX. */
 	max-width: 24rem;
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
@@ -2803,13 +2656,11 @@ button:has(> .icon),
  *  (300) — действительно "поверх всего", не только шапки.            *
  * ================================================================== */
 .sync-progress-bar {
+	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
 	inset-inline: 0;
 	inset-block-start: 0;
 	z-index: 500;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
 	pointer-events: none;
 }
 .sync-progress-bar-track {
@@ -2863,13 +2714,11 @@ button:has(> .icon),
 	overflow-y: auto;
 	max-width: min(90vw, 420px);
 }
+/* .stack (раскладка) уже в JSX. */
 .sync-progress-bar-log ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2xs);
 }
 .sync-progress-bar-log li {
 	font-size: var(--step--1);
@@ -2885,6 +2734,10 @@ button:has(> .icon),
  *  местах (components/help-content.jsx), см. CONTRACTS.md, "Раздел
  *  Справка".                                                          *
  * ================================================================== */
+/* display:grid ОСТАЁТСЯ (не .grid) — фиксированная колонка-рубрикатор
+   220px + резиновый контент, .grid (composition) даёт только auto-fit
+   minmax-колонки, не покрывает точную ширину сайдбара + медиазапрос
+   ниже, схлопывающий её в 1 колонку на узких экранах. */
 .app-layout .help-layout,
 .auth-layout .help-layout {
 	display: grid;
@@ -2898,13 +2751,12 @@ button:has(> .icon),
 		grid-template-columns: 1fr;
 	}
 }
+/* .stack (раскладка) уже в JSX. */
 .app-layout .help-rubricator ul,
 .auth-layout .help-rubricator ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: grid;
-	gap: var(--space-3xs);
 	position: sticky;
 	top: var(--space-s);
 }
@@ -2967,6 +2819,9 @@ button:has(> .icon),
 .auth-layout .md-view p {
 	line-height: 1.6;
 }
+/* display:grid ОСТАЁТСЯ (не .stack/.grid) — сырой HTML markdown-рендера
+   (MarkdownView), нет своей JSX-точки на каждый <ul>/<ol>, чтобы навесить
+   composition-класс. */
 .app-layout .md-view ul,
 .app-layout .md-view ol,
 .auth-layout .md-view ul,

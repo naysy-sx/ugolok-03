@@ -711,11 +711,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					<form class="message-compose" onSubmit={handleSend}>
+					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onSubmit={handleSend}>
 						<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
 						<button
 							type="button"
-							class="message-compose-tool-btn"
+							class="message-compose-tool-btn row"
+							style={{ alignItems: "center", justifyContent: "center" }}
 							onClick={() => fileInputRef.current?.click()}
 							disabled={recordingState !== "idle"}
 							aria-label={t("chat.window.attachFileAria")}
@@ -724,7 +725,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</button>
 						<button
 							type="button"
-							class="message-compose-tool-btn"
+							class="message-compose-tool-btn row"
+							style={{ alignItems: "center", justifyContent: "center" }}
 							onClick={() => setAttachmentPickerOpen(true)}
 							disabled={recordingState !== "idle"}
 							aria-label={t("chat.window.attachFromStorageAria")}
@@ -733,7 +735,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</button>
 						<button
 							type="button"
-							class="message-compose-tool-btn"
+							class="message-compose-tool-btn row"
+							style={{ alignItems: "center", justifyContent: "center" }}
 							onClick={handleStartRecording}
 							disabled={recordingState !== "idle" || !!attachmentFile}
 							aria-label={t("chat.window.recordVoiceAria")}
@@ -753,7 +756,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						/>
 						<button
 							type="submit"
-							class="message-compose-send-btn"
+							class="message-compose-send-btn row"
+							style={{ alignItems: "center", justifyContent: "center" }}
 							disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
 							aria-label={t("common.send")}
 						>
@@ -774,7 +778,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				</button>
 			)}
 			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>{t("chat.window.noMessagesYet")}</p>}
-			<div class="message-list">
+			<div class="message-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 				{messages.map((message) => {
 					const isOwn = message.senderPubkey === ownerPubkey;
 					return (

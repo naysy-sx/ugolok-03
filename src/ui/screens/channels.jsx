@@ -68,7 +68,7 @@ function ChannelAvatarThumb({ channel }) {
 		return <img src={url} alt="" class="channel-avatar-thumb" />;
 	}
 	return (
-		<div class="channel-avatar-thumb channel-avatar-thumb-fallback" aria-hidden="true">
+		<div class="channel-avatar-thumb channel-avatar-thumb-fallback row" style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
 			{(channel.name || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);
@@ -77,8 +77,8 @@ function ChannelAvatarThumb({ channel }) {
 function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 	const updated = formatUpdatedDate(channel.updatedAt);
 	return (
-		<li class="channel-card-item">
-			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link">
+		<li class="channel-card-item row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link row grow" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<ChannelAvatarThumb channel={channel} />
 				<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<strong>{channel.name || t("channels.card.untitled")}</strong>
@@ -100,7 +100,7 @@ function ChannelList({ channels, emptyText, showSubscribe, onSubscribe, onOpen, 
 		return <p style={{ color: "var(--muted)" }}>{emptyText}</p>;
 	}
 	return (
-		<ul role="list" class="channel-list">
+		<ul role="list" class="channel-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 			{channels.map((channel) => (
 				<ChannelCard key={channel.id} channel={channel} showSubscribe={showSubscribe} onSubscribe={onSubscribe} onOpen={onOpen} busy={busy} />
 			))}
@@ -348,7 +348,7 @@ function ChannelsList() {
 			    контенте; "Доступные" — в дополнительном aside справа, чтобы всегда
 			    было видно. */}
 			<div class="channels-layout">
-				<div class="channels-main">
+				<div class="channels-main stack" style={{ "--gap": "var(--space-l)" }}>
 					<section class="channels-block">
 						<h2>{t("channels.list.myChannelsTitle", { count: owned.length })}</h2>
 						<ChannelList channels={owned} emptyText={t("channels.list.myChannelsEmpty")} onOpen={openChannel} />

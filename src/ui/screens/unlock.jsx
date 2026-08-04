@@ -494,15 +494,15 @@ export default function Unlock() {
 
 	return (
 		<div class="auth-layout">
-			<header class="site-header">
-				<div class="logo">
+			<header class="site-header row" style={{ "--gap": "var(--space-s) var(--space-m)", alignItems: "center" }}>
+				<div class="logo row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
 					<span class="logo-name">{t("app.name")}</span>
 				</div>
 				<nav class="main-nav" aria-label={t("unlock.main.navAriaLabel")}>
 					{/* Кнопки, не ссылки — переключают содержимое <main> этой же страницы,
 					    не настоящая навигация (тот же принцип, что везде в проекте:
 					    реальное действие — реальный <button>, не div/a с подложной ролью). */}
-					<ul class="nav-links">
+					<ul class="nav-links row" style={{ "--gap": "var(--space-2xs) var(--space-m)" }}>
 						<li>
 							<button type="button" class={mainView === "home" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("home")}>
 								{t("unlock.main.navHome")}

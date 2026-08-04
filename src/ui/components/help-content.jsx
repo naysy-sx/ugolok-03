@@ -123,7 +123,7 @@ export default function HelpContent() {
 	return (
 		<div class="help-layout">
 			<nav class="help-rubricator" aria-label={t("help.topicsAria")}>
-				<ul role="list">
+				<ul role="list" class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					{topics.map((topic) => (
 						<li key={topic.id}>
 							<button

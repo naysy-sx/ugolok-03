@@ -10,7 +10,7 @@ import { t } from "../signals/i18n.js";
 export default function ToastHost() {
 	if (toasts.value.length === 0) return null;
 	return (
-		<div class="toast-host" role="region" aria-label={t("toast.regionAria")} aria-live="polite">
+		<div class="toast-host stack" style={{ "--gap": "var(--space-2xs)" }} role="region" aria-label={t("toast.regionAria")} aria-live="polite">
 			{toasts.value.map((toast) => (
 				<div
 					key={toast.id}

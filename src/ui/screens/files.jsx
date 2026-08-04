@@ -595,7 +595,7 @@ export default function Files() {
 					saveProgress={saveProgress}
 				/>
 			) : (
-			<div ref={containerRef} tabIndex={-1} class="files-shell">
+			<div ref={containerRef} tabIndex={-1} class="files-shell stack" style={{ "--gap": "var(--space-m)" }}>
 				<div class="row file-breadcrumbs" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 					<ol role="list" class="row file-breadcrumb-list" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 						{path.map((crumb, i) => (
@@ -619,7 +619,7 @@ export default function Files() {
 					)}
 				</div>
 
-				<div class="file-search-field">
+				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
 					<label class="visually-hidden" for="file-search">
 						{t("files.filterLabel")}

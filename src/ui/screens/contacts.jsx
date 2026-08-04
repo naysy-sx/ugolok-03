@@ -54,7 +54,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 	const avatar = profile?.picture ? (
 		<img src={profile.picture} alt="" width="40" height="40" class="contact-avatar" />
 	) : (
-		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback">
+		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ alignItems: "center", justifyContent: "center" }}>
 			{(displayName || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);
@@ -68,7 +68,7 @@ export function ContactIdentity({ pubkey, onClick }) {
 
 	if (!onClick) {
 		return (
-			<div class="contact-identity">
+			<div class="contact-identity row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{avatar}
 				{text}
 			</div>
@@ -76,7 +76,13 @@ export function ContactIdentity({ pubkey, onClick }) {
 	}
 
 	return (
-		<button type="button" onClick={onClick} aria-label={t("contacts.openChatAria", { name: displayName })} class="contact-identity contact-identity-btn">
+		<button
+			type="button"
+			onClick={onClick}
+			aria-label={t("contacts.openChatAria", { name: displayName })}
+			class="contact-identity contact-identity-btn row"
+			style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+		>
 			{avatar}
 			{text}
 		</button>
@@ -254,7 +260,7 @@ export default function Contacts() {
 
 	return (
 		<Screen title={t("nav.contacts")}>
-			<div class="contacts-toolbar">
+			<div class="contacts-toolbar stack" style={{ "--gap": "var(--space-s)" }}>
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
 				    здесь дублировать незачем (пользователь, item 4). */}
@@ -292,9 +298,9 @@ export default function Contacts() {
 			<div class="contacts-layout">
 				<aside class="card contacts-groups-aside" aria-labelledby="groups-heading">
 					<h2 id="groups-heading">{t("contacts.groupsHeading")}</h2>
-					<ul role="list" class="group-filter-list">
+					<ul role="list" class="group-filter-list stack">
 						<li>
-							<span class="group-filter-chip">
+							<span class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 								<input
 									id="group-filter-all"
 									type="checkbox"
@@ -306,7 +312,7 @@ export default function Contacts() {
 						</li>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<div class="group-filter-chip">
+								<div class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 									<input
 										id={`group-filter-${g.id}`}
 										type="checkbox"
@@ -396,7 +402,7 @@ export default function Contacts() {
 					)}
 				</aside>
 
-				<div class="contacts-main">
+				<div class="contacts-main stack" style={{ "--gap": "var(--space-l)" }}>
 					{/* Пользователь: "существующие контакты — главный рабочий блок,
 					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
@@ -408,15 +414,19 @@ export default function Contacts() {
 								{rowError}
 							</p>
 						)}
-						<ul role="list" class="contact-row-list">
+						<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 							{visibleContacts.map((pubkey) => {
 								const memberOfGroups = groupsForContact(pubkey);
 								const isExpanded = expandedPubkey === pubkey;
 								return (
-									<li key={pubkey} class="contact-row contact-row-expandable">
-										<div class="contact-row-main">
+									<li
+										key={pubkey}
+										class="contact-row contact-row-expandable row"
+										style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}
+									>
+										<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
-											<div class="contact-row-actions">
+											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 												<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
 													<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
 												</button>
@@ -443,9 +453,9 @@ export default function Contacts() {
 											</div>
 										</div>
 
-										<div class="contact-row-groups">
+										<div class="contact-row-groups row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 											{memberOfGroups.map((g) => (
-												<span key={g.id} class="group-chip">
+												<span key={g.id} class="group-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
 													{g.name}
 													<button
 														type="button"
@@ -494,11 +504,11 @@ export default function Contacts() {
 						{incomingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>{t("contacts.noIncoming")}</p>
 						) : (
-							<ul role="list" class="contact-row-list">
+							<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 								{incomingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row">
+									<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions">
+										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
 												{t("contacts.acceptButton")}
 											</button>
@@ -516,9 +526,9 @@ export default function Contacts() {
 					    развёрнутым (требует решения) — эти два списка вторичны
 					    (редко нужны, обычно пусты), сворачиваем в <details>
 					    (VISUAL.md v2 .req), чтобы не отвлекали от главного. */}
-					<div class="requests">
+					<div class="requests stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<details class="req">
-							<summary>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 								{t("contacts.outgoingSummary")} <span class="req__count">{outgoingRequests.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
@@ -526,11 +536,11 @@ export default function Contacts() {
 								{outgoingRequests.value.length === 0 ? (
 									<p style={{ color: "var(--muted)" }}>{t("contacts.noOutgoing")}</p>
 								) : (
-									<ul role="list" class="contact-row-list">
+									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 										{outgoingRequests.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row">
+											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 												<ContactIdentity pubkey={req.peerPubkey} />
-												<div class="contact-row-actions">
+												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 													<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
 														{t("contacts.cancelRequestButton")}
 													</button>
@@ -543,7 +553,7 @@ export default function Contacts() {
 						</details>
 
 						<details class="req">
-							<summary>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 								{t("contacts.rejectedSummary")} <span class="req__count">{rejectedByMe.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
@@ -551,13 +561,13 @@ export default function Contacts() {
 								{rejectedByMe.value.length === 0 ? (
 									<p style={{ color: "var(--muted)" }}>{t("contacts.noRejected")}</p>
 								) : (
-									<ul role="list" class="contact-row-list">
+									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 										{rejectedByMe.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row">
+											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 												<ContactIdentity pubkey={req.peerPubkey} />
 												{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
 												написать самому тому, чью заявку отклонил(а) раньше. */}
-												<div class="contact-row-actions">
+												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 													<button
 														type="button"
 														disabled={busy}
@@ -574,18 +584,18 @@ export default function Contacts() {
 						</details>
 					</div>
 
-					<div class="requests">
+					<div class="requests stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<details class="req">
-							<summary>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 								{t("contacts.blockedSummary")} <span class="req__count">{blockedContacts.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
-								<ul role="list" class="contact-row-list">
+								<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 									{blockedContacts.value.map((pubkey) => (
-										<li key={pubkey} class="contact-row">
+										<li key={pubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} />
-											<div class="contact-row-actions">
+											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 												<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
 													{t("contacts.unblockButton")}
 												</button>
@@ -615,10 +625,10 @@ function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
 
 	return (
 		<details class="menu" ref={ref} onClick={handleMenuClick}>
-			<summary class="chip" style={{ cursor: "pointer" }}>
+			<summary class="chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", cursor: "pointer" }}>
 				<IconPlus /> {t("contacts.addToGroupLabel")}
 			</summary>
-			<div class="menu__pop">
+			<div class="menu__pop stack" style={{ "--gap": "2px" }}>
 				{available.map((g) => (
 					<label key={g.id} class="menu-check">
 						<input type="checkbox" disabled={disabled} onChange={() => onAdd(g.id)} />

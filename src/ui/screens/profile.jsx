@@ -80,9 +80,9 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 					{error}
 				</p>
 			)}
-			<ul role="list" class="srv__list">
+			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
 				{urls.map((url) => (
-					<li key={url} class="srv__item">
+					<li key={url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 						<span class="srv__url">{url}</span>
 						{url === activeUrl && <span class="badge-on">{t("profile.server.activeLabel")}</span>}
 						{url !== activeUrl && (
@@ -107,7 +107,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 					</li>
 				)}
 			</ul>
-			<form class="srv__add" onSubmit={handleAdd}>
+			<form class="srv__add row" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleAdd}>
 				<label class="visually-hidden" for={`${title}-new-url`}>
 					{t("profile.server.addLabel")}
 				</label>
@@ -167,9 +167,9 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 					{error}
 				</p>
 			)}
-			<ul role="list" class="srv__list">
+			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
 				{urls.map((r) => (
-					<li key={r.url} class="srv__item">
+					<li key={r.url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 						<span class="srv__url">{r.url}</span>
 						<label>
 							<input
@@ -206,7 +206,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 					</li>
 				)}
 			</ul>
-			<form class="srv__add" onSubmit={handleAdd}>
+			<form class="srv__add row" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleAdd}>
 				<label class="visually-hidden" for="relay-new-url">
 					{t("profile.server.addLabel")}
 				</label>
@@ -604,7 +604,7 @@ export default function Profile() {
 				<h2 id="profile-npub-heading" class="sect-title">
 					{t("profile.identifierHeading")}
 				</h2>
-				<div class="keybox">
+				<div class="keybox row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 					<code>{npubEncode(id)}</code>
 					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
 						<IconCopy />
@@ -625,7 +625,7 @@ export default function Profile() {
 			    себе (фото + кнопка под ним), а "О себе" остаётся единственным
 			    видимым заголовком блока. */}
 			<div class="profile-photo-layout">
-				<div class="profile-photo-col" aria-label={t("profile.avatarColumnAria")}>
+				<div class="profile-photo-col stack" style={{ "--gap": "var(--space-s)", alignItems: "center" }} aria-label={t("profile.avatarColumnAria")}>
 					{/* avatarUrl (публичный Blossom URL) — фолбэк, когда локального
 					    data-url кэша ещё нет: НОВОЕ устройство подтягивает bio/avatarUrl
 					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
@@ -635,7 +635,12 @@ export default function Profile() {
 					{avatar || avatarUrl ? (
 						<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
 					) : (
-						<div role="img" aria-label={t("profile.avatarNotSetAria")} class="profile-avatar-square profile-avatar-square-fallback">
+						<div
+					role="img"
+					aria-label={t("profile.avatarNotSetAria")}
+					class="profile-avatar-square profile-avatar-square-fallback row"
+					style={{ alignItems: "center", justifyContent: "center" }}
+				>
 							{initial}
 						</div>
 					)}

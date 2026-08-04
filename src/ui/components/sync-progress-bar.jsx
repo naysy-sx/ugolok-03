@@ -34,7 +34,7 @@ export default function SyncProgressBar() {
 	const labelText = lastEntry ? lastEntry.text : t("syncProgress.defaultLabel");
 
 	return (
-		<div class="sync-progress-bar" role="status" aria-live="polite">
+		<div class="sync-progress-bar stack" style={{ alignItems: "center" }} role="status" aria-live="polite">
 			<div class="sync-progress-bar-track" aria-hidden="true" />
 			<span 
 				class="sync-progress-bar-label" 
@@ -46,7 +46,7 @@ export default function SyncProgressBar() {
 			</span>
 			{expanded && syncLog.value.length > 0 && (
 				<div class="sync-progress-bar-log">
-					<ul>
+					<ul class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 						{syncLog.value.map((entry, i) => (
 							<li key={i}>
 								{new Date(entry.ts).toLocaleTimeString(currentLocale.value)} {entry.text}

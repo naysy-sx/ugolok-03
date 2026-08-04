@@ -28,7 +28,7 @@ export default function Screen({ breadcrumb, title, actions, footer, feed, child
 					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
 					    кнопки, видимого текста больше нет. */}
 					{breadcrumb && (
-						<button type="button" class="back-button" onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
+						<button type="button" class="back-button row" style={{ alignItems: "center", justifyContent: "center" }} onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
 							<IconCornerBack />
 						</button>
 					)}
