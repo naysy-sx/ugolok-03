@@ -536,11 +536,11 @@ export default function Unlock() {
 				</div>
 			</header>
 
-			<aside class="sidebar" aria-label={t("unlock.main.sidebarAriaLabel")}>
-				<section class="widget accounts-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
+			<aside class="auth-sidebar grid" style={{ "--gap": "var(--space-m)" }} aria-label={t("unlock.main.sidebarAriaLabel")}>
+				<section class="auth-widget accounts-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
 					<h3>{t("unlock.main.accountsWidget.title")}</h3>
 					{accounts.length === 0 ? (
-						<p class="widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
+						<p class="auth-widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
 					) : (
 						<ul class="accounts-list stack" style={{ "--gap": "var(--space-3xs)" }}>
 							{accounts.map((acc) => (
@@ -562,12 +562,12 @@ export default function Unlock() {
 				</section>
 
 				{openAccount && (
-					<section class="widget auth-box stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-live="polite">
+					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-live="polite">
 						<div class="auth-box-header row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 							<AccountAvatar avatar={openAccount.avatar} login={openAccount.login || openAccount.id} large />
 							<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 								<h4>{openAccount.login || openAccount.id.slice(0, 16) + "…"}</h4>
-								{openAccountBio && <small class="widget-subtitle">{openAccountBio}</small>}
+								{openAccountBio && <small class="auth-widget-subtitle">{openAccountBio}</small>}
 							</div>
 						</div>
 						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleLoginSubmit}>
@@ -594,9 +594,9 @@ export default function Unlock() {
 				)}
 
 				{registerBoxOpen && (
-					<section class="widget auth-box stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-live="polite">
+					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-live="polite">
 						<h4>{t("unlock.main.registerBox.title")}</h4>
-						<p class="widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
+						<p class="auth-widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
 						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
 							<div class="form-group">
 								<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
@@ -640,9 +640,9 @@ export default function Unlock() {
 					</section>
 				)}
 
-				<section class="widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
+				<section class="auth-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
 					<h3>{t("unlock.main.otherWays.title")}</h3>
-					<p class="widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
+					<p class="auth-widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
 					<ul class="link-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<li>
 							<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>

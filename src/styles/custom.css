@@ -859,7 +859,7 @@ button:has(> .icon),
 .auth-layout main {
 	grid-area: main;
 }
-.auth-layout .sidebar {
+.auth-sidebar {
 	grid-area: sidebar;
 }
 .auth-layout .site-footer {
@@ -880,7 +880,13 @@ button:has(> .icon),
 		grid-template-rows: auto 1fr auto;
 	}
 
-	.auth-layout .sidebar {
+	/* Липкий + скроллящийся внутри себя, но ТОЛЬКО на широких экранах —
+	   состояние, включаемое медиа-запросом, не статическая раскладка;
+	   REGLAMENT.md сознательно не покрывает такие переключения (тот же
+	   принцип, что .app-layout .sidebar ниже, превращающийся в выезжающую
+	   панель) — .stick/.self-start/.scroller как JSX-классы работали бы
+	   ВСЕГДА, а не только с этого брейкпоинта. */
+	.auth-sidebar {
 		position: sticky;
 		inset-block-start: var(--space-m);
 		align-self: start;
@@ -950,18 +956,25 @@ button:has(> .icon),
 	margin-inline-start: auto;
 }
 
-.auth-layout .sidebar {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min), 100%), 1fr));
-	gap: var(--space-m);
+/* Переименовано из .auth-layout .sidebar (пользователь) — единственный
+   такой сайдбар в приложении (второй, непохожий .sidebar — у залогиненного
+   .app-layout, отдельный компонент), префикс-неймспейс не нужен, имя само
+   по себе уникально. .grid (раскладка) уже в JSX — здесь только
+   align-content: сетке есть куда расти по высоте (родительская grid-area
+   на широких экранах — во всю доступную высоту), без start строки
+   растягивались бы вертикально вместо того чтобы стоять плотно сверху;
+   ни одна composition-переменная такое не покрывает. */
+.auth-sidebar {
 	align-content: start;
 }
 
 /* .stack/.box (раскладка/паддинг) уже в JSX — здесь только оформление.
    Тень убрана (пользователь). container-type — реально используется только
    старым @container ниже (.contacts-groups-aside и т.п. в других частях
-   файла его не трогают), оставлен на случай будущей адаптации виджета. */
-.auth-layout .widget {
+   файла его не трогают), оставлен на случай будущей адаптации виджета.
+   Переименовано из .auth-layout .widget (пользователь) — тем же принципом,
+   что .auth-sidebar выше: единственный такой виджет, имя само уникально. */
+.auth-widget {
 	container-type: inline-size;
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--border);
@@ -971,15 +984,15 @@ button:has(> .icon),
    вертикального ритма внутри виджета; собственный margin на h3/h4/p
    складывался бы С gap (flex-элементы не схлопывают свои margin друг
    с другом, в отличие от обычного block-потока, где это работало раньше). */
-.auth-layout .widget :is(h3, h4) {
+.auth-widget :is(h3, h4) {
 	font-size: var(--step-1);
 	margin-block: 0;
 }
-.auth-layout .widget p {
+.auth-widget p {
 	margin-block: 0;
 }
 
-.auth-layout .widget-subtitle {
+.auth-widget-subtitle {
 	color: var(--muted);
 	font-size: var(--step--1);
 }
