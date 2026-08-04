@@ -599,6 +599,7 @@ export default function Profile() {
 
 	return (
 		<Screen title={login || t("profile.noNameFallback")}>
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-npub-heading">
 				<h2 id="profile-npub-heading" class="sect-title">
 					{t("profile.identifierHeading")}
@@ -699,6 +700,7 @@ export default function Profile() {
 
 			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 			<SelfHostedSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
+			</div>
 		</Screen>
 	);
 }

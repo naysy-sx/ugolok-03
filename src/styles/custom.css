@@ -1890,11 +1890,15 @@ button:has(> .icon),
  *  (пользователь, item 7): узкая слева (фото + "Заменить" под ним),  *
  *  широкая справа ("О себе").                                        *
  * ================================================================== */
+/* margin-block-end убран — этап 66Б.8: верхнеуровневые секции Профиля
+   теперь в общем .stack (profile.jsx), он и даёт межблочный отступ;
+   раньше он держался на этом единственном ручном margin, из-за чего
+   секции БЕЗ такого патча (например "Relay-серверы") слипались с
+   соседом — баг был и до REGLAMENT.md, не регрессия миграции. */
 .app-layout .profile-photo-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
-	margin-block-end: var(--space-l);
 }
 @media (min-width: 40em) {
 	.app-layout .profile-photo-layout {
