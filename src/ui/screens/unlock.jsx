@@ -195,8 +195,8 @@ export default function Unlock() {
 	// без сайдбар-сетки (нечего показывать рядом, отвлекало бы). ──────────────
 	if (step === "loading") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("app.name")}</h1>
 				</header>
@@ -207,12 +207,12 @@ export default function Unlock() {
 
 	if (step === "db-error") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("app.name")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 						{t("unlock.dbError.message")}
 					</p>
@@ -229,12 +229,12 @@ export default function Unlock() {
 
 	if (step === "create-generate") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createGenerate.title")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.createGenerate.instructions")}</p>
 					<MnemonicDisplay words={mnemonic.split(" ")} />
 					<button
@@ -253,16 +253,16 @@ export default function Unlock() {
 
 	if (step === "create-confirm") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createConfirm.title")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.createConfirm.instructions")}</p>
 					<label for="confirm-mnemonic">{t("unlock.createConfirm.label")}</label>
 					<textarea id="confirm-mnemonic" value={confirmInput} onInput={(e) => setConfirmInput(e.currentTarget.value)} />
-					<div class="cluster">
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						<button
 							type="button"
 							onClick={async () => {
@@ -295,16 +295,16 @@ export default function Unlock() {
 
 	if (step === "import-mnemonic") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importMnemonic.title")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.importMnemonic.instructions")}</p>
 					<label for="import-mnemonic">{t("unlock.importMnemonic.label")}</label>
 					<textarea id="import-mnemonic" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
-					<div class="cluster">
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						<button
 							type="button"
 							onClick={async () => {
@@ -338,12 +338,12 @@ export default function Unlock() {
 
 	if (step === "import-key") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importKey.title")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.importKey.instructions")}</p>
 					<p style={{ color: "var(--muted)" }}>
 						{t("unlock.importKey.explanation")}
@@ -355,7 +355,7 @@ export default function Unlock() {
 					</p>
 					<label for="import-key">{t("unlock.importKey.label")}</label>
 					<input id="import-key" type="password" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
-					<div class="cluster">
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						<button
 							type="button"
 							onClick={() => {
@@ -396,13 +396,13 @@ export default function Unlock() {
 
 	if (step === "advanced-password") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.advancedPassword.title")}</h1>
 				</header>
-				<form class="flow" onSubmit={handleAdvancedPasswordSubmit}>
-					<fieldset class="flow">
+				<form class="stack" style={{ "--gap": "var(--space-m)" }} onSubmit={handleAdvancedPasswordSubmit}>
+					<fieldset class="stack" style={{ "--gap": "var(--space-m)" }}>
 						<legend>{t("unlock.advancedPassword.title")}</legend>
 						<label for="adv-login">{t("unlock.advancedPassword.loginLabel")}</label>
 						<input id="adv-login" type="text" autocomplete="username" value={advLogin} onInput={(e) => setAdvLogin(e.currentTarget.value)} />
@@ -430,12 +430,12 @@ export default function Unlock() {
 
 	if (step === "done") {
 		return (
-			<main class="center flow" style={{ "--container": "44rem" }}>
-				<header class="flow">
+			<main class="measure stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.done.title")}</h1>
 				</header>
-				<div class="flow">
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.done.message")}</p>
 					<p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{npub}</p>
 					{isQuickRegister && (
@@ -642,7 +642,7 @@ export default function Unlock() {
 					</section>
 				)}
 				{mainView === "temp-chat" && (
-					<section class="hero-section flow">
+					<section class="hero-section">
 						<h1>{t("unlock.main.tempChat.title")}</h1>
 						<p class="hero-lead">
 							{t("unlock.main.tempChat.lead1")}
