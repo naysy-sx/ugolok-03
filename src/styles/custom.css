@@ -845,15 +845,21 @@ button:has(> .icon),
 	row-gap: var(--space-xl);
 	column-gap: var(--space-l);
 
+	/* Пользователь: на смартфонах виджеты входа/регистрации (sidebar) —
+	   ПЕРЕД героем-заставкой (main), не после — иначе на узком экране
+	   первым делом видишь маркетинговый текст, а форму входа приходится
+	   долго скроллить. На ≥48em (media ниже) свой, независимый порядок
+	   областей (бок о бок, не друг под другом) — колонки той раскладки
+	   этот порядок не наследуют. */
 	grid-template-areas:
 		"header"
-		"main"
 		"sidebar"
+		"main"
 		"footer";
-	grid-template-rows: auto 1fr auto auto;
+	grid-template-rows: auto auto 1fr auto;
 }
 
-.auth-layout .site-header {
+.site-header {
 	grid-area: header;
 }
 .auth-layout main {
@@ -862,7 +868,7 @@ button:has(> .icon),
 .auth-sidebar {
 	grid-area: sidebar;
 }
-.auth-layout .site-footer {
+.site-footer {
 	grid-area: footer;
 }
 
@@ -897,7 +903,7 @@ button:has(> .icon),
 	}
 }
 
-.auth-layout .site-header {
+.site-header {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -906,22 +912,22 @@ button:has(> .icon),
 	border-block-end: var(--border-width) solid var(--border);
 }
 
-.auth-layout .logo {
+.logo {
 	display: flex;
 	align-items: baseline;
 	gap: var(--space-2xs);
 }
-.auth-layout .logo-name {
+.logo-name {
 	font-size: var(--step-3);
 	font-weight: 900;
 	letter-spacing: var(--heading-letter-spacing);
 	color: var(--accent);
 }
 
-.auth-layout .main-nav {
+.main-nav {
 	margin-inline: auto;
 }
-.auth-layout .nav-links {
+.nav-links {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-2xs) var(--space-m);
@@ -929,11 +935,11 @@ button:has(> .icon),
 	padding-inline-start: 0;
 	list-style: none;
 }
-.auth-layout .nav-links li {
+.nav-links li {
 	margin-block: 0;
 }
-.auth-layout .nav-links a,
-.auth-layout .nav-link-btn {
+.nav-links a,
+.nav-link-btn {
 	color: var(--fg);
 	text-decoration: none;
 	background: none;
@@ -943,12 +949,12 @@ button:has(> .icon),
 	font-family: inherit;
 	cursor: pointer;
 }
-.auth-layout .nav-link-btn--active {
+.nav-link-btn--active {
 	color: var(--accent);
 	font-weight: 600;
 }
-.auth-layout .nav-links a:hover,
-.auth-layout .nav-link-btn:hover {
+.nav-links a:hover,
+.nav-link-btn:hover {
 	color: var(--accent);
 }
 
@@ -1000,14 +1006,14 @@ button:has(> .icon),
 /* "Другие способы" — простой список ссылок, не кнопки: действие второстепенное
    (переход к редким сценариям входа), шрифт нарочно чуть мельче обычного текста.
    .stack (раскладка) уже в JSX — здесь только сброс дефолтов списка. */
-.auth-layout .link-list {
+.link-list {
 	list-style: none;
 	padding-inline-start: 0;
 }
-.auth-layout .link-list li {
+.link-list li {
 	margin-block: 0;
 }
-.auth-layout .link-list-item {
+.link-list-item {
 	display: inline;
 	background: none;
 	border: 0;
@@ -1021,7 +1027,7 @@ button:has(> .icon),
 	cursor: pointer;
 	text-align: start;
 }
-.auth-layout .link-list-item:hover {
+.link-list-item:hover {
 	color: var(--accent-hover);
 }
 
@@ -1032,11 +1038,11 @@ button:has(> .icon),
    (строка) достаточно. Заодно убран второй вариант раскладки на широких
    контейнерах (@container — плитки-пилюли вместо строк): противоречил бы
    новому "аватар прижат к краю" — на пилюле прижимать не к чему. */
-.auth-layout .accounts-list {
+.accounts-list {
 	list-style: none;
 	padding-inline-start: 0;
 }
-.auth-layout .accounts-list li {
+.accounts-list li {
 	margin-block: 0;
 }
 
@@ -1046,7 +1052,7 @@ button:has(> .icon),
    auth-layout). overflow:hidden — обрезает острые углы плоского аватара
    точно по скруглению самой кнопки (аватар прижат к левому/верхнему/
    нижнему краю без своего отступа, иначе торчал бы за скруглённый угол). */
-.auth-layout .account-picker-btn {
+.account-picker-btn {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 	font-weight: var(--weight-normal);
@@ -1059,14 +1065,14 @@ button:has(> .icon),
 		background-color var(--transition-speed) var(--transition-ease),
 		filter var(--transition-speed) var(--transition-ease);
 }
-.auth-layout .account-picker-btn:hover {
+.account-picker-btn:hover {
 	filter: brightness(1.08);
 }
-.auth-layout .account-picker-btn:hover .account-name,
-.auth-layout .account-picker-btn[aria-current="true"] .account-name {
+.account-picker-btn:hover .account-name,
+.account-picker-btn[aria-current="true"] .account-name {
 	color: var(--accent);
 }
-.auth-layout .account-picker-btn[aria-current="true"] {
+.account-picker-btn[aria-current="true"] {
 	background-color: color-mix(in oklch, var(--accent), var(--surface-raised) 85%);
 }
 
@@ -1100,7 +1106,7 @@ button:has(> .icon),
 	font-weight: var(--weight-bold);
 }
 
-.auth-layout .auth-box {
+.auth-box {
 	border-block-start: var(--rule-accent) solid var(--accent);
 
 	transition:
@@ -1115,14 +1121,14 @@ button:has(> .icon),
 
 /* .row (раскладка) уже в JSX — margin-block-end убран, .stack родителя
    (.auth-box) сам разделяет header/form через свой --gap. */
-.auth-layout .auth-box-header h4 {
+.auth-box-header h4 {
 	margin-block: 0;
 }
 
 /* .stack (раскладка) уже в JSX — было display:grid (не flex) ИМЕННО
    ради .btn-link ниже (justify-self:center, grid-only свойство) — тот
    переведён на align-self:center, работающий и в этом flex-контексте. */
-.auth-layout .form-group {
+.form-group {
 	margin-block: 0;
 }
 
@@ -1149,13 +1155,13 @@ button:has(> .icon),
 	transform: translateY(var(--border-width));
 }
 
-.auth-layout .btn-block {
+.btn-block {
 	display: block;
 	inline-size: 100%;
 	text-align: center;
 }
 
-.auth-layout .btn-link {
+.btn-link {
 	background-color: transparent;
 	border: 0;
 	padding: var(--space-3xs);
@@ -1167,24 +1173,34 @@ button:has(> .icon),
 	cursor: pointer;
 	transition: color var(--transition-speed) var(--transition-ease);
 }
-.auth-layout .btn-link:hover {
+.btn-link:hover {
 	background-color: transparent;
 	color: var(--accent-hover);
 	text-decoration: none;
 }
-.auth-layout .btn-link:active {
+.btn-link:active {
 	transform: none;
 }
 
-.auth-layout .hero-section {
+.hero-section {
 	padding-block: var(--space-2xl, var(--space-xl)) var(--space-xl);
 }
+/* Пользователь: на смартфонах sidebar (виджеты входа) теперь стоит ПЕРЕД
+   main (см. grid-template-areas выше) — собственный верхний отступ
+   героя-заставки здесь лишний, сразу после виджетов и так есть row-gap
+   самой сетки .auth-layout. Нижний отступ (--space-xl) не трогаем —
+   разделяет main/sidebar друг от друга по-прежнему нужен. */
+@media (max-width: 47.99em) {
+	.hero-section {
+		padding-block-start: 0;
+	}
+}
 
-.auth-layout .hero-section h1 {
+.hero-section h1 {
 	max-width: var(--measure);
 }
 
-.auth-layout .hero-lead {
+.hero-lead {
 	font-size: var(--step-1);
 	line-height: 1.5;
 	color: var(--muted);
@@ -1192,7 +1208,7 @@ button:has(> .icon),
 	margin-block: var(--space-m) var(--space-l);
 }
 
-.auth-layout .site-footer {
+.site-footer {
 	border-block-start: var(--border-width) solid var(--border);
 	padding-block: var(--space-m);
 	color: var(--muted);
@@ -1307,7 +1323,7 @@ button:has(> .icon),
 	}
 }
 
-.auth-layout .site-footer p {
+.site-footer p {
 	margin-block: 0;
 }
 
