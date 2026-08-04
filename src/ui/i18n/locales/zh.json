@@ -536,6 +536,13 @@
 		"editProfileButton": "编辑个人资料",
 		"photoAlt": "头像照片"
 	},
+	"themeStatus": {
+		"panelAria": "主题",
+		"label": "主题",
+		"light": "浅色",
+		"dark": "深色",
+		"toggleLink": "切换主题"
+	},
 	"connectionStatus": {
 		"offline": "离线",
 		"connecting": "连接中…",

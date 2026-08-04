@@ -536,6 +536,13 @@
 		"editProfileButton": "Profili düzenle",
 		"photoAlt": "Profil fotoğrafı"
 	},
+	"themeStatus": {
+		"panelAria": "Tema",
+		"label": "Tema",
+		"light": "açık",
+		"dark": "koyu",
+		"toggleLink": "temayı değiştir"
+	},
 	"connectionStatus": {
 		"offline": "çevrimdışı",
 		"connecting": "bağlanıyor…",

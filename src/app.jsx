@@ -18,7 +18,7 @@ import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
 import { applyAccentColor } from "./ui/theme/accent-palette.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
-import { applyThemeMode, resolveEffectiveTheme, toggleThemeMode } from "./ui/theme/theme-mode.js";
+import { applyThemeMode, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { setLocale, t } from "./ui/signals/i18n.js";
 import { activeChatPubkey } from "./ui/signals/chat.js";
 import { activeChannelId } from "./ui/signals/channel-nav.js";
@@ -34,6 +34,7 @@ import CallOverlay from "./ui/components/call-overlay.jsx";
 import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
+import ThemeStatusPanel from "./ui/components/theme-status.jsx";
 import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
 import IconChatBubble from "./ui/icons/chat-bubble.jsx";
 import IconReader from "./ui/icons/reader.jsx";
@@ -44,8 +45,6 @@ import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
-import IconSun from "./ui/icons/sun.jsx";
-import IconMoon from "./ui/icons/moon.jsx";
 import IconMenu from "./ui/icons/menu.jsx";
 import IconFolder from "./ui/icons/folder.jsx";
 import IconHelpCircle from "./ui/icons/help-circle.jsx";
@@ -229,10 +228,11 @@ function MainShell() {
 			    (.app-shell-inner: не подошёл готовый composition-класс .center,
 			    там общий на проект --measure протёк бы в каждый <p> внутри). */}
 			<div class="app-shell-inner stack grow">
-			{/* Угол сверху-справа — переключатель темы (пользователь: "переключатель
-			    сверху стоит добавить") + бургер адаптива (пользователь: "весь
-			    sidebar прятать в бургер-кнопку справа вверху") в одном контейнере,
-			    чтобы не считать отступы вручную под каждую отдельно. */}
+			{/* Угол сверху-справа — бургер адаптива (пользователь: "весь sidebar
+			    прятать в бургер-кнопку справа вверху"). Переключатель темы отсюда
+			    убран (пользователь) — переехал в сайдбар отдельной панелью
+			    (ThemeStatusPanel), над ConnectionStatusPanel, тот же визуальный
+			    язык. */}
 			<div class="top-corner-actions">
 				<button
 					type="button"
@@ -243,14 +243,6 @@ function MainShell() {
 					aria-label={sidebarOpen ? t("shell.closeMenu") : t("shell.openMenu")}
 				>
 					{sidebarOpen ? "✕" : <IconMenu />}
-				</button>
-				<button
-					type="button"
-					class="theme-toggle-btn"
-					onClick={handleToggleTheme}
-					aria-label={resolveEffectiveTheme(themeMode) === "dark" ? t("shell.switchToLightTheme") : t("shell.switchToDarkTheme")}
-				>
-					{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />}
 				</button>
 			</div>
 			<div class="app-layout grow">
@@ -294,6 +286,10 @@ function MainShell() {
 							);
 						})}
 					</ul>
+					{/* Переключатель темы (пользователь) — был плавающей кнопкой в углу
+					    экрана, теперь панель здесь, тот же визуальный язык, что
+					    ConnectionStatusPanel сразу под ней. */}
+					<ThemeStatusPanel themeMode={themeMode} onToggle={handleToggleTheme} />
 					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
 					    главным меню, на любом экране, не только там, где раньше был
 					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}

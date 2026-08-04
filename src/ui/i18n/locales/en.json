@@ -536,6 +536,13 @@
 		"editProfileButton": "Edit profile",
 		"photoAlt": "Profile photo"
 	},
+	"themeStatus": {
+		"panelAria": "Theme",
+		"label": "Theme",
+		"light": "light",
+		"dark": "dark",
+		"toggleLink": "switch theme"
+	},
 	"connectionStatus": {
 		"offline": "offline",
 		"connecting": "connecting…",

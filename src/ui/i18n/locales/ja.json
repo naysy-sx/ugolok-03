@@ -536,6 +536,13 @@
 		"editProfileButton": "プロフィールを編集",
 		"photoAlt": "プロフィール写真"
 	},
+	"themeStatus": {
+		"panelAria": "テーマ",
+		"label": "テーマ",
+		"light": "ライト",
+		"dark": "ダーク",
+		"toggleLink": "テーマを切り替える"
+	},
 	"connectionStatus": {
 		"offline": "オフライン",
 		"connecting": "接続中…",

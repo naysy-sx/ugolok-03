@@ -536,6 +536,13 @@
 		"editProfileButton": "Edytuj profil",
 		"photoAlt": "Zdjęcie profilowe"
 	},
+	"themeStatus": {
+		"panelAria": "Motyw",
+		"label": "Motyw",
+		"light": "jasny",
+		"dark": "ciemny",
+		"toggleLink": "przełącz motyw"
+	},
 	"connectionStatus": {
 		"offline": "offline",
 		"connecting": "łączenie…",

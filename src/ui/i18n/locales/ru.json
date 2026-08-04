@@ -536,6 +536,13 @@
 		"editProfileButton": "Изменить профиль",
 		"photoAlt": "Фото профиля"
 	},
+	"themeStatus": {
+		"panelAria": "Тема оформления",
+		"label": "Тема",
+		"light": "светлая",
+		"dark": "тёмная",
+		"toggleLink": "переключить тему"
+	},
 	"connectionStatus": {
 		"offline": "офлайн",
 		"connecting": "подключение…",

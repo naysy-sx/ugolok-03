@@ -228,13 +228,13 @@ button:has(> .icon),
 	margin-inline: auto;
 }
 
-/* Угол сверху-справа (VISUAL.md, Claude Opus + пользователь: "бургер
-   расположенную (внимание!) справа вверху") — переключатель темы и бургер
-   адаптива живут в ОДНОМ контейнере, а не считают отступы друг от друга
-   по отдельности. z-index выше .call-overlay (200, этап 48) — доступны
-   даже во время звонка. position:absolute относительно .app-shell-inner
-   (было fixed к вьюпорту — до ограничения ширины на широких мониторах
-   разницы не было, .app-shell-inner занимал весь вьюпорт). */
+/* Угол сверху-справа (VISUAL.md, Claude Opus) — бургер адаптива, один в
+   контейнере (переключатель темы отсюда убран, пользователь — переехал
+   в сайдбар, ThemeStatusPanel). z-index выше .call-overlay (200, этап 48) —
+   доступен даже во время звонка. position:absolute относительно
+   .app-shell-inner (было fixed к вьюпорту — до ограничения ширины на
+   широких мониторах разницы не было, .app-shell-inner занимал весь
+   вьюпорт). */
 .top-corner-actions {
 	position: absolute;
 	inset-block-start: var(--space-s);
@@ -243,7 +243,6 @@ button:has(> .icon),
 	display: flex;
 	gap: var(--space-2xs);
 }
-.theme-toggle-btn,
 .sidebar-toggle-btn {
 	display: flex;
 	align-items: center;
@@ -258,7 +257,6 @@ button:has(> .icon),
 	box-shadow: var(--shadow);
 	font-size: 1.1rem;
 }
-.theme-toggle-btn:hover,
 .sidebar-toggle-btn:hover {
 	background-color: var(--surface-raised);
 	filter: brightness(1.08);
@@ -278,14 +276,6 @@ button:has(> .icon),
 		display: flex;
 	}
 }
-
-/* Раньше переключатель темы стоял буквально в углу ЭКРАНА — половина
-   кругляша "срезана" настоящим углом монитора (position:fixed к вьюпорту,
-   3/4 круга физически за пределами окна, браузер их просто не рисовал).
-   После ограничения ширины на широких мониторах (пользователь: 3440px)
-   .top-corner-actions стоит в углу КОНТЕНТА, не экрана — обрезать
-   уже нечем (это не край окна, а пустой фон вокруг), эффект убран, обе
-   кнопки — обычные кругляши в ряд через flex/gap родителя. */
 
 /* .grow (раскладка, "ем остаток от .shell") уже в JSX — display:flex
    здесь ОСТАЁТСЯ: строка/столбик переключает медиазапрос ниже (REGLAMENT.md
@@ -1969,23 +1959,57 @@ button:has(> .icon),
 /* Панель статуса соединения (пользователь, item 4) — постоянно под главным
    меню, на любом экране (раньше был ad-hoc "Соединение: ..." только на
    Контактах/Сообщениях — теперь один источник правды). Мелкий шрифт (URL
-   не главное), цвет — на самом статусе, не на строке целиком. */
+   не главное), цвет — на самом статусе, не на строке целиком.
+   .theme-status-panel — тот же визуальный язык (пользователь: убрал
+   плавающую кнопку-переключатель темы в углу экрана, перенёс сюда, над
+   этой панелью) — общий border-block-start только у неё (первая в паре,
+   отделяет ОБЕ панели вместе от списка меню выше), связка панелей —
+   через margin-block-start у .connection-status-panel. */
+.app-layout .sidebar .theme-status-panel,
 .app-layout .sidebar .connection-status-panel {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-3xs);
-	padding-block: var(--space-s);
-	margin-block-start: var(--space-s);
-	border-block-start: var(--border-width) solid var(--border);
 	font-size: var(--step--2);
 	color: var(--muted);
 }
+.app-layout .sidebar .theme-status-panel p,
 .app-layout .sidebar .connection-status-panel p {
 	margin: 0;
 }
 .app-layout .sidebar .connection-status-panel small {
 	display: block;
 	word-break: break-all;
+}
+.app-layout .sidebar .theme-status-panel {
+	padding-block-start: var(--space-s);
+	margin-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--border);
+}
+.app-layout .sidebar .connection-status-panel {
+	margin-block-start: var(--space-s);
+	padding-block-end: var(--space-s);
+}
+/* Ссылка-кнопка (не боксовая кнопка) — тот же приём, что .btn-link на
+   стартовом экране (auth-layout), но без justify-self:center (здесь
+   обычный текстовый поток, не CSS-grid форма). Иконка — тот же размер
+   шрифта, что текст (1em), выровнена по строке через inline-flex. */
+.app-layout .sidebar .theme-status-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	background: none;
+	border: none;
+	padding: 0;
+	color: var(--accent);
+	font: inherit;
+	font-size: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	cursor: pointer;
+}
+.app-layout .sidebar .theme-status-toggle:hover {
+	color: var(--accent-hover);
 }
 
 /* ================================================================== *
