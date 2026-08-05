@@ -142,12 +142,13 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 			) : (
 				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
 					{messages.map((m) => (
-						<li key={m.id}>
+						<li key={m.id} class="channel-message-row">
 							<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 								<ContactIdentity pubkey={m.authorPubkey} />
 								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
 								{m.authorPubkey !== ownerPubkey && (
 									<ModerationActions
+										compact
 										viewerPubkey={ownerPubkey}
 										viewerPrivKey={privKey}
 										channelOwnerPubkey={channelOwnerPubkey}

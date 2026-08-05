@@ -419,11 +419,7 @@ export default function Contacts() {
 								const memberOfGroups = groupsForContact(pubkey);
 								const isExpanded = expandedPubkey === pubkey;
 								return (
-									<li
-										key={pubkey}
-										class="contact-row contact-row-expandable row"
-										style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}
-									>
+									<li key={pubkey} class="contact-row contact-row-expandable row" style={{ "--gap": "var(--space-2xs)" }}>
 										<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
 											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>

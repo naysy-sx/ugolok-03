@@ -44,7 +44,7 @@ const RULES_MAX_LENGTH = 1000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // VISUAL.md v2 ("Пост + комментарии") — .cmt__box раскладывает аватар/имя/
-// текст отдельными grid-областями (не единым блоком, как ContactIdentity в
+// текст отдельными областями (не единым блоком, как ContactIdentity в
 // Контактах), поэтому здесь достаём имя/аватар автора комментария напрямую
 // из уже закэшированных профилей, а не переиспользуем ContactIdentity целиком.
 function commentAuthorInfo(pubkey) {
@@ -308,45 +308,47 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 
 	return (
 		<li id={`comment-${comment.id}`} class={`cmt${isTarget ? " is-target-comment" : ""}`}>
-			<article class="cmt__box">
+			<article class="cmt__box bar" style={{ "--gap": "var(--space-m)", alignItems: "flex-start" }}>
 				{author.avatar ? (
-					<img src={author.avatar} alt="" class="cmt__ava" />
+					<img src={author.avatar} alt="" class="cmt__ava rigid" />
 				) : (
-					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback row" style={{ alignItems: "center", justifyContent: "center" }}>
+					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
 						{(author.name || "?").trim().charAt(0).toUpperCase()}
 					</div>
 				)}
-				<div class="cmt__head row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
-					<span class="cmt__name">{author.name}</span>
-					{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
-					<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
-				</div>
-				<p class="cmt__text">{comment.text}</p>
-				{comment.attachments?.[0] && (
-					<div class="cmt__media">
-						<AttachmentView attachment={comment.attachments[0]} />
+				<div class="stack grow" style={{ "--gap": "var(--space-2xs)" }}>
+					<header class="cmt__head row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
+						<span class="cmt__name">{author.name}</span>
+						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
+						<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
+					</header>
+					<p class="cmt__text">{comment.text}</p>
+					{comment.attachments?.[0] && (
+						<div class="cmt__media">
+							<AttachmentView attachment={comment.attachments[0]} />
+						</div>
+					)}
+					<div class="cmt__actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+						{canComment && (
+							<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
+								<IconChatBubble /> {t("channel.comment.replyButton")}
+							</button>
+						)}
+						{!isOwnComment && (
+							<ActionsMenu label={t("channel.comment.moreActionsAria", { name: author.name })}>
+								<ModerationActions
+									viewerPubkey={ownerPubkey}
+									viewerPrivKey={privKey}
+									channelOwnerPubkey={channelOwnerPubkey}
+									channelId={channelId}
+									targetPubkey={comment.authorPubkey}
+									contentType="comment"
+									contentId={comment.id}
+									contentText={comment.text}
+								/>
+							</ActionsMenu>
+						)}
 					</div>
-				)}
-				<div class="cmt__actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-					{canComment && (
-						<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
-							<IconChatBubble /> {t("channel.comment.replyButton")}
-						</button>
-					)}
-					{!isOwnComment && (
-						<ActionsMenu label={t("channel.comment.moreActionsAria", { name: author.name })}>
-							<ModerationActions
-								viewerPubkey={ownerPubkey}
-								viewerPrivKey={privKey}
-								channelOwnerPubkey={channelOwnerPubkey}
-								channelId={channelId}
-								targetPubkey={comment.authorPubkey}
-								contentType="comment"
-								contentId={comment.id}
-								contentText={comment.text}
-							/>
-						</ActionsMenu>
-					)}
 				</div>
 			</article>
 
@@ -651,7 +653,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details class="req">
-					<summary>
+					<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 						{t("channels.create.rulesLabel")}
 						<IconChevronRight class="icon req__chev" aria-hidden="true" />
 					</summary>

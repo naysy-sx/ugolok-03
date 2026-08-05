@@ -96,7 +96,7 @@ function ImageAttachment({ attachment }) {
 				src={url}
 				alt={attachment.name || ""}
 				onClick={() => setShowModal(true)}
-				style={{ maxWidth: "100%", maxHeight: "16rem", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
+				style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
 			/>
 			{showModal && <ImageModal src={url} alt={attachment.name} onClose={() => setShowModal(false)} />}
 		</>

@@ -19,6 +19,20 @@
 	flex: none;
 }
 
+/* Найдено живой проверкой этапа с компактными иконками модерации
+   (channel-chat.jsx): SVG внутри inline-flex кнопки (.icon-btn/
+   .back-button) иногда схлопывается по ширине почти до нуля — классический
+   баг flex-автоминимума (min-width:auto у flex-item с replaced-содержимым
+   вычисляется неверно для SVG с шириной в em). flex:none — та же гигиена,
+   что уже применена к .nav-item-btn, но САМ фикс — явный min-width/
+   min-height, перебивающий автоминимум. */
+.icon-btn .icon,
+.back-button .icon {
+	flex: none;
+	min-width: 1em;
+	min-height: 1em;
+}
+
 /* Пользователь: "главное меню выглядит как стопка кирпичей... пусть выглядят
    как ссылки (но в разметке остаются кнопками), при наведении — красивая
    анимация подчёркивания через псевдоэлемент". Разметка не меняется —
@@ -608,6 +622,12 @@ button:has(> .icon),
    .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
 /* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
    завязан на width/height, не на padding вокруг текста (текста больше нет). */
+/* Найдено пользователем: var(--muted) + тонкий SVG-шеврон на фоне были
+   почти не видны, а ховер показывал только фоновый "диск" — саму иконку
+   не выделял вообще. Теперь кнопка без фона в обоих состояниях (не
+   визуальная "таблетка", просто кликабельная стрелка), сама стрелка
+   контрастнее по умолчанию (var(--fg), не var(--muted)) и подсвечивается
+   акцентом по ховеру/фокусу — не фон вокруг нее. */
 .back-button {
 	/* .row (раскладка) уже в JSX. */
 	flex: none;
@@ -615,14 +635,15 @@ button:has(> .icon),
 	height: 2.5rem;
 	padding: 0;
 	background-color: transparent;
-	color: var(--muted);
+	color: var(--fg);
 	border-color: transparent;
 	border-radius: calc(infinity * 1px);
 	font-size: var(--step-2);
 }
-.back-button:hover {
-	background-color: var(--surface-raised);
-	color: var(--fg);
+.back-button:hover,
+.back-button:focus-visible {
+	background-color: transparent;
+	color: var(--accent);
 }
 
 /* Этап 66 — было position:relative+flex:1+min-height:0 (content-area) /
@@ -1739,6 +1760,13 @@ button:has(> .icon),
 .contact-row-list .contact-row.contact-row-expandable:last-child {
 	padding-block-end: 0;
 }
+/* Найдено пользователем: у первой строки списка padding-block-start
+   создавал лишний отступ сверху (тот же принцип, что :first-child
+   у заголовков, minimal.css, — первый ребёнок не должен нести отступ
+   от несуществующего "предыдущего соседа"). */
+.contact-row-list .contact-row:first-child {
+	padding-block-start: 0;
+}
 /* Вариант-состояние (развёрнутая карточка) — переключает раскладку строки
    на столбик, поверх .row из JSX; REGLAMENT.md сознательно не покрывает
    такие переключения (тот же принцип, что .app-layout). */
@@ -2115,6 +2143,14 @@ button:has(> .icon),
 	position: relative;
 	display: inline-flex;
 }
+/* Найдено пользователем: клик "прыгал" высотой — глобальный
+   details[open] > summary { margin-block-end: var(--space-s) } (minimal.css,
+   рассчитан на .req/.thread, где тело реально идёт В ПОТОКЕ после summary)
+   у .menu раздувал сам инлайн-флекс-контейнер, хотя .menu__pop ниже —
+   position:absolute, из потока и так убран, отступ ему не нужен. */
+.menu[open] > summary {
+	margin-block-end: 0;
+}
 .menu > summary {
 	list-style: none;
 }
@@ -2362,6 +2398,12 @@ button:has(> .icon),
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
 }
+/* Глобальный p{margin-block:var(--space-m)} (minimal.css) иначе добавлял
+   бы ВТОРОЙ источник зазора поверх --gap родителя-.stack — тот же принцип,
+   что .message-bubble p. */
+.post > p {
+	margin-block: 0;
+}
 /* .row (раскладка) уже в JSX — margin-block-start убран: раньше это была
    ВТОРАЯ сущность спейсинга поверх .flow, теперь зазор — только один
    хозяин, --gap родителя-.stack. */
@@ -2411,22 +2453,16 @@ button:has(> .icon),
 	margin: 0;
 	padding: 0;
 }
-/* display:grid ОСТАЁТСЯ (не .grid) — двухколоночная раскладка
-   аватар/контент с grid-row-span аватара на 3 строки (см. .cmt__ava
-   ниже), .grid (composition) даёт только auto-fit колонки, не покрывает
-   фиксированную сетку auto/1fr с ручными grid-row у детей. */
-.cmt__box {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	column-gap: var(--space-s);
-	row-gap: var(--space-3xs);
-}
+/* Найдено пользователем ("с комментами беда") — раньше .cmt__box был
+   display:grid с grid-row:1/4 у аватара (расчёт РОВНО на 3 строки колонки
+   контента: заголовок/текст/действия); стоило появиться вложению
+   (.cmt__media, 4-я строка) — расчёт съезжал, аватар переставал покрывать
+   контент по высоте. .bar (раскладка) уже в JSX — аватар (.rigid, свой
+   фиксированный размер) + колонка контента (.stack.grow) естественной
+   высоты, сколько бы строк в ней ни было. */
 .cmt__ava {
-	grid-column: 1;
-	grid-row: 1 / 4;
-	align-self: start;
-	width: 2.125rem;
-	height: 2.125rem;
+	inline-size: 2.125rem;
+	block-size: 2.125rem;
 	aspect-ratio: 1;
 	object-fit: cover;
 	/* Пользователь: маленький border-radius вместо круга — тот же язык, что
@@ -2441,10 +2477,8 @@ button:has(> .icon),
 	color: var(--muted);
 	font-weight: var(--weight-bold);
 }
-.cmt__head {
-	/* .row (раскладка) уже в JSX. */
-	grid-column: 2;
-}
+/* .cmt__head — .row (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
 .cmt__name {
 	font-weight: var(--weight-bold);
 	font-size: var(--step--1);
@@ -2464,22 +2498,16 @@ button:has(> .icon),
 	border-radius: var(--radius-full);
 }
 .cmt__text {
-	grid-column: 2;
 	font-size: var(--step-0);
 	line-height: 1.55;
 	white-space: pre-wrap;
 	margin: 0;
 }
 .cmt__media {
-	grid-column: 2;
-	margin-block-start: var(--space-2xs);
 	max-width: 280px;
 }
-.cmt__actions {
-	/* .row (раскладка) уже в JSX. */
-	grid-column: 2;
-	margin-block-start: var(--space-3xs);
-}
+/* .cmt__actions — .row (раскладка) уже в JSX, собственных декоративных
+   свойств не осталось. */
 .cmt__actions .btn--ghost {
 	padding: var(--space-2xs) var(--space-s);
 	font-size: var(--step--1);
@@ -2489,10 +2517,12 @@ button:has(> .icon),
    граница окрашена акцентом, тред читается как "нить разговора", не
    просто отступ. */
 .thread {
-	grid-column: 1 / -1;
-	/* Раньше — дефолт голого <details> (minimal.css), убранный оттуда из-за
-	   утечки в .menu (см. .req выше) — border/border-radius там же
-	   остаются глобальным дефолтом, компенсируется здесь только padding. */
+	/* grid-column:1/-1 убран — мёртвый код от старой grid/subgrid раскладки
+	   .cmt__box (см. выше), .cmt-list уже .stack (flex), у <li> нет grid-
+	   родителя. Раньше — дефолт голого <details> (minimal.css), убранный
+	   оттуда из-за утечки в .menu (см. .req выше) — border/border-radius
+	   там же остаются глобальным дефолтом, компенсируется здесь только
+	   padding. */
 	padding: var(--space-s);
 }
 .thread > summary {
@@ -2860,4 +2890,24 @@ button:has(> .icon),
 	border-radius: var(--radius);
 	padding: var(--space-s);
 	overflow-x: auto;
+}
+
+/* ================================================================== *
+ *  Общий чат канала (channel-chat.jsx) — "Пожаловаться"/"Игнорировать" *
+ *  теперь маленькие иконки (moderation-actions.jsx), пользователь:    *
+ *  скрыты по умолчанию, появляются только при наведении на строку     *
+ *  сообщения (или фокусе с клавиатуры — focus-within, не только hover).*
+ * ================================================================== */
+.msg-mod-actions {
+	opacity: 0;
+	transition: opacity var(--transition-speed) var(--transition-ease);
+}
+.channel-message-row:hover .msg-mod-actions,
+.channel-message-row:focus-within .msg-mod-actions {
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.msg-mod-actions {
+		transition: none;
+	}
 }
