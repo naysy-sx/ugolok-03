@@ -3744,4 +3744,4 @@ Regression: `npm test` 1286/1286 (1 флап в incremental-sync.test.js —
 `npm run build` — успешен.
 
 DoD: [x] полная регрессия [x] живая проверка (inject+getComputedStyle
-+ визуальные скриншоты) [x] PLAN.md обновлён [ ] коммит — следующим шагом.
++ визуальные скриншоты) [x] PLAN.md обновлён [x] коммит (7edfa2e).
