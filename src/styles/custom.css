@@ -161,6 +161,32 @@ button:has(> .icon),
 .btn--danger:hover {
 	background-color: color-mix(in oklch, var(--bad), transparent 88%);
 }
+/* Этап 70-довесок — те же три модификатора, что .btn--danger, но для
+   предупреждения/подтверждения-успеха/информационного действия (токены
+   --warn/--good/--info появились в этом же этапе, раньше их не было —
+   отсюда только один .btn--danger существовал раньше). Комбинируются с
+   .btn--ghost тем же приёмом (обводка+текст, не сплошная заливка). */
+.btn--warn {
+	color: var(--warn);
+	border-color: color-mix(in oklch, var(--warn), transparent 55%);
+}
+.btn--warn:hover {
+	background-color: color-mix(in oklch, var(--warn), transparent 88%);
+}
+.btn--good {
+	color: var(--good);
+	border-color: color-mix(in oklch, var(--good), transparent 55%);
+}
+.btn--good:hover {
+	background-color: color-mix(in oklch, var(--good), transparent 88%);
+}
+.btn--info {
+	color: var(--info);
+	border-color: color-mix(in oklch, var(--info), transparent 55%);
+}
+.btn--info:hover {
+	background-color: color-mix(in oklch, var(--info), transparent 88%);
+}
 .btn--ghost:hover {
 	background-color: var(--surface-raised);
 }
@@ -187,6 +213,37 @@ button:has(> .icon),
 .icon-btn:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
+}
+/* Этап 70-довесок — та же семантика, что .btn--danger/warn/good/info, для
+   иконочных кнопок (корзина/бан и т.п. без текста) — база тонирована сразу
+   (не только hover), т.к. у иконки нет текста-подсказки самого действия. */
+.icon-btn--danger {
+	color: var(--bad);
+}
+.icon-btn--danger:hover {
+	background-color: color-mix(in oklch, var(--bad), transparent 88%);
+	color: var(--bad);
+}
+.icon-btn--warn {
+	color: var(--warn);
+}
+.icon-btn--warn:hover {
+	background-color: color-mix(in oklch, var(--warn), transparent 88%);
+	color: var(--warn);
+}
+.icon-btn--good {
+	color: var(--good);
+}
+.icon-btn--good:hover {
+	background-color: color-mix(in oklch, var(--good), transparent 88%);
+	color: var(--good);
+}
+.icon-btn--info {
+	color: var(--info);
+}
+.icon-btn--info:hover {
+	background-color: color-mix(in oklch, var(--info), transparent 88%);
+	color: var(--info);
 }
 
 /* Приподнятая карточка-контейнер — тот же язык, что уже был у
@@ -2195,6 +2252,13 @@ button:has(> .icon),
 }
 .menu__pop button.danger {
 	color: var(--bad);
+}
+/* Этап 70-довесок — тот же приём, что button.danger, для действий из
+   выпадающего меню, которые серьёзны, но не деструктивны (напр.
+   "Заблокировать" — обратимо через "Разблокировать", в отличие от
+   удаления). */
+.menu__pop button.warn {
+	color: var(--warn);
 }
 .menu-check input {
 	width: auto;

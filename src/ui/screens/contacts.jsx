@@ -432,6 +432,7 @@ export default function Contacts() {
 													</button>
 													<button
 														type="button"
+														class="warn"
 														disabled={busy}
 														onClick={() => runRowAction(() => blockContactAction(pubkey))}
 													>
@@ -505,7 +506,7 @@ export default function Contacts() {
 									<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 										<ContactIdentity pubkey={req.peerPubkey} />
 										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-											<button type="button" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
+											<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
 												{t("contacts.acceptButton")}
 											</button>
 											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>

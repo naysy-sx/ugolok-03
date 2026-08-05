@@ -166,7 +166,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 							>
 								<ContactIdentity pubkey={req.senderPubkey} />
 								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-									<button type="button" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
+									<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
 										{t("contacts.acceptButton")}
 									</button>
 									<button type="button" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
@@ -666,7 +666,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
 						<IconPhoneCall /> {t("common.call")}
 					</button>
-					<button type="button" onClick={handleClearHistory}>
+					<button type="button" class="btn--ghost btn--danger" onClick={handleClearHistory}>
 						<IconEraser /> {t("chat.window.clearHistoryButton")}
 					</button>
 				</>

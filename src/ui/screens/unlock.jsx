@@ -266,7 +266,7 @@ export default function Unlock() {
 					<p style={{ color: "var(--muted)" }}>
 						{t("unlock.dbError.warning")}
 					</p>
-					<button type="button" onClick={handleResetDatabase}>
+					<button type="button" class="btn--ghost btn--danger" onClick={handleResetDatabase}>
 						{t("unlock.dbError.resetButton")}
 					</button>
 				</div>

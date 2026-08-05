@@ -131,7 +131,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 										</button>
 									)}
 									{!banned.includes(r.targetPubkey) && (
-										<button type="button" disabled={busy} onClick={() => handleBan(r.targetPubkey)}>
+										<button type="button" class="btn--ghost btn--danger" disabled={busy} onClick={() => handleBan(r.targetPubkey)}>
 											{t("moderation.banButton")}
 										</button>
 									)}

@@ -337,7 +337,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 						<button type="button" class="btn--ghost" disabled={busy} onClick={handleRefreshStatus}>
 							{t("profile.selfHosted.refreshStatusButton")}
 						</button>
-						<button type="button" class="btn--ghost" disabled={busy} onClick={handleUnpair}>
+						<button type="button" class="btn--ghost btn--warn" disabled={busy} onClick={handleUnpair}>
 							{t("profile.selfHosted.disconnectButton")}
 						</button>
 					</div>

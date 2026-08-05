@@ -56,7 +56,7 @@ export default function ModerationActions({ viewerPubkey, viewerPrivKey, channel
 				<button type="button" class="icon-btn" onClick={handleReport} aria-label={t("moderation.reportButton")} title={t("moderation.reportButton")}>
 					<IconFlag />
 				</button>
-				<button type="button" class="icon-btn" onClick={handleIgnore} aria-label={t("moderation.ignoreButton")} title={t("moderation.ignoreButton")}>
+				<button type="button" class="icon-btn icon-btn--warn" onClick={handleIgnore} aria-label={t("moderation.ignoreButton")} title={t("moderation.ignoreButton")}>
 					<IconLockClosed />
 				</button>
 			</span>
@@ -68,7 +68,7 @@ export default function ModerationActions({ viewerPubkey, viewerPrivKey, channel
 			<button type="button" onClick={handleReport}>
 				<IconFlag /> {t("moderation.reportButton")}
 			</button>
-			<button type="button" onClick={handleIgnore}>
+			<button type="button" class="btn--ghost btn--warn" onClick={handleIgnore}>
 				<IconLockClosed /> {t("moderation.ignoreButton")}
 			</button>
 		</>

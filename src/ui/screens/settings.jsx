@@ -35,13 +35,19 @@ const DEFAULT_SENTINEL = "__default__";
 const PALETTE_PRESETS = [
 	{ id: "amber", hue: 55 },
 	{ id: "olive", hue: 115 },
-	{ id: "teal", hue: 175 },
-	{ id: "cyan", hue: 200 },
-	{ id: "indigo", hue: 265 },
-	{ id: "lavender", hue: 290 },
-	{ id: "purple", hue: 310 },
-	{ id: "magenta", hue: 330 },
-	{ id: "pink", hue: 350 },
+	{ id: "teal", hue: 172 },
+	{ id: "cyan", hue: 184 },
+	{ id: "sky", hue: 196 },
+	{ id: "azure", hue: 208 },
+	{ id: "blue", hue: 260 },
+	{ id: "indigo", hue: 272 },
+	{ id: "violet", hue: 284 },
+	{ id: "lavender", hue: 296 },
+	{ id: "purple", hue: 308 },
+	{ id: "amethyst", hue: 320 },
+	{ id: "magenta", hue: 332 },
+	{ id: "fuchsia", hue: 344 },
+	{ id: "pink", hue: 356 },
 ];
 
 // customPalette — всегда {cNeutral, accentHue}, никогда null (вызывающий код

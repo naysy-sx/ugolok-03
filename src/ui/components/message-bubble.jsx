@@ -97,7 +97,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 						)}
 						{attachment && <AttachmentDownloadLink attachment={attachment} />}
 						{typeof onDeleteForMe === "function" && (
-							<button type="button" onClick={() => setMode("confirming-delete")}>
+							<button type="button" class="btn--ghost btn--danger" onClick={() => setMode("confirming-delete")}>
 								{t("common.delete")}
 							</button>
 						)}
@@ -107,6 +107,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 					<>
 						<button
 							type="button"
+							class="btn--ghost btn--danger"
 							onClick={() => {
 								setMode(null);
 								onDeleteForMe(message.msgId);
@@ -117,6 +118,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 						{isOwn && typeof onDeleteForBoth === "function" && (
 							<button
 								type="button"
+								class="btn--ghost btn--danger"
 								onClick={() => {
 									setMode(null);
 									onDeleteForBoth(message.msgId);
