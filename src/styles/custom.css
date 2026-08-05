@@ -1583,15 +1583,15 @@ button:has(> .icon),
 	filter: brightness(1.06);
 }
 
-/* Поле поста — крупнее по умолчанию (пользователь: "сразу высоту побольше"),
-   фон "разлинованная бумага" (повторяющиеся горизонтальные линии по высоте
-   строки) + отступ снизу перед вложением/кнопками. */
+/* Поле поста — крупнее по умолчанию (пользователь: "сразу высоту побольше").
+   Этап 69: декоративный фон "разлинованная бумага" убран — единственное
+   место во всём приложении с текстурой на поле ввода, ни один живой
+   референс (GitHub/Linear/Notion/Discourse) так не делает, само поле
+   плоское (глобальный textarea{} из minimal.css). margin-block-end тоже
+   убран — источник зазора теперь один, --gap родителя-.stack. */
 .post-text-field {
 	min-height: 12rem;
-	margin-block-end: var(--space-s);
 	line-height: 1.6em;
-	background-image: repeating-linear-gradient(to bottom, transparent, transparent calc(1.6em - 1px), var(--border) calc(1.6em - 1px), var(--border) 1.6em);
-	background-attachment: local;
 }
 
 /* .stack (раскладка) уже в JSX. */
@@ -2145,7 +2145,7 @@ button:has(> .icon),
 }
 /* Найдено пользователем: клик "прыгал" высотой — глобальный
    details[open] > summary { margin-block-end: var(--space-s) } (minimal.css,
-   рассчитан на .req/.thread, где тело реально идёт В ПОТОКЕ после summary)
+   рассчитан на .req/.replies, где тело реально идёт В ПОТОКЕ после summary)
    у .menu раздувал сам инлайн-флекс-контейнер, хотя .menu__pop ниже —
    position:absolute, из потока и так убран, отступ ему не нужен. */
 .menu[open] > summary {
@@ -2390,14 +2390,13 @@ button:has(> .icon),
 	border-block-end-color: var(--accent);
 }
 
-/* Карточка поста — было инлайн-стилем прямо в JSX, теперь общий .card-
-   образный класс (без .card самого — посты не "приподняты", просто в
-   рамке, тише aside-панелей). */
-/* .stack/.box (раскладка) уже в JSX — здесь только граница. */
-.post {
-	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius);
-}
+/* Карточка поста — этап 69: собственная рамка убрана, поверхность (фон/
+   рамка/тень) теперь несёт общий .card на обёртке PostWithComments
+   (channel.jsx) — пост и комментарии под ним читаются как ОДНА
+   поверхность с внутренним разделителем (.comment-section), а не пост
+   в своей рамке и отдельно голый паддинг под ним. */
+/* .stack/.box (раскладка) уже в JSX — собственных декоративных свойств
+   не осталось. */
 /* Глобальный p{margin-block:var(--space-m)} (minimal.css) иначе добавлял
    бы ВТОРОЙ источник зазора поверх --gap родителя-.stack — тот же принцип,
    что .message-bubble p. */
@@ -2407,6 +2406,30 @@ button:has(> .icon),
 /* .row (раскладка) уже в JSX — margin-block-start убран: раньше это была
    ВТОРАЯ сущность спейсинга поверх .flow, теперь зазор — только один
    хозяин, --gap родителя-.stack. */
+
+/* Шапка автора поста (этап 69, по образцу .cmt__ava) — крупнее, чем
+   .cmt__ava (2.75rem против 2.125rem): пост важнее комментария,
+   визуальная иерархия. .post__ava-fallback делит цвет/вес с
+   .cmt__ava-fallback — тот же язык "буква на замену фото". */
+.post__ava {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+	font-size: 1.1rem;
+}
+.post__ava-fallback,
+.cmt__ava-fallback {
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}
+.post__author {
+	font-weight: var(--weight-bold);
+	font-size: var(--step-0);
+}
 
 /* ================================================================== *
  *  Пост + дерево комментариев — VISUAL.md v2, интеграция (пользователь *
@@ -2423,28 +2446,24 @@ button:has(> .icon),
 	margin-block-end: var(--step--1);
 }
 
-/* Обёртка блока комментариев (пользователь, item 23a) — верхний padding,
-   отделяющий его от карточки поста над ним. */
+/* Обёртка блока комментариев — этап 69: раньше свой padding-inline-start/
+   padding-block-start (единственный источник отступа), теперь .box+--pad
+   в JSX (тот же приём, что .post) + верхняя граница-разделитель — пост и
+   комментарии читаются как ОДНА поверхность (общий .card на обёртке
+   PostWithComments), а не пост-в-рамке и голый паддинг под ним. */
 .comment-section {
-	padding-inline-start: var(--space-m);
-	padding-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--border);
 }
 
-/* .composer — .stack (раскладка) уже в JSX, собственных декоративных
-   свойств не осталось. */
+/* .composer — этап 69: .bar (раскладка) уже в JSX (аватар+колонка текста,
+   не переносится), был .stack (только колонка, без аватара). Собственных
+   декоративных свойств не осталось. */
 /* .composer__row — .row (раскладка) уже в JSX, собственных декоративных
    свойств не осталось. */
-/* Поле комментария — крупнее (пользователь: "чё так мелко") + фон "блокнот
-   в точечку" (сетка точек через var(--space-m), тот же приём, что лист в
-   линейку у поста, только точками вместо линий). */
+/* Поле комментария — крупнее (пользователь: "чё так мелко"). Этап 69: фон
+   "блокнот в точечку" убран — та же причина, что .post-text-field выше. */
 .comment-text-field {
 	min-height: 5rem;
-	background-image: radial-gradient(circle, var(--muted) 1.5px, transparent 1.5px);
-	background-size: 22px 22px;
-	/* Глобальный reset (*{background-repeat:no-repeat}) иначе рисует всего
-	   ОДНУ точку в углу вместо повторяющейся сетки. */
-	background-repeat: repeat;
-	background-attachment: local;
 }
 
 /* .stack (раскладка) уже в JSX. */
@@ -2472,11 +2491,8 @@ button:has(> .icon),
 	background-color: var(--surface);
 	font-size: 0.85rem;
 }
-.cmt__ava-fallback {
-	/* .row (раскладка) уже в JSX. */
-	color: var(--muted);
-	font-weight: var(--weight-bold);
-}
+/* .cmt__ava-fallback — .row (раскладка) уже в JSX, цвет/вес — общее
+   правило выше, вместе с .post__ava-fallback. */
 /* .cmt__head — .row (раскладка) уже в JSX, собственных декоративных
    свойств не осталось. */
 .cmt__name {
@@ -2515,8 +2531,11 @@ button:has(> .icon),
 
 /* Ветка — нативное сворачивание + тёплая нить (подпись Уголка): левая
    граница окрашена акцентом, тред читается как "нить разговора", не
-   просто отступ. */
-.thread {
+   просто отступ. Класс .replies — этап 69, имя из эталона REGLAMENT.md
+   раздела 4 ("Дерево ответов — рекурсия, не новый примитив"), было
+   .thread — то же самое поведение/CSS, только имя приведено в
+   соответствие с уже принятым в регламенте словарём. */
+.replies {
 	/* grid-column:1/-1 убран — мёртвый код от старой grid/subgrid раскладки
 	   .cmt__box (см. выше), .cmt-list уже .stack (flex), у <li> нет grid-
 	   родителя. Раньше — дефолт голого <details> (minimal.css), убранный
@@ -2525,7 +2544,7 @@ button:has(> .icon),
 	   padding. */
 	padding: var(--space-s);
 }
-.thread > summary {
+.replies > summary {
 	/* .row (раскладка) уже в JSX. */
 	list-style: none;
 	cursor: pointer;
@@ -2535,20 +2554,20 @@ button:has(> .icon),
 	margin-block-start: var(--space-2xs);
 	border-radius: var(--radius-full);
 }
-.thread > summary::-webkit-details-marker {
+.replies > summary::-webkit-details-marker {
 	display: none;
 }
-.thread > summary:hover {
+.replies > summary:hover {
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
-.thread__chev {
+.replies__chev {
 	transition: transform var(--transition-speed) var(--transition-ease);
 }
-.thread[open] > summary .thread__chev {
+.replies[open] > summary .replies__chev {
 	transform: rotate(90deg);
 }
-.thread > .cmt-list {
+.replies > .cmt-list {
 	margin-block-start: var(--space-m);
 	padding-inline-start: var(--space-m);
 	border-inline-start: 2px solid color-mix(in oklch, var(--accent), var(--border) 68%);

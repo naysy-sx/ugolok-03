@@ -13,9 +13,25 @@ function formatDateTime(unixSeconds) {
 // этап 31, сознательное упрощение — вложения уже показывают картинки/видео/аудио
 // через тот же AttachmentView, что message-bubble.jsx, отдельный markdown-парсер не
 // нужен для этого MVP-прохода) + одно опциональное вложение + владельческие действия.
-export default function PostCard({ post, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount }) {
+//
+// Этап 69 — шапка автора (аватар+имя) добавлена по образцу .cmt__box/.bar
+// (channel.jsx), но крупнее (.post__ava, не .cmt__ava) — визуальная иерархия
+// "пост важнее комментария". Рамку/фон/тень несёт теперь общий .card на
+// обёртке PostWithComments (channel.jsx), не сама карточка — второй уровень
+// той же поверхности, а не отдельный вложенный блок.
+export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount }) {
 	return (
 		<article class="stack post box" style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}>
+			<header class="bar" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+				{authorAvatar ? (
+					<img src={authorAvatar} alt="" class="post__ava rigid" />
+				) : (
+					<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+						{(authorName || "?").trim().charAt(0).toUpperCase()}
+					</div>
+				)}
+				<span class="post__author">{authorName}</span>
+			</header>
 			<p style={{ whiteSpace: "pre-wrap" }}>{post.text}</p>
 			{post.attachments?.[0] && <AttachmentView attachment={post.attachments[0]} />}
 			<footer class="post__foot row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>

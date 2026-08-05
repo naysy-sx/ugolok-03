@@ -170,6 +170,14 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const attachment = usePendingAttachment();
+	const author = commentAuthorInfo(ownerPubkey);
+	// Этап 69 — свой аватар в композере рендерится ДО того, как что-либо
+	// ещё в этом дереве компонентов гарантированно подтянуло profiles[ownerPubkey]
+	// (PostWithComments подтягивает автора ПОСТА, но постов может ещё не
+	// быть) — без этого fallback на shortPubkey (буква "N" от npub…).
+	useEffect(() => {
+		ensureProfilesFetched([ownerPubkey], fetchProfiles).catch(() => {});
+	}, [ownerPubkey]);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -197,31 +205,41 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	}
 
 	return (
-		<form class="stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)", "--pad": "var(--space-m)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
-			<h2>{t("channel.composer.newPostTitle")}</h2>
+		<form class="card box stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
-			<label class="visually-hidden" for="post-text">
-				{t("channel.composer.postTextLabel")}
-			</label>
-			<textarea id="post-text" class="post-text-field" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={10} />
-			{attachment.file && (
-				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
-			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-				<button type="button" onClick={() => attachment.inputRef.current?.click()}>
-					<IconPaperclip /> {t("channel.composer.attachButton")}
-				</button>
-				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
-				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
-					<IconCross /> {t("common.cancel")}
-				</button>
+			<div class="bar" style={{ "--gap": "var(--space-m)", alignItems: "flex-start" }}>
+				{author.avatar ? (
+					<img src={author.avatar} alt="" class="post__ava rigid" />
+				) : (
+					<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+						{(author.name || "?").trim().charAt(0).toUpperCase()}
+					</div>
+				)}
+				<div class="stack grow" style={{ "--gap": "var(--space-s)" }}>
+					<label class="visually-hidden" for="post-text">
+						{t("channel.composer.postTextLabel")}
+					</label>
+					<textarea id="post-text" class="post-text-field" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={10} />
+					{attachment.file && (
+						<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
+					)}
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
+						<button type="button" onClick={() => attachment.inputRef.current?.click()}>
+							<IconPaperclip /> {t("channel.composer.attachButton")}
+						</button>
+						<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
+							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
+						</button>
+						<button type="button" onClick={onCancel} disabled={busy}>
+							<IconCross /> {t("common.cancel")}
+						</button>
+					</div>
+				</div>
 			</div>
 		</form>
 	);
@@ -232,6 +250,12 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const attachment = usePendingAttachment();
+	const author = commentAuthorInfo(ownerPubkey);
+	// Этап 69 — тот же приём, что PostComposer: свой аватар может отрисоваться
+	// раньше, чем profiles[ownerPubkey] окажется в кэше.
+	useEffect(() => {
+		ensureProfilesFetched([ownerPubkey], fetchProfiles).catch(() => {});
+	}, [ownerPubkey]);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -258,42 +282,51 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	}
 
 	return (
-		<form class="composer stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
-					{error}
-				</p>
+		<form class="composer bar" style={{ "--gap": "var(--space-s)", alignItems: "flex-start" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
+			{author.avatar ? (
+				<img src={author.avatar} alt="" class="cmt__ava rigid" />
+			) : (
+				<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+					{(author.name || "?").trim().charAt(0).toUpperCase()}
+				</div>
 			)}
-			<label class="visually-hidden" for={`comment-text-${parentId}`}>
-				{t("channel.commentComposer.label")}
-			</label>
-			<textarea
-				class="input comment-text-field"
-				id={`comment-text-${parentId}`}
-				value={text}
-				maxLength={COMMENT_MAX_LENGTH}
-				onInput={(e) => setText(e.currentTarget.value)}
-				rows={2}
-				placeholder={t("channel.commentComposer.placeholder")}
-				autoFocus={autoFocus}
-			/>
-			{attachment.file && (
-				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
-			)}
-			<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-				<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-				<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
-					<IconPaperclip />
-				</button>
-				<span class="grow" />
-				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
-					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
-				</button>
-				{onCancel && (
-					<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
-						{t("common.cancel")}
-					</button>
+			<div class="stack grow" style={{ "--gap": "var(--space-2xs)" }}>
+				{error && (
+					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						{error}
+					</p>
 				)}
+				<label class="visually-hidden" for={`comment-text-${parentId}`}>
+					{t("channel.commentComposer.label")}
+				</label>
+				<textarea
+					class="comment-text-field"
+					id={`comment-text-${parentId}`}
+					value={text}
+					maxLength={COMMENT_MAX_LENGTH}
+					onInput={(e) => setText(e.currentTarget.value)}
+					rows={2}
+					placeholder={t("channel.commentComposer.placeholder")}
+					autoFocus={autoFocus}
+				/>
+				{attachment.file && (
+					<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
+				)}
+				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
+					<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
+						<IconPaperclip />
+					</button>
+					<span class="grow" />
+					<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
+						{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
+					</button>
+					{onCancel && (
+						<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
+							{t("common.cancel")}
+						</button>
+					)}
+				</div>
 			</div>
 		</form>
 	);
@@ -372,11 +405,14 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 
 			{/* Ветка — нативное сворачивание (VISUAL.md v2 "тёплая нить треда"),
 			    open по умолчанию: тот же эффект, что раньше (всегда видно), но
-			    теперь можно свернуть длинный тред вручную. */}
+			    теперь можно свернуть длинный тред вручную. Класс .replies —
+			    имя из эталона REGLAMENT.md, раздел 4 ("Дерево ответов —
+			    рекурсия, не новый примитив"), этап 69: было .thread,
+			    разошедшееся с уже принятым в регламенте словарём. */}
 			{comment.replies.length > 0 && (
-				<details class="thread" open>
+				<details class="replies" open>
 					<summary class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
-						<IconChevronRight class="icon thread__chev" aria-hidden="true" />
+						<IconChevronRight class="icon replies__chev" aria-hidden="true" />
 						{t("channel.threadLabel", { count: tPlural("channel.repliesCount", comment.replies.length) })}
 					</summary>
 					<ul role="list" class="cmt-list stack" style={{ "--gap": "var(--space-m)" }}>
@@ -472,6 +508,14 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		document.getElementById(`comment-${highlightCommentId}`)?.scrollIntoView({ block: "center" });
 	}, [highlightCommentId, tree]);
 
+	// Этап 69 — шапка PostCard показывает автора всегда (не только когда
+	// комментарии развёрнуты и refreshComments сам подтягивает авторов
+	// комментариев), поэтому профиль автора ПОСТА подтягивается отдельно, тем
+	// же приёмом, что flattenAuthors в refreshComments.
+	useEffect(() => {
+		ensureProfilesFetched([post.authorPubkey], fetchProfiles).catch(() => {});
+	}, [post.authorPubkey]);
+
 	async function runAction(fn) {
 		try {
 			await fn();
@@ -481,10 +525,14 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		}
 	}
 
+	const author = commentAuthorInfo(post.authorPubkey);
+
 	return (
-		<div id={`post-${post.id}`}>
+		<div id={`post-${post.id}`} class="card stack" style={{ "--gap": 0 }}>
 			<PostCard
 				post={post}
+				authorName={author.name}
+				authorAvatar={author.avatar}
 				isOwner={isOwner}
 				commentCount={expanded ? countNodes(tree) : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
@@ -495,12 +543,12 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				}}
 			/>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" class="box" style={{ "--pad": "var(--space-m)", color: "var(--bad, oklch(0.58 0.21 25))" }}>
 					{error}
 				</p>
 			)}
 			{expanded && (
-				<div class="stack comment-section" style={{ "--gap": "var(--space-s)" }}>
+				<div class="stack box comment-section" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 					{canComment ? (
 						<CommentComposer
 							ownerPubkey={ownerPubkey}
