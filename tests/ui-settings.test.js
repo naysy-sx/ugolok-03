@@ -26,6 +26,15 @@ import {
 } from "../src/domain/settings/ui-settings.js";
 import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
 import { parseDmRelayListEvent } from "../src/domain/identity/dm-relay-list.js";
+import { DEFAULT_CUSTOM_PALETTE } from "../src/ui/theme/palette-apply.js";
+import { ACCENT_FORBIDDEN_ZONES } from "../src/ui/theme/palette-generator.js";
+
+function isHueForbidden(hue) {
+	return ACCENT_FORBIDDEN_ZONES.some((zone) => {
+		const diff = Math.abs(((hue - zone.hue + 540) % 360) - 180);
+		return diff < zone.halfWidth;
+	});
+}
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -94,9 +103,60 @@ test("parseUiSettingsEvent: messages.overrides из старого payload (бе
 
 test("loadUiSettings: без локальной записи -> дефолт", async () => {
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.equal(settings.accentColorId, "blue");
+	assert.equal(settings.customPalette, null, "совсем новый аккаунт без accentColorId — customPalette не выдумывается, null (build-дефолт применяется на уровне applyCustomPalette, не тут)");
 	assert.equal(settings.uiScale, "medium");
 	assert.deepEqual(settings.notifications, DEFAULT_SETTINGS.notifications);
+});
+
+// Этап 70 — миграция старого accentColorId (14 именованных пресетов, удалены
+// вместе с accent-palette.js) в customPalette: {cNeutral, accentHue} нового
+// генератора палитры. Часть пресетов (sky/terracotta/amber/saffron/moss)
+// попадает в запретные зоны служебных тонов — должны быть сдвинуты к
+// ближайшему разрешённому краю зоны, не отвергнуты и не оставлены как есть.
+test("mergeWithDefaults (через parseUiSettingsEvent): старый accentColorId без customPalette -> мигрирует в customPalette с тем же hue, если он разрешён", () => {
+	const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: "teal" }); // teal hue=185, вне запретных зон
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.ok(parsed.customPalette, "customPalette должен появиться из миграции");
+	assert.equal(parsed.customPalette.accentHue, 185);
+	assert.equal(parsed.customPalette.cNeutral, DEFAULT_CUSTOM_PALETTE.cNeutral, "cNeutral берётся из build-дефолта — старая система его не знала");
+});
+
+test("миграция accentColorId: коллизия с запретной зоной сдвигает hue к ближайшему краю, не отвергает и не оставляет исходный hue", () => {
+	// sky=230 -> зона info 235±20 = [215,255]; ближайший край 215 (|230-215|=15 < |230-255|=25)
+	const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: "sky" });
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.ok(parsed.customPalette);
+	assert.equal(parsed.customPalette.accentHue, 215);
+	assert.equal(isHueForbidden(parsed.customPalette.accentHue), false, "мигрированный hue сам не должен попадать в запретную зону");
+});
+
+test("миграция accentColorId: ВСЕ 14 легаси-пресетов после миграции дают разрешённый hue (не только 5 известных коллизий)", () => {
+	const LEGACY_IDS = ["blue", "indigo", "sky", "teal", "cyan", "lavender", "violet", "terracotta", "amber", "peach", "saffron", "orange", "olive", "moss"];
+	for (const id of LEGACY_IDS) {
+		const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: id });
+		const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+		assert.ok(parsed.customPalette, `${id}: customPalette должен появиться`);
+		assert.equal(isHueForbidden(parsed.customPalette.accentHue), false, `${id}: мигрированный hue ${parsed.customPalette.accentHue} не должен быть в запретной зоне`);
+	}
+});
+
+test("миграция accentColorId: hue ровно в центре запретной зоны (saffron=85, центр warn 85±20) — сдвигается на один из краёв, не оставляет 85", () => {
+	const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: "saffron" });
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.ok([65, 105].includes(parsed.customPalette.accentHue), `ожидался край зоны 65 или 105, получено ${parsed.customPalette.accentHue}`);
+});
+
+test("миграция accentColorId: уже выставленный customPalette не перезаписывается миграцией", () => {
+	const explicit = { cNeutral: 0.01, accentHue: 300 };
+	const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: "blue", customPalette: explicit });
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.deepEqual(parsed.customPalette, explicit, "явный выбор пользователя приоритетнее миграции из устаревшего поля");
+});
+
+test("миграция accentColorId: неизвестный/битый accentColorId не мигрирует и не падает — customPalette остаётся null", () => {
+	const event = buildUiSettingsEvent(ALICE_PRIV, { accentColorId: "какой-то-мусор-не-из-таблицы" });
+	const parsed = parseUiSettingsEvent(event, ALICE_PRIV);
+	assert.equal(parsed.customPalette, null);
 });
 
 // Этап 64 — первый запуск определяет язык системным языком (detectSystemLocale),
@@ -283,7 +343,7 @@ test("rebuildUiSettings: сканирует events, берёт ПОСЛЕДНИ�
 test("rebuildUiSettings: нет событий -> no-op, не бросает", async () => {
 	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY);
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
-	assert.equal(settings.accentColorId, "blue", "остаётся дефолт");
+	assert.equal(settings.customPalette, null, "остаётся дефолт");
 });
 
 // AC-16, Tier 4 (этап 45) — сырой дамп таблицы не должен содержать relay/Blossom

@@ -219,55 +219,119 @@
 		--space-3xl: clamp(4.8rem, 3.943rem + 4.286vw, 6rem);
 
 		/* ---- Цвет -------------------------------------------------------
-       Палитра выведена из нескольких базовых значений через oklch() +
-       color-mix(). light-dark() требует `color-scheme` (задан в `base`);
-       перевернуть страницу или любой блок — поставить на него
-       `color-scheme: light` / `dark`.                                   */
-		/* "Вечерний угол" (VISUAL.md, Claude Opus) — тёплые нейтрали вместо
-     серых: --hue сдвинут в янтарно-коричневую зону (было 250 — нейтрально-
-     синеватый), --chroma-ui чуть поднят, чтобы подтон реально читался, не
-     терялся. Дешёвый и сильный рычаг: --bg/--fg/--surface/--muted/--border
-     ниже ничего не знают про "тепло" явно — все выведены color-mix()'ом из
-     --bg/--fg, поэтому один сдвиг --hue прогревает ВСЮ палитру разом. */
-		--hue: 55; /* нейтральный/UI-тон — тёплый янтарь, не синеватый серый */
+       Этап 70 — генератор палитры (src/ui/theme/palette-generator.js,
+       applyCustomPalette). Каждый токен ниже — light-dark(var(--X-light),
+       var(--X-dark)): ДВЕ ветки, выставленные JS ЦЕЛИКОМ готовыми oklch()-
+       строками (не color-mix() из --bg/--fg — тот приём убран, генератор
+       считает роль напрямую от lBg+дельта, см. DESIGN.md). Значения ниже —
+       build-time дефолт (совпадает с applyCustomPalette(DEFAULT_CUSTOM_PALETTE),
+       см. palette-apply.js) — то, что видно ДО первого запуска JS; после
+       загрузки JS выставляет те же custom properties инлайн-стилем на
+       :root, тот полностью перекрывает эти значения (выше специфичность).
+       light-dark() требует `color-scheme` (задан в `base`) — перевернуть
+       страницу или любой блок целиком — поставить на него `color-scheme:
+       light` / `dark`. */
 		--accent-hue: 265;
-		--chroma-ui: 0.022; /* едва заметный тёплый подтон в нейтралях */
+		/* --hue — алиас, не отдельная константа (была --hue:55, независимая от
+     accent-hue, "тёплый янтарь" — этап 70 сознательно объединил нейтрали и
+     акцент в один узел, см. CONTRACTS.md/DESIGN.md, решение подтверждено
+     пользователем). Используется --shadow ниже и custom.css (оверлеи/
+     градиенты) — держит их в тон общей палитре, а не в устаревшем hue. */
+		--hue: var(--accent-hue);
 
-		--bg: light-dark(
-			oklch(0.99 var(--chroma-ui) var(--hue)),
-			oklch(0.17 var(--chroma-ui) var(--hue))
-		);
-		--fg: light-dark(oklch(0.26 0.02 var(--hue)), oklch(0.92 0.015 var(--hue)));
-		--surface: color-mix(in oklch, var(--bg), var(--fg) 5%);
+		--bg-light: oklch(0.99 0.004 var(--accent-hue));
+		--bg-dark: oklch(0.17 0.022 var(--accent-hue));
+		--bg: light-dark(var(--bg-light), var(--bg-dark));
+
+		--surface-light: oklch(0.94 0.022 var(--accent-hue));
+		--surface-dark: oklch(0.22 0.022 var(--accent-hue));
+		--surface: light-dark(var(--surface-light), var(--surface-dark));
+
 		/* Приподнятые элементы (карточки поверх surface — этап 34, auth-layout) —
      раньше жил ЛОКАЛЬНО только в .auth-layout с фолбэком var(--surface-raised,
      var(--surface)) в паре мест (call-overlay); теперь глобальный токен —
      один источник истины для всего приложения. */
-		--surface-raised: color-mix(in oklch, var(--surface), var(--fg) 6%);
-		--muted: color-mix(in oklch, var(--fg), var(--bg) 45%);
-		--border: color-mix(in oklch, var(--bg), var(--fg) 18%);
+		--surface-raised-light: oklch(0.88 0.022 var(--accent-hue));
+		--surface-raised-dark: oklch(0.28 0.022 var(--accent-hue));
+		--surface-raised: light-dark(var(--surface-raised-light), var(--surface-raised-dark));
+
+		--border-light: oklch(0.83 0.022 var(--accent-hue));
+		--border-dark: oklch(0.33 0.022 var(--accent-hue));
+		--border: light-dark(var(--border-light), var(--border-dark));
+
+		--muted-light: oklch(0.54 0.022 var(--accent-hue));
+		--muted-dark: oklch(0.62 0.022 var(--accent-hue));
+		--muted: light-dark(var(--muted-light), var(--muted-dark));
+
+		--fg-light: oklch(0.27 0.0352 var(--accent-hue));
+		--fg-dark: oklch(0.89 0.0352 var(--accent-hue));
+		--fg: light-dark(var(--fg-light), var(--fg-dark));
 
 		/* --accent — "лампа" (VISUAL.md): тепло, исходящие сообщения, primary-
-     кнопки. Управляется ЦЕЛИКОМ через --accent-hue (settings.jsx, 14 именованных
-     точек — accent-palette.js) — палитра пользователя не завязана на один цвет. */
-		--accent: light-dark(
-			oklch(0.55 0.17 var(--accent-hue)),
-			oklch(0.74 0.15 var(--accent-hue))
-		);
-		--accent-contrast: oklch(0.99 0 0);
+     кнопки. Управляется ЦЕЛИКОМ через --accent-hue (settings.jsx — генератор
+     палитры, именованные пресеты + "Настроить", см. CONTRACTS.md этап 70). */
+		--accent-light: oklch(0.55 0.085 var(--accent-hue));
+		--accent-dark: oklch(0.74 0.085 var(--accent-hue));
+		--accent: light-dark(var(--accent-light), var(--accent-dark));
+		--accent-contrast-light: oklch(1 0 0);
+		--accent-contrast-dark: oklch(0.1 0 0);
+		--accent-contrast: light-dark(var(--accent-contrast-light), var(--accent-contrast-dark));
 		--accent-hover: color-mix(in oklch, var(--accent), black 12%);
 
 		/* --accent-2 — "сквозняк" (VISUAL.md): холодный контраст лампе — ссылки,
      кольцо фокуса, вторичные акценты. Смещение hue на фиксированный угол
-     (не жёсткий цвет) — тёплый/холодный конфликт остаётся при ЛЮБОЙ из 14
-     палитр accent-hue, не только при "фабричном" коричнево-янтарном варианте. */
+     (не жёсткий цвет) — тёплый/холодный конфликт остаётся при ЛЮБОМ accentHue. */
 		--accent-2-hue: calc(var(--accent-hue) + 150);
-		--accent-2: light-dark(
-			oklch(0.58 0.13 var(--accent-2-hue)),
-			oklch(0.72 0.13 var(--accent-2-hue))
-		);
+		--accent-2-light: oklch(0.53 0.0765 var(--accent-2-hue));
+		--accent-2-dark: oklch(0.72 0.0765 var(--accent-2-hue));
+		--accent-2: light-dark(var(--accent-2-light), var(--accent-2-dark));
 		--accent-2-contrast: oklch(0.99 0 0);
 		--accent-2-hover: color-mix(in oklch, var(--accent-2), black 12%);
+
+		/* Служебные тона (ошибка/предупреждение/успех/инфо) — раньше существовали
+     ТОЛЬКО как фолбэк-литералы var(--bad, oklch(...)) в ~50 местах по коду
+     (сам токен нигде не был объявлен). Этап 70 — реальные токены, те же
+     h/c-константы, что уже были в фолбэках (не выдуманы заново), L пересчитан
+     под контраст WCAG на обеих полярностях (см. DESIGN.md, инвариант И1). */
+		--bad-light: oklch(0.5 0.0725 25);
+		--bad-dark: oklch(0.68 0.2 25);
+		--bad: light-dark(var(--bad-light), var(--bad-dark));
+		--bad-surface-light: oklch(0.94 0.024 25);
+		--bad-surface-dark: oklch(0.22 0.0319 25);
+		--bad-surface: light-dark(var(--bad-surface-light), var(--bad-surface-dark));
+		--bad-edge-light: oklch(0.83 0.09 25);
+		--bad-edge-dark: oklch(0.33 0.0478 25);
+		--bad-edge: light-dark(var(--bad-edge-light), var(--bad-edge-dark));
+
+		--warn-light: oklch(0.5 0.0725 85);
+		--warn-dark: oklch(0.66 0.1 85);
+		--warn: light-dark(var(--warn-light), var(--warn-dark));
+		--warn-surface-light: oklch(0.94 0.024 85);
+		--warn-surface-dark: oklch(0.22 0.0319 85);
+		--warn-surface: light-dark(var(--warn-surface-light), var(--warn-surface-dark));
+		--warn-edge-light: oklch(0.83 0.09 85);
+		--warn-edge-dark: oklch(0.33 0.0478 85);
+		--warn-edge: light-dark(var(--warn-edge-light), var(--warn-edge-dark));
+
+		--good-light: oklch(0.48 0.0696 145);
+		--good-dark: oklch(0.65 0.15 145);
+		--good: light-dark(var(--good-light), var(--good-dark));
+		--good-surface-light: oklch(0.94 0.024 145);
+		--good-surface-dark: oklch(0.22 0.0319 145);
+		--good-surface: light-dark(var(--good-surface-light), var(--good-surface-dark));
+		--good-edge-light: oklch(0.83 0.09 145);
+		--good-edge-dark: oklch(0.33 0.0478 145);
+		--good-edge: light-dark(var(--good-edge-light), var(--good-edge-dark));
+
+		--info-light: oklch(0.48 0.0696 235);
+		--info-dark: oklch(0.66 0.1 235);
+		--info: light-dark(var(--info-light), var(--info-dark));
+		--info-surface-light: oklch(0.94 0.024 235);
+		--info-surface-dark: oklch(0.22 0.0319 235);
+		--info-surface: light-dark(var(--info-surface-light), var(--info-surface-dark));
+		--info-edge-light: oklch(0.83 0.09 235);
+		--info-edge-dark: oklch(0.33 0.0478 235);
+		--info-edge: light-dark(var(--info-edge-light), var(--info-edge-dark));
 
 		/* ---- Форма, глубина, движение ----------------------------------- */
 		--radius: 0.625rem; /* "уютные" скруглённые углы (было 0 — острые) */

@@ -85,7 +85,7 @@ function useServiceWorker() {
 }
 
 function dbTone(state) {
-	if (state.startsWith("открыта")) return "var(--ok)";
+	if (state.startsWith("открыта")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -101,7 +101,7 @@ function useDatabaseStatus() {
 }
 
 function cacheTone(state) {
-	if (state.startsWith("ugolok-cache-")) return "var(--ok)";
+	if (state.startsWith("ugolok-cache-")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -138,7 +138,7 @@ function useCacheStatus() {
 }
 
 function coreLogicTone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -195,7 +195,7 @@ function useCoreLogicStatus() {
 }
 
 function stage5Tone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -230,7 +230,7 @@ function useOutboxStatus() {
 function releaseHashTone(state) {
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	if (state.startsWith("пропущено")) return "var(--muted)";
-	return "var(--ok)";
+	return "var(--good)";
 }
 
 function useReleaseHashStatus() {
@@ -256,7 +256,7 @@ function useReleaseHashStatus() {
 }
 
 function nip06Tone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -289,7 +289,7 @@ function useNip06Status() {
 }
 
 function keystoreTone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -334,7 +334,7 @@ function useKeystoreStatus() {
 }
 
 function nip9Tone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -381,19 +381,19 @@ function useSignCryptoStatus() {
 }
 
 function cryptoWorkerTone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
 
 function pSpikeTone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
 
 function transportSyncTone(state) {
-	if (state.startsWith("ok")) return "var(--ok)";
+	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
 	return "var(--muted)";
 }
@@ -614,7 +614,7 @@ function useTransportSyncCheck() {
 }
 
 function Row({ c }) {
-	const tone = c.ok ? "var(--ok)" : c.critical ? "var(--bad)" : "var(--warn)";
+	const tone = c.ok ? "var(--good)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
 	return (
 		<li
@@ -732,8 +732,8 @@ export default function Diagnostics() {
 					paddingBlock: "var(--space-s)",
 					paddingInline: "var(--space-m)",
 					background: "var(--surface)",
-					borderInlineStart: `3px solid ${pass ? "var(--ok)" : "var(--bad)"}`,
-					color: pass ? "var(--ok)" : "var(--bad)",
+					borderInlineStart: `3px solid ${pass ? "var(--good)" : "var(--bad)"}`,
+					color: pass ? "var(--good)" : "var(--bad)",
 				}}
 			>
 				{pass

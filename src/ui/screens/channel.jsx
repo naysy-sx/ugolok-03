@@ -116,7 +116,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 	return (
 		<form class="stack channel-settings-form" onSubmit={handleSave} style={{ "--gap": "var(--space-s)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -139,7 +139,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for="edit-channel-avatar">{t("channel.settings.changeAvatarLabel")}</label>
 				<input id="edit-channel-avatar" type="file" accept="image/*" onChange={handleAvatarSelected} />
-				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
+				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
 			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
@@ -207,7 +207,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	return (
 		<form class="card box stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -292,7 +292,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 			)}
 			<div class="stack grow" style={{ "--gap": "var(--space-2xs)" }}>
 				{error && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{error}
 					</p>
 				)}
@@ -543,7 +543,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				}}
 			/>
 			{error && (
-				<p role="alert" class="box" style={{ "--pad": "var(--space-m)", color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" class="box" style={{ "--pad": "var(--space-m)", color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -686,7 +686,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	if (!channelRow) {
 		return (
 			<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={t("channel.unavailableTitle")}>
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{t("channel.unavailableMessage")}
 				</p>
 			</Screen>
@@ -711,7 +711,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				</details>
 			)}
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

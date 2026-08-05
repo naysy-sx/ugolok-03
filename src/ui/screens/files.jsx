@@ -646,7 +646,7 @@ export default function Files() {
 					</form>
 				)}
 				{error && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{error}
 					</p>
 				)}
@@ -666,7 +666,7 @@ export default function Files() {
 					</div>
 				)}
 				{uploadError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{uploadError}
 					</p>
 				)}
@@ -840,7 +840,7 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 				</ul>
 			)}
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

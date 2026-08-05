@@ -51,7 +51,7 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
           <button type="submit">{t("common.confirm")}</button>
           <button type="button" onClick={handleCancel}>{t("common.cancel")}</button>
           {error && (
-            <p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+            <p role="alert" style={{ color: "var(--bad)" }}>
               {error}
             </p>
           )}

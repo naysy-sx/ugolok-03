@@ -11,6 +11,8 @@ import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-tab
 import { UI_SETTINGS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { detectSystemLocale } from "./locale-detection.js";
 import { DomainError } from "../errors.js";
+import { DEFAULT_CUSTOM_PALETTE } from "../../ui/theme/palette-apply.js";
+import { nudgeHueOutOfForbiddenZones } from "../../ui/theme/palette-generator.js";
 
 // F-SY-03 (TECH.md) — d-tag='settings' буквально, не opaque (не privacy-чувствительно,
 // тот же принцип, что read-status/drafts этапа 26).
@@ -36,7 +38,13 @@ export const DEFAULT_NOTIFICATIONS = {
 };
 
 export const DEFAULT_SETTINGS = {
-	accentColorId: "blue",
+	// Этап 70 — accentColorId (14 именованных пресетов) убран как активное поле:
+	// заменён customPalette (генератор палитры). НЕ добавлен сюда как "customPalette:
+	// DEFAULT_CUSTOM_PALETTE" — null означает "пользователь ничего не выбирал",
+	// build-дефолт применяется на уровне applyCustomPalette (см. CONTRACTS.md,
+	// этап 70), не здесь, иначе новый аккаунт и "явно выбрал дефолтный пресет"
+	// стали бы неотличимы.
+	customPalette: null,
 	uiScale: "medium",
 	themeMode: null, // null = "как в системе" (prefers-color-scheme); "light"|"dark" = явный выбор
 	language: "ru",
@@ -47,6 +55,39 @@ export const DEFAULT_SETTINGS = {
 	selfHostedServer: null, // null | {host, port, token, fingerprint, pairedAt} — Этап 63, И3
 };
 
+// Этап 70 — МИНИМАЛЬНАЯ таблица только для одноразовой миграции старого
+// accentColorId (14 пресетов accent-palette.js, файл удалён вместе со
+// свотч-кнопками в settings.jsx) в customPalette нового генератора палитры.
+// Никаких label/UI-полей — та часть ушла безвозвратно, тут только hue,
+// нужный чтобы не потерять уже сделанный пользователем выбор цвета.
+const LEGACY_ACCENT_HUES = {
+	blue: 255,
+	indigo: 275,
+	sky: 230,
+	teal: 185,
+	cyan: 200,
+	lavender: 290,
+	violet: 305,
+	terracotta: 35,
+	amber: 75,
+	peach: 45,
+	saffron: 85,
+	orange: 55,
+	olive: 115,
+	moss: 140,
+};
+
+// Одноразовая миграция: уже установленный customPalette (явный выбор
+// пользователя, в том числе после первой миграции) — приоритетнее и не
+// перезаписывается. Неизвестный/битый accentColorId — не мигрирует, не падает
+// (customPalette остаётся null, build-дефолт подставится на уровне applyCustomPalette).
+function migrateAccentColorId(parsed) {
+	if (parsed.customPalette) return parsed.customPalette;
+	const legacyHue = LEGACY_ACCENT_HUES[parsed.accentColorId];
+	if (legacyHue === undefined) return null;
+	return { cNeutral: DEFAULT_CUSTOM_PALETTE.cNeutral, accentHue: nudgeHueOutOfForbiddenZones(legacyHue) };
+}
+
 // Глубокое слияние с дефолтом — старый/неполный payload (например, сохранённый до
 // добавления нового вложенного поля) не должен терять остальное дерево notifications.
 function mergeWithDefaults(parsed) {
@@ -54,6 +95,7 @@ function mergeWithDefaults(parsed) {
 	return {
 		...DEFAULT_SETTINGS,
 		...parsed,
+		customPalette: migrateAccentColorId(parsed),
 		notifications: {
 			...DEFAULT_NOTIFICATIONS,
 			...notifications,

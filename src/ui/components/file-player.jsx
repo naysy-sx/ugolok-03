@@ -95,7 +95,7 @@ export default function FilePlayer({ digest, ownerPubkey, onClose }) {
 		>
 			<div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "100%", maxHeight: "100%" }}>
 				{error && (
-					<p role="alert" style={{ color: "#fff", background: "var(--bad, oklch(0.58 0.21 25))", padding: "var(--space-s)", borderRadius: "var(--radius)" }}>
+					<p role="alert" style={{ color: "#fff", background: "var(--bad)", padding: "var(--space-s)", borderRadius: "var(--radius)" }}>
 						{error}
 					</p>
 				)}

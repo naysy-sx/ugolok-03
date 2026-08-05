@@ -71,7 +71,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 
 	return (
 		<form class="stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit}>
-			<p style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+			<p style={{ color: "var(--bad)" }}>
 				{t("settings.deleteAccount.warningBeforeStrong")} <strong>{t("settings.deleteAccount.warningStrong")}</strong> {t("settings.deleteAccount.warningAfterStrong")}
 			</p>
 			<label>
@@ -83,7 +83,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 				<input type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} disabled={busy} required autoComplete="current-password" />
 			</label>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

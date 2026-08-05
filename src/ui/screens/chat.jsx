@@ -136,12 +136,12 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 			    (app.jsx, ConnectionStatusPanel) — видна на любом экране (пользователь,
 			    item 4). */}
 			{connectionError && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{connectionError}
 				</p>
 			)}
 			{listError && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{listError}
 				</p>
 			)}
@@ -215,7 +215,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 										<span
 											aria-label={t("chat.list.unreadAria", { count: unreadByPartner[pubkey] })}
 											style={{
-												background: "var(--bad, oklch(0.58 0.21 25))",
+												background: "var(--bad)",
 												color: "white",
 												borderRadius: "999px",
 												padding: "0 var(--space-3xs)",
@@ -768,7 +768,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			}
 		>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

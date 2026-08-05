@@ -155,11 +155,11 @@ button:has(> .icon),
    первичным CTA) вперемешку с красным текстом (было раньше — читалось
    как баг, синяя кнопка с красной надписью). */
 .btn--danger {
-	color: var(--bad, oklch(0.58 0.21 25));
-	border-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 55%);
+	color: var(--bad);
+	border-color: color-mix(in oklch, var(--bad), transparent 55%);
 }
 .btn--danger:hover {
-	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 88%);
+	background-color: color-mix(in oklch, var(--bad), transparent 88%);
 }
 .btn--ghost:hover {
 	background-color: var(--surface-raised);
@@ -806,7 +806,7 @@ button:has(> .icon),
 	width: 0.6em;
 	height: 0.6em;
 	border-radius: 50%;
-	background-color: var(--bad, oklch(0.58 0.21 25));
+	background-color: var(--bad);
 	animation: recording-pulse 1.2s ease-in-out infinite;
 }
 @keyframes recording-pulse {
@@ -1386,10 +1386,10 @@ button:has(> .icon),
 	cursor: pointer;
 }
 .call-btn-accept {
-	background: var(--good, oklch(0.6 0.16 145));
+	background: var(--good);
 }
 .call-btn-reject {
-	background: var(--bad, oklch(0.58 0.21 25));
+	background: var(--bad);
 }
 
 @keyframes call-pulse {
@@ -1417,18 +1417,18 @@ button:has(> .icon),
 	height: 2.25rem;
 	border-radius: 50%;
 	background: var(--surface-raised, var(--surface));
-	border: 2px solid var(--good, oklch(0.6 0.16 145));
+	border: 2px solid var(--good);
 	flex-shrink: 0;
 }
 
 .call-bar-reconnecting .call-bar-avatar {
-	border-color: var(--warn, oklch(0.75 0.15 85));
+	border-color: var(--warn);
 }
 
 .call-bar-hangup {
 	/* .row (раскладка) уже в JSX. */
 	margin-inline-start: auto;
-	background: var(--bad, oklch(0.58 0.21 25));
+	background: var(--bad);
 	color: white;
 	border: none;
 	border-radius: 50%;
@@ -1920,13 +1920,13 @@ button:has(> .icon),
    утилитарные классы (не только для неё), тот же oklch-inline-fallback
    приём, что уже используется точечно по проекту (var(--bad, oklch(...))). */
 .status-ok {
-	color: var(--good, oklch(0.6 0.15 145));
+	color: var(--good);
 }
 .status-warn {
-	color: var(--warn, oklch(0.75 0.15 85));
+	color: var(--warn);
 }
 .status-bad {
-	color: var(--bad, oklch(0.58 0.21 25));
+	color: var(--bad);
 }
 
 /* Панель статуса соединения (пользователь, item 4) — постоянно под главным
@@ -2081,8 +2081,8 @@ button:has(> .icon),
 	background-color: color-mix(in oklch, var(--accent-2), transparent 84%);
 }
 .jtype--bad {
-	color: var(--bad, oklch(0.58 0.21 25));
-	background-color: color-mix(in oklch, var(--bad, oklch(0.58 0.21 25)), transparent 84%);
+	color: var(--bad);
+	background-color: color-mix(in oklch, var(--bad), transparent 84%);
 }
 
 .jbody {
@@ -2194,7 +2194,7 @@ button:has(> .icon),
 	background-color: var(--surface);
 }
 .menu__pop button.danger {
-	color: var(--bad, oklch(0.58 0.21 25));
+	color: var(--bad);
 }
 .menu-check input {
 	width: auto;

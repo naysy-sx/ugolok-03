@@ -77,7 +77,7 @@ function ImageAttachment({ attachment }) {
 
 	if (error) {
 		return (
-			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+			<p role="alert" style={{ color: "var(--bad)" }}>
 				{t("attachment.imageLoadError", { error })}
 			</p>
 		);
@@ -140,7 +140,7 @@ function AudioAttachment({ attachment }) {
 
 	if (error) {
 		return (
-			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+			<p role="alert" style={{ color: "var(--bad)" }}>
 				{t("attachment.audioLoadError", { error })}
 			</p>
 		);
@@ -188,7 +188,7 @@ function VideoAttachment({ attachment }) {
 
 	if (error) {
 		return (
-			<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+			<p role="alert" style={{ color: "var(--bad)" }}>
 				{t("attachment.videoLoadError", { error })}
 			</p>
 		);
@@ -263,7 +263,7 @@ export function AttachmentDownloadLink({ attachment }) {
 				<Icon /> {busy ? t("attachment.downloading") : t("attachment.download")} {attachmentDisplayName(attachment)} ({formatFileSize(attachment.size)})
 			</button>
 			{error && (
-				<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<small role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</small>
 			)}

@@ -100,7 +100,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 				</span>
 			)}
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

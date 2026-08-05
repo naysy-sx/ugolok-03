@@ -52,7 +52,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 	return (
 		<form class="stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -128,7 +128,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	return (
 		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

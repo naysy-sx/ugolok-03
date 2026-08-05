@@ -2,7 +2,7 @@
 // форсировал тёмную тему кодом ("не надо так"), но переключатель наверху приложения
 // стоит добавить. mode: "light" | "dark" | null (null = "как в системе", data-theme
 // не выставляется вовсе — light-dark() в minimal.css решает по prefers-color-scheme,
-// как было всегда). Тот же приём DI/применения, что accent-palette.js/ui-scale.js.
+// как было всегда). Тот же приём DI/применения, что palette-apply.js/ui-scale.js.
 export function applyThemeMode(mode) {
 	if (mode === "light" || mode === "dark") {
 		document.documentElement.setAttribute("data-theme", mode);

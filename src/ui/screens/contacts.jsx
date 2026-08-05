@@ -265,7 +265,7 @@ export default function Contacts() {
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
 				    здесь дублировать незачем (пользователь, item 4). */}
 				{connectionError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{connectionError}
 					</p>
 				)}
@@ -289,7 +289,7 @@ export default function Contacts() {
 					</button>
 				</form>
 				{addError && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{addError}
 					</p>
 				)}
@@ -396,7 +396,7 @@ export default function Contacts() {
 						</button>
 					</form>
 					{groupError && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{groupError}
 						</p>
 					)}
@@ -410,7 +410,7 @@ export default function Contacts() {
 					<section class="stack card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--gap": "var(--space-s)" }}>
 						<h2 id="contacts-heading">{t("contacts.heading", { count: visibleContacts.length })}</h2>
 						{rowError && (
-							<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+							<p role="alert" style={{ color: "var(--bad)" }}>
 								{rowError}
 							</p>
 						)}

@@ -7,7 +7,8 @@ import { listAccounts } from "../../core/crypto/keystore.js";
 import { contacts, refreshContacts } from "../signals/contacts.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { ContactIdentity } from "./contacts.jsx";
-import { ACCENT_COLORS, applyAccentColor } from "../theme/accent-palette.js";
+import { DEFAULT_CUSTOM_PALETTE, applyCustomPalette } from "../theme/palette-apply.js";
+import { nudgeHueOutOfForbiddenZones } from "../theme/palette-generator.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import { SUPPORTED_LOCALES, setLocale, t, errorMessage } from "../signals/i18n.js";
 import Screen from "../components/screen.jsx";
@@ -24,6 +25,89 @@ const LEVEL_LABEL_KEYS = {
 };
 
 const DEFAULT_SENTINEL = "__default__";
+
+// Этап 70 — именованные пресеты-стартовые точки нового генератора палитры
+// (accent-palette.js/ACCENT_COLORS удалены целиком, см. CONTRACTS.md): только
+// hue, cNeutral пресет не трогает (остаётся текущим значением пользователя —
+// "Настроить" ниже позволяет донастроить обе оси после выбора стартовой точки).
+// Значения — вне запретных зон служебных тонов (ACCENT_FORBIDDEN_ZONES:
+// 25/85/145/235 ±20°), проверено расчётом при подборе.
+const PALETTE_PRESETS = [
+	{ id: "amber", hue: 55 },
+	{ id: "olive", hue: 115 },
+	{ id: "teal", hue: 175 },
+	{ id: "cyan", hue: 200 },
+	{ id: "indigo", hue: 265 },
+	{ id: "lavender", hue: 290 },
+	{ id: "purple", hue: 310 },
+	{ id: "magenta", hue: 330 },
+	{ id: "pink", hue: 350 },
+];
+
+// customPalette — всегда {cNeutral, accentHue}, никогда null (вызывающий код
+// settings.jsx уже подставляет DEFAULT_CUSTOM_PALETTE). onChange(next) — при
+// клике по пресету/движении любого слайдера.
+function PaletteSection({ customPalette, onChange }) {
+	const [showCustomize, setShowCustomize] = useState(false);
+	const instanceId = useId();
+
+	return (
+		<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+			<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.accentColorTitle")}</h2>
+			<div class="row" style={{ "--gap": "var(--space-s)", flexWrap: "wrap" }} role="group" aria-label={t("settings.accentColorTitle")}>
+				{PALETTE_PRESETS.map((p) => (
+					<button
+						key={p.id}
+						type="button"
+						aria-pressed={customPalette.accentHue === p.hue}
+						onClick={() => onChange({ cNeutral: customPalette.cNeutral, accentHue: p.hue })}
+						class="row"
+						style={{
+							"--gap": "var(--space-3xs)",
+							alignItems: "center",
+							border: customPalette.accentHue === p.hue ? "2px solid var(--fg)" : "var(--border-width) solid var(--border)",
+						}}
+					>
+						<span
+							aria-hidden="true"
+							style={{ display: "inline-block", width: "1.25rem", height: "1.25rem", borderRadius: "50%", background: `oklch(0.6 0.17 ${p.hue})` }}
+						/>
+						{t(`settings.palettePresets.${p.id}`)}
+					</button>
+				))}
+			</div>
+			<div>
+				<button type="button" aria-expanded={showCustomize} onClick={() => setShowCustomize(!showCustomize)}>
+					{t("settings.paletteCustomizeButton")}
+				</button>
+			</div>
+			{showCustomize && (
+				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+					<label for={`${instanceId}-palette-hue`}>{t("settings.paletteHueLabel")}</label>
+					<input
+						id={`${instanceId}-palette-hue`}
+						type="range"
+						min="0"
+						max="359"
+						step="1"
+						value={customPalette.accentHue}
+						onInput={(e) => onChange({ cNeutral: customPalette.cNeutral, accentHue: Number(e.currentTarget.value) })}
+					/>
+					<label for={`${instanceId}-palette-cneutral`}>{t("settings.paletteNeutralChromaLabel")}</label>
+					<input
+						id={`${instanceId}-palette-cneutral`}
+						type="range"
+						min="0"
+						max="0.035"
+						step="0.001"
+						value={customPalette.cNeutral}
+						onInput={(e) => onChange({ cNeutral: Number(e.currentTarget.value), accentHue: customPalette.accentHue })}
+					/>
+				</div>
+			)}
+		</section>
+	);
+}
 
 // Один select для дефолта категории/подкатегории (только 4 уровня, без "по умолчанию").
 function LevelSelect({ id, value, onChange, disabled }) {
@@ -78,7 +162,7 @@ export default function Settings() {
 	useEffect(() => {
 		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
 			setSettings(loaded);
-			applyAccentColor(loaded.accentColorId);
+			applyCustomPalette(loaded.customPalette);
 			applyUiScale(loaded.uiScale);
 			setLocale(loaded.language);
 		});
@@ -103,9 +187,14 @@ export default function Settings() {
 		}
 	}
 
-	function handleAccentClick(colorId) {
-		applyAccentColor(colorId); // мгновенный визуальный отклик, без ожидания записи в БД
-		persist({ ...settings, accentColorId: colorId });
+	// nudgeHueOutOfForbiddenZones — слайдер оттенка можно протащить курсором ЧЕРЕЗ
+	// запретную зону (браузер не мешает промежуточным значениям input[type=range]);
+	// без сдвига здесь applyCustomPalette->generatePalette бросил бы
+	// PaletteConfigError прямо во время перетаскивания.
+	function handlePaletteChange(next) {
+		const safe = { cNeutral: next.cNeutral, accentHue: nudgeHueOutOfForbiddenZones(next.accentHue) };
+		applyCustomPalette(safe); // мгновенный визуальный отклик, без ожидания записи в БД
+		persist({ ...settings, customPalette: safe });
 	}
 
 	function handleScaleChange(scaleId) {
@@ -114,7 +203,7 @@ export default function Settings() {
 	}
 
 	function handleLanguageChange(code) {
-		setLocale(code); // мгновенный визуальный отклик, тот же паттерн, что applyAccentColor
+		setLocale(code); // мгновенный визуальный отклик, тот же паттерн, что applyCustomPalette
 		persist({ ...settings, language: code });
 	}
 
@@ -199,7 +288,7 @@ export default function Settings() {
 		<Screen title={t("nav.settings")}>
 			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -215,37 +304,7 @@ export default function Settings() {
 				</select>
 			</section>
 
-			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.accentColorTitle")}</h2>
-				<div class="row" style={{ "--gap": "var(--space-s)" }} role="group" aria-label={t("settings.accentColorTitle")}>
-					{ACCENT_COLORS.map((c) => (
-						<button
-							key={c.id}
-							type="button"
-							aria-pressed={settings.accentColorId === c.id}
-							onClick={() => handleAccentClick(c.id)}
-							class="row"
-							style={{
-								"--gap": "var(--space-3xs)",
-								alignItems: "center",
-								border: settings.accentColorId === c.id ? "2px solid var(--fg)" : "var(--border-width) solid var(--border)",
-							}}
-						>
-							<span
-								aria-hidden="true"
-								style={{
-									display: "inline-block",
-									width: "1.25rem",
-									height: "1.25rem",
-									borderRadius: "50%",
-									background: `oklch(0.6 0.17 ${c.hue})`,
-								}}
-							/>
-							{c.label}
-						</button>
-					))}
-				</div>
-			</section>
+			<PaletteSection customPalette={settings.customPalette ?? DEFAULT_CUSTOM_PALETTE} onChange={handlePaletteChange} />
 
 			<section class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.language.sectionTitle")}</h2>

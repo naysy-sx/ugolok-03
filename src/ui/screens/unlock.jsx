@@ -4,7 +4,11 @@ import { getPublicKey } from "../../core/crypto/keys.js";
 import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile } from "../../core/crypto/keystore.js";
 import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
-import { login, setRememberedAccountId, getRememberedAccountId } from "../signals/auth.js";
+import { login, setRememberedAccountId, getRememberedAccountId, dbKeySig } from "../signals/auth.js";
+import { loadUiSettings } from "../../domain/settings/ui-settings.js";
+import { applyCustomPalette } from "../theme/palette-apply.js";
+import { applyUiScale } from "../theme/ui-scale.js";
+import { applyThemeMode } from "../theme/theme-mode.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
@@ -138,6 +142,22 @@ export default function Unlock() {
 			const account = accounts.find((a) => a.id === openLoginForId);
 			login(openLoginForId, account?.login ?? "", key);
 			setRememberedAccountId(openLoginForId);
+			// Найдено пользователем (баг) — тема/масштаб/акцент применялись только
+			// внутри MainShell'а ПОСЛЕ навигации (app.jsx), поэтому на секунду
+			// показывался build-дефолт вместо сохранённой темы ЭТОГО аккаунта.
+			// dbKeySig уже установлен синхронно внутри login() (deriveDbKey), поэтому
+			// можно прочитать/применить настройки СРАЗУ здесь, до navigate — MainShell
+			// применит их же повторно на mount, это идемпотентно, не проблема.
+			// Best-effort, в СВОЁМ try — пароль уже проверен выше (decryptPrivateKey
+			// не бросил), сбой здесь не должен ложно показать "неверный пароль".
+			try {
+				const loaded = await loadUiSettings(openLoginForId, dbKeySig.value);
+				applyCustomPalette(loaded.customPalette);
+				applyUiScale(loaded.uiScale);
+				applyThemeMode(loaded.themeMode);
+			} catch {
+				// не критично — MainShell попробует применить настройки ещё раз на mount
+			}
 			navigate("/main");
 		} catch {
 			setError(t("unlock.main.loginForm.wrongPasswordError"));
@@ -240,7 +260,7 @@ export default function Unlock() {
 					<h1>{t("app.name")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<p role="alert" style={{ color: "var(--bad)" }}>
 						{t("unlock.dbError.message")}
 					</p>
 					<p style={{ color: "var(--muted)" }}>
@@ -311,7 +331,7 @@ export default function Unlock() {
 						</button>
 					</div>
 					{error && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{error}
 						</p>
 					)}
@@ -354,7 +374,7 @@ export default function Unlock() {
 						</button>
 					</div>
 					{error && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{error}
 						</p>
 					)}
@@ -412,7 +432,7 @@ export default function Unlock() {
 						</button>
 					</div>
 					{error && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{error}
 						</p>
 					)}
@@ -446,7 +466,7 @@ export default function Unlock() {
 					</fieldset>
 					<button type="submit">{t("common.save")}</button>
 					{error && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{error}
 						</p>
 					)}
@@ -525,7 +545,7 @@ export default function Unlock() {
 					</ul>
 				</nav>
 				{error && (
-					<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))", margin: 0 }}>
+					<p role="alert" style={{ color: "var(--bad)", margin: 0 }}>
 						{error}
 					</p>
 				)}

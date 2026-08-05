@@ -50,7 +50,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	return (
 		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

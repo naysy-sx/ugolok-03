@@ -108,7 +108,7 @@ export default function Discovery() {
 		<Screen title={t("nav.discovery")}>
 			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -194,7 +194,7 @@ export default function Discovery() {
 											background: "none",
 											cursor: "pointer",
 											fontSize: "var(--step-2)",
-											color: sent ? "var(--ok, oklch(0.6 0.17 145))" : "var(--muted)",
+											color: sent ? "var(--good)" : "var(--muted)",
 										}}
 									>
 										{sent ? "✓" : "○"}

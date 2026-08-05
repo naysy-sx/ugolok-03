@@ -76,7 +76,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 				{title}
 			</h2>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -163,7 +163,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 				{t("profile.relay.heading")}
 			</h2>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -311,7 +311,7 @@ function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
 				{t("profile.selfHosted.heading")}
 			</h2>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -658,7 +658,7 @@ export default function Profile() {
 						{t("profile.chooseFromStorageButton")}
 					</button>
 					{avatarError && (
-						<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+						<p role="alert" style={{ color: "var(--bad)" }}>
 							{avatarError}
 						</p>
 					)}

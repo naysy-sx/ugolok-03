@@ -53,7 +53,7 @@ export default function AttachmentPreview({ file, position, onPositionChange, on
 				<span>{file.name}</span>
 				<small style={{ color: "var(--muted)" }}>{formatFileSize(file.size)}</small>
 				{error && (
-					<small role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+					<small role="alert" style={{ color: "var(--bad)" }}>
 						{error}
 					</small>
 				)}

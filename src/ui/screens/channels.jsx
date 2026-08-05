@@ -179,7 +179,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 		<form class="stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
 			<h2>{t("channels.create.title")}</h2>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
@@ -221,7 +221,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-avatar`}>{t("channels.create.avatarLabel")}</label>
 				<input id={`${instanceId}-avatar`} type="file" accept="image/*" onChange={handleAvatarSelected} />
-				{avatarFile && <small style={{ color: avatarError ? "var(--bad, oklch(0.58 0.21 25))" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
+				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
 			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
@@ -326,7 +326,7 @@ function ChannelsList() {
 			}
 		>
 			{error && (
-				<p role="alert" style={{ color: "var(--bad, oklch(0.58 0.21 25))" }}>
+				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}

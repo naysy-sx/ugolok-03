@@ -16,7 +16,7 @@ import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
-import { applyAccentColor } from "./ui/theme/accent-palette.js";
+import { applyCustomPalette } from "./ui/theme/palette-apply.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
 import { applyThemeMode, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { setLocale, t } from "./ui/signals/i18n.js";
@@ -79,7 +79,7 @@ function MainShell() {
 	// не только theme, заодно закрывает тот же пробел для accent/scale.
 	useEffect(() => {
 		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
-			applyAccentColor(loaded.accentColorId);
+			applyCustomPalette(loaded.customPalette);
 			applyUiScale(loaded.uiScale);
 			applyThemeMode(loaded.themeMode);
 			setThemeMode(loaded.themeMode);

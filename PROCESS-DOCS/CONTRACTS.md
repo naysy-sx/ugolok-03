@@ -10806,3 +10806,138 @@ elements, utilities, composition;`).
 переименование `.measure`→`.center`) закрыт — весь `src/ui` теперь на
 слое `composition`, временной коллизии имён `.center`/`.measure` больше
 не существует.
+
+## Этап 70 — генератор палитры (`src/ui/theme/palette-generator.js`)
+
+Формализация и обоснование решений — DESIGN.md, "Этап 70". Здесь —
+только публичный контракт для дальнейших этапов (UI/применение).
+
+```js
+/**
+ * @typedef {{
+ *   dir: -1 | 1,        // -1 светлая, 1 тёмная
+ *   lBg: number,        // dir=1: [0.12,0.24]; dir=-1: [0.93,0.995]
+ *   cNeutral: number,   // [0, 0.035]
+ *   accentHue: number,  // [0, 360), вне запретных зон (см. ACCENT_FORBIDDEN_ZONES)
+ * }} PaletteConfig
+ */
+
+/** Throws PaletteConfigError, если accentHue в запретной зоне или любое
+ *  поле вне диапазона (валидация — часть контракта, не best-effort). */
+export function generatePalette(config: PaletteConfig): Record<string, string>
+
+/** [{ hue: number, halfWidth: number }] — центры и полуширина запретных
+ *  зон вокруг служебных тонов (25/85/145/235 ± 20°), экспортируется для
+ *  UI-слайдера (чтобы визуально исключить недоступные секторы круга). */
+export const ACCENT_FORBIDDEN_ZONES: { hue: number, halfWidth: number }[]
+
+export class PaletteConfigError extends Error {}
+```
+
+**Возвращаемый объект** — плоская карта `--имя-токена → готовая CSS-
+строка цвета` (`oklch(L C H)`, абсолютный синтаксис, НЕ `oklch(from
+...)` — см. DESIGN.md почему). Полный список ключей: `--bg`,
+`--surface`, `--surface-raised`, `--border`, `--muted`, `--fg`,
+`--accent`, `--accent-contrast`, `--accent-2`, `--accent-2-hue`,
+`--bad`, `--bad-surface`, `--bad-edge`, `--warn`, `--warn-surface`,
+`--warn-edge`, `--good`, `--good-surface`, `--good-edge`, `--info`,
+`--info-surface`, `--info-edge`. `--accent-hover`/`--accent-2-hover`
+НЕ входят (остаются `color-mix()`-выражениями в CSS, зависят только от
+`--accent`/`--accent-2`, не от `config` напрямую).
+
+**Применение — РЕШЕНО (спросил пользователя, не угадано, см. диалог):**
+слайдер крутит `cNeutral`/`accentHue` СРАЗУ для обеих полярностей темы
+(общие — как сейчас единый `--accent-hue` в `light-dark()`); `lBg`
+пользователю НЕ выдаётся — это два build-time зафиксированных значения,
+по одному на полярность (`BUILD_LBG_LIGHT`, `BUILD_LBG_DARK`, оба —
+проверенные И1 отдельные точки внутри уже верифицированных диапазонов
+`generatePalette`, не новый параметр). Значит `customPalette`, который
+реально хранится в `uiSettings`, — НЕ `PaletteConfig` целиком, а его
+подмножество:
+```js
+/** @typedef {{ cNeutral: number, accentHue: number }} CustomPaletteConfig */
+```
+Применение — генерирует ОБЕ ветки сразу и раскладывает их в
+раздельные custom-properties с суффиксом полярности, а не в одно плоское
+имя (потому что CSS уже переключает ветки сам через `light-dark()`,
+основываясь на `prefers-color-scheme`/`data-theme` — JS не обязан
+знать текущую активную полярность и не должен пересчитывать палитру
+при переключении темы, только при изменении cNeutral/accentHue):
+```js
+export function applyCustomPalette({ cNeutral, accentHue }) {
+  const light = generatePalette({ dir: -1, lBg: BUILD_LBG_LIGHT, cNeutral, accentHue });
+  const dark = generatePalette({ dir: 1, lBg: BUILD_LBG_DARK, cNeutral, accentHue });
+  const root = document.documentElement.style;
+  for (const [name, value] of Object.entries(light)) {
+    if (name.endsWith("-hue")) { root.setProperty(name, value); continue; } // --accent-2-hue общий, не раздваивается
+    root.setProperty(name + "-light", value);
+  }
+  for (const [name, value] of Object.entries(dark)) {
+    if (name.endsWith("-hue")) continue;
+    root.setProperty(name + "-dark", value);
+  }
+}
+```
+`src/styles/minimal.css` должен для каждого генерируемого токена (`--bg`,
+`--surface`, `--surface-raised`, `--border`, `--muted`, `--fg`,
+`--accent`, `--accent-contrast`, `--accent-2`, `--bad(-surface/-edge)`,
+`--warn(...)`, `--good(...)`, `--info(...)`) определить его как
+`light-dark(var(--ИМЯ-light), var(--ИМЯ-dark))` — правка CSS-архитектуры,
+не только JS-подэтап (см. отдельную задачу очистки минимал.css).
+
+**Build-time дефолт (спросил пользователя — применяется ВСЕГДА, даже
+без единого явного действия пользователя, а не только после первого
+сохранения):**
+```js
+export const BUILD_LBG_LIGHT = 0.99; // = текущий --bg light-ветка (минимал.css)
+export const BUILD_LBG_DARK = 0.17;  // = текущий --bg dark-ветка
+export const DEFAULT_CUSTOM_PALETTE = { cNeutral: 0.022, accentHue: 265 };
+// 0.022 = текущий --chroma-ui, 265 = текущий --accent-hue — на дефолтных
+// значениях applyCustomPalette воспроизводит СЕГОДНЯШНИЙ --accent/--bg
+// побитово; расхождение с сегодняшним видом только в одном месте — старый
+// --hue:55 (тёплый янтарь) у нейтралей был НЕЗАВИСИМ от --accent-hue,
+// новый генератор всегда красит нейтрали в тон accentHue (единый узел
+// вместо двух) — пользователь осознанно принял этот компромисс
+// ("сразу build-дефолт генератора", не "null = старый CSS как есть").
+```
+`applyCustomPalette` вызывается ВСЕГДА при загрузке настроек (boot),
+включая случай `customPalette === null` — тогда аргумент —
+`DEFAULT_CUSTOM_PALETTE`, не no-op. `--hue` (используется `--shadow` и,
+возможно, другими некрашенными по токенам местами) — становится
+алиасом `var(--accent-hue)`, не отдельной константой 55, чтобы тень и
+подобные тёплые акценты оставались в тон общей палитре, а не жили в
+устаревшем захардкоженном hue.
+
+**Пересмотрено при реализации (нашёл коллизию, не гипотеза, затем
+пользователь подтвердил решение):** 5 из 14 существующих
+`ACCENT_COLORS` (`sky`=230, `terracotta`=35, `amber`=75, `saffron`=85,
+`moss`=140 — проверено скриптом) попадают в запретные зоны нового
+генератора (25/85/145/235 ±20°) — легаси-пресеты не могли бы
+маршрутизироваться через `generatePalette` без потерь. Пользователь
+решил проще: **старый механизм убирается целиком**
+(`accent-palette.js`/`ACCENT_COLORS`/свотч-кнопки в settings.jsx —
+подэтап UI), не сохраняется параллельно.
+
+`uiSettings.accentColorId` (старое строковое поле) остаётся в
+`DEFAULT_SETTINGS`/`mergeWithDefaults` только для ЧТЕНИЯ уже
+сохранённых у пользователей kind:30072-событий (одноразовая миграция
+при первой загрузке после апдейта: если `customPalette` не задан, а
+`accentColorId` есть — построить `CustomPaletteConfig` из
+build-дефолтного `cNeutral` и hue старого пресета (нужна МИНИМАЛЬНАЯ
+id→hue таблица для миграции — те же 14 значений, что были в
+`ACCENT_COLORS`, но без `label`/UI-полей, живёт рядом с миграцией, не
+экспортируется публично), при коллизии hue с запретной зоной — сдвинуть
+к ближайшему разрешённому краю зоны, не отказывать пользователю в
+переезде). Новое единственное поле конфигурации —
+`customPalette: CustomPaletteConfig | null`, `null` только для
+АБСОЛЮТНО нового аккаунта без сохранённого `accentColorId` (тогда —
+build-дефолт `CustomPaletteConfig`, не "нет цвета"). Миграция —
+один раз при `loadUiSettings`/`mergeWithDefaults`, не откладывается в
+фоновую сосуществующую систему.
+
+**Тестовый контракт** — `tests/palette-generator.test.js` проверяет
+И1 (DESIGN.md) через `tests/helpers/oklch-contrast.js` (OKLCH→
+относительная яркость WCAG, без внешних зависимостей в рантайм-бандле).
+Любое изменение таблицы дельт/служебных тонов обязано пройти этот файл
+без снижения порога контраста — регресс здесь равносилен регрессу
+любого другого протокольного инварианта проекта.
