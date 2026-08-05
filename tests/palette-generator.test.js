@@ -119,6 +119,13 @@ test("И1 — контраст и гамма для ВСЕХ допустимы�
 			["fg/bg >= 4.5", oklchContrastRatio(parsed["--fg"], bg), 4.5],
 			["muted/bg >= 3.0", oklchContrastRatio(parsed["--muted"], bg), 3.0],
 			["accent-contrast/accent >= 4.5", oklchContrastRatio(parsed["--accent-contrast"], parsed["--accent"]), 4.5],
+			// accent/bg >= 3.0 — этап 70-довесок: --accent используется как ЦВЕТ
+			// ТЕКСТА крупных заголовков (.app-layout .header-actions h1,
+			// custom.css), не только как фон кнопки (там за контраст отвечает
+			// accent-contrast/accent выше). Порог 3.0 — WCAG для КРУПНОГО текста
+			// (h1, --step-5), не 4.5 (обычный текст) — это было бы неверным
+			// порогом для этого случая использования.
+			["accent/bg >= 3.0 (крупный текст)", oklchContrastRatio(parsed["--accent"], bg), 3.0],
 			["bad/bg >= 4.5", oklchContrastRatio(parsed["--bad"], bg), 4.5],
 			["warn/bg >= 4.5", oklchContrastRatio(parsed["--warn"], bg), 4.5],
 			["good/bg >= 4.5", oklchContrastRatio(parsed["--good"], bg), 4.5],

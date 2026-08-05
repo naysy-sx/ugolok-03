@@ -63,7 +63,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 
 	if (!open) {
 		return (
-			<button type="button" class="btn--danger" onClick={handleOpen}>
+			<button type="button" class="btn--ghost btn--danger" onClick={handleOpen}>
 				{t("settings.deleteAccount.openButton")}
 			</button>
 		);
@@ -88,7 +88,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 				</p>
 			)}
 			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-				<button type="submit" class="btn--danger" disabled={busy}>
+				<button type="submit" class="btn--ghost btn--danger" disabled={busy}>
 					{busy ? t("settings.deleteAccount.deletingButton") : t("settings.deleteAccount.deletePermanentlyButton")}
 				</button>
 				<button type="button" class="btn--ghost" onClick={handleCancel} disabled={busy}>

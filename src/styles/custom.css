@@ -153,38 +153,47 @@ button:has(> .icon),
 /* Разрушительное действие (напр. "Удалить канал") — обводка+текст тем же
    цветом, что .menu__pop button.danger, не сплошная заливка (та за
    первичным CTA) вперемешку с красным текстом (было раньше — читалось
-   как баг, синяя кнопка с красной надписью). */
-.btn--danger {
+   как баг, синяя кнопка с красной надписью).
+   ВСЕГДА в паре с .btn--ghost, не отдельным классом — составной селектор
+   .btn--ghost.btn--danger (специфичность 0,2,0) обязателен по двум
+   причинам, обе найдены пользователем живьём: (1) многие контейнеры
+   задают ".такой-то button { color: var(--fg) }" — класс+тег (0,1,1) —
+   специфичнее одиночного .btn--danger (0,1,0) и тихо перебивал цвет
+   (.action-buttons/.contact-row-actions/.message-bubble-meta и т.п.);
+   (2) .btn--ghost:hover ниже тоже (0,2,0) — при равной специфичности с
+   прежним одиночным .btn--danger:hover побеждал ПОСЛЕДНИЙ по тексту
+   файла (.btn--ghost:hover), молча гася цветной hover. Составной
+   селектор перевешивает оба конфликта разом. */
+.btn--ghost.btn--danger {
 	color: var(--bad);
 	border-color: color-mix(in oklch, var(--bad), transparent 55%);
 }
-.btn--danger:hover {
+.btn--ghost.btn--danger:hover {
 	background-color: color-mix(in oklch, var(--bad), transparent 88%);
 }
 /* Этап 70-довесок — те же три модификатора, что .btn--danger, но для
    предупреждения/подтверждения-успеха/информационного действия (токены
    --warn/--good/--info появились в этом же этапе, раньше их не было —
-   отсюда только один .btn--danger существовал раньше). Комбинируются с
-   .btn--ghost тем же приёмом (обводка+текст, не сплошная заливка). */
-.btn--warn {
+   отсюда только один .btn--danger существовал раньше). */
+.btn--ghost.btn--warn {
 	color: var(--warn);
 	border-color: color-mix(in oklch, var(--warn), transparent 55%);
 }
-.btn--warn:hover {
+.btn--ghost.btn--warn:hover {
 	background-color: color-mix(in oklch, var(--warn), transparent 88%);
 }
-.btn--good {
+.btn--ghost.btn--good {
 	color: var(--good);
 	border-color: color-mix(in oklch, var(--good), transparent 55%);
 }
-.btn--good:hover {
+.btn--ghost.btn--good:hover {
 	background-color: color-mix(in oklch, var(--good), transparent 88%);
 }
-.btn--info {
+.btn--ghost.btn--info {
 	color: var(--info);
 	border-color: color-mix(in oklch, var(--info), transparent 55%);
 }
-.btn--info:hover {
+.btn--ghost.btn--info:hover {
 	background-color: color-mix(in oklch, var(--info), transparent 88%);
 }
 .btn--ghost:hover {
@@ -207,7 +216,13 @@ button:has(> .icon),
 	border-radius: var(--radius-full);
 	background: none;
 	border: var(--border-width) solid transparent;
-	color: var(--muted);
+	/* Было var(--muted) — найдено пользователем: рядом с "Позвонить"
+	   (var(--fg), контакты) кнопка "Ещё действия" (var(--muted)) визуально
+	   сливалась с фоном, хотя формальный контраст к --bg был в порядке
+	   (~5:1) — тонкая обводка иконки (stroke-width:0.6) при малом размере
+	   ослабляет восприятие сильнее, чем показывает голая цифра контраста.
+	   var(--fg) — тот же цвет, что уже у соседних текстовых action-кнопок. */
+	color: var(--fg);
 	font-size: 1.1rem;
 }
 .icon-btn:hover {
@@ -216,32 +231,35 @@ button:has(> .icon),
 }
 /* Этап 70-довесок — та же семантика, что .btn--danger/warn/good/info, для
    иконочных кнопок (корзина/бан и т.п. без текста) — база тонирована сразу
-   (не только hover), т.к. у иконки нет текста-подсказки самого действия. */
-.icon-btn--danger {
+   (не только hover), т.к. у иконки нет текста-подсказки самого действия.
+   Составной селектор .icon-btn.icon-btn--X — та же причина, что у
+   .btn--ghost.btn--danger выше (специфичность против возможных контейнерных
+   "button{color}"-правил и против .icon-btn:hover по source-order). */
+.icon-btn.icon-btn--danger {
 	color: var(--bad);
 }
-.icon-btn--danger:hover {
+.icon-btn.icon-btn--danger:hover {
 	background-color: color-mix(in oklch, var(--bad), transparent 88%);
 	color: var(--bad);
 }
-.icon-btn--warn {
+.icon-btn.icon-btn--warn {
 	color: var(--warn);
 }
-.icon-btn--warn:hover {
+.icon-btn.icon-btn--warn:hover {
 	background-color: color-mix(in oklch, var(--warn), transparent 88%);
 	color: var(--warn);
 }
-.icon-btn--good {
+.icon-btn.icon-btn--good {
 	color: var(--good);
 }
-.icon-btn--good:hover {
+.icon-btn.icon-btn--good:hover {
 	background-color: color-mix(in oklch, var(--good), transparent 88%);
 	color: var(--good);
 }
-.icon-btn--info {
+.icon-btn.icon-btn--info {
 	color: var(--info);
 }
-.icon-btn--info:hover {
+.icon-btn.icon-btn--info:hover {
 	background-color: color-mix(in oklch, var(--info), transparent 88%);
 	color: var(--info);
 }
@@ -637,6 +655,16 @@ button:has(> .icon),
 .app-layout .header-actions h1 {
 	font-size: var(--step-5);
 	margin-block: 0;
+	/* Пользователь: заголовок акцентным цветом — "выглядит органично,
+	   вносит разнообразие в ощущение приложения" — один класс, ОДНО место
+	   правки на все экраны (Screen.jsx — общий каркас для всех разделов).
+	   var(--accent), не var(--accent-dark): та жёстко фиксирует ветку
+	   тёмной темы (light-dark() внутри неё же не читается снаружи),
+	   заголовок выглядел бы неправильно в светлой теме. Контраст
+	   accent/bg отдельно проверен (tests/palette-generator.test.js,
+	   порог 3.0 — WCAG для крупного текста, не 4.5 — обычный текст был бы
+	   неверным порогом здесь): худший случай по всей сетке — 3.775. */
+	color: var(--accent);
 	/* Пользователь: заголовок всё ещё визуально чуть ниже центра строки —
 	   у крупного дисплейного шрифта над буквами есть лишнее "воздушное"
 	   пространство (line-box выше самих глифов); небольшой отрицательный
@@ -657,8 +685,16 @@ button:has(> .icon),
    заливка --accent (та зарезервирована за первичным CTA конкретного
    экрана, см. VISUAL.md .btn-ghost): обводка + прозрачный фон, заливается
    на hover. */
+/* :where([type="button"]) — НЕ голый [type="button"]: атрибутный селектор
+   весит как класс (0,1,0), а не как тег (0,0,1) — ".action-buttons
+   [type=button]" случайно оказывался РАВЕН по специфичности составным
+   модификаторам вида .btn--ghost.btn--danger (оба 0,2,0), и побеждал как
+   последний по файлу, молча гася семейство danger/warn/good у "Позвонить"/
+   "Очистить историю" и т.п. в шапке экрана (найдено пользователем живьём).
+   :where() обнуляет вклад атрибута в специфичность — правило продолжает
+   работать по умолчанию, но больше не спорит по весу с модификаторами. */
 .action-buttons button,
-.action-buttons [type="button"] {
+.action-buttons :where([type="button"]) {
 	background-color: transparent;
 	color: var(--fg);
 	border-color: var(--border);
@@ -670,7 +706,7 @@ button:has(> .icon),
 	border-radius: var(--radius-full);
 }
 .action-buttons button:hover,
-.action-buttons [type="button"]:hover {
+.action-buttons :where([type="button"]):hover {
 	background-color: var(--surface-raised);
 }
 
@@ -817,8 +853,23 @@ button:has(> .icon),
 	width: 2.25rem;
 	height: 2.25rem;
 	padding: 0;
+	padding-inline: 0;
 	border-radius: calc(infinity * 1px);
 	font-size: 1.1rem;
+}
+/* ПОВЕРХ padding:0 выше — иконки внутри реально <svg class="icon">, поэтому
+   срабатывает глобальное button:has(> .icon) { padding-inline: var(--step-0) }
+   (custom.css, самое начало файла), а его специфичность (класс+псевдокласс
+   :has = 0,1,1) ВЫШЕ голого .message-compose-tool-btn (0,1,0) — обычный
+   padding-inline:0 выше эту гонку проигрывает НЕЗАВИСИМО от порядка в файле
+   (не только по source order, как думали раньше про .sidebar-toggle-btn —
+   та кнопка на самом деле не содержит .icon, поэтому та предосторожность
+   никогда не проверялась на реальном конфликте). Составной селектор ниже —
+   класс+:has = (0,2,0) — надёжно перевешивает (0,1,1) в любом случае;
+   найдено пользователем живьём ("иконки скукожились, опять паддинг сжал"). */
+.message-compose-tool-btn:has(> .icon),
+.message-compose-send-btn:has(> .icon) {
+	padding-inline: 0;
 }
 .message-compose-tool-btn {
 	background: none;
