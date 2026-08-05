@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Комментарии — композиционные классы</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* ══════════════════════════════════════════════════════════
+           УРОВЕНЬ 1 — КОМПОЗИЦИЯ
+           Ни одного цвета, шрифта, радиуса. Переносится в любой проект.
+           ══════════════════════════════════════════════════════════ */
+
+            .stack {
+                display: flex;
+                flex-direction: column;
+                gap: var(--gap, 0);
+            }
+            .row {
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: var(--gap, 0);
+            }
+            .bar {
+                display: flex;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                gap: var(--gap, 0);
+            }
+            .layer {
+                display: grid;
+            }
+            .layer > * {
+                grid-area: 1 / 1;
+            }
+
+            /* Уровень 2 — право ребёнка на исключение */
+            .grow {
+                flex: 1 1 auto;
+                min-inline-size: 0;
+                min-block-size: 0;
+            }
+            .rigid {
+                flex: 0 0 auto;
+            }
+            .self-start {
+                align-self: flex-start;
+            }
+            .self-center {
+                align-self: center;
+            }
+            .self-end {
+                align-self: flex-end;
+            }
+
+            /* Уровень 3 — мера себя */
+            .box {
+                padding: var(--pad, 0);
+            }
+            .center {
+                max-inline-size: var(--measure, 65ch);
+                margin-inline: auto;
+            }
+            .truncate {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* ══════════════════════════════════════════════════════════
+           ТОКЕНЫ — имена-роли. Значения меняются от проекта к проекту,
+           имена — нет.
+           ══════════════════════════════════════════════════════════ */
+            :root {
+                --space-3xs: 0.125rem;
+                --space-2xs: 0.25rem;
+                --space-xs: 0.5rem;
+                --space-s: 0.75rem;
+                --space-m: 1rem;
+                --space-l: 1.5rem;
+                --space-xl: 2.5rem;
+
+                --bg: #14110d;
+                --bg-raised: #1c1812;
+                --bg-sunk: #100e0a;
+                --line: #2c2519;
+                --line-soft: #221d15;
+
+                --text: #ece5d7;
+                --text-dim: #9b9285;
+                --text-mute: #6d665c;
+
+                --lamp: #e8a33d;
+                --draught: #5fb8ac;
+
+                --radius: 10px;
+                --avatar: 3rem;
+                --comment-min: 3rem;
+            }
+
+            /* ══════════════════════════════════════════════════════════
+           УРОВЕНЬ 4 — ОФОРМЛЕНИЕ. Только вид. Ни одной раскладки.
+           ══════════════════════════════════════════════════════════ */
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-block-size: 100dvh;
+                background: var(--bg);
+                color: var(--text);
+                font-family: "Golos Text", system-ui, sans-serif;
+                font-size: 15px;
+                line-height: 1.6;
+                background-image: radial-gradient(
+                    60rem 40rem at 100% 0%,
+                    #2a1f0f 0%,
+                    transparent 60%
+                );
+                background-repeat: no-repeat;
+            }
+
+            .page {
+                padding-block: var(--space-xl);
+                padding-inline: var(--space-m);
+            }
+
+            h1 {
+                font-size: 1.4rem;
+                font-weight: 600;
+                margin: 0;
+                letter-spacing: -0.01em;
+            }
+            .lede {
+                color: var(--text-dim);
+                margin: 0;
+                font-size: 0.9rem;
+            }
+
+            .avatar {
+                inline-size: var(--avatar);
+                block-size: var(--avatar);
+                border-radius: 50%;
+                object-fit: cover;
+                background: var(--bg-sunk);
+                border: 1px solid var(--line);
+            }
+
+            .author {
+                font-weight: 600;
+                color: var(--text);
+            }
+            .handle {
+                color: var(--text-mute);
+                font-size: 0.82rem;
+            }
+            .body {
+                color: var(--text);
+                margin: 0;
+            }
+            .date {
+                color: var(--text-mute);
+                font-size: 0.78rem;
+            }
+            .act {
+                color: var(--text-mute);
+                font-size: 0.78rem;
+                background: none;
+                border: 0;
+                padding: 0;
+                cursor: pointer;
+                font-family: inherit;
+            }
+            .act:hover {
+                color: var(--lamp);
+            }
+            .act:focus-visible {
+                outline: 2px solid var(--lamp);
+                outline-offset: 3px;
+                border-radius: 3px;
+            }
+
+            .comment {
+                min-block-size: var(--comment-min);
+            }
+            .comment.is-op .author {
+                color: var(--lamp);
+            }
+            .badge {
+                font-size: 0.68rem;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--draught);
+                border: 1px solid currentColor;
+                border-radius: 999px;
+                padding-inline: var(--space-2xs);
+                padding-block: 1px;
+            }
+
+            .replies {
+                padding-inline-start: var(--space-l);
+                border-inline-start: 1px solid var(--line-soft);
+                margin-inline-start: calc(var(--avatar) / 2);
+            }
+            .replies:hover {
+                border-inline-start-color: var(--line);
+            }
+
+            .card {
+                background: var(--bg-raised);
+                border: 1px solid var(--line-soft);
+                border-radius: var(--radius);
+            }
+
+            /* переключатель — показать раскладку */
+            .legend {
+                color: var(--text-mute);
+                font-size: 0.78rem;
+            }
+            #dbg {
+                accent-color: var(--lamp);
+            }
+            #dbg:checked ~ .thread .bar {
+                outline: 1px dashed #5fb8ac66;
+            }
+            #dbg:checked ~ .thread .stack {
+                outline: 1px dashed #e8a33d55;
+            }
+            #dbg:checked ~ .thread .grow {
+                background: #e8a33d0d;
+            }
+        </style>
+    </head>
+    <body>
+        <div
+            class="page stack center"
+            style="--gap: var(--space-l); --measure: 46rem"
+        >
+            <div class="stack" style="--gap: var(--space-2xs)">
+                <h1>Обсуждение: NIP-65 и маршрутизация</h1>
+                <p class="lede">
+                    Четыре класса раскладки на весь список. Ни одного
+                    медиазапроса.
+                </p>
+            </div>
+
+            <input type="checkbox" id="dbg" hidden />
+            <label
+                class="bar legend"
+                style="
+                    --gap: var(--space-xs);
+                    align-items: center;
+                    cursor: pointer;
+                "
+            >
+                <input
+                    type="checkbox"
+                    onclick="
+                        document.getElementById('dbg').checked = this.checked
+                    "
+                    style="accent-color: #e8a33d"
+                />
+                показать раскладку
+            </label>
+
+            <div class="thread stack" style="--gap: var(--space-l)">
+                <!-- ───── комментарий ───── -->
+                <article class="comment bar" style="--gap: var(--space-m)">
+                    <img
+                        class="avatar rigid"
+                        alt=""
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' fill='%232b2418'/><text x='24' y='31' font-family='sans-serif' font-size='19' fill='%23e8a33d' text-anchor='middle'>Н</text></svg>"
+                    />
+                    <div class="stack grow" style="--gap: var(--space-2xs)">
+                        <header
+                            class="row"
+                            style="
+                                --gap: var(--space-xs);
+                                align-items: baseline;
+                            "
+                        >
+                            <span class="author">Наташа Ким</span>
+                            <span class="handle">@nkim</span>
+                            <span class="badge">автор</span>
+                        </header>
+                        <p class="body grow">
+                            Перенёс транспорт на outbox-модель. Публикую в свои
+                            write-релеи, читаю из read-релеев собеседника — как
+                            в NIP-65. Доставка выросла заметно, но появился
+                            неприятный край: если у человека в списке пять
+                            релеев и три лежат, мы всё равно ждём таймаут по
+                            всем. Думаю про гонку с ранним выходом на первом
+                            успехе.
+                        </p>
+                        <footer
+                            class="bar"
+                            style="--gap: var(--space-s); align-items: center"
+                        >
+                            <time class="date">2 августа, 09:14</time>
+                            <button class="act">Ответить</button>
+                        </footer>
+                    </div>
+                </article>
+
+                <div class="replies stack" style="--gap: var(--space-l)">
+                    <!-- ───── короткий: дата уезжает вниз ───── -->
+                    <article class="comment bar" style="--gap: var(--space-m)">
+                        <img
+                            class="avatar rigid"
+                            alt=""
+                            src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' fill='%23182421'/><text x='24' y='31' font-family='sans-serif' font-size='19' fill='%235fb8ac' text-anchor='middle'>Р</text></svg>"
+                        />
+                        <div class="stack grow" style="--gap: var(--space-2xs)">
+                            <header
+                                class="row"
+                                style="
+                                    --gap: var(--space-xs);
+                                    align-items: baseline;
+                                "
+                            >
+                                <span class="author">Рустам</span>
+                                <span class="handle">@rst</span>
+                            </header>
+                            <p class="body grow">
+                                Гонка — да. Только не забудь отменять хвост.
+                            </p>
+                            <footer
+                                class="bar"
+                                style="
+                                    --gap: var(--space-s);
+                                    align-items: center;
+                                "
+                            >
+                                <time class="date">2 августа, 09:41</time>
+                                <button class="act">Ответить</button>
+                            </footer>
+                        </div>
+                    </article>
+
+                    <div class="replies stack" style="--gap: var(--space-l)">
+                        <article
+                            class="comment bar"
+                            style="--gap: var(--space-m)"
+                        >
+                            <img
+                                class="avatar rigid"
+                                alt=""
+                                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' fill='%232b2418'/><text x='24' y='31' font-family='sans-serif' font-size='19' fill='%23e8a33d' text-anchor='middle'>Н</text></svg>"
+                            />
+                            <div
+                                class="stack grow"
+                                style="--gap: var(--space-2xs)"
+                            >
+                                <header
+                                    class="row"
+                                    style="
+                                        --gap: var(--space-xs);
+                                        align-items: baseline;
+                                    "
+                                >
+                                    <span class="author">Наташа Ким</span>
+                                    <span class="handle">@nkim</span>
+                                </header>
+                                <p class="body grow">
+                                    AbortController на каждый релей, отменяю по
+                                    первому ok. Иначе висят сокеты и батарея
+                                    тает.
+                                </p>
+                                <footer
+                                    class="bar"
+                                    style="
+                                        --gap: var(--space-s);
+                                        align-items: center;
+                                    "
+                                >
+                                    <time class="date">2 августа, 10:02</time>
+                                    <button class="act">Ответить</button>
+                                </footer>
+                            </div>
+                        </article>
+                    </div>
+
+                    <!-- ───── длинный: дата сразу под текстом ───── -->
+                    <article class="comment bar" style="--gap: var(--space-m)">
+                        <img
+                            class="avatar rigid"
+                            alt=""
+                            src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' fill='%23241a24'/><text x='24' y='31' font-family='sans-serif' font-size='19' fill='%23c98fc0' text-anchor='middle'>М</text></svg>"
+                        />
+                        <div class="stack grow" style="--gap: var(--space-2xs)">
+                            <header
+                                class="row"
+                                style="
+                                    --gap: var(--space-xs);
+                                    align-items: baseline;
+                                "
+                            >
+                                <span class="author">Марк Дубровин</span>
+                                <span class="handle">@mdub</span>
+                            </header>
+                            <p class="body grow">
+                                Осторожнее с ранним выходом. Первый ответивший
+                                релей не обязательно тот, который реально
+                                сохранил событие — некоторые отвечают ok сразу,
+                                а пишут асинхронно и молча теряют при
+                                перезапуске. Я в итоге считаю доставку успешной
+                                по двум подтверждениям из разных релеев, а не по
+                                одному. Медленнее на полсекунды, зато нет тихих
+                                потерь. И отдельно храню список тех, кто врёт:
+                                он на удивление стабилен.
+                            </p>
+                            <footer
+                                class="bar"
+                                style="
+                                    --gap: var(--space-s);
+                                    align-items: center;
+                                "
+                            >
+                                <time class="date">2 августа, 11:20</time>
+                                <button class="act">Ответить</button>
+                            </footer>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- ───── второй корневой ───── -->
+                <article class="comment bar" style="--gap: var(--space-m)">
+                    <img
+                        class="avatar rigid"
+                        alt=""
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' fill='%23222018'/><text x='24' y='31' font-family='sans-serif' font-size='19' fill='%239b9285' text-anchor='middle'>?</text></svg>"
+                    />
+                    <div class="stack grow" style="--gap: var(--space-2xs)">
+                        <header
+                            class="row"
+                            style="
+                                --gap: var(--space-xs);
+                                align-items: baseline;
+                            "
+                        >
+                            <span class="author">Гость</span>
+                        </header>
+                        <p class="body grow">
+                            А что происходит, если у человека вообще нет NIP-65?
+                        </p>
+                        <footer
+                            class="bar"
+                            style="--gap: var(--space-s); align-items: center"
+                        >
+                            <time class="date">3 августа, 08:05</time>
+                            <button class="act">Ответить</button>
+                        </footer>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </body>
+</html>

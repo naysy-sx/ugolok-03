@@ -320,7 +320,6 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					<header class="cmt__head row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
 						<span class="cmt__name">{author.name}</span>
 						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
-						<span class="cmt__time">{formatDateTime(comment.createdAt)}</span>
 					</header>
 					<p class="cmt__text">{comment.text}</p>
 					{comment.attachments?.[0] && (
@@ -328,7 +327,8 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 							<AttachmentView attachment={comment.attachments[0]} />
 						</div>
 					)}
-					<div class="cmt__actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<footer class="cmt__actions row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<time class="cmt__time">{formatDateTime(comment.createdAt)}</time>
 						{canComment && (
 							<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
 								<IconChatBubble /> {t("channel.comment.replyButton")}
@@ -348,7 +348,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 								/>
 							</ActionsMenu>
 						)}
-					</div>
+					</footer>
 				</div>
 			</article>
 
