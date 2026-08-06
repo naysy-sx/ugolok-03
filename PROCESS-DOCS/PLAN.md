@@ -3745,3 +3745,36 @@ Regression: `npm test` 1286/1286 (1 флап в incremental-sync.test.js —
 
 DoD: [x] полная регрессия [x] живая проверка (inject+getComputedStyle
 + визуальные скриншоты) [x] PLAN.md обновлён [x] коммит (7edfa2e).
+
+## Этап 71 — фикс гонки публикации профиля (multi-device стирал avatar/bio)
+
+Найдено пользователем живьём (несколько окон/браузеров одной identity
+одновременно): первый вход на НОВОМ браузере публиковал "голый" kind:0
+(только name) — replaceable-семантика NIP-01 стирала на relay уже
+опубликованную версию с about/picture, причём для ВСЕХ, кто запрашивает
+профиль этой identity, не только локально. Триаж — рутинная (13a):
+переупорядочить существующие вызовы + смёрджить уже читаемые данные,
+без новых структур/алгоритмов. Полный технический разбор —
+CONTRACTS.md, "Этап 71".
+
+Правки: `ensureProfilePublished` (`src/domain/identity/profile.js`)
+теперь читает `getProfile(ownerPubkey)` и передаёт `about`/`picture` из
+уже известных локально `bio`/`avatarUrl`, не только `name`.
+`hydrateOwnProfile` в `connect()` (`transport.js`) переставлен
+ВПЕРЁД — до `ensureOwnKeyPackagePublished`/`ensureProfilePublished`,
+не после них — иначе мёрджить было бы нечего. `bumpProfileActivity`/
+`bumpMessagingActivity` остались в конце (после всех sync-шагов).
+
+Живая проверка (реальный relay, не мок): создан аккаунт, опубликован
+полный профиль (name+about+picture), локально симулировано "новое
+устройство" (bio/avatarUrl/profileAutoPublished сброшены, cold reload +
+повторный логин — настоящий connect()), после чего `fetchProfiles`
+подтвердил: on relay остался ПОЛНЫЙ профиль, не голое имя.
+
+Regression: `npm test` 1288/1288 (+3 новых теста: слияние данных,
+адверсарный частичный случай bio-без-avatarUrl, существующий "голый"
+случай не регрессировал).
+
+DoD: [x] тесты этапа зелёные [x] полная регрессия [x] живая проверка
+(реальный relay round-trip) [x] адверсарный заход (частичные данные)
+[x] PLAN.md обновлён [x] коммит.

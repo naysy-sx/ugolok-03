@@ -326,6 +326,20 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// read-tracking каналов (kind 30074), не личных чатов.
 	await rebuildChannelReadStatus(pubkeyHex, privKey);
 	logSync(t("syncLog.readMarksDone"));
+
+	// Этап 71 (пользователь, живьём — несколько окон/браузеров одной identity):
+	// hydrateOwnProfile обязана отработать ДО ensureProfilePublished ниже — иначе
+	// первый вход на новом устройстве публикует ГОЛЫЙ {name} (keystore ещё
+	// пустой), стирая на relay уже существующие about/picture (kind:0
+	// replaceable, PROCESS-DOCS/CONTRACTS.md, "Этап 71"). Заодно закрывает
+	// исходную находку (вход с чистого устройства по мнемонике): bootstrap выше
+	// уже стянул kind 0 в db.events через authors:[я], но раньше ничто не
+	// читало его в keystore до этой точки — avatar/bio оставались пустыми
+	// НАВСЕГДА, не временно.
+	logSync(t("syncLog.profile"));
+	await hydrateOwnProfile(pubkeyHex);
+	logSync(t("syncLog.profileDone"));
+
 	logSync(t("syncLog.publishingKeyProfile"));
 	await ensureOwnKeyPackagePublished(pubkeyHex, privKey, dbKey, publish);
 	// Этап 37 — свежезарегистрированный пользователь иначе не разослал бы имя
@@ -351,19 +365,13 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
 	logSync(t("syncLog.chatHistoryDone"));
 
-	// Найдено пользователем (живая проверка — вход с чистого устройства по
-	// мнемонике): bootstrap выше уже стянул kind 0 (профиль) в db.events через
-	// authors:[я], но ничто не читало его в keystore — avatar/bio оставались
-	// пустыми НАВСЕГДА, не временно (не гонка, отдельный пробел). Второе —
-	// bumpMessagingActivity()/bumpProfileActivity() здесь ни разу не звучали
-	// на этом отрезке: chat.jsx/app.jsx-бейджи перечитывают контакты/непрочитанное
-	// ТОЛЬКО по этим сигналам, а до сих пор их бампали только ЖИВЫЕ входящие
-	// события (см. ниже) — если экран уже смонтирован (чат/бейдж в сайдбаре
-	// видны сразу после логина), его эффект отработал ОДИН раз на ещё пустом
-	// состоянии и не перезапускался, даже когда bootstrap выше всё заполнил.
-	logSync(t("syncLog.profile"));
-	await hydrateOwnProfile(pubkeyHex);
-	logSync(t("syncLog.profileDone"));
+	// bumpMessagingActivity()/bumpProfileActivity() — chat.jsx/app.jsx-бейджи
+	// перечитывают контакты/непрочитанное ТОЛЬКО по этим сигналам, а до сих пор
+	// их бампали только ЖИВЫЕ входящие события (см. ниже) — если экран уже
+	// смонтирован (чат/бейдж в сайдбаре видны сразу после логина), его эффект
+	// отработал ОДИН раз на ещё пустом состоянии и не перезапускался, даже
+	// когда bootstrap/синхронизация выше всё заполнили. В конце (не сразу после
+	// hydrateOwnProfile) — отражает полностью досинхронизированное состояние.
 	bumpProfileActivity();
 	bumpMessagingActivity();
 

@@ -10950,3 +10950,51 @@ build-дефолт `CustomPaletteConfig`, не "нет цвета"). Мигра�
 Любое изменение таблицы дельт/служебных тонов обязано пройти этот файл
 без снижения порога контраста — регресс здесь равносилен регрессу
 любого другого протокольного инварианта проекта.
+
+## Этап 71 — фикс гонки публикации профиля (multi-device перетирает avatar/picture)
+
+Найдено пользователем живьём (несколько окон/браузеров одной identity):
+первый вход на НОВОМ устройстве публикует "голый" `kind:0` только с
+`name` — `kind:0` replaceable (NIP-01), эта версия свежее по
+`created_at` и стирает на relay уже существующую версию с `about`/
+`picture`, причём НЕ ТОЛЬКО для этого устройства — для ВСЕХ, кто
+запрашивает профиль этой identity.
+
+**Правка контракта `ensureProfilePublished`** (`src/domain/identity/
+profile.js`, сигнатура НЕ меняется —
+`ensureProfilePublished(ownerPubkey, login, privKey, publish)`):
+раньше строила событие как `buildProfileEvent(privKey, { name: login
+})`, теперь — читает `getProfile(ownerPubkey)` (keystore) и передаёт
+`about`/`picture` из уже известных локально `bio`/`avatarUrl`, если
+они непустые:
+
+```
+const current = await getProfile(ownerPubkey);
+const event = buildProfileEvent(privKey, {
+  name: login,
+  about: current.bio || undefined,
+  picture: current.avatarUrl || undefined,
+});
+```
+
+Работает только если к моменту вызова keystore уже содержит
+актуальные `bio`/`avatarUrl` — для этого **порядок вызовов в
+`connect()` (`transport.js`) правится**: `hydrateOwnProfile(pubkeyHex)`
+(подтягивает уже опубликованный на relay `kind:0` в keystore — тот же
+`bootstrap`-поток, что и раньше, просто читается РАНЬШЕ) теперь
+вызывается ДО `ensureOwnKeyPackagePublished`/`ensureProfilePublished`,
+не после них. `bumpProfileActivity()`/`bumpMessagingActivity()`
+остаются на прежнем месте (в конце `connect()`, после
+`syncMirroredHistory`) — отражают полностью досинхронизированное
+состояние, не только пост-гидратацию.
+
+Остаточный риск (принят, не в скоупе этого этапа): два устройства,
+ОБА публикующие впервые практически одновременно (до того как любое
+успело получить обратно чужую версию через relay), всё ещё могут
+разойтись на один цикл `connect()` — обычная eventual-consistency
+граница replaceable-событий без блокировок, самоисцеляется на
+следующем connect() любого из устройств. Отличие от бага ДО фикса:
+раньше публикация была БЕЗУСЛОВНО голой (гонка гарантированно стирала
+контент), теперь голая публикация происходит, только если ЛОКАЛЬНО
+тоже пусто — не системная порча, а honest race с симметричным шансом
+у обеих версий быть содержательными.

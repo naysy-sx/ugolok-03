@@ -96,6 +96,58 @@ test("ensureProfilePublished: повторный вызов — no-op, publish �
 	assert.equal(calls, 1);
 });
 
+// Этап 71 (пользователь, живьём — несколько окон/браузеров одной identity):
+// первый вход на НОВОМ устройстве раньше публиковал ГОЛЫЙ {name}, стирая на
+// relay уже существующие about/picture у ВСЕХ, кто спрашивает эту identity
+// (kind:0 replaceable). Порядок в connect() теперь такой, что hydrateOwnProfile
+// (подтягивает уже опубликованное в keystore) отрабатывает ДО этого вызова —
+// ensureProfilePublished обязан использовать то, что уже лежит в keystore.
+test("ensureProfilePublished: bio/avatarUrl уже в keystore (после hydrateOwnProfile) -> публикует их вместе с именем, не голый {name}", async () => {
+	await db.table("keystore").clear();
+	await db.table("keystore").put({
+		id: OWNER_PUBKEY,
+		salt: new Uint8Array(1),
+		iv: new Uint8Array(1),
+		ciphertext: new Uint8Array(1),
+		login: "тест-логин",
+		bio: "уже хорошее био",
+		avatarUrl: "https://blossom.test/good.png",
+	});
+	const published = [];
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async (event) => {
+		published.push(event);
+		return { ok: true };
+	});
+
+	assert.equal(published.length, 1);
+	assert.deepEqual(JSON.parse(published[0].content), {
+		name: "тест-логин",
+		about: "уже хорошее био",
+		picture: "https://blossom.test/good.png",
+	});
+});
+
+test("ensureProfilePublished АДВЕРСАРНО: только bio без avatarUrl (частичные локальные данные) -> about есть, picture честно отсутствует в content (не пустая строка)", async () => {
+	await db.table("keystore").clear();
+	await db.table("keystore").put({
+		id: OWNER_PUBKEY,
+		salt: new Uint8Array(1),
+		iv: new Uint8Array(1),
+		ciphertext: new Uint8Array(1),
+		login: "тест-логин",
+		bio: "только био, без аватара",
+		avatarUrl: "",
+	});
+	const published = [];
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async (event) => {
+		published.push(event);
+		return { ok: true };
+	});
+	const content = JSON.parse(published[0].content);
+	assert.equal(content.about, "только био, без аватара");
+	assert.equal("picture" in content, false);
+});
+
 test("ensureProfilePublished АДВЕРСАРНО: publish бросает исключение — флаг всё равно стоит (не повторяет попытку при следующем логине), сам вызов НЕ бросает наружу", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);

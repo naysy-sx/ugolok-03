@@ -91,7 +91,8 @@ export async function ensureProfilePublished(ownerPubkey, login, privKey, publis
   if (record?.profileAutoPublished) return;
   await db.table('keystore').update(ownerPubkey, { profileAutoPublished: true });
   try {
-    const event = buildProfileEvent(privKey, { name: login });
+    const current = await getProfile(ownerPubkey);
+    const event = buildProfileEvent(privKey, { name: login, about: current.bio || undefined, picture: current.avatarUrl || undefined });
     await publish(event);
   } catch (e) {
     console.warn('ensureProfilePublished: не удалось опубликовать профиль', e);
