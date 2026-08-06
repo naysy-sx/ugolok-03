@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "Datum kiezen",
 		"jumpToDate": "Naar datum gaan",
+		"showAll": "Alles tonen",
 		"markAllRead": "Als gelezen markeren",
 		"empty": "Er is nog niets gebeurd — hier verschijnen meldingen.",
+		"emptyDate": "Geen gebeurtenissen op deze dag.",
 		"unreadDot": "ongelezen",
 		"pagerAriaLabel": "Journaalpagina's",
 		"pageStatus": "Pagina {{current}} van {{total}}",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "Geen nieuwe gespreksverzoeken van onbekenden.",
 			"chatsHeading": "Chats ({{count}})",
 			"noChatsYet": "Je hebt nog geen chats — open een gesprek via de bijnaam van een contact in de sectie ‘{{contactsLabel}}’.",
-			"unreadAria": "Ongelezen: {{count}}"
+			"unreadAria": "Ongelezen: {{count}}",
+			"composeButton": "Opstellen",
+			"composeTitle": "Bericht opstellen",
+			"backToChatsButton": "Terug naar chatlijst",
+			"toLabel": "Aan",
+			"attachmentsLabel": "Bijlagen",
+			"composeInvalidRecipient": "Kies een ontvanger uit je contacten"
 		},
 		"window": {
 			"clearHistoryButton": "Gesprek wissen",

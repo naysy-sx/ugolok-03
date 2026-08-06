@@ -58,15 +58,6 @@ function formatDaySeparator(ms) {
 	return new Date(ms).toLocaleDateString(currentLocale.value, { day: "2-digit", month: "long", year: "numeric" });
 }
 
-// Список отсортирован по occurredAt по убыванию (journal.js) — переход к дате
-// ищет первую запись, чей день <= выбранного (первое вхождение искомого дня,
-// либо ближайшая более старая, если на саму дату записей нет).
-function findPageForDate(entries, dateStr, pageSize) {
-	const idx = entries.findIndex((e) => dayKey(e.occurredAt) <= dateStr);
-	if (idx === -1) return Math.max(0, Math.ceil(entries.length / pageSize) - 1);
-	return Math.floor(idx / pageSize);
-}
-
 // Группировка страницы по календарному дню — стабильный порядок (страница
 // уже отсортирована по occurredAt), каждая группа — отдельная <section> с
 // собственным заголовком (a11y: список читается как оглавление по дням, не
@@ -100,6 +91,12 @@ export default function Journal() {
 	}, [ownerPubkey, messagingActivity.value]);
 
 	const entries = journalEntries.value;
+	// Фильтр по выбранной дате (jumpDate) — применяется ДО пагинации, иначе при
+	// малых журналах (totalPages == 1, PAGE_SIZE = 15) выбор даты был бы виден
+	// только сменой номера страницы, а список на экране не менялся (баг,
+	// найденный пользователем: filteredEntries тут — единственное место, где
+	// jumpDate реально влияет на то, что видно).
+	const filteredEntries = jumpDate ? entries.filter((e) => dayKey(e.occurredAt) === jumpDate) : entries;
 
 	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живая проверка) — реальный баг был не в сортировке
 	// (occurredAt по убыванию и так верный, см. journal.js), а в том, что "page"
@@ -120,11 +117,14 @@ export default function Journal() {
 		prevLengthRef.current = entries.length;
 	}, [entries.length]);
 
-	const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+	const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
 	// Страница могла "исчезнуть" (записи прочитаны/удалены на другом устройстве,
 	// список сократился) — не показывать пустую страницу молча.
 	const clampedPage = Math.min(page, totalPages - 1);
-	const pageEntries = entries.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
+	const pageEntries = filteredEntries.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
+	// Кнопка "отметить прочитанным" всегда действует на ВЕСЬ журнал, не только
+	// на видимый (отфильтрованный по дате) срез — hasUnread поэтому считается
+	// по entries, не по filteredEntries.
 	const hasUnread = entries.some((e) => !e.read);
 	const dayGroups = groupByDay(pageEntries);
 
@@ -133,8 +133,12 @@ export default function Journal() {
 
 	function handleJumpToDate(dateStr) {
 		setJumpDate(dateStr);
-		if (!dateStr) return;
-		setPage(findPageForDate(entries, dateStr, PAGE_SIZE));
+		setPage(0);
+	}
+
+	function handleShowAll() {
+		setJumpDate("");
+		setPage(0);
 	}
 
 	return (
@@ -153,6 +157,11 @@ export default function Journal() {
 							<input type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
 						</label>
 					)}
+					{jumpDate && (
+						<button type="button" class="btn btn--ghost" onClick={handleShowAll}>
+							{t("journal.showAll")}
+						</button>
+					)}
 					<button type="button" disabled={!hasUnread} onClick={() => markAllRead(ownerPubkey, dbKey)}>
 						<IconCheck />
 						<span class="mark-txt">{t("journal.markAllRead")}</span>
@@ -162,6 +171,8 @@ export default function Journal() {
 		>
 			{entries.length === 0 ? (
 				<p style={{ color: "var(--muted)" }}>{t("journal.empty")}</p>
+			) : filteredEntries.length === 0 ? (
+				<p style={{ color: "var(--muted)" }}>{t("journal.emptyDate")}</p>
 			) : (
 				<div class="journal">
 					{dayGroups.map((group) => (
@@ -187,9 +198,10 @@ export default function Journal() {
 													<Icon />
 												</span>
 												<span class="jbody stack" style={{ "--gap": "2px" }}>
-													<span class="jtitle">{entryTitle}</span>
+													<span class="jtitle">
+														{categoryLabel}: {entryTitle}
+													</span>
 													{entryBody && <span class="jmeta">{entryBody}</span>}
-													<span class="jmeta">{categoryLabel}</span>
 												</span>
 												<span class="jside stack" style={{ "--gap": "var(--space-3xs)", alignItems: "flex-end", justifyContent: "center" }}>
 													<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>

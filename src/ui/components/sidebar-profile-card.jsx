@@ -34,7 +34,7 @@ export default function SidebarProfileCard({ onEditProfile }) {
 	}, [id, profileActivity.value]);
 
 	return (
-		<section class="profile-card stack" style={{ "--gap": "var(--space-s)", alignItems: "center" }} aria-label={t("sidebarCard.profileAria")}>
+		<section class="profile-card stack" style={{ "--gap": "var(--space-s)" }} aria-label={t("sidebarCard.profileAria")}>
 			{/* Пользователь: "аватар строго квадратным, при клике — полная
 			    фотография в модальном окне" — кликабелен только если фото
 			    реально есть, заглушка-буква никуда не ведёт (disabled).
@@ -59,20 +59,19 @@ export default function SidebarProfileCard({ onEditProfile }) {
 				)}
 			</button>
 			<div class="profile-card-body">
-				<h2 class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", justifyContent: "center" }}>
+				<h2 class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", justifyContent: "space-between" }}>
 					<span title={login || id}>{login || id.slice(0, 16) + "…"}</span>
+					{/* Едва видима (opacity 0.2), проявляется по hover/focus на всей
+					    карточке (.profile-card) — рядом с именем, не отдельной
+					    строкой снизу. */}
+					<button type="button" class="icon-btn profile-edit-btn" onClick={onEditProfile} aria-label={t("sidebarCard.editProfileButton")}>
+						<IconPencil />
+					</button>
 				</h2>
 				{/* Декоративные кавычки вокруг био (пользователь предложил идею
 				    сам) — акцентным цветом-компаньоном (--accent-2/draught),
 				    тихо, без рамок вокруг всего блока. */}
 				{bio && <p class="profile-bio">{bio}</p>}
-				{/* Найдено пользователем: иконка-карандаш рядом с именем в узкой
-				    колонке h2 (флекс-строка с truncate-именем) пряталась у самого
-				    края сайдбара — фактически невидима/некликабельна. Своя строка
-				    ниже, с подписью — надёжнее компактной иконки-без-текста. */}
-				<button type="button" class="profile-edit-btn" onClick={onEditProfile}>
-					<IconPencil /> {t("sidebarCard.editProfileButton")}
-				</button>
 			</div>
 			{showAvatarModal && (avatar || avatarUrl) && <ImageModal src={avatar || avatarUrl} alt={t("sidebarCard.photoAlt")} onClose={() => setShowAvatarModal(false)} />}
 		</section>

@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "日付を選択",
 		"jumpToDate": "日付に移動",
+		"showAll": "すべて表示",
 		"markAllRead": "既読にする",
 		"empty": "まだ何も起きていません — ここに通知が表示されます。",
+		"emptyDate": "この日の出来事はありません。",
 		"unreadDot": "未読",
 		"pagerAriaLabel": "ジャーナルのページ",
 		"pageStatus": "{{current}} / {{total}} ページ",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "見知らぬ相手からの新しい会話リクエストはありません。",
 			"chatsHeading": "チャット（{{count}}）",
 			"noChatsYet": "まだチャットはありません — 「{{contactsLabel}}」セクションで連絡先のニックネームから会話を開始してください。",
-			"unreadAria": "未読: {{count}}"
+			"unreadAria": "未読: {{count}}",
+			"composeButton": "新規作成",
+			"composeTitle": "メッセージを作成",
+			"backToChatsButton": "チャット一覧に戻る",
+			"toLabel": "宛先",
+			"attachmentsLabel": "添付ファイル",
+			"composeInvalidRecipient": "連絡先から宛先を選んでください"
 		},
 		"window": {
 			"clearHistoryButton": "会話を消去",

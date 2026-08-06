@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "Elegir fecha",
 		"jumpToDate": "Ir a la fecha",
+		"showAll": "Mostrar todo",
 		"markAllRead": "Marcar como leído",
 		"empty": "Todavía no ha pasado nada — aquí aparecerán las notificaciones.",
+		"emptyDate": "No hay eventos en este día.",
 		"unreadDot": "sin leer",
 		"pagerAriaLabel": "Páginas del registro",
 		"pageStatus": "Página {{current}} de {{total}}",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "No hay nuevas solicitudes de conversación de desconocidos.",
 			"chatsHeading": "Chats ({{count}})",
 			"noChatsYet": "Todavía no tienes ningún chat — abre una conversación desde el apodo de un contacto en la sección «{{contactsLabel}}».",
-			"unreadAria": "Sin leer: {{count}}"
+			"unreadAria": "Sin leer: {{count}}",
+			"composeButton": "Redactar",
+			"composeTitle": "Redactar mensaje",
+			"backToChatsButton": "Volver a la lista de chats",
+			"toLabel": "Para",
+			"attachmentsLabel": "Adjuntos",
+			"composeInvalidRecipient": "Elige un destinatario de tus contactos"
 		},
 		"window": {
 			"clearHistoryButton": "Borrar conversación",

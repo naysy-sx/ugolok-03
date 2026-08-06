@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "Выбрать дату",
 		"jumpToDate": "Перейти к дате",
+		"showAll": "Показать всё",
 		"markAllRead": "Отметить прочитанным",
 		"empty": "Пока ничего не произошло — здесь будут появляться уведомления.",
+		"emptyDate": "В этот день событий нет.",
 		"unreadDot": "непрочитано",
 		"pagerAriaLabel": "Страницы журнала",
 		"pageStatus": "Страница {{current}} из {{total}}",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "Нет новых запросов на переписку от незнакомцев.",
 			"chatsHeading": "Чаты ({{count}})",
 			"noChatsYet": "Пока нет ни одного чата — откройте переписку по никнейму контакта в разделе «{{contactsLabel}}».",
-			"unreadAria": "Непрочитанных: {{count}}"
+			"unreadAria": "Непрочитанных: {{count}}",
+			"composeButton": "Написать",
+			"composeTitle": "Написать сообщение",
+			"backToChatsButton": "Вернуться в список чатов",
+			"toLabel": "Кому",
+			"attachmentsLabel": "Вложения",
+			"composeInvalidRecipient": "Выберите получателя из списка контактов"
 		},
 		"window": {
 			"clearHistoryButton": "Очистить переписку",

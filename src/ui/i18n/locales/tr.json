@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "Tarih seç",
 		"jumpToDate": "Tarihe git",
+		"showAll": "Tümünü göster",
 		"markAllRead": "Okundu olarak işaretle",
 		"empty": "Henüz bir şey olmadı — bildirimler burada görünecek.",
+		"emptyDate": "Bu günde hiç olay yok.",
 		"unreadDot": "okunmamış",
 		"pagerAriaLabel": "Günlük sayfaları",
 		"pageStatus": "Sayfa {{current}} / {{total}}",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "Yabancılardan yeni sohbet isteği yok.",
 			"chatsHeading": "Sohbetler ({{count}})",
 			"noChatsYet": "Henüz hiç sohbetiniz yok — «{{contactsLabel}}» bölümünde bir kişinin takma adından sohbet açın.",
-			"unreadAria": "Okunmamış: {{count}}"
+			"unreadAria": "Okunmamış: {{count}}",
+			"composeButton": "Yaz",
+			"composeTitle": "Mesaj yaz",
+			"backToChatsButton": "Sohbet listesine dön",
+			"toLabel": "Kime",
+			"attachmentsLabel": "Ekler",
+			"composeInvalidRecipient": "Kişilerinizden bir alıcı seçin"
 		},
 		"window": {
 			"clearHistoryButton": "Sohbeti temizle",

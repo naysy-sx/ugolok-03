@@ -17,6 +17,15 @@
 }
 .nav-item-btn svg {
 	flex: none;
+	/* Пользователь: иконка тем же цветом, что текст следом (currentColor),
+	   сливалась с подписью — приглушили, подпись остаётся доминантой. */
+	opacity: 0.3;
+}
+/* "Выйти" (.exit-btn) сюда не входит — иконка уже приглушена своим
+   var(--muted), а не currentColor из общего текста; двойное приглушение
+   делало её почти невидимой. */
+.exit-btn svg {
+	opacity: 1;
 }
 
 /* Найдено живой проверкой этапа с компактными иконками модерации
@@ -41,6 +50,11 @@
    отдельно ниже, пользователь явно попросил оставить его кнопкой. */
 .sidebar nav .nav-item-btn {
 	position: relative;
+	/* Начало подчёркивания (::after ниже) — после иконки, а не от края
+	   кнопки; 29px подобраны визуально в инспекторе (ни один --space-*
+	   токен не совпал с шириной иконка+gap+padding), отдельная переменная —
+	   чтобы не заводить magic number прямо в правиле. */
+	--nav-underline-offset: 1.8125rem;
 	background: none;
 	border: none;
 	color: var(--fg);
@@ -52,10 +66,12 @@
 .sidebar nav .nav-item-btn::after {
 	content: "";
 	position: absolute;
-	inset-inline: var(--space-3xs);
+	inset-inline-start: var(--nav-underline-offset);
+	inset-inline-end: var(--space-3xs);
 	inset-block-end: 0.2em;
 	block-size: 2px;
 	background-color: var(--accent);
+	opacity: 0.3;
 	transform: scaleX(0);
 	transform-origin: left;
 	transition: transform var(--transition-speed) var(--transition-ease);
@@ -473,7 +489,7 @@ button:has(> .icon),
 .profile-card {
 	/* .stack (раскладка) уже в JSX. */
 	container-type: inline-size; /* VISUAL.md v2 — cqi для заглушки-буквы аватара */
-	text-align: center;
+	text-align: start;
 	padding-block-end: var(--space-m);
 	border-block-end: var(--border-width) solid var(--border);
 }
@@ -574,58 +590,49 @@ button:has(> .icon),
 	white-space: nowrap;
 	min-inline-size: 0;
 }
-/* Компактная кнопка-карандаш вместо текстовой ссылки "Изменить профиль"
-   (пользователь: "ссылка выглядит стрёмно... сделать кнопочку с иконкой") —
-   рядом с именем, а не отдельной строкой снизу (была причиной лишнего
-   вертикального пространства). */
+/* Иконка-карандаш рядом с именем — база .icon-btn (круглая иконка-кнопка),
+   здесь только opacity-реакция: едва видима (0.2), проявляется по hover
+   на ВСЕЙ карточке (.profile-card), не только на самой кнопке — иначе
+   пользователь должен был бы сначала найти едва видимую цель, чтобы её
+   обнаружить. */
 .profile-edit-btn {
-	align-self: center;
-	margin-block-start: var(--space-2xs);
-	background: none;
-	border: var(--border-width) solid var(--border);
-	color: var(--muted);
-	padding: var(--space-3xs) var(--space-s);
-	border-radius: calc(infinity * 1px);
-	font-size: var(--step--1);
-	font-weight: var(--weight-normal);
+	flex-shrink: 0;
+	opacity: 0.2;
+	transition: opacity var(--transition-speed) var(--transition-ease);
 }
-.profile-edit-btn:hover {
-	background-color: var(--surface-raised);
-	color: var(--accent);
+.profile-card:hover .profile-edit-btn,
+.profile-edit-btn:focus-visible {
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.profile-edit-btn {
+		transition: opacity 1ms linear;
+	}
 }
 
 /* Био в кавычках (идея пользователя) — крупные декоративные кавычки цветом
    "сквозняка" (--accent-2, холодный компаньон лампового --accent),
    курсивный serif для тёплого "разговор по душам" тона. */
 .profile-bio {
-	position: relative;
 	color: var(--fg);
 	font-family: var(--font-serif);
 	font-style: italic;
 	font-size: var(--step--1);
 	margin-block: var(--space-2xs) 0;
-	padding-inline: var(--space-m);
 	text-wrap: pretty;
 }
 .profile-bio::before,
 .profile-bio::after {
-	position: absolute;
 	font-family: var(--font-display);
 	font-style: normal;
-	font-size: var(--step-2);
-	line-height: 0;
 	color: var(--accent-2);
 	opacity: 0.7;
 }
 .profile-bio::before {
 	content: "“";
-	inset-inline-start: 0;
-	top: 0.6em;
 }
 .profile-bio::after {
 	content: "”";
-	inset-inline-end: 0;
-	bottom: -0.2em;
 }
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной

@@ -13,7 +13,7 @@ import {
 	nextLamportTick,
 } from "../signals/transport.js";
 import { activeChatPubkey, openChat } from "../signals/chat.js";
-import { profiles, refreshProfiles } from "../signals/contacts.js";
+import { contacts, profiles, refreshAll, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconSend from "../icons/send.jsx";
@@ -23,6 +23,8 @@ import IconMicrophone from "../icons/microphone.jsx";
 import IconStop from "../icons/stop.jsx";
 import IconCross from "../icons/cross.jsx";
 import IconFolder from "../icons/folder.jsx";
+import IconPencil from "../icons/pencil.jsx";
+import IconArrowLeft from "../icons/arrow-left.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import {
 	messagingActivity,
@@ -61,7 +63,7 @@ function base64FromBytes(bytes) {
 // contacts.jsx уже вызывает ensureConnected при заходе на вкладку "Контакты" — но
 // пользователь может открыть "Сообщения" напрямую, минуя её. ensureConnected идемпотентна
 // (singleton-соединение на вкладку), повторный вызов отсюда безопасен.
-function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
+function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 	const [chatPartners, setChatPartners] = useState([]);
 	const [inboxList, setInboxList] = useState([]);
 	const [unreadByPartner, setUnreadByPartner] = useState({});
@@ -87,9 +89,28 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 				setUnreadByPartner(unread);
 				const allPubkeys = [...partners, ...inbox.map((r) => r.senderPubkey)];
 				if (allPubkeys.length > 0) {
-					// Найденный баг (пользователь): ensureProfilesFetched никогда не обновляла
-					// уже закэшированное био/имя — refreshProfiles безусловно перезаписывает.
-					await refreshProfiles(allPubkeys, fetchProfiles).catch(() => {});
+					// Найденный баг (пользователь, аватар собеседника без контакта не
+					// подгружался): fetchProfiles бросает "нет активного соединения", если
+					// вызвана раньше ensureConnected. Комментарий над ChatList всегда
+					// обещал, что этот вызов идемпотентен и безопасен отсюда — но сам вызов
+					// тут отсутствовал, а эффект Chat() (родителя), который реально
+					// подключается, коммитится ПОСЛЕ дочернего ChatList (React/Preact
+					// гарантируют порядок "снизу вверх" для useEffect на монтировании) —
+					// то есть на первом заходе (минуя "Контакты") fetchProfiles ГАРАНТИРОВАННО
+					// падал и профиль (в т.ч. аватар) собеседника без контакта, для которого
+					// это единственный шанс подгрузиться (нет постоянной live-подписки,
+					// см. refreshLiveProfileSubscription — она перечисляет только contacts),
+					// не подтягивался вообще, пока не прилетит новое сообщение от него.
+					try {
+						await ensureConnected(ownerPubkey, privKey, dbKey);
+						// Найденный баг (пользователь): ensureProfilesFetched никогда не обновляла
+						// уже закэшированное био/имя — refreshProfiles безусловно перезаписывает.
+						await refreshProfiles(allPubkeys, fetchProfiles);
+					} catch {
+						// Офлайн/сеть недоступна — список чатов всё равно показываем по уже
+						// загруженным локальным данным, профили подтянутся при следующем
+						// срабатывании эффекта (messagingActivity/повторное открытие экрана).
+					}
 				}
 			} catch (err) {
 				if (!cancelled) setListError(errorMessage(err));
@@ -129,8 +150,23 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 		});
 	}
 
+	// Пользователь: заголовки-секции "Входящие"/"Чаты" и заглушка "Нет новых
+	// запросов..." — лишний визуальный шум с огромными отступами между собой;
+	// остаётся только сам список (принять/отклонить для заявок незнакомцев —
+	// функционал сохранён, просто без подписи-секции, когда заявок нет —
+	// секция схлопывается целиком, а не показывает пустую заглушку).
+	const totalUnread = Object.values(unreadByPartner).reduce((sum, n) => sum + n, 0);
+
 	return (
-		<Screen title={t("nav.messages")} feed>
+		<Screen
+			title={totalUnread > 0 ? `${t("nav.messages")} [${totalUnread}]` : t("nav.messages")}
+			actions={
+				<button type="button" onClick={onCompose}>
+					<IconPencil /> {t("chat.list.composeButton")}
+				</button>
+			}
+			feed
+		>
 			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 			{/* "Соединение: ..." переехало в постоянную панель под главным меню
 			    (app.jsx, ConnectionStatusPanel) — видна на любом экране (пользователь,
@@ -146,11 +182,8 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 				</p>
 			)}
 
-			<section class="stack" aria-labelledby="inbox-heading" style={{ "--gap": "var(--space-s)" }}>
-				<h2 id="inbox-heading">{t("chat.list.inboxHeading", { count: inboxList.length })}</h2>
-				{inboxList.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{t("chat.list.noInboxRequests")}</p>
-				) : (
+			{inboxList.length > 0 && (
+				<section class="stack" aria-label={t("chat.list.inboxHeading", { count: inboxList.length })} style={{ "--gap": "var(--space-s)" }}>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{inboxList.map((req) => (
 							<li
@@ -176,11 +209,10 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 							</li>
 						))}
 					</ul>
-				)}
-			</section>
+				</section>
+			)}
 
-			<section class="stack" aria-labelledby="chats-heading" style={{ "--gap": "var(--space-s)" }}>
-				<h2 id="chats-heading">{t("chat.list.chatsHeading", { count: chatPartners.length })}</h2>
+			<section class="stack" aria-label={t("chat.list.chatsHeading", { count: chatPartners.length })} style={{ "--gap": "var(--space-s)" }}>
 				{chatPartners.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>
 						{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}
@@ -210,21 +242,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError }) {
 										color: "inherit",
 									}}
 								>
-									<ContactIdentity pubkey={pubkey} />
-									{unreadByPartner[pubkey] > 0 && (
-										<span
-											aria-label={t("chat.list.unreadAria", { count: unreadByPartner[pubkey] })}
-											style={{
-												background: "var(--bad)",
-												color: "white",
-												borderRadius: "999px",
-												padding: "0 var(--space-3xs)",
-												fontSize: "0.85em",
-											}}
-										>
-											{unreadByPartner[pubkey]}
-										</span>
-									)}
+									<ContactIdentity pubkey={pubkey} unreadCount={unreadByPartner[pubkey]} />
 								</button>
 							</li>
 						))}
@@ -800,12 +818,153 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	);
 }
 
+// "Написать" (header-actions ChatList) — короткая форма "кому/текст/вложение",
+// БЕЗ повторной реализации отправки+вложений: и то, и другое — те же функции,
+// что уже использует ChatWindow (sendChatMessageAction/buildOutgoingAttachment
+// логика вложения скопирована в укороченном виде — без голосовых/из хранилища,
+// пользователь просил именно "выбрать и отправить файлы"). После отправки —
+// сразу переход в открывшийся чат (openChat), как и ожидал бы пользователь.
+function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
+	const [to, setTo] = useState("");
+	const [text, setText] = useState("");
+	const [attachmentFile, setAttachmentFile] = useState(null);
+	const [attachmentPosition, setAttachmentPosition] = useState("below");
+	const [attachmentError, setAttachmentError] = useState("");
+	const [error, setError] = useState("");
+	const [busy, setBusy] = useState(false);
+	const busyRef = useRef(false);
+
+	useEffect(() => {
+		// Тот же приём, что в contacts.jsx: сначала пересчёт из уже загруженной
+		// (с прошлого захода) Map, затем — свежие данные после подключения, чтобы
+		// datalist "Кому" не оставался пустым, если пользователь попал в
+		// "Сообщения" напрямую, минуя "Контакты" в этой сессии.
+		refreshAll();
+		ensureConnected(ownerPubkey, privKey, dbKey)
+			.then(async () => {
+				refreshAll();
+				await refreshProfiles(contacts.value, fetchProfiles).catch(() => {});
+			})
+			.catch((e) => setError(errorMessage(e)));
+	}, [ownerPubkey]);
+
+	function handleFileSelected(e) {
+		const file = e.currentTarget.files?.[0];
+		e.currentTarget.value = "";
+		if (!file) return;
+		setAttachmentFile(file);
+		setAttachmentPosition("below");
+		try {
+			validateAttachment({ mime: file.type, size: file.size });
+			setAttachmentError("");
+		} catch (err) {
+			setAttachmentError(errorMessage(err));
+		}
+	}
+
+	function handleRemoveAttachment() {
+		setAttachmentFile(null);
+		setAttachmentError("");
+	}
+
+	function resolveRecipient() {
+		const trimmed = to.trim();
+		return contacts.value.includes(trimmed) ? trimmed : null;
+	}
+
+	async function handleSend(e) {
+		e.preventDefault();
+		if (busyRef.current) return;
+		const recipient = resolveRecipient();
+		if (!recipient) {
+			setError(t("chat.list.composeInvalidRecipient"));
+			return;
+		}
+		if (text.length === 0 && !attachmentFile) return;
+		if (attachmentFile && attachmentError) return;
+		if (text.length > MAX_MESSAGE_LENGTH) {
+			setError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
+			return;
+		}
+		busyRef.current = true;
+		setError("");
+		setBusy(true);
+		try {
+			let attachment;
+			if (attachmentFile) {
+				validateAttachment({ mime: attachmentFile.type, size: attachmentFile.size }); // повторно, defense-in-depth
+				const bytes = new Uint8Array(await attachmentFile.arrayBuffer());
+				attachment = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: attachmentFile.type, name: attachmentFile.name }, privKey);
+				if (attachment.type === "image") attachment.position = attachmentPosition;
+			}
+			await ensureConnected(ownerPubkey, privKey, dbKey);
+			const publishToRecipient = (event) => publishToContact(event, recipient);
+			const lamportTs = await nextLamportTick(ownerPubkey);
+			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchKeyPackage, refreshGroupMessageSubscription, attachment);
+			onSent(recipient);
+		} catch (err) {
+			setError(errorMessage(err));
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	return (
+		<Screen
+			title={t("chat.list.composeTitle")}
+			actions={
+				<button type="button" onClick={onCancel}>
+					<IconArrowLeft /> {t("chat.list.backToChatsButton")}
+				</button>
+			}
+		>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</p>
+			)}
+			<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleSend}>
+				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<span>{t("chat.list.toLabel")}</span>
+					<input list="compose-to-contacts" id="contacts" name="contacts-list" value={to} onInput={(e) => setTo(e.currentTarget.value)} autocomplete="off" />
+					<datalist id="compose-to-contacts">
+						{contacts.value.map((pk) => (
+							<option key={pk} value={pk}>
+								{profiles.value[pk]?.name || shortPubkey(pk)}
+							</option>
+						))}
+					</datalist>
+				</label>
+				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<span>{t("chat.window.messageLabel")}</span>
+					<textarea value={text} maxLength={MAX_MESSAGE_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={5} />
+				</label>
+				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<span>{t("chat.list.attachmentsLabel")}</span>
+					<input type="file" onChange={handleFileSelected} disabled={busy} />
+				</label>
+				{attachmentFile && (
+					<AttachmentPreview file={attachmentFile} position={attachmentPosition} onPositionChange={setAttachmentPosition} onRemove={handleRemoveAttachment} error={attachmentError} />
+				)}
+				<button
+					type="submit"
+					disabled={busy || (text.length === 0 && !attachmentFile) || (!!attachmentFile && !!attachmentError)}
+				>
+					<IconSend /> {t("common.send")}
+				</button>
+			</form>
+		</Screen>
+	);
+}
+
 export default function Chat() {
 	const ownerPubkey = currentUser.value.id;
 	const privKey = privKeySig.value;
 	const dbKey = dbKeySig.value;
 
 	const [connectionError, setConnectionError] = useState("");
+	const [composing, setComposing] = useState(false);
 
 	useEffect(() => {
 		ensureConnected(ownerPubkey, privKey, dbKey)
@@ -817,5 +976,20 @@ export default function Chat() {
 		return <ChatWindow ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} contactPubkey={activeChatPubkey.value} />;
 	}
 
-	return <ChatList ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} connectionError={connectionError} />;
+	if (composing) {
+		return (
+			<ComposeMessage
+				ownerPubkey={ownerPubkey}
+				privKey={privKey}
+				dbKey={dbKey}
+				onCancel={() => setComposing(false)}
+				onSent={(recipient) => {
+					setComposing(false);
+					openChat(recipient);
+				}}
+			/>
+		);
+	}
+
+	return <ChatList ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} connectionError={connectionError} onCompose={() => setComposing(true)} />;
 }

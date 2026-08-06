@@ -224,8 +224,10 @@
 	"journal": {
 		"selectDate": "选择日期",
 		"jumpToDate": "跳转到日期",
+		"showAll": "显示全部",
 		"markAllRead": "标记为已读",
 		"empty": "目前还没有发生任何事情——通知将显示在这里。",
+		"emptyDate": "这一天没有事件。",
 		"unreadDot": "未读",
 		"pagerAriaLabel": "日志页面",
 		"pageStatus": "第 {{current}} 页，共 {{total}} 页",
@@ -386,7 +388,13 @@
 			"noInboxRequests": "没有来自陌生人的新聊天请求。",
 			"chatsHeading": "聊天（{{count}}）",
 			"noChatsYet": "您还没有任何聊天——请从“{{contactsLabel}}”部分的联系人昵称开始对话。",
-			"unreadAria": "未读：{{count}}"
+			"unreadAria": "未读：{{count}}",
+			"composeButton": "写消息",
+			"composeTitle": "写消息",
+			"backToChatsButton": "返回聊天列表",
+			"toLabel": "收件人",
+			"attachmentsLabel": "附件",
+			"composeInvalidRecipient": "请从联系人中选择收件人"
 		},
 		"window": {
 			"clearHistoryButton": "清空聊天记录",

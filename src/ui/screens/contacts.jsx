@@ -47,7 +47,7 @@ import { t, errorMessage } from "../signals/i18n.js";
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
 // передан, делает аватар+имя ссылкой на чат (contacts.jsx, реальные контакты);
 // в списке заблокированных onClick не передаётся — просто отображение.
-export function ContactIdentity({ pubkey, onClick }) {
+export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 	const profile = profiles.value[pubkey];
 	const displayName = profile?.name || shortPubkey(pubkey);
 
@@ -61,7 +61,12 @@ export function ContactIdentity({ pubkey, onClick }) {
 
 	const text = (
 		<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-			<span class={profile?.name ? undefined : "contact-identity-npub"}>{displayName}</span>
+			<span class={profile?.name ? undefined : "contact-identity-npub"}>
+				{displayName}
+				{/* Список чатов (chat.jsx) — непрочитанные этого собеседника в квадратных
+				    скобках рядом с именем (пользователь), вместо отдельного бейджа справа. */}
+				{unreadCount > 0 && <span aria-label={t("chat.list.unreadAria", { count: unreadCount })}> [{unreadCount}]</span>}
+			</span>
 			{profile?.about && <small>{profile.about}</small>}
 		</span>
 	);
