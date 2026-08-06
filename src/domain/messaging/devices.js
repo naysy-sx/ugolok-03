@@ -9,6 +9,7 @@ import { getOrCreateDeviceId } from "../identity/device.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
+import { computeGroupId } from "./chat.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -84,6 +85,94 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 	// добавленным (DESIGN.md, "Этап 25", раздел 1).
 	knownRow.addedGroupIds.push(group.groupId);
 	await db.table("knownDevices").put(knownRow);
+}
+
+// Симметрична addSiblingToGroup выше, но добавляет устройство КОНТАКТА (не
+// своё) — появившееся ПОСЛЕ установления чата (этап 72, DESIGN.md). Коммит —
+// той же механикой, тем же #h-каналом (существующие участники, включая
+// другие устройства контакта, уже подписаны). Welcome — БЕЗ тега "contact"
+// (в отличие от addSiblingToGroup): отправитель Welcome — я сам, получатель —
+// контакт, обычная, ничем не осложнённая семантика (та же, что у самого
+// первого Welcome в ensureChatEstablished).
+async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group) {
+	const state = deserializeState(group.state);
+	const { privateKey: oldEnvPriv, publicKey: oldEnvPub } = await deriveNostrEnvelopeKeys(state);
+
+	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, wireBytes);
+	await db.table("mlsGroups").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				groupId: group.groupId,
+				contactPubkey: group.contactPubkey,
+				state: serializeState(newSessionState),
+			},
+			MLS_GROUPS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
+
+	const commitContent = nip44Encrypt(encodeBase64(commitWireBytes), oldEnvPriv, bytesToHex(oldEnvPub));
+	const commitEvent = sign(
+		{ kind: 445, tags: [["h", group.groupId]], content: commitContent, created_at: Math.floor(Date.now() / 1000) },
+		generateSecretKey(),
+	);
+	await requirePublishOk(publish, commitEvent);
+
+	const welcomeEvent = nip59Wrap({ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] }, privKey, contactPubkey);
+	await requirePublishOk(publish, welcomeEvent);
+
+	// Персист СРАЗУ после успешного добавления (SM-2, тот же принцип, что addSiblingToGroup).
+	await db.table("knownContactDevices").put({ ownerPubkey, contactPubkey, deviceId, wireBytes });
+}
+
+// Единая точка входа для ОДНОГО входящего kind:443-анонса — вызывается живой
+// подпиской (transport.js's refreshGroupMessageSubscription, этап 72), не
+// пакетом. Ветвление: announcerPubkey===ownerPubkey — свой сиблинг (тот же
+// addSiblingToGroup/knownDevices, что и syncDeviceMembership); иначе —
+// устройство КОНТАКТА, добавляется ТОЛЬКО если чат с ним уже установлен
+// (иначе — no-op, реальное первое установление идёт через ensureChatEstablished,
+// не через эту функцию).
+export async function handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish, announcerPubkey, deviceId, wireBytes) {
+	if (!deviceId) return;
+
+	if (announcerPubkey === ownerPubkey) {
+		const myDeviceId = await getOrCreateDeviceId();
+		if (deviceId === myDeviceId) return;
+
+		let knownRow = await db.table("knownDevices").get([ownerPubkey, deviceId]);
+		if (!knownRow) {
+			knownRow = { ownerPubkey, deviceId, wireBytes, addedGroupIds: [] };
+			await db.table("knownDevices").put(knownRow);
+		}
+
+		const allGroupsRaw = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+		const allGroups = allGroupsRaw.map((g) => fromEncryptedRow(g, dbKey));
+		for (const group of allGroups) {
+			if (knownRow.addedGroupIds.includes(group.groupId)) continue;
+			try {
+				await addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group);
+			} catch (e) {
+				console.warn("handleDeviceAnnounce: не удалось добавить своё устройство в группу", deviceId, group.groupId, e);
+			}
+		}
+		return;
+	}
+
+	const contactPubkey = announcerPubkey;
+	const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+	const groupRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+	if (!groupRaw) return; // нет установленной переписки — нечего досинхронизировать
+
+	const group = fromEncryptedRow(groupRaw, dbKey);
+	const known = await db.table("knownContactDevices").get([ownerPubkey, contactPubkey, deviceId]);
+	if (known) return;
+
+	try {
+		await addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group);
+	} catch (e) {
+		console.warn("handleDeviceAnnounce: не удалось добавить устройство контакта в группу", deviceId, groupIdHex, e);
+	}
 }
 
 export async function syncDeviceMembership(ownerPubkey, privKey, dbKey, publish, fetchOwnKeyPackageAnnounces) {

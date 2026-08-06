@@ -21,7 +21,7 @@ import {
 	receiveGroupMessageEvent,
 	upsertMessage,
 } from "../../domain/messaging/chat.js";
-import { syncDeviceMembership } from "../../domain/messaging/devices.js";
+import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
 import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
 import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
 import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-requests.js";
@@ -91,6 +91,8 @@ let connectPromise = null;
 let connectedForPubkey = null;
 let verifyBatchFn = null;
 let groupMessageSubscriber = null;
+let deviceAnnounceSubscriber = null; // этап 72 — живая досинхронизация устройств (свои + чужие)
+let mirrorSubscriber = null; // этап 72 — живое зеркало истории (было только one-shot catch-up)
 
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
@@ -363,6 +365,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// переподключившееся устройство получило полный паритет истории чатов.
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
 	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
+	// Этап 72 — постоянная подписка СРАЗУ после одноразового catch-up выше:
+	// дальнейшие зеркалированные события (от других устройств этой identity,
+	// живьём) больше не ждут следующего connect()/reload.
+	await refreshLiveMirrorSubscription(pubkeyHex, mirrorKey, dbKey);
 	logSync(t("syncLog.chatHistoryDone"));
 
 	// bumpMessagingActivity()/bumpProfileActivity() — chat.jsx/app.jsx-бейджи
@@ -1307,9 +1313,13 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 	if (!connection) return;
 	// НАЙДЕНО РЕАЛЬНЫМ ИСПОЛЬЗОВАНИЕМ (не домысел): .toArray() без фильтра подписывал(ся)
 	// на #h ГРУПП ВСЕХ локальных аккаунтов на этом устройстве, не только текущего ownerPubkey.
-	const groupIds = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map(
-		(row) => row.groupId,
+	// Этап 72 — расшифровываем строки (contactPubkey — sensitive, MLS_GROUPS_PLAINTEXT_FIELDS)
+	// не только ради groupIds, но и ради contactPubkeys ниже (фильтр живой досинхронизации).
+	const groupRows = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map((row) =>
+		fromEncryptedRow(row, dbKey),
 	);
+	const groupIds = groupRows.map((row) => row.groupId);
+	const contactPubkeys = [...new Set(groupRows.map((row) => row.contactPubkey))];
 	if (groupIds.length === 0) return;
 
 	if (!groupMessageSubscriber) {
@@ -1377,8 +1387,14 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 							);
 						}
 						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
-					} catch {
-						// не удалось расшифровать/обработать конкретное сообщение — не ронять батч
+					} catch (e) {
+						// Этап 72 — было полностью молчаливо (console.warn отсутствовал вовсе), что
+						// маскировало split-brain (DESIGN.md "Этап 72"): расхождение MLS-состояния
+						// между устройствами выглядело как "сообщения просто не доходят", без единой
+						// зацепки в консоли. console.warn — тот же уровень видимости, что везде в
+						// проекте для best-effort сбоев (mirrorBestEffort/syncDeviceMembership и т.п.),
+						// не UI-уведомление — не ронять батч по-прежнему обязательно.
+						console.warn("refreshGroupMessageSubscription: не удалось обработать входящее сообщение группы", event.id, e);
 					}
 				}
 				if (activityChanged) bumpMessagingActivity();
@@ -1387,6 +1403,33 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 		connection.addMessageHandler(groupMessageSubscriber.handleMessage);
 	}
 	groupMessageSubscriber.subscribe("group-messages", [{ "#h": groupIds, kinds: [445] }]);
+
+	// Этап 72 — живая (не только разово при connect()) досинхронизация устройств:
+	// и своих (сиблингов), и устройств КАЖДОГО контакта, с которым уже есть
+	// установленный чат (DESIGN.md "Этап 72" — пересмотр сознательно суженного
+	// скоупа этапа 25 §1, "если понадобится позже — тривиально"). Переиспользует
+	// ТЕ ЖЕ точки вызова, что group-messages выше (пересчитывается на каждый
+	// refreshGroupMessageSubscription — после ensureChatEstablished/acceptWelcome/
+	// connect()), не заводит новых точек по UI.
+	if (!deviceAnnounceSubscriber) {
+		deviceAnnounceSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					if (!isNewEvent(event.id)) continue;
+					try {
+						const deviceTag = event.tags.find((t) => t[0] === "device");
+						if (!deviceTag) continue; // легаси/чужеродное — не наш протокол
+						await handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish, event.pubkey, deviceTag[1], decodeBase64(event.content));
+					} catch (e) {
+						console.warn("deviceAnnounceSubscriber: не удалось обработать анонс устройства", event.id, e);
+					}
+				}
+			},
+		});
+		connection.addMessageHandler(deviceAnnounceSubscriber.handleMessage);
+	}
+	deviceAnnounceSubscriber.subscribe("device-announces", [{ authors: [ownerPubkey, ...contactPubkeys], kinds: [443] }]);
 }
 
 // DESIGN.md, этап 25, раздел 1 — one-shot REQ по ВСЕМ kind 443, когда-либо
@@ -1464,4 +1507,34 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 		connection.addMessageHandler(subscriber.handleMessage);
 		subscriber.subscribe(subId, [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }]);
 	});
+}
+
+// Этап 72 — было: зеркало подтягивалось ТОЛЬКО одноразовым REQ выше
+// (catch-up при connect()), не живьём — если сиблинг-устройство уже открыто
+// и подключено, когда ДРУГОЕ моё устройство отправляет/принимает сообщение,
+// первое узнавало об этом только на следующий connect()/reload (DESIGN.md
+// "Этап 72"). Постоянная подписка, тот же паттерн жизненного цикла, что
+// giftWrapSubscriber — заводится один раз при connect(), сразу после
+// одноразового catch-up (syncMirroredHistory выше), живёт до конца сессии.
+export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKey) {
+	if (!connection) return;
+
+	if (!mirrorSubscriber) {
+		mirrorSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				for (const event of events) {
+					try {
+						const payload = decryptMirrorPayload(event.content, mirrorKey);
+						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
+						await receiveLamportTick(ownerPubkey, payload.lamportTs);
+					} catch (e) {
+						console.warn("refreshLiveMirrorSubscription: не удалось расшифровать зеркалированное сообщение", e);
+					}
+				}
+			},
+		});
+		connection.addMessageHandler(mirrorSubscriber.handleMessage);
+	}
+	mirrorSubscriber.subscribe("live-mirror", [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }]);
 }
