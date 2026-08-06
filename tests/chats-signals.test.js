@@ -35,6 +35,7 @@ beforeEach(async () => {
 	await db.table("mlsGroups").clear();
 	await db.table("messages").clear();
 	await db.table("chatSyncState").clear();
+	await db.table("knownContactDevices").clear();
 });
 
 after(() => {
@@ -101,7 +102,7 @@ test("listChatPartners: messages-источник тоже owner-scoped — не
 
 test("sendChatMessageAction: устанавливает чат при первой отправке (ensureChatEstablished no-op при повторе) и вызывает refresh-подписку", async () => {
 	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
-	const fetchKeyPackage = async () => bobKeyPackage.wireBytes;
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
 	let refreshCalls = 0;
 	const refreshGroupMessageSubscription = async () => {
 		refreshCalls++;
@@ -116,16 +117,16 @@ test("sendChatMessageAction: устанавливает чат при перво
 		"привет",
 		1,
 		publish,
-		fetchKeyPackage,
+		fetchDeviceKeyPackages,
 		refreshGroupMessageSubscription,
 	);
 	assert.ok(eventId);
 	assert.equal(refreshCalls, 1, "refreshGroupMessageSubscription обязана вызываться (находка 3)");
 	assert.equal((await db.table("mlsGroups").toArray()).length, 1);
 
-	// повторная отправка — чат уже установлен (ensureChatEstablished no-op), fetchKeyPackage
+	// повторная отправка — чат уже установлен (ensureChatEstablished no-op), fetchDeviceKeyPackages
 	// не должен вызываться повторно
-	const fetchKeyPackageShouldNotBeCalled = async () => {
+	const fetchDeviceKeyPackagesShouldNotBeCalled = async () => {
 		throw new Error("не должен вызываться повторно");
 	};
 	await sendChatMessageAction(
@@ -136,7 +137,7 @@ test("sendChatMessageAction: устанавливает чат при перво
 		"второе",
 		2,
 		publish,
-		fetchKeyPackageShouldNotBeCalled,
+		fetchDeviceKeyPackagesShouldNotBeCalled,
 		refreshGroupMessageSubscription,
 	);
 	assert.equal(refreshCalls, 2, "refresh всё равно вызывается на каждую отправку (безусловно, идемпотентно)");
@@ -153,7 +154,7 @@ test("этап 29: sendChatMessageAction — attachment пробрасывает
 		"",
 		1,
 		async () => ({ ok: true }),
-		async () => bobKeyPackage.wireBytes,
+		async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]),
 		async () => {},
 		attachment,
 	);
@@ -161,13 +162,13 @@ test("этап 29: sendChatMessageAction — attachment пробрасывает
 	assert.deepEqual(row.attachment, attachment);
 });
 
-test("sendChatMessageAction: fetchKeyPackage не находит адресата -> понятная ошибка всплывает как есть", async () => {
-	const fetchKeyPackage = async () => {
+test("sendChatMessageAction: fetchDeviceKeyPackages не находит адресата -> понятная ошибка всплывает как есть", async () => {
+	const fetchDeviceKeyPackages = async () => {
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
 	};
 	await assert.rejects(
 		() => sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY,
-		BOB_PUB, "привет", 1, async () => ({ ok: true }), fetchKeyPackage, async () => {}),
+		BOB_PUB, "привет", 1, async () => ({ ok: true }), fetchDeviceKeyPackages, async () => {}),
 		/ключ/,
 	);
 });
@@ -183,7 +184,7 @@ test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делег
 		"привет",
 		1,
 		publish,
-		async () => bobKeyPackage.wireBytes,
+		async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]),
 		async () => {},
 	);
 	const row = await db.table("messages").where("id").equals(eventId).first();
@@ -212,7 +213,7 @@ test("deleteMessageForMeAction/clearChatHistoryAction: делегируют в d
 		"привет",
 		1,
 		publish,
-		async () => bobKeyPackage.wireBytes,
+		async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]),
 		async () => {},
 	);
 	const row = await db.table("messages").where("id").equals(eventId).first();
@@ -221,7 +222,7 @@ test("deleteMessageForMeAction/clearChatHistoryAction: делегируют в d
 	assert.equal(await db.table("messages").where("id").equals(eventId).first(), undefined);
 
 	await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY,
-		BOB_PUB, "ещё одно", 2, publish, async () => bobKeyPackage.wireBytes, async () => {});
+		BOB_PUB, "ещё одно", 2, publish, async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]), async () => {});
 	await clearChatHistoryAction(ALICE_PUB, BOB_PUB);
 	const remaining = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).toArray();
 	assert.deepEqual(remaining, []);

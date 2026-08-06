@@ -7,7 +7,7 @@ import {
 	publish,
 	publishToContact,
 	fetchProfiles,
-	fetchKeyPackage,
+	fetchDeviceKeyPackages,
 	refreshGroupMessageSubscription,
 	refreshLiveProfileSubscription,
 	nextLamportTick,
@@ -593,7 +593,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				text,
 				lamportTs,
 				publishToChatPartner,
-				fetchKeyPackage,
+				fetchDeviceKeyPackages,
 				refreshGroupMessageSubscription,
 				attachment,
 			);
@@ -900,7 +900,7 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			const publishToRecipient = (event) => publishToContact(event, recipient);
 			const lamportTs = await nextLamportTick(ownerPubkey);
-			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchKeyPackage, refreshGroupMessageSubscription, attachment);
+			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchDeviceKeyPackages, refreshGroupMessageSubscription, attachment);
 			onSent(recipient);
 		} catch (err) {
 			setError(errorMessage(err));

@@ -27,6 +27,7 @@ beforeEach(async () => {
 	await db.table("inboxRequests").clear();
 	await db.table("mlsGroups").clear();
 	await db.table("ownKeyPackage").clear();
+	await db.table("knownContactDevices").clear();
 	activeChatPubkey.value = null;
 });
 
@@ -54,7 +55,7 @@ test("acceptInboxRequestAction: присоединяется к MLS-группе
 		if (event.kind === 1059) welcomeGiftWrap = event;
 		return { ok: true };
 	};
-	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, ALICE_PUB, publish, async () => aliceOwnKeyPackage.wireBytes);
+	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, ALICE_PUB, publish, async () => new Map([["alice-device", { wireBytes: aliceOwnKeyPackage.wireBytes, createdAt: 1000 }]]));
 	await db.table("mlsGroups").clear();
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);

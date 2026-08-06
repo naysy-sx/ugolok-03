@@ -8,6 +8,7 @@ import {
 	createOwnKeyPackage,
 	createGroup,
 	addMember,
+	addMembers,
 	joinFromWelcome,
 	encryptApplicationMessage,
 	decryptApplicationMessage,
@@ -109,24 +110,34 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, 
 // DESIGN.md, этап 24, п.3 — установление 1:1-разговора. Своя (не из NIP-EE
 // напрямую) последовательность: KeyPackage адресата -> createGroup+addMember
 // -> персист ДО отправки (SM-1/SM-2, этап 13) -> Welcome как gift wrap.
-export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchKeyPackage) {
+//
+// Этап 72 — было: addMember() с ОДНИМ произвольно выбранным устройством
+// контакта (недетерминированный выбор в fetchKeyPackage) приводило к
+// split-brain — разные инициаторы могли выбрать разное устройство контакта,
+// получая ДВЕ независимые MLS-группы под одним и тем же #h-тегом
+// (computeGroupId зависит только от пары identity, не от устройства).
+// Теперь fetchDeviceKeyPackages возвращает ВСЕ известные устройства контакта
+// разом — addMembers добавляет их ОДНИМ commit'ом/welcome (см. DESIGN.md
+// "Этап 72" — Welcome в MLS штатно несёт секреты для нескольких новых
+// участников одновременно, каждое устройство извлекает свои независимо).
+export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
 	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return;
 
-	const theirWireBytes = await fetchKeyPackage(contactPubkey);
+	const theirDevices = await fetchDeviceKeyPackages(contactPubkey);
 
 	// Свежий KeyPackage — для СОЗДАНИЯ именно этой группы, не переиспользует
 	// опубликованный "приглашающий" ownKeyPackage (тот — для входящих Welcome от других).
-	const deviceId = await getOrCreateDeviceId();
-	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
+	const myDeviceId = await getOrCreateDeviceId();
+	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, myDeviceId);
 	const state = await createGroup(ownerPubkey, ownKeyPackage, groupId);
-	const { newSessionState, welcomeWireBytes } = await addMember(state, theirWireBytes);
+	const { newSessionState, welcomeWireBytes } = await addMembers(state, Array.from(theirDevices.values(), (d) => d.wireBytes));
 	// commitWireBytes сознательно отброшен — некому его слать (DESIGN.md п.3.4):
-	// у новой 2-местной группы нет других существующих участников кроме нового,
-	// который узнаёт состояние из Welcome, не из коммита.
+	// у новой группы нет других СУЩЕСТВУЮЩИХ участников кроме новых, которые
+	// узнают состояние из Welcome, не из коммита.
 
 	// contactPubkey хранится РЯДОМ с состоянием (не отдельной таблицей-маппингом) —
 	// нужен для обратного поиска "чьё это kind 445" по groupId из h-тега: groupId —
@@ -137,6 +148,13 @@ export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contact
 	await db.table("mlsGroups").put(
 		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
 	);
+
+	// Бухгалтерия для реактивной досинхронизации (devices.js, handleDeviceAnnounce) —
+	// эти устройства контакта УЖЕ добавлены сейчас, повторно добавлять не нужно.
+	// Не шифруется (тот же прецедент, что knownDevices) — публичный KeyPackage.
+	for (const [theirDeviceId, device] of theirDevices) {
+		await db.table("knownContactDevices").put({ ownerPubkey, contactPubkey, deviceId: theirDeviceId, wireBytes: device.wireBytes });
+	}
 
 	const welcomeEvent = nip59Wrap(
 		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] },

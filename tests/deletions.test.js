@@ -32,6 +32,7 @@ beforeEach(async () => {
 	await db.table("ownKeyPackage").clear();
 	await db.table("mlsGroups").clear();
 	await db.table("messages").clear();
+	await db.table("knownContactDevices").clear();
 });
 
 after(() => {
@@ -44,13 +45,13 @@ function toHex(bytes) {
 
 async function establishAliceToBob() {
 	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
-	const fetchKeyPackage = async () => bobKeyPackage.wireBytes;
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
 	const publishedEvents = [];
 	const publish = async (event) => {
 		publishedEvents.push(event);
 		return { ok: true };
 	};
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchDeviceKeyPackages);
 
 	const welcomeGiftWrap = publishedEvents.find((e) => e.kind === 1059);
 	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);

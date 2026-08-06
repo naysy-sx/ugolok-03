@@ -1246,21 +1246,40 @@ export async function refreshFileSubtreeOpSubscription(ownerPubkey, dbKey) {
 }
 
 // Аналог fetchProfiles, но kind 443 (KeyPackage) — одноразовый REQ, throw если
-// не найден (chat.js's ensureChatEstablished превращает это в понятную ошибку
-// "у контакта нет опубликованного ключа для сообщений").
-export async function fetchKeyPackage(pubkeyHex) {
+// не найдено НИ ОДНОГО устройства (chat.js's ensureChatEstablished превращает
+// это в понятную ошибку "у контакта нет опубликованного ключа для сообщений").
+//
+// Этап 72 — было: fetchKeyPackage брало "какое попадётся последним" среди
+// НЕСКОЛЬКИХ kind:443 от разных устройств контакта (kind 443 не replaceable —
+// у контакта с 2+ устройствами их несколько на relay одновременно, это штатно,
+// см. DESIGN.md "Этап 25" §1). Недетерминированный выбор приводил к split-brain
+// (DESIGN.md "Этап 72"): разные инициаторы чата могли добавить РАЗНОЕ
+// устройство контакта в MLS-группу под одним и тем же #h-тегом. Теперь
+// возвращаются ВСЕ известные устройства (дедуп по тегу device, при повторной
+// публикации одним и тем же устройством побеждает более свежий created_at) —
+// вызывающий код (ensureChatEstablished) добавляет их ОДНИМ commit'ом.
+export async function fetchDeviceKeyPackages(pubkeyHex) {
 	if (!connection) {
-		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchKeyPackage()");
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDeviceKeyPackages()");
 	}
-	let found = null;
-	const subId = "keypackage-" + Math.random().toString(36).slice(2);
+	const devices = new Map(); // deviceId -> {wireBytes, createdAt}
+	const subId = "device-keypackages-" + Math.random().toString(36).slice(2);
 
 	await new Promise((resolve) => {
 		const subscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: (events) => {
 				for (const event of events) {
-					found = decodeBase64(event.content);
+					try {
+						const deviceTag = event.tags.find((t) => t[0] === "device");
+						if (!deviceTag) continue; // легаси/чужеродное — не наш протокол, пропустить
+						const deviceId = deviceTag[1];
+						const existing = devices.get(deviceId);
+						if (existing && existing.createdAt >= event.created_at) continue; // не свежее — не перезаписывать
+						devices.set(deviceId, { wireBytes: decodeBase64(event.content), createdAt: event.created_at });
+					} catch {
+						// повреждённый content — пропустить, не ронять весь fetch (тот же принцип, что fetchProfiles)
+					}
 				}
 			},
 			onEose: () => {
@@ -1272,10 +1291,10 @@ export async function fetchKeyPackage(pubkeyHex) {
 		subscriber.subscribe(subId, [{ authors: [pubkeyHex], kinds: [443] }]);
 	});
 
-	if (!found) {
+	if (devices.size === 0) {
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
 	}
-	return found;
+	return devices;
 }
 
 // DESIGN.md, этап 24, п.5 — подписка на входящие kind 445 по #h (не authors —

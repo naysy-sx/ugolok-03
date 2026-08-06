@@ -271,6 +271,15 @@ db.version(20).stores({
   files_mount_file_meta: "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
 });
 
+// Этап 72 — учёт уже добавленных в MLS-группу устройств КОНТАКТА (не своих
+// собственных — для тех уже есть knownDevices, version(3)), чтобы реактивная
+// досинхронизация (devices.js) не пыталась добавить одно и то же устройство
+// контакта повторно. Не шифруется — тот же прецедент, что knownDevices:
+// KeyPackage и так публичен на relay, локальную копию нечем защищать.
+db.version(21).stores({
+  knownContactDevices: "[ownerPubkey+contactPubkey+deviceId], [ownerPubkey+contactPubkey]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

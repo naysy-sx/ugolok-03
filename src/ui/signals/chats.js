@@ -44,11 +44,11 @@ export async function sendChatMessageAction(
 	text,
 	lamportTs,
 	publish,
-	fetchKeyPackage,
+	fetchDeviceKeyPackages,
 	refreshGroupMessageSubscription,
 	attachment,
 ) {
-	await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchKeyPackage);
+	await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
 	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment);
 }

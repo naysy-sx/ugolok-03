@@ -5,6 +5,7 @@ import {
 	createOwnKeyPackage,
 	createGroup,
 	addMember,
+	addMembers,
 	joinFromWelcome,
 	encryptApplicationMessage,
 	decryptApplicationMessage,
@@ -117,6 +118,61 @@ test("addMember: мусорные байты вместо KeyPackage — пон�
 	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
 
 	await assert.rejects(() => addMember(aliceState, new Uint8Array([1, 2, 3, 4])));
+});
+
+// Этап 72 — addMembers: один commit, N add-proposals, ОДИН welcome, из
+// которого КАЖДОЕ добавленное устройство извлекает СВОИ секреты независимо
+// (штатное свойство MLS Welcome — не костыль). Нужна для детерминированного
+// установления 1:1-чата сразу со ВСЕМИ известными устройствами контакта.
+test("addMembers: два устройства добавлены ОДНИМ коммитом — оба реально становятся участниками (сообщение доходит обоим)", async () => {
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
+	const groupId = crypto.getRandomValues(new Uint8Array(32));
+	let aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
+
+	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device-1");
+	const bobOther = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device-2");
+
+	const addResult = await addMembers(aliceState, [bob.wireBytes, bobOther.wireBytes]);
+	aliceState = addResult.newSessionState;
+
+	// ОДИН и тот же welcomeWireBytes — каждое устройство находит СВОЮ запись внутри.
+	const bobState = await joinFromWelcome(bob, addResult.welcomeWireBytes);
+	const bobOtherState = await joinFromWelcome(bobOther, addResult.welcomeWireBytes);
+
+	const plaintext = new TextEncoder().encode("hello both bob devices");
+	const sendResult = await encryptApplicationMessage(aliceState, plaintext);
+
+	const recv1 = await decryptApplicationMessage(bobState, sendResult.wireBytes);
+	assert.deepEqual(recv1.message, plaintext);
+	const recv2 = await decryptApplicationMessage(bobOtherState, sendResult.wireBytes);
+	assert.deepEqual(recv2.message, plaintext);
+});
+
+test("addMembers: пустой массив — throw (нечего добавлять, вызывающий код обязан проверить до вызова)", async () => {
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
+	const groupId = crypto.getRandomValues(new Uint8Array(32));
+	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
+
+	await assert.rejects(() => addMembers(aliceState, []));
+});
+
+test("addMembers АДВЕРСАРНО: один валидный KeyPackage + один мусорный — вся операция отклоняется целиком, не частичное добавление", async () => {
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
+	const groupId = crypto.getRandomValues(new Uint8Array(32));
+	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
+	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device");
+
+	await assert.rejects(() => addMembers(aliceState, [bob.wireBytes, new Uint8Array([1, 2, 3, 4])]));
+});
+
+test("addMembers: SM-1 — возвращаемый объект не содержит поле consumed", async () => {
+	const alice = await createOwnKeyPackage(ALICE_PUBKEY_HEX, "alice-device");
+	const groupId = crypto.getRandomValues(new Uint8Array(32));
+	const aliceState = await createGroup(ALICE_PUBKEY_HEX, alice, groupId);
+	const bob = await createOwnKeyPackage(BOB_PUBKEY_HEX, "bob-device");
+
+	const addResult = await addMembers(aliceState, [bob.wireBytes]);
+	assert.equal("consumed" in addResult, false);
 });
 
 test("deriveNostrEnvelopeKeys: alice и bob получают ОДИНАКОВЫЕ ключи конверта в одной эпохе (общий exporter_secret)", async () => {

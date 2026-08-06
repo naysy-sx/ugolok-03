@@ -34,6 +34,7 @@ beforeEach(async () => {
 	await db.table("mlsGroups").clear();
 	await db.table("deviceIdentity").clear();
 	await db.table("knownDevices").clear();
+	await db.table("knownContactDevices").clear();
 });
 
 after(() => {
@@ -46,13 +47,13 @@ after(() => {
 // (уже существующий участник) реально получает и применяет коммит при добавлении сиблинга.
 async function establishAliceToBob() {
 	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "alice-main-device");
-	const fetchKeyPackage = async () => bobKeyPackage.wireBytes;
+	const fetchDeviceKeyPackages = async () => new Map([["alice-main-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
 	let welcomeGiftWrap;
 	const publish = async (event) => {
 		if (event.kind === 1059) welcomeGiftWrap = event;
 		return { ok: true };
 	};
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchDeviceKeyPackages);
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);
 	const welcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));

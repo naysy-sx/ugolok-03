@@ -32,6 +32,7 @@ beforeEach(async () => {
 	await db.table("inboxRequests").clear();
 	await db.table("mlsGroups").clear();
 	await db.table("ownKeyPackage").clear();
+	await db.table("knownContactDevices").clear();
 });
 
 after(() => {
@@ -109,7 +110,7 @@ test("acceptInboxRequest: реально присоединяет к MLS-гру�
 		return { ok: true };
 	};
 	// Незнакомец (условно) инициирует через тот же примитив ensureChatEstablished, адресуя Welcome Алисе
-	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, alicePub2, publish, async () => aliceOwnKeyPackage.wireBytes);
+	await ensureChatEstablished(STRANGER_PUB, STRANGER_PRIV, DB_KEY, alicePub2, publish, async () => new Map([["alice-device", { wireBytes: aliceOwnKeyPackage.wireBytes, createdAt: 1000 }]]));
 	await db.table("mlsGroups").clear(); // у Алисы своей записи ещё нет — это ЕЁ первый приём
 
 	const rumor = nip59Unwrap(welcomeGiftWrap, ALICE_PRIV);

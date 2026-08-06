@@ -37,6 +37,7 @@ beforeEach(async () => {
 	await db.table("mlsGroups").clear();
 	await db.table("messages").clear();
 	await db.table("outbox").clear();
+	await db.table("knownContactDevices").clear();
 });
 
 after(() => {
@@ -92,12 +93,16 @@ test("AC-16: ownKeyPackage хранится зашифрованным — сы�
 	assert.ok(decrypted.privatePackage);
 });
 
+// Этап 72 — fetchKeyPackage (один wireBytes) заменён на fetchDeviceKeyPackages
+// (Map<deviceId, {wireBytes, createdAt}> — может быть НЕСКОЛЬКО устройств
+// контакта, см. CONTRACTS.md "Этап 72"). Хелпер по умолчанию — одно
+// устройство Боба, для многоустройственных сценариев см. отдельные тесты ниже.
 async function establishAliceToBob() {
 	// Боб публикует свой KeyPackage (симулируем то, что реально произошло бы на его стороне)
 	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
-	const fetchKeyPackage = async (pubkey) => {
+	const fetchDeviceKeyPackages = async (pubkey) => {
 		assert.equal(pubkey, BOB_PUB);
-		return bobKeyPackage.wireBytes;
+		return new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
 	};
 	const publishedEvents = [];
 	const publish = async (event) => {
@@ -105,7 +110,7 @@ async function establishAliceToBob() {
 		return { ok: true };
 	};
 
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchDeviceKeyPackages);
 
 	const welcomeGiftWrap = publishedEvents.find((e) => e.kind === 1059);
 	assert.ok(welcomeGiftWrap, "должен опубликовать gift wrap с Welcome");
@@ -121,7 +126,7 @@ async function establishAliceToBob() {
 	const bobState = await joinFromWelcome(bobKeyPackage, welcomeWireBytes);
 	const groupId = computeGroupId(ALICE_PUB, BOB_PUB);
 
-	return { fetchKeyPackage, publish, groupId, bobSerializedState: serializeState(bobState) };
+	return { fetchDeviceKeyPackages, publish, groupId, bobSerializedState: serializeState(bobState) };
 }
 
 // Симулирует "теперь мы на устройстве Боба": подкладывает его копию состояния в
@@ -164,7 +169,7 @@ test("AC-16: mlsGroups хранится зашифрованным — сыро�
 });
 
 test("ensureChatEstablished: повторный вызов — no-op, не публикует Welcome снова", async () => {
-	const fetchKeyPackage = async () => {
+	const fetchDeviceKeyPackages = async () => {
 		throw new Error("не должен вызываться повторно");
 	};
 	let publishCount = 0;
@@ -173,17 +178,63 @@ test("ensureChatEstablished: повторный вызов — no-op, не пу�
 		return { ok: true };
 	};
 	await establishAliceToBob();
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchKeyPackage);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchDeviceKeyPackages);
 	assert.equal(publishCount, 0);
 });
 
-test("ensureChatEstablished: fetchKeyPackage не находит адресата — понятная ошибка, не тихий сбой", async () => {
-	const fetchKeyPackage = async () => {
+test("ensureChatEstablished: fetchDeviceKeyPackages не находит адресата — понятная ошибка, не тихий сбой", async () => {
+	const fetchDeviceKeyPackages = async () => {
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
 	};
 	await assert.rejects(
-		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchKeyPackage),
+		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages),
 		/ключ/,
+	);
+});
+
+// Этап 72 — ядро фикса split-brain: у Боба ДВА устройства с независимо
+// опубликованными KeyPackage — ensureChatEstablished обязана добавить ОБА
+// ОДНИМ commit'ом/welcome, а не выбрать одно произвольно (старый баг:
+// разные инициаторы могли выбрать РАЗНОЕ устройство контакта -> два
+// непересекающихся MLS-состояния под одним и тем же #h-тегом).
+test("ensureChatEstablished: у контакта ДВА устройства — оба добавлены ОДНИМ welcome, оба независимо принимают его", async () => {
+	const bobDevice1 = await createOwnKeyPackage(BOB_PUB, "bob-phone");
+	const bobDevice2 = await createOwnKeyPackage(BOB_PUB, "bob-laptop");
+	const fetchDeviceKeyPackages = async (pubkey) => {
+		assert.equal(pubkey, BOB_PUB);
+		return new Map([
+			["bob-phone", { wireBytes: bobDevice1.wireBytes, createdAt: 1000 }],
+			["bob-laptop", { wireBytes: bobDevice2.wireBytes, createdAt: 2000 }],
+		]);
+	};
+	const publishedEvents = [];
+	const publish = async (event) => {
+		publishedEvents.push(event);
+		return { ok: true };
+	};
+
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, fetchDeviceKeyPackages);
+
+	const welcomeGiftWraps = publishedEvents.filter((e) => e.kind === 1059);
+	assert.equal(welcomeGiftWraps.length, 1, "ОДИН welcome-конверт обслуживает оба устройства, не два отдельных");
+
+	const rumor = nip59Unwrap(welcomeGiftWraps[0], BOB_PRIV);
+	const welcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));
+
+	// Оба устройства НЕЗАВИСИМО извлекают свои секреты из ОДНОГО и того же welcome.
+	const bobPhoneState = await joinFromWelcome(bobDevice1, welcomeWireBytes);
+	const bobLaptopState = await joinFromWelcome(bobDevice2, welcomeWireBytes);
+	assert.ok(bobPhoneState);
+	assert.ok(bobLaptopState);
+
+	// Бухгалтерия: оба устройства Боба отмечены как уже добавленные в knownContactDevices,
+	// чтобы реактивная досинхронизация (этап 72, devices.js) их не задваивала.
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	const knownRows = await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).toArray();
+	assert.equal(knownRows.length, 2);
+	assert.deepEqual(
+		knownRows.map((r) => r.deviceId).sort(),
+		["bob-laptop", "bob-phone"],
 	);
 });
 

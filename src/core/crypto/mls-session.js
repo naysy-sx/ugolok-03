@@ -151,6 +151,45 @@ export async function addMember(sessionState, theirKeyPackageWireBytes) {
   }
 }
 
+// Этап 72 — множественное добавление ОДНИМ commit'ом: N add-proposals, ОДИН
+// welcome, из которого каждое добавленное устройство извлекает СВОИ секреты
+// независимо (штатное свойство MLS Welcome, не костыль). Нужна для
+// детерминированного установления 1:1-чата сразу со всеми известными
+// устройствами контакта (PROCESS-DOCS/DESIGN.md, "Этап 72") — addMember
+// (один участник) не трогается, остаётся для реактивной досинхронизации.
+export async function addMembers(sessionState, theirKeyPackagesWireBytesArray) {
+  if (theirKeyPackagesWireBytesArray.length === 0) {
+    throw new Error('mls-session: addMembers требует хотя бы один KeyPackage');
+  }
+
+  const context = await getContext();
+  const addProposals = theirKeyPackagesWireBytesArray.map((wireBytes) => ({
+    proposalType: defaultProposalTypes.add,
+    add: { keyPackage: decodeKeyPackage(wireBytes) },
+  }));
+
+  let commitResult;
+  try {
+    commitResult = await createCommit({
+      context,
+      state: sessionState,
+      extraProposals: addProposals,
+      ratchetTreeExtension: true,
+    });
+    if (!commitResult.welcome) {
+      throw new Error('mls-session: commit не произвёл welcome для новых участников');
+    }
+    return {
+      newSessionState: commitResult.newState,
+      welcomeWireBytes: encode(mlsMessageEncoder, commitResult.welcome),
+      commitWireBytes: encode(mlsMessageEncoder, commitResult.commit),
+    };
+  } finally {
+    // SM-1
+    commitResult?.consumed.forEach(zeroOutUint8Array);
+  }
+}
+
 export async function joinFromWelcome(ownKeyPackage, welcomeWireBytes) {
   const context = await getContext();
   const welcome = decodeWelcome(welcomeWireBytes);
