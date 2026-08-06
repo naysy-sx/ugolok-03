@@ -394,3 +394,41 @@ test("handleDeviceAnnounce: announcerPubkey === ownerPubkey, deviceId === myDevi
 	};
 	await handleDeviceAnnounce(ALICE_PUB, ALICE_PRIV, DB_KEY, publish, ALICE_PUB, myDeviceId, new Uint8Array([1]));
 });
+
+// АДВЕРСАРНО (этап 72) — гонка: ДВА вызова handleDeviceAnnounce для ОДНОГО И
+// ТОГО ЖЕ нового устройства контакта, второй начинается ДО того, как первый
+// успел записать knownContactDevices (redelivery того же kind:443 с двух
+// relay, или просто повторный live-batch до завершения предыдущего await).
+// НАЙДЕНО ЭТИМ ЖЕ ТЕСТОМ (не домысел): без guard'а ts-mls НЕ ловит второй
+// вызов как "уже участник" — оба читают ОДНО И ТО ЖЕ пред-коммитное состояние
+// НЕЗАВИСИМО (ни один ещё не записал своё), оба честно проходят addMember,
+// оба публикуют welcome — потерянное обновление, не ошибка протокола.
+// handleDeviceAnnounceInFlight (devices.js) коалесцирует одновременные вызовы
+// с одинаковым ключом в ОДНО реальное выполнение — проверяем именно это.
+test("handleDeviceAnnounce АДВЕРСАРНО: гонка — два параллельных вызова для ОДНОГО нового устройства контакта коалесцируются в одно выполнение, не задваивают welcome", async () => {
+	await establishAliceToBob();
+	const bob2KeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device-2");
+	const published = [];
+	const publish = async (event) => {
+		published.push(event);
+		return { ok: true };
+	};
+
+	// Promise.all — оба вызова стартуют ДО того, как любой успевает дописать
+	// knownContactDevices (тот await ещё не наступил в момент старта второго).
+	await Promise.all([
+		handleDeviceAnnounce(ALICE_PUB, ALICE_PRIV, DB_KEY, publish, BOB_PUB, "bob-device-2", bob2KeyPackage.wireBytes),
+		handleDeviceAnnounce(ALICE_PUB, ALICE_PRIV, DB_KEY, publish, BOB_PUB, "bob-device-2", bob2KeyPackage.wireBytes),
+	]);
+
+	// Ровно ОДНА пара (коммит+welcome) реально прошла — вторая попытка не задвоила эффект.
+	assert.equal(published.filter((e) => e.kind === 1059).length, 1, "welcome опубликован ровно один раз, не дважды");
+
+	// Устройство контакта реально добавлено (первый вызов победил) — bob-device-2
+	// может присоединиться по опубликованному welcome.
+	const welcomeGiftWrap = published.find((e) => e.kind === 1059);
+	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);
+	const welcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));
+	const bob2State = await joinFromWelcome(bob2KeyPackage, welcomeWireBytes);
+	assert.ok(bob2State, "устройство контакта реально в группе, несмотря на гонку");
+});

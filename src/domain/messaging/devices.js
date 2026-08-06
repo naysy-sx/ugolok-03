@@ -126,6 +126,22 @@ async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, con
 	await db.table("knownContactDevices").put({ ownerPubkey, contactPubkey, deviceId, wireBytes });
 }
 
+// АДВЕРСАРНО НАЙДЕНО (этап 72, тестом, не домыслом): два конкурентных вызова
+// handleDeviceAnnounce для ОДНОГО И ТОГО ЖЕ (ownerPubkey, announcerPubkey,
+// deviceId) — редоставка того же kind:443 живой подпиской, либо гонка с
+// batch-проходом syncDeviceMembership — оба независимо ЧИТАЮТ ОДНО И ТО ЖЕ
+// пред-коммитное состояние группы (ни один ещё не успел записать своё),
+// оба публикуют welcome — потерянное обновление (ts-mls НЕ ловит это как
+// "уже участник", т.к. с точки зрения КАЖДОГО вызова участника ещё нет).
+// handleDeviceAnnounceInFlight коалесцирует одновременные вызовы с одинаковым
+// ключом в ОДНО реальное выполнение — второй вызов просто ждёт результата
+// первого, не гоняет свою копию логики. Это НЕ то же самое, что И2 в
+// DESIGN.md ("Этап 72") — тот описывает ИСТИННО межпроцессную гонку (два
+// разных устройства/вкладки), нерешаемую без координирующего сервиса; этот
+// guard закрывает гонку ВНУТРИ одного процесса (тот же JS event loop), что
+// полностью решаемо и не требует такого допущения.
+const handleDeviceAnnounceInFlight = new Map();
+
 // Единая точка входа для ОДНОГО входящего kind:443-анонса — вызывается живой
 // подпиской (transport.js's refreshGroupMessageSubscription, этап 72), не
 // пакетом. Ветвление: announcerPubkey===ownerPubkey — свой сиблинг (тот же
@@ -136,43 +152,52 @@ async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, con
 export async function handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish, announcerPubkey, deviceId, wireBytes) {
 	if (!deviceId) return;
 
-	if (announcerPubkey === ownerPubkey) {
-		const myDeviceId = await getOrCreateDeviceId();
-		if (deviceId === myDeviceId) return;
+	const key = `${ownerPubkey}:${announcerPubkey}:${deviceId}`;
+	const inFlight = handleDeviceAnnounceInFlight.get(key);
+	if (inFlight) return inFlight;
 
-		let knownRow = await db.table("knownDevices").get([ownerPubkey, deviceId]);
-		if (!knownRow) {
-			knownRow = { ownerPubkey, deviceId, wireBytes, addedGroupIds: [] };
-			await db.table("knownDevices").put(knownRow);
-		}
+	const promise = (async () => {
+		if (announcerPubkey === ownerPubkey) {
+			const myDeviceId = await getOrCreateDeviceId();
+			if (deviceId === myDeviceId) return;
 
-		const allGroupsRaw = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
-		const allGroups = allGroupsRaw.map((g) => fromEncryptedRow(g, dbKey));
-		for (const group of allGroups) {
-			if (knownRow.addedGroupIds.includes(group.groupId)) continue;
-			try {
-				await addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group);
-			} catch (e) {
-				console.warn("handleDeviceAnnounce: не удалось добавить своё устройство в группу", deviceId, group.groupId, e);
+			let knownRow = await db.table("knownDevices").get([ownerPubkey, deviceId]);
+			if (!knownRow) {
+				knownRow = { ownerPubkey, deviceId, wireBytes, addedGroupIds: [] };
+				await db.table("knownDevices").put(knownRow);
 			}
+
+			const allGroupsRaw = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+			const allGroups = allGroupsRaw.map((g) => fromEncryptedRow(g, dbKey));
+			for (const group of allGroups) {
+				if (knownRow.addedGroupIds.includes(group.groupId)) continue;
+				try {
+					await addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group);
+				} catch (e) {
+					console.warn("handleDeviceAnnounce: не удалось добавить своё устройство в группу", deviceId, group.groupId, e);
+				}
+			}
+			return;
 		}
-		return;
-	}
 
-	const contactPubkey = announcerPubkey;
-	const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
-	const groupRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (!groupRaw) return; // нет установленной переписки — нечего досинхронизировать
+		const contactPubkey = announcerPubkey;
+		const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+		const groupRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+		if (!groupRaw) return; // нет установленной переписки — нечего досинхронизировать
 
-	const group = fromEncryptedRow(groupRaw, dbKey);
-	const known = await db.table("knownContactDevices").get([ownerPubkey, contactPubkey, deviceId]);
-	if (known) return;
+		const group = fromEncryptedRow(groupRaw, dbKey);
+		const known = await db.table("knownContactDevices").get([ownerPubkey, contactPubkey, deviceId]);
+		if (known) return;
 
-	try {
-		await addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group);
-	} catch (e) {
-		console.warn("handleDeviceAnnounce: не удалось добавить устройство контакта в группу", deviceId, groupIdHex, e);
-	}
+		try {
+			await addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group);
+		} catch (e) {
+			console.warn("handleDeviceAnnounce: не удалось добавить устройство контакта в группу", deviceId, groupIdHex, e);
+		}
+	})().finally(() => handleDeviceAnnounceInFlight.delete(key));
+
+	handleDeviceAnnounceInFlight.set(key, promise);
+	return promise;
 }
 
 export async function syncDeviceMembership(ownerPubkey, privKey, dbKey, publish, fetchOwnKeyPackageAnnounces) {
