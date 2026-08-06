@@ -10998,3 +10998,81 @@ const event = buildProfileEvent(privKey, {
 контент), теперь голая публикация происходит, только если ЛОКАЛЬНО
 тоже пусто — не системная порча, а honest race с симметричным шансом
 у обеих версий быть содержательными.
+
+## Этап 72 — MLS multi-device: детерминированное членство + реактивная досинхронизация
+
+Полная формализация, инварианты И1/И2 и обоснование — DESIGN.md,
+"Этап 72". Здесь — только интерфейсный контракт.
+
+**`src/core/crypto/mls-session.js`** — НОВАЯ функция, `addMember`
+существующий НЕ трогается:
+```
+addMembers(sessionState, theirKeyPackagesWireBytesArray: Uint8Array[])
+  -> { newSessionState, welcomeWireBytes: Uint8Array, commitWireBytes: Uint8Array }
+```
+Один `createCommit` с `extraProposals` = массив `add`-proposals (по
+одному на элемент входного массива). Бросает, если массив пуст
+(нечего добавлять — вызывающий код обязан проверить `theirDevices`
+непустым ДО вызова, симметрично старому `addMember`, которому тоже
+недопустимо передать пустой/невалидный wireBytes).
+
+**`src/ui/signals/transport.js`** — `fetchKeyPackage(pubkeyHex)`
+ЗАМЕНЯЕТСЯ на:
+```
+fetchDeviceKeyPackages(pubkeyHex: string)
+  -> Promise<Map<deviceId: string, { wireBytes: Uint8Array, createdAt: number }>>
+```
+Дедуп по `deviceId` — при повторе берётся максимальный `createdAt`.
+События без тега `device` пропускаются (не участвуют в дедупе, не
+попадают в результат). Бросает `"у контакта нет опубликованного
+ключа для сообщений"`, если результат пуст (тот же текст ошибки, что
+у старого `fetchKeyPackage` — не менять формулировку, на неё, возможно,
+уже завязан UI/тесты). Единственный вызывающий — `ensureChatEstablished`
+(`chat.js`) — сигнатуру и переменную там переименовать вслед за функцией.
+
+**`src/core/store/database.js`** — новая таблица, `db.version(21)`:
+```
+knownContactDevices: "[ownerPubkey+contactPubkey+deviceId], [ownerPubkey+contactPubkey]"
+```
+Строка: `{ ownerPubkey, contactPubkey, deviceId, wireBytes }` — БЕЗ
+`toEncryptedRow` (тот же прецедент, что `knownDevices`, этап 25:
+KeyPackage и так публичен на relay, шифровать локальную копию нечем
+защищать).
+
+**`src/domain/messaging/devices.js`** — новая функция, СИММЕТРИЧНАЯ
+`addSiblingToGroup` (та НЕ меняется):
+```
+addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group)
+```
+Commit — kind:445 `#h`-каналом (как у `addSiblingToGroup`). Welcome —
+`nip59.wrap(..., privKey, contactPubkey)` (НЕ `ownerPubkey` — это
+устройство контакта, не моё). После успешной публикации Welcome —
+`knownContactDevices.put({ownerPubkey, contactPubkey, deviceId, wireBytes})`.
+
+Новая функция-диспетчер (единая точка входа и для живой подписки, и
+для замены пакетного прохода при `connect()`):
+```
+handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish, announcerPubkey, deviceId, wireBytes)
+```
+Ветвление `announcerPubkey === ownerPubkey` (свой sibling, существующая
+логика `syncDeviceMembership`/`addSiblingToGroup`) vs иначе (устройство
+контакта, `addContactDeviceToGroup`, только если `mlsGroups` для этой
+пары УЖЕ существует — иначе no-op, реальное первое установление идёт
+через `ensureChatEstablished`).
+
+**`src/ui/signals/transport.js`** — `refreshGroupMessageSubscription`
+получает ВТОРОЙ постоянный подписчик внутри той же функции (см. явную
+причину в DESIGN.md — переиспользование существующих точек вызова, не
+новые). Фильтр: `{authors: [ownerPubkey, ...distinct(contactPubkey из
+mlsGroups.where(ownerPubkey))], kinds: [443]}`, тот же `subId` на
+каждый вызов (resubscribe). `onBatch` → `handleDeviceAnnounce` на
+каждое НОВОЕ (`isNewEvent`) событие. Существующий `catch {}` при
+разборе `kind:445` (строка с комментарием "не удалось расшифровать...
+не ронять батч") правится на `catch (e) { console.warn(...) }`.
+
+`syncMirroredHistory` — per-event тело (`decryptMirrorPayload` →
+`upsertMessage` → `receiveLamportTick`) выносится в приватный хелпер,
+переиспользуется НОВЫМ постоянным подписчиком
+`{authors:[ownerPubkey], kinds:[KIND_MESSAGE_MIRROR]}`, заводится один
+раз при `connect()` сразу после одноразового catch-up (тот же паттерн
+жизненного цикла, что `giftWrapSubscriber`).
