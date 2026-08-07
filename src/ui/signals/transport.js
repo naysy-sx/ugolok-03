@@ -1523,15 +1523,23 @@ export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKe
 		mirrorSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
+				// НАЙДЕНО ВНЕШНИМ РЕВЬЮ (М4, не домысел) — писали в messages, но не
+				// будили UI: открытый экран чата (chat.jsx) перечитывает окно ТОЛЬКО
+				// по этому сигналу (тот же принцип, что у group-messages/gift-wrap
+				// подписчиков выше) — без бампа сообщение появлялось только после
+				// перезагрузки/другого не связанного события.
+				let activityChanged = false;
 				for (const event of events) {
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
 						await receiveLamportTick(ownerPubkey, payload.lamportTs);
+						activityChanged = true;
 					} catch (e) {
 						console.warn("refreshLiveMirrorSubscription: не удалось расшифровать зеркалированное сообщение", e);
 					}
 				}
+				if (activityChanged) bumpMessagingActivity();
 			},
 		});
 		connection.addMessageHandler(mirrorSubscriber.handleMessage);
