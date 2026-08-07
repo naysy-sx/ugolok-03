@@ -21,6 +21,9 @@ import {
 	hasAnyMessagesFor,
 	enqueuePendingOutgoingMessage,
 	drainPendingOutgoingMessages,
+	recordGroupDecryptFailure,
+	listDesyncedChats,
+	recreateChatConversation,
 } from "../src/domain/messaging/chat.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -609,3 +612,94 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 // вручную БЕЗ sentAt/attachment, assert.deepEqual(decryptedByBob, {text, lamportTs})
 // проверяет ИМЕННО отсутствие лишних ключей, не просто "не бросает"). Не дублируется
 // здесь намеренно.
+
+// Этап 73.5 — М6 (детект расхождения).
+test("recordGroupDecryptFailure: копит счётчик, desynced становится true ровно на пороге (3), не раньше", async () => {
+	const { groupId } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	let row = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(row.consecutiveDecryptFailures, 1);
+	assert.equal(row.desynced, false);
+
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	row = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(row.consecutiveDecryptFailures, 2);
+	assert.equal(row.desynced, false, "ниже порога — ещё не desynced");
+
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	row = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(row.consecutiveDecryptFailures, 3);
+	assert.equal(row.desynced, true, "на пороге (3 подряд) — уже desynced");
+});
+
+test("receiveGroupMessageEvent: успешный приём СБРАСЫВАЕТ consecutiveDecryptFailures/desynced в 0/false", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	let aliceRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(aliceRow.desynced, true, "предусловие: уже desynced");
+
+	await asBob(groupIdHex, bobSerializedState, async () => {
+		const publishCapture = [];
+		await sendMessage(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, "живой ответ", 9, async (e) => {
+			publishCapture.push(e);
+			return { ok: true };
+		});
+		await receiveGroupMessageEvent(ALICE_PUB, ALICE_PRIV, DB_KEY, publishCapture.find((e) => e.kind === 445), async () => ({ ok: true }));
+	});
+
+	aliceRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(aliceRow.consecutiveDecryptFailures, 0);
+	assert.equal(aliceRow.desynced, false, "успешный приём обязан снять пометку desynced");
+});
+
+test("sendMessage: НЕ сбрасывает consecutiveDecryptFailures/desynced (отправка не доказывает, что приём работает)", async () => {
+	const { groupId } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "исходящее несмотря на desync", 10, async () => ({ ok: true }));
+
+	const row = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	assert.equal(row.consecutiveDecryptFailures, 3, "отправка не должна тихо занулять накопленный счётчик");
+	assert.equal(row.desynced, true, "и не должна тихо снимать пометку desynced");
+});
+
+test("listDesyncedChats: возвращает только desynced-группы этого owner, с contactPubkey и счётчиком", async () => {
+	const { groupId } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	assert.deepEqual(await listDesyncedChats(ALICE_PUB, DB_KEY), [], "до порога — пусто");
+
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+	await recordGroupDecryptFailure(ALICE_PUB, groupIdHex, DB_KEY);
+
+	const list = await listDesyncedChats(ALICE_PUB, DB_KEY);
+	assert.equal(list.length, 1);
+	assert.equal(list[0].contactPubkey, BOB_PUB);
+	assert.equal(list[0].consecutiveDecryptFailures, 3);
+});
+
+test("recreateChatConversation: удаляет локальную mlsGroups-запись и knownContactDevices для этого контакта", async () => {
+	const bobDevice2 = await createOwnKeyPackage(BOB_PUB, "bob-device-2");
+	const fetchDeviceKeyPackages = async () =>
+		new Map([
+			["bob-device", { wireBytes: (await createOwnKeyPackage(BOB_PUB, "bob-device")).wireBytes, createdAt: 1000 }],
+			["bob-device-2", { wireBytes: bobDevice2.wireBytes, createdAt: 1000 }],
+		]);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.ok(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), "предусловие: группа существует");
+	assert.ok((await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).count()) > 0, "предусловие: известные устройства есть");
+
+	await recreateChatConversation(ALICE_PUB, BOB_PUB, DB_KEY);
+
+	assert.equal(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), undefined);
+	assert.equal(await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).count(), 0);
+});

@@ -8,7 +8,10 @@
 
 export const OWN_KEY_PACKAGE_PLAINTEXT_FIELDS = ["ownerPubkey"];
 
-export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId"];
+// Этап 73.5 — consecutiveDecryptFailures/desynced (М6, детект расхождения):
+// диагностические метаданные, не содержание — plaintext, не индексируются
+// (db-версия не бампается, Dexie не требует схемы для неиндексируемых полей).
+export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId", "consecutiveDecryptFailures", "desynced"];
 
 export const CHANNEL_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion"];
 

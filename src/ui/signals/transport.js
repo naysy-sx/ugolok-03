@@ -21,6 +21,7 @@ import {
 	receiveGroupMessageEvent,
 	upsertMessage,
 	drainPendingOutgoingMessages,
+	recordGroupDecryptFailure,
 } from "../../domain/messaging/chat.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
 import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
@@ -1407,6 +1408,10 @@ async function retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKe
 				stillPending.push(entry);
 			} else {
 				console.warn("retryBufferedGroupMessages: событие окончательно не расшифровано за TTL, отброшено", entry.event.id, e);
+				// Этап 73.5 — М6: TTL истёк без единого успеха — это подтверждённая,
+				// окончательная потеря (не нормальная буферизация М3) — единственный
+				// сигнал, который считается для детекта расхождения группы.
+				await recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey);
 			}
 		}
 	}

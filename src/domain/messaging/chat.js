@@ -245,8 +245,23 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
+	// Этап 73.5 — М6: переносим (НЕ сбрасываем) consecutiveDecryptFailures/desynced —
+	// успешная ОТПРАВКА не доказывает, что ПРИЁМ работает (в M1/M2-сценарии
+	// отправка от "своей" ветки продолжает работать бесконечно, именно то, что
+	// маскирует проблему от пользователя, если тут тихо занулять счётчик).
 	await db.table("mlsGroups").put(
-		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				groupId: groupIdHex,
+				contactPubkey: row.contactPubkey,
+				state: serializeState(newSessionState),
+				consecutiveDecryptFailures: row.consecutiveDecryptFailures ?? 0,
+				desynced: row.desynced ?? false,
+			},
+			MLS_GROUPS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
 	);
 
 	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
@@ -366,8 +381,15 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 	const wireBytes = decodeBase64(nip44Decrypt(event.content, privateKey, bytesToHex(publicKey)));
 
 	const result = await decryptApplicationMessage(state, wireBytes);
+	// Этап 73.5 — М6: единственная точка сброса — успешный приём ЛЮБОГО kind:445
+	// этой группы (control-commit или обычное сообщение) прямое доказательство
+	// "группа сейчас в порядке", даже если раньше были единичные потери.
 	await db.table("mlsGroups").put(
-		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow(
+			{ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState), consecutiveDecryptFailures: 0, desynced: false },
+			MLS_GROUPS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
 	);
 
 	if (result.kind === "control") return null;
@@ -421,4 +443,51 @@ export async function getChatHistory(ownerPubkey, contactPubkey, dbKey) {
 		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 	});
 	return rows;
+}
+
+// Этап 73.5 — М6 (детект расхождения). Порог — 3 ПОДРЯД без единого успешного
+// приёма между ними (не 1 — редкая единичная потеря, уже принятый остаточный
+// риск И2/И4, не должна немедленно объявлять переписку сломанной; см.
+// DESIGN.md "Реализация (73.5)"). Произвольная, но консервативная константа.
+const DESYNC_THRESHOLD = 3;
+
+// Вызывается ТОЛЬКО из retryBufferedGroupMessages (transport.js) в момент
+// окончательного (TTL истёк) отказа от буферной записи — НЕ на каждый
+// провал расшифровки (это была бы нормальная, ожидаемая буферизация М3,
+// не признак расхождения).
+export async function recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey) {
+	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+	if (!raw) return;
+	const row = fromEncryptedRow(raw, dbKey);
+	const consecutiveDecryptFailures = (row.consecutiveDecryptFailures ?? 0) + 1;
+	await db.table("mlsGroups").put(
+		toEncryptedRow(
+			{
+				ownerPubkey,
+				groupId: groupIdHex,
+				contactPubkey: row.contactPubkey,
+				state: row.state,
+				consecutiveDecryptFailures,
+				desynced: consecutiveDecryptFailures >= DESYNC_THRESHOLD,
+			},
+			MLS_GROUPS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
+}
+
+export async function listDesyncedChats(ownerPubkey, dbKey) {
+	const rows = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => fromEncryptedRow(r, dbKey));
+	return rows.filter((r) => r.desynced).map((r) => ({ contactPubkey: r.contactPubkey, groupId: r.groupId, consecutiveDecryptFailures: r.consecutiveDecryptFailures }));
+}
+
+// Забывает ЛОКАЛЬНОЕ состояние (группу + бухгалтерию известных устройств
+// контакта) — НЕ решает, кто в паре коммиттер: следующий ensureChatEstablished
+// (ручная отправка) либо реактивный sibling-Welcome отработают ТЕМ ЖЕ путём,
+// что уже реализуют И3/И4 (DESIGN.md "Реализация (73.5)") — не отдельный
+// протокольный механизм.
+export async function recreateChatConversation(ownerPubkey, contactPubkey, dbKey) {
+	const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+	await db.table("mlsGroups").delete([ownerPubkey, groupIdHex]);
+	await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).delete();
 }

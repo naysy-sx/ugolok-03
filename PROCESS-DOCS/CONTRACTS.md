@@ -11245,6 +11245,89 @@ const { port } = await bridge.start();
 поведение `ws`) — без явного `ws.terminate()` перед `close()` один
 незакрытый сокет вешал бы `stop()` навсегда.
 
+## Этап 73.5 — детект расхождения (М6)
+
+Полная формализация — DESIGN.md "М6"/"Реализация (73.5)". Расширяет
+73.4 (буфер), новый протокольный инвариант не вводится.
+
+**`src/core/store/table-fields.js`** — `MLS_GROUPS_PLAINTEXT_FIELDS`
+дополняется (структурные метаданные диагностики, не содержание):
+```js
+export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId", "consecutiveDecryptFailures", "desynced"];
+```
+Db-версия НЕ бампается — оба поля НЕ индексируются, Dexie не требует
+объявления схемы для неиндексируемых полей.
+
+**`src/domain/messaging/chat.js`** — новая константа + 3 новых
+экспорта (рядом с `getChatHistory`/`hasAnyMessagesFor`):
+```js
+const DESYNC_THRESHOLD = 3;
+
+export async function recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey) {
+  const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+  if (!raw) return;
+  const row = fromEncryptedRow(raw, dbKey);
+  const consecutiveDecryptFailures = (row.consecutiveDecryptFailures ?? 0) + 1;
+  await db.table("mlsGroups").put(
+    toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: row.state, consecutiveDecryptFailures, desynced: consecutiveDecryptFailures >= DESYNC_THRESHOLD }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+  );
+}
+
+export async function listDesyncedChats(ownerPubkey, dbKey) {
+  const rows = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => fromEncryptedRow(r, dbKey));
+  return rows.filter((r) => r.desynced).map((r) => ({ contactPubkey: r.contactPubkey, groupId: r.groupId, consecutiveDecryptFailures: r.consecutiveDecryptFailures }));
+}
+
+export async function recreateChatConversation(ownerPubkey, contactPubkey, dbKey) {
+  const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+  await db.table("mlsGroups").delete([ownerPubkey, groupIdHex]);
+  await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).delete();
+}
+```
+
+`receiveGroupMessageEvent`'s существующий `put` (успешный приём —
+единственная точка сброса) дополняется:
+```js
+toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(result.newSessionState), consecutiveDecryptFailures: 0, desynced: false }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey)
+```
+
+`sendMessage`'s существующий `put` — ПЕРЕНОСИТ (не сбрасывает, не
+роняет) уже прочитанные значения из `row`:
+```js
+toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: row.contactPubkey, state: serializeState(newSessionState), consecutiveDecryptFailures: row.consecutiveDecryptFailures ?? 0, desynced: row.desynced ?? false }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey)
+```
+
+**`src/domain/messaging/devices.js`** — `addSiblingToGroup` и
+`addContactDeviceToGroup`'s `put`-вызовы, ТА ЖЕ логика переноса из уже
+доступного параметра `group`:
+```js
+consecutiveDecryptFailures: group.consecutiveDecryptFailures ?? 0, desynced: group.desynced ?? false
+```
+(добавляется внутрь уже существующего объекта, передаваемого в
+`toEncryptedRow`, оба места).
+
+**`src/ui/signals/transport.js`** — `retryBufferedGroupMessages`'s TTL-
+ветка (`else { console.warn(...) }`, "окончательно не расшифровано за
+TTL, отброшено") дополняется вызовом:
+```js
+await recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey);
+```
+Импорт `recordGroupDecryptFailure` добавляется к существующему импорту
+из `chat.js`.
+
+**`src/ui/screens/diagnostics.jsx`** — новая секция "Переписки"
+(рутинная UI-правка, не формализуется здесь): список результатов
+`listDesyncedChats(ownerPubkey, dbKey)` для текущего аккаунта, кнопка
+"Пересоздать" на каждую строку → `recreateChatConversation(ownerPubkey,
+contactPubkey, dbKey)`.
+
+Тесты — `tests/chat.test.js` (юнит, `recordGroupDecryptFailure`/
+`listDesyncedChats`/`recreateChatConversation`, порог, сброс на приём,
+перенос при send/addSibling) + `tests/harness/m3-repro.test.js`
+(расширение — добавить сценарий "TTL истёк без единого успеха 3 раза
+подряд → desynced=true", переиспользует уже существующие
+`pumpAllExcept`/`identifyNewConnId`).
+
 ## Этап 73.4 — буфер нерасшифрованных kind:445 (М3)
 
 Полная формализация — DESIGN.md "М3"/"Реализация (73.4)". Единственная

@@ -36,6 +36,8 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 	const { privateKey: oldEnvPriv, publicKey: oldEnvPub } = await deriveNostrEnvelopeKeys(state);
 
 	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, knownRow.wireBytes);
+	// Этап 73.5 — М6: переносим (не сбрасываем) consecutiveDecryptFailures/desynced —
+	// добавление сиблинга не относится к "смог ли я расшифровать что-то от собеседника".
 	await db.table("mlsGroups").put(
 		toEncryptedRow(
 			{
@@ -43,6 +45,8 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 				groupId: group.groupId,
 				contactPubkey: group.contactPubkey,
 				state: serializeState(newSessionState),
+				consecutiveDecryptFailures: group.consecutiveDecryptFailures ?? 0,
+				desynced: group.desynced ?? false,
 			},
 			MLS_GROUPS_PLAINTEXT_FIELDS,
 			dbKey,
@@ -99,6 +103,7 @@ async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, con
 	const { privateKey: oldEnvPriv, publicKey: oldEnvPub } = await deriveNostrEnvelopeKeys(state);
 
 	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, wireBytes);
+	// Этап 73.5 — М6: переносим (не сбрасываем), тот же принцип, что addSiblingToGroup.
 	await db.table("mlsGroups").put(
 		toEncryptedRow(
 			{
@@ -106,6 +111,8 @@ async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, con
 				groupId: group.groupId,
 				contactPubkey: group.contactPubkey,
 				state: serializeState(newSessionState),
+				consecutiveDecryptFailures: group.consecutiveDecryptFailures ?? 0,
+				desynced: group.desynced ?? false,
 			},
 			MLS_GROUPS_PLAINTEXT_FIELDS,
 			dbKey,
