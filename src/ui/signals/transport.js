@@ -155,6 +155,28 @@ function isNewEvent(eventId) {
 	return true;
 }
 
+// Этап 73.4 — М3: relay не гарантирует порядок доставки — kind:445,
+// продвигающий эпоху (commit), может прийти ПОСЛЕ события, которое от неё
+// зависит. Провал расшифровки в этом случае — признак "рано", не порчи;
+// НЕ пытаемся отличить его от НАВСЕГДА неисправимого провала (М1/М2-класс,
+// "invalid MAC" от независимой ветки даёт ТУ ЖЕ ошибку — эмпирически
+// подтверждено в 73.3) — просто буферим ЛЮБОЙ провал, TTL сам избавится от
+// неисправимых. In-memory, тот же принцип, что processedEventIds выше.
+const pendingUndecryptedByGroup = new Map(); // groupIdHex -> Array<{event, firstSeenAt}>
+const UNDECRYPTED_RETRY_TTL_MS = 5 * 60 * 1000;
+
+function groupIdOf(event) {
+	return event.tags.find((t) => t[0] === "h")?.[1];
+}
+
+function bufferUndecryptedEvent(event) {
+	const groupIdHex = groupIdOf(event);
+	if (!groupIdHex) return;
+	const list = pendingUndecryptedByGroup.get(groupIdHex) ?? [];
+	list.push({ event, firstSeenAt: Date.now() });
+	pendingUndecryptedByGroup.set(groupIdHex, list);
+}
+
 // Этап 60 — кэш обнаруженных inbox-relay (kind:10050) получателей: без него
 // КАЖДОЕ сообщение в чате делало бы новый REQ+EOSE round-трип перед попыткой
 // доставки. TTL, не "навсегда" — получатель может сменить relay-список в
@@ -1314,6 +1336,85 @@ export async function fetchDeviceKeyPackages(pubkeyHex) {
 // уже установленные чаты после reload) и при каждом новом Welcome (новый чат).
 // Пересоздание REQ с обновлённым списком тегов — простая, не инкрементальная схема (MVP).
 // privKey/publish (правка контракта этапа 25) — нужны, чтобы receiveGroupMessageEvent
+// Этап 73.4 — вынесено из onBatch (было инлайн) БЕЗ ИЗМЕНЕНИЯ логики —
+// переиспользуется И основным циклом, И retryBufferedGroupMessages ниже,
+// без дублирования (lamport tick, deletion/edit-маркер, уведомление).
+async function processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, event) {
+	const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
+	// Найдено реальным использованием — синхронизация Lamport-часов на входящее
+	// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
+	if (receivedResult) await receiveLamportTick(ownerPubkey, receivedResult.lamportTs);
+	// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
+	// application-message; no-op (false), если это обычное сообщение/control.
+	const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
+	// DESIGN.md, "Этап 27-довесок-6" — edit-маркер, тот же принцип; порядок с
+	// deletion неважен (разные префиксы, взаимоисключающие no-op на чужом маркере).
+	const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, dbKey, event, receivedResult);
+	// Этап 34 — уведомление только на ОБЫЧНОЕ новое сообщение, не на служебные
+	// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
+	// собственного же сообщения собеседником).
+	// Этап 50 (N1) — тот же класс redelivery, что isNewEvent защищает только НА ЭТУ
+	// сессию; chatSyncState.lastReadLamportTs уже синхронизирован с других
+	// устройств/сессий к этому моменту (rebuildReadStatus в начале connect()) —
+	// гасит уведомление о сообщении, уже прочитанном где угодно, включая ДО релогина.
+	if (
+		receivedResult &&
+		!wasDeletion &&
+		!wasEdit &&
+		!(await isChatContentRead(ownerPubkey, receivedResult.contactPubkey, receivedResult.lamportTs))
+	) {
+		await ensureProfilesFetched([receivedResult.contactPubkey], fetchProfiles).catch(() => {});
+		const messageNavTarget = { screen: "messages", contactPubkey: receivedResult.contactPubkey };
+		const newMsgTitleKey = "journal.newMessageTitle";
+		const newMsgTitleParams = { username: usernameFor(receivedResult.contactPubkey) };
+		await notifyAndLog(
+			ownerPubkey,
+			dbKey,
+			settings,
+			"messages",
+			null,
+			{
+				title: t(newMsgTitleKey, newMsgTitleParams),
+				body: receivedResult.text,
+				titleKey: newMsgTitleKey,
+				titleParams: newMsgTitleParams,
+				navTarget: messageNavTarget,
+				onClick: () => navigateFromNotification(messageNavTarget),
+				occurredAt: event.created_at * 1000,
+			},
+			receivedResult.contactPubkey,
+		);
+	}
+}
+
+// Этап 73.4 — М3: вызывается ПОСЛЕ каждого успешно обработанного kind:445
+// ЭТОЙ ЖЕ группы (control-commit или обычное сообщение — оба продвигают
+// локальную эпоху, оба могут разблокировать буфер). Однопроходно — не до
+// опустошения за один вызов: многошаговая зависимость (буферное A зависит
+// от буферного B, который сам ещё не пришёл) доедется СЛЕДУЮЩИМ успешным
+// событием этой же группы, не обязана решаться сразу.
+async function retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKey, publish, settings) {
+	const list = pendingUndecryptedByGroup.get(groupIdHex);
+	if (!list || list.length === 0) return false;
+	let anySucceeded = false;
+	const stillPending = [];
+	for (const entry of list) {
+		try {
+			await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, entry.event);
+			anySucceeded = true;
+		} catch (e) {
+			if (Date.now() - entry.firstSeenAt < UNDECRYPTED_RETRY_TTL_MS) {
+				stillPending.push(entry);
+			} else {
+				console.warn("retryBufferedGroupMessages: событие окончательно не расшифровано за TTL, отброшено", entry.event.id, e);
+			}
+		}
+	}
+	if (stillPending.length > 0) pendingUndecryptedByGroup.set(groupIdHex, stillPending);
+	else pendingUndecryptedByGroup.delete(groupIdHex);
+	return anySucceeded;
+}
+
 // могло зеркалировать полученное сообщение best-effort (DESIGN.md, "Этап 25", раздел 2).
 export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish) {
 	if (!connection) return;
@@ -1346,53 +1447,14 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 					// notify()'ла бы уже виденное сообщение повторно.
 					if (!isNewEvent(event.id)) continue;
 					try {
-						const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
-						// Найдено реальным использованием — синхронизация Lamport-часов на входящее
-						// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
-						if (receivedResult) await receiveLamportTick(ownerPubkey, receivedResult.lamportTs);
-						// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
-						// application-message; no-op (false), если это обычное сообщение/control.
-						const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
-						// DESIGN.md, "Этап 27-довесок-6" — edit-маркер, тот же принцип; порядок с
-						// deletion неважен (разные префиксы, взаимоисключающие no-op на чужом маркере).
-						const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, dbKey, event, receivedResult);
-						// Этап 34 — уведомление только на ОБЫЧНОЕ новое сообщение, не на служебные
-						// delete/edit-маркеры (иначе пользователь получал бы уведомление на удаление
-						// собственного же сообщения собеседником).
-						// Этап 50 (N1) — тот же класс redelivery, что комментарий выше (isNewEvent)
-						// защищает только НА ЭТУ сессию; chatSyncState.lastReadLamportTs уже
-						// синхронизирован с других устройств/сессий к этому моменту
-						// (rebuildReadStatus в начале connect()) — гасит уведомление о
-						// сообщении, уже прочитанном где угодно, включая ДО релогина.
-						if (
-							receivedResult &&
-							!wasDeletion &&
-							!wasEdit &&
-							!(await isChatContentRead(ownerPubkey, receivedResult.contactPubkey, receivedResult.lamportTs))
-						) {
-							await ensureProfilesFetched([receivedResult.contactPubkey], fetchProfiles).catch(() => {});
-							const messageNavTarget = { screen: "messages", contactPubkey: receivedResult.contactPubkey };
-							const newMsgTitleKey = "journal.newMessageTitle";
-							const newMsgTitleParams = { username: usernameFor(receivedResult.contactPubkey) };
-							await notifyAndLog(
-								ownerPubkey,
-								dbKey,
-								settings,
-								"messages",
-								null,
-								{
-									title: t(newMsgTitleKey, newMsgTitleParams),
-									body: receivedResult.text,
-									titleKey: newMsgTitleKey,
-									titleParams: newMsgTitleParams,
-									navTarget: messageNavTarget,
-									onClick: () => navigateFromNotification(messageNavTarget),
-									occurredAt: event.created_at * 1000,
-								},
-								receivedResult.contactPubkey,
-							);
-						}
+						await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, event);
 						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
+						// Этап 73.4 — М3: это событие продвинуло локальную эпоху этой группы —
+						// шанс, что ранее отложенные (из-за переупорядоченной доставки) теперь
+						// расшифруются.
+						if (await retryBufferedGroupMessages(groupIdOf(event), ownerPubkey, privKey, dbKey, publish, settings)) {
+							activityChanged = true;
+						}
 					} catch (e) {
 						// Этап 72 — было полностью молчаливо (console.warn отсутствовал вовсе), что
 						// маскировало split-brain (DESIGN.md "Этап 72"): расхождение MLS-состояния
@@ -1400,6 +1462,10 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						// зацепки в консоли. console.warn — тот же уровень видимости, что везде в
 						// проекте для best-effort сбоев (mirrorBestEffort/syncDeviceMembership и т.п.),
 						// не UI-уведомление — не ронять батч по-прежнему обязательно.
+						// Этап 73.4 — М3: провал НЕ обязательно означает порчу — событие может
+						// зависеть от commit'а, который ещё не пришёл (relay не гарантирует
+						// порядок) — буферим для повторной попытки, TTL избавится от неисправимых.
+						bufferUndecryptedEvent(event);
 						console.warn("refreshGroupMessageSubscription: не удалось обработать входящее сообщение группы", event.id, e);
 					}
 				}

@@ -11245,6 +11245,121 @@ const { port } = await bridge.start();
 поведение `ws`) — без явного `ws.terminate()` перед `close()` один
 незакрытый сокет вешал бы `stop()` навсегда.
 
+## Этап 73.4 — буфер нерасшифрованных kind:445 (М3)
+
+Полная формализация — DESIGN.md "М3"/"Реализация (73.4)". Единственная
+затронутая точка — `groupMessageSubscriber`'s `onBatch`
+(`src/ui/signals/transport.js`, рядом с `processedEventIds`/`isNewEvent`).
+
+Новые модульные константы/структуры (там же, где `processedEventIds`):
+```js
+const pendingUndecryptedByGroup = new Map(); // groupIdHex -> Array<{event, firstSeenAt}>
+const UNDECRYPTED_RETRY_TTL_MS = 5 * 60 * 1000;
+
+function groupIdOf(event) {
+  return event.tags.find((t) => t[0] === "h")?.[1];
+}
+
+function bufferUndecryptedEvent(event) {
+  const groupIdHex = groupIdOf(event);
+  if (!groupIdHex) return;
+  const list = pendingUndecryptedByGroup.get(groupIdHex) ?? [];
+  list.push({ event, firstSeenAt: Date.now() });
+  pendingUndecryptedByGroup.set(groupIdHex, list);
+}
+```
+
+Per-event тело ТЕКУЩЕГО `onBatch` (всё, что сейчас внутри `try {...}` —
+`receiveGroupMessageEvent` → lamport tick → deletion/edit-маркер →
+уведомление) выносится БЕЗ ИЗМЕНЕНИЙ построчно в новую функцию (та же
+логика, просто переиспользуемая):
+```js
+async function processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, event) {
+  const receivedResult = await receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish);
+  if (receivedResult) await receiveLamportTick(ownerPubkey, receivedResult.lamportTs);
+  const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
+  const wasEdit = await applyIncomingEditIfMarker(ownerPubkey, dbKey, event, receivedResult);
+  if (receivedResult && !wasDeletion && !wasEdit && !(await isChatContentRead(ownerPubkey, receivedResult.contactPubkey, receivedResult.lamportTs))) {
+    await ensureProfilesFetched([receivedResult.contactPubkey], fetchProfiles).catch(() => {});
+    const messageNavTarget = { screen: "messages", contactPubkey: receivedResult.contactPubkey };
+    const newMsgTitleKey = "journal.newMessageTitle";
+    const newMsgTitleParams = { username: usernameFor(receivedResult.contactPubkey) };
+    await notifyAndLog(ownerPubkey, dbKey, settings, "messages", null, {
+      title: t(newMsgTitleKey, newMsgTitleParams),
+      body: receivedResult.text,
+      titleKey: newMsgTitleKey,
+      titleParams: newMsgTitleParams,
+      navTarget: messageNavTarget,
+      onClick: () => navigateFromNotification(messageNavTarget),
+      occurredAt: event.created_at * 1000,
+    }, receivedResult.contactPubkey);
+  }
+}
+```
+
+Ретрай буфера ОДНОЙ группы — однопроходный, вызывается ПОСЛЕ каждого
+успешно обработанного kind:445 этой же группы:
+```js
+async function retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKey, publish, settings) {
+  const list = pendingUndecryptedByGroup.get(groupIdHex);
+  if (!list || list.length === 0) return false;
+  let anySucceeded = false;
+  const stillPending = [];
+  for (const entry of list) {
+    try {
+      await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, entry.event);
+      anySucceeded = true;
+    } catch (e) {
+      if (Date.now() - entry.firstSeenAt < UNDECRYPTED_RETRY_TTL_MS) {
+        stillPending.push(entry);
+      } else {
+        console.warn("retryBufferedGroupMessages: событие окончательно не расшифровано за TTL, отброшено", entry.event.id, e);
+      }
+    }
+  }
+  if (stillPending.length > 0) pendingUndecryptedByGroup.set(groupIdHex, stillPending);
+  else pendingUndecryptedByGroup.delete(groupIdHex);
+  return anySucceeded;
+}
+```
+
+`onBatch` (существующая функция, ПЕРЕПИСЫВАЕТСЯ на использование
+вынесенных функций выше):
+```js
+onBatch: async (events) => {
+  const settings = await loadUiSettings(ownerPubkey, dbKey);
+  let activityChanged = false;
+  for (const event of events) {
+    if (!isNewEvent(event.id)) continue;
+    try {
+      await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, event);
+      activityChanged = true;
+      if (await retryBufferedGroupMessages(groupIdOf(event), ownerPubkey, privKey, dbKey, publish, settings)) {
+        activityChanged = true;
+      }
+    } catch (e) {
+      bufferUndecryptedEvent(event);
+      console.warn("refreshGroupMessageSubscription: не удалось обработать входящее сообщение группы", event.id, e);
+    }
+  }
+  if (activityChanged) bumpMessagingActivity();
+},
+```
+
+Тесты — модульные функции (`bufferUndecryptedEvent`/
+`retryBufferedGroupMessages`/`processOneGroupMessageEvent`) НЕ
+экспортированы (внутренние детали `refreshGroupMessageSubscription`,
+как и `processedEventIds`/`isNewEvent` уже сейчас) — тестируется ЧЕРЕЗ
+публичное поведение подписчика. **Реализовано и верифицировано,
+коммит после этой записи** — `tests/harness/m3-repro.test.js`
+(харнесс, не `FakeWebSocket` — `transport.js` не грузится под голым
+node без `node-loader.mjs`, см. "Этап 73.2 — device.js"): А1↔Боб
+установлены, А2 (sibling) присоединяется, commit придержан для Боба
+(`reorder`+`flushNext`), сообщение А2 под новой эпохой доходит РАНЬШЕ —
+проваливается, буферизуется; после доставки commit'а восстанавливается
+без дополнительного триггера. 3/3 стабильно, полная регрессия
+1336/1336.
+
 ## Этап 73.3 — реализация И3 (единственный коммиттер)
 
 Полная формализация — DESIGN.md "Этап 73" (И3, механизм, псевдокод A-Г,
