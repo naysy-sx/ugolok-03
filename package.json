@@ -45,6 +45,7 @@
 		"fake-indexeddb": "^6.2.5",
 		"playwright": "^1.61.1",
 		"vite": "^8.1.0",
-		"vite-plugin-singlefile": "^2.3.3"
+		"vite-plugin-singlefile": "^2.3.3",
+		"ws": "^8.21.2"
 	}
 }
