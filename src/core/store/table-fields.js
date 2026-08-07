@@ -59,6 +59,11 @@ export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"
 
 export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
 
+// Этап 73.3 — И3 (единственный коммиттер): исходящие, накопленные проигравшей
+// стороной, пока коммиттер не создал группу. text/attachment — содержательные,
+// шифруются; ownerPubkey/contactPubkey/lamportTs — составной индекс, plaintext.
+export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lamportTs"];
+
 // Этап 49 — contactRelationships (единая таблица, CONTACTS-FSM.md §3). state/
 // resolvedAt/sentAt — структурные метаданные и индексы ([owner+peer], [owner+state]
 // требуют plaintext), тот же принцип, что contacts/blockedContacts на этапе 41.

@@ -6,10 +6,16 @@ import { createFakeRelay } from "./fake-relay.js";
 import { createWsBridge } from "./ws-bridge.js";
 import { spawnDevice } from "./scenario.js";
 
-const ALICE_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(3));
-const BOB_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(4));
-const ALICE_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(3)));
-const BOB_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(4)));
+// fill(4)/fill(3) (не по возрастанию!) — важно с этапа 73.3 (И3, единственный
+// коммиттер по min(pubkey)): Alice здесь ОТПРАВИТЕЛЬ и ОБЯЗАНА быть
+// коммиттером пары — иначе она корректно поставит сообщение в очередь
+// (см. m1-repro.test.js), а этот тест конкретно про "счастливый путь"
+// прямой отправки, не про И3/И4 — не нужно смешивать. Проверено эмпирически:
+// bytesToHex(getPublicKey(fill(4))) < bytesToHex(getPublicKey(fill(3))).
+const ALICE_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(4));
+const BOB_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(3));
+const ALICE_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(4)));
+const BOB_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(3)));
 
 // "Счастливый путь", БЕЗ адверсарного переупорядочивания — этап 73.2's DoD:
 // подтвердить, что вся цепочка IPC+реальный сокет+продакшн-код вообще
@@ -57,7 +63,7 @@ test("2 реальных device.js-процесса через реальный 
 	let history = [];
 	const deadline = Date.now() + 15000;
 	while (Date.now() < deadline) {
-		history = await bob.call("history", { contactPubkey: bytesToHex(getPublicKey(new Uint8Array(32).fill(3))) });
+		history = await bob.call("history", { contactPubkey: ALICE_PUB });
 		if (history.length > 0) break;
 		await new Promise((r) => setTimeout(r, 50));
 	}

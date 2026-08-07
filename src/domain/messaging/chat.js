@@ -22,8 +22,9 @@ import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
 import { enqueue } from "../../core/store/outbox.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
+import { isKnownContact } from "./inbox-requests.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -38,6 +39,12 @@ function decodeBase64(str) {
 export function computeGroupId(pubkeyHexA, pubkeyHexB) {
 	const sorted = [pubkeyHexA, pubkeyHexB].sort();
 	return sha256(utf8ToBytes(sorted.join(":")));
+}
+
+// Этап 73.3 — И3: для пары (A,B) ровно одна сторона вправе впервые создать
+// G(A,B) — тот же приём, что glare resolution в call-FSM (FEATURE-SPECS/VOICE.md).
+export function isCommitter(pubkeyHexA, pubkeyHexB) {
+	return pubkeyHexA < pubkeyHexB;
 }
 
 async function requirePublishOk(publish, event) {
@@ -126,6 +133,30 @@ export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contact
 
 	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return;
+
+	// Этап 73.3 — И4 (device-level, ПЕРЕД И3 — сигнал сильнее и безусловен):
+	// единственный способ иметь строки в messages БЕЗ локальной mlsGroups-записи —
+	// зеркало (kind:446, этап 25) от ДРУГОГО устройства ТОЙ ЖЕ identity (см.
+	// DESIGN.md "И4" — verified, не домысел). Найдено харнессом: identity-pair
+	// гейт (И3 ниже) САМ ПО СЕБЕ не закрывал М1 — оба устройства ОДНОЙ Алисы
+	// получают ОДИНАКОВЫЙ ответ isCommitter(). Восстановление — БЕЗ нового
+	// кода: существующий sibling-sync (devices.js, ветка announcerPubkey===
+	// ownerPubkey) уже добавляет новое устройство в СУЩЕСТВУЮЩУЮ группу.
+	if (await hasAnyMessagesFor(ownerPubkey, contactPubkey)) {
+		throw new DomainError("другое моё устройство уже разговаривало с этим контактом — жду синхронизации", "errors.awaitingSiblingSync", { contactPubkey });
+	}
+
+	// Этап 73.3 — И3: гейт применяется, ТОЛЬКО если contact УЖЕ подтверждённый
+	// контакт этого owner — холодное обращение к незнакомцу (isKnownContact
+	// false) остаётся БЕЗ ГЕЙТА, старое поведение (найдено проверкой против
+	// реальных тестов inbox-signals.test.js/inbox-requests.test.js, где
+	// проигравшая по лексикографике сторона пишет незнакомцу впервые — без
+	// этого условия сообщение зависло бы навсегда: реактивный канал
+	// восстановления, ветка Г devices.js, существует ТОЛЬКО для подтверждённых
+	// контактов, см. CONTRACTS.md/DESIGN.md "Этап 73.3").
+	if ((await isKnownContact(ownerPubkey, contactPubkey)) && !isCommitter(ownerPubkey, contactPubkey)) {
+		throw new DomainError("ожидание установления переписки — коммиттер этой пары не я", "errors.awaitingCommitter", { contactPubkey });
+	}
 
 	const theirDevices = await fetchDeviceKeyPackages(contactPubkey);
 
@@ -276,6 +307,46 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 	return { eventId: event.id };
 }
 
+// Этап 73.3 — И3: проигравшая сторона (не коммиттер) копит исходящие здесь,
+// пока коммиттер не создаст группу — см. DESIGN.md/CONTRACTS.md "Этап 73.3".
+export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment }) {
+	await db.table("pendingOutgoingMessages").put(
+		toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, text, ...(attachment !== undefined ? { attachment } : {}) }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey),
+	);
+}
+
+// НАЙДЕНО ХАРНЕССОМ (m1-repro.test.js, не домысел): Welcome может прийти
+// ПОВТОРНО (resubscribe-редоставка giftwrap-подписки — тот же класс, что
+// уже задокументирован для kind:445/kind:443 в других подписчиках этого
+// проекта) — acceptWelcome сама идемпотентна (`if (existing) return`), но
+// БЕЗ коалесцирования drain всё равно вызывался бы дважды на два прихода
+// ОДНОГО Welcome, отправляя одно и то же сообщение повторно. Тот же приём,
+// что handleDeviceAnnounceInFlight (devices.js, этап 72) — второй вызов
+// просто ждёт результата первого, не гоняет свою копию.
+const drainInFlight = new Map();
+
+// Вызывается, как только группа появляется — оба пути: (а) я сам стал
+// коммиттером реактивно (devices.js's handleDeviceAnnounce), (б) я принял
+// Welcome от коммиттера (transport.js, giftwrap-диспетчер, после acceptWelcome).
+// Группа ОБЯЗАНА уже существовать к этому моменту — drain её не создаёт.
+export async function drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+	const key = `${ownerPubkey}:${contactPubkey}`;
+	const inFlight = drainInFlight.get(key);
+	if (inFlight) return inFlight;
+
+	const promise = (async () => {
+		const raw = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).sortBy("lamportTs");
+		for (const encryptedRow of raw) {
+			const row = fromEncryptedRow(encryptedRow, dbKey);
+			await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachment);
+			await db.table("pendingOutgoingMessages").delete([ownerPubkey, contactPubkey, row.lamportTs]);
+		}
+	})().finally(() => drainInFlight.delete(key));
+
+	drainInFlight.set(key, promise);
+	return promise;
+}
+
 // privKey/publish (правка контракта этапа 25, было (ownerPubkey, event)) — нужны для
 // зеркала best-effort (DESIGN.md, "Этап 25", раздел 2): устройство, ПРИНЯВШЕЕ сообщение
 // живым MLS-путём, обязано распространить его на ОСТАЛЬНЫЕ устройства той же identity,
@@ -333,6 +404,12 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 	// для уведомлений "новое сообщение от X", ничего не ломает (существующие вызовы
 	// проверяют отдельные поля через assert.equal, не строгий deepEqual на весь объект).
 	return { text: parsed.text, lamportTs: parsed.lamportTs, contactPubkey, ...extra };
+}
+
+// Этап 73.3 — И4 (chat.js, ensureChatEstablished): существование, не данные —
+// count() дешевле toArray() для гейта "была ли переписка вообще".
+export async function hasAnyMessagesFor(ownerPubkey, contactPubkey) {
+	return (await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).count()) > 0;
 }
 
 export async function getChatHistory(ownerPubkey, contactPubkey, dbKey) {

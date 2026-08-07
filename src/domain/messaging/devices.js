@@ -9,7 +9,7 @@ import { getOrCreateDeviceId } from "../identity/device.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
-import { computeGroupId } from "./chat.js";
+import { computeGroupId, isCommitter } from "./chat.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -181,6 +181,18 @@ export async function handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish,
 		}
 
 		const contactPubkey = announcerPubkey;
+		// НАЙДЕНО ХАРНЕССОМ (m1-repro.test.js, этап 73.3, не домысел): без этого
+		// условия ДВЕ СТОРОНЫ независимо коммитят добавление ОДНОГО и того же
+		// нового устройства — я (contact-branch, здесь) ОДНОВременно с самим
+		// владельцем нового устройства (sibling-branch, на ЕГО стороне) —
+		// классический М2: два commit'а в одну эпоху одной группы. Ограничение
+		// коммиттером (И3) для СОЗДАНИЯ группы уже есть в ensureChatEstablished —
+		// то же правило распространяется и на ДОБАВЛЕНИЕ устройств контакта:
+		// только коммиттер этой пары когда-либо коммитит в эту группу, я —
+		// проигравшая сторона — молчу и жду, пока contact сам добавит себя
+		// (через свой sibling-sync, код без изменений).
+		if (!isCommitter(ownerPubkey, contactPubkey)) return;
+
 		const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
 		const groupRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 		if (!groupRaw) return; // нет установленной переписки — нечего досинхронизировать

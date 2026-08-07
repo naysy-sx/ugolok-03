@@ -11258,21 +11258,37 @@ export function isCommitter(pubkeyHexA, pubkeyHexB) {
 }
 ```
 `ensureChatEstablished` — ПЕРЕД строкой `const theirDevices = await
-fetchDeviceKeyPackages(contactPubkey);` добавляется:
+fetchDeviceKeyPackages(contactPubkey);` добавляется (ДВА гейта, И4
+СТРОГО ПЕРЕД И3 — см. обоснование порядка в DESIGN.md "И4"):
 ```js
+if (await hasAnyMessagesFor(ownerPubkey, contactPubkey)) {
+  throw new DomainError("другое моё устройство уже разговаривало с этим контактом — жду синхронизации", "errors.awaitingSiblingSync", { contactPubkey });
+}
 if ((await isKnownContact(ownerPubkey, contactPubkey)) && !isCommitter(ownerPubkey, contactPubkey)) {
   throw new DomainError("ожидание установления переписки — коммиттер этой пары не я", "errors.awaitingCommitter", { contactPubkey });
 }
 ```
-Гейт применяется, ТОЛЬКО если contact УЖЕ подтверждённый контакт
-(`isKnownContact`, `inbox-requests.js`, уже существующий экспорт) —
-НАЙДЕНО ПРОВЕРКОЙ ПРОТИВ РЕАЛЬНЫХ тестов (не домысел): без этого
-условия `inbox-signals.test.js`/`inbox-requests.test.js` (STRANGER_PUB
-лексикографически БОЛЬШЕ ALICE_PUB) сломали бы холодное обращение к
-незнакомцу — а восстановить его через реактивный канал (ветка В ниже)
-НЕЛЬЗЯ, тот канал существует только для подтверждённых контактов —
-получилось бы гарантированное зависание навсегда, хуже устраняемого
-М1. Импорт `isKnownContact` добавляется в `chat.js` из
+**И4 (mirror-история)** — БЕЗУСЛОВНЫЙ, не зависит от `isKnownContact`
+(mirror — прямое доказательство состоявшейся переписки, не косвенный
+признак). Единственный способ иметь строки в `messages` БЕЗ локальной
+`mlsGroups`-записи — зеркало (kind:446, этап 25) от ДРУГОГО устройства
+ТОЙ ЖЕ identity — verified DESIGN.md "И4". Новая функция (рядом с
+`getChatHistory`):
+```js
+export async function hasAnyMessagesFor(ownerPubkey, contactPubkey) {
+  return (await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).count()) > 0;
+}
+```
+
+**И3 (identity-committer)** — гейт применяется, ТОЛЬКО если contact УЖЕ
+подтверждённый контакт (`isKnownContact`, `inbox-requests.js`, уже
+существующий экспорт) — НАЙДЕНО ПРОВЕРКОЙ ПРОТИВ РЕАЛЬНЫХ тестов (не
+домысел): без этого условия `inbox-signals.test.js`/`inbox-requests.test.js`
+(STRANGER_PUB лексикографически БОЛЬШЕ ALICE_PUB) сломали бы холодное
+обращение к незнакомцу — а восстановить его через реактивный канал
+(ветка В ниже) НЕЛЬЗЯ, тот канал существует только для подтверждённых
+контактов — получилось бы гарантированное зависание навсегда, хуже
+устраняемого М1. Импорт `isKnownContact` добавляется в `chat.js` из
 `./inbox-requests.js` — ЕДИНСТВЕННЫЙ импорт в обратную сторону
 (`inbox-requests.js` уже импортирует `acceptWelcome` ИЗ `chat.js`) —
 цикл импортов ДОПУСТИМ в ES-модулях (не CommonJS), но стоит явно
@@ -11280,8 +11296,18 @@ if ((await isKnownContact(ownerPubkey, contactPubkey)) && !isCommitter(ownerPubk
 (`DomainError` уже импортирован в файле — правка НЕ трогает остальное
 тело функции, остаётся путём коммиттера без изменений).
 
+**Реализовано, коммит после 73.3/3 (см. log.md).** Харнесс
+(m1-repro.test.js) подтвердил: 3/3 стабильно зелёный. Полная
+регрессия 1335/1335, 0 todo.
+
 Новые экспорты (рядом с `sendMessage`, та же ответственность — не
-разносить по файлам):
+разносить по файлам). `drainPendingOutgoingMessages` ДОПОЛНИТЕЛЬНО
+коалесцирует конкурентные/повторные вызовы (`drainInFlight: Map`,
+ТОТ ЖЕ приём, что `handleDeviceAnnounceInFlight` в devices.js) —
+НАЙДЕНО ХАРНЕССОМ (не домысел): Welcome может прийти повторно
+(resubscribe-редоставка), без коалесцирования drain отправлял бы одно
+и то же отложенное сообщение дважды (два разных `msgId`/`eventId`,
+тот же текст/`lamportTs`):
 ```js
 export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment }) {
   await db.table("pendingOutgoingMessages").put(
@@ -11328,7 +11354,12 @@ export async function sendChatMessageAction(ownerPubkey, privKey, dbKey, contact
   try {
     await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
   } catch (e) {
-    if (e.key !== "errors.awaitingCommitter") throw e;
+    if (!e.key?.startsWith("errors.awaiting")) throw e;
+    // "errors.awaitingSiblingSync" (И4) и "errors.awaitingCommitter" (И3) —
+    // ДВЕ разные причины ждать, ОДИНАКОВАЯ реакция вызывающего кода: очередь
+    // + один и тот же статус для UI (обе означают "переписка устанавливается",
+    // различать причину пользователю не нужно — key внутри DomainError
+    // остаётся для диагностики/логов, не для UI-текста).
     await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment });
     return { status: "awaiting_committer" };
   }
@@ -11339,9 +11370,33 @@ export async function sendChatMessageAction(ownerPubkey, privKey, dbKey, contact
 Импорт `enqueuePendingOutgoingMessage` добавляется к существующему
 импорту из `chat.js` в этом файле.
 
-**`src/domain/messaging/devices.js`** — `handleDeviceAnnounce`'s
-контактная ветка (там, где сейчас `if (group === undefined) return;`)
-заменяется:
+**`src/domain/messaging/devices.js`** — ДВЕ ветки, НЕ одна (уточнение
+после 73.3/3 — план ниже был написан ДО реализации, статус каждой
+ветки указан явно):
+
+**(а) Контактная ветка, СЛУЧАЙ "группа УЖЕ существует" — РЕАЛИЗОВАНО,
+коммит после 73.3/3.** Найдено харнессом (m1-repro.test.js, не
+домысел, см. DESIGN.md "Итог 73.3/3", находка 2): без этого гейта Боб
+мог параллельно с sibling-add А1 коммитить СВОЁ добавление устройства
+контакта — два коммита в одну эпоху, М2. Добавлена ОДНА строка перед
+существующей веткой (`if (!groupRaw) return;` не тронута):
+```js
+const contactPubkey = announcerPubkey;
+if (!isCommitter(ownerPubkey, contactPubkey)) return; // я не коммиттер пары — не коммичу вообще ничего в эту группу
+const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+const groupRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+if (!groupRaw) return;
+```
+Импорт `isCommitter` добавлен к существующему импорту `computeGroupId`
+из `chat.js`.
+
+**(б) Контактная ветка, СЛУЧАЙ "группы ещё вовсе нет" (`if (group ===
+undefined)`, проактивное создание коммиттером) — НЕ РЕАЛИЗОВАНО в
+73.3/3.** m1-repro.test.js её не требует (там группа у Боба УЖЕ есть
+через A1, восстановление А2 идёт через sibling-sync, не через эту
+ветку) — план ниже остаётся АКТУАЛЬНЫМ для отдельной, ещё не начатой
+задачи: истинно первый контакт между ДВУМЯ РАЗНЫМИ identity, ни у одной
+ещё нет группы (M2's исходная, межидентичная форма).
 ```js
 if (group === undefined) {
   if (!isCommitter(ownerPubkey, contact)) return; // я не коммиттер — жду Welcome
@@ -11358,37 +11413,47 @@ if (group === undefined) {
 Требует добавить параметры `fetchDeviceKeyPackages`,
 `refreshGroupMessageSubscription` в сигнатуру `handleDeviceAnnounce` —
 у него их СЕЙЧАС нет (см. существующую сигнатуру в файле). Импорты
-`isCommitter`, `ensureChatEstablished`, `drainPendingOutgoingMessages`
-добавляются к существующему импорту из `chat.js` в этом файле.
+`ensureChatEstablished`, `drainPendingOutgoingMessages` понадобятся
+дополнительно к уже добавленному `isCommitter`.
 
-**`src/ui/signals/transport.js`** — ДВЕ точечные правки:
-1. `refreshGroupMessageSubscription`'s источник `contactPubkeys` для
-   `deviceAnnounceSubscriber`'s фильтра меняется с `[...new Set(groupRows.map(row => row.contactPubkey))]`
+**`src/ui/signals/transport.js`** — ТРИ точечные правки, СТАТУС РАЗНЫЙ:
+
+1. **НЕ РЕАЛИЗОВАНО (часть "случая б" выше).** `refreshGroupMessageSubscription`'s
+   источник `contactPubkeys` для `deviceAnnounceSubscriber`'s фильтра
+   меняется с `[...new Set(groupRows.map(row => row.contactPubkey))]`
    на объединение с подтверждёнными контактами:
    ```js
    const confirmedContacts = (await db.table("contactRelationships").where({ owner: ownerPubkey, state: "CONTACT" }).toArray()).map((r) => r.peer);
    const contactPubkeys = [...new Set([...groupRows.map((row) => row.contactPubkey), ...confirmedContacts])];
    ```
-2. Вызов `handleDeviceAnnounce(...)` в `deviceAnnounceSubscriber`'s
-   `onBatch` дополняется двумя новыми аргументами (`fetchDeviceKeyPackages`,
-   `refreshGroupMessageSubscription`) — они уже доступны в области
-   видимости этой функции (тот же модуль).
-3. В giftwrap-диспетчере, СРАЗУ после существующего
-   `await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);`
-   (строка ~422, ветка `rumor.kind === 444`) добавляется:
+2. **НЕ РЕАЛИЗОВАНО (часть "случая б").** Вызов `handleDeviceAnnounce(...)`
+   в `deviceAnnounceSubscriber`'s `onBatch` дополняется двумя новыми
+   аргументами (`fetchDeviceKeyPackages`, `refreshGroupMessageSubscription`).
+3. **РЕАЛИЗОВАНО, коммит после 73.3/3.** В giftwrap-диспетчере, СРАЗУ
+   после существующего `await refreshGroupMessageSubscription(pubkeyHex,
+   privKey, dbKey, publish);` (ветка `rumor.kind === 444`, ПОСЛЕ
+   успешного `if (isSibling || isKnownContact...)`) добавлено:
    ```js
    await drainPendingOutgoingMessages(pubkeyHex, privKey, dbKey, welcomeContactPubkey, publish);
    ```
-   Импорт `drainPendingOutgoingMessages` добавляется к существующему
-   импорту из `chat.js` в этом файле.
+   Импорт `drainPendingOutgoingMessages` добавлен к существующему
+   импорту из `chat.js` в этом файле. Это ЕДИНСТВЕННАЯ точка drain,
+   нужная для И4 (sibling-Welcome от собственного другого устройства) —
+   она же закрыла бы и И3's "случай б" (Welcome от коммиттера-контакта),
+   когда та ветка будет реализована — код после приёма Welcome
+   идентичен для обоих случаев (см. DESIGN.md "И4").
 
-Порядок применения (микрозадачи воркеру, п.6): (1) table-fields.js — 1
-строка; (2) database.js — version(22); (3) chat.js — isCommitter +
-enqueue/drain + throw в ensureChatEstablished, ОДНОЙ микрозадачей (один
-файл, взаимосвязанные правки); (4) chats.js — try/catch; (5) devices.js —
-handleDeviceAnnounce; (6) transport.js — 3 точечные правки. Каждый шаг —
-тесты обязаны быть зелёными ДО перехода к следующему (регрессия
-накоплением, п.18).
+Порядок применения фактически реализованной части (правки 73.3/3, все
+писались Claude напрямую, не через `./worker.sh` — по тому же
+обоснованию, что 73.3/2: протокольно-критичные файлы, риск 3 впустую
+потраченных воркер-итераций выше цены написать самому): table-fields.js
+→ database.js → chat.js (`isCommitter`/`hasAnyMessagesFor`/двойной
+гейт/enqueue-drain+коалесцирование) → chats.js (обобщённый catch) →
+devices.js (гейт коммиттера в контактной ветке, случай "а") →
+transport.js (правка 3, drain после Welcome). Каждый шаг — тесты
+зелёные до перехода к следующему (регрессия накоплением, п.18) —
+финально верифицировано харнессом (m1-repro.test.js, 3/3), полная
+регрессия 1335/1335.
 
 ## Этап 73.2 — харнесс multi-device (device.js)
 

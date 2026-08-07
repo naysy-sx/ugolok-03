@@ -347,6 +347,26 @@ test("handleDeviceAnnounce: устройство контакта, но чата
 	await handleDeviceAnnounce(ALICE_PUB, ALICE_PRIV, DB_KEY, publish, BOB_PUB, "bob-device", new Uint8Array([1, 2, 3]));
 });
 
+// Этап 73.3 — найдено харнессом (m1-repro.test.js): без этого гейта Боб
+// (НЕ коммиттер пары ALICE_PUB<BOB_PUB) независимо коммитил бы добавление
+// нового устройства Алисы ОДНОВРЕМЕННО с самой Алисой (её sibling-branch) —
+// два commit'а в одну эпоху одной группы, классический М2. Гейт: только
+// коммиттер пары когда-либо коммитит в группу — контактная ветка молчит,
+// даже если чат УЖЕ установлен и устройство контакта РЕАЛЬНО новое.
+test("handleDeviceAnnounce: Боб (НЕ коммиттер пары) — контактная ветка no-op, даже с установленным чатом и новым устройством Алисы", async () => {
+	const { bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = bytesToHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	const alice2KeyPackage = await createOwnKeyPackage(ALICE_PUB, "alice-device-2");
+	const publish = async () => {
+		throw new Error("Боб не коммиттер пары (ALICE_PUB, BOB_PUB) — не должен пытаться коммитить");
+	};
+	const { updatedBobSerializedState } = await asBob(groupIdHex, bobSerializedState, () =>
+		handleDeviceAnnounce(BOB_PUB, BOB_PRIV, DB_KEY, publish, ALICE_PUB, "alice-device-2", alice2KeyPackage.wireBytes),
+	);
+	assert.deepEqual(updatedBobSerializedState, bobSerializedState, "состояние группы Боба не должно измениться");
+	assert.equal(await db.table("knownContactDevices").get([BOB_PUB, ALICE_PUB, "alice-device-2"]), undefined);
+});
+
 test("handleDeviceAnnounce: deviceId отсутствует (легаси/чужеродное) — no-op вне зависимости от announcerPubkey", async () => {
 	await establishAliceToBob();
 	const publish = async () => {

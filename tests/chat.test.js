@@ -11,12 +11,16 @@ import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-ta
 import { MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import {
 	computeGroupId,
+	isCommitter,
 	ensureOwnKeyPackagePublished,
 	ensureChatEstablished,
 	acceptWelcome,
 	sendMessage,
 	receiveGroupMessageEvent,
 	getChatHistory,
+	hasAnyMessagesFor,
+	enqueuePendingOutgoingMessage,
+	drainPendingOutgoingMessages,
 } from "../src/domain/messaging/chat.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -38,6 +42,8 @@ beforeEach(async () => {
 	await db.table("messages").clear();
 	await db.table("outbox").clear();
 	await db.table("knownContactDevices").clear();
+	await db.table("contactRelationships").clear();
+	await db.table("pendingOutgoingMessages").clear();
 });
 
 after(() => {
@@ -236,6 +242,123 @@ test("ensureChatEstablished: у контакта ДВА устройства —
 		knownRows.map((r) => r.deviceId).sort(),
 		["bob-laptop", "bob-phone"],
 	);
+});
+
+// Этап 73.3 — И3 (единственный коммиттер): ALICE_PUB < BOB_PUB лексикографически
+// (проверено против реальных значений фикстур, не предположение).
+test("isCommitter: детерминирован, симметричен (ровно одна сторона — коммиттер)", () => {
+	assert.equal(isCommitter(ALICE_PUB, BOB_PUB), true);
+	assert.equal(isCommitter(BOB_PUB, ALICE_PUB), false);
+});
+
+test("ensureChatEstablished: коммиттер (меньший pubkey) создаёт группу как раньше, даже с подтверждённым контактом", async () => {
+	await db.table("contactRelationships").put({ owner: ALICE_PUB, peer: BOB_PUB, state: "CONTACT", resolvedAt: 1, sentAt: null });
+	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.ok(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), "коммиттер обязан создать группу немедленно");
+});
+
+test("ensureChatEstablished: НЕ-коммиттер (больший pubkey) с ПОДТВЕРЖДЁННЫМ контактом — бросает DomainError('errors.awaitingCommitter'), группу НЕ создаёт", async () => {
+	await db.table("contactRelationships").put({ owner: BOB_PUB, peer: ALICE_PUB, state: "CONTACT", resolvedAt: 1, sentAt: null });
+	let publishCalled = false;
+	const publish = async () => {
+		publishCalled = true;
+		return { ok: true };
+	};
+	await assert.rejects(
+		() => ensureChatEstablished(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, publish, async () => new Map()),
+		(e) => e.key === "errors.awaitingCommitter",
+	);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.equal(await db.table("mlsGroups").get([BOB_PUB, groupIdHex]), undefined, "проигравшая сторона не должна создавать группу");
+	assert.equal(publishCalled, false, "не должно быть попытки опубликовать Welcome");
+});
+
+test("ensureChatEstablished: НЕ-коммиттер БЕЗ подтверждённого контакта (холодное обращение к незнакомцу) — создаёт группу как раньше, гейт НЕ применяется", async () => {
+	// НАЙДЕНО ПРОВЕРКОЙ ПРОТИВ РЕАЛЬНЫХ ТЕСТОВ (не домысел): без этого условия
+	// inbox-signals.test.js/inbox-requests.test.js (STRANGER_PUB > ALICE_PUB
+	// лексикографически) сломали бы холодное обращение к незнакомцу — see
+	// CONTRACTS.md/DESIGN.md "Этап 73.3" для полного обоснования.
+	// contactRelationships НЕ содержит запись BOB->ALICE — они не контакты.
+	const aliceKeyPackage = await createOwnKeyPackage(ALICE_PUB, "alice-device");
+	const fetchDeviceKeyPackages = async () => new Map([["alice-device", { wireBytes: aliceKeyPackage.wireBytes, createdAt: 1000 }]]);
+	await ensureChatEstablished(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.ok(await db.table("mlsGroups").get([BOB_PUB, groupIdHex]), "холодное обращение к незнакомцу должно работать как раньше");
+});
+
+// Этап 73.3 — И4 (device-level, найдено харнессом: И3 сам по себе НЕ закрывал
+// М1 — гонка МЕЖДУ УСТРОЙСТВАМИ одной identity, не между identity).
+test("hasAnyMessagesFor: false для пустой истории, true после появления хотя бы одного сообщения", async () => {
+	assert.equal(await hasAnyMessagesFor(ALICE_PUB, BOB_PUB), false);
+	await db.table("messages").add(
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "ev1", text: "x", status: "sent", msgId: "m1" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	assert.equal(await hasAnyMessagesFor(ALICE_PUB, BOB_PUB), true);
+	assert.equal(await hasAnyMessagesFor(ALICE_PUB, "другой-контакт-не-затронут"), false, "не путает разных контактов");
+});
+
+test("ensureChatEstablished: И4 — непустая mirror-история блокирует создание, ДАЖЕ если owner — коммиттер (И3 бы разрешил)", async () => {
+	// ALICE_PUB — коммиттер относительно BOB_PUB (isCommitter(ALICE,BOB)===true,
+	// см. тест выше) — БЕЗ И4 этот вызов прошёл бы гейт И3 беспрепятственно.
+	// Симулируем: другое устройство Алисы уже намирорило сообщение с Бобом
+	// (kind:446, этап 25) — есть в messages, но mlsGroups у ЭТОГО процесса пуст.
+	await db.table("messages").add(
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "mirrored-ev", text: "уже было", status: "sent", msgId: "mirrored-msg" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	let publishCalled = false;
+	const publish = async () => {
+		publishCalled = true;
+		return { ok: true };
+	};
+	await assert.rejects(
+		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, publish, async () => new Map()),
+		(e) => e.key === "errors.awaitingSiblingSync",
+	);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.equal(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), undefined, "не должно создавать вторую независимую группу");
+	assert.equal(publishCalled, false, "не должно быть попытки опубликовать Welcome");
+});
+
+test("ensureChatEstablished: И4 срабатывает БЕЗ подтверждённого контакта (безусловно, в отличие от И3)", async () => {
+	// contactRelationships пуст (BOB и ALICE не контакты формально) — И3 бы
+	// пропустил (см. тест "холодное обращение к незнакомцу" выше), но mirror-
+	// история — прямое доказательство состоявшейся переписки, этого достаточно.
+	await db.table("messages").add(
+		toEncryptedRow({ ownerPubkey: BOB_PUB, chatId: ALICE_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "mirrored-ev2", text: "уже было", status: "sent", msgId: "mirrored-msg2" }, MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	await assert.rejects(
+		() => ensureChatEstablished(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, async () => ({ ok: true }), async () => new Map()),
+		(e) => e.key === "errors.awaitingSiblingSync",
+	);
+});
+
+test("enqueuePendingOutgoingMessage/drainPendingOutgoingMessages: очередь копится, drain отправляет по порядку lamportTs и опустошает очередь", async () => {
+	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, text: "второе", lamportTs: 2 });
+	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, text: "первое", lamportTs: 1 });
+
+	// Группа должна СУЩЕСТВОВАТЬ к моменту drain (создаётся коммиттером/через Welcome —
+	// drain сама группу не создаёт, только шлёт УЖЕ существующей).
+	const bobKeyPackage = await createOwnKeyPackage(BOB_PUB, "bob-device");
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobKeyPackage.wireBytes, createdAt: 1000 }]]);
+	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages);
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	const groupRaw = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const group = fromEncryptedRow(groupRaw, DB_KEY);
+	await db.table("mlsGroups").put(toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: group.state }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY));
+
+	const publishedEvents = [];
+	const publish = async (event) => {
+		publishedEvents.push(event);
+		return { ok: true };
+	};
+	await drainPendingOutgoingMessages(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, publish);
+
+	const remaining = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([BOB_PUB, ALICE_PUB]).toArray();
+	assert.equal(remaining.length, 0, "очередь должна опустеть после drain");
+	assert.equal(publishedEvents.filter((e) => e.kind === 445).length, 2, "оба сообщения должны быть реально отправлены (kind 445)");
 });
 
 test("sendMessage: бросает, если чат ещё не установлен (нет mlsGroups записи)", async () => {

@@ -55,7 +55,7 @@ const handlers = {
 
 	async send({ contactPubkey, text }) {
 		const lamportTs = await nextLamportTick(ownerPubkey);
-		await sendChatMessageAction(
+		const result = await sendChatMessageAction(
 			ownerPubkey,
 			privKey,
 			dbKey,
@@ -66,7 +66,7 @@ const handlers = {
 			fetchDeviceKeyPackages,
 			refreshGroupMessageSubscription,
 		);
-		return { lamportTs };
+		return { lamportTs, ...result };
 	},
 
 	async history({ contactPubkey }) {

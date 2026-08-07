@@ -20,6 +20,7 @@ import {
 	ensureOwnKeyPackagePublished,
 	receiveGroupMessageEvent,
 	upsertMessage,
+	drainPendingOutgoingMessages,
 } from "../../domain/messaging/chat.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
 import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
@@ -420,6 +421,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
 							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content));
 							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
+							// Этап 73.3 — И3/И4: группа только что появилась (либо через sibling-
+							// Welcome от моего же другого устройства — И4, либо через Welcome от
+							// контакта-коммиттера — И3) — отправляем всё, что копилось в очереди,
+							// пока группы не было (CONTRACTS.md/DESIGN.md "Этап 73.3").
+							await drainPendingOutgoingMessages(pubkeyHex, privKey, dbKey, welcomeContactPubkey, publish);
 						} else {
 							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА

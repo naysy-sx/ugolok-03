@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 import { db } from "../../core/store/database.js";
-import { ensureChatEstablished, sendMessage } from "../../domain/messaging/chat.js";
+import { ensureChatEstablished, sendMessage, enqueuePendingOutgoingMessage } from "../../domain/messaging/chat.js";
 import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
 import { editMessage } from "../../domain/messaging/edits.js";
 import { markChatAsRead } from "../../domain/messaging/read-status.js";
@@ -48,7 +48,18 @@ export async function sendChatMessageAction(
 	refreshGroupMessageSubscription,
 	attachment,
 ) {
-	await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
+	// Этап 73.3 — И3/И4: ensureChatEstablished бросает DomainError с
+	// key="errors.awaitingSiblingSync" (И4 — другое моё устройство уже
+	// разговаривало с этим контактом) или "errors.awaitingCommitter" (И3 —
+	// коммиттер этой пары не я) вместо создания второй независимой группы.
+	// Обе причины — ОДНА и та же реакция: сообщение в очередь, статус для UI.
+	try {
+		await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
+	} catch (e) {
+		if (!e.key?.startsWith("errors.awaiting")) throw e;
+		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment });
+		return { status: "awaiting_committer" };
+	}
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
 	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment);
 }

@@ -81,14 +81,14 @@ async function waitForHistory(bob, minLength, timeoutMs = 10000) {
 	return history;
 }
 
-// todo — ОСОЗНАННО красный: доказывает М1 на текущем коде (до И3, этап 73.3).
-// node:test не роняет общий прогон из-за todo-теста (полная регрессия
-// "зелёная" остаётся честной для остального кода, п.18 skill'а), но падение
-// видно отдельной строкой в сводке. Снять todo и получить зелёный — это и
-// есть Definition of Done для И3.
+// Был красным (todo) до 73.3/3 — доказывал М1 на коде без И3+И4. Теперь
+// зелёный: И4 (mirror-история) не даёт A2 создать вторую независимую
+// группу, А1's sibling-sync (не изменён) добавляет A2 в РЕАЛЬНУЮ группу,
+// drainPendingOutgoingMessages доставляет отложенное сообщение. См.
+// DESIGN.md/PLAN.md "Этап 73.3" за полной историей находки и фикса.
 test(
-	"М1: второе устройство Алисы пишет ДО реактивной досинхронизации — сообщение теряется для Боба (красный тест)",
-	{ timeout: 30000, todo: "закрывается этапом 73.3 (И3 — единственный коммиттер), см. PLAN.md" },
+	"М1 (был красным): второе устройство Алисы пишет ДО реактивной досинхронизации — теперь корректно ждёт sibling-sync, сообщение не теряется",
+	{ timeout: 30000 },
 	async (t) => {
 	let bridge;
 	const relay = createFakeRelay({ onDeliver: (connId, msg) => bridge.deliver(connId, msg) });
@@ -132,29 +132,37 @@ test(
 	await aliceA2.call("init", { privKeyHex: ALICE_PRIV_HEX, relayUrl });
 	await aliceA2.call("becomeContact", { peerPubkey: BOB_PUB });
 	await aliceA2.call("connect");
-	await aliceA2.call("send", { contactPubkey: BOB_PUB, text: "from A2" });
+	// И4 (chat.js, ensureChatEstablished): A2 уже подтянул mirror A1's "hello"
+	// во время connect() (syncMirroredHistory) — hasAnyMessagesFor(Alice,Bob)
+	// истинно, ensureChatEstablished бросает "errors.awaitingSiblingSync",
+	// sendChatMessageAction ловит и ставит в очередь — НЕ создаёт вторую
+	// независимую группу. Проверяем это явно, не только финальный счёт у Боба.
+	const sendResult = await aliceA2.call("send", { contactPubkey: BOB_PUB, text: "from A2" });
+	assert.equal(sendResult.status, "awaiting_committer", "И4 обязан поставить сообщение A2 в очередь, а не создать вторую независимую группу");
 
 	// Пока announce придержан, Боб не может знать про A2 — история должна
-	// остаться на 1 (сообщение A2 либо ещё не пришло, либо уже пришло по
-	// #h, но не расшифровалось — оба случая дают одинаковый наблюдаемый счёт).
+	// остаться на 1.
 	await new Promise((r) => setTimeout(r, 300));
 	const duringRace = await bob.call("history", { contactPubkey: ALICE_PUB });
 
-	// Отпускаем придержанное — если бы реактивная досинхронизация могла
-	// исправить дело ПОСТФАКТУМ, она сделала бы это здесь.
+	// Отпускаем придержанное — A1 (уже онлайн весь этот момент) реагирует на
+	// sibling-анонс A2 через УЖЕ СУЩЕСТВУЮЩИЙ (не изменённый в 73.3) sibling-sync
+	// (devices.js, ветка announcerPubkey===ownerPubkey), шлёт A2 sibling-Welcome;
+	// A2 принимает его (acceptWelcome) и drainPendingOutgoingMessages (transport.js)
+	// отправляет отложенное "from A2" уже В РЕАЛЬНУЮ группу.
 	clearInterval(holdTimer);
 	const releaseTimer = setInterval(() => relay.flushAll(), 5);
-	await new Promise((r) => setTimeout(r, 500));
-	const final = await bob.call("history", { contactPubkey: ALICE_PUB });
+	const final = await waitForHistory(bob, 2, 15000);
 	clearInterval(releaseTimer);
 
-	// КРАСНЫЙ тест: на текущем коде (до И3) Боб теряет сообщение A2 —
-	// acceptWelcome молча отбрасывает Welcome A2 (`if (existing) return`),
-	// kind:445 от A2 не расшифровывается локальным состоянием группы Боба
-	// (независимая ветка, другие ключи). Ожидаемое (желаемое, ПОСЛЕ И3) —
-	// 2 сообщения; фактическое сейчас — 1, ДАЖЕ ПОСЛЕ того как Боб узнал
-	// об A2 (постфактум это уже не чинит потерянное сообщение).
+	// ЗЕЛЁНЫЙ тест (этап 73.3, И3+И4): Боб видит ОБА сообщения — A2 не создаёт
+	// вторую независимую группу (И4), а дожидается sibling-Welcome от A1 и
+	// доставляет отложенное сообщение через РЕАЛЬНУЮ, единую группу.
 	assert.equal(duringRace.length, 1, "во время гонки: Боб пока не видит сообщение A2");
-	assert.equal(final.length, 2, "М1: сообщение A2 должно быть видно Бобу даже после того, как он узнал об A2 постфактум (провалится на текущем коде — это и есть красный тест)");
+	assert.equal(final.length, 2, "И3+И4: Боб должен увидеть оба сообщения — A2 корректно дождался sibling-sync вместо гонки");
+	assert.deepEqual(
+		final.map((m) => m.text).sort(),
+		["from A2", "hello от A1"],
+	);
 	},
 );

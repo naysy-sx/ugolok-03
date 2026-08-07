@@ -36,6 +36,7 @@ beforeEach(async () => {
 	await db.table("messages").clear();
 	await db.table("chatSyncState").clear();
 	await db.table("knownContactDevices").clear();
+	await db.table("pendingOutgoingMessages").clear();
 });
 
 after(() => {
@@ -171,6 +172,18 @@ test("sendChatMessageAction: fetchDeviceKeyPackages не находит адре
 		BOB_PUB, "привет", 1, async () => ({ ok: true }), fetchDeviceKeyPackages, async () => {}),
 		/ключ/,
 	);
+});
+
+// Этап 73.3 — И3/И4: ensureChatEstablished бросает DomainError вместо создания
+// второй независимой группы — sendChatMessageAction обязана ставить в очередь,
+// НЕ пробрасывать ошибку наружу (иначе пользователь видел бы "не отправилось",
+// хотя на самом деле сообщение просто ждёт установления переписки).
+test("sendChatMessageAction: И4 (mirror-история уже есть) — НЕ бросает, ставит в очередь, возвращает {status:'awaiting_committer'}", async () => {
+	await db.table("messages").add({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "mirrored-ev", status: "sent", msgId: "mirrored-msg" });
+	const result = await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет", 5, async () => ({ ok: true }), async () => new Map(), async () => {});
+	assert.deepEqual(result, { status: "awaiting_committer" });
+	const queued = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).toArray();
+	assert.equal(queued.length, 1);
 });
 
 test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делегируют в domain-модули этапов 25-26", async () => {

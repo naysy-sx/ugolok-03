@@ -280,6 +280,15 @@ db.version(21).stores({
   knownContactDevices: "[ownerPubkey+contactPubkey+deviceId], [ownerPubkey+contactPubkey]"
 });
 
+// Этап 73.3 — И3 (единственный коммиттер): исходящие, накопленные
+// проигравшей стороной, пока коммиттер не создал группу (DESIGN.md,
+// "Этап 73"). Шифруется через toEncryptedRow/PENDING_OUTGOING_MESSAGES_
+// PLAINTEXT_FIELDS — только ownerPubkey/contactPubkey/lamportTs plaintext
+// (составной индекс).
+db.version(22).stores({
+  pendingOutgoingMessages: "[ownerPubkey+contactPubkey+lamportTs], [ownerPubkey+contactPubkey]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }
