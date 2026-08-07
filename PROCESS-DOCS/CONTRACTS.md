@@ -11245,6 +11245,151 @@ const { port } = await bridge.start();
 поведение `ws`) — без явного `ws.terminate()` перед `close()` один
 незакрытый сокет вешал бы `stop()` навсегда.
 
+## Этап 73.3 — реализация И3 (единственный коммиттер)
+
+Полная формализация — DESIGN.md "Этап 73" (И3, механизм, псевдокод A-Г,
+расширение scope подписки, новая таблица). Здесь — точные сигнатуры для
+диспетчеризации воркеру микрозадачами (п.6 skill'а).
+
+**`src/domain/messaging/chat.js`** — новый экспорт:
+```js
+export function isCommitter(pubkeyHexA, pubkeyHexB) {
+  return pubkeyHexA < pubkeyHexB; // лексикографически по hex, симметрично
+}
+```
+`ensureChatEstablished` — ПЕРЕД строкой `const theirDevices = await
+fetchDeviceKeyPackages(contactPubkey);` добавляется:
+```js
+if ((await isKnownContact(ownerPubkey, contactPubkey)) && !isCommitter(ownerPubkey, contactPubkey)) {
+  throw new DomainError("ожидание установления переписки — коммиттер этой пары не я", "errors.awaitingCommitter", { contactPubkey });
+}
+```
+Гейт применяется, ТОЛЬКО если contact УЖЕ подтверждённый контакт
+(`isKnownContact`, `inbox-requests.js`, уже существующий экспорт) —
+НАЙДЕНО ПРОВЕРКОЙ ПРОТИВ РЕАЛЬНЫХ тестов (не домысел): без этого
+условия `inbox-signals.test.js`/`inbox-requests.test.js` (STRANGER_PUB
+лексикографически БОЛЬШЕ ALICE_PUB) сломали бы холодное обращение к
+незнакомцу — а восстановить его через реактивный канал (ветка В ниже)
+НЕЛЬЗЯ, тот канал существует только для подтверждённых контактов —
+получилось бы гарантированное зависание навсегда, хуже устраняемого
+М1. Импорт `isKnownContact` добавляется в `chat.js` из
+`./inbox-requests.js` — ЕДИНСТВЕННЫЙ импорт в обратную сторону
+(`inbox-requests.js` уже импортирует `acceptWelcome` ИЗ `chat.js`) —
+цикл импортов ДОПУСТИМ в ES-модулях (не CommonJS), но стоит явно
+зафиксировать как сознательное решение, не случайность.
+(`DomainError` уже импортирован в файле — правка НЕ трогает остальное
+тело функции, остаётся путём коммиттера без изменений).
+
+Новые экспорты (рядом с `sendMessage`, та же ответственность — не
+разносить по файлам):
+```js
+export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment }) {
+  await db.table("pendingOutgoingMessages").put(
+    toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, text, ...(attachment !== undefined ? { attachment } : {}) }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey),
+  );
+}
+
+export async function drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+  const raw = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).sortBy("lamportTs");
+  for (const encryptedRow of raw) {
+    const row = fromEncryptedRow(encryptedRow, dbKey);
+    await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachment);
+    await db.table("pendingOutgoingMessages").delete([ownerPubkey, contactPubkey, row.lamportTs]);
+  }
+}
+```
+Импорт `PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS` добавляется в
+существующий импорт из `table-fields.js` (та же строка, что уже
+импортирует `MLS_GROUPS_PLAINTEXT_FIELDS`/`MESSAGES_PLAINTEXT_FIELDS`).
+
+**`src/core/store/table-fields.js`** — новый экспорт (рядом с
+`CONTACT_RELATIONSHIPS_PLAINTEXT_FIELDS`, тот же стиль):
+```js
+export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lamportTs"];
+```
+
+**`src/core/store/database.js`** — новая версия (после `db.version(21)`):
+```js
+// Этап 73.3 — И3 (единственный коммиттер): исходящие, накопленные
+// проигравшей стороной, пока коммиттер не создал группу (DESIGN.md).
+// Не шифруется целиком — НЕТ, шифруется (text — содержательное поле,
+// тот же принцип, что messages) через toEncryptedRow/PENDING_OUTGOING_
+// MESSAGES_PLAINTEXT_FIELDS выше — только ownerPubkey/contactPubkey/
+// lamportTs остаются plaintext (составной индекс).
+db.version(22).stores({
+  pendingOutgoingMessages: "[ownerPubkey+contactPubkey+lamportTs], [ownerPubkey+contactPubkey]"
+});
+```
+
+**`src/ui/signals/chats.js`** — `sendChatMessageAction` оборачивает
+вызов `ensureChatEstablished` в try/catch:
+```js
+export async function sendChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, fetchDeviceKeyPackages, refreshGroupMessageSubscription, attachment) {
+  try {
+    await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
+  } catch (e) {
+    if (e.key !== "errors.awaitingCommitter") throw e;
+    await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment });
+    return { status: "awaiting_committer" };
+  }
+  await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
+  return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment);
+}
+```
+Импорт `enqueuePendingOutgoingMessage` добавляется к существующему
+импорту из `chat.js` в этом файле.
+
+**`src/domain/messaging/devices.js`** — `handleDeviceAnnounce`'s
+контактная ветка (там, где сейчас `if (group === undefined) return;`)
+заменяется:
+```js
+if (group === undefined) {
+  if (!isCommitter(ownerPubkey, contact)) return; // я не коммиттер — жду Welcome
+  try {
+    await ensureChatEstablished(ownerPubkey, privKey, dbKey, contact, publish, fetchDeviceKeyPackages);
+    await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
+    await drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, contact, publish);
+  } catch (e) {
+    console.warn("handleDeviceAnnounce: не удалось проактивно создать группу", contact, e);
+  }
+  return;
+}
+```
+Требует добавить параметры `fetchDeviceKeyPackages`,
+`refreshGroupMessageSubscription` в сигнатуру `handleDeviceAnnounce` —
+у него их СЕЙЧАС нет (см. существующую сигнатуру в файле). Импорты
+`isCommitter`, `ensureChatEstablished`, `drainPendingOutgoingMessages`
+добавляются к существующему импорту из `chat.js` в этом файле.
+
+**`src/ui/signals/transport.js`** — ДВЕ точечные правки:
+1. `refreshGroupMessageSubscription`'s источник `contactPubkeys` для
+   `deviceAnnounceSubscriber`'s фильтра меняется с `[...new Set(groupRows.map(row => row.contactPubkey))]`
+   на объединение с подтверждёнными контактами:
+   ```js
+   const confirmedContacts = (await db.table("contactRelationships").where({ owner: ownerPubkey, state: "CONTACT" }).toArray()).map((r) => r.peer);
+   const contactPubkeys = [...new Set([...groupRows.map((row) => row.contactPubkey), ...confirmedContacts])];
+   ```
+2. Вызов `handleDeviceAnnounce(...)` в `deviceAnnounceSubscriber`'s
+   `onBatch` дополняется двумя новыми аргументами (`fetchDeviceKeyPackages`,
+   `refreshGroupMessageSubscription`) — они уже доступны в области
+   видимости этой функции (тот же модуль).
+3. В giftwrap-диспетчере, СРАЗУ после существующего
+   `await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);`
+   (строка ~422, ветка `rumor.kind === 444`) добавляется:
+   ```js
+   await drainPendingOutgoingMessages(pubkeyHex, privKey, dbKey, welcomeContactPubkey, publish);
+   ```
+   Импорт `drainPendingOutgoingMessages` добавляется к существующему
+   импорту из `chat.js` в этом файле.
+
+Порядок применения (микрозадачи воркеру, п.6): (1) table-fields.js — 1
+строка; (2) database.js — version(22); (3) chat.js — isCommitter +
+enqueue/drain + throw в ensureChatEstablished, ОДНОЙ микрозадачей (один
+файл, взаимосвязанные правки); (4) chats.js — try/catch; (5) devices.js —
+handleDeviceAnnounce; (6) transport.js — 3 точечные правки. Каждый шаг —
+тесты обязаны быть зелёными ДО перехода к следующему (регрессия
+накоплением, п.18).
+
 ## Этап 73.2 — харнесс multi-device (device.js)
 
 Триаж: ПОГРАНИЧНЫЙ случай, решён в пользу 13b (записка) не из-за
