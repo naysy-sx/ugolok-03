@@ -29,6 +29,10 @@ import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
 import SyncIndicator from "../components/sync-indicator.jsx";
 import Screen from "../components/screen.jsx";
+import { currentUser, dbKeySig } from "../signals/auth.js";
+import { profiles } from "../signals/contacts.js";
+import { shortPubkey } from "../format.js";
+import { listDesyncedChats, recreateChatConversation } from "../../domain/messaging/chat.js";
 
 function envChecks() {
 	return [
@@ -613,6 +617,43 @@ function useTransportSyncCheck() {
 	return { status, connState, synced, relayUrl, run };
 }
 
+// Этап 73.5 — М6 (детект расхождения): список переписок, у которых накопилось
+// consecutiveDecryptFailures >= порога (chat.js, DESYNC_THRESHOLD) — устройство
+// подряд, без единого успешного приёма, теряло kind:445 этой группы даже после
+// повторных попыток буфера (73.4). "Пересоздать" — recreateChatConversation
+// (chat.js): забывает локальное состояние, дальше отрабатывают уже
+// существующие пути И3/И4 (коммиттер создаст заново / sibling-Welcome догонит).
+function useDesyncedChats() {
+	const [chats, setChats] = useState([]);
+	const [busyContact, setBusyContact] = useState(null);
+
+	async function refresh() {
+		const user = currentUser.value;
+		const dbKey = dbKeySig.value;
+		if (!user || !dbKey) return setChats([]);
+		setChats(await listDesyncedChats(user.id, dbKey));
+	}
+
+	useEffect(() => {
+		refresh();
+	}, [currentUser.value, dbKeySig.value]);
+
+	async function recreate(contactPubkey) {
+		const user = currentUser.value;
+		const dbKey = dbKeySig.value;
+		if (!user || !dbKey) return;
+		setBusyContact(contactPubkey);
+		try {
+			await recreateChatConversation(user.id, contactPubkey, dbKey);
+			await refresh();
+		} finally {
+			setBusyContact(null);
+		}
+	}
+
+	return { chats, recreate, busyContact };
+}
+
 function Row({ c }) {
 	const tone = c.ok ? "var(--good)" : c.critical ? "var(--bad)" : "var(--warn)";
 	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
@@ -709,6 +750,7 @@ export default function Diagnostics() {
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
 	const pSpike = usePSpikeBenchmark();
 	const transportSync = useTransportSyncCheck();
+	const desynced = useDesyncedChats();
 
 	return (
 		<Screen title="Проверка движка">
@@ -790,6 +832,34 @@ export default function Diagnostics() {
 					<SyncIndicator state={transportSync.connState} synced={transportSync.synced} url={transportSync.relayUrl} />
 				</li>
 			</Section>
+
+			{currentUser.value && (
+				<Section title="Переписки">
+					{desynced.chats.length === 0 ? (
+						<li style={{ paddingBlock: "var(--space-s)", color: "var(--muted)" }}>
+							Расхождений не обнаружено.
+						</li>
+					) : (
+						desynced.chats.map((c) => (
+							<StatusRow
+								key={c.contactPubkey}
+								label={`Расхождение · ${profiles.value[c.contactPubkey]?.name || shortPubkey(c.contactPubkey)}`}
+								status={`${c.consecutiveDecryptFailures} сообщений подряд не расшифровались — переписка, вероятно, разошлась на два независимых состояния`}
+								tone="var(--bad)"
+								action={
+									<button
+										type="button"
+										disabled={desynced.busyContact === c.contactPubkey}
+										onClick={() => desynced.recreate(c.contactPubkey)}
+									>
+										{desynced.busyContact === c.contactPubkey ? "Пересоздаю…" : "Пересоздать"}
+									</button>
+								}
+							/>
+						))
+					)}
+				</Section>
+			)}
 
 			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
 				{navigator.userAgent}
