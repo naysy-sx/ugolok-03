@@ -26,6 +26,7 @@ import {
 	listBannedMembers,
 } from "../src/domain/content/moderation.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { ChannelContentNotReadyError } from "../src/domain/content/channel-content-errors.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -311,8 +312,17 @@ test("АДВЕРСАРНЫЙ (крипто-барьер): после бана Б
 	// Mallory (получила v_new через переиздачу) пытается принять — крипто-барьер
 	// (DESIGN.md): decryptChannelContent ищет ТОЛЬКО meta.currentVersion (v_new),
 	// у события заголовок v_old -> null -> discard, ДО проверки allowlist.
-	const applied = await receiveComment(MALLORY_PUB, DB_KEY, forgedComment);
-	assert.equal(applied, false, "комментарий забаненного с устаревшим ключом обязан быть отклонён");
+	// Этап 74 — plaintext===null теперь throw ChannelContentNotReadyError (М3-класс
+	// для каналов), не тихий false: то же "буферизуется и отбрасывается по TTL"
+	// решение, что и в receiveAllowlistUpdate. Гарантия та же — комментарий не
+	// применяется, не сохраняется в БД.
+	await assert.rejects(() => receiveComment(MALLORY_PUB, DB_KEY, forgedComment), ChannelContentNotReadyError);
+	const stored = await db.table("comments").where("ownerPubkey").equals(MALLORY_PUB).toArray();
+	assert.equal(
+		stored.filter((c) => fromEncryptedRow(c, DB_KEY).authorPubkey === BOB_PUB).length,
+		0,
+		"комментарий забаненного с устаревшим ключом не сохранён у Mallory",
+	);
 });
 
 test("listReports: сортировка по createdAt убыв., owner-scoped по каналу", async () => {

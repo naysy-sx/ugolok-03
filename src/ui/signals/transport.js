@@ -39,6 +39,7 @@ import { applyChannelUnviewRumor } from "../../domain/content/channel-visibility
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
+import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
@@ -177,6 +178,29 @@ function bufferUndecryptedEvent(event) {
 	const list = pendingUndecryptedByGroup.get(groupIdHex) ?? [];
 	list.push({ event, firstSeenAt: Date.now() });
 	pendingUndecryptedByGroup.set(groupIdHex, list);
+}
+
+// Этап 74 — то же М3-расширение на контент каналов (kind 30060/30054/30061/30062/
+// 30063, DESIGN.md/CONTRACTS.md "Этап 74"): grant (kind 30053, отдельная подписка
+// #p:[я]) и контент (эта же #h-топик подписка) могут прийти в любом порядке — throw
+// ChannelContentNotReadyError из receive*-функций (channel-content-errors.js)
+// СПЕЦИФИЧНО сигналит "рано, не порча" (в отличие от group-веток выше — там ЛЮБОЙ
+// провал буферится, здесь буферится ТОЛЬКО этот класс, остальное — прежний тихий
+// discard). Ключ карты — channelTopic (тег `h`, общий routing-ключ для ВСЕХ 5 кинДов
+// одного канала, тот же приём, что groupIdHex у group-веток).
+const pendingUndecryptedByChannel = new Map(); // channelTopicHex -> Array<{event, firstSeenAt}>
+const CHANNEL_CONTENT_RETRY_TTL_MS = 5 * 60 * 1000;
+
+function channelTopicOf(event) {
+	return event.tags.find((t) => t[0] === "h")?.[1];
+}
+
+function bufferUndecryptedChannelEvent(event) {
+	const channelTopicHex = channelTopicOf(event);
+	if (!channelTopicHex) return;
+	const list = pendingUndecryptedByChannel.get(channelTopicHex) ?? [];
+	list.push({ event, firstSeenAt: Date.now() });
+	pendingUndecryptedByChannel.set(channelTopicHex, list);
 }
 
 // Этап 60 — кэш обнаруженных inbox-relay (kind:10050) получателей: без него
@@ -1034,14 +1058,16 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey, dbKe
 				// батче из N грантов это N лишних REQ-циклов вместо одного. Один раз после
 				// всего батча достаточно (topics всё равно читаются заново целиком).
 				let gotNewGrant = false;
+				const grantedChannelTopics = []; // Этап 74 — см. retry ниже
 				for (const event of events) {
 					// КРИТИЧНО именно здесь (этап 47-довесок-4): без этой проверки redelivery
 					// СТАРОГО гранта на resubscribe снова ставил бы gotNewGrant=true и запускал
 					// бы refreshChannelContentSubscription — мультипликативный каскад с ним же.
 					if (!isNewEvent(event.id)) continue;
 					try {
-						await receiveChannelKeyGrant(ownerPubkey, privKey, dbKey, event.pubkey, event);
+						const { channelTopic } = await receiveChannelKeyGrant(ownerPubkey, privKey, dbKey, event.pubkey, event);
 						gotNewGrant = true;
+						grantedChannelTopics.push(channelTopic);
 					} catch {
 						// не мой грант / повреждён — пропустить, не ронять батч
 					}
@@ -1052,6 +1078,14 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey, dbKe
 					// иначе метаданные/allowlist этого канала не придут до следующего
 					// перезахода (тот же класс находки, что этап 27-довесок-7 для профилей).
 					await refreshChannelContentSubscription(ownerPubkey, dbKey);
+					// Этап 74 — М3 для контента каналов: свежий грант (новая/первая версия
+					// ключа) — второй момент (наравне с "успешно применённое событие контента"
+					// в refreshChannelContentSubscription выше), когда ранее отложенный
+					// контент этого канала может, наконец, примениться.
+					const settings = await loadUiSettings(ownerPubkey, dbKey);
+					for (const channelTopic of grantedChannelTopics) {
+						await retryBufferedChannelContentEvents(channelTopic, ownerPubkey, dbKey, settings);
+					}
 					bumpMessagingActivity(); // channels.jsx узнаёт о новом "Доступном" канале
 				}
 			},
@@ -1062,6 +1096,254 @@ export async function refreshChannelGrantSubscription(ownerPubkey, privKey, dbKe
 }
 
 let channelContentSubscriber = null;
+
+// Этап 74 — вынесено из onBatch (было инлайн), БЕЗ ИЗМЕНЕНИЯ логики диспетчеризации:
+// переиспользуется И основным циклом ниже, И retryBufferedChannelContentEvents, тот
+// же приём, что processOneGroupMessageEvent (М3) выше по файлу. Бросает НАРУЖУ —
+// ChannelContentNotReadyError (буферизуемо, см. onBatch) либо любую другую ошибку
+// (не буферизуется, тихий discard на стороне вызывающего, как было раньше).
+async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event) {
+	// Разрешаем channelId по h-тегу ОДИН раз — нужен как entityId для
+	// notify() (этап 47, per-channel override) во всех ветках ниже, кроме
+	// 30060/30054 (у них своя, более ранняя точка входа без уведомлений).
+	// Расшифровываем ЗДЕСЬ, ДО любых мутаций этой итерации (этап 47-довесок-3,
+	// найденное — receiveBanAnnouncement ниже может УДАЛИТЬ эту же строку
+	// channels, если банят самого owner'а/зрителя; название нужно взять из
+	// состояния "до", а не гонять новый запрос "после" и получить пустоту).
+	const hTag = event.tags.find((t) => t[0] === "h");
+	const channelRowForNotifyRaw = hTag
+		? await db.table("channels").where("channelTopic").equals(hTag[1]).and((r) => r.ownerPubkey === ownerPubkey).first()
+		: null;
+	const channelRowForNotify = channelRowForNotifyRaw ? fromEncryptedRow(channelRowForNotifyRaw, dbKey) : null;
+	const channelId = channelRowForNotify?.id;
+	const channelName = channelRowForNotify?.name || "канал без названия";
+
+	if (event.kind === 30060) {
+		await receiveChannelMetadata(ownerPubkey, dbKey, event);
+	} else if (event.kind === 30054) {
+		await receiveAllowlistUpdate(ownerPubkey, dbKey, ownerPubkey, event);
+	} else if (event.kind === 30061) {
+		// Этап 31 — receivePost сама проверяет авторство (event.pubkey ===
+		// creatorPubkey, DESIGN.md формализация 2) — здесь только диспетчеризация.
+		const applied = await receivePost(ownerPubkey, dbKey, event);
+		// Не своё же эхо (я — владелец, вижу свой опубликованный пост через ту же
+		// подписку по topic) — уведомление только на ЧУЖОЙ, т.е. буквально всегда
+		// (пост может быть только от владельца, а не-владелец не пишет посты), но
+		// проверка event.pubkey оставлена явной — дешевле, чем гадать по роли.
+		// Этап 50 (N1) — redelivery на релогине/reconnect иначе повторно
+		// уведомлял бы о контенте, уже прочитанном (в этой сессии или на
+		// другом устройстве) — курсор channelSyncState уже синхронизирован
+		// на этот момент (rebuildChannelReadStatus в начале connect()).
+		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+			// postId — тот же приём, что post.js's receivePost (d-tag формата
+			// "{channelId}:{postId}", plaintext) — нужен и для чтения только что
+			// сохранённого текста (для тела уведомления), и для click-нав.
+			const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+			const postId = dTag?.slice(dTag.indexOf(":") + 1);
+			const postRow = postId ? fromEncryptedRow(await db.table("posts").get([ownerPubkey, postId]), dbKey) : null;
+			const navTarget = { screen: "channels", channelId, postId, subTab: "posts" };
+			const postTitleKey = "journal.newPostTitle";
+			const postTitleParams = { channel: channelName };
+			await notifyAndLog(
+				ownerPubkey,
+				dbKey,
+				settings,
+				"channels",
+				"posts",
+				{
+					title: t(postTitleKey, postTitleParams),
+					body: truncateForNotification(postRow?.text),
+					titleKey: postTitleKey,
+					titleParams: postTitleParams,
+					navTarget,
+					onClick: () => navigateFromNotification(navTarget),
+					occurredAt: event.created_at * 1000,
+				},
+				channelId,
+			);
+		}
+	} else if (event.kind === 30062) {
+		// Этап 47 — раньше комментарии были вне скоупа уведомлений вовсе
+		// (найденный пробел, CONTRACTS.md). receiveComment сама проверяет
+		// COMMENT-allowlist — здесь диспетчеризация + обнаружение "ответили мне".
+		const applied = await receiveComment(ownerPubkey, dbKey, event);
+		// Этап 50 (N1) — см. пояснение у kind 30061 выше.
+		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+			// commentId парсится из d-тега тем же приёмом, что comments.js's
+			// receiveComment (d-tag формата "{postId}:{commentId}", plaintext, без
+			// расшифровки) — нужен и для тела уведомления, и для click-нав, и для
+			// поиска родителя ниже.
+			const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+			const commentId = dTag?.slice(dTag.indexOf(":") + 1);
+			const storedComment = commentId ? fromEncryptedRow(await db.table("comments").get([ownerPubkey, commentId]), dbKey) : null;
+			const commentNavTarget = { screen: "channels", channelId, postId: storedComment?.postId, commentId, subTab: "posts" };
+			const commentTitleKey = "journal.newCommentTitle";
+			const commentTitleParams = { channel: channelName };
+			await notifyAndLog(
+				ownerPubkey,
+				dbKey,
+				settings,
+				"channels",
+				"comments",
+				{
+					title: t(commentTitleKey, commentTitleParams),
+					body: truncateForNotification(storedComment?.text),
+					titleKey: commentTitleKey,
+					titleParams: commentTitleParams,
+					navTarget: commentNavTarget,
+					onClick: () => navigateFromNotification(commentNavTarget),
+					occurredAt: event.created_at * 1000,
+				},
+				channelId,
+			);
+			// "Ответили МНЕ" — отдельная, обычно более громкая категория (DESIGN.md):
+			// родитель (parentId) — либо мой пост, либо мой же комментарий.
+			const parentId = storedComment?.parentId;
+			if (parentId) {
+				const parentPost = await db.table("posts").get([ownerPubkey, parentId]);
+				const parentComment = !parentPost ? await db.table("comments").get([ownerPubkey, parentId]) : null;
+				const parentAuthor = parentPost
+					? fromEncryptedRow(parentPost, dbKey)?.authorPubkey
+					: parentComment
+						? fromEncryptedRow(parentComment, dbKey)?.authorPubkey
+						: null;
+				if (parentAuthor === ownerPubkey) {
+					await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
+					const replyTitleKey = "journal.replyTitle";
+					const replyTitleParams = { channel: channelName, username: usernameFor(event.pubkey) };
+					const replyBodyKey = "journal.quotedText";
+					const replyBodyParams = { text: truncateForNotification(storedComment?.text) };
+					await notifyAndLog(ownerPubkey, dbKey, settings, "replies", null, {
+						title: t(replyTitleKey, replyTitleParams),
+						body: t(replyBodyKey, replyBodyParams),
+						titleKey: replyTitleKey,
+						titleParams: replyTitleParams,
+						bodyKey: replyBodyKey,
+						bodyParams: replyBodyParams,
+						navTarget: commentNavTarget,
+						onClick: () => navigateFromNotification(commentNavTarget),
+						occurredAt: event.created_at * 1000,
+					});
+				}
+			}
+		}
+	} else if (event.kind === 30063) {
+		// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
+		// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
+		const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
+		// Этап 50 (N1) — см. пояснение у kind 30061 выше.
+		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+			const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+			const messageId = dTag?.slice(dTag.indexOf(":") + 1);
+			const messageRow = messageId
+				? fromEncryptedRow(await db.table("channelMessages").get([ownerPubkey, messageId]), dbKey)
+				: null;
+			await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
+			const chatNavTarget = { screen: "channels", channelId, subTab: "chat" };
+			const chatMsgTitleKey = "journal.chatMessageTitle";
+			const chatMsgTitleParams = { channel: channelName };
+			const chatMsgBodyKey = "journal.userPrefixedText";
+			const chatMsgBodyParams = { username: usernameFor(event.pubkey), text: truncateForNotification(messageRow?.text) };
+			await notifyAndLog(
+				ownerPubkey,
+				dbKey,
+				settings,
+				"channels",
+				"chat",
+				{
+					title: t(chatMsgTitleKey, chatMsgTitleParams),
+					body: t(chatMsgBodyKey, chatMsgBodyParams),
+					titleKey: chatMsgTitleKey,
+					titleParams: chatMsgTitleParams,
+					bodyKey: chatMsgBodyKey,
+					bodyParams: chatMsgBodyParams,
+					navTarget: chatNavTarget,
+					onClick: () => navigateFromNotification(chatNavTarget),
+					occurredAt: event.created_at * 1000,
+				},
+				channelId,
+			);
+		}
+	} else if (event.kind === 5) {
+		// Этап 50-довесок-2 — владелец удалил канал целиком (kind-5 адресуемое
+		// удаление kind 30060). receiveChannelDeletion сама проверяет авторство
+		// (двойная сверка — тег И channelRow.creatorPubkey, см. channel.js) и
+		// каскадно чистит локальные данные (deleteChannelLocally). Читает имя
+		// ДО удаления — нужно для текста уведомления, после звать поздно.
+		const deletionResult = await receiveChannelDeletion(ownerPubkey, dbKey, event);
+		if (deletionResult.applied) {
+			// category "moderation" (не "channels" — там нет подходящей
+			// подкатегории под "канал исчез целиком", а notifications.channels.*
+			// без записи в settings всегда 'off', см. resolveNotificationLevel) —
+			// тот же bucket, что бан ("моё отношение к каналу необратимо
+			// изменилось, узнать обязан всегда"), поэтому ВСЕГДА 'sound'.
+			const deletedNavTarget = { screen: "channels" };
+			const deletedTitleKey = "journal.channelDeletedTitle";
+			const deletedTitleParams = { channel: deletionResult.channelName };
+			await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
+				title: t(deletedTitleKey, deletedTitleParams),
+				body: "",
+				titleKey: deletedTitleKey,
+				titleParams: deletedTitleParams,
+				navTarget: deletedNavTarget,
+				onClick: () => navigateFromNotification(deletedNavTarget),
+				occurredAt: event.created_at * 1000,
+			});
+		}
+	} else if (event.kind === CHANNEL_BAN_KIND) {
+		// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
+		// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация. Без
+		// N1-гейта — бан не "контент", read-cursor к нему не относится (тот
+		// же принцип, что moderation/ban всегда 'sound' независимо от settings).
+		const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
+		if (applied && event.pubkey !== ownerPubkey) {
+			const banNavTarget = { screen: "channels", channelId, subTab: "moderation" };
+			const banTitleKey = "journal.channelModerationTitle";
+			const banTitleParams = { channel: channelName };
+			const banBodyKey = "journal.channelModerationBody";
+			await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
+				title: t(banTitleKey, banTitleParams),
+				body: t(banBodyKey),
+				titleKey: banTitleKey,
+				titleParams: banTitleParams,
+				bodyKey: banBodyKey,
+				navTarget: banNavTarget,
+				onClick: () => navigateFromNotification(banNavTarget),
+				occurredAt: event.created_at * 1000,
+			});
+		}
+	}
+}
+
+// Этап 74 — вызывается ПОСЛЕ каждого успешно обработанного события контента ЭТОГО
+// ЖЕ канала (новая версия ключа стала известна) И после каждого нового VIEW-гранта
+// (refreshChannelGrantSubscription ниже) — оба момента могут разблокировать буфер.
+// Однопроходно, тот же принцип, что retryBufferedGroupMessages (М3): многошаговая
+// зависимость доедется следующим успешным событием, не обязана решаться сразу.
+async function retryBufferedChannelContentEvents(channelTopicHex, ownerPubkey, dbKey, settings) {
+	if (!channelTopicHex) return false;
+	const list = pendingUndecryptedByChannel.get(channelTopicHex);
+	if (!list || list.length === 0) return false;
+	let anySucceeded = false;
+	const stillPending = [];
+	for (const entry of list) {
+		try {
+			await processOneChannelContentEvent(ownerPubkey, dbKey, settings, entry.event);
+			anySucceeded = true;
+		} catch (e) {
+			if (e instanceof ChannelContentNotReadyError && Date.now() - entry.firstSeenAt < CHANNEL_CONTENT_RETRY_TTL_MS) {
+				stillPending.push(entry);
+			} else if (e instanceof ChannelContentNotReadyError) {
+				console.warn("retryBufferedChannelContentEvents: событие окончательно не готово за TTL, отброшено", entry.event.id, e);
+			}
+			// иные ошибки (повреждено/не моё и т.п.) — тихий discard, тот же принцип,
+			// что исходный catch{} onBatch ниже.
+		}
+	}
+	if (stillPending.length > 0) pendingUndecryptedByChannel.set(channelTopicHex, stillPending);
+	else pendingUndecryptedByChannel.delete(channelTopicHex);
+	return anySucceeded;
+}
 
 // Этап 30 — kind 30060 (метаданные, channelKey-зашифрованные, replaceable) и kind 30054
 // (comment allowlist) по known channelTopics. Топики меняются со временем (новые
@@ -1086,219 +1368,24 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 				for (const event of events) {
 					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe (этап 47-довесок-4)
 					try {
-						// Разрешаем channelId по h-тегу ОДИН раз — нужен как entityId для
-						// notify() (этап 47, per-channel override) во всех ветках ниже, кроме
-						// 30060/30054 (у них своя, более ранняя точка входа без уведомлений).
-						// Расшифровываем ЗДЕСЬ, ДО любых мутаций этой итерации (этап 47-довесок-3,
-						// найденное — receiveBanAnnouncement ниже может УДАЛИТЬ эту же строку
-						// channels, если банят самого owner'а/зрителя; название нужно взять из
-						// состояния "до", а не гонять новый запрос "после" и получить пустоту).
-						const hTag = event.tags.find((t) => t[0] === "h");
-						const channelRowForNotifyRaw = hTag
-							? await db.table("channels").where("channelTopic").equals(hTag[1]).and((r) => r.ownerPubkey === ownerPubkey).first()
-							: null;
-						const channelRowForNotify = channelRowForNotifyRaw ? fromEncryptedRow(channelRowForNotifyRaw, dbKey) : null;
-						const channelId = channelRowForNotify?.id;
-						const channelName = channelRowForNotify?.name || "канал без названия";
-
-						if (event.kind === 30060) {
-							await receiveChannelMetadata(ownerPubkey, dbKey, event);
-						} else if (event.kind === 30054) {
-							await receiveAllowlistUpdate(ownerPubkey, dbKey, ownerPubkey, event);
-						} else if (event.kind === 30061) {
-							// Этап 31 — receivePost сама проверяет авторство (event.pubkey ===
-							// creatorPubkey, DESIGN.md формализация 2) — здесь только диспетчеризация.
-							const applied = await receivePost(ownerPubkey, dbKey, event);
-							// Не своё же эхо (я — владелец, вижу свой опубликованный пост через ту же
-							// подписку по topic) — уведомление только на ЧУЖОЙ, т.е. буквально всегда
-							// (пост может быть только от владельца, а не-владелец не пишет посты), но
-							// проверка event.pubkey оставлена явной — дешевле, чем гадать по роли.
-							// Этап 50 (N1) — redelivery на релогине/reconnect иначе повторно
-							// уведомлял бы о контенте, уже прочитанном (в этой сессии или на
-							// другом устройстве) — курсор channelSyncState уже синхронизирован
-							// на этот момент (rebuildChannelReadStatus в начале connect()).
-							if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
-								// postId — тот же приём, что post.js's receivePost (d-tag формата
-								// "{channelId}:{postId}", plaintext) — нужен и для чтения только что
-								// сохранённого текста (для тела уведомления), и для click-нав.
-								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
-								const postId = dTag?.slice(dTag.indexOf(":") + 1);
-								const postRow = postId ? fromEncryptedRow(await db.table("posts").get([ownerPubkey, postId]), dbKey) : null;
-								const navTarget = { screen: "channels", channelId, postId, subTab: "posts" };
-								const postTitleKey = "journal.newPostTitle";
-								const postTitleParams = { channel: channelName };
-								await notifyAndLog(
-									ownerPubkey,
-									dbKey,
-									settings,
-									"channels",
-									"posts",
-									{
-										title: t(postTitleKey, postTitleParams),
-										body: truncateForNotification(postRow?.text),
-										titleKey: postTitleKey,
-										titleParams: postTitleParams,
-										navTarget,
-										onClick: () => navigateFromNotification(navTarget),
-										occurredAt: event.created_at * 1000,
-									},
-									channelId,
-								);
-							}
-						} else if (event.kind === 30062) {
-							// Этап 47 — раньше комментарии были вне скоупа уведомлений вовсе
-							// (найденный пробел, CONTRACTS.md). receiveComment сама проверяет
-							// COMMENT-allowlist — здесь диспетчеризация + обнаружение "ответили мне".
-							const applied = await receiveComment(ownerPubkey, dbKey, event);
-							// Этап 50 (N1) — см. пояснение у kind 30061 выше.
-							if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
-								// commentId парсится из d-тега тем же приёмом, что comments.js's
-								// receiveComment (d-tag формата "{postId}:{commentId}", plaintext, без
-								// расшифровки) — нужен и для тела уведомления, и для click-нав, и для
-								// поиска родителя ниже.
-								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
-								const commentId = dTag?.slice(dTag.indexOf(":") + 1);
-								const storedComment = commentId ? fromEncryptedRow(await db.table("comments").get([ownerPubkey, commentId]), dbKey) : null;
-								const commentNavTarget = { screen: "channels", channelId, postId: storedComment?.postId, commentId, subTab: "posts" };
-								const commentTitleKey = "journal.newCommentTitle";
-								const commentTitleParams = { channel: channelName };
-								await notifyAndLog(
-									ownerPubkey,
-									dbKey,
-									settings,
-									"channels",
-									"comments",
-									{
-										title: t(commentTitleKey, commentTitleParams),
-										body: truncateForNotification(storedComment?.text),
-										titleKey: commentTitleKey,
-										titleParams: commentTitleParams,
-										navTarget: commentNavTarget,
-										onClick: () => navigateFromNotification(commentNavTarget),
-										occurredAt: event.created_at * 1000,
-									},
-									channelId,
-								);
-								// "Ответили МНЕ" — отдельная, обычно более громкая категория (DESIGN.md):
-								// родитель (parentId) — либо мой пост, либо мой же комментарий.
-								const parentId = storedComment?.parentId;
-								if (parentId) {
-									const parentPost = await db.table("posts").get([ownerPubkey, parentId]);
-									const parentComment = !parentPost ? await db.table("comments").get([ownerPubkey, parentId]) : null;
-									const parentAuthor = parentPost
-										? fromEncryptedRow(parentPost, dbKey)?.authorPubkey
-										: parentComment
-											? fromEncryptedRow(parentComment, dbKey)?.authorPubkey
-											: null;
-									if (parentAuthor === ownerPubkey) {
-										await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
-										const replyTitleKey = "journal.replyTitle";
-										const replyTitleParams = { channel: channelName, username: usernameFor(event.pubkey) };
-										const replyBodyKey = "journal.quotedText";
-										const replyBodyParams = { text: truncateForNotification(storedComment?.text) };
-										await notifyAndLog(ownerPubkey, dbKey, settings, "replies", null, {
-											title: t(replyTitleKey, replyTitleParams),
-											body: t(replyBodyKey, replyBodyParams),
-											titleKey: replyTitleKey,
-											titleParams: replyTitleParams,
-											bodyKey: replyBodyKey,
-											bodyParams: replyBodyParams,
-											navTarget: commentNavTarget,
-											onClick: () => navigateFromNotification(commentNavTarget),
-											occurredAt: event.created_at * 1000,
-										});
-									}
-								}
-							}
-						} else if (event.kind === 30063) {
-							// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
-							// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
-							const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
-							// Этап 50 (N1) — см. пояснение у kind 30061 выше.
-							if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
-								const dTag = event.tags.find((t) => t[0] === "d")?.[1];
-								const messageId = dTag?.slice(dTag.indexOf(":") + 1);
-								const messageRow = messageId
-									? fromEncryptedRow(await db.table("channelMessages").get([ownerPubkey, messageId]), dbKey)
-									: null;
-								await ensureProfilesFetched([event.pubkey], fetchProfiles).catch(() => {});
-								const chatNavTarget = { screen: "channels", channelId, subTab: "chat" };
-								const chatMsgTitleKey = "journal.chatMessageTitle";
-								const chatMsgTitleParams = { channel: channelName };
-								const chatMsgBodyKey = "journal.userPrefixedText";
-								const chatMsgBodyParams = { username: usernameFor(event.pubkey), text: truncateForNotification(messageRow?.text) };
-								await notifyAndLog(
-									ownerPubkey,
-									dbKey,
-									settings,
-									"channels",
-									"chat",
-									{
-										title: t(chatMsgTitleKey, chatMsgTitleParams),
-										body: t(chatMsgBodyKey, chatMsgBodyParams),
-										titleKey: chatMsgTitleKey,
-										titleParams: chatMsgTitleParams,
-										bodyKey: chatMsgBodyKey,
-										bodyParams: chatMsgBodyParams,
-										navTarget: chatNavTarget,
-										onClick: () => navigateFromNotification(chatNavTarget),
-										occurredAt: event.created_at * 1000,
-									},
-									channelId,
-								);
-							}
-						} else if (event.kind === 5) {
-							// Этап 50-довесок-2 — владелец удалил канал целиком (kind-5 адресуемое
-							// удаление kind 30060). receiveChannelDeletion сама проверяет авторство
-							// (двойная сверка — тег И channelRow.creatorPubkey, см. channel.js) и
-							// каскадно чистит локальные данные (deleteChannelLocally). Читает имя
-							// ДО удаления — нужно для текста уведомления, после звать поздно.
-							const deletionResult = await receiveChannelDeletion(ownerPubkey, dbKey, event);
-							if (deletionResult.applied) {
-								// category "moderation" (не "channels" — там нет подходящей
-								// подкатегории под "канал исчез целиком", а notifications.channels.*
-								// без записи в settings всегда 'off', см. resolveNotificationLevel) —
-								// тот же bucket, что бан ("моё отношение к каналу необратимо
-								// изменилось, узнать обязан всегда"), поэтому ВСЕГДА 'sound'.
-								const deletedNavTarget = { screen: "channels" };
-								const deletedTitleKey = "journal.channelDeletedTitle";
-								const deletedTitleParams = { channel: deletionResult.channelName };
-								await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
-									title: t(deletedTitleKey, deletedTitleParams),
-									body: "",
-									titleKey: deletedTitleKey,
-									titleParams: deletedTitleParams,
-									navTarget: deletedNavTarget,
-									onClick: () => navigateFromNotification(deletedNavTarget),
-									occurredAt: event.created_at * 1000,
-								});
-							}
-						} else if (event.kind === CHANNEL_BAN_KIND) {
-							// Этап 33 — receiveBanAnnouncement сама проверяет авторство владельца
-							// (DESIGN.md, "Приём kind 30064") — здесь только диспетчеризация. Без
-							// N1-гейта — бан не "контент", read-cursor к нему не относится (тот
-							// же принцип, что moderation/ban всегда 'sound' независимо от settings).
-							const applied = await receiveBanAnnouncement(ownerPubkey, dbKey, event);
-							if (applied && event.pubkey !== ownerPubkey) {
-								const banNavTarget = { screen: "channels", channelId, subTab: "moderation" };
-								const banTitleKey = "journal.channelModerationTitle";
-								const banTitleParams = { channel: channelName };
-								const banBodyKey = "journal.channelModerationBody";
-								await notifyAndLog(ownerPubkey, dbKey, settings, "moderation", "ban", {
-									title: t(banTitleKey, banTitleParams),
-									body: t(banBodyKey),
-									titleKey: banTitleKey,
-									titleParams: banTitleParams,
-									bodyKey: banBodyKey,
-									navTarget: banNavTarget,
-									onClick: () => navigateFromNotification(banNavTarget),
-									occurredAt: event.created_at * 1000,
-								});
-							}
-						}
+						await processOneChannelContentEvent(ownerPubkey, dbKey, settings, event);
 						activityChanged = true; // channels.jsx/channel.jsx перечитывают списки
-					} catch {
-						// повреждено/эпоха неизвестна и т.п. — пропустить, не ронять батч
+						// Этап 74 — М3 для контента каналов: это событие продвинуло локальную
+						// версию ключа этого канала — шанс, что ранее отложенные (из-за
+						// переупорядоченной доставки grant/контент) теперь применятся.
+						if (await retryBufferedChannelContentEvents(channelTopicOf(event), ownerPubkey, dbKey, settings)) {
+							activityChanged = true;
+						}
+					} catch (e) {
+						if (e instanceof ChannelContentNotReadyError) {
+							// Этап 74 — локальная версия ключа канала ещё не готова (grant и
+							// контент — разные подписки, relay не гарантирует порядок между
+							// ними) — буферим для повторной попытки, TTL избавится от неисправимых
+							// (тот же приём, что bufferUndecryptedEvent/М3 для групп выше).
+							bufferUndecryptedChannelEvent(event);
+							console.warn("refreshChannelContentSubscription: локальная версия ключа канала ещё не готова, буферизовано", event.id, e);
+						}
+						// иначе — повреждено/эпоха неизвестна и т.п. — пропустить, не ронять батч
 					}
 				}
 				if (activityChanged) bumpMessagingActivity();

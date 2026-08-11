@@ -23,6 +23,7 @@ import {
 } from "../src/domain/content/channel.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { ChannelContentNotReadyError } from "../src/domain/content/channel-content-errors.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -285,7 +286,12 @@ test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный al
 	const grant = decryptChannelKeyGrant(grantEvent.content, BOB_PRIV, ALICE_PUB);
 	const forged = buildAllowlistEvent(grant.channelId, grant.channelTopic, 1, [BOB_PUB], grant.channelKey, MALLORY_PRIV, deriveMasterSecret(MALLORY_PRIV));
 
-	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, forged);
+	// Этап 74 — verified===null (подделка не проходит parseAndVerifyAllowlist)
+	// теперь throw ChannelContentNotReadyError, не тихий no-op (см. комментарий
+	// в receiveAllowlistUpdate: конфлирует с "версия ключа ещё не готова",
+	// принятый компромисс — подделка тоже буферизуется и отбрасывается по TTL).
+	// Гарантия та же: роль не повышается, DB-состояние не меняется.
+	await assert.rejects(() => receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, forged), ChannelContentNotReadyError);
 	assert.equal((await listSubscribedChannels(BOB_PUB, DB_KEY)).length, 0, "поддельный allowlist не должен повышать роль");
 	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 1, "канал остаётся в 'Доступные'");
 });

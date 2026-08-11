@@ -12315,3 +12315,72 @@ VIEW/allowlist работают независимо от метаданных, 
 внутри `revokeViewFromMember` был RAW (не расшифрован) — заменено на
 `fromEncryptedRow` (нужно для доступа к `name`/`description`/`rules`/
 `avatar`/`allowChatAttachments`, sensitive-полям).
+
+## Этап 74 — найдено живой проверкой (второй цикл): предыдущий фикс
+## работал один раз, но откат "(без названия)" повторился на ПОВТОРНОМ
+## remove/re-add группы видимости
+
+**Причина (М3-класс, тот же приём, что kind:445 этапа 73.4, но для
+контента каналов):** kind 30053 (grant новой версии ключа, подписка
+`#p:[я]`) и kind 30060/30054/30061/30062/30063 (контент, подписка
+`#h:[channelTopic]`) идут ДВУМЯ независимыми REQ — relay не
+гарантирует порядок доставки между ними. Все 5 `receive*`-функций
+контента каналов на "версия ключа ещё не готова" (`!meta`,
+`!keyRowRaw`, `decrypt→null`/`verified→null`) раньше молча делали
+`return`/`return false`. `isNewEvent(event.id)` в transport.js —
+ПОСТОЯННЫЙ dedup: событие, отмеченное "виденным" при первой (неудачной)
+попытке, НИКОГДА не обрабатывалось повторно, даже когда нужная версия
+ключа приходила чуть позже тем же connect()'ом.
+
+**Исправлено (аддитивно, без изменения остальных условий no-op —
+неизвестный канал/топик и LWW-устаревшая ревизия остаются тихим
+no-op, не подлежат retry):**
+- `src/domain/content/channel-content-errors.js` (новый) —
+  `ChannelContentNotReadyError`, отдельный от прочих ошибок сигнал
+  "рано, не порча".
+- `receiveChannelMetadata`/`receiveAllowlistUpdate` (`channel.js`),
+  `receivePost` (`post.js`), `receiveComment` (`comments.js`),
+  `receiveChannelMessage` (`channel-chat.js`) — throw
+  `ChannelContentNotReadyError` вместо тихого `return`/`return false`
+  ровно в точках "нужной версии ключа нет локально".
+- Побочная находка (не живая, найдена при написании тестов):
+  `parseAndVerifyAllowlist` (comment-allowlist.js) может БРОСИТЬ
+  raw AEAD-ошибку ("invalid tag"), не только вернуть `null`, когда
+  событие несёт версию ключа, которой у вызывающего ещё нет (карта
+  `{[версия из заголовка события]: key владельца текущей версии}`
+  ловит несовпадающий ключ, decrypt падает, а не возвращает null) —
+  `receiveAllowlistUpdate` теперь оборачивает вызов в try/catch и
+  тоже бросает `ChannelContentNotReadyError` (тот же принятый
+  компромисс "и не готово, и подделка дают один сигнал", уже
+  зафиксированный для `verified===null`).
+- `src/ui/signals/transport.js` — М3-паттерн, зеркально группам
+  (`pendingUndecryptedByGroup`/`UNDECRYPTED_RETRY_TTL_MS`):
+  `pendingUndecryptedByChannel` (ключ — `channelTopic`, общий `#h`
+  routing-тег ВСЕХ 5 кайндов контента одного канала),
+  `CHANNEL_CONTENT_RETRY_TTL_MS = 5 мин`, `channelTopicOf(event)`,
+  `bufferUndecryptedChannelEvent(event)`. `processOneChannelContentEvent`
+  вынесена из `onBatch` (была инлайн) — переиспользуется основным
+  циклом И `retryBufferedChannelContentEvents`, тот же приём, что
+  `processOneGroupMessageEvent`. В `onBatch` `refreshChannelContentSubscription`
+  ловится СПЕЦИФИЧНО `ChannelContentNotReadyError` → буфер; прочие
+  исключения — прежний тихий discard (не буферизуются, не retriable —
+  неизвестный канал/подделка не "может стать валидным позже").
+  Retry триггерится в ДВУХ точках: (а) после каждого успешно
+  обработанного события контента этого же канала (в
+  `refreshChannelContentSubscription`), (б) после каждого нового
+  VIEW-гранта (`refreshChannelGrantSubscription`) — оба момента
+  продвигают локальную версию ключа канала.
+- `receiveChannelKeyGrant` (`channel.js`) — аддитивный возврат
+  (раньше void): `{ channelId, channelTopic }`, нужен вызывающему
+  коду transport.js, чтобы после гранта повторить именно буфер ЭТОГО
+  канала (ключ Map — `channelTopic`).
+
+**Тесты:** `tests/channel-content-not-ready.test.js` (новый) — для
+каждой из 5 `receive*`-функций: реалистичная гонка через
+`banMember`-ротацию ключа (throw ДО применения нового гранта Бобом,
+успех ПОСЛЕ, retry того же события идемпотентен) + 2 негативных теста
+(неизвестный `#h`-топик — тихий no-op, НЕ throw). Два адверсарных
+теста, сломанных throw-семантикой (`channel.test.js` — поддельный
+allowlist; `moderation.test.js` — забаненный с устаревшим ключом),
+переведены на `assert.rejects(ChannelContentNotReadyError)` с
+сохранением исходной гарантии (роль/DB-состояние не меняются).

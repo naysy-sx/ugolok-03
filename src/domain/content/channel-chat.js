@@ -4,6 +4,7 @@ import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/
 import { canAuthorComment } from "../../core/crypto/comment-allowlist.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { ChannelContentNotReadyError } from "./channel-content-errors.js";
 import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
@@ -75,14 +76,16 @@ export async function receiveChannelMessage(ownerPubkey, dbKey, event) {
 		.first();
 	if (!channelRow) return false;
 
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): throw,
+	// не silent no-op — тот же приём, что receiveChannelMetadata (М3-класс для каналов).
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
-	if (!meta) return false;
+	if (!meta) throw new ChannelContentNotReadyError();
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRowRaw) return false;
+	if (!keyRowRaw) throw new ChannelContentNotReadyError();
 	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
-	if (plaintext === null) return false;
+	if (plaintext === null) throw new ChannelContentNotReadyError();
 
 	if (event.pubkey !== channelRow.creatorPubkey) {
 		const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, meta.currentVersion]), dbKey);

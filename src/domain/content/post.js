@@ -6,6 +6,7 @@ import { transitionPost } from "./post-machine.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { POSTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { isNewerVersion } from "../../core/sync/lww.js";
+import { ChannelContentNotReadyError } from "./channel-content-errors.js";
 import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
@@ -135,14 +136,16 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 	if (!channelRow) return false;
 	if (event.pubkey !== channelRow.creatorPubkey) return false;
 
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): throw,
+	// не silent no-op — тот же приём, что receiveChannelMetadata (М3-класс для каналов).
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
-	if (!meta) return false;
+	if (!meta) throw new ChannelContentNotReadyError();
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRowRaw) return false;
+	if (!keyRowRaw) throw new ChannelContentNotReadyError();
 	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
-	if (plaintext === null) return false;
+	if (plaintext === null) throw new ChannelContentNotReadyError();
 	const parsed = JSON.parse(plaintext);
 
 	const dTag = event.tags.find((t) => t[0] === "d");

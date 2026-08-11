@@ -15,6 +15,7 @@ import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { isNewerVersion } from "../../core/sync/lww.js";
+import { ChannelContentNotReadyError } from "./channel-content-errors.js";
 import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
@@ -166,6 +167,11 @@ export async function receiveChannelKeyGrant(ownerPubkey, readerPrivKey, dbKey, 
 			),
 		);
 	}
+	// Этап 74 — аддитивный возврат (раньше void): transport.js использует channelTopic,
+	// чтобы после успешного гранта повторить события контента этого канала, отложенные
+	// в буфере ChannelContentNotReadyError (М3-класс, см. channel-content-errors.js) —
+	// без этого grant и разблокированный им контент не были бы связаны на стороне вызова.
+	return { channelId: grant.channelId, channelTopic: grant.channelTopic };
 }
 
 // kind 30060 — обновляет локальные метаданные (имя/описание/правила/аватар). Неизвестный
@@ -185,14 +191,20 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 	if (!isNewerVersion({ createdAt: event.created_at, id: event.id }, { createdAt: existing.updatedAt, id: existing.lastEventId })) {
 		return;
 	}
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): не
+	// silent no-op, а throw — grant (kind 30053) и это событие (#h-топик) идут
+	// РАЗНЫМИ подписками, relay не гарантирует порядок между ними. Отсутствие
+	// нужной версии ключа ЗДЕСЬ — "ещё не готово", не "не моё"/"устарело" —
+	// вызывающий код (transport.js) буферизует и повторит после следующего
+	// успешно применённого гранта/события этого канала (тот же приём, что М3).
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
-	if (!meta) return;
+	if (!meta) throw new ChannelContentNotReadyError();
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
-	if (!keyRowRaw) return;
+	if (!keyRowRaw) throw new ChannelContentNotReadyError();
 	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
 	const plaintext = decryptChannelContent(event.content, { [meta.currentVersion]: keyRow.channelKey });
-	if (plaintext === null) return;
+	if (plaintext === null) throw new ChannelContentNotReadyError();
 	const parsed = JSON.parse(plaintext);
 	// name/description/rules/avatar — sensitive поля (CONTRACTS.md, Tier 1): decrypt-
 	// merge-encrypt через put(), не partial .update() (та же находка, что messages/posts).
@@ -328,14 +340,32 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 	if (!channelRow) return;
 	if (channelRow.role === "owner") return;
 
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): throw,
+	// не silent no-op — тот же приём, что receiveChannelMetadata (М3-класс для
+	// каналов). verified===null здесь конфлирует "нет нужной версии" И "подделка"
+	// (parseAndVerifyAllowlist не различает) — принятый компромисс: подделка тоже
+	// будет буферизована и безвредно отброшена по TTL, не проходя повторных проверок.
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelRow.id]), dbKey);
-	if (!meta) return;
+	if (!meta) throw new ChannelContentNotReadyError();
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelRow.id, meta.currentVersion]);
-	if (!keyRowRaw) return;
+	if (!keyRowRaw) throw new ChannelContentNotReadyError();
 	const keyRow = fromEncryptedRow(keyRowRaw, dbKey);
 
-	const verified = parseAndVerifyAllowlist(event, keyRow.channelKey, channelRow.creatorPubkey);
-	if (verified === null) return;
+	// Найдено при написании тестов Этапа 74 (не живой находкой): parseAndVerifyAllowlist
+	// строит карту {[версия из заголовка события]: keyRow.channelKey (ключ meta.currentVersion
+	// у Бобa)} — если событие несёт ЧУЖУЮ (более новую, ещё не полученную Бобом) версию,
+	// это НЕ "неизвестная версия" (та ветка decryptChannelContent вернула бы null), а
+	// "версия совпала по номеру, но ключ не тот" -> AEAD auth-фейл -> decryptChannelContent
+	// БРОСАЕТ (см. её же комментарий: "либо null, либо throw, вызывающий решает"). Без этого
+	// catch необработанное "invalid tag" ушло бы дальше как непредвиденная ошибка (transport.js
+	// не буферизует её, retry никогда не случится) — тот же М3-класс, просто другой канал throw.
+	let verified;
+	try {
+		verified = parseAndVerifyAllowlist(event, keyRow.channelKey, channelRow.creatorPubkey);
+	} catch {
+		throw new ChannelContentNotReadyError();
+	}
+	if (verified === null) throw new ChannelContentNotReadyError();
 
 	// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): F-CH-05 —
 	// несколько ревизий allowlist ОДНОЙ keyVersion реальны (добавление читателя
