@@ -14,6 +14,7 @@ import { buildAddressableDeletionEvent } from "../events/handlers.js";
 import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNELS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { isNewerVersion } from "../../core/sync/lww.js";
 import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
@@ -177,6 +178,13 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 
 	const existing = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!existing) return;
+	// Этап 74 — Часть C, C-2 (RC-подобный класс, CONTRACTS.md/DESIGN.md "Этап 74"):
+	// 30060 replaceable — старая версия, доставленная ПОСЛЕ новой (resubscribe-
+	// backlog/второй relay), не должна откатывать name/description/rules.
+	// updatedAt/lastEventId — уже применённая версия, existing плоские поля plaintext.
+	if (!isNewerVersion({ createdAt: event.created_at, id: event.id }, { createdAt: existing.updatedAt, id: existing.lastEventId })) {
+		return;
+	}
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	if (!meta) return;
 	const keyRowRaw = await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]);
@@ -199,6 +207,7 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 		// "последнего обновления" у владельца и у ВСЕХ читателей одного
 		// и того же republish, а не момент локальной обработки события.
 		updatedAt: event.created_at,
+		lastEventId: event.id,
 	};
 	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
 }
@@ -231,6 +240,9 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 		allowChatAttachments: allowChatAttachments ?? existing.allowChatAttachments,
 		updatedAt: editedAt,
 	};
+	// lastEventId дописывается ниже, ПОСЛЕ подписи metaEvent (id известен только
+	// после sign()) — держит owner-строку в паре с тем же LWW-инвариантом,
+	// что и читатели через receiveChannelMetadata (isNewerVersion, T7/C-2).
 
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
@@ -258,6 +270,7 @@ export async function editChannel(ownerPubkey, ownerPrivKey, dbKey, channelId, {
 		ownerPrivKey,
 	);
 	await requirePublishOk(publish, metaEvent);
+	merged.lastEventId = metaEvent.id;
 	await db.table("channels").put(toEncryptedRow(merged, CHANNELS_PLAINTEXT_FIELDS, dbKey));
 }
 
@@ -324,6 +337,16 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 	const verified = parseAndVerifyAllowlist(event, keyRow.channelKey, channelRow.creatorPubkey);
 	if (verified === null) return;
 
+	// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): F-CH-05 —
+	// несколько ревизий allowlist ОДНОЙ keyVersion реальны (добавление читателя
+	// без ротации ключа) — старая ревизия, доставленная ПОСЛЕ новой, не должна
+	// откатывать список читателей (транзитная потеря доступа только что
+	// добавленному). lastEventId — уже применённая ревизия ЭТОЙ keyVersion.
+	const existingAllowlistRaw = await db.table("commentAllowlists").get([ownerPubkey, channelRow.id, verified.version]);
+	if (!isNewerVersion({ createdAt: event.created_at, id: event.id }, { createdAt: existingAllowlistRaw?.lastEventCreatedAt, id: existingAllowlistRaw?.lastEventId })) {
+		return;
+	}
+
 	await db.table("commentAllowlists").put(
 		toEncryptedRow(
 			{
@@ -331,6 +354,8 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 				channelId: channelRow.id,
 				keyVersion: verified.version,
 				allowedAuthors: verified.allowedAuthors,
+				lastEventCreatedAt: event.created_at,
+				lastEventId: event.id,
 			},
 			COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS,
 			dbKey,

@@ -188,6 +188,30 @@ test("receivePost: Боб получает и расшифровывает по�
 	assert.equal(bobPosts[0].text, "для всех подписчиков");
 });
 
+// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): receivePost применял
+// ЛЮБОЕ входящее 30061 безусловно — archivePost/unpublishPost republish-ят ТОТ ЖЕ
+// d-tag с новым status; старая версия ("published"), доставленная ПОСЛЕ архивации,
+// откатывала бы пост обратно к видимому статусу вопреки явному действию владельца.
+test("АДВЕРСАРНО (C-2): старая версия поста (status='published'), доставленная ПОСЛЕ archivePost, не откатывает статус у подписчика", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "текст", attachments: [] });
+
+	const publishedEvents = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(publishedEvents));
+	const publishedEvent = { ...publishedEvents.find((e) => e.kind === 30061), created_at: 1000, id: "post-published" };
+
+	const archivedEvents = [];
+	await archivePost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(archivedEvents));
+	const archivedEvent = { ...archivedEvents.find((e) => e.kind === 30061), created_at: 2000, id: "post-archived" };
+
+	// Боб получает архивацию первой, затем УСТАРЕВШУЮ "опубликован" (переупорядоченная доставка).
+	await receivePost(BOB_PUB, DB_KEY, archivedEvent);
+	await receivePost(BOB_PUB, DB_KEY, publishedEvent);
+
+	const row = fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY);
+	assert.equal(row.status, "archived", "устаревшая версия не должна откатить архивацию");
+});
+
 test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VIEW-держатель, НЕ владелец) подделывает пост тем же channelKey — Боб отбрасывает", async () => {
 	const { channelId } = await setupChannelWithBobViewing();
 	// Дадим Mallory тоже VIEW (она честный подписчик, просто пытается выдать себя за владельца)

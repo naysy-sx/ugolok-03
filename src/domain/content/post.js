@@ -5,6 +5,7 @@ import { buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { transitionPost } from "./post-machine.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { POSTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { isNewerVersion } from "../../core/sync/lww.js";
 import { DomainError } from "../errors.js";
 
 async function requirePublishOk(publish, event) {
@@ -84,7 +85,11 @@ async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsm
 		ownerPrivKey,
 	);
 	await requirePublishOk(publish, event);
-	await db.table("posts").update([ownerPubkey, postId], { status: newStatus, keyVersion: meta.currentVersion });
+	// lastEventCreatedAt/lastEventId (Этап 74 — Часть C, C-2) — без них собственная
+	// строка владельца оставалась бы БЕЗ версии, и старая redelivery (resubscribe-
+	// backlog на своё же ПРОШЛОЕ событие) прошла бы isNewerVersion-гейт в receivePost
+	// как "нет сохранённой версии", откатив status на этом же/сиблинг-устройстве.
+	await db.table("posts").update([ownerPubkey, postId], { status: newStatus, keyVersion: meta.currentVersion, lastEventCreatedAt: event.created_at, lastEventId: event.id });
 	return { eventId: event.id };
 }
 
@@ -149,6 +154,15 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 	const existing = await db.table("posts").get([ownerPubkey, postId]);
 	const createdAt = existing ? existing.createdAt : event.created_at;
 
+	// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): archivePost/
+	// unpublishPost/edit republish-ят ТОТ ЖЕ d-tag — старая версия (например,
+	// "published"), доставленная ПОСЛЕ архивации, не должна откатывать status/
+	// text. lastEventCreatedAt — версия ПОСЛЕДНЕЙ применённой ревизии, отдельно
+	// от createdAt (хронологическая позиция, не трогается republish'ем).
+	if (existing && !isNewerVersion({ createdAt: event.created_at, id: event.id }, { createdAt: existing.lastEventCreatedAt, id: existing.lastEventId })) {
+		return false;
+	}
+
 	await db.table("posts").put(
 		toEncryptedRow(
 			{
@@ -161,6 +175,8 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 				status: parsed.status,
 				keyVersion: meta.currentVersion,
 				createdAt,
+				lastEventCreatedAt: event.created_at,
+				lastEventId: event.id,
 				deleted: false,
 			},
 			POSTS_PLAINTEXT_FIELDS,

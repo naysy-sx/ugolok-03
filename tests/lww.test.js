@@ -94,3 +94,13 @@ test("isNewerVersion: у stored нет createdAt (доверсионная/ру�
 	assert.equal(isNewerVersion(row("new", 100), { name: "Алиса" }), true);
 	assert.equal(isNewerVersion(row("new", 100), { name: "Алиса", createdAt: undefined }), true);
 });
+
+// Этап 74 — Часть C, C-2: найдено при адверсарном тестировании receiveChannelMetadata —
+// receiveChannelKeyGrant заводит updatedAt (createdAt-половину пары) СРАЗУ при создании
+// строки, а lastEventId (id-половину) — только при первом реальном приёме метаданных.
+// Полуверсионная запись (createdAt есть, id нет) обязана трактоваться так же, как
+// полное отсутствие версии — иначе тайбрейк по id (undefined) ломается молча.
+test("isNewerVersion: у stored ЕСТЬ createdAt, но НЕТ id (полуверсионная запись) -> true", () => {
+	assert.equal(isNewerVersion(row("new", 100), { createdAt: 100 }), true, "тот же created_at, id отсутствует — incoming обязан победить");
+	assert.equal(isNewerVersion(row("new", 50), { createdAt: 100 }), true, "даже меньший created_at — без id сравнивать не с чем, incoming побеждает");
+});

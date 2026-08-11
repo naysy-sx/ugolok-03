@@ -271,6 +271,39 @@ test("АДВЕРСАРНЫЙ: receiveAllowlistUpdate — поддельный al
 	assert.equal((await listAvailableChannels(BOB_PUB, DB_KEY)).length, 1, "канал остаётся в 'Доступные'");
 });
 
+// Этап 74 — Часть C, C-2: receiveAllowlistUpdate применяла ЛЮБУЮ входящую ревизию
+// allowlist безусловно — F-CH-05 позволяет НЕСКОЛЬКО ревизий ОДНОЙ keyVersion
+// (handleIncomingSubscribeRequest добавляет читателей без ротации ключа), поэтому
+// старая ревизия, доставленная ПОСЛЕ новой, транзитно откатывала бы список читателей.
+test("АДВЕРСАРНО (C-2): старая ревизия allowlist (той же keyVersion), доставленная ПОСЛЕ новой, не откатывает список читателей", async () => {
+	await seedGroupWithBob();
+	const aliceOutbox = [];
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const grantEventBob = aliceOutbox.find((e) => e.kind === 30053);
+	const metaEvent = aliceOutbox.find((e) => e.kind === 30060);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEventBob);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
+
+	// Ревизия 1 (старая): только Боб.
+	const outbox1 = [];
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(outbox1));
+	const oldEvent = { ...outbox1.find((e) => e.kind === 30054), created_at: 1000, id: "allowlist-old" };
+
+	// Ревизия 2 (новая, ТА ЖЕ keyVersion): Боб + Mallory.
+	const outbox2 = [];
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, MALLORY_PUB, capturingPublish(outbox2));
+	const newEvent = { ...outbox2.find((e) => e.kind === 30054), created_at: 2000, id: "allowlist-new" };
+
+	// Доставка НЕ по порядку: новая, затем старая (resubscribe-backlog/второй relay).
+	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, newEvent);
+	await receiveAllowlistUpdate(BOB_PUB, DB_KEY, BOB_PUB, oldEvent);
+
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([BOB_PUB, channelId]), DB_KEY);
+	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([BOB_PUB, channelId, meta.currentVersion]), DB_KEY);
+	assert.equal(allowlistRow.allowedAuthors.length, 2, "старая ревизия не должна откатить список к одному читателю");
+	assert.ok(allowlistRow.allowedAuthors.includes(MALLORY_PUB), "недавно добавленный читатель не должен транзитно исчезнуть");
+});
+
 // --- editChannel/deleteChannel (этап 50-довесок-2, найдено пользователем: нельзя
 // было отредактировать/удалить канал после создания) ---
 
@@ -317,6 +350,12 @@ test("editChannel: обновляет updatedAt владельца (для \"д�
 
 test("editChannel: подписчик получает ТУ ЖЕ updatedAt через event.created_at (не свой локальный Date.now())", async () => {
 	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+	// C-2 LWW-гейт (receiveChannelMetadata) сравнивает по created_at секундной
+	// точности — эта проверка сверяет РЕАЛЬНОЕ значение (owned.updatedAt ===
+	// available.updatedAt === metaEvent.created_at), синтетически подменять
+	// created_at здесь нельзя, не потеряв смысл теста; реальная задержка —
+	// тот же приём, что "editChannel: обновляет updatedAt владельца" выше.
+	await new Promise((resolve) => setTimeout(resolve, 1100));
 	const published = [];
 	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "x" }, capturingPublish(published));
 	const metaEvent = published.find((e) => e.kind === 30060);
@@ -344,7 +383,15 @@ test("editChannel: подписчик (Боб) получает обновлен
 	const published = [];
 	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Обновлено для всех" }, capturingPublish(published));
 
-	const metaEvent = published.find((e) => e.kind === 30060);
+	// Этап 74 — Часть C, C-2: receiveChannelMetadata теперь LWW-гейтит по
+	// created_at (isNewerVersion) — секундная точность Unix ts делает реальный
+	// created_at этого republish'а недетерминированно РАВНЫМ setup'ному metaEvent
+	// (оба Math.floor(Date.now()/1000) в пределах одного теста, без задержки),
+	// тайбрейк по id тогда даёт флейки-монетку. +2 секунды — тот же приём, что
+	// "editChannel: обновляет updatedAt владельца" ниже (там — реальный sleep),
+	// здесь дешевле сдвинуть метку синтетически (receiveChannelMetadata не
+	// проверяет подпись/created_at против реального времени).
+	const metaEvent = { ...published.find((e) => e.kind === 30060), created_at: published.find((e) => e.kind === 30060).created_at + 2 };
 	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent);
 
 	const available = await listAvailableChannels(BOB_PUB, DB_KEY);
@@ -354,6 +401,35 @@ test("editChannel: подписчик (Боб) получает обновлен
 test("editChannel: НЕ владелец (Боб) не может редактировать -> throw", async () => {
 	const { channelId } = await setupOwnedChannelAndBobSubscriber();
 	await assert.rejects(() => editChannel(BOB_PUB, BOB_PRIV, DB_KEY, channelId, { name: "x" }, capturingPublish([])));
+});
+
+// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): receiveChannelMetadata
+// применяла ЛЮБОЕ входящее 30060 безусловно — старая версия, доставленная ПОСЛЕ
+// новой (resubscribe-backlog/второй relay), откатывала название/описание канала.
+// created_at/id событий переопределены вручную (receiveChannelMetadata не проверяет
+// подпись/id — тот же приём, что и остальные тесты этого файла с "живыми" событиями).
+test("АДВЕРСАРНО (C-2): старая версия kind:30060, доставленная ПОСЛЕ новой, не откатывает канал у подписчика", async () => {
+	const { channelId } = await setupOwnedChannelAndBobSubscriber();
+
+	// Боб уже применил createChannel's исходное 30060 (setupOwnedChannelAndBobSubscriber) —
+	// его updatedAt реален (Date.now()), синтетические created_at обязаны быть НЕ МЕНЬШЕ этого.
+	const bobBefore = (await listAvailableChannels(BOB_PUB, DB_KEY))[0];
+	const baseCreatedAt = bobBefore.updatedAt;
+
+	const publishedA = [];
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Версия A (новая)" }, capturingPublish(publishedA));
+	const newEvent = { ...publishedA.find((e) => e.kind === 30060), created_at: baseCreatedAt + 2000, id: "event-new" };
+
+	const publishedB = [];
+	await editChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, { name: "Версия B (старая)" }, capturingPublish(publishedB));
+	const oldEvent = { ...publishedB.find((e) => e.kind === 30060), created_at: baseCreatedAt + 1000, id: "event-old" };
+
+	// Боб получает НОВУЮ версию первой, затем СТАРУЮ (переупорядоченная доставка).
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, newEvent);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, oldEvent);
+
+	const available = await listAvailableChannels(BOB_PUB, DB_KEY);
+	assert.equal(available[0].name, "Версия A (новая)", "старая версия не должна откатить новую");
 });
 
 test("deleteChannel: публикует kind-5 адресуемое удаление (a-тег 30060:owner:channelId), локально канал исчезает у владельца", async () => {

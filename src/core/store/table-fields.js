@@ -22,18 +22,32 @@ export const FILES_SHARE_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId", "vers
 export const FILES_MOUNTS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId"];
 export const FILES_MOUNT_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "nodeId", "version"];
 
-export const COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion"];
+// Этап 74 — Часть C, C-2 (CONTRACTS.md/DESIGN.md "Этап 74"): lastEventId —
+// id события, применившего текущую ревизию (вместе с updatedAt/createdAt —
+// пара для isNewerVersion, T7) — LWW-гейт живого пути 30054, старая ревизия
+// той же keyVersion (F-CH-05: несколько ревизий без ротации ключа) не
+// откатывает список читателей.
+export const COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion", "lastEventCreatedAt", "lastEventId"];
 
 // Этап 40 (Tier 1 — прямая находка пользователя, CONTRACTS.md).
 export const MESSAGES_PLAINTEXT_FIELDS = ["seq", "ownerPubkey", "chatId", "msgId", "lamportTs", "senderPubkey", "id", "status", "deleted"];
 
-export const POSTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "status", "keyVersion"];
+// Этап 74 — Часть C, C-2: lastEventCreatedAt/lastEventId — версия ПОСЛЕДНЕЙ
+// применённой ревизии (отдельно от createdAt, который фиксирован с первого
+// приёма — хронологическая позиция поста в ленте, не трогается republish'ем).
+// LWW-гейт живого пути 30061 — archivePost/unpublishPost/edit republish-ят
+// тот же d-tag, старая версия не должна откатывать status/text.
+export const POSTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "status", "keyVersion", "lastEventCreatedAt", "lastEventId"];
 
 export const COMMENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "postId", "parentId", "deleted"];
 
 export const CHANNEL_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "authorPubkey"];
 
-export const CHANNELS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelTopic", "role", "creatorPubkey", "createdAt", "updatedAt", "allowChatAttachments"];
+// Этап 74 — Часть C, C-2: lastEventId — LWW-гейт живого пути 30060 (editChannel
+// republish, тот же d-tag) — старая версия не должна откатывать name/description/
+// rules. updatedAt уже существовал (event.created_at последнего применения) —
+// lastEventId довершает пару для isNewerVersion (тайбрейк при равном created_at).
+export const CHANNELS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelTopic", "role", "creatorPubkey", "createdAt", "updatedAt", "allowChatAttachments", "lastEventId"];
 
 // Этап 41 (Tier 2 — соцграф, CONTRACTS.md). groupMembers/contacts/blockedContacts
 // не шифруются вовсе (голые pubkey-списки без отдельного "контента", TECH.md/DESIGN.md

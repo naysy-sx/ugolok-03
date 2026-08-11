@@ -1632,6 +1632,12 @@ export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKe
 				// перезагрузки/другого не связанного события.
 				let activityChanged = false;
 				for (const event of events) {
+					// Этап 74 — Часть C, C-3 (CONTRACTS.md/DESIGN.md "Этап 74"): единственный
+					// из 10 живых подписчиков без этого гейта — upsertMessage(...,"mirror")
+					// идемпотентен к redelivery, но receiveLamportTick НЕ идемпотентен (монотонно
+					// продвигает часы на КАЖДЫЙ вызов) — resubscribe-backlog инфлировал бы
+					// Lamport-счётчик без нужды. Тот же паттерн, что везде в этом файле.
+					if (!isNewEvent(event.id)) continue;
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
