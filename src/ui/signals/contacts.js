@@ -135,6 +135,28 @@ export async function reconcileContactsFromEventLog(ownerPubkey) {
 	}
 }
 
+// Этап 74 — найдено живой проверкой (не домысел, не часть исходного ТЗ):
+// PUBLISH_REQUEST/PUBLISH_ACCEPT/PUBLISH_REJECT/PUBLISH_CANCEL (contact-runtime.js)
+// заворачивают rumor ТОЛЬКО на pubkey собеседника, никогда на свой — сиблинг-
+// устройство владельца НЕ УЗНАЁТ о собственной отправленной/принятой заявке
+// вплоть до следующего connect() (когда reconcileContactsFromEventLog выше
+// подтягивает kind:3/10000 из bootstrap-бэклога). Эти две функции — тестируемое
+// ядро живой подписки (transport.js's refreshLiveContactListSubscription):
+// применяют ОДНО входящее kind:3/10000 событие через уже существующий,
+// протестированный reconcileList (contact-fsm.js) — та же LWW-семантика, что
+// reconcileContactsFromEventLog, не вторая реализация. Полный self-sync
+// PENDING-состояний (OUTGOING_PENDING/INCOMING_PENDING на сиблинге ДО
+// разрешения) — отдельная, более крупная задача, не в этом фиксе (см. DESIGN.md).
+export async function applyContactListEvent(event) {
+	if (!runtime) return;
+	await runtime.reconcileContactList(new Set(parseContactListEvent(event)), event.created_at);
+}
+
+export async function applyMuteListEvent(event) {
+	if (!runtime) return;
+	await runtime.reconcileMuteList(new Set(parseMuteListEvent(event)), event.created_at);
+}
+
 export function decodePubkeyInput(input) {
 	const trimmed = input.trim();
 	if (/^[0-9a-f]{64}$/i.test(trimmed)) return trimmed.toLowerCase();

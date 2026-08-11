@@ -284,6 +284,26 @@ test("reconcileList: mute-список (BLOCKED) работает симметр
 	assert.equal(r.relationships.get(BOB).name, "BLOCKED");
 });
 
+// Этап 74 — найдено живой проверкой (мультиустройственная сессия, не домысел):
+// ветка УДАЛЕНИЯ уже защищена I1 (тест выше, "против отката"), но ветка
+// ДОБАВЛЕНИЯ — нет. С появлением живой подписки на kind:3/10000 (не только
+// разового bootstrap-скана, где всегда применяется ЕДИНСТВЕННЫЙ pickLatest-
+// результат) редоставка/переупорядочивание live-событий стало реальным
+// сценарием — старый снимок списка, доставленный ПОСЛЕ более свежего локального
+// решения (например, USER_REMOVE_CONTACT), мог бы вернуть уже удалённого peer'а.
+test("reconcileList, ДОБАВЛЕНИЕ против отката: локальное решение НОВЕЕ списка -> старый список не возвращает уже удалённого peer'а", () => {
+	const relationships = new Map([[BOB, withState("NONE", BOB, { resolvedAt: 6000 })]]);
+	const r = reconcileList(relationships, "contacts", new Set([BOB]), 1000); // старый список, BOB ещё в нём
+	assert.equal(r.relationships.get(BOB).name, "NONE", "старая версия списка не должна вернуть уже удалённого контакта");
+});
+
+test("reconcileList, ДОБАВЛЕНИЕ: список НОВЕЕ локального решения -> добавляет как обычно", () => {
+	const relationships = new Map([[BOB, withState("NONE", BOB, { resolvedAt: 1000 })]]);
+	const r = reconcileList(relationships, "contacts", new Set([BOB]), 6000); // список новее
+	assert.equal(r.relationships.get(BOB).name, "CONTACT");
+	assert.equal(r.relationships.get(BOB).resolvedAt, 6000);
+});
+
 // --- Адверсарно: reduce не мутирует замороженный вход ---
 test("адверсарно: reduce не мутирует замороженный peerState", () => {
 	const scenarios = [

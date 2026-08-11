@@ -12158,3 +12158,34 @@ LWW-корректность НАСЛЕДУЕТСЯ от уже протести
 P-1/P-4, которые описывают, что происходит, КОГДА подписка вообще
 работает). Исправлено попутно: источник — сигнал `contacts`
 (`ui/signals/contacts.js`), синхронизированный `contactRelationships`.
+
+## Этап 74 — найдено живой проверкой (после закрытия A+B+C): контакты не live между сиблингами
+
+`PUBLISH_REQUEST`/`PUBLISH_ACCEPT`/`PUBLISH_REJECT`/`PUBLISH_CANCEL`
+(`contact-runtime.js`) заворачивают rumor ТОЛЬКО на pubkey собеседника,
+никогда на свой — сиблинг-устройство узнавало о собственной отправленной/
+принятой заявке только на следующем `connect()`. Живой E2E-тест (4
+браузера, kukusya/tutturulya) воспроизвёл это напрямую.
+
+**Исправлено:** `refreshLiveContactListSubscription(ownerPubkey)`
+(`transport.js`) — постоянная подписка на `{authors:[ownerPubkey],
+kinds:[3,10000]}` (свои же kind:3/kind:10000, не gift-wrap), вызывается
+безусловно в `connect()`, сразу после `reconcileContactsFromEventLog`.
+Тестируемое ядро — `applyContactListEvent`/`applyMuteListEvent`
+(`contacts.js`), переиспользуют `reconcileList` (`contact-fsm.js`) —
+та же LWW-семантика, что bootstrap-путь, не вторая реализация.
+
+Попутно найдена и закрыта дыра в самом `reconcileList`: ветка УДАЛЕНИЯ
+уже была защищена (I1, `peerState.resolvedAt <= createdAt`), ветка
+ДОБАВЛЕНИЯ — нет. С разовым bootstrap-сканом (всегда `pickLatest`
+единственного снимка) это не проявлялось; с живой подпиской (возможна
+редоставка/переупорядочивание) — стало реальным сценарием отката уже
+удалённого контакта. Добавлен симметричный гейт.
+
+**Известное ограничение (не в этом фиксе):** OUTGOING_PENDING/
+INCOMING_PENDING (промежуточные состояния ДО разрешения) по-прежнему
+не синхронизируются live на сиблинг-устройства — только финальные
+CONTACT/BLOCKED. Полный фикс требует self-addressed rumor с тегом
+реального peer'а (тот же приём, что `["contact", ...]` в devices.js's
+sibling-Welcome, Часть A) и новых FSM-переходов "LOCAL_*" — отдельная,
+более крупная задача.

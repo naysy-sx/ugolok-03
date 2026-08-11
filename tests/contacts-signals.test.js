@@ -19,6 +19,8 @@ import {
 	refreshProfiles,
 	applyProfileUpdates,
 	hydrateProfilesFromCache,
+	applyContactListEvent,
+	applyMuteListEvent,
 	decodePubkeyInput,
 	configureContactRuntime,
 	handleIncomingContactRumor,
@@ -37,6 +39,7 @@ import {
 } from "../src/ui/signals/contacts.js";
 import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, buildContactRequestRumor } from "../src/domain/contacts/requests.js";
+import { buildContactListEvent, buildMuteListEvent } from "../src/domain/contacts/contacts.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { GROUPS_PLAINTEXT_FIELDS, CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import { sign } from "../src/core/crypto/sign.js";
@@ -285,6 +288,39 @@ test("миграция (задача 3, этап 49): configureContactRuntime п
 
 	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
 	assert.deepEqual(blockedContacts.value, [ALICE_PUBKEY]);
+});
+
+// Этап 74 — найдено живой проверкой: applyContactListEvent/applyMuteListEvent —
+// тестируемое ядро живой подписки на СВОИ kind:3/10000 (без неё сиблинг-
+// устройство узнавало о принятых заявках/блокировках только на следующем
+// connect()). Переиспользуют reconcileList (contact-fsm.js) — та же LWW-
+// семантика, что и bootstrap-путь reconcileContactsFromEventLog.
+
+test("applyContactListEvent: сиблинг-устройство получает kind:3 живьём -> contacts.value обновляется", async () => {
+	await setupRuntime();
+	const event = buildContactListEvent(PRIV_KEY, [BOB_PUBKEY], 5000);
+	await applyContactListEvent(event);
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+});
+
+test("applyMuteListEvent: сиблинг-устройство получает kind:10000 живьём -> blockedContacts.value обновляется", async () => {
+	await setupRuntime();
+	const event = buildMuteListEvent(PRIV_KEY, [ALICE_PUBKEY], 5000);
+	await applyMuteListEvent(event);
+	assert.deepEqual(blockedContacts.value, [ALICE_PUBKEY]);
+});
+
+test("applyContactListEvent: старая версия (меньший created_at), доставленная ПОСЛЕ более свежего локального удаления, не возвращает контакт", async () => {
+	await setupRuntime();
+	await applyContactListEvent(buildContactListEvent(PRIV_KEY, [BOB_PUBKEY], 1000));
+	assert.deepEqual(contacts.value, [BOB_PUBKEY]);
+
+	await removeContactAction(BOB_PUBKEY); // локальное решение — заведомо позже, реальный Date.now()
+	assert.deepEqual(contacts.value, []);
+
+	// Редоставка/переупорядочивание — та же СТАРАЯ версия списка приходит повторно.
+	await applyContactListEvent(buildContactListEvent(PRIV_KEY, [BOB_PUBKEY], 1000));
+	assert.deepEqual(contacts.value, [], "старый список не должен вернуть только что удалённый контакт");
 });
 
 // --- Группы (не затронуто этапом 49) ---

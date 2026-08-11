@@ -30,7 +30,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -328,6 +328,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	logSync(t("syncLog.loadingHistoryDone", { count: bootstrapResult.addedCount }));
 	logSync(t("syncLog.contacts"));
 	await reconcileContactsFromEventLog(pubkeyHex);
+	// Этап 74 — найдено живой проверкой: живая подписка на СВОИ kind:3/10000 —
+	// без неё принятая заявка/блокировка не долетала до сиблинг-устройств до
+	// следующего connect(). Безусловно (как refreshChannelGrantSubscription
+	// ниже) — состояние владельца, не экрано-триггерное.
+	await refreshLiveContactListSubscription(pubkeyHex);
 	logSync(t("syncLog.contactsDone"));
 	logSync(t("syncLog.permissions"));
 	await rebuildGroups(pubkeyHex, privKey, dbKey);
@@ -943,6 +948,53 @@ export async function refreshLiveProfileSubscription(ownerPubkey) {
 	// Повторный вызов (новый контакт добавлен) — тот же приём, что groupMessageSubscriber:
 	// переподписка тем же subId идемпотентна и дёшево обновляет набор authors.
 	profileSubscriber.subscribe("live-profiles", [{ authors: [ownerPubkey, ...contacts.value], kinds: [0] }]);
+}
+
+let contactListSubscriber = null;
+
+// Этап 74 — найдено живой проверкой (не домысел, не часть исходного ТЗ):
+// PUBLISH_REQUEST/PUBLISH_ACCEPT/PUBLISH_REJECT/PUBLISH_CANCEL (contact-runtime.js)
+// адресуют gift-wrap ТОЛЬКО собеседнику — сиблинг-устройство владельца узнавало
+// о собственной отправленной/принятой заявке только на следующем connect()
+// (reconcileContactsFromEventLog — bootstrap-скан, не живой). kind:3/kind:10000 —
+// ОБЫЧНЫЕ (не gift-wrapped) события, подписанные самим владельцем — постоянная
+// подписка на них, тот же принцип, что refreshLiveProfileSubscription (kind:0).
+// Полный live-sync промежуточных PENDING-состояний — отдельная, более крупная
+// задача (нужен self-addressed rumor с тегом реального peer'а, см. DESIGN.md);
+// здесь — только финальные состояния (CONTACT/BLOCKED), они и были жалобой
+// живой проверки.
+export async function refreshLiveContactListSubscription(ownerPubkey) {
+	if (!connection) return;
+	if (!contactListSubscriber) {
+		contactListSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				let changed = false;
+				for (const event of events) {
+					if (!isNewEvent(event.id)) continue;
+					try {
+						if (event.kind === 3) {
+							await applyContactListEvent(event);
+							changed = true;
+						} else if (event.kind === 10000) {
+							await applyMuteListEvent(event);
+							changed = true;
+						}
+					} catch {
+						// повреждённый/чужеродный content — пропустить, не ронять батч
+					}
+				}
+				// applyContactListEvent/applyMuteListEvent уже дёргают onStateChange->
+				// recomputeContactSignals (contacts.value/blockedContacts.value — сигналы,
+				// реактивны сами по себе) — bump нужен только для экранов, слушающих
+				// messagingActivity по общему соглашению этого файла (тот же принцип, что
+				// остальные подписчики выше).
+				if (changed) bumpMessagingActivity();
+			},
+		});
+		connection.addMessageHandler(contactListSubscriber.handleMessage);
+	}
+	contactListSubscriber.subscribe("live-contact-list", [{ authors: [ownerPubkey], kinds: [3, 10000] }]);
 }
 
 let channelGrantSubscriber = null;

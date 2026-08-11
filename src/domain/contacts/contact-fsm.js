@@ -236,9 +236,14 @@ export function reconcileList(relationships, listKind, pubkeySet, createdAt) {
   const newRelationships = new Map(relationships);
   const commands = [];
 
+  // Этап 74 — найдено живой проверкой: симметрично ветке удаления ниже (I1) —
+  // старый снимок списка, доставленный ПОСЛЕ более свежего локального решения
+  // (например, USER_REMOVE_CONTACT), не должен вернуть уже удалённого peer'а.
+  // Актуально с появлением живой подписки на kind:3/10000 — разовый bootstrap-
+  // скан этой гонки не создавал (всегда применял единственный pickLatest-снимок).
   for (const peer of pubkeySet) {
     const existing = newRelationships.get(peer);
-    if (!existing || existing.name !== targetState) {
+    if ((!existing || existing.name !== targetState) && (!existing || existing.resolvedAt <= createdAt)) {
       newRelationships.set(peer, {
         name: targetState,
         peerPubkey: peer,
