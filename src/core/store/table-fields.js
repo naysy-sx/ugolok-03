@@ -67,6 +67,13 @@ export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
 // шифруются; ownerPubkey/contactPubkey/lamportTs — составной индекс, plaintext.
 export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lamportTs"];
 
+// Этап 74 — T2.3 (единственный писатель MLS-состояния): журнал уже
+// обработанных kind:445 для дедупликации между вкладками. Все поля
+// индексно-плоские — eventId уже публичен на relay, firstSeenAt нужен для
+// TTL-sweep, шифровать нечего, но toEncryptedRow применяется для
+// единообразия со всеми таблицами проекта.
+export const PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId", "firstSeenAt"];
+
 // Этап 49 — contactRelationships (единая таблица, CONTACTS-FSM.md §3). state/
 // resolvedAt/sentAt — структурные метаданные и индексы ([owner+peer], [owner+state]
 // требуют plaintext), тот же принцип, что contacts/blockedContacts на этапе 41.

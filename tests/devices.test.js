@@ -40,6 +40,7 @@ beforeEach(async () => {
 	await db.table("deviceIdentity").clear();
 	await db.table("knownDevices").clear();
 	await db.table("knownContactDevices").clear();
+	await db.table("processedGroupEvents").clear();
 });
 
 after(() => {
@@ -69,10 +70,17 @@ async function establishAliceToBob() {
 // Симулирует "теперь мы на устройстве Боба" — подкладывает его копию состояния в
 // db.mlsGroups (единственная база в этом тестовом процессе), не трогая копию Алисы
 // (тот же паттерн, что chat.test.js's asBob). Этап 39 — строка теперь зашифрована DB_KEY.
+// Этап 74 — T2.3: processedGroupEvents (дедуп-журнал) в реальности живёт В ТОЙ ЖЕ
+// локальной БД, что mlsGroups — per-device, не per-identity. Этот тестовый процесс
+// делит одну db на "несколько устройств Боба" ТОЛЬКО через подмену состояния под
+// одним ключом — без сброса журнала здесь второй симулированный физический прибор
+// (например, bob-device-2 в handleDeviceAnnounce-тесте) ложно считался бы уже
+// обработавшим событие, которое на самом деле впервые видит именно ОН.
 async function asBob(groupIdHex, bobSerializedState, fn) {
 	await db.table("mlsGroups").put(
 		toEncryptedRow({ ownerPubkey: BOB_PUB, groupId: groupIdHex, contactPubkey: ALICE_PUB, state: bobSerializedState }, MLS_GROUPS_PLAINTEXT_FIELDS, DB_KEY),
 	);
+	await db.table("processedGroupEvents").where("ownerPubkey").equals(BOB_PUB).delete();
 	const result = await fn();
 	const updatedBobRaw = await db.table("mlsGroups").get([BOB_PUB, groupIdHex]);
 	const updatedBobRow = fromEncryptedRow(updatedBobRaw, DB_KEY);

@@ -11841,3 +11841,143 @@ export function spawnDevice() { ... }
 ошибки — стек теряется намеренно, дочерний процесс — чёрный ящик по
 дизайну, важен факт и сообщение ошибки, не трасса). `kill()` —
 `child.kill()`, для очистки после теста/сценария (в `t.after`).
+
+## Этап 74 — Часть A (T1–T3), исправление доставки multi-device
+
+Внешний диагноз (Claude Fable, `PROCESS-DOCS/TZ-MULTIDEVICE-FIX.md`) —
+перепроверен чтением main, RC-1/RC-2 подтверждены буквально
+(`chat.js:410,421` — жёсткий `senderPubkey: contactPubkey`;
+`chat.js:65-72` — `upsertMessage` first-writer-wins), RC-3 подтверждён
+отсутствием `navigator.locks`/`SharedWorker`/leader election в коде.
+Открывает 73.6 как кандидата — эта запись закрывает T1–T3, задачи T4
+и Часть B/C — отдельные последующие сессии (см. PLAN.md).
+
+### T1 — senderPubkey внутри MLS-payload
+
+Контракт `messagePayload` (внутри MLS, `chat.js`'s `sendMessage`):
+было `{text, lamportTs, msgId, sentAt}`, стало
+`{text, lamportTs, msgId, sentAt, senderPubkey}` — аддитивное поле,
+едет ВНУТРИ MLS-шифртекста (не видно на проводе, метаданные не
+утекают). `senderDeviceId` НЕ добавляется — идентичность устройства
+не нужна для направления и была бы лишним раскрытием состава
+устройств контакту внутри 1:1.
+
+Приём (`receiveGroupMessageEvent`): вместо жёсткого
+`senderPubkey: contactPubkey` —
+`const senderPubkey = parsed.senderPubkey === ownerPubkey ? ownerPubkey : contactPubkey;`
+Нормализация к одному из двух легальных значений (1:1-группа — других
+identity нет), НЕ сырое `parsed.senderPubkey` — третье значение в
+payload — мусор/спуфинг, сводится к `contactPubkey`. Старый формат
+(payload без `senderPubkey`, исторические сообщения при catch-up) →
+`contactPubkey` (обратная совместимость: `parsed.senderPubkey ===
+ownerPubkey` ложно для `undefined`, ветка отрабатывает сама, без
+отдельной проверки на существование поля). Тот же вычисленный
+`senderPubkey` идёт в `mirrorBestEffort` (было — второй экземпляр той
+же жёсткой константы).
+
+**Известное ограничение (L-1, → DESIGN.md):** `senderPubkey` в payload
+аутентифицирован MLS лишь как "отправитель — участник группы", не как
+"отправитель — именно тот, кем себя назвал". Контакт технически может
+пометить своё сообщение как ваше — оно отрисуется исходящим в вашей
+ленте. Конфиденциальность/подлинность членства не нарушаются, это
+UI-спуфинг внутри 1:1. Устраняется, когда ts-mls раскроет leaf-индекс
+отправителя application-сообщений (после `2.0.0-rc.14`); тогда сверять
+с credential `pubkey:deviceId` листа вместо доверия payload.
+
+**Известное ограничение (L-2, → DESIGN.md):** исторические сообщения
+от sibling-устройств со старым payload при повторном catch-up живым
+путём атрибутируются по-старому (contact) — корректируются T3's
+зеркальной веткой ремонта, не отдельной миграцией.
+
+### T2 — withGroupLock (единственный писатель MLS-состояния)
+
+Новый модуль `src/core/store/mls-lock.js`:
+
+```js
+export function withGroupLock(ownerPubkey, groupIdHex, fn)
+```
+
+`name = "mls:" + ownerPubkey + ":" + groupIdHex` →
+`navigator.locks.request(name, fn)`, fallback (нет `navigator.locks` —
+тестовая среда node/jsdom) — in-process mutex, карта `name -> promise`-
+цепочка, тот же приём, что `drainInFlight` (`chat.js`)/
+`handleDeviceAnnounceInFlight` (`devices.js`). Fallback НЕ даёт
+межвкладочной гарантии (L-3, → DESIGN.md) — задокументировано в шапке
+модуля. Инвариант и полное правило нереентерабельности — DESIGN.md
+"Этап 74" (13b).
+
+Обёрнуты ЦЕЛИКОМ (захват — перед `db.table("mlsGroups").get(...)`,
+освобождение — после `put`):
+- `chat.js`: `sendMessage`, `receiveGroupMessageEvent`,
+  `recordGroupDecryptFailure`, `acceptWelcome`, `ensureChatEstablished`.
+- `devices.js`: `addSiblingToGroup`, `addContactDeviceToGroup` —
+  ОБЕ функции внутри лока ПЕРЕЧИТЫВАЮТ строку `mlsGroups` по
+  конкретному `groupId` заново (не доверяют объекту `group`,
+  переданному вызывающим кодом из bulk-`toArray()`, сделанного ДО
+  захвата лока — см. DESIGN.md).
+
+НЕ обёрнуты (правило нереентерабельности, Web Locks не
+реентерабелен): `drainPendingOutgoingMessages` (вызывает
+`sendMessage` — лочится только внутренний уровень) и
+`handleDeviceAnnounce`/`syncDeviceMembership` (вызывают
+`addSiblingToGroup`/`addContactDeviceToGroup` — лочится только
+внутренний уровень; их собственная `*InFlight`-коалесценция —
+отдельный, более грубый, ключ по `deviceId`, не заменяет
+`withGroupLock`, а сосуществует с ним).
+
+### T2.3 — processedGroupEvents (межвкладочная дедупликация событий)
+
+Новая таблица, `db.version(23)` (`database.js`):
+
+```js
+db.version(23).stores({
+  processedGroupEvents: "[ownerPubkey+eventId], [ownerPubkey+firstSeenAt]"
+});
+```
+
+`PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId",
+"firstSeenAt"]` (`table-fields.js`) — все поля индексно-плоские,
+`eventId` уже публичен на relay, шифровать нечего; `toEncryptedRow`
+всё равно применяется для единообразия со всеми таблицами проекта
+(прецедент `OUTBOX_PLAINTEXT_FIELDS`/`JOURNAL_ENTRIES_PLAINTEXT_FIELDS`).
+
+Гейт в начале `receiveGroupMessageEvent`, ВНУТРИ `withGroupLock`,
+ПЕРЕД крипто: `has([ownerPubkey, eventId])` → тихий `return null`.
+Запись — ПОСЛЕ успешной обработки, тем же локом. TTL/очистка — по
+прецеденту `pendingUndecryptedByGroup`/`UNDECRYPTED_RETRY_TTL_MS`
+(`transport.js:166-167`, 5 минут, проверка при каждой возможности, не
+таймер): при каждой записи новой строки — sweep строк этого
+`ownerPubkey` старше TTL (по индексу `[ownerPubkey+firstSeenAt]`),
+таблица не растёт неограниченно без scheduled-задачи.
+
+### T3 — ремонт зеркалом (upsertMessage)
+
+Правка контракта: `upsertMessage(row, dbKey, source = "live")` —
+аддитивный 3-й параметр, старые вызовы без изменений (`source` по
+умолчанию `"live"`). При `ConstraintError` (строка с этим `msgId` уже
+есть): если `source === "mirror"` и `senderPubkey` входящей строки
+отличается от уже сохранённого — перезаписывается ТОЛЬКО поле
+`senderPubkey` существующей строки, остальные поля нетронуты. Живой
+путь (`source === "live"`, значение по умолчанию) существующие строки
+НЕ корректирует — иначе форджибл-payload из T1 (см. L-1) получил бы
+право переписывать историю чужим `senderPubkey`. Зеркало авторитетнее
+для атрибуции: пишет его само устройство-отправитель под ключом,
+выводимым из `privKey` владельца — подделать может только владелец
+identity.
+
+Вызовы `buildMirroredMessageRow` → `upsertMessage` в
+`syncMirroredHistory`/`refreshLiveMirrorSubscription` (`transport.js`)
+передают `source: "mirror"`. Исторический catch-up зеркал при первом
+запуске после обновления чинит испорченные RC-1/RC-2 строки без
+отдельной миграции.
+
+### T1.4 — вердикт (UI-инвариант направления)
+
+Проверено (`grep` по `src/ui/screens/chat.jsx`, `src/ui/signals/chat.js`,
+`src/ui/signals/chats.js`, `src/ui/components/message-bubble.jsx`):
+направление определяется РОВНО в одном месте —
+`src/ui/screens/chat.jsx:801`, `const isOwn = message.senderPubkey ===
+ownerPubkey;` — уже единственный источник истины, других мест
+(сравнение с `chatId`, флаг "отправлено в этой сессии" и т.п.) не
+найдено. `MessageBubble` (`message-bubble.jsx`) получает готовый
+`isOwn` пропом, сама direction не вычисляет. Правок не требуется.

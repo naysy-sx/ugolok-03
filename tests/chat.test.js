@@ -47,6 +47,7 @@ beforeEach(async () => {
 	await db.table("knownContactDevices").clear();
 	await db.table("contactRelationships").clear();
 	await db.table("pendingOutgoingMessages").clear();
+	await db.table("processedGroupEvents").clear();
 });
 
 after(() => {

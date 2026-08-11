@@ -10,6 +10,7 @@ import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-tab
 import { MLS_GROUPS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
 import { computeGroupId, isCommitter } from "./chat.js";
+import { withGroupLock } from "../../core/store/mls-lock.js";
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -29,7 +30,24 @@ async function requirePublishOk(publish, event) {
 // групп/устройств (найдено адверсарным заходом; тот же принцип, что giftWrapSubscriber/
 // refreshGroupMessageSubscription в transport.js — "не ронять батч").
 async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group) {
-	const state = deserializeState(group.state);
+	// Этап 74 — T2.2 (RC-3, DESIGN.md "Этап 74"): лок ЦЕЛИКОМ вокруг read-
+	// modify-write. Вызывающий код (handleDeviceAnnounce/syncDeviceMembership)
+	// читает `group` bulk-enumeration'ом ДО захвата лока — group.groupId
+	// достаточно надёжен для АДРЕСАЦИИ, но НЕ для содержимого (могло устареть).
+	return withGroupLock(ownerPubkey, group.groupId, () => doAddSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group));
+}
+
+async function doAddSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow, group) {
+	// Перечитываем СВЕЖУЮ строку внутри лока — не доверяем `group` из
+	// bulk-enumeration, сделанной ДО захвата лока (DESIGN.md "Этап 74"):
+	// другая вкладка могла продвинуть состояние между тем чтением и этим
+	// моментом. Группа могла и вовсе исчезнуть (recreateChatConversation) —
+	// тогда тихий no-op, нечего досинхронизировать.
+	const freshRaw = await db.table("mlsGroups").get([ownerPubkey, group.groupId]);
+	if (!freshRaw) return;
+	const fresh = fromEncryptedRow(freshRaw, dbKey);
+
+	const state = deserializeState(fresh.state);
 	// Ключ конверта СТАРОЙ (пред-коммитной) эпохи — ей всё ещё пользуется
 	// contactPubkey (Bob, уже существующий участник группы), пока не применит
 	// коммит ниже. Захватить ДО addMember, не после (DESIGN.md, "Этап 25", раздел 1c).
@@ -43,10 +61,10 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 			{
 				ownerPubkey,
 				groupId: group.groupId,
-				contactPubkey: group.contactPubkey,
+				contactPubkey: fresh.contactPubkey,
 				state: serializeState(newSessionState),
-				consecutiveDecryptFailures: group.consecutiveDecryptFailures ?? 0,
-				desynced: group.desynced ?? false,
+				consecutiveDecryptFailures: fresh.consecutiveDecryptFailures ?? 0,
+				desynced: fresh.desynced ?? false,
 			},
 			MLS_GROUPS_PLAINTEXT_FIELDS,
 			dbKey,
@@ -78,7 +96,7 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 	// переиспользовать ту же acceptWelcome/computeGroupId(owner, contact) логику, что
 	// и для обычного Welcome от контакта (DESIGN.md, "Этап 25", раздел 1).
 	const welcomeEvent = nip59Wrap(
-		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [["contact", group.contactPubkey]] },
+		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [["contact", fresh.contactPubkey]] },
 		privKey,
 		ownerPubkey,
 	);
@@ -99,7 +117,17 @@ async function addSiblingToGroup(ownerPubkey, privKey, dbKey, publish, knownRow,
 // контакт, обычная, ничем не осложнённая семантика (та же, что у самого
 // первого Welcome в ensureChatEstablished).
 async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group) {
-	const state = deserializeState(group.state);
+	// Этап 74 — T2.2 (RC-3): тот же приём, что addSiblingToGroup — лок ЦЕЛИКОМ,
+	// перечитка свежей строки внутри (DESIGN.md "Этап 74").
+	return withGroupLock(ownerPubkey, group.groupId, () => doAddContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group));
+}
+
+async function doAddContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, contactPubkey, deviceId, wireBytes, group) {
+	const freshRaw = await db.table("mlsGroups").get([ownerPubkey, group.groupId]);
+	if (!freshRaw) return;
+	const fresh = fromEncryptedRow(freshRaw, dbKey);
+
+	const state = deserializeState(fresh.state);
 	const { privateKey: oldEnvPriv, publicKey: oldEnvPub } = await deriveNostrEnvelopeKeys(state);
 
 	const { newSessionState, welcomeWireBytes, commitWireBytes } = await addMember(state, wireBytes);
@@ -109,10 +137,10 @@ async function addContactDeviceToGroup(ownerPubkey, privKey, dbKey, publish, con
 			{
 				ownerPubkey,
 				groupId: group.groupId,
-				contactPubkey: group.contactPubkey,
+				contactPubkey: fresh.contactPubkey,
 				state: serializeState(newSessionState),
-				consecutiveDecryptFailures: group.consecutiveDecryptFailures ?? 0,
-				desynced: group.desynced ?? false,
+				consecutiveDecryptFailures: fresh.consecutiveDecryptFailures ?? 0,
+				desynced: fresh.desynced ?? false,
 			},
 			MLS_GROUPS_PLAINTEXT_FIELDS,
 			dbKey,

@@ -22,9 +22,28 @@ import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
 import { enqueue } from "../../core/store/outbox.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
 import { isKnownContact } from "./inbox-requests.js";
+import { withGroupLock } from "../../core/store/mls-lock.js";
+
+// Этап 74 — T2.3 (CONTRACTS.md/DESIGN.md "Этап 74"): по прецеденту
+// pendingUndecryptedByGroup/UNDECRYPTED_RETRY_TTL_MS (transport.js) — 5 минут,
+// sweep при каждой записи, не scheduled-таймер.
+const PROCESSED_EVENT_TTL_MS = 5 * 60 * 1000;
+
+async function markEventProcessed(ownerPubkey, eventId, dbKey) {
+	const now = Date.now();
+	await db.table("processedGroupEvents").put(
+		toEncryptedRow({ ownerPubkey, eventId, firstSeenAt: now }, PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS, dbKey),
+	);
+	const stale = await db
+		.table("processedGroupEvents")
+		.where("[ownerPubkey+firstSeenAt]")
+		.between([ownerPubkey, 0], [ownerPubkey, now - PROCESSED_EVENT_TTL_MS])
+		.primaryKeys();
+	if (stale.length > 0) await db.table("processedGroupEvents").bulkDelete(stale);
+}
 
 function encodeBase64(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -131,6 +150,12 @@ export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contact
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
+	// Этап 74 — T2.2 (RC-3): гонка "две вкладки одновременно создают ОДНУ группу
+	// первый раз" — лок ЦЕЛИКОМ вокруг get→создание→put (DESIGN.md "Этап 74").
+	return withGroupLock(ownerPubkey, groupIdHex, () => doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex));
+}
+
+async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex) {
 	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return;
 
@@ -202,23 +227,27 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
 	const groupIdHex = bytesToHex(groupId);
 
-	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
+	// Этап 74 — T2.2 (RC-3): гонка "две вкладки одновременно принимают один
+	// Welcome" — существует (DESIGN.md "Этап 74"), лок ЦЕЛИКОМ вокруг get→put.
+	return withGroupLock(ownerPubkey, groupIdHex, async () => {
+		const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+		if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
 
-	const ownKeyPackageRaw = await db.table("ownKeyPackage").get(ownerPubkey);
-	if (!ownKeyPackageRaw) {
-		throw new Error("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше");
-	}
-	const ownKeyPackageRow = fromEncryptedRow(ownKeyPackageRaw, dbKey);
-	const ownKeyPackage = {
-		publicPackage: ownKeyPackageRow.publicPackage,
-		privatePackage: ownKeyPackageRow.privatePackage,
-	};
+		const ownKeyPackageRaw = await db.table("ownKeyPackage").get(ownerPubkey);
+		if (!ownKeyPackageRaw) {
+			throw new Error("нет собственного KeyPackage — вызовите ensureOwnKeyPackagePublished() раньше");
+		}
+		const ownKeyPackageRow = fromEncryptedRow(ownKeyPackageRaw, dbKey);
+		const ownKeyPackage = {
+			publicPackage: ownKeyPackageRow.publicPackage,
+			privatePackage: ownKeyPackageRow.privatePackage,
+		};
 
-	const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
-	await db.table("mlsGroups").put(
-		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
-	);
+		const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
+		await db.table("mlsGroups").put(
+			toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+		);
+	});
 }
 
 // Этап 29 — правка контракта (skill п.12: только Claude, полная регрессия сразу
@@ -229,6 +258,14 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
+	// Этап 74 — T2.2 (RC-3): единственный писатель на (ownerPubkey, groupIdHex) —
+	// лок ЦЕЛИКОМ, get→крипто→put (DESIGN.md "Этап 74"). drainPendingOutgoingMessages
+	// вызывает sendMessage — лочится только этот, внутренний уровень (правило
+	// нереентерабельности, DESIGN.md).
+	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment, groupIdHex));
+}
+
+async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment, groupIdHex) {
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
@@ -240,7 +277,11 @@ export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, te
 	// и зеркалом одного и того же логического сообщения (DESIGN.md, "Этап 25", раздел 3).
 	const msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 	const sentAt = Math.floor(Date.now() / 1000);
-	const messagePayload = { text, lamportTs, msgId, sentAt };
+	// Этап 74 — T1.1 (RC-1): отправитель едет ВНУТРИ MLS-payload (не видно на
+	// проводе — см. CONTRACTS.md/DESIGN.md "Этап 74"). С этапа 72 все устройства
+	// ОБЕИХ identity состоят в группе — без этого поля приёмник не может отличить
+	// живое 445 от sibling-устройства владельца от живого 445 от контакта.
+	const messagePayload = { text, lamportTs, msgId, sentAt, senderPubkey: ownerPubkey };
 	if (attachment !== undefined) messagePayload.attachment = attachment;
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
@@ -371,6 +412,21 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 	if (!hTag) return null;
 	const groupIdHex = hTag[1];
 
+	// Этап 74 — T2.2/T2.3 (RC-3, DESIGN.md "Этап 74"): единственный писатель на
+	// (ownerPubkey, groupIdHex) — лок ЦЕЛИКОМ, от get() до put() включительно
+	// (дедуп-гейт T2.3 — внутри того же лока, до крипто).
+	return withGroupLock(ownerPubkey, groupIdHex, () => doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish, groupIdHex));
+}
+
+async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish, groupIdHex) {
+	// Этап 74 — T2.3: журнал обработанных событий — лок делает конкурентную
+	// обработку БЕЗОПАСНОЙ, но без этого гейта второй processMessage того же
+	// wire-события упал бы на replay-защите MLS и засчитался бы decrypt failure
+	// (DESIGN.md "Этап 74"). Проверка ВНУТРИ лока — иначе тот же TOCTOU, что
+	// лок вообще призван устранить.
+	const alreadyProcessed = await db.table("processedGroupEvents").get([ownerPubkey, event.id]);
+	if (alreadyProcessed) return null;
+
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) return null; // чужая/неизвестная группа — не наш разговор
 	const row = fromEncryptedRow(raw, dbKey);
@@ -391,6 +447,8 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 			dbKey,
 		),
 	);
+	// Этап 74 — T2.3: запись ПОСЛЕ успешной обработки, тем же локом.
+	await markEventProcessed(ownerPubkey, event.id, dbKey);
 
 	if (result.kind === "control") return null;
 
@@ -403,11 +461,19 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 	if (parsed.sentAt !== undefined) extra.sentAt = parsed.sentAt;
 	if (parsed.attachment !== undefined) extra.attachment = parsed.attachment;
 
+	// Этап 74 — T1.2 (RC-1): нормализация к ОДНОМУ из двух легальных значений —
+	// в 1:1-группе других identity нет, третье значение в payload — мусор/спуфинг
+	// (см. L-1, DESIGN.md "Этап 74"), сводится к contactPubkey. Payload старого
+	// формата (без senderPubkey, исторические sibling-сообщения при catch-up) —
+	// parsed.senderPubkey===ownerPubkey ложно для undefined, ветка отрабатывает
+	// сама (обратная совместимость, L-2).
+	const senderPubkey = parsed.senderPubkey === ownerPubkey ? ownerPubkey : contactPubkey;
+
 	await upsertMessage({
 		ownerPubkey,
 		chatId: contactPubkey,
 		lamportTs: parsed.lamportTs,
-		senderPubkey: contactPubkey,
+		senderPubkey,
 		id: event.id,
 		text: parsed.text,
 		status: "sent",
@@ -415,10 +481,12 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 		...extra,
 	}, dbKey);
 
+	// Этап 74 — T1.3: то же вычисленное значение — иначе зеркало несёт ВТОРОЙ
+	// экземпляр той же жёсткой ошибки RC-1.
 	await mirrorBestEffort(
 		privKey,
 		publish,
-		{ text: parsed.text, lamportTs: parsed.lamportTs, senderPubkey: contactPubkey, contactPubkey, msgId: parsed.msgId, ...extra },
+		{ text: parsed.text, lamportTs: parsed.lamportTs, senderPubkey, contactPubkey, msgId: parsed.msgId, ...extra },
 		groupIdHex,
 	);
 
@@ -456,24 +524,27 @@ const DESYNC_THRESHOLD = 3;
 // провал расшифровки (это была бы нормальная, ожидаемая буферизация М3,
 // не признак расхождения).
 export async function recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey) {
-	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (!raw) return;
-	const row = fromEncryptedRow(raw, dbKey);
-	const consecutiveDecryptFailures = (row.consecutiveDecryptFailures ?? 0) + 1;
-	await db.table("mlsGroups").put(
-		toEncryptedRow(
-			{
-				ownerPubkey,
-				groupId: groupIdHex,
-				contactPubkey: row.contactPubkey,
-				state: row.state,
-				consecutiveDecryptFailures,
-				desynced: consecutiveDecryptFailures >= DESYNC_THRESHOLD,
-			},
-			MLS_GROUPS_PLAINTEXT_FIELDS,
-			dbKey,
-		),
-	);
+	// Этап 74 — T2.2 (RC-3): тот же get→put на mlsGroups, тот же лок (DESIGN.md "Этап 74").
+	return withGroupLock(ownerPubkey, groupIdHex, async () => {
+		const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+		if (!raw) return;
+		const row = fromEncryptedRow(raw, dbKey);
+		const consecutiveDecryptFailures = (row.consecutiveDecryptFailures ?? 0) + 1;
+		await db.table("mlsGroups").put(
+			toEncryptedRow(
+				{
+					ownerPubkey,
+					groupId: groupIdHex,
+					contactPubkey: row.contactPubkey,
+					state: row.state,
+					consecutiveDecryptFailures,
+					desynced: consecutiveDecryptFailures >= DESYNC_THRESHOLD,
+				},
+				MLS_GROUPS_PLAINTEXT_FIELDS,
+				dbKey,
+			),
+		);
+	});
 }
 
 export async function listDesyncedChats(ownerPubkey, dbKey) {

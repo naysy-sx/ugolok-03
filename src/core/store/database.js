@@ -289,6 +289,16 @@ db.version(22).stores({
   pendingOutgoingMessages: "[ownerPubkey+contactPubkey+lamportTs], [ownerPubkey+contactPubkey]"
 });
 
+// Этап 74 — T2.3 (RC-3, CONTRACTS.md/DESIGN.md "Этап 74"): межвкладочная
+// дедупликация обработки kind:445 — withGroupLock делает конкурентную
+// обработку БЕЗОПАСНОЙ, но без этого журнала второй processMessage того же
+// wire-события упал бы на replay-защите MLS и засчитался бы decrypt failure.
+// eventId уже публичен на relay — не Tier-чувствителен, но toEncryptedRow
+// применяется по прецеденту всех остальных таблиц (единообразие).
+db.version(23).stores({
+  processedGroupEvents: "[ownerPubkey+eventId], [ownerPubkey+firstSeenAt]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }
