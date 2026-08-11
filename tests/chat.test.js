@@ -24,6 +24,7 @@ import {
 	recordGroupDecryptFailure,
 	listDesyncedChats,
 	recreateChatConversation,
+	upsertMessage,
 } from "../src/domain/messaging/chat.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -703,4 +704,118 @@ test("recreateChatConversation: удаляет локальную mlsGroups-за
 
 	assert.equal(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), undefined);
 	assert.equal(await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).count(), 0);
+});
+
+// Этап 74 — T3 (CONTRACTS.md/DESIGN.md "Этап 74", RC-2): строки, испорченные RC-1
+// (неверный senderPubkey), "прилипли" через first-writer-wins дедуп в upsertMessage —
+// зеркало (source:"mirror") авторитетно чинит ТОЛЬКО поле senderPubkey, живой путь
+// (source:"live", значение по умолчанию) историю не переписывает.
+
+test("upsertMessage: приход зеркала (source:'mirror') с верным senderPubkey исправляет ТОЛЬКО это поле, остальные нетронуты", async () => {
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: BOB_PUB, // испорчено RC-1 — на самом деле это было своё (sibling) сообщение
+		id: "live-event-1",
+		text: "привет",
+		status: "sent",
+		msgId: "t3-msg-1",
+		sentAt: 1000,
+	}, DB_KEY);
+
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: ALICE_PUB, // зеркало несёт ПРАВИЛЬНУЮ атрибуцию
+		id: "mirror-event-1",
+		text: "привет",
+		status: "sent",
+		msgId: "t3-msg-1",
+		sentAt: 1000,
+	}, DB_KEY, "mirror");
+
+	const rows = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
+	const row = rows.find((r) => r.msgId === "t3-msg-1");
+	assert.equal(row.senderPubkey, ALICE_PUB, "senderPubkey обязан быть исправлен зеркалом");
+	// Остальные поля — от ПЕРВОЙ (живой) записи, не от зеркала: коррекция
+	// затрагивает ТОЛЬКО senderPubkey, не весь объект.
+	assert.equal(row.id, "live-event-1", "id остаётся от исходной живой записи, не заменяется id зеркала");
+	assert.equal(row.text, "привет");
+	assert.equal(row.status, "sent");
+	assert.equal(row.sentAt, 1000);
+});
+
+test("upsertMessage: повторный приход того же зеркала — no-op (уже исправлено)", async () => {
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: BOB_PUB,
+		id: "live-event-2",
+		text: "текст",
+		status: "sent",
+		msgId: "t3-msg-2",
+	}, DB_KEY);
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: ALICE_PUB,
+		id: "mirror-event-2",
+		text: "текст",
+		status: "sent",
+		msgId: "t3-msg-2",
+	}, DB_KEY, "mirror");
+
+	// Тот же мирроринг повторно (resubscribe-редоставка, тот же класс, что уже
+	// задокументирован для kind:446 в других подписчиках проекта).
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: ALICE_PUB,
+		id: "mirror-event-2",
+		text: "текст",
+		status: "sent",
+		msgId: "t3-msg-2",
+	}, DB_KEY, "mirror");
+
+	const rows = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
+	const matching = rows.filter((r) => r.msgId === "t3-msg-2");
+	assert.equal(matching.length, 1, "не должно быть дублей строк");
+	assert.equal(matching[0].senderPubkey, ALICE_PUB);
+});
+
+test("upsertMessage: live-дубликат (source по умолчанию) НЕ меняет существующую строку, даже с другим senderPubkey", async () => {
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: BOB_PUB,
+		id: "live-event-3",
+		text: "оригинал",
+		status: "sent",
+		msgId: "t3-msg-3",
+	}, DB_KEY);
+
+	// Форджибл-payload (см. L-1, DESIGN.md "Этап 74") пытается переписать историю
+	// через живой путь — обязан остаться no-op, иначе контакт мог бы задним числом
+	// подменить атрибуцию чужого сообщения.
+	await upsertMessage({
+		ownerPubkey: ALICE_PUB,
+		chatId: BOB_PUB,
+		lamportTs: 1,
+		senderPubkey: ALICE_PUB,
+		id: "live-event-3-forged",
+		text: "оригинал",
+		status: "sent",
+		msgId: "t3-msg-3",
+	}, DB_KEY);
+
+	const rows = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
+	const row = rows.find((r) => r.msgId === "t3-msg-3");
+	assert.equal(row.senderPubkey, BOB_PUB, "живой путь не корректирует существующую строку");
+	assert.equal(row.id, "live-event-3", "id остаётся от первой записи");
 });

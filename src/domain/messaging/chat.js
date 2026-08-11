@@ -81,12 +81,32 @@ async function requirePublishOk(publish, event) {
 // (chatId, lamportTs, senderPubkey): два РАЗНЫХ сообщения могут легитимно иметь одинаковый
 // lamportTs при multi-device (найдено адверсарным прогоном уже принятого теста
 // getChatHistory tiebreak-by-id). row обязан содержать ownerPubkey — вызывающий код.
-export async function upsertMessage(row, dbKey) {
+// Этап 74 — T3 (RC-2, CONTRACTS.md/DESIGN.md "Этап 74"): source — аддитивный
+// параметр, старые вызовы (без него) сохраняют прежнее поведение ("live").
+// Живой путь существующие строки НЕ корректирует (форджибл-payload из T1 не
+// получил бы права переписывать историю чужим senderPubkey, см. L-1); зеркало
+// (source:"mirror") авторитетно чинит ТОЛЬКО поле senderPubkey — его пишет
+// само устройство-отправитель под ключом, выводимым из privKey владельца.
+export async function upsertMessage(row, dbKey, source = "live") {
 	try {
 		await db.table("messages").add(toEncryptedRow(row, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	} catch (e) {
 		if (e.name !== "ConstraintError") throw e;
-		// уже есть строка с тем же (chatId, msgId) — тихий no-op, не дубль
+		if (source !== "mirror") return; // живой дубликат — тихий no-op, не дубль, история не переписывается
+		const existing = await db
+			.table("messages")
+			.where("[ownerPubkey+chatId+msgId]")
+			.equals([row.ownerPubkey, row.chatId, row.msgId])
+			.first();
+		if (existing && existing.senderPubkey !== row.senderPubkey) {
+			// senderPubkey — plaintext-поле (MESSAGES_PLAINTEXT_FIELDS) — точечное
+			// исправление без расшифровки/перешифровки остальной строки.
+			await db
+				.table("messages")
+				.where("[ownerPubkey+chatId+msgId]")
+				.equals([row.ownerPubkey, row.chatId, row.msgId])
+				.modify({ senderPubkey: row.senderPubkey });
+		}
 	}
 }
 

@@ -1569,7 +1569,9 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
 						// отдельно от WebSocket-обвязки, см. mirror.test.js).
-						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
+						// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
+					// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
+					await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
 						await receiveLamportTick(ownerPubkey, payload.lamportTs);
 					} catch (e) {
 						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
@@ -1609,7 +1611,9 @@ export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKe
 				for (const event of events) {
 					try {
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
-						await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey);
+						// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
+					// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
+					await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
 						await receiveLamportTick(ownerPubkey, payload.lamportTs);
 						activityChanged = true;
 					} catch (e) {
