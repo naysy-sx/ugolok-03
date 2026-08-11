@@ -30,7 +30,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -611,6 +611,18 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			if (addedCount > 0) {
 				await reconcileContactsFromEventLog(pubkeyHex);
 				await rebuildGroups(pubkeyHex, privKey, dbKey);
+				// Этап 74 — найдено живой проверкой (не домысел): rebuildGroups
+				// пишет ТОЛЬКО в Dexie (groups/groupMembers) — Preact-сигнал `groups`
+				// (ui/signals/contacts.js) обновлялся ТОЛЬКО когда UI-экран
+				// (channels.jsx/contacts.jsx) монтировался сам и звал refreshGroups()
+				// на своём useEffect. Если экран уже был открыт на сиблинг-устройстве
+				// в момент прихода живого kind:30050 (создание/переименование группы,
+				// добавление/удаление участника) — сигнал никогда не обновлялся сам,
+				// в отличие от contacts/profiles (уже реактивны через EMIT/сигналы).
+				// Тот же класс бага, что был у contact-list (см. запись этого же
+				// этапа выше) — сама доставка/фолд работали, отсутствовал ТОЛЬКО
+				// мост "Dexie обновлена -> Preact-сигнал перечитан".
+				await refreshGroups(pubkeyHex, dbKey);
 				await rebuildEffectivePermissions(pubkeyHex, privKey);
 				// Этап 53 И5 (задача 5.3) — живой фолд журнала операций дерева
 				// файлов. Безопасный no-op, если экран "Файлы" ни разу не

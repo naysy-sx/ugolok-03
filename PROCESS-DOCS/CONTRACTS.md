@@ -12189,3 +12189,31 @@ CONTACT/BLOCKED. Полный фикс требует self-addressed rumor с т
 реального peer'а (тот же приём, что `["contact", ...]` в devices.js's
 sibling-Welcome, Часть A) и новых FSM-переходов "LOCAL_*" — отдельная,
 более крупная задача.
+
+## Этап 74 — найдено живой проверкой: groups-сигнал не обновлялся живьём
+
+Пользователь создал группу "друзья" на устройстве A (Zen), добавил
+tutturulya — на устройстве B (Chrome, тот же владелец) изменение не
+появилось без ручной перезагрузки.
+
+Причина: `rebuildGroups` (`domain/events/handlers.js`) корректно пишет
+в Dexie (`groups`/`groupMembers`) при получении kind:30050 через живую
+`startIncrementalSync` (`transport.js`'s `onEvent`), но НИКТО не
+вызывал `refreshGroups()` (`ui/signals/contacts.js`) после этого —
+Preact-сигнал `groups`, который читает UI (`channels.jsx`/
+`contacts.jsx`), обновлялся ТОЛЬКО когда экран монтировался сам (у
+обоих есть собственный `useEffect` с вызовом `refreshGroups` на mount,
+deps `[ownerPubkey]` — не на bump-сигналы). Это маскировало пробел при
+обычной перезагрузке (mount экрана сам подтягивал актуальное), но не
+работало живьём при уже открытом экране.
+
+**Исправлено:** `transport.js`'s `onEvent`-обработчик
+`startIncrementalSync` теперь вызывает `refreshGroups(pubkeyHex,
+dbKey)` сразу после `rebuildGroups` — мост "Dexie обновлена → Preact-
+сигнал перечитан" (тот же класс фикса, что live-contact-list выше,
+просто для groups не было даже отдельной подписки — она уже была
+`startIncrementalSync`, не хватало только вызова `refreshGroups`).
+Wiring-фикс без отдельного юнит-теста (transport.js не имеет прямого
+покрытия в проекте — чистая WebSocket-оркестрация; `refreshGroups`
+сама уже покрыта косвенно через тесты `*GroupAction`), корректность
+проверена полной регрессией + этой самой живой сессией.
