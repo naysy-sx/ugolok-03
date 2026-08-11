@@ -12,6 +12,16 @@ import { DomainError } from "../errors.js";
 // (3001, contacts/requests.js): не публичный, владелец узнаёт запросившего через unwrap.
 export const CHANNEL_SUBSCRIBE_REQUEST_KIND = 3002;
 
+// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): отзыв VIEW
+// (revokeViewFromMember, channel-visibility.js) сознательно НЕ публикует объявление
+// (не бан — человек просто вышел из группы, см. её же комментарий) — но это означало,
+// что отозванный НИКОГДА не узнавал об этом: локальная строка channels оставалась
+// навсегда с устаревшими данными, канал не исчезал из "Доступные". ПРИВАТНЫЙ
+// (gift-wrap, НЕ публичный под #h) сигнал — тот же уровень приватности, что
+// CONTACT_REJECTED_KIND/ACQUAINT_CANCELLED_KIND, адресован НЕПОСРЕДСТВЕННО
+// отозванному, невидим остальным участникам группы/канала.
+export const CHANNEL_UNVIEW_KIND = 3007;
+
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
@@ -27,6 +37,16 @@ export function buildSubscribeRequestRumor(channelId) {
 export async function sendSubscribeRequest(requesterPrivKey, ownerPubkey, channelId, publish) {
 	const giftWrap = nip59Wrap(buildSubscribeRequestRumor(channelId), requesterPrivKey, ownerPubkey);
 	await requirePublishOk(publish, giftWrap);
+}
+
+// channelId — единственное содержимое: получатель узнаёт "какой канал" из
+// СВОЕЙ же локальной строки (composite-ключ [ownerPubkey+channelId], ownerPubkey —
+// его собственная identity, не сериализуется в rumor). Приватность обеспечивает
+// nip59Wrap целиком — второе шифрование содержимого не нужно (в отличие от
+// CHANNEL_BAN_KIND, который идёт ПУБЛИЧНО под #h и поэтому нуждается в
+// channelKey-шифровании поверх).
+export function buildChannelUnviewRumor(channelId) {
+	return { kind: CHANNEL_UNVIEW_KIND, content: JSON.stringify({ channelId }), tags: [], created_at: Math.floor(Date.now() / 1000) };
 }
 
 // channel: {channelId, channelTopic (hex), channelKey (hex)}. F-CH-04 — kind 30053,
@@ -57,9 +77,17 @@ export async function sendViewGrant(ownerPubkey, ownerPrivKey, channel, readerPu
 // group-видимость была решением при создании канала; здесь только выдача COMMENT).
 // F-CH-05: НЕ ротирует channelKey (та же версия) — только новый allowlist той же эпохи.
 // Идемпотентно: requesterPubkey уже в списке -> no-op, не публикует лишний kind 30054.
+// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): комментарий
+// выше ВСЕГДА предполагал "VIEW уже есть у requesterPubkey", но НИКОГДА это не
+// проверял — читатель, лишённый видимости (не входит ни в одну привязанную группу
+// вовсе), мог получить COMMENT-доступ через "Подписаться". Явная проверка
+// channelReaders закрывает дыру в контроле доступа.
 export async function handleIncomingSubscribeRequest(ownerPubkey, ownerPrivKey, dbKey, channelId, requesterPubkey, publish) {
 	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
 	if (!channelRow) return; // не наш канал — defensive, не должно происходить в норме
+
+	const readerRow = await db.table("channelReaders").get([ownerPubkey, channelId, requesterPubkey]);
+	if (!readerRow) return; // без VIEW нет права запрашивать COMMENT — тихий отказ, не раскрываем причину
 
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const version = meta.currentVersion;

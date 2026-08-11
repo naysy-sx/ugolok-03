@@ -7,8 +7,10 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
 import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { CHANNEL_BAN_KIND } from "../src/domain/content/moderation.js";
-import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible, addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../src/domain/content/channel-visibility.js";
+import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible, addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds, applyChannelUnviewRumor } from "../src/domain/content/channel-visibility.js";
+import { CHANNEL_UNVIEW_KIND } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
+import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
 import { groups, createGroupAction, addGroupMemberAction, removeGroupMemberAction } from "../src/ui/signals/contacts.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
@@ -346,4 +348,104 @@ test("removeVisibilityGroup: НЕ владелец -> throw", async () => {
 test("listChannelVisibilityGroupIds: канал без групп (создан пустым) -> пустой массив", async () => {
 	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
 	assert.deepEqual(await listChannelVisibilityGroupIds(ALICE_PUB, channelId), []);
+});
+
+// --- Уведомление отозванного читателя (этап 74, найдено живой проверкой) ---
+// revokeViewFromMember раньше НЕ сообщал target'у о потере доступа вовсе (не
+// бан — сознательно без публичного объявления) — его локальная строка channels
+// оставалась НАВСЕГДА с устаревшими кэшированными данными, канал не исчезал
+// из "Доступные", "Подписаться" оставалась кликабельной. Приватный (gift-wrap,
+// НЕ публичный бан) сигнал — тот же уровень приватности, что CONTACT_REJECTED_KIND/
+// ACQUAINT_CANCELLED_KIND, но адресован НЕПОСРЕДСТВЕННО отозванному, не всем
+// участникам группы под #h.
+
+test("revokeViewFromMember: отправляет ПРИВАТНОЕ (gift-wrap) уведомление отозванному, содержащее channelId", async () => {
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}
+	const published = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(published));
+
+	const giftWraps = published.filter((e) => e.kind === 1059);
+	const unviewWrap = giftWraps.find((e) => {
+		try {
+			return nip59Unwrap(e, BOB_PRIV).kind === CHANNEL_UNVIEW_KIND;
+		} catch {
+			return false;
+		}
+	});
+	assert.ok(unviewWrap, "Боб обязан получить gift-wrapped уведомление об отзыве");
+	const rumor = nip59Unwrap(unviewWrap, BOB_PRIV);
+	assert.equal(rumor.pubkey, ALICE_PUB, "уведомление подписано реальным владельцем канала");
+	assert.deepEqual(JSON.parse(rumor.content), { channelId });
+
+	// Mallory (остаётся читателем) НЕ должна получить это уведомление.
+	const mallorySeesIt = giftWraps.some((e) => {
+		try {
+			return nip59Unwrap(e, MALLORY_PRIV).kind === CHANNEL_UNVIEW_KIND;
+		} catch {
+			return false;
+		}
+	});
+	assert.equal(mallorySeesIt, false, "уведомление адресовано ТОЛЬКО отозванному, не остальным читателям");
+});
+
+test("applyChannelUnviewRumor: полный сценарий — Боб уже видел канал локально, получает уведомление -> канал и связанные данные исчезают", async () => {
+	const aliceOutbox = [];
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const grantEvent = aliceOutbox.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+	const bobRawBefore = await db.table("channels").get([BOB_PUB, channelId]);
+	assert.ok(bobRawBefore, "предусловие: у Боба ЕСТЬ локальная строка канала");
+
+	const revokePublished = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(revokePublished));
+	const unviewWrap = revokePublished.find((e) => {
+		try {
+			return nip59Unwrap(e, BOB_PRIV).kind === CHANNEL_UNVIEW_KIND;
+		} catch {
+			return false;
+		}
+	});
+	const rumor = nip59Unwrap(unviewWrap, BOB_PRIV);
+
+	await applyChannelUnviewRumor(BOB_PUB, DB_KEY, rumor);
+
+	const bobRawAfter = await db.table("channels").get([BOB_PUB, channelId]);
+	assert.equal(bobRawAfter, undefined, "канал обязан исчезнуть у Боба локально");
+});
+
+test("applyChannelUnviewRumor: НЕ владелец канала может быть удалён, но СВОЙ (role='owner') канал — НИКОГДА, даже с совпадающим channelId", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Мой канал", description: "d", rules: "" }, [], capturingPublish([]));
+	// Синтетический (поддельный/ошибочный) rumor, ссылающийся на СОБСТВЕННЫЙ канал Алисы.
+	const forgedRumor = { pubkey: ALICE_PUB, content: JSON.stringify({ channelId }), kind: CHANNEL_UNVIEW_KIND };
+
+	await applyChannelUnviewRumor(ALICE_PUB, DB_KEY, forgedRumor);
+
+	const stillThere = await db.table("channels").get([ALICE_PUB, channelId]);
+	assert.ok(stillThere, "собственный (role='owner') канал не должен удаляться через этот путь ни при каких условиях");
+});
+
+test("АДВЕРСАРНО: applyChannelUnviewRumor — поддельное уведомление (rumor.pubkey НЕ настоящий владелец канала) отклоняется", async () => {
+	const aliceOutbox = [];
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const grantEvent = aliceOutbox.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantEvent);
+
+	// Mallory подделывает rumor.pubkey (притворяется Алисой, реальным владельцем не является).
+	const forgedRumor = { pubkey: MALLORY_PUB, content: JSON.stringify({ channelId }), kind: CHANNEL_UNVIEW_KIND };
+	await applyChannelUnviewRumor(BOB_PUB, DB_KEY, forgedRumor);
+
+	const stillThere = await db.table("channels").get([BOB_PUB, channelId]);
+	assert.ok(stillThere, "поддельное уведомление (не от реального владельца) не должно удалить канал");
+});
+
+test("applyChannelUnviewRumor: канал уже неизвестен локально (никогда не видели) -> no-op, не бросает", async () => {
+	await assert.doesNotReject(() => applyChannelUnviewRumor(BOB_PUB, DB_KEY, { pubkey: ALICE_PUB, content: JSON.stringify({ channelId: "nonexistent" }), kind: CHANNEL_UNVIEW_KIND }));
+});
+
+test("applyChannelUnviewRumor: битый content (не JSON) -> no-op, не бросает", async () => {
+	await assert.doesNotReject(() => applyChannelUnviewRumor(BOB_PUB, DB_KEY, { pubkey: ALICE_PUB, content: "не json{{{", kind: CHANNEL_UNVIEW_KIND }));
 });

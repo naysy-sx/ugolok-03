@@ -228,6 +228,25 @@ test("handleIncomingSubscribeRequest: повторный запрос уже п�
 	assert.equal(occurrences, 1, "повторный запрос не должен дублировать pubkey в allowlist");
 });
 
+// Этап 74 — найдено живой проверкой: handleIncomingSubscribeRequest НИКОГДА не
+// проверял, действительно ли у запросившего есть VIEW (состоит ли он в
+// channelReaders) — комментарий кода ПРЕДПОЛАГАЛ это ("VIEW уже есть у
+// requesterPubkey — group-видимость была решением при создании канала"), но
+// не проверял. Читатель, лишённый видимости (не входит ни в одну привязанную
+// группу вовсе), мог всё равно получить COMMENT-доступ через "Подписаться".
+test("АДВЕРСАРНО: handleIncomingSubscribeRequest — запросивший БЕЗ VIEW-доступа (не читатель канала) -> no-op, allowlist не публикуется", async () => {
+	await seedGroupWithBob(); // friends = {Боб} — Mallory НЕ входит ни в одну группу
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+
+	const published = [];
+	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, MALLORY_PUB, capturingPublish(published));
+
+	assert.deepEqual(published, [], "без VIEW-доступа запрос на COMMENT обязан быть отклонён, publish не вызывается");
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
+	const allowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ALICE_PUB, channelId, meta.currentVersion]), DB_KEY);
+	assert.ok(!allowlistRow?.allowedAuthors?.includes(MALLORY_PUB), "Mallory не должна попасть в allowlist");
+});
+
 test("АДВЕРСАРНЫЙ: receiveChannelKeyGrant для ЧУЖОГО получателя (не Mallory) -> throw, не тихо принимает", async () => {
 	await seedGroupWithBob();
 	const published = [];
@@ -289,7 +308,11 @@ test("АДВЕРСАРНО (C-2): старая ревизия allowlist (той 
 	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(outbox1));
 	const oldEvent = { ...outbox1.find((e) => e.kind === 30054), created_at: 1000, id: "allowlist-old" };
 
-	// Ревизия 2 (новая, ТА ЖЕ keyVersion): Боб + Mallory.
+	// Ревизия 2 (новая, ТА ЖЕ keyVersion): Боб + Mallory. Тест — про порядок ревизий
+	// allowlist (C-2), не про контроль доступа (C-2/фикс "handleIncomingSubscribeRequest
+	// требует VIEW") — Mallory получает VIEW напрямую (симулирует легитимного читателя,
+	// не входящего в "friends", но добавленного владельцем каким-то другим путём).
+	await db.table("channelReaders").put({ ownerPubkey: ALICE_PUB, channelId, readerPubkey: MALLORY_PUB });
 	const outbox2 = [];
 	await handleIncomingSubscribeRequest(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, MALLORY_PUB, capturingPublish(outbox2));
 	const newEvent = { ...outbox2.find((e) => e.kind === 30054), created_at: 2000, id: "allowlist-new" };

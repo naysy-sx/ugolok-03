@@ -3,7 +3,9 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { generateChannelKey } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
-import { sendViewGrant } from "./channel-access.js";
+import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
+import { sendViewGrant, buildChannelUnviewRumor } from "./channel-access.js";
+import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
@@ -64,6 +66,44 @@ export async function revokeViewFromMember(ownerPubkey, ownerPrivKey, dbKey, cha
 	}
 
 	await db.table("channelReaders").delete([ownerPubkey, channelId, targetPubkey]);
+
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"):
+	// приватное уведомление отозванному — БЕЗ него его локальная строка channels
+	// оставалась навсегда с устаревшими данными. Best-effort: сбой доставки не
+	// должен откатывать уже совершённую (и корректную) ротацию ключа выше —
+	// та же философия, что mirrorBestEffort (mirror.js).
+	try {
+		const unviewRumor = nip59Wrap(buildChannelUnviewRumor(channelId), ownerPrivKey, targetPubkey);
+		await requirePublishOk(publish, unviewRumor);
+	} catch (e) {
+		console.warn("revokeViewFromMember: не удалось уведомить отозванного читателя", e);
+	}
+}
+
+// Этап 74 — найдено живой проверкой: приёмная сторона CHANNEL_UNVIEW_KIND
+// (rumor уже развёрнут и ПРОВЕРЕН вызывающим giftWrapSubscriber'ом — rumor.pubkey
+// аутентифицирован nip59.unwrap, F-EV-05). Та же деградация, что получатель
+// публичного бан-объявления (receiveBanAnnouncement, moderation.js) применяет
+// к самому себе — deleteChannelLocally, единая точка "забыть канал".
+export async function applyChannelUnviewRumor(ownerPubkey, dbKey, rumor) {
+	let channelId;
+	try {
+		({ channelId } = JSON.parse(rumor.content));
+	} catch {
+		return; // повреждённый/чужеродный content — не роняем диспетчер
+	}
+	if (!channelId) return;
+
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!raw) return; // канал уже неизвестен локально — нечего удалять
+	const channelRow = fromEncryptedRow(raw, dbKey);
+	// Защита от подделки/ошибки: собственный (role="owner") канал НИКОГДА не
+	// удаляется через этот путь — тот же принцип, что receiveBanAnnouncement
+	// сверяет event.pubkey === channelRow.creatorPubkey.
+	if (channelRow.role === "owner") return;
+	if (rumor.pubkey !== channelRow.creatorPubkey) return; // не настоящий владелец — отклонить
+
+	await deleteChannelLocally(ownerPubkey, dbKey, channelId);
 }
 
 // Оркестратор: для каждого канала, чья видимость зависит от removedFromGroupId,

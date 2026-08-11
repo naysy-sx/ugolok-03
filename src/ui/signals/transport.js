@@ -35,10 +35,11 @@ import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion, backfillOwnChannelGrants } from "../../domain/content/channel.js";
+import { applyChannelUnviewRumor } from "../../domain/content/channel-visibility.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
-import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
+import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
@@ -505,6 +506,13 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							await handleIncomingSubscribeRequest(pubkeyHex, privKey, dbKey, channelIdTag[1], rumor.pubkey, publish);
 						}
 						activityChanged = true; // channels.jsx узнаёт о новом подписчике
+					} else if (rumor.kind === CHANNEL_UNVIEW_KIND) {
+						// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"):
+						// приватное уведомление об отзыве VIEW (revokeViewFromMember) — rumor уже
+						// развёрнут и аутентифицирован (rumor.pubkey проверен nip59.unwrap, F-EV-05),
+						// applyChannelUnviewRumor сама сверяет его с реальным владельцем канала.
+						await applyChannelUnviewRumor(pubkeyHex, dbKey, rumor);
+						activityChanged = true; // channels.jsx узнаёт, что канал исчез
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
 						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
 						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).
