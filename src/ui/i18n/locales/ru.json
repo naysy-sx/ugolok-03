@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "Сменить аватар",
+			"visibilityLabel": "Видимость (группы)",
 			"deleteButton": "Удалить канал",
 			"deleteConfirm": "Удалить канал «{{name}}»? Действие необратимо — канал исчезнет у всех подписчиков."
 		},

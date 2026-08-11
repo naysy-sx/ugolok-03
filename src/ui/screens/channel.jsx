@@ -1,15 +1,16 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useId } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
-import { ensureProfilesFetched, profiles } from "../signals/contacts.js";
+import { ensureProfilesFetched, profiles, groups, refreshGroups } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
 import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
+import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
@@ -56,6 +57,7 @@ function commentAuthorInfo(pubkey) {
 // удалить после создания) — та же вкладочная структура, что "Модерация"
 // (isOwner-only), подпись буквально по формулировке пользователя.
 function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRow, onSaved, onDeleted }) {
+	const instanceId = useId();
 	const [name, setName] = useState(channelRow.name || "");
 	const [description, setDescription] = useState(channelRow.description || "");
 	const [rules, setRules] = useState(channelRow.rules || "");
@@ -64,6 +66,32 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 	const [avatarError, setAvatarError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
+	// Этап 74 — найдено живой проверкой (не баг синхронизации, реальный пробел
+	// функциональности): группы видимости задавались ТОЛЬКО при createChannel,
+	// эта форма не имела полей про группы вовсе (channels.js/channel-visibility.js
+	// уже умели addVisibilityGroup/removeVisibilityGroup — не хватало UI-моста).
+	// originalGroupIdsRef — снимок НА МОМЕНТ ОТКРЫТИЯ формы, для diff при save
+	// (не сравниваем с channelRow — та не несёт список групп).
+	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
+	const [originalGroupIds, setOriginalGroupIds] = useState(() => new Set());
+
+	useEffect(() => {
+		refreshGroups(ownerPubkey, dbKey).catch(() => {});
+		listChannelVisibilityGroupIds(ownerPubkey, channelId).then((ids) => {
+			const asSet = new Set(ids);
+			setSelectedGroupIds(asSet);
+			setOriginalGroupIds(asSet);
+		});
+	}, [ownerPubkey, channelId]);
+
+	function toggleGroup(groupId) {
+		setSelectedGroupIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(groupId)) next.delete(groupId);
+			else next.add(groupId);
+			return next;
+		});
+	}
 
 	function handleAvatarSelected(e) {
 		const file = e.currentTarget.files?.[0];
@@ -91,6 +119,22 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
 			}
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
+			// Диф против снимка НА МОМЕНТ ОТКРЫТИЯ формы — только реально изменённые
+			// группы, не весь набор (addVisibilityGroup/removeVisibilityGroup сами
+			// идемпотентны, но вызывать их для НЕ тронутых групп — лишние проверки).
+			// Отзыв — ПЕРЕД выдачей (интуитивно: сначала убрать устаревший доступ,
+			// затем выдать новый — порядок не влияет на корректность, обе операции
+			// независимо читают свежее состояние ключа/версии при каждом вызове).
+			for (const groupId of originalGroupIds) {
+				if (!selectedGroupIds.has(groupId)) {
+					await removeVisibilityGroup(ownerPubkey, privKey, dbKey, channelId, groupId, publish);
+				}
+			}
+			for (const groupId of selectedGroupIds) {
+				if (!originalGroupIds.has(groupId)) {
+					await addVisibilityGroup(ownerPubkey, privKey, dbKey, channelId, groupId, publish);
+				}
+			}
 			onSaved();
 		} catch (err) {
 			setError(errorMessage(err));
@@ -146,6 +190,34 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
 				<label for="edit-channel-allow-chat-attachments">{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
+
+			<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
+				<legend>{t("channel.settings.visibilityLabel")}</legend>
+				<p style={{ color: "var(--muted)" }}>
+					{t("channels.create.visibilityHint")}
+				</p>
+				{groups.value.length === 0 ? (
+					<p style={{ color: "var(--muted)" }}>{t("channels.create.noGroups")}</p>
+				) : (
+					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+						{groups.value.map((g) => (
+							<li key={g.id}>
+								<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+									<input
+										id={`${instanceId}-group-${g.id}`}
+										type="checkbox"
+										checked={selectedGroupIds.has(g.id)}
+										onChange={() => toggleGroup(g.id)}
+									/>
+									<label for={`${instanceId}-group-${g.id}`}>
+										{t("channels.create.groupWithCount", { name: g.name, count: g.memberPubkeys.length })}
+									</label>
+								</span>
+							</li>
+						))}
+					</ul>
+				)}
+			</fieldset>
 
 			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				<button type="submit" disabled={busy || name.length === 0}>

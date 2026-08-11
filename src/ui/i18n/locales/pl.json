@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "Zmień awatar",
+			"visibilityLabel": "Widoczność (grupy)",
 			"deleteButton": "Usuń kanał",
 			"deleteConfirm": "Usunąć kanał „{{name}}”? Działanie nieodwracalne — kanał zniknie u wszystkich subskrybentów."
 		},

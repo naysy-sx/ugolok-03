@@ -7,7 +7,8 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
 import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { CHANNEL_BAN_KIND } from "../src/domain/content/moderation.js";
-import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible } from "../src/domain/content/channel-visibility.js";
+import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible, addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../src/domain/content/channel-visibility.js";
+import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
 import { groups, createGroupAction, addGroupMemberAction, removeGroupMemberAction } from "../src/ui/signals/contacts.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
@@ -217,4 +218,132 @@ test("ИНТЕГРАЦИЯ: removeGroupMemberAction (signals/contacts.js) реа
 	await removeGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, familyId, CAROL_PUB, capturingPublish(published));
 	readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
 	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, BOB_PUB].sort(), "Кэрол отозвана, Боб и владелец (self) остаются");
+});
+
+// --- addVisibilityGroup/removeVisibilityGroup (этап 74, найдено живой проверкой:
+// группы видимости задавались ТОЛЬКО при createChannel, editChannel не умел их
+// менять — UI редактирования канала не имел полей про группы вовсе) ---
+
+test("addVisibilityGroup: новая группа после создания канала (изначально groupIds=[]) -> её участники получают VIEW-грант", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+
+	const published = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish(published));
+
+	const grantEvent = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	assert.ok(grantEvent, "Боб обязан получить VIEW-грант");
+	const grant = decryptChannelKeyGrant(grantEvent.content, BOB_PRIV, ALICE_PUB);
+	assert.equal(grant.channelId, channelId);
+
+	const readerRow = await db.table("channelReaders").get([ALICE_PUB, channelId, BOB_PUB]);
+	assert.ok(readerRow, "Боб обязан появиться в channelReaders");
+});
+
+test("addVisibilityGroup: записывает channelVisibilityGroups -> listChannelVisibilityGroupIds видит новую группу", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	assert.deepEqual(await listChannelVisibilityGroupIds(ALICE_PUB, channelId), ["friends"]);
+});
+
+test("addVisibilityGroup: участник, уже видящий канал через ДРУГУЮ группу, НЕ получает повторный грант", async () => {
+	// Боб — в обеих группах ("friends" уже привязана, "family" — новая).
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	await db.table("groupMembers").add({ groupId: "family", pubkey: BOB_PUB });
+
+	const published = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish(published));
+
+	const bobGrants = published.filter((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	assert.equal(bobGrants.length, 0, "Боб уже читатель через friends — лишний грант не нужен");
+});
+
+test("addVisibilityGroup: НЕ владелец канала -> throw, ничего не публикует", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	// Боб получает self-грант через штатный путь (симулирует "у Боба уже есть
+	// локальная строка этого канала с ролью available") — реальный сценарий:
+	// он получил kind:30053 от Алисы для ДРУГОЙ причины (например, теста выше),
+	// здесь просто напрямую сеет строку channels с ролью НЕ-owner.
+	const { toEncryptedRow } = await import("../src/core/store/encrypted-table.js");
+	const { CHANNELS_PLAINTEXT_FIELDS } = await import("../src/core/store/table-fields.js");
+	await db.table("channels").put(
+		toEncryptedRow(
+			{ ownerPubkey: BOB_PUB, id: channelId, creatorPubkey: ALICE_PUB, name: "К", description: "d", rules: "", avatar: null, allowChatAttachments: true, channelTopic: "x", role: "available", createdAt: 1, updatedAt: 1 },
+			CHANNELS_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
+	);
+	const published = [];
+	await assert.rejects(() => addVisibilityGroup(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "friends", capturingPublish(published)));
+	assert.deepEqual(published, []);
+});
+
+test("addVisibilityGroup: несуществующий канал -> throw", async () => {
+	await assert.rejects(() => addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, "nonexistent", "friends", capturingPublish([])));
+});
+
+test("removeVisibilityGroup: участник, видимый ТОЛЬКО через удаляемую группу -> отзывается (ключ ротируется)", async () => {
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}
+	const metaBefore = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
+
+	await removeVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.deepEqual(readers.map((r) => r.readerPubkey), [ALICE_PUB], "Боб и Mallory отозваны (видны были ТОЛЬКО через friends); владелец (self-грант, этап 55) — постоянная строка");
+	const metaAfter = fromEncryptedRow(await db.table("channelKeyMeta").get([ALICE_PUB, channelId]), DB_KEY);
+	assert.ok(metaAfter.currentVersion > metaBefore.currentVersion, "ключ обязан ротироваться");
+});
+
+test("removeVisibilityGroup: участник, видимый ЕЩЁ через другую группу -> НЕ отзывается", async () => {
+	const { channelId } = await setupChannelTwoGroups(); // friends={Боб}, family={Боб,Кэрол}
+
+	await removeVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	const readers = await db.table("channelReaders").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.deepEqual(readers.map((r) => r.readerPubkey).sort(), [ALICE_PUB, BOB_PUB, CAROL_PUB].sort(), "Боб всё ещё виден через family — не отозван");
+});
+
+test("removeVisibilityGroup: удаляет запись channelVisibilityGroups (группа больше не привязана к каналу)", async () => {
+	const { channelId } = await setupChannelOneGroup();
+
+	await removeVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	assert.deepEqual(await listChannelVisibilityGroupIds(ALICE_PUB, channelId), []);
+});
+
+test("removeVisibilityGroup: владелец НИКОГДА не отзывается, даже если технически состоит в удаляемой группе", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	// Необычный, но возможный случай: владелец сам добавлен в группу видимости.
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: ALICE_PUB });
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	await removeVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish([]));
+
+	const ownerReaderRow = await db.table("channelReaders").get([ALICE_PUB, channelId, ALICE_PUB]);
+	assert.ok(ownerReaderRow, "владелец обязан остаться читателем собственного канала (self-грант, этап 55)");
+});
+
+test("removeVisibilityGroup: НЕ владелец -> throw", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	const { toEncryptedRow } = await import("../src/core/store/encrypted-table.js");
+	const { CHANNELS_PLAINTEXT_FIELDS } = await import("../src/core/store/table-fields.js");
+	await db.table("channels").put(
+		toEncryptedRow(
+			{ ownerPubkey: BOB_PUB, id: channelId, creatorPubkey: ALICE_PUB, name: "К", description: "d", rules: "", avatar: null, allowChatAttachments: true, channelTopic: "x", role: "available", createdAt: 1, updatedAt: 1 },
+			CHANNELS_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
+	);
+	await assert.rejects(() => removeVisibilityGroup(BOB_PUB, BOB_PRIV, DB_KEY, channelId, "friends", capturingPublish([])));
+});
+
+test("listChannelVisibilityGroupIds: канал без групп (создан пустым) -> пустой массив", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish([]));
+	assert.deepEqual(await listChannelVisibilityGroupIds(ALICE_PUB, channelId), []);
 });

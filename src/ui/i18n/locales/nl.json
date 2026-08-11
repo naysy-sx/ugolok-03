@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "Avatar wijzigen",
+			"visibilityLabel": "Zichtbaarheid (groepen)",
 			"deleteButton": "Kanaal verwijderen",
 			"deleteConfirm": "Kanaal ‘{{name}}’ verwijderen? Onomkeerbaar — het kanaal verdwijnt voor alle abonnees."
 		},

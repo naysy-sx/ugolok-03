@@ -8,6 +8,13 @@ import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-tab
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
 
+function requireOwnerChannel(raw, dbKey) {
+	if (!raw) throw new DomainError("канал не найден", "errors.channelNotFound");
+	const channelRow = fromEncryptedRow(raw, dbKey);
+	if (channelRow.role !== "owner") throw new DomainError("изменять видимость канала может только владелец", "errors.onlyOwnerCanEditChannel");
+	return channelRow;
+}
+
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
@@ -74,6 +81,70 @@ export async function revokeIfNoLongerVisible(ownerPubkey, ownerPrivKey, dbKey, 
 		let stillVisible = false;
 		for (const groupId of otherGroupIds) {
 			const member = await db.table("groupMembers").get([groupId, pubkey]);
+			if (member) {
+				stillVisible = true;
+				break;
+			}
+		}
+		if (stillVisible) continue;
+		const readerRow = await db.table("channelReaders").get([ownerPubkey, channelId, pubkey]);
+		if (!readerRow) continue;
+		await revokeViewFromMember(ownerPubkey, ownerPrivKey, dbKey, channelId, pubkey, publish);
+	}
+}
+
+// Этап 74 — найдено живой проверкой (не баг синхронизации, реальный пробел
+// функциональности): группы видимости задавались ТОЛЬКО при createChannel —
+// editChannel не умел их менять, UI редактирования канала не имел полей про
+// группы вовсе. Читает текущие связки канала для UI-формы редактирования
+// (checkbox-список, тот же паттерн, что CreateChannelForm, channels.jsx).
+export async function listChannelVisibilityGroupIds(ownerPubkey, channelId) {
+	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
+	return rows.map((r) => r.groupId);
+}
+
+// Привязывает уже СУЩЕСТВУЮЩИЙ канал к ДОПОЛНИТЕЛЬНОЙ группе (после создания).
+// Симметрична циклу createChannel (channel.js), но БЕЗ ротации ключа — новые
+// участники ПОЛУЧАЮТ доступ (не теряют), рассылка ТЕКУЩЕЙ версии ключа
+// достаточна, ротация нужна только при ОТЗЫВЕ (revokeViewFromMember).
+// Идемпотентна по читателям: уже видящий канал участник (через эту же или
+// другую группу) не получает повторный грант.
+export async function addVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, channelId, groupId, publish) {
+	const channelRow = requireOwnerChannel(await db.table("channels").get([ownerPubkey, channelId]), dbKey);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
+	const channel = { channelId, channelTopic: channelRow.channelTopic, channelKey: keyRow.channelKey };
+
+	const members = await db.table("groupMembers").where("groupId").equals(groupId).toArray();
+	for (const { pubkey } of members) {
+		const existingReader = await db.table("channelReaders").get([ownerPubkey, channelId, pubkey]);
+		if (existingReader) continue;
+		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, pubkey, meta.currentVersion, publish);
+		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey: pubkey });
+	}
+
+	await db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId });
+}
+
+// Отвязывает группу от уже СУЩЕСТВУЮЩЕГО канала. Для каждого участника
+// удаляемой группы — та же проверка "виден ли ещё через другую привязанную
+// группу", что revokeIfNoLongerVisible, но СКОУПЛЕНА одним известным
+// channelId (не идёт через findChannelIdsByVisibilityGroup — после удаления
+// строки ниже она вернула бы пусто и для ЭТОГО канала тоже). Владелец
+// (self-грант, этап 55) НИКОГДА не отзывается через этот путь — не зависит
+// от группового членства, даже если технически состоит в удаляемой группе.
+export async function removeVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, channelId, groupId, publish) {
+	requireOwnerChannel(await db.table("channels").get([ownerPubkey, channelId]), dbKey);
+
+	await db.table("channelVisibilityGroups").delete([ownerPubkey, channelId, groupId]);
+
+	const remainingGroupIds = (await listChannelVisibilityGroupIds(ownerPubkey, channelId));
+	const removedGroupMembers = await db.table("groupMembers").where("groupId").equals(groupId).toArray();
+	for (const { pubkey } of removedGroupMembers) {
+		if (pubkey === ownerPubkey) continue;
+		let stillVisible = false;
+		for (const otherGroupId of remainingGroupIds) {
+			const member = await db.table("groupMembers").get([otherGroupId, pubkey]);
 			if (member) {
 				stillVisible = true;
 				break;

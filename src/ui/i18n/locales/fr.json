@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "Changer l'avatar",
+			"visibilityLabel": "Visibilité (groupes)",
 			"deleteButton": "Supprimer la chaîne",
 			"deleteConfirm": "Supprimer la chaîne « {{name}} » ? Action irréversible — la chaîne disparaîtra pour tous les abonnés."
 		},

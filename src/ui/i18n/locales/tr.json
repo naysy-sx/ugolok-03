@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "Avatarı değiştir",
+			"visibilityLabel": "Görünürlük (gruplar)",
 			"deleteButton": "Kanalı sil",
 			"deleteConfirm": "«{{name}}» kanalı silinsin mi? Geri alınamaz — kanal tüm aboneler için kaybolur."
 		},

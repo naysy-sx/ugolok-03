@@ -12217,3 +12217,37 @@ Wiring-фикс без отдельного юнит-теста (transport.js н
 покрытия в проекте — чистая WebSocket-оркестрация; `refreshGroups`
 сама уже покрыта косвенно через тесты `*GroupAction`), корректность
 проверена полной регрессией + этой самой живой сессией.
+
+## Этап 74 — найдено живой проверкой: группы видимости канала нельзя было менять после создания
+
+Не баг синхронизации — реальный пробел функциональности. `channelVisibilityGroups`
+заполнялась ТОЛЬКО внутри `createChannel` — `editChannel` не принимал
+group-параметры вовсе, UI-форма редактирования не имела полей про группы.
+
+**Добавлено** (`channel-visibility.js`):
+- `listChannelVisibilityGroupIds(ownerPubkey, channelId)` — текущие
+  привязанные группы (для инициализации чекбоксов формы редактирования).
+- `addVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, channelId, groupId,
+  publish)` — привязывает СУЩЕСТВУЮЩИЙ канал к дополнительной группе. БЕЗ
+  ротации ключа (новые участники ПОЛУЧАЮТ доступ, не теряют — рассылка
+  текущей версии ключа достаточна). Идемпотентна по читателям: уже
+  видящий канал участник (через эту же/другую группу) не получает
+  повторный грант.
+- `removeVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, channelId,
+  groupId, publish)` — отвязывает группу. Для каждого её участника —
+  та же проверка "виден ли ещё через другую привязанную группу", что
+  `revokeIfNoLongerVisible`, но скоуплена ОДНИМ известным `channelId`
+  (не через `findChannelIdsByVisibilityGroup` — после удаления строки
+  та вернула бы пусто и для этого канала тоже). Владелец (self-грант,
+  этап 55) НИКОГДА не отзывается через этот путь.
+- Обе функции — `requireOwnerChannel`-гейт (throw, если не владелец
+  или канал не найден), тот же приём, что `editChannel`/`deleteChannel`.
+
+**UI** (`channel.jsx`'s `ChannelSettingsForm`): чекбокс-список групп
+(тот же паттерн, что `CreateChannelForm`, `channels.jsx`) — снимок
+текущих групп на момент открытия формы (`originalGroupIds`), при
+сохранении — diff против `selectedGroupIds`, вызывает
+`removeVisibilityGroup`/`addVisibilityGroup` только для реально
+изменённых групп. Новый i18n-ключ `channel.settings.visibilityLabel`
+во всех 12 локалях (структурная полнота — обязательный тест
+`i18n.test.js`).

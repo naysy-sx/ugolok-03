@@ -302,6 +302,7 @@
 	"channel": {
 		"settings": {
 			"changeAvatarLabel": "更改头像",
+			"visibilityLabel": "可见性（群组）",
 			"deleteButton": "删除频道",
 			"deleteConfirm": "删除频道“{{name}}”？此操作不可撤销——该频道将从所有订阅者处消失。"
 		},
