@@ -74,6 +74,12 @@ export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "conta
 // единообразия со всеми таблицами проекта.
 export const PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId", "firstSeenAt"];
 
+// Этап 74 — Часть B, T5.2: персист профилей контактов. Только составной
+// индекс plaintext (нужен для .get/.where-гидратации) — name/about/
+// picture/createdAt/id шифруются (прецедент contactRelationships:
+// содержательные поля шифруются, структурные индексы — нет).
+export const CONTACT_PROFILES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey"];
+
 // Этап 49 — contactRelationships (единая таблица, CONTACTS-FSM.md §3). state/
 // resolvedAt/sentAt — структурные метаданные и индексы ([owner+peer], [owner+state]
 // требуют plaintext), тот же принцип, что contacts/blockedContacts на этапе 41.

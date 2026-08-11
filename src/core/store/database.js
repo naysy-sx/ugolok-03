@@ -299,6 +299,15 @@ db.version(23).stores({
   processedGroupEvents: "[ownerPubkey+eventId], [ownerPubkey+firstSeenAt]"
 });
 
+// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74"): персист
+// профилей контактов (P-2 — раньше жили только в памяти, holodный старт
+// офлайн показывал инициалы). Составной индекс — единственные plaintext-
+// поля (нужны для .get([owner,contact])/.where("ownerPubkey")-гидратации
+// при старте); name/about/picture/createdAt/id — содержательные, шифруются.
+db.version(24).stores({
+  contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

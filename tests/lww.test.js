@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lwwWinner, pickLatest } from "../src/core/sync/lww.js";
+import { lwwWinner, pickLatest, isNewerVersion } from "../src/core/sync/lww.js";
 
 function ev(id, created_at) {
 	return { id, created_at, pubkey: "pk", kind: 30000, tags: [], content: "", sig: "s" };
@@ -58,4 +58,39 @@ test("pickLatest: побеждает событие с максимальным 
 test("pickLatest: массив из одного элемента возвращает его же", () => {
 	const only = ev("solo", 1);
 	assert.equal(pickLatest([only]), only);
+});
+
+// Этап 74 — T7 (CONTRACTS.md/DESIGN.md "Этап 74"): адаптер lwwWinner для
+// {createdAt,id}-строк кэша (camelCase — отличие от nostr-событий), НЕ
+// вторая реализация сравнения версий.
+
+function row(id, createdAt) {
+	return { createdAt, id };
+}
+
+test("isNewerVersion: stored отсутствует (null/undefined) -> true безусловно", () => {
+	assert.equal(isNewerVersion(row("a", 100), null), true);
+	assert.equal(isNewerVersion(row("a", 100), undefined), true);
+});
+
+test("isNewerVersion: incoming.createdAt больше -> true", () => {
+	assert.equal(isNewerVersion(row("new", 200), row("old", 100)), true);
+});
+
+test("isNewerVersion: incoming.createdAt меньше -> false (не откатывает более новое)", () => {
+	assert.equal(isNewerVersion(row("old", 100), row("new", 200)), false);
+});
+
+test("isNewerVersion: равный createdAt, больший id -> true (тайбрейк, тот же порядок, что lwwWinner)", () => {
+	assert.equal(isNewerVersion(row("zzz", 500), row("aaa", 500)), true);
+	assert.equal(isNewerVersion(row("aaa", 500), row("zzz", 500)), false);
+});
+
+test("isNewerVersion: identical (тот же createdAt и id) -> true (идемпотентный повторный приём — безопасно применить снова)", () => {
+	assert.equal(isNewerVersion(row("same", 300), row("same", 300)), true);
+});
+
+test("isNewerVersion: у stored нет createdAt (доверсионная/руками поставленная запись) -> true (число НЕ побеждает undefined через >, без явной проверки версия никогда не применилась бы)", () => {
+	assert.equal(isNewerVersion(row("new", 100), { name: "Алиса" }), true);
+	assert.equal(isNewerVersion(row("new", 100), { name: "Алиса", createdAt: undefined }), true);
 });

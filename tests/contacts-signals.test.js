@@ -17,6 +17,8 @@ import {
 	refreshAll,
 	ensureProfilesFetched,
 	refreshProfiles,
+	applyProfileUpdates,
+	hydrateProfilesFromCache,
 	decodePubkeyInput,
 	configureContactRuntime,
 	handleIncomingContactRumor,
@@ -35,8 +37,10 @@ import {
 } from "../src/ui/signals/contacts.js";
 import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, buildContactRequestRumor } from "../src/domain/contacts/requests.js";
-import { toEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { GROUPS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
+import { GROUPS_PLAINTEXT_FIELDS, CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { sign } from "../src/core/crypto/sign.js";
+import { accumulateProfileVersions } from "../src/domain/identity/profile.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(5);
 const OWNER_PUBKEY = bytesToHex(getPublicKey(PRIV_KEY));
@@ -66,6 +70,7 @@ beforeEach(async () => {
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
 	await db.table("events").clear();
+	await db.table("contactProfiles").clear();
 });
 
 after(() => {
@@ -345,18 +350,23 @@ test("refreshGroups: подтягивает группы из БД без дей
 	assert.deepEqual(groups.value, [{ id: "g1", name: "Z", memberPubkeys: ["z"] }]);
 });
 
-// --- Профили (не затронуто этапом 49) ---
+// --- Профили (не затронуто этапом 49; версионировано этапом 74, Часть B) ---
 
 const ALICE_STUB_PK = "a".repeat(64);
 const BOB_STUB_PK = "b".repeat(64);
 
+// Этап 74 — Часть B, T5 (CONTRACTS.md/DESIGN.md "Этап 74", P-1): fetchProfiles
+// теперь возвращает {name?,about?,picture?,createdAt,id} — createdAt/id нужны
+// вызывающему коду (applyProfileUpdates) для LWW-сравнения против уже
+// закэшированного. profiles.value[pk] получает те же поля (аддитивно).
+
 test("ensureProfilesFetched: заполняет profiles найденными записями", async () => {
 	const fetchStub = async (pubkeys) => {
 		assert.deepEqual(pubkeys, [ALICE_STUB_PK]);
-		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био" }]]);
+		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био", createdAt: 1000, id: "ev1" }]]);
 	};
 	await ensureProfilesFetched([ALICE_STUB_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "био" });
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "био", createdAt: 1000, id: "ev1" });
 });
 
 test("ensureProfilesFetched: не найденный профиль кэшируется как null (не запрашивается повторно)", async () => {
@@ -372,18 +382,18 @@ test("ensureProfilesFetched: не найденный профиль кэширу
 });
 
 test("ensureProfilesFetched: уже закэшированные pubkey исключаются из запроса", async () => {
-	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", createdAt: 1000, id: "ev1" } };
 	const fetchStub = async (pubkeys) => {
 		assert.deepEqual(pubkeys, [BOB_STUB_PK]);
-		return new Map([[BOB_STUB_PK, { name: "Боб" }]]);
+		return new Map([[BOB_STUB_PK, { name: "Боб", createdAt: 1000, id: "ev2" }]]);
 	};
 	await ensureProfilesFetched([ALICE_STUB_PK, BOB_STUB_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса" });
-	assert.deepEqual(profiles.value[BOB_STUB_PK], { name: "Боб" });
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", createdAt: 1000, id: "ev1" });
+	assert.deepEqual(profiles.value[BOB_STUB_PK], { name: "Боб", createdAt: 1000, id: "ev2" });
 });
 
 test("ensureProfilesFetched: пустой список отсутствующих pubkey не вызывает fetch вовсе", async () => {
-	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", createdAt: 1000, id: "ev1" } };
 	let called = false;
 	await ensureProfilesFetched([ALICE_STUB_PK], async () => {
 		called = true;
@@ -393,13 +403,13 @@ test("ensureProfilesFetched: пустой список отсутствующи�
 });
 
 test("refreshProfiles: перезаписывает УЖЕ закэшированный профиль свежими данными (найденный баг — био не обновлялось)", async () => {
-	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", about: "старое био" } };
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", about: "старое био", createdAt: 1000, id: "ev-old" } };
 	const fetchStub = async (pubkeys) => {
 		assert.deepEqual(pubkeys, [ALICE_STUB_PK], "refreshProfiles НЕ должен исключать уже закэшированные из запроса");
-		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "новое био" }]]);
+		return new Map([[ALICE_STUB_PK, { name: "Алиса", about: "новое био", createdAt: 2000, id: "ev-new" }]]);
 	};
 	await refreshProfiles([ALICE_STUB_PK], fetchStub);
-	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "новое био" });
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], { name: "Алиса", about: "новое био", createdAt: 2000, id: "ev-new" });
 });
 
 test("refreshProfiles: пустой список -> не вызывает fetch", async () => {
@@ -411,8 +421,149 @@ test("refreshProfiles: пустой список -> не вызывает fetch"
 	assert.equal(called, false);
 });
 
-test("refreshProfiles: контакт больше не найден -> обновляет на null (не оставляет устаревшую запись)", async () => {
-	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса" } };
+test("refreshProfiles: контакт больше не найден -> обновляет на null (не оставляет устаревшую запись, поведение сигнала НЕ менялось этим этапом)", async () => {
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", createdAt: 1000, id: "ev1" } };
 	await refreshProfiles([ALICE_STUB_PK], async () => new Map());
 	assert.equal(profiles.value[ALICE_STUB_PK], null);
+});
+
+// Этап 74 — Часть B, T5.1: LWW-гейт — старая версия (меньший createdAt, либо
+// тот же createdAt с меньшим id) не должна откатить уже закэшированную новую,
+// ни через ensureProfilesFetched (после cache-miss), ни через refreshProfiles.
+
+test("refreshProfiles: старая версия (меньший createdAt) НЕ откатывает уже закэшированную новую", async () => {
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", about: "новое", createdAt: 2000, id: "new-ev" } };
+	const fetchStub = async () => new Map([[ALICE_STUB_PK, { name: "Алиса", about: "старое", createdAt: 1000, id: "old-ev" }]]);
+	await refreshProfiles([ALICE_STUB_PK], fetchStub);
+	assert.equal(profiles.value[ALICE_STUB_PK].about, "новое", "старая версия (эмуляция второго relay) не должна откатить новую");
+});
+
+test("refreshProfiles: равный createdAt, тайбрейк по id — меньший id не откатывает больший", async () => {
+	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", about: "победитель", createdAt: 1000, id: "zzz" } };
+	const fetchStub = async () => new Map([[ALICE_STUB_PK, { name: "Алиса", about: "проигравший", createdAt: 1000, id: "aaa" }]]);
+	await refreshProfiles([ALICE_STUB_PK], fetchStub);
+	assert.equal(profiles.value[ALICE_STUB_PK].about, "победитель");
+});
+
+// Этап 74 — Часть B, T5.2: персист — ТОЛЬКО для реальных контактов
+// (contacts.value), НЕ для произвольных pubkey (авторы постов канала и т.п.).
+
+test("applyProfileUpdates: реальный контакт -> персистится в contactProfiles", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_STUB_PK];
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био", picture: "", createdAt: 1000, id: "ev1" }]]));
+
+	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
+	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
+	assert.ok(raw, "должно быть персистировано — ALICE_STUB_PK в contacts.value");
+	const row = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(row.name, "Алиса");
+	assert.equal(row.createdAt, 1000);
+});
+
+test("applyProfileUpdates: НЕ-контакт (например, автор поста канала) -> в profiles.value попадает, НЕ персистится", async () => {
+	await setupRuntime();
+	contacts.value = []; // явно не контакт
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", createdAt: 1000, id: "ev1" }]]));
+
+	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
+	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
+	assert.equal(raw, undefined, "не-контакт не должен персистироваться");
+});
+
+test("applyProfileUpdates: старая версия не откатывает уже персистированную новую (и не перезаписывает таблицу)", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_STUB_PK];
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "новое", picture: "", createdAt: 2000, id: "new" }]]));
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "старое", picture: "", createdAt: 1000, id: "old" }]]));
+
+	assert.equal(profiles.value[ALICE_STUB_PK].about, "новое");
+	const row = fromEncryptedRow(await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]), DB_KEY);
+	assert.equal(row.about, "новое", "таблица тоже не должна откатиться");
+});
+
+test("applyProfileUpdates: null (не найден) НИКОГДА не персистится, даже для реального контакта", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_STUB_PK];
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био", picture: "", createdAt: 1000, id: "ev1" }]]));
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, null]]));
+
+	assert.equal(profiles.value[ALICE_STUB_PK], null, "сигнал обновляется на null как раньше");
+	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
+	assert.ok(raw, "персист НЕ должен быть стёрт временным 'не найден' — T5.3");
+});
+
+test("applyProfileUpdates: возвращает true, если что-то изменилось, false — если нет (echo/устаревшее)", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_STUB_PK];
+	const changed1 = await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", createdAt: 1000, id: "ev1" }]]));
+	assert.equal(changed1, true);
+	const changed2 = await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", createdAt: 500, id: "old" }]]));
+	assert.equal(changed2, false, "более старая версия — ничего не изменилось");
+});
+
+// Этап 74 — Часть B, T5.2: гидратация ДО сети — критерий приёмки TZ §4.4
+// ("холодный старт офлайн показывает закэшированные профили, не инициалы").
+
+test("hydrateProfilesFromCache: гидрирует profiles.value из персиста, без сети", async () => {
+	await db.table("contactProfiles").put(
+		toEncryptedRow({ ownerPubkey: OWNER_PUBKEY, contactPubkey: ALICE_STUB_PK, name: "Алиса", about: "био", picture: "https://x.png", createdAt: 1000, id: "ev1" }, CONTACT_PROFILES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	profiles.value = {};
+	await hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY);
+	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
+	assert.equal(profiles.value[ALICE_STUB_PK].about, "био");
+	assert.equal(profiles.value[ALICE_STUB_PK].picture, "https://x.png");
+});
+
+test("hydrateProfilesFromCache: пустой персист -> profiles.value не трогается, не бросает", async () => {
+	profiles.value = {};
+	await assert.doesNotReject(() => hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY));
+	assert.deepEqual(profiles.value, {});
+});
+
+test("hydrateProfilesFromCache: НЕ путает профили РАЗНЫХ локальных владельцев (owner-scoping)", async () => {
+	await db.table("contactProfiles").put(
+		toEncryptedRow({ ownerPubkey: BOB_PUBKEY, contactPubkey: ALICE_STUB_PK, name: "чужой владелец", about: "", picture: "", createdAt: 1000, id: "ev1" }, CONTACT_PROFILES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	profiles.value = {};
+	await hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY);
+	assert.equal(profiles.value[ALICE_STUB_PK], undefined, "профиль другого owner не должен просочиться");
+});
+
+// АДВЕРСАРНАЯ ФАЗА (skill п.19) — критерий приёмки TZ §4.4 целиком, сквозь
+// РЕАЛЬНЫЙ wire-формат (подписанные kind:0), не готовые объекты: контакт
+// сменил аватар+био на одном устройстве (новая версия) — live-подписка
+// доставляет события НЕ ПО ПОРЯДКУ (resubscribe-backlog, эмуляция второго
+// relay: старая версия долетает ПОСЛЕ новой) — профиль обязан остаться на
+// новой версии И в сигнале, И в персисте; холодный перезапуск (сигнал
+// очищен, персист — нет) обязан восстановить именно её, не инициалы.
+test("АДВЕРСАРНО: старая версия kind:0 контакта, доставленная ПОСЛЕ новой (resubscribe-backlog) — не откатывает ни сигнал, ни персист, ни холодный рестарт", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_PUBKEY]; // события подписаны ALICE_PRIV — event.pubkey===ALICE_PUBKEY
+
+	const oldEvent = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ name: "Алиса", about: "старое био", picture: "https://old.png" }) }, ALICE_PRIV);
+	const newEvent = sign({ kind: 0, created_at: 2000, tags: [], content: JSON.stringify({ name: "Алиса", about: "новое био", picture: "https://new.png" }) }, ALICE_PRIV);
+
+	// Живая подписка сначала доставляет НОВУЮ версию (реальный порядок публикации)...
+	const batch1 = new Map();
+	accumulateProfileVersions(batch1, newEvent);
+	await applyProfileUpdates(batch1);
+
+	// ...затем resubscribe (новый контакт открыл вкладку/переподписка) реиграет
+	// BACKLOG, включающий и СТАРУЮ версию — из другого REQ, отдельный вызов
+	// accumulateProfileVersions с чистой картой (не тот же батч, что T5.1's
+	// within-batch тест — это между-батчевый сценарий, П.2 диагноза).
+	const batch2 = new Map();
+	accumulateProfileVersions(batch2, oldEvent);
+	await applyProfileUpdates(batch2);
+
+	assert.equal(profiles.value[ALICE_PUBKEY].about, "новое био", "сигнал не должен откатиться");
+	const persistedRow = fromEncryptedRow(await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_PUBKEY]), DB_KEY);
+	assert.equal(persistedRow.about, "новое био", "персист не должен откатиться");
+
+	// Холодный рестарт: сигнал очищен (эмуляция перезагрузки страницы), персист — нет.
+	profiles.value = {};
+	await hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY);
+	assert.equal(profiles.value[ALICE_PUBKEY].about, "новое био", "холодный старт офлайн обязан показать закэшированный (верный) профиль, не инициалы и не старую версию");
 });

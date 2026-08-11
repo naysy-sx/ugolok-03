@@ -5,9 +5,10 @@ import { parseContactListEvent, parseMuteListEvent } from "../../domain/contacts
 import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../domain/contacts/groups.js";
 import { foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { createContactRuntime } from "../../domain/contacts/contact-runtime.js";
-import { pickLatest } from "../../core/sync/lww.js";
+import { pickLatest, isNewerVersion } from "../../core/sync/lww.js";
 import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
-import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { fromEncryptedRow, toEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
@@ -192,6 +193,53 @@ export async function removeContactAction(peerPubkeyOrNpub) {
 	await requireRuntime().removeContact(peer);
 }
 
+// Этап 74 — Часть B, T5.1/T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-1/P-2):
+// единая точка применения входящих версий профиля — вызывается ИЗ
+// ensureProfilesFetched/refreshProfiles ниже И из transport.js's
+// refreshLiveProfileSubscription (контактная ветка, T6.2) — оба пути через
+// один и тот же LWW-гейт (T7), не два разных сравнения. incoming===null —
+// СУЩЕСТВУЮЩЕЕ поведение (сигнал безусловно обновляется на null, "не
+// найден"), НЕ меняется этим этапом — но null НИКОГДА не персистится
+// (T5.3 — асимметрия персиста и сигнала, DESIGN.md). Персист — ТОЛЬКО для
+// реальных контактов (contacts.value), не для произвольных pubkey (авторы
+// постов канала и т.п. тоже проходят через ensureProfilesFetched).
+export async function applyProfileUpdates(updates) {
+	const next = { ...profiles.value };
+	let changed = false;
+	for (const [pk, incoming] of updates) {
+		if (incoming === null) {
+			next[pk] = null;
+			changed = true;
+			continue;
+		}
+		if (isNewerVersion(incoming, next[pk])) {
+			next[pk] = incoming;
+			changed = true;
+			if (contacts.value.includes(pk) && ownerPubkeyRef && dbKeyRef) {
+				await db.table("contactProfiles").put(
+					toEncryptedRow({ ownerPubkey: ownerPubkeyRef, contactPubkey: pk, ...incoming }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKeyRef),
+				);
+			}
+		}
+	}
+	if (changed) profiles.value = next;
+	return changed;
+}
+
+// Этап 74 — Часть B, T5.2: гидратация ДО любых сетевых запросов (критерий
+// приёмки TZ §4.4 — холодный старт офлайн показывает закэшированные
+// профили, не инициалы). Вызывается первой строкой connect() (transport.js).
+export async function hydrateProfilesFromCache(ownerPubkey, dbKey) {
+	const rows = await db.table("contactProfiles").where("ownerPubkey").equals(ownerPubkey).toArray();
+	if (rows.length === 0) return;
+	const next = { ...profiles.value };
+	for (const row of rows) {
+		const decrypted = fromEncryptedRow(row, dbKey);
+		next[decrypted.contactPubkey] = { name: decrypted.name, about: decrypted.about, picture: decrypted.picture, createdAt: decrypted.createdAt, id: decrypted.id };
+	}
+	profiles.value = next;
+}
+
 // F-CT-04 — запрос профиля контакта. fetchProfilesFn инъецируется (по образцу publish) —
 // реально transport.fetchProfiles, тесты дают stub. Пропускает уже закэшированные pubkey
 // (в т.ч. null — "запрошен, не найден", не повторяет запрос бесконечно на каждый рендер).
@@ -199,11 +247,8 @@ export async function ensureProfilesFetched(pubkeys, fetchProfilesFn) {
 	const missing = pubkeys.filter((pk) => !(pk in profiles.value));
 	if (missing.length === 0) return;
 	const fetched = await fetchProfilesFn(missing);
-	const next = { ...profiles.value };
-	for (const pk of missing) {
-		next[pk] = fetched.get(pk) ?? null;
-	}
-	profiles.value = next;
+	const updates = new Map(missing.map((pk) => [pk, fetched.get(pk) ?? null]));
+	await applyProfileUpdates(updates);
 }
 
 // Найденный баг (пользователь, F-CT-04-довесок): ensureProfilesFetched пропускает уже
@@ -213,11 +258,8 @@ export async function ensureProfilesFetched(pubkeys, fetchProfilesFn) {
 export async function refreshProfiles(pubkeys, fetchProfilesFn) {
 	if (pubkeys.length === 0) return;
 	const fetched = await fetchProfilesFn(pubkeys);
-	const next = { ...profiles.value };
-	for (const pk of pubkeys) {
-		next[pk] = fetched.get(pk) ?? null;
-	}
-	profiles.value = next;
+	const updates = new Map(pubkeys.map((pk) => [pk, fetched.get(pk) ?? null]));
+	await applyProfileUpdates(updates);
 }
 
 // --- Группы (не затронуто этапом 49 — отдельная структура, kind 30050) ---
