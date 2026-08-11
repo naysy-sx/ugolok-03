@@ -6,7 +6,7 @@ import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile, uploadAvatarBlob } from "../src/domain/identity/profile.js";
+import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile, uploadAvatarBlob, accumulateProfileVersions, applyLiveOwnProfileEvent } from "../src/domain/identity/profile.js";
 import { sign } from "../src/core/crypto/sign.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(11);
@@ -260,6 +260,137 @@ test("hydrateOwnProfile: и локально, и во входящем пуст�
 	const row = await db.table("keystore").get(OWNER_PUBKEY);
 	assert.equal(row.bio, "");
 	assert.equal(row.avatarUrl, "");
+});
+
+// Этап 74 — Часть B, T6.1 (P-3, CONTRACTS.md/DESIGN.md "Этап 74"): аватар —
+// ДВА разных поля keystore (avatarUrl — публичный Blossom URL из kind:0,
+// avatar — локальный data-url кэш ЭТОГО устройства, заполняется только
+// загрузкой файла). Рендер — avatar || avatarUrl (T6.3) — если avatarUrl
+// сменился, а avatar не инвалидирован, устройство вечно рисует старую
+// картинку поверх новой.
+
+test("T6.1: непустой incoming picture, отличается от текущего avatarUrl -> очищает локальный avatar-кэш", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await db.table("keystore").put({ id: OWNER_PUBKEY, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин", bio: "био", avatarUrl: "https://blossom.test/old.png", avatar: "data:image/png;base64,СТАРЫЙКЭШ" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { about: "био", picture: "https://blossom.test/new.png" });
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.avatarUrl, "https://blossom.test/new.png");
+	assert.equal(row.avatar, "", "устаревший локальный data-url кэш обязан быть очищен");
+});
+
+test("T6.1: incoming picture СОВПАДАЕТ с текущим avatarUrl -> avatar НЕ трогается (нет реальной смены)", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await db.table("keystore").put({ id: OWNER_PUBKEY, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин", avatarUrl: "https://blossom.test/same.png", avatar: "data:image/png;base64,ЛОКАЛЬНЫЙКЭШ" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { picture: "https://blossom.test/same.png" });
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.avatar, "data:image/png;base64,ЛОКАЛЬНЫЙКЭШ", "тот же URL — не смена, локальный кэш остаётся валидным");
+});
+
+test("T6.1: пустой incoming picture -> avatar НЕ трогается (правило этапа 57 без изменений)", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await db.table("keystore").put({ id: OWNER_PUBKEY, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин", avatarUrl: "https://blossom.test/good.png", avatar: "data:image/png;base64,ЛОКАЛЬНЫЙКЭШ" });
+	await seedProfileEvent(OWNER_PUBKEY, PRIV_KEY, 1000, { name: "тест-логин" }); // голый republish, БЕЗ picture
+
+	await hydrateOwnProfile(OWNER_PUBKEY);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.avatar, "data:image/png;base64,ЛОКАЛЬНЫЙКЭШ");
+	assert.equal(row.avatarUrl, "https://blossom.test/good.png");
+});
+
+// Этап 74 — Часть B, T6.2 (P-4): живая подписка на собственный kind:0.
+// applyLiveOwnProfileEvent — тестируемое ядро без сети: персистит сырое
+// событие (идемпотентно, hasEvent-гейт) и переиспользует hydrateOwnProfile
+// (LWW-корректность наследуется от pickLatest, не пишется заново — T7).
+// Возвращает true, ТОЛЬКО если профиль реально изменился (эхо — no-op).
+
+test("applyLiveOwnProfileEvent: новое непустое событие -> применяется, возвращает true", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	const event = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ about: "новое био" }) }, PRIV_KEY);
+
+	const changed = await applyLiveOwnProfileEvent(OWNER_PUBKEY, event);
+	assert.equal(changed, true);
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "новое био");
+});
+
+test("applyLiveOwnProfileEvent: эхо собственной публикации (то же событие повторно) -> возвращает false, не дёргает лишний ре-рендер", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	const event = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ about: "био" }) }, PRIV_KEY);
+
+	const first = await applyLiveOwnProfileEvent(OWNER_PUBKEY, event);
+	assert.equal(first, true);
+	const second = await applyLiveOwnProfileEvent(OWNER_PUBKEY, event);
+	assert.equal(second, false, "идентичное значение — echo, не должно считаться изменением");
+
+	const eventsCount = await db.table("events").where("id").equals(event.id).count();
+	assert.equal(eventsCount, 1, "то же событие не должно дублироваться в db.events");
+});
+
+test("applyLiveOwnProfileEvent: старая версия ПОСЛЕ уже применённой новой -> не откатывает, возвращает false", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	const newEvent = sign({ kind: 0, created_at: 2000, tags: [], content: JSON.stringify({ about: "новое" }) }, PRIV_KEY);
+	const oldEvent = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ about: "старое" }) }, PRIV_KEY);
+
+	await applyLiveOwnProfileEvent(OWNER_PUBKEY, newEvent);
+	const changed = await applyLiveOwnProfileEvent(OWNER_PUBKEY, oldEvent);
+	assert.equal(changed, false, "более старая версия, доставленная позже (эмуляция второго relay), не должна откатывать");
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.bio, "новое", "профиль обязан остаться на более свежей версии");
+});
+
+// Этап 74 — Часть B, T5.1 (within-batch, P-1): fetchProfiles копит несколько
+// событий ОДНОГО pubkey за ОДИН REQ+EOSE (multi-relay pool) — без гейта
+// внутри самого накопления последнее ПРИБЫВШЕЕ (не обязательно самое новое
+// по created_at) побеждает необратимо, до того как внешний гейт вообще
+// получит шанс сравнить.
+
+test("accumulateProfileVersions: новый pubkey -> добавляется в карту", () => {
+	const results = new Map();
+	const event = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ name: "Алиса" }) }, PRIV_KEY);
+	accumulateProfileVersions(results, event);
+	assert.equal(results.get(OWNER_PUBKEY).name, "Алиса");
+	assert.equal(results.get(OWNER_PUBKEY).createdAt, 1000);
+	assert.equal(results.get(OWNER_PUBKEY).id, event.id);
+});
+
+test("accumulateProfileVersions: более новое событие ТОГО ЖЕ pubkey в том же батче -> заменяет", () => {
+	const results = new Map();
+	const older = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ about: "старое" }) }, PRIV_KEY);
+	const newer = sign({ kind: 0, created_at: 2000, tags: [], content: JSON.stringify({ about: "новое" }) }, PRIV_KEY);
+	accumulateProfileVersions(results, older);
+	accumulateProfileVersions(results, newer);
+	assert.equal(results.get(OWNER_PUBKEY).about, "новое");
+});
+
+test("accumulateProfileVersions: более СТАРОЕ событие, пришедшее ПОСЛЕ нового в том же батче -> НЕ заменяет (порядок прибытия НЕ решает)", () => {
+	const results = new Map();
+	const older = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ about: "старое" }) }, PRIV_KEY);
+	const newer = sign({ kind: 0, created_at: 2000, tags: [], content: JSON.stringify({ about: "новое" }) }, PRIV_KEY);
+	accumulateProfileVersions(results, newer);
+	accumulateProfileVersions(results, older); // "прибыл" вторым, но старше по created_at
+	assert.equal(results.get(OWNER_PUBKEY).about, "новое", "порядок прибытия внутри батча не должен побеждать created_at — именно баг P-1");
+});
+
+test("accumulateProfileVersions: битый content -> пропускается, не бросает, не портит уже накопленное", () => {
+	const results = new Map();
+	const good = sign({ kind: 0, created_at: 1000, tags: [], content: JSON.stringify({ name: "Алиса" }) }, PRIV_KEY);
+	const bad = sign({ kind: 0, created_at: 2000, tags: [], content: "не json{{{" }, PRIV_KEY);
+	accumulateProfileVersions(results, good);
+	assert.doesNotThrow(() => accumulateProfileVersions(results, bad));
+	assert.equal(results.get(OWNER_PUBKEY).name, "Алиса", "битое событие не должно затереть уже накопленное валидное");
 });
 
 // uploadAvatarBlob — перенесено из tests/attachments-upload.test.js (этап 53

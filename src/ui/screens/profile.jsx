@@ -631,7 +631,11 @@ export default function Profile() {
 					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
 					    но avatar (сам файл как data-url) — только через локальную загрузку;
 					    без фолбэка аватар выглядел бы пустым до первой замены на новом
-					    устройстве, хотя публичная копия уже известна. */}
+					    устройстве, хотя публичная копия уже известна.
+					    Этап 74 — Часть B, T6.3: приоритет avatar||avatarUrl НЕ меняется —
+					    корректность (устаревший локальный кэш не должен маскировать новый
+					    avatarUrl) обеспечивает инвалидация в hydrateOwnProfile (T6.1,
+					    profile.js), не порядок здесь. Не "чинить" приоритет на обратный. */}
 					{avatar || avatarUrl ? (
 						<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
 					) : (

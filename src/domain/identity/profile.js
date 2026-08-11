@@ -2,7 +2,8 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { sign } from '../../core/crypto/sign.js';
 import { db } from '../../core/store/database.js';
-import { pickLatest } from '../../core/sync/lww.js';
+import { pickLatest, isNewerVersion } from '../../core/sync/lww.js';
+import { hasEvent, appendEvent } from '../../core/store/event-log.js';
 import { getProfile, updateProfile } from '../../core/crypto/keystore.js';
 import { uploadBlob, checkUploadRequirements } from '../files/blob.js';
 import { validateAttachment } from '../files/attachment-validation.js';
@@ -77,8 +78,60 @@ export async function hydrateOwnProfile(ownerPubkey) {
     return false; // повреждённый/чужеродный content — не роняем bootstrap
   }
   const current = await getProfile(ownerPubkey);
-  await updateProfile(ownerPubkey, { bio: parsed.about || current.bio || '', avatarUrl: parsed.picture || current.avatarUrl || '' });
+  const newAvatarUrl = parsed.picture || current.avatarUrl || '';
+  const patch = { bio: parsed.about || current.bio || '', avatarUrl: newAvatarUrl };
+  // Этап 74 — Часть B, T6.1 (P-3, CONTRACTS.md/DESIGN.md "Этап 74"): avatar —
+  // ЛОКАЛЬНЫЙ data-url кэш этого устройства, avatarUrl — публичный Blossom URL
+  // из kind:0. Если входящий picture НЕПУСТОЙ и реально ОТЛИЧАЕТСЯ от уже
+  // хранимого avatarUrl (устройство сменило картинку) — локальный кэш устарел,
+  // инвалидируем вместе с avatarUrl. Пустой picture локальные поля не трогает
+  // (правило этапа 57 выше — без изменений).
+  if (parsed.picture && parsed.picture !== current.avatarUrl) {
+    patch.avatar = '';
+  }
+  await updateProfile(ownerPubkey, patch);
   return true;
+}
+
+// Этап 74 — Часть B, T5.1 (within-batch, CONTRACTS.md/DESIGN.md "Этап 74",
+// P-1): fetchProfiles (transport.js) копит несколько версий ОДНОГО pubkey за
+// ОДИН REQ+EOSE (multi-relay pool) — без гейта здесь последнее ПРИБЫВШЕЕ
+// (не обязательно самое новое по created_at) необратимо побеждает ДО того,
+// как внешний LWW-гейт (contacts.js's applyProfileUpdates) вообще получит
+// шанс сравнить. results — Map<pubkey, {...,createdAt,id}>, мутируется на месте.
+export function accumulateProfileVersions(results, event) {
+  let parsed;
+  try {
+    parsed = parseProfileEvent(event);
+  } catch {
+    return; // повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять батч
+  }
+  const incoming = { ...parsed, createdAt: event.created_at, id: event.id };
+  const existing = results.get(event.pubkey);
+  if (!existing || isNewerVersion(incoming, existing)) {
+    results.set(event.pubkey, incoming);
+  }
+}
+
+// Этап 74 — Часть B, T6.2 (P-4, CONTRACTS.md/DESIGN.md "Этап 74"): живая
+// подписка на СВОЙ kind:0 (transport.js's refreshLiveProfileSubscription,
+// ветка event.pubkey===ownerPubkey). Персистит сырое событие в db.events
+// (идемпотентно — hasEvent-гейт, тот же приём, что bootstrap) и
+// переиспользует hydrateOwnProfile — LWW-корректность НАСЛЕДУЕТСЯ от уже
+// протестированного pickLatest над полной историей, вторая реализация
+// сравнения версий не пишется (T7). Возвращает true, ТОЛЬКО если профиль
+// РЕАЛЬНО изменился — эхо собственной публикации (relay возвращает только
+// что изданный kind:0) обязано быть no-op, сравнение ДО/ПОСЛЕ, не внутри
+// hydrateOwnProfile (её true/false-контракт "найден валидный kind:0" уже
+// протестирован отдельно, profile.test.js, менять нельзя).
+export async function applyLiveOwnProfileEvent(ownerPubkey, event) {
+  if (!(await hasEvent(event.id))) {
+    await appendEvent(event);
+  }
+  const before = await getProfile(ownerPubkey);
+  await hydrateOwnProfile(ownerPubkey);
+  const after = await getProfile(ownerPubkey);
+  return before.bio !== after.bio || before.avatarUrl !== after.avatarUrl || before.avatar !== after.avatar;
 }
 
 // Тот же идиом, что chat.js's ensureOwnKeyPackagePublished (этап 25): локальный

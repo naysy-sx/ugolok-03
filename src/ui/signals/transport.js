@@ -10,7 +10,7 @@ import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { rebuildGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
 import { createSubscriber } from "../../core/transport/subscriber.js";
-import { parseProfileEvent } from "../../domain/identity/profile.js";
+import { accumulateProfileVersions } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
@@ -30,7 +30,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -50,7 +50,7 @@ import { initMounts, activeMountRootIds, handleIncomingShareGrant, handleIncomin
 import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/content/channel-read-status.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { drain } from "../../core/store/outbox.js";
-import { ensureProfilePublished, hydrateOwnProfile } from "../../domain/identity/profile.js";
+import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
 import { currentUser } from "./auth.js";
 import { resetSyncLog, logSync } from "./sync-log.js";
@@ -250,6 +250,11 @@ async function discoverOwnRelaysViaBootstrap(pubkeyHex) {
 async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	resetSyncLog();
+	// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-2): гидратация
+	// profiles.value из персиста ДО любых сетевых запросов — критерий приёмки
+	// "холодный старт офлайн показывает закэшированные профили контактов, не
+	// инициалы". Не зависит от соединения/контактов — только ownerPubkey/dbKey.
+	await hydrateProfilesFromCache(pubkeyHex, dbKey);
 	logSync(t("syncLog.connecting"));
 	// Этап 34 — найденное решение (бутстрап-проблема): relay-список нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
@@ -810,12 +815,11 @@ export async function fetchProfiles(pubkeys) {
 		const subscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
 			onBatch: (events) => {
+				// Этап 74 — Часть B, T5.1 (P-1): несколько версий ОДНОГО pubkey в
+				// ОДНОМ REQ+EOSE (multi-relay pool) — LWW-гейт (не последняя ПРИБЫВШАЯ,
+				// а последняя СОЗДАННАЯ), см. CONTRACTS.md/DESIGN.md "Этап 74".
 				for (const event of events) {
-					try {
-						results.set(event.pubkey, parseProfileEvent(event));
-					} catch {
-						// повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять весь fetch
-					}
+					accumulateProfileVersions(results, event);
 				}
 			},
 			onEose: () => {
@@ -889,28 +893,47 @@ let profileSubscriber = null;
 // собеседника не появлялось само. Аналог refreshGroupMessageSubscription, но для kind 0:
 // ПОСТОЯННАЯ подписка — relay сначала отдаёт текущее состояние (REQ backlog), затем стримит
 // НОВЫЕ kind-0 по мере публикации контактами, без переоткрытия экрана.
+// НАЙДЕНО ПРИ РЕАЛИЗАЦИИ T6.2 (не домысел, не часть исходного ТЗ): contactPubkeys
+// читался из legacy-таблицы `contacts` (db.version(1)) — она ОПУСТОШЕНА
+// миграцией `migrateLegacyContactTables` (contact-runtime.js, этап 49) сразу
+// после однократного переноса в `contactRelationships` и НИЧЕМ больше не
+// заполняется. Для любой identity, подключавшейся хоть раз после этапа 49,
+// `contactPubkeys` был ВСЕГДА пуст → функция всегда попадала в ранний
+// `return` и НИКОГДА не создавала подписку — живые обновления профилей
+// контактов были мертвы с этапа 49, отдельно от P-1/P-4. Источник истины —
+// сигнал `contacts` (ui/signals/contacts.js), синхронизированный
+// `configureContactRuntime`/`recomputeContactSignals` из `contactRelationships`.
+//
+// Этап 74 — Часть B, T6.2 (P-4, CONTRACTS.md/DESIGN.md "Этап 74"): authors
+// расширен до [ownerPubkey, ...contacts.value] — живая подписка на СВОЙ
+// kind:0. Ранний `return` при нуле контактов УДАЛЁН: новый пользователь без
+// контактов всё равно обязан получать живые обновления СВОЕГО профиля.
 export async function refreshLiveProfileSubscription(ownerPubkey) {
 	if (!connection) return;
-	const contactPubkeys = (await db.table("contacts").where("owner").equals(ownerPubkey).toArray()).map((row) => row.pubkey);
-	if (contactPubkeys.length === 0) return;
 
 	if (!profileSubscriber) {
 		profileSubscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
-			onBatch: (events) => {
-				const next = { ...profiles.value };
-				let changed = false;
+			onBatch: async (events) => {
+				const contactUpdates = new Map();
+				let ownProfileChanged = false;
 				for (const event of events) {
 					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe
-					try {
-						next[event.pubkey] = parseProfileEvent(event);
-						changed = true;
-					} catch {
-						// повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять батч
+					if (event.pubkey === ownerPubkey) {
+						// T6.2 — LWW-корректность через hydrateOwnProfile/pickLatest (T7),
+						// не повторное сравнение здесь.
+						if (await applyLiveOwnProfileEvent(ownerPubkey, event)) ownProfileChanged = true;
+						continue;
 					}
+					accumulateProfileVersions(contactUpdates, event);
 				}
+				let changed = ownProfileChanged;
+				if (contactUpdates.size > 0) {
+					const contactChanged = await applyProfileUpdates(contactUpdates);
+					changed = changed || contactChanged;
+				}
+				if (ownProfileChanged) bumpProfileActivity();
 				if (changed) {
-					profiles.value = next;
 					bumpMessagingActivity(); // этап 27, находка 2 — открытые экраны перечитывают profiles
 				}
 			},
@@ -919,7 +942,7 @@ export async function refreshLiveProfileSubscription(ownerPubkey) {
 	}
 	// Повторный вызов (новый контакт добавлен) — тот же приём, что groupMessageSubscriber:
 	// переподписка тем же subId идемпотентна и дёшево обновляет набор authors.
-	profileSubscriber.subscribe("live-profiles", [{ authors: contactPubkeys, kinds: [0] }]);
+	profileSubscriber.subscribe("live-profiles", [{ authors: [ownerPubkey, ...contacts.value], kinds: [0] }]);
 }
 
 let channelGrantSubscriber = null;

@@ -11981,3 +11981,180 @@ ownerPubkey;` — уже единственный источник истины,
 (сравнение с `chatId`, флаг "отправлено в этой сессии" и т.п.) не
 найдено. `MessageBubble` (`message-bubble.jsx`) получает готовый
 `isOwn` пропом, сама direction не вычисляет. Правок не требуется.
+
+## Этап 74 — Часть B (T5–T7): синхронизация профилей
+
+Диагноз P-1..P-4 (`TZ-MULTIDEVICE-FIX.md`) перепроверен чтением main —
+подтверждён буквально: `fetchProfiles` (`transport.js:799-831`) копит
+`results.set(event.pubkey, parsed)` в порядке прибытия внутри одного
+REQ+EOSE (multi-relay pool — разные версии одного kind:0 в одном REQ);
+`refreshLiveProfileSubscription`'s onBatch (`transport.js:892-923`) —
+`next[event.pubkey] = parsed`, `isNewEvent` дедуплицирует только ПОВТОР
+того же event.id, не версии; `refreshProfiles`
+(`contacts.js:213-221`) безусловно перезаписывает. `profiles = signal({})`
+(`contacts.js:26`) нигде не персистится. `hydrateOwnProfile`
+(`domain/identity/profile.js:69-83`) обновляет только `avatarUrl`, не
+`avatar` (`sidebar-profile-card.jsx`/`profile.jsx` рендерят
+`avatar || avatarUrl`). `refreshLiveProfileSubscription` подписана на
+`authors: contactPubkeys` — `ownerPubkey` туда не входит.
+
+### Изменение контракта `fetchProfiles` (аддитивное)
+
+Возвращает `Map<pubkey, {name?, about?, picture?, createdAt, id}>` —
+было `{name?, about?, picture?}`. `createdAt`/`id` — от исходного kind:0
+события (`event.created_at`/`event.id`), нужны вызывающему коду для LWW-
+сравнения против уже закэшированного. `parseProfileEvent` (profile.js)
+НЕ меняется (чистый парсинг `content`) — обогащение делается в
+вызывающем коде (`fetchProfiles`, `refreshLiveProfileSubscription`).
+Внутри `fetchProfiles`'s onBatch — тот же LWW-гейт (`isNewerVersion`,
+см. ниже) применяется при накоплении в `results` (несколько версий
+ОДНОГО pubkey в ОДНОМ REQ — реальный сценарий multi-relay pool, не
+домысел, прямая цитата диагноза).
+
+### `core/sync/lww.js` — T7, новый экспорт
+
+```js
+export function isNewerVersion(incoming, stored)
+```
+
+`incoming`/`stored` — `{createdAt, id}`-подобные объекты (кэш-строки,
+camelCase — отличие от nostr-событий, где `created_at`/`id`).
+`stored` может быть `null`/`undefined` (кэша ещё нет) → `true`
+безусловно. Иначе — адаптирует к существующему `lwwWinner({created_at,
+id})` (снейк-кейс), не дублирует логику сравнения. Единственная
+реализация LWW-сравнения версий в проекте (skill: "запрещено вводить
+вторую реализацию") — все профильные пути (T5.1) и живой own-путь
+(T6.2, через `hydrateOwnProfile`/`pickLatest`, которая уже реализует
+тот же инвариант по построению — `pickLatest = reduce(lwwWinner)`)
+используют её же/`lwwWinner`, не пишут сравнение заново.
+
+### `profiles.value[pk]` — аддитивное поле `createdAt` (+`id`)
+
+Кэш профилей контактов (`contacts.js`'s `profiles` signal) — записи
+получают `createdAt`/`id` рядом с `name`/`about`/`picture`. Все
+существующие читатели сигнала обращаются к `.name`/`.about`/`.picture`
+точечно (не `deepEqual` на весь объект, проверено чтением
+UI-компонентов) — лишние поля не ломают рендер.
+
+### Новая таблица `contactProfiles` (T5.2), `db.version(24)`
+
+```js
+db.version(24).stores({
+  contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey"
+});
+```
+
+`CONTACT_PROFILES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey"]`
+— ТОЛЬКО составной индекс и обратный `ownerPubkey`-скан (гидратация
+всех профилей при старте) остаются plaintext; `name`/`about`/`picture`/
+`createdAt`/`id` — зашифрованы `dbKey` через `toEncryptedRow`.
+
+Решение по прецеденту `contacts`/`contactRelationships` (задача — по
+тексту ТЗ): `contactRelationships` (`db.version(15)`) шифрует РОВНО ОДНО
+содержательное поле (`greeting`), остальное (`owner`/`peer`/`state`/
+`resolvedAt`/`sentAt`) — plaintext, потому что это структурные индексы,
+не потому что несущественно. Здесь ЕСТЬ реальные содержательные поля
+(`name`/`about`/`picture`) сверх составного ключа — по принципу
+"индексные поля plaintext, содержательные зашифрованы" (тот же, что
+`MLS_GROUPS_PLAINTEXT_FIELDS`, `PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS`
+и большинство таблиц проекта) они шифруются. `contactPubkey` в
+составном ключе НЕИЗБЕЖНО plaintext (нужен для `.get([owner,contact])`/
+`.where("ownerPubkey")`) — тот же неизбежный компромисс, что `peer` в
+`contactRelationships` и `contactPubkey` НЕ в составном ключе `mlsGroups`
+(там он зашифрован именно потому, что НЕ часть индекса). Итог: состав
+графа контактов technically читаем по ownerPubkey-скану ЛЮБОЙ таблицы с
+таким индексом в проекте (уже так для `contactRelationships`) — не
+новая утечка, продолжение существующего компромисса, не расширение его.
+
+### `applyProfileUpdates(updates)` — новая функция, `contacts.js`
+
+```js
+async function applyProfileUpdates(updates: Map<pubkey, {name?,about?,picture?,createdAt,id} | null>) -> Promise<boolean>
+```
+
+Единая точка применения входящих профилей (T5.1) — вызывается ИЗ
+`ensureProfilesFetched`/`refreshProfiles` (после `fetchProfiles`) И из
+`refreshLiveProfileSubscription`'s onBatch (`transport.js`, contact-
+ветка, T6.2) — оба пути унифицированы (T7), не два разных сравнения.
+Для каждой записи: `incoming === null` → безусловно пишется в
+`profiles.value[pk] = null` (СУЩЕСТВУЮЩЕЕ поведение `refreshProfiles`,
+`contacts-signals.test.js` — "контакт больше не найден -> обновляет на
+null", НЕ меняется этим этапом) — но НИКОГДА не пишется в
+`contactProfiles` (T5.3 — только про персист, не про сигнал: "не
+кэшировать null НАВСЕГДА" означает не персистить, не запрещает сессионный
+null в сигнале). Иначе (incoming — реальный профиль) —
+`isNewerVersion(incoming, profiles.value[pk])` → применяется в
+`profiles.value` И, если `contacts.value.includes(pk)`, в таблицу
+`contactProfiles` (через `ownerPubkeyRef`/`dbKeyRef`, уже существующие
+module-level переменные `contacts.js`, установленные
+`configureContactRuntime` — БЕЗ правки сигнатур
+`ensureProfilesFetched`/`refreshProfiles`, у которых уже ~10
+вызывающих мест в UI). Возвращает `true`, если `profiles.value`
+реально изменился (для вызывающего кода — bump-решение).
+
+### `hydrateProfilesFromCache(ownerPubkey, dbKey)` — новая функция, `contacts.js`
+
+Читает ВСЕ строки `contactProfiles` для `ownerPubkey`, гидрирует
+`profiles.value` ДО любых сетевых запросов (T5.2). Вызывается ПЕРВОЙ
+строкой `connect()` (`transport.js`) — раньше `loadUiSettings`, не
+зависит от контактов/соединения/`configureContactRuntime` (`ownerPubkey`/
+`dbKey` уже известны на этот момент).
+
+### `ensureProfilesFetched`/`refreshProfiles` — контракт сигнатур НЕ меняется
+
+Both продолжают принимать `(pubkeys, fetchProfilesFn)` — используются
+не только для контактов (`channel.jsx`/`channel-chat.jsx`/`discovery.jsx`
+зовут для авторов постов/каналов, не входящих в `contacts.value`).
+Персист в `contactProfiles` — избирательный (только когда pubkey
+реально контакт, проверка внутри `applyProfileUpdates`), не расширяется
+на произвольные pubkey.
+
+### T6.1 — `hydrateOwnProfile`, аддитивная правка (только оркестратор)
+
+Если `parsed.picture` НЕПУСТОЙ и `parsed.picture !== current.avatarUrl`
+— `patch.avatar = ''` (локальный data-url кэш инвалидирован) ВМЕСТЕ с
+`avatarUrl`. Пустой `parsed.picture` — локальные поля не трогает
+(правило этапа 57 остаётся). Контракт возврата (`true`/`false` — найден/
+не найден валидный kind:0) НЕ меняется — существующие тесты
+(`profile.test.js`) сверяют именно это, строго `assert.equal(result,
+true/false)`.
+
+### T6.2 — живая подписка на собственный kind:0
+
+`refreshLiveProfileSubscription(ownerPubkey)` (`transport.js`) —
+`authors` подписки расширен до `[ownerPubkey, ...contactPubkeys]`;
+ранний `if (contactPubkeys.length === 0) return` УДАЛЁН (новый
+пользователь без контактов всё равно должен получать живые обновления
+СВОЕГО профиля). onBatch ветвит: `event.pubkey === ownerPubkey` →
+персистит сырое событие в `db.table("events")` (если ещё не было,
+`hasEvent`/`appendEvent` из `core/store/event-log.js` — тот же приём,
+что bootstrap) и переиспользует `hydrateOwnProfile(ownerPubkey)` —
+LWW-корректность НАСЛЕДУЕТСЯ от уже протестированного `pickLatest` над
+полной историей событий, не пишется заново; иначе → `applyProfileUpdates`
+(контактная ветка, T5.1). Один subscriber, не два (T6.2's явное
+требование). Эхо собственной публикации — `bumpProfileActivity()`
+вызывается ТОЛЬКО если `getProfile(ownerPubkey)` реально отличается
+до/после вызова `hydrateOwnProfile` (сравнение на стороне вызывающего
+кода в `transport.js`, не внутри `hydrateOwnProfile` — иначе пришлось
+бы менять её протестированный `true`/`false`-контракт).
+
+### T6.3 — рендер-контракт НЕ меняется
+
+`avatar || avatarUrl` (`profile.jsx`, `sidebar-profile-card.jsx`)
+остаётся как есть — корректность обеспечивает T6.1's инвалидация.
+Комментарий у обоих мест фиксирует это явно (следующий читатель кода
+не "исправит" приоритет).
+
+### Побочная находка при реализации T6.2 (не домысел, не часть исходного ТЗ)
+
+`refreshLiveProfileSubscription` (`transport.js`) читал `contactPubkeys`
+из legacy-таблицы `contacts` (`db.version(1)`) — она ОПУСТОШЕНА
+одноразовой миграцией `migrateLegacyContactTables` (`contact-runtime.js`,
+этап 49) сразу после переноса в `contactRelationships`, ничем больше не
+заполняется. Для любой identity, подключавшейся хоть раз после этапа 49
+(то есть практически всегда), `contactPubkeys` был пуст → функция
+попадала в ранний `return` и НИКОГДА не создавала подписку — живые
+обновления профилей КОНТАКТОВ были мертвы с этапа 49 (отдельно от
+P-1/P-4, которые описывают, что происходит, КОГДА подписка вообще
+работает). Исправлено попутно: источник — сигнал `contacts`
+(`ui/signals/contacts.js`), синхронизированный `contactRelationships`.

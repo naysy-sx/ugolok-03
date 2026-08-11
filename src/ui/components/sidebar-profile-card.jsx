@@ -40,7 +40,10 @@ export default function SidebarProfileCard({ onEditProfile }) {
 			    реально есть, заглушка-буква никуда не ведёт (disabled).
 			    avatarUrl — фолбэк на публичный Blossom URL, когда локального
 			    data-url кэша ещё нет (новое устройство после hydrateOwnProfile,
-			    profile.js) — тот же приём, что profile.jsx. */}
+			    profile.js) — тот же приём, что profile.jsx.
+			    Этап 74 — Часть B, T6.3: приоритет avatar||avatarUrl НЕ менять —
+			    корректность обеспечивает инвалидация в hydrateOwnProfile (T6.1),
+			    не порядок здесь. */}
 			<button
 				type="button"
 				class="profile-card-avatar-btn"
