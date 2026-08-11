@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { createChannel, receiveChannelKeyGrant, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
+import { createChannel, receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
 import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { CHANNEL_BAN_KIND } from "../src/domain/content/moderation.js";
 import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible, addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds, applyChannelUnviewRumor } from "../src/domain/content/channel-visibility.js";
@@ -127,6 +127,67 @@ test("revokeViewFromMember: ротирует channelKey, реиздаёт гра
 	assert.ok(!published.some((e) => e.kind === CHANNEL_BAN_KIND), "это не бан — объявление о бане не публикуется");
 	const banRow = await db.table("bannedMembers").get([ALICE_PUB, channelId, BOB_PUB]);
 	assert.equal(banRow, undefined, "не должен появляться в bannedMembers — вышел из группы, не забанен");
+});
+
+// Этап 74 — найдено живой проверкой (не домысел, реальный сценарий пользователя:
+// убрал группу видимости у канала -> вернул обратно): revokeViewFromMember
+// ротирует channelKey, но НЕ переиздавал метаданные (kind 30060) под НОВОЙ
+// версией — единственная копия метаданных на relay оставалась зашифрована
+// СТАРОЙ (уже недействующей для новых читателей) версией ключа. Любой читатель,
+// получивший VIEW ПОСЛЕ ротации (addVisibilityGroup на ту же/другую группу,
+// включая повторное добавление ранее отозванного), создаёт ЛОКАЛЬНУЮ строку
+// со stub-заглушками (name:"", receiveChannelKeyGrant) и НИКОГДА не получает
+// шанс её заполнить — decryptChannelContent требует ТУ ЖЕ версию, что зашифровала
+// content, а у нового читателя есть только НОВЫЙ ключ. Живой симптом:
+// "(без названия)", канал без аватара, но полностью функциональный (можно
+// подписаться/писать) — потому что VIEW/allowlist работают НЕЗАВИСИМО от метаданных.
+test("revokeViewFromMember: переиздаёт метаданные (kind 30060) под НОВОЙ версией ключа — новый читатель после ротации видит РЕАЛЬНОЕ имя, не заглушку", async () => {
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}, канал "К"
+	const revokePublished = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(revokePublished));
+
+	const republishedMeta = revokePublished.find((e) => e.kind === 30060);
+	assert.ok(republishedMeta, "revokeViewFromMember обязан переиздать метаданные под новой версией ключа");
+	assert.deepEqual(republishedMeta.tags.find((t) => t[0] === "d"), ["d", channelId]);
+
+	// Кэрол получает VIEW ВПЕРВЫЕ, УЖЕ ПОСЛЕ ротации (та же версия, что у Mallory).
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	await db.table("groupMembers").add({ groupId: "family", pubkey: CAROL_PUB });
+	const addPublished = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish(addPublished));
+	const carolGrant = addPublished.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === CAROL_PUB);
+	await receiveChannelKeyGrant(CAROL_PUB, CAROL_PRIV, DB_KEY, ALICE_PUB, carolGrant);
+
+	const carolRowBeforeMeta = fromEncryptedRow(await db.table("channels").get([CAROL_PUB, channelId]), DB_KEY);
+	assert.equal(carolRowBeforeMeta.name, "", "предусловие: свежий грант — заглушка, имя ещё не заполнено");
+
+	// Кэрол применяет ПЕРЕИЗДАННЫЕ (не исходные) метаданные — тот самый republishedMeta.
+	await receiveChannelMetadata(CAROL_PUB, DB_KEY, republishedMeta);
+
+	const carolRowAfter = fromEncryptedRow(await db.table("channels").get([CAROL_PUB, channelId]), DB_KEY);
+	assert.equal(carolRowAfter.name, "К", "Кэрол обязана увидеть РЕАЛЬНОЕ имя канала, не заглушку/'(без названия)'");
+});
+
+test("revokeViewFromMember: переиздаёт метаданные — реиздание проходит С ТЕМИ ЖЕ полями (название/описание/правила/аватар), что были на момент отзыва", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Котики", description: "d", rules: "r" }, [], capturingPublish([]));
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	const addPub = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish(addPub));
+	const bobGrant = addPub.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, bobGrant);
+
+	const revokePublished = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(revokePublished));
+	const republishedMeta = revokePublished.find((e) => e.kind === 30060);
+
+	// Читатель, ЕЩЁ имеющий доступ (владелец, self-грант) — переиздание не должно
+	// откатить/испортить его уже применённое (корректное) состояние.
+	await receiveChannelMetadata(ALICE_PUB, DB_KEY, republishedMeta);
+	const ownerRow = fromEncryptedRow(await db.table("channels").get([ALICE_PUB, channelId]), DB_KEY);
+	assert.equal(ownerRow.name, "Котики");
+	assert.equal(ownerRow.description, "d");
+	assert.equal(ownerRow.rules, "r");
 });
 
 test("revokeViewFromMember: переиздаёт allowlist БЕЗ target (если был подписчиком)", async () => {

@@ -1,6 +1,7 @@
 import { db } from "../../core/store/database.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { generateChannelKey } from "../../core/crypto/channel-key.js";
+import { sign } from "../../core/crypto/sign.js";
+import { generateChannelKey, encryptChannelContent } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
@@ -35,8 +36,9 @@ export async function findChannelIdsByVisibilityGroup(ownerPubkey, groupId) {
 // записи в bannedMembers и без скрытия контента — это не модерация, человек не
 // нарушил правил, просто вышел из группы, давшей ему видимость.
 export async function revokeViewFromMember(ownerPubkey, ownerPrivKey, dbKey, channelId, targetPubkey, publish) {
-	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!channelRow) return;
+	const raw = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!raw) return;
+	const channelRow = fromEncryptedRow(raw, dbKey);
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
 	const vOld = meta.currentVersion;
 	const vNew = vOld + 1;
@@ -53,6 +55,31 @@ export async function revokeViewFromMember(ownerPubkey, ownerPrivKey, dbKey, cha
 	for (const r of remaining) {
 		await sendViewGrant(ownerPubkey, ownerPrivKey, newChannel, r.readerPubkey, vNew, publish);
 	}
+
+	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"):
+	// единственная копия метаданных (kind 30060) на relay оставалась зашифрована
+	// СТАРОЙ версией ключа — любой читатель, получивший VIEW ПОСЛЕ этой ротации
+	// (включая повторное addVisibilityGroup той же/другой группы), создавал
+	// ЛОКАЛЬНУЮ строку со stub-заглушками (receiveChannelKeyGrant, name:"") и
+	// НИКОГДА не мог её заполнить — decryptChannelContent требует ТУ ЖЕ версию,
+	// что зашифровала content. Живой симптом: "(без названия)", канал без
+	// аватара, но полностью функциональный (VIEW/allowlist не зависят от метаданных).
+	const metaContent = encryptChannelContent(
+		JSON.stringify({
+			name: channelRow.name,
+			description: channelRow.description,
+			rules: channelRow.rules,
+			avatar: channelRow.avatar,
+			allowChatAttachments: channelRow.allowChatAttachments,
+		}),
+		newKeyHex,
+		vNew,
+	);
+	const metaEvent = sign(
+		{ kind: 30060, content: metaContent, tags: [["d", channelId], ["h", channelRow.channelTopic]], created_at: Math.floor(Date.now() / 1000) },
+		ownerPrivKey,
+	);
+	await requirePublishOk(publish, metaEvent);
 
 	const oldAllowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelId, vOld]), dbKey);
 	if (oldAllowlistRow) {
