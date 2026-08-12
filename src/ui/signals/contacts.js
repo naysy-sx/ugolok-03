@@ -6,7 +6,7 @@ import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../dom
 import { foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { createContactRuntime } from "../../domain/contacts/contact-runtime.js";
 import { pickLatest, isNewerVersion } from "../../core/sync/lww.js";
-import { revokeIfNoLongerVisible } from "../../domain/content/channel-visibility.js";
+import { revokeIfNoLongerVisible, grantIfNewlyVisible } from "../../domain/content/channel-visibility.js";
 import { fromEncryptedRow, toEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
@@ -343,6 +343,10 @@ export async function addGroupMemberAction(ownerPubkey, privKey, dbKey, groupId,
 	const event = buildGroupEvent(privKey, updated, nextCreatedAt("group:" + groupId));
 	await requirePublishOk(publish, event);
 	await foldGroup(event, privKey, dbKey);
+	// Этап 74 — найдено живой проверкой: симметрично removeGroupMemberAction's
+	// revokeIfNoLongerVisible ниже — участник, добавленный в группу, УЖЕ дающую
+	// видимость какому-то каналу, раньше никем не догонялся грантом.
+	await grantIfNewlyVisible(ownerPubkey, privKey, dbKey, pubkey, groupId, publish);
 	await refreshGroups(ownerPubkey, dbKey);
 }
 

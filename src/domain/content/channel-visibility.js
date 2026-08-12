@@ -1,6 +1,8 @@
 import { db } from "../../core/store/database.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { sign } from "../../core/crypto/sign.js";
+import { getPublicKey } from "../../core/crypto/keys.js";
+import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
 import { generateChannelKey, encryptChannelContent } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
@@ -9,6 +11,7 @@ import { sendViewGrant, buildChannelUnviewRumor } from "./channel-access.js";
 import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { lwwWinner } from "../../core/sync/lww.js";
 import { DomainError } from "../errors.js";
 
 function requireOwnerChannel(raw, dbKey) {
@@ -29,6 +32,68 @@ async function requirePublishOk(publish, event) {
 export async function findChannelIdsByVisibilityGroup(ownerPubkey, groupId) {
 	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+groupId]").equals([ownerPubkey, groupId]).toArray();
 	return rows.map((r) => r.channelId);
+}
+
+// Этап 74 — найдено живой проверкой: channelVisibilityGroups (какие группы дают
+// видимость каналу) мутировалась ТОЛЬКО в локальной Dexie, ни разу не публикуясь —
+// в отличие от groups (kind:30050), у этой связки не было self-sync между
+// sibling-устройствами владельца вовсе. Прямой прецедент buildGroupEvent/
+// parseGroupEvent (contacts/groups.js): self-encrypted (nip44 на собственный
+// pubkey), parameterized-replaceable, d-tag = channelId. content несёт ПОЛНЫЙ
+// текущий набор groupIds (не дельту) — тот же приём, что группа целиком
+// переиздаётся при любом изменении состава, не патчится по одному участнику.
+export const CHANNEL_VISIBILITY_SYNC_KIND = 30065;
+
+function buildChannelVisibilitySyncEvent(privKey, channelId, groupIds, createdAt = Math.floor(Date.now() / 1000)) {
+	const ownPubHex = bytesToHex(getPublicKey(privKey));
+	const content = nip44Encrypt(JSON.stringify({ groupIds }), privKey, ownPubHex);
+	return sign({ kind: CHANNEL_VISIBILITY_SYNC_KIND, tags: [["d", channelId]], content, created_at: createdAt }, privKey);
+}
+
+function parseChannelVisibilitySyncEvent(event, privKey) {
+	const ownPubHex = bytesToHex(getPublicKey(privKey));
+	const plaintext = nip44Decrypt(event.content, privKey, event.pubkey || ownPubHex);
+	const parsed = JSON.parse(plaintext);
+	const channelId = event.tags.find((t) => t[0] === "d")[1];
+	return { channelId, groupIds: parsed.groupIds };
+}
+
+// Delete-all + bulkAdd для [ownerPubkey, channelId] — зеркально foldGroup
+// (domain/events/handlers.js): полное замещение набора, не дельта-патч.
+async function foldChannelVisibilityGroups(event, privKey, dbKey) {
+	const { channelId, groupIds } = parseChannelVisibilitySyncEvent(event, privKey);
+	return db.transaction("rw", db.table("channelVisibilityGroups"), async () => {
+		await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([event.pubkey, channelId]).delete();
+		await db.table("channelVisibilityGroups").bulkAdd(groupIds.map((groupId) => ({ ownerPubkey: event.pubkey, channelId, groupId })));
+	});
+}
+
+// Зеркально rebuildGroups: пересчёт из ПОЛНОЙ локальной истории событий этого
+// kind (таблица events), LWW-победитель на d-tag(channelId), затем fold. Тот же
+// проверенный механизм, никакого нового поля/потокового LWW-гейта на строке не
+// потребовалось — переиспользуется lwwWinner (core/sync/lww.js).
+export async function rebuildChannelVisibilityGroups(ownerPubkey, privKey, dbKey) {
+	const syncEvents = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, CHANNEL_VISIBILITY_SYNC_KIND]).toArray();
+	const latestByDTag = new Map();
+	for (const ev of syncEvents) {
+		const dTag = ev.tags.find((t) => t[0] === "d")?.[1];
+		if (!dTag) continue;
+		const existing = latestByDTag.get(dTag);
+		latestByDTag.set(dTag, existing ? lwwWinner(existing, ev) : ev);
+	}
+	for (const [, event] of latestByDTag) {
+		await foldChannelVisibilityGroups(event, privKey, dbKey);
+	}
+}
+
+// Публикует ТЕКУЩИЙ (уже смутированный локально к моменту вызова) полный набор
+// groupIds для channelId — единая точка вызова из ВСЕХ трёх мест, мутирующих
+// channelVisibilityGroups (addVisibilityGroup/removeVisibilityGroup ниже,
+// createChannel в channel.js).
+export async function publishChannelVisibilitySync(ownerPubkey, ownerPrivKey, dbKey, channelId, publish) {
+	const groupIds = await listChannelVisibilityGroupIds(ownerPubkey, channelId);
+	const event = buildChannelVisibilitySyncEvent(ownerPrivKey, channelId, groupIds);
+	await requirePublishOk(publish, event);
 }
 
 // СТРОГОЕ ПОДМНОЖЕСТВО moderation.js's banMember: та же ротация channelKey и
@@ -160,6 +225,35 @@ export async function revokeIfNoLongerVisible(ownerPubkey, ownerPrivKey, dbKey, 
 	}
 }
 
+// Этап 74 — найдено живой проверкой (НЕ баг синхронизации — воспроизводится даже
+// на одном устройстве без сети): зеркало revokeIfNoLongerVisible в обратном
+// направлении. addVisibilityGroup рассылает гранты только ТЕКУЩИМ на момент
+// вызова участникам группы — участник, добавленный в УЖЕ привязанную к каналу
+// группу ПОЗЖЕ, никем не догоняется. Направление и условия обхода зеркальны, но
+// не идентичны revokeIfNoLongerVisible (тот проверяет "виден ли ЕЩЁ через другую
+// группу" при УДАЛЕНИИ из одной; этот — "нужно ли выдать" при ДОБАВЛЕНИИ в одну),
+// поэтому отдельная функция, не параметризация одной общей.
+export async function grantIfNewlyVisible(ownerPubkey, ownerPrivKey, dbKey, pubkey, addedToGroupId, publish) {
+	// Владелец уже имеет self-грант с момента создания канала (этап 55) —
+	// второй грант через групповое членство избыточен, даже если владелец
+	// технически состоит в собственной группе.
+	if (pubkey === ownerPubkey) return;
+	const channelIds = await findChannelIdsByVisibilityGroup(ownerPubkey, addedToGroupId);
+	for (const channelId of channelIds) {
+		const existingReader = await db.table("channelReaders").get([ownerPubkey, channelId, pubkey]);
+		if (existingReader) continue; // уже виден (через эту же или другую группу/прямой грант)
+		const raw = await db.table("channels").get([ownerPubkey, channelId]);
+		if (!raw) continue; // defensive — не должно происходить (визибилити-группа без канала)
+		const channelRow = fromEncryptedRow(raw, dbKey);
+		if (channelRow.role !== "owner") continue; // то же требование, что addVisibilityGroup
+		const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
+		const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
+		const channel = { channelId, channelTopic: channelRow.channelTopic, channelKey: keyRow.channelKey };
+		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, pubkey, meta.currentVersion, publish);
+		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey: pubkey });
+	}
+}
+
 // Этап 74 — найдено живой проверкой (не баг синхронизации, реальный пробел
 // функциональности): группы видимости задавались ТОЛЬКО при createChannel —
 // editChannel не умел их менять, UI редактирования канала не имел полей про
@@ -191,6 +285,7 @@ export async function addVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, chann
 	}
 
 	await db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId });
+	await publishChannelVisibilitySync(ownerPubkey, ownerPrivKey, dbKey, channelId, publish);
 }
 
 // Отвязывает группу от уже СУЩЕСТВУЮЩЕГО канала. Для каждого участника
@@ -204,6 +299,7 @@ export async function removeVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, ch
 	requireOwnerChannel(await db.table("channels").get([ownerPubkey, channelId]), dbKey);
 
 	await db.table("channelVisibilityGroups").delete([ownerPubkey, channelId, groupId]);
+	await publishChannelVisibilitySync(ownerPubkey, ownerPrivKey, dbKey, channelId, publish);
 
 	const remainingGroupIds = (await listChannelVisibilityGroupIds(ownerPubkey, channelId));
 	const removedGroupMembers = await db.table("groupMembers").where("groupId").equals(groupId).toArray();

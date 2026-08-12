@@ -12439,3 +12439,97 @@ allowlist; `moderation.test.js` — забаненный с устаревшим
 Promise.resolve()` — сериализация добавляет промежуточные тики).
 `tests/incremental-sync.test.js` — новый тест: `onCaughtUp` не
 срабатывает, пока асинхронный `onEvent` не завершился.
+
+## Этап 74 — найдено живой проверкой (чистый повтор после сброса всех
+## серверных/клиентских данных): группа-член-sync подтверждена ИСПРАВНОЙ
+## (гонка flush() закрыта), НО две отдельные, узкие, не связанные с
+## гонками находки в области "видимость канала ↔ группы"
+
+Живой сценарий (с нуля): создание канала — синхронизировалось;
+создание группы — синхронизировалось; добавление участника в группу —
+синхронизировалось (гонка предыдущего фикса подтверждена закрытой).
+Осталось сломано:
+
+**Находка 1 — `channelVisibilityGroups` никогда не публиковалась.**
+Галочка видимости канала для группы, поставленная на одном устройстве
+владельца, не появлялась на sibling-устройстве того же владельца.
+Причина — не гонка: `addVisibilityGroup`/`removeVisibilityGroup`
+(`channel-visibility.js`) и начальный список групп в `createChannel`
+(`channel.js`) пишут ассоциацию ТОЛЬКО в локальную Dexie-таблицу
+`channelVisibilityGroups`, ни разу не публикуя событие — в отличие от
+`groups` (kind:30050), у этой таблицы никогда не было self-sync
+механизма вообще.
+
+**Исправлено (по прямому прецеденту kind:30050/`foldGroup`/
+`rebuildGroups`, тот же паттерн, не изобретение нового):**
+- `src/domain/content/channel-visibility.js` — новый self-encrypted
+  (nip44 на собственный pubkey), parameterized-replaceable
+  `CHANNEL_VISIBILITY_SYNC_KIND = 30065` (d-tag = channelId, content =
+  `{groupIds: [...]}` — ПОЛНЫЙ текущий набор, не дельта, тот же приём,
+  что `buildGroupEvent`). `buildChannelVisibilitySyncEvent`/
+  `parseChannelVisibilitySyncEvent` — round-trip, зеркально
+  `buildGroupEvent`/`parseGroupEvent` (`contacts/groups.js`).
+  `foldChannelVisibilityGroups(event, privKey, dbKey)` — delete-all +
+  bulkAdd для `[ownerPubkey, channelId]`, зеркально `foldGroup`.
+  `rebuildChannelVisibilityGroups(ownerPubkey, privKey, dbKey)` —
+  читает ВСЕ локально сохранённые события `CHANNEL_VISIBILITY_SYNC_KIND`
+  из таблицы `events`, LWW-победитель (`lwwWinner`) по d-tag(channelId),
+  fold каждого — зеркально `rebuildGroups`. Никакого нового поля в
+  схеме БД не потребовалось (переиспользован уже проверенный "полная
+  история → пересчёт" механизм, не потоковый LWW-гейт на строке).
+  `publishChannelVisibilitySync(ownerPubkey, ownerPrivKey, dbKey,
+  channelId, publish)` — читает ТЕКУЩИЙ (уже смутированный локально)
+  полный набор `channelVisibilityGroups` для канала и публикует;
+  вызывается из `addVisibilityGroup`, `removeVisibilityGroup` (после
+  соответствующей мутации) И из `createChannel` (после начальной
+  простановки групп, `channel.js`) — все ТРИ точки мутации этой
+  таблицы теперь публикуют.
+- `src/ui/signals/transport.js` — `rebuildChannelVisibilityGroups`
+  вызывается в `onEvent` (`startIncrementalSync`) сразу после
+  `rebuildGroups`, тем же приёмом (наследует и сериализацию flush(),
+  и `await` — фикс гонки выше распространяется автоматически).
+- Область НЕ включает live-обновление уже ОТКРЫТОЙ формы настроек
+  канала (`ChannelSettingsForm`, `channel.jsx`) — она читает
+  `listChannelVisibilityGroupIds` в `useEffect` на mount (не signal),
+  что достаточно: пересборка Dexie гарантированно опережает открытие
+  формы пользователем в реальном сценарии проверки ("зашёл в
+  настройки — проверил"). Живой сигнал в открытой форме — вне скоупа
+  этого точечного фикса (см. решение пользователя не делать полный
+  архитектурный пересмотр).
+
+**Находка 2 — добавление участника в УЖЕ привязанную к каналу группу
+не выдаёт ему VIEW retroactively.** `removeGroupMemberAction`
+(`ui/signals/contacts.js`) симметрично вызывает
+`revokeIfNoLongerVisible` (отозвать доступ при выходе из группы), но у
+`addGroupMemberAction` не было обратной пары — `addVisibilityGroup`
+рассылает гранты только ТЕКУЩИМ на момент вызова участникам группы;
+участник, добавленный ПОЗЖЕ (после того, как видимость уже включена),
+никем не догоняется. Это НЕ баг синхронизации — чистый пробел бизнес-
+логики, воспроизводится даже на одном устройстве без сети.
+
+**Исправлено:** `channel-visibility.js` — новая
+`grantIfNewlyVisible(ownerPubkey, ownerPrivKey, dbKey, pubkey, groupId,
+publish)`, зеркальная `revokeIfNoLongerVisible`, НЕ переиспользующая её
+код (направление и условия обхода — зеркальные, не идентичные): для
+каждого `channelId`, где `groupId` даёт видимость
+(`findChannelIdsByVisibilityGroup`), если `pubkey` ещё НЕ
+`channelReaders` (не виден иначе) — грант + запись читателя. `pubkey
+=== ownerPubkey` — сразу no-op (self-грант уже есть с момента
+создания канала, этап 55, второй грант через группу избыточен).
+`ui/signals/contacts.js`'s `addGroupMemberAction` вызывает её
+симметрично тому, как `removeGroupMemberAction` вызывает
+`revokeIfNoLongerVisible`.
+
+**Тесты:** `tests/handlers-style` зеркальные `foldGroup`/`rebuildGroups`
+тесты для `foldChannelVisibilityGroups`/`rebuildChannelVisibilityGroups`
+(upsert+полная замена; LWW-победитель по d-tag; независимые channelId
+не смешиваются) — в `channel-visibility.test.js` (не отдельный файл,
+домен один). Интеграционные: `addVisibilityGroup`/
+`removeVisibilityGroup`/`createChannel` публикуют, и "приём на
+sibling-устройстве" (fold полученного события) воспроизводит тот же
+набор `channelVisibilityGroups`, что у публикующего устройства.
+`grantIfNewlyVisible`/`addGroupMemberAction`: retroactive-грант новому
+участнику уже видимой группы; владелец не получает второй грант;
+уже-читатель (через другую группу) не получает дублирующий грант;
+участник группы, НЕ привязанной ни к одному каналу — no-op, publish не
+вызывается вовсе.

@@ -10,6 +10,7 @@ import {
 } from "../../core/crypto/channel-key.js";
 import { parseAndVerifyAllowlist } from "../../core/crypto/comment-allowlist.js";
 import { sendViewGrant, sendSubscribeRequest } from "./channel-access.js";
+import { publishChannelVisibilitySync } from "./channel-visibility.js";
 import { buildAddressableDeletionEvent } from "../events/handlers.js";
 import { deleteChannelLocally } from "./moderation.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
@@ -104,6 +105,12 @@ export async function createChannel(ownerPubkey, ownerPrivKey, dbKey, { name, de
 	for (const groupId of groupIds) {
 		await db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId });
 	}
+	// Этап 74 — найдено живой проверкой: channelVisibilityGroups раньше не
+	// синхронизировалась к sibling-устройствам владельца вовсе — публикуем
+	// начальный набор той же self-sync точкой, что addVisibilityGroup/
+	// removeVisibilityGroup (channel-visibility.js). Безусловно (даже при пустом
+	// groupIds) — sibling обязан узнать "видимости пока нет", не только "уже есть".
+	await publishChannelVisibilitySync(ownerPubkey, ownerPrivKey, dbKey, channelId, publish);
 
 	return { channelId };
 }

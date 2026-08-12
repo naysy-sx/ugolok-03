@@ -7,10 +7,23 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
 import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { CHANNEL_BAN_KIND } from "../src/domain/content/moderation.js";
-import { findChannelIdsByVisibilityGroup, revokeViewFromMember, revokeIfNoLongerVisible, addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds, applyChannelUnviewRumor } from "../src/domain/content/channel-visibility.js";
+import {
+	findChannelIdsByVisibilityGroup,
+	revokeViewFromMember,
+	revokeIfNoLongerVisible,
+	grantIfNewlyVisible,
+	addVisibilityGroup,
+	removeVisibilityGroup,
+	listChannelVisibilityGroupIds,
+	applyChannelUnviewRumor,
+	CHANNEL_VISIBILITY_SYNC_KIND,
+	rebuildChannelVisibilityGroups,
+} from "../src/domain/content/channel-visibility.js";
 import { CHANNEL_UNVIEW_KIND } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
 import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
+import { sign } from "../src/core/crypto/sign.js";
+import { encrypt as nip44Encrypt } from "../src/core/crypto/nip44.js";
 import { groups, createGroupAction, addGroupMemberAction, removeGroupMemberAction } from "../src/ui/signals/contacts.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
@@ -37,6 +50,7 @@ beforeEach(async () => {
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
 	await db.table("channelReaders").clear();
+	await db.table("events").clear();
 	await db.table("bannedMembers").clear();
 	groups.value = [];
 });
@@ -509,4 +523,154 @@ test("applyChannelUnviewRumor: канал уже неизвестен локал
 
 test("applyChannelUnviewRumor: битый content (не JSON) -> no-op, не бросает", async () => {
 	await assert.doesNotReject(() => applyChannelUnviewRumor(BOB_PUB, DB_KEY, { pubkey: ALICE_PUB, content: "не json{{{", kind: CHANNEL_UNVIEW_KIND }));
+});
+
+// --- CHANNEL_VISIBILITY_SYNC_KIND self-sync (этап 74, найдено живой проверкой:
+// channelVisibilityGroups никогда не публиковалась) — прямой прецедент
+// rebuildGroups/foldGroup тестов в tests/handlers.test.js, тот же фикстурный стиль.
+function rawVisibilitySyncEvent(privKey, channelId, groupIds, createdAt) {
+	const ownPubHex = bytesToHex(getPublicKey(privKey));
+	const content = nip44Encrypt(JSON.stringify({ groupIds }), privKey, ownPubHex);
+	return sign({ kind: CHANNEL_VISIBILITY_SYNC_KIND, tags: [["d", channelId]], content, created_at: createdAt }, privKey);
+}
+
+test("createChannel публикует CHANNEL_VISIBILITY_SYNC_KIND с начальным набором groupIds — sibling воспроизводит его через rebuildChannelVisibilityGroups", async () => {
+	const aliceOutbox = [];
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(aliceOutbox));
+	const syncEvent = aliceOutbox.find((e) => e.kind === CHANNEL_VISIBILITY_SYNC_KIND);
+	assert.ok(syncEvent, "createChannel обязан опубликовать событие видимости, даже с непустым groupIds");
+
+	// Симулируем sibling: чистая channelVisibilityGroups, только приём self-эха.
+	await db.table("channelVisibilityGroups").clear();
+	await db.table("events").add({ ...syncEvent, flatTags: [] });
+	await rebuildChannelVisibilityGroups(ALICE_PUB, ALICE_PRIV, DB_KEY);
+
+	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.deepEqual(rows.map((r) => r.groupId), ["friends"]);
+});
+
+test("createChannel с groupIds=[] тоже публикует CHANNEL_VISIBILITY_SYNC_KIND (sibling обязан узнать «видимости пока нет», не только «уже есть»)", async () => {
+	const aliceOutbox = [];
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, [], capturingPublish(aliceOutbox));
+	const syncEvent = aliceOutbox.find((e) => e.kind === CHANNEL_VISIBILITY_SYNC_KIND);
+	assert.ok(syncEvent);
+});
+
+test("addVisibilityGroup публикует ПОЛНЫЙ текущий набор groupIds (не дельту) — sibling видит и старые, и новую группу", async () => {
+	const { channelId } = await setupChannelOneGroup(); // groupIds=["friends"] при создании
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	const published = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish(published));
+	const syncEvent = published.filter((e) => e.kind === CHANNEL_VISIBILITY_SYNC_KIND).pop();
+	assert.ok(syncEvent);
+
+	await db.table("channelVisibilityGroups").clear();
+	await db.table("events").add({ ...syncEvent, flatTags: [] });
+	await rebuildChannelVisibilityGroups(ALICE_PUB, ALICE_PRIV, DB_KEY);
+	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.deepEqual(rows.map((r) => r.groupId).sort(), ["family", "friends"]);
+});
+
+test("removeVisibilityGroup публикует обновлённый набор БЕЗ удалённой группы", async () => {
+	const { channelId } = await setupChannelOneGroup(); // groupIds=["friends"]
+	const published = [];
+	await removeVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish(published));
+	const syncEvent = published.filter((e) => e.kind === CHANNEL_VISIBILITY_SYNC_KIND).pop();
+	assert.ok(syncEvent);
+
+	await db.table("channelVisibilityGroups").clear();
+	await db.table("events").add({ ...syncEvent, flatTags: [] });
+	await rebuildChannelVisibilityGroups(ALICE_PUB, ALICE_PRIV, DB_KEY);
+	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, channelId]).toArray();
+	assert.deepEqual(rows, []);
+});
+
+test("rebuildChannelVisibilityGroups: несколько версий ОДНОГО d-tag(channelId), материализуется последняя (LWW)", async () => {
+	const older = rawVisibilitySyncEvent(ALICE_PRIV, "chan-1", ["friends"], 1000);
+	const newer = rawVisibilitySyncEvent(ALICE_PRIV, "chan-1", ["friends", "family"], 2000);
+	await db.table("events").add({ ...older, flatTags: [] });
+	await db.table("events").add({ ...newer, flatTags: [] });
+
+	await rebuildChannelVisibilityGroups(ALICE_PUB, ALICE_PRIV, DB_KEY);
+
+	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, "chan-1"]).toArray();
+	assert.deepEqual(rows.map((r) => r.groupId).sort(), ["family", "friends"]);
+});
+
+test("rebuildChannelVisibilityGroups: РАЗНЫЕ channelId — независимые наборы, не путаются", async () => {
+	const chan1 = rawVisibilitySyncEvent(ALICE_PRIV, "chan-1", ["friends"], 1000);
+	const chan2 = rawVisibilitySyncEvent(ALICE_PRIV, "chan-2", ["family"], 1000);
+	await db.table("events").add({ ...chan1, flatTags: [] });
+	await db.table("events").add({ ...chan2, flatTags: [] });
+
+	await rebuildChannelVisibilityGroups(ALICE_PUB, ALICE_PRIV, DB_KEY);
+
+	const rows1 = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, "chan-1"]).toArray();
+	const rows2 = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ALICE_PUB, "chan-2"]).toArray();
+	assert.deepEqual(rows1.map((r) => r.groupId), ["friends"]);
+	assert.deepEqual(rows2.map((r) => r.groupId), ["family"]);
+});
+
+// --- grantIfNewlyVisible (этап 74, найдено живой проверкой: НЕ баг синхронизации,
+// воспроизводится и на одном устройстве без сети — addVisibilityGroup рассылает
+// гранты только ТЕКУЩИМ на момент вызова участникам, добавленный ПОЗЖЕ никем не
+// догоняется).
+
+test("grantIfNewlyVisible: участник, добавленный в УЖЕ привязанную к каналу группу, получает VIEW retroactively", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+
+	const published = [];
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB }); // добавление МИМО addGroupMemberAction — изолируем grantIfNewlyVisible
+	await grantIfNewlyVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "friends", capturingPublish(published));
+
+	const grantEvent = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	assert.ok(grantEvent, "Боб обязан получить VIEW-грант retroactively");
+	const readerRow = await db.table("channelReaders").get([ALICE_PUB, channelId, BOB_PUB]);
+	assert.ok(readerRow, "channelReaders обязана содержать Боба");
+});
+
+test("grantIfNewlyVisible: владелец, добавленный в СВОЮ группу, не получает второй грант (self-грант уже есть)", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+
+	const published = [];
+	await assert.doesNotReject(() => grantIfNewlyVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, ALICE_PUB, "friends", capturingPublish(published)));
+	assert.deepEqual(published, [], "владелец не нуждается во втором гранте через групповое членство");
+});
+
+test("grantIfNewlyVisible: участник, УЖЕ видимый через другую группу, не получает дублирующий грант", async () => {
+	const { channelId } = await setupChannelTwoGroups(); // friends={Боб}, family={Боб,Кэрол} — Боб уже reader
+	const readerBefore = await db.table("channelReaders").get([ALICE_PUB, channelId, BOB_PUB]);
+	assert.ok(readerBefore);
+
+	const published = [];
+	await grantIfNewlyVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "friends", capturingPublish(published));
+	assert.deepEqual(published, [], "Боб уже читатель — повторный грант избыточен");
+});
+
+test("grantIfNewlyVisible: группа не привязана НИ К ОДНОМУ каналу — no-op, publish не вызывается вовсе", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "orphan", name: "Ничейная" });
+	const published = [];
+	await assert.doesNotReject(() => grantIfNewlyVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "orphan", capturingPublish(published)));
+	assert.deepEqual(published, []);
+});
+
+test("ИНТЕГРАЦИЯ: addGroupMemberAction (signals/contacts.js) — участник, добавленный в группу ПОСЛЕ того, как видимость канала уже включена, получает VIEW автоматически (точное воспроизведение живого бага)", async () => {
+	await createGroupAction(ALICE_PUB, ALICE_PRIV, DB_KEY, "Друзья", capturingPublish([]));
+	const friendsId = groups.value.find((g) => g.name === "Друзья").id;
+
+	// Канал создан БЕЗ групп, видимость включена ОТДЕЛЬНО (тот же порядок, что живой репорт:
+	// сначала канал, потом группа, потом чекбокс видимости, потом добавление участника).
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "первый", description: "d", rules: "" }, [], capturingPublish([]));
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, friendsId, capturingPublish([]));
+
+	const published = [];
+	await addGroupMemberAction(ALICE_PUB, ALICE_PRIV, DB_KEY, friendsId, BOB_PUB, capturingPublish(published));
+
+	const grantEvent = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === BOB_PUB);
+	assert.ok(grantEvent, "Боб обязан получить VIEW-грант сразу при добавлении в уже-видящую группу");
+	const readerRow = await db.table("channelReaders").get([ALICE_PUB, channelId, BOB_PUB]);
+	assert.ok(readerRow);
 });

@@ -35,7 +35,7 @@ import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
 import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion, backfillOwnChannelGrants } from "../../domain/content/channel.js";
-import { applyChannelUnviewRumor } from "../../domain/content/channel-visibility.js";
+import { applyChannelUnviewRumor, rebuildChannelVisibilityGroups } from "../../domain/content/channel-visibility.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
@@ -655,6 +655,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 				// этапа выше) — сама доставка/фолд работали, отсутствовал ТОЛЬКО
 				// мост "Dexie обновлена -> Preact-сигнал перечитан".
 				await refreshGroups(pubkeyHex, dbKey);
+				// Этап 74 — найдено живой проверкой: channelVisibilityGroups (какие
+				// группы дают видимость каналу) раньше не синхронизировалась к sibling-
+				// устройствам владельца вовсе (channel-visibility.js's addVisibilityGroup/
+				// removeVisibilityGroup/createChannel теперь публикуют
+				// CHANNEL_VISIBILITY_SYNC_KIND) — здесь та же точка приёма, что группы.
+				await rebuildChannelVisibilityGroups(pubkeyHex, privKey, dbKey);
 				await rebuildEffectivePermissions(pubkeyHex, privKey);
 				// Этап 53 И5 (задача 5.3) — живой фолд журнала операций дерева
 				// файлов. Безопасный no-op, если экран "Файлы" ни разу не
