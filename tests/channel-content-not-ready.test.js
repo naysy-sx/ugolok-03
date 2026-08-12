@@ -19,6 +19,8 @@ import { buildAllowlistEvent } from "../src/core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../src/core/crypto/derivation.js";
 import { createChannel, receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate } from "../src/domain/content/channel.js";
 import { handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
+import { revokeViewFromMember, applyChannelUnviewRumor, addVisibilityGroup } from "../src/domain/content/channel-visibility.js";
+import { CHANNEL_UNVIEW_KIND } from "../src/domain/content/channel-access.js";
 import { banMember } from "../src/domain/content/moderation.js";
 import { receivePost } from "../src/domain/content/post.js";
 import { receiveComment } from "../src/domain/content/comments.js";
@@ -44,6 +46,7 @@ beforeEach(async () => {
 	await db.table("channelKeyMeta").clear();
 	await db.table("channelReaders").clear();
 	await db.table("commentAllowlists").clear();
+	await db.table("channelVisibilityGroups").clear();
 	await db.table("groups").clear();
 	await db.table("groupMembers").clear();
 	await db.table("posts").clear();
@@ -209,11 +212,15 @@ test("receiveChannelMessage: сообщение владельца, зашифр
 	assert.equal(row.text, "сообщение владельца", "повторная доставка ПОСЛЕ применения гранта обязана пройти");
 });
 
-// Негативная сторона контракта: throw специфичен для "версия ключа не готова",
-// НЕ для обычных no-op условий (неизвестный канал/топик) — те остаются тихими,
-// не подлежат буферизации/retry (М3-прецедент: буферизуется только "может стать
-// валидным позже", не "заведомо не моё").
-test("receiveChannelMetadata: неизвестный #h-топик -> тихий no-op, НЕ throw", async () => {
+// Этап 74 (второй заход, живой баг "канал-призрак после revoke->re-grant") —
+// пересмотр: "неизвестный канал" ТЕПЕРЬ throw, не тихий no-op. Причина: unview
+// (gift-wrap подписка) и это событие (#h-топик подписка) — независимые
+// подписки без гарантии порядка; "неизвестный канал" здесь может быть
+// ТРАНЗИТНЫМ состоянием (между revoke и следующим re-grant), а не "заведомо
+// не моё" — permanent silent no-op НАВСЕГДА терял republish метаданных,
+// прилетевший в это окно. Малформед-события (нет #h/#d-тега) остаются тихим
+// no-op — те, в отличие от "неизвестного канала", никогда не станут валидными.
+test("receiveChannelMetadata: неизвестный #h-топик -> throw ChannelContentNotReadyError (ретраебельно, не малформед)", async () => {
 	await setupRotatedChannel();
 	const event = sign(
 		{
@@ -227,10 +234,10 @@ test("receiveChannelMetadata: неизвестный #h-топик -> тихий
 		},
 		ALICE_PRIV,
 	);
-	await assert.doesNotReject(() => receiveChannelMetadata(BOB_PUB, DB_KEY, event));
+	await assert.rejects(() => receiveChannelMetadata(BOB_PUB, DB_KEY, event), ChannelContentNotReadyError);
 });
 
-test("receivePost: неизвестный #h-топик -> тихий no-op, НЕ throw", async () => {
+test("receivePost: неизвестный #h-топик -> throw ChannelContentNotReadyError (ретраебельно, не малформед)", async () => {
 	await setupRotatedChannel();
 	const event = sign(
 		{
@@ -244,5 +251,53 @@ test("receivePost: неизвестный #h-топик -> тихий no-op, Н�
 		},
 		ALICE_PRIV,
 	);
-	await assert.doesNotReject(() => receivePost(BOB_PUB, DB_KEY, event));
+	await assert.rejects(() => receivePost(BOB_PUB, DB_KEY, event), ChannelContentNotReadyError);
+});
+
+// Этап 74 (второй заход) — ТОЧНОЕ воспроизведение живого бага "канал-призрак":
+// revoke (unview rumor, gift-wrap подписка) обрабатывается РАНЬШЕ republish
+// метаданных (тот же kind:30060, но #h-топик подписка — независимая) —
+// "неизвестный канал" в этот момент throw'ит (буферизуется), НЕ теряется
+// навсегда; когда владелец повторно выдаёт VIEW той же/другой группой, retry
+// (тот же вызов receiveChannelMetadata тем же event) успешно применяет
+// метаданные к свежесозданному stub'у.
+test("receiveChannelMetadata: revoke -> republish метаданных приходит ПОСЛЕ удаления локальной строки (гонка unview/#h-топик) -> throw, ПОСЛЕ re-grant retry успешно заполняет имя", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	const created = [];
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish(created));
+	const grantBob = created.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")[1] === BOB_PUB);
+	const metaEvent0 = created.find((e) => e.kind === 30060);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantBob);
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, metaEvent0);
+	assert.equal(fromEncryptedRow(await db.table("channels").get([BOB_PUB, channelId]), DB_KEY).name, "К");
+
+	// Алиса отзывает VIEW у Боба (ротация ключа + republish метаданных под новой версией).
+	const revokeOutbox = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(revokeOutbox));
+	const republishedMeta = revokeOutbox.find((e) => e.kind === 30060);
+	assert.ok(republishedMeta, "revokeViewFromMember обязана переиздать метаданные под новой версией");
+	const unviewRumorWrapped = revokeOutbox.find((e) => e.kind === 1059); // gift-wrap
+	assert.ok(unviewRumorWrapped);
+
+	// Гонка: unview ПРИМЕНЯЕТСЯ ПЕРВЫМ (Боб теряет локальную строку channels).
+	await applyChannelUnviewRumor(BOB_PUB, DB_KEY, { pubkey: ALICE_PUB, content: JSON.stringify({ channelId }), kind: CHANNEL_UNVIEW_KIND });
+	assert.equal(await db.table("channels").get([BOB_PUB, channelId]), undefined, "канал должен исчезнуть локально после unview");
+
+	// ПОТОМ (независимая #h-топик подписка) прилетает republish метаданных — throw, буферизуется.
+	await assert.rejects(() => receiveChannelMetadata(BOB_PUB, DB_KEY, republishedMeta), ChannelContentNotReadyError);
+
+	// Владелец передумывает — повторно выдаёт VIEW (та же версия ключа, что и в republish).
+	const regrantOutbox = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish(regrantOutbox));
+	const newGrantForBob = regrantOutbox.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")[1] === BOB_PUB);
+	assert.ok(newGrantForBob);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, newGrantForBob);
+	const stubRow = fromEncryptedRow(await db.table("channels").get([BOB_PUB, channelId]), DB_KEY);
+	assert.equal(stubRow.name, "", "receiveChannelKeyGrant создаёт stub БЕЗ имени — заполнить обязан retry буферизованных метаданных");
+
+	// Retry (тот же приём, что retryBufferedChannelContentEvents в transport.js): тот же event, теперь успешно.
+	await receiveChannelMetadata(BOB_PUB, DB_KEY, republishedMeta);
+	const finalRow = fromEncryptedRow(await db.table("channels").get([BOB_PUB, channelId]), DB_KEY);
+	assert.equal(finalRow.name, "К", "имя канала обязано восстановиться после retry — БЕЗ этого фикса оставался бы «(без названия)» навсегда");
 });

@@ -133,7 +133,11 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 		.equals(hTag[1])
 		.and((r) => r.ownerPubkey === ownerPubkey)
 		.first();
-	if (!channelRow) return false;
+	// Этап 74 — найдено живой проверкой (revoke/re-grant race, тот же класс, что
+	// receiveChannelMetadata, channel.js): "неизвестный канал" может быть
+	// транзитным (unview ещё не сменился повторным грантом) — throw делает
+	// событие ретраебельным вместо permanent silent loss.
+	if (!channelRow) throw new ChannelContentNotReadyError();
 	if (event.pubkey !== channelRow.creatorPubkey) return false;
 
 	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): throw,

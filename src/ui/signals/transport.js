@@ -1140,7 +1140,17 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 		// уведомлял бы о контенте, уже прочитанном (в этой сессии или на
 		// другом устройстве) — курсор channelSyncState уже синхронизирован
 		// на этот момент (rebuildChannelReadStatus в начале connect()).
-		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+		if (
+			applied &&
+			event.pubkey !== ownerPubkey &&
+			// Этап 74 — найдено живой проверкой: "available" (есть VIEW, браузит канал,
+			// НЕ подписан) получал уведомления о новом контенте наравне с "subscriber" —
+			// уведомления обязаны идти только тем, кто явно подписался ("Подписки"), не
+			// каждому, у кого просто есть доступ ("Доступные"). role !== "available"
+			// покрывает и "subscriber", и "owner" (сиблинг-устройство владельца).
+			channelRowForNotify?.role !== "available" &&
+			!(await isChannelContentRead(ownerPubkey, channelId, event.created_at))
+		) {
 			// postId — тот же приём, что post.js's receivePost (d-tag формата
 			// "{channelId}:{postId}", plaintext) — нужен и для чтения только что
 			// сохранённого текста (для тела уведомления), и для click-нав.
@@ -1174,7 +1184,17 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 		// COMMENT-allowlist — здесь диспетчеризация + обнаружение "ответили мне".
 		const applied = await receiveComment(ownerPubkey, dbKey, event);
 		// Этап 50 (N1) — см. пояснение у kind 30061 выше.
-		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+		if (
+			applied &&
+			event.pubkey !== ownerPubkey &&
+			// Этап 74 — найдено живой проверкой: "available" (есть VIEW, браузит канал,
+			// НЕ подписан) получал уведомления о новом контенте наравне с "subscriber" —
+			// уведомления обязаны идти только тем, кто явно подписался ("Подписки"), не
+			// каждому, у кого просто есть доступ ("Доступные"). role !== "available"
+			// покрывает и "subscriber", и "owner" (сиблинг-устройство владельца).
+			channelRowForNotify?.role !== "available" &&
+			!(await isChannelContentRead(ownerPubkey, channelId, event.created_at))
+		) {
 			// commentId парсится из d-тега тем же приёмом, что comments.js's
 			// receiveComment (d-tag формата "{postId}:{commentId}", plaintext, без
 			// расшифровки) — нужен и для тела уведомления, и для click-нав, и для
@@ -1238,7 +1258,17 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 		// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
 		const applied = await receiveChannelMessage(ownerPubkey, dbKey, event);
 		// Этап 50 (N1) — см. пояснение у kind 30061 выше.
-		if (applied && event.pubkey !== ownerPubkey && !(await isChannelContentRead(ownerPubkey, channelId, event.created_at))) {
+		if (
+			applied &&
+			event.pubkey !== ownerPubkey &&
+			// Этап 74 — найдено живой проверкой: "available" (есть VIEW, браузит канал,
+			// НЕ подписан) получал уведомления о новом контенте наравне с "subscriber" —
+			// уведомления обязаны идти только тем, кто явно подписался ("Подписки"), не
+			// каждому, у кого просто есть доступ ("Доступные"). role !== "available"
+			// покрывает и "subscriber", и "owner" (сиблинг-устройство владельца).
+			channelRowForNotify?.role !== "available" &&
+			!(await isChannelContentRead(ownerPubkey, channelId, event.created_at))
+		) {
 			const dTag = event.tags.find((t) => t[0] === "d")?.[1];
 			const messageId = dTag?.slice(dTag.indexOf(":") + 1);
 			const messageRow = messageId

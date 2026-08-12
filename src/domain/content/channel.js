@@ -189,8 +189,18 @@ export async function receiveChannelMetadata(ownerPubkey, dbKey, event) {
 	if (!dTag) return;
 	const channelId = dTag[1];
 
+	// Этап 74 — найдено живой проверкой (revoke -> re-grant той же группы видимости):
+	// unview-уведомление (gift-wrap подписка) и это событие (#h-топик подписка) —
+	// ДВЕ независимые подписки, порядок между ними не гарантирован. Если unview
+	// применяется ПЕРВЫМ (deleteChannelLocally стирает эту строку), republish
+	// метаданных, пришедший СРАЗУ ПОСЛЕ, находит "неизвестный канал" и раньше
+	// НАВСЕГДА терялся (silent no-op + permanent isNewEvent dedup) — при повторной
+	// выдаче VIEW создавался пустой stub, никогда не заполнявшийся. throw делает
+	// это ретраебельным: тот же буфер/retry (М3-класс), что уже покрывает "версия
+	// ключа не готова" — сработает, когда receiveChannelKeyGrant создаст строку
+	// заново (тот же trigger point, transport.js).
 	const existing = await db.table("channels").get([ownerPubkey, channelId]);
-	if (!existing) return;
+	if (!existing) throw new ChannelContentNotReadyError();
 	// Этап 74 — Часть C, C-2 (RC-подобный класс, CONTRACTS.md/DESIGN.md "Этап 74"):
 	// 30060 replaceable — старая версия, доставленная ПОСЛЕ новой (resubscribe-
 	// backlog/второй relay), не должна откатывать name/description/rules.
@@ -344,7 +354,11 @@ export async function receiveAllowlistUpdate(ownerPubkey, dbKey, myPubkey, event
 		.equals(channelTag[1])
 		.and((r) => r.ownerPubkey === ownerPubkey)
 		.first();
-	if (!channelRow) return;
+	// Этап 74 — найдено живой проверкой (тот же revoke/re-grant race, что
+	// receiveChannelMetadata выше): "неизвестный канал" здесь может быть
+	// ТРАНЗИТНЫМ (unview ещё не сменился повторным грантом) — throw делает
+	// событие ретраебельным вместо permanent silent loss.
+	if (!channelRow) throw new ChannelContentNotReadyError();
 	if (channelRow.role === "owner") return;
 
 	// Этап 74 — найдено живой проверкой (CONTRACTS.md/DESIGN.md "Этап 74"): throw,
