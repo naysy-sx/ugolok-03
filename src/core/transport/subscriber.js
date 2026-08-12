@@ -20,6 +20,34 @@ export function createSubscriber(connection, options) {
     return q;
   }
 
+  // Этап 74 — найдено живой проверкой (не домысел): flush() и её вызывающий код
+  // (handleMessage/scheduleFlush ниже) НЕ awaits друг друга — новое событие,
+  // прилетевшее ПОКА один flush() ещё внутри await verifyBatch/onBatch, планирует
+  // СВОЙ независимый flush() (q.timer уже сброшен в начале текущего). Два вызова
+  // onBatch того же subId могли выполняться конкурентно — потребители вроде
+  // rebuildGroups (transport.js) делают "прочитать снимок -> пересчитать -> точно
+  // записать", и "устаревший" вызов мог физически завершить запись ПОСЛЕ
+  // "свежего", откатив состояние (живой баг: добавление участника в группу
+  // терялось). Серилизуем per-subId, тот же приём, что withGroupLock's fallback
+  // in-process mutex (mls-lock.js) — здесь без Web Locks: чисто внутрипроцессная
+  // гонка внутри одной вкладки, межвкладочная гарантия не нужна.
+  const flushChains = new Map(); // subId -> promise (хвост цепочки)
+
+  function serializedPerSubId(subId, fn) {
+    const previous = flushChains.get(subId) ?? Promise.resolve();
+    const next = previous.then(fn, fn);
+    // Цепочка продолжается независимо от исхода — ошибка одного flush не должна
+    // дедлочить очередь следующих (тот же принцип, что mls-lock.js).
+    flushChains.set(
+      subId,
+      next.then(
+        () => {},
+        () => {},
+      ),
+    );
+    return next;
+  }
+
   async function flush(subId) {
     const q = queues.get(subId);
     if (!q || q.events.length === 0) return;
@@ -30,11 +58,13 @@ export function createSubscriber(connection, options) {
     const batch = q.events;
     q.events = [];
 
-    const verified = await verifyBatch(batch);
-    const validEvents = batch.filter((_, i) => verified[i]);
-    if (validEvents.length > 0) {
-      await onBatch(validEvents, subId);
-    }
+    await serializedPerSubId(subId, async () => {
+      const verified = await verifyBatch(batch);
+      const validEvents = batch.filter((_, i) => verified[i]);
+      if (validEvents.length > 0) {
+        await onBatch(validEvents, subId);
+      }
+    });
   }
 
   function scheduleFlush(subId) {

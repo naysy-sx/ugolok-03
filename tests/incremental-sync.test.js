@@ -96,6 +96,39 @@ test("onCaughtUp вызывается на EOSE; onEvent вызывается н
 	controller.stop();
 });
 
+// Этап 74 — найдено живой проверкой: options.onEvent?.(...) вызывался БЕЗ await —
+// onBatch резолвился раньше, чем реально завершался вызывающий его код
+// (rebuildGroups и др. в transport.js). Проверяем, что downstream-сигнал
+// (onCaughtUp, зависящий от flush() в subscriber.js) не срабатывает, пока
+// асинхронный onEvent ещё не завершился.
+test("onEvent действительно await'ится — onCaughtUp не срабатывает, пока промис onEvent не разрешился", async () => {
+	const order = [];
+	let releaseOnEvent;
+	const gate = new Promise((resolve) => {
+		releaseOnEvent = resolve;
+	});
+	const { conn, ws } = setupConnected();
+	const controller = await startIncrementalSync(conn, PUBKEY, {
+		verifyBatch: acceptAllVerify,
+		onEvent: async (addedCount) => {
+			order.push("onEvent-start");
+			await gate;
+			order.push("onEvent-end");
+		},
+		onCaughtUp: () => order.push("caughtUp"),
+	});
+
+	ws._emit(["EVENT", "incremental-sync", ev("e1")]);
+	ws._emit(["EOSE", "incremental-sync"]);
+	await new Promise((r) => setTimeout(r, 10));
+	assert.deepEqual(order, ["onEvent-start"], "onCaughtUp не должен сработать, пока onEvent не завершился");
+
+	releaseOnEvent();
+	await new Promise((r) => setTimeout(r, 10));
+	assert.deepEqual(order, ["onEvent-start", "onEvent-end", "caughtUp"]);
+	controller.stop();
+});
+
 test("подписка ОСТАЁТСЯ открытой после EOSE — новые события ПОСЛЕ EOSE тоже обрабатываются (F-CS-10, живой поток)", async () => {
 	const onEventCalls = [];
 	const { conn, ws } = setupConnected();

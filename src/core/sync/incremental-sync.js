@@ -24,7 +24,13 @@ export async function startIncrementalSync(connection, pubkey, options = {}) {
 
       const { addedIds } = await mergeEvents(events);
       await setSyncState(connection.getUrl(), Math.floor(Date.now() / 1000));
-      options.onEvent?.(addedIds.length);
+      // Этап 74 — найдено живой проверкой: без await onBatch резолвился ДО того,
+      // как onEvent (transport.js — rebuildGroups и др.) реально дописывал Dexie.
+      // Следующий flush() того же subId (см. subscriber.js — теперь тоже
+      // сериализован per-subId) мог начать СВОЙ onEvent раньше, чем этот
+      // завершится — два независимых rebuildGroups гонялись за одной и той же
+      // строкой, "устаревший" мог записаться последним и откатить состояние.
+      await options.onEvent?.(addedIds.length);
     },
     onEose: () => {
       options.onCaughtUp?.();

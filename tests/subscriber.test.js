@@ -40,6 +40,16 @@ function acceptAllVerify(events) {
 	return events.map(() => true);
 }
 
+// Этап 74 — flush() теперь проходит через serializedPerSubId (per-subId
+// промис-цепочка, см. subscriber.js) — добавляет несколько микротасков между
+// вызовом flush() и реальным выполнением onBatch. Один `await Promise.resolve()`
+// (как было раньше, до сериализации) уже недостаточен; вместо подбора точного
+// числа тиков вручную — гоняем цепочку с запасом. Только микротаски (не
+// setTimeout) — совместимо с тестами на mock-таймерах ниже.
+async function flushMicrotasks() {
+	for (let i = 0; i < 8; i++) await Promise.resolve();
+}
+
 test("subscribe(): отправляет REQ с заданным subId и фильтрами", () => {
 	const { conn, ws } = setupConnected();
 	const sub = createSubscriber(conn, { verifyBatch: acceptAllVerify, onBatch: async () => {} });
@@ -67,7 +77,7 @@ test("EOSE форсирует флаш независимо от размера/
 	assert.equal(batches.length, 0, "до EOSE/размера/времени — не флашится");
 
 	sub.handleMessage(["EOSE", "sub1"]);
-	await Promise.resolve(); // onBatch асинхронный
+	await flushMicrotasks();
 	assert.equal(batches.length, 1);
 	assert.deepEqual(batches[0].map((e) => e.id), ["a", "b"]);
 	t.mock.timers.reset();
@@ -81,7 +91,7 @@ test("флаш по достижении batchSize — немедленно, б�
 
 	sub.handleMessage(["EVENT", "sub1", ev("a")]);
 	sub.handleMessage(["EVENT", "sub1", ev("b")]);
-	await Promise.resolve();
+	await flushMicrotasks();
 	assert.equal(batches.length, 1);
 	assert.equal(batches[0].length, 2);
 });
@@ -95,7 +105,7 @@ test("флаш по времени (batchWindowMs)", async (t) => {
 	sub.handleMessage(["EVENT", "sub1", ev("a")]);
 
 	t.mock.timers.tick(200);
-	await Promise.resolve();
+	await flushMicrotasks();
 	assert.equal(batches.length, 1);
 	t.mock.timers.reset();
 });
@@ -111,7 +121,7 @@ test("verifyBatch отфильтровывает невалидные — onBatc
 	sub.subscribe("sub1", [{}]);
 	sub.handleMessage(["EVENT", "sub1", ev("bad")]);
 	sub.handleMessage(["EVENT", "sub1", ev("good")]);
-	await Promise.resolve();
+	await flushMicrotasks();
 	assert.deepEqual(batches[0].map((e) => e.id), ["good"]);
 });
 
@@ -137,7 +147,7 @@ test("две независимые подписки не смешивают с�
 	sub.subscribe("subB", [{}]);
 	sub.handleMessage(["EVENT", "subA", ev("a1")]);
 	sub.handleMessage(["EVENT", "subB", ev("b1")]);
-	await Promise.resolve();
+	await flushMicrotasks();
 	assert.deepEqual(batchesBySub.subA.map((e) => e.id), ["a1"]);
 	assert.deepEqual(batchesBySub.subB.map((e) => e.id), ["b1"]);
 });
@@ -162,6 +172,81 @@ test("onEose вызывается ПОСЛЕ flush() текущего батча
 	sub.handleMessage(["EOSE", "sub1"]);
 	await new Promise((resolve) => setTimeout(resolve, 10));
 	assert.equal(eoseCalledAfterBatch, true);
+});
+
+// Этап 74 — АДВЕРСАРНЫЙ (живой баг): flush() того же subId раньше не была
+// защищена от повторного входа — новое событие, прилетевшее ПОКА onBatch
+// предыдущего flush() ещё выполняется, планировало СВОЙ независимый flush(),
+// и оба onBatch могли выполняться конкурентно (потребители вроде rebuildGroups
+// в transport.js делают "снимок -> пересчёт -> запись" — конкурентная запись
+// откатывала состояние). Проверяем строгую сериализацию: onBatch("b") не
+// стартует, пока onBatch("a") не завершится, даже если "a" искусственно
+// задержан, а "b" прилетает ДО завершения "a".
+test("АДВЕРСАРНО: два flush() одного subId НЕ выполняются конкурентно — второй onBatch ждёт завершения первого", async () => {
+	const order = [];
+	let releaseA;
+	const gateA = new Promise((resolve) => {
+		releaseA = resolve;
+	});
+	const { conn } = setupConnected();
+	const sub = createSubscriber(conn, {
+		batchSize: 1,
+		verifyBatch: acceptAllVerify,
+		onBatch: async (evs) => {
+			const id = evs[0].id;
+			order.push(`${id}-start`);
+			if (id === "a") await gateA;
+			order.push(`${id}-end`);
+		},
+	});
+	sub.subscribe("sub1", [{}]);
+
+	sub.handleMessage(["EVENT", "sub1", ev("a")]); // flush() запускается, onBatch("a") зависает на gateA
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.deepEqual(order, ["a-start"], "onBatch(a) стартовал, но ещё не завершился");
+
+	sub.handleMessage(["EVENT", "sub1", ev("b")]); // второй flush() того же subId, ПОКА первый ещё внутри onBatch
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.deepEqual(order, ["a-start"], "onBatch(b) НЕ должен стартовать, пока onBatch(a) не завершился");
+
+	releaseA();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.deepEqual(order, ["a-start", "a-end", "b-start", "b-end"], "строгий порядок: b начинается только после конца a");
+});
+
+test("две независимые подписки НЕ блокируют друг друга через сериализацию flush()", async () => {
+	const order = [];
+	let releaseA;
+	const gateA = new Promise((resolve) => {
+		releaseA = resolve;
+	});
+	const { conn } = setupConnected();
+	const sub = createSubscriber(conn, {
+		batchSize: 1,
+		verifyBatch: acceptAllVerify,
+		onBatch: async (evs, subId) => {
+			order.push(`${subId}-start`);
+			if (subId === "subA") await gateA;
+			order.push(`${subId}-end`);
+		},
+	});
+	sub.subscribe("subA", [{}]);
+	sub.subscribe("subB", [{}]);
+
+	sub.handleMessage(["EVENT", "subA", ev("a")]); // зависает на gateA
+	await Promise.resolve();
+	await Promise.resolve();
+	sub.handleMessage(["EVENT", "subB", ev("b")]); // другой subId — не должен ждать subA
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.deepEqual(order, ["subA-start", "subB-start", "subB-end"], "subB завершается, не дожидаясь subA");
+
+	releaseA();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.deepEqual(order, ["subA-start", "subB-start", "subB-end", "subA-end"]);
 });
 
 test("onEose не обязателен (options без него) — EOSE всё равно флашит батч без ошибки", async () => {
