@@ -203,6 +203,36 @@ function bufferUndecryptedChannelEvent(event) {
 	pendingUndecryptedByChannel.set(channelTopicHex, list);
 }
 
+// Этап 74 — найдено живой проверкой (шторм дублирующихся push-уведомлений на
+// один комментарий/сообщение чата после revoke->re-add): retryBufferedChannelContentEvents
+// (ниже) вызывается из ДВУХ независимых подписок — refreshChannelContentSubscription
+// (после каждого успешного контент-события) и refreshChannelGrantSubscription
+// (после нового гранта) — их flush() сериализован per-subId (subscriber.js), но
+// РАЗНЫЕ subId друг друга не блокируют. Если оба вызова для ОДНОГО channelTopicHex
+// пересекаются по времени (типичный случай сразу после re-add: грант и бэклог
+// контента приходят почти одновременно), оба читают ОДИН И ТОТ ЖЕ снимок буфера
+// ДО того, как любой успевает записать его обратно — оба применяют одни и те же
+// буферизованные события, каждое генерирует свой notifyAndLog (receiveComment/
+// receiveChannelMessage, в отличие от receivePost, не идемпотентны к повторному
+// event.id — отдельного LWW-гейта на них нет). Серилизуем per-channelTopicHex,
+// тот же приём, что withGroupLock/subscriber.js's serializedPerSubId.
+const channelRetryChains = new Map(); // channelTopicHex -> promise (хвост цепочки)
+
+function serializedPerChannelTopic(channelTopicHex, fn) {
+	const previous = channelRetryChains.get(channelTopicHex) ?? Promise.resolve();
+	const next = previous.then(fn, fn);
+	// Цепочка продолжается независимо от исхода — ошибка одного retry не должна
+	// дедлочить очередь следующих (тот же принцип, что mls-lock.js/subscriber.js).
+	channelRetryChains.set(
+		channelTopicHex,
+		next.then(
+			() => {},
+			() => {},
+		),
+	);
+	return next;
+}
+
 // Этап 60 — кэш обнаруженных inbox-relay (kind:10050) получателей: без него
 // КАЖДОЕ сообщение в чате делало бы новый REQ+EOSE round-трип перед попыткой
 // доставки. TTL, не "навсегда" — получатель может сменить relay-список в
@@ -1392,27 +1422,29 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 // зависимость доедется следующим успешным событием, не обязана решаться сразу.
 async function retryBufferedChannelContentEvents(channelTopicHex, ownerPubkey, dbKey, settings) {
 	if (!channelTopicHex) return false;
-	const list = pendingUndecryptedByChannel.get(channelTopicHex);
-	if (!list || list.length === 0) return false;
-	let anySucceeded = false;
-	const stillPending = [];
-	for (const entry of list) {
-		try {
-			await processOneChannelContentEvent(ownerPubkey, dbKey, settings, entry.event);
-			anySucceeded = true;
-		} catch (e) {
-			if (e instanceof ChannelContentNotReadyError && Date.now() - entry.firstSeenAt < CHANNEL_CONTENT_RETRY_TTL_MS) {
-				stillPending.push(entry);
-			} else if (e instanceof ChannelContentNotReadyError) {
-				console.warn("retryBufferedChannelContentEvents: событие окончательно не готово за TTL, отброшено", entry.event.id, e);
+	return serializedPerChannelTopic(channelTopicHex, async () => {
+		const list = pendingUndecryptedByChannel.get(channelTopicHex);
+		if (!list || list.length === 0) return false;
+		let anySucceeded = false;
+		const stillPending = [];
+		for (const entry of list) {
+			try {
+				await processOneChannelContentEvent(ownerPubkey, dbKey, settings, entry.event);
+				anySucceeded = true;
+			} catch (e) {
+				if (e instanceof ChannelContentNotReadyError && Date.now() - entry.firstSeenAt < CHANNEL_CONTENT_RETRY_TTL_MS) {
+					stillPending.push(entry);
+				} else if (e instanceof ChannelContentNotReadyError) {
+					console.warn("retryBufferedChannelContentEvents: событие окончательно не готово за TTL, отброшено", entry.event.id, e);
+				}
+				// иные ошибки (повреждено/не моё и т.п.) — тихий discard, тот же принцип,
+				// что исходный catch{} onBatch ниже.
 			}
-			// иные ошибки (повреждено/не моё и т.п.) — тихий discard, тот же принцип,
-			// что исходный catch{} onBatch ниже.
 		}
-	}
-	if (stillPending.length > 0) pendingUndecryptedByChannel.set(channelTopicHex, stillPending);
-	else pendingUndecryptedByChannel.delete(channelTopicHex);
-	return anySucceeded;
+		if (stillPending.length > 0) pendingUndecryptedByChannel.set(channelTopicHex, stillPending);
+		else pendingUndecryptedByChannel.delete(channelTopicHex);
+		return anySucceeded;
+	});
 }
 
 // Этап 30 — kind 30060 (метаданные, channelKey-зашифрованные, replaceable) и kind 30054
