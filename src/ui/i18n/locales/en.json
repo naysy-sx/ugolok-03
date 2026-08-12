@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "Channel «{{channel}}» was deleted by the owner",
 		"channelModerationTitle": "Moderation in channel «{{channel}}»",
 		"channelModerationBody": "Changes in the channel — see the Moderation tab",
+		"oldHistoryUnavailableTitle": "Some channel history is unavailable",
+		"oldHistoryUnavailableBody": "Some older comments in the channel “{{channel}}” are no longer visible to you — the channel's encryption key was updated while you didn't have access.",
 		"newMessageTitle": "New message from {{username}}",
 		"contactNewRequestTitle": "New contact request from {{username}}",
 		"contactAcceptedTitle": "{{username}} accepted your request",

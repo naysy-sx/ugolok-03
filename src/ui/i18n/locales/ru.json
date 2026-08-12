@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "Канал «{{channel}}» удалён владельцем",
 		"channelModerationTitle": "Модерация канала «{{channel}}»",
 		"channelModerationBody": "Изменения в канале — см. вкладку Модерация",
+		"oldHistoryUnavailableTitle": "Часть истории канала недоступна",
+		"oldHistoryUnavailableBody": "Некоторые старые комментарии в канале «{{channel}}» вам больше не видны — ключ шифрования канала обновился, пока у вас не было доступа.",
 		"newMessageTitle": "Новое сообщение от {{username}}",
 		"contactNewRequestTitle": "Новый запрос в контакты от {{username}}",
 		"contactAcceptedTitle": "{{username}} принял(а) вашу заявку",

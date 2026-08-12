@@ -40,7 +40,7 @@ import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
-import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
+import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
@@ -537,6 +537,40 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// applyChannelUnviewRumor сама сверяет его с реальным владельцем канала.
 						await applyChannelUnviewRumor(pubkeyHex, dbKey, rumor);
 						activityChanged = true; // channels.jsx узнаёт, что канал исчез
+					} else if (rumor.kind === CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND) {
+						// Этап 74 — найдено живой проверкой (второй заход, "канал вернулся, но
+						// пуст"): чисто информационное уведомление (channel-visibility.js's
+						// notifyOldHistoryUnavailableIfNeeded) — ничего локально не мутирует,
+						// только объясняет пользователю, ПОЧЕМУ часть комментариев не появится
+						// (криптографически неразрешимо, см. её же комментарий). category
+						// "moderation" — тот же принцип, что channelDeletedTitle/бан ниже:
+						// принудительная доставка (settings не должны молча спрятать причину
+						// "почему канал выглядит неполным").
+						const settings = await loadUiSettings(pubkeyHex, dbKey);
+						let hOldHistoryChannelId;
+						try {
+							({ channelId: hOldHistoryChannelId } = JSON.parse(rumor.content));
+						} catch {
+							hOldHistoryChannelId = null;
+						}
+						if (hOldHistoryChannelId) {
+							const channelRowRaw = await db.table("channels").get([pubkeyHex, hOldHistoryChannelId]);
+							const oldHistoryChannelName = channelRowRaw ? fromEncryptedRow(channelRowRaw, dbKey).name || "канал без названия" : "канал без названия";
+							const oldHistoryNavTarget = { screen: "channels", channelId: hOldHistoryChannelId, subTab: "posts" };
+							const oldHistoryTitleKey = "journal.oldHistoryUnavailableTitle";
+							const oldHistoryBodyKey = "journal.oldHistoryUnavailableBody";
+							const oldHistoryBodyParams = { channel: oldHistoryChannelName };
+							await notifyAndLog(pubkeyHex, dbKey, settings, "moderation", "ban", {
+								title: t(oldHistoryTitleKey),
+								body: t(oldHistoryBodyKey, oldHistoryBodyParams),
+								titleKey: oldHistoryTitleKey,
+								bodyKey: oldHistoryBodyKey,
+								bodyParams: oldHistoryBodyParams,
+								navTarget: oldHistoryNavTarget,
+								onClick: () => navigateFromNotification(oldHistoryNavTarget),
+								occurredAt: rumor.created_at * 1000,
+							});
+						}
 					} else if (rumor.kind === CHANNEL_REPORT_KIND) {
 						// Этап 33 — жалоба/авто-репорт игнора, приватно владельцу. reporterPubkey —
 						// ИЗ unwrap (rumor.pubkey), не из тега (тот же принцип, что везде).

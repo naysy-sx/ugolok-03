@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "チャンネル「{{channel}}」がオーナーによって削除されました",
 		"channelModerationTitle": "チャンネル「{{channel}}」でモデレーション",
 		"channelModerationBody": "チャンネルに変更あり — モデレーションタブを確認してください",
+		"oldHistoryUnavailableTitle": "チャンネル履歴の一部が利用できません",
+		"oldHistoryUnavailableBody": "チャンネル「{{channel}}」の古いコメントの一部は表示できなくなりました — アクセス権がない間にチャンネルの暗号化キーが更新されたためです。",
 		"newMessageTitle": "{{username}}さんから新しいメッセージ",
 		"contactNewRequestTitle": "{{username}}さんから新しい連絡先リクエスト",
 		"contactAcceptedTitle": "{{username}}さんがあなたのリクエストを承認しました",

@@ -22,6 +22,18 @@ export const CHANNEL_SUBSCRIBE_REQUEST_KIND = 3002;
 // отозванному, невидим остальным участникам группы/канала.
 export const CHANNEL_UNVIEW_KIND = 3007;
 
+// Этап 74 — найдено живой проверкой (второй заход, "канал вернулся, но пуст"):
+// посты владельца переиздаются под новой версией ключа при ротации
+// (revokeViewFromMember -> post.js's republishAllPostsUnderCurrentKey), но
+// КОММЕНТАРИИ переиздать нельзя (подписаны авторами, не владельцем — владелец
+// физически не может переподписать чужим приватным ключом). Читатель,
+// получающий VIEW под версией > 1 (канал УЖЕ пережил хотя бы одну ротацию —
+// не важно, был ли отозван именно ОН, история до ротации в любом случае
+// недоступна ЛЮБОМУ новому/повторному читателю), должен явно узнать об этом,
+// а не тихо видеть пустые посты без комментариев. Приватный (gift-wrap) сигнал,
+// тот же уровень, что CHANNEL_UNVIEW_KIND — информационный, не про доступ.
+export const CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND = 3009;
+
 async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
@@ -47,6 +59,12 @@ export async function sendSubscribeRequest(requesterPrivKey, ownerPubkey, channe
 // channelKey-шифровании поверх).
 export function buildChannelUnviewRumor(channelId) {
 	return { kind: CHANNEL_UNVIEW_KIND, content: JSON.stringify({ channelId }), tags: [], created_at: Math.floor(Date.now() / 1000) };
+}
+
+// channelId — та же схема, что buildChannelUnviewRumor выше (получатель узнаёт
+// "какой канал" из своей же локальной строки, ownerPubkey не сериализуется).
+export function buildChannelOldHistoryUnavailableRumor(channelId) {
+	return { kind: CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, content: JSON.stringify({ channelId }), tags: [], created_at: Math.floor(Date.now() / 1000) };
 }
 
 // channel: {channelId, channelTopic (hex), channelKey (hex)}. F-CH-04 — kind 30053,

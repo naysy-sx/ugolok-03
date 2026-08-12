@@ -7,8 +7,9 @@ import { generateChannelKey, encryptChannelContent } from "../../core/crypto/cha
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
 import { deriveMasterSecret } from "../../core/crypto/derivation.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
-import { sendViewGrant, buildChannelUnviewRumor } from "./channel-access.js";
+import { sendViewGrant, buildChannelUnviewRumor, buildChannelOldHistoryUnavailableRumor } from "./channel-access.js";
 import { deleteChannelLocally } from "./moderation.js";
+import { republishAllPostsUnderCurrentKey } from "./post.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, COMMENT_ALLOWLISTS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { lwwWinner } from "../../core/sync/lww.js";
@@ -146,6 +147,15 @@ export async function revokeViewFromMember(ownerPubkey, ownerPrivKey, dbKey, cha
 	);
 	await requirePublishOk(publish, metaEvent);
 
+	// Этап 74 — найдено живой проверкой (второй заход на "канал-призрак"): ТОТ ЖЕ
+	// класс проблемы, что метаданные выше, но для постов (kind 30061) — на relay
+	// они остаются зашифрованы СТАРОЙ версией, повторно добавленный читатель
+	// никогда не получит v_old заново и не расшифрует их. Переиздаём под НОВОЙ
+	// версией (post.js's republishAllPostsUnderCurrentKey — best-effort per-пост,
+	// не откатывает уже совершённую ротацию при частичном сбое). КОММЕНТАРИИ
+	// переиздать НЕЛЬЗЯ (подписаны авторами, не владельцем) — см. её же комментарий.
+	await republishAllPostsUnderCurrentKey(ownerPubkey, ownerPrivKey, dbKey, channelId, publish);
+
 	const oldAllowlistRow = fromEncryptedRow(await db.table("commentAllowlists").get([ownerPubkey, channelId, vOld]), dbKey);
 	if (oldAllowlistRow) {
 		const newAuthors = oldAllowlistRow.allowedAuthors.filter((p) => p !== targetPubkey);
@@ -251,6 +261,7 @@ export async function grantIfNewlyVisible(ownerPubkey, ownerPrivKey, dbKey, pubk
 		const channel = { channelId, channelTopic: channelRow.channelTopic, channelKey: keyRow.channelKey };
 		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, pubkey, meta.currentVersion, publish);
 		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey: pubkey });
+		await notifyOldHistoryUnavailableIfNeeded(ownerPubkey, ownerPrivKey, meta.currentVersion, channelId, pubkey, publish);
 	}
 }
 
@@ -262,6 +273,24 @@ export async function grantIfNewlyVisible(ownerPubkey, ownerPrivKey, dbKey, pubk
 export async function listChannelVisibilityGroupIds(ownerPubkey, channelId) {
 	const rows = await db.table("channelVisibilityGroups").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
 	return rows.map((r) => r.groupId);
+}
+
+// Этап 74 — best-effort уведомление читателя, получающего VIEW под версией
+// ключа > 1: канал УЖЕ пережил хотя бы одну ротацию (кого-то отозвали и/или
+// вернули), значит существуют комментарии, зашифрованные более старыми
+// версиями, которые ЭТОМУ читателю (новому или повторному — не важно) больше
+// никогда не станут доступны (комментарии переиздать нельзя, см.
+// republishAllPostsUnderCurrentKey's комментарий, post.js). Сбой доставки не
+// должен откатывать уже совершённую выдачу VIEW — та же философия, что
+// revokeViewFromMember's unview-уведомление.
+async function notifyOldHistoryUnavailableIfNeeded(ownerPubkey, ownerPrivKey, currentVersion, channelId, targetPubkey, publish) {
+	if (currentVersion <= 1) return;
+	try {
+		const rumor = nip59Wrap(buildChannelOldHistoryUnavailableRumor(channelId), ownerPrivKey, targetPubkey);
+		await requirePublishOk(publish, rumor);
+	} catch (e) {
+		console.warn("notifyOldHistoryUnavailableIfNeeded: не удалось уведомить о недоступной истории", e);
+	}
 }
 
 // Привязывает уже СУЩЕСТВУЮЩИЙ канал к ДОПОЛНИТЕЛЬНОЙ группе (после создания).
@@ -282,6 +311,7 @@ export async function addVisibilityGroup(ownerPubkey, ownerPrivKey, dbKey, chann
 		if (existingReader) continue;
 		await sendViewGrant(ownerPubkey, ownerPrivKey, channel, pubkey, meta.currentVersion, publish);
 		await db.table("channelReaders").put({ ownerPubkey, channelId, readerPubkey: pubkey });
+		await notifyOldHistoryUnavailableIfNeeded(ownerPubkey, ownerPrivKey, meta.currentVersion, channelId, pubkey, publish);
 	}
 
 	await db.table("channelVisibilityGroups").put({ ownerPubkey, channelId, groupId });

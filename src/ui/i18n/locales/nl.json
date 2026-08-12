@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "Kanaal ‘{{channel}}’ is verwijderd door de eigenaar",
 		"channelModerationTitle": "Moderatie in kanaal ‘{{channel}}’",
 		"channelModerationBody": "Wijzigingen in het kanaal — zie het tabblad Moderatie",
+		"oldHistoryUnavailableTitle": "Een deel van de kanaalgeschiedenis is niet beschikbaar",
+		"oldHistoryUnavailableBody": "Sommige oudere reacties in het kanaal '{{channel}}' zijn niet meer voor u zichtbaar — de versleutelingssleutel van het kanaal is bijgewerkt terwijl u geen toegang had.",
 		"newMessageTitle": "Nieuw bericht van {{username}}",
 		"contactNewRequestTitle": "Nieuw contactverzoek van {{username}}",
 		"contactAcceptedTitle": "{{username}} heeft uw verzoek geaccepteerd",

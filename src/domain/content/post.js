@@ -197,3 +197,52 @@ export async function listChannelPosts(ownerPubkey, dbKey, channelId) {
 	const raw = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
 	return raw.filter((r) => r.channelId === channelId && !r.deleted).map((r) => fromEncryptedRow(r, dbKey));
 }
+
+// Этап 74 — найдено живой проверкой: revokeViewFromMember (channel-visibility.js)
+// ротирует channelKey, но посты на relay остаются зашифрованы СТАРОЙ версией —
+// повторно добавленный читатель (та же/другая группа видимости) получает ТОЛЬКО
+// новую версию ключа и никогда не расшифрует историю (relay хранит replaceable-
+// событие под старым конвертом навсегда, ключ к нему больше никому не выдаётся).
+// Тот же приём, что revokeViewFromMember уже делает для метаданных канала (kind
+// 30060) — переиздаём ЖИВЫЕ (не draft, не deleted) посты ПОД ТЕКУЩЕЙ версией
+// ключа, СТАТУС не меняется (не republishWithStatus — та делает FSM-переход).
+// Best-effort по каждому посту (прецедент backfillOwnChannelGrants, channel.js):
+// падение одного publish не должно откатывать уже ротированный ключ выше или
+// блокировать переиздачу остальных постов.
+//
+// КОММЕНТАРИИ НЕ переиздаются здесь и не могут быть переизданы вообще —
+// подписаны АВТОРОМ комментария (не обязательно владельцем канала), у владельца
+// физически нет приватного ключа автора. Это криптографическое ограничение
+// модели, не пробел реализации (channel-access.js's
+// buildChannelOldHistoryUnavailableRumor уведомляет об этом читателя явно).
+export async function republishAllPostsUnderCurrentKey(ownerPubkey, ownerPrivKey, dbKey, channelId, publish) {
+	const channelRow = await db.table("channels").get([ownerPubkey, channelId]);
+	if (!channelRow) return;
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, channelId]), dbKey);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, channelId, meta.currentVersion]), dbKey);
+
+	const raw = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const posts = raw.map((r) => fromEncryptedRow(r, dbKey)).filter((p) => p.channelId === channelId && !p.deleted && p.status !== "draft");
+
+	for (const post of posts) {
+		try {
+			const content = encryptChannelContent(JSON.stringify({ text: post.text, attachments: post.attachments, status: post.status }), keyRow.channelKey, meta.currentVersion);
+			const event = sign(
+				{
+					kind: 30061,
+					content,
+					tags: [
+						["d", `${channelId}:${post.id}`],
+						["h", channelRow.channelTopic],
+					],
+					created_at: Math.floor(Date.now() / 1000),
+				},
+				ownerPrivKey,
+			);
+			await requirePublishOk(publish, event);
+			await db.table("posts").update([ownerPubkey, post.id], { keyVersion: meta.currentVersion, lastEventCreatedAt: event.created_at, lastEventId: event.id });
+		} catch (e) {
+			console.warn("republishAllPostsUnderCurrentKey: не удалось переиздать пост, остальные всё равно переиздаются", post.id, e);
+		}
+	}
+}

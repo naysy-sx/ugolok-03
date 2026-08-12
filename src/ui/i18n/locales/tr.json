@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "«{{channel}}» kanalı sahibi tarafından silindi",
 		"channelModerationTitle": "«{{channel}}» kanalında moderasyon",
 		"channelModerationBody": "Kanalda değişiklikler — Moderasyon sekmesine bakın",
+		"oldHistoryUnavailableTitle": "Kanal geçmişinin bir kısmı kullanılamıyor",
+		"oldHistoryUnavailableBody": "«{{channel}}» kanalındaki bazı eski yorumlar artık sizin için görünmüyor — erişiminiz olmadığı sırada kanalın şifreleme anahtarı güncellendi.",
 		"newMessageTitle": "{{username}} kişisinden yeni mesaj",
 		"contactNewRequestTitle": "{{username}} kişisinden yeni kişi isteği",
 		"contactAcceptedTitle": "{{username}} isteğinizi kabul etti",

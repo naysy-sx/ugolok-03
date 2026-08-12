@@ -19,12 +19,13 @@ import {
 	CHANNEL_VISIBILITY_SYNC_KIND,
 	rebuildChannelVisibilityGroups,
 } from "../src/domain/content/channel-visibility.js";
-import { CHANNEL_UNVIEW_KIND } from "../src/domain/content/channel-access.js";
+import { CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
 import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
 import { sign } from "../src/core/crypto/sign.js";
 import { encrypt as nip44Encrypt } from "../src/core/crypto/nip44.js";
 import { groups, createGroupAction, addGroupMemberAction, removeGroupMemberAction } from "../src/ui/signals/contacts.js";
+import { createDraftPost, publishPost, receivePost, listChannelPosts } from "../src/domain/content/post.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -52,6 +53,7 @@ beforeEach(async () => {
 	await db.table("channelReaders").clear();
 	await db.table("events").clear();
 	await db.table("bannedMembers").clear();
+	await db.table("posts").clear();
 	groups.value = [];
 });
 
@@ -673,4 +675,99 @@ test("ИНТЕГРАЦИЯ: addGroupMemberAction (signals/contacts.js) — уч�
 	assert.ok(grantEvent, "Боб обязан получить VIEW-грант сразу при добавлении в уже-видящую группу");
 	const readerRow = await db.table("channelReaders").get([ALICE_PUB, channelId, BOB_PUB]);
 	assert.ok(readerRow);
+});
+
+// --- Уведомление о недоступности старой истории (этап 74, найдено живой
+// проверкой: комментарии физически невозможно переиздать под новой версией
+// ключа — их подписывает АВТОР, не владелец канала). Читатель, получающий
+// VIEW под версией > 1, должен явно узнать, что часть истории комментариев
+// ему больше не видна.
+
+function findOldHistoryRumor(published, recipientPrivKey) {
+	return published
+		.filter((e) => e.kind === 1059)
+		.find((e) => {
+			try {
+				return nip59Unwrap(e, recipientPrivKey).kind === CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND;
+			} catch {
+				return false;
+			}
+		});
+}
+
+test("addVisibilityGroup: НЕ отправляет уведомление о недоступной истории, если канал НИКОГДА не ротировался (version===1)", async () => {
+	const { channelId } = await setupChannelOneGroup(); // version=1 с момента создания
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	await db.table("groupMembers").add({ groupId: "family", pubkey: CAROL_PUB });
+
+	const published = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish(published));
+	assert.equal(findOldHistoryRumor(published, CAROL_PRIV), undefined, "version===1 — истории до ротации не существует, уведомлять не о чем");
+});
+
+test("addVisibilityGroup: отправляет уведомление о недоступной истории, если канал УЖЕ пережил ротацию (version>1)", async () => {
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}
+	// Ротация: отзываем Mallory — версия становится 2.
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, MALLORY_PUB, capturingPublish([]));
+
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	await db.table("groupMembers").add({ groupId: "family", pubkey: CAROL_PUB });
+
+	const published = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish(published));
+	const rumorWrap = findOldHistoryRumor(published, CAROL_PRIV);
+	assert.ok(rumorWrap, "Кэрол (новый читатель, версия уже >1) обязана получить уведомление");
+	const rumor = nip59Unwrap(rumorWrap, CAROL_PRIV);
+	assert.deepEqual(JSON.parse(rumor.content), { channelId });
+});
+
+test("grantIfNewlyVisible: отправляет уведомление о недоступной истории при retroactive-гранте, если version>1", async () => {
+	const { channelId } = await setupChannelOneGroup(); // friends = {Боб, Mallory}
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, MALLORY_PUB, capturingPublish([])); // version=2
+
+	// "family" привязана к каналу ДО того, как Кэрол стала её участником —
+	// grantIfNewlyVisible (не addVisibilityGroup) обязана retroactive-выдать грант.
+	await db.table("groups").add({ owner: ALICE_PUB, id: "family", name: "Семья" });
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "family", capturingPublish([]));
+
+	await db.table("groupMembers").add({ groupId: "family", pubkey: CAROL_PUB });
+	const published = [];
+	await grantIfNewlyVisible(ALICE_PUB, ALICE_PRIV, DB_KEY, CAROL_PUB, "family", capturingPublish(published));
+
+	const grantEvent = published.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")?.[1] === CAROL_PUB);
+	assert.ok(grantEvent, "Кэрол обязана получить retroactive VIEW-грант");
+	const rumorWrap = findOldHistoryRumor(published, CAROL_PRIV);
+	assert.ok(rumorWrap, "Кэрол (version>1) обязана получить уведомление о недоступной истории");
+});
+
+test("ИНТЕГРАЦИЯ: revoke -> republish постов -> re-add — повторно добавленный читатель видит ПОСТЫ и получает уведомление о недоступных комментариях", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	const created = [];
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "три пятёрки", description: "d", rules: "" }, ["friends"], capturingPublish(created));
+	const grantBob = created.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")[1] === BOB_PUB);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, grantBob);
+
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "пост до ротации", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+
+	// Алиса отзывает Боба (снимает галочку видимости группы), потом возвращает.
+	const revokePublished = [];
+	await revokeViewFromMember(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, BOB_PUB, capturingPublish(revokePublished));
+	const republishedPost = revokePublished.find((e) => e.kind === 30061);
+	assert.ok(republishedPost, "revokeViewFromMember обязана переиздать пост при ротации");
+
+	const readdPublished = [];
+	await addVisibilityGroup(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, "friends", capturingPublish(readdPublished));
+
+	const newGrantForBob = readdPublished.find((e) => e.kind === 30053 && e.tags.find((t) => t[0] === "p")[1] === BOB_PUB);
+	assert.ok(newGrantForBob, "Боб обязан получить новый грант при re-add");
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, newGrantForBob);
+
+	await receivePost(BOB_PUB, DB_KEY, republishedPost);
+	const bobPosts = await listChannelPosts(BOB_PUB, DB_KEY, channelId);
+	assert.equal(bobPosts.find((p) => p.id === postId)?.text, "пост до ротации", "Боб обязан снова увидеть пост, созданный ДО ротации");
+
+	const oldHistoryRumor = findOldHistoryRumor(readdPublished, BOB_PRIV);
+	assert.ok(oldHistoryRumor, "Боб обязан получить уведомление о недоступной истории комментариев");
 });

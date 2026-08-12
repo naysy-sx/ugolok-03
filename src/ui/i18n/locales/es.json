@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "El canal «{{channel}}» fue eliminado por el propietario",
 		"channelModerationTitle": "Moderación en el canal «{{channel}}»",
 		"channelModerationBody": "Cambios en el canal — ver la pestaña Moderación",
+		"oldHistoryUnavailableTitle": "Parte del historial del canal no está disponible",
+		"oldHistoryUnavailableBody": "Algunos comentarios antiguos del canal «{{channel}}» ya no son visibles para ti — la clave de cifrado del canal se actualizó mientras no tenías acceso.",
 		"newMessageTitle": "Nuevo mensaje de {{username}}",
 		"contactNewRequestTitle": "Nueva solicitud de contacto de {{username}}",
 		"contactAcceptedTitle": "{{username}} aceptó tu solicitud",

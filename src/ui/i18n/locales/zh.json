@@ -252,6 +252,8 @@
 		"channelDeletedTitle": "频道“{{channel}}”已被所有者删除",
 		"channelModerationTitle": "频道“{{channel}}”中的管理操作",
 		"channelModerationBody": "频道有变更——请查看管理标签页",
+		"oldHistoryUnavailableTitle": "部分频道历史记录不可用",
+		"oldHistoryUnavailableBody": "频道「{{channel}}」中的部分旧评论对您不再可见——在您没有访问权限期间，频道的加密密钥已更新。",
 		"newMessageTitle": "来自 {{username}} 的新消息",
 		"contactNewRequestTitle": "来自 {{username}} 的新联系人请求",
 		"contactAcceptedTitle": "{{username}} 接受了您的请求",

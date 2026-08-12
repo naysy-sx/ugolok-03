@@ -5,7 +5,7 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/channel.js";
-import { decryptChannelContent } from "../src/core/crypto/channel-key.js";
+import { decryptChannelContent, encryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
 import {
 	createDraftPost,
 	updateDraftPost,
@@ -15,9 +15,10 @@ import {
 	deletePost,
 	receivePost,
 	listChannelPosts,
+	republishAllPostsUnderCurrentKey,
 } from "../src/domain/content/post.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
-import { CHANNEL_KEYS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
+import { CHANNEL_KEYS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -261,4 +262,84 @@ test("АДВЕРСАРНЫЙ (DESIGN.md формализация 2): Mallory (VI
 	assert.equal(applied, false, "пост НЕ от создателя канала обязан быть отклонён");
 	const bobPosts = await listChannelPosts(BOB_PUB, DB_KEY, channelId);
 	assert.equal(bobPosts.length, 0);
+});
+
+// --- republishAllPostsUnderCurrentKey (этап 74, найдено живой проверкой:
+// revokeViewFromMember ротирует channelKey, но посты на relay оставались
+// зашифрованы СТАРОЙ версией — повторно добавленный читатель никогда не
+// расшифровывал историю). Симулируем ротацию напрямую (без revokeViewFromMember/
+// channel-visibility.js — изолированный тест доменной функции).
+
+async function rotateChannelKeyManually(channelId, newVersion) {
+	const newKeyHex = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+	await db.table("channelKeys").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, channelId, keyVersion: newVersion, channelKey: newKeyHex }, CHANNEL_KEYS_PLAINTEXT_FIELDS, DB_KEY));
+	await db.table("channelKeyMeta").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, channelId, currentVersion: newVersion }, CHANNEL_KEY_META_PLAINTEXT_FIELDS, DB_KEY));
+	return newKeyHex;
+}
+
+test("republishAllPostsUnderCurrentKey: переиздаёт published-пост под НОВОЙ версией ключа — читатель, получивший её ПОСЛЕ ротации, расшифровывает", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "старый пост", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+
+	const newKeyHex = await rotateChannelKeyManually(channelId, 2);
+
+	const published = [];
+	await republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+	const republishedEvent = published.find((e) => e.kind === 30061);
+	assert.ok(republishedEvent, "обязан переиздать пост");
+	assert.deepEqual(republishedEvent.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`], "тот же d-tag — replaceable замена на relay");
+
+	const plaintext = decryptChannelContent(republishedEvent.content, { 2: newKeyHex });
+	assert.deepEqual(JSON.parse(plaintext), { text: "старый пост", attachments: [], status: "published" });
+
+	// Читатель, получивший грант именно ЭТОЙ (новой) версии, расшифровывает.
+	const aliceChannelRow = fromEncryptedRow(await db.table("channels").get([ALICE_PUB, channelId]), DB_KEY);
+	const newGrantContent = encryptChannelKeyGrant(channelId, aliceChannelRow.channelTopic, newKeyHex, 2, ALICE_PRIV, BOB_PUB);
+	await receiveChannelKeyGrant(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, { content: newGrantContent });
+	await receivePost(BOB_PUB, DB_KEY, republishedEvent);
+	const bobPosts = await listChannelPosts(BOB_PUB, DB_KEY, channelId);
+	assert.equal(bobPosts.find((p) => p.id === postId)?.text, "старый пост");
+});
+
+test("republishAllPostsUnderCurrentKey: НЕ переиздаёт draft (никогда не публиковался — нечего переиздавать)", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "черновик", attachments: [] });
+	await rotateChannelKeyManually(channelId, 2);
+
+	const published = [];
+	await republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+	assert.deepEqual(published, []);
+});
+
+test("republishAllPostsUnderCurrentKey: НЕ переиздаёт удалённый пост", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "будет удалён", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	await rotateChannelKeyManually(channelId, 2);
+
+	const published = [];
+	await republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+	assert.deepEqual(published, []);
+});
+
+test("АДВЕРСАРНО: republishAllPostsUnderCurrentKey — публикация ОДНОГО поста падает, остальные всё равно переиздаются (best-effort)", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId: failId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "упадёт", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, failId, capturingPublish([]));
+	const { postId: okId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "пройдёт", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, okId, capturingPublish([]));
+	await rotateChannelKeyManually(channelId, 2);
+
+	const published = [];
+	const flakyPublish = async (event) => {
+		const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+		if (dTag?.endsWith(failId)) return { ok: false, reason: "симулированный сбой relay" };
+		published.push(event);
+		return { ok: true };
+	};
+	await assert.doesNotReject(() => republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, flakyPublish));
+	assert.equal(published.length, 1, "упавший пост пропущен, остальные переизданы");
+	assert.deepEqual(published[0].tags.find((t) => t[0] === "d"), ["d", `${channelId}:${okId}`]);
 });
