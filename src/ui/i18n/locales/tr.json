@@ -121,7 +121,8 @@
 		"openMenu": "Menüyü aç",
 		"closeMenu": "Menüyü kapat",
 		"switchToLightTheme": "Açık temaya geç",
-		"switchToDarkTheme": "Koyu temaya geç"
+		"switchToDarkTheme": "Koyu temaya geç",
+		"quickConnect": "Quick Connect"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",
@@ -171,7 +172,6 @@
 		"main": {
 			"navAriaLabel": "Ana menü",
 			"navHome": "Ana sayfa",
-			"navTempChat": "Geçici sohbet",
 			"createSpaceButton": "Alan oluştur",
 			"accountsWidget": {
 				"title": "Bu cihazdaki hesaplar",
@@ -206,16 +206,12 @@
 				"title": "Merkezi sunucu olmadan iletişim için özel bir alan",
 				"lead": "{{appName}}, sohbetler için uçtan uca şifreleme (MLS) ve cihazda veritabanı şifrelemesi sağlayan, Nostr protokolü üzerine kurulu bir mesajlaşma uygulamasıdır. Genel internet olmadan, yerel ağda çalışır."
 			},
-			"tempChat": {
-				"title": "Geçici sohbet",
-				"lead1": "Yakında burada tek kullanımlık bir oda oluşturup diğer misafirleri metin veya sesle davet edebileceksiniz — kayıt olmadan ve önceden anahtar değişimi yapmadan. Oda, boşaldıktan bir saat sonra kendiliğinden kaybolacak.",
-				"lead2": "Bu bölüm henüz uygulanmadı — bu sayfa özelliğin kendisinden önce ortaya çıktı."
-			},
 			"footer": {
 				"tagline": "{{appName}} — özel bir mesajlaşma uygulaması.",
 				"alphaNotice": "Alfa test aşaması. Veriler, ana parolanızdan türetilen bir anahtarla şifrelenir ve bu cihazda yerel olarak saklanır."
 			},
-			"sidebarAriaLabel": "Hesap ve erişim yönetimi"
+			"sidebarAriaLabel": "Hesap ve erişim yönetimi",
+			"navTempChat": "Quick Connect"
 		}
 	},
 	"placeholder": {
@@ -743,5 +739,45 @@
 		"relayRejected": "relay yayını reddetti",
 		"selfHostedFingerprintMismatch": "sunucunun parmak izi bu adres için daha önce kaydedilenden farklı — sunucu değiştirilmiş olabilir",
 		"urlNotInList": "URL listede yok — önce ekleyin"
+	},
+	"quick": {
+		"anonymousNick": "Guest",
+		"exitButton": "Back",
+		"entry": {
+			"title": "Quick Connect",
+			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",
+			"tabsAriaLabel": "How to join",
+			"tabCreate": "Create",
+			"tabJoinLink": "By link",
+			"tabJoinPassword": "By name and password",
+			"nickLabel": "Name in the room (optional)",
+			"nameLabel": "Room name",
+			"passwordLabel": "Password",
+			"linkLabel": "Invite link",
+			"openModeLabel": "Allow entry by name and password",
+			"openModeHintOn": "Anyone who knows the name and password can join.",
+			"openModeHintOff": "Entry is by invite link only.",
+			"createButton": "Create room",
+			"joinButton": "Join",
+			"anonymityNotice": "Entry is always anonymous, even if you're logged into the app — your main account is never revealed. The relay operator sees that the room exists and is active, but not its content."
+		},
+		"room": {
+			"titleFallback": "Room",
+			"leaveButton": "Leave room",
+			"participantsAriaLabel": "Participants",
+			"participantsTitle": "Participants ({{count}})",
+			"selfMarker": "you",
+			"chatPlaceholder": "Message…",
+			"sendButton": "Send",
+			"inviteLabel": "Invite link (copy and share)",
+			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
+			"reconnectButton": "Reconnect to the primary room"
+		},
+		"errors": {
+			"createFailed": "Couldn't create the room. Check your connection and try again.",
+			"joinFailed": "Couldn't join the room. Check the link and your connection.",
+			"invalidLink": "Invalid invite link.",
+			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
+		}
 	}
 }

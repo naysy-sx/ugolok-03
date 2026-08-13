@@ -6,3 +6,6 @@ export const ROOM_ANNOUNCE_KIND = 29001;
 export const ROOM_PROBE_KIND = 29002;
 export const ROOM_PRESENCE_KIND = 29003;
 export const ROOM_CHAT_KIND = 29004;
+// Этап 3 — открытый режим (ROOMS-MATH §1.2): указатель на suffix под тегом
+// h=hDisc, а не h=hTopic (см. room-events.js).
+export const ROOM_POINTER_KIND = 29005;

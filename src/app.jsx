@@ -1,5 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
+import { signal } from "@preact/signals";
 import { NAV_ITEMS, DEFAULT_ACTIVE } from "./ui/nav-items.js";
+import Quick from "./ui/screens/quick.jsx";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
@@ -47,6 +49,13 @@ import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
 import IconFolder from "./ui/icons/folder.jsx";
 import IconHelpCircle from "./ui/icons/help-circle.jsx";
+
+// ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
+// уровня, НЕ внутри MainShell (иначе гостевые if внутри общей оболочки дают
+// тот же класс расползающихся правок, что owner-scoping доставался четырьмя
+// заходами, см. ROOMS-SPEC). Сигнал модульного уровня, не useState внутри
+// MainShell — доступен App() снаружи MainShell для переключения ветки.
+export const roomsScreenActive = signal(false);
 
 // nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
 // живёт здесь, во view-слое.
@@ -297,6 +306,18 @@ function MainShell() {
 					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
 					<ConnectionStatusPanel />
 				</nav>
+				{/* ROOMS-SPEC.md §1.4 — вход в отдельную верхнеуровневую ветку (см.
+				    App() ниже), не переключение activeId: "Быстрая связь" не является
+				    вкладкой MainShell, у неё своя, независимая от аккаунта, identity. */}
+				<button
+					type="button"
+					class="nav-item-btn row"
+					style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
+					onClick={() => (roomsScreenActive.value = true)}
+				>
+					<IconGlobe />
+					{t("shell.quickConnect")}
+				</button>
 				<button type="button" class="nav-item-btn exit-btn row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={lock}>
 					<IconExit />
 					{t("shell.logout")}
@@ -330,6 +351,14 @@ function MainShell() {
 }
 
 export default function App() {
+	// ROOMS-SPEC.md §1.4 — проверяется ПЕРВЫМ, до currentUser: "Быстрая связь"
+	// стоит НАД веткой вход/MainShell, не внутри неё. Гостевой доступ (не
+	// залогинен) — через собственную вкладку unlock.jsx (см. "temp-chat" там),
+	// этот сигнал включается только из MainShell (кнопка в сайдбаре).
+	if (roomsScreenActive.value) {
+		return <Quick onExit={() => (roomsScreenActive.value = false)} />;
+	}
+
 	const user = currentUser.value;
 
 	if (user) {

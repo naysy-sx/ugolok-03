@@ -11,7 +11,7 @@ import { sign } from "../src/core/crypto/sign.js";
 import { createFakeRelay } from "./harness/fake-relay.js";
 import { createWsBridge } from "./harness/ws-bridge.js";
 import { openRoomTransport } from "../src/domain/rooms/adapters/room-transport.js";
-import { ROOM_ANNOUNCE_KIND, ROOM_CHAT_KIND } from "../src/domain/events/kind-registry.js";
+import { ROOM_ANNOUNCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../src/domain/events/kind-registry.js";
 import { CALL_SIGNAL_KIND } from "../src/domain/calls/signaling-adapter.js";
 
 async function setup() {
@@ -195,4 +195,79 @@ test("close(): после закрытия дальнейшие события �
 	await new Promise((r) => setTimeout(r, 350));
 
 	assert.deepEqual(received, [], "после close() новые события не должны приходить");
+});
+
+test("Этап 3: ни hTopic, ни hDisc не переданы -> бросает явную ошибку конфигурации", async (t) => {
+	const { bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	await assert.rejects(() => openRoomTransport({ relayUrl, selfPubkey: getPublicKey(generateSecretKey()), onEvent: () => {} }));
+});
+
+test("Этап 3: только hDisc (обнаружение по паролю) — ROOM_POINTER_KIND под hDisc доходит, без hTopic вовсе", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+
+	const hDisc = "disc-1".padStart(64, "0");
+	const senderKey = generateSecretKey();
+	const received = [];
+	const discovery = await openRoomTransport({ relayUrl, hDisc, selfPubkey: getPublicKey(generateSecretKey()), onEvent: (e) => received.push(e) });
+	t.after(() => discovery.close());
+
+	await waitFor(() => relay.pending().length > 0);
+	relay.flushAll();
+
+	const pointerEvent = rawEvent(senderKey, ROOM_POINTER_KIND, [["h", hDisc]], "encrypted-suffix-stub");
+	relay.publish("sender-conn", pointerEvent);
+	relay.flushAll();
+	await waitFor(() => received.length > 0);
+
+	assert.equal(received[0].id, pointerEvent.id);
+});
+
+test("Этап 3: hTopic + hDisc вместе — ОБА типа событий доходят через одну подписку", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+
+	const hTopic = "topic-both".padStart(64, "0");
+	const hDisc = "disc-both".padStart(64, "0");
+	const senderKey = generateSecretKey();
+	const received = [];
+	const listener = await openRoomTransport({ relayUrl, hTopic, hDisc, selfPubkey: getPublicKey(generateSecretKey()), onEvent: (e) => received.push(e) });
+	t.after(() => listener.close());
+
+	await waitFor(() => relay.pending().length > 0);
+	relay.flushAll();
+
+	const chatEvent = rawEvent(senderKey, ROOM_CHAT_KIND, [["h", hTopic]], "x");
+	const pointerEvent = rawEvent(senderKey, ROOM_POINTER_KIND, [["h", hDisc]], "y");
+	relay.publish("sender-conn", chatEvent);
+	relay.publish("sender-conn", pointerEvent);
+	relay.flushAll();
+	await waitFor(() => received.length >= 2);
+
+	const ids = received.map((e) => e.id).sort();
+	assert.deepEqual(ids, [chatEvent.id, pointerEvent.id].sort());
+});
+
+test("Этап 3: POINTER с тегом h=hTopic (не hDisc) НЕ доходит — теги разных 'каналов' не смешиваются", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+
+	const hTopic = "topic-mix".padStart(64, "0");
+	const hDisc = "disc-mix".padStart(64, "0");
+	const senderKey = generateSecretKey();
+	const received = [];
+	const listener = await openRoomTransport({ relayUrl, hTopic, hDisc, selfPubkey: getPublicKey(generateSecretKey()), onEvent: (e) => received.push(e) });
+	t.after(() => listener.close());
+
+	await waitFor(() => relay.pending().length > 0);
+	relay.flushAll();
+
+	// POINTER, но помечен hTopic вместо hDisc — не должен пройти предфильтр POINTER-ветки
+	const wronglyTaggedPointer = rawEvent(senderKey, ROOM_POINTER_KIND, [["h", hTopic]], "z");
+	relay.publish("sender-conn", wronglyTaggedPointer);
+	relay.flushAll();
+	await new Promise((r) => setTimeout(r, 350));
+
+	assert.deepEqual(received, [], "POINTER маршрутизируется только по hDisc, не по hTopic");
 });

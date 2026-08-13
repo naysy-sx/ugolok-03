@@ -116,6 +116,7 @@
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",
 		"navAriaLabel": "Main menu",
+		"quickConnect": "Quick Connect",
 		"logout": "Log out",
 		"unreadAriaLabel": "unread: {{count}}",
 		"openMenu": "Open menu",
@@ -171,7 +172,7 @@
 		"main": {
 			"navAriaLabel": "Main menu",
 			"navHome": "Home",
-			"navTempChat": "Temporary chat",
+			"navTempChat": "Quick Connect",
 			"createSpaceButton": "Create a space",
 			"accountsWidget": {
 				"title": "Accounts on this device",
@@ -205,11 +206,6 @@
 			"hero": {
 				"title": "A private space for messaging without a central server",
 				"lead": "{{appName}} is a messenger built on the Nostr protocol with end-to-end encryption (MLS) for conversations and device-side database encryption. Works on a local network, without the public internet."
-			},
-			"tempChat": {
-				"title": "Temporary chat",
-				"lead1": "Soon you'll be able to create a disposable room here and invite other guests into it — by text or voice, without registration and without exchanging keys beforehand. The room will disappear on its own an hour after it's empty.",
-				"lead2": "This section isn't built yet — this page arrived before the feature itself."
 			},
 			"footer": {
 				"tagline": "{{appName}} — a private messenger.",
@@ -743,5 +739,45 @@
 		"relayRejected": "the relay rejected the publish",
 		"selfHostedFingerprintMismatch": "the server's fingerprint differs from the one saved earlier for this address — the server may have been swapped",
 		"urlNotInList": "the URL is not in the list — add it first"
+	},
+	"quick": {
+		"anonymousNick": "Guest",
+		"exitButton": "Back",
+		"entry": {
+			"title": "Quick Connect",
+			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",
+			"tabsAriaLabel": "How to join",
+			"tabCreate": "Create",
+			"tabJoinLink": "By link",
+			"tabJoinPassword": "By name and password",
+			"nickLabel": "Name in the room (optional)",
+			"nameLabel": "Room name",
+			"passwordLabel": "Password",
+			"linkLabel": "Invite link",
+			"openModeLabel": "Allow entry by name and password",
+			"openModeHintOn": "Anyone who knows the name and password can join.",
+			"openModeHintOff": "Entry is by invite link only.",
+			"createButton": "Create room",
+			"joinButton": "Join",
+			"anonymityNotice": "Entry is always anonymous, even if you're logged into the app — your main account is never revealed. The relay operator sees that the room exists and is active, but not its content."
+		},
+		"room": {
+			"titleFallback": "Room",
+			"leaveButton": "Leave room",
+			"participantsAriaLabel": "Participants",
+			"participantsTitle": "Participants ({{count}})",
+			"selfMarker": "you",
+			"chatPlaceholder": "Message…",
+			"sendButton": "Send",
+			"inviteLabel": "Invite link (copy and share)",
+			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
+			"reconnectButton": "Reconnect to the primary room"
+		},
+		"errors": {
+			"createFailed": "Couldn't create the room. Check your connection and try again.",
+			"joinFailed": "Couldn't join the room. Check the link and your connection.",
+			"invalidLink": "Invalid invite link.",
+			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
+		}
 	}
 }

@@ -12800,6 +12800,37 @@ users) — параметр, рассчитанный на банковский 
 публиковать ли `hDisc`), не `room-keys.js` — она возвращает оба поля
 безусловно.
 
+### room-keys.js — Этап 3: `kPointer` для открытого режима, разбивка на 3 функции
+
+```js
+deriveKBase(name, password, argon2) -> Promise<kBase>                 // МЕДЛЕННЫЙ шаг, ровно один раз за сессию
+derivePairKeys(kBase) -> { hDisc, kPointer }                          // быстрые, от пары (n,p)
+deriveLinkKeys(kBase, suffix) -> { kRv, hTopic }                      // быстрые, от (n,p,suffix)
+deriveRoomKeys(name, password, suffix, argon2) -> Promise<{ kBase, kRv, kSess: null, hTopic, hDisc, kPointer }>  // прежняя обёртка, argon2 ровно 1 раз, ТЕПЕРЬ с kPointer в объекте
+```
+
+Разбивка — не рефакторинг ради стиля, а необходимость открытого режима
+(ROOMS-MATH §1.2): joiner по паролю знает только `(name, password)`, НЕ
+`suffix` — цепочка `kRv`/`hTopic` недоступна на фазе обнаружения. Но
+`argon2` обязан вызываться РОВНО ОДИН раз за сессию (ROOMS-ALGO §8) —
+поэтому `room-session.js` в открытом режиме: `kBase =
+deriveKBase(...)` один раз → `derivePairKeys(kBase)` для обнаружения
+(подписка на `hDisc`, расшифровка указателя ключом `kPointer`) →
+когда `suffix` найден — `deriveLinkKeys(kBase, suffix)` БЕЗ повторного
+`argon2`. `deriveRoomKeys` (старая обёртка, используется закрытым
+режимом и Этапом 1/2 тестами) продолжает работать НЕИЗМЕНЁННО — просто
+теперь дополнительно считает и возвращает `kPointer` (аддитивное поле,
+существующие тесты сравнивают отдельные поля объекта, не форму
+целиком — регрессия чистая).
+
+`kPointer = HKDF(kBase, "" (пустая соль), "Rooms/v1/pointer")` —
+параллельно `hDisc = HMAC(kBase, "disc")`: оба — производные ТОЛЬКО от
+пары `(n,p)`, ни один не зависит от `suffix` (иначе указатель на
+`suffix` нельзя было бы расшифровать, не зная `suffix` — циклическая
+зависимость). Пустая соль в HKDF — RFC 5869 допускает (по умолчанию
+ноль байт хэш-длины), домен-разделение обеспечивает `info`-строка
+`"Rooms/v1/pointer"`, уникальная среди всех HKDF-вызовов модуля.
+
 ## presence.js [C]
 
 ```js
@@ -13094,6 +13125,31 @@ decrypt+JSON.parse, тот же принцип, что `decryptChannelContent`'s
 
 # Rooms («Быстрая связь») — Этап 2: транспорт и личность
 
+## room-events.js — Этап 3: `ROOM_POINTER_KIND` (открытый режим)
+
+```js
+buildRoomPointerEvent(privKey, kPointer, hDisc, suffix, createdAtMs) -> signed event
+parseRoomPointerEvent(event, kPointer) -> { id, suffix } | null
+```
+
+`ROOM_POINTER_KIND = 29005` (`kind-registry.js`). Шифруется на
+`kPointer` (room-keys.js, Этап 3), тег `h = hDisc` — **НЕ** `hTopic`:
+joiner по паролю знает только `(name, password)`, из которых выводится
+`kPointer`/`hDisc`, но НЕ `suffix`/`kRv`/`hTopic` (та самая
+циклическая зависимость, которую `kPointer` разрывает, ROOMS-MATH
+§1.2). `buildEvent`/`parseEvent` внутренние хелперы модуля уже
+тег-агностичны (`buildTags(hTopic)` строит `[["h", X]]` для любого
+`X`) — переиспользуются без изменений, второй параметр помечен
+`hTopic` в сигнатуре хелпера чисто по имени, семантически это просто
+"тег маршрутизации", `hDisc` подходит буквально.
+
+`parseRoomPointerEvent` возвращает `id` события (не только `suffix`)
+— обязательно для И9 (тайбрейк по минимальному `id`, ROOMS-MATH §1.4):
+`room-session.js` сравнивает `id` НЕСКОЛЬКИХ указателей под одним
+`hDisc`, лексикографическое сравнение hex-строк (тот же приём, что
+`mesh.js`'s `i < j` на pubkey-строках) — детерминировано, без арбитра,
+каждый наблюдатель приходит к тому же выбору независимо.
+
 ## room-identity.js [C]
 
 ```js
@@ -13198,6 +13254,33 @@ alice.publish(...)` зависал навсегда). Фикс — `flushUntilSe
 слить" вместо одной точки синхронизации. Используется вместо
 однократного `waitFor+flushAll` везде, где в сценарии больше одного
 независимого транспортного клиента.
+
+### room-transport.js — Этап 3: `hDisc` — второй, опциональный фильтр (открытый режим)
+
+```js
+openRoomTransport({relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent}) -> Promise<{ publish, close }>
+```
+
+Хотя бы один из `hTopic`/`hDisc` обязателен (бросает иначе — явная
+ошибка конфигурации, не тихий no-op). Причина двух режимов:
+- **Обнаружение по паролю** (`room-session.js`'s `joinRoomByPassword`,
+  ниже): `suffix` ещё не известен → `hTopic` нет вовсе, только `hDisc`
+  (слушать указатели `ROOM_POINTER_KIND`).
+- **Открытый режим создателя**: `hTopic` уже есть (обычная сессия) —
+  и ДОПОЛНИТЕЛЬНО `hDisc`, чтобы услышать конкурирующие указатели
+  других создателей той же пары `(n,p)` (И9).
+
+Если оба заданы — ОДНА подписка (`subscriber.subscribe`) с ДВУМЯ
+фильтрами в массиве (стандартный nostr REQ с несколькими фильтрами —
+тот же приём, что `[{"#h": groupIds, kinds:[445]}]`-подписки в
+`transport.js`, просто с двумя объектами вместо одного), не два
+отдельных REQ. `ROOM_POINTER_KIND` маршрутизируется по `hDisc` (свой
+случай в `onBatch`, отдельный от общего `hTopic`-предфильтра — теги
+`h` для POINTER и для остальных четырёх kind РАЗНЫЕ значения, единая
+проверка `hasTag(event,"h",hTopic)` неверно отбросила бы POINTER).
+`CALL_SIGNAL_KIND`'s `p`-предфильтр не затрагивается — POINTER никогда
+не несёт `p`, ветка POINTER выходит из `onBatch`'s цикла раньше него
+(`continue`).
 
 ## room-session.js [C] — design-записка (skill п.13b, оркестратор — нетривиальное связывание 7 чистых модулей + 2 адаптера)
 
@@ -13369,3 +13452,194 @@ ROOMS-SPEC §0: "Закрытие вкладки — конец, без убор
 До первого sweep-тика — `joinRoom` публикует `ROOM_PROBE_KIND` сразу
 после `openRoomTransport` резолвится (не ждёт тика/trickle), чтобы
 уложиться в ROOMS-SPEC §5.2's 3-секундное окно ожидания ответа.
+
+## room-session.js — Этап 3: открытый режим, `joinRoomByPassword`, И9 (design-записка, 13b)
+
+### `argon2` ровно один раз через две фазы — `precomputedKBase`
+
+Открытый режим требует ДВУХ последовательных фаз с РАЗНЫМИ ключами
+маршрутизации (сначала `hDisc`, потом `hTopic`), но `argon2` обязан
+вызываться один раз за сессию (ROOMS-ALGO §8). Решение: `openSession`
+(внутренняя функция, не экспортируется) принимает необязательный
+`precomputedKBase` — если задан, `deriveKBase` пропускается, `kBase`
+берётся готовым; `derivePairKeys`/`deriveLinkKeys` (быстрые) всё равно
+считаются заново от него. `joinRoomByPassword` вызывает `deriveKBase`
+САМА (для фазы обнаружения), затем передаёт результат в `openSession`
+как `precomputedKBase` — второго вызова `argon2` не происходит.
+
+### Новый экспорт: `joinRoomByPassword`
+
+```js
+joinRoomByPassword({ name, password, nick, relayUrl, argon2, now, random,
+                      sweepIntervalMs, setIntervalImpl, clearIntervalImpl,
+                      onChange, discoveryTimeoutMs = 5000 })
+  -> Promise<RoomSessionHandle>
+```
+
+Алгоритм: `kBase = deriveKBase(...)` → `{hDisc, kPointer} =
+derivePairKeys(kBase)` → `suffix = await discoverSuffixViaPointer(...)`
+(ниже) → если `null` (ничего не нашлось за окно) — **бросает** явную
+ошибку ("комната не найдена") — не тихий провал → `openSession({...,
+suffix, precomputedKBase: kBase, isCreator: false})`, дальше ИДЕНТИЧНО
+обычному `joinRoom` (PROBE, ожидание ANNOUNCE и т.д. — суффикс уже
+есть, остальной путь не отличается).
+
+### `discoverSuffixViaPointer` — внутренняя, не экспортируется
+
+```js
+discoverSuffixViaPointer({ hDisc, kPointer, relayUrl, discoveryTimeoutMs }) -> Promise<suffix | null>
+```
+
+Открывает ОТДЕЛЬНЫЙ короткоживущий `openRoomTransport({relayUrl, hDisc,
+selfPubkey: PLACEHOLDER, onEvent})` (`hTopic` не передаётся —
+`room-transport.js`'s Этап-3 контракт это разрешает); собирает ВСЕ
+`ROOM_POINTER_KIND` (расшифрованные через `parseRoomPointerEvent`) за
+`discoveryTimeoutMs` (реальное время — `setTimeout`, БЕЗ инъекции: это
+одноразовый bootstrap-шаг, не входит в sweep-контур, тесты используют
+маленький `discoveryTimeoutMs`, напр. 300мс, вместо подмены часов —
+тот же компромисс, что уже был у `flushUntilSettled` в тестах
+транспорта); затем закрывает transport, сортирует собранные `{id,
+suffix}` лексикографически по `id`, возвращает `suffix` минимального
+(ROOMS-MATH §1.4 — тот же тайбрейк, что решает И9). Пусто — `null`.
+`selfPubkey` — заглушка (не используется фильтрацией POINTER-ветки,
+но обязательный параметр контракта `openRoomTransport`).
+
+### `createRoom({..., openMode = false})` и И9-тайбрейк
+
+Если `openMode`: сразу после `becomeReady` (немедленно, тот же момент,
+что генерация `salt` — не ждёт тика) публикует СВОЙ `ROOM_POINTER_KIND`
+под `hDisc`; ЗАПОМИНАЕТ `id` этой ПЕРВОЙ публикации как `ownPointerId`
+(последующие переопубликования указателя — см. ниже — получают НОВЫЙ
+`id` каждый раз из-за разного `created_at`/подписи, но сравнение И9
+использует ТОЛЬКО `id` первой, "исходной" заявки — семантика "кто
+заявил раньше", не "чей последний повтор свежее"). Транспорт
+открывается С ОБОИМИ `hTopic` И `hDisc` (Этап-3 room-transport.js
+контракт) — сессия слышит и обычный трафик комнаты, и конкурирующие
+указатели.
+
+**Переопубликование указателя** — на той же периодике, что ANNOUNCE:
+в `tick()`, когда `trickle.shouldTransmit(t)` истинно И `openMode` —
+ТАКЖЕ `publishPointer(t)` (не только `publishAnnounce`), чтобы поздние
+`joinRoomByPassword`-обнаружения находили комнату (эфемерные события,
+ретеншн relay ограничен — см. AUDIT.md, спайк 0.1).
+
+**Сравнение (И9)** — диспетчер `ROOM_POINTER_KIND` в `handleEvent`:
+```
+если !openMode или ownPointerId===null → игнор (не создатель открытого режима / ещё не заявились)
+если now() - ownPointerPublishedAt >= τ → игнор (окно гонки закрыто, ROOMS-MATH §1.4 буквально: "окно длиной τ")
+payload = parseRoomPointerEvent(event, kPointer); если невалиден → игнор
+если payload.id < bestPointerId (изначально = ownPointerId):
+    bestPointerId = payload.id; bestSuffix = payload.suffix
+    если bestSuffix !== свой suffix → raceOutcome = {winningSuffix: bestSuffix}; onChange()
+```
+Однажды установленный `raceOutcome` НЕ откатывается (`bestPointerId`
+монотонно убывает, поэтому опасаться "передумывания" не нужно —
+минимум по построению стабилен).
+
+**Сессия НЕ телепортируется в victim/winner сама.** Обнаружив
+поражение, `room-session.js` не мутирует себя в joiner — это
+означало бы скрытую пересборку идентичности/ключей внутри уже живого
+объекта, лишний источник багов. Вместо этого `raceOutcome` — СИГНАЛ
+наружу (`getRaceOutcome()` на хендле + `onChange()`), решение "закрыть
+эту сессию и переподключиться через `joinRoom(..., suffix:
+winningSuffix)`" — ответственность ВЫЗЫВАЮЩЕГО кода (Этап 3 UI,
+позже — оркестратор `room-session.js` этим не занимается, только
+сигнализирует, ROOMS-SPEC §1.3: "отдаёт сигналы для UI"). Проигравший,
+пока не переподключился, остаётся полностью рабочей (хоть и
+обречённой) комнатой — не ломается сам по себе.
+
+### `RoomSessionHandle` — новый геттер
+
+```js
+getRaceOutcome() -> null | { winningSuffix }
+```
+`null` всегда для `joinRoom`/`joinRoomByPassword`-сессий и для
+`createRoom` без `openMode` (пусто, гонки не отслеживаются).
+
+### И11 (комната переживает уход создателя) — не требует нового кода
+
+"Нет роли создателя" (Р5, ROOMS-MATH) уже встроено в архитектуру Этапа
+2: КАЖДЫЙ `ready`-участник ведёт свой собственный `trickle`/heartbeat
+независимо, `room-machine`-реконсиляция — per-observer. Уход создателя
+— обычный `mergeExit`/протухание аренды с точки зрения оставшихся,
+ничем не отличается от ухода любого другого участника. И11 — тест,
+подтверждающий существующее поведение, не новая реализация.
+
+## UI (`quick.jsx`, `app.jsx`, `unlock.jsx`) — Этап 3
+
+### Точки входа — ДВЕ, не одна (ROOMS-SPEC §1.4 буквально)
+
+`Quick` (`src/ui/screens/quick.jsx`) — самодостаточный компонент
+(принимает `onExit`, не привязан к аккаунту), смонтирован в ДВУХ
+независимых местах:
+1. `unlock.jsx`'s существующая вкладка `mainView==="temp-chat"`
+   (гость, не залогинен) — эта вкладка УЖЕ существовала как заглушка
+   (`unlock.main.tempChat.*`, "раздел ещё не реализован — эта страница
+   появилась раньше самой функции") — Этап 3 просто подставляет
+   реальный компонент вместо текста-заглушки, старые ключи удалены
+   (все 12 локалей).
+2. `app.jsx`'s новый модульный сигнал `roomsScreenActive` (`signal`,
+   НЕ `useState` внутри `MainShell` — доступен `App()` СНАРУЖИ
+   `MainShell`), проверяется В `App()` ПЕРВЫМ, до `currentUser` —
+   именно это даёт "не внутри MainShell" буквально: залогиненный
+   пользователь нажимает кнопку в сайдбаре (`shell.quickConnect`),
+   `App()` рендерит `<Quick>` ВМЕСТО `<MainShell>`, не как вкладку
+   внутри неё.
+
+### Инвайт-ссылка — копируемая строка, НЕ настоящий URL/роут
+
+`roomlink:v1:` + `base64(JSON.stringify({name, password, suffix}))`.
+Сознательное упрощение: реальный `https://`-роут потребовал бы
+интеграции с `router.js` (отдельная задача, вне Этапа 3). Кодирует ВСЕ
+три поля разом — вошедший по ссылке не вводит ничего руками.
+Закрытый режим: `encodeInviteLink` вызывается после `createRoom`/
+`joinRoom`. Открытый режим (`joinRoomByPassword`): ссылка тоже
+строится (тем же кодированием) из найденных `name`/`password` — она
+эквивалентна закрытой ссылке на ТУ ЖЕ комнату (тот же `suffix`, уже
+обнаруженный), просто доставлена другим путём.
+
+### `activeRoomName`/`activeRoomPassword` — единый источник правды (найдено живой проверкой)
+
+**Живой баг, пойманный на реальном strfry, не автотестами:** заголовок
+комнаты и `handleReconnectToWinner` изначально читали `roomName ||
+joinPwName` — при входе В ОДНОЙ вкладке СНАЧАЛА через "Создать", ПОТОМ
+через "По паролю" в другую комнату, `roomName` от первой попытки
+оставался непустым и "побеждал" в `||`-цепочке: заголовок и
+потенциальный reconnect молча указывали на СТАРУЮ комнату. Фикс —
+`attachSession(session, invite, name, password)` явно получает
+разрешённые `name`/`password` от ТОГО ЖЕ вызова, что открыл сессию
+(из `decoded.name`/`decoded.password` для ссылки, из `joinPwName`/
+`joinPwPassword` для пароля, из `roomName`/`roomPassword` для
+создания) — единственный источник правды `activeRoomName`/
+`activeRoomPassword`, не производный от полей форм, которые могли с
+тех пор смениться.
+
+### `MessageBubble` — адаптер полей, не новый компонент чата
+
+`message-bubble.jsx` ожидает `{msgId, text, sentAt (СЕКУНДЫ),
+deleted, edited, status}` — Rooms передаёt `{msgId: m.id, text: m.text,
+sentAt: Math.floor(m.createdAt / 1000), deleted: false, edited:
+false}` (без `status`/`onEdit`/`onDeleteFor*` — компонент сам скрывает
+кнопки редактирования/удаления при их отсутствии, ROOMS-SPEC §6
+Этап 3: "переиспользовать message-bubble.jsx через пропсы... НЕ
+chat.jsx").
+
+### `publisher.js` — фикс инфраструктурного бага, найденного живой проверкой (Этап 3, не Rooms-контракт)
+
+**Не входит в контракты Rooms** — `core/transport/publisher.js`
+существовал до Rooms, используется ПОВСЮДУ в проекте (chat/channels/
+files/contacts/…). Живая проверка (два реальных таба Chrome, реальный
+strfry) поймала: `close()` соединения между `publish()` и срабатыванием
+отложенного `flush()` (`batchWindowMs=200мс`) — `connection.send()`
+бросает СИНХРОННО ("недоступен в состоянии disconnected") ИЗ
+`setTimeout`-колбэка → необработанное исключение уровня вкладки, а не
+просто неудача публикации. Воспроизведено буквально: "Покинуть
+комнату" сразу после создания.
+
+Фикс: `flush()` оборачивает каждый `connection.send()` в try/catch;
+при ошибке — `reject()` ожидающего `publish()` (тот же контракт, что
+уже есть для `OK:false` от relay), остальные события батча всё равно
+пытаются уйти (одна неудача не блокирует другие). Аддитивная,
+консервативная правка (не меняет форму возвращаемого объекта/сигнатуры)
+— полная регрессия обязательна и пройдена (правило 13, инфраструктура
+общая, менять может только Claude явным решением).

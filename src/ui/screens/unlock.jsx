@@ -14,6 +14,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
+import Quick from "./quick.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -692,15 +693,7 @@ export default function Unlock() {
 						</p>
 					</section>
 				)}
-				{mainView === "temp-chat" && (
-					<section class="hero-section">
-						<h1>{t("unlock.main.tempChat.title")}</h1>
-						<p class="hero-lead">
-							{t("unlock.main.tempChat.lead1")}
-						</p>
-						<p class="hero-lead">{t("unlock.main.tempChat.lead2")}</p>
-					</section>
-				)}
+				{mainView === "temp-chat" && <Quick />}
 				{mainView === "help" && <HelpContent />}
 			</main>
 

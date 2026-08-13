@@ -1,11 +1,13 @@
-// Rooms, этап 2 — оркестратор: единственное место, где чистое ядро встречается
+// Rooms, этапы 2+3 — оркестратор: единственное место, где чистое ядро встречается
 // с адаптерами (ROOMS-SPEC.md §1.3). Контракт и design-записка:
-// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 2" (room-session.js).
+// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 2"/"Этап 3" (room-session.js).
 //
-// Область Этапа 2: только LINK-режим (name+password+suffix уже известны),
-// без UI, без голоса (kind 20075 молча проходит мимо диспетчера).
+// Область: LINK-режим (createRoom/joinRoom, name+password+suffix) и открытый
+// режим (createRoom({openMode:true})/joinRoomByPassword, name+password —
+// suffix находится через указатель под hDisc, ROOMS-MATH §1.2). Без UI, без
+// голоса (kind 20075 молча проходит мимо диспетчера, Этап 4).
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { deriveRoomKeys, deriveSessionKey, defaultSlowKdf } from "./room-keys.js";
+import { deriveKBase, derivePairKeys, deriveLinkKeys, deriveSessionKey, defaultSlowKdf } from "./room-keys.js";
 import { emptyPresence, mergeHeartbeat, mergeExit, present, prune } from "./presence.js";
 import { emptyRoomState, create as machineCreate, join as machineJoin, leave as machineLeave, checkTimeout } from "./room-machine.js";
 import { createTrickle } from "./trickle.js";
@@ -19,16 +21,19 @@ import {
 	parseRoomPresenceEvent,
 	buildRoomChatEvent,
 	parseRoomChatEvent,
+	buildRoomPointerEvent,
+	parseRoomPointerEvent,
 } from "./room-events.js";
-import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND } from "../events/kind-registry.js";
+import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../events/kind-registry.js";
 import { createEphemeralIdentity } from "./adapters/room-identity.js";
 import { openRoomTransport } from "./adapters/room-transport.js";
 
 const HEARTBEAT_INTERVAL_MS = 15000; // δ
-const PRESENCE_TAU_MS = 45000; // τ
+const PRESENCE_TAU_MS = 45000; // τ — тот же τ используется как окно И9-тайбрейка (ROOMS-MATH §1.4)
 const TRICKLE_I_MIN_MS = 15000;
 const TRICKLE_I_MAX_MS = 60000;
 const TRICKLE_K = 1;
+const DISCOVERY_PLACEHOLDER_PUBKEY = "0".repeat(64);
 
 function randomSuffix() {
 	return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
@@ -59,10 +64,13 @@ async function openSession({
 	clearIntervalImpl = clearInterval,
 	onChange = () => {},
 	isCreator,
+	openMode = false,
+	precomputedKBase = null,
 }) {
 	const identity = createEphemeralIdentity();
-	const keys = await deriveRoomKeys(name, password, suffix, argon2);
-	const { kRv, hTopic } = keys;
+	const kBase = precomputedKBase ?? (await deriveKBase(name, password, argon2));
+	const { hDisc, kPointer } = derivePairKeys(kBase);
+	const { kRv, hTopic } = deriveLinkKeys(kBase, suffix);
 
 	let ready = false;
 	let kSess = null;
@@ -70,7 +78,15 @@ async function openSession({
 	let roomMachineState = emptyRoomState();
 	let messageLog = createLog({});
 	let lastHeartbeatAt = -Infinity;
+	let currentSalt = null;
 	const trickle = createTrickle({ iMin: TRICKLE_I_MIN_MS, iMax: TRICKLE_I_MAX_MS, k: TRICKLE_K, random });
+
+	// И9 (ROOMS-MATH §1.4) — только для openMode-создателя.
+	let ownPointerId = null;
+	let ownPointerPublishedAt = null;
+	let bestPointerId = null;
+	let bestSuffix = suffix;
+	let raceOutcome = null;
 
 	function publishHeartbeat(t) {
 		const event = buildRoomPresenceEvent(identity.privKey, kSess, hTopic, { type: "heartbeat", nick }, t);
@@ -87,14 +103,22 @@ async function openSession({
 		return transport.publish(event);
 	}
 
+	function publishPointer(t) {
+		const event = buildRoomPointerEvent(identity.privKey, kPointer, hDisc, suffix, t);
+		if (ownPointerId === null) {
+			ownPointerId = event.id;
+			ownPointerPublishedAt = t;
+			bestPointerId = event.id;
+		}
+		return transport.publish(event);
+	}
+
 	function becomeReady(salt, t) {
 		currentSalt = salt;
 		kSess = deriveSessionKey(kRv, salt);
 		ready = true;
 		lastHeartbeatAt = -Infinity; // первый sweep-тик после готовности сразу шлёт heartbeat
 	}
-
-	let currentSalt = null;
 
 	function handleEvent(event) {
 		switch (event.kind) {
@@ -142,15 +166,37 @@ async function openSession({
 				onChange();
 				return;
 			}
+			case ROOM_POINTER_KIND: {
+				if (!openMode || ownPointerId === null) return;
+				if (now() - ownPointerPublishedAt >= PRESENCE_TAU_MS) return; // окно гонки закрыто
+				const payload = parseRoomPointerEvent(event, kPointer);
+				if (!payload) return;
+				if (payload.id < bestPointerId) {
+					bestPointerId = payload.id;
+					bestSuffix = payload.suffix;
+					if (bestSuffix !== suffix) {
+						raceOutcome = { winningSuffix: bestSuffix };
+						onChange();
+					}
+				}
+				return;
+			}
 			default:
 				return; // сигналинг голоса и прочее — Этап 4, молча пропускаем
 		}
 	}
 
-	const transport = await openRoomTransport({ relayUrl, hTopic, selfPubkey: identity.pubkeyHex, onEvent: handleEvent });
+	const transport = await openRoomTransport({
+		relayUrl,
+		hTopic,
+		hDisc: openMode ? hDisc : undefined,
+		selfPubkey: identity.pubkeyHex,
+		onEvent: handleEvent,
+	});
 
 	if (isCreator) {
 		becomeReady(randomSalt(), now());
+		if (openMode) publishPointer(now());
 	} else {
 		publishProbe(now());
 	}
@@ -171,6 +217,7 @@ async function openSession({
 			}
 			if (trickle.shouldTransmit(t)) {
 				publishAnnounce(t);
+				if (openMode) publishPointer(t);
 			}
 		}
 		onChange();
@@ -185,6 +232,7 @@ async function openSession({
 		getPresent: () => present(presenceState, now(), PRESENCE_TAU_MS),
 		getMessages: () => messageLog.toArray(),
 		getRoomState: () => roomMachineState,
+		getRaceOutcome: () => raceOutcome,
 		sendChat: (text) => {
 			if (!ready) return Promise.reject(new Error("room-session: sendChat до готовности сессии (salt ещё не известен)"));
 			const event = buildRoomChatEvent(identity.privKey, kSess, hTopic, { nick, text }, now());
@@ -197,7 +245,29 @@ async function openSession({
 	};
 }
 
-export function createRoom({ name, password, nick, relayUrl, argon2, now, random, sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange }) {
+// Этап 3 — открытый режим, обнаружение suffix через указатель под hDisc
+// (ROOMS-MATH §1.2). Реальное время (setTimeout, без инъекции) — одноразовый
+// bootstrap-шаг вне sweep-контура; тесты используют маленький discoveryTimeoutMs.
+async function discoverSuffixViaPointer({ hDisc, kPointer, relayUrl, discoveryTimeoutMs }) {
+	const pointers = [];
+	const transport = await openRoomTransport({
+		relayUrl,
+		hDisc,
+		selfPubkey: DISCOVERY_PLACEHOLDER_PUBKEY,
+		onEvent: (event) => {
+			if (event.kind !== ROOM_POINTER_KIND) return;
+			const payload = parseRoomPointerEvent(event, kPointer);
+			if (payload) pointers.push(payload);
+		},
+	});
+	await new Promise((resolve) => setTimeout(resolve, discoveryTimeoutMs));
+	transport.close();
+	if (pointers.length === 0) return null;
+	pointers.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+	return pointers[0].suffix;
+}
+
+export function createRoom({ name, password, nick, relayUrl, argon2, now, random, sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange, openMode }) {
 	return openSession({
 		name,
 		password,
@@ -212,6 +282,7 @@ export function createRoom({ name, password, nick, relayUrl, argon2, now, random
 		clearIntervalImpl,
 		onChange,
 		isCreator: true,
+		openMode,
 	});
 }
 
@@ -230,5 +301,43 @@ export function joinRoom({ name, password, suffix, nick, relayUrl, argon2, now, 
 		clearIntervalImpl,
 		onChange,
 		isCreator: false,
+	});
+}
+
+export async function joinRoomByPassword({
+	name,
+	password,
+	nick,
+	relayUrl,
+	argon2 = defaultSlowKdf,
+	now,
+	random,
+	sweepIntervalMs,
+	setIntervalImpl,
+	clearIntervalImpl,
+	onChange,
+	discoveryTimeoutMs = 5000,
+}) {
+	const kBase = await deriveKBase(name, password, argon2);
+	const { hDisc, kPointer } = derivePairKeys(kBase);
+	const suffix = await discoverSuffixViaPointer({ hDisc, kPointer, relayUrl, discoveryTimeoutMs });
+	if (suffix === null) {
+		throw new Error("room-session: комната не найдена (открытый режим, ничего не обнаружено за отведённое время)");
+	}
+	return openSession({
+		name,
+		password,
+		suffix,
+		nick,
+		relayUrl,
+		argon2,
+		now,
+		random,
+		sweepIntervalMs,
+		setIntervalImpl,
+		clearIntervalImpl,
+		onChange,
+		isCreator: false,
+		precomputedKBase: kBase,
 	});
 }

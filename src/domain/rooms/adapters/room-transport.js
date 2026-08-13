@@ -7,7 +7,7 @@ import { createRelayConnection } from "../../../core/transport/relay-pool.js";
 import { createPublisher } from "../../../core/transport/publisher.js";
 import { createSubscriber } from "../../../core/transport/subscriber.js";
 import { verify } from "../../../core/crypto/sign.js";
-import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND } from "../../events/kind-registry.js";
+import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../../events/kind-registry.js";
 import { CALL_SIGNAL_KIND } from "../../calls/signaling-adapter.js";
 
 const ROOM_KINDS = [ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, CALL_SIGNAL_KIND];
@@ -33,7 +33,12 @@ function hasTag(event, name, value) {
 	return event.tags.some((tag) => tag[0] === name && tag[1] === value);
 }
 
-export async function openRoomTransport({ relayUrl, hTopic, selfPubkey, onEvent }) {
+// hTopic/hDisc — как минимум один обязателен (Этап 3, открытый режим): joiner
+// по паролю на фазе обнаружения знает только hDisc (suffix, а с ним hTopic, ещё
+// не найден); обычная закрытая/уже-найденная сессия знает hTopic (и опционально
+// ТАКЖЕ hDisc — открытый режим создателя слушает указатели-конкуренты, И9).
+export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent }) {
+	if (!hTopic && !hDisc) throw new Error("room-transport: нужен хотя бы один из hTopic/hDisc");
 	const conn = createRelayConnection(relayUrl, {});
 	conn.connect();
 	await waitForConnState(conn, (s) => s === "connected", 8000);
@@ -46,7 +51,12 @@ export async function openRoomTransport({ relayUrl, hTopic, selfPubkey, onEvent 
 
 	function onBatch(events) {
 		for (const event of events) {
-			if (!hasTag(event, "h", hTopic)) continue;
+			if (event.kind === ROOM_POINTER_KIND) {
+				if (!hDisc || !hasTag(event, "h", hDisc)) continue;
+				onEvent(event);
+				continue;
+			}
+			if (!hTopic || !hasTag(event, "h", hTopic)) continue;
 			if (event.kind === CALL_SIGNAL_KIND && !hasTag(event, "p", selfPubkey)) continue;
 			onEvent(event);
 		}
@@ -56,7 +66,10 @@ export async function openRoomTransport({ relayUrl, hTopic, selfPubkey, onEvent 
 
 	conn.addMessageHandler(publisher.handleMessage);
 	conn.addMessageHandler(subscriber.handleMessage);
-	subscriber.subscribe(SUB_ID, [{ kinds: ROOM_KINDS, "#h": [hTopic] }]);
+	const filters = [];
+	if (hTopic) filters.push({ kinds: ROOM_KINDS, "#h": [hTopic] });
+	if (hDisc) filters.push({ kinds: [ROOM_POINTER_KIND], "#h": [hDisc] });
+	subscriber.subscribe(SUB_ID, filters);
 
 	function publish(event) {
 		return publisher.publish(event);

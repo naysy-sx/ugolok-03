@@ -1,11 +1,12 @@
-// Rooms, этап 1 — build/parse 4 событий комнаты. Контракт:
-// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 1" (kind-registry.js + room-events.js);
-// ROOMS-SPEC.md §5.1/§5.2.
+// Rooms, этапы 1+3 — build/parse событий комнаты. Контракт:
+// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 1"/"Этап 3" (kind-registry.js +
+// room-events.js); ROOMS-SPEC.md §5.1/§5.2, ROOMS-MATH.md §1.2 (POINTER).
 //
-// ANNOUNCE/PROBE шифруются на kRv, PRESENCE/CHAT — на kSess (encryptChannelContent/
-// decryptChannelContent, core/crypto/channel-key.js — версия-в-заголовке AEAD на
-// произвольный симметричный ключ; ROOM_CONTENT_VERSION фиксирована, в Rooms нет
-// ротации ключей внутри рендеву/экземпляра). Тег h = hTopic на всех четырёх.
+// ANNOUNCE/PROBE шифруются на kRv, PRESENCE/CHAT — на kSess, POINTER — на
+// kPointer (encryptChannelContent/decryptChannelContent, core/crypto/channel-key.js
+// — версия-в-заголовке AEAD на произвольный симметричный ключ; ROOM_CONTENT_VERSION
+// фиксирована, в Rooms нет ротации ключей внутри рендеву/экземпляра). Тег h —
+// hTopic на первых четырёх kind, hDisc на POINTER (см. ниже, почему).
 //
 // Единицы времени: nostr's created_at — секунды; весь остальной Rooms-домен
 // (presence.js/room-machine.js/trickle.js) — миллисекунды. Эта точка конвертации
@@ -13,7 +14,7 @@
 import { sign } from "../../core/crypto/sign.js";
 import { encryptChannelContent, decryptChannelContent } from "../../core/crypto/channel-key.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND } from "../events/kind-registry.js";
+import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../events/kind-registry.js";
 
 const ROOM_CONTENT_VERSION = 1;
 
@@ -80,4 +81,17 @@ export function parseRoomChatEvent(event, kSess) {
 	const payload = parseEvent(event, kSess);
 	if (payload === null) return null;
 	return { id: event.id, createdAt: event.created_at * 1000, pubkey: event.pubkey, nick: payload.nick, text: payload.text };
+}
+
+// Этап 3 — открытый режим (ROOMS-MATH §1.2): указатель на suffix, тег h=hDisc
+// (НЕ hTopic — hTopic зависит от suffix, которого joiner в открытом режиме ещё
+// не знает), шифрование на kPointer (room-keys.js), не на kRv/kSess.
+export function buildRoomPointerEvent(privKey, kPointer, hDisc, suffix, createdAtMs) {
+	return buildEvent(privKey, kPointer, ROOM_POINTER_KIND, hDisc, { suffix }, createdAtMs);
+}
+
+export function parseRoomPointerEvent(event, kPointer) {
+	const payload = parseEvent(event, kPointer);
+	if (payload === null) return null;
+	return { id: event.id, suffix: payload.suffix };
 }

@@ -3,7 +3,7 @@
 // §1.1/§1.4, ROOMS-ALGO.md §8.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveRoomKeys, deriveSessionKey, defaultSlowKdf } from "../src/domain/rooms/room-keys.js";
+import { deriveRoomKeys, deriveSessionKey, defaultSlowKdf, deriveKBase, derivePairKeys, deriveLinkKeys } from "../src/domain/rooms/room-keys.js";
 
 // argon2-заглушка для тестов — БЫСТРАЯ, детерминированная функция от
 // (password, saltBytes), НЕ настоящий Argon2id (реальная WASM-библиотека —
@@ -107,4 +107,46 @@ test("defaultSlowKdf: совместим с deriveRoomKeys как боевая �
 	assert.equal(keys.kBase.length, 32);
 	assert.equal(typeof keys.hDisc, "string");
 	assert.equal(typeof keys.hTopic, "string");
+});
+
+test("Этап 3: deriveRoomKeys теперь возвращает kPointer, согласованный с derivePairKeys(kBase)", async () => {
+	const keys = await deriveRoomKeys("котики", "111", "s", fakeArgon2);
+	assert.ok(keys.kPointer instanceof Uint8Array);
+	assert.equal(keys.kPointer.length, 32);
+	const kBase = await deriveKBase("котики", "111", fakeArgon2);
+	const pair = derivePairKeys(kBase);
+	assert.deepEqual(keys.kPointer, pair.kPointer, "kPointer из deriveRoomKeys совпадает с прямым derivePairKeys(kBase)");
+	assert.equal(keys.hDisc, pair.hDisc);
+});
+
+test("kPointer НЕ зависит от suffix (иначе указатель на suffix нельзя было бы расшифровать до знания suffix)", async () => {
+	const kBase = await deriveKBase("котики", "111", fakeArgon2);
+	const { kPointer } = derivePairKeys(kBase);
+	const linkA = deriveLinkKeys(kBase, "suffix-a");
+	const linkB = deriveLinkKeys(kBase, "suffix-b");
+	assert.notEqual(bytesToHex(linkA.kRv), bytesToHex(linkB.kRv), "kRv зависит от suffix");
+	// kPointer вычислен ДО выбора suffix и одинаков независимо от того, какой suffix потом будет создан
+	const kBaseAgain = await deriveKBase("котики", "111", fakeArgon2);
+	assert.deepEqual(derivePairKeys(kBaseAgain).kPointer, kPointer);
+});
+
+test("kPointer отличается от kRv и от kBase (разные HKDF info-строки/входы — не коллизия доменов)", async () => {
+	const kBase = await deriveKBase("котики", "111", fakeArgon2);
+	const { kPointer } = derivePairKeys(kBase);
+	const { kRv } = deriveLinkKeys(kBase, "suffix-1");
+	assert.notEqual(bytesToHex(kPointer), bytesToHex(kRv));
+	assert.notEqual(bytesToHex(kPointer), bytesToHex(kBase));
+});
+
+test("deriveKBase: argon2 вызывается ровно один раз, переиспользуется derivePairKeys+deriveLinkKeys без повторного вызова", async () => {
+	let callCount = 0;
+	const countingArgon2 = (password, salt) => {
+		callCount++;
+		return fakeArgon2(password, salt);
+	};
+	const kBase = await deriveKBase("котики", "111", countingArgon2);
+	derivePairKeys(kBase);
+	deriveLinkKeys(kBase, "любой-suffix");
+	deriveLinkKeys(kBase, "другой-suffix");
+	assert.equal(callCount, 1, "argon2 вызван один раз, даже с двумя последующими deriveLinkKeys (двухфазный открытый режим)");
 });

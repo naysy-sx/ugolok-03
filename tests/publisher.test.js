@@ -90,3 +90,44 @@ test("handleMessage: OK с id, не относящимся к очереди pub
 	assert.equal(pub.handleMessage(["OK", "unknown-id", true, ""]), false);
 	assert.equal(pub.handleMessage(["EVENT", "sub1", {}]), false);
 });
+
+// Найдено живой проверкой (Rooms, этап 3, два реальных браузерных таба): close()
+// соединения между publish() и отложенным flush() — connection.send() бросает
+// синхронно из setTimeout-колбэка, роняя вкладку необработанным исключением.
+test("flush(): connection.send() бросает (соединение закрыто между publish и flush) -> publish() reject, не необработанное исключение", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const { conn, ws } = setupConnected();
+	const pub = createPublisher(conn, { batchWindowMs: 200, batchSize: 100 });
+
+	const promise = pub.publish(ev("a"));
+	conn.close(); // ws.readyState -> 3 (closed), send() ниже бросит
+
+	assert.doesNotThrow(() => t.mock.timers.tick(200), "flush() не должен пробрасывать исключение наружу");
+	await assert.rejects(promise, /недоступен в состоянии/);
+	t.mock.timers.reset();
+});
+
+test("flush(): одно событие батча бросает при send(), остальные всё равно уходят", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const { conn, ws } = setupConnected();
+	const pub = createPublisher(conn, { batchWindowMs: 200, batchSize: 100 });
+
+	const promiseA = pub.publish(ev("a"));
+	// Подменяем send() так, чтобы бросало РОВНО для события "a", остальные проходят —
+	// имитирует частичный сбой, не полное закрытие соединения.
+	const originalSend = conn.send;
+	conn.send = (msg) => {
+		if (msg[1]?.id === "a") throw new Error("симулированный сбой отправки");
+		return originalSend(msg);
+	};
+	pub.publish(ev("b"));
+
+	t.mock.timers.tick(200);
+	await assert.rejects(promiseA, /симулированный сбой/);
+	assert.deepEqual(
+		ws.sent.map((m) => m[1].id),
+		["b"],
+		"b всё равно ушло, несмотря на сбой a",
+	);
+	t.mock.timers.reset();
+});

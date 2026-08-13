@@ -10,7 +10,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { utf8ToBytes } from "@noble/hashes/utils.js";
 import { createFakeRelay } from "./harness/fake-relay.js";
 import { createWsBridge } from "./harness/ws-bridge.js";
-import { createRoom, joinRoom } from "../src/domain/rooms/room-session.js";
+import { createRoom, joinRoom, joinRoomByPassword } from "../src/domain/rooms/room-session.js";
 
 function fakeArgon2(password, saltBytes) {
 	return Promise.resolve(hkdf(sha256, utf8ToBytes(password), saltBytes, utf8ToBytes("fake-argon2-test-stub"), 32));
@@ -369,4 +369,162 @@ test("адверсарно: битый content (не base64/AEAD-мусор) н�
 
 	// Сессия осталась работоспособной после попытки (sweep продолжает тикать без исключений)
 	assert.doesNotThrow(() => timerA.tick());
+});
+
+// --- Этап 3: открытый режим, joinRoomByPassword, И9, И11 ---
+
+test("открытый режим: createRoom({openMode:true}) публикует указатель, joinRoomByPassword находит suffix и присоединяется", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const alice = await createRoom({
+		name: "открытая-комната",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		openMode: true,
+	});
+	t.after(() => alice.close());
+	assert.equal(alice.getRaceOutcome(), null, "единственный создатель — гонки нет");
+
+	// Указатель Алисы уходит на relay (реальный websocket, publisher's batchWindowMs).
+	// fake-relay.js хранит опубликованные события и реплеит их НОВОЙ подписке — но
+	// саму ДОСТАВКУ реплея (pending -> сокет) всё равно нужно вручную флашить,
+	// discoverSuffixViaPointer сама этого не делает (её задача — ждать, не сливать
+	// тестовый харнесс). Параллельно с ожиданием joinRoomByPassword — ограниченный
+	// по времени опрос-и-слив (НЕ бесконечный цикл — обязан остановиться сам).
+	await flushUntilSettled(relay);
+
+	const discoveryTimeoutMs = 500;
+	async function pollAndFlushFor(ms) {
+		const deadline = Date.now() + ms;
+		while (Date.now() < deadline) {
+			if (relay.pending().length > 0) relay.flushAll();
+			await new Promise((r) => setTimeout(r, 20));
+		}
+	}
+
+	const [bob] = await Promise.all([
+		joinRoomByPassword({
+			name: "открытая-комната",
+			password: "111",
+			nick: "Боб",
+			relayUrl,
+			argon2: fakeArgon2,
+			now: clock.now,
+			random: () => 0.5,
+			discoveryTimeoutMs,
+		}),
+		pollAndFlushFor(discoveryTimeoutMs + 200),
+	]);
+	t.after(() => bob.close());
+
+	assert.equal(bob.getSuffix(), alice.getSuffix(), "Боб нашёл ТОТ ЖЕ suffix через указатель");
+	// Дальнейшая сходимость presence через LINK-путь (suffix уже есть у обоих) уже
+	// покрыта отдельными LINK-режимными тестами выше — здесь важен сам факт находки.
+
+	// bob сразу после joinRoomByPassword публикует PROBE (обычный joinRoom-путь) —
+	// дать publisher'у реально его отправить ДО close() в t.after (тот же паттерн,
+	// что уже чинился в room-transport.test.js/room-session.test.js выше).
+	await flushUntilSettled(relay);
+});
+
+test("И9: два конкурирующих createRoom(openMode) под тем же (name,password) — ровно один проигрывает, узнаёт winningSuffix минимального id", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const timerB = makeFakeTimer();
+
+	const creatorA = await createRoom({
+		name: "гонка",
+		password: "222",
+		nick: "A",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		openMode: true,
+	});
+	const creatorB = await createRoom({
+		name: "гонка",
+		password: "222",
+		nick: "B",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerB.setIntervalImpl,
+		clearIntervalImpl: timerB.clearIntervalImpl,
+		onChange: () => {},
+		openMode: true,
+	});
+	t.after(() => {
+		creatorA.close();
+		creatorB.close();
+	});
+
+	assert.notEqual(creatorA.getSuffix(), creatorB.getSuffix(), "два независимых случайных suffix");
+
+	await pump(relay, clock, [timerA, timerB], { rounds: 10 });
+
+	const outcomeA = creatorA.getRaceOutcome();
+	const outcomeB = creatorB.getRaceOutcome();
+	// Ровно один из двух проиграл (увидел суффикс с меньшим id, отличный от своего).
+	const outcomes = [outcomeA, outcomeB];
+	const losers = outcomes.filter((o) => o !== null);
+	assert.equal(losers.length, 1, "ровно один проигравший — оба не могут проиграть друг другу одновременно (антисимметрия сравнения id)");
+
+	if (outcomeA !== null) {
+		assert.equal(outcomeA.winningSuffix, creatorB.getSuffix(), "A проиграл -> его winningSuffix это suffix B");
+	} else {
+		assert.equal(outcomeB.winningSuffix, creatorA.getSuffix(), "B проиграл -> его winningSuffix это suffix A");
+	}
+});
+
+test("И11: комната переживает уход создателя — оставшийся участник продолжает отвечать на probe нового гостя", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const { alice, bob, timerA, timerB } = await openTwoParticipants(relay, relayUrl, clock);
+
+	alice.close(); // создатель ушёл (абруптно)
+	t.after(() => bob.close());
+
+	// Третий участник входит по suffix (известному заранее, вне канала — как если
+	// бы получил инвайт-ссылку до ухода Алисы) — ссылка не зависит от того, жива ли Алиса.
+	const timerC = makeFakeTimer();
+	const carol = await joinRoom({
+		name: "котики",
+		password: "111",
+		suffix: bob.getSuffix(),
+		nick: "Кэрол",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerC.setIntervalImpl,
+		clearIntervalImpl: timerC.clearIntervalImpl,
+		onChange: () => {},
+	});
+	t.after(() => carol.close());
+
+	await pump(relay, clock, [timerB, timerC], { rounds: 15 });
+
+	assert.equal(carol.isReady(), true, "Боб (оставшийся участник) ответил на probe Кэрол анонсом — комната жива без создателя");
+	assert.equal(
+		carol.getPresent().some((p) => p.pubkey === bob.getPubkeyHex()),
+		true,
+		"Кэрол видит Боба в present()",
+	);
 });

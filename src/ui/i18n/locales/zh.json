@@ -121,7 +121,8 @@
 		"openMenu": "打开菜单",
 		"closeMenu": "关闭菜单",
 		"switchToLightTheme": "切换到浅色主题",
-		"switchToDarkTheme": "切换到深色主题"
+		"switchToDarkTheme": "切换到深色主题",
+		"quickConnect": "Quick Connect"
 	},
 	"unlock": {
 		"checking": "正在检查…",
@@ -171,7 +172,6 @@
 		"main": {
 			"navAriaLabel": "主菜单",
 			"navHome": "首页",
-			"navTempChat": "临时聊天",
 			"createSpaceButton": "创建空间",
 			"accountsWidget": {
 				"title": "此设备上的账户",
@@ -206,16 +206,12 @@
 				"title": "无需中心服务器即可通信的私密空间",
 				"lead": "{{appName}} 是基于 Nostr 协议构建的即时通讯工具，聊天采用端到端加密（MLS），设备端数据库也进行加密。可在本地网络中运行，无需公共互联网。"
 			},
-			"tempChat": {
-				"title": "临时聊天",
-				"lead1": "很快您将可以在此创建一次性房间，并邀请其他访客加入——支持文字或语音，无需注册，也无需事先交换密钥。房间在无人使用一小时后会自动消失。",
-				"lead2": "此功能尚未实现——此页面在功能本身之前就已出现。"
-			},
 			"footer": {
 				"tagline": "{{appName}} —— 私密即时通讯工具。",
 				"alphaNotice": "内测阶段。数据使用由您的主密码派生的密钥加密，并在此设备上本地存储。"
 			},
-			"sidebarAriaLabel": "账户与访问管理"
+			"sidebarAriaLabel": "账户与访问管理",
+			"navTempChat": "Quick Connect"
 		}
 	},
 	"placeholder": {
@@ -743,5 +739,45 @@
 		"relayRejected": "relay 拒绝了发布",
 		"selfHostedFingerprintMismatch": "服务器指纹与此前为该地址保存的指纹不同——服务器可能已被替换",
 		"urlNotInList": "该 URL 不在列表中——请先添加"
+	},
+	"quick": {
+		"anonymousNick": "Guest",
+		"exitButton": "Back",
+		"entry": {
+			"title": "Quick Connect",
+			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",
+			"tabsAriaLabel": "How to join",
+			"tabCreate": "Create",
+			"tabJoinLink": "By link",
+			"tabJoinPassword": "By name and password",
+			"nickLabel": "Name in the room (optional)",
+			"nameLabel": "Room name",
+			"passwordLabel": "Password",
+			"linkLabel": "Invite link",
+			"openModeLabel": "Allow entry by name and password",
+			"openModeHintOn": "Anyone who knows the name and password can join.",
+			"openModeHintOff": "Entry is by invite link only.",
+			"createButton": "Create room",
+			"joinButton": "Join",
+			"anonymityNotice": "Entry is always anonymous, even if you're logged into the app — your main account is never revealed. The relay operator sees that the room exists and is active, but not its content."
+		},
+		"room": {
+			"titleFallback": "Room",
+			"leaveButton": "Leave room",
+			"participantsAriaLabel": "Participants",
+			"participantsTitle": "Participants ({{count}})",
+			"selfMarker": "you",
+			"chatPlaceholder": "Message…",
+			"sendButton": "Send",
+			"inviteLabel": "Invite link (copy and share)",
+			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
+			"reconnectButton": "Reconnect to the primary room"
+		},
+		"errors": {
+			"createFailed": "Couldn't create the room. Check your connection and try again.",
+			"joinFailed": "Couldn't join the room. Check the link and your connection.",
+			"invalidLink": "Invalid invite link.",
+			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
+		}
 	}
 }
