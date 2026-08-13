@@ -12776,17 +12776,24 @@ deriveSessionKey(kRv, salt) -> kSess
 `core/crypto/derivation.js` (`deriveMasterSecret`/`opaqueDTag`) — не
 новая зависимость. `deriveSessionKey(kRv, salt) = HKDF(kRv, salt)`.
 
-**`argon2` — открытый вопрос на Этап 2, не блокирует Этап 1.**
+**`argon2` — открытый вопрос на Этап 1, ЗАКРЫТ на Этапе 2.**
 `ROOMS-MATH-v2.md`/`ROOMS-ALGO.md` называют Argon2id как "медленный
 KDF" на уровне конвенции ([К]/[Г], не жёсткое решение конкретной
-библиотеки) — в проекте сейчас НЕТ Argon2-зависимости (`@noble/hashes`
-даёт `scrypt`, не Argon2id). Поскольку `deriveRoomKeys` принимает
-`argon2` ИНЖЕКТИРУЕМЫМ параметром (сигнатура ROOMS-SPEC §3.1: "в бою —
-вызов в воркере, в тесте — заглушка"), Этап 1 эту зависимость не
-трогает вовсе — тесты подставляют быструю детерминированную заглушку.
-Выбор реальной WASM-библиотеки (Argon2id vs `@noble/hashes`'s `scrypt`,
-бюджет бандла NF-11) — решение при реализации Этапа 2
-(`room-identity.js`/воркер), не здесь.
+библиотеки) — в проекте нет Argon2-зависимости (`@noble/hashes` даёт
+`scrypt`, не Argon2id). Решение: `defaultSlowKdf(password, saltBytes) ->
+Promise<Uint8Array(32)>` (`room-keys.js`, ниже в файле) — `scryptAsync`
+из `@noble/hashes` (УЖЕ зависимость проекта — ноль добавочного веса
+бандла, не WASM Argon2id-библиотека). Параметры `N=2**15, r=8, p=1`
+(≈32 MiB памяти, десятки-сотни мс на слабом устройстве) — компромисс,
+не "самое сильное возможное": комната эфемерна (не долгоживущий
+секрет), деплой — локальная сеть (CLAUDE.md), аудитория продукта
+включает слабые устройства (memory: censorship-affected non-tech
+users) — параметр, рассчитанный на банковский секрет, здесь был бы
+неоправданной UX-ценой без соразмерного выигрыша в безопасности.
+`deriveRoomKeys` по-прежнему принимает `argon2` ИНЖЕКТИРУЕМЫМ
+параметром (сигнатура не меняется) — `defaultSlowKdf` ТОЛЬКО значение
+по умолчанию для боевого кода (`room-session.js`, Этап 2), тесты
+по-прежнему подставляют быструю заглушку.
 
 `hSess` (в закрытом режиме `hDisc` вычисляется, но не публикуется) —
 ответственность ВЫЗЫВАЮЩЕГО кода (адаптер/оркестратор решает,
@@ -12888,9 +12895,20 @@ checkTimeout(state, now, tau) -> state             // idempotent: draining + (no
 
 ```js
 createTrickle({iMin, iMax, k, random}) -> {
-  onInterval(now), onConsistent(), onInconsistent(), shouldTransmit(now)
+  onInterval(now), onConsistent(), onInconsistent(), shouldTransmit(now), getIntervalEnd()
 }
 ```
+
+**`getIntervalEnd()` — добавлена на Этапе 2** (пробел, найденный при
+проектировании `room-session.js`): оркестратору нужно знать, КОГДА
+наступает конец текущего интервала, чтобы вызвать `onInterval(now)` и
+начать следующий — без этого геттера состояние `intervalEnd`
+недоступно снаружи вовсе, а дублировать его вычисление во внешнем коде
+означало бы вести вторую копию того же состояния. Возвращает `null` до
+первого `onInterval`. Аддитивное расширение контракта, существующие
+9 тестов не меняются, регрессия обязательна (правило 13: контракты
+прошлых этапов неизменяемы для воркера, менять может только Claude
+явным решением).
 
 RFC 6206 (ROOMS-ALGO §4.2) буквально, но сигнатура из ROOMS-SPEC §3.3
 не даёt деталей контракта вызовов — решение реализации:
@@ -13073,3 +13091,281 @@ decrypt+JSON.parse, тот же принцип, что `decryptChannelContent`'s
 `ROOM_PRESENCE_KIND`/`ROOM_CHAT_KIND` — на `kSess`. Тег `h` = `hTopic`
 на всех четырёх — ОДНА функция `buildTags(hTopic)` внутри модуля, не
 дублировать `[["h", hTopic]]` в четырёх местах.
+
+# Rooms («Быстрая связь») — Этап 2: транспорт и личность
+
+## room-identity.js [C]
+
+```js
+createEphemeralIdentity() -> { pubkeyHex, privKey, dbKey: null }
+```
+
+ROOMS-SPEC §4.1 буквально: `generateSecretKey()`/`getPublicKey()`
+(`nostr-tools/pure`, те же примитивы, что везде в проекте — `sign.js`,
+тесты), `pubkeyHex` через `bytesToHex`. `dbKey: null` — фиксированное
+поле формы (спек даёт его явно в сигнатуре; гостевая identity
+принципиально не пишет в Dexie, поле присутствует ради единообразия
+формы с обычной identity, не вычисляется). Ничего не пишет в Dexie, не
+вызывает `login()`, не трогает keystore — И7 обеспечивается ПРОСТО
+отсутствием побочных эффектов (нечего чистить при закрытии вкладки).
+
+## room-transport.js [C]
+
+```js
+openRoomTransport({relayUrl, hTopic, selfPubkey, onEvent}) -> Promise<{ publish, close }>
+```
+
+Асинхронная (спек даёт `-> {publish, close}` без `Promise`, но
+подключение неизбежно асинхронно — тот же паттерн, что
+`diagnostics.jsx:569`: `conn.connect(); await waitForConnState(...)`.
+`openRoomTransport` инкапсулирует это ожидание внутри себя, а не
+перекладывает на вызывающий код — оркестратор `room-session.js` не
+должен знать про `waitForConnState`).
+
+Сборка буквально по ROOMS-SPEC §4.2:
+```js
+const conn = createRelayConnection(relayUrl, { onStateChange });
+conn.connect();
+await waitForConnState(conn, s => s === "connected", 8000);
+const publisher = createPublisher(conn);
+const subscriber = createSubscriber(conn, { verifyBatch, onBatch, onEose });
+conn.addMessageHandler(publisher.handleMessage);
+conn.addMessageHandler(subscriber.handleMessage);
+subscriber.subscribe("room", [{ kinds: ROOM_KINDS, "#h": [hTopic] }]);
+```
+`waitForConnState` — локальный хелпер внутри модуля (копия паттерна
+`diagnostics.jsx`, не экспортируется из `relay-pool.js`). `onStateChange`
+— НЕ параметр контракта (спек его не просит) — no-op изнутри, транспорт
+не отдаёт наружу состояние соединения на этом этапе (оркестратор Этапа 2
+работает только с `present`/сообщениями, не с UI-индикатором соединения;
+добавить параметр — тривиальная правка Этапа 3, если UI потребует).
+
+`ROOM_KINDS = [ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND,
+ROOM_CHAT_KIND, CALL_SIGNAL_KIND]` (последний — `20075`, импорт из
+`domain/calls/signaling-adapter.js`, ROOMS-SPEC §5.1: "Плюс существующий
+kind 20075 для сигналинга голоса"). Модуль ГОТОВ принимать голосовой
+сигналинг уже на этом этапе (Этап 4 не должен переоткрывать
+`room-transport.js`), даже хотя `mesh-supervisor.js` появится позже.
+
+`verifyBatch` — РЕШЕНИЕ РЕАЛИЗАЦИИ (спек не даёт для room-transport.js):
+синхронная обёртка над `verify()` (`core/crypto/sign.js`, чистый JS,
+`nostr-tools`'s `verifyEvent`) — `(events) => events.map(verify)`, БЕЗ
+Comlink/Worker. Обоснование: воркер-батчинг в `diagnostics.jsx`
+оправдан объёмом bootstrap/incremental-sync (тысячи событий); комната —
+единицы участников, десятки событий в секунду на пике — синхронная
+проверка дешевле лишнего движущегося узла (Worker), тот же принцип
+минимализма, что ROOMS-ALGO §9 "что не оптимизировать". Публичный
+контракт `openRoomTransport` не получает параметр `verifyBatch` —
+это внутренний выбор модуля, не наружная настройка.
+
+**Предфильтр — обязателен (ROOMS-SPEC §4.2 буквально), в `onBatch`
+перед вызовом `onEvent` на КАЖДОЕ событие батча:**
+1. Верный `h`-тег: `event.tags` содержит `["h", hTopic]` — защита в
+   глубину сверх relay-side фильтра (тот же принцип "не доверять
+   фильтрации только на стороне сети", что и общий транспортный слой
+   проекта) — событие без совпадающего тега молча отбрасывается, не
+   ошибка (chужая комната по совпадению подписки — рутинный случай).
+2. `event.kind === CALL_SIGNAL_KIND` — дополнительно проверить `p`-тег:
+   есть `["p", selfPubkey]` в `event.tags` — иначе отбросить БЕЗ
+   попытки расшифровки (расшифровка чужого NIP-44-события бросает
+   исключение — ловить как штатный поток недопустимо, ROOMS-SPEC §4.2).
+   Остальные 4 kind не несут `p` — предфильтр пропускает их всегда
+   (после проверки 1).
+Оба пункта — синхронные проверки тегов, до любой попытки `parse*`
+(`room-events.js`/`signaling-adapter.js` вызываются ВЫШЕ, оркестратором,
+не внутри `room-transport.js` — транспорт передаёт наружу сырое
+событие через `onEvent(event)`, не расшифровывает сам: "не знает про"
+формат payload, только про маршрутизацию, ROOMS-SPEC §1.2).
+
+`publish(event) -> Promise<{ok, reason}>` — прямая передача
+`publisher.publish`. `close()` — `conn.close()` (весь коннекшн
+целиком, комната не мультиплексирует соединение с чем-либо ещё,
+ROOMS-SPEC §0: "второй, независимый транспортный клиент") — не
+требует явного `CLOSE` подписки перед этим, закрытие сокета обрывает
+всё сразу.
+
+**Находка при тестировании (`tests/room-transport.test.js`) — гонка
+харнесса `ws-bridge`/`fake-relay`, актуальна и для `room-session.js`'s
+тестов (Этап 2, дальше):** при ДВУХ независимых `openRoomTransport`
+на одном `relayUrl` (два "участника") единичная пара `waitFor(() =>
+relay.pending().length > 0); relay.flushAll();` гонится сама с собой —
+REQ первого участника может прийти на relay, сработать `pending>0`,
+уйти в `flushAll()` ДО того, как REQ второго участника физически
+долетел по сокету; результат — второе событие "протухает" в очереди
+и путает следующую проверку (наблюдалось живьём: `await
+alice.publish(...)` зависал навсегда). Фикс — `flushUntilSettled(relay)`
+хелпер: несколько раундов "подождать 40мс → если pending непусто,
+слить" вместо одной точки синхронизации. Используется вместо
+однократного `waitFor+flushAll` везде, где в сценарии больше одного
+независимого транспортного клиента.
+
+## room-session.js [C] — design-записка (skill п.13b, оркестратор — нетривиальное связывание 7 чистых модулей + 2 адаптера)
+
+ROOMS-SPEC §1.3 не даёт сигнатур буквально ("единственное место, где
+ядро встречается с адаптерами... владеет одним таймером sweep...
+отдаёт сигналы для UI") — контракт ниже спроектирован Claude как
+[C]-автор, зафиксирован ДО тестов.
+
+### Область Этапа 2
+
+Только LINK-режим (участник знает `(name, password, suffix)` — суффикс
+получен из инвайт-ссылки вне кода; сама ссылка/её парсинг — Этап 3 UI,
+не здесь). Открытый режим (поиск по `hDisc` без suffix, Р1/И9) —
+ОТЛОЖЕН, не реализуется этим этапом: `hDisc` вычисляется
+`deriveRoomKeys`, но ничем не используется в `room-session.js` до
+Этапа 3. Голос (kind 20075) — `room-transport.js` уже готов его
+пропускать (Этап 2 контракт), но `room-session.js` НЕ обрабатывает
+его вовсе (нет `mesh-supervisor.js` до Этапа 4) — событие молча
+проходит мимо диспетчера (`default`-ветка).
+
+### Публичный API — два фабричных входа, не один с булевым флагом
+
+```js
+createRoom({ name, password, nick, relayUrl, argon2, now, random,
+             sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange })
+  -> Promise<RoomSessionHandle>
+
+joinRoom({ name, password, suffix, nick, relayUrl, argon2, now, random,
+           sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange })
+  -> Promise<RoomSessionHandle>
+```
+
+`createRoom` не принимает `suffix` — генерирует сама
+(`bytesToHex(crypto.getRandomValues(new Uint8Array(16)))`, 128 бит,
+формат не фиксирован спекой — комбинаторика энтропии в ROOMS-MATH §1
+про количество бит, не про кодировку). `argon2` по умолчанию —
+`defaultSlowKdf` (room-keys.js). `now`/`random`/`setIntervalImpl`/
+`clearIntervalImpl` — та же инъекция, что везде в проекте
+(`WebSocketImpl` в relay-pool.js — прецедент), позволяет тестам
+подменить таймер фейковым перехватчиком вместо ожидания реальных
+45 секунд.
+
+```js
+RoomSessionHandle = {
+  getPubkeyHex(),
+  getSuffix(),                          // createRoom: сгенерированный; joinRoom: тот же, что передан
+  isReady(),                            // false у joinRoom, пока не пришёл первый ANNOUNCE (salt неизвестен)
+  getPresent() -> Array<{pubkey, nick, joinedAt}>,   // presence.js's present()
+  getMessages() -> Array<{id, createdAt, pubkey, nick, text}>, // message-log.js's toArray()
+  getRoomState() -> {name, k},          // room-machine.js state
+  sendChat(text) -> Promise<{ok, reason}>,  // rejects, если !isReady()
+  close(),                              // без явного exit-события — см. ниже
+}
+```
+
+### Почему `createRoom`/`joinRoom`, а не один вызов с флагом `isCreator`
+
+Асимметрия реальна (создатель сразу знает `salt`, входящий — нет,
+плюс входящий обязан отправить `ROOM_PROBE` немедленно) — два имени
+яснее для будущего UI (Этап 3: два разных экрана/кнопки), чем один
+вызов с булевым переключателем поведения.
+
+### Ready-переход: единственный триггер — `salt` известен
+
+И для создателя (`salt` генерируется на месте,
+`crypto.getRandomValues(new Uint8Array(32))`, `isReady()` истинно с
+первого тика), и для входящего (`salt` приходит из ПЕРВОГО валидного
+`ANNOUNCE`) — `kSess = deriveSessionKey(kRv, salt)` вычисляется РОВНО
+один раз, при переходе в ready. Повторные `ANNOUNCE` с ДРУГИМ `salt`
+после того, как `kSess` уже установлен, ИГНОРИРУЮТСЯ (И9 — конкурентные
+создатели одного `(n,p)` — вне области Этапа 2, честно
+задокументировано как упрощение, не молчаливый пробел).
+
+### Диспетчер входящих событий (`onEvent` из `room-transport.js`)
+
+Один `switch(event.kind)`:
+- `ROOM_ANNOUNCE_KIND` → `parseRoomAnnounceEvent(event, kRv)`; если
+  `payload && !ready` → установить `salt`, вычислить `kSess`, `ready =
+  true`, вызвать `onChange()`. Если уже `ready` — игнор (см. выше).
+- `ROOM_PROBE_KIND` → `parseRoomProbeEvent(event, kRv)`; если валиден
+  И `ready`: **немедленно** `publishAnnounce(now())` (публикация НЕ
+  через `trickle.shouldTransmit` — ROOMS-SPEC §5.2 буквально "отвечают
+  анонсом НЕМЕДЛЕННО", это отдельный от периодики путь), **И
+  немедленно `publishHeartbeat(now())`** (найдено тестом — БЕЗ этого
+  новичок узнаёт, что комната жива, но не видит УЖЕ присутствующих до
+  их следующего обычного heartbeat, до δ=15с; ROOMS-SPEC не оговаривает
+  это явно, но цель §5.2 — быстрый онбординг новичка, а не только
+  подтверждение существования комнаты), ЗАТЕМ `trickle.onInconsistent();
+  trickle.onInterval(now())` (сброс периодического таймера, чтобы не
+  задвоить анонс скоро после; `lastHeartbeatAt` тоже обновляется на
+  `now()`, чтобы обычный sweep-тик не отправил ещё один heartbeat почти
+  сразу же). Если `!ready` — игнор (нечем ответить, `salt` ещё не
+  известен).
+- `ROOM_PRESENCE_KIND` → игнор, если `!ready` (нечем расшифровать).
+  Иначе `parseRoomPresenceEvent(event, kSess)`; `type==="heartbeat"` →
+  `presence.mergeHeartbeat`; `type==="exit"` → `presence.mergeExit`;
+  затем пересчитать `room-machine` (см. ниже) и `onChange()`.
+- `ROOM_CHAT_KIND` → игнор, если `!ready`. Иначе
+  `parseRoomChatEvent(event, kSess)` → `messageLog.insert(...)` →
+  `onChange()` (дедуп по `id` — уже в `message-log.js`, свои же
+  опубликованные сообщения возвращаются через ту же подписку и просто
+  не дублируются — ОДИН путь вставки, не два, см. ниже).
+- `CALL_SIGNAL_KIND`/другое → игнор (Этап 4).
+
+### Собственные сообщения идут через ТОТ ЖЕ путь, не отдельной веткой
+
+`sendChat` публикует и НЕ вставляет в `message-log` напрямую — событие
+возвращается через ту же подписку (relay эхом отдаёт публикующему её
+же событие при совпадающем фильтре — подтверждено `fake-relay.js`'s
+`publish()`: рассылка всем совпавшим подпискам, включая подписку
+публикующего). Один код-путь вставки вместо двух, `message-log.js`'s
+дедуп по `id` делает эту схему безопасной даже если предположение
+об эхо когда-нибудь окажется неверным для какого-то релея (просто
+сообщение не появится — не задвоится).
+
+### Sweep-тик — единственный таймер модуля (ROOMS-SPEC §1.3 буквально)
+
+```js
+function tick() {
+  const t = now();
+  presenceState = presence.prune(presenceState, t, PRESENCE_TAU_MS);
+  const currentK = presence.present(presenceState, t, PRESENCE_TAU_MS).length;
+  roomMachineState = syncRoomMachineK(roomMachineState, currentK, t);   // ниже
+  roomMachineState = roomMachine.checkTimeout(roomMachineState, t, PRESENCE_TAU_MS);
+  if (ready) {
+    if (t - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) { publishHeartbeat(t); lastHeartbeatAt = t; }
+    if (trickle.getIntervalEnd() === null || t >= trickle.getIntervalEnd()) trickle.onInterval(t);
+    if (trickle.shouldTransmit(t)) publishAnnounce(t);
+  }
+  onChange();
+}
+```
+`HEARTBEAT_INTERVAL_MS = 15000` (δ), `PRESENCE_TAU_MS = 45000` (τ) —
+ИМЕНОВАННЫЕ константы В ОДНОМ месте (`room-session.js`), тот же
+принцип, что `MAX_VOICE_PARTICIPANTS`. `sweepIntervalMs` (по умолчанию
+1000) — частота самого тика, НЕ δ/τ — грубая гранулярность в 1с более
+чем достаточна против интервалов порядка 15-60с.
+
+`syncRoomMachineK(state, targetK, now)` — реконсиляция room-machine.js
+к текущему размеру `Present(t)` (пробел контракта room-machine.js,
+закрыт здесь, не там: сам автомат меняет `k` на ±1 за вызов, но
+`present().length` может скакнуть больше чем на 1 за один тик — если
+несколько heartbeat/exit обработаны в одном батче подписчика):
+```js
+function syncRoomMachineK(state, targetK, now) {
+  if (state.name === "dead" && targetK > 0) state = roomMachine.emptyRoomState(); // новый экземпляр, не переход ИЗ dead
+  while (state.k < targetK) state = state.name === "empty" ? roomMachine.create(state) : roomMachine.join(state);
+  while (state.k > targetK) state = roomMachine.leave(state, now);
+  return state;
+}
+```
+
+### `close()` — БЕЗ явного exit-события (сознательное решение, не пробел)
+
+ROOMS-SPEC §0: "Закрытие вкладки — конец, без уборки". Этап 2 DoD
+явно тестирует именно τ-путь исчезновения ("один уходит — ЧЕРЕЗ τ
+исчезает у второго"), не graceful-exit. `close()` останавливает sweep
+(`clearIntervalImpl`) и зовёт `transport.close()` — ничего больше.
+Явное прощальное `ROOM_PRESENCE` с `type:"exit"` для мгновенного UX
+при осознанном "покинуть комнату" (кнопка) — ВОЗМОЖНОЕ будущее
+улучшение Этапа 3+, не реализуется здесь: основной путь (закрытая
+вкладка) обязан работать без него, раз лизинговая модель ИМЕННО ради
+этого спроектирована — тестировать нужно её, а не оптимизацию поверх.
+И7 (ничего в IndexedDB) — тривиально выполнен отсутствием побочных
+эффектов, как и `room-identity.js`.
+
+### PROBE публикуется joinRoom СРАЗУ при открытии транспорта
+
+До первого sweep-тика — `joinRoom` публикует `ROOM_PROBE_KIND` сразу
+после `openRoomTransport` резолвится (не ждёт тика/trickle), чтобы
+уложиться в ROOMS-SPEC §5.2's 3-секундное окно ожидания ответа.

@@ -5142,3 +5142,35 @@ ROOMS-SPEC, теперь tests/rooms-no-browser-api.test.js).
 
 Далее — Этап 2: room-identity.js, room-transport.js, room-session.js
 (оркестратор без UI).
+
+---
+
+## Rooms («Быстрая связь») — Этап 2: транспорт и личность
+
+#1 room-identity.js [C] — Claude напрямую, 4 теста, зелёные сразу.
+#2 room-transport.js [C] — Claude напрямую; тесты на РЕАЛЬНОМ WebSocket
+через tests/harness/ws-bridge.js+fake-relay.js (без форка процессов —
+Rooms без синглтона). Найдена гонка харнесса при двух клиентах на одном
+relay (waitFor+flush один раз гонится сам с собой) — фикс
+flushUntilSettled (несколько раундов вместо одной точки синхронизации).
+6 тестов.
+#3 room-session.js [C] — design-записка (13b) до тестов: два фабричных
+входа createRoom/joinRoom, sweep-тик, syncRoomMachineK-реконсиляция,
+диспетчер по kind. Попутно: trickle.js получил getIntervalEnd()
+(оркестратору нужен конец интервала — геттера не было, аддитивная правка
++ regression); room-keys.js закрыл отложенный с Этапа 1 вопрос argon2 —
+defaultSlowKdf на scrypt (@noble/hashes, без новой WASM-зависимости).
+Тестами найден реальный UX-пробел: ответ на ROOM_PROBE слал анонс, но не
+heartbeat — новичок не видел уже присутствующих до их следующего heartbeat
+(до 15с); добавлен немедленный heartbeat в ответ на probe. 10 тестов (8 +
+2 адверсарных: дублирующая доставка, битый content).
+
+Regression: node --test 1528/1528, 0 fail, ×2 стабильно. npm run build —
+успешен. И7 подтверждён grep'ом (ноль обращений к Dexie/IndexedDB в
+src/domain/rooms/). DoD этапа 2 (два участника видят друг друга, обмен
+сообщениями, τ-исчезновение при абруптном close()) — проверен тестами с
+полностью инъецированными часами/таймером, без форка child_process
+(в отличие от MLS-харнесса — Rooms архитектурно без module-level
+синглтона, независимые сессии в одном процессе достаточны).
+
+Далее — Этап 3: текстовая комната, UI (app.jsx, quick.jsx).

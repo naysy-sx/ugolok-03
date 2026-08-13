@@ -3,7 +3,7 @@
 // §1.1/§1.4, ROOMS-ALGO.md §8.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveRoomKeys, deriveSessionKey } from "../src/domain/rooms/room-keys.js";
+import { deriveRoomKeys, deriveSessionKey, defaultSlowKdf } from "../src/domain/rooms/room-keys.js";
 
 // argon2-заглушка для тестов — БЫСТРАЯ, детерминированная функция от
 // (password, saltBytes), НЕ настоящий Argon2id (реальная WASM-библиотека —
@@ -86,4 +86,25 @@ test("И4: kSess экземпляра E1 отличается от kSess экз�
 	const kSessE1 = deriveSessionKey(keysE1.kRv, saltE1);
 	const kSessE2 = deriveSessionKey(keysE2.kRv, saltE2);
 	assert.notEqual(bytesToHex(kSessE1), bytesToHex(kSessE2), "шифртекст E1 не расшифровывается ключом E2");
+});
+
+test("defaultSlowKdf (Этап 2, scrypt): детерминизм, 32 байта, чувствительность к password и salt", async () => {
+	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const a = await defaultSlowKdf("пароль", salt);
+	const b = await defaultSlowKdf("пароль", salt);
+	assert.equal(a.length, 32);
+	assert.deepEqual(a, b, "детерминизм: тот же (password, salt) -> тот же результат");
+
+	const differentPassword = await defaultSlowKdf("другой-пароль", salt);
+	assert.notDeepEqual(a, differentPassword);
+
+	const differentSalt = await defaultSlowKdf("пароль", crypto.getRandomValues(new Uint8Array(16)));
+	assert.notDeepEqual(a, differentSalt);
+});
+
+test("defaultSlowKdf: совместим с deriveRoomKeys как боевая реализация argon2 (не только заглушка)", async () => {
+	const keys = await deriveRoomKeys("котики", "секрет", "suffix-1", defaultSlowKdf);
+	assert.equal(keys.kBase.length, 32);
+	assert.equal(typeof keys.hDisc, "string");
+	assert.equal(typeof keys.hTopic, "string");
 });

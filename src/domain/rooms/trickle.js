@@ -32,6 +32,9 @@ export function createTrickle({ iMin, iMax, k, random }) {
       if (now < t) return false;
       firedThisInterval = true;
       return c < k;
+    },
+    getIntervalEnd() {
+      return intervalEnd;
     }
   };
 }

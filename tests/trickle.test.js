@@ -14,6 +14,15 @@ test("до первого onInterval(): shouldTransmit всегда false", () =
 	assert.equal(trickle.shouldTransmit(999999), false);
 });
 
+test("getIntervalEnd(): null до первого onInterval, затем now+I на каждом вызове (Этап 2 — нужен оркестратору)", () => {
+	const trickle = createTrickle({ iMin: I_MIN, iMax: I_MAX, k: 1, random: (lo) => lo });
+	assert.equal(trickle.getIntervalEnd(), null);
+	trickle.onInterval(1000); // I=30000
+	assert.equal(trickle.getIntervalEnd(), 1000 + 30000);
+	trickle.onInterval(100000); // I=60000 (капнуто)
+	assert.equal(trickle.getIntervalEnd(), 100000 + 60000);
+});
+
 test("первый onInterval: I удваивается от iMin, t = now + random(I/2, I)", () => {
 	const trickle = createTrickle({ iMin: I_MIN, iMax: I_MAX, k: 1, random: (lo) => lo });
 	trickle.onInterval(1000);

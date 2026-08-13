@@ -4313,5 +4313,55 @@ mesh.js; И12 — presence.js/message-log.js; И14 — message-log.js)
 не подключены к app.jsx — вклад в бандл будет виден с Этапа 3)
 [x] коммит
 
-**Следующий шаг:** Этап 2 — транспорт и личность (`room-identity.js`,
-`room-transport.js`, оркестратор `room-session.js` без UI), §6 ROOMS-SPEC.md.
+### Этап 2 — транспорт и личность — ЗАКРЫТ
+
+`room-identity.js`, `room-transport.js`, `room-session.js` (оркестратор
+без UI), §4/§1.3 ROOMS-SPEC.md. Контракты и design-записка (room-session.js
+— skill п.13b, нетривиальное связывание 7 модулей ядра + 2 адаптера) — в
+CONTRACTS.md "Rooms — Этап 2".
+
+- `room-identity.js` [C] — эфемерная identity (`createEphemeralIdentity`),
+  Claude напрямую. 4 теста.
+- `room-transport.js` [C] — сборка `createRelayConnection`+`createPublisher`+
+  `createSubscriber`, двойной предфильтр (тег `h` защитой в глубину + тег
+  `p` для `CALL_SIGNAL_KIND`), синхронная `verify()` вместо Comlink-воркера
+  (решение: объём событий комнаты не оправдывает второй движущийся узел).
+  6 тестов на РЕАЛЬНОМ WebSocket + `tests/harness/ws-bridge.js`+`fake-relay.js`
+  (тот же харнесс, что MLS-мультидевайс, БЕЗ форка child_process — Rooms
+  архитектурно без module-level синглтона, форк не нужен). Найдена и
+  задокументирована гонка харнесса при двух независимых клиентах на одном
+  relay (`flushUntilSettled` вместо однократного `waitFor+flush`).
+- `room-session.js` [C] — оркестратор, `createRoom`/`joinRoom`, sweep-тик
+  (heartbeat/prune/room-machine-реконсиляция/trickle). 10 тестов (8
+  функциональных + 2 адверсарных), реальный WebSocket + ПОЛНОСТЬЮ
+  подконтрольные тесту часы/таймер (`now`/`setIntervalImpl` инъекция) — τ=45с
+  проверяется без единой реальной секунды ожидания.
+- Попутные находки/правки контрактов прошлых этапов (Claude, явное решение,
+  regression после каждой): `trickle.js` — добавлен `getIntervalEnd()`
+  (оркестратору нужно знать конец интервала, геттера не было); `room-keys.js`
+  — закрыт отложенный с Этапа 1 вопрос `argon2` (`defaultSlowKdf` — `scrypt`
+  из `@noble/hashes`, НЕ новая WASM Argon2id-зависимость, N=2**15/r=8/p=1);
+  `room-session.js` (найдено тестом, не с самого начала) — ответ на
+  `ROOM_PROBE` шлёт не только немедленный anounce, но и немедленный
+  heartbeat, иначе новичок не видел уже присутствующих участников до их
+  следующего обычного heartbeat (до 15с); `tests/rooms-no-browser-api.test.js`
+  сужен на ПЛОСКИЕ файлы `src/domain/rooms/` (не рекурсирует в новую
+  `adapters/` — ей по контракту разрешена сеть).
+
+*DoD этапа 2:*
+[x] два независимых участника (в одном процессе — форк не нужен, см. выше)
+входят в комнату, видят друг друга в `present()`, обмениваются сообщениями
+[x] один уходит АБРУПТНО (`close()` без exit-события, имитация закрытой
+вкладки) — через τ пропадает у второго (проверено без реального ожидания,
+инъекция часов)
+[x] И7 проверен: `grep` по `src/domain/rooms/` на Dexie/IndexedDB/keystore —
+ноль реальных обращений (только документирующий комментарий)
+[x] `node --test` зелёный — 1528 тестов, 0 fail, ×2 подряд стабильно
+[x] адверсарная фаза: дублирующая доставка (идемпотентность), битый
+content на `ROOM_PRESENCE_KIND` (не роняет диспетчер)
+[x] `npm run build` зелёный
+[x] коммит
+
+**Следующий шаг:** Этап 3 — текстовая комната, UI (`app.jsx` ветка,
+`quick.jsx` экран входа/создания, список участников, чат сбоку), §6
+ROOMS-SPEC.md.
