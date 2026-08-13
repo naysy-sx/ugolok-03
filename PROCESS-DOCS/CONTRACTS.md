@@ -12746,3 +12746,330 @@ throw'нувшие события) приходят почти одноврем�
 конструкции, уже покрыт адверсарными тестами — переиспользуется ТОТ
 ЖЕ, УЖЕ доказанный корректным примитив, не новый код с нуля).
 Верифицировано ревью кода и остаётся на живую проверку пользователем.
+
+---
+
+# Rooms («Быстрая связь») — Этап 1: чистое ядро
+
+ТЗ: `ROOMS-SPEC.md` v2 (архитектор Claude Opus), формализация —
+`ROOMS-MATH-v2.md`/`ROOMS-ALGO.md` (те же роль и статус, что design-
+записка по skill п.13b — не дублируется здесь). Ниже — только то, что
+формализация ОСТАВЛЯЕТ на усмотрение реализации (сигнатуры даны как
+интерфейс, не полное поведение), плюс явные scope-решения.
+
+Все 7 модулей — `src/domain/rooms/`, `node --test` без браузера/relay/
+`fake-indexeddb`. Ни один не вызывает `Date.now()`/`Math.random()`
+внутри — время и случайность инжектируются параметром (ROOMS-SPEC §2).
+
+## room-keys.js [C]
+
+```js
+deriveRoomKeys(name, password, suffix, argon2) -> Promise<{ kBase, kRv, kSess: null, hTopic, hDisc }>
+deriveSessionKey(kRv, salt) -> kSess
+```
+
+Цепочка — ROOMS-ALGO §8, буквально: `kBase = argon2(name, password)`
+(ЕДИНСТВЕННЫЙ медленный шаг, инжектируется — см. ниже),
+`hDisc = HMAC(kBase, "disc")`, `kRv = HKDF(kBase, suffix)`,
+`hTopic = HMAC(kRv, "topic")` — все три через `@noble/hashes`'s
+`hmac`/`hkdf`+`sha256`, тот же примитив, что уже использует
+`core/crypto/derivation.js` (`deriveMasterSecret`/`opaqueDTag`) — не
+новая зависимость. `deriveSessionKey(kRv, salt) = HKDF(kRv, salt)`.
+
+**`argon2` — открытый вопрос на Этап 2, не блокирует Этап 1.**
+`ROOMS-MATH-v2.md`/`ROOMS-ALGO.md` называют Argon2id как "медленный
+KDF" на уровне конвенции ([К]/[Г], не жёсткое решение конкретной
+библиотеки) — в проекте сейчас НЕТ Argon2-зависимости (`@noble/hashes`
+даёт `scrypt`, не Argon2id). Поскольку `deriveRoomKeys` принимает
+`argon2` ИНЖЕКТИРУЕМЫМ параметром (сигнатура ROOMS-SPEC §3.1: "в бою —
+вызов в воркере, в тесте — заглушка"), Этап 1 эту зависимость не
+трогает вовсе — тесты подставляют быструю детерминированную заглушку.
+Выбор реальной WASM-библиотеки (Argon2id vs `@noble/hashes`'s `scrypt`,
+бюджет бандла NF-11) — решение при реализации Этапа 2
+(`room-identity.js`/воркер), не здесь.
+
+`hSess` (в закрытом режиме `hDisc` вычисляется, но не публикуется) —
+ответственность ВЫЗЫВАЮЩЕГО кода (адаптер/оркестратор решает,
+публиковать ли `hDisc`), не `room-keys.js` — она возвращает оба поля
+безусловно.
+
+## presence.js [C]
+
+```js
+emptyPresence() -> Map                                    // L, пустая
+mergeHeartbeat(state, {pubkey, nick, at}) -> Map           // новое состояние, state не мутируется
+mergeExit(state, {pubkey, at}) -> Map
+present(state, now, tau) -> Array<{pubkey, nick, joinedAt}>  // по joinedAt возрастанию
+prune(state, now, tau) -> Map
+```
+
+Структура — ROOMS-ALGO §3.1 буквально: `L: Map<pubkeyHex, {a, r, nick,
+joinedAt}>`. `merge` покомпонентно `max` на `(a, r)` (ROOMS-MATH §2.2).
+
+**`joinedAt` — деталь, не описанная формулами явно, решение
+реализации (ПЕРЕСМОТРЕНО в ходе реализации — см. ниже причину):**
+`joinedAt` = min-накопление внутри ОТКРЫТОГО периода: при heartbeat
+`joinedAt = periodClosed ? at : Math.min(existing.joinedAt, at)`, где
+`periodClosed = existing.r >= existing.joinedAt` (известный `r`
+перекрыл начало текущего периода — значит exit пришёл ПОСЛЕ входа,
+период закрыт, следующий heartbeat открывает НОВЫЙ период с
+`joinedAt = at`). Пока период открыт, `joinedAt` — минимум всех `at`
+heartbeat'ов этого периода, а не значение первого увиденного.
+
+Первая версия ("сохранять `joinedAt`, если предыдущее состояние уже
+присутствовало", т.е. проверка `existing.a <= existing.r` в момент
+КАЖДОГО отдельного merge) оказалась НЕ коммутативной: для двух
+heartbeat одного периода (без exit между ними), доставленных в разном
+порядке двум наблюдателям, `joinedAt` получался разным — реальная
+живая рассинхронизация порядка `present()` между наблюдателями, не
+просто теоретическое нарушение. Поймано адверсарным тестом на
+ассоциативность (`tests/room-presence.test.js`, "И1: merge
+ассоциативна") ДО того, как стало живым багом. `min` коммутативен и
+ассоциативен по построению (та же причина, по которой `max`-слияние
+`(a,r)` — валидный CvRDT), поэтому min-накопление устраняет
+зависимость от порядка доставки, сохраняя оба требуемых свойства:
+продление аренды не двигает `joinedAt` (стабильный порядок
+`present()`, ROOMS-SPEC §3.2), повторный вход ПОСЛЕ exit обновляет
+`joinedAt` на новый момент. Известное ограничение: коммутативность
+доказана для случая переупорядоченных heartbeat ВНУТРИ одного периода;
+для патологических чередований heartbeat/exit одного участника
+(события перемешаны относительно друг друга) полная коммутативность
+`joinedAt` не доказана — но это НЕ нарушает формальный И1 (тот говорит
+о `Present(t)`, не о `joinedAt`, который является UX-полем сверх
+формальной CvRDT-модели).
+
+`nick` — всегда берётся из ПОСЛЕДНЕГО `mergeHeartbeat` (не
+полурешёточное поле само по себе — LWW внутри той же записи по `at`,
+побеждает более свежий `at`, независимо от `a`/`r`-предиката; если
+`at` из входящего heartbeat меньше уже известного `nickAt`, `nick` НЕ
+откатывается).
+
+`prune` — по ROOMS-ALGO §2.2 буквально: удаляет запись, если `a_d <
+now - tau`, НЕЗАВИСИМО от `r_d` (не привязано к предикату
+"присутствует"). Уже вышедший, но недавно (по `a`) — не обрезается
+раньше срока естественного протухания.
+
+## room-machine.js [C]
+
+Поверх `core/fsm/machine.js`'s `transition(transitions, state, event)`
+(чистая функция ИМЯ-состояния → ИМЯ-состояния, без данных). Автомат
+ROOMS-MATH §5.1 несёт данные (`k` — число присутствующих), которых
+голый `transition()` не поддерживает — `room-machine.js` ведёт `k`
+ОТДЕЛЬНО, использует `transition()` только для имени.
+
+```js
+emptyRoomState() -> { name: "empty", k: 0 }
+create(state) -> { name: "alive", k: 1 }
+join(state) -> { name, k: state.k + 1 }          // из "alive" и "draining" (k=0) — одна формула
+leave(state, now) -> { name, k, drainedAt? }      // k>1: {name:"alive", k:k-1}; k<=1: {name:"draining", k:0, drainedAt:now}
+checkTimeout(state, now, tau) -> state             // idempotent: draining + (now-drainedAt>=tau) -> dead; иначе state как есть
+```
+
+`TRANSITIONS` (внутренние имена событий, не публичный API):
+```js
+{
+  empty:    { CREATE: "alive" },
+  alive:    { JOIN: "alive", LEAVE: "alive", LEAVE_LAST: "draining" },
+  draining: { JOIN: "alive", TIMEOUT: "dead" },
+  dead:     {},
+}
+```
+`leave()` сама выбирает `LEAVE` vs `LEAVE_LAST` по `state.k` ДО вызова
+`transition()` — недопустимые вызовы (`leave()` на `empty`/`dead`,
+`checkTimeout` не на `draining`, где нет ветки в TRANSITIONS) — `dead`
+не имеет исходящих переходов вообще (поглощающее, ROOMS-MATH §5.1:
+новый экземпляр = новый `emptyRoomState()`, не переход ИЗ dead).
+
+`drainedAt` хранится ВНУТРИ state (не отдельным параллельным
+таймером) — `checkTimeout` становится чистой функцией от
+`(state, now, tau)`, тестируется без реальных таймеров (ROOMS-SPEC §2).
+
+## trickle.js [W] — точный псевдокод для воркера
+
+```js
+createTrickle({iMin, iMax, k, random}) -> {
+  onInterval(now), onConsistent(), onInconsistent(), shouldTransmit(now)
+}
+```
+
+RFC 6206 (ROOMS-ALGO §4.2) буквально, но сигнатура из ROOMS-SPEC §3.3
+не даёt деталей контракта вызовов — решение реализации:
+
+- Внутреннее состояние: `c` (счётчик согласованных), `t` (абсолютное
+  время следующей точки передачи), `intervalEnd`, `I` (текущая длина
+  интервала), `firedThisInterval` (bool, чтобы `shouldTransmit`
+  срабатывал РОВНО ОДИН раз за интервал).
+- **Инициализация:** сразу после `createTrickle` — `I = iMin`, `t`/
+  `intervalEnd` НЕ установлены (`null`). Вызывающий код ОБЯЗАН вызвать
+  `onInterval(now)` ОДИН раз сразу после создания, чтобы стартовать
+  первый интервал. `shouldTransmit(now)` до этого момента — всегда
+  `false`.
+- `onInterval(now)`: `I = min(2*I, iMax)` (растёт КАЖДЫЙ регулярный
+  вызов); `c = 0`; `t = now + random(I/2, I)`; `intervalEnd = now + I`;
+  `firedThisInterval = false`.
+- `shouldTransmit(now)`: `if (t === null) return false; if
+  (firedThisInterval) return false; if (now < t) return false;
+  firedThisInterval = true; return c < k;` — явная проверка `t ===
+  null` ОБЯЗАТЕЛЬНА (найдено при реализации): `now < t` с `t = null`
+  приводится JS к `now < 0`, что для `now >= 0` ложно и проваливается
+  в `firedThisInterval = true; return c < k` — нарушает "до первого
+  `onInterval` всегда `false`". Побочный эффект (взводит флаг) — при
+  первом достижении `t`, дальше `false` до следующего `onInterval`.
+- `onConsistent()`: `c += 1`. Без `now` — счётчик, не время.
+- `onInconsistent()`: `I = iMin`; `c = 0`; **НЕ пересчитывает `t`/
+  `intervalEnd`** (сигнатура без `now` не позволяет) — вместо этого
+  контракт использования: вызывающий код (`room-session.js`) ОБЯЗАН
+  вызвать `onInterval(now)` СРАЗУ ПОСЛЕД `onInconsistent()`, что и
+  даёт RFC 6206's "начать интервал заново" относительно текущего
+  момента. Единственное место, вычисляющее `t`/`intervalEnd` —
+  `onInterval` (не дублировать формулу в двух функциях).
+
+## mesh.js [W]
+
+```js
+edges(pubkeys) -> Array<[initiator, responder]>   // sort(pubkeys) затем все пары i<j
+diffEdges(oldEdges, newEdges) -> {toOpen, toClose}  // разность множеств по сериализованной паре "i:j"
+```
+
+ROOMS-ALGO §6 буквально — полностью специфицировано, без открытых
+вопросов. `diffEdges` сравнивает рёбра как значения (не по ссылке) —
+сериализация пары в строку для `Set`-разности, порядок `[i,j]` внутри
+пары уже канонический (i<j) из `edges()`.
+
+## message-log.js [W]
+
+```js
+createLog({maxBacktrack = 200}) -> { insert(msg) -> boolean, toArray() }
+```
+
+ROOMS-ALGO §5 буквально — вставка с хвоста, `Set<id>` для дедупа,
+порядок `(createdAt, id)` (ROOMS-SPEC §3.5 — Lamport сознательно НЕ
+используется), обрыв прохода на `maxBacktrack` шагов назад. `insert`
+возвращает `false` на дубликат id (уже в `Set`), `true` иначе
+(независимо от того, вставлено ли в "правильную" по порядку позицию
+или на границу `maxBacktrack`).
+
+Точный псевдокод (устраняет неоднозначность "с какой позиции считать
+шаги" — иначе граница `maxBacktrack` не тестируема детерминированно):
+
+```js
+function compare(a, b) {           // 0 если равны по обоим полям
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  if (a.id < b.id) return -1;
+  if (a.id > b.id) return 1;
+  return 0;
+}
+
+function insert(msg) {
+  if (idSet.has(msg.id)) return false;
+  idSet.add(msg.id);
+  let pos = arr.length;
+  let steps = 0;
+  while (pos > 0 && steps < maxBacktrack && compare(arr[pos - 1], msg) > 0) {
+    pos -= 1;
+    steps += 1;
+  }
+  arr.splice(pos, 0, msg);
+  return true;
+}
+```
+
+Сообщение "по порядку" (не меньше последнего элемента) — `steps=0`,
+одно сравнение, вставка в хвост, `O(1)`. Сообщение, требующее сдвига
+больше `maxBacktrack` позиций, вставляется РОВНО на позицию
+`arr.length - maxBacktrack` (считая от хвоста на момент начала этой
+вставки) — не на формально верную позицию; это принятый компромисс
+(ROOMS-ALGO §5.1: "опоздавшее на двести позиций в эфемерной комнате
+не имеет смысла ставить точно").
+
+## kind-registry.js + room-events.js [C]
+
+**Новый `src/domain/events/kind-registry.js`** — заводится ЭТИМ этапом,
+но ТОЛЬКО для НОВЫХ room-kind. ROOMS-SPEC §5.1 просит "существующие
+номера тоже перенести" — это ОТДЕЛЬНАЯ, самостоятельная миграция
+(15+ доменных файлов по всему проекту, каждый со своей локальной
+`_KIND`-константой) — вне скоупа "Rooms, чистое ядро" и рискованная
+для стабильного существующего кода. Реестр начинается как источник
+истины для НОВЫХ kind (растущий список), перенос существующих —
+отдельная будущая задача, не блокирует Rooms.
+
+Четыре новых kind (эфемерные, 20000-29999, не пересекаются с занятыми
+20075/22242/24242 — см. `PROCESS-DOCS/AUDIT.md` §1.3):
+```js
+export const ROOM_ANNOUNCE_KIND = 29001;
+export const ROOM_PROBE_KIND = 29002;
+export const ROOM_PRESENCE_KIND = 29003;
+export const ROOM_CHAT_KIND = 29004;
+```
+
+`room-events.js` — build/parse для этих 4 kind, шифрование NIP-44-
+подобным AEAD на `kRv` (ANNOUNCE/PROBE) или `kSess` (PRESENCE/CHAT) —
+переиспользует `encryptChannelContent`/`decryptChannelContent`
+(`core/crypto/channel-key.js`, версия-в-заголовке AEAD, УЖЕ
+симметричный примитив на произвольный ключ, ближе к `k_sess`, чем
+NIP-44's ECDH-pair — тот же выбор, что Opus сделал для сигналинга НЕ
+подходит здесь: комнатные события МНОГОПОЛЬЗОВАТЕЛЬСКИЕ по природе
+(все участники читают ОДИН и тот же `kSess`), в отличие от парного
+сигналинга голоса). Тег `h` = `hTopic`, все 4 kind — с ним.
+
+**Payload-схема и сигнатуры — решение реализации (ROOMS-SPEC §5.1 не
+фиксирует буквально, только таблицу kind/ключ/частота):**
+
+Постройка событий следует прецеденту `signaling-adapter.js`'s
+`buildCallSignalEvent` — `build*` сразу подписывает через `sign()`
+(`core/crypto/sign.js`, `nostr-tools/pure`'s `finalizeEvent`, чистый
+JS, без браузерных API — Этап 1 DoD не нарушается) и возвращает ГОТОВОЕ
+событие; сеть/публикация — забота вызывающего (адаптер/оркестратор,
+Этап 2), отсюда "не знает про: публикация" в §1.1 — именно про
+сетевой ввод-вывод, не про подпись.
+
+Единицы времени: nostr's `created_at` — СЕКУНДЫ; весь остальной Rooms-
+домен (`presence.js`, `room-machine.js`, `trickle.js`, δ=15000/τ=45000)
+— МИЛЛИСЕКУНДЫ. `room-events.js` — единственная точка конвертации:
+`parse*` умножает `event.created_at` на 1000 при формировании `at`/
+`createdAt` для чистого ядра; `build*` делит на 1000 при формировании
+`created_at` для события.
+
+`ROOM_CONTENT_VERSION = 1` — фиксированная константа (не растёт, в
+Rooms нет ротации ключей внутри экземпляра/рендеву — `version`-поле
+конверта используется только потому, что переиспользуется формат
+`encryptChannelContent`, семантически версии здесь нет).
+
+```js
+// ANNOUNCE — несёт salt текущего экземпляра (kSess = HKDF(kRv, salt)),
+// иначе новичок, знающий только kRv, не может вычислить kSess (ROOMS-SPEC §5.1).
+buildRoomAnnounceEvent(privKey, kRv, hTopic, saltHex, createdAt) -> signed event
+parseRoomAnnounceEvent(event, kRv) -> { salt: hex } | null
+
+// PROBE — публикуется входящим, пустой payload: сам факт валидной
+// расшифровки на kRv — единственный сигнал ("несогласованность" для Trickle,
+// ROOMS-SPEC §5.2).
+buildRoomProbeEvent(privKey, kRv, hTopic, createdAt) -> signed event
+parseRoomProbeEvent(event, kRv) -> {} | null
+
+// PRESENCE — heartbeat ИЛИ exit одним kind (различаются полем type),
+// готовый вход для presence.js's mergeHeartbeat/mergeExit; pubkey —
+// из event.pubkey (эфемерная identity комнаты = участник), НЕ дублируется в payload.
+buildRoomPresenceEvent(privKey, kSess, hTopic, {type: "heartbeat", nick}, createdAt) -> signed event
+buildRoomPresenceEvent(privKey, kSess, hTopic, {type: "exit"}, createdAt) -> signed event
+parseRoomPresenceEvent(event, kSess) -> { pubkey, type: "heartbeat", nick, at } | { pubkey, type: "exit", at } | null
+
+// CHAT — id/createdAt/pubkey берутся из события (id=event.id уже уникален
+// и публичен на relay — не дублируется), payload несёт только nick/text.
+buildRoomChatEvent(privKey, kSess, hTopic, { nick, text }, createdAt) -> signed event
+parseRoomChatEvent(event, kSess) -> { id, createdAt, pubkey, nick, text } | null
+```
+
+`parse*` возвращают `null` на ЛЮБУЮ ошибку (AEAD-провал чужим ключом,
+битый JSON, отсутствие ожидаемых полей) — try/catch вокруг
+decrypt+JSON.parse, тот же принцип, что `decryptChannelContent`'s
+"версия не найдена -> null, не throw": предфильтр по тегу `h` в
+`room-transport.js` (Этап 2) снижает вероятность чужого события почти
+до нуля, но не до нуля (коллизия тега либо чужая комната по ошибке
+подписки) — рутинный случай, не исключение.
+
+`ROOM_ANNOUNCE_KIND`/`ROOM_PROBE_KIND` шифруются на `kRv` (hex через
+`bytesToHex`, `@noble/hashes/utils.js` — тот же, что везде в проекте);
+`ROOM_PRESENCE_KIND`/`ROOM_CHAT_KIND` — на `kSess`. Тег `h` = `hTopic`
+на всех четырёх — ОДНА функция `buildTags(hTopic)` внутри модуля, не
+дублировать `[["h", hTopic]]` в четырёх местах.

@@ -4268,5 +4268,50 @@ function closePc() {
 *DoD этапа 0:* [x] два скрипта в `scripts/` [x] результат записан в
 PLAN.md (эта запись) [x] 0.1 не провалился — можно идти дальше.
 
-**Следующий шаг:** Этап 1 — чистое ядро (`src/domain/rooms/`, 7 модулей,
-§1.1/§3 ROOMS-SPEC.md), тесты до кода, ни строки UI/сети.
+### Этап 1 — чистое ядро (`src/domain/rooms/`, 7 модулей) — ЗАКРЫТ
+
+Все 7 модулей §1.1 ROOMS-SPEC.md, тесты до кода (skill п.14), контракты
+в CONTRACTS.md "Rooms — Этап 1" (уточнялись по ходу — presence.js's
+`joinedAt` пересмотрен после найденного тестом бага коммутативности,
+trickle.js's `shouldTransmit` дополнен явной проверкой `t === null`,
+message-log.js/mesh.js получили точный псевдокод после написания):
+
+- `room-keys.js` [C] — деривация `kBase→hDisc/kRv→hTopic`, `deriveSessionKey`. 7 тестов.
+- `presence.js` [C] — CvRDT-полурешётка присутствия, min-накопление `joinedAt`
+  (см. CONTRACTS.md — переписан после адверсарного теста на ассоциативность,
+  нашедшего реальную рассинхронизацию порядка между наблюдателями). 16 тестов.
+- `room-machine.js` [C] — автомат `empty→alive(k)→draining→dead` поверх
+  `core/fsm/machine.js`. 18 тестов.
+- `trickle.js` [W] — RFC 6206, воркер + точечная правка (export забыт,
+  плюс найденный при тестировании пробел в контракте: `now < t` с `t=null`
+  приводится JS к `now<0`, что ложно и портит "до первого onInterval —
+  всегда false"). 10 тестов.
+- `mesh.js` [W] — турнир рёбер, воркер, зелёный с первой попытки. 14 тестов
+  (включая явную И5-проверку антисимметрии/полноты для n=2..6).
+- `message-log.js` [W] — адаптивная вставка с хвоста, воркер + точечная
+  правка (export забыт, придуман несуществующий импорт `./utils.js`).
+  9 тестов (включая И14 — амортизированную O(1)-проверку на 20000 вставках).
+- `kind-registry.js` (новый `src/domain/events/kind-registry.js`, только
+  новые room-kind 29001-29004) + `room-events.js` [C] — build/parse 4
+  событий, payload-схема спроектирована и зафиксирована в CONTRACTS.md
+  (ROOMS-SPEC не давала её буквально — решение реализации: ANNOUNCE несёт
+  `salt`, PROBE пуст, PRESENCE = heartbeat|exit одним kind, CHAT берёт
+  id/createdAt/pubkey из события; единственная точка конвертации
+  секунды↔миллисекунды между nostr и Rooms-доменом). Переиспользует
+  `encryptChannelContent`/`decryptChannelContent` (`core/crypto/channel-key.js`)
+  и `sign()`/`verify()` (`core/crypto/sign.js`, чистый JS через nostr-tools,
+  без браузерных API). 12 тестов, все зелёные с первой попытки.
+
+*DoD этапа 1:*
+[x] `node --test` зелёный — 1505 тестов, 0 fail, ×2 подряд стабильно
+[x] покрыты И1-И6, И12-И14 (И1-И4 — room-keys.js/presence.js; И5-И6 —
+mesh.js; И12 — presence.js/message-log.js; И14 — message-log.js)
+[x] ноль импортов браузерных API в `src/domain/rooms/` — теперь
+автоматизированный тест (`tests/rooms-no-browser-api.test.js`), не
+разовый ручной grep
+[x] `npm run build` зелёный, 721.75 kB gzip (бюджет 1304 KB, Rooms ещё
+не подключены к app.jsx — вклад в бандл будет виден с Этапа 3)
+[x] коммит
+
+**Следующий шаг:** Этап 2 — транспорт и личность (`room-identity.js`,
+`room-transport.js`, оркестратор `room-session.js` без UI), §6 ROOMS-SPEC.md.
