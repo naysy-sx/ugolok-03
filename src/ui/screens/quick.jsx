@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../../domain/rooms/room-session.js";
 import MessageBubble from "../components/message-bubble.jsx";
 import RoomAudioVisualizer from "../components/room-audio-visualizer.jsx";
+import { relayStatusInfo } from "../components/connection-status.jsx";
 import IconQuickConnect from "../icons/quick-connect.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
@@ -62,6 +63,8 @@ export default function Quick({ onExit }) {
 	const [inviteLink, setInviteLink] = useState("");
 	const [chatText, setChatText] = useState("");
 	const [voiceActive, setVoiceActive] = useState(false);
+	// Этап 6 — ROOMS-SPEC §7 "Релей отвалился": видно в UI, не только в поведении.
+	const [connectionState, setConnectionState] = useState("connected");
 	const [voiceBusy, setVoiceBusy] = useState(false);
 	const [voiceError, setVoiceError] = useState("");
 	const [remoteStreams, setRemoteStreams] = useState(new Map());
@@ -105,6 +108,7 @@ export default function Quick({ onExit }) {
 		setPresent(newSession.getPresent());
 		setMessages(newSession.getMessages());
 		setRaceOutcome(newSession.getRaceOutcome());
+		setConnectionState(newSession.getConnectionState());
 		setVoiceActive(false);
 		setVoiceError("");
 		setRemoteStreams(new Map());
@@ -138,6 +142,7 @@ export default function Quick({ onExit }) {
 		// И10 самоэвикция (CONTRACTS.md "Rooms — Этап 4" §3) может выключить голос
 		// без явного действия пользователя, onChange — единственный способ узнать об этом.
 		setVoiceActive(s.isVoiceActive());
+		setConnectionState(s.getConnectionState());
 	}
 
 	async function handleCreate(e) {
@@ -304,6 +309,11 @@ export default function Quick({ onExit }) {
 	if (screen === "in-room" && session) {
 		const selfPubkey = session.getPubkeyHex();
 		const voiceCount = present.filter((p) => p.inVoice).length;
+		// Этап 6 — ROOMS-SPEC §7: комната не завязана на синхронизацию истории
+		// (нет её вовсе, §5.4), поэтому isSynced=true всегда — "connected"/
+		// "subscribed" всегда читается как "ok", не как "синхронизация".
+		const relayInfo = relayStatusInfo(connectionState, true);
+		const edgeStates = session.getEdgeStates();
 		return (
 			<div class="quick-room stack" style={{ "--gap": "var(--space-m)" }}>
 				<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
@@ -318,6 +328,14 @@ export default function Quick({ onExit }) {
 						</button>
 					)}
 				</header>
+
+				{relayInfo.tone !== "ok" && (
+					<p role="status" class={`status-${relayInfo.tone}`}>
+						{t(relayInfo.labelKey)}
+					</p>
+				)}
+
+				<p class="quick-ephemeral-notice">{t("quick.room.ephemeralNotice")}</p>
 
 				{raceOutcome && (
 					<div role="alert" class="quick-race-warning stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
@@ -376,16 +394,30 @@ export default function Quick({ onExit }) {
 					>
 						<h3>{t("quick.room.participantsTitle", { count: present.length })}</h3>
 						<ul role="list">
-							{present.map((p) => (
-								<li key={p.pubkey} class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
-									<IconUserBadge style={{ color: "var(--accent)" }} />
-									<span>
-										{p.nick || t("quick.anonymousNick")}
-										{p.pubkey === selfPubkey ? ` (${t("quick.room.selfMarker")})` : ""}
-										{p.inVoice ? ` — ${t("quick.room.inVoiceMarker")}` : ""}
-									</span>
-								</li>
-							))}
+							{present.map((p) => {
+								// Этап 6 — ROOMS-SPEC §7 "у пары взаимная тишина с пометкой": только
+								// ЯВНЫЙ отказ ребра (ENDED/RECONNECTING), не переходные состояния
+								// установки (OUTGOING_RINGING/INCOMING_RINGING/CONNECTING) — те не
+								// диагностика, а нормальный первые секунды процесса (см. CONTRACTS.md).
+								const edge = edgeStates.find((e) => e.peer === p.pubkey);
+								const edgeSilent = voiceActive && p.inVoice && p.pubkey !== selfPubkey && edge && (edge.state === "ENDED" || edge.state === "RECONNECTING");
+								return (
+									<li key={p.pubkey} class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+										<IconUserBadge style={{ color: "var(--accent)" }} />
+										<span>
+											{p.nick || t("quick.anonymousNick")}
+											{p.pubkey === selfPubkey ? ` (${t("quick.room.selfMarker")})` : ""}
+											{p.inVoice ? ` — ${t("quick.room.inVoiceMarker")}` : ""}
+											{edgeSilent && (
+												<small role="alert" style={{ color: "var(--bad)" }}>
+													{" "}
+													— {t("quick.room.edgeSilentHint")}
+												</small>
+											)}
+										</span>
+									</li>
+								);
+							})}
 						</ul>
 					</aside>
 

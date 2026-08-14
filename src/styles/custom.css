@@ -878,6 +878,14 @@ button:has(> .icon),
 	font-weight: var(--weight-bold);
 }
 
+/* Этап 6 — ROOMS-SPEC §5.4, факт эфемерности словами, тихо (не alert — не
+   отказ, а постоянное свойство комнаты). */
+.quick-ephemeral-notice {
+	font-size: var(--step--2);
+	color: var(--muted);
+	margin-block: 0;
+}
+
 /* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
    язык, что VISUAL.md .compose/.field/.send. */
 .message-compose {

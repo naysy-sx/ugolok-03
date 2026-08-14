@@ -780,7 +780,9 @@
 			"voiceFullError": "The room's voice part is full (maximum participants reached).",
 			"voiceMicDeniedError": "Microphone access wasn't granted. You're still in the room as a listener — chat works as usual.",
 			"voiceJoinError": "Couldn't connect to voice. Check your connection and try again — chat keeps working in the meantime.",
-			"volumeLabel": "Volume"
+			"volumeLabel": "Volume",
+			"ephemeralNotice": "Messages aren't saved or loaded on join — anyone who joins later won't see the history. A message sent right when the recipient briefly drops offline is lost for good.",
+			"edgeSilentHint": "can't hear you"
 		},
 		"errors": {
 			"createFailed": "Couldn't create the room. Check your connection and try again.",

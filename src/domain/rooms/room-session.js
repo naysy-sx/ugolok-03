@@ -103,6 +103,12 @@ async function openSession({
 	let voiceActive = false;
 	let meshSupervisor = null;
 
+	// Этап 6 — состояние соединения комнаты (ROOMS-SPEC §7, "Релей отвалился").
+	// Старт "connected", т.к. openRoomTransport ниже резолвится только ПОСЛЕ
+	// первого "connected" — к моменту, когда openSession возвращает handle,
+	// соединение уже установлено.
+	let connectionState = "connected";
+
 	function getVoicePresent() {
 		return present(presenceState, now(), PRESENCE_TAU_MS).filter((p) => p.inVoice);
 	}
@@ -223,6 +229,10 @@ async function openSession({
 		hDisc: openMode ? hDisc : undefined,
 		selfPubkey: identity.pubkeyHex,
 		onEvent: handleEvent,
+		onConnectionStateChange: (state) => {
+			connectionState = state;
+			onChange();
+		},
 	});
 
 	if (isCreator) {
@@ -254,7 +264,13 @@ async function openSession({
 				onLocalStream,
 			});
 		}
-		await meshSupervisor.joinVoice();
+		// Этап 6 — meshSupervisor.joinVoice() возвращает false, если конкурентный
+		// leaveVoice() (например, close() всей комнаты, пока висел запрос разрешения
+		// микрофона) отменил join, пока getUserMedia висел (CONTRACTS.md "Rooms —
+		// Этап 6"): ничего не публикуем, voiceActive не трогаем — как будто join и
+		// не начинался.
+		const joined = await meshSupervisor.joinVoice();
+		if (!joined) return;
 		voiceActive = true;
 		const t = now();
 		publishHeartbeat(t);
@@ -321,6 +337,7 @@ async function openSession({
 		getVoicePresent,
 		isVoiceActive: () => voiceActive,
 		getEdgeStates: () => (meshSupervisor ? meshSupervisor.getEdgeStates() : []),
+		getConnectionState: () => connectionState,
 		joinVoice,
 		leaveVoice,
 		getRaceOutcome: () => raceOutcome,

@@ -37,9 +37,15 @@ function hasTag(event, name, value) {
 // по паролю на фазе обнаружения знает только hDisc (suffix, а с ним hTopic, ещё
 // не найден); обычная закрытая/уже-найденная сессия знает hTopic (и опционально
 // ТАКЖЕ hDisc — открытый режим создателя слушает указатели-конкуренты, И9).
-export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent }) {
+// Этап 6 — onConnectionStateChange (аддитивный, необязательный): пробрасывает
+// уже существующий примитив relay-pool.js's onStateChange (тот же, что двигает
+// connState главного приложения, ui/signals/transport.js) наверх, чтобы UI
+// комнаты мог показать "переподключение"/"офлайн" (ROOMS-SPEC §7, "Релей
+// отвалился"). autoReconnect у relay-pool.js включён по умолчанию — этот
+// колбэк только НАБЛЮДАЕТ состояние, ничего не меняет в поведении реконнекта.
+export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent, onConnectionStateChange = () => {} }) {
 	if (!hTopic && !hDisc) throw new Error("room-transport: нужен хотя бы один из hTopic/hDisc");
-	const conn = createRelayConnection(relayUrl, {});
+	const conn = createRelayConnection(relayUrl, { onStateChange: onConnectionStateChange });
 	conn.connect();
 	await waitForConnState(conn, (s) => s === "connected", 8000);
 

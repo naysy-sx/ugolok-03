@@ -197,6 +197,32 @@ test("close(): после закрытия дальнейшие события �
 	assert.deepEqual(received, [], "после close() новые события не должны приходить");
 });
 
+test("Этап 6: onConnectionStateChange пробрасывается в createRelayConnection — вызывается хотя бы с 'connected' к моменту резолва openRoomTransport", async (t) => {
+	const { bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+
+	const states = [];
+	const hTopic = "topic-conn".padStart(64, "0");
+	const transport = await openRoomTransport({
+		relayUrl,
+		hTopic,
+		selfPubkey: getPublicKey(generateSecretKey()),
+		onEvent: () => {},
+		onConnectionStateChange: (state) => states.push(state),
+	});
+	t.after(() => transport.close());
+
+	assert.ok(states.includes("connected"), `ожидался переход в 'connected', получено: ${states.join(",")}`);
+});
+
+test("Этап 6: onConnectionStateChange не передан — не бросает (аддитивный, необязательный параметр)", async (t) => {
+	const { bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const hTopic = "topic-conn2".padStart(64, "0");
+	const transport = await openRoomTransport({ relayUrl, hTopic, selfPubkey: getPublicKey(generateSecretKey()), onEvent: () => {} });
+	t.after(() => transport.close());
+});
+
 test("Этап 3: ни hTopic, ни hDisc не переданы -> бросает явную ошибку конфигурации", async (t) => {
 	const { bridge, relayUrl } = await setup();
 	t.after(() => bridge.stop());

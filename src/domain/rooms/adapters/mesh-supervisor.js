@@ -30,6 +30,7 @@ export function createMeshSupervisor({
 	onLocalStream = () => {},
 }) {
 	let sharedStream = null;
+	let joinGeneration = 0; // Этап 6 — отмена гонки joinVoice()/leaveVoice(), см. joinVoice ниже
 	const edgesByPeer = new Map(); // peerPubkey -> {runtime, role}
 	let currentMyEdges = [];
 
@@ -58,15 +59,29 @@ export function createMeshSupervisor({
 		onRemoteStream(peer, null); // UI обязана убрать/остановить <audio> этого пира
 	}
 
+	// Этап 6, найдено адверсарной фазой (CONTRACTS.md "Rooms — Этап 6"): getUserMedia
+	// асинхронен — если leaveVoice() (например, закрытие всей комнаты, пока висит
+	// нативный запрос разрешения микрофона) срабатывает ДО того, как этот await
+	// резолвится, joinGeneration не совпадёт на выходе — только что полученный
+	// поток немедленно останавливается и НЕ становится sharedStream, вместо того
+	// чтобы молча "воскресить" голос, который пользователь уже явно покинул.
 	async function joinVoice() {
-		sharedStream = await getUserMedia({ audio: true });
+		const myGeneration = ++joinGeneration;
+		const stream = await getUserMedia({ audio: true });
+		if (myGeneration !== joinGeneration) {
+			for (const track of stream.getTracks()) track.stop();
+			return false;
+		}
+		sharedStream = stream;
 		// Этап 5 — audio-graph.js's addStream(selfPubkey, ..., {isSelf:true}) нужен
 		// именно ЭТОТ, сырой (не клонированный) поток для собственного уровня/
 		// спектрограммы; клоны на рёбра — отдельно, ниже.
 		onLocalStream(sharedStream);
+		return true;
 	}
 
 	function leaveVoice() {
+		joinGeneration++; // отменяет любой ещё не завершённый joinVoice()
 		for (const peer of [...edgesByPeer.keys()]) closeEdge(peer);
 		currentMyEdges = [];
 		if (sharedStream) {

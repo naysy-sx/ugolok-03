@@ -102,7 +102,11 @@ async function openTwoParticipants(relay, relayUrl, clock) {
 // Этап 4 — фейковый mesh-supervisor (DI, CONTRACTS.md "Rooms — Этап 4"): room-session.js
 // тестируется без реального WebRTC на два уровня вглубь (mesh-supervisor.js сам уже
 // протестирован отдельно, tests/mesh-supervisor.test.js — здесь важна только СТЫКОВКА).
-function fakeMeshSupervisorFactory() {
+// joinVoiceResult — Этап 6: контракт mesh-supervisor.js's joinVoice() теперь
+// возвращает boolean (true = успешно, false = отменено конкурентным leaveVoice()
+// пока висел getUserMedia, CONTRACTS.md "Rooms — Этап 6"). По умолчанию true —
+// подавляющее большинство тестов не про эту гонку.
+function fakeMeshSupervisorFactory({ joinVoiceResult = true } = {}) {
 	const instances = [];
 	function factory(options) {
 		const instance = {
@@ -115,6 +119,7 @@ function fakeMeshSupervisorFactory() {
 		const supervisor = {
 			joinVoice: async () => {
 				instance.joinVoiceCalls += 1;
+				return joinVoiceResult;
 			},
 			leaveVoice: () => {
 				instance.leaveVoiceCalls += 1;
@@ -174,6 +179,28 @@ test("createRoom: готов сразу (salt свой), joinRoom: НЕ гото
 	// Дать publisher'у время реально отправить PROBE (batchWindowMs=200мс) ДО close() —
 	// иначе отложенный flush() внутри publisher.js бросает после закрытия соединения.
 	await flushUntilSettled(relay);
+});
+
+test("Этап 6: getConnectionState() -> 'connected' сразу после создания сессии (openRoomTransport резолвится только после первого connected)", async (t) => {
+	const { bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const alice = await createRoom({
+		name: "conn-state",
+		password: "p",
+		nick: "A",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+	});
+	t.after(() => alice.close());
+
+	assert.equal(alice.getConnectionState(), "connected");
 });
 
 test("два участника видят друг друга в present() после сходимости (probe -> announce -> heartbeat)", async (t) => {
@@ -913,4 +940,31 @@ test("close(): останавливает голос (meshSupervisor.leaveVoice)
 
 	alice.close();
 	assert.equal(instances[0].leaveVoiceCalls, 1);
+});
+
+test("Этап 6: joinVoice() отменён конкурентным leaveVoice() (meshSupervisor.joinVoice() вернул false) — isVoiceActive() остаётся false, heartbeat с inVoice:true не публикуется", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const { factory } = fakeMeshSupervisorFactory({ joinVoiceResult: false });
+	const alice = await createRoom({
+		name: "голос-отменён",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: factory,
+	});
+	t.after(() => alice.close());
+
+	await alice.joinVoice();
+
+	assert.equal(alice.isVoiceActive(), false, "отменённый join не должен считаться активным голосом");
 });

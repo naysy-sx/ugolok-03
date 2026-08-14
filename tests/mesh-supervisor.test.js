@@ -307,6 +307,77 @@ test("Этап 5: leaveVoice() без предварительного joinVoice
 	assert.deepEqual(localStreamCalls, []);
 });
 
+// --- Этап 6: адверсарная фаза на границе joinVoice()/leaveVoice() (найденная гонка) ---
+
+function deferred() {
+	let resolve;
+	const promise = new Promise((r) => (resolve = r));
+	return { promise, resolve };
+}
+
+test("Этап 6, живая находка: leaveVoice() вызван ПОКА joinVoice() ещё ждёт getUserMedia — join отменяется, поток немедленно останавливается, sharedStream НЕ присваивается", async () => {
+	const gum = deferred();
+	const localStreamCalls = [];
+	const stream = fakeStream("racing");
+	const { createFakeCallRuntime } = fakeCallRuntimeFactory();
+	const supervisor = createMeshSupervisor({
+		selfPubkey: ALICE,
+		selfPrivKey: new Uint8Array(32),
+		hTopic: "topic".padStart(64, "0"),
+		publish: async () => ({ ok: true }),
+		maxVoice: 5,
+		getUserMedia: () => gum.promise,
+		createCallRuntime: createFakeCallRuntime,
+		onLocalStream: (s) => localStreamCalls.push(s),
+	});
+
+	const joinPromise = supervisor.joinVoice(); // getUserMedia ещё не резолвился
+	supervisor.leaveVoice(); // "закрыть комнату, пока висит запрос разрешения микрофона"
+	gum.resolve(stream); // теперь getUserMedia резолвится — join должен быть уже отменён
+	const joined = await joinPromise;
+
+	assert.equal(joined, false, "joinVoice() обязан сообщить об отмене");
+	assert.equal(localStreamCalls.length, 0, "onLocalStream НЕ вызывается для отменённого join'а");
+	assert.ok(stream.tracks[0].stopped, "поток немедленно остановлен, не оставлен висеть с активным микрофоном");
+
+	// updateRoster не должен открывать рёбра — sharedStream так и не был присвоен.
+	supervisor.updateRoster([ALICE, BOB]);
+	assert.deepEqual(supervisor.getEdgeStates(), []);
+});
+
+test("Этап 6: НЕ отменённый joinVoice() (leaveVoice() не вызывался) — join завершается нормально", async () => {
+	const gum = deferred();
+	const stream = fakeStream("normal");
+	const { createFakeCallRuntime } = fakeCallRuntimeFactory();
+	const supervisor = createMeshSupervisor({
+		selfPubkey: ALICE,
+		selfPrivKey: new Uint8Array(32),
+		hTopic: "topic".padStart(64, "0"),
+		publish: async () => ({ ok: true }),
+		maxVoice: 5,
+		getUserMedia: () => gum.promise,
+		createCallRuntime: createFakeCallRuntime,
+	});
+
+	const joinPromise = supervisor.joinVoice();
+	gum.resolve(stream);
+	const joined = await joinPromise;
+
+	assert.equal(joined, true);
+	assert.ok(!stream.tracks[0].stopped);
+});
+
+test("Этап 6, найдено интеграционной адверсарной фазой: onSignal ПОСЛЕ leaveVoice() (эквивалент состояния после close() всей сессии) — молча отброшено, не бросает, не открывает фантомное ребро", async () => {
+	const { supervisor } = setup({ selfPubkey: BOB }); // BOB > ALICE -> responder на реактивное открытие
+	await supervisor.joinVoice();
+	supervisor.updateRoster([ALICE, BOB]);
+	supervisor.leaveVoice(); // sharedStream=null, edgesByPeer пуст — то же состояние, что после close()
+
+	const staleOffer = { pubkey: ALICE, kind: 20075, content: "x", tags: [], id: "e-stale" };
+	assert.doesNotThrow(() => supervisor.onSignal(staleOffer));
+	assert.deepEqual(supervisor.getEdgeStates(), [], "не должно открыться фантомное ребро на уже покинутый голос");
+});
+
 // --- Адверсарная фаза (skill п.19) ---
 
 test("адверсарно: повторный updateRoster с ТЕМ ЖЕ составом — идемпотентно, не пересоздаёт рёбра", async () => {

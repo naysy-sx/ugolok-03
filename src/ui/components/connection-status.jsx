@@ -8,7 +8,11 @@ const RELAY_URL = BUILD_DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const BLOSSOM_CHECK_INTERVAL_MS = 30000;
 
-function relayStatusInfo(state, isSynced) {
+// Экспортирована (Этап 6, Rooms) — quick.jsx переиспользует ту же классификацию
+// состояний relay-pool.js для своего НЕЗАВИСИМОГО транспортного клиента
+// (ROOMS-SPEC §0), чтобы тексты/цвета индикатора не разъезжались между двумя
+// независимыми соединениями приложения.
+export function relayStatusInfo(state, isSynced) {
 	if (state === "disconnected") return { labelKey: "connectionStatus.offline", tone: "bad" };
 	if (state === "connecting" || state === "authenticating") return { labelKey: "connectionStatus.connecting", tone: "warn" };
 	if ((state === "connected" || state === "subscribed") && !isSynced) return { labelKey: "connectionStatus.syncing", tone: "warn" };
