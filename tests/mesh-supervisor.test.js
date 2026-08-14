@@ -300,3 +300,43 @@ test("адверсарно: updateRoster с пустым массивом (ро�
 	assert.equal(instances[1].hangupCalls, 1);
 	assert.deepEqual(supervisor.getEdgeStates(), []);
 });
+
+// --- Живая находка (три реальных браузера, полная тишина): гонка heartbeat/offer ---
+
+test("живая находка: onSignal ОТ ПИРА, ещё НЕ известного через updateRoster (offer обогнал heartbeat) — реактивно открывает ребро как responder, не роняет offer молча", async (t) => {
+	const { supervisor, instances } = setup({ selfPubkey: BOB }); // BOB > ALICE -> BOB был бы responder
+	await supervisor.joinVoice();
+	// updateRoster НЕ вызывался вовсе — BOB ещё не узнал через presence, что ALICE в голосе,
+	// но offer от ALICE уже пришёл (ровно гонка, найденная живьём).
+	assert.equal(instances.length, 0);
+
+	const offerEvent = { pubkey: ALICE, kind: 20075, content: "x", tags: [], id: "e1" };
+	supervisor.onSignal(offerEvent);
+
+	assert.equal(instances.length, 1, "ребро открыто реактивно, offer не потерян");
+	assert.deepEqual(instances[0].incomingSignals, [offerEvent]);
+	assert.deepEqual(instances[0].placeCalls, [], "мы НЕ инициатор — сами не звоним, только приняли");
+	assert.deepEqual(supervisor.getEdgeStates(), [{ peer: ALICE, role: "responder", state: "IDLE" }]);
+});
+
+test("живая находка: после реактивного открытия ПОСЛЕДУЮЩИЙ updateRoster с тем же ростером НЕ дублирует и НЕ закрывает ребро", async (t) => {
+	const { supervisor, instances } = setup({ selfPubkey: BOB });
+	await supervisor.joinVoice();
+
+	const offerEvent = { pubkey: ALICE, kind: 20075, content: "x", tags: [], id: "e1" };
+	supervisor.onSignal(offerEvent); // реактивное открытие ДО updateRoster
+
+	// Presence наконец догнал — тот же ростер, что уже фактически отражён реактивно.
+	supervisor.updateRoster([ALICE, BOB]);
+
+	assert.equal(instances.length, 1, "НЕ создалось второе (дублирующее) ребро");
+	assert.equal(instances[0].hangupCalls, 0, "и не закрылось как 'неизвестное' updateRoster'у ребро");
+});
+
+test("живая находка: onSignal от неизвестного пира ДО joinVoice() (нет sharedStream) — молча отброшено, не бросает", async () => {
+	const { supervisor, instances } = setup({ selfPubkey: BOB });
+	// joinVoice() НЕ вызывался.
+	const offerEvent = { pubkey: ALICE, kind: 20075, content: "x", tags: [], id: "e1" };
+	assert.doesNotThrow(() => supervisor.onSignal(offerEvent));
+	assert.equal(instances.length, 0);
+});

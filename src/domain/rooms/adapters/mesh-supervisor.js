@@ -77,9 +77,29 @@ export function createMeshSupervisor({
 		}
 	}
 
+	// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (три реальных браузера, полная тишина): heartbeat
+	// (roster, объявляет "я в голосе") и offer (сигнал ребра) — ДВЕ независимые
+	// публикации без гарантии порядка доставки. Если оффер от инициатора приходит
+	// РАНЬШЕ, чем наш собственный updateRoster узнал о нём через heartbeat,
+	// edgesByPeer ещё пуст для этого пира — старая версия молча роняла offer
+	// НАВСЕГДА (retry нет), ребро не формировалось никогда. Событие уже прошло
+	// предфильтр room-transport.js (тег p=self, h=hTopic, валидная NIP-44-
+	// расшифровка внутри handleIncomingSignal) — отправитель легитимен для
+	// комнаты, поэтому реактивно открываем ребро как responder (мы явно не
+	// инициатор — инициатор сам посылает offer, не ждёт его).
 	function onSignal(event) {
-		const edge = edgesByPeer.get(event.pubkey);
-		if (!edge) return; // несуществующее/уже закрытое ребро — рутинный случай при гонке закрытия
+		const peer = event.pubkey;
+		let edge = edgesByPeer.get(peer);
+		if (!edge) {
+			if (!sharedStream) return; // не в голосе вовсе — некуда открывать
+			openEdge(peer, "responder");
+			edge = edgesByPeer.get(peer);
+			// currentMyEdges — синхронизировать, иначе следующий updateRoster()
+			// решит, что это ребро "новое", и продублирует открытие через diffEdges.
+			const pairKey = [selfPubkey, peer].sort();
+			const alreadyTracked = currentMyEdges.some(([a, b]) => a === pairKey[0] && b === pairKey[1]);
+			if (!alreadyTracked) currentMyEdges = [...currentMyEdges, pairKey];
+		}
 		edge.runtime.handleIncomingSignal(event);
 	}
 
