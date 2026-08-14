@@ -7,8 +7,8 @@ import { emptyPresence, mergeHeartbeat, mergeExit, present, prune } from "../src
 
 const TAU = 45000;
 
-function heartbeat(state, pubkey, at, nick = "гость") {
-	return mergeHeartbeat(state, { pubkey, nick, at });
+function heartbeat(state, pubkey, at, nick = "гость", inVoice = false) {
+	return mergeHeartbeat(state, { pubkey, nick, inVoice, at });
 }
 function exit(state, pubkey, at) {
 	return mergeExit(state, { pubkey, at });
@@ -178,4 +178,60 @@ test("состояние не мутируется на месте — mergeHear
 	const afterHeartbeat = heartbeat(original, "alice", 1000);
 	assert.equal(original.size, 0, "исходное состояние не тронуто");
 	assert.equal(afterHeartbeat.size, 1);
+});
+
+// --- Этап 4: inVoice — LWW по той же at, что nick (CONTRACTS.md "Rooms — Этап 4" §1) ---
+
+test("inVoice: по умолчанию false, если не передан явно (обратная совместимость с Этапом 2/3)", () => {
+	let state = emptyPresence();
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", at: 1000 });
+	assert.equal(present(state, 1000, TAU)[0].inVoice, false);
+});
+
+test("inVoice: heartbeat с inVoice:true -> присутствует в голосе", () => {
+	let state = emptyPresence();
+	state = heartbeat(state, "alice", 1000, "Алиса", true);
+	assert.equal(present(state, 1000, TAU)[0].inVoice, true);
+});
+
+test("inVoice: LWW по at — более свежий heartbeat меняет inVoice, более старый (запоздавший) не откатывает", () => {
+	let state = emptyPresence();
+	state = heartbeat(state, "alice", 100, "Алиса", false);
+	state = heartbeat(state, "alice", 200, "Алиса", true); // вошла в голос
+	assert.equal(present(state, 200, TAU)[0].inVoice, true);
+
+	// Запоздалое (более старое at) сообщение с inVoice:false не должно откатить состояние
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", inVoice: false, at: 150 });
+	assert.equal(present(state, 200, TAU)[0].inVoice, true, "inVoice не откатывается более старым at");
+});
+
+test("inVoice: mergeExit не трогает inVoice поле напрямую, но вышедший не проходит present()-предикат независимо от него", () => {
+	let state = emptyPresence();
+	state = heartbeat(state, "alice", 100, "Алиса", true);
+	state = exit(state, "alice", 200);
+	assert.deepEqual(present(state, 200, TAU), [], "вышедшая alice не в present(), даже если была в голосе");
+});
+
+test("inVoice: разные участники независимы — один в голосе, другой нет", () => {
+	let state = emptyPresence();
+	state = heartbeat(state, "alice", 100, "Алиса", true);
+	state = heartbeat(state, "bob", 100, "Боб", false);
+	const result = present(state, 100, TAU);
+	const alice = result.find((p) => p.pubkey === "alice");
+	const bob = result.find((p) => p.pubkey === "bob");
+	assert.equal(alice.inVoice, true);
+	assert.equal(bob.inVoice, false);
+});
+
+test("inVoice: коммутативность слияния сохраняется (И1) с добавленным полем", () => {
+	// Два порядка слияния двух heartbeat одного участника (обычный + голосовой) дают одинаковый результат.
+	let forward = emptyPresence();
+	forward = mergeHeartbeat(forward, { pubkey: "alice", nick: "A", inVoice: false, at: 100 });
+	forward = mergeHeartbeat(forward, { pubkey: "alice", nick: "A", inVoice: true, at: 200 });
+
+	let reversed = emptyPresence();
+	reversed = mergeHeartbeat(reversed, { pubkey: "alice", nick: "A", inVoice: true, at: 200 });
+	reversed = mergeHeartbeat(reversed, { pubkey: "alice", nick: "A", inVoice: false, at: 100 });
+
+	assert.deepEqual(present(forward, 200, TAU), present(reversed, 200, TAU));
 });

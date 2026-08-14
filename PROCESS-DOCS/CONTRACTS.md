@@ -13643,3 +13643,230 @@ strfry) поймала: `close()` соединения между `publish()` и
 консервативная правка (не меняет форму возвращаемого объекта/сигнатуры)
 — полная регрессия обязательна и пройдена (правило 13, инфраструктура
 общая, менять может только Claude явным решением).
+
+# Rooms («Быстрая связь») — Этап 4: голос — design-записка (skill п.13b)
+
+Три решения ниже НЕ даны буквально ни в ROOMS-SPEC, ни в ROOMS-MATH/
+ROOMS-ALGO — спека фиксирует контракт `mesh-supervisor.js` и владение
+микрофоном (§4.3), но не то, ЧЕРЕЗ ЧТО участники узнают друг о друге
+"кто сейчас в голосе", и не то, как разрешается гонка на лимите
+`MAX_VOICE_PARTICIPANTS` при одновременных входах (И10 требует
+безопасности "при любой последовательности... включая одновременные").
+Решения — Claude как [C]-автор, в рамках уже принятых паттернов
+проекта (LWW-по-`at`, детерминированный тайбрейк без арбитра — тот же
+язык, что И9/mesh-турнир).
+
+## 1. `VoicePresent ⊆ Present` — сигнализируется через presence-heartbeat, не новый kind
+
+`VoicePresent` (ROOMS-MATH §4.3) нигде не определяет МЕХАНИЗМ. Решение:
+расширить существующий `ROOM_PRESENCE_KIND` heartbeat полем `inVoice`
+— НЕ заводить отдельный kind/событие. Обоснование: heartbeat УЖЕ несёт
+per-participant состояние на кадансе δ=15с ("я здесь, вот мой nick") —
+"я в голосе" того же рода факт про того же участника в тот же момент,
+плодить второй канал ради одного булева поля не оправдано (тот же
+принцип минимализма, что ROOMS-ALGO §9).
+
+`presence.js`: `mergeHeartbeat(state, {pubkey, nick, inVoice = false,
+at})` — `inVoice` LWW ПО ТОЙ ЖЕ `at`, что уже решает `nick` (оба поля
+приходят в одном heartbeat, отдельная временная метка на `inVoice` не
+нужна — они всегда обновляются вместе). `present()` возвращает
+`{pubkey, nick, joinedAt, inVoice}` — аддитивное поле в уже
+существующей форме. `mergeExit` не трогается: вышедший не проходит
+`present()`-предикат (`a>r`) независимо от `inVoice`, специального
+случая не требуется.
+
+`room-events.js`: `buildRoomPresenceEvent(...,{type:"heartbeat", nick,
+inVoice}, ...)` — `inVoice` необязателен (по умолчанию `false`,
+обратная совместимость с уже подписанными Этапом 2/3 событиями).
+`type:"exit"` не несёт `inVoice` (уход есть уход, независимо от того,
+был ли участник в голосе).
+
+`room-session.js`: `getVoicePresent()` = `present(...).filter(p =>
+p.inVoice)` (уже отсортирован по `joinedAt`, presence.js's гарантия
+Этапа 1 — переиспользуется, не пересортировывается).
+
+## 2. Авто-accept внутри mesh-рёбер — НЕ пользовательский ring/decline
+
+Существующий `call-fsm.js` при входящем offer уходит в
+`INCOMING_RINGING`, ждёт explicit `accept()`/`reject()` — правильно
+для 1:1 звонка, НЕВЕРНО для mesh-ребра: клик "войти в голос" на
+уровне КОМНАТЫ уже есть согласие, пятеро отдельных всплывающих "вам
+звонят" были бы неюзабельны. `mesh-supervisor.js`'s созданные
+runtime'ы для КАЖДОГО ребра подписывают `onStateChange`: при
+`stateName==="INCOMING_RINGING"` — немедленно `runtime.accept()`, без
+участия пользователя. Это НЕ противоречит Р4 ("не подключать
+автоматически при освобождении места — показать кнопку") — тот пункт
+про решение НА УРОВНЕ КОМНАТЫ (входить в голос вообще), не про
+согласие на каждое отдельное ребро уже ПОСЛЕ входа.
+
+**Glare между рёбрами не возникает по построению** — `mesh.js`'s
+`edges()` даёт РОВНО одного инициатора на пару (турнир), отвечающая
+сторона никогда сама не вызывает `placeCall()`. Существующий
+glare-путь в `call-fsm.js` остаётся как защитная сеть на случай гонки
+переходов ростера, не как ожидаемый штатный путь.
+
+## 3. И10 при гонке — детерминированная само-эвикция, не арбитр
+
+Локальная проверка "уже 5? тогда отказ" на `joinVoice()` защищает от
+ПОСЛЕДОВАТЕЛЬНЫХ входов (DoD буквально: "4-й и 5-й подключаются,
+6-й видит занято"), но НЕ от одновременных (два участника видят
+локально "ещё есть место", оба присоединяются, суммарно 6 — та же
+природа гонки, что И9 у создания комнаты).
+
+Решение — тот же язык, что уже есть в проекте (детерминированный
+тайбрейк без согласования, ROOMS-MATH §1.4/И9 precedent): каждый
+`ready`-участник в `tick()` пересчитывает `getVoicePresent()`
+(уже стабильно отсортирован по `joinedAt` — presence.js's гарантия),
+и если СОБСТВЕННАЯ позиция в этом списке `>= MAX_VOICE_PARTICIPANTS`
+— вызывает `leaveVoice()` САМ У СЕБЯ (само-эвикция, не команда
+извне). Детерминировано: все наблюдатели видят один и тот же
+CvRDT-снимок presence, значит вычисляют один и тот же отсортированный
+список и одного и того же "лишнего".
+
+**Принятое упрощение:** тайбрейк использует `joinedAt` ВХОДА В
+КОМНАТУ (текст), не отдельный момент входа в голос — presence.js уже
+считает и сортирует по нему (Этап 1), заводить параллельное поле
+`voiceJoinedAt` ради более "справедливого" тайбрейка на редком
+пограничном случае не оправдано. Эффект: при столкновении выигрывает
+тот, кто раньше вошёл В КОМНАТУ, не в голос — задокументированный,
+не молчаливый компромисс.
+
+## 4. `mesh-supervisor.js` — внутренняя структура
+
+```js
+createMeshSupervisor({selfPubkey, selfPrivKey, hTopic, publish, maxVoice, getUserMedia})
+  -> {joinVoice, leaveVoice, updateRoster, onSignal, getEdgeStates}
+```
+
+Замыкание держит: `sharedStream` (захватывается в `joinVoice()`,
+освобождается в `leaveVoice()`), `edgesByPeer: Map<peerPubkey,
+{runtime, role}>`, `currentMyEdges` (для `diffEdges` между
+пересчётами).
+
+`updateRoster(pubkeys)` — `pubkeys` включает `selfPubkey` (полный
+снимок голосового состава, не "все кроме меня" — проще: `edges.js`
+уже принимает полный список и сам ориентирует). Алгоритм:
+```
+allEdges = edges(pubkeys)
+myNewEdges = allEdges.filter(([a,b]) => a === selfPubkey || b === selfPubkey)
+{toOpen, toClose} = diffEdges(currentMyEdges, myNewEdges)
+currentMyEdges = myNewEdges
+для каждого ребра в toClose: edgesByPeer.get(peer).runtime.hangup(); edgesByPeer.delete(peer)
+для каждого ребра в toOpen:
+  peer = участник ребра, отличный от selfPubkey
+  role = (эта сторона — "i" в паре [i,j]) ? "initiator" : "responder"
+  runtime = createCallRuntime({myPubkey: selfPubkey, privKey: selfPrivKey, publish,
+    iceServers, createMediaController: (opts) => defaultCreateMediaController({...opts,
+      getUserMediaImpl: () => Promise.resolve(sharedStream.clone())}),
+    onStateChange: (stateName) => { if (stateName === "INCOMING_RINGING") runtime.accept(); }})
+  edgesByPeer.set(peer, {runtime, role})
+  если role === "initiator": runtime.placeCall(peer)
+```
+Если `updateRoster` вызван ДО `joinVoice()` (нет `sharedStream`) —
+no-op (нечем открывать рёбра; `room-session.js` контрактно вызывает
+`updateRoster` только после `joinVoice()` резолвится, но защита
+внутри не лишняя).
+
+`onSignal(payload, senderPubkey)` — маршрутизация по `edgesByPeer.get(senderPubkey)`;
+находит через `signalingAdapter.toFsmEvent(payload, senderPubkey, selfPubkey)`
+и `runtime.handleIncomingSignal`-эквивалент (напрямую `dispatch`
+недоступен снаружи `call-runtime.js` — `onSignal` реконструирует сырое
+"событие" достаточное для `runtime.handleIncomingSignal`, ЛИБО
+`room-session.js` передаёт уже готовый nostr-event, а `onSignal`
+делегирует `runtime.handleIncomingSignal(event)` напрямую — см. ниже
+точный контракт `onSignal`, выбран ВТОРОЙ вариант: `onSignal(event)`
+принимает СЫРОЕ nostr-событие (не заранее распарсенный payload),
+делегирует расшифровку `signalingAdapter.parseCallSignalEvent`
+ВНУТРИ каждого `call-runtime.handleIncomingSignal` — тот уже умеет
+это делать (`call-runtime.js:157-166`), не нужно распаковывать
+дважды. Если пира с `senderPubkey` нет в `edgesByPeer` — событие
+молча отброшено (несуществующее/уже закрытое ребро, рутинный случай
+при гонке закрытия).
+
+`joinVoice()` — `sharedStream = await getUserMedia({audio:true})`,
+затем `updateRoster` вызывается СНАРУЖИ (`room-session.js`), не
+изнутри `joinVoice()` (симметрично: `room-session.js` уже знает
+актуальный ростер лучше, чем `mesh-supervisor` в момент, когда мик
+только что захвачен).
+
+`leaveVoice()` — для каждого `edgesByPeer`: `runtime.hangup()`,
+затем очистка карты; `sharedStream.getTracks().forEach(t=>t.stop())`;
+`sharedStream = null`. Один явный останов — по спеке "Освобождение
+общего потока — один раз, в leaveVoice()".
+
+`getEdgeStates()` -> `Array<{peer, role, state}>` (state — снимок
+`runtime.getState().name` на каждое ребро) — для UI (кто на связи, у
+кого тишина).
+
+### Аддитивные параметры сверх буквального контракта спеки
+
+- `createCallRuntime` (по умолчанию — реальный `createCallRuntime` из
+  `call-runtime.js`) — тот же DI-приём, что везде в проекте
+  (`media-controller.js`/`call-runtime.js` сами так тестируются);
+  спека не перечисляла его явно, но без инъекции `mesh-supervisor.js`
+  нельзя протестировать без настоящего WebRTC. Не меняет поведение по
+  умолчанию.
+- `iceServers` (по умолчанию `[]`) — пробрасывается в каждый дочерний
+  `createCallRuntime`, тот же смысл, что у `call.js`'s
+  `BUILD_DEFAULT_ICE_SERVERS` для обычных звонков.
+
+### `maxVoice` — защитное усечение ВНУТРИ, не единственная линия обороны
+
+Основная эвикция при столкновении на лимите — на уровне
+`room-session.js` (детерминированная само-эвикция по `joinedAt`, §3
+выше). `maxVoice` внутри `mesh-supervisor.js` — вторая, defensive
+линия: `updateRoster(pubkeys)` берёт `pubkeys.slice(0, maxVoice)` ДО
+вычисления `edges()` — если чем-то (баг вызывающего кода, устаревший
+снимок) в `mesh-supervisor` попадёт ростер длиннее лимита, супервизор
+физически не создаст рёбер сверх `maxVoice−1` на узел. Порядок
+элементов внутри `pubkeys` — ответственность вызывающего
+(`room-session.js`'s `getVoicePresent()` уже отсортирован по
+`joinedAt` — `mesh-supervisor` не пересортировывает, просто берёт
+префикс).
+
+## 5. `room-session.js` — точки интеграции (без нового публичного API сверх необходимого)
+
+`joinVoice()`/`leaveVoice()` на хендле сессии — тонкие обёртки:
+проверка лимита (см. §3) → ленивое создание `meshSupervisor` (один
+раз на сессию, переиспользуется между повторными `joinVoice`/
+`leaveVoice`) → делегирование → немедленная (не ждать тика)
+публикация heartbeat с новым `inVoice` → оптимистичное локальное
+`mergeHeartbeat` (не ждать эха с relay — тот же приём, что уже
+есть для входящих heartbeat) → `meshSupervisor.updateRoster(...)`.
+
+`handleEvent`'s `CALL_SIGNAL_KIND`-ветка (была "молча пропускаем",
+Этап 2/3) — теперь: `if (meshSupervisor) meshSupervisor.onSignal(event)`.
+
+`tick()` — новая проверка само-эвикции (§3) добавляется ПОСЛЕ
+пересчёта `presenceState`/`roomMachineState`, ПЕРЕД обычной
+heartbeat/trickle веткой.
+
+### Аддитивные DI-параметры и новые поля `RoomSessionHandle` (Этап 4)
+
+`createRoom`/`joinRoom`/`joinRoomByPassword` получают три новых
+необязательных параметра, форвардятся в `openSession`:
+- `getUserMedia` (по умолчанию `navigator.mediaDevices.getUserMedia`,
+  тот же паттерн, что `media-controller.js`'s собственный дефолт).
+- `iceServers` (по умолчанию `[]`) — UI-слой (`quick.jsx`) передаёт
+  `BUILD_DEFAULT_ICE_SERVERS` явно, `room-session.js` сам `config.js`
+  не импортирует (та же граница слоёв, что уже есть у
+  `media-controller.js`/`call-runtime.js` — конфиг подключается на
+  UI-уровне, не в domain).
+- `createMeshSupervisor` (по умолчанию — реальный, из
+  `adapters/mesh-supervisor.js`) — DI для тестов
+  (`tests/room-session.test.js` подставляет фейковый супервизор,
+  избегая необходимости фейковать WebRTC на два уровня вглубь).
+
+`RoomSessionHandle` получает: `joinVoice()` (async, бросает при
+`!ready` или заполненной голосовой части), `leaveVoice()`,
+`getVoicePresent()` (= `getPresent().filter(p => p.inVoice)`),
+`isVoiceActive()`, `getEdgeStates()` (делегирует
+`meshSupervisor.getEdgeStates()`, `[]` до первого `joinVoice()`).
+
+`close()` дополнительно вызывает `meshSupervisor.leaveVoice()`
+НАПРЯМУЮ (не публичную обёртку `leaveVoice()`) — при закрытии сессии
+локальная очистка микрофона/RTCPeerConnection обязательна независимо
+от философии "без явного exit по сети" (ROOMS-SPEC §0 — та про
+протокол, не про реальное железо: незакрытый трек держит индикатор
+записи включённым в браузере), финальный heartbeat не публикуется —
+транспорт закрывается следом.

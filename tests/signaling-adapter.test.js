@@ -135,3 +135,33 @@ test("сквозной цикл: Алиса publish(SEND_OFFER) -> Боб пол
 		myPubkey: BOB_PUB,
 	});
 });
+
+// --- Rooms, этап 4 (ROOMS-SPEC §5.3) — hTopic необязательный второй тег ---
+
+test("buildCallSignalEvent: без hTopic — только тег p (обычный 1:1-звонок, поведение не меняется)", () => {
+	const event = buildCallSignalEvent(ALICE_PRIV, BOB_PUB, { type: "hangup", sessionId: SID });
+	assert.deepEqual(event.tags, [["p", BOB_PUB]]);
+});
+
+test("buildCallSignalEvent: с hTopic — второй тег h, шифрование не меняется (тот же NIP-44 на пару)", () => {
+	const hTopic = "a".repeat(64);
+	const event = buildCallSignalEvent(ALICE_PRIV, BOB_PUB, { type: "hangup", sessionId: SID }, undefined, hTopic);
+	assert.deepEqual(event.tags, [["p", BOB_PUB], ["h", hTopic]]);
+	const decrypted = parseCallSignalEvent(event, BOB_PRIV);
+	assert.deepEqual(decrypted, { type: "hangup", sessionId: SID });
+});
+
+test("execute: ctx.hTopic пробрасывается в buildCallSignalEvent -> событие несёт тег h", async () => {
+	const hTopic = "b".repeat(64);
+	const published = [];
+	const publish = async (event) => published.push(event);
+	await execute({ type: "SEND_ICE", candidate: "c1" }, { privKey: ALICE_PRIV, peerPubkey: BOB_PUB, sessionId: SID, publish, hTopic });
+	assert.deepEqual(published[0].tags, [["p", BOB_PUB], ["h", hTopic]]);
+});
+
+test("execute: ctx.hTopic отсутствует (undefined, обычный 1:1) -> тег h не добавляется", async () => {
+	const published = [];
+	const publish = async (event) => published.push(event);
+	await execute({ type: "SEND_ICE", candidate: "c1" }, { privKey: ALICE_PRIV, peerPubkey: BOB_PUB, sessionId: SID, publish });
+	assert.deepEqual(published[0].tags, [["p", BOB_PUB]]);
+});

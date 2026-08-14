@@ -11,6 +11,10 @@ import { utf8ToBytes } from "@noble/hashes/utils.js";
 import { createFakeRelay } from "./harness/fake-relay.js";
 import { createWsBridge } from "./harness/ws-bridge.js";
 import { createRoom, joinRoom, joinRoomByPassword } from "../src/domain/rooms/room-session.js";
+import { generateSecretKey, getPublicKey } from "nostr-tools/pure";
+import { sign } from "../src/core/crypto/sign.js";
+import { deriveKBase, derivePairKeys, deriveLinkKeys } from "../src/domain/rooms/room-keys.js";
+import { CALL_SIGNAL_KIND } from "../src/domain/calls/signaling-adapter.js";
 
 function fakeArgon2(password, saltBytes) {
 	return Promise.resolve(hkdf(sha256, utf8ToBytes(password), saltBytes, utf8ToBytes("fake-argon2-test-stub"), 32));
@@ -93,6 +97,41 @@ async function openTwoParticipants(relay, relayUrl, clock) {
 	});
 	await pump(relay, clock, [timerA, timerB]);
 	return { alice, bob, timerA, timerB, changesA, changesB };
+}
+
+// Этап 4 — фейковый mesh-supervisor (DI, CONTRACTS.md "Rooms — Этап 4"): room-session.js
+// тестируется без реального WebRTC на два уровня вглубь (mesh-supervisor.js сам уже
+// протестирован отдельно, tests/mesh-supervisor.test.js — здесь важна только СТЫКОВКА).
+function fakeMeshSupervisorFactory() {
+	const instances = [];
+	function factory(options) {
+		const instance = {
+			options,
+			joinVoiceCalls: 0,
+			leaveVoiceCalls: 0,
+			updateRosterCalls: [],
+			onSignalCalls: [],
+		};
+		const supervisor = {
+			joinVoice: async () => {
+				instance.joinVoiceCalls += 1;
+			},
+			leaveVoice: () => {
+				instance.leaveVoiceCalls += 1;
+			},
+			updateRoster: (pubkeys) => {
+				instance.updateRosterCalls.push(pubkeys);
+			},
+			onSignal: (event) => {
+				instance.onSignalCalls.push(event);
+			},
+			getEdgeStates: () => [],
+		};
+		instance.supervisor = supervisor;
+		instances.push(instance);
+		return supervisor;
+	}
+	return { factory, instances };
 }
 
 test("createRoom: готов сразу (salt свой), joinRoom: НЕ готов до первого ANNOUNCE", async (t) => {
@@ -527,4 +566,351 @@ test("И11: комната переживает уход создателя — 
 		true,
 		"Кэрол видит Боба в present()",
 	);
+});
+
+// --- Этап 4: голос — joinVoice/leaveVoice, VoicePresent, CALL_SIGNAL_KIND, И10 ---
+
+async function fakeStream() {
+	return {
+		getTracks: () => [{ stop() {} }],
+		clone() {
+			return this;
+		},
+	};
+}
+
+test("joinVoice(): делегирует meshSupervisor.joinVoice/updateRoster, isVoiceActive() становится true, self виден в getVoicePresent()", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const { factory, instances } = fakeMeshSupervisorFactory();
+	const alice = await createRoom({
+		name: "голос1",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: factory,
+	});
+	t.after(() => alice.close());
+
+	assert.equal(alice.isVoiceActive(), false);
+	await alice.joinVoice();
+
+	assert.equal(alice.isVoiceActive(), true);
+	assert.equal(instances.length, 1);
+	assert.equal(instances[0].joinVoiceCalls, 1);
+	assert.ok(instances[0].updateRosterCalls.length >= 1);
+	assert.deepEqual(instances[0].updateRosterCalls.at(-1), [alice.getPubkeyHex()]);
+	assert.ok(alice.getVoicePresent().some((p) => p.pubkey === alice.getPubkeyHex()));
+	await flushUntilSettled(relay); // дать heartbeat из joinVoice() реально уйти до close() в t.after
+});
+
+test("leaveVoice(): делегирует meshSupervisor.leaveVoice, isVoiceActive() -> false", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const { factory, instances } = fakeMeshSupervisorFactory();
+	const alice = await createRoom({
+		name: "голос2",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: factory,
+	});
+	t.after(() => alice.close());
+	await alice.joinVoice();
+
+	alice.leaveVoice();
+	assert.equal(alice.isVoiceActive(), false);
+	assert.equal(instances[0].leaveVoiceCalls, 1);
+	assert.equal(
+		alice.getVoicePresent().some((p) => p.pubkey === alice.getPubkeyHex()),
+		false,
+	);
+	await flushUntilSettled(relay); // дать heartbeat'ам (join+leave) реально уйти до close() в t.after
+});
+
+test("leaveVoice() без предварительного joinVoice() — no-op, не бросает", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const alice = await createRoom({
+		name: "голос3",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+	});
+	t.after(() => alice.close());
+	assert.doesNotThrow(() => alice.leaveVoice());
+});
+
+test("два реальных участника: оба входят в голос -> каждый видит ДРУГОГО в getVoicePresent(), updateRoster отражает обоих", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const meshA = fakeMeshSupervisorFactory();
+	const meshB = fakeMeshSupervisorFactory();
+
+	const timerA = makeFakeTimer();
+	const alice = await createRoom({
+		name: "голос-двое",
+		password: "222",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: meshA.factory,
+	});
+	const timerB = makeFakeTimer();
+	const bob = await joinRoom({
+		name: "голос-двое",
+		password: "222",
+		suffix: alice.getSuffix(),
+		nick: "Боб",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerB.setIntervalImpl,
+		clearIntervalImpl: timerB.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: meshB.factory,
+	});
+	t.after(() => {
+		alice.close();
+		bob.close();
+	});
+	await pump(relay, clock, [timerA, timerB]);
+
+	await alice.joinVoice();
+	await bob.joinVoice();
+	await pump(relay, clock, [timerA, timerB], { rounds: 10 });
+
+	assert.ok(
+		alice.getVoicePresent().some((p) => p.pubkey === bob.getPubkeyHex()),
+		"Алиса видит Боба в голосе",
+	);
+	assert.ok(
+		bob.getVoicePresent().some((p) => p.pubkey === alice.getPubkeyHex()),
+		"Боб видит Алису в голосе",
+	);
+	const lastRosterA = meshA.instances[0].updateRosterCalls.at(-1);
+	assert.ok(lastRosterA.includes(bob.getPubkeyHex()) && lastRosterA.includes(alice.getPubkeyHex()));
+});
+
+test("CALL_SIGNAL_KIND: до joinVoice() (нет meshSupervisor) — событие молча пропускается, не бросает", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const senderKey = generateSecretKey();
+	const alice = await createRoom({
+		name: "голос-сигнал",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+	});
+	t.after(() => alice.close());
+
+	// Независимо пересчитываем hTopic ТЕМ ЖЕ путём, что room-session.js внутри
+	// (deriveKBase -> deriveLinkKeys) — hTopic не выставлен наружу намеренно
+	// (не часть публичного контракта), но детерминированно воспроизводим из
+	// уже известных (name, password, suffix).
+	const kBase = await deriveKBase("голос-сигнал", "111", fakeArgon2);
+	const { hTopic } = deriveLinkKeys(kBase, alice.getSuffix());
+	const signalEvent = sign(
+		{ kind: CALL_SIGNAL_KIND, tags: [["p", alice.getPubkeyHex()], ["h", hTopic]], content: "x", created_at: 1 },
+		senderKey,
+	);
+
+	relay.publish("attacker-conn", signalEvent);
+	relay.flushAll();
+	await new Promise((r) => setTimeout(r, 350));
+	// Ничего не должно было упасть — если дошли до этой строки, тест прошёл.
+});
+
+test("CALL_SIGNAL_KIND: после joinVoice() — событие маршрутизируется в meshSupervisor.onSignal", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const { factory, instances } = fakeMeshSupervisorFactory();
+	const senderKey = generateSecretKey();
+	const alice = await createRoom({
+		name: "голос-сигнал2",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: factory,
+	});
+	t.after(() => alice.close());
+	await alice.joinVoice();
+	await flushUntilSettled(relay); // дать REQ-подписке реально дойти до relay ДО публикации сигнала
+
+	const kBase = await deriveKBase("голос-сигнал2", "111", fakeArgon2);
+	const { hTopic } = deriveLinkKeys(kBase, alice.getSuffix());
+	const signalEvent = sign(
+		{ kind: CALL_SIGNAL_KIND, tags: [["p", alice.getPubkeyHex()], ["h", hTopic]], content: "x", created_at: 1 },
+		senderKey,
+	);
+
+	relay.publish("sender-conn", signalEvent);
+	relay.flushAll();
+	await new Promise((r) => setTimeout(r, 350));
+
+	assert.equal(instances[0].onSignalCalls.length, 1);
+	assert.equal(instances[0].onSignalCalls[0].id, signalEvent.id);
+});
+
+test("И10: голосовая часть заполнена (5 участников) -> 6-й получает отказ на joinVoice()", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const roomName = "переполненная";
+	const password = "333";
+
+	const fillerCount = 5;
+	const timers = [];
+	const sessions = [];
+	const creatorTimer = makeFakeTimer();
+	timers.push(creatorTimer);
+	const creator = await createRoom({
+		name: roomName,
+		password,
+		nick: "F0",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: creatorTimer.setIntervalImpl,
+		clearIntervalImpl: creatorTimer.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: fakeMeshSupervisorFactory().factory,
+	});
+	sessions.push(creator);
+	t.after(() => creator.close());
+
+	for (let i = 1; i < fillerCount; i++) {
+		const timer = makeFakeTimer();
+		timers.push(timer);
+		const s = await joinRoom({
+			name: roomName,
+			password,
+			suffix: creator.getSuffix(),
+			nick: `F${i}`,
+			relayUrl,
+			argon2: fakeArgon2,
+			now: clock.now,
+			random: () => 0.5,
+			setIntervalImpl: timer.setIntervalImpl,
+			clearIntervalImpl: timer.clearIntervalImpl,
+			onChange: () => {},
+			getUserMedia: fakeStream,
+			createMeshSupervisor: fakeMeshSupervisorFactory().factory,
+		});
+		sessions.push(s);
+		t.after(() => s.close());
+	}
+	await pump(relay, clock, timers, { rounds: 15 });
+
+	for (const s of sessions) await s.joinVoice();
+	await pump(relay, clock, timers, { rounds: 10 });
+
+	assert.equal(sessions[0].getVoicePresent().length, fillerCount, "все 5 заполнителей видны в голосе друг у друга");
+
+	const sixthTimer = makeFakeTimer();
+	timers.push(sixthTimer);
+	const sixth = await joinRoom({
+		name: roomName,
+		password,
+		suffix: creator.getSuffix(),
+		nick: "F5-lishniy",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: sixthTimer.setIntervalImpl,
+		clearIntervalImpl: sixthTimer.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: fakeMeshSupervisorFactory().factory,
+	});
+	t.after(() => sixth.close());
+	await pump(relay, clock, timers, { rounds: 10 });
+
+	assert.equal(sixth.getVoicePresent().length, fillerCount, "6-й видит все 5 существующих голосовых мест как занятые");
+	await assert.rejects(() => sixth.joinVoice(), /заполнен/);
+});
+
+test("close(): останавливает голос (meshSupervisor.leaveVoice) даже без явного leaveVoice()", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const timerA = makeFakeTimer();
+	const { factory, instances } = fakeMeshSupervisorFactory();
+	const alice = await createRoom({
+		name: "голос-close",
+		password: "111",
+		nick: "Алиса",
+		relayUrl,
+		argon2: fakeArgon2,
+		now: clock.now,
+		random: () => 0.5,
+		setIntervalImpl: timerA.setIntervalImpl,
+		clearIntervalImpl: timerA.clearIntervalImpl,
+		onChange: () => {},
+		getUserMedia: fakeStream,
+		createMeshSupervisor: factory,
+	});
+	await alice.joinVoice();
+	assert.equal(instances[0].leaveVoiceCalls, 0);
+	await flushUntilSettled(relay); // дать heartbeat из joinVoice() реально уйти до close()
+
+	alice.close();
+	assert.equal(instances[0].leaveVoiceCalls, 1);
 });

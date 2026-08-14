@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "preact/hooks";
-import { createRoom, joinRoom, joinRoomByPassword } from "../../domain/rooms/room-session.js";
+import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../../domain/rooms/room-session.js";
 import MessageBubble from "../components/message-bubble.jsx";
 import { t } from "../signals/i18n.js";
-import { BUILD_DEFAULT_RELAYS } from "../../config.js";
+import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
 
 // ROOMS-SPEC.md §1.4 — отдельная ветка ВНЕ MainShell, переиспользует
 // message-bubble.jsx через пропсы (форма сообщения совпадает), НЕ chat.jsx
@@ -10,6 +10,9 @@ import { BUILD_DEFAULT_RELAYS } from "../../config.js";
 // callback onChange (не @preact/signals) — каждое изменение перечитывает
 // снимок present()/getMessages()/getRoomState() в локальный state.
 const RELAY_URL = BUILD_DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
+// room-session.js сам navigator/config.js не импортирует (граница слоёв, та
+// же, что у media-controller.js/call-runtime.js) — конфиг подключается здесь.
+const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
 
 // "Инвайт-ссылка" — Этап 3 сознательно НЕ строит настоящий https://-роут
 // (нужна была бы интеграция с router.js — отдельная задача); это копируемая
@@ -54,6 +57,9 @@ export default function Quick({ onExit }) {
 	const [raceOutcome, setRaceOutcome] = useState(null);
 	const [inviteLink, setInviteLink] = useState("");
 	const [chatText, setChatText] = useState("");
+	const [voiceActive, setVoiceActive] = useState(false);
+	const [voiceBusy, setVoiceBusy] = useState(false);
+	const [voiceError, setVoiceError] = useState("");
 	// Единый источник правды для названия/пароля ТЕКУЩЕЙ комнаты — НЕ производная
 	// от roomName/joinPwName через ||-цепочку (найдено живой проверкой: пользователь,
 	// сначала создавший комнату, затем в ТОЙ ЖЕ вкладке вошедший в другую комнату
@@ -78,6 +84,8 @@ export default function Quick({ onExit }) {
 		setPresent(newSession.getPresent());
 		setMessages(newSession.getMessages());
 		setRaceOutcome(newSession.getRaceOutcome());
+		setVoiceActive(false);
+		setVoiceError("");
 		setScreen("in-room");
 	}
 
@@ -87,6 +95,10 @@ export default function Quick({ onExit }) {
 		setPresent(s.getPresent());
 		setMessages(s.getMessages());
 		setRaceOutcome(s.getRaceOutcome());
+		// isVoiceActive() читается из самой сессии, не только из ответа joinVoice() —
+		// И10 самоэвикция (CONTRACTS.md "Rooms — Этап 4" §3) может выключить голос
+		// без явного действия пользователя, onChange — единственный способ узнать об этом.
+		setVoiceActive(s.isVoiceActive());
 	}
 
 	async function handleCreate(e) {
@@ -100,6 +112,7 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: RELAY_URL,
 				openMode,
+				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 			});
 			attachSession(newSession, encodeInviteLink(roomName, roomPassword, newSession.getSuffix()), roomName, roomPassword);
@@ -126,6 +139,7 @@ export default function Quick({ onExit }) {
 				suffix: decoded.suffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: RELAY_URL,
+				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 			});
 			attachSession(newSession, inviteInput.trim(), decoded.name, decoded.password);
@@ -146,6 +160,7 @@ export default function Quick({ onExit }) {
 				password: joinPwPassword,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: RELAY_URL,
+				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 			});
 			attachSession(newSession, encodeInviteLink(joinPwName, joinPwPassword, newSession.getSuffix()), joinPwName, joinPwPassword);
@@ -173,6 +188,7 @@ export default function Quick({ onExit }) {
 				suffix: raceOutcome.winningSuffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: RELAY_URL,
+				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 			});
 			attachSession(newSession, encodeInviteLink(activeRoomName, activeRoomPassword, raceOutcome.winningSuffix), activeRoomName, activeRoomPassword);
@@ -191,7 +207,39 @@ export default function Quick({ onExit }) {
 		setRaceOutcome(null);
 		setActiveRoomName("");
 		setActiveRoomPassword("");
+		setVoiceActive(false);
+		setVoiceError("");
 		setScreen("entry");
+	}
+
+	// Текст не зависит от голоса ни в одном сценарии (ROOMS-SPEC §7) — отказ
+	// joinVoice() (микрофон запрещён/голос заполнен/TURN недоступен) оставляет
+	// комнату и чат полностью рабочими, только показывает сообщение об ошибке.
+	async function handleJoinVoice() {
+		if (!sessionRef.current) return;
+		setVoiceBusy(true);
+		setVoiceError("");
+		try {
+			await sessionRef.current.joinVoice();
+			setVoiceActive(true);
+		} catch (err) {
+			const message = err?.message || "";
+			if (message.includes("заполнена")) {
+				setVoiceError(t("quick.room.voiceFullError"));
+			} else if (err?.name === "NotAllowedError" || err?.name === "NotFoundError") {
+				setVoiceError(t("quick.room.voiceMicDeniedError"));
+			} else {
+				setVoiceError(t("quick.room.voiceJoinError"));
+			}
+		} finally {
+			setVoiceBusy(false);
+		}
+	}
+
+	function handleLeaveVoice() {
+		sessionRef.current?.leaveVoice();
+		setVoiceActive(false);
+		setVoiceError("");
 	}
 
 	function handleSendChat(e) {
@@ -204,6 +252,7 @@ export default function Quick({ onExit }) {
 
 	if (screen === "in-room" && session) {
 		const selfPubkey = session.getPubkeyHex();
+		const voiceCount = present.filter((p) => p.inVoice).length;
 		return (
 			<div class="quick-room stack" style={{ "--gap": "var(--space-m)" }}>
 				<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
@@ -234,6 +283,29 @@ export default function Quick({ onExit }) {
 					</div>
 				)}
 
+				<div class="quick-voice-controls row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					{voiceActive ? (
+						<button type="button" class="btn" onClick={handleLeaveVoice}>
+							{t("quick.room.leaveVoiceButton")}
+						</button>
+					) : (
+						<button
+							type="button"
+							class="btn"
+							disabled={voiceBusy || voiceCount >= MAX_VOICE_PARTICIPANTS}
+							onClick={handleJoinVoice}
+						>
+							{voiceCount >= MAX_VOICE_PARTICIPANTS ? t("quick.room.voiceFullLabel") : t("quick.room.joinVoiceButton")}
+						</button>
+					)}
+					<small>{t("quick.room.voiceCount", { count: voiceCount, max: MAX_VOICE_PARTICIPANTS })}</small>
+				</div>
+				{voiceError && (
+					<p role="alert" style={{ color: "var(--bad)" }}>
+						{voiceError}
+					</p>
+				)}
+
 				<div class="quick-room-layout row" style={{ "--gap": "var(--space-m)" }}>
 					<aside
 						class="quick-participants stack box"
@@ -246,6 +318,7 @@ export default function Quick({ onExit }) {
 								<li key={p.pubkey}>
 									{p.nick || t("quick.anonymousNick")}
 									{p.pubkey === selfPubkey ? ` (${t("quick.room.selfMarker")})` : ""}
+									{p.inVoice ? ` — ${t("quick.room.inVoiceMarker")}` : ""}
 								</li>
 							))}
 						</ul>

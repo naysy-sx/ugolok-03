@@ -79,7 +79,13 @@ test("PRESENCE heartbeat: build/parse round-trip -> готовый вход дл
 	assert.equal(event.kind, ROOM_PRESENCE_KIND);
 	assert.deepEqual(event.tags, [["h", hTopic]]);
 	const parsed = parseRoomPresenceEvent(event, kSess);
-	assert.deepEqual(parsed, { pubkey, type: "heartbeat", nick: "Гость", at: AT_MS });
+	assert.deepEqual(parsed, { pubkey, type: "heartbeat", nick: "Гость", inVoice: false, at: AT_MS });
+});
+
+test("PRESENCE heartbeat: inVoice:true проходит round-trip (Этап 4)", () => {
+	const event = buildRoomPresenceEvent(privKey, kSess, hTopic, { type: "heartbeat", nick: "Гость", inVoice: true }, AT_MS);
+	const parsed = parseRoomPresenceEvent(event, kSess);
+	assert.deepEqual(parsed, { pubkey, type: "heartbeat", nick: "Гость", inVoice: true, at: AT_MS });
 });
 
 test("PRESENCE exit: build/parse round-trip -> готовый вход для presence.js's mergeExit (без nick)", () => {

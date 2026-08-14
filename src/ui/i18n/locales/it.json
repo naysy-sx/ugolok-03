@@ -771,7 +771,15 @@
 			"sendButton": "Send",
 			"inviteLabel": "Invite link (copy and share)",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
-			"reconnectButton": "Reconnect to the primary room"
+			"reconnectButton": "Reconnect to the primary room",
+			"inVoiceMarker": "in voice",
+			"joinVoiceButton": "Join voice",
+			"leaveVoiceButton": "Leave voice",
+			"voiceFullLabel": "Voice is full",
+			"voiceCount": "In voice: {{count}} / {{max}}",
+			"voiceFullError": "The room's voice part is full (maximum participants reached).",
+			"voiceMicDeniedError": "Microphone access wasn't granted. You're still in the room as a listener — chat works as usual.",
+			"voiceJoinError": "Couldn't connect to voice. Check your connection and try again — chat keeps working in the meantime."
 		},
 		"errors": {
 			"createFailed": "Couldn't create the room. Check your connection and try again.",

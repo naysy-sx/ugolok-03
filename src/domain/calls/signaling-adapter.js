@@ -10,10 +10,17 @@ export const CALL_SIGNAL_KIND = 20075;
 // Один kind на ВСЕ типы сигнальных сообщений — тип различается полем payload.type
 // (тот же приём, что d-tag-подтипы/маркеры уже применяются в проекте), не плодим
 // kind на каждый вариант.
-export function buildCallSignalEvent(privKey, peerPubkey, payload, createdAt = Math.floor(Date.now() / 1000)) {
+//
+// hTopic (Rooms, этап 4, ROOMS-SPEC §5.3) — необязательный: обычные 1:1-звонки его
+// не передают (тег отсутствует, поведение не меняется); mesh-supervisor.js передаёт
+// hTopic комнаты, событие получает ВТОРОЙ тег ["h", hTopic] — им ловит подписка
+// room-transport.js, шифрование НЕ меняется (по-прежнему NIP-44 попарно, §5.3
+// решение: не заводить симметричный режим на kSess — сигналинг паренный по природе).
+export function buildCallSignalEvent(privKey, peerPubkey, payload, createdAt = Math.floor(Date.now() / 1000), hTopic) {
 	const plaintext = JSON.stringify(payload);
 	const content = nip44Encrypt(plaintext, privKey, peerPubkey);
-	const eventTemplate = { kind: CALL_SIGNAL_KIND, tags: [["p", peerPubkey]], content, created_at: createdAt };
+	const tags = hTopic ? [["p", peerPubkey], ["h", hTopic]] : [["p", peerPubkey]];
+	const eventTemplate = { kind: CALL_SIGNAL_KIND, tags, content, created_at: createdAt };
 	return sign(eventTemplate, privKey);
 }
 
@@ -26,7 +33,7 @@ export function parseCallSignalEvent(event, privKey) {
 // Остальные команды (медиа/таймеры/EMIT) сюда не приходят — call-runtime.js их
 // не пересылает (тот же принцип, что media-controller.js).
 export async function execute(command, ctx) {
-	const { privKey, peerPubkey, sessionId, publish } = ctx;
+	const { privKey, peerPubkey, sessionId, publish, hTopic } = ctx;
 	let payload;
 	switch (command.type) {
 		case "SEND_OFFER":
@@ -44,7 +51,7 @@ export async function execute(command, ctx) {
 		default:
 			return undefined;
 	}
-	const event = buildCallSignalEvent(privKey, peerPubkey, payload);
+	const event = buildCallSignalEvent(privKey, peerPubkey, payload, undefined, hTopic);
 	return publish(event);
 }
 

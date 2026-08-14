@@ -1,11 +1,11 @@
-// Rooms, этапы 2+3 — оркестратор: единственное место, где чистое ядро встречается
+// Rooms, этапы 2+3+4 — оркестратор: единственное место, где чистое ядро встречается
 // с адаптерами (ROOMS-SPEC.md §1.3). Контракт и design-записка:
-// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 2"/"Этап 3" (room-session.js).
+// PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 2"/"Этап 3"/"Этап 4" (room-session.js).
 //
 // Область: LINK-режим (createRoom/joinRoom, name+password+suffix) и открытый
 // режим (createRoom({openMode:true})/joinRoomByPassword, name+password —
-// suffix находится через указатель под hDisc, ROOMS-MATH §1.2). Без UI, без
-// голоса (kind 20075 молча проходит мимо диспетчера, Этап 4).
+// suffix находится через указатель под hDisc, ROOMS-MATH §1.2). Этап 4 — голос:
+// joinVoice/leaveVoice, VoicePresent через inVoice-флаг heartbeat'а, mesh-supervisor.js.
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { deriveKBase, derivePairKeys, deriveLinkKeys, deriveSessionKey, defaultSlowKdf } from "./room-keys.js";
 import { emptyPresence, mergeHeartbeat, mergeExit, present, prune } from "./presence.js";
@@ -27,6 +27,8 @@ import {
 import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../events/kind-registry.js";
 import { createEphemeralIdentity } from "./adapters/room-identity.js";
 import { openRoomTransport } from "./adapters/room-transport.js";
+import { createMeshSupervisor } from "./adapters/mesh-supervisor.js";
+import { CALL_SIGNAL_KIND } from "../calls/signaling-adapter.js";
 
 const HEARTBEAT_INTERVAL_MS = 15000; // δ
 const PRESENCE_TAU_MS = 45000; // τ — тот же τ используется как окно И9-тайбрейка (ROOMS-MATH §1.4)
@@ -34,6 +36,9 @@ const TRICKLE_I_MIN_MS = 15000;
 const TRICKLE_I_MAX_MS = 60000;
 const TRICKLE_K = 1;
 const DISCOVERY_PLACEHOLDER_PUBKEY = "0".repeat(64);
+// Р4 (ROOMS-MATH §4.3) — ОДНА именованная константа в ОДНОМ месте.
+export const MAX_VOICE_PARTICIPANTS = 5;
+const DEFAULT_GET_USER_MEDIA = (constraints) => navigator.mediaDevices.getUserMedia(constraints);
 
 function randomSuffix() {
 	return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
@@ -66,6 +71,9 @@ async function openSession({
 	isCreator,
 	openMode = false,
 	precomputedKBase = null,
+	getUserMedia = DEFAULT_GET_USER_MEDIA,
+	iceServers = [],
+	createMeshSupervisor: createMeshSupervisorImpl = createMeshSupervisor,
 }) {
 	const identity = createEphemeralIdentity();
 	const kBase = precomputedKBase ?? (await deriveKBase(name, password, argon2));
@@ -88,8 +96,17 @@ async function openSession({
 	let bestSuffix = suffix;
 	let raceOutcome = null;
 
+	// Этап 4 — голос. meshSupervisor создаётся ЛЕНИВО, при первом joinVoice()
+	// (не раньше — незачем существовать, пока пользователь не решил включить голос).
+	let voiceActive = false;
+	let meshSupervisor = null;
+
+	function getVoicePresent() {
+		return present(presenceState, now(), PRESENCE_TAU_MS).filter((p) => p.inVoice);
+	}
+
 	function publishHeartbeat(t) {
-		const event = buildRoomPresenceEvent(identity.privKey, kSess, hTopic, { type: "heartbeat", nick }, t);
+		const event = buildRoomPresenceEvent(identity.privKey, kSess, hTopic, { type: "heartbeat", nick, inVoice: voiceActive }, t);
 		return transport.publish(event);
 	}
 
@@ -148,13 +165,18 @@ async function openSession({
 				const payload = parseRoomPresenceEvent(event, kSess);
 				if (!payload) return;
 				if (payload.type === "heartbeat") {
-					presenceState = mergeHeartbeat(presenceState, { pubkey: payload.pubkey, nick: payload.nick, at: payload.at });
+					presenceState = mergeHeartbeat(presenceState, { pubkey: payload.pubkey, nick: payload.nick, inVoice: payload.inVoice, at: payload.at });
 				} else if (payload.type === "exit") {
 					presenceState = mergeExit(presenceState, { pubkey: payload.pubkey, at: payload.at });
 				}
 				const t = now();
 				const currentK = present(presenceState, t, PRESENCE_TAU_MS).length;
 				roomMachineState = syncRoomMachineK(roomMachineState, currentK, t);
+				// Этап 4 — новый/ушедший голосовой участник виден немедленно, не ждать
+				// следующего sweep-тика (до 1с — некритично, но мгновенная реакция лучше).
+				if (voiceActive && meshSupervisor) {
+					meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+				}
 				onChange();
 				return;
 			}
@@ -181,8 +203,15 @@ async function openSession({
 				}
 				return;
 			}
+			case CALL_SIGNAL_KIND: {
+				// room-transport.js уже отфильтровал по тегу p (Этап 2) — событие точно
+				// адресовано нам. meshSupervisor может отсутствовать (голос ещё не включён
+				// НИ разу за сессию) — тогда сигналу просто некому маршрутизировать.
+				if (meshSupervisor) meshSupervisor.onSignal(event);
+				return;
+			}
 			default:
-				return; // сигналинг голоса и прочее — Этап 4, молча пропускаем
+				return; // неизвестный/будущий kind — молча пропускаем
 		}
 	}
 
@@ -199,6 +228,50 @@ async function openSession({
 		if (openMode) publishPointer(now());
 	} else {
 		publishProbe(now());
+	}
+
+	// Этап 4 — И10 при гонке: детерминированная само-эвикция, не арбитр
+	// (CONTRACTS.md "Rooms — Этап 4" §3). getVoicePresent() уже стабильно
+	// отсортирован по joinedAt (presence.js's гарантия, Этап 1) — все наблюдатели
+	// вычисляют один и тот же список из одного и того же CvRDT-снимка.
+	async function joinVoice() {
+		if (!ready) throw new Error("room-session: joinVoice до готовности сессии");
+		if (getVoicePresent().length >= MAX_VOICE_PARTICIPANTS) {
+			throw new Error("room-session: голосовая часть заполнена");
+		}
+		if (!meshSupervisor) {
+			meshSupervisor = createMeshSupervisorImpl({
+				selfPubkey: identity.pubkeyHex,
+				selfPrivKey: identity.privKey,
+				hTopic,
+				publish: transport.publish,
+				maxVoice: MAX_VOICE_PARTICIPANTS,
+				getUserMedia,
+				iceServers,
+			});
+		}
+		await meshSupervisor.joinVoice();
+		voiceActive = true;
+		const t = now();
+		publishHeartbeat(t);
+		lastHeartbeatAt = t;
+		// Оптимистичное локальное обновление — не ждать эха публикации с relay
+		// (тот же приём, что уже применяется для входящих heartbeat).
+		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: true, at: t });
+		meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+		onChange();
+	}
+
+	function leaveVoice() {
+		if (!meshSupervisor) return;
+		meshSupervisor.leaveVoice();
+		voiceActive = false;
+		const t = now();
+		publishHeartbeat(t);
+		lastHeartbeatAt = t;
+		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: false, at: t });
+		meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+		onChange();
 	}
 
 	function tick() {
@@ -219,6 +292,15 @@ async function openSession({
 				publishAnnounce(t);
 				if (openMode) publishPointer(t);
 			}
+			if (voiceActive) {
+				const voiceList = getVoicePresent();
+				const myIndex = voiceList.findIndex((p) => p.pubkey === identity.pubkeyHex);
+				if (myIndex >= MAX_VOICE_PARTICIPANTS) {
+					leaveVoice(); // И10 при гонке — сам себя эвиктирую, детерминировано для всех наблюдателей
+				} else if (meshSupervisor) {
+					meshSupervisor.updateRoster(voiceList.map((p) => p.pubkey));
+				}
+			}
 		}
 		onChange();
 	}
@@ -232,6 +314,11 @@ async function openSession({
 		getPresent: () => present(presenceState, now(), PRESENCE_TAU_MS),
 		getMessages: () => messageLog.toArray(),
 		getRoomState: () => roomMachineState,
+		getVoicePresent,
+		isVoiceActive: () => voiceActive,
+		getEdgeStates: () => (meshSupervisor ? meshSupervisor.getEdgeStates() : []),
+		joinVoice,
+		leaveVoice,
 		getRaceOutcome: () => raceOutcome,
 		sendChat: (text) => {
 			if (!ready) return Promise.reject(new Error("room-session: sendChat до готовности сессии (salt ещё не известен)"));
@@ -240,6 +327,12 @@ async function openSession({
 		},
 		close: () => {
 			clearIntervalImpl(timerHandle);
+			// Локальная очистка ресурсов (микрофон/RTCPeerConnection) — ОБЯЗАТЕЛЬНА
+			// независимо от философии "закрытие вкладки — конец, без уборки" (ROOMS-SPEC
+			// §0, это про сетевой протокол/lease, не про реальное железо): непойманный
+			// активный трек микрофона держит индикатор записи включённым в браузере.
+			// Финальный heartbeat НЕ публикуется — transport и так закрывается следом.
+			if (meshSupervisor) meshSupervisor.leaveVoice();
 			transport.close();
 		},
 	};
@@ -267,7 +360,23 @@ async function discoverSuffixViaPointer({ hDisc, kPointer, relayUrl, discoveryTi
 	return pointers[0].suffix;
 }
 
-export function createRoom({ name, password, nick, relayUrl, argon2, now, random, sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange, openMode }) {
+export function createRoom({
+	name,
+	password,
+	nick,
+	relayUrl,
+	argon2,
+	now,
+	random,
+	sweepIntervalMs,
+	setIntervalImpl,
+	clearIntervalImpl,
+	onChange,
+	openMode,
+	getUserMedia,
+	iceServers,
+	createMeshSupervisor,
+}) {
 	return openSession({
 		name,
 		password,
@@ -283,10 +392,29 @@ export function createRoom({ name, password, nick, relayUrl, argon2, now, random
 		onChange,
 		isCreator: true,
 		openMode,
+		getUserMedia,
+		iceServers,
+		createMeshSupervisor,
 	});
 }
 
-export function joinRoom({ name, password, suffix, nick, relayUrl, argon2, now, random, sweepIntervalMs, setIntervalImpl, clearIntervalImpl, onChange }) {
+export function joinRoom({
+	name,
+	password,
+	suffix,
+	nick,
+	relayUrl,
+	argon2,
+	now,
+	random,
+	sweepIntervalMs,
+	setIntervalImpl,
+	clearIntervalImpl,
+	onChange,
+	getUserMedia,
+	iceServers,
+	createMeshSupervisor,
+}) {
 	return openSession({
 		name,
 		password,
@@ -301,6 +429,9 @@ export function joinRoom({ name, password, suffix, nick, relayUrl, argon2, now, 
 		clearIntervalImpl,
 		onChange,
 		isCreator: false,
+		getUserMedia,
+		iceServers,
+		createMeshSupervisor,
 	});
 }
 
@@ -317,6 +448,9 @@ export async function joinRoomByPassword({
 	clearIntervalImpl,
 	onChange,
 	discoveryTimeoutMs = 5000,
+	getUserMedia,
+	iceServers,
+	createMeshSupervisor,
 }) {
 	const kBase = await deriveKBase(name, password, argon2);
 	const { hDisc, kPointer } = derivePairKeys(kBase);
@@ -339,5 +473,8 @@ export async function joinRoomByPassword({
 		onChange,
 		isCreator: false,
 		precomputedKBase: kBase,
+		getUserMedia,
+		iceServers,
+		createMeshSupervisor,
 	});
 }

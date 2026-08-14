@@ -59,8 +59,12 @@ export function parseRoomProbeEvent(event, kRv) {
 	return {};
 }
 
-export function buildRoomPresenceEvent(privKey, kSess, hTopic, { type, nick }, createdAtMs) {
-	const payload = type === "heartbeat" ? { type, nick } : { type };
+// inVoice (Этап 4, CONTRACTS.md "Rooms — Этап 4" §1) — необязательное поле
+// heartbeat-payload'а, по умолчанию false (обратная совместимость с событиями,
+// подписанными Этапом 2/3, где поля не было вовсе). exit его не несёт — уход
+// есть уход, независимо от того, был ли участник в голосе.
+export function buildRoomPresenceEvent(privKey, kSess, hTopic, { type, nick, inVoice = false }, createdAtMs) {
+	const payload = type === "heartbeat" ? { type, nick, inVoice } : { type };
 	return buildEvent(privKey, kSess, ROOM_PRESENCE_KIND, hTopic, payload, createdAtMs);
 }
 
@@ -68,7 +72,7 @@ export function parseRoomPresenceEvent(event, kSess) {
 	const payload = parseEvent(event, kSess);
 	if (payload === null) return null;
 	const at = event.created_at * 1000;
-	if (payload.type === "heartbeat") return { pubkey: event.pubkey, type: "heartbeat", nick: payload.nick, at };
+	if (payload.type === "heartbeat") return { pubkey: event.pubkey, type: "heartbeat", nick: payload.nick, inVoice: payload.inVoice ?? false, at };
 	if (payload.type === "exit") return { pubkey: event.pubkey, type: "exit", at };
 	return null;
 }

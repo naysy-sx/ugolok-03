@@ -299,3 +299,25 @@ test("handleIncomingSignal: событие для чужой (устаревше
 
 	assert.deepEqual(runtime.getState(), before);
 });
+
+// --- Rooms, этап 4 (ROOMS-SPEC §5.3) — hTopic пробрасывается в ctx сигналинга ---
+
+test("createCallRuntime({hTopic}): опубликованные сигнальные события несут тег h (mesh-supervisor.js использует эту опцию)", async () => {
+	const hTopic = "c".repeat(64);
+	const { runtime, media, published } = makeRuntime(ALICE_PRIV, ALICE_PUB, { hTopic });
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+
+	assert.equal(published.length, 1);
+	assert.deepEqual(published[0].tags, [["p", BOB_PUB], ["h", hTopic]]);
+});
+
+test("createCallRuntime без hTopic (обычный 1:1-звонок) — опубликованные события тега h не несут", async () => {
+	const { runtime, media, published } = makeRuntime(ALICE_PRIV, ALICE_PUB);
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+
+	assert.deepEqual(published[0].tags, [["p", BOB_PUB]]);
+});

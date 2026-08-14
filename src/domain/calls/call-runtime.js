@@ -39,6 +39,7 @@ export function createCallRuntime(options = {}) {
 		myPubkey,
 		privKey,
 		publish,
+		hTopic, // Rooms, этап 4 (ROOMS-SPEC §5.3) — undefined для обычных 1:1-звонков, тег h не добавляется
 		onStateChange = () => {},
 		createMediaController = defaultCreateMediaController,
 		signalingAdapter = defaultSignalingAdapter,
@@ -116,7 +117,7 @@ export function createCallRuntime(options = {}) {
 		}
 		if (SIGNAL_COMMAND_TYPES.has(command.type)) {
 			try {
-				await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish });
+				await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish, hTopic });
 			} catch (e) {
 				console.warn(`call-runtime: сигнальная команда ${command.type} упала`, e);
 			}
