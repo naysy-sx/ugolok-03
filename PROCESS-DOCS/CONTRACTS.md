@@ -14006,3 +14006,136 @@ Regression: `node --test tests/*.test.js` — 1589/1589 (было 1587,
 изолированным флейком И9-теста под полной нагрузкой — не связан с
 этой правкой, стабилен ×3 в изоляции, тот же класс, что и раньше).
 `npm run build` — зелёный.
+
+---
+
+## Rooms — Этап 5. Визуализатор
+
+Design-записка — DESIGN.md "Rooms — Этап 5" (13b). ROOMS-SPEC §4.4,
+ROOMS-ALGO §7.
+
+### `ring-column-blit.js` [C] — чистое ядро, пополняет список §1.1
+
+```js
+computeBlitRegions(writeIndex, width) -> [{srcX, width, destX}, ...]  // 1 или 2 региона
+nextWriteIndex(writeIndex, width) -> number
+```
+
+Кольцевой буфер столбцов спектрограммы (ROOMS-ALGO §7.2 [Э]).
+`buffer[writeIndex]` — самый старый столбец (следующий на
+перезапись). Порядок за кадр: записать столбец в `buffer[writeIndex]`
+→ `writeIndex = nextWriteIndex(writeIndex, width)` → отрисовать по
+регионам `computeBlitRegions` С НОВЫМ `writeIndex`. Ни один DOM/canvas
+символ — добавлен в `PURE_CORE_FILES` (`tests/rooms-no-browser-api.test.js`).
+
+### `level-meter.js` [C] — чистое ядро
+
+```js
+createLevelTracker({alpha = 0.3, onThreshold = 0.15, offThreshold = 0.10} = {})
+  -> { update(rms) -> {level, speaking}, get() -> {level, speaking} }
+computeRms(timeDomainData: Uint8Array) -> number  // [0,1], без FFT
+```
+
+`update`: EMA `level ← α·rms + (1-α)·level`, гистерезис
+`false→true` только при пересечении `onThreshold` снизу вверх,
+`true→false` только при пересечении `offThreshold` сверху вниз — в
+мёртвой зоне `(offThreshold, onThreshold)` состояние не меняется.
+Один трекер на участника (включая себя), живёт внутри `audio-graph.js`.
+Тоже пополняет `PURE_CORE_FILES`.
+
+### `audio-graph.js` [C] — адаптер, `src/domain/rooms/adapters/`
+
+```js
+createAudioGraph({AudioContextImpl = window.AudioContext || window.webkitAudioContext} = {})
+  -> {
+    addStream(pubkey, stream, {isSelf = false} = {}),
+    removeStream(pubkey),
+    setMasterGain(v),        // GainNode.gain.setTargetAtTime, НЕ присваивание (щелчок)
+    getSpectrum() -> Uint8Array,      // из ЕДИНСТВЕННОГО шинного AnalyserNode(fftSize=2048)
+    getLevels() -> Map<pubkey, {level, speaking}>,   // per-участнику AnalyserNode(fftSize=256) + level-meter.js
+    close(),
+  }
+```
+
+Топология на `addStream`: `source = ctx.createMediaStreamSource(stream)`
+→ (а) `source.connect(perParticipantAnalyser)` [fftSize=256, ТОЛЬКО
+`getByteTimeDomainData`, никогда `getByteFrequencyData` — И15 по
+построению, не по счётчику] → (б) `source.connect(spectrogramBus)`
+[все потоки, включая `isSelf`, шина ведёт в ЕДИНСТВЕННЫЙ
+`AnalyserNode(fftSize=2048)`, `getSpectrum()` — единственное место
+вызова `getByteFrequencyData` во всём графе] → (в) ТОЛЬКО когда
+`!isSelf`: `source.connect(masterGain)`, `masterGain.connect(destination)`
+— самопрослушивание исключено из звука (не из визуализации/уровня),
+design-решение — DESIGN.md "Rooms — Этап 5", подраздел про
+самопрослушивание. `removeStream` отключает и уничтожает узлы этого
+`pubkey` (`source.disconnect()`, оба анализатора, запись в
+`masterGain`-ветке если была), удаляет level-tracker.
+
+**Следствие: `quick.jsx`'s `RoomRemoteAudio`/`remoteStreams`-state
+(Этап 4-довесок №2) УДАЛЯЮТСЯ** — Web Audio graph (`masterGain →
+destination`) становится единственным путём воспроизведения; два
+параллельных пути одного `MediaStream` дали бы удвоенный звук.
+`mesh-supervisor.js` получает третий аддитивный колбэк
+`onLocalStream(stream|null)` — вызывается в `joinVoice()` сразу после
+`sharedStream = await getUserMedia(...)`, и `null` в начале
+`leaveVoice()` (тот же паттерн, что `onRemoteStream`), пробрасывается
+`room-session.js` → `createRoom`/`joinRoom`/`joinRoomByPassword` тем
+же аддитивным путём.
+
+### `room-audio-visualizer.jsx` [C] — UI, `src/ui/components/`
+
+```jsx
+<RoomAudioVisualizer audioGraph={...} localStream={...} remoteStreams={Map} selfPubkey={...} />
+```
+
+Владеет ОДНИМ `requestAnimationFrame`-циклом на всю комнату
+(ROOMS-ALGO §7.4): каждый кадр — `getSpectrum()` + два `drawImage` по
+`computeBlitRegions`; раз в 4 кадра (счётчик по модулю 4) —
+`getLevels()` + `setState` (перерендер ограничен этим компонентом, не
+поднимается в `quick.jsx` — 60 кадров/сек не должны трогать список
+сообщений/участников). Сам создаёт/уничтожает `audioGraph` через
+`createAudioGraph()` по изменению `localStream`
+(`null`→есть = голос начался = создать граф и вызвать `addStream` для
+себя; есть→`null` = голос закончился = `close()`); диффит
+`remoteStreams`-Map на каждый рендер (новые ключи → `addStream`,
+пропавшие → `removeStream`) — тот же принцип diff, что
+`mesh-supervisor.js`'s `updateRoster`/`diffEdges`, но без турнира
+(просто добавить/убрать). Рендерится ВСЕГДА, пока `voiceActive`
+(не по отдельному тумблеру) — воспроизведение не должно зависеть от
+того, свёрнут ли визуально канвас.
+
+### Найдено адверсарной фазой (skill п.19), закрыто в самом коде
+
+`audio-graph.js`'s `addStream(pubkey, ...)` вызванный ДВАЖДЫ для того
+же `pubkey` без промежуточного `removeStream` (гипотетическое
+переприсоединение) оставлял старый `source`-узел подключённым —
+утечка узла (звук с уже неактуального `MediaStream`, если тот вообще
+ещё жив, продолжал бы литься в граф). Фикс — `addStream` сам вызывает
+`removeStream(pubkey)` первым делом, если запись уже существует.
+
+### Тесты и живая проверка
+
+`tests/ring-column-blit.test.js` (8), `tests/level-meter.test.js` (8),
+`tests/audio-graph.test.js` (12, включая 3 адверсарных), плюс 3 новых
+теста в `tests/mesh-supervisor.test.js` (`onLocalStream`) — итого +31
+к общему счёту. `tests/rooms-no-browser-api.test.js` расширен до 9
+модулей чистого ядра. Regression: `node --test tests/*.test.js` —
+1620/1620, ×2 стабильно (один прогон между ними — уже задокументированный
+изолированный флейк И9-теста под полной нагрузкой, не связан с этим
+этапом). `npm run build` — зелёный.
+
+Живая проверка в Chrome (1 вкладка, автоматизировано — реального звука
+у автоматизированной вкладки нет, канвас корректно остаётся пустым,
+см. `drawColumn`'s порог `value <= 0.02`): "Войти в голос" → визуализатор
+появляется (канвас, слайдер "Громкость", индикатор участника под
+слайдером) без диалога разрешения микрофона (уже был выдан ранее в
+этой сессии) и без ошибок в консоли; слайдер громкости двигается,
+`setMasterGain` вызывается (проверено логикой, не значением звука);
+"Покинуть голос" — визуализатор корректно исчезает, счётчик "В
+голосе" возвращается к 0, ошибок в консоли нет (значит `audioGraph.close()`
+и `AudioContext.close()` отрабатывают штатно). Профилировочная часть
+DoD (≤1 `getByteFrequencyData`/кадр, кадр ≤16мс при 5 участниках) —
+первое гарантировано топологией графа и покрыто тестом на счётчик
+фейка (не профилировщиком); второе требует реальной многоучастниковой
+нагрузки — оставлено пользователю по тому же принципу, что живая
+проверка голоса Этапа 4 ("браузерная граница автоматизации").

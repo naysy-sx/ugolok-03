@@ -779,7 +779,8 @@
 			"voiceCount": "In voice: {{count}} / {{max}}",
 			"voiceFullError": "The room's voice part is full (maximum participants reached).",
 			"voiceMicDeniedError": "Microphone access wasn't granted. You're still in the room as a listener — chat works as usual.",
-			"voiceJoinError": "Couldn't connect to voice. Check your connection and try again — chat keeps working in the meantime."
+			"voiceJoinError": "Couldn't connect to voice. Check your connection and try again — chat keeps working in the meantime.",
+			"volumeLabel": "Volume"
 		},
 		"errors": {
 			"createFailed": "Couldn't create the room. Check your connection and try again.",

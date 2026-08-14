@@ -18,13 +18,25 @@ import { join } from "node:path";
 
 const ROOMS_DIR = join(import.meta.dirname, "..", "src", "domain", "rooms");
 
-// ROOMS-SPEC.md §1.1 — ровно эти семь.
-const PURE_CORE_FILES = ["room-keys.js", "presence.js", "room-machine.js", "trickle.js", "mesh.js", "message-log.js", "room-events.js"];
+// ROOMS-SPEC.md §1.1 — исходные семь, плюс ring-column-blit.js/level-meter.js
+// (Этап 5 — чистая арифметика позиций/RMS+EMA+гистерезис, ни один DOM/
+// AudioContext символ, см. CONTRACTS.md "Rooms — Этап 5").
+const PURE_CORE_FILES = [
+	"room-keys.js",
+	"presence.js",
+	"room-machine.js",
+	"trickle.js",
+	"mesh.js",
+	"message-log.js",
+	"room-events.js",
+	"ring-column-blit.js",
+	"level-meter.js",
+];
 
 const BROWSER_API_PATTERN =
 	/\bwindow\.|\bdocument\.|\bnavigator\.|\bWebSocket\b|\bRTCPeerConnection\b|\bindexedDB\b|\blocalStorage\b|\bsessionStorage\b|\bMediaRecorder\b|\bAudioContext\b|\bfetch\(/;
 
-test("src/domain/rooms/: семь модулей чистого ядра (ROOMS-SPEC §1.1) — ноль импортов/обращений к браузерным API", () => {
+test("src/domain/rooms/: девять модулей чистого ядра (ROOMS-SPEC §1.1 + Этап 5) — ноль импортов/обращений к браузерным API", () => {
 	const offenders = [];
 	for (const name of PURE_CORE_FILES) {
 		const content = readFileSync(join(ROOMS_DIR, name), "utf8");

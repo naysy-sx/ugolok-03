@@ -69,7 +69,7 @@ function fakeCallRuntimeFactory() {
 	return { createFakeCallRuntime, instances };
 }
 
-function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream } = {}) {
+function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream, onLocalStream } = {}) {
 	const { createFakeCallRuntime, instances } = fakeCallRuntimeFactory();
 	const stream = fakeStream("shared");
 	const published = [];
@@ -85,6 +85,7 @@ function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream } = {}) {
 		getUserMedia: async () => stream,
 		createCallRuntime: createFakeCallRuntime,
 		...(onRemoteStream ? { onRemoteStream } : {}),
+		...(onLocalStream ? { onLocalStream } : {}),
 	});
 	return { supervisor, instances, stream, published };
 }
@@ -277,6 +278,33 @@ test("живая находка №2: закрытие ребра (updateRoster 
 	supervisor.updateRoster([ALICE]); // BOB вышел -> ребро закрывается
 
 	assert.deepEqual(remoteStreamCalls, [[BOB, null]]);
+});
+
+test("Этап 5: joinVoice() вызывает onLocalStream(sharedStream) — сырой поток, не клон (нужен audio-graph.js для собственного уровня/спектрограммы)", async () => {
+	const localStreamCalls = [];
+	const { supervisor, stream } = setup({ onLocalStream: (s) => localStreamCalls.push(s) });
+	await supervisor.joinVoice();
+
+	assert.deepEqual(localStreamCalls, [stream]);
+});
+
+test("Этап 5: leaveVoice() вызывает onLocalStream(null) ДО остановки треков", async () => {
+	const localStreamCalls = [];
+	const { supervisor, stream } = setup({ onLocalStream: (s) => localStreamCalls.push(s) });
+	await supervisor.joinVoice();
+	localStreamCalls.length = 0;
+	supervisor.leaveVoice();
+
+	assert.deepEqual(localStreamCalls, [null]);
+	assert.ok(stream.tracks[0].stopped, "трек всё равно останавливается — onLocalStream(null) не заменяет leaveVoice()'s cleanup");
+});
+
+test("Этап 5: leaveVoice() без предварительного joinVoice() — onLocalStream НЕ вызывается (нечего анонсировать)", () => {
+	const localStreamCalls = [];
+	const { supervisor } = setup({ onLocalStream: (s) => localStreamCalls.push(s) });
+	supervisor.leaveVoice();
+
+	assert.deepEqual(localStreamCalls, []);
 });
 
 // --- Адверсарная фаза (skill п.19) ---

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../../domain/rooms/room-session.js";
 import MessageBubble from "../components/message-bubble.jsx";
+import RoomAudioVisualizer from "../components/room-audio-visualizer.jsx";
 import IconQuickConnect from "../icons/quick-connect.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
@@ -23,26 +24,6 @@ const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
 // не нужно было ничего вводить руками. Реальный URL-формат — будущее
 // расширение поверх той же схемы, не блокирует функциональность.
 const INVITE_PREFIX = "roomlink:v1:";
-
-// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (тишина сохранилась даже после фикса гонки offer/
-// heartbeat в mesh-supervisor.js) — трек собеседника доходит до RTCPeerConnection,
-// но без явного <audio> с srcObject звук не воспроизводится нигде (тот же класс
-// пробела, что уже чинился в 1:1-звонках — call-overlay.jsx's RemoteAudio,
-// комментарий там же). Голос комнаты — мультиучастник, поэтому по одному
-// скрытому <audio> на пира, а не один общий элемент.
-function RoomRemoteAudio({ stream }) {
-	const audioRef = useRef(null);
-	useEffect(() => {
-		const el = audioRef.current;
-		if (!el || !stream) return;
-		el.srcObject = stream;
-		el.play().catch(() => {}); // автоплей может потребовать жеста — клик "Войти в голос" его уже дал
-		return () => {
-			el.srcObject = null;
-		};
-	}, [stream]);
-	return <audio ref={audioRef} autoPlay style={{ display: "none" }} />;
-}
 
 function encodeInviteLink(name, password, suffix) {
 	const payload = JSON.stringify({ name, password, suffix });
@@ -84,6 +65,10 @@ export default function Quick({ onExit }) {
 	const [voiceBusy, setVoiceBusy] = useState(false);
 	const [voiceError, setVoiceError] = useState("");
 	const [remoteStreams, setRemoteStreams] = useState(new Map());
+	// Этап 5 — сырой (не клонированный) собственный поток, нужен
+	// room-audio-visualizer.jsx для audio-graph.js (собственный уровень/
+	// спектрограмма); mesh-supervisor.js's onLocalStream — единственный источник.
+	const [localStream, setLocalStream] = useState(null);
 	// Единый источник правды для названия/пароля ТЕКУЩЕЙ комнаты — НЕ производная
 	// от roomName/joinPwName через ||-цепочку (найдено живой проверкой: пользователь,
 	// сначала создавший комнату, затем в ТОЙ ЖЕ вкладке вошедший в другую комнату
@@ -123,11 +108,13 @@ export default function Quick({ onExit }) {
 		setVoiceActive(false);
 		setVoiceError("");
 		setRemoteStreams(new Map());
+		setLocalStream(null);
 		setScreen("in-room");
 	}
 
 	// stream === null -> ребро закрылось, убрать пира из карты (mesh-supervisor.js
-	// шлёт это явно при закрытии, иначе <audio> держал бы протухший srcObject).
+	// шлёт это явно при закрытии — room-audio-visualizer.jsx's диффинг-эффект
+	// обязан узнать об уходе, чтобы вызвать audioGraph.removeStream).
 	function handleRemoteStream(peer, stream) {
 		setRemoteStreams((prev) => {
 			const next = new Map(prev);
@@ -135,6 +122,10 @@ export default function Quick({ onExit }) {
 			else next.delete(peer);
 			return next;
 		});
+	}
+
+	function handleLocalStream(stream) {
+		setLocalStream(stream);
 	}
 
 	function handleSessionChange() {
@@ -163,6 +154,7 @@ export default function Quick({ onExit }) {
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(roomName, roomPassword, newSession.getSuffix()), roomName, roomPassword);
 		} catch {
@@ -191,6 +183,7 @@ export default function Quick({ onExit }) {
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, inviteInput.trim(), decoded.name, decoded.password);
 		} catch {
@@ -213,6 +206,7 @@ export default function Quick({ onExit }) {
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(joinPwName, joinPwPassword, newSession.getSuffix()), joinPwName, joinPwPassword);
 		} catch {
@@ -242,6 +236,7 @@ export default function Quick({ onExit }) {
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(activeRoomName, activeRoomPassword, raceOutcome.winningSuffix), activeRoomName, activeRoomPassword);
 		} catch {
@@ -262,6 +257,7 @@ export default function Quick({ onExit }) {
 		setVoiceActive(false);
 		setVoiceError("");
 		setRemoteStreams(new Map());
+		setLocalStream(null);
 		setScreen("entry");
 	}
 
@@ -294,6 +290,7 @@ export default function Quick({ onExit }) {
 		setVoiceActive(false);
 		setVoiceError("");
 		setRemoteStreams(new Map());
+		setLocalStream(null);
 	}
 
 	function handleSendChat(e) {
@@ -362,9 +359,14 @@ export default function Quick({ onExit }) {
 						{voiceError}
 					</p>
 				)}
-				{[...remoteStreams.entries()].map(([peer, stream]) => (
-					<RoomRemoteAudio key={peer} stream={stream} />
-				))}
+				{voiceActive && (
+					<RoomAudioVisualizer
+						localStream={localStream}
+						remoteStreams={remoteStreams}
+						selfPubkey={selfPubkey}
+						participantNicks={new Map(present.map((p) => [p.pubkey, p.nick || t("quick.anonymousNick")]))}
+					/>
+				)}
 
 				<div class="quick-room-layout row" style={{ "--gap": "var(--space-m)" }}>
 					<aside

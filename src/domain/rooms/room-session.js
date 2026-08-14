@@ -75,6 +75,7 @@ async function openSession({
 	iceServers = [],
 	createMeshSupervisor: createMeshSupervisorImpl = createMeshSupervisor,
 	onRemoteStream = () => {},
+	onLocalStream = () => {},
 }) {
 	const identity = createEphemeralIdentity();
 	const kBase = precomputedKBase ?? (await deriveKBase(name, password, argon2));
@@ -250,6 +251,7 @@ async function openSession({
 				getUserMedia,
 				iceServers,
 				onRemoteStream,
+				onLocalStream,
 			});
 		}
 		await meshSupervisor.joinVoice();
@@ -379,6 +381,7 @@ export function createRoom({
 	iceServers,
 	createMeshSupervisor,
 	onRemoteStream,
+	onLocalStream,
 }) {
 	return openSession({
 		name,
@@ -399,6 +402,7 @@ export function createRoom({
 		iceServers,
 		createMeshSupervisor,
 		onRemoteStream,
+		onLocalStream,
 	});
 }
 
@@ -419,6 +423,7 @@ export function joinRoom({
 	iceServers,
 	createMeshSupervisor,
 	onRemoteStream,
+	onLocalStream,
 }) {
 	return openSession({
 		name,
@@ -438,6 +443,7 @@ export function joinRoom({
 		iceServers,
 		createMeshSupervisor,
 		onRemoteStream,
+		onLocalStream,
 	});
 }
 
@@ -458,6 +464,7 @@ export async function joinRoomByPassword({
 	iceServers,
 	createMeshSupervisor,
 	onRemoteStream,
+	onLocalStream,
 }) {
 	const kBase = await deriveKBase(name, password, argon2);
 	const { hDisc, kPointer } = derivePairKeys(kBase);
@@ -484,5 +491,6 @@ export async function joinRoomByPassword({
 		iceServers,
 		createMeshSupervisor,
 		onRemoteStream,
+		onLocalStream,
 	});
 }

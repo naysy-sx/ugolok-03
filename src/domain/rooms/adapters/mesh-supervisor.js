@@ -27,6 +27,7 @@ export function createMeshSupervisor({
 	iceServers = [],
 	createCallRuntime = defaultCreateCallRuntime,
 	onRemoteStream = () => {},
+	onLocalStream = () => {},
 }) {
 	let sharedStream = null;
 	const edgesByPeer = new Map(); // peerPubkey -> {runtime, role}
@@ -59,12 +60,17 @@ export function createMeshSupervisor({
 
 	async function joinVoice() {
 		sharedStream = await getUserMedia({ audio: true });
+		// Этап 5 — audio-graph.js's addStream(selfPubkey, ..., {isSelf:true}) нужен
+		// именно ЭТОТ, сырой (не клонированный) поток для собственного уровня/
+		// спектрограммы; клоны на рёбра — отдельно, ниже.
+		onLocalStream(sharedStream);
 	}
 
 	function leaveVoice() {
 		for (const peer of [...edgesByPeer.keys()]) closeEdge(peer);
 		currentMyEdges = [];
 		if (sharedStream) {
+			onLocalStream(null);
 			for (const track of sharedStream.getTracks()) track.stop();
 			sharedStream = null;
 		}

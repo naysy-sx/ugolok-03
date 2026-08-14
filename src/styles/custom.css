@@ -856,6 +856,28 @@ button:has(> .icon),
 	block-size: min(60dvh, 28rem);
 }
 
+/* Визуализатор голоса комнаты (Этап 5, room-audio-visualizer.jsx). Канвас —
+   фиксированные пиксели (не токены — реальный пиксельный буфер кольцевого
+   блиттинга, ROOMS-ALGO §7.2, тот же класс исключения, что max-width:70% у
+   .message-bubble). */
+.room-spectrogram {
+	inline-size: 100%;
+	block-size: 5rem;
+	border-radius: var(--radius);
+	background-color: var(--surface-raised);
+}
+.room-speaking-indicators {
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: 0;
+	font-size: var(--step--2);
+	color: var(--muted);
+}
+.room-speaking-active {
+	color: var(--accent);
+	font-weight: var(--weight-bold);
+}
+
 /* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
    язык, что VISUAL.md .compose/.field/.send. */
 .message-compose {
