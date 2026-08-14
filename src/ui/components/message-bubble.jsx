@@ -23,7 +23,12 @@ function formatTimestamp(sentAt) {
 // у чужих сообщений доступно только "Удалить у себя", без раскрывающегося меню.
 // mode: null | "confirming-delete" | "editing" — один открытый режим за раз, без
 // модалки/библиотеки (бюджет бандла), инлайн в самом сообщении.
-export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength }) {
+// senderName — опционален, НЕ используется в chat.jsx (1:1/групповой чат уже
+// показывает собеседника через свой заголовок экрана). Нужен в multi-party
+// сценарии (quick.jsx, комнаты "Быстрая связь" — до 5 участников в одной
+// ленте) — без подписи невозможно понять, кто именно написал (найдено живой
+// проверкой пользователем).
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
@@ -37,6 +42,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	if (message.deleted) {
 		return (
 			<div class={`${bubbleClass} message-bubble-deleted`} style={bubbleStyle}>
+				{senderName && <small class="message-bubble-sender">{senderName}</small>}
 				<p>{t("message.deletedNotice")}</p>
 			</div>
 		);
@@ -81,6 +87,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
+			{senderName && <small class="message-bubble-sender">{senderName}</small>}
 			{attachmentAbove && <AttachmentView attachment={attachment} />}
 			{message.text && <p>{message.text}</p>}
 			{attachmentBelow && <AttachmentView attachment={attachment} />}

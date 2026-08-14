@@ -69,7 +69,7 @@ function fakeCallRuntimeFactory() {
 	return { createFakeCallRuntime, instances };
 }
 
-function setup({ selfPubkey = ALICE, maxVoice = 5 } = {}) {
+function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream } = {}) {
 	const { createFakeCallRuntime, instances } = fakeCallRuntimeFactory();
 	const stream = fakeStream("shared");
 	const published = [];
@@ -84,6 +84,7 @@ function setup({ selfPubkey = ALICE, maxVoice = 5 } = {}) {
 		maxVoice,
 		getUserMedia: async () => stream,
 		createCallRuntime: createFakeCallRuntime,
+		...(onRemoteStream ? { onRemoteStream } : {}),
 	});
 	return { supervisor, instances, stream, published };
 }
@@ -253,6 +254,29 @@ test("hTopic/publish/iceServers пробрасываются в каждый д�
 	assert.equal(opts.hTopic, hTopic);
 	assert.equal(opts.publish, publishFn);
 	assert.deepEqual(opts.iceServers, [{ urls: "stun:example.org" }]);
+});
+
+test("живая находка №2 (тишина СОХРАНИЛАСЬ после фикса onSignal): дочернему runtime передан onRemoteStream, форвардящий (peer, stream) наверх в инъецированный колбэк супервизора", async () => {
+	const remoteStreamCalls = [];
+	const { supervisor, instances } = setup({ selfPubkey: ALICE, onRemoteStream: (peer, stream) => remoteStreamCalls.push([peer, stream]) });
+	await supervisor.joinVoice();
+	supervisor.updateRoster([ALICE, BOB]);
+
+	assert.equal(typeof instances[0].options.onRemoteStream, "function", "media-controller.js должен получить onRemoteStream, иначе ontrack некуда девать (та же дыра, что уже чинилась в 1:1-звонках, call-overlay.jsx)");
+	const fakeRemote = { id: "remote-track-stream" };
+	instances[0].options.onRemoteStream(fakeRemote);
+	assert.deepEqual(remoteStreamCalls, [[BOB, fakeRemote]], "супервизор форвардит поток С ПРАВИЛЬНЫМ peer, не просто наружу");
+});
+
+test("живая находка №2: закрытие ребра (updateRoster убрал пира) шлёт onRemoteStream(peer, null) — UI обязана остановить/убрать <audio>", async () => {
+	const remoteStreamCalls = [];
+	const { supervisor } = setup({ selfPubkey: ALICE, onRemoteStream: (peer, stream) => remoteStreamCalls.push([peer, stream]) });
+	await supervisor.joinVoice();
+	supervisor.updateRoster([ALICE, BOB]);
+	remoteStreamCalls.length = 0; // интересует только момент закрытия
+	supervisor.updateRoster([ALICE]); // BOB вышел -> ребро закрывается
+
+	assert.deepEqual(remoteStreamCalls, [[BOB, null]]);
 });
 
 // --- Адверсарная фаза (skill п.19) ---

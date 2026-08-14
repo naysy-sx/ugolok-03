@@ -557,6 +557,10 @@ export default function Unlock() {
 				</div>
 			</header>
 
+			{/* Быстрая связь — эфемерная ветка вне аккаунтов устройства (ROOMS-SPEC
+			    §1.4): виджеты входа/регистрации/мнемоники здесь бессмысленны и
+			    только отвлекают от самой комнаты (найдено пользователем). */}
+			{mainView !== "temp-chat" && (
 			<aside class="auth-sidebar grid" style={{ "--gap": "var(--space-m)" }} aria-label={t("unlock.main.sidebarAriaLabel")}>
 				<section class="auth-widget accounts-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
 					<h3>{t("unlock.main.accountsWidget.title")}</h3>
@@ -683,6 +687,7 @@ export default function Unlock() {
 					</ul>
 				</section>
 			</aside>
+			)}
 
 			<main class="main">
 				{mainView === "home" && (

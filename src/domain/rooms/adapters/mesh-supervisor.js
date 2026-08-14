@@ -8,6 +8,15 @@
 import { createCallRuntime as defaultCreateCallRuntime } from "../../calls/call-runtime.js";
 import { edges, diffEdges } from "../mesh.js";
 
+// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (три реальных браузера, тишина СОХРАНИЛАСЬ и после
+// фикса onSignal выше): тот же класс пробела, что уже находился и чинился в
+// 1:1-звонках (call-overlay.jsx's RemoteAudio, комментарий там же) — трек
+// собеседника доходит до RTCPeerConnection (media-controller.js's pc.ontrack),
+// но НИКУДА не воспроизводится без явного <audio> с srcObject. mesh-
+// supervisor.js своих <audio> не создаёт (это UI-забота) — вместо этого
+// ребро получает onRemoteStream, супервизор форвардит (peer, stream) наверх
+// через ТОТ ЖЕ инъецируемый колбэк вызывающему коду (room-session.js -> UI),
+// который и рисует по одному скрытому <audio> на пира.
 export function createMeshSupervisor({
 	selfPubkey,
 	selfPrivKey,
@@ -17,6 +26,7 @@ export function createMeshSupervisor({
 	getUserMedia,
 	iceServers = [],
 	createCallRuntime = defaultCreateCallRuntime,
+	onRemoteStream = () => {},
 }) {
 	let sharedStream = null;
 	const edgesByPeer = new Map(); // peerPubkey -> {runtime, role}
@@ -33,6 +43,7 @@ export function createMeshSupervisor({
 			onStateChange: (stateName) => {
 				if (stateName === "INCOMING_RINGING") runtime.accept();
 			},
+			onRemoteStream: (stream) => onRemoteStream(peer, stream),
 		});
 		edgesByPeer.set(peer, { runtime, role });
 		if (role === "initiator") runtime.placeCall(peer);
@@ -43,6 +54,7 @@ export function createMeshSupervisor({
 		if (!edge) return;
 		edge.runtime.hangup();
 		edgesByPeer.delete(peer);
+		onRemoteStream(peer, null); // UI обязана убрать/остановить <audio> этого пира
 	}
 
 	async function joinVoice() {

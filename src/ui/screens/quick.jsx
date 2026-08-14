@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../../domain/rooms/room-session.js";
 import MessageBubble from "../components/message-bubble.jsx";
+import IconQuickConnect from "../icons/quick-connect.jsx";
+import IconUserBadge from "../icons/user-badge.jsx";
+import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import { t } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
 
@@ -20,6 +23,26 @@ const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
 // не нужно было ничего вводить руками. Реальный URL-формат — будущее
 // расширение поверх той же схемы, не блокирует функциональность.
 const INVITE_PREFIX = "roomlink:v1:";
+
+// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (тишина сохранилась даже после фикса гонки offer/
+// heartbeat в mesh-supervisor.js) — трек собеседника доходит до RTCPeerConnection,
+// но без явного <audio> с srcObject звук не воспроизводится нигде (тот же класс
+// пробела, что уже чинился в 1:1-звонках — call-overlay.jsx's RemoteAudio,
+// комментарий там же). Голос комнаты — мультиучастник, поэтому по одному
+// скрытому <audio> на пира, а не один общий элемент.
+function RoomRemoteAudio({ stream }) {
+	const audioRef = useRef(null);
+	useEffect(() => {
+		const el = audioRef.current;
+		if (!el || !stream) return;
+		el.srcObject = stream;
+		el.play().catch(() => {}); // автоплей может потребовать жеста — клик "Войти в голос" его уже дал
+		return () => {
+			el.srcObject = null;
+		};
+	}, [stream]);
+	return <audio ref={audioRef} autoPlay style={{ display: "none" }} />;
+}
 
 function encodeInviteLink(name, password, suffix) {
 	const payload = JSON.stringify({ name, password, suffix });
@@ -60,6 +83,7 @@ export default function Quick({ onExit }) {
 	const [voiceActive, setVoiceActive] = useState(false);
 	const [voiceBusy, setVoiceBusy] = useState(false);
 	const [voiceError, setVoiceError] = useState("");
+	const [remoteStreams, setRemoteStreams] = useState(new Map());
 	// Единый источник правды для названия/пароля ТЕКУЩЕЙ комнаты — НЕ производная
 	// от roomName/joinPwName через ||-цепочку (найдено живой проверкой: пользователь,
 	// сначала создавший комнату, затем в ТОЙ ЖЕ вкладке вошедший в другую комнату
@@ -68,12 +92,24 @@ export default function Quick({ onExit }) {
 	const [activeRoomName, setActiveRoomName] = useState("");
 	const [activeRoomPassword, setActiveRoomPassword] = useState("");
 	const sessionRef = useRef(null);
+	// Автопрокрутка к последнему сообщению (найдено пользователем — без неё
+	// список растягивал всю страницу и новые сообщения было не видно без
+	// ручной прокрутки). Комната эфемерна и мала (до 5 участников,
+	// ROOMS-SPEC §0) — в отличие от chat.jsx (bottomRef ТОЛЬКО при смене
+	// собеседника, чтобы не выдёргивать читающего историю), здесь прокрутка
+	// к низу на КАЖДОЕ новое сообщение — намеренное упрощение, длинной
+	// истории для пролистывания в комнате не бывает.
+	const bottomRef = useRef(null);
 
 	// Закрытие вкладки — конец, без уборки (ROOMS-SPEC §0); размонтирование
 	// экрана внутри SPA — тот же принцип на уровне компонента.
 	useEffect(() => {
 		return () => sessionRef.current?.close();
 	}, []);
+
+	useEffect(() => {
+		bottomRef.current?.scrollIntoView({ block: "end" });
+	}, [messages]);
 
 	function attachSession(newSession, invite, name, password) {
 		sessionRef.current = newSession;
@@ -86,7 +122,19 @@ export default function Quick({ onExit }) {
 		setRaceOutcome(newSession.getRaceOutcome());
 		setVoiceActive(false);
 		setVoiceError("");
+		setRemoteStreams(new Map());
 		setScreen("in-room");
+	}
+
+	// stream === null -> ребро закрылось, убрать пира из карты (mesh-supervisor.js
+	// шлёт это явно при закрытии, иначе <audio> держал бы протухший srcObject).
+	function handleRemoteStream(peer, stream) {
+		setRemoteStreams((prev) => {
+			const next = new Map(prev);
+			if (stream) next.set(peer, stream);
+			else next.delete(peer);
+			return next;
+		});
 	}
 
 	function handleSessionChange() {
@@ -114,6 +162,7 @@ export default function Quick({ onExit }) {
 				openMode,
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
+				onRemoteStream: handleRemoteStream,
 			});
 			attachSession(newSession, encodeInviteLink(roomName, roomPassword, newSession.getSuffix()), roomName, roomPassword);
 		} catch {
@@ -141,6 +190,7 @@ export default function Quick({ onExit }) {
 				relayUrl: RELAY_URL,
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
+				onRemoteStream: handleRemoteStream,
 			});
 			attachSession(newSession, inviteInput.trim(), decoded.name, decoded.password);
 		} catch {
@@ -162,6 +212,7 @@ export default function Quick({ onExit }) {
 				relayUrl: RELAY_URL,
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
+				onRemoteStream: handleRemoteStream,
 			});
 			attachSession(newSession, encodeInviteLink(joinPwName, joinPwPassword, newSession.getSuffix()), joinPwName, joinPwPassword);
 		} catch {
@@ -190,6 +241,7 @@ export default function Quick({ onExit }) {
 				relayUrl: RELAY_URL,
 				iceServers: ICE_SERVERS,
 				onChange: handleSessionChange,
+				onRemoteStream: handleRemoteStream,
 			});
 			attachSession(newSession, encodeInviteLink(activeRoomName, activeRoomPassword, raceOutcome.winningSuffix), activeRoomName, activeRoomPassword);
 		} catch {
@@ -209,6 +261,7 @@ export default function Quick({ onExit }) {
 		setActiveRoomPassword("");
 		setVoiceActive(false);
 		setVoiceError("");
+		setRemoteStreams(new Map());
 		setScreen("entry");
 	}
 
@@ -240,6 +293,7 @@ export default function Quick({ onExit }) {
 		sessionRef.current?.leaveVoice();
 		setVoiceActive(false);
 		setVoiceError("");
+		setRemoteStreams(new Map());
 	}
 
 	function handleSendChat(e) {
@@ -256,6 +310,7 @@ export default function Quick({ onExit }) {
 		return (
 			<div class="quick-room stack" style={{ "--gap": "var(--space-m)" }}>
 				<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<IconQuickConnect style={{ color: "var(--accent)", fontSize: "1.5em" }} />
 					<h2>{activeRoomName || t("quick.room.titleFallback")}</h2>
 					<button type="button" class="btn--ghost" onClick={handleLeave}>
 						{t("quick.room.leaveButton")}
@@ -291,10 +346,12 @@ export default function Quick({ onExit }) {
 					) : (
 						<button
 							type="button"
-							class="btn"
+							class="btn bar"
+							style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}
 							disabled={voiceBusy || voiceCount >= MAX_VOICE_PARTICIPANTS}
 							onClick={handleJoinVoice}
 						>
+							<IconVoiceBroadcast class="icon rigid" aria-hidden="true" />
 							{voiceCount >= MAX_VOICE_PARTICIPANTS ? t("quick.room.voiceFullLabel") : t("quick.room.joinVoiceButton")}
 						</button>
 					)}
@@ -305,6 +362,9 @@ export default function Quick({ onExit }) {
 						{voiceError}
 					</p>
 				)}
+				{[...remoteStreams.entries()].map(([peer, stream]) => (
+					<RoomRemoteAudio key={peer} stream={stream} />
+				))}
 
 				<div class="quick-room-layout row" style={{ "--gap": "var(--space-m)" }}>
 					<aside
@@ -315,10 +375,13 @@ export default function Quick({ onExit }) {
 						<h3>{t("quick.room.participantsTitle", { count: present.length })}</h3>
 						<ul role="list">
 							{present.map((p) => (
-								<li key={p.pubkey}>
-									{p.nick || t("quick.anonymousNick")}
-									{p.pubkey === selfPubkey ? ` (${t("quick.room.selfMarker")})` : ""}
-									{p.inVoice ? ` — ${t("quick.room.inVoiceMarker")}` : ""}
+								<li key={p.pubkey} class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+									<IconUserBadge style={{ color: "var(--accent)" }} />
+									<span>
+										{p.nick || t("quick.anonymousNick")}
+										{p.pubkey === selfPubkey ? ` (${t("quick.room.selfMarker")})` : ""}
+										{p.inVoice ? ` — ${t("quick.room.inVoiceMarker")}` : ""}
+									</span>
 								</li>
 							))}
 						</ul>
@@ -331,8 +394,10 @@ export default function Quick({ onExit }) {
 									key={m.id}
 									message={{ msgId: m.id, text: m.text, sentAt: Math.floor(m.createdAt / 1000), deleted: false, edited: false }}
 									isOwn={m.pubkey === selfPubkey}
+									senderName={m.nick || t("quick.anonymousNick")}
 								/>
 							))}
+							<div ref={bottomRef} />
 						</div>
 						<form class="row" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSendChat}>
 							<input

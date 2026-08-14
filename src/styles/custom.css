@@ -810,6 +810,19 @@ button:has(> .icon),
 	font-style: italic;
 	color: var(--muted);
 }
+/* Подпись отправителя (quick.jsx, комнаты "Быстрая связь") — до 5 участников
+   в одной ленте, без имени непонятно, кто пишет (найдено живой проверкой). */
+.message-bubble-sender {
+	display: block;
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+}
+.message-bubble-own .message-bubble-sender {
+	color: color-mix(in oklch, var(--accent-contrast), transparent 30%);
+}
+.message-bubble-other .message-bubble-sender {
+	color: var(--accent);
+}
 /* margin-block-start убран — .stack родителя (message-bubble) уже даёт
    зазор через --gap, второй хозяин отступа не нужен. */
 .message-bubble-meta {
@@ -832,6 +845,15 @@ button:has(> .icon),
 	font-weight: var(--weight-normal);
 	text-decoration: underline;
 	text-underline-offset: 0.15em;
+}
+
+/* Быстрая связь (quick.jsx) — комната. .scroller (уже в JSX) даёт
+   overflow-y:auto, но без явной высоты копить прокрутке нечего — без этого
+   список сообщений разъезжает всю страницу вместо внутренней прокрутки
+   (найдено живой проверкой пользователем). Фиксированная, не max-block-size —
+   иначе форма ввода прыгала бы по высоте вместе с числом сообщений. */
+.quick-messages {
+	block-size: min(60dvh, 28rem);
 }
 
 /* Компоуз-бар — пилюльное поле ввода + круглая кнопка отправки, тот же
