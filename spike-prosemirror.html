@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>Спайк C.0 — ProseMirror на телефоне</title>
+		<style>
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				font-family: system-ui, sans-serif;
+				background: #111;
+				color: #eee;
+				display: flex;
+				flex-direction: column;
+				min-height: 100dvh;
+			}
+			header {
+				padding: 0.75rem 1rem;
+				border-bottom: 1px solid #333;
+			}
+			header h1 {
+				font-size: 1rem;
+				margin: 0 0 0.5rem;
+			}
+			header ol {
+				margin: 0;
+				padding-left: 1.2rem;
+				font-size: 0.85rem;
+				color: #aaa;
+			}
+			#editor-wrap {
+				flex: 1;
+				padding: 1rem;
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+			}
+			#editor {
+				flex: 1;
+				min-height: 40vh;
+				border: 1px solid #444;
+				border-radius: 8px;
+				padding: 0.75rem;
+				background: #1a1a1a;
+				font-size: 1rem;
+				line-height: 1.5;
+				overflow-y: auto;
+				display: flex;
+			}
+			#editor .ProseMirror {
+				outline: none;
+				flex: 1;
+				min-height: 100%;
+			}
+			#editor .ProseMirror p {
+				margin: 0 0 0.5em;
+			}
+			#log {
+				padding: 0.5rem 1rem;
+				font-size: 0.75rem;
+				color: #666;
+				border-top: 1px solid #333;
+				white-space: pre-wrap;
+				max-height: 6rem;
+				overflow-y: auto;
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>Спайк C.0 — MARKDOWN-TASK.md §4.C.0</h1>
+			<ol>
+				<li>Русская раскладка — набрать обычный текст</li>
+				<li>Свайп-ввод (если есть на клавиатуре)</li>
+				<li>Автоподстановка/автокоррекция слов</li>
+				<li>Вставка текста из буфера обмена</li>
+				<li>Появление экранной клавиатуры — редактор не уезжает/не перекрывается</li>
+			</ol>
+		</header>
+		<div id="editor-wrap">
+			<div id="editor"></div>
+		</div>
+		<div id="log">события пока не было</div>
+		<script type="module" src="/spike-prosemirror.js"></script>
+	</body>
+</html>
