@@ -1170,7 +1170,14 @@ button:has(> .icon),
 	   выходит из общего правила через .self-end в JSX (пункт 2, живая
 	   проверка: кнопка тянулась на всю высоту формы). */
 	align-items: stretch;
-	margin: var(--space-s);
+	/* Не margin со всех сторон — сверху уже есть --gap .quick-chat (зазор
+	   к .quick-messages) И padding-block-end самого .quick-messages
+	   (--pad, борется с обрезкой теней бабблов скроллом) — margin-block-
+	   start добавил бы туда ТРЕТИЙ интервал подряд (найдено внешним
+	   ревью). Слева/справа/снизу такого дублирования нет — там margin
+	   единственный источник отступа. */
+	margin-inline: var(--space-s);
+	margin-block-end: var(--space-s);
 	/* Найдено живой проверкой: 4% --fg сливался с панелью (--fg в тёмной
 	   теме сам светлый, подмешивать его в уже светлую --quick-panel
 	   практически ничего не меняет) — подсветка белым, работает в обеих
@@ -1200,6 +1207,10 @@ button:has(> .icon),
 	   смотрелась бы посторонним углом в пилюльной форме — авторост даёт
 	   уже глобальный field-sizing:content, ручной ресайз тут не нужен. */
 	resize: none;
+	/* Страховка на браузеры без field-sizing (найдено внешним ревью) —
+	   без него textarea осталась бы в одну строку с прокруткой внутри,
+	   не поломка, но на глаз некомфортно. */
+	min-block-size: 3rem;
 	max-block-size: 8rem;
 	overflow-y: auto;
 }
@@ -1212,10 +1223,13 @@ button:has(> .icon),
 	   прижата вправо (margin-inline-start:auto) и низу (.self-end в JSX,
 	   отменяет унаследованный align-items:stretch — иначе кнопка тянется
 	   на всю высоту формы, найдено живой проверкой). Радиус — на верхний
-	   левый угол; --pad свой же (форма теперь сама .box), привязывает
-	   скругление к тому же ритму, что и её собственный паддинг. */
+	   левый угол; значение явное (--space-s), не var(--pad) — форма
+	   больше не .box (это давало margin, не padding, по правке
+	   пользователя), необъявленный --pad резолвился в invalid-at-
+	   computed-value-time и молча сбрасывал border-radius в 0
+	   (найдено внешним ревью). */
 	margin-inline-start: auto;
-	border-radius: var(--pad) 0 0;
+	border-radius: var(--space-s) 0 0;
 	padding-inline: var(--space-m);
 }
 
@@ -1474,8 +1488,12 @@ button:has(> .icon),
 	background-color: var(--quick-tint);
 }
 .quick-room {
-	padding: var(--step-4);
-	border-radius: var(--step-3);
+	/* --step-* — шкала кегля, не отступов (и, в отличие от --space-*, не
+	   текучая) — найдено внешним ревью: осталось от .quick-entry/.quick-room
+	   общего правила ДО их разделения, `.quick-entry` тогда получил
+	   правильные --space-l/--radius-lg (выше), сюда забыли перенести. */
+	padding: var(--space-l);
+	border-radius: var(--radius-lg);
 }
 
 /* Стартовый экран — своя карточка с мягким акцентным светом сверху справа

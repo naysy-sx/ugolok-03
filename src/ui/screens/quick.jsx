@@ -120,6 +120,10 @@ export default function Quick({ onExit }) {
 	}, []);
 
 	useEffect(() => {
+		return () => clearTimeout(inviteCopyTimerRef.current);
+	}, []);
+
+	useEffect(() => {
 		const el = messagesScrollRef.current;
 		if (!el) return;
 		function updateWasNearBottom() {
@@ -127,7 +131,12 @@ export default function Quick({ onExit }) {
 		}
 		el.addEventListener("scroll", updateWasNearBottom, { passive: true });
 		return () => el.removeEventListener("scroll", updateWasNearBottom);
-	}, []);
+		// [screen], не [] — найдено внешним ревью: экран входа и рабочий экран
+		// комнаты один и тот же компонент (условный рендер по screen, не
+		// перемонтирование), при монтировании .quick-messages ещё нет в DOM
+		// (виден экран входа) — с [] слушатель не навешивался НИКОГДА, вход в
+		// комнату на это не реагировал.
+	}, [screen]);
 
 	useEffect(() => {
 		const last = messages[messages.length - 1];
@@ -162,6 +171,12 @@ export default function Quick({ onExit }) {
 		setVoiceError("");
 		setRemoteStreams(new Map());
 		setLocalStream(null);
+		// Сброс автопрокрутки для НОВОЙ комнаты — иначе isFirstLoad (сравнение
+		// с lastMessageIdRef) уйдёт в false с самого первого сообщения, а
+		// wasNearBottomRef унесёт состояние прежней комнаты (найдено внешним
+		// ревью).
+		wasNearBottomRef.current = true;
+		lastMessageIdRef.current = null;
 		setScreen("in-room");
 	}
 
@@ -535,12 +550,21 @@ export default function Quick({ onExit }) {
 								/>
 							))}
 						</div>
-						<form class="quick-compose row" style={{ "--gap": "0" }} onSubmit={handleSendChat}>
+						<form class="quick-compose bar" style={{ "--gap": "0" }} onSubmit={handleSendChat}>
 							<textarea
 								class="grow"
 								rows={1}
 								value={chatText}
 								onInput={(e) => setChatText(e.currentTarget.value)}
+								onKeyDown={(e) => {
+									// Enter отправляет, Shift+Enter — перевод строки. isComposing —
+									// защита от IME: во время набора через предиктивный ввод/составные
+									// раскладки Enter подтверждает вариант, а не завершает сообщение.
+									if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+										e.preventDefault();
+										handleSendChat(e);
+									}
+								}}
 								placeholder={t("quick.room.chatPlaceholder")}
 								aria-label={t("quick.room.chatPlaceholder")}
 							/>
