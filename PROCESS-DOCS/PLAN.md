@@ -4811,7 +4811,7 @@ DoD:
 - [x] `grep dangerouslySetInnerHTML\|innerHTML` src/ — пусто
 - [x] живая проверка панели (реальный DOM API)
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
-- [ ] коммит — следующим шагом
+- [x] коммит (458f43c)
 
 Следующий — Этап C.0 (спайк ProseMirror на реальном телефоне, за
 пользователем) → Этап C (редактор постов).
