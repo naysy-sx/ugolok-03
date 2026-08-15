@@ -4,6 +4,7 @@ import ActionsMenu from "./actions-menu.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconTrash from "../icons/trash.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
+import { toPreviewText } from "../../core/markdown/preview.js";
 
 function formatDateTime(unixSeconds) {
 	return new Date(unixSeconds * 1000).toLocaleString(currentLocale.value, { dateStyle: "short", timeStyle: "short" });
@@ -45,8 +46,10 @@ export default function PostCard({ post, authorName, authorAvatar, isOwner, onAr
 					<IconChatBubble /> {t("postCard.commentsButton", { count: commentCount })}
 				</button>
 				<span class="grow" />
+				{/* Markdown-этап E — aria-label через toPlainText, иначе скринридер
+				    читает разметку буквально (CONTRACTS.md, "Markdown — Этап E"). */}
 				{isOwner && (
-					<ActionsMenu label={t("postCard.actionsAria", { excerpt: post.text?.slice(0, 40) || t("postCard.noTextFallback") })}>
+					<ActionsMenu label={t("postCard.actionsAria", { excerpt: toPreviewText(post.text, { profile: "rich", maxLength: 40 }) || t("postCard.noTextFallback") })}>
 						{post.status === "published" && <button type="button" onClick={onArchive}>{t("postCard.archiveButton")}</button>}
 						{post.status === "published" && <button type="button" onClick={onUnpublish}>{t("postCard.unpublishButton")}</button>}
 						<button type="button" class="danger" onClick={onDelete}>

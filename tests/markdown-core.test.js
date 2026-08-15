@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parseRich, parseLite } from "../src/core/markdown/parse.js";
 import { safeHref } from "../src/core/markdown/sanitize.js";
 import { toPlainText } from "../src/core/markdown/to-plain.js";
+import { toPreviewText } from "../src/core/markdown/preview.js";
 import {
 	RICH_BLOCK_TYPES,
 	RICH_INLINE_TYPES,
@@ -285,4 +286,60 @@ test("реалистичный смешанный документ — все б
 	const tree = parseRich(source);
 	const types = tree.children.map((n) => n.type);
 	assert.deepEqual(types, ["heading", "paragraph", "heading", "list", "code", "paragraph"]);
+});
+
+// --- toPreviewText (Этап E: превью в уведомлениях/aria-label) ---
+
+test("toPreviewText: пустой/undefined источник -> пустая строка", () => {
+	assert.equal(toPreviewText(""), "");
+	assert.equal(toPreviewText(undefined), "");
+	assert.equal(toPreviewText(null), "");
+});
+
+test("toPreviewText: короткий текст без markdown возвращается как есть", () => {
+	assert.equal(toPreviewText("привет мир"), "привет мир");
+});
+
+test("toPreviewText: markdown-синтаксис снимается (lite-профиль по умолчанию)", () => {
+	assert.equal(toPreviewText("привет **мир**, это *я*"), "привет мир, это я");
+});
+
+test("toPreviewText: заголовок деградирует в текст в lite-профиле", () => {
+	assert.equal(toPreviewText("# Заголовок"), "Заголовок");
+});
+
+test("toPreviewText: rich-профиль тоже снимает markdown, но допускает heading-контент как обычно (текст один и тот же)", () => {
+	assert.equal(toPreviewText("# Заголовок", { profile: "rich" }), "Заголовок");
+});
+
+test("toPreviewText: обрезка по умолчанию — 120 символов + один символ многоточия", () => {
+	const long = "а".repeat(200);
+	const result = toPreviewText(long);
+	assert.equal(result.length, 121);
+	assert.equal(result.slice(0, 120), "а".repeat(120));
+	assert.equal(result.slice(120), "…");
+});
+
+test("toPreviewText: текст короче лимита не обрезается и не получает многоточие", () => {
+	const text = "а".repeat(50);
+	assert.equal(toPreviewText(text, { maxLength: 120 }), text);
+});
+
+test("toPreviewText: кастомный maxLength (aria-label 40 символов)", () => {
+	const long = "б".repeat(60);
+	const result = toPreviewText(long, { maxLength: 40 });
+	assert.equal(result, "б".repeat(40) + "…");
+});
+
+test("toPreviewText: обрезка происходит ПОСЛЕ снятия markdown-синтаксиса, не до (не режет маркер пополам)", () => {
+	// "**" + 50 букв + "**" — исходник длиннее maxLength из-за маркеров,
+	// но после toPlainText текста ровно 50 символов — короче лимита,
+	// обрезки быть не должно вовсе.
+	const source = "**" + "в".repeat(50) + "**";
+	const result = toPreviewText(source, { maxLength: 60 });
+	assert.equal(result, "в".repeat(50));
+});
+
+test("toPreviewText: жалоба/сообщение с javascript:-ссылкой -> текст метки, не мусор от URL", () => {
+	assert.equal(toPreviewText("[клик](javascript:alert(1))"), "клик");
 });

@@ -770,6 +770,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	return (
 		<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={channelRow.name || t("channels.card.untitled")}>
+			{/* Markdown-этап E — описание/правила канала намеренно plain, разметка
+			    в них не вводится (CONTRACTS.md, "Markdown — Этап E", п.6). */}
 			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details class="req">

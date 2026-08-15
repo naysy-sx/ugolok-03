@@ -51,6 +51,7 @@ import { FILE_SHARE_GRANT_KIND, FILE_SUBTREE_OP_KIND } from "../../domain/files/
 import { initMounts, activeMountRootIds, handleIncomingShareGrant, handleIncomingSubtreeEvent } from "./mounts.js";
 import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/content/channel-read-status.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
+import { toPreviewText } from "../../core/markdown/preview.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
@@ -73,9 +74,11 @@ function usernameFor(pubkeyHex) {
 	return name || `${pubkeyHex.slice(0, 8)}…`;
 }
 
+// Markdown-этап E — тело браузерных уведомлений через toPlainText (CONTRACTS.md,
+// "Markdown — Этап E"): снимает markdown-синтаксис ДО обрезки по длине, иначе
+// обрезка могла бы разрезать маркер пополам.
 function truncateForNotification(text, maxLength = 120) {
-	if (!text) return "";
-	return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+	return toPreviewText(text, { maxLength });
 }
 
 async function channelNameFor(ownerPubkey, dbKey, channelId) {
@@ -1232,7 +1235,8 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 				"posts",
 				{
 					title: t(postTitleKey, postTitleParams),
-					body: truncateForNotification(postRow?.text),
+					// Пост — rich-профиль (как post-card.jsx), не общий lite-хелпер.
+					body: toPreviewText(postRow?.text, { profile: "rich" }),
 					titleKey: postTitleKey,
 					titleParams: postTitleParams,
 					navTarget,
@@ -1660,7 +1664,9 @@ async function processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish,
 			null,
 			{
 				title: t(newMsgTitleKey, newMsgTitleParams),
-				body: receivedResult.text,
+				// Markdown-этап E — раньше сырой текст без обрезки и без снятия
+				// markdown-синтаксиса шёл в тело уведомления напрямую.
+				body: truncateForNotification(receivedResult.text),
 				titleKey: newMsgTitleKey,
 				titleParams: newMsgTitleParams,
 				navTarget: messageNavTarget,

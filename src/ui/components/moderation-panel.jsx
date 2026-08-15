@@ -123,6 +123,9 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 									<span>{t("moderation.toLabel")}</span>
 									<ContactIdentity pubkey={r.targetPubkey} />
 								</div>
+								{/* Markdown-этап E — намеренно RAW, не MarkdownView: модератор должен
+								    видеть исходник жалобы буквально, рендер разметки позволил бы
+								    спрятать содержимое (пустая ссылка, схлопнутая структура). */}
 								<p style={{ whiteSpace: "pre-wrap", color: "var(--muted)" }}>{r.contentText}</p>
 								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 									{!r.viewed && (
