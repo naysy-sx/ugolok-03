@@ -1,0 +1,318 @@
+/* ================================================================== *
+ *  Быстрая связь — рабочий экран комнаты.                            *
+ *                                                                     *
+ *  ЗАМЕНЯЕТ раздел "Комната" в quick-connect.css целиком (всё от      *
+ *  `.quick-room-title` до конца `.quick-compose`). Локальные токены   *
+ *  (--quick-tint/--quick-edge/--quick-panel), общее правило           *
+ *  .quick-entry/.quick-room, лампа и вкладки-клавиши остаются как     *
+ *  есть — этот файл их не трогает, только пользуется.                 *
+ *                                                                     *
+ *  Переработка структурная, не косметическая. Раньше экран был стопкой*
+ *  из семи независимых блоков (шапка, статус реле, плашка эфемерности,*
+ *  race-предупреждение, инвайт-ссылка, кнопки голоса, визуализатор,   *
+ *  и только потом работа) — каждый со своим фоном или без, все одного *
+ *  веса. Теперь три зоны с разной ролью: ШАПКА (кто мы и где, выход), *
+ *  СЦЕНА (всё про голос) и РАБОЧАЯ ОБЛАСТЬ (участники + чат).         *
+ * ================================================================== */
+
+/* ---- Шапка ---------------------------------------------------------
+   Плашка "ничего не сохраняется" и счётчик людей были отдельными
+   блоками в общем потоке. Это не самостоятельные сообщения, а
+   уточнения к названию комнаты — поэтому уехали подписью под заголовок
+   и перестали занимать вертикаль. */
+.quick-room-header {
+	padding-block-end: var(--space-s);
+	border-block-end: var(--border-width) solid var(--quick-edge);
+}
+.quick-room-title {
+	/* h2 по элементному слою тянет --font-h2 (до 2.44rem) — заголовок
+	   статьи, а не рабочей панели. */
+	font-size: var(--step-2);
+}
+.quick-room-subtitle {
+	font-size: var(--step--2);
+	color: var(--muted);
+	margin-block: 0;
+	max-inline-size: none; /* p{max-width:--measure} здесь ни к чему */
+}
+.quick-room-icon {
+	flex: none;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	color: var(--accent);
+}
+
+/* ---- Сцена (голос) --------------------------------------------------
+   Кнопка входа в голос, счётчик мест, спектрограмма и индикаторы
+   говорящих — одно целое, а не четыре соседа по потоку. Поверхность
+   держит СЦЕНА, а не сам холст: room-audio-visualizer.jsx у меня перед
+   глазами не было, и завязываться на его внутреннюю разметку значило
+   бы гадать. Правило ниже гасит собственный фон холста, чтобы не
+   получилось панели в панели. */
+.quick-stage {
+	background-color: light-dark(
+		color-mix(in oklch, var(--good-surface-light), black 6%),
+		color-mix(in oklch, var(--good-surface-dark), black 22%)
+	);
+	border: var(--border-width) solid var(--quick-edge);
+	border-radius: var(--radius-lg);
+	text-align: start;
+	transition: box-shadow var(--transition-speed) var(--transition-ease);
+}
+/* Голос включён — сцену обводит тёплое кольцо. Это тот же приём, что и
+   свечение в углу комнаты, и включается тем же классом состояния: свет
+   в "Уголке" загорается, когда комната ожила. */
+.is-voice-live .quick-stage {
+	box-shadow:
+		0 0 0 0.35rem color-mix(in oklch, var(--accent), transparent 88%),
+		var(--shadow);
+}
+.quick-stage .room-spectrogram {
+	inline-size: 100%;
+	block-size: 5rem;
+	/* Поверхность и рамка — на .quick-stage; холст рисует только сигнал. */
+	background-color: transparent;
+	border: 0;
+	border-radius: var(--radius-md);
+}
+.room-speaking-indicators {
+	font-size: var(--step--2);
+	color: var(--muted);
+	list-style: none;
+	padding-inline-start: 0;
+}
+.room-speaking-active {
+	color: var(--accent);
+	font-weight: var(--weight-bold);
+}
+.quick-voice-count {
+	color: var(--muted);
+}
+/* Точка "в эфире" рядом с кнопкой выхода из голоса — единственный
+   индикатор, который видно, даже если спектрограмма молчит. */
+.quick-live-dot {
+	flex: none;
+	inline-size: 0.5rem;
+	block-size: 0.5rem;
+	border-radius: 50%;
+	background-color: var(--accent);
+	box-shadow: 0 0 0.5rem var(--accent);
+	animation: quick-live-pulse 2s var(--ease-io) infinite alternate;
+}
+@keyframes quick-live-pulse {
+	from {
+		opacity: 0.45;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* ---- Рабочая область ------------------------------------------------
+   Две плоскости с общим языком: раньше список участников и чат лежали
+   в одном потоке без единой границы и читались как один текст. */
+.quick-participants,
+.quick-chat {
+	background-color: var(--quick-panel);
+	border: var(--border-width) solid var(--quick-edge);
+	border-radius: var(--radius-lg);
+	text-align: start;
+	/* Обе колонки — flex-контейнеры, которым нужно уметь сжиматься ниже
+	   высоты содержимого, иначе внутренний .scroller не активируется. */
+	min-block-size: 0;
+}
+.quick-participants {
+	flex: 0 0 auto;
+	inline-size: 100%;
+}
+/* Состояние по ширине окна, а не статическая раскладка — тот же случай,
+   что .auth-sidebar/.sidebar выше: как JSX-класс это работало бы на всех
+   ширинах, а нужно только с этого порога. */
+@media (min-width: 48em) {
+	.quick-participants {
+		inline-size: 17rem;
+	}
+}
+.quick-participants h3 {
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--muted);
+}
+.quick-participants ul {
+	list-style: none;
+	padding-inline-start: 0;
+	margin-block: 0;
+}
+.quick-participant {
+	padding-block: var(--space-3xs);
+}
+.quick-participant-icon {
+	flex: none;
+	inline-size: 1.1em;
+	block-size: 1.1em;
+	color: var(--muted);
+}
+.quick-participant-self .quick-participant-icon {
+	color: var(--accent);
+}
+.quick-participant-self .quick-participant-name {
+	font-weight: var(--weight-bold);
+}
+/* "В голосе" — пилюля справа, а не тире в продолжение имени: это
+   состояние участника, а не часть его ника. */
+.quick-voice-pill {
+	flex: none;
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	line-height: 1.6;
+	padding-inline: var(--space-2xs);
+	border-radius: var(--radius-full);
+	background-color: color-mix(in oklch, var(--accent), transparent 82%);
+	color: var(--accent);
+}
+.quick-edge-silent {
+	flex: none;
+	color: var(--bad);
+	font-size: var(--step--2);
+}
+
+/* ---- Приглашение ----------------------------------------------------
+   Инвайт-ссылка занимала постоянный блок во весь экран, хотя нужна
+   один раз в начале. <details> сворачивает её и ставит рядом со
+   списком участников — "кто здесь" и "как позвать ещё" это один
+   вопрос. Тот же zero-JS приём details/summary, что в остальном
+   приложении. */
+.quick-invite {
+	margin-block-start: auto; /* прижимает к низу панели участников */
+	padding-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--quick-edge);
+}
+.quick-invite summary {
+	cursor: pointer;
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	color: var(--accent);
+	list-style: none;
+}
+.quick-invite summary::-webkit-details-marker {
+	display: none;
+}
+.quick-invite summary::before {
+	content: "+ ";
+}
+.quick-invite[open] summary::before {
+	content: "− ";
+}
+.quick-invite input {
+	font-family: var(--font-mono);
+	font-size: var(--step--2);
+	margin-block-start: var(--space-2xs);
+}
+
+/* ---- Уведомления ---------------------------------------------------- */
+.quick-race-warning {
+	background-color: var(--warn-surface);
+	border: var(--border-width) solid var(--warn-edge);
+	border-radius: var(--radius-md);
+	color: var(--warn);
+	text-align: start;
+}
+.quick-race-warning p {
+	margin-block: 0;
+}
+
+/* ---- Чат ------------------------------------------------------------
+   МОДЕЛЬ ВЫСОТЫ ПО УМОЛЧАНИЮ (поток): список растёт вместе с числом
+   сообщений до потолка, дальше скроллится. Прежнее block-size:min(60dvh,
+   28rem) резервировало 28rem даже в пустой комнате. Потолок оставлен —
+   без него форма ввода уезжала бы за нижний край экрана (это и была
+   исходная причина фиксации, найденная живой проверкой). */
+.quick-messages {
+	flex: 1 1 auto;
+	min-block-size: 8rem;
+	max-block-size: min(58dvh, 30rem);
+}
+/* Пустая комната — приглашение к действию, а не пустота. */
+.quick-empty {
+	margin: auto;
+	max-inline-size: 22rem;
+	text-align: center;
+	font-family: var(--font-display);
+	font-size: var(--step--1);
+	line-height: 1.5;
+	color: var(--muted);
+	text-wrap: balance;
+}
+
+/* Компоуз-бар — тот же пилюльный язык, что .message-compose в основном
+   приложении, но кнопка отправки текстовая: в комнате нет вложений,
+   круглая иконка была бы вывеской без назначения. */
+.quick-compose {
+	background-color: color-mix(in oklch, var(--quick-panel), var(--fg) 4%);
+	border: var(--border-width) solid var(--quick-edge);
+	border-radius: var(--radius-full);
+	padding: var(--space-3xs);
+}
+.quick-compose input {
+	border: 0;
+	background: none;
+	padding-inline: var(--space-s);
+}
+.quick-compose input:focus-visible {
+	outline: none;
+}
+.quick-compose button[type="submit"] {
+	flex: none;
+	border-radius: var(--radius-full);
+}
+
+/* ================================================================== *
+ *  ОПЦИЯ: режим "во весь экран" — .quick-room.quick-room--fill        *
+ *                                                                     *
+ *  Комната занимает всю высоту вьюпорта, страница не скроллится,      *
+ *  скроллится только список сообщений. Тот же каркас, что у           *
+ *  .shell/.content-wrapper в залогиненном приложении.                 *
+ *                                                                     *
+ *  ПРЕДУСЛОВИЕ, которое надо проверить перед включением: у .auth-     *
+ *  layout стоит min-height:100dvh (НЕ height) и grid-template-rows:   *
+ *  auto 1fr auto. min-height означает, что при высоком содержимом ряд *
+ *  вырастет вместо того, чтобы включить внутренний скролл — цепочка   *
+ *  ограничения высоты не замкнута. Правила ниже её замыкают, но они   *
+ *  лезут в .main, то есть в чужую зону ответственности. Поэтому это   *
+ *  отдельный модификатор, а не поведение по умолчанию: включайте,     *
+ *  если проверите, что на .main нет своих отступов/фонов, которые от  *
+ *  этого поедут.                                                      *
+ * ================================================================== */
+.auth-layout:has(.quick-room--fill) {
+	block-size: 100dvh;
+	min-height: 0;
+	overflow: hidden;
+}
+.auth-layout:has(.quick-room--fill) .main {
+	min-block-size: 0;
+	display: flex;
+}
+.quick-room--fill {
+	flex: 1 1 auto;
+	min-block-size: 0;
+}
+/* Рабочая область забирает остаток высоты; min-block-size:0 обязателен —
+   без него flex-элемент не сжимается ниже содержимого и .scroller
+   внутри никогда не включится. */
+.quick-room--fill .quick-room-layout {
+	flex: 1 1 auto;
+	min-block-size: 0;
+}
+.quick-room--fill .quick-chat,
+.quick-room--fill .quick-participants {
+	max-block-size: 100%;
+}
+.quick-room--fill .quick-messages {
+	max-block-size: none;
+}
+.quick-room--fill .quick-participants ul {
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}

@@ -19,6 +19,52 @@ import { t } from "../signals/i18n.js";
 const CANVAS_WIDTH = 300;
 const CANVAS_HEIGHT = 80;
 const LEVELS_EVERY_N_FRAMES = 4; // ROOMS-ALGO §7.4 — "каждый третий-четвёртый"
+const PALETTE_SIZE = 256;
+
+// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ: getComputedStyle(...).getPropertyValue("--accent")
+// возвращает СЫРУЮ строку кастомного свойства буквально как записана в
+// minimal.css — "light-dark(oklch(...), oklch(...))" — браузер резолвит
+// light-dark() только когда свойство используется как значение НАСТОЯЩЕГО
+// CSS-свойства (color/background и т.п.), не при чтении самого custom
+// property. Canvas 2D's addColorStop() такой синтаксис не понимает вовсе и
+// бросает SyntaxError (ctx.fillStyle = ... для сравнения молча ИГНОРИРУЕТ
+// невалидное значение, поэтому та же ошибка раньше была не видна). Резолвим
+// через служебный элемент — единственный надёжный способ получить
+// КОНКРЕТНЫЙ цвет для текущей темы без дублирования логики light-dark в JS.
+function resolveCssColor(colorExpression, fallback) {
+	const probe = document.createElement("span");
+	probe.style.position = "absolute";
+	probe.style.visibility = "hidden";
+	probe.style.color = colorExpression;
+	document.body.appendChild(probe);
+	const resolved = getComputedStyle(probe).color;
+	probe.remove();
+	return resolved || fallback;
+}
+
+// lookup[0..255] по интенсивности сэмпла спектра — построен через встроенный
+// canvas-градиент (принимает любую валидную CSS-строку цвета в addColorStop,
+// включая oklch()/var()-резолвленный accentColor), а не вручную интерполяцией
+// каналов: гарантированно то же цветовое пространство, что и у самого accent.
+function buildHeatPalette(accentColor) {
+	const paletteCanvas = document.createElement("canvas");
+	paletteCanvas.width = PALETTE_SIZE;
+	paletteCanvas.height = 1;
+	const ctx = paletteCanvas.getContext("2d");
+	const gradient = ctx.createLinearGradient(0, 0, PALETTE_SIZE, 0);
+	gradient.addColorStop(0, "transparent");
+	gradient.addColorStop(0.5, accentColor);
+	gradient.addColorStop(1, "white");
+	ctx.fillStyle = gradient;
+	ctx.fillRect(0, 0, PALETTE_SIZE, 1);
+	const { data } = ctx.getImageData(0, 0, PALETTE_SIZE, 1);
+	const palette = new Array(PALETTE_SIZE);
+	for (let i = 0; i < PALETTE_SIZE; i++) {
+		const o = i * 4;
+		palette[i] = `rgba(${data[o]}, ${data[o + 1]}, ${data[o + 2]}, ${data[o + 3] / 255})`;
+	}
+	return palette;
+}
 
 export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPubkey, participantNicks }) {
 	const canvasRef = useRef(null);
@@ -70,7 +116,14 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 		bufferCanvasRef.current = bufferCanvas;
 		const bufferCtx = bufferCanvas.getContext("2d");
 		const visibleCtx = visibleCanvas.getContext("2d");
-		const accentColor = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#4a90d9";
+		const accentColor = resolveCssColor("var(--accent)", "#4a90d9");
+		// Тепловая палитра (пользователь: "спектрограмму можно в другом стиле
+		// сделать?") вместо плоского --accent+alpha — тихо гаснет в прозрачность,
+		// громко разгорается до белого, тот же язык, что лампа/свечение quick-entry.
+		// Построена ОДИН раз через canvas-градиент (не пересчитывается по кадрам —
+		// пересчёт цвета на каждый из 80 пикселей столбца 60 раз/сек был бы лишней
+		// работой ради того же результата, что готовый lookup по значению).
+		const palette = buildHeatPalette(accentColor);
 		writeIndexRef.current = 0;
 		let raf;
 		let frame = 0;
@@ -78,16 +131,14 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 		function drawColumn(spectrum) {
 			const x = writeIndexRef.current;
 			bufferCtx.clearRect(x, 0, 1, CANVAS_HEIGHT);
-			bufferCtx.fillStyle = accentColor;
 			// Каждая строка канваса — один сэмпл спектра (ближайший сосед), O(H) на столбец.
 			for (let row = 0; row < CANVAS_HEIGHT; row++) {
 				const binIndex = Math.floor(((CANVAS_HEIGHT - 1 - row) / CANVAS_HEIGHT) * spectrum.length);
 				const value = spectrum[binIndex] / 255;
-				if (value <= 0.02) continue; // тишина — не рисовать (быстрее, чем rgba с alpha=0)
-				bufferCtx.globalAlpha = value;
+				if (value <= 0.02) continue; // тишина — не рисовать (палитра там и так почти прозрачна)
+				bufferCtx.fillStyle = palette[Math.round(value * 255)];
 				bufferCtx.fillRect(x, row, 1, 1);
 			}
-			bufferCtx.globalAlpha = 1;
 			writeIndexRef.current = nextWriteIndex(writeIndexRef.current, CANVAS_WIDTH);
 		}
 

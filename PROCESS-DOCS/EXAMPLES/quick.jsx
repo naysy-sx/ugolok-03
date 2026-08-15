@@ -3,12 +3,10 @@ import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from
 import MessageBubble from "../components/message-bubble.jsx";
 import RoomAudioVisualizer from "../components/room-audio-visualizer.jsx";
 import { relayStatusInfo } from "../components/connection-status.jsx";
-import IconQuickRoomPeople from "../icons/quick-room-people.jsx";
+import IconQuickConnect from "../icons/quick-connect.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
-import IconCopy from "../icons/copy.jsx";
-import IconLogOut from "../icons/log-out.jsx";
-import { t, tPlural } from "../signals/i18n.js";
+import { t } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
 
 // ROOMS-SPEC.md §1.4 — отдельная ветка ВНЕ MainShell, переиспользует
@@ -27,14 +25,6 @@ const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
 // не нужно было ничего вводить руками. Реальный URL-формат — будущее
 // расширение поверх той же схемы, не блокирует функциональность.
 const INVITE_PREFIX = "roomlink:v1:";
-
-// Три режима входа — вкладки-папка (EXAMPLES/quick.jsx): ник общий для всех
-// трёх, поэтому живёт в теле папки над разделителем, а не над вкладками.
-const ENTRY_TABS = [
-	["create", "quick.entry.tabCreate"],
-	["join-link", "quick.entry.tabJoinLink"],
-	["join-password", "quick.entry.tabJoinPassword"],
-];
 
 function encodeInviteLink(name, password, suffix) {
 	const payload = JSON.stringify({ name, password, suffix });
@@ -92,26 +82,12 @@ export default function Quick({ onExit }) {
 	const sessionRef = useRef(null);
 	// Автопрокрутка к последнему сообщению (найдено пользователем — без неё
 	// список растягивал всю страницу и новые сообщения было не видно без
-	// ручной прокрутки). lastMessageIdRef — найдено пользователем живой
-	// проверкой: room.tick() (~раз в секунду) даёт getMessages() новую
-	// ссылку на массив даже без новых сообщений, а эффект был завязан на
-	// саму ссылку — прокрутка дёргалась постоянно, мешая читать историю
-	// выше. Теперь скроллим только когда id последнего сообщения реально
-	// сменился.
-	const messagesScrollRef = useRef(null);
-	const lastMessageIdRef = useRef(null);
-	// "У низа был" — держим ОТДЕЛЬНО, через scroll-события, а не пересчётом
-	// в момент нового сообщения: найдено пользователем живой проверкой —
-	// пересчёт ПОСЛЕ того, как бабл уже добавлен в DOM, меряет scrollHeight,
-	// УЖЕ выросший на высоту этого бабла, против старого scrollTop — любое
-	// сообщение выше ~96px (перенос на несколько строк — обычное дело)
-	// ошибочно читалось как "ушёл наверх читать историю", и прокрутка не
-	// срабатывала вовсе.
-	const wasNearBottomRef = useRef(true);
-	// Копирование инвайт-ссылки (тот же приём, что profile.jsx's handleCopyNpub) —
-	// статус на 2с, затем гаснет сам.
-	const [inviteCopyStatus, setInviteCopyStatus] = useState("");
-	const inviteCopyTimerRef = useRef(null);
+	// ручной прокрутки). Комната эфемерна и мала (до 5 участников,
+	// ROOMS-SPEC §0) — в отличие от chat.jsx (bottomRef ТОЛЬКО при смене
+	// собеседника, чтобы не выдёргивать читающего историю), здесь прокрутка
+	// к низу на КАЖДОЕ новое сообщение — намеренное упрощение, длинной
+	// истории для пролистывания в комнате не бывает.
+	const bottomRef = useRef(null);
 
 	// Закрытие вкладки — конец, без уборки (ROOMS-SPEC §0); размонтирование
 	// экрана внутри SPA — тот же принцип на уровне компонента.
@@ -120,32 +96,7 @@ export default function Quick({ onExit }) {
 	}, []);
 
 	useEffect(() => {
-		const el = messagesScrollRef.current;
-		if (!el) return;
-		function updateWasNearBottom() {
-			wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
-		}
-		el.addEventListener("scroll", updateWasNearBottom, { passive: true });
-		return () => el.removeEventListener("scroll", updateWasNearBottom);
-	}, []);
-
-	useEffect(() => {
-		const last = messages[messages.length - 1];
-		if (!last || last.id === lastMessageIdRef.current) return;
-		const isFirstLoad = lastMessageIdRef.current === null;
-		lastMessageIdRef.current = last.id;
-		const el = messagesScrollRef.current;
-		if (!el) return;
-		// .scrollTop контейнера напрямую, а не scrollIntoView — тот, найдено
-		// пользователем живой проверкой, попутно чуть прокручивал и саму
-		// страницу (пытается довести элемент в видимость во ВСЕХ предках со
-		// скроллом, не только в ближайшем). Прокручиваем только если
-		// пользователь и так был у низа (или это первая загрузка истории) —
-		// иначе не мешаем читать более старые сообщения.
-		if (isFirstLoad || wasNearBottomRef.current) {
-			el.scrollTop = el.scrollHeight;
-			wasNearBottomRef.current = true;
-		}
+		bottomRef.current?.scrollIntoView({ block: "end" });
 	}, [messages]);
 
 	function attachSession(newSession, invite, name, password) {
@@ -355,17 +306,6 @@ export default function Quick({ onExit }) {
 		sessionRef.current.sendChat(text).catch(() => {});
 	}
 
-	async function handleCopyInvite() {
-		try {
-			await navigator.clipboard.writeText(inviteLink);
-			setInviteCopyStatus(t("quick.room.inviteCopiedStatus"));
-		} catch {
-			setInviteCopyStatus(t("quick.room.inviteCopyFailedStatus"));
-		}
-		clearTimeout(inviteCopyTimerRef.current);
-		inviteCopyTimerRef.current = setTimeout(() => setInviteCopyStatus(""), 2000);
-	}
-
 	if (screen === "in-room" && session) {
 		const selfPubkey = session.getPubkeyHex();
 		const voiceCount = present.filter((p) => p.inVoice).length;
@@ -374,58 +314,54 @@ export default function Quick({ onExit }) {
 		// "subscribed" всегда читается как "ok", не как "синхронизация".
 		const relayInfo = relayStatusInfo(connectionState, true);
 		const edgeStates = session.getEdgeStates();
+		// Статус мест зависит от того, где находится сам пользователь: снаружи
+		// ему нужно знать "влезу ли я", изнутри — "сколько нас". Одна общая
+		// формулировка ("В голосе 3 из 5") отвечала на второй вопрос всегда,
+		// в том числе тем, кто ещё не подключился.
 		const voiceFree = MAX_VOICE_PARTICIPANTS - voiceCount;
-		// До подключения важно "влезу ли я" (места), после — "сколько нас"
-		// (счёт) — два разных вопроса, не одна общая формулировка на оба
-		// состояния (решение по итогам разбора с Claude Opus). "Мест" требует
-		// склонения (1 место / 2 места / 5 мест) — tPlural, не t().
-		const voiceStatusText = voiceActive
-			? t("quick.room.voiceConnected", { count: voiceCount, max: MAX_VOICE_PARTICIPANTS })
+		const voiceStatusKey = voiceActive
+			? "quick.room.voiceConnected"
 			: voiceFree <= 0
-				? t("quick.room.voiceNoSlots")
-				: tPlural("quick.room.voiceFreeSlots", voiceFree, { max: MAX_VOICE_PARTICIPANTS });
+				? "quick.room.voiceNoSlots"
+				: "quick.room.voiceFreeSlots";
 		return (
+			// is-voice-live — класс-состояние экрана: по нему custom.css
+			// разжигает тёплое свечение в углу комнаты и кольцо вокруг сцены,
+			// когда включён голос (обратная связь, не украшение).
+			// quick-room--fill добавьте, если включаете режим "во весь экран"
+			// (см. предусловие в quick-room.css).
 			<div class={voiceActive ? "quick-room stack is-voice-live" : "quick-room stack"} style={{ "--gap": "var(--space-m)" }}>
+				{/* ---- Шапка: кто мы, где мы, как выйти ------------------- */}
 				<header class="quick-room-header row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-					<div class="bar grow" style={{ "--gap": "var(--space-l)", alignItems: "flex-start" }}>
-						<IconQuickRoomPeople class="icon quick-room-icon rigid" aria-hidden="true" />
+					{/* Иконка с заголовком — одна группа, тянется; кнопки —
+					    вторая, жёсткая, прижата вправо. Раньше все элементы
+					    лежали одним рядом и кнопки липли к названию. */}
+					<div class="row grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+						<IconQuickConnect class="icon quick-room-icon" aria-hidden="true" />
 						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="bar" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
-								<h2 class="quick-room-title truncate grow">{activeRoomName || t("quick.room.titleFallback")}</h2>
-								{/* Уход из комнаты необратим (без ссылки на руках обратно не
-								    попасть) — --warn, не нейтральный ghost. */}
-								<button type="button" class="quick-room-leave btn--ghost btn--warn bar rigid" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={handleLeave}>
-									<IconLogOut class="icon rigid" aria-hidden="true" />
-									{t("quick.room.leaveButton")}
-								</button>
-							</div>
-							{inviteLink && (
-								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-									<code class="quick-invite-code grow truncate">{inviteLink}</code>
-									<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
-										<IconCopy class="icon" aria-hidden="true" />
-									</button>
-									{inviteCopyStatus && (
-										<small role="status" class="quick-invite-status rigid">
-											{inviteCopyStatus}
-										</small>
-									)}
-								</div>
-							)}
+							<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+							{/* Счётчик людей и обещание эфемерности были двумя
+							    отдельными блоками в общем потоке. Это уточнения
+							    к названию комнаты, а не самостоятельные
+							    сообщения — отсюда подпись под заголовком. */}
 							<p class="quick-room-subtitle">
 								{t("quick.room.participantsTitle", { count: present.length })} · {t("quick.room.ephemeralNotice")}
 							</p>
 						</div>
 					</div>
-					{typeof onExit === "function" && (
-						<div class="row rigid" style={{ "--gap": "var(--space-2xs)", alignItems: "center", marginInlineStart: "auto" }}>
+					<div class="row rigid" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+						<button type="button" class="btn--ghost" onClick={handleLeave}>
+							{t("quick.room.leaveButton")}
+						</button>
+						{typeof onExit === "function" && (
 							<button type="button" class="btn--ghost" onClick={onExit}>
 								{t("quick.exitButton")}
 							</button>
-						</div>
-					)}
+						)}
+					</div>
 				</header>
 
+				{/* ---- Уведомления: только когда есть что сказать --------- */}
 				{relayInfo.tone !== "ok" && (
 					<p role="status" class={`status-${relayInfo.tone}`}>
 						{t(relayInfo.labelKey)}
@@ -441,26 +377,30 @@ export default function Quick({ onExit }) {
 					</div>
 				)}
 
+				{/* ---- Сцена: всё про голос в одной панели ----------------
+				    Кнопка, счётчик мест, ошибка и визуализатор были четырьмя
+				    соседями по потоку. Поверхность держит сцена, а не холст —
+				    room-audio-visualizer.jsx рисует только сигнал. */}
+				{/* Существительное живёт в заголовке панели ОДИН раз, поэтому
+				    кнопки остаются голыми глаголами: "Подключиться"/"Отключиться".
+				    Прежние "Войти в голос"/"Выйти из голоса" звучали калькой
+				    именно потому, что "голос" притворялся местом — в русском
+				    входят в комнату, в чат, в эфир, но не в голос. */}
 				<section class="quick-stage stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-s)" }} aria-labelledby="quick-stage-title">
-					<div class="quick-stage-header bar" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-						<h3 id="quick-stage-title" class="grow truncate">
-							{t("quick.room.voiceSectionTitle")}
-						</h3>
-						<small class="quick-voice-count rigid">{voiceStatusText}</small>
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<h3 id="quick-stage-title" class="quick-stage-title grow">{t("quick.room.voiceSectionTitle")}</h3>
+						<small class="quick-voice-count rigid">
+							{t(voiceStatusKey, { count: voiceCount, free: voiceFree, max: MAX_VOICE_PARTICIPANTS })}
+						</small>
+					</div>
+					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 						{voiceActive ? (
-							<button type="button" class="btn--ghost rigid bar" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={handleLeaveVoice}>
+							<button type="button" class="btn--ghost" onClick={handleLeaveVoice}>
 								<span class="quick-live-dot" aria-hidden="true" />
 								{t("quick.room.leaveVoiceButton")}
 							</button>
 						) : (
-							// --good — "приглашающий" цвет для звонка вместо нейтрального --accent.
-							<button
-								type="button"
-								class="btn btn--good rigid bar"
-								style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}
-								disabled={voiceBusy || voiceFree <= 0}
-								onClick={handleJoinVoice}
-							>
+							<button type="button" class="btn" disabled={voiceBusy || voiceFree <= 0} onClick={handleJoinVoice}>
 								<IconVoiceBroadcast class="icon rigid" aria-hidden="true" />
 								{voiceFree <= 0 ? t("quick.room.voiceNoSlots") : t("quick.room.joinVoiceButton")}
 							</button>
@@ -483,6 +423,7 @@ export default function Quick({ onExit }) {
 					)}
 				</section>
 
+				{/* ---- Рабочая область: кто здесь + разговор -------------- */}
 				<div class="quick-room-layout row" style={{ "--gap": "var(--space-m)" }}>
 					<aside
 						class="quick-participants stack box"
@@ -521,30 +462,65 @@ export default function Quick({ onExit }) {
 								);
 							})}
 						</ul>
+
+						{/* Ссылка-приглашение занимала постоянный блок во весь
+						    экран, хотя нужна один раз в начале. Свёрнута и
+						    поставлена к списку участников: "кто здесь" и "как
+						    позвать ещё" — один вопрос. */}
+						{inviteLink && (
+							<details class="quick-invite">
+								<summary>{t("quick.room.inviteLabel")}</summary>
+								<input
+									type="text"
+									readonly
+									value={inviteLink}
+									aria-label={t("quick.room.inviteLabel")}
+									onFocus={(e) => e.currentTarget.select()}
+								/>
+							</details>
+						)}
 					</aside>
 
-					<section class="quick-chat stack grow box" style={{ "--gap": "var(--space-s)" }}>
-						<div ref={messagesScrollRef} class="quick-messages stack scroller box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
+					<section class="quick-chat stack grow box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-s)" }}>
+						<div class="quick-messages stack scroller" style={{ "--gap": "var(--space-2xs)" }}>
 							{messages.length === 0 && <p class="quick-empty">{t("quick.room.emptyChat")}</p>}
-							{messages.map((m) => (
-								<MessageBubble
-									key={m.id}
-									message={{ msgId: m.id, text: m.text, sentAt: Math.floor(m.createdAt / 1000), deleted: false, edited: false }}
-									isOwn={m.pubkey === selfPubkey}
-									senderName={m.nick || t("quick.anonymousNick")}
-								/>
-							))}
+							{messages.map((m) => {
+								const isOwn = m.pubkey === selfPubkey;
+								const sent = new Date(m.createdAt);
+								return (
+									// ⚠ ОБЁРТКА СО ВРЕМЕНЕМ — ПРОВЕРЬТЕ ПЕРЕД ПРИМЕНЕНИЕМ.
+									// В custom.css уже есть .message-bubble-meta со стилями
+									// под своё и чужое, а sentAt сюда передаётся — значит
+									// message-bubble.jsx, скорее всего, умеет показывать
+									// время сам. Если умеет, будет ДВЕ метки: удаляйте
+									// <time> ниже и раздел C в quick-bubbles.css вместе.
+									<div key={m.id} class={isOwn ? "quick-message quick-message-own stack" : "quick-message stack"} style={{ "--gap": "var(--space-3xs)" }}>
+										<MessageBubble
+											message={{ msgId: m.id, text: m.text, sentAt: Math.floor(m.createdAt / 1000), deleted: false, edited: false }}
+											isOwn={isOwn}
+											senderName={m.nick || t("quick.anonymousNick")}
+										/>
+										<time class="quick-message-time" dateTime={sent.toISOString()}>
+											{sent.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+										</time>
+									</div>
+								);
+							})}
+							<div ref={bottomRef} />
 						</div>
+						{/* --gap: 0 обязателен — кнопка отправки должна касаться
+						    правого края, зазор разрушил бы фигуру "незаконченного
+						    пузыря" (см. раздел B в quick-bubbles.css). */}
 						<form class="quick-compose row" style={{ "--gap": "0" }} onSubmit={handleSendChat}>
-							<textarea
+							<input
+								type="text"
 								class="grow"
-								rows={1}
 								value={chatText}
 								onInput={(e) => setChatText(e.currentTarget.value)}
 								placeholder={t("quick.room.chatPlaceholder")}
 								aria-label={t("quick.room.chatPlaceholder")}
 							/>
-							<button type="submit" class="btn self-end" disabled={chatText.trim().length === 0}>
+							<button type="submit" class="btn" disabled={chatText.trim().length === 0}>
 								{t("quick.room.sendButton")}
 							</button>
 						</form>
@@ -554,9 +530,20 @@ export default function Quick({ onExit }) {
 		);
 	}
 
+	// Три режима входа — вкладки-папка: ник общий для всех трёх, поэтому
+	// живёт в теле папки над разделителем, а не над вкладками (раньше
+	// он висел снаружи и читался как ещё одно поле формы "Создать").
+	const tabs = [
+		["create", "quick.entry.tabCreate"],
+		["join-link", "quick.entry.tabJoinLink"],
+		["join-password", "quick.entry.tabJoinPassword"],
+	];
+
 	return (
 		<div class="quick-entry stack" style={{ "--gap": "var(--space-m)" }}>
+			{/* Лампа на шнуре — декоративная, скрыта от скринридеров. */}
 			<span class="quick-lamp" aria-hidden="true" />
+
 			<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }}>
 				<h2>{t("quick.entry.title")}</h2>
 				{typeof onExit === "function" && (
@@ -569,7 +556,7 @@ export default function Quick({ onExit }) {
 
 			<div class="folder">
 				<div class="folder-tabs bar" role="tablist" aria-label={t("quick.entry.tabsAriaLabel")}>
-					{ENTRY_TABS.map(([id, labelKey]) => (
+					{tabs.map(([id, labelKey]) => (
 						<button
 							key={id}
 							type="button"
@@ -598,13 +585,13 @@ export default function Quick({ onExit }) {
 					</div>
 
 					{error && (
-						<p role="alert" style={{ color: "var(--bad)" }}>
+						<p role="alert" class="status-bad">
 							{error}
 						</p>
 					)}
 
 					{entryTab === "create" && (
-						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleCreate}>
+						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleCreate}>
 							<div class="form-group">
 								<label for="quick-create-name">{t("quick.entry.nameLabel")}</label>
 								<input id="quick-create-name" type="text" required value={roomName} onInput={(e) => setRoomName(e.currentTarget.value)} />
@@ -625,7 +612,7 @@ export default function Quick({ onExit }) {
 					)}
 
 					{entryTab === "join-link" && (
-						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinLink}>
+						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinLink}>
 							<div class="form-group">
 								<label for="quick-join-link">{t("quick.entry.linkLabel")}</label>
 								<input id="quick-join-link" type="text" required value={inviteInput} onInput={(e) => setInviteInput(e.currentTarget.value)} />
@@ -637,7 +624,7 @@ export default function Quick({ onExit }) {
 					)}
 
 					{entryTab === "join-password" && (
-						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinPassword}>
+						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinPassword}>
 							<div class="form-group">
 								<label for="quick-joinpw-name">{t("quick.entry.nameLabel")}</label>
 								<input id="quick-joinpw-name" type="text" required value={joinPwName} onInput={(e) => setJoinPwName(e.currentTarget.value)} />
