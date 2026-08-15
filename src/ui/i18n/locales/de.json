@@ -650,6 +650,13 @@
 		"archiveButton": "Archivieren",
 		"unpublishButton": "Veröffentlichung zurückziehen"
 	},
+	"markdownToolbar": {
+		"boldAria": "Fett",
+		"italicAria": "Kursiv",
+		"quoteAria": "Zitat",
+		"listAria": "Liste",
+		"linkAria": "Link"
+	},
 	"channelChat": {
 		"messageLabel": "Nachricht im Kanal-Chat",
 		"noMessages": "Noch keine Nachrichten im Kanal-Chat.",

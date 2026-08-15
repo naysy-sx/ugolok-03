@@ -650,6 +650,13 @@
 		"archiveButton": "归档",
 		"unpublishButton": "取消发布"
 	},
+	"markdownToolbar": {
+		"boldAria": "粗体",
+		"italicAria": "斜体",
+		"quoteAria": "引用",
+		"listAria": "列表",
+		"linkAria": "链接"
+	},
 	"channelChat": {
 		"messageLabel": "频道聊天消息",
 		"noMessages": "频道聊天中暂无消息。",

@@ -650,6 +650,13 @@
 		"archiveButton": "Archive",
 		"unpublishButton": "Unpublish"
 	},
+	"markdownToolbar": {
+		"boldAria": "Bold",
+		"italicAria": "Italic",
+		"quoteAria": "Quote",
+		"listAria": "List",
+		"linkAria": "Link"
+	},
 	"channelChat": {
 		"messageLabel": "Message in the channel chat",
 		"noMessages": "No messages in the channel chat yet.",

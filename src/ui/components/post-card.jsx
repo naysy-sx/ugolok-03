@@ -5,6 +5,7 @@ import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconTrash from "../icons/trash.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
+import MarkdownView from "./markdown-view.jsx";
 
 function formatDateTime(unixSeconds) {
 	return new Date(unixSeconds * 1000).toLocaleString(currentLocale.value, { dateStyle: "short", timeStyle: "short" });
@@ -33,7 +34,7 @@ export default function PostCard({ post, authorName, authorAvatar, isOwner, onAr
 				)}
 				<span class="post__author">{authorName}</span>
 			</header>
-			<p style={{ whiteSpace: "pre-wrap" }}>{post.text}</p>
+			<MarkdownView source={post.text} profile="rich" />
 			{post.attachments?.[0] && <AttachmentView attachment={post.attachments[0]} />}
 			<footer class="post__foot row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<small style={{ color: "var(--muted)" }}>{formatDateTime(post.createdAt)}</small>

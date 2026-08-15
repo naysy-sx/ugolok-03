@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import AttachmentView, { AttachmentDownloadLink } from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
+import MarkdownView from "./markdown-view.jsx";
 
 const STATUS_LABEL_KEYS = {
 	created: "message.status.created",
@@ -89,7 +90,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
 			{attachmentAbove && <AttachmentView attachment={attachment} />}
-			{message.text && <p>{message.text}</p>}
+			{message.text && <MarkdownView source={message.text} profile="lite" />}
 			{attachmentBelow && <AttachmentView attachment={attachment} />}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}

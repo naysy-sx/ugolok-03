@@ -52,6 +52,7 @@ import AttachmentPreview from "../components/attachment-preview.jsx";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
+import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
@@ -268,6 +269,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
 	const draftTimerRef = useRef(null);
+	const composerTextareaRef = useRef(null);
 	// Упущение пользователя (не баг): при входе в чат нужна автопрокрутка к последнему
 	// сообщению. bottomRef — сентинел ПОСЛЕ последнего сообщения; scrollIntoView() сам
 	// находит реально скроллящегося предка — после переезда на общий каркас (screen.jsx)
@@ -395,14 +397,20 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		};
 	}, [contactPubkey]);
 
-	function handleTextInput(e) {
+	// Markdown-этап D — извлечено из handleTextInput, чтобы панель форматирования
+	// (программная вставка, не пользовательский onInput-event) шла тем же путём
+	// (черновик обязан сохраняться и после вставки разметки кнопкой).
+	function applyTextChange(value) {
 		userEditedRef.current = true;
-		const value = e.currentTarget.value;
 		setText(value);
 		if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 		draftTimerRef.current = setTimeout(() => {
 			saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, value, publish).catch(() => {});
 		}, 1000);
+	}
+
+	function handleTextInput(e) {
+		applyTextChange(e.currentTarget.value);
 	}
 
 	// Прикрепление/голосовое взаимоисключающие — выбор одного сбрасывает другое.
@@ -729,6 +737,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
+					<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
 					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onSubmit={handleSend}>
 						<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
 						<button
@@ -766,6 +775,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</label>
 						<textarea
 							id="chat-message-input"
+							ref={composerTextareaRef}
 							class="message-compose-field"
 							value={text}
 							maxLength={MAX_MESSAGE_LENGTH}
@@ -833,6 +843,7 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
+	const composeTextareaRef = useRef(null);
 
 	useEffect(() => {
 		// Тот же приём, что в contacts.jsx: сначала пересчёт из уже загруженной
@@ -938,7 +949,8 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 				</label>
 				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<span>{t("chat.window.messageLabel")}</span>
-					<textarea value={text} maxLength={MAX_MESSAGE_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={5} />
+					<MarkdownFormatToolbar textareaRef={composeTextareaRef} value={text} onChange={setText} />
+					<textarea ref={composeTextareaRef} value={text} maxLength={MAX_MESSAGE_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={5} />
 				</label>
 				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<span>{t("chat.list.attachmentsLabel")}</span>

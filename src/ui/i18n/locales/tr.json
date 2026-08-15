@@ -650,6 +650,13 @@
 		"archiveButton": "Arşivle",
 		"unpublishButton": "Yayından kaldır"
 	},
+	"markdownToolbar": {
+		"boldAria": "Kalın",
+		"italicAria": "İtalik",
+		"quoteAria": "Alıntı",
+		"listAria": "Liste",
+		"linkAria": "Bağlantı"
+	},
 	"channelChat": {
 		"messageLabel": "Kanal sohbetine mesaj",
 		"noMessages": "Kanal sohbetinde henüz mesaj yok.",

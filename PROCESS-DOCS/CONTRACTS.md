@@ -14535,7 +14535,239 @@ markdown-маркер пополам (`**жирны` без закрывающе
 - `moderation-panel.jsx:126`, `channel.jsx:780` — код не меняется,
   добавляется однострочный комментарий с причиной (см. п.1/п.2 выше).
 
-### Стадии D/C — контракты пишутся отдельно, когда придёт их очередь
+## Markdown — Этап D. Markdown в чате, комментариях, общем чате канала
+
+ТЗ §3. Триаж (13a): рендер-часть — **рутинная** (подстановка уже готового
+`MarkdownView`). Панель форматирования — **пограничная**: вставка текста
+по позиции курсора сама по себе рутинна, но алгоритм "что именно вставить
+и куда переместить курсор" для 5 разных операций (2 inline-обёртки с/без
+выделения, 2 построчных префикса на многострочном диапазоне) — вынесен
+в отдельную ЧИСТУЮ функцию с исчерпывающим набором тестов (13b-подобная
+строгость без формальной design-записки — детерминированный алгоритм на
+строках, не пространство состояний).
+
+### Расхождение "три композера" — разрешено фактами из кода, не догадкой
+
+ТЗ называет ровно три константы лимита буквально: `MESSAGE_MAX_LENGTH`
+(`channel-chat.jsx:18`, общий чат канала), `COMMENT_MAX_LENGTH`
+(`channel.jsx:39`, комментарии), `MAX_MESSAGE_LENGTH` (`chat.jsx:56`,
+личные/групповые). Это ТРИ, а не четыре, реальных места ввода с
+`<textarea>` в проекте — `quick.jsx` (комнаты «Быстрая связь») использует
+СВОЙ `MAX_MESSAGE_LENGTH`-эквивалент, не совпадающий ни с одной из трёх
+названных констант, и не упомянут в списке лимитов ТЗ вовсе. Вывод:
+**панель форматирования подключается к ЭТИМ ТРЁМ композерам, НЕ к
+`quick.jsx`.** Рендер (`message-bubble.jsx`) при этом переиспользуется
+и в комнатах тоже (буквально по ТЗ) — если участник комнаты вручную
+наберёт `**жирный**` без кнопки, CommonMark всё равно распознает
+синтаксис и отрендерит корректно; кнопки просто не помогают набирать.
+
+### Рендер — 4 замены + одна общая CSS-правка
+
+- `message-bubble.jsx:92` — `{message.text && <p>{message.text}</p>}` ->
+  `{message.text && <MarkdownView source={message.text} profile="lite" />}`.
+  `.message-bubble p` (descendant-селектор, `custom.css:797`) продолжает
+  работать нетронуто — `<p>` от `MarkdownView` тоже потомок `.message-bubble`.
+- `channel-chat.jsx:163` — `<p style={{whiteSpace:"pre-wrap"}}>{m.text}</p>`
+  -> `<MarkdownView source={m.text} profile="lite" />`. Инлайн-стиль
+  `whiteSpace` заменяется общей CSS-правкой ниже.
+- `channel.jsx:429` — `<p class="cmt__text">{comment.text}</p>` ->
+  `<div class="cmt__text"><MarkdownView source={comment.text} profile="lite" /></div>`.
+  Обёртка, не проп: класс несёт `font-size`/`line-height`/`white-space`/
+  `margin` (все, кроме `margin`, — наследуемые CSS-свойства, унаследуются
+  вложенным `<p>` автоматически; `margin` и так `0` глобально, см. ниже) —
+  контракт `MarkdownView` НЕ меняется, никакого нового `class`-пропа.
+- `post-card.jsx:36` — `<p style={{whiteSpace:"pre-wrap"}}>{post.text}</p>`
+  -> `<MarkdownView source={post.text} profile="rich" />`.
+
+**CSS (одна строка):** `custom.css`, правило `.app-layout .md-view p,
+.auth-layout .md-view p { line-height: 1.6; }` (создано на Этапе A для
+Справки) — добавить `white-space: pre-wrap;`. Обоснование: одиночный
+`\n` внутри абзаца остаётся частью значения ОДНОГО text-узла (CommonMark
+soft break — проверено тестами Этапа A), без `white-space: pre-wrap`
+браузер схлопнёт его в пробел при отображении — та же регрессия, что
+уже была найдена и закрыта для `.message-bubble p` (комментарий в
+`custom.css:797-806`, "textarea в quick.jsx впервые позволила реально
+ввести перевод строки"). Правка на общем `.md-view p` закрывает её
+СРАЗУ для всех 4 мест рендера, включая Справку (safe — не меняет
+wrapping/перенос по словам, только не схлопывает уже существующие
+literal-переносы, которых в тексте справки и так почти нет).
+**`margin` — НЕ трогать нигде**: глобальный ресет `minimal.css`,
+`:where(:not(dialog)) { margin: 0; padding: 0 }` (специфичность `:where()`
+== 0) уже обнуляет `margin` у ЛЮБОГО элемента, включая новый `<p>` внутри
+`.md-view` — старые точечные `margin-block: 0`/`margin: 0` в
+`.message-bubble p`/`.cmt__text` были явной подстраховкой, избыточной,
+но безвредной; новый код полагается на глобальный ресет и не дублирует.
+
+### Новый файл: `src/core/markdown/format-insert.js` (чистая функция, тестируется)
+
+```js
+export function applyFormat(kind, { value, selectionStart, selectionEnd })
+    // kind: "bold" | "italic" | "quote" | "list" | "link"
+    // -> { text: string, replaceStart: number, replaceEnd: number, selectStart: number, selectEnd: number }
+```
+`text`/`replaceStart`/`replaceEnd` — аргументы для `el.setRangeText(text,
+replaceStart, replaceEnd)` (заменить диапазон `[replaceStart,replaceEnd)`
+исходного `value` на `text`). `selectStart`/`selectEnd` — координаты В
+НОВОЙ строке (после замены), куда нужно вручную поставить
+`el.selectionStart`/`el.selectionEnd` после вызова `setRangeText`
+(родовой JSX-обвязке НЕ полагаться на `setRangeText`'s встроенный
+`selectionMode`-параметр — он выделяет только весь заменённый диапазон
+целиком, а для `link` с выделением курсор должен встать ВНУТРИ скобок
+URL, не выделять текст).
+
+**bold/italic** (`selected = value.slice(selectionStart, selectionEnd)`):
+- `selected` пуст (`selectionStart === selectionEnd`, просто курсор):
+  `text = marker+marker` (bold: `"****"`, italic: `"**"`),
+  `replaceStart = replaceEnd = selectionStart`,
+  `selectStart = selectEnd = selectionStart + marker.length` (курсор
+  МЕЖДУ парой маркеров).
+- есть выделение: `text = marker + selected + marker`,
+  `replaceStart = selectionStart`, `replaceEnd = selectionEnd`,
+  `selectStart = selectionStart`, `selectEnd = selectionStart + text.length`
+  (выделить весь новый блок целиком, включая маркеры — видимое
+  подтверждение изменения).
+  (marker: bold `"**"`, italic `"*"`.)
+
+**link**:
+- `selected` пуст: `text = "[]()"`,
+  `replaceStart = replaceEnd = selectionStart`,
+  `selectStart = selectEnd = selectionStart + 1` (курсор между `[` и `]`,
+  чтобы сразу печатать текст ссылки).
+- есть выделение: `text = "[" + selected + "]()"`,
+  `replaceStart = selectionStart`, `replaceEnd = selectionEnd`,
+  `selectStart = selectEnd = selectionStart + ("[" + selected + "](").length`
+  (курсор между `(` и `)`, чтобы сразу печатать URL — НЕ выделение).
+
+**quote/list** (построчный префикс на диапазоне строк, покрывающих
+выделение — работает и при пустом выделении, курсор просто в какой-то
+строке):
+```
+lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1   // 0, если "\n" нет
+lineEndIdx = value.indexOf("\n", selectionEnd)
+lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx
+block = value.slice(lineStart, lineEnd)
+prefix = kind === "quote" ? "> " : "- "
+text = block.split("\n").map(line => prefix + line).join("\n")
+replaceStart = lineStart
+replaceEnd = lineEnd
+selectStart = lineStart
+selectEnd = lineStart + text.length   // выделить весь новый блок
+```
+
+### Новый файл: `src/ui/components/markdown-format-toolbar.jsx` (JSX-обвязка, без тестов — тонкий слой, аналогично `markdown-view.jsx`)
+
+```jsx
+export default function MarkdownFormatToolbar({ textareaRef, value, onChange })
+```
+5 кнопок `<button type="button">` (bold/italic/quote/list/link), порядок
+как в ТЗ. Кнопка — короткий языконезависимый символ как видимое
+содержимое (`B`, `I`, `❝`, `•`, `🔗` — НЕ SVG-иконка: в проекте нет
+готовой иконки этого назначения, а копирование новых SVG путей вручную
+без внешней проверки на этот раз — неоправданный риск брака; текстовые
+символы для типографских операций общеприняты и не нуждаются в
+переводе), `aria-label` — через `t()`, ключи `markdownToolbar.{bold,
+italic,quote,list,link}Aria`, 12 локалей (переводит Claude напрямую, не
+воркер — установленное правило проекта, "Этап 64").
+
+Обработчик клика — ЕДИНЫЙ паттерн для всех 5 kind (не полагаться на
+`setRangeText`'s `selectionMode`, всегда сам режим `"preserve"` +
+ручное присвоение `selectionStart`/`selectionEnd`):
+```js
+function handleClick(kind) {
+	const el = textareaRef.current;
+	if (!el) return;
+	const result = applyFormat(kind, { value, selectionStart: el.selectionStart, selectionEnd: el.selectionEnd });
+	el.focus();
+	el.setRangeText(result.text, result.replaceStart, result.replaceEnd, "preserve");
+	el.selectionStart = result.selectStart;
+	el.selectionEnd = result.selectEnd;
+	onChange(el.value);
+}
+```
+`el.focus()` ДО `setRangeText` — клик мышью по кнопке снимает фокус с
+textarea, `selectionStart`/`End`/`setRangeText` требуют, чтобы элемент
+был активен для корректного видимого курсора после операции.
+`onChange(el.value)` — ПОСЛЕ мутации DOM, синхронизирует Preact
+controlled-state с уже изменённым `el.value` (native `setRangeText`
+сохраняет undo-историю браузера — Ctrl+Z продолжает работать; ручная
+склейка строк через `value.slice()` + `setState` эту историю ломает,
+поэтому ТЗ явно требует `setRangeText`, не ручную конкатенацию).
+
+### Интеграция в три композера (точечно, без воркера — стыковка, не логика)
+
+- `chat.jsx` — единственное место с побочным эффектом при изменении
+  текста (`handleTextInput`, строка ~398, debounce-сохранение черновика
+  `saveChatDraftAction`). Извлечь общую часть в `applyTextChange(value)`,
+  `handleTextInput(e)` становится `applyTextChange(e.currentTarget.value)`
+  (чистый extract-function рефакторинг, поведение не меняется) — панель
+  получает `onChange={applyTextChange}`. Добавить `composerTextareaRef`
+  (`useRef(null)`), `ref={composerTextareaRef}` на сам `<textarea>`.
+- `channel-chat.jsx` (`ChatComposer`) — простой случай, `onChange={setText}`
+  напрямую, без рефакторинга (нет побочных эффектов при вводе).
+- `channel.jsx` (форма комментария) — тот же простой случай, `onChange={setText}`.
+- Панель — под/над `<textarea>` в каждом месте (визуальное решение —
+  на усмотрение при живой проверке, не архитектурный вопрос).
+
+Лимиты (`MESSAGE_MAX_LENGTH`/`COMMENT_MAX_LENGTH`/`MAX_MESSAGE_LENGTH`) —
+НЕ меняются (ТЗ Р-4 касается только постов).
+
+Панель подключена также в `ComposeMessage` (`chat.jsx`, форма "Написать
+сообщение" — первое сообщение НОВОГО диалога) — тот же композер по духу
+ТЗ (общая константа `MAX_MESSAGE_LENGTH`), простой случай без побочных
+эффектов (`onChange={setText}` напрямую), не отдельный четвёртый композер.
+
+### Этап D ЗАКРЫТ — живая проверка и находки
+
+15 тестов `format-insert.js` (написаны до кода). Воркер сдал `parse.js`-
+уровня простые файлы с первого раза (`node-allowlist.js`, `parse.js`,
+`markdown-format-toolbar.jsx`) точно по контракту; `format-insert.js` и
+`sanitize.js`/`to-plain.js` (Этапы A/E) содержали найденные тестами
+реальные баги, закрытые точечно без повторного вызова воркера (лестница
+конкретности, skill п.8-9):
+- TDZ-баг: `const` объявлена внутри `case "quote"` без блока `{}`,
+  `case "list"` пытался присвоить ту же переменную без объявления —
+  `ReferenceError` при прямом вызове `kind="list"`.
+- `link` с выделением: курсор ставился на `selectionEnd` вместо
+  `selectionStart + "[selected](".length` — неверная позиция.
+- `bold`/`italic` без выделения: `text` был равен одиночному маркеру
+  (`"**"`/`"*"`), а не паре (`"****"`/`"**"`) — вставлялся только
+  открывающий маркер без закрывающего.
+
+Живая проверка панели — в реальном браузере (не unit-тест, единственное,
+что не покрывается node-тестами: `setRangeText`/`selectionStart` — DOM
+API): форма "Написать сообщение" (`chat.jsx`), без необходимости
+реальной отправки (сама вставка текста кнопкой — чистая клиентская
+DOM-операция, не зависит от relay). Проверено визуально: `bold` —
+`Привет **мир**` с выделением всего нового блока; `link` с выделением —
+`[Привет](|)` курсор точечно между `(`/`)`, ввод URL встаёт туда же;
+`list`/`quote` — префикс добавляется ТОЛЬКО на текущей строке, соседние
+не тронуты. `italic` не проверялась отдельно (идентичный `bold`
+алгоритм, 100% в unit-тестах). Консоль чиста.
+
+Полноценный E2E с реальной публикацией канала/поста/комментария через
+relay НЕ пройден — поднятый для этого эфемерный `fake-relay.js`+
+`ws-bridge.js` (harness проекта, `tests/harness/`) зависал в состоянии
+`connecting`/`disconnected`, причина не расследовалась (инфраструктурная
+проблема тестового scaffolding, к markdown-коду не относится — то же
+харнесс успешно используется в `room-transport.test.js`/`room-session.
+test.js` под управляемым `flushAll()`, здесь использовался
+автотаймерный `flushAll()` каждые 50мс, что могло не совпасть с
+протокольным ожиданием клиента). Рендер (`MarkdownView` в новых 4
+местах) отдельно живьём не перепроверялся — тот же самый компонент,
+что уже подтверждён работающим на Этапе A (Справка), меняется только
+`profile`/источник текста, не сама логика рендера.
+
+DoD:
+- [x] тесты этапа зелёные (15/15), полная регрессия зелёная (1676/1676)
+- [x] `npm run build` зелёный, 753,33 КБ, в пороге (759,93/764,93 КБ)
+- [x] `grep dangerouslySetInnerHTML\|innerHTML` src/ — пусто
+- [x] живая проверка панели форматирования (реальный DOM API, 4 из 5
+      операций визуально подтверждены, консоль чиста)
+- [x] CONTRACTS.md обновлён
+- [ ] PLAN.md/log.md — следующим шагом
+- [ ] коммит — следующим шагом
+
+### Стадия C — контракты пишутся отдельно, когда придёт их очередь
 
 Явно НЕ покрыто этим разделом (будет своя запись в CONTRACTS.md на
 своей стадии): allowlist-места без рендера markdown (E), проп-контракт

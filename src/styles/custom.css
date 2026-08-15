@@ -3692,6 +3692,30 @@ button:has(> .icon),
 .app-layout .md-view p,
 .auth-layout .md-view p {
 	line-height: 1.6;
+	/* Markdown-этап D — soft break CommonMark (одиночный \n внутри абзаца)
+	   остаётся частью значения ОДНОГО text-узла (проверено тестами Этапа A);
+	   без pre-wrap браузер схлопнёт его в пробел при отображении — та же
+	   регрессия, что уже закрыта точечно для .message-bubble p. */
+	white-space: pre-wrap;
+}
+/* Markdown-этап D — панель форматирования (жирный/курсив/цитата/список/
+   ссылка) над textarea в трёх композерах (chat.jsx, channel-chat.jsx,
+   channel.jsx-комментарии). .markdown-toolbar несёт только .row (раскладка
+   уже в JSX) — здесь только сама кнопка. */
+.markdown-toolbar-btn {
+	flex: none;
+	min-width: 2rem;
+	height: 2rem;
+	padding-inline: var(--space-2xs);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm, 4px);
+	background: none;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.markdown-toolbar-btn:hover {
+	background-color: var(--surface);
+	color: var(--fg);
 }
 /* display:grid ОСТАЁТСЯ (не .stack/.grid) — сырой HTML markdown-рендера
    (MarkdownView), нет своей JSX-точки на каждый <ul>/<ol>, чтобы навесить

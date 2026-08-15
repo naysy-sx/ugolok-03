@@ -650,6 +650,13 @@
 		"archiveButton": "Archiveren",
 		"unpublishButton": "Publicatie intrekken"
 	},
+	"markdownToolbar": {
+		"boldAria": "Vet",
+		"italicAria": "Cursief",
+		"quoteAria": "Citaat",
+		"listAria": "Lijst",
+		"linkAria": "Link"
+	},
 	"channelChat": {
 		"messageLabel": "Bericht in de kanaalchat",
 		"noMessages": "Nog geen berichten in de kanaalchat.",

@@ -14,6 +14,8 @@ import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
+import MarkdownView from "./markdown-view.jsx";
+import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
 
@@ -22,6 +24,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const attachment = usePendingAttachment();
+	const textareaRef = useRef(null);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -59,7 +62,8 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			<label class="visually-hidden" for="channel-chat-text">
 				{t("channelChat.messageLabel")}
 			</label>
-			<textarea id="channel-chat-text" value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
+			<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
+			<textarea id="channel-chat-text" ref={textareaRef} value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
 			{attachment.file && (
 				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 			)}
@@ -160,7 +164,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 									/>
 								)}
 							</div>
-							<p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
+							<MarkdownView source={m.text} profile="lite" />
 							{m.attachments?.[0] && <AttachmentView attachment={m.attachments[0]} />}
 						</li>
 					))}

@@ -650,6 +650,13 @@
 		"archiveButton": "Archivar",
 		"unpublishButton": "Despublicar"
 	},
+	"markdownToolbar": {
+		"boldAria": "Negrita",
+		"italicAria": "Cursiva",
+		"quoteAria": "Cita",
+		"listAria": "Lista",
+		"linkAria": "Enlace"
+	},
 	"channelChat": {
 		"messageLabel": "Mensaje en el chat del canal",
 		"noMessages": "Todavía no hay mensajes en el chat del canal.",

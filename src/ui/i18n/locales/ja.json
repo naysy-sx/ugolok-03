@@ -650,6 +650,13 @@
 		"archiveButton": "アーカイブ",
 		"unpublishButton": "公開を取り消す"
 	},
+	"markdownToolbar": {
+		"boldAria": "太字",
+		"italicAria": "斜体",
+		"quoteAria": "引用",
+		"listAria": "リスト",
+		"linkAria": "リンク"
+	},
 	"channelChat": {
 		"messageLabel": "チャンネルチャットへのメッセージ",
 		"noMessages": "まだチャンネルチャットにメッセージはありません。",

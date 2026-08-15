@@ -650,6 +650,13 @@
 		"archiveButton": "Archiwizuj",
 		"unpublishButton": "Cofnij publikację"
 	},
+	"markdownToolbar": {
+		"boldAria": "Pogrubienie",
+		"italicAria": "Kursywa",
+		"quoteAria": "Cytat",
+		"listAria": "Lista",
+		"linkAria": "Link"
+	},
 	"channelChat": {
 		"messageLabel": "Wiadomość na czacie kanału",
 		"noMessages": "Jeszcze brak wiadomości na czacie kanału.",

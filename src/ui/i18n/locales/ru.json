@@ -650,6 +650,13 @@
 		"archiveButton": "Архивировать",
 		"unpublishButton": "Снять с публикации"
 	},
+	"markdownToolbar": {
+		"boldAria": "Жирный",
+		"italicAria": "Курсив",
+		"quoteAria": "Цитата",
+		"listAria": "Список",
+		"linkAria": "Ссылка"
+	},
 	"channelChat": {
 		"messageLabel": "Сообщение в чат канала",
 		"noMessages": "Пока нет сообщений в чате канала.",

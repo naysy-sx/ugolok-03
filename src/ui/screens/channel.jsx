@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from "preact/hooks";
+import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
@@ -34,6 +34,8 @@ import IconPaperclip from "../icons/paperclip.jsx";
 import IconSend from "../icons/send.jsx";
 import IconCross from "../icons/cross.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
+import MarkdownView from "../components/markdown-view.jsx";
+import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 
 const POST_MAX_LENGTH = 10000; // ТЗ пользователя
 const COMMENT_MAX_LENGTH = 4000;
@@ -322,6 +324,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const attachment = usePendingAttachment();
+	const textareaRef = useRef(null);
 	const author = commentAuthorInfo(ownerPubkey);
 	// Этап 69 — тот же приём, что PostComposer: свой аватар может отрисоваться
 	// раньше, чем profiles[ownerPubkey] окажется в кэше.
@@ -371,9 +374,11 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 				<label class="visually-hidden" for={`comment-text-${parentId}`}>
 					{t("channel.commentComposer.label")}
 				</label>
+				<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
 				<textarea
 					class="comment-text-field"
 					id={`comment-text-${parentId}`}
+					ref={textareaRef}
 					value={text}
 					maxLength={COMMENT_MAX_LENGTH}
 					onInput={(e) => setText(e.currentTarget.value)}
@@ -426,7 +431,9 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 						<span class="cmt__name">{author.name}</span>
 						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 					</header>
-					<p class="cmt__text">{comment.text}</p>
+					<div class="cmt__text">
+					<MarkdownView source={comment.text} profile="lite" />
+				</div>
 					{comment.attachments?.[0] && (
 						<div class="cmt__media">
 							<AttachmentView attachment={comment.attachments[0]} />
