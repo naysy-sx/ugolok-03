@@ -4776,6 +4776,6 @@ DoD:
 - [x] `npm run build` зелёный, в пороге
 - [x] `grep dangerouslySetInnerHTML\|innerHTML` src/ — пусто
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
-- [ ] коммит — следующим шагом
+- [x] коммит (593b437)
 
 Следующий — Этап D (markdown в чате/комментариях/постах).
