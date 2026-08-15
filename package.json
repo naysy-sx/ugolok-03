@@ -36,6 +36,7 @@
 		"@scure/bip39": "^2.2.0",
 		"comlink": "^4.4.2",
 		"dexie": "^4.4.4",
+		"mdast-util-from-markdown": "^2.0.3",
 		"nostr-tools": "^2.23.8",
 		"preact": "^10.29.2",
 		"ts-mls": "2.0.0-rc.14"

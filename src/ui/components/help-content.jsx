@@ -139,7 +139,7 @@ export default function HelpContent() {
 				</ul>
 			</nav>
 			<div class="help-content">
-				<MarkdownView source={activeTopic.source} />
+				<MarkdownView source={activeTopic.source} profile="rich" />
 			</div>
 		</div>
 	);
