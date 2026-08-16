@@ -20,6 +20,7 @@ import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import AttachmentTray from "../components/media/attachment-tray.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
+import { splitBubbleAttachments } from "../components/message-bubble-attachments.js";
 import PostCard, { formatDateTime } from "../components/post-card.jsx";
 import ChannelChat from "../components/channel-chat.jsx";
 import ModerationActions from "../components/moderation-actions.jsx";
@@ -426,6 +427,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 	const isTarget = comment.id === highlightCommentId;
 	const isOP = comment.authorPubkey === postAuthorPubkey;
 	const author = commentAuthorInfo(comment.authorPubkey);
+	const { above, below } = splitBubbleAttachments(comment.attachments);
 
 	return (
 		<li id={`comment-${comment.id}`} class={`cmt${isTarget ? " is-target-comment" : ""}`}>
@@ -442,12 +444,19 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 						<span class="cmt__name">{author.name}</span>
 						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 					</header>
+					{above && (
+						<div class="cmt__media">
+							<AttachmentView attachment={above} />
+						</div>
+					)}
 					<div class="cmt__text">
 					<MarkdownView source={comment.text} profile="lite" />
 				</div>
-					{comment.attachments?.[0] && (
+					{below.length > 0 && (
 						<div class="cmt__media">
-							<AttachmentView attachment={comment.attachments[0]} />
+							{below.map((a, i) => (
+								<AttachmentView key={i} attachment={a} />
+							))}
 						</div>
 					)}
 					<footer class="cmt__actions row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>

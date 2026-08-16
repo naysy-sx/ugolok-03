@@ -10,6 +10,7 @@ import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import AttachmentTray from "./media/attachment-tray.jsx";
 import AttachmentView from "./attachment-view.jsx";
+import { splitBubbleAttachments } from "./message-bubble-attachments.js";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
@@ -144,29 +145,35 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 				<p style={{ color: "var(--muted)" }}>{t("channelChat.noMessages")}</p>
 			) : (
 				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
-					{messages.map((m) => (
-						<li key={m.id} class="channel-message-row">
-							<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-								<ContactIdentity pubkey={m.authorPubkey} />
-								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
-								{m.authorPubkey !== ownerPubkey && (
-									<ModerationActions
-										compact
-										viewerPubkey={ownerPubkey}
-										viewerPrivKey={privKey}
-										channelOwnerPubkey={channelOwnerPubkey}
-										channelId={channelId}
-										targetPubkey={m.authorPubkey}
-										contentType="chat_message"
-										contentId={m.id}
-										contentText={m.text}
-									/>
-								)}
-							</div>
-							<MarkdownView source={m.text} profile="lite" />
-							{m.attachments?.[0] && <AttachmentView attachment={m.attachments[0]} />}
-						</li>
-					))}
+					{messages.map((m) => {
+						const { above, below } = splitBubbleAttachments(m.attachments);
+						return (
+							<li key={m.id} class="channel-message-row">
+								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+									<ContactIdentity pubkey={m.authorPubkey} />
+									<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
+									{m.authorPubkey !== ownerPubkey && (
+										<ModerationActions
+											compact
+											viewerPubkey={ownerPubkey}
+											viewerPrivKey={privKey}
+											channelOwnerPubkey={channelOwnerPubkey}
+											channelId={channelId}
+											targetPubkey={m.authorPubkey}
+											contentType="chat_message"
+											contentId={m.id}
+											contentText={m.text}
+										/>
+									)}
+								</div>
+								{above && <AttachmentView attachment={above} />}
+								<MarkdownView source={m.text} profile="lite" />
+								{below.map((a, i) => (
+									<AttachmentView key={i} attachment={a} />
+								))}
+							</li>
+						);
+					})}
 				</ul>
 			)}
 			<div ref={bottomRef} />

@@ -1,4 +1,5 @@
 import AttachmentView from "./attachment-view.jsx";
+import { splitBubbleAttachments } from "./message-bubble-attachments.js";
 import { shortPubkey } from "../format.js";
 import ActionsMenu from "./actions-menu.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
@@ -22,6 +23,7 @@ function formatDateTime(unixSeconds) {
 // обёртке PostWithComments (channel.jsx), не сама карточка — второй уровень
 // той же поверхности, а не отдельный вложенный блок.
 export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount }) {
+	const { above, below } = splitBubbleAttachments(post.attachments);
 	return (
 		<article class="stack post box" style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}>
 			<header class="bar" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
@@ -34,8 +36,11 @@ export default function PostCard({ post, authorName, authorAvatar, isOwner, onAr
 				)}
 				<span class="post__author">{authorName}</span>
 			</header>
+			{above && <AttachmentView attachment={above} />}
 			<MarkdownView source={post.text} profile="rich" />
-			{post.attachments?.[0] && <AttachmentView attachment={post.attachments[0]} />}
+			{below.map((a, i) => (
+				<AttachmentView key={i} attachment={a} />
+			))}
 			<footer class="post__foot row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<small style={{ color: "var(--muted)" }}>{formatDateTime(post.createdAt)}</small>
 				{post.status === "archived" && <small style={{ color: "var(--muted)" }}>{t("postCard.archivedLabel")}</small>}
