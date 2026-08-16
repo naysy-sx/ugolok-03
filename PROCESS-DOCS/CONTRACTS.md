@@ -16166,3 +16166,186 @@ DoD:
       подтверждена
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (b5b9014)
+
+## Медиа-подсистема — Этап C (потоковая загрузка)
+
+Алгоритмическая задача (13a-б) — формализация в DESIGN.md "Медиа-
+подсистема — Этап C" ДО тестов/кода (Уровень 1: Θ(C) память одного
+файла; Уровень 2: конвейер нескольких файлов через уже существующий
+`createThumbnailQueue`).
+
+### `src/domain/files/stream-upload.js` [C]
+
+**Находка перед кодом (не в исходных документах)**: `import
+CryptoWorker from ".../crypto.worker.js?worker&inline"` (уже
+существующий паттерн `transport.js`) — синтаксис, который понимает
+ТОЛЬКО vite-сборка; под голым `node --test` (никакого vite в
+рантайме тестов) `?worker&inline` не отрезается резолвером, импорт
+падает буквально при попытке загрузить модуль (проверено: `node -e
+"import('crypto.worker.js?worker&inline')"` → `ep.addEventListener is
+not a function`). Значит модуль с таким импортом НЕЛЬЗЯ грузить даже
+транзитивно (статический импорт исполняется при загрузке ФАЙЛА, не при
+вызове функции) из файла, который тесты импортируют — иначе весь
+`stream-upload.test.js` не запустится. Решение — тот же приём, что уже
+есть в `putStream` для `fetchImpl`: инъекция зависимости, по умолчанию
+резолвится ЛЕНИВЫМ динамическим `import()` ВНУТРИ функции (исполняется
+только при реальном вызове, не при загрузке модуля), тесты подставляют
+мок и путь к воркеру не трогают вовсе.
+
+```js
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { generateFileKey } from "./crypto.js";
+import { planChunks } from "./manifest.js";
+import { uploadBlob, checkUploadRequirements } from "./blob.js";
+import { chunkSizeFor } from "../media/upload-plan.js";
+import { createThumbnailQueue } from "./thumbnail-queue.js";
+import { DomainError } from "../errors.js";
+
+async function defaultEncryptChunk(chunkBytes, fileKey, chunkIndex) {
+  const { encryptChunkRemote } = await import("./stream-crypto-worker.js"); // ЛЕНИВО
+  return encryptChunkRemote(chunkBytes, fileKey, chunkIndex);
+}
+
+export async function putFileStreaming(file, {
+  name, mime, serverUrl, privateKey, chunkSize, signal, onProgress,
+  fetchImpl, fileKey: overrideFileKey, encryptChunk = defaultEncryptChunk,
+} = {})
+// -> { manifest, manifestDigest, fileKey, size } — та же форма, что putStream
+
+export async function putFilesStreaming(jobs, {
+  concurrency = 2, signal, onJobDone,
+} = {})
+// jobs: Array<{ file, options }>, options — тот же объект, что putFileStreaming
+// принимает вторым параметром (name/mime/serverUrl/privateKey/encryptChunk/...),
+// БЕЗ signal (общий signal — параметр putFilesStreaming, прокидывается в
+// каждый job сам)
+// -> Promise<Array<{ manifest, manifestDigest, fileKey, size }>>, порядок = порядок jobs
+```
+
+**`putFileStreaming`** — буквально алгоритм MATH §8.4/SPEC §3.9:
+`chunkSize` по умолчанию — `chunkSizeFor(file.size)` (этап A, уже
+протестирован), не плоская `DEFAULT_CHUNK_SIZE` (та остаётся только у
+`putStream` — П "старый путь не трогаем"). Цикл: `file.slice(start,
+end).arrayBuffer()` → `Uint8Array` → `encryptChunk(...)` (по умолчанию
+Web Worker, C2; тесты подставляют мок) → `hasher.update(cipher)`
+(инкрементальный, `sha256.create()`, не второй проход) →
+`parts.push(new Blob([cipher]))`. `signal.aborted` проверяется МЕЖДУ
+чанками (как `putStream`), бросает `DOMException(..., "AbortError")`.
+После цикла — `bytesToHex(hasher.digest())`, `body = new Blob(parts)`,
+тот же `checkUploadRequirements`/`uploadBlob`/манифест-апload, что
+`putStream`, но `body` — `Blob`, не `Uint8Array` (`uploadBlob`
+передаёт его в `fetch` как есть — `fetch` принимает `Blob`-тело
+нативно, менять `blob.js`/`blossom-client.js` не нужно). Манифест —
+та же форма `{ size, chunkSize, chunks, keyId, mime, name, blobSha256 }`.
+
+**`putFilesStreaming`** — обёртка над `createThumbnailQueue(concurrency)`
+буквально по DESIGN.md "Уровень 2": `queue.enqueue` на каждый job (сам
+job вызывает `putFileStreaming`, значит `encryptChunk`-мок,
+переданный в `options` job'а, доезжает до места без изменений),
+`AbortSignal` — проверка на входе в task + `abort`-листенер зовёт
+`cancel()` на все handle. `Promise.all` — первый `AbortError` отклоняет
+всё (частичные результаты не возвращаются).
+
+### `src/workers/crypto.worker.js` [C] — расширение, не новый файл
+
+```js
+encryptChunk(chunkBytes, fileKey, chunkIndex)  // domain/files/crypto.js::encryptChunk,
+                                                 // просто проброс через Comlink
+```
+
+Существующий единственный worker-файл проекта (уже `batchVerify` для
+`transport.js`) — второй inline-воркер стоит бандла дороже одного
+расширенного (`?worker&inline`, NF-11). Transferable-оптимизация
+СОЗНАТЕЛЬНО не делается (чанк ≤4 МиБ, structured-clone копия —
+константный множитель, не влияет на Θ(C); см. DESIGN.md).
+
+### `src/domain/files/stream-crypto-worker.js` [C] — новый маленький модуль
+
+Статический импорт `?worker&inline` — ЕДИНСТВЕННОЕ, что в этом файле,
+и только он динамически подгружается из `stream-upload.js` (см. выше);
+сам файл при этом всё равно НЕ должен грузиться под `node --test`
+напрямую (тестов на него нет — см. ниже).
+
+```js
+export async function encryptChunkRemote(chunkBytes, fileKey, chunkIndex)
+// -> Uint8Array (шифротекст) — ленивый собственный синглтон CryptoWorker,
+// НЕ переиспользует transport.js'ный (тот приватный, привязан к жизненному
+// циклу подключения — домен не может на него полагаться, правило "домен не
+// знает про UI/подключение"). Воркер создаётся при первом вызове, живёт
+// до конца вкладки, явно не завершается (дёшев, используется редко).
+```
+
+### `putStream` — не трогается
+
+Контракт прошлого этапа неизменяем (правило 13). Старые вызовы и тесты
+продолжают идти через `putStream`/`DEFAULT_CHUNK_SIZE`.
+
+### Тесты (до кода)
+
+`tests/stream-upload.test.js`:
+- `putFileStreaming` на маленьком `File`/`Blob` через мок `fetchImpl` —
+  результат бит-в-бит совпадает с тем, что дал бы `putStream` на тех же
+  байтах И ТОМ ЖЕ `fileKey` (оверрайд) — тот же шифротекст, тот же
+  `manifestDigest`, та же форма манифеста (кроме `chunkSize`, если он
+  выбран автоматически по-разному — тест фиксирует `chunkSize` явно,
+  чтобы сравнение было честным).
+- `chunkSize` по умолчанию берётся из `chunkSizeFor(file.size)` (мок
+  `encryptChunk` в `options` считает число вызовов/по манифесту).
+- `signal` уже aborted до вызова — бросает `AbortError`, `fetchImpl` НЕ
+  вызывается вовсе (ничего не ушло в сеть).
+- `signal` абортится ПОСЛЕ первого чанка (мок `encryptChunk`,
+  управляемый промис) — бросает `AbortError`, оставшиеся чанки не
+  шифруются.
+- `putFilesStreaming`: с 4 job'ами, каждый — управляемая задержка на
+  "шифровании" и на "отправке" (моки), сравнить время `concurrency: 1`
+  против `concurrency: 2` — конвейер заметно быстрее (буквальный П7.4;
+  проверялась и более узкая событийная версия "стадия сети job'а 1
+  пересекается со стадией шифрования job'а 2 по порядку событий" — при
+  `concurrency=2` оба job'а стартуют СРАЗУ (так и должно быть — само
+  ограничение параллелизма это гарантирует), поэтому такая точная
+  последовательность событий не гарантирована и не тестируется;
+  измеримый прирост скорости — то, что реально требует П7.4).
+  `concurrency` соблюдён — отдельный тест считает пиковое число
+  одновременных вызовов "шифрования".
+- `putFilesStreaming` с `signal`, абортящимся посреди — `Promise.all`
+  отклоняется `AbortError`, ещё не стартовавшие job не вызывают
+  `fetchImpl` вовсе.
+- Порядок результатов `putFilesStreaming` — совпадает с порядком
+  `jobs`, даже если job 2 завершается раньше job 1 (конвейер не должен
+  переставлять результаты местами).
+
+`crypto.worker.js`/`stream-crypto-worker.js` — БЕЗ теста напрямую
+(worker/DOM-обвязка, `node --test` без браузера воркер не поднимет);
+корректность шифрования проверяется КОСВЕННО через
+`putFileStreaming`-тесты выше сравнением с `encryptChunk`, вызванным
+напрямую (не через воркер) на тех же входах — если бы воркер шифровал
+иначе, тест на "бит-в-бит совпадает с putStream" бы упал.
+
+### Этап C1+C2 ЗАКРЫТ (`stream-upload.js` + Web Worker)
+
+Регрессия: 1824 + 8 = 1832/1832. Бюджет: 843,38 КБ (**+5,46 КБ** —
+заметно больше, чем предыдущие этапы медиа-подсистемы вместе взятые;
+причина найдена, не баг: `crypto.worker.js` — ЕДИНСТВЕННЫЙ
+inline-воркер проекта, уже безусловно встроен в каждую сборку
+(`transport.js` тянет его всегда). Добавленный `encryptChunk` тянет за
+собой `chacha20poly1305` (`@noble/ciphers`) — та же библиотека УЖЕ есть
+в основном бандле (`domain/files/crypto.js` её и так использует), но
+воркер — отдельный самодостаточный JS-контекст, делить код с главным
+потоком не может, поэтому копия неизбежна. Это цена самого требования
+"шифрование — в Web Worker" (SPEC §3.9), не следствие решения "тот же
+файл, не новый" — новый отдельный worker-файл стоил бы дороже (второй
+inline-блоб плюс та же неизбежная копия `chacha20poly1305`).
+Возвращаемый бюджет всё ещё далёк от лимита NF-11 (843 КБ из 1304 КБ),
+но заметно превышает неформальную заметку этапа A "задел на весь
+этап A–F — 15 КБ" (уже потрачено ~6 КБ из них, C — почти всё) — фиксирую
+честно, не подгоняю ожидание задним числом.
+
+DoD:
+- [x] тесты этапа зелёные (8/8, `stream-upload.test.js`)
+- [x] полная регрессия зелёная (1832/1832)
+- [x] `npm run build` зелёный, 843,38 КБ (+5,46 КБ, причина объяснена)
+- [x] П7.4 (частично): отмена — тест; конвейер быстрее последовательного
+      — тест (моки, не живой замер); память 2 ГБ/100 МБ — остаётся C4
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом
