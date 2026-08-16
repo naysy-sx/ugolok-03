@@ -3704,14 +3704,28 @@ button:has(> .icon),
    уже в JSX) — здесь только сама кнопка. */
 .markdown-toolbar-btn {
 	flex: none;
-	min-width: 2rem;
+	width: 2rem;
 	height: 2rem;
-	padding-inline: var(--space-2xs);
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-sm, 4px);
 	background: none;
 	color: var(--muted);
-	font-size: var(--step--1);
+	font-size: 1rem;
+}
+/* Глобальный ресет minimal.css (svg{height:auto}) переопределяет HTML-атрибуты
+   width/height="1em" на самом SVG — в обычном block-контексте это резолвится
+   через viewBox-пропорцию нормально, но внутри flex-контейнера (display:flex
+   на самой кнопке) резолвится в 0×0 (найдено живой проверкой, иконка не была
+   видна). Явные width/height здесь побеждают auto-резолюцию. */
+.markdown-toolbar-btn .icon {
+	width: 1em;
+	height: 1em;
+	max-width: none;
+	flex-shrink: 0;
 }
 .markdown-toolbar-btn:hover {
 	background-color: var(--surface);
