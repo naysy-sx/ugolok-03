@@ -266,6 +266,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [hasMore, setHasMore] = useState(false);
 	const [text, setText] = useState("");
 	const [error, setError] = useState("");
+	// Ошибки самой отправки (текст/вложение/голос) — отдельно от error (тот уходит в
+	// ленту сообщений через Screen's children и не виден пользователю при длинной
+	// истории). Рендерится в footer, рядом с кнопкой "Отправить" — там, где
+	// пользователь только что кликнул.
+	const [composeError, setComposeError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
 	const draftTimerRef = useRef(null);
@@ -577,11 +582,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		if (text.length === 0 && !attachmentFile && !recordedVoiceBlob) return; // нечего отправлять
 		if (attachmentFile && attachmentError) return; // невалидное вложение — сначала убрать/заменить
 		if (text.length > MAX_MESSAGE_LENGTH) {
-			setError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
+			setComposeError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
 			return;
 		}
 		busyRef.current = true;
-		setError("");
+		setComposeError("");
 		setBusy(true);
 		try {
 			// Загрузка на Blossom (если есть вложение) — ДО тика Lamport-часов и
@@ -615,7 +620,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
 			await reloadWindow();
 		} catch (err) {
-			setError(errorMessage(err));
+			setComposeError(errorMessage(err));
 		} finally {
 			setUploadingAttachment(false);
 			busyRef.current = false;
@@ -700,6 +705,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			feed
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+					{composeError && (
+						<p role="alert" style={{ color: "var(--bad)" }}>
+							{composeError}
+						</p>
+					)}
+
 					{attachmentFile && (
 						<AttachmentPreview
 							file={attachmentFile}

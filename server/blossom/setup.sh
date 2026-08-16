@@ -16,6 +16,25 @@ if [ ! -d "./blossom-src" ]; then
 	fi
 
 	git clone https://github.com/sebdeveloper6952/blossom-server.git blossom-src
+
+	# Патч поверх вендорного сида: апстримная 3_seed_mime_types.sql содержит
+	# video/webm, но не audio/webm — голосовые сообщения (voice.js пишет Blob как
+	# "audio/webm") с этапа 62 проходят BUD-06-преflight (HEAD /upload), который
+	# сверяет реальный mime с этой таблицей, и получают 415. Новый файл миграции,
+	# а не правка 3_seed_mime_types.sql — библиотека миграций применяет файлы по
+	# имени один раз и, вероятно, палит чек-сумму уже применённых; новый файл
+	# безопасен и подхватится автоматически при следующем запуске ./bin/app
+	# (db.NewDB читает db/migrations на каждом старте, cmd/api/main.go).
+	cat > blossom-src/db/migrations/4_add_audio_webm.sql <<'EOF'
+-- +migrate Up
+INSERT INTO mime_types(extension, mime_type)
+VALUES
+(".weba","audio/webm");
+
+-- +migrate Down
+DELETE FROM mime_types WHERE mime_type = "audio/webm";
+EOF
+
 	cd blossom-src
 	# Headless-сборка (без тега ui — админ-панель на Svelte/pnpm не нужна для тестового
 	# сервера, используемого только клиентом "Уголок"). CGO_ENABLED=1 нужен для
