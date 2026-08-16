@@ -15966,4 +15966,4 @@ DoD:
       `addFiles([])` на полном лотке, неизвестный `id` у `remove`/
       `setPosition`, `planUpload([])`) разобраны, ничего не открыто
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
-- [ ] коммит — следующим шагом
+- [x] коммит (d3b75ed)
