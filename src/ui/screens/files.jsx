@@ -41,7 +41,8 @@ import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
-import { getManifest, getRange, putStream } from "../../domain/files/content.js";
+import { getManifest, getRange } from "../../domain/files/content.js";
+import { putFileStreaming } from "../../domain/files/stream-upload.js";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
@@ -233,8 +234,7 @@ export default function Files() {
 			uploadAbortRef.current = controller;
 			setUploadState({ fileName: file.name, fileIndex: i + 1, filesTotal: files.length, chunksDone: 0, chunksTotal: 1 });
 			try {
-				const bytes = new Uint8Array(await file.arrayBuffer());
-				const { manifestDigest, fileKey } = await putStream(bytes, {
+				const { manifestDigest, fileKey } = await putFileStreaming(file, {
 					name: file.name,
 					mime: file.type || "application/octet-stream",
 					serverUrl: BLOSSOM_URL,

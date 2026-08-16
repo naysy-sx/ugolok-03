@@ -1,7 +1,7 @@
 import { useState, useCallback } from "preact/hooks";
 import * as core from "./attachment-tray-core.js";
 import { errorMessage } from "../signals/i18n.js";
-import { uploadMessageAttachment, referenceStoredFile } from "../../domain/messaging/attachments.js";
+import { uploadMessageAttachmentStreaming, referenceStoredFile } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
@@ -25,8 +25,7 @@ export function useAttachmentTray({ maxItems }) {
 				if (job.kind === "reference") {
 					descriptor = referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest);
 				} else {
-					const bytes = new Uint8Array(await job.file.arrayBuffer());
-					descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: job.mime, name: job.name }, privKey);
+					descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey);
 				}
 				if (job.isImage) descriptor.position = job.position;
 				results.push(descriptor);

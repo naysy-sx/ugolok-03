@@ -8,6 +8,7 @@
 // просто источник ключа/адресации — content-addressed чанкованное хранилище
 // files, а не отдельное whole-file шифрование attachments).
 import { putStream, getManifest, getRange } from "../files/content.js";
+import { putFileStreaming } from "../files/stream-upload.js";
 import { validateAttachment } from "../files/attachment-validation.js";
 import { classOf } from "../media/media-ref.js";
 
@@ -35,6 +36,19 @@ function attachmentTypeFromMime(mime) {
 export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: fileBytes.length });
 	const { manifestDigest, fileKey, size } = await putStream(fileBytes, { name, mime, serverUrl, privateKey, ...options });
+	return { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+}
+
+// Этап C медиа-подсистемы — тот же путь "с диска", но file — File|Blob, не
+// Uint8Array: байты НЕ читаются в память целиком до загрузки (putFileStreaming
+// сам делает срезы, Θ(C) память вместо Θ(S)). Используется use-attachment-
+// tray.js::uploadAll — ЕДИНСТВЕННЫЙ вызывающий, у которого на входе реальный
+// File (из <input type="file">), а не уже готовые байты (аватары чата/канала/
+// профиля продолжают idти через uploadMessageAttachment — там bytes уже в
+// руках вызывающей стороны, streaming для них не даёт выигрыша).
+export async function uploadMessageAttachmentStreaming(serverUrl, file, { mime, name }, privateKey, options = {}) {
+	validateAttachment({ mime, size: file.size });
+	const { manifestDigest, fileKey, size } = await putFileStreaming(file, { name, mime, serverUrl, privateKey, ...options });
 	return { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
 }
 

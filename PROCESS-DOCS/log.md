@@ -6164,3 +6164,34 @@ DoD:
 - [x] npm run build зелёный (843,38 КБ, причина роста объяснена)
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (d5540c4)
+
+## Медиа-подсистема — Этап C3 (подключение в files.jsx и uploadAll)
+
+1. Сужение против плана (решение PM): `files.jsx` грузит несколько
+   файлов ПОСЛЕДОВАТЕЛЬНО не случайно — комментарий в коде фиксирует
+   это как сознательное решение ("прогресс понятен как файл N из M").
+   putFilesStreaming (конвейер, concurrency>1) ломает именно это.
+   Решение — подключить только putFileStreaming (Θ(C) память + воркер,
+   UX не меняется), putFilesStreaming остаётся готовой но неподключённой
+   инфраструктурой, доложено пользователю отдельно.
+2. attachments.js: uploadMessageAttachmentStreaming (File|Blob вместо
+   Uint8Array) рядом со старым uploadMessageAttachment (тот остаётся —
+   им пользуются аватары чата/канала/профиля, byte-based, streaming не
+   даёт им выигрыша).
+3. use-attachment-tray.js::uploadAll — снят .arrayBuffer() пред-чтение,
+   прямой вызов uploadMessageAttachmentStreaming(job.file, ...).
+4. files.jsx::handleFilesSelected — putStream(bytes)→putFileStreaming(file),
+   тот же цикл, та же форма onProgress/signal.
+5. Регрессия 1832/1832 (тонкий слой, без новых тестов). Бюджет 845,12
+   КБ (+1,74 — файлы стали реально импортируемыми, не мёртвым кодом).
+6. Живая проверка (2 аккаунта, реальный strfry+Blossom): вложение из
+   личного чата (лоток) — отправлено/принято/скачивается. "Файлы" —
+   2 файла загружены через putFileStreaming, оба в дереве. Консоль
+   чистая.
+
+DoD:
+- [x] полная регрессия зелёная (1832/1832)
+- [x] npm run build зелёный (845,12 КБ)
+- [x] живая проверка — оба пути работают
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом

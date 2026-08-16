@@ -16349,3 +16349,84 @@ DoD:
       — тест (моки, не живой замер); память 2 ГБ/100 МБ — остаётся C4
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (d5540c4)
+
+## Медиа-подсистема — Этап C3 (подключение в `files.jsx` и в `uploadAll` лотка)
+
+**Сужение против первоначального плана, решение PM**: `files.jsx`
+(`handleFilesSelected`) грузит несколько файлов ПОСЛЕДОВАТЕЛЬНО не
+случайно — комментарий в коде на месте фиксирует это как осознанное
+решение ("не перегружать шифрование/сеть, прогресс остаётся понятным
+как «файл N из M»"). `putFilesStreaming` (конвейер, `concurrency>1`)
+ломает это ровно тем, что делает полезным — два файла в работе
+одновременно, "файл N из M" перестаёт быть однозначным. Менять
+принятое решение прошлого этапа — по правилу 13 отдельное явное
+решение с немедленной регрессией, не тихая подмена внутри "рутинного"
+подключения. Решение: **этим проходом не меняю UX `files.jsx`** —
+подключаю только `putFileStreaming` (одиночный файл, Θ(C) память +
+воркер, СЕМАНТИКА "N из M" не меняется, чистое улучшение без риска).
+`putFilesStreaming` остаётся готовой, протестированной (C1+C2), но
+пока НИГДЕ в UI не подключённой инфраструктурой — доложено пользователю
+отдельно, не спрятано.
+
+### `src/domain/messaging/attachments.js` — новая функция рядом с `uploadMessageAttachment`
+
+```js
+export async function uploadMessageAttachmentStreaming(serverUrl, file, { mime, name }, privateKey, options = {})
+// file — File | Blob (НЕ Uint8Array — в этом и весь смысл, байты не
+// читаются в память ДО вызова, putFileStreaming сам делает срезы)
+// -> тот же дескриптор, что uploadMessageAttachment: {type, manifestDigest,
+//    fileKey (base64), mime, size, name}
+```
+
+Буквально `uploadMessageAttachment`, но `putFileStreaming(file, ...)`
+вместо `putStream(bytes, ...)` — `validateAttachment`/
+`attachmentTypeFromMime`/`base64FromBytes` переиспользуются как есть.
+`uploadMessageAttachment` (старый, `Uint8Array`) НЕ удаляется — им,
+предположительно, всё ещё пользуются старые пути/тесты (проверить
+явно перед принятием, не удалять по умолчанию).
+
+### `src/ui/hooks/use-attachment-tray.js` — `uploadAll`
+
+`job.file.arrayBuffer()` (читало ВЕСЬ файл в память ДО начала загрузки
+— именно то, что Θ(C) отменяет) заменяется прямым вызовом
+`uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, {mime,
+name}, privKey)`. Цикл по `jobs` остаётся последовательным (как был,
+B3/B4 контракт не менялся) — только сам вызов внутри итерации.
+
+### `src/ui/screens/files.jsx` — `handleFilesSelected`
+
+`const bytes = new Uint8Array(await file.arrayBuffer()); await
+putStream(bytes, {...})` заменяется на `await putFileStreaming(file,
+{...})` (те же поля опций, `onProgress` — та же форма
+`{chunksDone,chunksTotal}`, `signal` — тот же `uploadAbortRef`). Цикл
+`for` по `files` остаётся буквально тем же (не переписывается на
+`putFilesStreaming`, см. сужение выше).
+
+### Тесты
+
+Не пишутся отдельно — `putFileStreaming` уже покрыт этапом C1+C2,
+`uploadMessageAttachmentStreaming` — тонкая обвязка без новой логики
+(тот же прецедент "тонкий слой без теста"). Приёмка — регрессия +
+`npm run build` + живая проверка (отправка вложения из личного чата/
+канала, загрузка файла в "Файлы" — оба пути реально шлют/принимают).
+
+### Этап C3 ЗАКРЫТ
+
+Регрессия: 1832/1832 (без новых тестов — тонкий слой). Бюджет: 845,12
+КБ (+1,74 КБ — `stream-upload.js`/`stream-crypto-worker.js` стали
+реально импортируемыми, раньше были мёртвым кодом с точки зрения
+бандлера).
+
+Живая проверка (те же два аккаунта, реальный strfry+Blossom):
+personal-чат — вложение через лоток (`uploadMessageAttachmentStreaming`)
+отправлено и принято собеседником, скачивается. "Файлы" — два файла
+загружены через `putFileStreaming` (последовательно, семантика "N из
+M" не тронута), оба видны в дереве. Консоль чистая (кроме уже
+известного несвязанного MLS-warning).
+
+DoD:
+- [x] полная регрессия зелёная (1832/1832)
+- [x] `npm run build` зелёный, 845,12 КБ
+- [x] живая проверка — оба пути (лоток, "Файлы") реально шлют/принимают
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом
