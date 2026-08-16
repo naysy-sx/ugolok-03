@@ -9,6 +9,7 @@
 // files, а не отдельное whole-file шифрование attachments).
 import { putStream, getManifest, getRange } from "../files/content.js";
 import { validateAttachment } from "../files/attachment-validation.js";
+import { classOf } from "../media/media-ref.js";
 
 function base64FromBytes(bytes) {
 	return btoa(String.fromCharCode(...bytes));
@@ -18,11 +19,12 @@ function base64ToBytes(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
 }
 
+// Этап A медиа-подсистемы (MEDIA-SPEC.md §3.1) — classOf единственное место
+// классификации mime; "other" -> "file" сохраняет уже принятый в дескрипторах
+// и сохранённых сообщениях словарь, менять его нельзя (не новый формат).
 function attachmentTypeFromMime(mime) {
-	if (mime.startsWith("video/")) return "video";
-	if (mime.startsWith("audio/")) return "audio";
-	if (mime.startsWith("image/")) return "image";
-	return "file";
+	const c = classOf(mime);
+	return c === "other" ? "file" : c;
 }
 
 // Путь "с диска" (chat.jsx/channel.jsx/pending-attachment.js) — реальная

@@ -15313,3 +15313,251 @@ DoD:
 при старте Этапа E): `greeting` НЕ показывать** — это отдельная,
 незапланированная в ТЗ задача, вне скоупа. На Этапе E для этого пункта
 ТЗ трогать нечего — рендер-места для него просто не существует.
+
+---
+
+## Медиа-подсистема — Этап A (чистое ядро `src/domain/media/`)
+
+Источники: `PROCESS-DOCS/MEDIA-SYSTEM/{MEDIA-MATH,MEDIA-ALGO,MEDIA-SPEC}.md`.
+Design-записка автомата — `DESIGN.md` "Медиа-подсистема — Этап A".
+Ничего не подключается к UI/адаптерам в этом этапе. Всё в `node --test`.
+
+### `src/domain/media/playlist.js` [C]
+
+```js
+/**
+ * @typedef {Object} Playlist
+ * @property {MediaRef[]}   items
+ * @property {Uint8Array}   cls    позиция → 0 audio | 1 video | 2 image | 3 other
+ * @property {Int32Array}   rank   позиция → номер внутри своего класса
+ * @property {{audio:Int32Array, video:Int32Array, image:Int32Array}} idx
+ * @property {Float64Array} pref   префиксные суммы size, длина items.length+1
+ */
+export function buildPlaylist(refs, { dedupeClasses = ["audio", "video"] } = {})
+export function classesPresent(pl)               // → {audio, video, image} — булевы
+export function stepInClass(pl, position, delta)  // → позиция | -1
+export function firstOfClass(pl, cls)             // → позиция | -1
+export function windowByBudget(pl, position, budgetBytes, maxSpan)  // → {l, r}, полуинтервал
+```
+
+Порядок классов в `cls`/`idx`: `0=audio, 1=video, 2=image, 3=other`
+(фиксировано, используется и в `media-machine.js`, и в тестах —
+менять только вместе).
+
+**`buildPlaylist`** — ALGO §4.2 буквально: два прохода (подсчёт →
+выделение `idx[c] = Int32Array(cnt[c])` → размещение с одновременным
+заполнением `rank`). `pref[0] = 0`, `pref[j+1] = pref[j] + refs[j].size`
+ДО дедупликации по позициям (после дедупликации — по оставшимся
+позициям, индексация внутри `items`, не внутри исходного `refs`).
+Дедупликация (`dedupeClasses`) — первое вхождение остаётся, повторные
+исключаются из `items` целиком (не просто из `idx`) — ALGO §4.1,
+`Set<digest>` в одном проходе с построением `L`.
+
+**`stepInClass`**: `c = pl.cls[position]`, `r = pl.rank[position]`,
+результат — `pl.idx[classNameOf(c)][r + delta]`, либо `-1`, если
+`r + delta` вне `[0, idx[c].length)`. `Θ(1)`.
+
+**`windowByBudget`**: наибольшее по включению окно `[l, r)` вокруг
+`position`, укладывающееся в `budgetBytes` (`pref[r]-pref[l] ≤ budgetBytes`)
+и не длиннее `maxSpan` позиций. Два указателя (ALGO §3.3): `l, r`
+инициализируются в `position, position+1` и раздвигаются, пока влезают
+оба ограничения; направление раздвижения — поочерёдно влево/вправо
+(симметрично вокруг `position`, не «сначала всё вправо»). При
+`budgetBytes = 0` или `maxSpan ≤ 1` → `{l: position, r: position+1}`
+(минимум — сам элемент, окно никогда не пустое для валидной `position`).
+
+### `src/domain/media/media-machine.js` [C]
+
+```js
+/**
+ * @typedef {null | {
+ *   cls: "audio"|"video"|"image",
+ *   position: number,
+ *   display: "full"|"mini",
+ *   play: "playing"|"paused"|"suspended",
+ *   callActive: boolean
+ * }} MediaState
+ */
+export const EVENTS = ["open","next","prev","toggle","minimize","restore",
+                       "close","callStart","callEnd","ended","seek"];
+
+/** ТОТАЛЬНА. payload: open → {cls, position}; seek → {t} (игнорируется машиной); прочие — не используются. */
+export function transition(state, event, payload, playlist)
+
+/** Чистая функция состояния — MATH §6.2 + windowByBudget для image (DESIGN.md). */
+export function allocWindow(state, playlist, budgetBytes)
+```
+
+Полная таблица переходов, разбор недоопределённых по SPEC ячеек
+(`open`+звонок, `callStart`/`callEnd`+`callActive`, `next`/`prev`/`ended`
+на границе класса, `seek`, `minimize` на image) — **буквально** в
+`DESIGN.md` "Медиа-подсистема — Этап A: формализация автомата". Реализация
+транскрибирует псевдокод оттуда один в один, включая обоснования (это
+формализация Claude, не задание воркеру — правило 13b).
+
+Инварианты И1–И6 — SPEC §3.4 дословно; тест A5 обходом графа
+достижимости проверяет их все плюс тотальность `δ` (все `37×11` пар
+состояние×событие, не только достижимые).
+
+### `src/domain/media/media-ref.js` [W]
+
+Найдено разведкой по коду (важно для контракта):
+`attachmentTypeFromMime` (`src/domain/messaging/attachments.js:21-26`,
+НЕ экспортирована) классифицирует в `"video"|"audio"|"image"|"file"`
+(`"file"` — фолбэк). Дескриптор вложения (и чата, и канала — один
+формат, `uploadMessageAttachment`/`referenceStoredFile`,
+`attachments.js:33-54`): `{type, manifestDigest, fileKey (base64-
+строка!), mime, size, name}`; голосовые получают `descriptor.voice =
+true` ОТДЕЛЬНО, на стороне `chat.jsx` (не часть базового дескриптора).
+`Node` (`tree.js`, `mkNode`) хранит `{id, kind, blob, par, name, origin,
+purged}` — **без `size`** (размер — только в манифесте).
+
+```js
+/** @returns {"audio"|"video"|"image"|"other"} */
+export function classOf(mime)
+
+/** attachment: {manifestDigest, fileKey (base64), mime, name, size}. key всегда резолвится (fileKey у дескриптора не бывает пустым). */
+export function refFromAttachment(attachment, sourceMeta)
+
+/** ОТКЛОНЕНИЕ от буквальной сигнатуры SPEC §3.1 (node, mime, key): добавлен
+ *  4-й параметр size. Причина: MediaRef.size обязателен по typedef, а Node
+ *  (tree.js) поля size не хранит вовсе — только манифест его знает, и
+ *  вызывающая сторона (Этап E/F, ещё не написана) обязана передать его
+ *  явно, как уже передаёт mime и key. Дёшево отменить (не экспортируемая
+ *  наружу пара функций), решение Claude, не вопрос пользователю. */
+export function refFromNode(node, mime, key, size)
+```
+
+`classOf`: `mime.startsWith("audio/") → "audio"`, `"video/" → "video"`,
+`"image/" → "image"`, иначе `"other"`.
+
+`refFromAttachment`: `digest = attachment.manifestDigest`, `key =
+base64ToBytes(attachment.fileKey)` (свой приватный `base64ToBytes` в
+`media-ref.js` — 2 строки, тот же код, что уже приватно дублирован в
+`attachments.js`; общего экспортируемого хелпера в проекте нет, заводить
+не по масштабу этой задачи), `mime/name/size` — с дескриптора один в
+один, `sourceKind: "attachment"`, `sourceMeta` — как передано вызывающей
+стороной.
+
+`refFromNode`: `digest = node.blob`, `key`/`mime`/`size` — параметры как
+есть, `name = node.name.value` (LWW-регистр — только `.value`),
+`sourceKind: "node"`, `sourceMeta: {nodeId: node.id}`.
+
+**Часть A1 — точечная правка существующего файла (мандат самого
+SPEC §3.1): `attachmentTypeFromMime` НАЧИНАЕТ звать `classOf`, а не
+дублировать классификацию.** Существующий вызывающий код и уже
+сохранённые сообщения используют строку `"file"` (не `"other"`) как
+класс "прочее" — это часть уже принятого сетевого/доменного формата
+(поле `type` дескриптора), менять её нельзя. Правка:
+
+```js
+import { classOf } from "../media/media-ref.js";
+function attachmentTypeFromMime(mime) {
+	const c = classOf(mime);
+	return c === "other" ? "file" : c;
+}
+```
+
+Поведенчески — noop (тот же результат на всех входах), тест на
+`attachments.js` — регрессия, не новый тест.
+
+### `src/domain/media/scope.js` [W]
+
+Найдено разведкой: **общей экспортируемой функции сравнения "братьев"
+комментариев в кодовой базе НЕТ.** Сортировка сейчас — приватный инлайн
+`.sort((a,b) => a.createdAt - b.createdAt)` внутри неэкспортируемой
+`buildTree` (`src/domain/content/comments.js:135`), БЕЗ tie-break по
+`id` (т.е. без полного порядка при совпадении `createdAt` — слабое
+место сравнения с Утв. 1 матдокумента, которое существовало и до этой
+работы). **Это не блокирует Этап A**: контракт `collectPostScope`
+получает `compareSiblings` ПАРАМЕТРОМ (SPEC §3.2), а не берёт его сам
+— инъекция специально изолирует чистое ядро от того, что общей функции
+пока нет. **Долг, переносится в Этап D/F (не в этот контракт)**:
+вынести сравнение из `comments.js` в экспортируемую функцию с
+tie-break по `id`, использовать её и в отрисовке треда, и при вызове
+`collectPostScope` — иначе нарушится ЖЕ Утв. 2 (SPEC §3.2, "не
+`такой же`, а `той же` функцией").
+
+`loadChatWindow` (`src/core/sync/lazy-chat.js`) уже возвращает
+`messages`, отсортированные по `(lamportTs, senderPubkey, id)` —
+предположение контракта "уже отсортированное окно" подтверждено.
+Сегодняшнее поле сообщения — `attachment` (единственное число, до
+Этапа B). `collectChatScope` пишется под ЦЕЛЕВУЮ форму Этапа B
+(`message.attachments: []`) — реальная проводка случится в Этапе D/F,
+когда B уже закрыт; юнит-тесты Этапа A используют синтетические
+сообщения с `attachments`.
+
+```js
+/** compareSiblings — параметр, не импорт (общей функции пока нет, см. выше). */
+export function collectPostScope({ post, commentsTree, compareSiblings })
+export function collectChatScope(messages)      // messages[].attachments — целевая форма Этапа B
+export function collectFolderScope(entries, keyOf)
+// все три: → MediaRef[], БЕЗ дедупликации (её делает playlist.js/buildPlaylist — SPEC §3.2/3.3 разносят обход и дедуп по разным модулям)
+```
+
+`collectChatScope`: по порядку `messages`, для каждого — если
+`message.attachments` есть и не `voice`-элемент (SPEC §1.4: голосовые,
+`voice === true`, не в плейлисте), `refFromAttachment(a, {msgId:
+message.id})` для каждого элемента массива по порядку.
+
+`collectPostScope`: итеративный обход явным стеком (ALGO §4.1, не
+рекурсия — глубина ответов не ограничена), `compareSiblings` сортирует
+детей на каждом уровне. Вложения самого поста — `refFromAttachment(a,
+{postId: post.id})` (SPEC's пример `sourceMeta` не исчерпывающий список
+ключей, `postId` добавлен по той же логике, что и `nodeId` — для
+отладки/подписи, не влияет на равенство/дедуп, тот идёт по `digest`).
+Вложения комментария — `refFromAttachment(a, {commentId: comment.id})`.
+Тест на порядок — буквально из ALGO §4.1: дерево «корень → A, B; A →
+A1, A2» даёt `A, A1, A2, B`.
+
+`collectFolderScope(entries, keyOf)`: `entries` — уже отфильтрованные
+и отсортированные (текущая сортировка экрана) записи вида `{node, mime,
+size}` (caller разрешает `mime`/`size` заранее — Этап E денормализует
+`mime` в узел, `size` всё равно только в манифесте, тот же довод, что у
+`refFromNode`); `keyOf(entry) → Uint8Array|null` — извлекает ключ файла
+(в папке ключи резолвятся ЛЕНИВО через отдельный `getFileKeyFor`,
+внешний по отношению к дереву — `null`, пока не резолвлен, это и есть
+задокументированный в SPEC случай `MediaRef.key === null`). Собственная
+защита от не-файлов внутри (`entry.node.kind === "file"`), даже если
+вызывающая сторона уже отфильтровала — дёшево, не вредит.
+
+### `src/domain/media/upload-plan.js` [W]
+
+```js
+/** clamp(2^round(log2 √(h·size)), 64КиБ, 4МиБ), h=67 — ALGO §4.8, MATH §8.2. */
+export function chunkSizeFor(size)
+/** По возрастанию size — MATH §8.5 (Утв. 11: порядок почти не важен, конвейер обязателен). */
+export function orderUploads(files)   // files: [{size, ...}] → тот же тип, переставленный
+```
+
+`chunkSizeFor`: `64*1024 * 2^n`, `n = round(log2(√(67*size) / 65536))`,
+зажатое так, что результат ∈ `{65536, 131072, 262144, 524288, 1048576,
+2097152, 4194304}` (степени двойки от 64 КиБ до 4 МиБ включительно).
+При `size = 0` или отрицательном — `64*1024` (нижняя граница, не
+`NaN`/деление на ноль).
+
+### Этап A ЗАКРЫТ
+
+Реализовано ровно по контракту. `media-ref.js`/`scope.js`/`upload-
+plan.js` — воркер, все три с первой попытки (8/8, 12/12, 11/11).
+`playlist.js`/`media-machine.js` — Claude, по формализации `DESIGN.md`.
+`attachments.js` — точечная правка (`attachmentTypeFromMime` зовёт
+`classOf`), регрессия файла (54 теста) не тронута.
+
+**A5 нашёл реальный дефект, не гипотетический**: в `doEnded` не было
+проверки `callActive`, найдено при первом же прогоне обхода в ширину
+на состоянии `audio|suspended|callActive=true`, событие `ended`. Разбор
+и исправление — `DESIGN.md`.
+
+Регрессия: 1717 + 76 = 1793/1793. Бюджет: 836,89 КБ (+0,09 КБ —
+`domain/media/` пока не подключён к UI, кроме `classOf` транзитивно
+через `attachments.js`).
+
+DoD:
+- [x] тесты этапа зелёные (76/76), полная регрессия зелёная (1793/1793)
+- [x] `npm run build` зелёный, 836,89 КБ
+- [x] критерии приёмки §7.1–7.2 (плейлист 10⁴ < 50мс, `stepInClass`
+      не растёт, глубина 10⁴ не роняет стек, обход автомата — все
+      состояния/И1–И6/тотальность `δ`) — все пройдены тестами
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [x] коммит
