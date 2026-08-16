@@ -4897,6 +4897,6 @@ DoD:
 - [x] `grep dangerouslySetInnerHTML\|innerHTML` src/ — пусто
 - [x] живая проверка полная, адверсарный заход живьём — XSS не проходит
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
-- [ ] коммит — следующим шагом
+- [x] коммит (5c247fc)
 
 **MARKDOWN-TASK.md — все этапы (A, E, D, C.0, C) закрыты.**
