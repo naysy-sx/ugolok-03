@@ -755,6 +755,7 @@
 		"postNotFound": "nie znaleziono posta",
 		"relayRejected": "relay odrzucił publikację",
 		"selfHostedFingerprintMismatch": "odcisk serwera różni się od zapisanego wcześniej dla tego adresu — serwer mógł zostać podmieniony",
+		"tooManyAttachments": "można załączyć maksymalnie {{max}} plików naraz",
 		"urlNotInList": "adresu URL nie ma na liście — najpierw go dodaj"
 	},
 	"quick": {

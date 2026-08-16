@@ -15747,4 +15747,223 @@ DoD:
 - [x] живая проверка — старый формат читается, новый пишется и
       читается, сквозь реальное шифрование/публикацию/приём
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [x] коммит (80f03fc)
+
+
+## Медиа-подсистема — Этап B3 (`use-attachment-tray.js` + `attachment-tray.jsx`)
+
+Рутинная задача (13a-а) — теоретическая фаза (13b) не нужна.
+
+**Поправка после разведки перед вызовом воркера**: в проекте НЕТ
+инфраструктуры для тестирования Preact-хуков (`useState` внутри) —
+ни jsdom/happy-dom, ни рендер-стенда, ни у одного из существующих
+хуков (`use-details-menu.js`, `use-virtual-window.js`) тестов нет.
+Единственный проверенный в этом кодовой базе способ протестировать
+логику из JSX/хука — вынести её в чистую функцию на плоском состоянии
+(прецедент — `message-bubble-attachments.js`, SPEC §0.3). Поэтому
+`use-attachment-tray.js` делится на два файла вместо одного, названного
+в MEDIA-SPEC.md §3.11 — расширение контракта, не отступление от него:
+
+- `src/ui/hooks/attachment-tray-core.js` [W] — чистые функции над
+  плоским `{ items, errors }`, без `preact/hooks`, без i18n. Тестируется
+  `node --test` напрямую.
+- `src/ui/hooks/use-attachment-tray.js` [W] — тонкая обвязка `useState`
+  поверх ядра + сетевые вызовы `uploadAll`. БЕЗ теста (тонкий слой,
+  прецедент — `markdown-format-toolbar.jsx` "без тестов" в контракте
+  Markdown-этапа D).
+
+Только хук + "глупый" компонент лотка, СТАНДАЛОН — не подключены к
+композерам (то B4).
+
+### `src/ui/hooks/attachment-tray-core.js` [W]
+
+```js
+import { DomainError } from "../../domain/errors.js";
+import { classOf } from "../../domain/media/media-ref.js";
+import { validateAttachment } from "../../domain/files/attachment-validation.js";
+
+emptyTrayState()
+// -> { items: [], errors: [] }
+
+addFiles(state, files, maxItems)
+// files: File[] | FileList (итерируется как массив)
+// -> новый { items, errors }, см. "Лимит/Валидация" ниже
+
+addFromStorage(state, refs, maxItems)
+// refs: Array<{ manifestDigest, fileKey, manifest }> — та же форма,
+// что chat.jsx::handleAttachmentFromStorage уже строит как
+// attachmentSourceRef (manifest.mime/name/size — источник дескриптора)
+// -> новый { items, errors }, та же семантика лимита/валидации
+
+setItemPosition(state, id, position)
+// position: "above" | "below"; item с type !== "image" — no-op
+// -> новый items (errors не трогает)
+
+removeItem(state, id)
+// -> новый items (errors не трогает)
+
+planUpload(items)
+// -> Array<Job>, см. ниже; бросает DomainError, если хоть у одного
+//    item истинный item.error (проверка ДО построения плана — ничего
+//    частично не возвращает)
+```
+
+Item:
+
+```js
+{
+  id,          // crypto.randomUUID() — конвенция проекта (contacts.js/
+               // call-fsm.js/post.js/channel.js/comments.js/journal.js)
+  file,        // File | null — заполнено addFiles
+  storageRef,  // { manifestDigest, fileKey, manifest } | null — addFromStorage
+  mime, name, size,  // из file.* либо storageRef.manifest.*
+  type,        // classOf(mime) с "other"->"file" — та же переклассификация,
+               // что messaging/attachments.js::attachmentTypeFromMime
+               // (приватная там; здесь короткая копия — тот же
+               // сознательный дубль, что уже в attachment-preview.jsx)
+  position,    // "above" | "below", только для type==="image", по умолчанию "below"
+  error,       // DomainError | undefined — из validateAttachment; невалидный
+               // item ОСТАЁТСЯ в items (пользователь видит и убирает сам,
+               // паттерн с этапа 29). НЕ локализовано здесь — это делает
+               // use-attachment-tray.js на границе (errorMessage(err))
+}
+```
+
+Job (элемент результата `planUpload`):
+
+```js
+{ id, kind: "reference", manifestDigest, fileKey, manifest, isImage, position }
+// или
+{ id, kind: "upload", file, mime, name, isImage, position }
+```
+
+Поведение:
+
+- **Лимит `maxItems`** считается от `state.items.length` ДО вызова.
+  Свободных мест 0 → ничего не добавляется, `errors` = [DomainError],
+  `items` не меняется. Мест меньше, чем входных файлов, → добавляется
+  срез по числу мест, `errors` = [DomainError] на остаток. Всё
+  поместилось → `errors` = `[]` (успешный вызов стирает след
+  предыдущего переполнения). DomainError в обоих случаях:
+  `new DomainError(\`нельзя добавить больше ${maxItems} вложений\`,
+  "errors.tooManyAttachments", { max: maxItems })` — ключ уже добавлен
+  этим этапом во все 12 locale-файлов, `{{max}}` — единственный параметр.
+- **Валидация на добавление**: `validateAttachment({ mime, size })` на
+  каждый принятый файл/ref (внутри среза по лимиту); поймали →
+  `item.error = <пойманный DomainError>`. `type` вычисляется независимо
+  от валидности (`classOf` понимает любую строку mime, включая мусор).
+- `planUpload` НЕ выполняет сеть и не импортирует `uploadMessageAttachment`/
+  `referenceStoredFile` — только решает, что бы вызвал верхний слой,
+  и в каком порядке (порядок `items`).
+
+### `src/ui/hooks/use-attachment-tray.js` [W] — без теста
+
+```js
+import { useState, useCallback } from "preact/hooks";
+import * as core from "./attachment-tray-core.js";
+import { errorMessage } from "../signals/i18n.js";
+import { uploadMessageAttachment, referenceStoredFile } from "../../domain/messaging/attachments.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+
+useAttachmentTray({ maxItems })
+// -> {
+//   items,   // Item[] с item.error уже как string|undefined (errorMessage применён)
+//   errors,  // string[] (errorMessage применён к каждому)
+//   addFiles(fileList), addFromStorage(refs),
+//   setPosition(id, position), remove(id), reset(),
+//   uploadAll(privKey, onProgress), // async -> Promise<descriptor[]>
+// }
+```
+
+`BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]` — та же
+константа, что `pending-attachment.js`; хук её сам определяет, не
+принимает параметром (тот же выбор, что уже сделан в этом файле).
+
+`uploadAll(privKey, onProgress)`: `core.planUpload(state.items)` —
+если бросает, `uploadAll` пробрасывает исключение сразу, ничего не
+грузит (то же защитное условие, что сейчас разбросано по трём
+композерам: `if (attachmentFile && attachmentError) return;` — здесь
+одно место вместо трёх, ради чего и делается B3/B4). Иначе —
+последовательно (не параллельно: предсказуемый прогресс, сеть и так
+сериализована в `putStream`) по каждому `Job`: `kind === "reference"` →
+`referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest)`
+(без сети); `kind === "upload"` → `new Uint8Array(await
+job.file.arrayBuffer())` → `uploadMessageAttachment(BLOSSOM_SERVER_URL,
+bytes, { mime: job.mime, name: job.name }, privKey)`. `job.isImage` →
+`descriptor.position = job.position`. После каждого элемента —
+`onProgress?.(done, total)` (`done` считает с 1). Пустой `items` →
+`uploadAll` возвращает `[]`, `onProgress` не вызывается.
+
+`reset()` — `setState(core.emptyTrayState())`.
+
+### `src/ui/components/media/attachment-tray.jsx` [W] — без теста
+
+Новая директория — первый файл `ui/components/media/` (остальные пять
+компонентов туда попадут этапом D, MEDIA-SPEC.md §2.4; директория
+заводится этим этапом, не раньше).
+
+"Глупый" компонент — только props, без вызова хука и без импорта
+домена (правило §2.2 MEDIA-SPEC.md). НЕ переиспользует
+`AttachmentPreview` буквально (он расчитан на один `File`, картиночное
+превью через `URL.createObjectURL(file)` — у storage-item файла нет,
+подсовывать чужеродный объект вместо `File` — обход типа ради
+формы, не годится). Вместо этого — собственная лёгкая строка на item:
+иконка по `type` (та же карта эмодзи, что в `attachment-preview.jsx` —
+сознательный дубль, тот же прецедент) ИЛИ картинка через
+`URL.createObjectURL(item.file)` (`useMemo`+revoke в `useEffect`,
+как в `attachment-preview.jsx`), только когда `item.file` реально
+есть И `item.type === "image"` — для storage-item превью всегда
+иконка (сужение, приемлемо для B3, не блокирует). Плюс имя, размер,
+`item.error` под именем, radio "above"/"below" только для
+`type==="image"`, кнопка "Убрать".
+
+Пропы: `{ items, errors, onRemove(id), onPositionChange(id, position) }`
+— `attachment-tray.jsx` НЕ вызывает хук сам (композер держит хук,
+передаёт данные и колбэки вниз — обычная связка контейнер/вид).
+`errors` рендерятся списком под лотком (пусто — ничего не рендерится).
+
+### Тесты (до кода)
+
+`tests/attachment-tray-core.test.js` — покрыть: `emptyTrayState()`
+форма; `addFiles` валидных `< maxItems` — все добавлены, `errors=[]`,
+`id` уникальны, `type` верный; `addFiles` переполняет — срез по
+свободным местам + `errors` с одним DomainError (`key ===
+"errors.tooManyAttachments"`, `params.max === maxItems`); `addFiles`
+вызван при уже полном лотке — ничего не добавляется; успешный `addFiles`
+после переполнения стирает старый `errors`; `addFiles` с невалидным
+mime — `item.error` — DomainError, item всё равно в `items`;
+`addFromStorage` — та же лимит/валидация-семантика, поля из
+`manifest.mime/name/size`; `setItemPosition` меняет `position` только
+у `type==="image"`, no-op у файла; `removeItem` убирает по `id`, прочие
+не задеты; `planUpload` без ошибок — возвращает `Job[]` в порядке
+`items`, верный `kind`/`isImage`/`position` на каждом; `planUpload` с
+хотя бы одним `item.error` — бросает, ничего не возвращает.
+
+### Этап B3 ЗАКРЫТ
+
+Воркер: первая попытка `attachment-tray-core.js` — синтаксическая
+ошибка (`function crypto.randomUUID()`) + невалидные файлы
+выбрасывались из `items` вместо `item.error` + необъявленная
+переменная в `planUpload` (упало бы в strict mode) — итерация 2 с
+буквальным кодом на замену закрыла всё, кроме одной моей же
+недоделки (забыл маппинг `"other"->"file"` в буквальном коде) —
+исправлено точечно (2 строки), без нового захода воркера.
+`use-attachment-tray.js` — первая попытка вернула НЕ код (скопирован
+комментарий с сигнатурой), вторая (буквальный код) — точное
+совпадение. `attachment-tray.jsx` — буквальный код с первого раза
+(за счёт готового кода в задании, ladder rung 3 сразу, т.к. предыдущий
+файл показал: без литерального кода модель на прозе контракта не
+справляется).
+
+Регрессия: 1808 + 16 = 1824/1824. Бюджет: 837,31 КБ (+0,34 КБ — новые
+файлы мёртвым кодом, не подключены нигде, ожидаемо для стандалон-этапа).
+
+DoD:
+- [x] тесты этапа зелёные (16/16, `attachment-tray-core.test.js`)
+- [x] полная регрессия зелёная (1824/1824)
+- [x] `npm run build` зелёный, 837,31 КБ
+- [x] адверсарный заход — граничные случаи (`maxItems=0`, пустой
+      `addFiles([])` на полном лотке, неизвестный `id` у `remove`/
+      `setPosition`, `planUpload([])`) разобраны, ничего не открыто
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [ ] коммит — следующим шагом

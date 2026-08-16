@@ -755,6 +755,7 @@
 		"postNotFound": "gönderi bulunamadı",
 		"relayRejected": "relay yayını reddetti",
 		"selfHostedFingerprintMismatch": "sunucunun parmak izi bu adres için daha önce kaydedilenden farklı — sunucu değiştirilmiş olabilir",
+		"tooManyAttachments": "bir seferde en fazla {{max}} dosya ekleyebilirsiniz",
 		"urlNotInList": "URL listede yok — önce ekleyin"
 	},
 	"quick": {

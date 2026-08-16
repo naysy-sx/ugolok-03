@@ -755,6 +755,7 @@
 		"postNotFound": "publication introuvable",
 		"relayRejected": "le relay a rejeté la publication",
 		"selfHostedFingerprintMismatch": "l'empreinte du serveur diffère de celle enregistrée précédemment pour cette adresse — le serveur a peut-être été remplacé",
+		"tooManyAttachments": "vous pouvez joindre au maximum {{max}} fichiers à la fois",
 		"urlNotInList": "l'URL n'est pas dans la liste — ajoutez-la d'abord"
 	},
 	"quick": {

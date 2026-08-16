@@ -755,6 +755,7 @@
 		"postNotFound": "bericht niet gevonden",
 		"relayRejected": "de relay heeft de publicatie geweigerd",
 		"selfHostedFingerprintMismatch": "de vingerafdruk van de server wijkt af van de eerder voor dit adres opgeslagen vingerafdruk — de server is mogelijk vervangen",
+		"tooManyAttachments": "je kunt maximaal {{max}} bestanden tegelijk bijvoegen",
 		"urlNotInList": "de URL staat niet in de lijst — voeg deze eerst toe"
 	},
 	"quick": {

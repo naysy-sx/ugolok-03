@@ -755,6 +755,7 @@
 		"postNotFound": "未找到帖子",
 		"relayRejected": "relay 拒绝了发布",
 		"selfHostedFingerprintMismatch": "服务器指纹与此前为该地址保存的指纹不同——服务器可能已被替换",
+		"tooManyAttachments": "一次最多只能添加 {{max}} 个文件",
 		"urlNotInList": "该 URL 不在列表中——请先添加"
 	},
 	"quick": {

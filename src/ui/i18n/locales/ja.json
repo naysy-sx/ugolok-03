@@ -755,6 +755,7 @@
 		"postNotFound": "投稿が見つかりません",
 		"relayRejected": "relayが公開を拒否しました",
 		"selfHostedFingerprintMismatch": "サーバーの指紋がこのアドレスに以前保存されたものと異なります — サーバーがすり替えられた可能性があります",
+		"tooManyAttachments": "一度に添付できるのは最大{{max}}個のファイルです",
 		"urlNotInList": "URLがリストにありません — 先に追加してください"
 	},
 	"quick": {

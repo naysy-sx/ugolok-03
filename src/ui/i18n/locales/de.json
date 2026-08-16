@@ -755,6 +755,7 @@
 		"postNotFound": "Beitrag nicht gefunden",
 		"relayRejected": "der Relay hat die Veröffentlichung abgelehnt",
 		"selfHostedFingerprintMismatch": "der Fingerabdruck des Servers weicht von dem zuvor für diese Adresse gespeicherten ab — der Server wurde möglicherweise ausgetauscht",
+		"tooManyAttachments": "man kann höchstens {{max}} Dateien auf einmal anhängen",
 		"urlNotInList": "die URL ist nicht in der Liste — zuerst hinzufügen"
 	},
 	"quick": {
