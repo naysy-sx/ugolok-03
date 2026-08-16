@@ -309,7 +309,8 @@
 			"postTextLabel": "投稿本文",
 			"attachButton": "添付",
 			"publishingButton": "公開中…",
-			"publishButton": "公開する"
+			"publishButton": "公開する",
+			"tooLongError": "テキストが長すぎます（上限 {{max}} 文字）"
 		},
 		"commentComposer": {
 			"ariaLabel": "新しいコメント",
@@ -656,6 +657,15 @@
 		"quoteAria": "引用",
 		"listAria": "リスト",
 		"linkAria": "リンク"
+	},
+	"postEditor": {
+		"syntaxHint": "Markdown記法に対応: **太字**、*斜体*、> 引用、- リスト、[リンク](url)",
+		"headingAria": "見出し",
+		"codeAria": "コード",
+		"bulletListAria": "箇条書きリスト",
+		"orderedListAria": "番号付きリスト",
+		"linkPrompt": "リンクのURLを入力してください",
+		"linkRejected": "このリンクはサポートされていません（https、http、mailto、相対アドレスのみ許可されています）"
 	},
 	"channelChat": {
 		"messageLabel": "チャンネルチャットへのメッセージ",

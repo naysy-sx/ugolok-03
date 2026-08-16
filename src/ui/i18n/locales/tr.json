@@ -309,7 +309,8 @@
 			"postTextLabel": "Gönderi metni",
 			"attachButton": "Ekle",
 			"publishingButton": "Yayınlanıyor…",
-			"publishButton": "Yayınla"
+			"publishButton": "Yayınla",
+			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Yeni yorum",
@@ -656,6 +657,15 @@
 		"quoteAria": "Alıntı",
 		"listAria": "Liste",
 		"linkAria": "Bağlantı"
+	},
+	"postEditor": {
+		"syntaxHint": "Markdown biçimlendirmesini destekler: **kalın**, *italik*, > alıntı, - liste, [bağlantı](url)",
+		"headingAria": "Başlık",
+		"codeAria": "Kod",
+		"bulletListAria": "Madde işaretli liste",
+		"orderedListAria": "Numaralı liste",
+		"linkPrompt": "Bağlantı URL'sini girin",
+		"linkRejected": "Bu bağlantı desteklenmiyor (izin verilenler: https, http, mailto ve göreli adresler)"
 	},
 	"channelChat": {
 		"messageLabel": "Kanal sohbetine mesaj",

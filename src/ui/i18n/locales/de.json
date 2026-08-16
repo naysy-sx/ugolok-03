@@ -309,7 +309,8 @@
 			"postTextLabel": "Beitragstext",
 			"attachButton": "Anhängen",
 			"publishingButton": "Wird veröffentlicht…",
-			"publishButton": "Veröffentlichen"
+			"publishButton": "Veröffentlichen",
+			"tooLongError": "Text zu lang (Limit: {{max}} Zeichen)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Neuer Kommentar",
@@ -656,6 +657,15 @@
 		"quoteAria": "Zitat",
 		"listAria": "Liste",
 		"linkAria": "Link"
+	},
+	"postEditor": {
+		"syntaxHint": "Unterstützt Markdown-Formatierung: **fett**, *kursiv*, > Zitat, - Liste, [Link](url)",
+		"headingAria": "Überschrift",
+		"codeAria": "Code",
+		"bulletListAria": "Aufzählungsliste",
+		"orderedListAria": "Nummerierte Liste",
+		"linkPrompt": "Link-URL eingeben",
+		"linkRejected": "Dieser Link wird nicht unterstützt (erlaubt: https, http, mailto und relative Adressen)"
 	},
 	"channelChat": {
 		"messageLabel": "Nachricht im Kanal-Chat",

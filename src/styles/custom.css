@@ -3731,6 +3731,60 @@ button:has(> .icon),
 	background-color: var(--surface);
 	color: var(--fg);
 }
+/* Markdown-этап C — редактор постов (ProseMirror). .post-editor-toolbar-btn —
+   тот же паттерн, что .markdown-toolbar-btn выше (тот же CSS-фикс для SVG
+   внутри flex, найденный на Этапе D — воспроизведён здесь заранее, не задним
+   числом). */
+.post-editor-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.post-editor-toolbar-btn {
+	flex: none;
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm, 4px);
+	background: none;
+	color: var(--muted);
+	font-size: 1rem;
+}
+.post-editor-toolbar-btn .icon {
+	width: 1em;
+	height: 1em;
+	max-width: none;
+	flex-shrink: 0;
+}
+.post-editor-toolbar-btn:hover {
+	background-color: var(--surface);
+	color: var(--fg);
+}
+.post-editor-toolbar-btn.is-active {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border-color: var(--accent);
+}
+.post-editor {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-s);
+	background-color: var(--surface);
+	min-height: 12rem;
+}
+.post-editor .ProseMirror {
+	outline: none;
+	min-height: 10rem;
+}
+.post-editor-hint {
+	font-size: var(--step--2);
+	color: var(--muted);
+	margin: 0;
+}
 /* display:grid ОСТАЁТСЯ (не .stack/.grid) — сырой HTML markdown-рендера
    (MarkdownView), нет своей JSX-точки на каждый <ul>/<ol>, чтобы навесить
    composition-класс. */

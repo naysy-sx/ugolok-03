@@ -309,7 +309,8 @@
 			"postTextLabel": "Текст поста",
 			"attachButton": "Прикрепить",
 			"publishingButton": "Публикация…",
-			"publishButton": "Опубликовать"
+			"publishButton": "Опубликовать",
+			"tooLongError": "Слишком длинный текст (лимит — {{max}} символов)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Новый комментарий",
@@ -656,6 +657,15 @@
 		"quoteAria": "Цитата",
 		"listAria": "Список",
 		"linkAria": "Ссылка"
+	},
+	"postEditor": {
+		"syntaxHint": "Поддерживается разметка Markdown: **жирный**, *курсив*, > цитата, - список, [ссылка](адрес)",
+		"headingAria": "Заголовок",
+		"codeAria": "Код",
+		"bulletListAria": "Маркированный список",
+		"orderedListAria": "Нумерованный список",
+		"linkPrompt": "Введите адрес ссылки",
+		"linkRejected": "Такая ссылка не поддерживается (разрешены https, http, mailto и относительные адреса)"
 	},
 	"channelChat": {
 		"messageLabel": "Сообщение в чат канала",

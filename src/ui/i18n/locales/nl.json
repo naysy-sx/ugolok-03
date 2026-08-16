@@ -309,7 +309,8 @@
 			"postTextLabel": "Berichttekst",
 			"attachButton": "Bijvoegen",
 			"publishingButton": "Publiceren…",
-			"publishButton": "Publiceren"
+			"publishButton": "Publiceren",
+			"tooLongError": "Tekst te lang (limiet: {{max}} tekens)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nieuwe reactie",
@@ -656,6 +657,15 @@
 		"quoteAria": "Citaat",
 		"listAria": "Lijst",
 		"linkAria": "Link"
+	},
+	"postEditor": {
+		"syntaxHint": "Ondersteunt Markdown-opmaak: **vet**, *cursief*, > citaat, - lijst, [link](url)",
+		"headingAria": "Kop",
+		"codeAria": "Code",
+		"bulletListAria": "Opsommingslijst",
+		"orderedListAria": "Genummerde lijst",
+		"linkPrompt": "Voer de link-URL in",
+		"linkRejected": "Deze link wordt niet ondersteund (toegestaan: https, http, mailto en relatieve adressen)"
 	},
 	"channelChat": {
 		"messageLabel": "Bericht in de kanaalchat",

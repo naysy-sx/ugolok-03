@@ -309,7 +309,8 @@
 			"postTextLabel": "Testo del post",
 			"attachButton": "Allega",
 			"publishingButton": "Pubblicazione…",
-			"publishButton": "Pubblica"
+			"publishButton": "Pubblica",
+			"tooLongError": "Testo troppo lungo (limite: {{max}} caratteri)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nuovo commento",
@@ -656,6 +657,15 @@
 		"quoteAria": "Citazione",
 		"listAria": "Elenco",
 		"linkAria": "Link"
+	},
+	"postEditor": {
+		"syntaxHint": "Supporta la formattazione Markdown: **grassetto**, *corsivo*, > citazione, - elenco, [link](url)",
+		"headingAria": "Titolo",
+		"codeAria": "Codice",
+		"bulletListAria": "Elenco puntato",
+		"orderedListAria": "Elenco numerato",
+		"linkPrompt": "Inserisci l'URL del link",
+		"linkRejected": "Questo link non è supportato (consentiti: https, http, mailto e indirizzi relativi)"
 	},
 	"channelChat": {
 		"messageLabel": "Messaggio nella chat del canale",

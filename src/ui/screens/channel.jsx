@@ -36,8 +36,12 @@ import IconCross from "../icons/cross.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 import MarkdownView from "../components/markdown-view.jsx";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
+import PostEditor from "../editor/editor.jsx";
+import { parseRich } from "../../core/markdown/parse.js";
+import { toPlainText } from "../../core/markdown/to-plain.js";
 
-const POST_MAX_LENGTH = 10000; // ТЗ пользователя
+const POST_MAX_LENGTH = 10000; // ТЗ пользователя — видимый лимит, считается по toPlainText (Р-4)
+const POST_SOURCE_MAX_LENGTH = 20000; // Р-4 — скрытый жёсткий потолок на markdown-исходник
 const COMMENT_MAX_LENGTH = 4000;
 // Те же лимиты, что CreateChannelForm (channels.jsx) — редактирование обязано
 // подчиняться тем же правилам, что создание.
@@ -253,9 +257,15 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 		ensureProfilesFetched([ownerPubkey], fetchProfiles).catch(() => {});
 	}, [ownerPubkey]);
 
+	// Markdown-этап C — Р-4: видимый пользователю лимит считается по plain-тексту
+	// (toPlainText), на markdown-исходник действует скрытый жёсткий потолок.
+	const plainLength = text ? toPlainText(parseRich(text)).length : 0;
+	const plainTooLong = plainLength > POST_MAX_LENGTH;
+	const sourceTooLong = text.length > POST_SOURCE_MAX_LENGTH;
+
 	async function handleSubmit(e) {
 		e.preventDefault();
-		if (busy || text.length === 0) return;
+		if (busy || text.length === 0 || plainTooLong || sourceTooLong) return;
 		if (attachment.file && attachment.error) return;
 		if (!limiter.tryAction("post")) {
 			setError(t("common.rateLimitError"));
@@ -297,7 +307,12 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 					<label class="visually-hidden" for="post-text">
 						{t("channel.composer.postTextLabel")}
 					</label>
-					<textarea id="post-text" class="post-text-field" value={text} maxLength={POST_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={10} />
+					<PostEditor initialSource={text} onChange={setText} />
+					{(plainTooLong || sourceTooLong) && (
+						<p role="alert" style={{ color: "var(--bad)" }}>
+							{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
+						</p>
+					)}
 					{attachment.file && (
 						<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
 					)}
@@ -306,7 +321,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 						<button type="button" onClick={() => attachment.inputRef.current?.click()}>
 							<IconPaperclip /> {t("channel.composer.attachButton")}
 						</button>
-						<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
+						<button type="submit" disabled={busy || text.length === 0 || plainTooLong || sourceTooLong || (!!attachment.file && !!attachment.error)}>
 							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 						</button>
 						<button type="button" onClick={onCancel} disabled={busy}>

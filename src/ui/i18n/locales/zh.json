@@ -309,7 +309,8 @@
 			"postTextLabel": "帖子内容",
 			"attachButton": "添加附件",
 			"publishingButton": "发布中…",
-			"publishButton": "发布"
+			"publishButton": "发布",
+			"tooLongError": "文本过长（上限 {{max}} 字符）"
 		},
 		"commentComposer": {
 			"ariaLabel": "新评论",
@@ -656,6 +657,15 @@
 		"quoteAria": "引用",
 		"listAria": "列表",
 		"linkAria": "链接"
+	},
+	"postEditor": {
+		"syntaxHint": "支持 Markdown 格式：**粗体**、*斜体*、> 引用、- 列表、[链接](url)",
+		"headingAria": "标题",
+		"codeAria": "代码",
+		"bulletListAria": "项目符号列表",
+		"orderedListAria": "编号列表",
+		"linkPrompt": "请输入链接地址",
+		"linkRejected": "不支持此链接（仅允许 https、http、mailto 和相对地址）"
 	},
 	"channelChat": {
 		"messageLabel": "频道聊天消息",

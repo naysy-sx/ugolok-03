@@ -309,7 +309,8 @@
 			"postTextLabel": "Post text",
 			"attachButton": "Attach",
 			"publishingButton": "Publishing…",
-			"publishButton": "Publish"
+			"publishButton": "Publish",
+			"tooLongError": "Text too long (limit — {{max}} characters)"
 		},
 		"commentComposer": {
 			"ariaLabel": "New comment",
@@ -656,6 +657,15 @@
 		"quoteAria": "Quote",
 		"listAria": "List",
 		"linkAria": "Link"
+	},
+	"postEditor": {
+		"syntaxHint": "Supports Markdown formatting: **bold**, *italic*, > quote, - list, [link](url)",
+		"headingAria": "Heading",
+		"codeAria": "Code",
+		"bulletListAria": "Bulleted list",
+		"orderedListAria": "Numbered list",
+		"linkPrompt": "Enter link URL",
+		"linkRejected": "This link is not supported (allowed: https, http, mailto, and relative addresses)"
 	},
 	"channelChat": {
 		"messageLabel": "Message in the channel chat",

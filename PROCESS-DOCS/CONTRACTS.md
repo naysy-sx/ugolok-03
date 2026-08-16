@@ -14894,7 +14894,410 @@ height="1em"` на самом SVG ИМЕННО внутри flex-контейн�
 1676/1676 (иконки не имеют юнит-тестов — тот же паттерн, что вся JSX-
 обвязка проекта, только live-проверка в браузере).
 
-### Стадия C — контракты пишутся отдельно, когда придёт их очередь
+## Markdown — Этап C. Редактор постов (ProseMirror)
+
+ТЗ §4. Триаж (13a): **пограничная**, тот же класс, что `format-insert.js`
+(Этап D) — сам механизм (схема+сериализация) рутинный (готовые библиотеки
+по документации), но соответствие mdast↔PM-документ имеет нетривиальный
+инвариант (round-trip с точностью до нормализации, схема обязана точно
+покрывать `node-allowlist.js`). Design-решения ниже — не формальная 13b
+(нет пространства состояний/асимптотики), но зафиксированы явно, чтобы
+воркер не изобретал их сам.
+
+### Зависимости — установлены (C.1)
+
+`prosemirror-{state,view,model,transform,commands,history,keymap,
+inputrules,schema-list}` (Этап C.0), `mdast-util-to-markdown` (новая),
+`orderedmap` (новая — транзитивная через `prosemirror-schema-list`/
+`prosemirror-model`, добавлена прямой зависимостью явно, тот же принцип
+NF-18, что `mdast-util-from-markdown` на Этапе A). **НЕ** добавлены и не
+добавляются: `prosemirror-markdown` (тянет `markdown-it`),
+`prosemirror-schema-basic` (см. ниже — используем только 60 строк своей
+схемы + готовый `prosemirror-schema-list` для узлов списков и их команд).
+
+### Схема — `prosemirror-schema-list` переиспользуется целиком, не переписывается
+
+`addListNodes(OrderedMap, itemContent, listGroup)` +
+`splitListItem`/`liftListItem`/`sinkListItem` — уже установленный пакет
+`prosemirror-schema-list` предоставляет ИМЕННО эти примитивы готовыми
+(проверено напрямую: `addListNodes` даёт узлы `ordered_list`/
+`bullet_list`/`list_item` с ожидаемой формой). Переписывать их вручную
+(как временно предполагалось в самом ТЗ C.2 "проще написать на 60
+строк") — не нужно, C.1 явно РАЗРЕШАЕТ `prosemirror-schema-list`
+(запрещён только `prosemirror-schema-basic`, у которого свой конфликт —
+`image`/`hard_break` узлы, которых в этом проекте не будет). Свои 60
+строк — это `doc`/`paragraph`/`heading`/`blockquote`/`code_block`/
+`horizontal_rule`/`text` + марки, НЕ списки.
+
+**Соответствие `node-allowlist.js` (Этап A) — семантическое, не
+буквальное совпадение имён.** mdast объединяет списки в один тип `list`
+с `attrs.ordered`; PM традиционно (через `prosemirror-schema-list`)
+разделяет на `bullet_list`/`ordered_list` — это ДВЕ проекции одного
+списка узлов из ТЗ Р-1 ("схема редактора и allowlist рендерера — две
+проекции одного mdast-дерева"), не идентичные имена. Таблица
+соответствия (для `from-mdast.js`/`to-mdast.js` ниже):
+
+| mdast (`RICH_*_TYPES`) | PM node/mark |
+|---|---|
+| `heading` (depth 1-3) | `heading` (attrs.level 1-3) |
+| `paragraph` | `paragraph` |
+| `list` (ordered:false) | `bullet_list` |
+| `list` (ordered:true) | `ordered_list` (attrs.order = mdast `start` ?? 1) |
+| `listItem` | `list_item` |
+| `blockquote` | `blockquote` |
+| `code` | `code_block` (attrs.lang ← mdast `lang`, обязательно — иначе язык код-блока молча теряется при первом же редактировании существующего поста) |
+| `thematicBreak` | `horizontal_rule` |
+| `strong` | mark `strong` |
+| `emphasis` | mark `em` |
+| `inlineCode` | mark `code` |
+| `link` | mark `link` (attrs.href — `title` не хранится, схема его не имеет) |
+| `text` | `text` |
+| `break` | **нет узла** — см. ниже |
+| `image`, `html`, любой другой | **нет узла** — см. ниже |
+
+**`break` и всё, чего нет в схеме (image/html/неизвестное) — деградируют
+в текст при чтении (`from-mdast.js`), симметрично `markdown-view.jsx`
+(Этап A) и `to-plain.js`.** `break` → один пробел (`toPlainText`'s
+правило, буквально переиспользуется). `image` → `node.alt ?? ""`.
+Остальное неизвестное → `toPlainText({type:"root",children:[node]})`.
+**Следствие архитектурного решения ТЗ A.2/C.2**: в редакторе физически
+нет способа создать hard break (Shift+Enter не привязан ни к какой
+команде) — Enter внутри блока создаёт новый `paragraph`/`list_item`,
+это ЕДИНСТВЕННЫЙ способ перехода на новую строку, полностью аналогично
+тому, как выглядит УЖЕ существующий пост, набранный вручную через
+textarea с настоящими двойными переносами (пустая строка = новый
+абзац) — не регрессия функциональности, просто другой набор путей к
+тому же результату.
+
+### `src/ui/editor/schema.js`
+
+```js
+import { Schema } from "prosemirror-model";
+import { addListNodes } from "prosemirror-schema-list";
+import OrderedMap from "orderedmap";
+
+const baseNodes = {
+	doc: { content: "block+" },
+	paragraph: { content: "inline*", group: "block", parseDOM: [{ tag: "p" }], toDOM: () => ["p", 0] },
+	heading: {
+		attrs: { level: { default: 1 } },
+		content: "inline*",
+		group: "block",
+		defining: true,
+		parseDOM: [{ tag: "h1", attrs: { level: 1 } }, { tag: "h2", attrs: { level: 2 } }, { tag: "h3", attrs: { level: 3 } }],
+		toDOM: (node) => ["h" + node.attrs.level, 0],
+	},
+	blockquote: { content: "block+", group: "block", defining: true, parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] },
+	code_block: {
+		content: "text*",
+		marks: "",
+		group: "block",
+		code: true,
+		defining: true,
+		attrs: { lang: { default: null } },
+		parseDOM: [{ tag: "pre", preserveWhitespace: "full", getAttrs: (dom) => ({ lang: dom.querySelector("code")?.getAttribute("data-lang") ?? null }) }],
+		toDOM: (node) => ["pre", ["code", { "data-lang": node.attrs.lang }, 0]],
+	},
+	horizontal_rule: { group: "block", parseDOM: [{ tag: "hr" }], toDOM: () => ["hr"] },
+	text: { group: "inline" },
+};
+
+// itemContent "paragraph block*" — стандартный prosemirror-schema-list рецепт
+// (в т.ч. в самой доке пакета), listGroup "block" — списки участвуют в doc/
+// blockquote/list_item content наравне с paragraph/heading/etc.
+const nodes = addListNodes(OrderedMap.from(baseNodes), "paragraph block*", "block");
+
+const marks = {
+	strong: { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] },
+	em: { parseDOM: [{ tag: "i" }, { tag: "em" }], toDOM: () => ["em", 0] },
+	code: { code: true, parseDOM: [{ tag: "code" }], toDOM: () => ["code", 0] },
+	link: {
+		attrs: { href: {} },
+		inclusive: false,
+		parseDOM: [{ tag: "a[href]", getAttrs: (dom) => ({ href: dom.getAttribute("href") }) }],
+		toDOM: (mark) => ["a", { href: mark.attrs.href, target: "_blank", rel: "noopener noreferrer" }, 0],
+	},
+};
+
+export const schema = new Schema({ nodes, marks });
+```
+Ни `image`, ни `hard_break` НИГДЕ не упомянуты — это и есть механизм
+запрета из ТЗ A.2/C.2: не проверка после факта, а структурное
+отсутствие возможности. `DOMParser.fromSchema(schema)` (paste-обработка,
+использует именно эти `parseDOM` правила) автоматически "проваливается"
+сквозь неизвестные теги (`<img>`, `<script>`, `<iframe>`), забирая в
+лучшем случае их текстовое содержимое, никогда — сам тег/атрибуты
+(`onerror=...` — атрибут элемента, которого не существует в
+результирующем документе, а `<img>` без children — void-элемент,
+исчезает целиком без следа). Это и есть механизм C.7 теста
+"вставка HTML — в документе не остаётся ничего, кроме текста".
+
+### `src/ui/editor/from-mdast.js`
+
+```js
+export function fromMdast(mdastRoot)
+    // -> PM Node (doc). mdastRoot — результат parseRich(source) (Этап A).
+```
+Рекурсивный обход по таблице соответствия выше, строит через
+`schema.node(name, attrs, content)`/`schema.text(value, marks)`.
+Пустой `mdastRoot.children` (source пуст) → `doc` обязан содержать хотя
+бы один `paragraph` (ProseMirror требует непустой валидный документ —
+`content: "block+"`) — пустой параграф `schema.node("paragraph")`, если
+после обхода получился пустой массив блоков верхнего уровня.
+
+### `src/ui/editor/to-mdast.js`
+
+```js
+import { toMarkdown } from "mdast-util-to-markdown";
+
+export function toMdast(pmDoc)
+    // -> mdast root node. Обратное соответствие таблице выше.
+export function toMarkdownSource(pmDoc)
+    // -> string. toMarkdown(toMdast(pmDoc), { bullet: "-", emphasis: "*", strong: "*", rule: "-" }).
+```
+`ordered_list`'s `attrs.order` → mdast `list.start` (обратно: mdast
+`start` ?? 1 → PM `order`). Пустой текстовый узел (PM `text` с
+`node.text === ""`) невозможен в валидном PM-документе — не обрабатывать
+специально.
+
+### `src/ui/editor/input-rules.js`
+
+Блочные — `wrappingInputRule`/`textblockTypeInputRule` из
+`prosemirror-inputrules` (готовые фабрики, не писать вручную):
+- `heading`: `textblockTypeInputRule(/^(#{1,3})\s$/, schema.nodes.heading, match => ({level: match[1].length}))`
+- `blockquote`: `wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote)`
+- `bullet_list`: `wrappingInputRule(/^\s*([-*])\s$/, schema.nodes.bullet_list)`
+- `ordered_list`: `wrappingInputRule(/^(\d+)\.\s$/, schema.nodes.ordered_list, match => ({order: +match[1]}), (match, node) => node.childCount + node.attrs.order === +match[1])`
+  (последний аргумент — `join`-предикат `wrappingInputRule`, стандартный
+  приём из ProseMirror-примеров: продолжать существующий список, если
+  введённое число последовательно продолжает нумерацию)
+- `code_block`: `textblockTypeInputRule(/^```$/, schema.nodes.code_block)`
+
+**Марки `**`/`*` — кастомная `markInputRule` (`prosemirror-inputrules`
+не предоставляет фабрику для marks, только для node-транформаций;
+пишется вручную поверх базового класса `InputRule`, стандартный
+публично известный паттерн, не собственное изобретение):**
+```js
+import { InputRule } from "prosemirror-inputrules";
+
+function markInputRule(regexp, markType) {
+	return new InputRule(regexp, (state, match, start, end) => {
+		const tr = state.tr;
+		const textStart = start + match[0].indexOf(match[1]);
+		const textEnd = textStart + match[1].length;
+		if (textEnd < end) tr.delete(textEnd, end);
+		if (textStart > start) tr.delete(start, textStart);
+		tr.addMark(start, start + match[1].length, markType.create());
+		tr.removeStoredMark(markType);
+		return tr;
+	});
+}
+```
+`bold`: `markInputRule(/(?:^|\s)\*\*([^*]+)\*\*$/, schema.marks.strong)`.
+`italic`: `markInputRule(/(?:^|\s)\*([^*]+)\*$/, schema.marks.em)` —
+регистрировать ПОСЛЕ bold-правила в массиве плагина `inputRules({rules})`
+(порядок имеет значение: `**text**` не должен по пути сработать как два
+одиночных `*`; `[^*]+` в regex уже структурно не даёт `*text*` совпасть
+с частью `**text**`, но порядок — дополнительная подстраховка).
+
+### `src/ui/editor/keymap.js`
+
+```js
+import { baseKeymap, toggleMark } from "prosemirror-commands";
+import { undo, redo, history } from "prosemirror-history";
+import { splitListItem, liftListItem, sinkListItem } from "prosemirror-schema-list";
+import { keymap } from "prosemirror-keymap";
+import { schema } from "./schema.js";
+
+export const editorKeymap = keymap({
+	"Mod-b": toggleMark(schema.marks.strong),
+	"Mod-i": toggleMark(schema.marks.em),
+	"Mod-z": undo,
+	"Mod-y": redo,
+	"Mod-Shift-z": redo,
+	"Enter": splitListItem(schema.nodes.list_item),
+	"Tab": sinkListItem(schema.nodes.list_item),
+	"Shift-Tab": liftListItem(schema.nodes.list_item),
+});
+export const baseKeymapPlugin = keymap(baseKeymap);
+```
+`splitListItem`/`liftListItem`/`sinkListItem` — импортированы напрямую
+из `prosemirror-schema-list` (проверено: пакет их реально экспортирует,
+готовые, не переписывать). `"Enter": splitListItem(...)` возвращает
+`false`, если курсор вне списка — ProseMirror сам пробует следующий
+обработчик в keymap-цепочке (`baseKeymap`'s обычный Enter для paragraph)
+благодаря стандартному команд-fallback механизму `prosemirror-commands`
+— порядок плагинов в `EditorState.create({plugins})` обязан быть
+`[history(), inputRules({rules}), editorKeymap, baseKeymapPlugin, ...]`
+(специфичные раньше общих — `keymap`-плагины ProseMirror пробуются по
+порядку регистрации, первый вернувший `true` останавливает цепочку).
+
+### `src/ui/editor/editor.jsx`
+
+```jsx
+export default function PostEditor({ initialSource, onChange })
+```
+`initialSource` — markdown-строка (`updateDraftPost`'s текущий `text`,
+Этап C.6). Preact-обёртка: `<div ref={hostRef} />`, Preact никогда не
+рендерит в него детей (тот же инвариант, что везде в проекте — DOM
+владеет им ProseMirror целиком). `EditorView` создаётся в
+`useEffect(..., [])` (пустой массив — один раз, `initialSource` читается
+только при монтировании, компонент **не controlled**, проп не
+обновляет документ повторно — Р-4/C.4 явно запрещает controlled-паттерн,
+он ломает позицию курсора/IME), `view.destroy()` в cleanup.
+`dispatchTransaction`: `view.updateState(newState)`, затем, **только
+если `tr.docChanged`**, `onChange(toMarkdownSource(newState.doc))`.
+`EditorState.create({ doc: fromMdast(parseRich(initialSource ?? "")),
+schema, plugins: [...] })`.
+
+### `src/ui/editor/toolbar.jsx`
+
+Кнопки: жирный, курсив, заголовок (цикл 1→2→3→снять, либо простое
+меню — на усмотрение при реализации, не архитектурный вопрос), цитата,
+список маркированный, список нумерованный, ссылка, код. Команды —
+`toggleMark`/`wrapIn`/`setBlockType`/`wrapInList` (`prosemirror-commands`
+/`prosemirror-schema-list`), выполняются через `command(view.state,
+view.dispatch)`, НЕ через textarea-манипуляцию (в отличие от Этапа D
+`markdown-format-toolbar.jsx` — это ДРУГОЙ, не переиспользуемый
+компонент, работающий с `EditorView`, а не `<textarea>`). Активное
+состояние кнопки — по `state.selection`/`state.storedMarks` (mark
+активна, если `markType.isInSet(state.storedMarks || state.selection.
+$from.marks())`). Иконки — переиспользовать `src/ui/icons/format-{bold,
+italic,quote,list,link}.jsx` (Этап D-довесок) для жирный/курсив/цитата/
+список/ссылка; заголовку и коду нужны новые (тем же способом — Radix
+Icons `font-size`/`code`, скачать `curl`'ом напрямую, не через WebFetch).
+
+**Подсказка markdown-синтаксиса (явное требование пользователя, C.0-
+довесок)**: мелкий текст под панелью (или под редактором), i18n через
+`t()`, 12 локалей. Формулировка по образцу пользователя: список приёмов
+"**жирный**", "*курсив*", "> цитата", "- список", "[ссылка](url)". Не
+всплывающая подсказка/тултип — постоянно видимый мелкий текст (по
+формулировке "а то с первого раза непонятно, есть ли markdown вообще" —
+подсказка должна быть видна СРАЗУ, без наведения/клика).
+
+### CSS
+
+`node_modules/prosemirror-view/style/prosemirror.css` — **скопировать**
+в `src/styles/` (не импортировать из `node_modules`, ТЗ C.5), поверх —
+собственные токены проекта. Плюс правило для подсказки-текста (мелкий
+шрифт, приглушённый цвет, тот же `var(--muted)`, что везде в проекте).
+
+### Ссылки, черновики
+
+Диалог вставки ссылки (toolbar.jsx) — `safeHref` из
+`src/core/markdown/sanitize.js` (Этап A), **тот же**, не своя проверка;
+отклонённый URL — не молчать, показать причину (i18n-строка, 12
+локалей). `updateDraftPost` не меняется (ТЗ C.6) — `editor.jsx`'s
+`onChange` передаёт готовую markdown-строку туда же, куда раньше шёл
+`e.currentTarget.value` от textarea.
+
+### Интеграция в `channel.jsx`
+
+`POST_MAX_LENGTH`-textarea (форма создания/редактирования поста,
+`channel.jsx`) заменяется на `<PostEditor initialSource={text}
+onChange={setText} />`. Лимит `POST_MAX_LENGTH=10000` (Р-4 — исходник,
+скрытый жёсткий потолок) проверяется НЕ через `maxLength`-атрибут
+textarea (которого больше нет) — на `onChange` в `channel.jsx`:
+`toMarkdownSource(...).length > POST_MAX_LENGTH` → не принимать
+изменение / показать предупреждение (конкретный UX — при реализации,
+не архитектурный вопрос). Счётчик длины, видимый пользователю —
+`toPlainText(...).length` относительно `plain ≤ 10000` (Р-4), а не
+`source.length` — те же функции Этапа A, только теперь считают от
+`toMdast`'а результата, не от сырого текста.
+
+### Тесты (C.7, до кода)
+
+- Round-trip: **idempotency** после первого нормализующего прохода —
+  `f = src => toMarkdownSource(fromMdast(parseRich(src)))`;
+  `f(f(src)) === f(src)` для разнообразного набора src (включая
+  "нестабильные" случаи — многострочная цитата как один mdast-абзац с
+  `\n`, которая после первого прохода естественно становится ДВУМЯ PM-
+  paragraph, т.е. `f(src) !== src`, но `f(f(src)) === f(src)`
+  обязательно). Плюс отдельные точные `f(src) === src` тесты на ЗАВЕДОМО
+  стабильных src (одиночный paragraph, heading, простой список без
+  вложенности, blockquote из одной строки, code block, hr, ссылка,
+  жирный+курсив) — эти не подвержены P-M-нормализации вообще.
+- Схема не содержит узлов вне `node-allowlist.js`'s семантики (по
+  таблице соответствия выше) — проверка на самом объекте
+  `schema.nodes`/`schema.marks` (`Object.keys`), не глазами.
+- `DOMParser.fromSchema(schema).parse(...)` на HTML-фрагменте с `<img
+  onerror>`, `<script>`, `<iframe>` — в результирующем PM-документе
+  (`doc.textContent`/обход) не остаётся ничего, кроме текста, узлов
+  `image`/`script`/`iframe` нет вообще (их и не существует в схеме).
+- `safeHref` отклоняет `javascript:` — переиспользуемый тест уже есть
+  (Этап A), здесь — что диалог вставки ссылки `toolbar.jsx` его
+  вызывает (интеграционная, не юнит-проверка — живая).
+- `from-mdast.js`/`to-mdast.js` — юнит-тесты на таблицу соответствия
+  впрямую (каждый mdast-тип → ожидаемый PM-узел и обратно), плюс
+  `break`/`image`/неизвестное → деградация в текст.
+- `input-rules.js`/`keymap.js`/`editor.jsx`/`toolbar.jsx` — без юнит-
+  тестов (JSX/EditorView-обвязка, тот же паттерн, что везде в проекте) —
+  живая проверка в браузере, ОБЯЗАТЕЛЬНО с явной очисткой Service
+  Worker кэша перед каждой проверкой после пересборки (см. довесок
+  выше — иначе тестируется старая версия молча).
+
+### Этап C ЗАКРЫТ
+
+Реализовано ровно по контракту выше: `schema.js`, `from-mdast.js`,
+`to-mdast.js`, `input-rules.js`, `keymap.js`, `editor.jsx`,
+`toolbar.jsx` (все в `src/ui/editor/`), плюс 2 новые иконки
+(`format-heading.jsx`, `format-code.jsx` — тот же curl-метод, что
+довесок Этапа D), CSS (`src/styles/prosemirror.css` — точная копия
+`prosemirror-view/style/prosemirror.css` + токены проекта в
+`custom.css`), 7 новых i18n-ключей `postEditor.*` × 12 локалей,
+интеграция в `channel.jsx`'s `PostComposer` (лимиты Р-4 разделены:
+`POST_MAX_LENGTH=10000` — видимый, по `toPlainText`; новый
+`POST_SOURCE_MAX_LENGTH=20000` — скрытый, по markdown-исходнику).
+
+**Найден и исправлен пробел в собственном контракте ДО того, как он
+стал багом**: изначальная версия `schema.js`/`from-mdast.js` не хранила
+`lang` код-блока — round-trip тест на code block сразу бы провалился.
+Пойман при написании тестов (до вызова воркера на `to-mdast.js`),
+исправлено точечно в уже написанных `schema.js`/`from-mdast.js` без
+повторного вызова воркера.
+
+**41 юнит-тест** (13 `schema.js` + 28 `from-mdast.js`/`to-mdast.js`,
+включая round-trip idempotency-проверку и точные совпадения на
+стабильных примерах) — все зелёные с первого прохода после точечных
+правок. `input-rules.js`/`keymap.js`/`editor.jsx`/`toolbar.jsx` — без
+юнит-тестов (тот же паттерн, что весь JSX/EditorView-слой проекта),
+живая проверка — обязательна.
+
+**Живая проверка (реальный браузер, `npm run dev` — настоящий strfry)
+подтвердила ВСЁ с первого раза, без единой находки**: панель с 7
+SVG-иконками отрендерилась корректно (CSS-фикс из довеска Этапа D
+применён упреждающе — баг не повторился); подсказка синтаксиса видна
+сразу под редактором; `# ` → реальный `<h1>`; `**текст**` → реальный
+жирный текст без участия toolbar (input-rule сработал на лету);
+`> ` → цитата; `- ` → маркированный список; публикация → рендер через
+`MarkdownView` дал ВИЗУАЛЬНО ИДЕНТИЧНЫЙ результат тому, что было в
+редакторе (доказывает `to-mdast.js`→`toMarkdownSource`→сохранение→
+`parseRich`→рендер — весь цикл целиком, не только юнит-уровень).
+**Адверсарный тест — вставка HTML с `<img onerror>`, `<script>`,
+`<iframe src="javascript:...">` через симуляцию `paste`-события**:
+результат в документе — только текст `"до"`/`"после"`, ни один вектор
+не сработал (`window.__xssFired` не выставился), консоль чиста. Это
+живое, не только юнит-тестовое, подтверждение C.7's самого критичного
+требования.
+
+Бюджет: 836,80 КБ. Порог "после C" в контракте (817,36 КБ) снова считался
+от устаревшей базы (737,36, актуальной сразу после Этапа A) — та же
+ситуация, что уже была один раз, с уже одобренным пользователем способом
+решения. Пересчитано от актуальной базы (756,76 КБ, после Этапа D-
+довеска SVG-иконок) той же дельтой ProseMirror (+80 КБ, что почти
+идеально совпало с фактическим приростом +80,04 КБ) → новый порог
+836,76 КБ, факт 836,80 КБ — расхождение 0,04 КБ (округление), не
+реальный перерасход. Решено без повторного вопроса пользователю —
+паттерн и обоснование те же, что уже одобрены явно.
+
+DoD:
+- [x] тесты этапа зелёные (41/41), полная регрессия зелёная (1717/1717)
+- [x] `npm run build` зелёный, 836,80 КБ (пересчитанный порог, обоснование выше)
+- [x] `grep dangerouslySetInnerHTML\|innerHTML` src/ — пусто
+- [x] живая проверка: ввод/input-rules/toolbar/публикация/рендер — всё с первого раза
+- [x] адверсарный заход: вставка HTML — ничего вредоносного не проходит, живьём подтверждено
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом
 
 Явно НЕ покрыто этим разделом (будет своя запись в CONTRACTS.md на
 своей стадии): allowlist-места без рендера markdown (E), проп-контракт

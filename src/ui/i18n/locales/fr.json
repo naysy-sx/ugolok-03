@@ -309,7 +309,8 @@
 			"postTextLabel": "Texte de la publication",
 			"attachButton": "Joindre",
 			"publishingButton": "Publication…",
-			"publishButton": "Publier"
+			"publishButton": "Publier",
+			"tooLongError": "Texte trop long (limite : {{max}} caractères)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nouveau commentaire",
@@ -656,6 +657,15 @@
 		"quoteAria": "Citation",
 		"listAria": "Liste",
 		"linkAria": "Lien"
+	},
+	"postEditor": {
+		"syntaxHint": "Prend en charge le formatage Markdown : **gras**, *italique*, > citation, - liste, [lien](url)",
+		"headingAria": "Titre",
+		"codeAria": "Code",
+		"bulletListAria": "Liste à puces",
+		"orderedListAria": "Liste numérotée",
+		"linkPrompt": "Entrez l'URL du lien",
+		"linkRejected": "Ce lien n'est pas pris en charge (autorisés : https, http, mailto et adresses relatives)"
 	},
 	"channelChat": {
 		"messageLabel": "Message dans le chat de la chaîne",
