@@ -271,21 +271,22 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 }
 
 // Этап 29 — правка контракта (skill п.12: только Claude, полная регрессия сразу
-// после). attachment — необязательный 7-й параметр (undefined по умолчанию, старые
+// после). attachments — необязательный 7-й параметр, МАССИВ (этап B, MEDIA-SPEC.md
+// §3.7 — было единственное вложение attachment, undefined по умолчанию, старые
 // вызовы без изменений). sentAt (wall-clock, секунды) генерируется ВСЕГДА — обе
 // стороны видят ОДИНАКОВОЕ время отправки (не время получения); lamportTs (логические
 // часы, порядок сортировки) не трогается — назначение разное, смешивать нельзя.
-export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment) {
+export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 	// Этап 74 — T2.2 (RC-3): единственный писатель на (ownerPubkey, groupIdHex) —
 	// лок ЦЕЛИКОМ, get→крипто→put (DESIGN.md "Этап 74"). drainPendingOutgoingMessages
 	// вызывает sendMessage — лочится только этот, внутренний уровень (правило
 	// нереентерабельности, DESIGN.md).
-	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment, groupIdHex));
+	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex));
 }
 
-async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment, groupIdHex) {
+async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex) {
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
@@ -302,7 +303,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 	// ОБЕИХ identity состоят в группе — без этого поля приёмник не может отличить
 	// живое 445 от sibling-устройства владельца от живого 445 от контакта.
 	const messagePayload = { text, lamportTs, msgId, sentAt, senderPubkey: ownerPubkey };
-	if (attachment !== undefined) messagePayload.attachment = attachment;
+	if (attachments !== undefined && attachments.length > 0) messagePayload.attachments = attachments;
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 
@@ -355,7 +356,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 			status: "failed",
 			msgId,
 			sentAt,
-			...(attachment !== undefined ? { attachment } : {}),
+			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 		}, dbKey);
 		return { eventId: event.id, queued: true };
 	}
@@ -370,13 +371,13 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		status: "sent",
 		msgId,
 		sentAt,
-		...(attachment !== undefined ? { attachment } : {}),
+		...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 	}, dbKey);
 
 	await mirrorBestEffort(
 		privKey,
 		publish,
-		{ text, lamportTs, senderPubkey: ownerPubkey, contactPubkey, msgId, sentAt, ...(attachment !== undefined ? { attachment } : {}) },
+		{ text, lamportTs, senderPubkey: ownerPubkey, contactPubkey, msgId, sentAt, ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}) },
 		groupIdHex,
 	);
 
@@ -385,9 +386,9 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 
 // Этап 73.3 — И3: проигравшая сторона (не коммиттер) копит исходящие здесь,
 // пока коммиттер не создаст группу — см. DESIGN.md/CONTRACTS.md "Этап 73.3".
-export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment }) {
+export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachments }) {
 	await db.table("pendingOutgoingMessages").put(
-		toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, text, ...(attachment !== undefined ? { attachment } : {}) }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, text, ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}) }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey),
 	);
 }
 
@@ -414,7 +415,7 @@ export async function drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, 
 		const raw = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).sortBy("lamportTs");
 		for (const encryptedRow of raw) {
 			const row = fromEncryptedRow(encryptedRow, dbKey);
-			await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachment);
+			await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachments);
 			await db.table("pendingOutgoingMessages").delete([ownerPubkey, contactPubkey, row.lamportTs]);
 		}
 	})().finally(() => drainInFlight.delete(key));
@@ -473,13 +474,18 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	if (result.kind === "control") return null;
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
-	// Этап 29 — sentAt/attachment ОТСУТСТВУЮТ у сообщений старого формата (до этого
-	// этапа) — включаются в строку/результат, только если РЕАЛЬНО пришли в payload,
-	// не как undefined-значения (иначе deepEqual-тесты на старый формат, devices.test.js,
-	// увидели бы лишние ключи и сломались бы).
+	// Этап 29 — sentAt ОТСУТСТВУЕТ у сообщений старого формата (до этого этапа) —
+	// включается в строку/результат, только если РЕАЛЬНО пришёл в payload, не как
+	// undefined-значение (иначе deepEqual-тесты на старый формат, devices.test.js,
+	// увидели бы лишний ключ и сломались бы).
+	// Этап B (MEDIA-SPEC.md §3.7) — attachments (массив) заменил attachment
+	// (единственное число). Нормализация ЗДЕСЬ, единственном месте: старый формат
+	// (payload.attachment — сообщения ДО этого этапа, локальная база разработки их
+	// содержит) приводится к attachments-массиву; дальше по коду везде уже extra.attachments.
 	const extra = {};
 	if (parsed.sentAt !== undefined) extra.sentAt = parsed.sentAt;
-	if (parsed.attachment !== undefined) extra.attachment = parsed.attachment;
+	const normalizedAttachments = parsed.attachments ?? (parsed.attachment ? [parsed.attachment] : undefined);
+	if (normalizedAttachments !== undefined) extra.attachments = normalizedAttachments;
 
 	// Этап 74 — T1.2 (RC-1): нормализация к ОДНОМУ из двух легальных значений —
 	// в 1:1-группе других identity нет, третье значение в payload — мусор/спуфинг
@@ -522,9 +528,19 @@ export async function hasAnyMessagesFor(ownerPubkey, contactPubkey) {
 	return (await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).count()) > 0;
 }
 
+// Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — та же нормализация, что уже
+// применяется на живом/зеркальном приёме (doReceiveGroupMessageEvent/
+// buildMirroredMessageRow), но здесь — для строк, УЖЕ лежащих в IndexedDB с
+// момента ДО этого этапа (attachment, единственное число). Без неё старые
+// сообщения с вложением молча перестают его показывать при чтении истории.
+export function normalizeMessageAttachments(row) {
+	if (row.attachments !== undefined || row.attachment === undefined) return row;
+	return { ...row, attachments: [row.attachment] };
+}
+
 export async function getChatHistory(ownerPubkey, contactPubkey, dbKey) {
 	const raw = await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).toArray();
-	const rows = raw.map((r) => fromEncryptedRow(r, dbKey));
+	const rows = raw.map((r) => normalizeMessageAttachments(fromEncryptedRow(r, dbKey)));
 	rows.sort((a, b) => {
 		if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;
 		if (a.senderPubkey !== b.senderPubkey) return a.senderPubkey < b.senderPubkey ? -1 : 1;

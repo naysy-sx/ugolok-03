@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import AttachmentView, { AttachmentDownloadLink } from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
+import { splitBubbleAttachments } from "./message-bubble-attachments.js";
 
 const STATUS_LABEL_KEYS = {
 	created: "message.status.created",
@@ -51,11 +52,10 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	const statusLabel = STATUS_LABEL_KEYS[message.status] ? t(STATUS_LABEL_KEYS[message.status]) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
-	// position (F-AT-02, CONTRACTS.md этап 29) — ТОЛЬКО для type==="image"; остальные
-	// типы вложений всегда рендерятся под текстом (переключатель им не показывается).
-	const attachment = message.attachment;
-	const attachmentAbove = attachment?.type === "image" && attachment.position === "above";
-	const attachmentBelow = attachment && !attachmentAbove;
+	// position (F-AT-02, CONTRACTS.md этап 29) — ТОЛЬКО для type==="image", и только
+	// у ПЕРВОГО такого вложения (этап B, MEDIA-SPEC.md §3.7 — attachments теперь
+	// массив); остальные типы/позиции вложений всегда рендерятся под текстом.
+	const { above, below } = splitBubbleAttachments(message.attachments);
 
 	if (mode === "editing") {
 		return (
@@ -89,9 +89,11 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
-			{attachmentAbove && <AttachmentView attachment={attachment} />}
+			{above && <AttachmentView attachment={above} />}
 			{message.text && <MarkdownView source={message.text} profile="lite" />}
-			{attachmentBelow && <AttachmentView attachment={attachment} />}
+			{below.map((a, i) => (
+				<AttachmentView key={i} attachment={a} />
+			))}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}
 				{isOwn && statusLabel && <small>{statusLabel}</small>}
@@ -103,7 +105,9 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 								{t("message.editButton")}
 							</button>
 						)}
-						{attachment && <AttachmentDownloadLink attachment={attachment} />}
+						{(message.attachments ?? []).map((a, i) => (
+							<AttachmentDownloadLink key={i} attachment={a} />
+						))}
 						{typeof onDeleteForMe === "function" && (
 							<button type="button" class="btn--ghost btn--danger" onClick={() => setMode("confirming-delete")}>
 								{t("common.delete")}

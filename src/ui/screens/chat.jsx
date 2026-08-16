@@ -596,6 +596,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			setUploadingAttachment(true);
 			const attachment = await buildOutgoingAttachment();
 			setUploadingAttachment(false);
+			// Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — домен ждёт МАССИВ вложений;
+			// заворачивание единственного результата buildOutgoingAttachment() в массив —
+			// НЕ полноценный мультивыбор (тот — отдельный лоток, этап B3/B4), только
+			// минимальная обвязка, чтобы формат не разошёлся между composer'ом и доменом.
+			const attachments = attachment !== undefined ? [attachment] : undefined;
 
 			const lamportTs = await nextLamportTick(ownerPubkey);
 			await sendChatMessageAction(
@@ -608,7 +613,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				publishToChatPartner,
 				fetchDeviceKeyPackages,
 				refreshGroupMessageSubscription,
-				attachment,
+				attachments,
 			);
 			if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 			setText("");
@@ -922,7 +927,10 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			const publishToRecipient = (event) => publishToContact(event, recipient);
 			const lamportTs = await nextLamportTick(ownerPubkey);
-			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchDeviceKeyPackages, refreshGroupMessageSubscription, attachment);
+			// Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — та же минимальная обвязка,
+			// что в ChatWindow.handleSend: заворачивание в массив, не полноценный лоток.
+			const attachments = attachment !== undefined ? [attachment] : undefined;
+			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchDeviceKeyPackages, refreshGroupMessageSubscription, attachments);
 			onSent(recipient);
 		} catch (err) {
 			setError(errorMessage(err));

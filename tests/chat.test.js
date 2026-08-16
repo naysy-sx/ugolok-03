@@ -6,7 +6,15 @@ import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { decrypt as nip44Decrypt } from "../src/core/crypto/nip44.js";
 import { unwrap as nip59Unwrap } from "../src/core/crypto/nip59.js";
-import { joinFromWelcome, createOwnKeyPackage, deserializeState, serializeState } from "../src/core/crypto/mls-session.js";
+import {
+	joinFromWelcome,
+	createOwnKeyPackage,
+	deserializeState,
+	serializeState,
+	encryptApplicationMessage,
+	deriveNostrEnvelopeKeys,
+} from "../src/core/crypto/mls-session.js";
+import { encrypt as nip44Encrypt } from "../src/core/crypto/nip44.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import {
@@ -18,6 +26,7 @@ import {
 	sendMessage,
 	receiveGroupMessageEvent,
 	getChatHistory,
+	normalizeMessageAttachments,
 	hasAnyMessagesFor,
 	enqueuePendingOutgoingMessage,
 	drainPendingOutgoingMessages,
@@ -401,7 +410,7 @@ test("sendMessage/receiveGroupMessageEvent: полный цикл — B реал
 	assert.equal(received.text, "привет, Боб");
 	assert.equal(received.lamportTs, 5);
 	assert.equal(typeof received.sentAt, "number");
-	assert.equal(received.attachment, undefined, "без вложения — поле отсутствует, не undefined-значение");
+	assert.equal(received.attachments, undefined, "без вложения — поле отсутствует, не undefined-значение");
 });
 
 // AC-FS-02 (TECH.md §15, метод "Перемешать доставку") — уровень приложения, не
@@ -569,10 +578,10 @@ test("этап 29: sendMessage — sentAt (wall-clock) генерируется 
 	const row = fromEncryptedRow(await db.table("messages").where("id").equals(eventId).first(), DB_KEY);
 	assert.equal(typeof row.sentAt, "number");
 	assert.ok(row.sentAt >= before && row.sentAt <= after, "sentAt — реальное время отправки, не что попало");
-	assert.equal(row.attachment, undefined, "без вложения — поле отсутствует");
+	assert.equal(row.attachments, undefined, "без вложения — поле отсутствует");
 });
 
-test("этап 29: sendMessage(attachment) — вложение попадает в локальную строку и доходит до собеседника", async () => {
+test("этап 29/этап B: sendMessage(attachments) — массив вложений попадает в локальную строку и доходит до собеседника", async () => {
 	const { groupId, bobSerializedState } = await establishAliceToBob();
 	const groupIdHex = toHex(groupId);
 	const attachment = {
@@ -585,27 +594,93 @@ test("этап 29: sendMessage(attachment) — вложение попадает
 		name: "photo.jpg",
 		position: "above",
 	};
+	const attachments = [attachment];
 	const publish = async () => ({ ok: true });
-	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "смотри", 1, publish, attachment);
+	const { eventId } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "смотри", 1, publish, attachments);
 
 	const aliceRow = fromEncryptedRow(await db.table("messages").where("id").equals(eventId).first(), DB_KEY);
-	assert.deepEqual(aliceRow.attachment, attachment, "своя копия сразу содержит вложение (оптимистично, как text)");
+	assert.deepEqual(aliceRow.attachments, attachments, "своя копия сразу содержит вложения (оптимистично, как text)");
 
 	const sentEvents = [];
 	const publishCapture = async (event) => {
 		sentEvents.push(event);
 		return { ok: true };
 	};
-	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "ещё одна с вложением", 2, publishCapture, attachment);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "ещё одна с вложением", 2, publishCapture, attachments);
 	const sentEvent = sentEvents.find((e) => e.kind === 445);
 
 	const { result: received } = await asBob(groupIdHex, bobSerializedState, () =>
 		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, sentEvent, async () => ({ ok: true })),
 	);
-	assert.deepEqual(received.attachment, attachment, "вложение доходит до собеседника без искажений");
+	assert.deepEqual(received.attachments, attachments, "вложения доходят до собеседника без искажений");
 
 	const bobRow = fromEncryptedRow(await db.table("messages").where("id").equals(sentEvent.id).first(), DB_KEY);
-	assert.deepEqual(bobRow.attachment, attachment, "и попадает в его локальную строку тоже");
+	assert.deepEqual(bobRow.attachments, attachments, "и попадают в его локальную строку тоже");
+});
+
+function encodeBase64(bytes) {
+	return btoa(String.fromCharCode.apply(null, bytes));
+}
+
+test("этап B: doReceiveGroupMessageEvent нормализует старый формат payload (attachment, единственное число) в attachments-массив", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const legacyAttachment = { type: "image", sha256: "b".repeat(64), blossomUrl: "http://127.0.0.1:8080", encryptionKey: "key==", mime: "image/png", size: 999, name: "old.png" };
+
+	// Сообщение старого формата (payload.attachment, единственное число, не
+	// payload.attachments) — собрано вручную мимо sendMessage (тот уже пишет
+	// только новый формат), тот же приём, что devices.test.js использует для
+	// проверки совместимости с payload без sentAt/attachment (строки ~326-336).
+	const aliceGroupRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	const aliceState = deserializeState(aliceGroupRow.state);
+	const legacyPayload = { text: "старое вложение", lamportTs: 1, msgId: "legacy-1", senderPubkey: ALICE_PUB, attachment: legacyAttachment };
+	const sendResult = await encryptApplicationMessage(aliceState, new TextEncoder().encode(JSON.stringify(legacyPayload)));
+	const aliceEnvKeys = await deriveNostrEnvelopeKeys(aliceState);
+	const legacyEvent = {
+		kind: 445,
+		tags: [["h", groupIdHex]],
+		content: nip44Encrypt(encodeBase64(sendResult.wireBytes), aliceEnvKeys.privateKey, bytesToHex(aliceEnvKeys.publicKey)),
+		id: "legacy-event-1",
+		pubkey: "irrelevant",
+	};
+
+	const { result } = await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, legacyEvent, async () => ({ ok: true })),
+	);
+	assert.deepEqual(result.attachments, [legacyAttachment], "старый формат (attachment) нормализуется в attachments-массив на чтении");
+
+	const bobRow = fromEncryptedRow(await db.table("messages").where("id").equals(legacyEvent.id).first(), DB_KEY);
+	assert.deepEqual(bobRow.attachments, [legacyAttachment], "нормализованный массив попадает и в локальную строку получателя");
+});
+
+test("normalizeMessageAttachments: пустой row без attachment/attachments не меняется", () => {
+	const row = { text: "привет" };
+	assert.equal(normalizeMessageAttachments(row), row, "нет изменений — тот же объект, не копия");
+});
+
+test("normalizeMessageAttachments: attachment (старый формат) -> attachments-массив, старое поле остаётся", () => {
+	const attachment = { type: "file", mime: "application/pdf" };
+	const row = { text: "", attachment };
+	const result = normalizeMessageAttachments(row);
+	assert.deepEqual(result.attachments, [attachment]);
+	assert.equal(result.attachment, attachment);
+});
+
+test("normalizeMessageAttachments: attachments уже есть (новый формат) — attachment игнорируется, если тоже присутствует", () => {
+	const attachments = [{ type: "image" }];
+	const row = { attachments, attachment: { type: "file" } };
+	assert.equal(normalizeMessageAttachments(row), row, "attachments уже есть — приоритет у него, объект не трогаем");
+});
+
+test("getChatHistory: нормализует старый формат вложения (attachment) уже сохранённой строки", async () => {
+	await establishAliceToBob();
+	const legacyAttachment = { type: "image", mime: "image/png", size: 1 };
+	await upsertMessage(
+		{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "hist-legacy", text: "старое", status: "sent", msgId: "m-hist-legacy", attachment: legacyAttachment },
+		DB_KEY,
+	);
+	const history = await getChatHistory(ALICE_PUB, BOB_PUB, DB_KEY);
+	assert.deepEqual(history[0].attachments, [legacyAttachment]);
 });
 
 // Обратная совместимость (старый формат payload без sentAt/attachment — сообщение,

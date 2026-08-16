@@ -149,6 +149,21 @@ test("loadChatWindow: не включает 'сиротские' строки de
 	assert.ok(messages.every((m) => m.msgId !== "del-msgid" && m.msgId !== "edit-msgid"));
 });
 
+test("loadChatWindow: нормализует старый формат вложения (attachment, единственное число) уже СОХРАНЁННОЙ строки в attachments-массив (этап B, MEDIA-SPEC.md §3.7)", async () => {
+	const legacyAttachment = { type: "image", sha256: "c".repeat(64), blossomUrl: "http://127.0.0.1:8080", encryptionKey: "key==", mime: "image/png", size: 555, name: "legacy.png" };
+	await db.table("messages").bulkAdd([
+		toEncryptedRow(
+			{ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: ALICE_PUB, id: "e-legacy", text: "старое", status: "sent", msgId: "m-legacy", attachment: legacyAttachment },
+			MESSAGES_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
+	]);
+	const { messages } = await loadChatWindow(ALICE_PUB, BOB_PUB, DB_KEY, { limit: 100 });
+	assert.equal(messages.length, 1);
+	assert.deepEqual(messages[0].attachments, [legacyAttachment], "строка, сохранённая ДО этапа B, всё равно рендерит своё вложение");
+	assert.deepEqual(messages[0].attachment, legacyAttachment, "старое поле не удаляется — только дополняется новым");
+});
+
 test("markWindowLoaded: сохраняет курсор, не затирая другие поля chatSyncState", async () => {
 	await db.table("chatSyncState").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lastReadLamportTs: 42 }, CHAT_SYNC_STATE_PLAINTEXT_FIELDS, DB_KEY));
 	await markWindowLoaded(ALICE_PUB, DB_KEY, BOB_PUB, 12345);

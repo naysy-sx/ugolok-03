@@ -37,12 +37,16 @@ export function buildMirrorEvent(payload, mirrorKey, groupIdHex, createdAt) {
 
 // AC-AT-06 (TECH.md §15) — извлечено из transport.js's syncMirroredHistory (было
 // инлайн внутри onBatch, непроверяемо юнит-тестом отдельно от WebSocket-обвязки).
-// sentAt/attachment включаются, ТОЛЬКО если реально присутствуют в payload (этап 29
-// — обратная совместимость со старыми зеркалами, не undefined-значения).
+// sentAt/attachments включаются, ТОЛЬКО если реально присутствуют в payload (этап 29
+// — обратная совместимость со старыми зеркалами, не undefined-значения). Этап B
+// (MEDIA-SPEC.md §3.7) — attachment (единственное число, старый формат) нормализуется
+// в attachments-массив: зеркало может доставить историческое событие с другого
+// устройства владельца, которое ещё не обновилось до этого этапа.
 export function buildMirroredMessageRow(ownerPubkey, payload, eventId) {
 	const extra = {};
 	if (payload.sentAt !== undefined) extra.sentAt = payload.sentAt;
-	if (payload.attachment !== undefined) extra.attachment = payload.attachment;
+	const attachments = payload.attachments ?? (payload.attachment ? [payload.attachment] : undefined);
+	if (attachments !== undefined) extra.attachments = attachments;
 	return {
 		ownerPubkey,
 		chatId: payload.contactPubkey,

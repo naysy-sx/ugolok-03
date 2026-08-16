@@ -15561,3 +15561,190 @@ DoD:
       состояния/И1–И6/тотальность `δ`) — все пройдены тестами
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит
+
+## Медиа-подсистема — Этап B1+B2 (attachment → attachments, личный чат)
+
+Источник: `MEDIA-SPEC.md` §3.7. Разведка (Explore-агент) нашла ВСЕ
+точки касания — см. `log.md`. Оба [C] (связанный формат события +
+публичный контракт рендера), Claude пишет напрямую, без воркера.
+
+### `src/domain/messaging/chat.js`
+
+`sendMessage`/`doSendMessage`: 8-й параметр `attachment` →
+`attachments` (массив или `undefined`). Пишется в payload/строку/
+зеркало **только если `attachments !== undefined && attachments.length
+> 0`** — тот же принцип "нет вложения — поля нет вовсе", что уже был у
+единственного числа, перенесён на массив (не пишем `attachments: []`
+для обычных текстовых сообщений — раздувает payload и ломает
+`AC-16`/обратную совместимость на пустом массиве).
+
+Четыре места записи меняют `attachment` → `attachments` буквальной
+заменой имени поля и условия (`attachment !== undefined` →
+`attachments !== undefined && attachments.length > 0`):
+`messagePayload.attachment` (MLS payload), два `upsertMessage(...)` (в
+`try`-ветке сбоя publish и в успешной), один `mirrorBestEffort(...)`.
+
+`doReceiveGroupMessageEvent`: замена строки
+`if (parsed.attachment !== undefined) extra.attachment = parsed.attachment;`
+на нормализацию (SPEC §3.7, буквально):
+
+```js
+const normalizedAttachments = parsed.attachments ?? (parsed.attachment ? [parsed.attachment] : undefined);
+if (normalizedAttachments !== undefined) extra.attachments = normalizedAttachments;
+```
+
+Это ЕДИНСТВЕННОЕ место, где новый формат (`attachments`) и старый
+(`attachment`, сообщения до этого этапа — локальная база разработки их
+содержит) сходятся в одну переменную; дальше по коду (`upsertMessage`,
+`mirrorBestEffort`, возврат функции) — везде уже `extra.attachments`,
+никаких следов старого имени.
+
+`enqueuePendingOutgoingMessage`: параметр деструктуризации `attachment`
+→ `attachments`, тот же условный spread. `drainPendingOutgoingMessages`:
+вызов `sendMessage(..., row.attachment)` → `sendMessage(...,
+row.attachments)`.
+
+### `src/domain/messaging/mirror.js`
+
+`buildMirroredMessageRow`: та же нормализация, что в `chat.js` (не
+только `payload.attachments !== undefined`, а с фолбэком на
+`payload.attachment` — зеркало может доставить историческое событие,
+созданное ДО этого этапа, с другого устройства владельца, которое ещё
+не обновилось):
+
+```js
+const attachments = payload.attachments ?? (payload.attachment ? [payload.attachment] : undefined);
+if (attachments !== undefined) extra.attachments = attachments;
+```
+
+### `src/ui/signals/chats.js` — `sendChatMessageAction`
+
+Пробрасывающий параметр `attachment` (9-й аргумент) → `attachments`,
+переименование в сигнатуре и в обоих местах использования
+(`enqueuePendingOutgoingMessage`, `sendMessage`) — сам не решает,
+что и как заворачивать в массив, это дело вызывающей стороны
+(`chat.jsx`).
+
+### `src/ui/screens/chat.jsx` — минимальная обвязка (НЕ этап B3/B4/лоток)
+
+**Явно вне контракта B3/B4** (тот лоток — отдельная задача воркеру,
+мультивыбор файлов): здесь только заворачивание уже существующего
+ОДНОГO результата `buildOutgoingAttachment()` в массив, чтобы
+приложение не сломалось между B1 (домен ждёт массив) и B4 (лоток ещё
+не подключён). Оба композера (`ChatWindow.handleSend`,
+`ComposeMessage.handleSend`, независимые копии — см. `log.md`,
+находка агента):
+
+```js
+const attachment = await buildOutgoingAttachment();
+const attachments = attachment !== undefined ? [attachment] : undefined;
+// ...sendChatMessageAction(..., attachments)
+```
+
+### `src/ui/components/message-bubble.jsx` — рендер списка
+
+Логика "какое вложение выше текста, какие ниже" выносится в чистую
+функцию (не в JSX — SPEC §0.3, "логика не должна жить в JSX"):
+
+```js
+// src/ui/components/message-bubble-attachments.js
+export function splitBubbleAttachments(attachments)
+// → { above: MediaDescriptor|null, below: MediaDescriptor[] }
+```
+
+Правило (SPEC §3.7, буквально): **только ПЕРВОЕ по порядку изображение
+с `position === "above"`** уходит в `above`; все остальные вложения
+(независимо от их собственного `position`) — в `below`, в исходном
+порядке минус изъятый элемент. Если `attachments` пуст/undefined —
+`{above: null, below: []}`.
+
+`message-bubble.jsx`: `const { above, below } = splitBubbleAttachments(message.attachments);`
+— рендерит `above` (если есть) до текста, `below` — списком после
+текста (`key` — индекс, порядок сообщения неизменен после получения),
+и `AttachmentDownloadLink` — по одному на каждый элемент
+`message.attachments` (было — один раз на единственное вложение).
+
+### Тесты (до кода)
+
+`tests/chat.test.js`: 4 существующих теста на `attachment`
+переписываются на `attachments` (массив из одного элемента, там где
+раньше был объект) — `deepEqual` на `[attachment]`, не на `attachment`.
+Новый тест: получатель с ЛОКАЛЬНО собранным (не через `sendMessage`)
+payload старого формата `{..., attachment: {...}}` (без `attachments`)
+— `doReceiveGroupMessageEvent` обязан вернуть `result.attachments`
+равным `[этот attachment]` (нормализация читающего пути).
+
+`tests/mirror.test.js`: 2 существующих теста на `buildMirroredMessageRow`
+переписываются на массив; новый тест на нормализацию
+`payload.attachment` (старый формат зеркала) → `row.attachments`.
+
+`tests/message-bubble-attachments.test.js` (новый, чистая функция, без
+DOM): `splitBubbleAttachments` — пусто/undefined, один элемент без
+`position`, один элемент `position:"above"`, несколько элементов с
+`position:"above"` у НЕ первого (должен остаться в `below` — само
+правило "только первое").
+
+### Довесок — живой проверкой найден пробел контракта: чтение УЖЕ
+### СОХРАНЁННЫХ строк истории (не только живого/зеркального приёма)
+
+Контракт выше нормализовал `attachment→attachments` на ДВУХ входных
+путях: живой приём (`doReceiveGroupMessageEvent`) и зеркало
+(`buildMirroredMessageRow`). Живая проверка (два реальных аккаунта,
+локальный strfry+Blossom) вскрыла ТРЕТИЙ путь, не учтённый в контракте:
+строки, УЖЕ лежащие в `messages` (IndexedDB) с прошлых сессий, ДО этого
+этапа — `message-bubble.jsx` начал читать `message.attachments`
+(множественное), а такие строки хранят только `message.attachment`
+(единственное) → вложение молча переставало отображаться при чтении
+истории, хотя сама строка была цела.
+
+Фикс — `src/domain/messaging/chat.js`:
+
+```js
+export function normalizeMessageAttachments(row) {
+	if (row.attachments !== undefined || row.attachment === undefined) return row;
+	return { ...row, attachments: [row.attachment] };
+}
+```
+
+Применяется в ОБОИХ читающих путях: `getChatHistory` (chat.js) и
+`loadChatWindow` (`src/core/sync/lazy-chat.js`, импортирует функцию —
+никакого цикла импортов: `chat.js` ничего не импортирует из
+`core/sync/`). Старое поле `attachment` НЕ удаляется из строки (только
+дополняется) — дешёвая, обратимая, не разрушающая операция чтения.
+
+Тесты (после находки, но до финального прогона): `tests/chat.test.js`
+(`normalizeMessageAttachments` напрямую + `getChatHistory` на строке
+старого формата), `tests/lazy-chat.test.js` (`loadChatWindow` на строке
+старого формата, сохранённой напрямую в `messages` в обход
+`sendMessage`).
+
+Это ровно тот класс находки, ради которого в процессе проекта
+обязательна живая проверка после тестов: юнит-тесты проверяли КАЖДЫЙ
+путь по отдельности корректно (входной payload нормализовался), но
+демонстрировали разрыв, который выявляется только сценарием
+"перезайти в уже существующий чат с историей, написанной ДО этого
+этапа" — то есть ровно тем, что делает живой человек, а не
+синтетический тест с чистой БД на каждый прогон.
+
+### Этап B1+B2 ЗАКРЫТ
+
+Регрессия: 1793 + 15 = 1808/1808 (один известный несвязанный флейк по
+пути — `room-session` И9, тот же, что уже документирован в прошлых
+этапах; воспроизведён в изоляции 1/3 прогонов, подтверждён
+независимым от этого этапа — Rooms/voice, glare-resolution race).
+Бюджет: 836,97 КБ (+0,08 КБ).
+
+Живая проверка (два реальных локальных аккаунта, настоящий
+strfry+Blossom): (а) уже существовавшие ДО этого этапа сообщения
+(старый формат `attachment`) продолжают отображаться как плееры после
+находки-довеска; (б) два новых вложения отправлены через новый путь
+(`attachments`-массив) — дошли, отрендерились, скачиваются.
+
+DoD:
+- [x] тесты этапа зелёные (15/15 новых + все переписанные)
+- [x] полная регрессия зелёная (1808/1808, флейк не в счёт)
+- [x] `npm run build` зелёный, 836,97 КБ
+- [x] живая проверка — старый формат читается, новый пишется и
+      читается, сквозь реальное шифрование/публикацию/приём
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом

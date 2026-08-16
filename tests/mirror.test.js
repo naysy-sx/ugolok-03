@@ -59,21 +59,29 @@ test("buildMirrorEvent: собирает kind/tags/content/created_at, не по
 // непроверяемо юнит-тестом) — та же логика, но теперь отдельная чистая функция.
 const OWNER_PUB = "d".repeat(64);
 
-test("buildMirroredMessageRow: вложение из mirror-payload попадает в строку сообщения (AC-AT-06)", () => {
-	const payload = { ...SAMPLE_PAYLOAD, sentAt: 1700000000, attachment: { type: "image", sha256: "abc123", blossomUrl: "https://blossom.test", encryptionKey: "base64key==", mime: "image/png", size: 1234, name: "photo.png" } };
+test("buildMirroredMessageRow: вложения из mirror-payload попадают в строку сообщения (AC-AT-06)", () => {
+	const attachments = [{ type: "image", sha256: "abc123", blossomUrl: "https://blossom.test", encryptionKey: "base64key==", mime: "image/png", size: 1234, name: "photo.png" }];
+	const payload = { ...SAMPLE_PAYLOAD, sentAt: 1700000000, attachments };
 	const row = buildMirroredMessageRow(OWNER_PUB, payload, "event-id-1");
 
-	assert.deepEqual(row.attachment, payload.attachment, "дескриптор вложения должен дойти до второго устройства БЕЗ потерь");
+	assert.deepEqual(row.attachments, attachments, "дескрипторы вложений должны дойти до второго устройства БЕЗ потерь");
 	assert.equal(row.ownerPubkey, OWNER_PUB);
 	assert.equal(row.chatId, payload.contactPubkey);
 	assert.equal(row.id, "event-id-1");
 	assert.equal(row.status, "sent");
 });
 
-test("buildMirroredMessageRow: payload БЕЗ вложения — поле attachment отсутствует (не undefined-значение, обратная совместимость со старыми зеркалами)", () => {
+test("buildMirroredMessageRow: payload БЕЗ вложений — поле attachments отсутствует (не undefined-значение, обратная совместимость со старыми зеркалами)", () => {
 	const row = buildMirroredMessageRow(OWNER_PUB, SAMPLE_PAYLOAD, "event-id-2");
-	assert.equal("attachment" in row, false);
+	assert.equal("attachments" in row, false);
 	assert.equal("sentAt" in row, false);
+});
+
+test("buildMirroredMessageRow: старый формат payload (attachment, единственное число) нормализуется в attachments-массив", () => {
+	const legacyAttachment = { type: "image", sha256: "def456", blossomUrl: "https://blossom.test", encryptionKey: "key==", mime: "image/png", size: 5678, name: "old.png" };
+	const payload = { ...SAMPLE_PAYLOAD, attachment: legacyAttachment };
+	const row = buildMirroredMessageRow(OWNER_PUB, payload, "event-id-legacy");
+	assert.deepEqual(row.attachments, [legacyAttachment], "историческое зеркало со старым форматом читается корректно");
 });
 
 test("buildMirroredMessageRow: sentAt из payload переносится, если присутствует", () => {

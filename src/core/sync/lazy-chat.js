@@ -1,13 +1,14 @@
 import { db } from '../store/database.js';
 import { parseDeletionText } from '../../domain/messaging/deletions.js';
 import { parseEditText } from '../../domain/messaging/edits.js';
+import { normalizeMessageAttachments } from '../../domain/messaging/chat.js';
 import { toEncryptedRow, fromEncryptedRow } from '../store/encrypted-table.js';
 import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../store/table-fields.js';
 
 export async function loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit = 100, beforeSeq } = {}) {
     // [ownerPubkey+chatId] (db.version(4), owner-scoping — см. database.js).
     const raw = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, contactPubkey]).toArray();
-    let rows = raw.map((r) => fromEncryptedRow(r, dbKey));
+    let rows = raw.map((r) => normalizeMessageAttachments(fromEncryptedRow(r, dbKey)));
 
     // DESIGN.md, "Этап 25" раздел 5 (backlog, теперь реализовано этапом 27-довесок-6):
     // sendMessage создаёт СВОЮ строку messages на КАЖДОЕ kind-445, включая

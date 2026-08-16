@@ -35,7 +35,7 @@ export async function listChatPartners(ownerPubkey, dbKey) {
 // Находка 3 (CONTRACTS.md, этап 27): ensureChatEstablished не подписывает устройство
 // на #h новой группы само — refreshGroupMessageSubscription обязана вызываться следом,
 // безусловно на каждую отправку (идемпотентна — дешевле, чем проверять "было ли создано").
-// attachment (этап 29) — необязательный, проброс в sendMessage как есть.
+// attachments (этап 29, массив — этап B, MEDIA-SPEC.md §3.7) — необязательный, проброс в sendMessage как есть.
 export async function sendChatMessageAction(
 	ownerPubkey,
 	privKey,
@@ -46,7 +46,7 @@ export async function sendChatMessageAction(
 	publish,
 	fetchDeviceKeyPackages,
 	refreshGroupMessageSubscription,
-	attachment,
+	attachments,
 ) {
 	// Этап 73.3 — И3/И4: ensureChatEstablished бросает DomainError с
 	// key="errors.awaitingSiblingSync" (И4 — другое моё устройство уже
@@ -57,11 +57,11 @@ export async function sendChatMessageAction(
 		await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
 	} catch (e) {
 		if (!e.key?.startsWith("errors.awaiting")) throw e;
-		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachment });
+		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachments });
 		return { status: "awaiting_committer" };
 	}
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
-	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachment);
+	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments);
 }
 
 export async function deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish) {
