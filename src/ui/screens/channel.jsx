@@ -14,11 +14,11 @@ import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupId
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
-import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
-import { validateAttachment } from "../../domain/files/attachment-validation.js";
+import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
+import { validateAttachment, MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import AttachmentPreview from "../components/attachment-preview.jsx";
+import AttachmentTray from "../components/media/attachment-tray.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
 import PostCard, { formatDateTime } from "../components/post-card.jsx";
 import ChannelChat from "../components/channel-chat.jsx";
@@ -247,7 +247,8 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const attachment = usePendingAttachment();
+	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
+	const fileInputRef = useRef(null);
 	const author = commentAuthorInfo(ownerPubkey);
 	// Этап 69 — свой аватар в композере рендерится ДО того, как что-либо
 	// ещё в этом дереве компонентов гарантированно подтянуло profiles[ownerPubkey]
@@ -266,7 +267,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	async function handleSubmit(e) {
 		e.preventDefault();
 		if (busy || text.length === 0 || plainTooLong || sourceTooLong) return;
-		if (attachment.file && attachment.error) return;
+		if (tray.items.some((item) => item.error)) return;
 		if (!limiter.tryAction("post")) {
 			setError(t("common.rateLimitError"));
 			return;
@@ -274,10 +275,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 		setBusy(true);
 		setError("");
 		try {
-			let attachments = [];
-			if (attachment.file) {
-				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
-			}
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
 			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments });
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
@@ -313,15 +311,15 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 							{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
 						</p>
 					)}
-					{attachment.file && (
-						<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
+					{(tray.items.length > 0 || tray.errors.length > 0) && (
+						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 					)}
 					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-						<button type="button" onClick={() => attachment.inputRef.current?.click()}>
+						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+						<button type="button" onClick={() => fileInputRef.current?.click()}>
 							<IconPaperclip /> {t("channel.composer.attachButton")}
 						</button>
-						<button type="submit" disabled={busy || text.length === 0 || plainTooLong || sourceTooLong || (!!attachment.file && !!attachment.error)}>
+						<button type="submit" disabled={busy || text.length === 0 || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 						</button>
 						<button type="button" onClick={onCancel} disabled={busy}>
@@ -338,7 +336,8 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const attachment = usePendingAttachment();
+	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
+	const fileInputRef = useRef(null);
 	const textareaRef = useRef(null);
 	const author = commentAuthorInfo(ownerPubkey);
 	// Этап 69 — тот же приём, что PostComposer: свой аватар может отрисоваться
@@ -350,7 +349,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	async function handleSubmit(e) {
 		e.preventDefault();
 		if (busy || text.length === 0) return;
-		if (attachment.file && attachment.error) return;
+		if (tray.items.some((item) => item.error)) return;
 		if (!limiter.tryAction("comment")) {
 			setError(t("common.rateLimitError"));
 			return;
@@ -358,10 +357,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 		setBusy(true);
 		setError("");
 		try {
-			let attachments = [];
-			if (attachment.file) {
-				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
-			}
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
 			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, text, attachments, publish);
 			onSubmitted();
 		} catch (err) {
@@ -401,16 +397,16 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 					placeholder={t("channel.commentComposer.placeholder")}
 					autoFocus={autoFocus}
 				/>
-				{attachment.file && (
-					<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
+				{(tray.items.length > 0 || tray.errors.length > 0) && (
+					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 				)}
 				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-					<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-					<button type="button" class="icon-btn" onClick={() => attachment.inputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
+					<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+					<button type="button" class="icon-btn" onClick={() => fileInputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
 						<IconPaperclip />
 					</button>
 					<span class="grow" />
-					<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
+					<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
 						{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
 					</button>
 					{onCancel && (

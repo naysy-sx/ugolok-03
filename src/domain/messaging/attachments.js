@@ -27,7 +27,7 @@ function attachmentTypeFromMime(mime) {
 	return c === "other" ? "file" : c;
 }
 
-// Путь "с диска" (chat.jsx/channel.jsx/pending-attachment.js) — реальная
+// Путь "с диска" (chat.jsx/channel.jsx/channel-chat.jsx через use-attachment-tray.js) — реальная
 // загрузка. putStream шифрует ЧАНКОВАНО (не целиком, как старый encryptFile) —
 // побочный эффект: видео/аудио-вложения теперь МОГЛИ БЫ читаться через тот же
 // Range-путь, что плеер "Файлы" (не реализовано этим проходом — вложения

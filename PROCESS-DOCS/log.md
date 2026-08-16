@@ -6047,3 +6047,41 @@ DoD:
 - [x] адверсарный заход — граничные случаи разобраны, ничего не открыто
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (d3b75ed)
+
+## Медиа-подсистема — Этап B4 (подключение лотка в пяти композерах)
+
+1. Решение маршрутизации: B4 помечен [W] в плане, но по факту —
+   стыковка внутри уже плотно переплетённой логики живых экранов
+   (chat.jsx, channel.jsx, channel-chat.jsx), не изолированная функция.
+   Прецедент — Markdown-этап C/D "без воркера — стыковка, не логика".
+   Правил впрямую (Edit), без worker.sh.
+2. MAX_ATTACHMENTS_PER_MESSAGE=10 — добавлено в attachment-validation.js
+   (продуктовое решение PM, число не в исходных документах).
+3. Пять точек: ChatWindow/ComposeMessage (chat.jsx), PostComposer/
+   CommentComposer (channel.jsx), ChatComposer (channel-chat.jsx) —
+   usePendingAttachment → useAttachmentTray, AttachmentPreview →
+   AttachmentTray, multiple на input[type=file]. ChatWindow: убрал
+   getRange (расшифровку целиком ради превью) из handleAttachmentFromStorage
+   — AttachmentTray для storage-item превью не рисует (B3), значит и
+   расшифровывать не нужно.
+4. usePendingAttachment/AttachmentPreview удалены целиком (мёртвый код
+   после миграции всех потребителей).
+5. Регрессия 1824/1824, build 837,85 КБ.
+6. Живая проверка (2 реальных локальных аккаунта b4tester/b4tester2,
+   настоящий strfry+Blossom, dev-сервер с автозапуском обоих из
+   vite.config.js): PostComposer/CommentComposer/ChatComposer —
+   мультивыбор/загрузка/публикация с первого раза. ChatWindow/
+   ComposeMessage — НАШЁЛ РЕАЛЬНЫЙ БАГ: handleFilesSelected обнулял
+   e.currentTarget.value ДО tray.addFiles(files) — FileList живая
+   ссылка, не копия, обнуление инпута опустошало и её; вложения молча
+   пропадали. Три канальных композера писали в верном порядке случайно
+   (addFiles() первым) — оттуда не всплыло. Переставил порядок в обоих
+   местах chat.jsx, перепроверил вживую — оба шлют/принимают
+   мультивложения, голос/лоток взаимоисключение подтверждено.
+
+DoD:
+- [x] npm run build зелёный (837,85 КБ)
+- [x] полная регрессия зелёная (1824/1824)
+- [x] живая проверка — 5/5 композеров, реальный баг найден и закрыт
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом

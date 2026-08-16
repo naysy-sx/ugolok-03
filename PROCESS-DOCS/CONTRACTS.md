@@ -15967,3 +15967,145 @@ DoD:
       `setPosition`, `planUpload([])`) разобраны, ничего не открыто
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (d3b75ed)
+
+## Медиа-подсистема — Этап B4 (подключение лотка в пяти композерах)
+
+**Решение по маршрутизации (13a, отдельным явным решением PM)**:
+PLAN.md метил B4 как [W], но по факту это пять точек стыковки внутри
+УЖЕ существующей, плотно переплетённой логики живых экранов (`chat.jsx`
+45 КБ — вложение/голос/из-хранилища взаимоисключающие в одном composer,
+`channel.jsx` 39 КБ, `channel-chat.jsx`) — не изолированная функция с
+полной спецификацией (критерий [W] из шапки MEDIA-SPEC.md). Прямой
+прецедент В ЭТОМ ЖЕ проекте: контракт Markdown-этапа C/D,
+"Интеграция в три композера (точечно, без воркера — стыковка, не
+логика)". Тот же режим здесь — Claude правит впрямую (Edit), без
+`worker.sh`.
+
+**`MAX_ATTACHMENTS_PER_MESSAGE = 10`** — добавлено в
+`domain/files/attachment-validation.js` (рядом с `MAX_SANITY_FILE_SIZE`
+— тот же файл уже хранит клиентские потолки вложений). Число не
+названо ни в одном источнике (MATH/ALGO/SPEC/TASK) — продуктовое
+решение PM, не пробел в знаниях (9a не применяется: это обычный дизайн-
+выбор UI-лимита, не факт из внешней документации/среды исполнения).
+Один потолок на все пять композеров.
+
+### `chat.jsx` — `ChatWindow`
+
+Замена `attachmentFile/attachmentPosition/attachmentError/
+attachmentSourceRef` на `useAttachmentTray({ maxItems:
+MAX_ATTACHMENTS_PER_MESSAGE })`. Голосовая запись и лоток остаются
+ВЗАИМОИСКЛЮЧАЮЩИМИ (как раньше file/voice) — старт записи вызывает
+`tray.reset()`, кнопка микрофона дизейблится при `tray.items.length >
+0`, кнопки "прикрепить"/"из Файлов" — при `recordingState !== "idle"`.
+
+`handleAttachmentFromStorage` **упрощён**: раньше расшифровывал файл
+целиком (`getRange`) только чтобы построить локальный `File` для
+превью `AttachmentPreview`. `AttachmentTray` (B3) для storage-item
+превью не показывает картинку (только иконку, сознательное сужение
+B3) — значит расшифровка ради превью больше не нужна вовсе, вызывается
+`tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest
+}])` сразу после `getManifest`/`getFileKeyFor`, без `getRange`. Чистая
+эффективность (не тянем в память видео/большой файл ради иконки),
+побочный эффект стыковки, отдельно не тестируется отдельным этапом.
+
+`buildOutgoingAttachment` разбирается на два независимых пути
+(взаимоисключение — voice ИЛИ tray, оба разом невозможны по построению
+UI): `tray.items.length > 0 → await tray.uploadAll(privKey)` (массив
+дескрипторов) ИЛИ `recordedVoiceBlob → [voiceDescriptor]` (как раньше,
+голос НЕ идёт через лоток — inline/upload-логика голоса не меняется)
+ИЛИ `undefined`.
+
+`<input type="file">` — добавлен `multiple`, `onChange` зовёт
+`tray.addFiles(e.currentTarget.files)`. Рендер вложений —
+`<AttachmentTray items={tray.items} errors={tray.errors}
+onRemove={tray.remove} onPositionChange={tray.setPosition} />` вместо
+`AttachmentPreview`. Импорты `validateAttachment`, `referenceStoredFile`,
+`getRange`, `AttachmentPreview` — сняты (более не используются в файле
+после миграции обоих composer'ов, см. ниже).
+
+### `chat.jsx` — `ComposeMessage`
+
+Тот же паттерн, без voice/storage — только `useAttachmentTray` +
+`tray.addFiles`/`tray.uploadAll`/`AttachmentTray`. После полной миграции
+обоих composer'ов в файле `uploadMessageAttachment` остаётся нужен
+ТОЛЬКО `ChatWindow` (голос); `ComposeMessage` его больше не вызывает
+напрямую (внутри `tray.uploadAll`).
+
+### `channel.jsx` — `PostComposer`, `CommentComposer`
+
+Оба — тот же паттерн замены `usePendingAttachment()` →
+`useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE })`,
+`attachment.file`→`tray.items.length > 0` в гардах, `uploadPendingAttachment`
+→ `tray.uploadAll(privKey)` (уже массив, не оборачивать в `[...]`
+повторно — B1+B2 обвязка `attachments = attachment !== undefined ?
+[attachment] : undefined` снимается, `tray.uploadAll` уже возвращает
+массив, в т.ч. пустой при пустом лотке — `createDraftPost`/`addComment`
+уже принимают массив `attachments`, пустой массив семантически равен
+"нет вложений" — не различалось раньше тоже, т.к. `attachments = []`
+по умолчанию).
+
+### `channel-chat.jsx` — `ChatComposer`
+
+Тот же паттерн, `allowAttachments` гейт остаётся (если `false` — кнопка
+"прикрепить" не рендерится, лоток тоже не рендерится, если пуст —
+`AttachmentTray` с пустым `items`/`errors` рендерит пустой контейнер,
+не проблема, но для чистоты рендерится условно `tray.items.length > 0
+|| tray.errors.length > 0`, как и в остальных четырёх местах).
+
+### Снятие `usePendingAttachment`
+
+После миграции всех трёх файлов (`channel.jsx`×2, `channel-chat.jsx`×1)
+— `src/ui/hooks/pending-attachment.js` не импортируется нигде, удалён
+целиком (был единственным потребителем `uploadMessageAttachment`
+экспорта, который остаётся в `domain/messaging/attachments.js` для
+других мест).
+
+### Тесты
+
+Ни один из пяти файлов не тестируется `node --test` (JSX/composer —
+MEDIA-SPEC.md §0.3, прецедент B1+B2: "минимальная обвязка... НЕ этап
+B3/B4/лоток"). Приёмка — `npm run build` зелёный + полная регрессия
+без падений (мёртвых импортов быть не должно) + живая проверка (rule
+17: "файлы работают внутри приложения").
+
+### Довесок — живой проверкой найден реальный дефект (не гипотетический)
+
+`AttachmentPreview` (единственный потребитель `usePendingAttachment`)
+удалён целиком вместе с хуком — после миграции всех пяти композеров на
+`AttachmentTray`/`useAttachmentTray` он остался мёртвым кодом (нигде
+не импортируется), убран тем же проходом (не отдельным этапом).
+
+Живая проверка (два реальных локальных аккаунта, настоящий strfry +
+Blossom): три общих композера (`PostComposer`/`CommentComposer`/
+`ChatComposer`) — мультивыбор/загрузка/публикация прошли с первого
+раза. `ChatWindow`/`ComposeMessage` (`chat.jsx`) — **нашли реальный
+баг**: `handleFilesSelected` в обоих местах захватывал `files =
+e.currentTarget.files`, затем СРАЗУ `e.currentTarget.value = ""`, и
+только потом звал `tray.addFiles(files)`. `FileList` из `.files` —
+ЖИВАЯ ссылка на список инпута, не копия: обнуление `.value` опустошает
+её же, `tray.addFiles` получал `files.length === 0` и молча выходил по
+раннему `return`. Три канальных композера (`PostComposer` и др.) писали
+в правильном порядке (`addFiles()` до очистки) — оттуда и работали
+сразу; в `chat.jsx` порядок был случайно другой. Исправлено (переставлен
+порядок, addFiles() первым), задокументировано комментарием в коде.
+Перепроверено вживую после фикса — оба места (`ComposeMessage`
+короткая форма, `ChatWindow` полный composer) шлют/принимают
+мультивложения, голос/лоток взаимоисключение подтверждено
+(`disabled` на кнопке микрофона при непустом лотке).
+
+Побочная находка того же прохода: `handleAttachmentFromStorage`
+(было — расшифровка байтов целиком ради локального превью) упростился
+до `getManifest`+`getFileKeyFor` без `getRange` — `AttachmentTray` не
+рендерит превью для storage-item (B3, сознательное сужение), значит и
+расшифровывать нечего.
+
+Регрессия после фикса: 1824/1824 (без изменений в числе тестов — фикс
+внутри composer, не покрывается `node --test` по построению этого
+этапа). Бюджет: 837,85 КБ (без изменений).
+
+DoD:
+- [x] `npm run build` зелёный, 837,85 КБ
+- [x] полная регрессия зелёная (1824/1824)
+- [x] живая проверка — 5/5 композеров, реальный баг найден и закрыт
+- [x] CONTRACTS.md/PLAN.md/log.md обновлены
+- [ ] коммит — следующим шагом

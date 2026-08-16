@@ -6,8 +6,9 @@ import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched } from "../signals/contacts.js";
-import { usePendingAttachment, uploadPendingAttachment } from "../hooks/pending-attachment.js";
-import AttachmentPreview from "./attachment-preview.jsx";
+import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
+import AttachmentTray from "./media/attachment-tray.jsx";
 import AttachmentView from "./attachment-view.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
@@ -23,13 +24,14 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const attachment = usePendingAttachment();
+	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
+	const fileInputRef = useRef(null);
 	const textareaRef = useRef(null);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
 		if (busy || text.length === 0) return;
-		if (attachment.file && attachment.error) return;
+		if (tray.items.some((item) => item.error)) return;
 		if (!limiter.tryAction("chat")) {
 			setError(t("common.rateLimitError"));
 			return;
@@ -37,13 +39,10 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 		setBusy(true);
 		setError("");
 		try {
-			let attachments = [];
-			if (attachment.file) {
-				attachments = [await uploadPendingAttachment(attachment.file, privKey)];
-			}
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
 			await sendChannelMessage(ownerPubkey, privKey, dbKey, channelId, text, attachments, publish);
 			setText("");
-			attachment.reset();
+			tray.reset();
 			onSent();
 		} catch (err) {
 			setError(errorMessage(err));
@@ -64,19 +63,19 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			</label>
 			<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
 			<textarea id="channel-chat-text" ref={textareaRef} value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
-			{attachment.file && (
-				<AttachmentPreview file={attachment.file} position="below" onPositionChange={() => {}} onRemove={attachment.reset} error={attachment.error} />
+			{(tray.items.length > 0 || tray.errors.length > 0) && (
+				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 			)}
 			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{allowAttachments && (
 					<>
-						<input ref={attachment.inputRef} type="file" style={{ display: "none" }} onChange={attachment.handleSelect} />
-						<button type="button" onClick={() => attachment.inputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
+						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+						<button type="button" onClick={() => fileInputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
 							<IconPaperclip />
 						</button>
 					</>
 				)}
-				<button type="submit" disabled={busy || text.length === 0 || (!!attachment.file && !!attachment.error)}>
+				<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
 					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
 				</button>
 			</div>

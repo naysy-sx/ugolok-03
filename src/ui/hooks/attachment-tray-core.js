@@ -3,7 +3,7 @@ import { classOf } from "../../domain/media/media-ref.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 
 // Та же переклассификация, что messaging/attachments.js::attachmentTypeFromMime
-// (приватная там) — сознательный дубль, тот же приём, что уже в attachment-preview.jsx.
+// (приватная там) — сознательный дубль.
 function typeFromMime(mime) {
 	const c = classOf(mime);
 	return c === "other" ? "file" : c;

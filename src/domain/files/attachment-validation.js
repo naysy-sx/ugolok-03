@@ -13,6 +13,10 @@ export const ALLOWED_MIME_TYPES = new Set([
 
 export const MAX_SANITY_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1 ГБ
 
+// Лимит лотка мультивыбора (MEDIA-SPEC.md §3.11, этап B4) — не мнение сервера,
+// разумный клиентский потолок на число вложений ОДНОГО сообщения/поста/комментария.
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+
 export function validateAttachment({ mime, size }) {
 	if (!ALLOWED_MIME_TYPES.has(mime)) {
 		throw new DomainError(`недопустимый тип файла: ${mime}`, "errors.invalidFileType", { mime });

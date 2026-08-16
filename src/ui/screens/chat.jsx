@@ -42,13 +42,14 @@ import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
 import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
 import { refreshUnreadMessagesCount } from "../signals/notifications.js";
-import { validateAttachment } from "../../domain/files/attachment-validation.js";
-import { uploadMessageAttachment, referenceStoredFile } from "../../domain/messaging/attachments.js";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
+import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { createVoiceRecorder, shouldInlineVoice } from "../../domain/messaging/voice.js";
-import { getManifest, getRange } from "../../domain/files/content.js";
+import { getManifest } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
 import MessageBubble from "../components/message-bubble.jsx";
-import AttachmentPreview from "../components/attachment-preview.jsx";
+import AttachmentTray from "../components/media/attachment-tray.jsx";
+import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
@@ -293,24 +294,13 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// имеет права его перезаписывать. Сбрасывается при смене contactPubkey (новый чат).
 	const userEditedRef = useRef(false);
 
-	// Этап 29 — вложения. attachmentFile (выбранный файл) и recordedVoiceBlob (голосовая
-	// запись) ВЗАИМОИСКЛЮЧАЮЩИЕ — сообщение несёт максимум одно вложение за раз
-	// (тот же принцип, что большинство мессенджеров: либо файл, либо голосовое, не оба
-	// сразу в одном сообщении). fileInputRef — скрытый <input type=file>, кнопка
-	// "Прикрепить" триггерит его клик программно.
-	const [attachmentFile, setAttachmentFile] = useState(null);
-	const [attachmentPosition, setAttachmentPosition] = useState("below");
-	const [attachmentError, setAttachmentError] = useState("");
+	// Этап 29 — вложения; этап B4 — лоток мультивыбора (useAttachmentTray, B3).
+	// Лоток и recordedVoiceBlob (голосовая запись) ВЗАИМОИСКЛЮЧАЮЩИЕ — сообщение
+	// несёт либо вложения, либо голосовое, не оба сразу (тот же принцип, что
+	// большинство мессенджеров). fileInputRef — скрытый <input type=file multiple>,
+	// кнопка "Прикрепить" триггерит его клик программно.
+	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
-	// Заполнено ТОЛЬКО когда attachmentFile пришёл из "Файлы" (не с диска/не
-	// запись) — {manifestDigest, fileKey, manifest}, уже известные узлу.
-	// Наличие этой ссылки означает: buildOutgoingAttachment ОБЯЗАН собрать
-	// дескриптор через referenceStoredFile (без сети, без повторной заливки —
-	// MATH.md §7 "передают Digest блоба, а не копию байтов"), а НЕ через
-	// uploadMessageAttachment. attachmentFile сам по себе (File, декодированный
-	// ЛОКАЛЬНО из этих же bytes) остаётся нужен ТОЛЬКО для превью
-	// (AttachmentPreview требует File-подобный объект с URL.createObjectURL).
-	const [attachmentSourceRef, setAttachmentSourceRef] = useState(null);
 	const fileInputRef = useRef(null);
 
 	// recordingState: "idle" | "recording" | "recorded". voiceRecorderRef держит
@@ -320,9 +310,10 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const voiceRecorderRef = useRef(null);
 	const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
-	// Object URL для прослушивания ЗАПИСАННОГО (ещё не отправленного) голоса — тот же
-	// принцип, что attachment-preview.jsx: создать один раз на смену blob, освободить
-	// на очистке/размонтировании, не пересоздавать на каждый рендер.
+	// Object URL для прослушивания ЗАПИСАННОГО (ещё не отправленного) голоса —
+	// создать один раз на смену blob, освободить на очистке/размонтировании,
+	// не пересоздавать на каждый рендер (тот же принцип, что objectUrl в
+	// components/media/attachment-tray.jsx для превью картинок).
 	const [recordedVoiceUrl, setRecordedVoiceUrl] = useState(null);
 	useEffect(() => {
 		if (!recordedVoiceBlob) {
@@ -418,47 +409,29 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		applyTextChange(e.currentTarget.value);
 	}
 
-	// Прикрепление/голосовое взаимоисключающие — выбор одного сбрасывает другое.
-	// Общий хвост обоих источников (с диска/из хранилища, И7 7.3) — file уже
-	// готовый File/Blob-подобный объект (name/type/size/arrayBuffer()), откуда он
-	// взят — не важно ниже по стеку для ПРЕВЬЮ (validateAttachment/AttachmentPreview
-	// агностичны к происхождению). sourceRef (не null, только из хранилища) —
-	// см. buildOutgoingAttachment: решает, заливать ли файл заново или сослаться
-	// на уже существующий digest (MATH.md §7 — дедупликация).
-	function applySelectedFile(file, sourceRef = null) {
+	// Прикрепление/голосовое взаимоисключающие — начало одного сбрасывает другое.
+	function handleFilesSelected(e) {
+		// FileList из e.currentTarget.files — ЖИВАЯ ссылка на список инпута:
+		// обнуление e.currentTarget.value ДО addFiles() опустошило бы её же
+		// (тот же объект, не копия) — addFiles() должен уйти первым.
+		const files = e.currentTarget.files;
+		if (!files || files.length === 0) return;
 		setRecordingState("idle");
 		setRecordedVoiceBlob(null);
-		setAttachmentFile(file);
-		setAttachmentSourceRef(sourceRef);
-		setAttachmentPosition("below");
-		try {
-			validateAttachment({ mime: file.type, size: file.size });
-			setAttachmentError("");
-		} catch (err) {
-			// Файл ВСЁ РАВНО показывается (AttachmentPreview покажет причину отказа) —
-			// пользователь должен понимать, ЧТО он выбрал и почему это не пройдёт, а не
-			// молча ничего не происходит.
-			setAttachmentError(errorMessage(err));
-		}
-	}
-
-	function handleFileSelected(e) {
-		const file = e.currentTarget.files?.[0];
-		e.currentTarget.value = ""; // иначе повторный выбор ТОГО ЖЕ файла не даёт onChange
-		if (!file) return;
-		applySelectedFile(file);
+		tray.addFiles(files);
+		e.currentTarget.value = ""; // иначе повторный выбор ТЕХ ЖЕ файлов не даёт onChange
 	}
 
 	// И7 7.3/7.4 — вложение ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). Дедупликация
 	// (MATH.md §7: "передают Digest блоба, а не копию байтов") — файл НЕ
-	// перезаливается заново под новым ключом (это создавало бы дубликат блоба,
-	// первая версия 7.3 так и делала — исправлено этим проходом), дескриптор
-	// вложения ссылается на ТОТ ЖЕ manifestDigest/fileKey узла. Расшифровка
-	// (getRange) здесь — ТОЛЬКО ради локального превью (AttachmentPreview),
-	// сети/повторной заливки не требует. С момента отправки получатель держит
-	// fileKey НАВСЕГДА — отозвать нельзя (решение №9 TASK.md), предупреждение —
-	// ДО расшифровки, простой window.confirm() (тот же приём, что аватар 7.2/
-	// необратимые действия files.jsx).
+	// перезаливается заново под новым ключом, дескриптор вложения ссылается на
+	// ТОТ ЖЕ manifestDigest/fileKey узла. Этап B4: расшифровка байтов больше НЕ
+	// нужна здесь — AttachmentTray (B3) для storage-item превью показывает
+	// только иконку, не картинку, поэтому `getRange` снят (не тянем в память
+	// файл целиком ради того, что не рендерится). С момента отправки получатель
+	// держит fileKey НАВСЕГДА — отозвать нельзя (решение №9 TASK.md),
+	// предупреждение — ДО обращения к хранилищу, простой window.confirm() (тот
+	// же приём, что аватар 7.2/необратимые действия files.jsx).
 	async function handleAttachmentFromStorage([nodeId]) {
 		setAttachmentPickerOpen(false);
 		const node = projected.value.nodes.get(nodeId);
@@ -471,23 +444,17 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				setError(t("chat.window.fileKeyNotFoundError"));
 				return;
 			}
-			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_SERVER_URL });
-			applySelectedFile(new File([bytes], node.displayName, { type: manifest.mime }), { manifestDigest: node.blob, fileKey, manifest });
+			setRecordingState("idle");
+			setRecordedVoiceBlob(null);
+			tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest }]);
 		} catch (err) {
 			setError(errorMessage(err));
 		}
 	}
 
-	function handleRemoveAttachment() {
-		setAttachmentFile(null);
-		setAttachmentSourceRef(null);
-		setAttachmentError("");
-	}
-
 	async function handleStartRecording() {
 		setError("");
-		setAttachmentFile(null); // взаимоисключение — начатая запись отменяет выбранный файл
-		setAttachmentSourceRef(null);
+		tray.reset(); // взаимоисключение — начатая запись отменяет выбранные вложения
 		const recorder = createVoiceRecorder();
 		try {
 			await recorder.start();
@@ -548,30 +515,19 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// Возвращает undefined, если нечего прикреплять (обычное текстовое сообщение).
 	// Голосовое ≤32КБ (F-AT-08/AC-AT-03b) НИКОГДА не грузится на Blossom — inline
 	// base64 прямо в сообщении; иначе — тот же uploadAttachment, что обычный файл.
-	async function buildOutgoingAttachment() {
-		if (attachmentFile) {
-			// attachmentSourceRef — файл пришёл из "Файлы" (handleAttachmentFromStorage):
-			// БЕЗ сети, ссылка на уже существующий блоб (MATH.md §7 — дедупликация,
-			// не повторная заливка под новым ключом).
-			if (attachmentSourceRef) {
-				const descriptor = referenceStoredFile(attachmentSourceRef.manifestDigest, attachmentSourceRef.fileKey, attachmentSourceRef.manifest);
-				if (descriptor.type === "image") descriptor.position = attachmentPosition;
-				return descriptor;
-			}
-			validateAttachment({ mime: attachmentFile.type, size: attachmentFile.size }); // повторно, defense-in-depth
-			const bytes = new Uint8Array(await attachmentFile.arrayBuffer());
-			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: attachmentFile.type, name: attachmentFile.name }, privKey);
-			if (descriptor.type === "image") descriptor.position = attachmentPosition;
-			return descriptor;
-		}
+	// Этап B4 медиа-подсистемы — лоток и голос взаимоисключающие (гарантировано
+	// UI: старт записи вызывает tray.reset(), выбор файла сбрасывает запись),
+	// поэтому здесь простое ветвление, не слияние.
+	async function buildOutgoingAttachments() {
+		if (tray.items.length > 0) return tray.uploadAll(privKey);
 		if (recordedVoiceBlob) {
 			const bytes = new Uint8Array(await recordedVoiceBlob.arrayBuffer());
 			if (shouldInlineVoice(bytes.length)) {
-				return { type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) };
+				return [{ type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) }];
 			}
 			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey);
 			descriptor.voice = true;
-			return descriptor;
+			return [descriptor];
 		}
 		return undefined;
 	}
@@ -579,8 +535,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	async function handleSend(e) {
 		e.preventDefault();
 		if (busyRef.current) return;
-		if (text.length === 0 && !attachmentFile && !recordedVoiceBlob) return; // нечего отправлять
-		if (attachmentFile && attachmentError) return; // невалидное вложение — сначала убрать/заменить
+		if (text.length === 0 && tray.items.length === 0 && !recordedVoiceBlob) return; // нечего отправлять
+		if (tray.items.some((item) => item.error)) return; // невалидное вложение — сначала убрать/заменить
 		if (text.length > MAX_MESSAGE_LENGTH) {
 			setComposeError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
 			return;
@@ -594,13 +550,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			// впустую, и вложение/голос ОСТАЮТСЯ в состоянии компоновки для повторной
 			// попытки (не теряются на сетевой ошибке).
 			setUploadingAttachment(true);
-			const attachment = await buildOutgoingAttachment();
+			const attachments = await buildOutgoingAttachments();
 			setUploadingAttachment(false);
-			// Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — домен ждёт МАССИВ вложений;
-			// заворачивание единственного результата buildOutgoingAttachment() в массив —
-			// НЕ полноценный мультивыбор (тот — отдельный лоток, этап B3/B4), только
-			// минимальная обвязка, чтобы формат не разошёлся между composer'ом и доменом.
-			const attachments = attachment !== undefined ? [attachment] : undefined;
 
 			const lamportTs = await nextLamportTick(ownerPubkey);
 			await sendChatMessageAction(
@@ -617,9 +568,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			);
 			if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 			setText("");
-			setAttachmentFile(null);
-			setAttachmentSourceRef(null);
-			setAttachmentError("");
+			tray.reset();
 			setRecordedVoiceBlob(null);
 			setRecordingState("idle");
 			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
@@ -716,14 +665,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					{attachmentFile && (
-						<AttachmentPreview
-							file={attachmentFile}
-							position={attachmentPosition}
-							onPositionChange={setAttachmentPosition}
-							onRemove={handleRemoveAttachment}
-							error={attachmentError}
-						/>
+					{(tray.items.length > 0 || tray.errors.length > 0) && (
+						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 					)}
 
 					{recordingState === "recording" && (
@@ -755,7 +698,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 					<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
 					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onSubmit={handleSend}>
-						<input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelected} aria-hidden="true" tabIndex={-1} />
+						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFilesSelected} aria-hidden="true" tabIndex={-1} />
 						<button
 							type="button"
 							class="message-compose-tool-btn row"
@@ -781,7 +724,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							class="message-compose-tool-btn row"
 							style={{ alignItems: "center", justifyContent: "center" }}
 							onClick={handleStartRecording}
-							disabled={recordingState !== "idle" || !!attachmentFile}
+							disabled={recordingState !== "idle" || tray.items.length > 0}
 							aria-label={t("chat.window.recordVoiceAria")}
 						>
 							<IconMicrophone />
@@ -802,7 +745,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							type="submit"
 							class="message-compose-send-btn row"
 							style={{ alignItems: "center", justifyContent: "center" }}
-							disabled={busy || (text.length === 0 && !attachmentFile && !recordedVoiceBlob) || (!!attachmentFile && !!attachmentError)}
+							disabled={busy || (text.length === 0 && tray.items.length === 0 && !recordedVoiceBlob) || tray.items.some((item) => item.error)}
 							aria-label={t("common.send")}
 						>
 							<IconSend />
@@ -853,9 +796,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 	const [to, setTo] = useState("");
 	const [text, setText] = useState("");
-	const [attachmentFile, setAttachmentFile] = useState(null);
-	const [attachmentPosition, setAttachmentPosition] = useState("below");
-	const [attachmentError, setAttachmentError] = useState("");
+	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
@@ -875,23 +816,13 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 			.catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey]);
 
-	function handleFileSelected(e) {
-		const file = e.currentTarget.files?.[0];
+	function handleFilesSelected(e) {
+		// FileList — живая ссылка на список инпута: addFiles() должен уйти
+		// ДО обнуления value (см. тот же комментарий в ChatWindow).
+		const files = e.currentTarget.files;
+		if (!files || files.length === 0) return;
+		tray.addFiles(files);
 		e.currentTarget.value = "";
-		if (!file) return;
-		setAttachmentFile(file);
-		setAttachmentPosition("below");
-		try {
-			validateAttachment({ mime: file.type, size: file.size });
-			setAttachmentError("");
-		} catch (err) {
-			setAttachmentError(errorMessage(err));
-		}
-	}
-
-	function handleRemoveAttachment() {
-		setAttachmentFile(null);
-		setAttachmentError("");
 	}
 
 	function resolveRecipient() {
@@ -907,8 +838,8 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 			setError(t("chat.list.composeInvalidRecipient"));
 			return;
 		}
-		if (text.length === 0 && !attachmentFile) return;
-		if (attachmentFile && attachmentError) return;
+		if (text.length === 0 && tray.items.length === 0) return;
+		if (tray.items.some((item) => item.error)) return;
 		if (text.length > MAX_MESSAGE_LENGTH) {
 			setError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
 			return;
@@ -917,19 +848,10 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 		setError("");
 		setBusy(true);
 		try {
-			let attachment;
-			if (attachmentFile) {
-				validateAttachment({ mime: attachmentFile.type, size: attachmentFile.size }); // повторно, defense-in-depth
-				const bytes = new Uint8Array(await attachmentFile.arrayBuffer());
-				attachment = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: attachmentFile.type, name: attachmentFile.name }, privKey);
-				if (attachment.type === "image") attachment.position = attachmentPosition;
-			}
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : undefined;
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			const publishToRecipient = (event) => publishToContact(event, recipient);
 			const lamportTs = await nextLamportTick(ownerPubkey);
-			// Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — та же минимальная обвязка,
-			// что в ChatWindow.handleSend: заворачивание в массив, не полноценный лоток.
-			const attachments = attachment !== undefined ? [attachment] : undefined;
 			await sendChatMessageAction(ownerPubkey, privKey, dbKey, recipient, text, lamportTs, publishToRecipient, fetchDeviceKeyPackages, refreshGroupMessageSubscription, attachments);
 			onSent(recipient);
 		} catch (err) {
@@ -973,14 +895,14 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 				</label>
 				<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<span>{t("chat.list.attachmentsLabel")}</span>
-					<input type="file" onChange={handleFileSelected} disabled={busy} />
+					<input type="file" multiple onChange={handleFilesSelected} disabled={busy} />
 				</label>
-				{attachmentFile && (
-					<AttachmentPreview file={attachmentFile} position={attachmentPosition} onPositionChange={setAttachmentPosition} onRemove={handleRemoveAttachment} error={attachmentError} />
+				{(tray.items.length > 0 || tray.errors.length > 0) && (
+					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 				)}
 				<button
 					type="submit"
-					disabled={busy || (text.length === 0 && !attachmentFile) || (!!attachmentFile && !!attachmentError)}
+					disabled={busy || (text.length === 0 && tray.items.length === 0) || tray.items.some((item) => item.error)}
 				>
 					<IconSend /> {t("common.send")}
 				</button>
