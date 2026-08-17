@@ -464,6 +464,13 @@
 			"audio": "ses",
 			"video": "video",
 			"image": "görseller"
+		},
+		"info": {
+			"size": "Boyut",
+			"type": "Tür",
+			"resolution": "Çözünürlük",
+			"duration": "Süre",
+			"hash": "SHA-256"
 		}
 	},
 	"files": {

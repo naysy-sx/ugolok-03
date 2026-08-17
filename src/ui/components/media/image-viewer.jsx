@@ -12,7 +12,7 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // acquireMediaUrl — та же мемоизированная функция, что уже вызвал
 // resourceOwner (ui/signals/media.js) — повторный вызов здесь НЕ повторяет
 // сеть/регистрацию, просто дожидается готового handle (CONTRACTS.md "Этап D").
-export default function ImageViewer({ mediaRef }) {
+export default function ImageViewer({ mediaRef, onMeta }) {
 	const [url, setUrl] = useState(null);
 	const [error, setError] = useState("");
 
@@ -42,5 +42,12 @@ export default function ImageViewer({ mediaRef }) {
 	if (!url) {
 		return <p style={{ color: "#fff" }}>{t("common.loading")}</p>;
 	}
-	return <img src={url} alt={mediaRef.name || ""} style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }} />;
+	return (
+		<img
+			src={url}
+			alt={mediaRef.name || ""}
+			onLoad={(e) => onMeta?.({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+			style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }}
+		/>
+	);
 }

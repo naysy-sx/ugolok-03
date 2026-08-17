@@ -2388,7 +2388,9 @@ html[data-media-full] .top-corner-actions {
 	border-radius: var(--radius-full);
 	background: transparent;
 	color: var(--fg);
-	font-size: 1.05rem;
+	/* Живой фидбек пользователя (после этапа 1) — иконки закрытия/сворачивания
+	   мелковаты; +70% от исходных 1.05rem. */
+	font-size: 1.785rem;
 	cursor: pointer;
 	transition:
 		background-color var(--transition-speed) var(--transition-ease),
@@ -2423,7 +2425,9 @@ html[data-media-full] .top-corner-actions {
 	background: oklch(0.16 0.02 var(--hue) / 0.45);
 	backdrop-filter: blur(8px);
 	color: var(--fg);
-	font-size: 1.25rem;
+	/* Живой фидбек пользователя (после этапа 1) — стрелки мелковаты;
+	   +70% от исходных 1.25rem. */
+	font-size: 2.125rem;
 	cursor: pointer;
 	opacity: 0;
 	transition:
@@ -2468,6 +2472,64 @@ html[data-media-full] .top-corner-actions {
 	padding: var(--space-l) var(--space-m) var(--space-s);
 	padding-block-end: max(var(--space-s), env(safe-area-inset-bottom));
 	background: linear-gradient(transparent, oklch(0.12 0.02 var(--hue) / 0.8) 42%);
+}
+
+/* MEDIA-OVERLAY-UI.md, этап 2.1 — авто-скрытие хрома. data-chrome ставит/
+   снимает media-overlay.jsx по таймеру 2800мс бездействия; пока панель
+   сведений закреплена (data-info="on"), таймер не прячет (см. эффект). */
+.media-overlay[data-chrome="off"] .media-overlay-top,
+.media-overlay[data-chrome="off"] .media-overlay-bottom,
+.media-overlay[data-chrome="off"] .media-overlay-nav {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.media-overlay[data-chrome="off"] .media-overlay-top {
+	transform: translateY(-0.875rem);
+}
+
+.media-overlay[data-chrome="off"] .media-overlay-bottom {
+	transform: translateY(1rem);
+}
+
+/* MEDIA-OVERLAY-UI.md, этап 2.2 — панель сведений. grid-template-rows
+   0fr -> 1fr вместо height:auto — тот анимируется, это нет. */
+.media-overlay-info {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows 0.34s var(--ease);
+}
+
+.media-overlay-bottom:hover .media-overlay-info,
+.media-overlay[data-info="on"] .media-overlay-info {
+	grid-template-rows: 1fr;
+}
+
+.media-overlay-info > div {
+	overflow: hidden;
+	min-block-size: 0;
+}
+
+.media-overlay-meta {
+	--gap: var(--space-3xs);
+	flex-wrap: wrap;
+	padding-block-end: var(--space-2xs);
+}
+
+/* Не .chip: тот на var(--surface) и рассчитан на светлый фон. */
+.media-overlay-meta span {
+	padding: 3px var(--space-2xs);
+	border-radius: var(--radius-full);
+	background: color-mix(in oklch, var(--fg), transparent 90%);
+	font-size: var(--step--1);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.media-overlay-meta span b {
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+	margin-inline-end: var(--space-3xs);
 }
 
 .media-mini-bar {

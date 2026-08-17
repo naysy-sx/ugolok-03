@@ -464,6 +464,13 @@
 			"audio": "Audio",
 			"video": "Video",
 			"image": "Bilder"
+		},
+		"info": {
+			"size": "Größe",
+			"type": "Typ",
+			"resolution": "Auflösung",
+			"duration": "Dauer",
+			"hash": "SHA-256"
 		}
 	},
 	"files": {

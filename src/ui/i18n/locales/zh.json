@@ -464,6 +464,13 @@
 			"audio": "音频",
 			"video": "视频",
 			"image": "图片"
+		},
+		"info": {
+			"size": "大小",
+			"type": "类型",
+			"resolution": "分辨率",
+			"duration": "时长",
+			"hash": "SHA-256"
 		}
 	},
 	"files": {

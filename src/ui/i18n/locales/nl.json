@@ -464,6 +464,13 @@
 			"audio": "audio",
 			"video": "video",
 			"image": "afbeeldingen"
+		},
+		"info": {
+			"size": "Grootte",
+			"type": "Type",
+			"resolution": "Resolutie",
+			"duration": "Duur",
+			"hash": "SHA-256"
 		}
 	},
 	"files": {

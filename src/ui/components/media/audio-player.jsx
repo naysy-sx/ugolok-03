@@ -10,7 +10,7 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // синхронизация playing<->нативные controls без зацикливания; довесок —
 // <audio> остаётся смонтированным при смене mediaRef, отказ play() от
 // политики автовоспроизведения синхронизирует mediaSession, не молчит).
-export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, compact }) {
+export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, compact, onMeta }) {
 	const audioRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
@@ -57,6 +57,9 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					controls={!compact}
 					src={src ?? undefined}
 					onEnded={onEnded}
+					onLoadedMetadata={(e) => {
+						onMeta?.({ duration: e.currentTarget.duration });
+					}}
 					onPlay={() => {
 						if (!playing) onToggle();
 					}}

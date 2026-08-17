@@ -17249,3 +17249,78 @@ e.currentTarget` проверка на viewport — обе покрываютс�
 DoD этапа 1 (открытие из 4 мест без регрессий, `total===1` без стрелок
 и т.д.), отдельный unit-тест на JSX-композицию строки признан
 избыточным (тот же критерий, что и раньше в этом проекте).
+
+## MEDIA-OVERLAY-UI.md — довесок (живой фидбек) + Этап 2
+
+### `src/styles/custom.css` [C, точечная правка]
+
+`.media-overlay-btn`/`.media-overlay-nav` `font-size`: 1.05rem→
+1.785rem, 1.25rem→2.125rem (+70%, живой фидбек пользователя после
+этапа 1 — иконки мелковаты). Иконка масштабируется вместе (SVG
+`width/height="1em"`), сама кнопка/тач-таргет (2.5rem / 2.75×4.5rem)
+не менялся — есть запас.
+
+### `src/ui/components/media/media-overlay.jsx` [C, ветка `full` дополнена]
+
+Новое локальное состояние (НЕ в автомате, `session` про него не
+знает — тот же принцип, что везде в этом модуле):
+- `chromeVisible` (bool) + `hideTimerRef` (таймер 2800мс) +
+  `infoPinnedRef` (синхронная копия `infoPinned` для чтения ВНУТРИ
+  уже запущенного `setTimeout`, без чего проверка "не прятать при
+  закреплённой панели" читала бы значение на момент ПОСТАНОВКИ
+  таймера, не на момент срабатывания). `handleChromeActivity()` —
+  общая функция для стартового эффекта и `onPointerMove`/
+  `onPointerDown`/`onFocusIn` на корне `.media-overlay`. Кнопки шапки/
+  навигации активность НЕ глушат (у них `stopPropagation` только на
+  `onClick`, не на `pointerdown`) — считаются активностью бесплатно.
+  `data-chrome="on|off"` на корне.
+- `infoPinned` (bool, тоггл кнопкой "i") → `data-info="on|off"` на
+  корне.
+- `meta` — `{digest, width?, height?, duration?} | null`, приходит из
+  `onMeta` пропа вида `<View onMeta={(m) => setMeta({digest:
+  currentRef.digest, ...m})}>`. Рендер сверяет `meta?.digest ===
+  currentRef.digest` (`isCurrentMeta`) — НЕ сброс через `useEffect` на
+  смену `currentRef.digest` (тот сработал бы уже ПОСЛЕ первого
+  рендера с новым digest, окно в кадр с чужими значениями). Чипы
+  разрешения/длительности рендерятся только при наличии данных, без
+  плейсхолдера "—".
+
+Header `.media-overlay-acts`: добавлена кнопка "i"
+(`aria-pressed={infoPinned}`) первой в ряду, перед свернуть/закрыть —
+порядок как в исходном скелете §1.1, который этап 1 сознательно
+пропустил (там ещё не было источника данных для панели).
+
+Footer `.media-overlay-bottom` больше не пуст: `.media-overlay-info >
+div > .media-overlay-meta.bar` со span-чипами тип/размер/[разрешение]/
+[длительность]/hash (`shortHash` — первые 4 + последние 4 символа
+hex-digest'а, тот всегда hex-строка — `bytesToHex`, см. `content.js`/
+`stream-upload.js`).
+
+### `src/ui/components/media/{video-player,audio-player}.jsx` [C, точечная правка]
+
+Новый проп `onMeta`. `onLoadedMetadata` на `<video>`/`<audio>` зовёт
+`onMeta?.({width, height, duration})` (video) / `onMeta?.({duration})`
+(audio, нет width/height). Опционален (`?.`) — вызов из mini-ветки
+`media-overlay.jsx` его не передаёт, там метаданные не нужны.
+
+### `src/ui/components/media/image-viewer.jsx` [C, точечная правка]
+
+Новый проп `onMeta`. `onLoad` на `<img>` зовёт `onMeta?.({width:
+naturalWidth, height: naturalHeight})` (нет duration — картинка).
+
+### Локали (все 12 `src/ui/i18n/locales/*.json`) [C]
+
+Новый узел `media.info.{size,type,resolution,duration,hash}` — подписи
+чипов, буквально как в spec §2.2: «Размер», «Тип», «Разрешение»,
+«Длительность», «SHA-256» (ru); остальные локали — прямой перевод, без
+падежной адаптации (тот же уровень, что и остальные добавленные ранее
+ключи).
+
+### Тесты — намеренно НЕ добавлены (тот же прецедент, что этап 1)
+
+Единственная нетривиальная логика — `isCurrentMeta`-сверка по digest —
+покрывается конструктивно (нет способа получить рассинхрон при данной
+структуре кода: `meta` всегда пишется ВМЕСТЕ со своим digest одним
+`setState`), а не отдельным unit-тестом; DOM-эффекты (таймер/pointer-
+события) — тот же класс, что и остальной UI-слой этого модуля, приёмка
+через живую проверку DoD этапа 2.

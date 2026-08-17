@@ -464,6 +464,13 @@
 			"audio": "音声",
 			"video": "動画",
 			"image": "画像"
+		},
+		"info": {
+			"size": "サイズ",
+			"type": "種類",
+			"resolution": "解像度",
+			"duration": "長さ",
+			"hash": "SHA-256"
 		}
 	},
 	"files": {
