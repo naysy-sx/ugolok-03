@@ -446,6 +446,11 @@
 		}
 	},
 	"media": {
+		"buttons": {
+			"audio": "音频",
+			"video": "视频",
+			"images": "图片"
+		},
 		"player": {
 			"play": "播放",
 			"pause": "暂停",

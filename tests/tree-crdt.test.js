@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInitialState, applyOp, merge, project, cloneState, ROOT_ID } from "../src/domain/files/tree.js";
-import { createFolder, rename, move, remove, PreconditionError } from "../src/domain/files/ops.js";
+import { createFolder, createFile, rename, move, remove, PreconditionError } from "../src/domain/files/ops.js";
 
 // mulberry32 — зерно фиксируется, сценарий воспроизводится по номеру
 // (TASK.md, задача 1.5: "зерно фиксируется, сценарий воспроизводится по
@@ -171,4 +171,15 @@ test("постусловия I-ACYCLIC/I-REACHABLE/I-UNIQUE-NAME держатс�
 			assert.equal(new Set(names).size, names.length, `seed=${seed}: дубль displayName в одной папке`);
 		}
 	}
+});
+
+// Этап E — classCount должен клонироваться НЕЗАВИСИМЫМИ Int32Array (не общими
+// ссылками), иначе applyOp на клоне мутировал бы оригинал в обход снимка
+// (тот же довод, что уже проверен для children/namesInDir выше по файлу).
+test("cloneState: classCount клонов независим — правка клона не задевает оригинал", () => {
+	let S = createInitialState();
+	S = applyOp(S, createFile(S, ROOT_ID, "a.mp3", "f1", "d1", { counter: 1, deviceId: "d1" }, null, null, "audio/mpeg"));
+	const clone = cloneState(S);
+	clone.classCount.get(ROOT_ID)[0] = 99;
+	assert.equal(S.classCount.get(ROOT_ID)[0], 1, "оригинал не задет мутацией клона");
 });

@@ -4,6 +4,8 @@
 // размещение (в частности lost+found как отдельный узел vs подпапка корзины)
 // оставлено открытым вопросом до И3 (MATH.md §12.4), здесь — просто три
 // зарезервированных NodeId.
+import { classOf, CLASS_INDEX } from "../media/media-ref.js";
+
 export const ROOT_ID = "$root";
 export const TRASH_ID = "$trash";
 export const LOST_FOUND_ID = "$lost+found";
@@ -23,7 +25,7 @@ function lwwMerge(reg, value, label) {
 	return reg;
 }
 
-function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null) {
+function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null, mimeValue = null) {
 	return {
 		id,
 		kind,
@@ -32,6 +34,34 @@ function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null) 
 		name: { value: nameValue, label },
 		origin: { value: originValue, label },
 		purged: false,
+		mime: mimeValue,
+	};
+}
+
+// classCount — индекс parentId → Int32Array(4) ([audio,video,image,other],
+// CLASS_INDEX из media-ref.js), по образцу children/namesInDir (ALGO.MD
+// §3.5, DESIGN.md "Этап E, E1"). Класс узла неизменяем (MEDIA-MATH.md
+// Утв. 8), поэтому поддержка — чистый +1/-1, без разбора случаев.
+function addClassCount(classCount, parentId, mime) {
+	if (mime == null) return;
+	if (!classCount.has(parentId)) classCount.set(parentId, new Int32Array(4));
+	classCount.get(parentId)[CLASS_INDEX[classOf(mime)]] += 1;
+}
+function removeClassCount(classCount, parentId, mime) {
+	if (mime == null) return;
+	const arr = classCount.get(parentId);
+	if (!arr) return;
+	arr[CLASS_INDEX[classOf(mime)]] -= 1;
+}
+
+// Θ(1) — три сравнения с нулём (ALGO.MD §3.5). "other" (индекс 3) наружу не
+// выставляется — для него нет UI-кнопки (MEDIA-SPEC.md §3.10).
+export function classesPresent(S, parentId) {
+	const arr = S.classCount.get(parentId);
+	return {
+		audio: !!arr && arr[0] > 0,
+		video: !!arr && arr[1] > 0,
+		image: !!arr && arr[2] > 0,
 	};
 }
 
@@ -88,20 +118,22 @@ export function createInitialState() {
 	insert(mkNode(TRASH_ID, "dir", null, ROOT_ID, "Корзина", sysLabel));
 	insert(mkNode(LOST_FOUND_ID, "dir", null, ROOT_ID, "lost+found", sysLabel));
 
-	return { nodes, children, namesInDir, pending: new Map() };
+	return { nodes, children, namesInDir, classCount: new Map(), pending: new Map() };
 }
 
-// Пересобирает children/namesInDir с нуля из nodes — O(n), один раз (не на
-// операцию). Нужен store.js: персистируется только nodes (индексы —
-// производные, как и кэш project(), не хранятся в БД).
+// Пересобирает children/namesInDir/classCount с нуля из nodes — O(n), один
+// раз (не на операцию). Нужен store.js: персистируется только nodes
+// (индексы — производные, как и кэш project(), не хранятся в БД).
 export function rebuildIndexes(nodes) {
 	const children = new Map();
 	const namesInDir = new Map();
+	const classCount = new Map();
 	for (const node of nodes.values()) {
 		if (node.purged) continue;
 		addToIndex(children, namesInDir, node.par.value, node.id, node.name.value);
+		if (node.kind === "file") addClassCount(classCount, node.par.value, node.mime);
 	}
-	return { children, namesInDir };
+	return { children, namesInDir, classCount };
 }
 
 // Независимая копия состояния — ЕДИНСТВЕННЫЙ способ получить снимок,
@@ -114,6 +146,7 @@ export function cloneState(S) {
 		nodes: new Map(S.nodes),
 		children: new Map([...S.children].map(([k, v]) => [k, new Set(v)])),
 		namesInDir: new Map([...S.namesInDir].map(([k, v]) => [k, new Map(v)])),
+		classCount: new Map([...S.classCount].map(([k, v]) => [k, Int32Array.from(v)])),
 		pending: new Map(S.pending),
 	};
 }
@@ -135,35 +168,36 @@ export function cloneState(S) {
 // create, была бы потеряна навсегда (нарушение I-CONVERGE при
 // определённых перестановках доставки).
 export function applyOp(S, op) {
-	const { nodes, children, namesInDir, pending } = S;
+	const { nodes, children, namesInDir, classCount, pending } = S;
 
 	if (op.type === "create") {
-		if (nodes.has(op.id)) return { nodes, children, namesInDir, pending }; // идемпотентный повтор
-		const node = mkNode(op.id, op.kind, op.blob ?? null, op.parentId, op.name, op.label, op.origin ?? null);
+		if (nodes.has(op.id)) return { nodes, children, namesInDir, classCount, pending }; // идемпотентный повтор
+		const node = mkNode(op.id, op.kind, op.blob ?? null, op.parentId, op.name, op.label, op.origin ?? null, op.mime ?? null);
 		nodes.set(op.id, node);
 		addToIndex(children, namesInDir, op.parentId, op.id, op.name);
+		if (op.kind === "file") addClassCount(classCount, op.parentId, node.mime);
 		const queued = pending.get(op.id);
 		if (queued) {
 			pending.delete(op.id);
-			let s = { nodes, children, namesInDir, pending };
+			let s = { nodes, children, namesInDir, classCount, pending };
 			for (const q of queued) s = applyOp(s, q);
 			return s;
 		}
-		return { nodes, children, namesInDir, pending };
+		return { nodes, children, namesInDir, classCount, pending };
 	}
 
 	if (op.type === "setPar" || op.type === "setName" || op.type === "setOrigin") {
 		const node = nodes.get(op.id);
 		if (!node) {
 			pending.set(op.id, [...(pending.get(op.id) ?? []), op]);
-			return { nodes, children, namesInDir, pending };
+			return { nodes, children, namesInDir, classCount, pending };
 		}
 		const field = op.type === "setPar" ? "par" : op.type === "setName" ? "name" : "origin";
 		const updatedReg = lwwMerge(node[field], op.value, op.label);
 		if (updatedReg === node[field]) {
 			// Метка не выиграла (устаревшая/повторная доставка) — индексы
 			// трогать нечего, значение не изменилось.
-			return { nodes, children, namesInDir, pending };
+			return { nodes, children, namesInDir, classCount, pending };
 		}
 		const updatedNode = { ...node, [field]: updatedReg };
 		nodes.set(op.id, updatedNode);
@@ -172,24 +206,46 @@ export function applyOp(S, op) {
 			if (field === "par") {
 				removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
 				addToIndex(children, namesInDir, updatedReg.value, op.id, node.name.value);
+				if (node.kind === "file") {
+					removeClassCount(classCount, node.par.value, node.mime);
+					addClassCount(classCount, updatedReg.value, node.mime);
+				}
 			} else if (field === "name") {
 				removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
 				addToIndex(children, namesInDir, node.par.value, op.id, updatedReg.value);
 			}
 		}
-		return { nodes, children, namesInDir, pending };
+		return { nodes, children, namesInDir, classCount, pending };
 	}
 
 	if (op.type === "purge") {
 		const node = nodes.get(op.id);
 		if (!node) {
 			pending.set(op.id, [...(pending.get(op.id) ?? []), op]);
-			return { nodes, children, namesInDir, pending };
+			return { nodes, children, namesInDir, classCount, pending };
 		}
-		if (node.purged) return { nodes, children, namesInDir, pending }; // монотонный флаг, идемпотентно
+		if (node.purged) return { nodes, children, namesInDir, classCount, pending }; // монотонный флаг, идемпотентно
 		nodes.set(op.id, { ...node, purged: true });
 		removeFromIndex(children, namesInDir, node.par.value, op.id, node.name.value);
-		return { nodes, children, namesInDir, pending };
+		if (node.kind === "file") removeClassCount(classCount, node.par.value, node.mime);
+		return { nodes, children, namesInDir, classCount, pending };
+	}
+
+	// Дозаливка mime старому узлу (⊥→v) — DESIGN.md "Этап E, E1-доп".
+	// Монотонное слияние: node.mime уже есть значение → идемпотентный no-op
+	// (MEDIA-MATH.md Утв. 9 — независимые дозаливки одного узла вычисляют
+	// ОДНО И ТО ЖЕ v, сравнивать нечего, второй приход не может нести другое
+	// значение). БЕЗ label — тот же класс операции, что purge().
+	if (op.type === "setMime") {
+		const node = nodes.get(op.id);
+		if (!node) {
+			pending.set(op.id, [...(pending.get(op.id) ?? []), op]);
+			return { nodes, children, namesInDir, classCount, pending };
+		}
+		if (node.mime != null) return { nodes, children, namesInDir, classCount, pending }; // уже есть значение
+		nodes.set(op.id, { ...node, mime: op.value });
+		if (!node.purged && node.kind === "file") addClassCount(classCount, node.par.value, op.value);
+		return { nodes, children, namesInDir, classCount, pending };
 	}
 
 	throw new Error(`tree.js: неизвестный тип операции "${op.type}"`);
@@ -333,6 +389,7 @@ export function project(S) {
 			kind: n.kind,
 			blob: n.blob,
 			origin: n.origin.value,
+			mime: n.mime,
 			status,
 		});
 	}

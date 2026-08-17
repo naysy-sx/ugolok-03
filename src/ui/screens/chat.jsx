@@ -52,6 +52,11 @@ import AttachmentTray from "../components/media/attachment-tray.jsx";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
+import { openMedia } from "../signals/media.js";
+import { collectChatScope } from "../../domain/media/scope.js";
+import { buildPlaylist } from "../../domain/media/playlist.js";
+import { classOf } from "../../domain/media/media-ref.js";
+import MediaButtons from "../components/media/media-buttons.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 
@@ -609,6 +614,27 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		}
 	}
 
+	// Этап E, E3 (CONTRACTS.md/DESIGN.md "Этап E") — scope на ВЕСЬ загруженный
+	// чат (messages уже в состоянии, collectChatScope — Этап A). Ключи/размер
+	// уже внутри дескриптора вложения (refFromAttachment) — БЕЗ сети, в
+	// отличие от files.jsx's openFolderMediaClass.
+	function classesInMessages() {
+		const present = { audio: false, video: false, image: false };
+		for (const ref of collectChatScope(messages)) {
+			const c = classOf(ref.mime);
+			if (c in present) present[c] = true;
+		}
+		return present;
+	}
+
+	function openChatMediaClass(cls) {
+		const refs = collectChatScope(messages);
+		const playlist = buildPlaylist(refs);
+		const position = playlist.idx[cls]?.[0];
+		if (position === undefined) return;
+		openMedia({ refs, position });
+	}
+
 	async function handleClearHistory() {
 		if (!window.confirm(t("chat.window.clearHistoryConfirm"))) return;
 		try {
@@ -656,6 +682,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					</button>
 				</>
 			}
+			mediaButtons={<MediaButtons counts={classesInMessages()} onOpen={openChatMediaClass} />}
 			feed
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>

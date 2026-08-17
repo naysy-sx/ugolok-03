@@ -21,6 +21,7 @@ import {
 	canUndo,
 	createFolder,
 	createFileEntry,
+	backfillMime,
 	renameNode,
 	removeNode,
 	purgeNode,
@@ -37,12 +38,16 @@ import { sharedNodeIds, initShares, shareFolder, revokeAccess, listGrantees } fr
 import { activeMounts, mountProjections, ensureMountProjection, saveMountedItemToOwn, unmountShare } from "../signals/mounts.js";
 import { contacts, profiles } from "../signals/contacts.js";
 import { dbKeySig } from "../signals/auth.js";
-import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
+import { ROOT_ID, TRASH_ID, LOST_FOUND_ID, classesPresent, liveChildrenOf } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFileStreaming } from "../../domain/files/stream-upload.js";
+import { classOf } from "../../domain/media/media-ref.js";
+import { collectFolderScope } from "../../domain/media/scope.js";
+import { buildPlaylist } from "../../domain/media/playlist.js";
+import MediaButtons from "../components/media/media-buttons.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
@@ -101,6 +106,11 @@ function FileThumbnail({ entry, ownerPubkey }) {
 						manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
 						await putCachedManifest(ownerPubkey, entry.blob, manifest);
 					}
+					// Этап E, E1-доп (DESIGN.md) — дозаливка mime старому узлу (⊥),
+					// событийно: манифест и так уже резолвлен ради миниатюры. НЕ
+					// блокирует саму миниатюру (fire-and-forget) — classCount обновится
+					// к следующему открытию/перерисовке шапки, не в этом кадре.
+					if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
 					if (!isThumbnailable(manifest.mime)) return null;
 					const fileKey = await getFileKeyFor(entry.blob);
 					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
@@ -201,6 +211,7 @@ export default function Files() {
 	// (не переходит к следующему файлу молча).
 	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, chunksDone, chunksTotal} | null
 	const [uploadError, setUploadError] = useState("");
+	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
 	const fileInputRef = useRef(null);
 	const uploadAbortRef = useRef(null);
 
@@ -241,7 +252,7 @@ export default function Files() {
 					signal: controller.signal,
 					onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, ...p } : prev)),
 				});
-				const result = await createFileEntry(file.name, manifestDigest, fileKey);
+				const result = await createFileEntry(file.name, manifestDigest, fileKey, null, file.type || "application/octet-stream");
 				const message = errorMessage(result);
 				if (message) {
 					setUploadError(t("files.uploadEntryError", { name: file.name, message }));
@@ -457,11 +468,11 @@ export default function Files() {
 
 	// Этап D медиа-подсистемы — заменяет FilePlayer/playingDigest. Одиночный
 	// MediaRef (не через collectFolderScope — форма entries здесь плоская,
-	// не CRDT-узел с .name.value, DESIGN.md "D6" разбирает подробно; полный
-	// playlist по папке — отдельная задача). mime/name/size — ТОЛЬКО из
-	// манифеста (узлы старой записи mime не несут, этап E ещё не пройден;
-	// тот же кэш getCachedManifest/putCachedManifest, что уже использует
-	// миниатюра выше — не новая сетевая стоимость на повторный клик).
+	// не CRDT-узел с .name.value, DESIGN.md "D6" разбирает подробно; playlist
+	// по всей папке целиком — отдельный путь, openFolderMediaClass ниже,
+	// подключён только в Этапе E). mime/name/size — ТОЛЬКО из манифеста; тот
+	// же кэш getCachedManifest/putCachedManifest, что уже использует
+	// миниатюра выше — не новая сетевая стоимость на повторный клик.
 	async function openEntry(entry) {
 		if (entry.kind === "dir") {
 			openFolder(entry.id);
@@ -474,6 +485,8 @@ export default function Files() {
 				manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
 				await putCachedManifest(ownerPubkey, entry.blob, manifest);
 			}
+			// Этап E, E1-доп — та же событийная дозаливка, что FileThumbnail.
+			if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
 			const fileKey = await getFileKeyFor(entry.blob);
 			if (!fileKey) {
 				setError(t("chat.window.fileKeyNotFoundError"));
@@ -485,6 +498,59 @@ export default function Files() {
 			});
 		} catch (err) {
 			setError(translateErrorMessage(err));
+		}
+	}
+
+	// Этап E, E3 (CONTRACTS.md/DESIGN.md "Этап E") — клик по кнопке
+	// "Аудио"/"Видео"/"Изображения" под шапкой. В отличие от openEntry — ТУТ
+	// действительно нужен collectFolderScope (Этап A, впервые подключается
+	// в реальном UI): сырые живые дети ТЕКУЩЕЙ папки (treeState.value, не
+	// projected — collectFolderScope ждёт entry.node.name.value, сырую форму
+	// узла), отфильтрованные до файлов нужного класса, mime уже денормализован
+	// в узле (Этап E1) — манифест нужен ТОЛЬКО за size (единственная реально
+	// сетевая часть этого пути, пропорциональная числу файлов класса, не всей
+	// папке). Ключи — getFileKeyFor, как везде.
+	async function openFolderMediaClass(cls) {
+		setMediaButtonsBusy(true);
+		setError("");
+		try {
+			const S = treeState.value;
+			const ids = [...liveChildrenOf(S, currentFolderId.value)];
+			const candidates = ids
+				.map((id) => S.nodes.get(id))
+				.filter((node) => node.kind === "file" && node.mime != null && classOf(node.mime) !== "other");
+
+			const entries = [];
+			for (const node of candidates) {
+				let manifest = await getCachedManifest(ownerPubkey, node.blob);
+				if (!manifest) {
+					manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+					await putCachedManifest(ownerPubkey, node.blob, manifest);
+				}
+				entries.push({ node, mime: node.mime, size: manifest.size });
+			}
+
+			const refs = collectFolderScope(entries, (entry) => null);
+			// keyOf синхронный по контракту scope.js, но getFileKeyFor асинхронна —
+			// резолвим ключи отдельным проходом ПОСЛЕ сборки MediaRef[] (те же
+			// сигнатуры, key заполняется по digest, не меняет длину/порядок массива).
+			for (const ref of refs) {
+				ref.key = await getFileKeyFor(ref.digest);
+			}
+			const missingKey = refs.find((r) => !r.key);
+			if (missingKey) {
+				setError(t("chat.window.fileKeyNotFoundError"));
+				return;
+			}
+
+			const playlist = buildPlaylist(refs);
+			const position = playlist.idx[cls]?.[0];
+			if (position === undefined) return; // classesPresent соврать не должно, но защититься дёшево
+			openMedia({ refs, position });
+		} catch (err) {
+			setError(translateErrorMessage(err));
+		} finally {
+			setMediaButtonsBusy(false);
 		}
 	}
 
@@ -604,6 +670,14 @@ export default function Files() {
 						</>
 					)}
 				</>
+			}
+			mediaButtons={
+				view === "own" && (
+					<>
+						<MediaButtons counts={classesPresent(treeState.value, currentFolderId.value)} onOpen={openFolderMediaClass} />
+						{mediaButtonsBusy && <span class="spinner" aria-hidden="true" />}
+					</>
+				)
 			}
 		>
 			{view === "mounts" ? (

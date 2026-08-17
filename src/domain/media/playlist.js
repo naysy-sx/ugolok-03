@@ -1,7 +1,4 @@
-import { classOf } from "./media-ref.js";
-
-const CLASS_NAMES = ["audio", "video", "image", "other"];
-const CLASS_INDEX = { audio: 0, video: 1, image: 2, other: 3 };
+import { classOf, CLASS_NAMES, CLASS_INDEX } from "./media-ref.js";
 
 export function buildPlaylist(refs, { dedupeClasses = ["audio", "video"] } = {}) {
 	const dedupeSet = new Set(dedupeClasses);

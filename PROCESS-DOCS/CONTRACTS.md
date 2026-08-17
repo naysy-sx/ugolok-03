@@ -16731,3 +16731,279 @@ audio → `{kind:"bridge", src}` + реально зарегistрирован в
 
 Компоненты (D3/D4) — без теста (тонкий рендер-слой, прецедент всей
 этой сессии).
+
+## Медиа-подсистема — Этап E (кнопки и `mime` в дереве)
+
+### `src/domain/files/ops.js` [C]
+
+```js
+/** 9-й параметр, по умолчанию null (⊥ — неизвестно). Новые загрузки (files.jsx)
+ *  передают mime сразу; старые вызовы (без 9-го аргумента) не меняют поведение. */
+export function createFile(S, parentId, name, newId, blob, label, origin = null, fileKeyHex = null, mime = null)
+
+/** Дозаливка mime старому узлу (mime===null). БЕЗ label — монотонное слияние
+ *  ⊥→v (MEDIA-MATH.md Утв. 9: blob↦mime — функция, конфликта v₁≠v₂ не бывает),
+ *  тот же класс операции, что purge(). Вызывающая сторона решает КОГДА звать
+ *  (событийно, DESIGN.md "Этап E, E1-доп") — сам constructor ничего не проверяет
+ *  и не бросает, applyOp идемпотентен на повторную/гоночную дозаливку. */
+export function setMime(S, id, mime)
+```
+
+### `src/domain/files/tree.js` [C]
+
+```js
+// mkNode получает 8-й параметр mimeValue=null — неизменяемая часть узла
+// (рядом с blob/kind), НЕ LWW-регистр.
+function mkNode(id, kind, blob, parValue, nameValue, label, originValue = null, mimeValue = null)
+
+// Новый индекс состояния S, по образцу children/namesInDir:
+// S.classCount : Map<parentId, Int32Array(4)>   // [audio, video, image, other]
+// Мутируется НА МЕСТЕ в applyOp (не клонируется — довод children/namesInDir,
+// ALGO.MD §3.5), персистируется НЕ он — пересобирается rebuildIndexes().
+
+/** Есть ли в живых детях parentId файл каждого из трёх media-классов —
+ *  Θ(1) через classCount, БЕЗ обхода. Возвращает {audio, video, image}
+ *  (booleans) — "other" не выставляется наружу (для него нет UI-кнопки). */
+export function classesPresent(S, parentId)
+```
+
+`createInitialState`/`cloneState`/`rebuildIndexes` — возвращают/клонируют
+`classCount` наравне с `children`/`namesInDir` (та же форма клонирования:
+новый `Map`, значения — новые `Int32Array` копии, не общие ссылки).
+
+`applyOp`:
+- `create`, `kind="file"`, `op.mime≠null` → `classCount[parentId][classOf(mime)] += 1` (аллоцирует `Int32Array(4)`, если для `parentId` записи ещё нет).
+- `purge`, `!node.purged`(до пометки), `node.mime≠null` → decrement в `node.par.value`.
+- `setPar`, `!node.purged`, `node.mime≠null` → decrement в старом `node.par.value`, increment в новом значении.
+- `setName` — не трогает (не входит в уравнение E1).
+- **`setMime` (новый case)** — `node ⊥` → буферизуется в `pending`, как `setPar`/`purge` на ещё не увиденный `create` (тот же путь); `node.mime≠null` (уже есть значение) → идемпотентный no-op, БЕЗ проверки равенства с `op.value` (Утв. 9 гарантирует равенство, дважды проверять нечем); иначе — `nodes.set(id, {...node, mime: op.value})`, и если `!node.purged` — `classCount[node.par.value][classOf(op.value)] += 1`.
+
+`project()`: `outNodes.set(id, {..., mime: n.mime})` — денормализованное поле едет в проекцию наравне с `blob`/`kind`/`origin` (нужно `files.jsx`'s `currentEntries` для E3-подключения кнопок и для будущего показа mime-иконки, вне рамок этого контракта).
+
+### `src/domain/files/store.js` [C]
+
+`nodeToRow`: `+ mime: node.mime`. `rowToNode`: `+ mime: row.mime ?? null`
+(старые строки без столбца читаются как `undefined` → нормализуются в `null`,
+тот же сентинел ⊥, что использует остальной код). Правка одна на обе функции
+— общие для `files_nodes` (свои файлы) и `files_mount_nodes` (доли других,
+`saveMountState`/`loadMountState` их переиспользуют без изменений).
+**Без повышения версии схемы IndexedDB** — новый столбец не индексирован
+(DESIGN.md "Этап E, E1-доп-2", разведка, закрывает открытый вопрос
+`MEDIA-SPEC.md` §3.8).
+
+### `src/domain/media/media-ref.js` [C, точечная правка]
+
+```js
+/** Единый источник истины для порядка/индекса класса — playlist.js, tree.js
+ *  (classCount) и media-index.js (mediaClassesByPost) должны использовать
+ *  ОДИН и тот же порядок, иначе индексы разъедутся между модулями молча
+ *  (число совпадёт, семантика — нет). Раньше был приватный дубль ТОЛЬКО
+ *  в playlist.js — вынесен сюда, playlist.js импортирует, а не объявляет
+ *  свою копию (Claude, не воркер: правка уже принятого контракта Этапа A,
+ *  правило 13 — щадящая, поведенчески noop, немедленная полная регрессия). */
+export const CLASS_NAMES = ["audio", "video", "image", "other"];
+export const CLASS_INDEX = { audio: 0, video: 1, image: 2, other: 3 };
+```
+
+`playlist.js` — заменяет свой локальный `const CLASS_NAMES/CLASS_INDEX` на
+`import { CLASS_NAMES, CLASS_INDEX } from "./media-ref.js"`, поведение не
+меняется (те же значения, тот же порядок), регрессия `media-playlist.test.js`
+и `media-machine*.test.js` подтверждает.
+
+### `src/domain/content/comments.js` [C, точечная правка — закрывает долг Этапа A]
+
+```js
+/** Компаратор комментариев-братьев: createdAt, tie-break — id (строковое
+ *  сравнение) при равенстве createdAt. Раньше — приватный инлайн внутри
+ *  buildTree, БЕЗ tie-break (см. DESIGN.md "Этап A" долг, дословно
+ *  "перенесён в Этап D/F" — Этап D не тронул, закрывается здесь, т.к.
+ *  E3 — первый реальный вызов collectPostScope из UI). */
+export function compareComments(a, b)
+```
+
+`buildTree` использует `compareComments` вместо приватного
+`.sort((a,b)=>a.createdAt-b.createdAt)`. Поведенчески NOOP на нынешних
+данных (id — UUID/hex, коллизия `createdAt` при разных `id` — статистически
+пренебрежима, но детерминированность теперь гарантирована, не "почти
+всегда"), тест — на саму функцию (не regression существующего дерева).
+
+### `src/domain/content/media-index.js` [C] (НОВЫЙ)
+
+```js
+/** Один скан db.posts + один скан db.comments владельца — Θ(k+m), НЕ Θ(k·m)
+ *  (MEDIA-ALGO.md §2.2 Q1, прямой аналог countCommentsByPost). Область — ВСЕ
+ *  каналы owner'а разом (SPEC §3.10 буквально, без channelId-параметра).
+ *  → Map<postId, Int32Array(4)>, тот же порядок класса, что CLASS_INDEX. */
+export async function mediaClassesByPost(ownerPubkey, dbKey)
+```
+
+Черновики (`status==="draft"`) и удалённые посты — исключены (тот же
+фильтр, что `loadPostsWindow`). Комментарии — фильтр `!deleted` +
+`computeReachableCommentIds` (реиспользуется из `comments.js`, не
+дублируется), и только для постов, уже попавших в `acc` (экономит
+расшифровку комментариев чужих каналов/черновиков впустую — DESIGN.md).
+
+### `src/ui/components/screen.jsx` [C, точечная правка]
+
+```js
+export default function Screen({ breadcrumb, title, actions, mediaButtons, footer, feed, children })
+```
+
+Новый необязательный слот `mediaButtons` — рендерится СРАЗУ ПОД
+`<header class="section-header...">`, ДО `.content-area`, своим `<div
+class="media-buttons-bar row" ...>` (пусто/`undefined` → ничего не
+рендерится, ноль верстки для экранов, что его не передают — Профиль/
+Настройки/Каналы-список и т.д. не затронуты). Единственное новое место
+разметки, общее для `chat.jsx` и `files.jsx` — даёт консистентность
+позиции "бесплатно" (решение пользователя этой сессии, DESIGN.md "Этап
+E3").
+
+### `src/ui/components/media/media-buttons.jsx` [W] (НОВЫЙ)
+
+```js
+/** counts: Int32Array(4) | {audio,video,image} booleans | null/undefined
+ *  (ничего не показывать). Рендерит ДО 3 маленьких цветных кнопок
+ *  (audio/video/image — "other" никогда), только для классов с count>0
+ *  (или true). onOpen(cls) — cls ∈ "audio"|"video"|"image". Иконки —
+ *  уже существующие IconMusicNote/IconVideoCamera/IconImage (проверить
+ *  наличие последней, иначе завести по образцу двух других). Пусто ⇒ null
+ *  (ни одной кнопки — компонент не занимает места). */
+export default function MediaButtons({ counts, onOpen })
+```
+
+i18n — `media.buttons.audio/video/images` (уже объявлены `MEDIA-SPEC.md`
+§8, ещё не заведены ни в одной из 12 локалей — E4).
+
+### Подключение (E3, [C] — интеграция/стыковка, прецедент Этапов B4/B5/C3/D3)
+
+**`chat.jsx`** (личный чат, `Screen` с `actions=Позвонить/Очистить`):
+`mediaButtons={<MediaButtons counts={classesInMessages(messages)}
+onOpen={openChatMediaClass} />}`, где `classesInMessages` — маленькая
+локальная свёртка `collectChatScope(messages)` по `classOf` (без
+дедупликации — здесь только ПРИСУТСТВИЕ класса нужно, не список),
+`openChatMediaClass(cls)` — `collectChatScope(messages)` → `buildPlaylist`
+→ находит первую позицию класса `cls` → `openMedia({refs, position})`.
+Ключи/размер уже в дескрипторе — без сети.
+
+**`files.jsx`** (`Screen`, `view==="own"` — на "Полученные папки" кнопки
+НЕ подключаются, отдельная CRDT-проекция без `classCount`, вне объёма
+этого этапа): `mediaButtons={<MediaButtons counts={classesPresent(
+treeState.value, currentFolderId.value)} onOpen={openFolderMediaClass} />}`.
+`openFolderMediaClass(cls)` — асинхронно: сырые живые дети текущей папки
+(`liveChildrenOf`) → фильтр `kind==="file" && mime≠null &&
+classOf(mime)!=="other"` → для каждого — манифест (кэш/сеть, тот же
+приём, что `openEntry`) → `size`; `keyOf` — `getFileKeyFor` →
+`collectFolderScope(entries, keyOf)` → `buildPlaylist` → позиция первого
+элемента класса `cls` → `openMedia`. Пока идёт резолв — простой
+индикатор загрузки (тот же `<span class="spinner">`, что уже есть у
+загрузки вложений).
+
+**`channel.jsx`/`post-card.jsx`** (НЕ шапка экрана — DESIGN.md "Этап E3"):
+`refresh()` дополнительно вызывает `mediaClassesByPost(ownerPubkey,
+dbKey)` (как уже вызывает `countCommentsByPost`), результат —
+`mediaClasses` state, `Object.fromEntries`. `PostCard` получает новый
+проп `mediaCounts={mediaClasses[post.id]}`, рендерит `<MediaButtons>` в
+`.post__foot`, рядом с кнопкой комментариев. `onOpen` — НЕ в `PostCard`
+(там нет доступа к дереву комментариев), пробрасывается из
+`PostWithComments` как `onOpenMediaClass(cls)`: форсирует свежий
+`getCommentsTree(ownerPubkey, dbKey, post.id)` (НЕЗАВИСИМО от `expanded`
+— DESIGN.md разбирает, почему) → `collectPostScope({post, commentsTree,
+compareSiblings: compareComments})` → `buildPlaylist` → позиция первого
+элемента класса `cls` → `openMedia`.
+
+### `src/ui/signals/files.js` [C, найдено при интеграции — не было в исходном контракте]
+
+Без этого mime-денормализация оставалась бы структурно готовой, но
+функционально мёртвой (новые загрузки всегда получали бы `mime=null`,
+дозаливка никогда бы не вызывалась):
+
+```js
+/** 5-й параметр mime=null — денормализуется СРАЗУ, когда вызывающая сторона
+ *  его и так знает (files.jsx's upload — file.type). */
+export async function createFileEntry(name, blobDigest, fileKey, origin = null, mime = null)
+
+/** Событийная дозаливка (⊥→v) — DESIGN.md "Этап E, E1-доп". БЕЗ label. */
+export async function backfillMime(nodeId, mime)
+```
+
+`files.jsx` подключает `backfillMime` в двух точках, где манифест и так уже
+резолвлен: `FileThumbnail`'s эффект (fire-and-forget, не блокирует саму
+миниатюру) и `openEntry`. Upload (`handleFilesSelected`) передаёт `file.type
+|| "application/octet-stream"` пятым аргументом в `createFileEntry`.
+
+### Тесты (до кода)
+
+- `tree.js`/`ops.js`: `classCount` — create/purge/setPar/setName (4 события
+  E1) на файлах С mime и БЕЗ (симметрия increment/decrement строго по
+  `mime≠null`); `setMime` — на несуществующий узел (буферизация pending →
+  разрешается после create), на узел с уже проставленным mime (no-op,
+  идемпотентность), на purged узел (не трогает classCount), на живой узел
+  (classCount инкрементируется на E1's правило); `classesPresent` — пустая
+  папка → `{false,false,false}`, после `create+setMime` → соответствующий
+  true; `createInitialState`/`cloneState`/`rebuildIndexes` — новый `S`
+  содержит `classCount` (пустой/копия/пересобранный).
+- `store.js`: round-trip `nodeToRow`→`rowToNode` сохраняет `mime`; старая
+  строка без столбца `mime` (`delete row.mime`) → `rowToNode` даёт `null`.
+- `media-ref.js`/`playlist.js`: `CLASS_NAMES`/`CLASS_INDEX` экспортированы
+  и совпадают со старыми приватными значениями (регрессия).
+- `comments.js`: `compareComments` — сортировка по `createdAt`, tie-break
+  по `id` при равном `createdAt`; `buildTree` даёт тот же порядок, что до
+  правки, на существующих тестовых данных (регрессия).
+- `media-index.js`: `mediaClassesByPost` — пост с вложениями всех трёх
+  классов даёт верный `Int32Array`; черновик/удалённый пост исключён;
+  вложения недостижимого (осиротевшего) комментария не считаются
+  (реиспользование `computeReachableCommentIds` реально работает, не
+  просто импортировано); комментарий поста из ДРУГОГО (не переданного)
+  скана не паникует (chuk постов другого владельца/канала просто не
+  попадает в `acc`, `row.postId ∉ acc` — тихо пропускается); `Θ(k+m)` —
+  не тест производительности буквально (node --test не мерит время
+  надёжно), а тест на ЧИСЛО вызовов `fromEncryptedRow` (мок-подсчёт),
+  подтверждающий один проход, не `k` проходов.
+- `media-buttons.jsx` — без теста (тонкий рендер-слой, прецедент D3/D4).
+- Подключение в `chat.jsx`/`files.jsx`/`channel.jsx`/`post-card.jsx` —
+  без юнит-теста (стыковка сигналов и разметки), приёмка — живая проверка
+  (правило 17, "интеграция... реальный запуск флоу").
+
+### `vite.config.js`/`service-worker.js`/`main.jsx` [C, найдено живой проверкой пользователя — вне исходного контракта Этапа E]
+
+SW не регистрировался в `vite dev` (`main.jsx` раньше: `if
+(!import.meta.env.DEV)`) — `emitServiceWorker` (vite.config.js) это
+build-only плагин (`apply:"build"`, Rollup's `generateBundle`, Vite dev
+его не зовёт). `/files-content/*` поэтому улетал в SPA-фолбэк
+`index.html` (`text/html`) — mp3/mp4 не проигрывались НИ РАЗУ за всю
+сессию в dev, включая живую проверку Этапа D (там это не поймали —
+видео/аудио не тестировались живьём).
+
+```js
+// vite.config.js — новый dev-only плагин, тот же паттерн, что
+// devRelayPlugin/devBlossomPlugin (apply:"serve").
+function devServiceWorkerPlugin()
+```
+Middleware отдаёт `/service-worker.js` в dev, подставляя буквальную
+строку `"dev"` вместо `__BUILD_HASH__` (тот же `replaceAll`, что
+`emitServiceWorker`).
+
+`service-worker.js`: `IS_DEV = BUILD_HASH === "dev"` — выключает
+precache (`install`) и cache-first статику (`fetch`, ветка ПОСЛЕ
+`files-content:range-*`) в dev — иначе сломало бы HMR (кэш отдавал бы
+старый код после правки файла). `files-content:range-*` остаётся
+идентичным в dev и в проде — единственное, что реально нужно плееру.
+
+`main.jsx`: `navigator.serviceWorker.register(...)` теперь безусловна
+(была `if (!import.meta.env.DEV)`).
+
+**Прод не задет** — `dist/service-worker.js`'s `BUILD_HASH` остаётся
+обычным git-хэшем (`emitServiceWorker` не тронут), `IS_DEV` там
+`false`, precache/cache-first работают как раньше.
+
+**Проверено живьём**: SW корректно перехватывает `/files-content/*` в
+dev (`vite dev`, порт 5173) — Range-запрос (и закрытый, и открытый)
+доходит до SW, до страницы (`postMessage`), расшифровывается,
+возвращается 206 за ~17мс, идентично прод-сборке. `<audio>`/`<video>`
+DOM-элемент в САМОЙ этой (многочасовой, много вкладок) автоматизированной
+Chrome-сессии зависал на `readyState=0` даже для `blob:`-URL с уже
+готовыми байтами — но `AudioContext.decodeAudioData` на ТЕХ ЖЕ байтах
+успешно декодирует, то есть данные и вся сетевая/крипто-часть конвейера
+корректны; впечатление — деградация media-пайплайна конкретно этого
+браузерного процесса, не баг кода. Не перепроверено в свежем окне
+браузера (открытый пункт пользователю).

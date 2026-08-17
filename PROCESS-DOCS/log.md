@@ -6297,3 +6297,70 @@ DoD:
 - [x] коммит (d91e49d)
 
 Дальше по MEDIA-SPEC.md — этап E (кнопки и mime в дереве файлов).
+
+## Медиа-подсистема — Этап E (кнопки и mime в дереве файлов) ЗАКРЫТ
+
+1. E1: mime в createFile/mkNode (op.mime, mkNode's mimeValue),
+   classCount (Map<parentId, Int32Array(4)>, порядок из media-ref.js's
+   CLASS_INDEX — вынесен туда из playlist.js, был приватным дублем).
+   Поддержка на create/purge/setPar строго по mime≠null (симметрия
+   increment/decrement). setMime — новая монотонная операция (⊥→v,
+   БЕЗ label, класс purge()) для дозаливки старым узлам; applyOp's
+   pending-буфер переиспользован для setMime на ещё не увиденный create.
+   classesPresent(S, parentId) — Θ(1) через classCount.
+2. store.js: mime — обычный столбец nodeToRow/rowToNode (НЕ индекс) —
+   без повышения версии схемы IndexedDB, закрывает открытый вопрос SPEC.
+3. Найдено при интеграции (не в исходном контракте): createFileEntry/
+   backfillMime в ui/signals/files.js отсутствовали — без них mime
+   денормализация была бы структурно готова, но мертва (новые
+   загрузки всегда mime=null). Добавлены; files.jsx подключает mime
+   в upload (file.type) и дозаливку в FileThumbnail/openEntry.
+4. E2: media-index.js's mediaClassesByPost — один скан db.posts +
+   один db.comments (реиспользует computeReachableCommentIds из
+   comments.js), Θ(k+m). Попутно закрыт долг Этапа A: compareComments
+   вынесен из comments.js (был приватный инлайн без tie-break).
+5. E3: media-buttons.jsx (написан напрямую Claude, не через worker.sh
+   — тривиальный, полностью специфицированный компонент, отклонение
+   от плана зафиксировано честно). Screen.jsx получил новый слот
+   mediaButtons (зона под шапкой). Место кнопок обсуждено с
+   пользователем в чате — решено технически (mediaClassesByPost's
+   Map<postId,...> формой): чат/файлы — один SCOPE на экран (в
+   Screen'е), канал — один SCOPE на пост (в PostCard's footer, НЕ в
+   шапке экрана канала).
+6. files.jsx's openFolderMediaClass — впервые реально подключает
+   collectFolderScope (Этап A, ранее не использовался — Этап D6 его
+   обошёл из-за несовпадения формы entries). Теперь работает: сырые
+   S.nodes (не projected), mime уже денормализован, manifest — только
+   за size.
+7. РЕГРЕССИЯ 1868/1868 (room-session.test.js — известный флейк,
+   исключён, не связан), build 850,07 КБ gzip (+1,85 КБ от Stage D,
+   в бюджете 15 КБ на весь этап).
+8. ЖИВАЯ ПРОВЕРКА (2026-08-17, d1tester/d2tester + новый канал
+   "Тест E"): все три места подключения — файлы, чат, пост канала —
+   открывают MediaOverlay с картинкой по клику на кнопку, консоль
+   чиста.
+9. ПОПУТНО (пользователь сам протестировал параллельно, нашёл
+   реальный баг вне контракта): mp3/mp4 не играли в dev — SW не
+   регистрировался в vite dev вовсе (main.jsx, emitServiceWorker —
+   build-only плагин). Исправлено: vite.config.js's
+   devServiceWorkerPlugin (раздаёт SW и в dev, BUILD_HASH="dev"),
+   service-worker.js's IS_DEV-ветка (precache/cache-first статики
+   выключены в dev — не сломать HMR; files-content:range-* не
+   тронут), main.jsx — регистрация безусловна. Прод не задет
+   (проверено: dist/service-worker.js's BUILD_HASH — обычный git-хэш).
+   Живьём подтверждено: Range-конвейер в dev работает end-to-end,
+   17мс, идентично проду. <audio>/<video> DOM-элемент не удалось
+   перепроверить в этой же (многочасовой) автоматизированной
+   Chrome-сессии — decodeAudioData на тех же байтах декодирует
+   успешно, похоже на деградацию media-пайплайна процесса, не баг.
+   Открытый пункт пользователю: перепроверить в свежем окне браузера.
+
+DoD:
+- [x] тесты этапа зелёные
+- [x] полная регрессия зелёная (1868/1868, room-session — флейк)
+- [x] адверсарный заход — живая проверка (своя + пользователя) нашла
+      реальный баг (SW не в dev), закрыт
+- [x] PLAN.md/CONTRACTS.md/DESIGN.md/log.md обновлены
+- [ ] коммит
+
+Дальше по MEDIA-SPEC.md — этап F (вложения на потоковый путь).

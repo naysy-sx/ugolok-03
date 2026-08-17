@@ -647,6 +647,20 @@ button:has(> .icon),
 .section-header {
 	border-block-end: var(--border-width) solid var(--border);
 }
+
+/* Этап E медиа-подсистемы — зона под шапкой, общая для chat.jsx/files.jsx
+   (screen.jsx's mediaButtons-слот). Первый проход размещения — маленькая
+   тонкая полоса, кнопки сами берут цвет из уже существующих .btn--ghost.
+   btn--info/warn/good (media-buttons.jsx). Пользователь этой сессии заранее
+   предупредил, что визуал будет отдельно дополировываться позже. */
+.media-buttons-zone {
+	padding-inline: var(--space-m);
+	padding-block: var(--space-2xs);
+	border-block-end: var(--border-width) solid var(--border);
+}
+.media-buttons-bar {
+	flex-wrap: wrap;
+}
 /* .header-actions — теперь просто .row в JSX (align-items:center инлайн,
    раскладка не задаёт justify-content: initial-значение и так flex-start,
    этого достаточно — БЕЗ space-between: на экранах с breadcrumb, но без

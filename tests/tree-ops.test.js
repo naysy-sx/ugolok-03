@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createInitialState, applyOp, ROOT_ID, TRASH_ID } from "../src/domain/files/tree.js";
-import { createFolder, createFile, rename, move, copy, remove, purge, PreconditionError } from "../src/domain/files/ops.js";
+import { createInitialState, applyOp, classesPresent, ROOT_ID, TRASH_ID } from "../src/domain/files/tree.js";
+import { createFolder, createFile, rename, move, copy, remove, purge, setMime, PreconditionError } from "../src/domain/files/ops.js";
 
 let counter = 0;
 function label() {
@@ -218,4 +218,126 @@ test("createFile: БЕЗ fileKeyHex — поле fileKey в op отсутств�
 	let S = createInitialState();
 	const op = createFile(S, ROOT_ID, "обычный.jpg", id("file"), "digest-plain", label());
 	assert.equal("fileKey" in op, false);
+});
+
+// Этап E — classCount (DESIGN.md "Этап E, E1"): индекс [audio,video,image,other],
+// поддерживается на create/purge/setPar, СИММЕТРИЧНО по mime≠null.
+test("classCount: create с mime увеличивает счётчик своего класса у родителя", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "трек.mp3", id("file"), "d1", label(), null, null, "audio/mpeg");
+	S = applyOp(S, op);
+	assert.equal(S.classCount.get(ROOT_ID)[0], 1, "audio=index0");
+	assert.deepEqual([...S.classCount.get(ROOT_ID).slice(1)], [0, 0, 0]);
+});
+
+test("classCount: create БЕЗ mime (mime=null, старая запись) НЕ трогает счётчик", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "безымянный", id("file"), "d1", label());
+	S = applyOp(S, op);
+	assert.equal(S.classCount.has(ROOT_ID), false, "ни одного известного класса — записи в индексе нет вовсе");
+});
+
+test("classCount: create директории НИКОГДА не трогает classCount (директории не классифицируются)", () => {
+	let S = createInitialState();
+	const [, ] = mkFolder(S, ROOT_ID, "Папка");
+	assert.equal(S.classCount.has(ROOT_ID), false);
+});
+
+test("classCount: purge файла С mime декрементирует счётчик его родителя", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "клип.mp4", id("file"), "d1", label(), null, null, "video/mp4");
+	S = applyOp(S, op);
+	assert.equal(S.classCount.get(ROOT_ID)[1], 1, "video=index1");
+	S = applyOp(S, purge(S, op.id));
+	assert.equal(S.classCount.get(ROOT_ID)[1], 0);
+});
+
+test("classCount: purge файла БЕЗ mime — не декрементирует (никогда не инкрементировал, порчи в минус быть не должно)", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "безымянный", id("file"), "d1", label());
+	S = applyOp(S, op);
+	S = applyOp(S, purge(S, op.id));
+	assert.ok(!S.classCount.get(ROOT_ID) || S.classCount.get(ROOT_ID)[0] === 0, "ни один индекс не ушёл в отрицательное значение");
+});
+
+test("classCount: setPar (move) переносит +1/-1 между старым и новым родителем", () => {
+	let S = createInitialState();
+	let dirId;
+	[S, dirId] = mkFolder(S, ROOT_ID, "Картинки");
+	const op = createFile(S, ROOT_ID, "фото.png", id("file"), "d1", label(), null, null, "image/png");
+	S = applyOp(S, op);
+	assert.equal(S.classCount.get(ROOT_ID)[2], 1, "image=index2");
+	S = applyOp(S, move(S, op.id, dirId, label()));
+	assert.equal(S.classCount.get(ROOT_ID)[2], 0, "у старого родителя декремент");
+	assert.equal(S.classCount.get(dirId)[2], 1, "у нового родителя инкремент");
+});
+
+test("classCount: rename (setName) не трогает classCount вовсе", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "a.png", id("file"), "d1", label(), null, null, "image/png");
+	S = applyOp(S, op);
+	S = applyOp(S, rename(S, op.id, "b.png", label()));
+	assert.equal(S.classCount.get(ROOT_ID)[2], 1, "счётчик не изменился при переименовании");
+});
+
+test("classCount: 'other' (неизвестный медиа-тип, но mime известен) тоже считается — индекс 3", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "документ.pdf", id("file"), "d1", label(), null, null, "application/pdf");
+	S = applyOp(S, op);
+	assert.equal(S.classCount.get(ROOT_ID)[3], 1, "other=index3");
+});
+
+// setMime — монотонная дозаливка (⊥→v), DESIGN.md "Этап E, E1-доп".
+test("setMime: дозаливка старому узлу проставляет mime и инкрементирует classCount", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "старый.mp3", id("file"), "d1", label());
+	S = applyOp(S, op);
+	assert.equal(S.nodes.get(op.id).mime, null);
+	S = applyOp(S, setMime(S, op.id, "audio/mpeg"));
+	assert.equal(S.nodes.get(op.id).mime, "audio/mpeg");
+	assert.equal(S.classCount.get(ROOT_ID)[0], 1);
+});
+
+test("setMime: повторная дозаливка ТЕМ ЖЕ значением — идемпотентный no-op (classCount не растёт дважды)", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "старый.mp3", id("file"), "d1", label());
+	S = applyOp(S, op);
+	S = applyOp(S, setMime(S, op.id, "audio/mpeg"));
+	S = applyOp(S, setMime(S, op.id, "audio/mpeg")); // гонка двух устройств, вычисливших одно и то же
+	assert.equal(S.classCount.get(ROOT_ID)[0], 1, "не 2 — идемпотентно");
+});
+
+test("setMime: на ещё не увиденный create — буферизуется в pending и разрешается, когда create приходит", () => {
+	let S = createInitialState();
+	const newId = id("file");
+	S = applyOp(S, setMime(S, newId, "image/png")); // create ещё не пришёл
+	assert.equal(S.nodes.has(newId), false);
+	const createOp = { type: "create", id: newId, kind: "file", blob: "d1", parentId: ROOT_ID, name: "потом.png", origin: null, label: label() };
+	S = applyOp(S, createOp);
+	assert.equal(S.nodes.get(newId).mime, "image/png", "буферизованный setMime применился следом за create");
+	assert.equal(S.classCount.get(ROOT_ID)[2], 1);
+});
+
+test("setMime: на purged узел — mime проставляется (для истории), но classCount НЕ трогается (узел не живой)", () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "удалённый.mp3", id("file"), "d1", label());
+	S = applyOp(S, op);
+	S = applyOp(S, purge(S, op.id));
+	S = applyOp(S, setMime(S, op.id, "audio/mpeg"));
+	assert.equal(S.nodes.get(op.id).mime, "audio/mpeg");
+	assert.equal(S.classCount.has(ROOT_ID), false, "purged — classCount не инкрементирован");
+});
+
+test("classesPresent: пустая папка — все три класса false", () => {
+	const S = createInitialState();
+	assert.deepEqual(classesPresent(S, ROOT_ID), { audio: false, video: false, image: false });
+});
+
+test("classesPresent: Θ(1) через classCount — отражает реальное присутствие каждого класса, 'other' наружу не выставляется", () => {
+	let S = createInitialState();
+	S = applyOp(S, createFile(S, ROOT_ID, "a.mp3", id("file"), "d1", label(), null, null, "audio/mpeg"));
+	S = applyOp(S, createFile(S, ROOT_ID, "b.pdf", id("file"), "d2", label(), null, null, "application/pdf"));
+	const present = classesPresent(S, ROOT_ID);
+	assert.deepEqual(present, { audio: true, video: false, image: false });
+	assert.equal("other" in present, false);
 });

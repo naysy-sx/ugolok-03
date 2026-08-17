@@ -41,6 +41,7 @@ function nodeToRow(ownerPubkey, node) {
 		originCounter: node.origin.label.counter,
 		originDeviceId: node.origin.label.deviceId,
 		purged: node.purged,
+		mime: node.mime,
 	};
 }
 
@@ -53,6 +54,7 @@ function rowToNode(row) {
 		name: { value: row.nameValue, label: { counter: row.nameCounter, deviceId: row.nameDeviceId } },
 		origin: { value: row.originValue, label: { counter: row.originCounter, deviceId: row.originDeviceId } },
 		purged: row.purged,
+		mime: row.mime ?? null,
 	};
 }
 
@@ -77,8 +79,8 @@ export async function loadTreeState(ownerPubkey) {
 	// children/namesInDir (tree.js) — производные индексы, персистируются НЕ
 	// они, а nodes; пересобираются один раз при загрузке (O(n), не на
 	// операцию — тот же принцип, что кэш project()).
-	const { children, namesInDir } = rebuildIndexes(nodes);
-	return { nodes, children, namesInDir, pending: new Map() };
+	const { children, namesInDir, classCount } = rebuildIndexes(nodes);
+	return { nodes, children, namesInDir, classCount, pending: new Map() };
 }
 
 export async function getCachedManifest(ownerPubkey, digest) {
@@ -270,8 +272,8 @@ export async function loadMountState(ownerPubkey, mountId) {
 	for (const row of rows) {
 		nodes.set(row.id, rowToNode(row));
 	}
-	const { children, namesInDir } = rebuildIndexes(nodes);
-	return { nodes, children, namesInDir, pending: new Map() };
+	const { children, namesInDir, classCount } = rebuildIndexes(nodes);
+	return { nodes, children, namesInDir, classCount, pending: new Map() };
 }
 
 export async function deleteMountState(ownerPubkey, mountId) {

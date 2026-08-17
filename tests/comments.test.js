@@ -7,7 +7,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { createChannel, receiveChannelKeyGrant } from "../src/domain/content/channel.js";
 import { sendViewGrant, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { decryptChannelKeyGrant } from "../src/core/crypto/channel-key.js";
-import { addComment, receiveComment, getCommentsTree, countCommentsByPost, computeReachableCommentIds } from "../src/domain/content/comments.js";
+import { addComment, receiveComment, getCommentsTree, countCommentsByPost, computeReachableCommentIds, compareComments } from "../src/domain/content/comments.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { COMMENTS_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 
@@ -212,4 +212,33 @@ test("computeReachableCommentIds: обрыв цепочки (родитель о
 	];
 	const reachable = computeReachableCommentIds(comments);
 	assert.deepEqual([...reachable], ["root"], "orphan и всё, что от него зависит, недостижимо; root — не затронут");
+});
+
+// Этап E — closes долг Этапа A: экспортированный компаратор с tie-break по id.
+test("compareComments: сортирует по createdAt по возрастанию", () => {
+	const a = { id: "x", createdAt: 20 };
+	const b = { id: "y", createdAt: 10 };
+	assert.ok(compareComments(a, b) > 0);
+	assert.ok(compareComments(b, a) < 0);
+});
+
+test("compareComments: равный createdAt — tie-break по id (детерминированный полный порядок)", () => {
+	const a = { id: "aaa", createdAt: 5 };
+	const b = { id: "bbb", createdAt: 5 };
+	assert.ok(compareComments(a, b) < 0);
+	assert.ok(compareComments(b, a) > 0);
+	assert.equal(compareComments(a, a), 0);
+});
+
+test("getCommentsTree: порядок братьев стабилен при равном createdAt (регрессия — buildTree теперь использует compareComments)", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+	const postId = "post-tie";
+	// Оба комментария с ОДНИМ createdAt — раньше порядок зависел от порядка
+	// вставки в БД (нестабильная сортировка/недоопределённость), теперь —
+	// строго по id.
+	await db.table("comments").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "b-comment", postId, parentId: postId, channelId, authorPubkey: ALICE_PUB, text: "b", attachments: [], keyVersion: 1, createdAt: 100, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY));
+	await db.table("comments").put(toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "a-comment", postId, parentId: postId, channelId, authorPubkey: ALICE_PUB, text: "a", attachments: [], keyVersion: 1, createdAt: 100, deleted: false }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY));
+
+	const tree = await getCommentsTree(ALICE_PUB, DB_KEY, postId);
+	assert.deepEqual(tree.map((c) => c.id), ["a-comment", "b-comment"]);
 });

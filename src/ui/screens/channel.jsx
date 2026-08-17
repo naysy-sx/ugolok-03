@@ -12,7 +12,12 @@ import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } 
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
-import { addComment, getCommentsTree, countCommentsByPost } from "../../domain/content/comments.js";
+import { addComment, getCommentsTree, countCommentsByPost, compareComments } from "../../domain/content/comments.js";
+import { mediaClassesByPost } from "../../domain/content/media-index.js";
+import { collectPostScope } from "../../domain/media/scope.js";
+import { buildPlaylist } from "../../domain/media/playlist.js";
+import { openMedia } from "../signals/media.js";
+import MediaButtons from "../components/media/media-buttons.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import { validateAttachment, MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
@@ -540,7 +545,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 	);
 }
 
-function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, limiter, commentCount, onCountChange, onPostChanged, autoExpand, highlightCommentId }) {
+function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, limiter, commentCount, mediaCounts, onCountChange, onPostChanged, autoExpand, highlightCommentId }) {
 	const [expanded, setExpanded] = useState(false);
 	const [tree, setTree] = useState([]);
 	const [error, setError] = useState("");
@@ -624,6 +629,23 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		}
 	}
 
+	// Этап E, E3 (DESIGN.md "Этап E") — mediaCounts (кнопка) посчитан по ВСЕМ
+	// комментариям поста, а не только по раскрытым (tree заполняется лениво,
+	// только при expanded). Клик форсирует СВЕЖИЙ getCommentsTree независимо
+	// от expanded — иначе плейлист разошёлся бы со счётчиком на кнопке.
+	async function handleOpenMediaClass(cls) {
+		try {
+			const commentsTree = await getCommentsTree(ownerPubkey, dbKey, post.id);
+			const refs = collectPostScope({ post, commentsTree, compareSiblings: compareComments });
+			const playlist = buildPlaylist(refs);
+			const position = playlist.idx[cls]?.[0];
+			if (position === undefined) return;
+			openMedia({ refs, position });
+		} catch (err) {
+			setError(errorMessage(err));
+		}
+	}
+
 	const author = commentAuthorInfo(post.authorPubkey);
 
 	return (
@@ -635,6 +657,8 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				isOwner={isOwner}
 				commentCount={expanded ? countNodes(tree) : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
+				mediaCounts={mediaCounts}
+				onOpenMediaClass={handleOpenMediaClass}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {
@@ -702,6 +726,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [error, setError] = useState("");
 	const [tab, setTab] = useState("posts");
 	const [commentCounts, setCommentCounts] = useState({});
+	const [mediaClasses, setMediaClasses] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
 	const [navTarget, setNavTarget] = useState(null); // этап 47-довесок-3 — {postId, commentId?} из уведомления
 
@@ -732,6 +757,11 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		// countCommentsByPost, comments.js.)
 		const counts = await countCommentsByPost(ownerPubkey, freshPosts.map((p) => p.id));
 		setCommentCounts(Object.fromEntries(counts));
+		// Этап E, E2/E3 — один общий скан на ВСЮ ленту владельца (не только этот
+		// канал, MEDIA-SPEC.md §3.10 буквально), тот же приём, что commentCounts
+		// выше. PostCard читает по своему post.id, Θ(1) на карточку.
+		const classes = await mediaClassesByPost(ownerPubkey, dbKey);
+		setMediaClasses(Object.fromEntries(classes));
 	}
 
 	function handleCommentCountChange(postId, count) {
@@ -897,6 +927,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 									channelOwnerPubkey={channelRow.creatorPubkey}
 									limiter={limiter}
 									commentCount={commentCounts[post.id] ?? 0}
+									mediaCounts={mediaClasses[post.id]}
 									onCountChange={handleCommentCountChange}
 									onPostChanged={refresh}
 									autoExpand={navTarget?.postId === post.id}

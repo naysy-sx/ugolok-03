@@ -6,7 +6,7 @@
 import { signal, computed } from "@preact/signals";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { createInitialState, merge, project, ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
-import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, PreconditionError } from "../../domain/files/ops.js";
+import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, setMime as opSetMime, PreconditionError } from "../../domain/files/ops.js";
 import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey, listUnannouncedFileKeys, markFileKeyAnnounced } from "../../domain/files/store.js";
 import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../../domain/files/sync.js";
 import { db } from "../../core/store/database.js";
@@ -274,17 +274,30 @@ export async function createFolder(name) {
 // (store.js's saveFileKey, зашифрован dbKey) — без этого файл стал бы
 // нерасшифровываем после первой же перезагрузки (найдено при реализации
 // миниатюр, задача 3.8 — ключ раньше нигде не персистировался).
-export async function createFileEntry(name, blobDigest, fileKey, origin = null) {
+// mime — Этап E (CONTRACTS.md "Этап E, ops.js") — денормализуется В МОМЕНТ
+// создания, когда вызывающая сторона его и так уже знает (files.jsx's
+// upload — file.type), без этого свежезагруженные файлы были бы неотличимы
+// от старых "⊥"-узлов и не участвовали в classCount до случайной дозаливки.
+export async function createFileEntry(name, blobDigest, fileKey, origin = null, mime = null) {
 	// Этап 57 — fileKey едет прямо в create-Op (журнал уже NIP-44-самошифрован,
 	// провезти секрет внутри безопасно) — announced=true сразу, backfillOwnFileKeys
 	// нечего будет довыдавать для файлов, созданных с этого момента.
-	const op = opCreateFile(treeState.value, currentFolderId.value, name, randomNodeId(), blobDigest, await label(), origin, bytesToHex(fileKey));
+	const op = opCreateFile(treeState.value, currentFolderId.value, name, randomNodeId(), blobDigest, await label(), origin, bytesToHex(fileKey), mime);
 	if (op instanceof PreconditionError) return op;
 	await saveFileKey(cachedOwnerPubkey, dbKeySig.value, blobDigest, fileKey, true);
 	await applyAndPersist([op]);
 	pushUndo(undoStack, [recordCreate(op.id)]);
 	canUndo.value = canUndoNow(undoStack);
 	return op;
+}
+
+// Дозаливка mime старому узлу (mime===null) — событийно, вызывается там,
+// где манифест и так уже резолвлен (files.jsx's FileThumbnail/openEntry),
+// DESIGN.md "Этап E, E1-доп". setMime — монотонная, БЕЗ label; applyAndPersist
+// сама решает публиковать ли (best-effort, как остальные мутации).
+export async function backfillMime(nodeId, mime) {
+	const op = opSetMime(treeState.value, nodeId, mime);
+	await applyAndPersist([op]);
 }
 
 // Для чтения (миниатюры, будущий плеер И4) — по digest, не по узлу

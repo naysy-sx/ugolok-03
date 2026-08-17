@@ -446,6 +446,11 @@
 		}
 	},
 	"media": {
+		"buttons": {
+			"audio": "Ses",
+			"video": "Video",
+			"images": "Görseller"
+		},
 		"player": {
 			"play": "Oynat",
 			"pause": "Duraklat",

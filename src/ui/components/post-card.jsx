@@ -7,6 +7,7 @@ import IconTrash from "../icons/trash.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import MarkdownView from "./markdown-view.jsx";
+import MediaButtons from "./media/media-buttons.jsx";
 
 function formatDateTime(unixSeconds) {
 	return new Date(unixSeconds * 1000).toLocaleString(currentLocale.value, { dateStyle: "short", timeStyle: "short" });
@@ -22,7 +23,7 @@ function formatDateTime(unixSeconds) {
 // "пост важнее комментария". Рамку/фон/тень несёт теперь общий .card на
 // обёртке PostWithComments (channel.jsx), не сама карточка — второй уровень
 // той же поверхности, а не отдельный вложенный блок.
-export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount }) {
+export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount, mediaCounts, onOpenMediaClass }) {
 	const { above, below } = splitBubbleAttachments(post.attachments);
 	return (
 		<article class="stack post box" style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}>
@@ -51,6 +52,10 @@ export default function PostCard({ post, authorName, authorAvatar, isOwner, onAr
 				<button type="button" class="btn--ghost" onClick={onOpenComments}>
 					<IconChatBubble /> {t("postCard.commentsButton", { count: commentCount })}
 				</button>
+				{/* Этап E, E3 — mediaCounts посчитан ОДНИМ сканом на всю ленту
+				    (mediaClassesByPost, channel.jsx's refresh), не здесь — карточка
+				    только читает готовое значение по своему post.id, Θ(1). */}
+				<MediaButtons counts={mediaCounts} onOpen={onOpenMediaClass} />
 				<span class="grow" />
 				{/* Markdown-этап E — aria-label через toPlainText, иначе скринридер
 				    читает разметку буквально (CONTRACTS.md, "Markdown — Этап E"). */}

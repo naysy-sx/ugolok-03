@@ -129,10 +129,23 @@ export async function receiveComment(ownerPubkey, dbKey, event) {
 	return true;
 }
 
+// Компаратор комментариев-братьев — createdAt, tie-break по id (строковое
+// сравнение) при равном createdAt. Экспортирован (Этап E, CONTRACTS.md —
+// закрывает долг Этапа A "вынести сравнение из comments.js... использовать
+// её и в отрисовке треда, и при вызове collectPostScope"): и buildTree
+// (ниже), и вызов domain/media/scope.js's collectPostScope обязаны
+// использовать ОДНУ И ТУ ЖЕ функцию (MEDIA-MATH.md Утв. 2 — "не такой же,
+// а той же"), иначе порядок открытия медиа разойдётся с порядком отрисовки.
+export function compareComments(a, b) {
+	if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+	if (a.id === b.id) return 0;
+	return a.id < b.id ? -1 : 1;
+}
+
 function buildTree(comments, parentId) {
 	return comments
 		.filter((c) => c.parentId === parentId)
-		.sort((a, b) => a.createdAt - b.createdAt)
+		.sort(compareComments)
 		.map((c) => ({ ...c, replies: buildTree(comments, c.id) }));
 }
 

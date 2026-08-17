@@ -3,7 +3,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createInitialState, applyOp, ROOT_ID } from "../src/domain/files/tree.js";
-import { createFolder } from "../src/domain/files/ops.js";
+import { createFolder, createFile } from "../src/domain/files/ops.js";
 import { saveTreeState, loadTreeState, getCachedManifest, putCachedManifest, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey, listUnannouncedFileKeys, markFileKeyAnnounced } from "../src/domain/files/store.js";
 
 const OWNER_A = "owner-a-pubkey";
@@ -179,4 +179,43 @@ test("markFileKeyAnnounced: после пометки ключ пропадае�
 
 	const remaining = await listUnannouncedFileKeys(OWNER_A, dbKeyA);
 	assert.deepEqual(remaining.map((r) => r.digest), ["digest-2"]);
+});
+
+// Этап E — mime едет как обычный столбец nodeToRow/rowToNode, БЕЗ повышения
+// версии схемы IndexedDB (CONTRACTS.md "Этап E, store.js").
+test("saveTreeState/loadTreeState: mime переживает round-trip", async () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "трек.mp3", "file-1", "d1", { counter: 1, deviceId: "d1" }, null, null, "audio/mpeg");
+	S = applyOp(S, op);
+
+	await saveTreeState(OWNER_A, S);
+	const loaded = await loadTreeState(OWNER_A);
+
+	assert.equal(loaded.nodes.get("file-1").mime, "audio/mpeg");
+});
+
+test("loadTreeState: пересобирает classCount из nodes (rebuildIndexes), а не из персистированного индекса", async () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "картинка.png", "file-2", "d1", { counter: 1, deviceId: "d1" }, null, null, "image/png");
+	S = applyOp(S, op);
+	await saveTreeState(OWNER_A, S);
+
+	const loaded = await loadTreeState(OWNER_A);
+	assert.equal(loaded.classCount.get(ROOT_ID)[2], 1, "image=index2, восстановлено при загрузке");
+});
+
+test("loadTreeState: старая строка без столбца mime (row.mime===undefined) читается как null (⊥), не как undefined", async () => {
+	let S = createInitialState();
+	const op = createFile(S, ROOT_ID, "старый.dat", "file-3", "d1", { counter: 1, deviceId: "d1" });
+	S = applyOp(S, op);
+	await saveTreeState(OWNER_A, S);
+	// Имитация строки, сохранённой ДО добавления столбца mime в этой сессии —
+	// удаляем поле целиком, а не выставляем undefined (Dexie/IndexedDB и так
+	// не хранит explicit undefined, это тот же эффект, что "столбца никогда не было").
+	const row = await db.table("files_nodes").get([OWNER_A, "file-3"]);
+	delete row.mime;
+	await db.table("files_nodes").put(row);
+
+	const loaded = await loadTreeState(OWNER_A);
+	assert.equal(loaded.nodes.get("file-3").mime, null);
 });

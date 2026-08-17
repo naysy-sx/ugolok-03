@@ -31,11 +31,14 @@ if ("serviceWorker" in navigator) {
 	// сразу при загрузке приложения, безусловно. register() идемпотентен
 	// (повторный вызов с тем же scriptURL из diagnostics.jsx резолвится в ТУ
 	// ЖЕ регистрацию, не создаёт вторую) — оставлен как есть, ради статуса на
-	// экране диагностики. В dev SW не эмитится вовсе (emitServiceWorker,
-	// apply:"build") — регистрировать нечего.
-	if (!import.meta.env.DEV) {
-		navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {});
-	}
+	// экране диагностики.
+	// Этап E, найдено живой проверкой пользователя — раньше здесь стояло
+	// `if (!import.meta.env.DEV)`, потому что emitServiceWorker (vite.config.js)
+	// работает только на build, и в dev регистрировать было нечего (404).
+	// vite.config.js's devServiceWorkerPlugin теперь раздаёт service-worker.js
+	// и в dev (с IS_DEV-веткой внутри самого SW — precache/cache-first статики
+	// выключены, чтобы не сломать HMR), поэтому регистрация безусловна.
+	navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {});
 }
 
 const root = document.getElementById("app");

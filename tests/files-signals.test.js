@@ -14,6 +14,7 @@ import {
 	canUndo,
 	createFolder,
 	createFileEntry,
+	backfillMime,
 	getFileKeyFor,
 	renameNode,
 	moveNode,
@@ -92,6 +93,28 @@ test("createFileEntry: создаёт узел kind='file' с указанным
 
 	const gotKey = await getFileKeyFor("digest-xyz");
 	assert.deepEqual(gotKey, fileKey);
+});
+
+// Этап E — mime передаётся В МОМЕНТ создания (files.jsx's upload знает
+// file.type сразу), классифицируется в currentEntries/classCount немедленно.
+test("createFileEntry: mime денормализуется сразу — entry.mime и classCount видны без ожидания дозаливки", async () => {
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	const op = await createFileEntry("трек.mp3", "digest-audio", fileKey, null, "audio/mpeg");
+	const entry = currentEntries.value.find((e) => e.id === op.id);
+	assert.equal(entry.mime, "audio/mpeg");
+	assert.equal(treeState.value.classCount.get(ROOT_ID)[0], 1);
+});
+
+test("backfillMime: старый узел (mime=null) — дозаливка проставляет mime, классифицируется в classCount", async () => {
+	const fileKey = crypto.getRandomValues(new Uint8Array(32));
+	const op = await createFileEntry("старый.png", "digest-old", fileKey);
+	assert.equal(currentEntries.value.find((e) => e.id === op.id).mime, null);
+
+	await backfillMime(op.id, "image/png");
+
+	const entry = currentEntries.value.find((e) => e.id === op.id);
+	assert.equal(entry.mime, "image/png");
+	assert.equal(treeState.value.classCount.get(ROOT_ID)[2], 1);
 });
 
 test("openFolder/breadcrumbPath: навигация внутрь и хлебные крошки отражают путь", async () => {

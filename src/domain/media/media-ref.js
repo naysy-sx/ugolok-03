@@ -5,6 +5,13 @@ export function classOf(mime) {
   return "other";
 }
 
+// Единый источник истины для порядка/индекса класса — playlist.js, tree.js
+// (classCount) и media-index.js (mediaClassesByPost) обязаны использовать
+// ОДИН и тот же порядок, иначе индексы молча разъедутся между модулями
+// (Этап E, CONTRACTS.md).
+export const CLASS_NAMES = ["audio", "video", "image", "other"];
+export const CLASS_INDEX = { audio: 0, video: 1, image: 2, other: 3 };
+
 function base64ToBytes(str) {
   return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
 }

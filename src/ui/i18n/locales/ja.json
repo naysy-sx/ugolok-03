@@ -446,6 +446,11 @@
 		}
 	},
 	"media": {
+		"buttons": {
+			"audio": "音声",
+			"video": "動画",
+			"images": "画像"
+		},
 		"player": {
 			"play": "再生",
 			"pause": "一時停止",

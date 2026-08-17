@@ -135,6 +135,32 @@ function buildDefaultIceServers() {
 	return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
+// Этап E, найдено живой проверкой пользователя — в dev SW вообще не
+// регистрировался (main.jsx: `if (!import.meta.env.DEV)`), поэтому
+// /files-content/* улетал в SPA-фолбэк index.html (text/html), и mp3/mp4
+// молча не играли ни разу за всю сессию. emitServiceWorker (ниже) — плагин
+// СБОРКИ (apply:"build", generateBundle — Vite dev его не зовёт вовсе), так
+// что для `vite dev` нужен отдельный путь раздачи. __BUILD_HASH__ здесь
+// подставляется буквальной строкой "dev" — service-worker.js's IS_DEV на
+// это ориентируется, чтобы выключить precache/cache-first статики (иначе
+// сломал бы HMR — кэш отдавал бы старый код после правки файла); files-
+// content:range-* остаётся активным что в dev, что в проде.
+function devServiceWorkerPlugin() {
+	return {
+		name: "ugolok:dev-service-worker",
+		apply: "serve",
+		configureServer(server) {
+			server.middlewares.use((req, res, next) => {
+				if (req.url !== "/service-worker.js") return next();
+				const src = readFileSync("service-worker.js", "utf8").replaceAll("__BUILD_HASH__", () => "dev");
+				res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+				res.setHeader("Service-Worker-Allowed", "/");
+				res.end(src);
+			});
+		},
+	};
+}
+
 // SW не должен инлайниться в index.html, но БАНДЛИТЬ define-константы — должен.
 // Эмитим его отдельным ассетом, подставляя BUILD_HASH в плейсхолдер.
 function emitServiceWorker(buildHash) {
@@ -164,7 +190,7 @@ export default defineConfig(({ command }) => ({
 		preact({ devToolsEnabled: false }), // обход бага preset×Vite8×zimmerframe
 		emitServiceWorker(BUILD_HASH),
 		viteSingleFile(),
-		...(command === "serve" ? [devRelayPlugin(), devBlossomPlugin()] : []),
+		...(command === "serve" ? [devRelayPlugin(), devBlossomPlugin(), devServiceWorkerPlugin()] : []),
 	],
 	define: {
 		__BUILD_HASH__: JSON.stringify(BUILD_HASH),

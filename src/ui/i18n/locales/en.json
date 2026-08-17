@@ -446,6 +446,11 @@
 		}
 	},
 	"media": {
+		"buttons": {
+			"audio": "Audio",
+			"video": "Video",
+			"images": "Images"
+		},
 		"player": {
 			"play": "Play",
 			"pause": "Pause",

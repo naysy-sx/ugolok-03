@@ -1,10 +1,18 @@
 // __BUILD_HASH__ заменяется в сборке плагином emitServiceWorker (vite.config.js, DoD 1.2).
+// В dev (vite.config.js's devServiceWorkerPlugin) подставляется буквальная строка
+// "dev" — сигнал IS_DEV ниже: сборка не singlefile (много отдельных модулей),
+// precache/cache-first статики здесь бессмысленны и ЛОМАЮТ HMR (кэш отдавал бы
+// старый код после правки файла). files-content:range-* — единственное, что
+// нужно активным в dev (Этап E, живая проверка пользователя: mp3/mp4 не играли
+// в dev именно потому, что SW там не регистрировался вовсе).
 const BUILD_HASH = "__BUILD_HASH__";
+const IS_DEV = BUILD_HASH === "dev";
 const CACHE = `ugolok-cache-v${BUILD_HASH}`; // F-OF-06
 const PRECACHE = ["./", "./index.html"]; // singlefile → весь клиент в одном файле
 
 self.addEventListener("install", (e) => {
 	self.skipWaiting(); // F-OF-05
+	if (IS_DEV) return;
 	e.waitUntil(
 		caches
 			.open(CACHE)
@@ -138,6 +146,9 @@ self.addEventListener("fetch", (e) => {
 	if (url.pathname.endsWith("service-worker.js")) return;
 	// Кросс-origin (Blossom HTTP, relay) — не трогаем, уходит в сеть. WS через fetch вообще не идёт.
 	if (url.origin !== self.location.origin) return;
+	// dev: не трогать статику вовсе (см. комментарий у BUILD_HASH/IS_DEV) —
+	// только files-content:range-* выше, обычный fetch для всего остального.
+	if (IS_DEV) return;
 
 	// Статика того же origin — cache-first, офлайн-фолбэк на index.html (A-01).
 	e.respondWith(

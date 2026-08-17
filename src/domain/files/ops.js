@@ -64,12 +64,12 @@ export function createFolder(S, parentId, name, newId, label) {
 // Этап 57 — fileKeyHex (необязательный) едет ВНУТРИ уже NIP-44-самошифрованного
 // журнала операций (sync.js) — второе устройство того же владельца иначе видит
 // digest, но никогда не сможет расшифровать содержимое (найдено живой проверкой).
-export function createFile(S, parentId, name, newId, blob, label, origin = null, fileKeyHex = null) {
+export function createFile(S, parentId, name, newId, blob, label, origin = null, fileKeyHex = null, mime = null) {
 	if (!nameFree(S, parentId, name)) {
 		return new PreconditionError("NAME_TAKEN", `Имя "${name}" уже занято в этой папке`, "errors.nameTakenInFolder", { name });
 	}
 	const fileKey = fileKeyHex !== undefined && fileKeyHex !== null ? { fileKey: fileKeyHex } : {};
-	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label, ...fileKey };
+	return { type: "create", id: newId, kind: "file", blob, parentId, name, origin, label, mime, ...fileKey };
 }
 
 export function rename(S, id, name, label) {
@@ -154,4 +154,14 @@ export function remove(S, id, label) {
 
 export function purge(S, id) {
 	return { type: "purge", id };
+}
+
+// Дозаливка mime старому узлу (mime===null, "⊥") — DESIGN.md "Этап E,
+// E1-доп". БЕЗ label: монотонное слияние ⊥→v (MEDIA-MATH.md Утв. 9 —
+// blob↦mime детерминирована, конфликта значений не бывает по построению),
+// тот же класс операции, что purge(). Ничего не проверяет здесь — вызывающая
+// сторона зовёт событийно, только увидев mime===null; applyOp сам идемпотентен
+// на повторную/гоночную дозаливку.
+export function setMime(S, id, mime) {
+	return { type: "setMime", id, value: mime };
 }
