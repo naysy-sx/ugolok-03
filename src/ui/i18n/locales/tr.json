@@ -457,7 +457,13 @@
 			"prev": "Önceki",
 			"minimize": "Küçült",
 			"restore": "Genişlet",
-			"trackOf": "{{total}} içinden {{current}}"
+			"trackOf": "{{total}} içinden {{current}}",
+			"info": "Bilgi"
+		},
+		"classNames": {
+			"audio": "ses",
+			"video": "video",
+			"image": "görseller"
 		}
 	},
 	"files": {

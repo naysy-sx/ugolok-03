@@ -457,7 +457,13 @@
 			"prev": "前へ",
 			"minimize": "最小化",
 			"restore": "展開",
-			"trackOf": "{{total}}件中{{current}}件目"
+			"trackOf": "{{total}}件中{{current}}件目",
+			"info": "情報"
+		},
+		"classNames": {
+			"audio": "音声",
+			"video": "動画",
+			"image": "画像"
 		}
 	},
 	"files": {

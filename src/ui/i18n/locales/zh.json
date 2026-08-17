@@ -457,7 +457,13 @@
 			"prev": "上一个",
 			"minimize": "最小化",
 			"restore": "展开",
-			"trackOf": "第 {{current}} / 共 {{total}}"
+			"trackOf": "第 {{current}} / 共 {{total}}",
+			"info": "信息"
+		},
+		"classNames": {
+			"audio": "音频",
+			"video": "视频",
+			"image": "图片"
 		}
 	},
 	"files": {

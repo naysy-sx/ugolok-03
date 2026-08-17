@@ -457,7 +457,13 @@
 			"prev": "Предыдущий",
 			"minimize": "Свернуть",
 			"restore": "Развернуть",
-			"trackOf": "{{current}} из {{total}}"
+			"trackOf": "{{current}} из {{total}}",
+			"info": "Сведения"
+		},
+		"classNames": {
+			"audio": "аудио",
+			"video": "видео",
+			"image": "изображения"
 		}
 	},
 	"files": {

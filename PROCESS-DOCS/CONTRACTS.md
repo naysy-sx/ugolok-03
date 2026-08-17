@@ -17163,3 +17163,89 @@ function put(key, bytes, { pin = false } = {})
   рендер-слой + стыковка сигналов, прецедент D3/D4/E3), приёмка —
   живая проверка (видео из чата открывается и перематывается БЕЗ
   полной загрузки — по объёму сетевого трафика, критерий 7.7).
+
+## MEDIA-OVERLAY-UI.md — Этап 1 (каркас и хром)
+
+### `src/ui/components/media/media-overlay.jsx` [C, ветка `full` переписана]
+
+Скелет по MEDIA-OVERLAY-UI.md §1.1: `div.media-overlay` (role=dialog,
+onClick=closeMedia) > `div.media-overlay-scrim` (aria-hidden) +
+`div.media-overlay-viewport` (onClick закрывает ТОЛЬКО если
+`e.target===e.currentTarget` — клик по пустому полю вокруг кадра, не
+по кадру) > `div.media-overlay-inner` (stopPropagation) > `<View>` +
+`header.media-overlay-top` (имя, "N из M · класс · размер", кнопки
+свернуть/закрыть) + до 2х `button.media-overlay-nav.is-{prev,next}`
+(только `total>1`) + `footer.media-overlay-bottom` (пуст на этапе 1).
+Header/nav/footer каждый со своим `stopPropagation` — без этого клик
+по любой кнопке шапки/навигации забублился бы до `closeMedia` на
+корневом div (в spec явно не расписано, добавлено как необходимое
+следствие данной схемы кликов, не новая фича).
+
+Ветка `isMini` НЕ тронута (ни разметка, ни символы `⏸ ▶ ⤢`) —
+переделывается целиком на этапе 6.
+
+`metaLine` — JS-конкатенация: `t("media.player.trackOf", {current,
+total})` + `" · "` + `t(\`media.classNames.${session.cls}\`)` + `" · "`
++ `formatFileSize(currentRef.size)` (импорт из `../attachment-view.jsx`,
+уже экспортирована оттуда — не дублировать).
+
+Второй `useEffect` (§1.2): `document.documentElement.dataset.mediaFull
+= "1"` пока `session?.display === "full"`, снимается в cleanup,
+зависимость `[session?.display]` — раздельно от уже существующего
+Escape-эффекта (та же зависимость, но разная ответственность, слитие
+в один эффект не делалось, чтобы каждый cleanup был независим).
+
+Кнопка «сведения» (в скелете §1.1 она есть в списке, "только если есть
+что показать") НЕ отрендерена на этапе 1 — источник данных для неё
+(панель сведений) заводится только этапом 2.
+
+### `src/ui/icons/{minimize,player-play,player-pause,info-circle}.jsx` [C] (НОВЫЕ)
+
+По образцу `phone-call.jsx`/`bell.jsx`: viewBox `0 0 15 15`,
+`fill="currentColor"` на фигуре, `width/height="1em"`, `class="icon"`.
+Экспорт по умолчанию — функциональный компонент, проп `props`
+разворачивается на `<svg>` (даёт `aria-label` и т.п. переопределять
+снаружи, как у остальных иконок проекта). `minimize.jsx` подключена в
+`media-overlay.jsx` этапом 1; `player-play.jsx`/`player-pause.jsx`/
+`info-circle.jsx` заготовлены впрок (понадобятся этапам 2/6),
+НИГДЕ пока не импортированы.
+
+### `src/styles/custom.css` [C, блок заменён целиком между старым header-комментарием и `.media-mini-bar {`]
+
+Классы из §1.3 verbatim: `.media-overlay` (`color-scheme:dark`,
+`--media-pull:0` — объявлена сразу под этап 3, чтобы правило не
+переписывалось повторно), `.media-overlay-scrim`, `-viewport`,
+`-inner`, общее `.media-overlay-top,.media-overlay-bottom` (позиция +
+transition), `.media-overlay-top` (градиент), `.media-overlay-title
+span/small`, `.media-overlay-acts`, `.media-overlay-btn` (+hover/
+active/is-close:hover), `.media-overlay-nav` (+hover/focus-visible/
+is-prev/is-next/[disabled]/`@media(pointer:coarse)` — на тач стрелок
+нет вовсе, листание свайпом будет этапом 3), `.media-overlay-bottom`
+(градиент). Плюс отдельно, рядом с уже существующим
+`.top-corner-actions`: `html[data-media-full] .top-corner-actions
+{opacity:0;pointer-events:none}` (§1.2).
+
+`.media-mini-bar*` — НЕ в этом блоке, границе правки намеренно уперта
+в `.media-mini-bar {` как маркер (этап 6 его переделает).
+
+### Локали (все 12 файлов `src/ui/i18n/locales/*.json`) [C]
+
+`media.player.info` (строка) + новый узел `media.classNames.{audio,
+video,image}` (родительный падеж там, где это применимо — ru:
+«аудио»/«видео»/«изображения» буквально как в spec §1.4; остальные
+локали — прямой перевод существительным, без падежной адаптации,
+тот же уровень качества, что и остальные 10 неносительских переводов,
+см. память проекта). `media.player.trackOf` САМ не менялся — формат
+`"{{current}} из {{total}}"` (и аналоги) остаётся, композиция строки
+шапки собирается в JS (см. `media-overlay.jsx` выше), не в i18n-шаблоне.
+
+### Тесты — намеренно НЕ добавлены
+
+Разметка/CSS/иконки — чистый рендер-слой без новой бизнес-логики
+(прецедент D3/D4/E3/F: тонкий UI без dedicated unit-тестов, приёмка
+через регрессию существующих + живую проверку). Единственная не совсем
+тривиальная логика — `metaLine`-конкатенация и `e.target===
+e.currentTarget` проверка на viewport — обе покрываются live-проверкой
+DoD этапа 1 (открытие из 4 мест без регрессий, `total===1` без стрелок
+и т.д.), отдельный unit-тест на JSX-композицию строки признан
+избыточным (тот же критерий, что и раньше в этом проекте).

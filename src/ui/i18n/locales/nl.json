@@ -457,7 +457,13 @@
 			"prev": "Vorige",
 			"minimize": "Minimaliseren",
 			"restore": "Uitvouwen",
-			"trackOf": "{{current}} van {{total}}"
+			"trackOf": "{{current}} van {{total}}",
+			"info": "Info"
+		},
+		"classNames": {
+			"audio": "audio",
+			"video": "video",
+			"image": "afbeeldingen"
 		}
 	},
 	"files": {

@@ -457,7 +457,13 @@
 			"prev": "Previous",
 			"minimize": "Minimize",
 			"restore": "Expand",
-			"trackOf": "{{current}} of {{total}}"
+			"trackOf": "{{current}} of {{total}}",
+			"info": "Info"
+		},
+		"classNames": {
+			"audio": "audio",
+			"video": "video",
+			"image": "images"
 		}
 	},
 	"files": {

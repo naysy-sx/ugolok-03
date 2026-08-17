@@ -346,6 +346,14 @@ button:has(> .icon),
 	inset-inline-end: var(--space-s);
 	z-index: 300;
 }
+/* MEDIA-OVERLAY-UI.md, этап 1.2 — .top-corner-actions (z-index 300) стоит
+   ВЫШЕ .media-overlay (190); поднимать оверлей нельзя (он сознательно ниже
+   .call-overlay, 200), поэтому при полноэкранном просмотре прячем шапку,
+   а не двигаем оверлей. Атрибут ставит/снимает media-overlay.jsx's эффект. */
+html[data-media-full] .top-corner-actions {
+	opacity: 0;
+	pointer-events: none;
+}
 /* padding-inline:0 ЯВНО — без него побеждает глобальное правило
    button:has(> .icon) (padding-inline:var(--step-0)) выше по файлу:
    специфичность :has() (0,1,1) больше голого класса (0,1,0), сжимало
@@ -2279,38 +2287,187 @@ button:has(> .icon),
 	}
 }
 
-/* Медиа-подсистема, этап D (MEDIA-SPEC.md §4 "Этап D") — полноэкранный
-   просмотр/свёрнутая плашка. z-index НИЖЕ .call-overlay (200) и
-   .top-corner-actions (300) — звонок и бургер/тема приоритетнее. */
+/* ================================================================== *
+ *  Просмотрщик вложений (media-overlay.jsx) — довесок к этапу D.     *
+ *  Оверлей ВСЕГДА тёмный независимо от темы приложения: color-scheme *
+ *  здесь форсирует тёмную ветвь всех light-dark() внутри. Причина не *
+ *  вкусовая — светлая рамка вокруг фотографии смещает восприятие её  *
+ *  собственных цветов; так устроены все просмотрщики, от Google      *
+ *  Photos до Telegram. z-index НИЖЕ .call-overlay (200) и НИЖЕ       *
+ *  .top-corner-actions (300) — см. html[data-media-full] выше.       *
+ * ================================================================== */
 .media-overlay {
 	position: fixed;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.85);
+	z-index: 190;
+	color-scheme: dark;
+	color: var(--fg);
+	/* --media-pull — доля жеста "потянуть вниз, чтобы закрыть" (этап 3).
+	   На этапе 1 всегда 0; переменная объявлена сразу, чтобы правила
+	   ниже не переписывались повторно. */
+	--media-pull: 0;
+}
+
+/* Подложка: не нейтральный rgba(0,0,0,.85), а тот же тёплый угол света,
+   что у .message-list — окно принадлежит приложению, а не браузеру. */
+.media-overlay-scrim {
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(110% 80% at 100% 0%, color-mix(in oklch, var(--accent), transparent 86%), transparent 55%),
+		oklch(0.13 0.018 var(--hue) / 0.94);
+	backdrop-filter: blur(18px) saturate(120%);
+	opacity: calc(1 - var(--media-pull) * 0.85);
+}
+
+.media-overlay-viewport {
+	position: absolute;
+	inset: 0;
 	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	z-index: 190;
-	padding: var(--space-m);
+	overflow: hidden;
+	padding: var(--space-2xl) var(--space-l) calc(var(--space-2xl) + var(--space-l));
+	transform: translateY(calc(var(--media-pull) * 180px)) scale(calc(1 - var(--media-pull) * 0.12));
+	border-radius: calc(var(--media-pull) * var(--radius-lg));
 }
 
 .media-overlay-inner {
-	max-width: 100%;
-	max-height: 80vh;
+	max-inline-size: 100%;
+	max-block-size: 100%;
 }
 
-.media-overlay-controls {
-	--gap: var(--space-m);
+/* Хром: две полосы с растяжкой градиента в прозрачность — читаемость
+   текста поверх произвольного кадра без сплошной плашки. */
+.media-overlay-top,
+.media-overlay-bottom {
+	position: absolute;
+	inset-inline: 0;
+	z-index: 2;
+	--gap: var(--space-s);
+	transition:
+		opacity 0.28s var(--ease-io),
+		transform 0.28s var(--ease-io);
+}
+
+.media-overlay-top {
+	inset-block-start: 0;
+	align-items: flex-start;
+	padding: var(--space-s) var(--space-m);
+	padding-block-start: max(var(--space-s), env(safe-area-inset-top));
+	background: linear-gradient(oklch(0.12 0.02 var(--hue) / 0.75), transparent);
+}
+
+.media-overlay-title span {
+	font-size: var(--step-0);
+	font-weight: var(--weight-bold);
+}
+
+.media-overlay-title small {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.media-overlay-acts {
+	--gap: var(--space-3xs);
+}
+
+/* Не .icon-btn: тот 2.25rem и рассчитан на светлую поверхность
+   (color:var(--fg), подсветка фоном --surface). Здесь кнопка лежит на
+   произвольном кадре — нужна своя подложка при наведении и больший
+   тач-таргет. */
+.media-overlay-btn {
+	display: inline-flex;
 	align-items: center;
-	margin-block-start: var(--space-s);
-	color: #fff;
-	width: 100%;
-	max-width: 40rem;
+	justify-content: center;
+	flex: none;
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: transparent;
+	color: var(--fg);
+	font-size: 1.05rem;
+	cursor: pointer;
+	transition:
+		background-color var(--transition-speed) var(--transition-ease),
+		transform var(--transition-speed) var(--ease);
 }
 
-.media-overlay-track-of {
-	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.9em;
+.media-overlay-btn:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 88%);
+}
+
+.media-overlay-btn:active {
+	transform: scale(0.92);
+}
+
+.media-overlay-btn.is-close:hover {
+	background-color: color-mix(in oklch, var(--bad), transparent 55%);
+}
+
+/* Стрелки разнесены к краям экрана (приём Lity) — на десктопе угол/кромка
+   экрана берётся мышью тривиально. На тач-устройствах кромка занята
+   системными жестами и недостижима большим пальцем: там стрелок нет
+   вовсе, листание свайпом (этап 3). */
+.media-overlay-nav {
+	position: absolute;
+	inset-block-start: 50%;
+	translate: 0 -50%;
+	z-index: 2;
+	inline-size: 2.75rem;
+	block-size: 4.5rem;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: oklch(0.16 0.02 var(--hue) / 0.45);
+	backdrop-filter: blur(8px);
+	color: var(--fg);
+	font-size: 1.25rem;
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 0.25s var(--ease),
+		background-color var(--transition-speed) var(--transition-ease);
+}
+
+.media-overlay:hover .media-overlay-nav {
+	opacity: 1;
+}
+
+.media-overlay-nav:focus-visible {
+	opacity: 1;
+}
+
+.media-overlay-nav:hover {
+	background: oklch(0.16 0.02 var(--hue) / 0.75);
+}
+
+.media-overlay-nav.is-prev {
+	inset-inline-start: var(--space-2xs);
+}
+
+.media-overlay-nav.is-next {
+	inset-inline-end: var(--space-2xs);
+}
+
+.media-overlay-nav[disabled] {
+	opacity: 0 !important;
+	pointer-events: none;
+}
+
+@media (pointer: coarse) {
+	.media-overlay-nav {
+		display: none;
+	}
+}
+
+.media-overlay-bottom {
+	inset-block-end: 0;
+	flex-direction: column;
+	padding: var(--space-l) var(--space-m) var(--space-s);
+	padding-block-end: max(var(--space-s), env(safe-area-inset-bottom));
+	background: linear-gradient(transparent, oklch(0.12 0.02 var(--hue) / 0.8) 42%);
 }
 
 .media-mini-bar {
