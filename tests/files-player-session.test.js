@@ -120,6 +120,27 @@ test("упреждающая подкачка: следующий чанк ок�
 	assert.notEqual(before, undefined);
 });
 
+// Этап F, F3 (DESIGN.md "Этап F, F3") — чанк 0 закреплён (pin), переживает
+// вытеснение, даже когда суммарный объём последующих чанков превышает бюджет.
+test("чанк 0 остаётся в кэше после загрузки многих последующих чанков, суммарно превышающих бюджет", async () => {
+	const blossom = makeFakeBlossom();
+	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 5000, 256); // ~20 чанков по 256 байт
+	const cache = createChunkCache(700); // бюджет ~2.7 чанка — заведомо мал для всех
+	const namespace = manifest.blobSha256;
+	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache, fetchImpl: blossom.fetchImpl });
+
+	await session.readRange(0, 100); // прогревает чанк 0 (закрепляется)
+	// Читаем много последующих чанков подряд — суммарно СИЛЬНО больше бюджета.
+	for (let offset = 300; offset < 4800; offset += 256) {
+		await session.readRange(offset, offset + 50);
+	}
+
+	assert.notEqual(cache.get(`${namespace}:0`), undefined, "чанк 0 закреплён — не вытесняется, сколько бы чанков ни загрузилось после");
+	// Обычный (не нулевой) чанк с той же дистанции давно вытеснен — бюджет
+	// не резиновый, закрепление касается ТОЛЬКО индекса 0.
+	assert.equal(cache.get(`${namespace}:1`), undefined, "обычный чанк 1 вытеснен — закрепление не распространяется на него");
+});
+
 test("ошибка prefetch не пробрасывается наружу и не роняет основной readRange", async () => {
 	const blossom = makeFakeBlossom();
 	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 3000, 256);

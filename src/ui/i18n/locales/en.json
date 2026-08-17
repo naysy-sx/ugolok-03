@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "Failed to load audio: {{error}}",
 		"loadingVoice": "Loading voice message…",
-		"loadingAudio": "Loading audio…",
 		"downloading": "Downloading…",
 		"download": "Download",
 		"imageLoadError": "Failed to load the image: {{error}}",
 		"loadingImage": "Loading image…",
-		"videoLoadError": "Failed to load the video: {{error}}",
-		"loadingVideo": "Loading video…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "Open video {{name}}",
+		"openAudioAria": "Open audio {{name}}"
 	},
 	"media": {
 		"buttons": {

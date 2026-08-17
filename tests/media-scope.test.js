@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collectPostScope, collectChatScope, collectFolderScope } from "../src/domain/media/scope.js";
+import { collectPostScope, collectChatScope, collectFolderScope, findRefPosition } from "../src/domain/media/scope.js";
 
 function compareSiblings(a, b) {
 	return a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -138,4 +138,38 @@ test("collectFolderScope: keyOf может вернуть null — не резо
 	const entries = [folderEntry("f1", "file", "image/png", 10)];
 	const refs = collectFolderScope(entries, () => null);
 	assert.equal(refs[0].key, null);
+});
+
+// Этап F — findRefPosition (DESIGN.md "Этап F, F1/F2").
+test("findRefPosition: находит верную позицию по совпадению digest+sourceMeta", () => {
+	const messages = [
+		{ id: "m1", attachments: [attachmentFor("a")] },
+		{ id: "m2", attachments: [attachmentFor("b")] },
+	];
+	const refs = collectChatScope(messages);
+	assert.equal(findRefPosition(refs, "a", { msgId: "m1" }), 0);
+	assert.equal(findRefPosition(refs, "b", { msgId: "m2" }), 1);
+});
+
+test("findRefPosition: -1, если не найдено (ни по digest, ни по sourceMeta)", () => {
+	const messages = [{ id: "m1", attachments: [attachmentFor("a")] }];
+	const refs = collectChatScope(messages);
+	assert.equal(findRefPosition(refs, "нет-такого", { msgId: "m1" }), -1);
+	assert.equal(findRefPosition(refs, "a", { msgId: "другое-сообщение" }), -1);
+});
+
+test("findRefPosition: различает элементы с ОДНИМ digest, но РАЗНЫМ sourceMeta (тот же файл в двух сообщениях)", () => {
+	const messages = [
+		{ id: "m1", attachments: [attachmentFor("same")] },
+		{ id: "m2", attachments: [attachmentFor("same")] },
+	];
+	const refs = collectChatScope(messages);
+	assert.equal(findRefPosition(refs, "same", { msgId: "m1" }), 0);
+	assert.equal(findRefPosition(refs, "same", { msgId: "m2" }), 1);
+});
+
+test("findRefPosition: sourceMeta сравнивается по значению, не по ссылке (новый объект с теми же ключами)", () => {
+	const post = { id: "post-1", attachments: [attachmentFor("P")] };
+	const refs = collectPostScope({ post, commentsTree: [], compareSiblings });
+	assert.equal(findRefPosition(refs, "P", { postId: "post-1" }), 0);
 });

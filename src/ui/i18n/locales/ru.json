@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "Не удалось загрузить аудио: {{error}}",
 		"loadingVoice": "Загрузка голосового…",
-		"loadingAudio": "Загрузка аудио…",
 		"downloading": "Скачивание…",
 		"download": "Скачать",
 		"imageLoadError": "Не удалось загрузить картинку: {{error}}",
 		"loadingImage": "Загрузка картинки…",
-		"videoLoadError": "Не удалось загрузить видео: {{error}}",
-		"loadingVideo": "Загрузка видео…",
 		"units": {
 			"bytes": "{{count}} Б",
 			"kb": "{{count}} КБ",
 			"mb": "{{count}} МБ"
-		}
+		},
+		"openVideoAria": "Открыть видео {{name}}",
+		"openAudioAria": "Открыть аудио {{name}}"
 	},
 	"media": {
 		"buttons": {

@@ -3,8 +3,6 @@ import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { openMedia } from "../signals/media.js";
-import { refFromAttachment } from "../../domain/media/media-ref.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
@@ -43,13 +41,14 @@ const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconM
 // Картинка — EAGER-загрузка+расшифровка (не может быть иначе: E2E-шифрование не даёт
 // частичной/потоковой подгрузки, нужно скачать и расшифровать ПОЛНОСТЬЮ, прежде чем
 // показать хоть пиксель) — но картинки ожидаются видимыми сразу в бабле (в отличие от
-// видео, см. VideoAttachment), клик -> openMedia (Этап D медиа-подсистемы, DESIGN.md
-// "D6" — заменяет локальную ImageModal; одиночный элемент, без сбора scope поста/
-// чата/канала этим проходом — то отдельная задача). Инлайновое превью в бабле
-// продолжает идти через attachment-memory-cache.js (эта функция), fullscreen-вид —
-// через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша одной
-// и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
-function ImageAttachment({ attachment }) {
+// видео/аудио, см. VideoAttachment/AudioAttachment). Клик -> onOpen(attachment) —
+// Этап F (DESIGN.md "Этап F, F1/F2") передаёт scope (сбор playlist поста/чата/канала)
+// вызывающей стороне целиком; сам компонент про scope не знает (было — строил
+// openMedia сам, одиночный элемент, без next/prev — Этап D6). Инлайновое превью в
+// бабле продолжает идти через attachment-memory-cache.js (эта функция), fullscreen-
+// вид — через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша
+// одной и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
+function ImageAttachment({ attachment, onOpen }) {
 	// Ленивая инициализация из общего слоя памяти (attachment-memory-cache.js) —
 	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
 	// без вспышки спиннера (найдено ревью: URL.revokeObjectURL на каждом unmount
@@ -99,20 +98,25 @@ function ImageAttachment({ attachment }) {
 		<img
 			src={url}
 			alt={attachment.name || ""}
-			onClick={() => openMedia({ refs: [refFromAttachment(attachment, {})], position: 0 })}
+			onClick={() => onOpen(attachment)}
 			style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
 		/>
 	);
 }
 
-// Аудио/голосовое — тоже eager (F-AT-04, этап 29-довесок: тот же потолок 50 МБ, что
-// видео — раньше был отдельный лимит 3 МБ, поднят по просьбе пользователя). voiceInline
-// (F-AT-08, ≤32КБ) вообще не ходит в сеть — декодируется прямо из base64 в payload.
-function AudioAttachment({ attachment }) {
+// Голосовое (voice/voiceInline, F-AT-08) — БЕЗ изменений Этапом F: остаётся eager
+// (уже дёшево — voiceInline ≤32КБ декодируется прямо из base64 в payload, без сети
+// вовсе; не voiceInline — тот же потолок 50 МБ, что раньше). Голосовые НЕ в
+// плейлисте (MEDIA-SPEC.md §1.4) — не через onOpen/openMedia, свой нативный
+// <audio controls> инлайн, как всегда. Обычное (не голосовое) аудио — Этап F,
+// F1: превью БЕЗ сети вовсе (DESIGN.md "Этап F, F1"), клик -> onOpen(attachment),
+// потоковый плеер уже есть с Этапа D (SW-мост, Range).
+function AudioAttachment({ attachment, onOpen }) {
 	const [url, setUrl] = useState(() => (attachment.voiceInline ? null : (getMemoryCachedUrl(attachment.manifestDigest) ?? null)));
 	const [error, setError] = useState("");
 
 	useEffect(() => {
+		if (!attachment.voice) return;
 		// voiceInline (≤32КБ, F-AT-08) — decode из payload КАЖДЫЙ раз, в сеть/кэш
 		// не ходит вовсе, кэшировать нечего (уже дёшево, ObjectURL живёт своим
 		// unmount'ом, как раньше).
@@ -140,6 +144,10 @@ function AudioAttachment({ attachment }) {
 		};
 	}, [attachment]);
 
+	if (!attachment.voice) {
+		return <MediaPreview attachment={attachment} Icon={IconMusicNote} onOpen={onOpen} ariaLabelKey="attachment.openAudioAria" />;
+	}
+
 	if (error) {
 		return (
 			<p role="alert" style={{ color: "var(--bad)" }}>
@@ -150,59 +158,42 @@ function AudioAttachment({ attachment }) {
 	if (!url) {
 		return (
 			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> {attachment.voice ? t("attachment.loadingVoice") : t("attachment.loadingAudio")}
+				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingVoice")}
 			</p>
 		);
 	}
 	return <audio controls src={url} />;
 }
 
-// Видео — EAGER-загрузка (item 9, пользователь: "не надо кнопку, пусть сразу
-// файл отображается"), тот же приём, что ImageAttachment. autoPlay убран
-// НАРОЧНО: при входе в чат с несколькими уже загруженными (закэшированными
-// в памяти) видео все они рендерятся одновременно — с autoPlay они играли бы
-// хором ("сливаются в какофонию", живая проверка пользователя); без autoPlay
-// каждое видео просто показывает первый кадр, воспроизведение — по клику на
-// нативные controls, как и ожидается от обычного плеера.
-function VideoAttachment({ attachment }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.manifestDigest) ?? null);
-	const [error, setError] = useState("");
+// Видео — Этап F, F1 (DESIGN.md "Этап F, F1"): БЕЗ сети вовсе — превью
+// (иконка+имя+размер, тот же паттерн, что FileAttachment), клик -> onOpen.
+// Было: eager-загрузка ПОЛНОГО файла в бабл (item 9, ранняя стадия проекта) —
+// заменено на потоковый путь, уже готовый с Этапа D (SW-мост, Range, не вся
+// загрузка сразу — устраняет и саму причину "какофонии" от нескольких autoPlay-
+// видео разом, раз ни одно видео больше не грузится/не рендерится инлайн).
+function VideoAttachment({ attachment, onOpen }) {
+	return <MediaPreview attachment={attachment} Icon={IconVideoCamera} onOpen={onOpen} ariaLabelKey="attachment.openVideoAria" />;
+}
 
-	useEffect(() => {
-		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
-		if (memUrl) {
-			setUrl(memUrl);
-			return;
-		}
-		let cancelled = false;
-		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
-			.then((bytes) => {
-				if (cancelled) return;
-				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
-			})
-			.catch((err) => {
-				if (!cancelled) setError(errorMessage(err));
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [attachment]);
-
-	if (error) {
-		return (
-			<p role="alert" style={{ color: "var(--bad)" }}>
-				{t("attachment.videoLoadError", { error })}
-			</p>
-		);
-	}
-	if (!url) {
-		return (
-			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingVideo")}
-			</p>
-		);
-	}
-	return <video controls src={url} style={{ maxWidth: "100%", borderRadius: "var(--radius)", display: "block" }} />;
+// Общий вид превью для видео и не-голосового аудио (Этап F, F1) — иконка+имя+
+// размер, кликabельная строка, тот же визуальный паттерн, что FileAttachment,
+// но <button>, не <p> (интерактивность). Без состояния загрузки — синхронно,
+// name/size/mime уже есть в дескрипторе, сеть не нужна для самого превью.
+function MediaPreview({ attachment, Icon, onOpen, ariaLabelKey }) {
+	return (
+		<button
+			type="button"
+			class="btn--ghost media-attachment-preview row"
+			style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+			onClick={() => onOpen(attachment)}
+			aria-label={t(ariaLabelKey, { name: attachment.name })}
+		>
+			<Icon aria-hidden="true" />
+			<span>
+				{attachment.name} ({formatFileSize(attachment.size)})
+			</span>
+		</button>
+	);
 }
 
 // Файл (не image/video/audio — документ/таблица) — статичная строка с
@@ -223,10 +214,10 @@ function FileAttachment({ attachment }) {
 // Диспетчер по attachment.type (F-AT-02) — единственная точка входа для рендера
 // вложения, переиспользуется message-bubble.jsx; задел на будущий раздел "мои файлы"
 // (тот же дескриптор, та же отрисовка по типу).
-export default function AttachmentView({ attachment }) {
-	if (attachment.type === "image") return <ImageAttachment attachment={attachment} />;
-	if (attachment.type === "video") return <VideoAttachment attachment={attachment} />;
-	if (attachment.type === "audio") return <AudioAttachment attachment={attachment} />;
+export default function AttachmentView({ attachment, onOpen }) {
+	if (attachment.type === "image") return <ImageAttachment attachment={attachment} onOpen={onOpen} />;
+	if (attachment.type === "video") return <VideoAttachment attachment={attachment} onOpen={onOpen} />;
+	if (attachment.type === "audio") return <AudioAttachment attachment={attachment} onOpen={onOpen} />;
 	return <FileAttachment attachment={attachment} />;
 }
 

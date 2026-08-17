@@ -16,7 +16,10 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 		const cached = cache.get(key);
 		if (cached) return cached;
 		const bytes = await getChunk(manifest, fileKey, index, { serverUrl, fetchImpl });
-		cache.put(key, bytes);
+		// Этап F, F3 (DESIGN.md) — чанк 0 закреплён: любое повторное открытие
+		// файла (переоткрытие, переход к началу) попадает в кэш за Θ(1),
+		// независимо от того, сколько чанков было загружено после.
+		cache.put(key, bytes, { pin: index === 0 });
 		return bytes;
 	}
 

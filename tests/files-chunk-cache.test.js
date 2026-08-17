@@ -69,3 +69,40 @@ test("put элемента крупнее бюджета вытесняет ВС
 	assert.equal(cache.get("a"), undefined);
 	assert.notEqual(cache.get("huge"), undefined);
 });
+
+// Этап F, F3 — pin (DESIGN.md "Этап F, F3"): без pin поведение ИДЕНТИЧНО
+// прежнему (регрессия выше подтверждает); с pin — новая семантика.
+test("pin: закреплённый ключ переживает вытеснение, которое иначе снесло бы его", () => {
+	const cache = createChunkCache(20); // бюджет ровно на 2 записи по 10 байт
+	cache.put("pinned", bytes(10), { pin: true });
+	cache.put("b", bytes(10));
+	cache.put("c", bytes(10)); // без pin вытеснился бы "pinned" (LRU-самый старый)
+	assert.notEqual(cache.get("pinned"), undefined, "закреплённая запись не вытесняется, даже будучи LRU-самой старой");
+	assert.equal(cache.get("b"), undefined, "b — незакреплённая LRU-самая старая среди незакреплённых — вытесняется");
+});
+
+test("pin: незакреплённые продолжают вытесняться как раньше при наличии закреплённых записей", () => {
+	const cache = createChunkCache(20);
+	cache.put("pinned", bytes(10), { pin: true });
+	cache.put("x", bytes(10));
+	cache.put("y", bytes(10)); // "x" — незакреплённая LRU-самая старая, вытесняется
+	assert.notEqual(cache.get("pinned"), undefined);
+	assert.equal(cache.get("x"), undefined);
+	assert.notEqual(cache.get("y"), undefined);
+});
+
+test("pin: несколько закреплённых записей все переживают вытеснение (даже с перерасходом бюджета)", () => {
+	const cache = createChunkCache(15);
+	cache.put("p1", bytes(10), { pin: true });
+	cache.put("p2", bytes(10), { pin: true }); // суммарно уже 20 > 15, обе закреплены — вытеснять нечего
+	assert.notEqual(cache.get("p1"), undefined);
+	assert.notEqual(cache.get("p2"), undefined);
+});
+
+test("pin: put без третьего аргумента — pin=false по умолчанию, обычное вытеснение", () => {
+	const cache = createChunkCache(20);
+	cache.put("a", bytes(10));
+	cache.put("b", bytes(10));
+	cache.put("c", bytes(10));
+	assert.equal(cache.get("a"), undefined, "без pin — обычное LRU-вытеснение, как раньше");
+});

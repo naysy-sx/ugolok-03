@@ -30,7 +30,7 @@ function formatTimestamp(sentAt) {
 // сценарии (quick.jsx, комнаты "Быстрая связь" — до 5 участников в одной
 // ленте) — без подписи невозможно понять, кто именно написал (найдено живой
 // проверкой пользователем).
-export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName }) {
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
@@ -89,10 +89,10 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
-			{above && <AttachmentView attachment={above} />}
+			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} />}
 			{message.text && <MarkdownView source={message.text} profile="lite" />}
 			{below.map((a, i) => (
-				<AttachmentView key={i} attachment={a} />
+				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} />
 			))}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}

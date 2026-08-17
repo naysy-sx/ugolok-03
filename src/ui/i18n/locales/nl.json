@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "Kon audio niet laden: {{error}}",
 		"loadingVoice": "Spraakbericht laden…",
-		"loadingAudio": "Audio laden…",
 		"downloading": "Downloaden…",
 		"download": "Downloaden",
 		"imageLoadError": "Kon afbeelding niet laden: {{error}}",
 		"loadingImage": "Afbeelding laden…",
-		"videoLoadError": "Kon video niet laden: {{error}}",
-		"loadingVideo": "Video laden…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "Video openen {{name}}",
+		"openAudioAria": "Audio openen {{name}}"
 	},
 	"media": {
 		"buttons": {

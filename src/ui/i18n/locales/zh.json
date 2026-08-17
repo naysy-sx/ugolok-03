@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "无法加载音频：{{error}}",
 		"loadingVoice": "正在加载语音消息…",
-		"loadingAudio": "正在加载音频…",
 		"downloading": "下载中…",
 		"download": "下载",
 		"imageLoadError": "图片加载失败：{{error}}",
 		"loadingImage": "正在加载图片…",
-		"videoLoadError": "视频加载失败：{{error}}",
-		"loadingVideo": "正在加载视频…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "打开视频 {{name}}",
+		"openAudioAria": "打开音频 {{name}}"
 	},
 	"media": {
 		"buttons": {

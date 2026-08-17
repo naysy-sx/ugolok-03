@@ -14,8 +14,9 @@ import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupId
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { addComment, getCommentsTree, countCommentsByPost, compareComments } from "../../domain/content/comments.js";
 import { mediaClassesByPost } from "../../domain/content/media-index.js";
-import { collectPostScope } from "../../domain/media/scope.js";
+import { collectPostScope, findRefPosition } from "../../domain/media/scope.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
+import { refFromAttachment } from "../../domain/media/media-ref.js";
 import { openMedia } from "../signals/media.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
@@ -426,7 +427,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	);
 }
 
-function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, postAuthorPubkey, limiter, onChanged, depth, highlightCommentId }) {
+function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, postId, postAuthorPubkey, limiter, onChanged, depth, highlightCommentId, onOpenAttachment }) {
 	const [replying, setReplying] = useState(false);
 	const isOwnComment = comment.authorPubkey === ownerPubkey;
 	const isTarget = comment.id === highlightCommentId;
@@ -451,7 +452,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					</header>
 					{above && (
 						<div class="cmt__media">
-							<AttachmentView attachment={above} />
+							<AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} />
 						</div>
 					)}
 					<div class="cmt__text">
@@ -460,7 +461,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					{below.length > 0 && (
 						<div class="cmt__media">
 							{below.map((a, i) => (
-								<AttachmentView key={i} attachment={a} />
+								<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} />
 							))}
 						</div>
 					)}
@@ -536,6 +537,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 								onChanged={onChanged}
 								depth={depth + 1}
 								highlightCommentId={highlightCommentId}
+								onOpenAttachment={onOpenAttachment}
 							/>
 						))}
 					</ul>
@@ -646,6 +648,20 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		}
 	}
 
+	// Этап F, F1/F2 (CONTRACTS.md/DESIGN.md "Этап F") — в отличие от кнопки
+	// (handleOpenMediaClass выше) клик по КОНКРЕТНОМУ вложению НЕ форсирует
+	// свежий getCommentsTree: если comment.attachments рендерятся вообще, tree
+	// уже загружен (CommentNode рисуется только внутри {expanded && ...}),
+	// а клик по post.attachments (всегда видимым) остаётся мгновенным, как
+	// было до этого этапа — без сетевого ожидания на каждый клик по картинке.
+	function openAttachment(attachment, sourceMeta) {
+		const refs = collectPostScope({ post, commentsTree: tree, compareSiblings: compareComments });
+		const target = refFromAttachment(attachment, sourceMeta);
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
+		openMedia({ refs, position });
+	}
+
 	const author = commentAuthorInfo(post.authorPubkey);
 
 	return (
@@ -659,6 +675,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				onOpenComments={() => setExpanded((v) => !v)}
 				mediaCounts={mediaCounts}
 				onOpenMediaClass={handleOpenMediaClass}
+				onOpenAttachment={(a) => openAttachment(a, { postId: post.id })}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {
@@ -707,6 +724,7 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 									onChanged={refreshComments}
 									depth={0}
 									highlightCommentId={highlightCommentId}
+									onOpenAttachment={openAttachment}
 								/>
 							))}
 						</ul>

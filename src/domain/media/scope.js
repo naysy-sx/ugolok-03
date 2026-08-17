@@ -12,6 +12,23 @@ export function collectFolderScope(entries, keyOf) {
                   .map(entry => refFromNode(entry.node, entry.mime, keyOf(entry), entry.size));
 }
 
+// Этап F, F1/F2 (DESIGN.md "Этап F") — позиция клика в УЖЕ построенном refs,
+// по (digest, sourceMeta), сравнение sourceMeta по значению (не по ссылке —
+// вызывающая сторона строит sourceMeta заново, не переиспользует объект
+// сборщика). Известное ограничение: тот же файл ДВАЖДЫ в ОДНОМ контейнере
+// (sourceMeta совпадёт) даёт первое вхождение — не входит в объём.
+export function findRefPosition(refs, digest, sourceMeta) {
+	return refs.findIndex((r) => r.digest === digest && sourceMetaEquals(r.sourceMeta, sourceMeta));
+}
+
+function sourceMetaEquals(a, b) {
+	const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+	for (const k of keys) {
+		if (a?.[k] !== b?.[k]) return false;
+	}
+	return true;
+}
+
 export function collectPostScope({ post, commentsTree, compareSiblings }) {
     let result = [];
     if (post.attachments) {

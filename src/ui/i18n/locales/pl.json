@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "Nie udało się wczytać dźwięku: {{error}}",
 		"loadingVoice": "Wczytywanie wiadomości głosowej…",
-		"loadingAudio": "Wczytywanie dźwięku…",
 		"downloading": "Pobieranie…",
 		"download": "Pobierz",
 		"imageLoadError": "Nie udało się wczytać obrazu: {{error}}",
 		"loadingImage": "Wczytywanie obrazu…",
-		"videoLoadError": "Nie udało się wczytać wideo: {{error}}",
-		"loadingVideo": "Wczytywanie wideo…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "Otwórz wideo {{name}}",
+		"openAudioAria": "Otwórz audio {{name}}"
 	},
 	"media": {
 		"buttons": {

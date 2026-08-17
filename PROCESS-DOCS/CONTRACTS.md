@@ -17007,3 +17007,109 @@ Chrome-сессии зависал на `readyState=0` даже для `blob:`-U
 корректны; впечатление — деградация media-пайплайна конкретно этого
 браузерного процесса, не баг кода. Не перепроверено в свежем окне
 браузера (открытый пункт пользователю).
+
+## Медиа-подсистема — Этап F (вложения на потоковый путь)
+
+### `src/domain/media/scope.js` [C, точечное дополнение]
+
+```js
+/** Позиция клика в уже построенном refs — по (digest, sourceMeta),
+ *  сравнение sourceMeta по значению (не по ссылке). -1, если не найдено. */
+export function findRefPosition(refs, digest, sourceMeta)
+```
+
+Известное ограничение (DESIGN.md "Этап F, F1/F2"): один и тот же файл
+дважды в ОДНОМ И ТОМ ЖЕ контейнере (сообщении/посте/комментарии) даёт
+совпадающий `(digest, sourceMeta)` — находится первое вхождение. Не
+входит в объём (дедупликация клика — не задача этого этапа).
+
+### `src/ui/components/attachment-view.jsx` [C]
+
+```js
+export default function AttachmentView({ attachment, onOpen })
+```
+
+`onOpen(attachment)` — новый проп, ЕДИНСТВЕННЫЙ канал открытия
+плеера/просмотрщика; компонент сам НЕ строит `openMedia` и не знает
+про scope (DESIGN.md "Этап F, F1/F2"). `ImageAttachment` — без
+изменений в загрузке (eager, E2E-шифрование), меняется только источник
+клика. `VideoAttachment`/`AudioAttachment` (не-voice) — БЕЗ `useEffect`/
+сети вовсе: кликabельная строка иконка+имя+размер (тот же паттерн, что
+`FileAttachment`), клик → `onOpen(attachment)`. Голосовые
+(`attachment.voice===true`) — БЕЗ изменений, остаются в eager-ветке
+`AudioAttachment` (F-AT-08, MEDIA-SPEC.md §1.4 — не в плейлисте).
+
+i18n: `attachment.loadingVideo`/`videoLoadError`/`loadingAudio` —
+УДАЛЕНЫ (мертвы — video больше не имеет состояния загрузки в пузыре
+вовсе, `loadingAudio` был для не-voice ветки, которой больше нет;
+`audioLoadError`/`loadingVoice` остаются — voice-ветка не тронута).
+Новые: `attachment.openVideoAria`/`openAudioAria` (`"Открыть видео/аудио
+{{name}}"`) — единственный текст новых превью (иконка+имя+размер уже
+есть через `formatFileSize`, отдельная видимая подпись не нужна).
+
+### Подключение (стыковка, прецедент Этапов B4/B5/C3/D3/E3)
+
+**`chat.jsx`** (personal): `openAttachment(message, attachment)` —
+`collectChatScope(messages)` → `refFromAttachment(attachment,
+{msgId: message.id})` → `findRefPosition` → `openMedia({refs, position})`.
+`MessageBubble` получает новый проп `onOpenAttachment(message,
+attachment)`; сама передаёт `onOpen={() => onOpenAttachment(message,
+attachment)}` в оба вызова `<AttachmentView>` (above/below).
+
+**`channel-chat.jsx`**: та же схема, `messages` уже в локальном
+состоянии компонента — `openAttachment` строится и используется прямо
+там же, без проброса пропа наружу.
+
+**`post-card.jsx`/`CommentNode` (channel.jsx)**: `PostWithComments`
+уже держит `tree` (комментарии, ленивая загрузка по `expanded` —
+Этап 69). В отличие от Этапа E3's кнопки (которая форсирует свежий
+`getCommentsTree` НЕЗАВИСИМО от `expanded`, т.к. счётчик на кнопке
+обещает медиа из ВСЕХ комментариев) — клик по КОНКРЕТНОМУ вложению не
+форсирует ничего: `collectPostScope({post, commentsTree: tree,
+compareSiblings: compareComments})` на уже загруженном (возможно
+пустом, если `!expanded`) `tree`. Синхронно, без сетевого ожидания —
+сохраняет прежнее мгновенное поведение клика по картинке (было так до
+этого этапа). `onOpenAttachment(attachment, sourceMeta)` — новая
+функция в `PostWithComments`, пробрасывается в `PostCard` (для
+post.attachments, `sourceMeta={postId: post.id}`) и рекурсивно в
+каждый `CommentNode` (для comment.attachments, `sourceMeta=
+{commentId: comment.id}`).
+
+### `src/domain/files/chunk-cache.js` [C]
+
+```js
+/** 3-й параметр (необязательный) — {pin: true} исключает key из цикла
+ *  вытеснения по объёму (Set закреплённых ключей). Без pin — поведение
+ *  ИДЕНТИЧНО прежнему (регрессия существующих тестов подтверждает noop
+ *  для незакреплённого пути). */
+function put(key, bytes, { pin = false } = {})
+```
+
+### `src/domain/files/player-session.js` [C, точечная правка]
+
+`loadChunk(index)`: `cache.put(key, bytes, { pin: index === 0 })` —
+закрепляет ровно чанк 0 (DESIGN.md "Этап F, F3" — Θ(1) переоткрытие
+файла независимо от того, сколько чанков загружено после).
+
+### `src/domain/files/player-bridge.js` [C, точечная правка]
+
+`DEFAULT_CACHE_BUDGET_BYTES`: `32*1024*1024` → `2_621_440` (=`(k+3)·C`
+при `C=512КиБ, k=2`, ALGO.md §3.4's собственный расчёт буквально).
+
+### Тесты (до кода)
+
+- `scope.js`: `findRefPosition` — находит верную позицию по совпадению
+  digest+sourceMeta; -1 при отсутствии; различает элементы с одним
+  digest, но разным sourceMeta (два разных сообщения, тот же файл).
+- `chunk-cache.js`: НОВЫЕ тесты на `pin` — закреплённый ключ переживает
+  вытеснение, которое иначе снесло бы его (объём/LRU-порядок это не
+  спасло бы); незакреплённые продолжают вытесняться как раньше;
+  ВСЯ существующая сюита (regression) остаётся зелёной без изменений
+  (подтверждает noop при `pin` не переданном).
+- `player-session.js`: чанк 0 остаётся в кэше после загрузки МНОГИХ
+  последующих чанков, суммарно превышающих бюджет — обычный (не
+  нулевой) чанк на той же дистанции вытесняется, чанк 0 — нет.
+- `attachment-view.jsx`/подключение в 4 местах — без юнит-теста (тонкий
+  рендер-слой + стыковка сигналов, прецедент D3/D4/E3), приёмка —
+  живая проверка (видео из чата открывается и перематывается БЕЗ
+  полной загрузки — по объёму сетевого трафика, критерий 7.7).

@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "Não foi possível carregar o áudio: {{error}}",
 		"loadingVoice": "Carregando mensagem de voz…",
-		"loadingAudio": "Carregando áudio…",
 		"downloading": "Baixando…",
 		"download": "Baixar",
 		"imageLoadError": "Não foi possível carregar a imagem: {{error}}",
 		"loadingImage": "Carregando imagem…",
-		"videoLoadError": "Não foi possível carregar o vídeo: {{error}}",
-		"loadingVideo": "Carregando vídeo…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "Abrir vídeo {{name}}",
+		"openAudioAria": "Abrir áudio {{name}}"
 	},
 	"media": {
 		"buttons": {

@@ -12,7 +12,12 @@ import { createChunkCache } from "./chunk-cache.js";
 // файл) — ключи кэша уже пространственно разделены manifest.blobSha256
 // (player-session.js), общий бюджет просто означает, что холодные файлы
 // вытесняются раньше при нехватке места, а не то, что они конфликтуют.
-const DEFAULT_CACHE_BUDGET_BYTES = 32 * 1024 * 1024; // 32 МБ
+// Этап F, F3 (DESIGN.md/CONTRACTS.md "Этап F, F3", ALGO.md §3.4) — было 32 МБ
+// (LRU без понятия "окно"). При C=512КиБ, k=2: (k+3)·C = 2 621 440 байт
+// (=2.5 МиБ) — не оптимизация скорости, освобождение памяти на телефоне;
+// чанк 0 закреплён отдельно (player-session.js's loadChunk), переживает
+// вытеснение независимо от бюджета.
+const DEFAULT_CACHE_BUDGET_BYTES = 2_621_440; // 2.5 МиБ = (k+3)·C, C=512КиБ, k=2
 const sharedCache = createChunkCache(DEFAULT_CACHE_BUDGET_BYTES);
 
 const registry = new Map(); // manifestDigest -> { manifest, session }

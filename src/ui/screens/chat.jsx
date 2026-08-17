@@ -53,9 +53,9 @@ import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import FilePicker from "../components/file-picker.jsx";
 import Screen from "../components/screen.jsx";
 import { openMedia } from "../signals/media.js";
-import { collectChatScope } from "../../domain/media/scope.js";
+import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
-import { classOf } from "../../domain/media/media-ref.js";
+import { classOf, refFromAttachment } from "../../domain/media/media-ref.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
@@ -635,6 +635,19 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		openMedia({ refs, position });
 	}
 
+	// Этап F, F1/F2 (CONTRACTS.md/DESIGN.md "Этап F") — клик по КОНКРЕТНОМУ
+	// вложению в пузыре. sourceMeta {msgId: message.id} — тот же ключ, что уже
+	// строит collectChatScope сам (Этап A), иначе findRefPosition не найдёт
+	// совпадение (message.id — nostr event.id, НЕ message.msgId, тот другой
+	// стабильный идентификатор для edit/delete — Stage A's контракт, не бага).
+	function openAttachment(message, attachment) {
+		const refs = collectChatScope(messages);
+		const target = refFromAttachment(attachment, { msgId: message.id });
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
+		openMedia({ refs, position });
+	}
+
 	async function handleClearHistory() {
 		if (!window.confirm(t("chat.window.clearHistoryConfirm"))) return;
 		try {
@@ -804,6 +817,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
 							onEdit={isOwn ? handleEdit : undefined}
 							maxLength={MAX_MESSAGE_LENGTH}
+							onOpenAttachment={openAttachment}
 						/>
 					);
 				})}

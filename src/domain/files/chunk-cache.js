@@ -6,6 +6,10 @@
 // сторона) — разные файлы не должны делить кэш по совпавшему индексу чанка.
 export function createChunkCache(budgetBytes) {
 	const cache = new Map();
+	// Этап F, F3 (DESIGN.md "Этап F, F3") — закреплённые ключи исключены из
+	// цикла вытеснения по объёму. Пусто по умолчанию — без единого put(...,
+	// {pin:true}) поведение НЕОТЛИЧИМО от прежнего (подтверждено регрессией).
+	const pinned = new Set();
 
 	function get(key) {
 		if (!cache.has(key)) return undefined;
@@ -15,9 +19,10 @@ export function createChunkCache(budgetBytes) {
 		return bytes;
 	}
 
-	function put(key, bytes) {
+	function put(key, bytes, { pin = false } = {}) {
 		if (cache.has(key)) cache.delete(key);
 		cache.set(key, bytes);
+		if (pin) pinned.add(key);
 		let total = 0;
 		for (const entry of cache.values()) total += entry.length;
 		// cache.size > 1 — единственный оставшийся элемент не вытесняет сам
@@ -25,9 +30,16 @@ export function createChunkCache(budgetBytes) {
 		// чанков по 8 МБ" — вырожденный случай, временный перерасход лучше,
 		// чем зацикленное вытеснение до пустого кэша на каждый put).
 		while (total > budgetBytes && cache.size > 1) {
-			const oldestKey = cache.keys().next().value;
-			total -= cache.get(oldestKey).length;
-			cache.delete(oldestKey);
+			let victim;
+			for (const k of cache.keys()) {
+				if (!pinned.has(k)) {
+					victim = k;
+					break;
+				}
+			}
+			if (victim === undefined) break; // все оставшиеся записи закреплены — вытеснять нечего
+			total -= cache.get(victim).length;
+			cache.delete(victim);
 		}
 	}
 

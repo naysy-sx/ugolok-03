@@ -23,7 +23,7 @@ function formatDateTime(unixSeconds) {
 // "пост важнее комментария". Рамку/фон/тень несёт теперь общий .card на
 // обёртке PostWithComments (channel.jsx), не сама карточка — второй уровень
 // той же поверхности, а не отдельный вложенный блок.
-export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount, mediaCounts, onOpenMediaClass }) {
+export default function PostCard({ post, authorName, authorAvatar, isOwner, onArchive, onUnpublish, onDelete, onOpenComments, commentCount, mediaCounts, onOpenMediaClass, onOpenAttachment }) {
 	const { above, below } = splitBubbleAttachments(post.attachments);
 	return (
 		<article class="stack post box" style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}>
@@ -37,10 +37,10 @@ export default function PostCard({ post, authorName, authorAvatar, isOwner, onAr
 				)}
 				<span class="post__author">{authorName}</span>
 			</header>
-			{above && <AttachmentView attachment={above} />}
+			{above && <AttachmentView attachment={above} onOpen={onOpenAttachment} />}
 			<MarkdownView source={post.text} profile="rich" />
 			{below.map((a, i) => (
-				<AttachmentView key={i} attachment={a} />
+				<AttachmentView key={i} attachment={a} onOpen={onOpenAttachment} />
 			))}
 			<footer class="post__foot row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<small style={{ color: "var(--muted)" }}>{formatDateTime(post.createdAt)}</small>

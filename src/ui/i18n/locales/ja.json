@@ -432,18 +432,17 @@
 	"attachment": {
 		"audioLoadError": "音声を読み込めませんでした: {{error}}",
 		"loadingVoice": "音声メッセージを読み込み中…",
-		"loadingAudio": "音声を読み込み中…",
 		"downloading": "ダウンロード中…",
 		"download": "ダウンロード",
 		"imageLoadError": "画像を読み込めませんでした: {{error}}",
 		"loadingImage": "画像を読み込み中…",
-		"videoLoadError": "動画を読み込めませんでした: {{error}}",
-		"loadingVideo": "動画を読み込み中…",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
 			"mb": "{{count}} MB"
-		}
+		},
+		"openVideoAria": "動画を開く {{name}}",
+		"openAudioAria": "音声を開く {{name}}"
 	},
 	"media": {
 		"buttons": {

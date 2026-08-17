@@ -11,6 +11,9 @@ import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-valid
 import AttachmentTray from "./media/attachment-tray.jsx";
 import AttachmentView from "./attachment-view.jsx";
 import { splitBubbleAttachments } from "./message-bubble-attachments.js";
+import { openMedia } from "../signals/media.js";
+import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
+import { refFromAttachment } from "../../domain/media/media-ref.js";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
@@ -129,6 +132,16 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		setHasMore(more);
 	}
 
+	// Этап F, F1/F2 (CONTRACTS.md/DESIGN.md "Этап F") — та же схема, что
+	// chat.jsx, messages уже в локальном состоянии этого компонента.
+	function openAttachment(message, attachment) {
+		const refs = collectChatScope(messages);
+		const target = refFromAttachment(attachment, { msgId: message.id });
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
+		openMedia({ refs, position });
+	}
+
 	return (
 		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
@@ -166,10 +179,10 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 										/>
 									)}
 								</div>
-								{above && <AttachmentView attachment={above} />}
+								{above && <AttachmentView attachment={above} onOpen={(a) => openAttachment(m, a)} />}
 								<MarkdownView source={m.text} profile="lite" />
 								{below.map((a, i) => (
-									<AttachmentView key={i} attachment={a} />
+									<AttachmentView key={i} attachment={a} onOpen={(a) => openAttachment(m, a)} />
 								))}
 							</li>
 						);
