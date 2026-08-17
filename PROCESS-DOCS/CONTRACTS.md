@@ -16632,15 +16632,14 @@ DESIGN.md). Edge-detection: `callStart`/`callEnd` диспетчерятся Т�
 предыдущие решения этого же этапа).
 
 ```
-video-player.jsx    { mediaRef, playing, onToggle, onEnded }
-audio-player.jsx    { mediaRef, playing, onToggle, onEnded }
+video-player.jsx    { mediaRef, playing, onToggle, onEnded, compact }
+audio-player.jsx    { mediaRef, playing, onToggle, onEnded, compact }
 image-viewer.jsx    { mediaRef }                          // native <img>, без zoom/swipe (тот же отказ, что ImageModal)
-media-mini-bar.jsx  { mediaRef, cls, playing, onToggle, onRestore, onClose }
 media-overlay.jsx   — корень, читает mediaSession.value, выбирает вид
-                       по display/cls, next/prev/minimize/close — ОБЩИЙ
-                       chrome ЗДЕСЬ (не в отдельных видах — next/prev
-                       работает одинаково для всех трёх классов,
-                       media-machine.js это уже гарантирует)
+                       по cls, next/prev/minimize/close — ОБЩИЙ chrome
+                       ЗДЕСЬ (не в отдельных видах — next/prev работает
+                       одинаково для всех трёх классов, media-machine.js
+                       это уже гарантирует)
 ```
 
 **Проп называется `mediaRef`, НЕ `ref`** — найдено живой проверкой
@@ -16656,6 +16655,57 @@ Preact — таблица выше уже исправлена.
 идиом, что уже был у `file-player.jsx`/`attachment-view.jsx`, НЕ через
 `media-overlay.jsx` (он остаётся тонким диспетчером, не держит
 загрузочное состояние).
+
+### Довесок (найдено живой проверкой пользователя, после Этапа F) — `media-mini-bar.jsx` УДАЛЁН, `compact`-проп вместо отдельного компонента
+
+**Реальный баг относительно собственного критерия приёмки Этапа D**
+(SPEC §7.5, "Свёрнутое аудио продолжает играть при переходе между
+разделами"): `media-mini-bar.jsx` был ОТДЕЛЬНЫМ компонентом без
+единого `<video>`/`<audio>` внутри — переключение `display` в `"mini"`
+размонтировало `video-player.jsx`/`audio-player.jsx` целиком (Preact
+меняет ветку `if (session.display === "mini") return <MediaMiniBar
+.../>`), воспроизведение обрывалось молча. Исправлено сменой формы
+дерева `media-overlay.jsx`: теперь ОДИН `<View mediaRef={...}
+compact={isMini} .../>`, всегда смонтированный, пока сессия жива;
+`isMini` меняет ТОЛЬКО класс/обвязку обёрток (`div > div > View` —
+та же форма что в mini, что в full, Preact не считает это unmount+
+remount), контролы (mini-бар: имя+play/pause+restore+close; full:
+prev/track-of/next+minimize+close) рендерятся условно ВОКРУГ, не
+вместо `<View>`.
+
+`compact` (новый проп `video-player.jsx`/`audio-player.jsx`): убирает
+нативные `controls` (у mini-бара свои кнопки), video — маленький кадр
+через CSS (`object-fit:cover`, `.media-mini-bar-preview`, 2.5rem²),
+audio — `display:none` (воспроизведение аудио НЕ останавливается
+`display:none`, только визуально скрыт — иконка класса рядом в
+`media-overlay.jsx` сигнализирует "это аудио"). `image-viewer.jsx` —
+проп не используется (И5, картинка не сворачивается вовсе).
+
+`media-mini-bar.jsx` — файл удалён целиком (логика поглощена
+`media-overlay.jsx`).
+
+### Довесок (та же живая проверка) — автовоспроизведение при next/prev не срабатывало (Firefox/Zen)
+
+Второй реальный баг, тот же класс, что первый (недо-закрытый MEDIA-
+SPEC.md R4 "next после ended не стартует... при отказе — показать
+кнопку, не молчать"): смена `mediaRef` на `doNext`/`doPrev` роняла
+`src` в `null` → компонент рендерил СОВСЕМ ДРУГОЕ дерево (`<p>Loading
+</p>` вместо `<video>`) → старый `<video>` размонтировался, новый
+монтировался заново при готовности `src` — лишний разрыв DOM-элемента
+ровно в момент, когда автовоспроизведению и так труднее всего устоять
+(особенно у Firefox — строже Chromium к asynchronous `.play()` без
+свежего user gesture на СОВСЕМ НОВОМ элементе). Плюс `.play().catch(()
+=> {})` молча проглатывал отказ, оставляя `mediaSession.play=
+"playing"` НЕ соответствующим реальности.
+
+Исправлено (`video-player.jsx`/`audio-player.jsx`): `<video>`/`<audio>`
+остаётся смонтированным ВСЕГДА, пока нет ошибки (`src={src ?? undefined}`
+— Preact не пишет атрибут, пока не готов; "Loading" — оверлей рядом, не
+замена дерева); отказ `play()` теперь синхронизирует `mediaSession`
+через `onToggle()` — пользователь СРАЗУ видит кнопку "▶", не гадает,
+почему тишина. Полной гарантии автовоспроизведения при next/prev это
+не даёт (браузерная политика — вне контроля приложения), но устраняет
+и лишний источник разрыва, и молчаливое рассогласование состояния.
 
 `media-overlay.jsx` не рендерит ничего, если `mediaSession.value ===
 null` (И3 — allocWindow пуст, здесь — симметрично, нечего показывать).

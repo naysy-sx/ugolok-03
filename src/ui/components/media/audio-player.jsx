@@ -7,8 +7,10 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Аудио внутри медиа-сессии (Этап D) — тот же приём/те же гарантии, что
 // video-player.jsx (см. комментарий там: src через мост SW, двунаправленная
-// синхронизация playing<->нативные controls без зацикливания).
-export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded }) {
+// синхронизация playing<->нативные controls без зацикливания; довесок —
+// <audio> остаётся смонтированным при смене mediaRef, отказ play() от
+// политики автовоспроизведения синхронизирует mediaSession, не молчит).
+export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, compact }) {
 	const audioRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
@@ -32,32 +34,42 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded }) {
 	useEffect(() => {
 		const el = audioRef.current;
 		if (!el || !src) return;
-		if (playing) el.play().catch(() => {});
-		else el.pause();
+		if (playing) {
+			el.play().catch(() => {
+				if (playing) onToggle();
+			});
+		} else {
+			el.pause();
+		}
 	}, [playing, src]);
 
-	if (error) {
-		return (
-			<p role="alert" style={{ color: "#fff" }}>
-				{t("attachment.audioLoadError", { error })}
-			</p>
-		);
-	}
-	if (!src) {
-		return <p style={{ color: "#fff" }}>{t("common.loading")}</p>;
-	}
 	return (
-		<audio
-			ref={audioRef}
-			controls
-			src={src}
-			onEnded={onEnded}
-			onPlay={() => {
-				if (!playing) onToggle();
-			}}
-			onPause={() => {
-				if (playing) onToggle();
-			}}
-		/>
+		<div>
+			{error && !compact && (
+				<p role="alert" style={{ color: "#fff" }}>
+					{t("attachment.audioLoadError", { error })}
+				</p>
+			)}
+			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
+			{!error && (
+				<audio
+					ref={audioRef}
+					controls={!compact}
+					src={src ?? undefined}
+					onEnded={onEnded}
+					onPlay={() => {
+						if (!playing) onToggle();
+					}}
+					onPause={() => {
+						if (playing) onToggle();
+					}}
+					// compact (свёрнутый вид) — звук продолжает играть, нативные controls
+					// скрыты (у mini-бара свои кнопки); display:none НЕ останавливает
+					// воспроизведение аудио в фоне (в отличие от video, где точно так же
+					// не останавливает — там просто нет смысла скрывать, есть картинка).
+					style={{ display: compact ? "none" : src ? undefined : "none" }}
+				/>
+			)}
+		</div>
 	);
 }

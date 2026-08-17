@@ -15,7 +15,22 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // Оба направления защищены от зацикливания: эффект ниже вызывает play()/pause()
 // ТОЛЬКО когда playing реально изменился, onPlay/onPause вызывают onToggle
 // ТОЛЬКО когда состояние ещё не совпадает.
-export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded }) {
+//
+// Довесок (найдено живой проверкой пользователя, Firefox/Zen) — MEDIA-SPEC.md
+// R4 "next после ended не стартует... при отказе — показать кнопку, не
+// молчать" был закрыт не до конца: (1) смена mediaRef на doNext/doPrev роняла
+// src в null -> компонент рендерил СОВСЕМ ДРУГОЕ дерево (<p>Loading</p> вместо
+// <video>) -> старый <video> размонтировался, новый монтировался заново при
+// готовности src — лишний разрыв DOM-элемента ровно в тот момент, когда
+// автовоспроизведению и так труднее всего устоять. Теперь <video> остаётся
+// СМОНТИРОВАННЫМ всегда (src=undefined, пока не готов — Preact не пишет
+// атрибут вовсе), "Loading" — оверлей поверх, не замена дерева. (2) play()
+// мог отклониться политикой автовоспроизведения браузера — .catch(()=>{})
+// молча проглатывал это, оставляя mediaSession.play="playing" НЕ
+// соответствующим реальности (кнопка/индикатор молча врали). Теперь отказ
+// синхронизирует состояние сессии через onToggle — пользователь СРАЗУ видит
+// кнопку "▶", не гадает, почему тишина.
+export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, compact }) {
 	const videoRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
@@ -39,33 +54,42 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded }) {
 	useEffect(() => {
 		const el = videoRef.current;
 		if (!el || !src) return;
-		if (playing) el.play().catch(() => {});
-		else el.pause();
+		if (playing) {
+			el.play().catch(() => {
+				if (playing) onToggle();
+			});
+		} else {
+			el.pause();
+		}
 	}, [playing, src]);
 
-	if (error) {
-		return (
-			<p role="alert" style={{ color: "#fff" }}>
-				{t("attachment.videoLoadError", { error })}
-			</p>
-		);
-	}
-	if (!src) {
-		return <p style={{ color: "#fff" }}>{t("common.loading")}</p>;
-	}
 	return (
-		<video
-			ref={videoRef}
-			controls
-			src={src}
-			onEnded={onEnded}
-			onPlay={() => {
-				if (!playing) onToggle();
-			}}
-			onPause={() => {
-				if (playing) onToggle();
-			}}
-			style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }}
-		/>
+		<div style={{ position: "relative" }}>
+			{error && !compact && (
+				<p role="alert" style={{ color: "#fff" }}>
+					{t("attachment.videoLoadError", { error })}
+				</p>
+			)}
+			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
+			{!error && (
+				<video
+					ref={videoRef}
+					controls={!compact}
+					src={src ?? undefined}
+					onEnded={onEnded}
+					onPlay={() => {
+						if (!playing) onToggle();
+					}}
+					onPause={() => {
+						if (playing) onToggle();
+					}}
+					style={
+						compact
+							? { width: "100%", height: "100%", objectFit: "cover", display: src ? "block" : "none" }
+							: { maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: src ? "block" : "none" }
+					}
+				/>
+			)}
+		</div>
 	);
 }

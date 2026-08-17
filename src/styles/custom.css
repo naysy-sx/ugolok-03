@@ -2324,12 +2324,34 @@ button:has(> .icon),
 	padding: var(--space-2xs) var(--space-s);
 	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 	max-width: 20rem;
+	/* Довесок — раньше задавалось инлайн-стилем на отдельном компоненте
+	   (media-mini-bar.jsx, ныне удалён); .media-overlay.jsx общий div больше
+	   так не делает, перенесено сюда. */
+	--gap: var(--space-s);
+	align-items: center;
 }
 
 .media-mini-bar-name {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Довесок — mini больше не отдельный компонент без медиа-элемента внутри
+   (найдено живой проверкой: "свёрнутое" не играло вовсе), .media-overlay.jsx
+   держит <video>/<audio> смонтированным всегда, эта зона — просто маленькая
+   рамка под него (видео) либо пустая (аудио — сам audio-элемент invisible,
+   иконка рядом уже сигналит класс). */
+.media-mini-bar-preview {
+	width: 2.5rem;
+	height: 2.5rem;
+	flex-shrink: 0;
+	overflow: hidden;
+	border-radius: var(--radius);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklch, var(--fg), transparent 90%);
 }
 
 /* ================================================================== *
