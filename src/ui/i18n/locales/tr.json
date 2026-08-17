@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Oynat",
+			"pause": "Duraklat",
+			"next": "Sonraki",
+			"prev": "Önceki",
+			"minimize": "Küçült",
+			"restore": "Genişlet",
+			"trackOf": "{{total}} içinden {{current}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "köke taşındı (senkronizasyon çakışması)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "{{count}} öğe çöp kutusuna taşınsın mı?",
 		"purgeConfirm": "Kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
 		"sharedFolderDefaultName": "Paylaşılan klasör ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Oynatıcı",
-		"noPreview": "Bu dosya türü için önizleme yok ({{mime}}).",
-		"unknownType": "bilinmeyen tür"
 	},
 	"profile": {
 		"server": {

@@ -6237,3 +6237,63 @@ Worker) → C3 (подключение в files.jsx/uploadAll, putFilesStreaming
 частично — флэт-память подтверждена, буквальные 2 ГБ упёрлись в
 ограничение тестового Chrome-профиля, не приложения). Дальше по
 MEDIA-SPEC.md — этап D (сессия и микроприложения плеера).
+
+## Медиа-подсистема — Этап D (сессия и микроприложения) ЗАКРЫТ
+
+1. D1-D2: resource-owner.js (ref-counting по мультимножеству
+   digest'ов), media-url.js (acquire/release поверх существующего
+   player-bridge.js + прямая object-URL для картинок). [W]-задачи,
+   9 + 6 тестов.
+2. D3: ui/signals/media.js (dispatch поверх transition/allocWindow,
+   effect() на callState с edge-detection для И2), четыре компонента
+   (video/audio/image/mini-bar) + media-overlay.jsx — сборка Claude
+   напрямую (прецедент B4/B5/C3: склейка/интеграция). 8 тестов на
+   сигналы.
+3. Найден при сборке: экспорта mediaEnded не было в исходном списке
+   SPEC §3.5 — <video onEnded> нечем было дёргать. Добавлен, задокум.
+4. auth.js::lock() — closeMedia() первой строкой (ключи файлов
+   плейлиста не переживают блокировку).
+5. D4: app.jsx (<MediaOverlay/> после <CallOverlay/>, z-index 190),
+   CSS, 12 локалей (media.player.*).
+6. D6: attachment-view.jsx (клик по картинке → openMedia вместо
+   ImageModal), files.jsx (клик по файлу → openMedia через новый
+   async openEntry). files.jsx ПЕРЕСМОТРЕН на реализации — план
+   ждал collectFolderScope(currentEntries), но currentEntries.value
+   плоская проекция (нет entry.node), а MediaRef.key нележив —
+   сузил до одиночного MediaRef с mime/name/size из манифеста (как
+   attachment-view.jsx). file-player.jsx удалён (мёртвый код),
+   image-modal.jsx оставлен (sidebar-profile-card.jsx, аватар не
+   MediaRef-адресуем).
+7. РЕГРЕССИЯ 1856/1856, build 848,22 КБ gzip — зелёные.
+8. ЖИВАЯ ПРОВЕРКА, инцидент: клик по картинке — крах
+   "Cannot read properties of undefined (reading 'digest')".
+   Причина — проп `ref` зарезервирован Preact'ом (форвардинг
+   DOM-ссылки), компонент получал undefined молча. Переименовано в
+   `mediaRef` во всех 5 файлах (image-viewer/video-player/audio-
+   player/media-mini-bar/media-overlay), CONTRACTS.md исправлен.
+9. Второй баг, найден тестом (не живой проверкой): releaseMediaUrlHandle
+   использовал pending.then(cleanup) без await — Promise.then()
+   всегда откладывает в микротаску, даже на уже решённом промисе;
+   handleRangeRequest успевал проверить состояние моста ДО очистки.
+   Исправлено — функция стала async.
+10. Живая проверка после фикса: b4tester/b4tester2 оказались
+    залогинены под паролем, которого нет ни в PROCESS-DOCS, ни в
+    памяти — случайная жёсткая перезагрузка разлогинила. Не стал
+    угадывать пароль (правило 9a), создал 2 новых тестовых
+    аккаунта (d1tester/d2tester). Личный чат → клик по вложению-
+    картинке → MediaOverlay открылся, картинка видна, консоль
+    чиста. Закрытие ✕ и Escape — оба работают. Файлы → двойной
+    клик по файлу → тот же MediaOverlay через files.jsx::openEntry.
+    Видео/аудио bidirectional play/pause НЕ проверены живьём (нет
+    тестового медиафайла со звуком/видео) — полагаюсь на модульные
+    тесты media-url.test.js/ui-signals-media.test.js.
+
+DoD:
+- [x] тесты этапа зелёные
+- [x] полная регрессия зелёная (1856/1856)
+- [x] адверсарный заход — живая проверка нашла 2 реальных бага
+      (ref-проп, async release), оба закрыты
+- [x] PLAN.md/CONTRACTS.md/DESIGN.md/log.md обновлены
+- [ ] коммит
+
+Дальше по MEDIA-SPEC.md — этап E (кнопки и mime в дереве файлов).

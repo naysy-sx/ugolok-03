@@ -16500,3 +16500,234 @@ DoD (буквально §7.4):
       обычном браузере, если нужна буквальная галочка.
 - [x] CONTRACTS.md/PLAN.md/log.md обновлены
 - [x] коммит (c263ba7)
+
+## Медиа-подсистема — Этап D (сессия и микроприложения)
+
+Алгоритмическая задача (13a-б) — формализация в DESIGN.md "Медиа-
+подсистема — Этап D" ДО тестов/кода. Автомат (`media-machine.js`) уже
+построен и исчерпывающе проверен этапом A — здесь ТОЛЬКО сессия вокруг
+него, ресурсы, DOM-мост и замена двух старых просмотрщиков.
+
+**Уточнение контракта против буквального текста SPEC §3.6**: там
+`owner.sync(desiredPositions, playlist)` — но уже реализованный этапом
+A `allocWindow(state, playlist, budgetBytes)` возвращает МАССИВ
+DIGEST'ОВ (`digests.push(playlist.items[j].digest)`), не позиций.
+Позиции этим проходом НЕ меняются (правило 13 — контракт этапа A
+неизменяем без отдельного явного решения, а менять здесь незачем: вся
+нужная информация — в digest'ах). `resourceOwner.sync` принимает
+РЕЗУЛЬТАТ `allocWindow` буквально (массив digest'ов, с повторами —
+мультимножество), плюс `playlist` — для разрешения НОВОГО digest'а в
+`MediaRef` при первом `acquire`.
+
+### `src/domain/media/adapters/resource-owner.js` [C]
+
+```js
+export function createResourceOwner({ acquire, release })
+// acquire(ref: MediaRef) — вызывается РОВНО ОДИН раз на digest, когда
+//   счётчик переходит 0 → >0 (не на каждое вхождение в желаемый набор)
+// release(digest: string) — РОВНО ОДИН раз, когда счётчик падает до 0
+//   (принимает digest, НЕ ref — к моменту release плейлист, из которого
+//   он появился, мог уже смениться, ref мог "устареть"/пропасть)
+
+owner.sync(desiredDigests, playlist)
+// desiredDigests: string[] — буквально то, что вернул allocWindow
+// (мультимножество — считает повторы, не Set)
+owner.releaseAll()
+```
+
+Реализация — счётчик по digest (Утв. 7/ALGO §4.4), `Map<digest,
+number>`. Разность мультимножеств: то, что было `>0` и ушло из
+`desiredDigests` — `release`; то, что появилось впервые (`have===0`
+перед обновлением) — `acquire`. `playlist.items.find(r => r.digest
+=== digest)` для разрешения новых digest'ов — окно по построению
+маленькое (`windowByBudget(..., maxSpan=3)` для картинок, 1 элемент
+для audio/video), `O(n)`-поиск в маленьком окне не требует индекса.
+
+### `src/domain/media/adapters/media-url.js` [C]
+
+```js
+export async function acquireMediaUrl(ref, { serverUrl, fetchImpl } = {})
+// -> { kind: "bridge", src: string } | { kind: "object-url", url: string }
+// МЕМОИЗИРОВАНО по ref.digest — повторный вызов на уже acquired/в
+// процессе digest НЕ повторяет сеть/регистрацию, возвращает тот же
+// promise/результат. Это позволяет и resourceOwner (владение
+// жизненным циклом), и view-компоненту (D3, чтение src для рендера)
+// звать ОДНУ И ТУ ЖЕ функцию без двойного счёта — единственный
+// РЕАЛЬНЫЙ acquire/release держит resourceOwner, компонент только
+// читает уже (или почти) готовый результат.
+
+export async function releaseMediaUrlHandle(digest)
+// unregisterPlayerFile/revokeObjectURL по СОХРАНЁННОМУ при acquire
+// виду — вызывается ТОЛЬКО resourceOwner.release, не компонентом.
+// ASYNC (найдено тестом, не в исходном плане контракта): Promise.then()
+// ВСЕГДА откладывает колбэк в микрозадачу, даже на уже готовом промисе
+// (гарантия Promises/A+) — синхронной версии "снять регистрацию прямо
+// сейчас" не существует в принципе, если release зовётся, пока acquire
+// ещё может быть в полёте. Функция возвращает promise, чтобы вызывающая
+// сторона (тесты — обязательно; resourceOwner.release — по желанию,
+// fire-and-forget допустим) могла дождаться реального завершения
+// очистки, не угадывая порядок микрозадач.
+```
+
+video/audio → `registerPlayerFile(ref.digest, {manifest, fileKey:
+ref.key, serverUrl})` (мост уже построен и работает, `player-bridge.js`
+— НЕ переписывается), `src = /files-content/${ref.digest}`. image →
+`getRange(manifest, ref.key, 0, ref.size, {serverUrl})` (eager, тот же
+приём, что `file-player.jsx` уже делает для картинок) +
+`URL.createObjectURL`. Манифест — `getManifest(ref.digest, {serverUrl})`
+(уже кэширует через `getCachedManifest`/`putCachedManifest`, тот же
+путь, не новая стоимость).
+
+### `src/ui/signals/media.js` [C]
+
+```js
+export const mediaSession;  // signal(MediaState & {playlist} | null)
+export function openMedia({ refs, position, dedupe })
+export function mediaNext(), mediaPrev(), mediaToggle(), mediaSeek(t)
+export function mediaMinimize(), mediaRestore(), closeMedia()
+export function mediaEnded()  // НАЙДЕНО при сборке D3, не в исходном
+// списке SPEC §3.5 — <video>/<audio> onEnded обязаны дойти до автомата
+// (doEnded уже готов с этапа A), без этого экспорта событию EVENTS.ended
+// неоткуда прийти.
+```
+
+`MEDIA_WINDOW_BUDGET_BYTES = 16 * 1024 * 1024` — продуктовое решение
+PM (в исходных документах числа нет, тот же класс решения, что
+`MAX_ATTACHMENTS_PER_MESSAGE` на этапе B4). Внутри — `playlistRef`
+(снимок вне сигнала, SPEC §3.3 "копируется при открытии"), `dispatch`
+зовёт `transition` + `resourceOwner.sync(allocWindow(...), playlistRef)`
++ на `close` (`next === null`) — `playlistRef = null` (§3.5 "ключи не
+переживают закрытие сессии").
+
+Подписка на `callState` — через `effect()` (`@preact/signals`, НОВЫЙ
+для проекта паттерн подписки на сигнал вне компонента — обоснование в
+DESIGN.md). Edge-detection: `callStart`/`callEnd` диспетчерятся ТОЛЬКО
+на границе неактивен↔активен (`callState.name` ∉/∈ `{IDLE,ENDED}`), не
+на каждое внутреннее изменение FSM звонка.
+
+### `src/ui/signals/auth.js::lock()` [C] — точечная правка
+
+`closeMedia()` первой строкой, перед существующим `clearMemoryCache()`
+(SPEC §3.5 "Обязательно"). Импорт `media.js` в `auth.js` не создаёт
+цикл (`media.js` не импортирует `auth.js` — `openMedia` получает уже
+разрешённые `MediaRef`).
+
+### D5 — гашение устаревших `seek`: ОСОЗНАННО ПРОПУЩЕНО
+
+Обоснование — DESIGN.md "D5". Предпосылка гонки (ALGO §4.5) уже снята
+на обоих уровнях, где могла бы жить: транспорт (`requestId`-корреляция
+в `player-bridge.js`, построена раньше) и состояние (`transition` —
+чистая синхронная функция, гонки обгонять нечего). Строить
+неиспользуемый монотонный счётчик — против правила "не проектировать
+под гипотетическое требование". Возврат к этому пункту — если/когда
+появится собственный (не нативный) JS-driven scrubber.
+
+### `src/ui/components/media/` — D3 [явно НЕ через воркер, решение PM]
+
+**Маршрутизация**: несмотря на пометку [W] в MEDIA-SPEC.md, четыре
+вида пишутся Claude напрямую — тот же прецедент, что уже применён в
+этапах B4/B5/C3 этой сессии (стыковка/интеграция с реальным
+управлением `<video>`/`<audio>` через mediaSession — не изолированная
+функция с полным ТЗ, а компонент, завязанный на состояние сессии и
+предыдущие решения этого же этапа).
+
+```
+video-player.jsx    { mediaRef, playing, onToggle, onEnded }
+audio-player.jsx    { mediaRef, playing, onToggle, onEnded }
+image-viewer.jsx    { mediaRef }                          // native <img>, без zoom/swipe (тот же отказ, что ImageModal)
+media-mini-bar.jsx  { mediaRef, cls, playing, onToggle, onRestore, onClose }
+media-overlay.jsx   — корень, читает mediaSession.value, выбирает вид
+                       по display/cls, next/prev/minimize/close — ОБЩИЙ
+                       chrome ЗДЕСЬ (не в отдельных видах — next/prev
+                       работает одинаково для всех трёх классов,
+                       media-machine.js это уже гарантирует)
+```
+
+**Проп называется `mediaRef`, НЕ `ref`** — найдено живой проверкой
+(не на этапе контракта): `ref` — зарезервированное имя в Preact
+(форвардинг ссылки на DOM-узел), JSX-атрибут `<Comp ref={x}>` НЕ
+доходит до компонента как обычный проп — `props.ref` был `undefined`,
+крах на первом же `.digest` внутри компонента. Простое, но реальное
+несоответствие между контрактом (написан до кода) и рантаймом
+Preact — таблица выше уже исправлена.
+
+`acquireMediaUrl` вызывает КАЖДЫЙ вид САМ, в своём `useEffect`
+(`video-player.jsx`/`audio-player.jsx`/`image-viewer.jsx`) — тот же
+идиом, что уже был у `file-player.jsx`/`attachment-view.jsx`, НЕ через
+`media-overlay.jsx` (он остаётся тонким диспетчером, не держит
+загрузочное состояние).
+
+`media-overlay.jsx` не рендерит ничего, если `mediaSession.value ===
+null` (И3 — allocWindow пуст, здесь — симметрично, нечего показывать).
+
+### `src/app.jsx` — D4
+
+`<MediaOverlay />` рядом с `<CallOverlay />`, вне `.app-layout`, ПОСЛЕ
+него в порядке JSX (не критично для рендера, но отражает приоритет:
+звонок важнее). CSS: `.media-overlay { z-index: 190; }` — ниже
+`.call-overlay` (200) и `.top-corner-actions` (300), буквально SPEC
+§4 "соседство с 200, ниже 300".
+
+### D6 — снятие `FilePlayer`/`ImageModal`
+
+Сужение — DESIGN.md "D6". Реальных вызывающих мест два (третье,
+`sidebar-profile-card.jsx`, НЕ трогается — аватар не `MediaRef`, вне
+модели этой подсистемы):
+
+- `files.jsx`: **пересмотрено при реализации** (DESIGN.md "D6") —
+  `collectFolderScope` ждёт сырые CRDT-узлы (`entry.node.name.value`),
+  `currentEntries.value` в `files.jsx` — уже плоская проекция
+  (`entry.displayName`, без `.node`); плюс `MediaRef.key` не ленивый,
+  потребовал бы `getFileKeyFor` для ВСЕХ медиа-файлов папки сразу.
+  Вместо этого `openEntry` стал `async`: тот же
+  `getCachedManifest`/`getManifest`/`putCachedManifest`-путь, что уже
+  использует миниатюра (не новая сетевая стоимость на повторный клик),
+  затем `getFileKeyFor` — `mime`/`name`/`size` берутся из МАНИФЕСТА, не
+  из `entry` (узлы старой записи `mime` не несут — этап E, `E1`, ещё не
+  пройден, `entry.mime` не существует). Результат —
+  `openMedia({ refs: [{ digest: entry.blob, key: fileKey, mime:
+  manifest.mime, name: manifest.name, size: manifest.size, sourceKind:
+  "node", sourceMeta: { nodeId: entry.id } }], position: 0 })` —
+  одиночный `MediaRef`, собран литералом (не через `refFromNode` —
+  форма не подходит), без scope. Полноценный playlist по папке —
+  отдельная задача, не в этом проходе.
+- `attachment-view.jsx`: `openMedia({ refs: [refFromAttachment(
+  attachment, sourceMeta)], position: 0 })` — ОДИН элемент, без сбора
+  scope поста/чата/канала (то — этап F, дословно в MEDIA-SPEC.md).
+  Поведение пользователя не меняется (клик — один вид), меняется
+  только механизм (единая сессия вместо локального `useState`).
+
+**Только `FilePlayer` удалён целиком** (`file-player.jsx` — файл,
+после миграции `files.jsx` нигде не импортируется). `ImageModal`
+(`image-modal.jsx`) — ОСТАЁТСЯ, живой компонент: `sidebar-profile-
+card.jsx` (просмотр СВОЕГО аватара) сознательно не мигрирован (см.
+выше — аватар вне модели `MediaRef`), это его единственный оставшийся
+потребитель. `ImageAttachment`'s `showModal`-ветка (`attachment-
+view.jsx`) снята вместе с локальным `useState` (тот же порядок, что
+`AttachmentPreview`/`pending-attachment.js` на этапе B4).
+
+### Тесты (до кода)
+
+`tests/media-resource-owner.test.js` — `sync` считает
+acquire/release РОВНО по границам счётчика (не на каждое вхождение),
+дедуп повторного digest в желаемом наборе, скачок между
+непересекающимися окнами (ALGO §4.4), `releaseAll`.
+
+`tests/media-url.test.js` — `acquireMediaUrl` через мок `fetchImpl`
+(тот же приём, что `files-content.test.js::makeFakeBlossom`): video/
+audio → `{kind:"bridge", src}` + реально зарегistрирован в
+`player-bridge.js` (проверяется `handleRangeRequest` после
+`acquireMediaUrl`); image → `{kind:"object-url", url}`; повторный
+вызов на тот же digest — НЕ повторяет сеть (счётчик вызовов
+`fetchImpl`); `releaseMediaUrlHandle` реально снимает регистрацию
+(`handleRangeRequest` после release — `unknown-digest`).
+
+`tests/ui-signals-media.test.js` — `openMedia`→`mediaSession.value`
+соответствует `transition`; `closeMedia` обнуляет и зовёт `release`
+на все живые digest'ы; подписка на `callState` — edge-detection
+(имитация `OUTGOING_RINGING→CONNECTING→CONNECTED` даёт РОВНО один
+`callStart`); `lock()` вызывает `closeMedia` до `clearMemoryCache`
+(порядок проверяется мок-функциями с меткой времени вызова).
+
+Компоненты (D3/D4) — без теста (тонкий рендер-слой, прецедент всей
+этой сессии).

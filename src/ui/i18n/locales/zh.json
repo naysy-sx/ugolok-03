@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "播放",
+			"pause": "暂停",
+			"next": "下一个",
+			"prev": "上一个",
+			"minimize": "最小化",
+			"restore": "展开",
+			"trackOf": "第 {{current}} / 共 {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "已移动到根目录（同步冲突）",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "将 {{count}} 个对象移动到回收站？",
 		"purgeConfirm": "永久删除？此操作不可撤销。",
 		"sharedFolderDefaultName": "共享文件夹（{{pubkey}}）"
-	},
-	"filePlayer": {
-		"ariaLabel": "播放器",
-		"noPreview": "此文件类型（{{mime}}）没有预览。",
-		"unknownType": "未知类型"
 	},
 	"profile": {
 		"server": {

@@ -53,7 +53,7 @@ import IconGlobe from "../icons/globe.jsx";
 import IconPeople from "../icons/people.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
-import FilePlayer from "../components/file-player.jsx";
+import { openMedia } from "../signals/media.js";
 import { t, errorMessage as translateErrorMessage } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
@@ -175,7 +175,6 @@ export default function Files() {
 	const [error, setError] = useState("");
 	const [searchInput, setSearchInput] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
-	const [playingDigest, setPlayingDigest] = useState(null);
 	const containerRef = useRef(null);
 
 	// 6.7 (сужение MVP, CONTRACTS.md) — "Полученные доли" ОТДЕЛЬНЫЙ раздел,
@@ -456,13 +455,37 @@ export default function Files() {
 		setRenamingId(null);
 	}
 
-	function openEntry(entry) {
+	// Этап D медиа-подсистемы — заменяет FilePlayer/playingDigest. Одиночный
+	// MediaRef (не через collectFolderScope — форма entries здесь плоская,
+	// не CRDT-узел с .name.value, DESIGN.md "D6" разбирает подробно; полный
+	// playlist по папке — отдельная задача). mime/name/size — ТОЛЬКО из
+	// манифеста (узлы старой записи mime не несут, этап E ещё не пройден;
+	// тот же кэш getCachedManifest/putCachedManifest, что уже использует
+	// миниатюра выше — не новая сетевая стоимость на повторный клик).
+	async function openEntry(entry) {
 		if (entry.kind === "dir") {
 			openFolder(entry.id);
 			setSelected(new Set());
 			return;
 		}
-		setPlayingDigest(entry.blob);
+		try {
+			let manifest = await getCachedManifest(ownerPubkey, entry.blob);
+			if (!manifest) {
+				manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+				await putCachedManifest(ownerPubkey, entry.blob, manifest);
+			}
+			const fileKey = await getFileKeyFor(entry.blob);
+			if (!fileKey) {
+				setError(t("chat.window.fileKeyNotFoundError"));
+				return;
+			}
+			openMedia({
+				refs: [{ digest: entry.blob, key: fileKey, mime: manifest.mime, name: manifest.name, size: manifest.size, sourceKind: "node", sourceMeta: { nodeId: entry.id } }],
+				position: 0,
+			});
+		} catch (err) {
+			setError(translateErrorMessage(err));
+		}
 	}
 
 	async function handleDelete(ids) {
@@ -783,7 +806,6 @@ export default function Files() {
 			</div>
 			)}
 		</Screen>
-		{playingDigest && <FilePlayer digest={playingDigest} ownerPubkey={ownerPubkey} onClose={() => setPlayingDigest(null)} />}
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}

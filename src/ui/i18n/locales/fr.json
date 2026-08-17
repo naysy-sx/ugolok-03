@@ -445,6 +445,17 @@
 			"mb": "{{count}} Mo"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Lire",
+			"pause": "Pause",
+			"next": "Suivant",
+			"prev": "Précédent",
+			"minimize": "Réduire",
+			"restore": "Agrandir",
+			"trackOf": "{{current}} sur {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "déplacé à la racine (conflit de synchronisation)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "Déplacer {{count}} éléments vers la corbeille ?",
 		"purgeConfirm": "Supprimer définitivement ? Cette action est irréversible.",
 		"sharedFolderDefaultName": "Dossier partagé ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Lecteur",
-		"noPreview": "Aucun aperçu disponible pour ce type de fichier ({{mime}}).",
-		"unknownType": "type inconnu"
 	},
 	"profile": {
 		"server": {

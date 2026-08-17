@@ -3,7 +3,8 @@ import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import ImageModal from "./image-modal.jsx";
+import { openMedia } from "../signals/media.js";
+import { refFromAttachment } from "../../domain/media/media-ref.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
@@ -42,7 +43,12 @@ const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconM
 // Картинка — EAGER-загрузка+расшифровка (не может быть иначе: E2E-шифрование не даёт
 // частичной/потоковой подгрузки, нужно скачать и расшифровать ПОЛНОСТЬЮ, прежде чем
 // показать хоть пиксель) — но картинки ожидаются видимыми сразу в бабле (в отличие от
-// видео, см. VideoAttachment), клик -> полноэкранная модалка (image-modal.jsx).
+// видео, см. VideoAttachment), клик -> openMedia (Этап D медиа-подсистемы, DESIGN.md
+// "D6" — заменяет локальную ImageModal; одиночный элемент, без сбора scope поста/
+// чата/канала этим проходом — то отдельная задача). Инлайновое превью в бабле
+// продолжает идти через attachment-memory-cache.js (эта функция), fullscreen-вид —
+// через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша одной
+// и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
 function ImageAttachment({ attachment }) {
 	// Ленивая инициализация из общего слоя памяти (attachment-memory-cache.js) —
 	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
@@ -50,7 +56,6 @@ function ImageAttachment({ attachment }) {
 	// раньше заставлял пере-качивать и пере-расшифровывать уже виденное).
 	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.manifestDigest) ?? null);
 	const [error, setError] = useState("");
-	const [showModal, setShowModal] = useState(false);
 
 	useEffect(() => {
 		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
@@ -91,15 +96,12 @@ function ImageAttachment({ attachment }) {
 	}
 
 	return (
-		<>
-			<img
-				src={url}
-				alt={attachment.name || ""}
-				onClick={() => setShowModal(true)}
-				style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
-			/>
-			{showModal && <ImageModal src={url} alt={attachment.name} onClose={() => setShowModal(false)} />}
-		</>
+		<img
+			src={url}
+			alt={attachment.name || ""}
+			onClick={() => openMedia({ refs: [refFromAttachment(attachment, {})], position: 0 })}
+			style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
+		/>
 	);
 }
 

@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "再生",
+			"pause": "一時停止",
+			"next": "次へ",
+			"prev": "前へ",
+			"minimize": "最小化",
+			"restore": "展開",
+			"trackOf": "{{total}}件中{{current}}件目"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "ルートに移動しました（同期の競合）",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "{{count}} 件のオブジェクトをゴミ箱に移動しますか？",
 		"purgeConfirm": "完全に削除しますか？ この操作は取り消せません。",
 		"sharedFolderDefaultName": "共有フォルダ（{{pubkey}}）"
-	},
-	"filePlayer": {
-		"ariaLabel": "プレーヤー",
-		"noPreview": "このファイル形式（{{mime}}）のプレビューはありません。",
-		"unknownType": "不明な形式"
 	},
 	"profile": {
 		"server": {

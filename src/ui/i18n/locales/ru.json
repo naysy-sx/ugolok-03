@@ -445,6 +445,17 @@
 			"mb": "{{count}} МБ"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Воспроизвести",
+			"pause": "Пауза",
+			"next": "Следующий",
+			"prev": "Предыдущий",
+			"minimize": "Свернуть",
+			"restore": "Развернуть",
+			"trackOf": "{{current}} из {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "перемещено в корень (конфликт синхронизации)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "Переместить {{count}} объектов в корзину?",
 		"purgeConfirm": "Удалить безвозвратно? Это необратимо.",
 		"sharedFolderDefaultName": "Общая папка ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Плеер",
-		"noPreview": "Нет предпросмотра для этого типа файла ({{mime}}).",
-		"unknownType": "неизвестный тип"
 	},
 	"profile": {
 		"server": {

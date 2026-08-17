@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Play",
+			"pause": "Pause",
+			"next": "Next",
+			"prev": "Previous",
+			"minimize": "Minimize",
+			"restore": "Expand",
+			"trackOf": "{{current}} of {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "moved to root (sync conflict)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "Move {{count}} items to trash?",
 		"purgeConfirm": "Delete permanently? This is irreversible.",
 		"sharedFolderDefaultName": "Shared folder ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Player",
-		"noPreview": "No preview available for this file type ({{mime}}).",
-		"unknownType": "unknown type"
 	},
 	"profile": {
 		"server": {

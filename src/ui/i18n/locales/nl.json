@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Afspelen",
+			"pause": "Pauzeren",
+			"next": "Volgende",
+			"prev": "Vorige",
+			"minimize": "Minimaliseren",
+			"restore": "Uitvouwen",
+			"trackOf": "{{current}} van {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "verplaatst naar hoofdmap (synchronisatieconflict)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "{{count}} items naar de prullenbak verplaatsen?",
 		"purgeConfirm": "Definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
 		"sharedFolderDefaultName": "Gedeelde map ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Speler",
-		"noPreview": "Geen voorbeeld beschikbaar voor dit bestandstype ({{mime}}).",
-		"unknownType": "onbekend type"
 	},
 	"profile": {
 		"server": {

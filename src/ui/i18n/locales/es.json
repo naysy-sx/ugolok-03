@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Reproducir",
+			"pause": "Pausa",
+			"next": "Siguiente",
+			"prev": "Anterior",
+			"minimize": "Minimizar",
+			"restore": "Expandir",
+			"trackOf": "{{current}} de {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "movido a la raíz (conflicto de sincronización)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "¿Mover {{count}} elementos a la papelera?",
 		"purgeConfirm": "¿Eliminar definitivamente? Esta acción es irreversible.",
 		"sharedFolderDefaultName": "Carpeta compartida ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Reproductor",
-		"noPreview": "No hay vista previa disponible para este tipo de archivo ({{mime}}).",
-		"unknownType": "tipo desconocido"
 	},
 	"profile": {
 		"server": {

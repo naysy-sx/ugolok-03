@@ -445,6 +445,17 @@
 			"mb": "{{count}} MB"
 		}
 	},
+	"media": {
+		"player": {
+			"play": "Abspielen",
+			"pause": "Pause",
+			"next": "Weiter",
+			"prev": "Zurück",
+			"minimize": "Verkleinern",
+			"restore": "Erweitern",
+			"trackOf": "{{current}} von {{total}}"
+		}
+	},
 	"files": {
 		"status": {
 			"repaired": "in den Stammordner verschoben (Synchronisationskonflikt)",
@@ -496,11 +507,6 @@
 		"moveManyToTrashConfirm": "{{count}} Objekte in den Papierkorb verschieben?",
 		"purgeConfirm": "Endgültig löschen? Dies ist unwiderruflich.",
 		"sharedFolderDefaultName": "Freigegebener Ordner ({{pubkey}})"
-	},
-	"filePlayer": {
-		"ariaLabel": "Player",
-		"noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar ({{mime}}).",
-		"unknownType": "unbekannter Typ"
 	},
 	"profile": {
 		"server": {

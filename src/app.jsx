@@ -33,6 +33,7 @@ import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { pushToast } from "./ui/signals/toasts.js";
 import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
+import MediaOverlay from "./ui/components/media/media-overlay.jsx";
 import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
@@ -230,6 +231,14 @@ function MainShell() {
 			    block-элемент в потоке, сжимающий .app-layout по высоте, а не
 			    перекрывающий его (иначе плашка накрывала бы верх сайдбара). */}
 			<CallOverlay />
+			{/* Этап D медиа-подсистемы — MediaOverlay ВНЕ .app-layout по тому же
+			    принципу, что CallOverlay: полноэкранный просмотр/свёрнутая плашка
+			    должны пережить переход между разделами (MEDIA-SPEC.md §7.5), не
+			    размонтируясь вместе с текущим экраном. z-index ниже CallOverlay
+			    (custom.css: .media-overlay 190 < .call-overlay 200 < .top-corner-actions
+			    300) — звонок приоритетнее (И2 и так приостанавливает воспроизведение,
+			    но чтобы вплывающий чат-звонок не оказался ПОД просмотрщиком). */}
+			<MediaOverlay />
 			{/* Ограничение ширины на широких мониторах (пользователь: 3440px —
 			    приложение расползалось на всю ширину) + якорь позиционирования
 			    для .top-corner-actions ниже — раскладка/размер в custom.css

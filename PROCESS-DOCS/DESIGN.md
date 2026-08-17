@@ -6318,3 +6318,205 @@ Transferable-оптимизация (zero-copy `ArrayBuffer` в воркер и 
       стадий (тест с моками, детерминированными задержками на
       "шифрование"/"отправку", БЕЗ реального сетевого замера — реальный
       замер отдельно, живой проверкой на нескольких файлах поменьше).
+
+## Медиа-подсистема — Этап D: сессия и микроприложения (13b, алгоритмическая задача)
+
+Источник: `MEDIA-SPEC.md` §3.5/3.6/2.3/2.4, §4 "Этап D", `MEDIA-MATH.md`
+Утв. 5–7 (уже формализованы этапом A в `media-machine.js` — здесь НЕ
+переформализуются), `MEDIA-ALGO.md` §4.4 (окно ресурсов), §4.5 (гашение
+устаревших seek). Автомат (`transition`/`allocWindow`) уже построен и
+исчерпывающе проверен (этап A) — этап D строит СЕССИЮ вокруг него
+(сигнал, владение ресурсами, DOM-мост) и заменяет два существующих
+ad-hoc просмотрщика.
+
+### `domain/media/adapters/resource-owner.js` — счётчик ссылок, буквально Утв. 7/ALGO §4.4
+
+    createResourceOwner({ acquire, release }):
+      counts ← Map<digest, number>()   // ссылок на этот digest СЕЙЧАС
+
+      sync(desiredRefs):                 // desiredRefs — MediaRef[] (allocWindow(...).map(p → playlist.items[p]))
+        desiredCounts ← подсчёт digest → сколько раз встречается в desiredRefs
+        для (digest, n) в counts, где n>0 и digest ∉ desiredCounts:
+          release(digest); counts.delete(digest)      // ушёл из окна целиком
+        для (digest, want) в desiredCounts:
+          have ← counts.get(digest) ?? 0
+          если want > have: acquire(digest) — вызывается ОДИН РАЗ (не want-have
+            раз): acquire — идемпотентная РЕГИСТРАЦИЯ ресурса, не счётчик
+            использований самого ресурса — counts здесь ведёт КОЛИЧЕСТВО
+            ПОЗИЦИЙ плейлиста, ссылающихся на digest (для будущего release
+            на противоположном переходе), а не количество открытых хендлов
+          counts.set(digest, want)
+
+      releaseAll(): release каждый digest с counts>0, counts.clear()
+
+Инвариант (Утв. 7, "живые ресурсы — в точности те, у кого счётчик
+положителен"): после `sync`, `{digest : counts.get(digest) > 0}` ===
+`{digest(r) : r ∈ desiredRefs}` — тест проверяет это на случайных
+последовательностях `sync` (не только соседних `allocWindow`, но и
+скачках — ALGO §4.4 "при скачке окна могут не пересекаться").
+Дедупликация (Утв.7 контекст, MATH §3.4): один и тот же digest на ДВУХ
+позициях окна (аудио/видео-дедуп playlist.js уже даёт это на уровне
+allocWindow — playlist САМ не кладёт дубликаты audio/video в `items`,
+но REF на один digest всё равно теоретически может встретиться дважды
+в изображениях, где `dedupeClasses` их не убирает) — `sync` обязан
+считать это ОДНОЙ логической позицией для acquire, но не терять её при
+частичном release (частный случай общей ref-count логики выше, отдельно
+не тестируется — покрыт тем же тестом на подсчёт).
+
+### `domain/media/adapters/media-url.js` — MediaRef → src, БЕЗ новой логики моста
+
+Мост «страница↔SW» (`player-bridge.js`, `registerPlayerFile`/
+`unregisterPlayerFile`) уже построен и работает (`file-player.jsx`,
+`FilePlayer`). `media-url.js` — единственная точка ЕГО ВЫЗОВА для
+медиа-сессии, буквально тот же порядок операций, что `file-player.jsx`
+уже соблюдает (регистрация ДО src — "гонка 3", CONTRACTS.md/DESIGN.md
+прошлых этапов, НЕ переформулируется здесь):
+
+    acquireMediaUrl(ref):                      // ref: MediaRef
+      если ref.mime это audio/video:
+        registerPlayerFile(ref.digest, { manifest: <построить из ref>, fileKey: ref.key, serverUrl })
+        → { kind: "bridge", src: `/files-content/${ref.digest}` }
+      если ref.mime это image:
+        bytes ← getRange(<manifest>, ref.key, 0, ref.size, { serverUrl })   // eager, как FilePlayer уже делает для картинок
+        url ← URL.createObjectURL(new Blob([bytes], { type: ref.mime }))
+        → { kind: "object-url", url }
+
+    releaseMediaUrl(ref, handle):
+      kind==="bridge": unregisterPlayerFile(ref.digest)
+      kind==="object-url": URL.revokeObjectURL(handle.url)
+
+Это ADAPTER (§2.2 SPEC — "не знает про домен", здесь наоборот: знает
+ТОЛЬКО про домен/browser API, не про Preact) — `resourceOwner`
+(созданный в `ui/signals/media.js`) передаёт СЮДА `acquire`/`release`
+при конструировании: `createResourceOwner({ acquire: acquireMediaUrl,
+release: releaseMediaUrl })`, храня возвращённый `handle` рядом (Map
+digest→handle, тот же модуль, не в `resource-owner.js` — тот
+универсален и не обязан знать форму `handle`).
+
+Манифест для `registerPlayerFile`/`getRange` — `MediaRef` не несёт
+полный `Manifest` (только `digest`/`key`/`mime`/`name`/`size`), а
+обеим функциям он нужен целиком (`chunks[]`, `chunkSize`,
+`blobSha256`). Решение: `getManifest(ref.digest, {serverUrl})` внутри
+`acquireMediaUrl` (сетевой вызов, но `getManifest` уже кэширует через
+`getCachedManifest`/`putCachedManifest`, тот же путь, что
+`file-player.jsx` — не новая стоимость, тот же паттерн).
+
+### `ui/signals/media.js` — сборка сигнала
+
+    mediaSession = signal(null)   // MediaState & {playlist} | null
+    let playlistRef = null        // Playlist — снимок, живёт вне сигнала (SPEC §3.3: "копируется при открытии")
+
+    function dispatch(event, payload):
+      если mediaSession.value === null && event не "open": return   // нет сессии — нечего гасить кроме open
+      next ← transition(mediaSession.value && {...mediaSession.value, playlist: undefined}, event, payload, playlistRef)
+      mediaSession.value = next && { ...next, playlist: playlistRef }
+      resourceOwner.sync(next ? allocWindow(next, playlistRef, BUDGET).map(p => playlistRef.items[p]) : [])
+      если next === null: playlistRef = null   // ссылки на ключи не переживают close (§3.5 "обязательно")
+
+    openMedia({ refs, position, dedupe }):
+      playlistRef = buildPlaylist(refs, { dedupeClasses: dedupe ?? ["audio","video"] })
+      dispatch("open", { cls: classOf(playlistRef.items[position].mime), position })
+
+    mediaNext/mediaPrev/mediaToggle/mediaMinimize/mediaRestore/closeMedia/mediaSeek(t)
+      — тонкие dispatch(...) обёртки, буквально по EVENTS (этап A)
+
+**Подписка на `callState`** (НОВЫЙ для этого проекта паттерн — ни один
+существующий `ui/signals/*.js` не подписывается на ДРУГОЙ сигнал через
+`effect()` из `@preact/signals`; здесь он ровно то, для чего задуман):
+
+    let wasCallActive = false
+    effect(() => {
+      const active = callState.value.name !== "IDLE" && callState.value.name !== "ENDED"
+      if (active !== wasCallActive) {
+        dispatch(active ? "callStart" : "callEnd", null)
+        wasCallActive = active
+      }
+    })
+
+Edge-detection (`wasCallActive` сравнение, не безусловный dispatch на
+каждое изменение `callState`) — намеренно: `callState` меняется МНОГО
+раз внутри одного звонка (`OUTGOING_RINGING`→`CONNECTING`→`CONNECTED`),
+`callStart` должен уйти в автомат ОДИН раз на границе
+неактивен→активен, не на каждый внутренний переход FSM звонка
+(избыточные `callStart` были бы безвредны — таблица `transition`
+идемпотентна на `callStart` из `suspended`, но дают шум в тестах/логах
+без всякой пользы).
+
+### `lock()` — closeMedia ДО очистки кэшей (буквально §3.5 "Обязательно")
+
+`ui/signals/auth.js::lock()` — единственное место, где нужна правка:
+`closeMedia()` первой строкой, ПЕРЕД существующим `clearMemoryCache()`.
+Порядок импорта: `auth.js` → `media.js` — ЦИКЛА НЕТ (`media.js` не
+импортирует `auth.js`; `openMedia` получает уже РАЗРЕШЁННЫЕ `MediaRef`
+от вызывающей стороны — приватный ключ ей не нужен, домен уже
+предоставляет `ref.key` заранее, см. `refFromAttachment`/`refFromNode`
+из этапа A).
+
+### D5 — гашение устаревших `seek`: ОСОЗНАННО НЕ строится отдельным механизмом
+
+`MEDIA-ALGO.md` §4.5 описывает гонку "ответ на ранний запрос приходит
+позже позднего и перетирает его" — проверка показала, что для ЭТОЙ
+архитектуры предпосылка гонки уже отсутствует на ОБОИХ уровнях, где
+она могла бы жить:
+- **транспорт** (`service-worker.js`↔`player-bridge.js`): УЖЕ
+  корректирует конкурентные запросы по `requestId` — каждый Range-фетч
+  получает СВОЙ promise, резолвящийся ИМЕННО его ответом; более ранний
+  запрос, ответивший позже, не может "перетереть" более поздний — они
+  адресованы разным ожидающим переменным, не общей mutable-ячейке;
+- **состояние** (`mediaSeek(t)` → `transition(...,"seek",...)`) —
+  ЧИСТАЯ синхронная функция (тот же автомат, что этап A), внутри
+  которой физически нет async-работы, которую можно было бы обогнать.
+
+Значит монотонный жетон поколений здесь СТРОИТЬ НЕ НА ЧЕМ — это была
+бы защита от гонки, которой в данной конкретной сборке компонентов не
+существует (нативные `<video>`/`<audio controls>`, D3, сами управляют
+своим `currentTime`/буферингом через браузерный Range-механизм, не
+через кастомный JS-стейт, который эта гонка могла бы испортить).
+Строить неиспользуемую инфраструктуру "на будущее" — против правила
+проекта (не проектировать под гипотетические требования). Если позже
+появится СВОЙ JS-driven scrubber (не нативный `<input type=range>`
+поверх `currentTime`, к примеру), гонка actuallyу станет реальной —
+тогда и добавляется жетон, с тестом на конкретный код, который его
+требует. Здесь — явный отказ, не забытый пункт.
+
+### D6 — снятие `FilePlayer`/`ImageModal`: сужение объёма переноса вызовов
+
+Реальных вызывающих мест два (третье, `sidebar-profile-card.jsx`'s
+`ImageModal` для АВАТАРА пользователя — НЕ трогается: аватар не
+`MediaRef`, не из `manifestDigest`-адресуемого хранилища через этот
+домен, вне модели плейлиста этой подсистемы):
+
+- `files.jsx` (`FilePlayer` по клику на файл) — **пересмотрено при
+  реализации**: изначальный план ("`collectFolderScope(currentEntries,
+  ...)` ничего не стоит") не учёл двух реальных препятствий, найденных
+  при попытке написать код, а не на этапе контракта — (а) форма
+  данных не совпадает: `collectFolderScope` (этап A) ждёт СЫРЫЕ
+  CRDT-узлы (`entry.node.name.value`), `currentEntries.value` в
+  `files.jsx` — уже спроецированные плоские объекты
+  (`entry.displayName`, без `.node`); (б) `MediaRef.key` — не
+  ленивый: `collectFolderScope`/`refFromNode` требуют готовый ключ
+  файла СРАЗУ при построении refs, то есть пришлось бы резолвить
+  `getFileKeyFor` для ВСЕХ медиа-файлов папки ДО открытия, даже тех,
+  что пользователь не смотрит — прямо против духа ленивого
+  `resourceOwner` (только текущее окно). И то, и другое решаемо, но
+  это отдельный, самостоятельный объём работы, не "бесплатное"
+  расширение в рамках D6. Решение: **files.jsx получает ту же
+  сузку, что attachment-view.jsx** — одиночный `MediaRef`
+  (собранный литералом на месте, `refFromNode` не годится по форме,
+  см. (а)), без scope. Полноценный playlist по папке — отдельная
+  задача, не блокирует закрытие этапа D.
+- `attachment-view.jsx` (`ImageModal` по клику на картинку) —
+  переводится на `openMedia({ refs: [refFromAttachment(attachment)],
+  position: 0 })` — ОДИН элемент, БЕЗ сбора scope поста/чата/канала
+  этим проходом. `MEDIA-SPEC.md` САМ относит переработку
+  `attachment-view.jsx` под полноценный scope к этапу F (F1/F2:
+  "видео/аудио... превращаются в превью с кликом в openMedia",
+  "изображения в пузыре: клик → openMedia С ОБЛАСТЬЮ, а не локальная
+  модалка" — дословно "с областью" вынесено В F, не в D). Строить
+  здесь scope-проводку через четыре разных render-места
+  (`message-bubble.jsx`/`post-card.jsx`/`channel.jsx`/`channel-chat.jsx`)
+  — объём этапа F, не D; здесь `ImageModal` заменяется на
+  `openMedia`-based просмотрщик КОРРЕКТНО (единая сессия, минимизация,
+  единообразный UI), но без next/prev — ровно то же поведение
+  пользователя, что было (один клик — один вид), другой механизм под
+  капотом.

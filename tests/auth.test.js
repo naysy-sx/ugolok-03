@@ -11,6 +11,7 @@ import {
 	isIdle,
 } from "../src/ui/signals/auth.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../src/ui/attachment-memory-cache.js";
+import { mediaSession, openMedia } from "../src/ui/signals/media.js";
 
 test("исходное состояние: все сигналы пусты", () => {
 	lock(); // сброс на случай порядка выполнения тестов
@@ -46,6 +47,13 @@ test("lock: чистит кэш расшифрованных вложений в
 	putMemoryCachedAttachment("some-sha256", new Uint8Array([1, 2, 3]), "image/png");
 	lock();
 	assert.equal(getMemoryCachedUrl("some-sha256"), undefined);
+});
+
+test("lock: закрывает медиа-сессию (closeMedia) — SPEC §3.5 'ключи файлов в плейлисте не переживают блокировку'", () => {
+	openMedia({ refs: [{ digest: "d1", key: new Uint8Array([1]), mime: "image/png", name: "d1", size: 10, sourceKind: "attachment", sourceMeta: {} }], position: 0 });
+	assert.notEqual(mediaSession.value, null);
+	lock();
+	assert.equal(mediaSession.value, null);
 });
 
 test("login: masterSecret/dbKey детерминированы (та же деривация, что этап 8)", () => {
