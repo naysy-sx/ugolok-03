@@ -17411,3 +17411,178 @@ full" на старой форме дал `UNMOUNT id=X` + `MOUNT id=Y` — ба
 же кнопка на новой форме — ноль сообщений в обе стороны. Файл удалён
 после проверки, в git не попадал (не создавать по образцу постоянных
 файлов проекта — он временный, вне `src/`, не тестовая сюита `tests/`).
+
+## MEDIA-OVERLAY-UI.md — Этап 3 (жесты и анимация открытия)
+
+Формализация — DESIGN.md "MEDIA-OVERLAY-UI.md, этап 3". Тесты
+математики жеста — `tests/media-swipe-gesture.test.js` (14, все
+зелёные, ДО правки `media-overlay.jsx`). Воркер не привлекался
+(§3 spec: "Воркеру не отдавать ничего из этапа 3").
+
+### `src/domain/media/swipe-gesture.js` [C, новый файл]
+
+Чистые функции без DOM (тот же слой, что `playlist.js`/
+`media-machine.js`, но НЕ автомат — паттерна transition() здесь нет,
+это просто арифметика над dx/dy, не пространство состояний):
+`resolveAxis(dx, dy)` → `"horizontal"|"vertical"|null` (порог 8px,
+диагональ — больший по модулю компонент, `>=` даёт horizontal при
+равенстве — детерминировано, не мигает); `elasticDx(dx, atEdge)` →
+×0.3 на краю плейлиста; `horizontalCommit(dx, widthPx)` →
+`"prev"|"next"|null` при пороге 16% ширины (`widthPx<=0` → null,
+защита от деления на 0); `verticalPull(dy)` → `[0,1]` линейно на
+260px, свайп вверх (`dy<0`) прижат к 0; `verticalCommit(dy)` →
+`dy>110`. Решение о commit — ТОЛЬКО на `pointerup` (не в процессе
+драга) для обеих осей — сознательное упрощение относительно
+буквального "по достижении порога" в §3.1 про audio/video: срабатывание
+ВНУТРИ драга потребовало бы флага "уже сработало в этом жесте" (риск
+двойного mediaNext при продолжении движения после порога) — приёмка на
+отпускании даёт тот же результат для типичного жеста ценой одного кадра
+задержки, не срабатывает дважды по построению.
+
+### `src/ui/signals/media-origin.js` [C, новый файл]
+
+`setMediaOrigin(rect)` / `consumeMediaOrigin()` — модуль-`let`, НЕ
+сигнал (не должен вызывать реактивных обновлений, читается ровно один
+раз за сессию). `openMedia()` не меняет сигнатуру (медиа-подсистема,
+"Правки media-machine.js/playlist.js/scope.js... не реализуются", а
+добавление параметра в `openMedia` касалось бы контракта D, не только
+UI-довеска) — геометрию источник клика кладёт СЮДА непосредственно
+перед вызовом того колбэка, что в итоге вызовет `openMedia`.
+
+Три точки записи (из шести мест вызова `openMedia`, см. §3.3 spec):
+- `attachment-view.jsx`: общий helper `openWithOrigin(e, attachment,
+  onOpen)` — `setMediaOrigin(e.currentTarget.getBoundingClientRect())`
+  затем `onOpen(attachment)`; подключён во ВСЕХ трёх кликабельных
+  превью (`ImageAttachment`, `MediaPreview` — audio-без-voice и video).
+  Одна правка в ОДНОМ файле закрывает ТРИ места вызова `openMedia`
+  (channel.jsx/chat.jsx/channel-chat.jsx `openAttachment` — все идут
+  через `AttachmentView`), правка самих трёх экранов не нужна.
+- `files.jsx`: `onDblClick` на `.file-row-name` — захват ТОЛЬКО при
+  `entry.kind !== "dir"` (у навигации в папку своей сессии нет; если
+  захватывать всегда, чужая геометрия папки пережила бы клик и была бы
+  ошибочно подхвачена СЛЕДУЮЩИМ открытием медиа без своего захвата,
+  напр. кнопкой класса).
+- Кнопки класса (`media-buttons.jsx`, `openChatMediaClass`/
+  `openFolderMediaClass`) геометрию НЕ пишут — по spec явно "обычное
+  проявление" без анимации.
+
+Самоочищение: `media-overlay.jsx` читает `consumeMediaOrigin()` (и
+обнуляет) на КАЖДОМ переходе сессии `null -> not null`, независимо от
+того, была запись или нет (`null` — валидный результат, просто нет
+анимации). Не обнаруженный на практике устаревший край: если вызывающая
+сторона записала origin, но её собственный код упал/вернулся раньше
+`openMedia` (напр. `findRefPosition` вернул `-1`) — запись переживает
+до следующего РЕАЛЬНОГО открытия и будет ошибочно использована им
+(анимация "разлетится" из неправильной точки). Последствие чисто
+косметическое (не крах, не потеря данных), вероятность мала
+(рассинхрон scope/target) — осознанно не чинится в этом проходе.
+
+### `src/ui/components/media/media-overlay.jsx` [C, крупная правка]
+
+**Открытие/закрытие (§3.3).** Эффект с зависимостью `[!!session]`
+(НЕ `[session]` — тот меняется на КАЖДЫЙ dispatch, `justOpened`
+всё равно фильтрует по факту перехода `null->not null` через
+`prevSessionExistedRef`, но `[!!session]` дешевле — не перезапускается
+на next/prev/toggle). При `justOpened && display==="full"`:
+`consumeMediaOrigin()`; если rect есть — WAAPI на
+`.media-overlay-viewport` (`viewportRef`) от `translate(dx,dy)
+scale(0.35)` + `opacity:0` к `translate(0,0) scale(1)` + `opacity:1`,
+420мс, `cubic-bezier(0.22,0.61,0.36,1)` (литерал — WAAPI не читает CSS
+custom properties), где `dx/dy` — разница центров rect'а источника и
+текущего viewport'а (НЕ разница размеров — scale всегда буквально
+0.35, как в spec, не пропорция размеров миниатюры). rect источника
+сохраняется в `originRectRef` для симметричного закрытия. Если rect'а
+нет (кнопка класса) — без WAAPI, обычное появление.
+
+`handleClose()` заменяет прямые вызовы `closeMedia` на backdrop-click,
+viewport-click-outside, кнопке закрытия и Escape (НЕ на commit свайпа
+вниз — тот вызывает `closeMedia()` напрямую по буквальному тексту
+§3.2, визуальное сжатие там уже отыграно `--media-pull` в реальном
+времени во время драга, вторая анимация поверх избыточна). Если
+`originRectRef.current` есть — WAAPI 200мс в обратную сторону
+(`fill:"forwards"`, элемент всё равно размонтируется сразу после — не
+на что "приземляться"), иначе просто `opacity:1→0`. `closeMedia()`
+вызывается в `animation.finished.then(...).catch(() => {})` — не
+раньше кадра, отмена анимации при досрочном размонтировании не роняет.
+`prefers-reduced-motion: reduce` (проверка `matchMedia`, не CSS —
+WAAPI не подчиняется глобальному CSS-глушителю анимаций из
+`minimal.css`) — пропускает WAAPI целиком в обе стороны,
+`closeMedia()`/появление сразу.
+
+**Жесты (§3.1/§3.2).** `onPointerDown/Move/Up/Cancel` на КОРНЕ
+`.media-overlay` (не только на viewport) — вертикальный pull-to-close
+должен работать и над хромом/фоном, не только над кадром. Игнор
+жестов, начавшихся на `e.target.closest("button, video, audio")` —
+буквально по spec (перемотка/громкость нативных `controls` не должна
+листать). `setPointerCapture` на `pointerdown`. Ось решает
+`resolveAxis` (`swipe-gesture.js`) один раз за жест, дальше не
+пересматривается (ref, не state — 60 событий `pointermove` в секунду
+не должны вызывать ре-рендер компонента).
+
+Вертикаль: `--media-pull` пишется НАПРЯМУЮ в `style` корневого DOM-узла
+(`overlayRef.current.style.setProperty`), не через Preact state —
+CSS-правила `--media-pull` уже читают её (Этап 1). На `pointerup`:
+`verticalCommit(dy)` → `closeMedia()` напрямую; иначе анимированный
+возврат в 0 (transition на `--media-pull`, класс `.is-settling-pull`
+временный).
+
+Горизонталь, `cls==="image"`: три слайда в `.media-overlay-track`
+(`prevRef`/`currentRef`/`nextRef` — `stepInClass(playlist, position,
+±1)` из `playlist.js`, НЕ полный `allocWindow`-бюджет — окно жеста и
+окно ресурсов из `signals/media.js` НЕ обязаны совпадать 1-в-1;
+`maxSpan` там и здесь равны (3), при типичном бюджете 16 МиБ окна на
+практике совпадают, при их расхождении соседний слайд просто грузится
+своим собственным `acquireMediaUrl` внутри `ImageViewer` — не
+регрессия, просто чуть менее прогретый кэш). `elasticDx` на краях
+(`rank===0` для `dx>0`/`rank===total-1` для `dx<0`) пишет `--drag-px`
+на `trackRef` напрямую (та же причина, что `--media-pull`). На
+`pointerup`: нет коммита → transition `--drag-px` к 0 (`.is-settling`);
+есть коммит → transition к ПОЛНОЙ ширине viewport в сторону коммита
+(не текущий `dx` — довод до конца, ощущение завершённого перелистывания
+вместо обрыва на пороге), на `transitionend` СИНХРОННО: `mediaNext()`/
+`mediaPrev()` (сдвигает `position`, пересчитывает `prevRef/nextRef`)
+и мгновенный (`transition:none` на один кадр, класс `.is-dragging`
+затем снят на следующем `requestAnimationFrame`) сброс `--drag-px` в 0
+— тот же кадр, что и подмена refs, зрительного скачка нет (тот же
+приём, что "бесшовная карусель"). `prefers-reduced-motion` — без
+транзишна вовсе, `mediaNext`/`prev`+сброс сразу.
+
+Горизонталь, `cls!=="image"` (И-B — ленты нет): во время драга — без
+визуальной обратной связи (буквально по spec, там нет упоминания
+трансформации кадра для audio/video). На `pointerup` с коммитом:
+`mediaNext()`/`mediaPrev()` сразу, класс `.is-swapping` на
+`.media-overlay-inner` (CSS `@keyframes` `opacity 0→1`, 200мс),
+снимается по `animationend` (once) с таймерным фолбэком 220мс на
+случай отменённой анимации.
+
+Клик после драга: pointerup, где `resolveAxis` вернул НЕ `null`
+(реальный жест состоялся), помечает `didDragRef.current = true`;
+следующий синтетический `click` (браузер эмитит его после
+`pointerup` даже над элементом, у которого есть `onClick`) —
+общий `handleRootClick`/`handleViewportClick` проверяют флаг ПЕРВЫМ
+действием, сбрасывают его и выходят БЕЗ `closeMedia()` — иначе любой
+завершённый свайп (в т.ч. отменённый, ниже порога) закрывал бы
+оверлей случайным кликом по фону.
+
+**Клавиатура (§3.4).** В существующий `keydown`-эффект (уже ловит
+`Escape` → `handleClose()`, был `closeMedia()` — правится тем же
+эффектом) добавлены `ArrowLeft`→`mediaPrev`, `ArrowRight`→`mediaNext`,
+`" "` (Space) → `preventDefault()` + `mediaToggle()` (без
+`preventDefault` страница проскроллила бы под оверлеем — тот уже
+`position:fixed`, но `document.body` мог бы всё равно принять скролл
+чата под ним). Только при `display==="full"` — то же условие, что уже
+было у эффекта.
+
+### `src/styles/custom.css` [C, довесок]
+
+`.media-overlay-track`/`.media-overlay-slide` — 3-панельная карусель
+(классический приём: track `width:300%`, слайд `flex:0 0 33.3334%`,
+база `translate3d(-33.3334%, 0, 0)` центрирует средний слайд, `+
+var(--drag-px)` поверх). `.media-overlay-inner:has(.media-overlay-track)`
+— `width/height:100%` (иначе `.media-overlay-inner` авто-сайзится по
+контенту, 300%-ширины трек распёр бы его) — CSS `:has()`, тот же
+уровень современности CSS, что уже везде в модуле (`oklch`,
+`color-mix`, `backdrop-filter`). `@keyframes media-overlay-swap-fade`
+— fade для audio/video. `.media-overlay-track.is-dragging{transition:
+none}` / `.is-settling{transition:transform .42s var(--ease)}` —
+классы переключает JS, не медиа-запрос.

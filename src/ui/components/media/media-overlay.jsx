@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { mediaSession, mediaNext, mediaPrev, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../../signals/media.js";
+import { stepInClass } from "../../../domain/media/playlist.js";
+import { resolveAxis, elasticDx, horizontalCommit, verticalPull, verticalCommit } from "../../../domain/media/swipe-gesture.js";
+import { consumeMediaOrigin } from "../../signals/media-origin.js";
 import VideoPlayer from "./video-player.jsx";
 import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
@@ -12,6 +15,15 @@ import IconRestore from "../../icons/restore.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
+
+const OPEN_ANIMATION_MS = 420;
+const CLOSE_ANIMATION_MS = 200;
+const WAAPI_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)"; // == --ease (minimal.css) — WAAPI не читает custom properties
+const SWAP_FADE_FALLBACK_MS = 220; // подстраховка, если animationend не пришёл (Этап 3.1, audio/video)
+
+function prefersReducedMotion() {
+	return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 const VIEWS = { video: VideoPlayer, audio: AudioPlayer, image: ImageViewer };
 
@@ -82,14 +94,96 @@ export default function MediaOverlay() {
 	const hideTimerRef = useRef(null);
 	const infoPinnedRef = useRef(false);
 
+	// MEDIA-OVERLAY-UI.md, этап 3 — refs жеста/анимации. Всё, что двигается на
+	// каждый pointermove (--media-pull, --drag-px), пишется НАПРЯМУЮ в DOM
+	// через эти refs, в обход Preact state — ре-рендер компонента на 60
+	// событий/с не нужен и заметно лагал бы (см. CONTRACTS.md).
+	const overlayRef = useRef(null);
+	const viewportRef = useRef(null);
+	const innerRef = useRef(null);
+	const trackRef = useRef(null);
+	const originRectRef = useRef(null); // rect источника открытия — для симметричного закрытия
+	const prevSessionExistedRef = useRef(false);
+	const gestureRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, axis: null, widthPx: 0 });
+	const didDragRef = useRef(false); // подавляет "случайный" click сразу после реального свайпа
+
 	useEffect(() => {
 		infoPinnedRef.current = infoPinned;
 	}, [infoPinned]);
 
+	// §3.3 — анимация "разлёт из миниатюры". Зависимость [!!session], не
+	// [session]: последний меняется на КАЖДЫЙ dispatch (next/prev/toggle/...),
+	// а justOpened всё равно фильтрует по факту перехода null->not null —
+	// булев тумблер просто не перезапускает эффект зря на каждую навигацию.
+	useEffect(() => {
+		const justOpened = !prevSessionExistedRef.current && !!session;
+		prevSessionExistedRef.current = !!session;
+		if (!justOpened || !session || session.display !== "full") return;
+		const rect = consumeMediaOrigin();
+		originRectRef.current = rect;
+		const el = viewportRef.current;
+		if (!rect || !el || prefersReducedMotion()) return;
+		const target = el.getBoundingClientRect();
+		const dx = rect.left + rect.width / 2 - (target.left + target.width / 2);
+		const dy = rect.top + rect.height / 2 - (target.top + target.height / 2);
+		el.animate(
+			[
+				{ transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 },
+				{ transform: "translate(0, 0) scale(1)", opacity: 1 },
+			],
+			{ duration: OPEN_ANIMATION_MS, easing: WAAPI_EASE },
+		);
+	}, [!!session]);
+
+	// Закрытие — зеркально открытию (§3.3): WAAPI в обратную сторону к тому
+	// же originRect, closeMedia() ТОЛЬКО после animation.finished (иначе
+	// сессия уйдёт раньше кадра). Заменяет прямой closeMedia() на всех
+	// click-путях закрытия (backdrop/кнопка/Escape) — НЕ на commit свайпа
+	// вниз, тот уже отыграл сжатие в реальном времени через --media-pull.
+	function handleClose() {
+		const el = viewportRef.current;
+		if (!el || prefersReducedMotion()) {
+			closeMedia();
+			return;
+		}
+		const rect = originRectRef.current;
+		let keyframes;
+		if (rect) {
+			const target = el.getBoundingClientRect();
+			const dx = rect.left + rect.width / 2 - (target.left + target.width / 2);
+			const dy = rect.top + rect.height / 2 - (target.top + target.height / 2);
+			keyframes = [
+				{ transform: "translate(0, 0) scale(1)", opacity: 1 },
+				{ transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 },
+			];
+		} else {
+			keyframes = [{ opacity: 1 }, { opacity: 0 }];
+		}
+		const animation = el.animate(keyframes, { duration: CLOSE_ANIMATION_MS, easing: WAAPI_EASE, fill: "forwards" });
+		animation.finished.then(() => closeMedia()).catch(() => {});
+	}
+
+	// Клик сразу после отпускания реального свайпа (didDragRef) не должен
+	// закрывать оверлей — иначе любой завершённый (в т.ч. отменённый, ниже
+	// порога) свайп по фону читался бы ещё и как клик-закрытие.
+	function guardedClose() {
+		if (didDragRef.current) {
+			didDragRef.current = false;
+			return;
+		}
+		handleClose();
+	}
+
 	useEffect(() => {
 		if (!session || session.display !== "full") return;
 		function handleKeyDown(e) {
-			if (e.key === "Escape") closeMedia();
+			if (e.key === "Escape") handleClose();
+			else if (e.key === "ArrowLeft") mediaPrev();
+			else if (e.key === "ArrowRight") mediaNext();
+			else if (e.key === " ") {
+				e.preventDefault(); // иначе прокрутка страницы под fixed-оверлеем
+				mediaToggle();
+			}
 		}
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
@@ -154,39 +248,196 @@ export default function MediaOverlay() {
 	const hasResolution = isCurrentMeta && meta.width != null && meta.height != null;
 	const hasDuration = isCurrentMeta && meta.duration != null && Number.isFinite(meta.duration);
 
+	// §3.1, И-B — соседние позиции ТОЛЬКО для ленты изображений; stepInClass
+	// (playlist.js), не allocWindow-бюджет из signals/media.js — окно жеста и
+	// окно предзагрузки ресурсов не обязаны совпадать 1-в-1 (см. CONTRACTS.md).
+	const leftPos = session.cls === "image" ? stepInClass(session.playlist, session.position, -1) : -1;
+	const rightPos = session.cls === "image" ? stepInClass(session.playlist, session.position, +1) : -1;
+	const leftRef = leftPos === -1 ? null : session.playlist.items[leftPos];
+	const rightRef = rightPos === -1 ? null : session.playlist.items[rightPos];
+
+	// §3.1/3.2 — pointer-обработчики жеста, все на корне .media-overlay (не
+	// только на viewport: вертикальная тяга-закрытие должна работать и над
+	// хромом/фоном). Игнор жестов, начавшихся на кнопке/нативных controls —
+	// буквально по spec, иначе перемотка видео/громкость превратились бы в
+	// листание.
+	function handleGesturePointerDown(e) {
+		if (isMini) return;
+		if (e.target.closest("button, video, audio")) return;
+		const g = gestureRef.current;
+		g.active = true;
+		g.pointerId = e.pointerId;
+		g.startX = e.clientX;
+		g.startY = e.clientY;
+		g.axis = null;
+		g.widthPx = viewportRef.current?.getBoundingClientRect().width ?? 0;
+		overlayRef.current?.setPointerCapture(e.pointerId);
+		overlayRef.current?.classList.add("is-pulling"); // отключает transition на весь жест, см. custom.css
+		trackRef.current?.classList.add("is-dragging");
+		trackRef.current?.classList.remove("is-settling");
+	}
+
+	function handleGesturePointerMove(e) {
+		const g = gestureRef.current;
+		if (!g.active || e.pointerId !== g.pointerId) return;
+		const dx = e.clientX - g.startX;
+		const dy = e.clientY - g.startY;
+		if (g.axis === null) g.axis = resolveAxis(dx, dy);
+		if (g.axis === "vertical") {
+			overlayRef.current?.style.setProperty("--media-pull", String(verticalPull(dy)));
+		} else if (g.axis === "horizontal" && session.cls === "image" && trackRef.current) {
+			const atEdge = (dx > 0 && rank === 0) || (dx < 0 && rank === total - 1);
+			trackRef.current.style.setProperty("--drag-px", `${elasticDx(dx, atEdge)}px`);
+		}
+	}
+
+	function settleTrack(direction, widthPx) {
+		const el = trackRef.current;
+		if (!el) return;
+		el.classList.remove("is-dragging");
+		if (prefersReducedMotion()) {
+			el.style.setProperty("--drag-px", "0px");
+			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
+			return;
+		}
+		el.classList.add("is-settling");
+		const targetPx = direction === "next" ? -widthPx : direction === "prev" ? widthPx : 0;
+		el.style.setProperty("--drag-px", `${targetPx}px`);
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			el.removeEventListener("transitionend", finish);
+			el.classList.remove("is-settling");
+			el.classList.add("is-dragging"); // сброс без transition — тот же кадр, что смена refs
+			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
+			el.style.setProperty("--drag-px", "0px");
+			requestAnimationFrame(() => el.classList.remove("is-dragging"));
+		};
+		el.addEventListener("transitionend", finish);
+		setTimeout(finish, 500); // фолбэк, если transitionend не пришёл (напр. targetPx===0 без реального изменения)
+	}
+
+	function springBackPull() {
+		overlayRef.current?.style.setProperty("--media-pull", "0");
+	}
+
+	function playSwapFade() {
+		const el = innerRef.current;
+		if (!el || prefersReducedMotion()) return;
+		el.classList.remove("is-swapping");
+		void el.offsetWidth; // форс reflow — перезапуск CSS-анимации при быстром повторном next/prev
+		el.classList.add("is-swapping");
+		let done = false;
+		const clear = () => {
+			if (done) return;
+			done = true;
+			el.classList.remove("is-swapping");
+			el.removeEventListener("animationend", clear);
+		};
+		el.addEventListener("animationend", clear);
+		setTimeout(clear, SWAP_FADE_FALLBACK_MS);
+	}
+
+	function endGesture() {
+		gestureRef.current.active = false;
+		gestureRef.current.pointerId = null;
+		overlayRef.current?.classList.remove("is-pulling");
+		trackRef.current?.classList.remove("is-dragging"); // settleTrack() re-adds/manages it correctly if called right after
+	}
+
+	function handleGesturePointerUp(e) {
+		const g = gestureRef.current;
+		if (!g.active || e.pointerId !== g.pointerId) return;
+		const dx = e.clientX - g.startX;
+		const dy = e.clientY - g.startY;
+		const axis = g.axis;
+		const widthPx = g.widthPx;
+		endGesture();
+		if (axis === "vertical") {
+			didDragRef.current = true;
+			if (verticalCommit(dy)) closeMedia();
+			else springBackPull();
+			return;
+		}
+		if (axis === "horizontal") {
+			didDragRef.current = true;
+			let direction = horizontalCommit(dx, widthPx);
+			if (session.cls === "image") {
+				// На краю плейлиста commit по РАЗМАХУ жеста возможен (horizontalCommit
+				// не знает о rank/total), но реального перехода нет (media-machine.js
+				// уже no-op) — без этой проверки трек уезжал бы на полную ширину и
+				// на кадр показывал бы ПУСТОЙ слайд (leftRef/rightRef===null) перед
+				// откатом. На краю коммит гасится — обычная пружинка, как ниже порога.
+				const atEdge = (direction === "prev" && rank === 0) || (direction === "next" && rank === total - 1);
+				if (atEdge) direction = null;
+				settleTrack(direction, widthPx);
+			} else if (direction) {
+				(direction === "next" ? mediaNext : mediaPrev)();
+				playSwapFade();
+			}
+		}
+		// axis === null — обычный тап, didDragRef не трогаем, клик отработает сам
+	}
+
+	function handleGesturePointerCancel(e) {
+		const g = gestureRef.current;
+		if (!g.active || e.pointerId !== g.pointerId) return;
+		const wasImage = session.cls === "image";
+		const widthPx = g.widthPx;
+		endGesture();
+		springBackPull();
+		if (wasImage) settleTrack(null, widthPx);
+	}
+
 	return (
 		<div
+			ref={overlayRef}
 			class={isMini ? "media-mini-bar row" : "media-overlay"}
 			role={isMini ? "status" : "dialog"}
 			aria-modal={isMini ? undefined : "true"}
 			data-chrome={isMini ? undefined : chromeVisible ? "on" : "off"}
 			data-info={isMini ? undefined : infoPinned ? "on" : "off"}
-			onClick={isMini ? undefined : closeMedia}
-			onPointerMove={isMini ? undefined : handleChromeActivity}
-			onPointerDown={isMini ? undefined : handleChromeActivity}
+			onClick={isMini ? undefined : guardedClose}
+			onPointerMove={isMini ? undefined : (e) => { handleChromeActivity(); handleGesturePointerMove(e); }}
+			onPointerDown={isMini ? undefined : (e) => { handleChromeActivity(); handleGesturePointerDown(e); }}
+			onPointerUp={isMini ? undefined : handleGesturePointerUp}
+			onPointerCancel={isMini ? undefined : handleGesturePointerCancel}
 			onFocusIn={isMini ? undefined : handleChromeActivity}
 		>
 			{/* Первый ребёнок корня — ВСЕГДА эта пара обёрток вокруг <View>, той же
 			    формы что при isMini, что при full (см. комментарий выше компонента).
 			    Не трогать позицию/форму без крайней необходимости. */}
 			<div
+				ref={viewportRef}
 				class={isMini ? "media-mini-bar-preview" : "media-overlay-viewport"}
-				onClick={isMini ? undefined : (e) => { if (e.target === e.currentTarget) closeMedia(); }}
+				onClick={isMini ? undefined : (e) => { if (e.target === e.currentTarget) guardedClose(); }}
 			>
 				<div
+					ref={innerRef}
 					class={isMini ? undefined : "media-overlay-inner"}
 					style={isMini ? { display: "contents" } : undefined}
 					onClick={isMini ? undefined : (e) => e.stopPropagation()}
 				>
 					{session.cls === "audio" && <IconMusicNote aria-hidden="true" style={isMini ? undefined : { display: "none" }} />}
-					<View
-						mediaRef={currentRef}
-						playing={playing}
-						onToggle={mediaToggle}
-						onEnded={mediaEnded}
-						compact={isMini}
-						onMeta={isMini ? undefined : (m) => setMeta({ digest: currentRef.digest, ...m })}
-					/>
+					{!isMini && session.cls === "image" ? (
+						<div class="media-overlay-track" ref={trackRef}>
+							<div class="media-overlay-slide">{leftRef && <ImageViewer mediaRef={leftRef} />}</div>
+							<div class="media-overlay-slide">
+								<ImageViewer mediaRef={currentRef} onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })} />
+							</div>
+							<div class="media-overlay-slide">{rightRef && <ImageViewer mediaRef={rightRef} />}</div>
+						</div>
+					) : (
+						<View
+							mediaRef={currentRef}
+							playing={playing}
+							onToggle={mediaToggle}
+							onEnded={mediaEnded}
+							compact={isMini}
+							onMeta={isMini ? undefined : (m) => setMeta({ digest: currentRef.digest, ...m })}
+						/>
+					)}
 				</div>
 			</div>
 
@@ -225,7 +476,7 @@ export default function MediaOverlay() {
 									<IconMinimize />
 								</button>
 							)}
-							<button type="button" class="media-overlay-btn is-close" onClick={closeMedia} aria-label={t("common.close")}>
+							<button type="button" class="media-overlay-btn is-close" onClick={handleClose} aria-label={t("common.close")}>
 								<IconCross />
 							</button>
 						</div>

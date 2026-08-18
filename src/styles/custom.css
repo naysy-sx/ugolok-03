@@ -2628,6 +2628,90 @@ html[data-media-full] .top-corner-actions {
 }
 
 /* ================================================================== *
+ *  MEDIA-OVERLAY-UI.md, этап 3 — жесты и анимация открытия.          *
+ *  touch-action:none на корне — иначе браузерный pull-to-refresh/    *
+ *  свайп-назад конкурировал бы с нашим --media-pull/--drag-px за тот *
+ *  же тач-жест (найдено при чтении, не живой проверкой — это ровно  *
+ *  тот класс проблемы, что DoD требует ловить на реальном телефоне). *
+ * ================================================================== */
+.media-overlay {
+	touch-action: none;
+}
+
+/* Transition на СВОЙСТВАХ, которые читают --media-pull (transform/opacity),
+   не на самой custom property (та не анимируется без @property — не
+   регистрируем ради этого, transition на transform/opacity и так работает,
+   стандартный приём). .is-pulling — активный драг, JS ставит на pointerdown
+   и снимает на pointerup/cancel — без него КАЖДОЕ pointermove-присваивание
+   --media-pull запускало бы новый 0.3s transition поверх ещё не завершённого
+   предыдущего, палец бы "отставал" от кадра. */
+.media-overlay-viewport {
+	transition:
+		transform 0.3s var(--ease),
+		border-radius 0.3s var(--ease);
+}
+
+.media-overlay::before {
+	transition: opacity 0.3s var(--ease);
+}
+
+.media-overlay.is-pulling .media-overlay-viewport,
+.media-overlay.is-pulling::before {
+	transition: none;
+}
+
+/* Карусель из трёх слайдов (§3.1) — классический приём: трек 300% ширины,
+   слайд 33.3334% (=100% контейнера), база translate3d(-33.3334%,...)
+   центрирует средний слайд, --drag-px поверх во время/после жеста.
+   .media-overlay-inner:has() — авто-сайзинг по контенту (0-length CSS
+   иначе растянул бы inner до 300%-ширины трека, вслед за width:auto по
+   умолчанию) переопределяется на 100%×100% ТОЛЬКО когда внутри трек —
+   для audio/video (одиночный View) inner остаётся авто-сайзингом, как
+   было. */
+.media-overlay-inner:has(.media-overlay-track) {
+	width: 100%;
+	height: 100%;
+}
+
+.media-overlay-track {
+	--drag-px: 0px;
+	display: flex;
+	width: 300%;
+	height: 100%;
+	transform: translate3d(calc(-33.3334% + var(--drag-px)), 0, 0);
+	transition: transform 0.42s var(--ease);
+}
+
+.media-overlay-track.is-dragging {
+	transition: none;
+}
+
+.media-overlay-slide {
+	flex: 0 0 33.3334%;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+/* audio/video (И-B, без ленты) — переход между треками окрашен коротким
+   fade вместо жёсткого попкорн-скачка кадра. Класс ставит/снимает JS
+   (playSwapFade) сразу после mediaNext/Prev на свайпе. */
+@keyframes media-overlay-swap-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.media-overlay-inner.is-swapping {
+	animation: media-overlay-swap-fade 0.2s var(--ease);
+}
+
+/* ================================================================== *
  *  Экран каналов (channels.jsx) — блоки вместо табов, "Доступные" в  *
  *  постоянном aside справа (пользователь, item 8).                    *
  * ================================================================== */

@@ -3,6 +3,7 @@ import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { setMediaOrigin } from "../signals/media-origin.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
@@ -37,6 +38,17 @@ function attachmentDisplayName(attachment) {
 }
 
 const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconMusicNote, file: IconFileText };
+
+// MEDIA-OVERLAY-UI.md, этап 3.3 — точка клика (rect на момент СИНХРОННОГО
+// вызова обработчика, до открытия сессии) кладётся в media-origin.js, чтобы
+// media-overlay.jsx мог анимировать "разлёт из миниатюры". Общий helper —
+// единственное место захвата для всех трёх кликабельных превью ниже, три
+// экранных пути (chat.jsx/channel.jsx/channel-chat.jsx openAttachment) правятся
+// этим одним изменением.
+function openWithOrigin(e, attachment, onOpen) {
+	setMediaOrigin(e.currentTarget.getBoundingClientRect());
+	onOpen(attachment);
+}
 
 // Картинка — EAGER-загрузка+расшифровка (не может быть иначе: E2E-шифрование не даёт
 // частичной/потоковой подгрузки, нужно скачать и расшифровать ПОЛНОСТЬЮ, прежде чем
@@ -98,7 +110,7 @@ function ImageAttachment({ attachment, onOpen }) {
 		<img
 			src={url}
 			alt={attachment.name || ""}
-			onClick={() => onOpen(attachment)}
+			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
 			style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
 		/>
 	);
@@ -185,7 +197,7 @@ function MediaPreview({ attachment, Icon, onOpen, ariaLabelKey }) {
 			type="button"
 			class="btn--ghost media-attachment-preview row"
 			style={{ "--gap": "var(--space-s)", alignItems: "center" }}
-			onClick={() => onOpen(attachment)}
+			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
 			aria-label={t(ariaLabelKey, { name: attachment.name })}
 		>
 			<Icon aria-hidden="true" />

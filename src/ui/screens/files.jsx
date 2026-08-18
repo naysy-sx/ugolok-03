@@ -59,6 +59,7 @@ import IconPeople from "../icons/people.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import { openMedia } from "../signals/media.js";
+import { setMediaOrigin } from "../signals/media-origin.js";
 import { t, errorMessage as translateErrorMessage } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
@@ -827,7 +828,18 @@ export default function Files() {
 										</button>
 									</form>
 								) : (
-									<button type="button" class="file-row-name" onDblClick={() => openEntry(entry)}>
+									<button
+										type="button"
+										class="file-row-name"
+										onDblClick={(e) => {
+											// MEDIA-OVERLAY-UI.md, этап 3.3 — только для файлов: у навигации в
+											// папку своей медиа-сессии нет, оставлять здесь чужую геометрию
+											// нельзя (её потом ошибочно подхватил бы следующий openMedia без
+											// собственного захвата, например кнопка класса MediaButtons).
+											if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
+											openEntry(entry);
+										}}
+									>
 										{entry.displayName}
 									</button>
 								)}
