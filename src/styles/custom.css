@@ -2630,6 +2630,11 @@ html[data-media-full] .top-corner-actions {
 	object-fit: cover;
 }
 
+/* MEDIA-OVERLAY-UI.md, этап 6 — та же плотность, что остальной хром
+   оверлея (не отдельный, более "воздушный" стиль, как было). --shadow/
+   --radius-md — токены проекта вместо литералов rgba(0,0,0,.25)/
+   --radius, что были здесь с довеска Этапа D (тот писал "на скорую
+   руку", этап 6 — плановая полировка). */
 .media-mini-bar {
 	position: fixed;
 	inset-inline-end: var(--space-m);
@@ -2637,15 +2642,32 @@ html[data-media-full] .top-corner-actions {
 	z-index: 190;
 	background: var(--surface);
 	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius);
+	border-radius: var(--radius-md);
 	padding: var(--space-2xs) var(--space-s);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--shadow);
 	max-width: 20rem;
 	/* Довесок — раньше задавалось инлайн-стилем на отдельном компоненте
 	   (media-mini-bar.jsx, ныне удалён); .media-overlay.jsx общий div больше
 	   так не делает, перенесено сюда. */
 	--gap: var(--space-s);
 	align-items: center;
+	animation: media-mini-bar-in 0.3s var(--ease);
+}
+
+@keyframes media-mini-bar-in {
+	from {
+		transform: translateY(10px) scale(0.96);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
+}
+
+.media-mini-bar-info {
+	--gap: 0;
+	min-width: 0;
 }
 
 .media-mini-bar-name {
@@ -2654,14 +2676,33 @@ html[data-media-full] .top-corner-actions {
 	white-space: nowrap;
 }
 
+.media-mini-bar-time {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Уменьшенная версия .media-overlay-btn (та рассчитана на полноэкранный
+   хром, 2.5rem/1.785rem — здесь тесно) — контекстный оверрайд, не
+   отдельный класс: тот же набор кнопок (play/restore/close), просто
+   внутри мини-бара. */
+.media-mini-bar .media-overlay-btn {
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	font-size: 1rem;
+}
+
+.media-mini-bar .media-overlay-btn:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+}
+
 /* Довесок — mini больше не отдельный компонент без медиа-элемента внутри
    (найдено живой проверкой: "свёрнутое" не играло вовсе), .media-overlay.jsx
    держит <video>/<audio> смонтированным всегда, эта зона — просто маленькая
    рамка под него (видео) либо пустая (аудио — сам audio-элемент invisible,
    иконка рядом уже сигналит класс). */
 .media-mini-bar-preview {
-	width: 2.5rem;
-	height: 2.5rem;
+	width: 2.25rem;
+	height: 2.25rem;
 	flex-shrink: 0;
 	overflow: hidden;
 	border-radius: var(--radius);
@@ -2669,6 +2710,14 @@ html[data-media-full] .top-corner-actions {
 	align-items: center;
 	justify-content: center;
 	background: color-mix(in oklch, var(--fg), transparent 90%);
+}
+
+/* Этап 6 — аудио: иконка ноты на подложке акцента вместо пустой рамки
+   (видео там же показывает реальный кадр, у аудио своего превью нет —
+   раньше просто нейтральный фон, теперь сигнал класса виднее). */
+.media-mini-bar-preview.is-audio {
+	background: var(--accent);
+	color: var(--accent-contrast);
 }
 
 /* ================================================================== *

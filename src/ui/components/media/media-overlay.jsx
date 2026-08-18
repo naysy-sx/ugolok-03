@@ -14,6 +14,8 @@ import IconNavNext from "../../icons/nav-next.jsx";
 import IconMinimize from "../../icons/minimize.jsx";
 import IconRestore from "../../icons/restore.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
+import IconPlayerPlay from "../../icons/player-play.jsx";
+import IconPlayerPause from "../../icons/player-pause.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
 
@@ -92,6 +94,9 @@ export default function MediaOverlay() {
 	const [chromeVisible, setChromeVisible] = useState(true);
 	const [infoPinned, setInfoPinned] = useState(false);
 	const [meta, setMeta] = useState(null);
+	// Этап 6 — время воспроизведения в свёрнутом мини-баре ("0:12 / 1:34").
+	// Только там: в полном виде за это отвечают нативные controls (spec §6).
+	const [miniTime, setMiniTime] = useState(0);
 	const hideTimerRef = useRef(null);
 	const infoPinnedRef = useRef(false);
 
@@ -112,6 +117,10 @@ export default function MediaOverlay() {
 	useEffect(() => {
 		infoPinnedRef.current = infoPinned;
 	}, [infoPinned]);
+
+	useEffect(() => {
+		setMiniTime(0);
+	}, [currentRef?.digest]);
 
 	// Этап 4 — плёнка миниатюр докручивается к активному кадру на КАЖДУЮ
 	// смену позиции (стрелки/клавиатура/клик по самой плёнке — DoD требует
@@ -469,7 +478,7 @@ export default function MediaOverlay() {
 			    Не трогать позицию/форму без крайней необходимости. */}
 			<div
 				ref={viewportRef}
-				class={isMini ? "media-mini-bar-preview" : "media-overlay-viewport"}
+				class={isMini ? `media-mini-bar-preview${session.cls === "audio" ? " is-audio" : ""}` : "media-overlay-viewport"}
 				onClick={isMini ? undefined : withDragGuard((e) => { if (e.target === e.currentTarget) handleClose(); })}
 			>
 				<div
@@ -510,7 +519,8 @@ export default function MediaOverlay() {
 							onToggle={mediaToggle}
 							onEnded={mediaEnded}
 							compact={isMini}
-							onMeta={isMini ? undefined : (m) => setMeta({ digest: currentRef.digest, ...m })}
+							onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })}
+							onTimeUpdate={isMini ? setMiniTime : undefined}
 						/>
 					)}
 				</div>
@@ -518,14 +528,24 @@ export default function MediaOverlay() {
 
 			{isMini ? (
 				<>
-					<span class="media-mini-bar-name grow">{currentRef.name}</span>
-					<button type="button" onClick={mediaToggle} aria-label={playing ? t("media.player.pause") : t("media.player.play")}>
-						{playing ? "⏸" : "▶"}
+					<div class="media-mini-bar-info stack grow">
+						<span class="media-mini-bar-name">{currentRef.name}</span>
+						{/* Этап 6 — время только в мини-баре (в полном виде это отдают
+						    нативные controls). hasDuration уже сверен по digest —
+						    тот же флаг, что использует полный вид для панели сведений. */}
+						{hasDuration && (
+							<small class="media-mini-bar-time">
+								{formatDuration(miniTime)} / {formatDuration(meta.duration)}
+							</small>
+						)}
+					</div>
+					<button type="button" class="media-overlay-btn" onClick={mediaToggle} aria-label={playing ? t("media.player.pause") : t("media.player.play")}>
+						{playing ? <IconPlayerPause /> : <IconPlayerPlay />}
 					</button>
-					<button type="button" onClick={mediaRestore} aria-label={t("media.player.restore")}>
+					<button type="button" class="media-overlay-btn" onClick={mediaRestore} aria-label={t("media.player.restore")}>
 						<IconRestore />
 					</button>
-					<button type="button" onClick={closeMedia} aria-label={t("common.close")}>
+					<button type="button" class="media-overlay-btn" onClick={closeMedia} aria-label={t("common.close")}>
 						<IconCross />
 					</button>
 				</>

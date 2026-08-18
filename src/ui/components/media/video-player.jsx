@@ -30,7 +30,7 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // соответствующим реальности (кнопка/индикатор молча врали). Теперь отказ
 // синхронизирует состояние сессии через onToggle — пользователь СРАЗУ видит
 // кнопку "▶", не гадает, почему тишина.
-export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, compact, onMeta }) {
+export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, compact, onMeta, onTimeUpdate }) {
 	const videoRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
@@ -80,6 +80,7 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					onLoadedMetadata={(e) => {
 						onMeta?.({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight, duration: e.currentTarget.duration });
 					}}
+					onTimeUpdate={onTimeUpdate ? (e) => onTimeUpdate(e.currentTarget.currentTime) : undefined}
 					onPlay={() => {
 						if (!playing) onToggle();
 					}}
