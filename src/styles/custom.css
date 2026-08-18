@@ -2309,8 +2309,17 @@ html[data-media-full] .top-corner-actions {
 }
 
 /* Подложка: не нейтральный rgba(0,0,0,.85), а тот же тёплый угол света,
-   что у .message-list — окно принадлежит приложению, а не браузеру. */
-.media-overlay-scrim {
+   что у .message-list — окно принадлежит приложению, а не браузеру.
+   ::before, не отдельный div (был .media-overlay-scrim довеском Этапа D,
+   ныне убран из DOM) — довесок к MEDIA-OVERLAY-UI.md этапу 2: свёрнутое
+   аудио/видео обрывалось при sворачивании/разворачивании, потому что
+   scrim-div сдвигал позицию <View> в дереве между mini/full-ветками
+   (Preact диффит детей позиционно — chrome-html'ные подробности в
+   комментарии над media-overlay.jsx's MediaOverlay). ::before не создаёт
+   DOM-узла и не участвует в позиционном diff'е детей вовсе — та же
+   покраска (первым, "под" остальным содержимым), тот же CSS. */
+.media-overlay::before {
+	content: "";
 	position: absolute;
 	inset: 0;
 	background:

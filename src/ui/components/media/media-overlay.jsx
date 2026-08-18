@@ -8,6 +8,7 @@ import IconCross from "../../icons/cross.jsx";
 import IconNavPrev from "../../icons/nav-prev.jsx";
 import IconNavNext from "../../icons/nav-next.jsx";
 import IconMinimize from "../../icons/minimize.jsx";
+import IconRestore from "../../icons/restore.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
@@ -35,11 +36,38 @@ function shortHash(digest) {
 // раньше монтировал ОТДЕЛЬНЫЙ компонент (media-mini-bar.jsx, ныне удалён) без
 // единого <audio>/<video> внутри — переключение в mini размонтировало
 // проигрыватель целиком, воспроизведение обрывалось. Теперь <View> — ОДНА
-// точка в дереве, всегда смонтированная, пока сессия жива; mini/full меняют
-// только ОБВЯЗКУ (обёртка/контролы) вокруг НЕЁ, той же формы дерева (div>div>
-// View), чтобы Preact не считал переключение unmount+remount. compact-проп
-// у VideoPlayer/AudioPlayer убирает нативные controls (в mini свои кнопки) и
-// переключает размер/видимость через CSS — сам элемент не пересоздаётся.
+// точка в дереве, всегда смонтированная, пока сессия жива.
+//
+// Второй довесок (найдено живой проверкой ПОСЛЕ MEDIA-OVERLAY-UI.md этапа 1)
+// — тот же баг вернулся в другом виде. Этап 1 развёл mini/full на ДВА
+// ПОЛНОСТЬЮ РАЗНЫХ return: mini — div>div(preview)>View, full — div>[div
+// (scrim), div(viewport)>div(inner)>View, header, nav×2?, footer]. У Preact
+// нет "смены компонента" при переключении mini/full (тот же MediaOverlay),
+// но diff идёт ПОЗИЦИОННО по детям: в full's дереве View лежит ВТОРЫМ
+// ребёнком корня (после scrim), в mini's — ПЕРВЫМ. При сворачивании Preact
+// сверяет позицию 1 (scrim, пусто) с позицией 1 (preview, содержит Icon?+
+// View) — создаёт НОВЫЙ View там; и отдельно позицию 2 (viewport с
+// НАСТОЯЩИМ играющим View) с позицией 2 (span.media-mini-bar-name,
+// другой тег) — размонтирует НАСТОЯЩИЙ View целиком. Отсюда "музыка
+// обрывается при сворачивании/разворачивании".
+//
+// Исправлено: ОДИН return, ОДНА пара обёрток вокруг <View> в ОБОИХ режимах
+// (div.viewport-или-preview > div.inner-или-contents > [Icon?] + View) —
+// всегда ПЕРВый ребёнок корня, всегда та же форма поддерева. Всё, что
+// отличается между режимами (шапка/навигация/подвал vs имя+кнопки),
+// стоит ПОСЛЕ этой пары — там смена тегов безопасна, там нет состояния,
+// которое жалко потерять. .media-overlay-scrim перестала быть DOM-узлом
+// (мешала быть "первым ребёнком" наравне с viewport) — стала ::before
+// на корне (custom.css), тот же порядок покраски, что и раньше.
+// IconMusicNote для audio теперь в DOM ВСЕГДА (при cls==="audio", не
+// isMini&&cls==="audio") — иначе видимость иконки от isMini сдвигала бы
+// индекс View внутри inner-обёртки ровно между mini и full ТОЛЬКО для
+// аудио; видимость теперь через display:none в full-режиме, не через
+// отсутствие в дереве.
+//
+// compact-проп у VideoPlayer/AudioPlayer убирает нативные controls (в
+// mini свои кнопки) и переключает размер/видимость через CSS — сам
+// элемент не пересоздаётся.
 export default function MediaOverlay() {
 	const session = mediaSession.value;
 	const currentRef = session ? session.playlist.items[session.position] : null;
@@ -117,34 +145,6 @@ export default function MediaOverlay() {
 	const rank = session.playlist.rank[session.position];
 	const total = session.playlist.idx[session.cls].length;
 
-	if (isMini) {
-		// Мини-бар переделывается на этапе 6 (MEDIA-OVERLAY-UI.md) — здесь
-		// намеренно оставлена прежняя разметка и текстовые символы ⏸/▶/⤢.
-		return (
-			<div class="media-mini-bar row" role="status">
-				<div class="media-mini-bar-preview">
-					{session.cls === "audio" && <IconMusicNote aria-hidden="true" />}
-					<View mediaRef={currentRef} playing={playing} onToggle={mediaToggle} onEnded={mediaEnded} compact={true} />
-				</div>
-				<span class="media-mini-bar-name grow">{currentRef.name}</span>
-				<button type="button" onClick={mediaToggle} aria-label={playing ? t("media.player.pause") : t("media.player.play")}>
-					{playing ? "⏸" : "▶"}
-				</button>
-				<button type="button" onClick={mediaRestore} aria-label={t("media.player.restore")}>
-					⤢
-				</button>
-				<button type="button" onClick={closeMedia} aria-label={t("common.close")}>
-					<IconCross />
-				</button>
-			</div>
-		);
-	}
-
-	// MEDIA-OVERLAY-UI.md, этап 1.1 — заголовок над кадром всегда содержит
-	// имя и строку "N из M · класс · размер"; стрелки листания разнесены к
-	// краям экрана (приём Lity). Этап 2.2 — нижняя полоса больше не пуста:
-	// панель сведений (тип/размер/разрешение/длительность/хеш), раскрытие по
-	// наведению или закреплённая кнопкой "i".
 	const metaLine = `${t("media.player.trackOf", { current: rank + 1, total })} · ${t(`media.classNames.${session.cls}`)} · ${formatFileSize(currentRef.size)}`;
 	// meta помечена digest'ом файла, для которого она пришла (см. onMeta ниже) —
 	// сверка здесь, а не сброс через эффект после смены currentRef, потому что
@@ -156,106 +156,134 @@ export default function MediaOverlay() {
 
 	return (
 		<div
-			class="media-overlay"
-			role="dialog"
-			aria-modal="true"
-			data-chrome={chromeVisible ? "on" : "off"}
-			data-info={infoPinned ? "on" : "off"}
-			onClick={closeMedia}
-			onPointerMove={handleChromeActivity}
-			onPointerDown={handleChromeActivity}
-			onFocusIn={handleChromeActivity}
+			class={isMini ? "media-mini-bar row" : "media-overlay"}
+			role={isMini ? "status" : "dialog"}
+			aria-modal={isMini ? undefined : "true"}
+			data-chrome={isMini ? undefined : chromeVisible ? "on" : "off"}
+			data-info={isMini ? undefined : infoPinned ? "on" : "off"}
+			onClick={isMini ? undefined : closeMedia}
+			onPointerMove={isMini ? undefined : handleChromeActivity}
+			onPointerDown={isMini ? undefined : handleChromeActivity}
+			onFocusIn={isMini ? undefined : handleChromeActivity}
 		>
-			<div class="media-overlay-scrim" aria-hidden="true" />
-			<div class="media-overlay-viewport" onClick={(e) => { if (e.target === e.currentTarget) closeMedia(); }}>
-				<div class="media-overlay-inner" onClick={(e) => e.stopPropagation()}>
+			{/* Первый ребёнок корня — ВСЕГДА эта пара обёрток вокруг <View>, той же
+			    формы что при isMini, что при full (см. комментарий выше компонента).
+			    Не трогать позицию/форму без крайней необходимости. */}
+			<div
+				class={isMini ? "media-mini-bar-preview" : "media-overlay-viewport"}
+				onClick={isMini ? undefined : (e) => { if (e.target === e.currentTarget) closeMedia(); }}
+			>
+				<div
+					class={isMini ? undefined : "media-overlay-inner"}
+					style={isMini ? { display: "contents" } : undefined}
+					onClick={isMini ? undefined : (e) => e.stopPropagation()}
+				>
+					{session.cls === "audio" && <IconMusicNote aria-hidden="true" style={isMini ? undefined : { display: "none" }} />}
 					<View
 						mediaRef={currentRef}
 						playing={playing}
 						onToggle={mediaToggle}
 						onEnded={mediaEnded}
-						compact={false}
-						onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })}
+						compact={isMini}
+						onMeta={isMini ? undefined : (m) => setMeta({ digest: currentRef.digest, ...m })}
 					/>
 				</div>
 			</div>
-			<header class="media-overlay-top bar" onClick={(e) => e.stopPropagation()}>
-				<div class="media-overlay-title stack grow">
-					<span class="truncate">{currentRef.name}</span>
-					<small>{metaLine}</small>
-				</div>
-				<div class="media-overlay-acts bar rigid">
-					<button
-						type="button"
-						class="media-overlay-btn"
-						onClick={() => setInfoPinned((v) => !v)}
-						aria-pressed={infoPinned}
-						aria-label={t("media.player.info")}
-					>
-						<IconInfoCircle />
+
+			{isMini ? (
+				<>
+					<span class="media-mini-bar-name grow">{currentRef.name}</span>
+					<button type="button" onClick={mediaToggle} aria-label={playing ? t("media.player.pause") : t("media.player.play")}>
+						{playing ? "⏸" : "▶"}
 					</button>
-					{canMinimize && (
-						<button type="button" class="media-overlay-btn" onClick={mediaMinimize} aria-label={t("media.player.minimize")}>
-							<IconMinimize />
-						</button>
-					)}
-					<button type="button" class="media-overlay-btn is-close" onClick={closeMedia} aria-label={t("common.close")}>
+					<button type="button" onClick={mediaRestore} aria-label={t("media.player.restore")}>
+						<IconRestore />
+					</button>
+					<button type="button" onClick={closeMedia} aria-label={t("common.close")}>
 						<IconCross />
 					</button>
-				</div>
-			</header>
-			{total > 1 && (
+				</>
+			) : (
 				<>
-					<button
-						type="button"
-						class="media-overlay-nav is-prev"
-						onClick={(e) => { e.stopPropagation(); mediaPrev(); }}
-						aria-label={t("media.player.prev")}
-					>
-						<IconNavPrev />
-					</button>
-					<button
-						type="button"
-						class="media-overlay-nav is-next"
-						onClick={(e) => { e.stopPropagation(); mediaNext(); }}
-						aria-label={t("media.player.next")}
-					>
-						<IconNavNext />
-					</button>
+					<header class="media-overlay-top bar" onClick={(e) => e.stopPropagation()}>
+						<div class="media-overlay-title stack grow">
+							<span class="truncate">{currentRef.name}</span>
+							<small>{metaLine}</small>
+						</div>
+						<div class="media-overlay-acts bar rigid">
+							<button
+								type="button"
+								class="media-overlay-btn"
+								onClick={() => setInfoPinned((v) => !v)}
+								aria-pressed={infoPinned}
+								aria-label={t("media.player.info")}
+							>
+								<IconInfoCircle />
+							</button>
+							{canMinimize && (
+								<button type="button" class="media-overlay-btn" onClick={mediaMinimize} aria-label={t("media.player.minimize")}>
+									<IconMinimize />
+								</button>
+							)}
+							<button type="button" class="media-overlay-btn is-close" onClick={closeMedia} aria-label={t("common.close")}>
+								<IconCross />
+							</button>
+						</div>
+					</header>
+					{total > 1 && (
+						<>
+							<button
+								type="button"
+								class="media-overlay-nav is-prev"
+								onClick={(e) => { e.stopPropagation(); mediaPrev(); }}
+								aria-label={t("media.player.prev")}
+							>
+								<IconNavPrev />
+							</button>
+							<button
+								type="button"
+								class="media-overlay-nav is-next"
+								onClick={(e) => { e.stopPropagation(); mediaNext(); }}
+								aria-label={t("media.player.next")}
+							>
+								<IconNavNext />
+							</button>
+						</>
+					)}
+					<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
+						<div class="media-overlay-info">
+							<div>
+								<div class="media-overlay-meta bar">
+									<span>
+										<b>{t("media.info.type")}</b>
+										{currentRef.mime}
+									</span>
+									<span>
+										<b>{t("media.info.size")}</b>
+										{formatFileSize(currentRef.size)}
+									</span>
+									{hasResolution && (
+										<span>
+											<b>{t("media.info.resolution")}</b>
+											{meta.width}×{meta.height}
+										</span>
+									)}
+									{hasDuration && (
+										<span>
+											<b>{t("media.info.duration")}</b>
+											{formatDuration(meta.duration)}
+										</span>
+									)}
+									<span>
+										<b>{t("media.info.hash")}</b>
+										{shortHash(currentRef.digest)}
+									</span>
+								</div>
+							</div>
+						</div>
+					</footer>
 				</>
 			)}
-			<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
-				<div class="media-overlay-info">
-					<div>
-						<div class="media-overlay-meta bar">
-							<span>
-								<b>{t("media.info.type")}</b>
-								{currentRef.mime}
-							</span>
-							<span>
-								<b>{t("media.info.size")}</b>
-								{formatFileSize(currentRef.size)}
-							</span>
-							{hasResolution && (
-								<span>
-									<b>{t("media.info.resolution")}</b>
-									{meta.width}×{meta.height}
-								</span>
-							)}
-							{hasDuration && (
-								<span>
-									<b>{t("media.info.duration")}</b>
-									{formatDuration(meta.duration)}
-								</span>
-							)}
-							<span>
-								<b>{t("media.info.hash")}</b>
-								{shortHash(currentRef.digest)}
-							</span>
-						</div>
-					</div>
-				</div>
-			</footer>
 		</div>
 	);
 }
