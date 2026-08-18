@@ -54,6 +54,16 @@ export function openMedia({ refs, position, dedupe }) {
 	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position });
 }
 
+// MEDIA-OVERLAY-UI.md, этап 4 — прыжок на произвольную позицию плёнкой
+// миниатюр. Сессия уже открыта — НЕ openMedia (та пересобрала бы
+// playlistRef заново через buildPlaylist, лишняя работа и семантически
+// неверно, это тот же плейлист). Переиспользует событие "open" —
+// media-machine.js уже умеет ставить произвольную позицию, новый
+// обработчик в автомат не добавляется (spec явно это оговаривает).
+export function mediaGoTo(position) {
+	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position });
+}
+
 export function mediaNext() {
 	dispatch("next", null);
 }

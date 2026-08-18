@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mediaSession, openMedia, mediaNext, mediaPrev, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../src/ui/signals/media.js";
+import { mediaSession, openMedia, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../src/ui/signals/media.js";
 import { callState } from "../src/ui/signals/call.js";
 
 function ref(digest, mime = "image/jpeg") {
@@ -31,6 +31,30 @@ test("mediaNext/mediaPrev: перемещают позицию в предела
 	assert.equal(mediaSession.value.position, 1);
 	mediaPrev();
 	assert.equal(mediaSession.value.position, 0);
+	closeMedia();
+});
+
+test("mediaGoTo: этап 4 — прыжок на произвольную позицию через 'open', без пересборки плейлиста", () => {
+	resetCallState();
+	closeMedia();
+	openMedia({ refs: [ref("a"), ref("b"), ref("c"), ref("d", "video/mp4")], position: 0 });
+	const playlistBefore = mediaSession.value.playlist;
+	mediaGoTo(2);
+	assert.equal(mediaSession.value.position, 2);
+	assert.equal(mediaSession.value.cls, "image");
+	assert.equal(mediaSession.value.display, "full");
+	assert.equal(mediaSession.value.play, "playing");
+	assert.equal(mediaSession.value.playlist, playlistBefore, "playlistRef — тот же объект (===), openMedia/buildPlaylist не вызывались повторно");
+	closeMedia();
+});
+
+test("mediaGoTo: корректно переключает класс (jump с image на video той же сессии)", () => {
+	resetCallState();
+	closeMedia();
+	openMedia({ refs: [ref("a"), ref("b", "video/mp4")], position: 0 });
+	mediaGoTo(1);
+	assert.equal(mediaSession.value.position, 1);
+	assert.equal(mediaSession.value.cls, "video");
 	closeMedia();
 });
 

@@ -2586,6 +2586,50 @@ html[data-media-full] .top-corner-actions {
 	margin-inline-end: var(--space-3xs);
 }
 
+/* MEDIA-OVERLAY-UI.md, этап 4 — плёнка миниатюр, только для изображений.
+   Блок буквально из текста задачи (§4). */
+.media-overlay-strip {
+	--gap: var(--space-3xs);
+	scrollbar-width: none;
+	padding-block: 2px;
+}
+
+.media-overlay-strip::-webkit-scrollbar {
+	display: none;
+}
+
+.media-overlay-thumb {
+	flex: none;
+	inline-size: 3.25rem;
+	block-size: 3.25rem;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	overflow: hidden;
+	cursor: pointer;
+	opacity: 0.5;
+	transition:
+		opacity 0.25s var(--ease),
+		transform 0.25s var(--ease),
+		box-shadow 0.25s var(--ease);
+}
+
+.media-overlay-thumb:hover {
+	opacity: 0.85;
+}
+
+.media-overlay-thumb[aria-current="true"] {
+	opacity: 1;
+	transform: translateY(-2px);
+	box-shadow: 0 0 0 2px var(--accent);
+}
+
+.media-overlay-thumb img {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}
+
 .media-mini-bar {
 	position: fixed;
 	inset-inline-end: var(--space-m);

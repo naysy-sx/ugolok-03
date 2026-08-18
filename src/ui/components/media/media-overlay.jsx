@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { mediaSession, mediaNext, mediaPrev, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../../signals/media.js";
+import { mediaSession, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../../signals/media.js";
 import { stepInClass } from "../../../domain/media/playlist.js";
 import { resolveAxis, elasticDx, horizontalCommit, verticalPull, verticalCommit } from "../../../domain/media/swipe-gesture.js";
 import { consumeMediaOrigin } from "../../signals/media-origin.js";
+import { getMemoryCachedUrl } from "../../attachment-memory-cache.js";
 import VideoPlayer from "./video-player.jsx";
 import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
@@ -106,10 +107,24 @@ export default function MediaOverlay() {
 	const prevSessionExistedRef = useRef(false);
 	const gestureRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, axis: null, widthPx: 0 });
 	const didDragRef = useRef(false); // подавляет "случайный" click сразу после реального свайпа
+	const activeThumbRef = useRef(null); // Этап 4 — активная миниатюра плёнки, для scrollIntoView
 
 	useEffect(() => {
 		infoPinnedRef.current = infoPinned;
 	}, [infoPinned]);
+
+	// Этап 4 — плёнка миниатюр докручивается к активному кадру на КАЖДУЮ
+	// смену позиции (стрелки/клавиатура/клик по самой плёнке — DoD требует
+	// явно только "при листании стрелками", но завязка на session?.position,
+	// а не на источник перехода, покрывает это как частный случай, без
+	// отдельного кода). ref привязан ТОЛЬКО к активной кнопке (условно в
+	// JSX) — Preact сам переносит его при смене позиции. behavior не задан
+	// явно ("smooth") — берёт scroll-behavior из CSS, тот уже глушится
+	// глобально под prefers-reduced-motion (minimal.css), дублировать
+	// JS-проверку незачем.
+	useEffect(() => {
+		activeThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+	}, [session?.position]);
 
 	// §3.3 — анимация "разлёт из миниатюры". Зависимость [!!session], не
 	// [session]: последний меняется на КАЖДЫЙ dispatch (next/prev/toggle/...),
@@ -562,6 +577,28 @@ export default function MediaOverlay() {
 						</>
 					)}
 					<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
+						{session.cls === "image" && total > 1 && (
+							<div class="media-overlay-strip reel">
+								{[...session.playlist.idx.image].map((pos) => {
+									const thumbRef = session.playlist.items[pos];
+									const thumbUrl = getMemoryCachedUrl(thumbRef.digest);
+									const isActive = pos === session.position;
+									return (
+										<button
+											key={pos}
+											type="button"
+											class="media-overlay-thumb"
+											ref={isActive ? activeThumbRef : undefined}
+											aria-current={isActive}
+											aria-label={t("media.player.trackOf", { current: session.playlist.rank[pos] + 1, total })}
+											onClick={withDragGuard(() => mediaGoTo(pos))}
+										>
+											{thumbUrl && <img src={thumbUrl} alt="" draggable={false} />}
+										</button>
+									);
+								})}
+							</div>
+						)}
 						<div class="media-overlay-info">
 							<div>
 								<div class="media-overlay-meta bar">
