@@ -106,7 +106,6 @@ export default function MediaOverlay() {
 	const prevSessionExistedRef = useRef(false);
 	const gestureRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, axis: null, widthPx: 0 });
 	const didDragRef = useRef(false); // подавляет "случайный" click сразу после реального свайпа
-	const settleCallCounter = useRef(0); // ВРЕМЕННО для диагностики (баг-репорт пользователя)
 
 	useEffect(() => {
 		infoPinnedRef.current = infoPinned;
@@ -179,11 +178,9 @@ export default function MediaOverlay() {
 	function withDragGuard(fn) {
 		return (e) => {
 			if (didDragRef.current) {
-				console.debug("[gesture] CLICK SUPPRESSED by didDragRef", { target: e.target?.className });
 				didDragRef.current = false;
 				return;
 			}
-			console.debug("[gesture] CLICK passed through", { target: e.target?.className });
 			fn(e);
 		};
 	}
@@ -278,14 +275,17 @@ export default function MediaOverlay() {
 	function handleGesturePointerDown(e) {
 		if (isMini) return;
 		if (e.target.closest("button, video, audio")) return;
-		console.debug("[gesture] DOWN", { pointerId: e.pointerId, pointerType: e.pointerType, x: e.clientX, y: e.clientY, wasActive: gestureRef.current.active });
 		const g = gestureRef.current;
 		g.active = true;
 		g.pointerId = e.pointerId;
 		g.startX = e.clientX;
 		g.startY = e.clientY;
 		g.axis = null;
-		g.widthPx = viewportRef.current?.getBoundingClientRect().width ?? 0;
+		// .media-overlay-inner — контентная область БЕЗ паддинга viewport'а
+		// (var(--space-l) с каждой стороны); ширина viewport'а завышала бы
+		// widthPx примерно на 2×--space-l — цель коммита-довода промахивалась
+		// бы мимо истинной ширины слайда, давая заметный "довесок" на сбросе.
+		g.widthPx = innerRef.current?.getBoundingClientRect().width ?? 0;
 		overlayRef.current?.setPointerCapture(e.pointerId);
 		overlayRef.current?.classList.add("is-pulling"); // отключает transition на весь жест, см. custom.css
 		trackRef.current?.classList.add("is-dragging");
@@ -297,10 +297,7 @@ export default function MediaOverlay() {
 		if (!g.active || e.pointerId !== g.pointerId) return;
 		const dx = e.clientX - g.startX;
 		const dy = e.clientY - g.startY;
-		if (g.axis === null) {
-			g.axis = resolveAxis(dx, dy);
-			if (g.axis !== null) console.debug("[gesture] AXIS LOCK", { axis: g.axis, dx, dy });
-		}
+		if (g.axis === null) g.axis = resolveAxis(dx, dy);
 		if (g.axis === "vertical") {
 			overlayRef.current?.style.setProperty("--media-pull", String(verticalPull(dy)));
 		} else if (g.axis === "horizontal" && session.cls === "image" && trackRef.current) {
@@ -310,7 +307,6 @@ export default function MediaOverlay() {
 	}
 
 	function settleTrack(direction, widthPx) {
-		console.debug("[gesture] settleTrack CALLED", { direction, widthPx, callId: ++settleCallCounter.current });
 		const el = trackRef.current;
 		if (!el) return;
 		el.classList.remove("is-dragging");
@@ -322,24 +318,28 @@ export default function MediaOverlay() {
 		el.classList.add("is-settling");
 		const targetPx = direction === "next" ? -widthPx : direction === "prev" ? widthPx : 0;
 		el.style.setProperty("--drag-px", `${targetPx}px`);
-		const myCallId = settleCallCounter.current;
 		let done = false;
 		const finish = () => {
-			console.debug("[gesture] settleTrack finish() invoked", { callId: myCallId, alreadyDone: done, direction });
 			if (done) return;
 			done = true;
 			el.removeEventListener("transitionend", onTransitionEnd);
 			el.classList.remove("is-settling");
-			el.classList.add("is-dragging"); // сброс без transition — тот же кадр, что смена refs
-			if (direction) {
-				console.debug("[gesture] calling", direction === "next" ? "mediaNext" : "mediaPrev", { callId: myCallId });
-				(direction === "next" ? mediaNext : mediaPrev)();
-			}
+			el.classList.add("is-dragging"); // transition:none — сброс должен быть мгновенным
+			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
 			el.style.setProperty("--drag-px", "0px");
-			requestAnimationFrame(() => el.classList.remove("is-dragging"));
+			// requestAnimationFrame здесь был БАГОМ: transitionend и следующий rAF
+			// браузер обрабатывает в рамках ОДНОГО прохода "update the rendering"
+			// (animation-события -> rAF-колбэки), ДО пересчёта стиля — снятие
+			// is-dragging в rAF успевало произойти раньше, чем стиль хоть раз
+			// пересчитывался с "transition:none + drag-px:0", поэтому браузер видел
+			// только переход из ПРЕЖНЕГО (ещё анимирующегося) значения прямо в 0 —
+			// с уже включённым transition, то есть анимировал по новой. Форс-reflow
+			// (offsetWidth) фиксирует пересчёт стиля СИНХРОННО, пока transition:none
+			// ещё точно в силе — тот же приём, что уже стоит в playSwapFade.
+			void el.offsetWidth;
+			el.classList.remove("is-dragging");
 		};
 		function onTransitionEnd(ev) {
-			console.debug("[gesture] transitionend event", { callId: myCallId, propertyName: ev.propertyName, target: ev.target === el ? "track-itself" : ev.target?.className });
 			if (ev.target !== el) return; // не реагировать на всплывшие transitionend от потомков
 			finish();
 		}
@@ -392,11 +392,7 @@ export default function MediaOverlay() {
 
 	function handleGesturePointerUp(e) {
 		const g = gestureRef.current;
-		console.debug("[gesture] UP", { pointerId: e.pointerId, gActive: g.active, gPointerId: g.pointerId, gAxis: g.axis, x: e.clientX, y: e.clientY });
-		if (!g.active || e.pointerId !== g.pointerId) {
-			console.debug("[gesture] UP ignored (not active or pointerId mismatch)");
-			return;
-		}
+		if (!g.active || e.pointerId !== g.pointerId) return;
 		const dx = e.clientX - g.startX;
 		const dy = e.clientY - g.startY;
 		const axis = g.axis;
@@ -411,7 +407,6 @@ export default function MediaOverlay() {
 		if (axis === "horizontal") {
 			armDragGuard();
 			let direction = horizontalCommit(dx, widthPx);
-			console.debug("[gesture] UP horizontal commit decision", { dx, widthPx, ratio: Math.abs(dx) / widthPx, direction, rank, total });
 			if (session.cls === "image") {
 				// На краю плейлиста commit по РАЗМАХУ жеста возможен (horizontalCommit
 				// не знает о rank/total), но реального перехода нет (media-machine.js
@@ -425,15 +420,12 @@ export default function MediaOverlay() {
 				(direction === "next" ? mediaNext : mediaPrev)();
 				playSwapFade();
 			}
-		} else {
-			console.debug("[gesture] UP axis is null/vertical-not-taken — treating as tap");
 		}
 		// axis === null — обычный тап, didDragRef не трогаем, клик отработает сам
 	}
 
 	function handleGesturePointerCancel(e) {
 		const g = gestureRef.current;
-		console.debug("[gesture] CANCEL", { pointerId: e.pointerId, gActive: g.active, gPointerId: g.pointerId });
 		if (!g.active || e.pointerId !== g.pointerId) return;
 		const wasImage = session.cls === "image";
 		const widthPx = g.widthPx;
@@ -474,11 +466,27 @@ export default function MediaOverlay() {
 					{session.cls === "audio" && <IconMusicNote aria-hidden="true" style={isMini ? undefined : { display: "none" }} />}
 					{!isMini && session.cls === "image" ? (
 						<div class="media-overlay-track" ref={trackRef}>
-							<div class="media-overlay-slide">{leftRef && <ImageViewer mediaRef={leftRef} />}</div>
-							<div class="media-overlay-slide">
+							{/* key — АБСОЛЮТНАЯ позиция в плейлисте, не индекс слота (0/1/2).
+							    Без key Preact сопоставляет слайды позиционно: на next/prev
+							    ТЕ ЖЕ 3 инстанса ImageViewer просто получают чужой mediaRef,
+							    их собственный digest-стейт на кадр устаревает — "Загрузка..."
+							    мигает у всех трёх сразу, даже если картинка уже была
+							    показана соседним слайдом мгновение назад. С key по позиции
+							    Preact при сдвиге [P-1,P,P+1]->[P,P+1,P+2] ПЕРЕСТАВЛЯЕТ узлы
+							    (у двух совпадает key со старым слотом — состояние/загрузка
+							    едут вместе с узлом), создаётся заново только один, самый
+							    дальний, невидимый в момент сброса. gap-slot'ы (нет соседа)
+							    держат отдельный стабильный key, не путаются с реальными
+							    позициями. */}
+							<div class="media-overlay-slide" key={leftPos === -1 ? "gap-prev" : leftPos}>
+								{leftRef && <ImageViewer mediaRef={leftRef} />}
+							</div>
+							<div class="media-overlay-slide" key={session.position}>
 								<ImageViewer mediaRef={currentRef} onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })} />
 							</div>
-							<div class="media-overlay-slide">{rightRef && <ImageViewer mediaRef={rightRef} />}</div>
+							<div class="media-overlay-slide" key={rightPos === -1 ? "gap-next" : rightPos}>
+								{rightRef && <ImageViewer mediaRef={rightRef} />}
+							</div>
 						</div>
 					) : (
 						<View
