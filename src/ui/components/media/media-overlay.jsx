@@ -5,8 +5,8 @@ import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
 import IconMusicNote from "../../icons/music-note.jsx";
 import IconCross from "../../icons/cross.jsx";
-import IconChevronLeft from "../../icons/chevron-left.jsx";
-import IconChevronRight from "../../icons/chevron-right.jsx";
+import IconNavPrev from "../../icons/nav-prev.jsx";
+import IconNavNext from "../../icons/nav-next.jsx";
 import IconMinimize from "../../icons/minimize.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
@@ -212,7 +212,7 @@ export default function MediaOverlay() {
 						onClick={(e) => { e.stopPropagation(); mediaPrev(); }}
 						aria-label={t("media.player.prev")}
 					>
-						<IconChevronLeft />
+						<IconNavPrev />
 					</button>
 					<button
 						type="button"
@@ -220,7 +220,7 @@ export default function MediaOverlay() {
 						onClick={(e) => { e.stopPropagation(); mediaNext(); }}
 						aria-label={t("media.player.next")}
 					>
-						<IconChevronRight />
+						<IconNavNext />
 					</button>
 				</>
 			)}

@@ -14,10 +14,16 @@
 // масштаб 0..15 (×0.625 = 15/24) — та же форма, что и ручной пересчёт,
 // без риска ошибиться в дуге. transform применяется к уже отрисованной
 // геометрии, поэтому sweep-флаги в самой path-строке трогать не нужно.
+//
+// stroke-width исходника — 2 в системе 0..24; transform уменьшает штрих
+// вместе с геометрией (×0.625), поэтому 2 давало эффективные 1.25 — заметно
+// тоньше/бледнее соседних иконок шапки (cross.jsx — 1.4). Живой фидбек
+// пользователя: "иконка выглядит бледнее". 2.24 здесь = 1.4/0.625, чтобы
+// после того же масштабирования получить те же эффективные 1.4.
 export default function IconMinimize(props) {
 	return (
 		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<g transform="scale(0.625) translate(24,0) scale(-1,1)" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+			<g transform="scale(0.625) translate(24,0) scale(-1,1)" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.24">
 				<path d="M3 17a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zm1-5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
 				<path d="M15 13h-4V9m0 4l5-5" />
 			</g>
