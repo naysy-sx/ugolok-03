@@ -2337,6 +2337,21 @@ html[data-media-full] .top-corner-actions {
 	max-block-size: 100%;
 }
 
+/* Живой фидбек пользователя — нативный <audio> в полноэкранном просмотрщике
+   мелковат (браузерная ширина по умолчанию ~300px). Шире — только на
+   планшетах/десктопах (min-width: 48em, тот же брейкпоинт, что и везде в
+   custom.css); на телефоне нативный размер остаётся, там 700px не влезет.
+   max-width:100% — подстраховка на планшетах у́же 700px (иначе упёрлось бы
+   в padding .media-overlay-viewport и вылезло за кадр). */
+@media (min-width: 48em) {
+	.media-overlay-inner audio {
+		width: 700px;
+		max-width: 100%;
+		background-color: var(--accent-light);
+		border-radius: var(--radius-lg);
+	}
+}
+
 /* Хром: две полосы с растяжкой градиента в прозрачность — читаемость
    текста поверх произвольного кадра без сплошной плашки. */
 .media-overlay-top,
