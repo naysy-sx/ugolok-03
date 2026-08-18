@@ -186,6 +186,19 @@ function emitServiceWorker(buildHash) {
 
 export default defineConfig(({ command }) => ({
 	base: "./", // переносимость пары файлов на произвольный путь
+	server: {
+		// Разовый tuna-туннель для проверки с телефона (пользователь, 2026-08-15).
+		// Оба пункта нашлись по факту EOF в тоннеле, не по документации:
+		// (1) без host Vite слушал только IPv6 [::1] — tuna целится в 127.0.0.1
+		//     (IPv4) буквально, туда никто не отвечал (`nc` -> Connection refused).
+		//     "127.0.0.1", не true — не открываем 0.0.0.0/LAN, только то, во что
+		//     метит именно tuna.
+		// (2) без allowedHosts Vite рвёт соединение на чужом Host-заголовке
+		//     (защита от DNS rebinding) — тоже выглядело бы как EOF.
+		// Убрать после теста, если туннель больше не нужен.
+		host: "127.0.0.1",
+		allowedHosts: ["2gty8p-150-241-83-79.ru.tuna.am"],
+	},
 	plugins: [
 		preact({ devToolsEnabled: false }), // обход бага preset×Vite8×zimmerframe
 		emitServiceWorker(BUILD_HASH),

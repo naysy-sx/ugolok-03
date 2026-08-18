@@ -13,16 +13,28 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // resourceOwner (ui/signals/media.js) — повторный вызов здесь НЕ повторяет
 // сеть/регистрацию, просто дожидается готового handle (CONTRACTS.md "Этап D").
 export default function ImageViewer({ mediaRef, onMeta }) {
-	const [url, setUrl] = useState(null);
+	// MEDIA-OVERLAY-UI.md, этап 3 — довесок: в ленте (media-overlay-track)
+	// Preact ПЕРЕИСПОЛЬЗУЕТ этот же экземпляр компонента для соседнего слайда
+	// на каждый next/prev (три позиции — три СТАБИЛЬНЫХ инстанса, без key).
+	// Раньше url помечался digest'ом только КОСВЕННО — эффект сбрасывал его в
+	// null и запрашивал заново, но между сменой mediaRef-пропа и срабатыванием
+	// эффекта (после коммита рендера) был РЕНДЕР, где url ещё держал URL
+	// СТАРОЙ картинки: на кадр показывалась чужая (предыдущая) картинка,
+	// затем null ("Загрузка..."), затем верная — глазами читается как "свайп
+	// откатился, потом снова проиграл анимацию" (живой фидбек пользователя).
+	// Фикс — тот же приём, что isCurrentMeta в media-overlay.jsx: url хранится
+	// ВМЕСТЕ со своим digest, рендер сверяет с текущим mediaRef.digest
+	// СИНХРОННО, не дожидаясь эффекта.
+	const [state, setState] = useState(null); // { digest, url } | null
 	const [error, setError] = useState("");
+	const url = state?.digest === mediaRef.digest ? state.url : null;
 
 	useEffect(() => {
 		let cancelled = false;
-		setUrl(null);
 		setError("");
 		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
 			.then((handle) => {
-				if (!cancelled) setUrl(handle.url);
+				if (!cancelled) setState({ digest: mediaRef.digest, url: handle.url });
 			})
 			.catch((err) => {
 				if (!cancelled) setError(errorMessage(err));

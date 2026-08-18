@@ -106,6 +106,7 @@ export default function MediaOverlay() {
 	const prevSessionExistedRef = useRef(false);
 	const gestureRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, axis: null, widthPx: 0 });
 	const didDragRef = useRef(false); // подавляет "случайный" click сразу после реального свайпа
+	const settleCallCounter = useRef(0); // ВРЕМЕННО для диагностики (баг-репорт пользователя)
 
 	useEffect(() => {
 		infoPinnedRef.current = infoPinned;
@@ -164,14 +165,27 @@ export default function MediaOverlay() {
 	}
 
 	// Клик сразу после отпускания реального свайпа (didDragRef) не должен
-	// закрывать оверлей — иначе любой завершённый (в т.ч. отменённый, ниже
-	// порога) свайп по фону читался бы ещё и как клик-закрытие.
-	function guardedClose() {
-		if (didDragRef.current) {
-			didDragRef.current = false;
-			return;
-		}
-		handleClose();
+	// доходить ни до одной кнопки хрома. Причина шире, чем просто "закрытие
+	// фоном": стрелки .media-overlay-nav стоят буквально у краёв экрана —
+	// туда естественно попадает курсор МЫШИ в конце горизонтального свайпа
+	// (в отличие от тача, у мыши :hover активен весь жест, кнопки не
+	// невидимы). Синтетический click, который браузер шлёт СРАЗУ после
+	// pointerup, бьёт по стрелке уже ПОСЛЕ обработки свайпа в
+	// handleGesturePointerUp — лишний mediaNext/mediaPrev поверх уже
+	// сделанного свайпом (найдено живой проверкой: "свайпнул — картинка то
+	// откатывается назад, то снова уезжает" — ровно два разнонаправленных
+	// или задвоенных перехода). Единая обёртка на ВСЕ кликабельные элементы
+	// хрома (закрыть/свернуть/инфо/стрелки), не только на закрытие.
+	function withDragGuard(fn) {
+		return (e) => {
+			if (didDragRef.current) {
+				console.debug("[gesture] CLICK SUPPRESSED by didDragRef", { target: e.target?.className });
+				didDragRef.current = false;
+				return;
+			}
+			console.debug("[gesture] CLICK passed through", { target: e.target?.className });
+			fn(e);
+		};
 	}
 
 	useEffect(() => {
@@ -264,6 +278,7 @@ export default function MediaOverlay() {
 	function handleGesturePointerDown(e) {
 		if (isMini) return;
 		if (e.target.closest("button, video, audio")) return;
+		console.debug("[gesture] DOWN", { pointerId: e.pointerId, pointerType: e.pointerType, x: e.clientX, y: e.clientY, wasActive: gestureRef.current.active });
 		const g = gestureRef.current;
 		g.active = true;
 		g.pointerId = e.pointerId;
@@ -282,7 +297,10 @@ export default function MediaOverlay() {
 		if (!g.active || e.pointerId !== g.pointerId) return;
 		const dx = e.clientX - g.startX;
 		const dy = e.clientY - g.startY;
-		if (g.axis === null) g.axis = resolveAxis(dx, dy);
+		if (g.axis === null) {
+			g.axis = resolveAxis(dx, dy);
+			if (g.axis !== null) console.debug("[gesture] AXIS LOCK", { axis: g.axis, dx, dy });
+		}
 		if (g.axis === "vertical") {
 			overlayRef.current?.style.setProperty("--media-pull", String(verticalPull(dy)));
 		} else if (g.axis === "horizontal" && session.cls === "image" && trackRef.current) {
@@ -292,6 +310,7 @@ export default function MediaOverlay() {
 	}
 
 	function settleTrack(direction, widthPx) {
+		console.debug("[gesture] settleTrack CALLED", { direction, widthPx, callId: ++settleCallCounter.current });
 		const el = trackRef.current;
 		if (!el) return;
 		el.classList.remove("is-dragging");
@@ -303,18 +322,28 @@ export default function MediaOverlay() {
 		el.classList.add("is-settling");
 		const targetPx = direction === "next" ? -widthPx : direction === "prev" ? widthPx : 0;
 		el.style.setProperty("--drag-px", `${targetPx}px`);
+		const myCallId = settleCallCounter.current;
 		let done = false;
 		const finish = () => {
+			console.debug("[gesture] settleTrack finish() invoked", { callId: myCallId, alreadyDone: done, direction });
 			if (done) return;
 			done = true;
-			el.removeEventListener("transitionend", finish);
+			el.removeEventListener("transitionend", onTransitionEnd);
 			el.classList.remove("is-settling");
 			el.classList.add("is-dragging"); // сброс без transition — тот же кадр, что смена refs
-			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
+			if (direction) {
+				console.debug("[gesture] calling", direction === "next" ? "mediaNext" : "mediaPrev", { callId: myCallId });
+				(direction === "next" ? mediaNext : mediaPrev)();
+			}
 			el.style.setProperty("--drag-px", "0px");
 			requestAnimationFrame(() => el.classList.remove("is-dragging"));
 		};
-		el.addEventListener("transitionend", finish);
+		function onTransitionEnd(ev) {
+			console.debug("[gesture] transitionend event", { callId: myCallId, propertyName: ev.propertyName, target: ev.target === el ? "track-itself" : ev.target?.className });
+			if (ev.target !== el) return; // не реагировать на всплывшие transitionend от потомков
+			finish();
+		}
+		el.addEventListener("transitionend", onTransitionEnd);
 		setTimeout(finish, 500); // фолбэк, если transitionend не пришёл (напр. targetPx===0 без реального изменения)
 	}
 
@@ -346,23 +375,43 @@ export default function MediaOverlay() {
 		trackRef.current?.classList.remove("is-dragging"); // settleTrack() re-adds/manages it correctly if called right after
 	}
 
+	// didDragRef взводится, но НЕ полагается только на потребление в
+	// withDragGuard: синтетический click, идущий сразу после pointerup,
+	// может попасть НЕ на охраняемую кнопку, а на саму картинку — там
+	// onClick лишь делает stopPropagation, флаг никто не сбросит, и он
+	// "утёк" бы в СЛЕДУЮЩИЙ, никак не связанный, клик пользователя позже.
+	// Автосброс на ближайший тик (click для ЭТОГО жеста, если он вообще
+	// будет, синхронно идёт следом за pointerup в той же обработке жеста
+	// браузером — успевает раньше setTimeout(0)).
+	function armDragGuard() {
+		didDragRef.current = true;
+		setTimeout(() => {
+			didDragRef.current = false;
+		}, 0);
+	}
+
 	function handleGesturePointerUp(e) {
 		const g = gestureRef.current;
-		if (!g.active || e.pointerId !== g.pointerId) return;
+		console.debug("[gesture] UP", { pointerId: e.pointerId, gActive: g.active, gPointerId: g.pointerId, gAxis: g.axis, x: e.clientX, y: e.clientY });
+		if (!g.active || e.pointerId !== g.pointerId) {
+			console.debug("[gesture] UP ignored (not active or pointerId mismatch)");
+			return;
+		}
 		const dx = e.clientX - g.startX;
 		const dy = e.clientY - g.startY;
 		const axis = g.axis;
 		const widthPx = g.widthPx;
 		endGesture();
 		if (axis === "vertical") {
-			didDragRef.current = true;
+			armDragGuard();
 			if (verticalCommit(dy)) closeMedia();
 			else springBackPull();
 			return;
 		}
 		if (axis === "horizontal") {
-			didDragRef.current = true;
+			armDragGuard();
 			let direction = horizontalCommit(dx, widthPx);
+			console.debug("[gesture] UP horizontal commit decision", { dx, widthPx, ratio: Math.abs(dx) / widthPx, direction, rank, total });
 			if (session.cls === "image") {
 				// На краю плейлиста commit по РАЗМАХУ жеста возможен (horizontalCommit
 				// не знает о rank/total), но реального перехода нет (media-machine.js
@@ -376,12 +425,15 @@ export default function MediaOverlay() {
 				(direction === "next" ? mediaNext : mediaPrev)();
 				playSwapFade();
 			}
+		} else {
+			console.debug("[gesture] UP axis is null/vertical-not-taken — treating as tap");
 		}
 		// axis === null — обычный тап, didDragRef не трогаем, клик отработает сам
 	}
 
 	function handleGesturePointerCancel(e) {
 		const g = gestureRef.current;
+		console.debug("[gesture] CANCEL", { pointerId: e.pointerId, gActive: g.active, gPointerId: g.pointerId });
 		if (!g.active || e.pointerId !== g.pointerId) return;
 		const wasImage = session.cls === "image";
 		const widthPx = g.widthPx;
@@ -398,7 +450,7 @@ export default function MediaOverlay() {
 			aria-modal={isMini ? undefined : "true"}
 			data-chrome={isMini ? undefined : chromeVisible ? "on" : "off"}
 			data-info={isMini ? undefined : infoPinned ? "on" : "off"}
-			onClick={isMini ? undefined : guardedClose}
+			onClick={isMini ? undefined : withDragGuard(handleClose)}
 			onPointerMove={isMini ? undefined : (e) => { handleChromeActivity(); handleGesturePointerMove(e); }}
 			onPointerDown={isMini ? undefined : (e) => { handleChromeActivity(); handleGesturePointerDown(e); }}
 			onPointerUp={isMini ? undefined : handleGesturePointerUp}
@@ -411,7 +463,7 @@ export default function MediaOverlay() {
 			<div
 				ref={viewportRef}
 				class={isMini ? "media-mini-bar-preview" : "media-overlay-viewport"}
-				onClick={isMini ? undefined : (e) => { if (e.target === e.currentTarget) guardedClose(); }}
+				onClick={isMini ? undefined : withDragGuard((e) => { if (e.target === e.currentTarget) handleClose(); })}
 			>
 				<div
 					ref={innerRef}
@@ -465,18 +517,18 @@ export default function MediaOverlay() {
 							<button
 								type="button"
 								class="media-overlay-btn"
-								onClick={() => setInfoPinned((v) => !v)}
+								onClick={withDragGuard(() => setInfoPinned((v) => !v))}
 								aria-pressed={infoPinned}
 								aria-label={t("media.player.info")}
 							>
 								<IconInfoCircle />
 							</button>
 							{canMinimize && (
-								<button type="button" class="media-overlay-btn" onClick={mediaMinimize} aria-label={t("media.player.minimize")}>
+								<button type="button" class="media-overlay-btn" onClick={withDragGuard(mediaMinimize)} aria-label={t("media.player.minimize")}>
 									<IconMinimize />
 								</button>
 							)}
-							<button type="button" class="media-overlay-btn is-close" onClick={handleClose} aria-label={t("common.close")}>
+							<button type="button" class="media-overlay-btn is-close" onClick={withDragGuard(handleClose)} aria-label={t("common.close")}>
 								<IconCross />
 							</button>
 						</div>
@@ -486,7 +538,7 @@ export default function MediaOverlay() {
 							<button
 								type="button"
 								class="media-overlay-nav is-prev"
-								onClick={(e) => { e.stopPropagation(); mediaPrev(); }}
+								onClick={withDragGuard((e) => { e.stopPropagation(); mediaPrev(); })}
 								aria-label={t("media.player.prev")}
 							>
 								<IconNavPrev />
@@ -494,7 +546,7 @@ export default function MediaOverlay() {
 							<button
 								type="button"
 								class="media-overlay-nav is-next"
-								onClick={(e) => { e.stopPropagation(); mediaNext(); }}
+								onClick={withDragGuard((e) => { e.stopPropagation(); mediaNext(); })}
 								aria-label={t("media.player.next")}
 							>
 								<IconNavNext />
