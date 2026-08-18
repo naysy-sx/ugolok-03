@@ -2695,6 +2695,21 @@ html[data-media-full] .top-corner-actions {
 	overflow: hidden;
 }
 
+/* draggable=false на самом <img> (image-viewer.jsx) гасит HTML5 drag-and-drop
+   в большинстве браузеров — WebKit иногда всё равно инициирует его, отсюда
+   отдельный -webkit-user-drag. Без этого правила pointerdown+move мышью НА
+   САМОЙ картинке уходит в нативный drag "перетащить файл" вместо наших
+   pointermove — курсор превращается в drag-ghost, дальше события к нам не
+   идут вовсе (найдено живой проверкой пользователя: "мышкой нельзя
+   свайпнуть", хотя автоматизация синтетическими CDP-событиями этот нативный
+   путь не запускала и бага не поймала). user-select:none — тот же класс
+   проблемы с выделением текста/изображения при драге. */
+.media-overlay-slide img,
+.media-overlay-inner img {
+	-webkit-user-drag: none;
+	user-select: none;
+}
+
 /* audio/video (И-B, без ленты) — переход между треками окрашен коротким
    fade вместо жёсткого попкорн-скачка кадра. Класс ставит/снимает JS
    (playSwapFade) сразу после mediaNext/Prev на свайпе. */

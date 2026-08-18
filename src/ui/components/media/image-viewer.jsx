@@ -46,6 +46,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		<img
 			src={url}
 			alt={mediaRef.name || ""}
+			draggable={false}
 			onLoad={(e) => onMeta?.({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
 			style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: "block" }}
 		/>
