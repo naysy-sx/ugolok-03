@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { mediaSession, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../../signals/media.js";
 import { stepInClass } from "../../../domain/media/playlist.js";
-import { resolveAxis, elasticDx, horizontalCommit, verticalPull, verticalCommit } from "../../../domain/media/swipe-gesture.js";
+import { elasticDx, verticalCommit } from "../../../domain/media/swipe-gesture.js";
+import { IDLE_STATE, gestureTransition, gestureOutput } from "../../../domain/media/gesture-machine.js";
 import { consumeMediaOrigin } from "../../signals/media-origin.js";
 import { getMemoryCachedUrl } from "../../attachment-memory-cache.js";
 import VideoPlayer from "./video-player.jsx";
@@ -110,7 +111,16 @@ export default function MediaOverlay() {
 	const trackRef = useRef(null);
 	const originRectRef = useRef(null); // rect источника открытия — для симметричного закрытия
 	const prevSessionExistedRef = useRef(false);
-	const gestureRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, axis: null, widthPx: 0 });
+	// MEDIA-OVERLAY-UI-2.md, этап 7 — состояние автомата жеста (Мура,
+	// gesture-machine.js) живёт здесь, а не в useState: диспетчер читает и
+	// пишет его синхронно НЕСКОЛЬКО раз за один pointer-эвент (см.
+	// dispatchGesture ниже), лишний ре-рендер компонента на 60 событий/с не
+	// нужен — то же обоснование, что у остальных gesture-ref'ов этого файла.
+	const gestureStateRef = useRef(IDLE_STATE);
+	// pointerId/стартовая точка — DOM-специфичная часть жеста, сознательно
+	// ВНЕ чистого автомата (тот получает уже готовые dx/dy через payload).
+	const pointerTrackRef = useRef(null); // {pointerId, startX, startY} | null
+	const widthPxRef = useRef(0); // ширина .media-overlay-inner, измерена на "down"
 	const didDragRef = useRef(false); // подавляет "случайный" click сразу после реального свайпа
 	const activeThumbRef = useRef(null); // Этап 4 — активная миниатюра плёнки, для scrollIntoView
 
@@ -291,90 +301,10 @@ export default function MediaOverlay() {
 	const leftRef = leftPos === -1 ? null : session.playlist.items[leftPos];
 	const rightRef = rightPos === -1 ? null : session.playlist.items[rightPos];
 
-	// §3.1/3.2 — pointer-обработчики жеста, все на корне .media-overlay (не
-	// только на viewport: вертикальная тяга-закрытие должна работать и над
-	// хромом/фоном). Игнор жестов, начавшихся на кнопке/нативных controls —
-	// буквально по spec, иначе перемотка видео/громкость превратились бы в
-	// листание.
-	function handleGesturePointerDown(e) {
-		if (isMini) return;
-		if (e.target.closest("button, video, audio")) return;
-		const g = gestureRef.current;
-		g.active = true;
-		g.pointerId = e.pointerId;
-		g.startX = e.clientX;
-		g.startY = e.clientY;
-		g.axis = null;
-		// .media-overlay-inner — контентная область БЕЗ паддинга viewport'а
-		// (var(--space-l) с каждой стороны); ширина viewport'а завышала бы
-		// widthPx примерно на 2×--space-l — цель коммита-довода промахивалась
-		// бы мимо истинной ширины слайда, давая заметный "довесок" на сбросе.
-		g.widthPx = innerRef.current?.getBoundingClientRect().width ?? 0;
-		overlayRef.current?.setPointerCapture(e.pointerId);
-		overlayRef.current?.classList.add("is-pulling"); // отключает transition на весь жест, см. custom.css
-		trackRef.current?.classList.add("is-dragging");
-		trackRef.current?.classList.remove("is-settling");
-	}
-
-	function handleGesturePointerMove(e) {
-		const g = gestureRef.current;
-		if (!g.active || e.pointerId !== g.pointerId) return;
-		const dx = e.clientX - g.startX;
-		const dy = e.clientY - g.startY;
-		if (g.axis === null) g.axis = resolveAxis(dx, dy);
-		if (g.axis === "vertical") {
-			overlayRef.current?.style.setProperty("--media-pull", String(verticalPull(dy)));
-		} else if (g.axis === "horizontal" && session.cls === "image" && trackRef.current) {
-			const atEdge = (dx > 0 && rank === 0) || (dx < 0 && rank === total - 1);
-			trackRef.current.style.setProperty("--drag-px", `${elasticDx(dx, atEdge)}px`);
-		}
-	}
-
-	function settleTrack(direction, widthPx) {
-		const el = trackRef.current;
-		if (!el) return;
-		el.classList.remove("is-dragging");
-		if (prefersReducedMotion()) {
-			el.style.setProperty("--drag-px", "0px");
-			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
-			return;
-		}
-		el.classList.add("is-settling");
-		const targetPx = direction === "next" ? -widthPx : direction === "prev" ? widthPx : 0;
-		el.style.setProperty("--drag-px", `${targetPx}px`);
-		let done = false;
-		const finish = () => {
-			if (done) return;
-			done = true;
-			el.removeEventListener("transitionend", onTransitionEnd);
-			el.classList.remove("is-settling");
-			el.classList.add("is-dragging"); // transition:none — сброс должен быть мгновенным
-			if (direction) (direction === "next" ? mediaNext : mediaPrev)();
-			el.style.setProperty("--drag-px", "0px");
-			// requestAnimationFrame здесь был БАГОМ: transitionend и следующий rAF
-			// браузер обрабатывает в рамках ОДНОГО прохода "update the rendering"
-			// (animation-события -> rAF-колбэки), ДО пересчёта стиля — снятие
-			// is-dragging в rAF успевало произойти раньше, чем стиль хоть раз
-			// пересчитывался с "transition:none + drag-px:0", поэтому браузер видел
-			// только переход из ПРЕЖНЕГО (ещё анимирующегося) значения прямо в 0 —
-			// с уже включённым transition, то есть анимировал по новой. Форс-reflow
-			// (offsetWidth) фиксирует пересчёт стиля СИНХРОННО, пока transition:none
-			// ещё точно в силе — тот же приём, что уже стоит в playSwapFade.
-			void el.offsetWidth;
-			el.classList.remove("is-dragging");
-		};
-		function onTransitionEnd(ev) {
-			if (ev.target !== el) return; // не реагировать на всплывшие transitionend от потомков
-			finish();
-		}
-		el.addEventListener("transitionend", onTransitionEnd);
-		setTimeout(finish, 500); // фолбэк, если transitionend не пришёл (напр. targetPx===0 без реального изменения)
-	}
-
-	function springBackPull() {
-		overlayRef.current?.style.setProperty("--media-pull", "0");
-	}
-
+	// MEDIA-OVERLAY-UI-2.md, этап 7 — автомат жеста (gesture-machine.js,
+	// DESIGN.md "этап 7"). И-G: applyGestureOutput — ЕДИНСТВЕННАЯ функция,
+	// пишущая classList/style на trackRef/overlayRef; ни pointerdown, ни
+	// какой-либо другой обработчик классов больше не трогает.
 	function playSwapFade() {
 		const el = innerRef.current;
 		if (!el || prefersReducedMotion()) return;
@@ -392,11 +322,121 @@ export default function MediaOverlay() {
 		setTimeout(clear, SWAP_FADE_FALLBACK_MS);
 	}
 
-	function endGesture() {
-		gestureRef.current.active = false;
-		gestureRef.current.pointerId = null;
-		overlayRef.current?.classList.remove("is-pulling");
-		trackRef.current?.classList.remove("is-dragging"); // settleTrack() re-adds/manages it correctly if called right after
+	// ЕДИНСТВЕННЫЙ писатель classList/style для is-dragging/is-settling/
+	// --drag-px/--media-pull (И-G) — buквально: во всём файле нет другого
+	// места, трогающего эти четыре имени (is-swapping в playSwapFade —
+	// другой, cls-специфичный механизм fade для audio/video, вне периметра
+	// И-G, который явно ограничен именно этой четвёркой). Семантический
+	// выход λ (gestureOutput) переводится в конкретные пиксели здесь и
+	// только здесь: elasticDx (нужны rank/total — их нет в чистом
+	// состоянии) и domножение знакового dragPx SETTLING на измеренный
+	// widthPxRef (DESIGN.md, п. λ).
+	//
+	// instant=true — выход ИЗ SETTLING: --drag-px обязан упасть на 0 БЕЗ
+	// анимации, форс-reflow (offsetWidth) фиксирует пересчёт стиля
+	// синхронно, пока transition:none ещё в силе — buквально тот же приём,
+	// что уже стоит в playSwapFade, здесь применён к тому же элементу
+	// перед тем, как ниже применится обычная (уже не форсированная)
+	// классификация состояния.
+	function applyGestureOutput(state, { instant = false } = {}) {
+		const out = gestureOutput(state);
+		const suppressPull = state.name === "PRESSED" || state.name === "DRAG_V";
+		const suppressDrag = state.name === "PRESSED" || state.name === "DRAG_H";
+
+		const overlay = overlayRef.current;
+		if (overlay) {
+			overlay.classList.toggle("is-pulling", suppressPull);
+			overlay.style.setProperty("--media-pull", String(out.pull));
+		}
+
+		const track = trackRef.current;
+		if (track) {
+			let dragPx = 0;
+			if (state.name === "DRAG_H") {
+				const atEdge = (state.dx > 0 && rank === 0) || (state.dx < 0 && rank === total - 1);
+				dragPx = elasticDx(out.dragPx, atEdge);
+			} else if (state.name === "SETTLING") {
+				dragPx = out.dragPx * widthPxRef.current;
+			}
+			if (instant) {
+				track.classList.remove("is-settling");
+				track.classList.add("is-dragging");
+				track.style.setProperty("--drag-px", `${dragPx}px`);
+				void track.offsetWidth;
+			}
+			track.classList.toggle("is-dragging", suppressDrag);
+			track.classList.toggle("is-settling", out.settling);
+			track.style.setProperty("--drag-px", `${dragPx}px`);
+		}
+	}
+
+	// Заводит наблюдателей завершения ОДНОЙ конкретной доводки (gen).
+	// Для audio/video трека в DOM нет вовсе (И-B) — анимировать нечего,
+	// доводка считается завершённой синхронно тем же тиком (это и раньше
+	// было мгновенным mediaNext/Prev без анимации для этих классов).
+	function armSettleWatchers(gen) {
+		if (session.cls !== "image") {
+			dispatchGesture("settleEnd", { gen });
+			return;
+		}
+		const track = trackRef.current;
+		if (!track) {
+			dispatchGesture("settleEnd", { gen });
+			return;
+		}
+		let timeoutId;
+		const finish = () => {
+			track.removeEventListener("transitionend", onTransitionEnd);
+			clearTimeout(timeoutId);
+			dispatchGesture("settleEnd", { gen });
+		};
+		function onTransitionEnd(ev) {
+			if (ev.target !== track) return; // не реагировать на всплывшие transitionend от потомков
+			finish();
+		}
+		track.addEventListener("transitionend", onTransitionEnd);
+		// фолбэк, если transitionend не пришёл (напр. targetPx===0 без
+		// реального изменения значения — transition тогда не запускается).
+		timeoutId = setTimeout(finish, 500);
+	}
+
+	// Единственный диспетчер (аналог dispatch() в signals/media.js —
+	// оборачивает чистый gestureTransition побочными эффектами). НЕ трогает
+	// classList/style сам (И-G) — только решает, ЧТО применить, применяет
+	// через applyGestureOutput. Порядок (DESIGN.md "этап 7, п.5"):
+	// 1) на границе выхода из SETTLING — применить решение доводки
+	//    (mediaNext/Prev, fade для audio/video), λ ниже мгновенно (instant)
+	//    сбросит --drag-px в 0 тем же вызовом;
+	// 2) закрытие по вертикали (verticalCommit) — тоже на границе перехода;
+	// 3) зафиксировать новое состояние;
+	// 4) применить λ (единственный писатель, с instant при выходе из
+	//    SETTLING);
+	// 5) при СВЕЖЕМ входе в SETTLING — завести наблюдателей ПОСЛЕ (4), иначе
+	//    синхронный settleEnd для audio/video (рекурсивный вызов
+	//    dispatchGesture ИЗНУТРИ armSettleWatchers) применил бы λ(IDLE)
+	//    раньше, чем родительский вызов успел применить λ(SETTLING) —
+	//    итоговый DOM откатился бы на кадр назад.
+	function dispatchGesture(event, payload) {
+		const prev = gestureStateRef.current;
+		const next = gestureTransition(prev, event, payload);
+		const exitingSettling = prev.name === "SETTLING" && next.name !== "SETTLING";
+
+		if (exitingSettling) {
+			if (prev.dir === "next") mediaNext();
+			else if (prev.dir === "prev") mediaPrev();
+			if (session.cls !== "image" && prev.dir) playSwapFade();
+		}
+
+		if (prev.name === "DRAG_V" && event === "up" && next.name === "IDLE" && verticalCommit(prev.dy)) {
+			closeMedia();
+		}
+
+		gestureStateRef.current = next;
+		applyGestureOutput(next, { instant: exitingSettling });
+
+		if (prev.name !== "SETTLING" && next.name === "SETTLING") {
+			armSettleWatchers(next.gen);
+		}
 	}
 
 	// didDragRef взводится, но НЕ полагается только на потребление в
@@ -414,48 +454,50 @@ export default function MediaOverlay() {
 		}, 0);
 	}
 
+	// §3.1/3.2 — pointer-обработчики, все на корне .media-overlay (не
+	// только на viewport: вертикальная тяга-закрытие должна работать и над
+	// хромом/фоном). Игнор жестов, начавшихся на кнопке/нативных controls —
+	// буквально по spec, иначе перемотка видео/громкость превратились бы в
+	// листание. "down" не перехватывает жест у УЖЕ активного указателя —
+	// автомат сам проигнорировал бы лишний down (PRESSED/DRAG_H/DRAG_V.down
+	// — игнор), но pointerTrackRef обязан остаться привязан к ПЕРВОМУ
+	// указателю, не быть угнанным вторым.
+	function handleGesturePointerDown(e) {
+		if (isMini) return;
+		if (e.target.closest("button, video, audio")) return;
+		const accepting = gestureStateRef.current.name === "IDLE" || gestureStateRef.current.name === "SETTLING";
+		if (!accepting) return;
+		pointerTrackRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
+		// .media-overlay-inner — контентная область БЕЗ паддинга viewport'а
+		// (var(--space-l) с каждой стороны); ширина viewport'а завышала бы
+		// widthPx примерно на 2×--space-l — цель коммита-довода промахивалась
+		// бы мимо истинной ширины слайда, давая заметный "довесок" на сбросе.
+		widthPxRef.current = innerRef.current?.getBoundingClientRect().width ?? 0;
+		overlayRef.current?.setPointerCapture(e.pointerId);
+		dispatchGesture("down", null);
+	}
+
+	function handleGesturePointerMove(e) {
+		const track = pointerTrackRef.current;
+		if (!track || e.pointerId !== track.pointerId) return;
+		dispatchGesture("move", { dx: e.clientX - track.startX, dy: e.clientY - track.startY });
+	}
+
 	function handleGesturePointerUp(e) {
-		const g = gestureRef.current;
-		if (!g.active || e.pointerId !== g.pointerId) return;
-		const dx = e.clientX - g.startX;
-		const dy = e.clientY - g.startY;
-		const axis = g.axis;
-		const widthPx = g.widthPx;
-		endGesture();
-		if (axis === "vertical") {
-			armDragGuard();
-			if (verticalCommit(dy)) closeMedia();
-			else springBackPull();
-			return;
-		}
-		if (axis === "horizontal") {
-			armDragGuard();
-			let direction = horizontalCommit(dx, widthPx);
-			if (session.cls === "image") {
-				// На краю плейлиста commit по РАЗМАХУ жеста возможен (horizontalCommit
-				// не знает о rank/total), но реального перехода нет (media-machine.js
-				// уже no-op) — без этой проверки трек уезжал бы на полную ширину и
-				// на кадр показывал бы ПУСТОЙ слайд (leftRef/rightRef===null) перед
-				// откатом. На краю коммит гасится — обычная пружинка, как ниже порога.
-				const atEdge = (direction === "prev" && rank === 0) || (direction === "next" && rank === total - 1);
-				if (atEdge) direction = null;
-				settleTrack(direction, widthPx);
-			} else if (direction) {
-				(direction === "next" ? mediaNext : mediaPrev)();
-				playSwapFade();
-			}
-		}
-		// axis === null — обычный тап, didDragRef не трогаем, клик отработает сам
+		const track = pointerTrackRef.current;
+		if (!track || e.pointerId !== track.pointerId) return;
+		const wasRealDrag = gestureStateRef.current.name === "DRAG_H" || gestureStateRef.current.name === "DRAG_V";
+		dispatchGesture("up", { widthPx: widthPxRef.current, rank, total });
+		pointerTrackRef.current = null;
+		if (wasRealDrag) armDragGuard();
+		// иначе — обычный тап, didDragRef не трогаем, клик отработает сам
 	}
 
 	function handleGesturePointerCancel(e) {
-		const g = gestureRef.current;
-		if (!g.active || e.pointerId !== g.pointerId) return;
-		const wasImage = session.cls === "image";
-		const widthPx = g.widthPx;
-		endGesture();
-		springBackPull();
-		if (wasImage) settleTrack(null, widthPx);
+		const track = pointerTrackRef.current;
+		if (!track || e.pointerId !== track.pointerId) return;
+		dispatchGesture("cancel", null);
+		pointerTrackRef.current = null;
 	}
 
 	return (

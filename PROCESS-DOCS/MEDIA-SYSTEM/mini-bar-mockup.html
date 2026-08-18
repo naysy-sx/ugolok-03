@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Уголок — мини-бар и сворачивание</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ------------------------------------------------------------------ *
+ *  Подмножество токенов проекта (minimal.css, слой tokens).           *
+ *  Здесь только то, что нужно макету; имена и значения — как в репо.  *
+ * ------------------------------------------------------------------ */
+:root {
+	--font-body: "Golos Text", system-ui, sans-serif;
+	--step--2: 0.694rem;
+	--step--1: 0.833rem;
+	--step-0: 1rem;
+	--step-1: 1.2rem;
+	--weight-normal: 400;
+	--weight-bold: 700;
+	--space-3xs: 0.25rem;
+	--space-2xs: 0.5rem;
+	--space-xs: 0.75rem;
+	--space-s: 1rem;
+	--space-m: 1.5rem;
+	--space-l: 2rem;
+	--space-2xl: 4rem;
+	--radius: 0.625rem;
+	--radius-md: 0.875rem;
+	--radius-lg: 1.25rem;
+	--radius-full: calc(infinity * 1px);
+	--border-width: 1px;
+	--shadow: 0 10px 30px oklch(0.1 0.02 var(--hue) / 0.45);
+	--transition-speed: 150ms;
+	--transition-ease: cubic-bezier(0.2, 0, 0.2, 1);
+	--ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+	--ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+	--accent-hue: 55;
+	--hue: var(--accent-hue);
+	--bg: light-dark(oklch(0.99 0.004 var(--accent-hue)), oklch(0.17 0.022 var(--accent-hue)));
+	--surface: light-dark(oklch(0.94 0.022 var(--accent-hue)), oklch(0.22 0.022 var(--accent-hue)));
+	--surface-raised: light-dark(oklch(0.88 0.022 var(--accent-hue)), oklch(0.28 0.022 var(--accent-hue)));
+	--border: light-dark(oklch(0.83 0.022 var(--accent-hue)), oklch(0.33 0.022 var(--accent-hue)));
+	--muted: light-dark(oklch(0.54 0.022 var(--accent-hue)), oklch(0.62 0.022 var(--accent-hue)));
+	--fg: light-dark(oklch(0.27 0.0352 var(--accent-hue)), oklch(0.89 0.0352 var(--accent-hue)));
+	--accent: light-dark(oklch(0.55 0.085 var(--accent-hue)), oklch(0.74 0.085 var(--accent-hue)));
+	--accent-contrast: light-dark(oklch(1 0 0), oklch(0.1 0 0));
+	--accent-2: light-dark(oklch(0.53 0.0765 calc(var(--accent-hue) + 150)), oklch(0.72 0.0765 calc(var(--accent-hue) + 150)));
+	--bad: light-dark(oklch(0.5 0.0725 25), oklch(0.68 0.2 25));
+}
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+
+*, *::before, *::after { box-sizing: border-box; min-width: 0; border: 0 solid; }
+:where(:not(dialog)) { margin: 0; padding: 0; }
+button { font: inherit; color: inherit; background: transparent; appearance: none; cursor: pointer; }
+img, svg, video { display: block; max-width: 100%; }
+
+body {
+	font-family: var(--font-body);
+	background: var(--bg);
+	color: var(--fg);
+	line-height: 1.6;
+	padding: var(--space-m);
+	min-height: 100vh;
+}
+
+/* ---- обвязка макета (в проект не переносится) ---- */
+.demo-bar { display: flex; flex-wrap: wrap; gap: var(--space-2xs); align-items: center; margin-bottom: var(--space-s); font-size: var(--step--1); }
+.demo-bar button { padding: 0.35rem 0.9rem; border-radius: var(--radius); border: var(--border-width) solid var(--border); }
+.demo-bar button[aria-pressed="true"] { background: var(--surface); }
+.demo-hue { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.demo-hue[aria-pressed="true"] { border-color: var(--fg); }
+.demo-note { color: var(--muted); font-size: var(--step--1); max-width: 62ch; margin-bottom: var(--space-s); }
+.stage {
+	position: relative;
+	height: 560px;
+	overflow: hidden;
+	background: var(--bg);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	transition: width 0.4s var(--ease), max-width 0.4s var(--ease);
+	max-width: 100%;
+}
+body[data-view="mobile"] .stage { max-width: 380px; height: 620px; }
+.app { position: absolute; inset: 0; display: flex; flex-direction: column; background-image: radial-gradient(120% 60% at 100% 0%, color-mix(in oklch, var(--accent), transparent 92%), transparent 60%); }
+.app-head { display: flex; align-items: center; gap: var(--space-2xs); padding: var(--space-2xs) var(--space-s); border-bottom: var(--border-width) solid var(--border); background: var(--surface); }
+.app-ava { width: 2rem; height: 2rem; border-radius: 50%; background: color-mix(in oklch, var(--accent), transparent 70%); display: grid; place-items: center; font-size: var(--step--1); }
+.app-feed { flex: 1; padding: var(--space-s); display: flex; flex-direction: column; gap: var(--space-2xs); overflow-y: auto; }
+.msg { max-width: 78%; padding: var(--space-2xs) var(--space-xs); border-radius: 1.125rem; background: var(--surface); font-size: var(--step--1); }
+.msg.own { align-self: flex-end; background: color-mix(in oklch, var(--accent), transparent 82%); }
+.tile { display: flex; align-items: center; gap: var(--space-2xs); padding: var(--space-2xs); border-radius: var(--radius); background: var(--surface); border: var(--border-width) solid var(--border); max-width: 78%; text-align: left; }
+.tile .cov { width: 2.5rem; height: 2.5rem; border-radius: var(--radius); flex: none; }
+.tile small { color: var(--muted); font-size: var(--step--2); }
+
+.art { background-size: cover; background-position: center; }
+.art[data-art="0"] { background-image: linear-gradient(160deg, oklch(0.72 0.12 60), oklch(0.42 0.1 25) 55%, oklch(0.24 0.06 300)); }
+.art[data-art="1"] { background-image: radial-gradient(80% 70% at 30% 20%, oklch(0.85 0.1 200), transparent 60%), linear-gradient(200deg, oklch(0.5 0.09 230), oklch(0.22 0.05 260)); }
+.art[data-art="2"] { background-image: conic-gradient(from 210deg at 60% 40%, oklch(0.78 0.13 100), oklch(0.55 0.12 30), oklch(0.3 0.07 300), oklch(0.78 0.13 100)); }
+
+/* ================================================================== *
+ *  Полноэкранный просмотр — только то, что нужно для показа перехода. *
+ * ================================================================== */
+.media-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	color-scheme: dark;
+	color: var(--fg);
+}
+.media-overlay[hidden] { display: none; }
+.media-overlay::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(110% 80% at 100% 0%, color-mix(in oklch, var(--accent), transparent 86%), transparent 55%),
+		oklch(0.13 0.018 var(--hue) / 0.94);
+	backdrop-filter: blur(18px) saturate(120%);
+}
+.media-overlay-viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-2xl) var(--space-l); }
+.media-overlay-inner { max-width: min(100%, 640px); width: 100%; }
+.media-overlay-shot { aspect-ratio: 16 / 9; border-radius: var(--radius-lg); box-shadow: 0 24px 60px oklch(0.1 0.02 var(--hue) / 0.55); }
+.media-overlay-top { position: absolute; inset-inline: 0; top: 0; display: flex; align-items: flex-start; gap: var(--space-2xs); padding: var(--space-2xs) var(--space-s); background: linear-gradient(oklch(0.12 0.02 var(--hue) / 0.75), transparent); }
+
+/* Полоса перемотки во весь экран — то, ради чего разворачиваются обратно.
+   В плашке 28rem одна секунда занимает доли пикселя, здесь — на порядок
+   больше, попасть в нужное место реально. */
+.media-overlay-scrub { position: absolute; inset-inline: 0; bottom: 0; display: flex; align-items: center; gap: var(--space-2xs); padding: var(--space-l) var(--space-m) var(--space-s); background: linear-gradient(transparent, oklch(0.12 0.02 var(--hue) / 0.8) 42%); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.media-overlay-scrub-track { flex: 1; height: 1rem; display: flex; align-items: center; cursor: pointer; }
+.media-overlay-scrub-track > span { position: relative; display: block; width: 100%; height: 4px; border-radius: 2px; background: color-mix(in oklch, var(--fg), transparent 82%); }
+.media-overlay-scrub-track i { position: absolute; inset-block: 0; left: 0; width: calc(var(--p, 0) * 100%); border-radius: 2px; background: var(--accent); }
+.media-overlay-scrub-track i::after { content: ""; position: absolute; right: -0.4rem; top: 50%; width: 0.8rem; height: 0.8rem; border-radius: 50%; background: var(--accent); transform: translateY(-50%) scale(0); transition: transform var(--transition-speed) var(--ease); }
+.media-overlay-scrub-track:hover i::after { transform: translateY(-50%) scale(1); }
+.media-overlay-title { flex: 1; min-width: 0; }
+.media-overlay-title span { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-overlay-title small { color: var(--muted); font-size: var(--step--1); }
+.media-overlay-btn {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: var(--radius-full);
+	transition: background-color var(--transition-speed) var(--transition-ease), transform var(--transition-speed) var(--ease);
+}
+.media-overlay-btn:hover { background-color: color-mix(in oklch, var(--fg), transparent 88%); }
+.media-overlay-btn:active { transform: scale(0.92); }
+.media-overlay-btn.is-close:hover { background-color: color-mix(in oklch, var(--bad), transparent 55%); }
+
+/* ================================================================== *
+ *  МИНИ-БАР — основная часть макета.                                  *
+ *  Раскладка: .bar/.stack/.grow/.rigid/.truncate из слоя composition; *
+ *  здесь только цвет, размер, тень, движение.                         *
+ * ================================================================== */
+.media-mini-bar {
+	position: absolute;
+	inset-inline-end: var(--space-s);
+	inset-block-end: var(--space-s);
+	z-index: 25;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3xs);
+	width: min(24rem, calc(100% - var(--space-s) * 2));
+	padding: var(--space-2xs);
+	padding-block-start: var(--space-xs);
+	background: color-mix(in oklch, var(--surface-raised), transparent 8%);
+	backdrop-filter: blur(14px) saturate(130%);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow);
+	overflow: hidden;
+}
+.media-mini-bar[hidden] { display: none; }
+
+/* Строка имени отдана целиком имени — оно длиннее всего остального и в
+   строке с контролами получало от силы треть ширины. Счётчик позиции
+   ужат до «3/5» и стоит на фиксированной ширине с tabular-nums: иначе
+   переход с «9/12» на «10/12» дёргал бы правый край. */
+.media-mini-bar-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2xs);
+	block-size: 1.25rem;
+}
+.media-mini-bar-rank {
+	flex: none;
+	font-size: var(--step--2);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.media-mini-bar-row { display: flex; align-items: center; gap: var(--space-2xs); }
+
+/* Полоса прогресса — по верхней кромке во всю ширину, а не отдельным
+   элементом в строке: не отнимает горизонталь у названия и читается
+   как «состояние всей плашки», а не как ещё один контрол. */
+.media-mini-bar-progress {
+	position: absolute;
+	inset-inline: 0;
+	inset-block-start: 0;
+	height: 0.5rem;
+	display: flex;
+	align-items: flex-start;
+	cursor: pointer;
+}
+.media-mini-bar-progress i {
+	display: block;
+	height: 2px;
+	width: calc(var(--p, 0) * 100%);
+	background: var(--accent);
+	transition: height var(--transition-speed) var(--transition-ease);
+}
+.media-mini-bar-progress::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	inset-block-start: 0;
+	height: 2px;
+	background: color-mix(in oklch, var(--fg), transparent 88%);
+}
+.media-mini-bar-progress i { position: relative; }
+.media-mini-bar-progress:hover i { height: 4px; }
+
+/* Превью: у видео шире (16:9, видно кадр), у аудио — квадратная обложка.
+   Оба заметно крупнее прежних 2.5rem: плашка должна читаться как
+   проигрыватель, а не как тост. */
+.media-mini-bar-preview {
+	position: relative;
+	flex: none;
+	block-size: 3rem;
+	inline-size: 3rem;
+	border-radius: var(--radius);
+	overflow: hidden;
+	background: color-mix(in oklch, var(--fg), transparent 90%);
+	margin-block-start: var(--space-3xs);
+}
+.media-mini-bar[data-cls="video"] .media-mini-bar-preview { inline-size: 5.25rem; }
+
+/* Эквалайзер поверх обложки — единственная индикация «звук идёт», когда
+   плашка свёрнута и кадра не видно. Три полосы, анимация только при
+   data-playing="true" (иначе застывают внизу — пауза читается сразу). */
+.media-mini-bar-eq {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 2px;
+	padding: 0.4rem;
+	background: linear-gradient(transparent 35%, oklch(0.12 0.02 var(--hue) / 0.55));
+}
+.media-mini-bar-eq b {
+	width: 3px;
+	height: 18%;
+	border-radius: 1px;
+	background: var(--accent);
+	transition: height 0.2s var(--ease-io);
+}
+.media-mini-bar[data-playing="true"] .media-mini-bar-eq b { animation: mini-eq 0.9s var(--ease-io) infinite; }
+.media-mini-bar-eq b:nth-child(2) { animation-delay: 0.15s; }
+.media-mini-bar-eq b:nth-child(3) { animation-delay: 0.3s; }
+@keyframes mini-eq {
+	0%, 100% { height: 22%; }
+	50% { height: 78%; }
+}
+
+/* Имя файла. Расширение вынесено в отдельный узел и не сжимается — при
+   обрезке видно «ночная-репетиция-фи….mp3», а не «ночная-репетиция-фи…»:
+   расширение несёт тип, а хвост имени у файлов из одного экспорта часто
+   единственное, чем они различаются.
+   Бегущая строка НЕ бесконечная (см. .is-marquee ниже). */
+.media-mini-bar-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--step--1);
+	font-weight: 500;
+	line-height: 1.25rem;
+}
+.media-mini-bar-name-inner {
+	display: flex;
+	max-width: 100%;
+	white-space: nowrap;
+	will-change: transform;
+}
+.media-mini-bar-name-stem { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.media-mini-bar-name-ext { flex: none; color: var(--muted); }
+
+/* Прокрутка запускается ТОЛЬКО когда текст реально не влез, идёт два
+   прохода туда-обратно и останавливается. Бесконечная строка в плашке,
+   которая живёт на экране минутами, тянет взгляд из периферии и попадает
+   под WCAG 2.2.2 (движение дольше пяти секунд надо уметь остановить).
+   Два прохода — «прочитай и забудь»; дальше по наведению/фокусу. */
+.media-mini-bar-name.is-marquee .media-mini-bar-name-stem { overflow: visible; text-overflow: clip; }
+.media-mini-bar-name.is-marquee .media-mini-bar-name-inner {
+	animation: mini-marquee var(--marquee-dur, 7s) var(--ease-io) 2;
+}
+.media-mini-bar-name.is-marquee:hover .media-mini-bar-name-inner,
+.media-mini-bar-name.is-marquee:focus-within .media-mini-bar-name-inner {
+	animation-iteration-count: infinite;
+}
+@keyframes mini-marquee {
+	0%, 12% { transform: translateX(0); }
+	45%, 55% { transform: translateX(calc(-1 * var(--marquee-shift, 0px))); }
+	88%, 100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.media-mini-bar-name.is-marquee .media-mini-bar-name-inner { animation: none; }
+	.media-mini-bar-name.is-marquee .media-mini-bar-name-stem { overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Ширина зафиксирована по самому длинному варианту («00:00 / 00:00»),
+   иначе правый край строки ходит на каждой секунде. */
+.media-mini-bar-time {
+	flex: none;
+	font-size: var(--step--2);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	min-width: 6.2ch;
+}
+
+.media-mini-bar-controls { display: flex; align-items: center; gap: var(--space-3xs); flex: none; }
+.media-mini-bar-aux { display: flex; align-items: center; gap: 0; flex: none; }
+
+.media-mini-bar-btn {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 2rem;
+	height: 2rem;
+	border-radius: var(--radius-full);
+	color: var(--fg);
+	transition: background-color var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease), transform var(--transition-speed) var(--ease);
+}
+.media-mini-bar-btn:hover { background-color: color-mix(in oklch, var(--fg), transparent 90%); }
+.media-mini-bar-btn:active { transform: scale(0.9); }
+.media-mini-bar-btn[disabled] { opacity: 0.35; pointer-events: none; }
+.media-mini-bar-btn.is-close:hover { background-color: color-mix(in oklch, var(--bad), transparent 60%); color: var(--fg); }
+
+/* Единственная заливная кнопка на всю плашку — как в любом плеере:
+   глаз находит «пуск» без чтения иконок. */
+.media-mini-bar-btn.is-play {
+	width: 2.5rem;
+	height: 2.5rem;
+	background: var(--accent);
+	color: var(--accent-contrast);
+}
+.media-mini-bar-btn.is-play:hover { background: color-mix(in oklch, var(--accent), white 10%); }
+
+/* Повтор — три состояния на одной кнопке (выкл / список / трек), как в
+   большинстве плееров. Активность = цвет акцента, «один» дополнительно
+   помечен цифрой, иначе off и one различаются только оттенком. */
+.media-mini-bar-btn.is-repeat[data-mode="off"] { color: var(--muted); }
+.media-mini-bar-btn.is-repeat[data-mode="all"],
+.media-mini-bar-btn.is-repeat[data-mode="one"] { color: var(--accent); }
+.media-mini-bar-repeat-badge {
+	position: absolute;
+	font-size: 0.5rem;
+	font-weight: 700;
+	transform: translate(0.45rem, 0.45rem);
+	background: var(--surface-raised);
+	border-radius: var(--radius-full);
+	padding: 0 0.15rem;
+	line-height: 1.2;
+}
+.media-mini-bar-btn.is-repeat { position: relative; }
+
+/* Разворот — обведённая, а не плоская: это главный выход из свёрнутого
+   состояния, и он должен читаться как выход, а не как ещё одна мелкая
+   иконка в ряду. Полноэкранный режим — единственное место, где полоса
+   перемотки достаточно длинная, чтобы попасть в нужную секунду. */
+.media-mini-bar-btn.is-restore {
+	box-shadow: inset 0 0 0 var(--border-width) var(--border);
+}
+.media-mini-bar-btn.is-restore:hover {
+	box-shadow: inset 0 0 0 var(--border-width) var(--accent);
+	color: var(--accent);
+}
+
+/* Обложка и название — вторая, «широкая» цель для разворота: так делают
+   почти все мобильные плееры, потому что кнопка 2rem пальцем берётся
+   плохо, а полоска шириной в половину плашки — хорошо. */
+.media-mini-bar-grab { cursor: pointer; }
+.media-mini-bar-grab:hover { color: var(--accent); }
+
+@media (max-width: 30rem) {
+	.media-mini-bar {
+		inset-inline: var(--space-2xs);
+		width: auto;
+	}
+	/* Первым уходит повтор — вторичный контрол. Разворот не прячется никогда. */
+	.media-mini-bar-aux .is-repeat { display: none; }
+}
+
+/* ================================================================== *
+ *  Каскад сворачивания/разворачивания.                                *
+ *  Три рамки летят из прямоугольника окна в прямоугольник плашки с    *
+ *  задержкой — глаз успевает проследить траекторию, чего мгновенное   *
+ *  переключение не даёт. Рамки живут в отдельном слое, ничего не      *
+ *  двигают и не участвуют в раскладке.                                *
+ * ================================================================== */
+.media-fold-layer { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+.media-fold-ghost {
+	position: absolute;
+	border: 2px solid var(--accent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklch, var(--accent), transparent 92%);
+}
+</style>
+</head>
+<body data-view="desktop">
+
+<div class="demo-bar">
+	<button type="button" id="t-theme" aria-pressed="true">Тёмная</button>
+	<button type="button" id="t-view" aria-pressed="false">Телефон</button>
+	<button type="button" id="t-cls" aria-pressed="false">Показать аудио</button>
+	<span style="margin-left:auto">Оттенок:</span>
+	<button type="button" class="demo-hue" data-hue="55" aria-pressed="true" aria-label="Янтарь" style="background:oklch(.74 .085 55)"></button>
+	<button type="button" class="demo-hue" data-hue="265" aria-pressed="false" aria-label="Сирень" style="background:oklch(.74 .085 265)"></button>
+	<button type="button" class="demo-hue" data-hue="150" aria-pressed="false" aria-label="Мох" style="background:oklch(.74 .085 150)"></button>
+</div>
+<p class="demo-note">Нажми «свернуть» в правом верхнем углу окна — увидишь каскад. В плашке работают пуск, перемотка по полосе, следующий/предыдущий, повтор (три состояния) и разворот обратно.</p>
+
+<div class="stage" id="stage">
+	<div class="app">
+		<div class="app-head">
+			<div class="app-ava">АК</div>
+			<div>
+				<div style="font-size:var(--step--1);font-weight:500">Аня Круглова</div>
+				<div style="font-size:var(--step--2);color:var(--muted)">была недавно</div>
+			</div>
+		</div>
+		<div class="app-feed">
+			<div class="msg">Держи, вчерашняя репетиция целиком.</div>
+			<button class="tile" id="open-btn">
+				<div class="cov art" data-art="2"></div>
+				<div>
+					<div style="font-size:var(--step--1)">дорога-домой.mp4</div>
+					<small>46,0 МБ · 2:34</small>
+				</div>
+			</button>
+			<div class="msg own">Открываю.</div>
+			<div class="msg">Там на 1:40 гитара вступает.</div>
+		</div>
+	</div>
+
+	<div class="media-overlay" id="overlay" hidden>
+		<div class="media-overlay-viewport" id="viewport">
+			<div class="media-overlay-inner">
+				<div class="media-overlay-shot art" data-art="2" id="shot"></div>
+			</div>
+		</div>
+		<div class="media-overlay-top">
+			<div class="media-overlay-title">
+				<span id="ov-name">дорога-домой.mp4</span>
+				<small id="ov-sub">2 из 5 · видео · 46,0 МБ</small>
+			</div>
+			<button type="button" class="media-overlay-btn" id="b-min" aria-label="Свернуть">
+				<svg viewBox="0 0 15 15" width="1.05em" height="1.05em" fill="currentColor" aria-hidden="true"><path d="M2 6.5h4.5V2h1v5.5H2v-1Zm6.5 1H14v1H9.5V13h-1V7.5Z"/></svg>
+			</button>
+			<button type="button" class="media-overlay-btn is-close" id="b-close" aria-label="Закрыть">
+				<svg viewBox="0 0 15 15" width="1.05em" height="1.05em" fill="currentColor" aria-hidden="true"><path d="M3.6 2.9 7.5 6.8l3.9-3.9.7.7-3.9 3.9 3.9 3.9-.7.7-3.9-3.9-3.9 3.9-.7-.7 3.9-3.9-3.9-3.9.7-.7Z"/></svg>
+			</button>
+		</div>
+		<div class="media-overlay-scrub">
+			<button type="button" class="media-overlay-btn" id="ov-play" aria-label="Воспроизвести">
+				<svg viewBox="0 0 15 15" width="1.05em" height="1.05em" fill="currentColor" aria-hidden="true" id="ov-play-icon"><path d="M4 2.8 12 7.5 4 12.2V2.8Z"/></svg>
+			</button>
+			<span id="ov-cur">0:00</span>
+			<div class="media-overlay-scrub-track" id="ov-scrub"><span><i></i></span></div>
+			<span id="ov-dur">2:34</span>
+		</div>
+	</div>
+
+	<div class="media-mini-bar" id="mini" data-cls="video" data-playing="false" role="status" hidden>
+		<div class="media-mini-bar-progress" id="mini-progress"><i></i></div>
+		<div class="media-mini-bar-head">
+			<div class="media-mini-bar-name media-mini-bar-grab" id="mini-name" title="Развернуть">
+				<span class="media-mini-bar-name-inner" id="mini-name-inner">
+					<span class="media-mini-bar-name-stem" id="mini-name-stem">дорога-домой</span><span class="media-mini-bar-name-ext" id="mini-name-ext">.mp4</span>
+				</span>
+			</div>
+			<span class="media-mini-bar-rank" id="mini-rank">2/5</span>
+		</div>
+		<div class="media-mini-bar-row">
+			<div class="media-mini-bar-preview media-mini-bar-grab art" data-art="2" id="mini-preview" title="Развернуть">
+				<div class="media-mini-bar-eq" aria-hidden="true"><b></b><b></b><b></b></div>
+			</div>
+			<span class="media-mini-bar-time" id="mini-time">0:00 / 2:34</span>
+			<span style="flex:1"></span>
+			<div class="media-mini-bar-controls">
+			<button type="button" class="media-mini-bar-btn" id="mini-prev" aria-label="Предыдущий">
+				<svg viewBox="0 0 15 15" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M4 3h1.2v9H4V3Zm7 0v9L5.8 7.5 11 3Z"/></svg>
+			</button>
+			<button type="button" class="media-mini-bar-btn is-play" id="mini-play" aria-label="Воспроизвести">
+				<svg viewBox="0 0 15 15" width="1.05em" height="1.05em" fill="currentColor" aria-hidden="true" id="mini-play-icon"><path d="M4 2.8 12 7.5 4 12.2V2.8Z"/></svg>
+			</button>
+			<button type="button" class="media-mini-bar-btn" id="mini-next" aria-label="Следующий">
+				<svg viewBox="0 0 15 15" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M11 3h-1.2v9H11V3ZM4 3v9l5.2-4.5L4 3Z"/></svg>
+			</button>
+		</div>
+		<div class="media-mini-bar-aux">
+			<button type="button" class="media-mini-bar-btn is-repeat" id="mini-repeat" data-mode="off" aria-label="Повтор: выключен">
+				<svg viewBox="0 0 15 15" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true"><path d="M3 6V5a2 2 0 0 1 2-2h7M12 9v1a2 2 0 0 1-2 2H3"/><path d="M10.5 1.5 12.5 3l-2 1.5M4.5 10.5 2.5 12l2 1.5"/></svg>
+				<span class="media-mini-bar-repeat-badge" id="mini-repeat-badge" hidden>1</span>
+			</button>
+			<button type="button" class="media-mini-bar-btn is-restore" id="mini-restore" aria-label="Развернуть">
+				<svg viewBox="0 0 15 15" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M8.5 2H13v4.5h-1V3.7L8.8 6.9l-.7-.7L11.3 3H8.5V2ZM2 8.5h1v2.8l3.2-3.2.7.7L3.7 12h2.8v1H2V8.5Z"/></svg>
+			</button>
+			<button type="button" class="media-mini-bar-btn is-close" id="mini-close" aria-label="Закрыть">
+				<svg viewBox="0 0 15 15" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M3.6 2.9 7.5 6.8l3.9-3.9.7.7-3.9 3.9 3.9 3.9-.7.7-3.9-3.9-3.9 3.9-.7-.7 3.9-3.9-3.9-3.9.7-.7Z"/></svg>
+			</button>
+		</div>
+		</div>
+	</div>
+
+	<div class="media-fold-layer" id="fold-layer"></div>
+</div>
+
+<script>
+(function () {
+	const $ = (s) => document.querySelector(s);
+	const stage = $("#stage"), overlay = $("#overlay"), viewport = $("#viewport"), mini = $("#mini"), foldLayer = $("#fold-layer");
+
+	const TRACKS = {
+		video: { name: "дорога-домой-финальный-монтаж-2026-08-17.mp4", size: "46,0 МБ", dur: 154, art: 2, cls: "видео" },
+		audio: { name: "ночная-репетиция.mp3", size: "7,0 МБ", dur: 227, art: 1, cls: "аудио" },
+	};
+	let kind = "video";
+	let playing = false, t = 0, repeat = "off", rank = 1;
+	const total = 5;
+
+	const mmss = (x) => Math.floor(x / 60) + ":" + String(Math.floor(x % 60)).padStart(2, "0");
+	const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	function splitName(name) {
+		const i = name.lastIndexOf(".");
+		return i > 0 ? [name.slice(0, i), name.slice(i)] : [name, ""];
+	}
+
+	// Прокрутка включается только по факту переполнения. Замер делается
+	// после укладки и с ВЫКЛЮЧЕННОЙ обрезкой: с ellipsis scrollWidth равен
+	// clientWidth, переполнения не видно вовсе.
+	function measureMarquee() {
+		const box = $("#mini-name"), inner = $("#mini-name-inner");
+		box.classList.remove("is-marquee");
+		box.style.setProperty("--marquee-shift", "0px");
+		requestAnimationFrame(() => {
+			box.classList.add("is-marquee");
+			const overflow = inner.scrollWidth - box.clientWidth;
+			if (overflow <= 1) {
+				box.classList.remove("is-marquee");
+				return;
+			}
+			box.style.setProperty("--marquee-shift", overflow + 8 + "px");
+			box.style.setProperty("--marquee-dur", Math.round(5 + overflow / 28) + "s");
+		});
+	}
+
+	function paint() {
+		const tr = TRACKS[kind];
+		const [stem, ext] = splitName(tr.name);
+		mini.dataset.cls = kind;
+		mini.dataset.playing = String(playing);
+		$("#mini-preview").dataset.art = tr.art;
+		$("#shot").dataset.art = tr.art;
+		$("#mini-name-stem").textContent = stem;
+		$("#mini-name-ext").textContent = ext;
+		$("#mini-name").title = tr.name;
+		$("#ov-name").textContent = tr.name;
+		$("#ov-sub").textContent = `${rank + 1} из ${total} · ${tr.cls} · ${tr.size}`;
+		$("#mini-rank").textContent = `${rank + 1}/${total}`;
+		$("#mini-time").textContent = `${mmss(t)} / ${mmss(tr.dur)}`;
+		$("#mini-progress").style.setProperty("--p", t / tr.dur);
+		$("#mini-play-icon").innerHTML = playing
+			? '<path d="M4 3h2.2v9H4V3Zm4.8 0H11v9H8.8V3Z"/>'
+			: '<path d="M4 2.8 12 7.5 4 12.2V2.8Z"/>';
+		$("#mini-play").setAttribute("aria-label", playing ? "Пауза" : "Воспроизвести");
+		$("#mini-prev").disabled = rank === 0 && repeat !== "all";
+		$("#mini-next").disabled = rank === total - 1 && repeat === "off";
+		$("#mini-repeat").dataset.mode = repeat;
+		$("#mini-repeat-badge").hidden = repeat !== "one";
+		$("#mini-repeat").setAttribute("aria-label",
+			repeat === "off" ? "Повтор: выключен" : repeat === "all" ? "Повтор: весь список" : "Повтор: текущий");
+		$("#ov-cur").textContent = mmss(t);
+		$("#ov-dur").textContent = mmss(tr.dur);
+		$("#ov-scrub").style.setProperty("--p", t / tr.dur);
+		$("#ov-play-icon").innerHTML = $("#mini-play-icon").innerHTML;
+		$("#ov-play").setAttribute("aria-label", playing ? "Пауза" : "Воспроизвести");
+	}
+
+	let last = 0;
+	requestAnimationFrame(function tick(ts) {
+		requestAnimationFrame(tick);
+		const dt = (ts - last) / 1000; last = ts;
+		if (!playing || dt > 1) return;
+		t += dt;
+		const dur = TRACKS[kind].dur;
+		if (t >= dur) {
+			if (repeat === "one") t = 0;
+			else if (rank < total - 1) { rank++; t = 0; }
+			else if (repeat === "all") { rank = 0; t = 0; }
+			else { t = dur; playing = false; }
+		}
+		paint();
+	});
+
+	/* ---- каскад: три рамки из rect A в rect B со сдвигом по времени ---- */
+	// Каскад рамок из прямоугольника A в прямоугольник B.
+	// reverse=true (разворот) переворачивает ОЧЕРЁДНОСТЬ: при сворачивании
+	// первой уходит внешняя рамка и «затягивает» остальные внутрь, при
+	// развороте первой должна вылетать внутренняя, иначе движение читается
+	// как то же самое схлопывание, только в другую сторону.
+	function cascade(from, to, { reverse = false } = {}) {
+		if (reduced()) return Promise.resolve();
+		const s = stage.getBoundingClientRect();
+		const rel = (r) => ({ left: r.left - s.left, top: r.top - s.top, width: r.width, height: r.height });
+		const a = rel(from), b = rel(to);
+		const jobs = [];
+		for (let i = 0; i < 3; i++) {
+			const g = document.createElement("div");
+			g.className = "media-fold-ghost";
+			g.style.left = a.left + "px";
+			g.style.top = a.top + "px";
+			g.style.width = a.width + "px";
+			g.style.height = a.height + "px";
+			g.style.borderRadius = reverse ? "0.875rem" : "1.25rem";
+			foldLayer.appendChild(g);
+			const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+			const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+			const anim = g.animate(
+				[
+					{ transform: "translate(0,0) scale(1,1)", opacity: reverse ? 0.75 : 0.9, borderRadius: reverse ? "0.875rem" : "1.25rem" },
+					{
+						transform: `translate(${dx}px, ${dy}px) scale(${b.width / a.width}, ${b.height / a.height})`,
+						opacity: 0,
+						borderRadius: reverse ? "1.25rem" : "0.875rem",
+					},
+				],
+				{
+					duration: reverse ? 340 : 300,
+					delay: (reverse ? 2 - i : i) * 55,
+					easing: reverse ? "cubic-bezier(0.22, 0.61, 0.36, 1)" : "cubic-bezier(0.65, 0, 0.35, 1)",
+					fill: "both",
+				},
+			);
+			jobs.push(anim.finished.then(() => g.remove()).catch(() => {}));
+		}
+		return Promise.all(jobs);
+	}
+
+	function minimize() {
+		const from = viewport.getBoundingClientRect();
+		mini.hidden = false;
+		const to = mini.getBoundingClientRect();
+		mini.hidden = true;
+		cascade(from, to);
+		if (!reduced()) {
+			viewport.animate(
+				[
+					{ transform: "scale(1)", opacity: 1 },
+					{ transform: "scale(0.82)", opacity: 0 },
+				],
+				{ duration: 220, easing: "cubic-bezier(0.65, 0, 0.35, 1)" },
+			);
+		}
+		setTimeout(() => {
+			overlay.hidden = true;
+			mini.hidden = false;
+			measureMarquee();
+			if (!reduced()) {
+				mini.animate(
+					[
+						{ transform: "translateY(0.75rem) scale(0.94)", opacity: 0 },
+						{ transform: "none", opacity: 1 },
+					],
+					{ duration: 260, delay: 60, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)", fill: "backwards" },
+				);
+			}
+		}, 190);
+		paint();
+	}
+
+	function restore() {
+		const from = mini.getBoundingClientRect();
+		overlay.hidden = false;
+		const to = viewport.getBoundingClientRect();
+		overlay.hidden = true;
+		cascade(from, to, { reverse: true });
+		setTimeout(() => {
+			mini.hidden = true;
+			overlay.hidden = false;
+			if (!reduced()) {
+				viewport.animate(
+					[
+						{ transform: "scale(0.86)", opacity: 0 },
+						{ transform: "scale(1)", opacity: 1 },
+					],
+					{ duration: 300, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" },
+				);
+			}
+			paint();
+		}, 190);
+	}
+
+	$("#open-btn").addEventListener("click", () => {
+		overlay.hidden = false;
+		mini.hidden = true;
+		playing = true;
+		paint();
+	});
+	$("#b-close").addEventListener("click", () => { overlay.hidden = true; playing = false; t = 0; paint(); });
+	$("#b-min").addEventListener("click", minimize);
+	$("#mini-restore").addEventListener("click", restore);
+	$("#mini-preview").addEventListener("click", restore);
+	$("#mini-name").addEventListener("click", restore);
+	window.addEventListener("resize", measureMarquee);
+	$("#ov-play").addEventListener("click", () => { playing = !playing; paint(); });
+	$("#ov-scrub").addEventListener("click", (e) => {
+		const r = e.currentTarget.getBoundingClientRect();
+		t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * TRACKS[kind].dur;
+		paint();
+	});
+	$("#mini-close").addEventListener("click", () => { mini.hidden = true; playing = false; t = 0; paint(); });
+	$("#mini-play").addEventListener("click", () => { playing = !playing; paint(); });
+	$("#mini-next").addEventListener("click", () => { rank = rank < total - 1 ? rank + 1 : 0; t = 0; paint(); });
+	$("#mini-prev").addEventListener("click", () => { if (t > 3) { t = 0; } else if (rank > 0) { rank--; t = 0; } paint(); });
+	$("#mini-repeat").addEventListener("click", () => {
+		repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
+		paint();
+	});
+	$("#mini-progress").addEventListener("click", (e) => {
+		const r = e.currentTarget.getBoundingClientRect();
+		t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * TRACKS[kind].dur;
+		paint();
+	});
+
+	$("#t-theme").addEventListener("click", (e) => {
+		const dark = document.documentElement.dataset.theme === "dark";
+		document.documentElement.dataset.theme = dark ? "light" : "dark";
+		e.currentTarget.textContent = dark ? "Светлая" : "Тёмная";
+		e.currentTarget.setAttribute("aria-pressed", String(!dark));
+	});
+	$("#t-view").addEventListener("click", (e) => {
+		const m = document.body.dataset.view === "mobile";
+		document.body.dataset.view = m ? "desktop" : "mobile";
+		setTimeout(measureMarquee, 420);
+		e.currentTarget.textContent = m ? "Телефон" : "Десктоп";
+		e.currentTarget.setAttribute("aria-pressed", String(!m));
+	});
+	$("#t-cls").addEventListener("click", (e) => {
+		kind = kind === "video" ? "audio" : "video";
+		t = 0;
+		e.currentTarget.textContent = kind === "video" ? "Показать аудио" : "Показать видео";
+		e.currentTarget.setAttribute("aria-pressed", String(kind === "audio"));
+		paint();
+		measureMarquee();
+	});
+	document.querySelectorAll(".demo-hue").forEach((b) =>
+		b.addEventListener("click", () => {
+			document.querySelectorAll(".demo-hue").forEach((x) => x.setAttribute("aria-pressed", "false"));
+			b.setAttribute("aria-pressed", "true");
+			document.documentElement.style.setProperty("--accent-hue", b.dataset.hue);
+		}),
+	);
+
+	paint();
+	measureMarquee();
+})();
+</script>
+</body>
+</html>
