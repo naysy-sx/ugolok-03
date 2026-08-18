@@ -6886,4 +6886,4 @@ DoD (буквально из spec §7):
 - [x] `grep -n "classList" media-overlay.jsx` даёт ровно одну функцию-писателя (is-dragging/is-settling/--drag-px/--media-pull — applyGestureOutput; is-swapping в playSwapFade сознательно вне периметра И-G)
 - [x] тесты зелёные (34 новых)
 - [x] PLAN.md/CONTRACTS.md/DESIGN.md/log.md обновлены
-- [ ] коммит
+- [x] коммит (f1e07e5)
