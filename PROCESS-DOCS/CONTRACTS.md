@@ -17324,3 +17324,18 @@ naturalWidth, height: naturalHeight})` (нет duration — картинка).
 `setState`), а не отдельным unit-тестом; DOM-эффекты (таймер/pointer-
 события) — тот же класс, что и остальной UI-слой этого модуля, приёмка
 через живую проверку DoD этапа 2.
+
+### `src/styles/custom.css` [C, довесок — размер иконок не по font-size]
+
+Первая правка (font-size на `.media-overlay-btn`/`.media-overlay-nav`)
+не влияла на размер иконки вовсе — та маскировалась известным этому
+проекту багом (см. существующий комментарий у `.markdown-toolbar-btn
+.icon`): `minimal.css`'s `svg{max-width:100%;height:auto}` побеждает
+HTML-атрибуты `width/height="1em"` самого SVG, внутри flex-контейнера
+резолвится в 0×0. Настоящий фикс — явные `.media-overlay-btn .icon`/
+`.media-overlay-nav .icon {width:1em;height:1em;max-width:none;
+flex-shrink:0;}`, побеждающие ресет специфичностью класса. Заодно
+`.media-overlay-nav` получила `display:flex;align-items:center;
+justify-content:center` — без неё была не flex-контейнером вовсе
+(текстовые `‹ ›` из исходной spec центрировались через line-height
+кнопки без этого; заменивший их `<svg>` — нет).

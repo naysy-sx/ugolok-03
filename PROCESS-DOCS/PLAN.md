@@ -5358,3 +5358,29 @@ currentRef.digest` — НЕ через `useEffect` со сбросом на см
 авторизации, даже для локального тестового аккаунта. DOM/CSS
 корректность — сборка+регрессия+построчное чтение; живая проверка
 DoD этапа 2 (см. spec) — за пользователем.
+
+### Живой фидбек, второй заход — иконки ВСЁ ЕЩЁ крошечные (font-size не помог)
+
+Первая правка (font-size +70% на `.media-overlay-btn`/`.media-overlay-
+nav`) не сработала вовсе — размер иконки на самом деле никогда не
+зависел от font-size кнопки. Настоящая причина — уже известный этому
+проекту баг, задокументированный ранее у `.markdown-toolbar-btn .icon`
+(Markdown-этап C/D): глобальный ресет `minimal.css` (`svg{max-width:
+100%; height:auto}`) побеждает HTML-атрибуты `width/height="1em"` на
+самом SVG; внутри flex-контейнера (`.media-overlay-btn` — inline-flex)
+это резолвится в 0×0 — иконка формально в DOM, но фактически невидима
+независимо от font-size родителя. Решение то же, что там: явные
+`.media-overlay-btn .icon`/`.media-overlay-nav .icon { width:1em;
+height:1em; max-width:none; flex-shrink:0; }`, побеждающие ресет через
+специфичность класса, а не каскадное наследование font-size.
+
+Попутно найдено при разборе: `.media-overlay-nav` (кнопки стрелок) не
+была flex-контейнером вовсе (spec давала только текстовые `‹ ›`,
+центрирующиеся через line-height кнопки без усилий) — при замене на
+`<IconChevronLeft/>`/`<IconChevronRight/>` (блочный `<svg>` из ресета
+minimal.css) иконка легла бы у левого верхнего угла кнопки, не по
+центру. Добавлены `display:flex; align-items:center; justify-
+content:center` на `.media-overlay-nav` — тот же паттерн, что уже был
+у `.media-overlay-btn`.
+
+Регрессия 1877/1877, сборка 853,08 КБ gzip.
