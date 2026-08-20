@@ -18328,3 +18328,99 @@ muted)) версия. repeat-all/one — ЕДИНСТВЕННЫЕ (вместе 
 из-за фонового бага, не логической ошибки в количестве режимов).
 
 Регрессия 1976/1976, build стабильна.
+
+## Общепроектная работа: систематическая проверка icon-only кнопок + новые form-модификаторы
+
+### Найденные и исправленные icon-only кнопки без reset
+
+Агент-исследователь (Explore) прошёл `src/ui/**/*.jsx` целиком в
+поисках `<button>` с единственным ребёнком-иконкой (или голым
+символом типа "×"), не имеющих явного CSS-сброса `background`/
+`padding`. Найдено 6 кандидатов:
+
+1. **`.toast-close`** (`toast-host.jsx`) — `background: none` был,
+   `padding` не был. Добавлен `padding: 0`.
+2. **`.call-bar-hangup`** (`call-overlay.jsx`) — `background: var(--bad)`
+   (не акцент, само по себе не сливалось), но `padding` не был задан:
+   `padding: 8px 16px` внутри фиксированных `width/height: 2rem`
+   (border-box) сжимало иконку "положить трубку" почти до нуля.
+   Добавлен `padding: 0`.
+3. **`channel-chat.jsx`** (кнопка-скрепка, `<IconPaperclip/>`) — БЕЗ
+   класса вовсе. Основной чат (`chat.jsx`) использует для той же
+   функции класс `message-compose-tool-btn` (уже полностью защищён —
+   `background:none; padding:0; padding-inline:0` явно, плюс
+   composite-селектор `.message-compose-tool-btn:has(> .icon)` против
+   специфичностной ловушки). Переведено на тот же класс — заодно
+   устранена несогласованность вёрстки между чатом и каналом.
+4. **`image-modal.jsx`** (крестик закрытия) — только inline `style`,
+   `padding` был, `background` — нет. Добавлен `background: "none"`.
+5. **`discovery.jsx`** (значок "✓/○" карточки) — только inline `style`,
+   `background` был, `padding` — нет. Добавлен `padding: 0`.
+6. **`.group-chip button`** (`contacts.jsx`, крестик "убрать из
+   группы") — АГЕНТ ОШИБСЯ: смотрел только на класс самой кнопки (его
+   нет), не проверил родительский CSS-селектор `.group-chip button`
+   (специфичность 0,1,1 — класс+тег, побеждает `button:has(>.icon)`
+   не участвует вовсе — символ "×", не `.icon`-SVG), который ПОЛНОСТЬЮ
+   сбрасывает и `background`, и `padding`. Подтверждено живым
+   изолированным DOM-тестом (`document.body.appendChild` с реальными
+   классами вне контекста экрана) — `bg: transparent, padding: 0px`.
+   **Не тронуто.** Урок: при проверке icon-only кнопок без прямого
+   класса нужно ОБЯЗАТЕЛЬНО искать и контекстные (родительские)
+   CSS-селекторы, не только классы на самой кнопке.
+
+### Новые классы (`src/styles/custom.css`, рядом с `.icon-btn`)
+
+```css
+.btn--pill      /* border-radius:full — форма-модификатор, НЕ для .icon-btn (та фикс. ширины) */
+.btn-group      /* контейнер: overflow:hidden + border-radius держит форму,
+                   > button { border-radius:0; border-inline-end: разделитель } */
+.input--pill    /* та же форма-семантика для input */
+.input-icon     /* wrapper: > .icon (position:absolute, pointer-events:none) + > input (padding-inline-start) */
+```
+
+`.btn-group` работает с ЛЮБЫМИ кнопками внутри (icon-only/текст/
+смешанные, разной ширины) — не требует единообразия. `.input-icon`
+рассчитан в первую очередь на `type="search"`, но применим к любому
+текстовому input; иконка decorative (`pointer-events:none`, вызывающая
+сторона должна поставить `aria-hidden` на сам SVG).
+
+### `design-system.html` (корень репозитория)
+
+Standalone HTML-страница, ссылается на реальные `/src/styles/{fonts,
+minimal,custom}.css` напрямую (Vite dev server отдаёт произвольные
+`.html` файлы из корня через свой обычный HTML-transform pipeline —
+никакой отдельной настройки не потребовалось). НЕ входит в
+`rollup`/`viteSingleFile` build (не entry point) — чисто dev-инструмент,
+доступен через `vite dev` по `/design-system.html`. Содержит все
+варианты кнопок/input с подписями классов + JS-переключатель
+`data-theme` (light/dark) для визуального сравнения тем без смены
+системных настроек ОС.
+
+### Комментарий в шапке `custom.css` — исправлена неточность
+
+Было: "перебивают базовые без `!important` — просто за счёт порядка
+подключения". Это неточно — реальный механизм: `minimal.css` целиком
+в `@layer` (`reset/tokens/base/elements/utilities/composition`),
+`custom.css` — unlayered. По CSS Cascade Layers unlayered ВСЕГДА
+побеждает layered НЕЗАВИСИМО от порядка подключения/специфичности —
+но только по свойствам, которые unlayered-код реально задаёт (если
+свойство не задано вовсе, "победа" не имеет предмета, и каскад
+использует layered-значение). Похоже, именно неточное описание
+механизма ("порядок подключения" вместо "layer priority") стало
+источником сегодняшних багов — новый текст комментария явно
+предупреждает о ловушке и даёт конвенцию для будущих icon-only кнопок.
+
+### Живая проверка Chrome-автоматизацией
+
+`design-system.html` открыта через dev-сервер, обе темы (`data-theme`
+toggle): `.btn-group` (3 текстовые кнопки-фильтра + 2 icon-only
+navigation-кнопки) — единая скруглённая полоса с тонкими
+разделителями между сегментами, без двойной границы. `.input-icon` —
+иконка-лупа не наезжает на placeholder/введённый текст ни в обычном
+варианте, ни в составном `.input-icon > input.input--pill`. `.icon-btn`
++ модификаторы (danger/good/disabled) — все чётко видны в обеих
+темах. `.btn--pill` (с иконкой, с `.btn--ghost`, без иконки) —
+корректная скруглённая форма во всех случаях.
+
+Регрессия 1976/1976, build стабильна (`design-system.html`
+подтверждённо не попадает в build — не в rollup input).

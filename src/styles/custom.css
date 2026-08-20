@@ -1,8 +1,26 @@
 /*
  * custom.css — файл для ручной кастомизации вёрстки.
  *
- * Подключается ПОСЛЕ minimal.css (см. main.jsx), поэтому правила здесь
- * перебивают базовые без !important — просто за счёт порядка подключения.
+ * Подключается ПОСЛЕ minimal.css (см. main.jsx), но перебивает базовые
+ * правила БЕЗ !important НЕ из-за порядка подключения — minimal.css
+ * целиком лежит в @layer (reset/tokens/base/elements/utilities/
+ * composition), а этот файл НЕ в @layer вовсе. По спеке CSS Cascade
+ * Layers unlayered-стили ВСЕГДА побеждают layered, независимо от
+ * специфичности и от того, какой файл подключён раньше/позже.
+ *
+ * ЛОВУШКА (найдена живьём, MEDIA-OVERLAY-UI-2.md, "живой фидбек №4"):
+ * это правило "unlayered побеждает" действует ПОСВОЙСТВЕННО, не
+ * по правилу целиком. Если ЗДЕСЬ класс не задаёт какое-то CSS-свойство
+ * вовсе (например background у круглой icon-only кнопки), а minimal.css
+ * его задаёт (button{background-color:var(--accent)} в @layer elements,
+ * рассчитан на обычные CTA-кнопки с текстом) — победить нечем, значение
+ * приходит из layered minimal.css молча, без предупреждений. Конвенция:
+ * любая НОВАЯ icon-only <button> обязана либо взять готовый .icon-btn
+ * (см. ниже — уже сбрасывает background/padding/border), либо, если
+ * нужен другой размер/тон (как .media-overlay-btn/.media-mini-bar-btn/
+ * .media-overlay-nav — свои причины см. в комментариях у каждого),
+ * ЯВНО задать background/padding/border сама.
+ *
  * Сюда добавляются классы, которые размечает верстальщик вручную в JSX
  * (например is-active ниже), а не автогенерируемые инлайн-style.
  */
@@ -278,6 +296,77 @@ button:has(> .icon),
 .icon-btn.icon-btn--info:hover {
 	background-color: color-mix(in oklch, var(--info), transparent 88%);
 	color: var(--info);
+}
+
+/* ================================================================== *
+ *  Форма-модификаторы для кнопок/полей (найдено систематической       *
+ *  проверкой icon-only кнопок — MEDIA-OVERLAY-UI-2.md, "живой фидбек   *
+ *  №4/№5"). Круглая icon-only кнопка уже есть (.icon-btn выше) —      *
+ *  здесь остальные формы того же семейства: скруглённая кнопка с      *
+ *  иконкой+текстом, сегментированная группа без зазора, скруглённое   *
+ *  поле, поле с иконкой слева. Демо всех вариантов — design-system.html *
+ *  в корне репозитория.                                               *
+ * ================================================================== */
+
+/* Скруглённая "таблеткой" кнопка с иконкой+текстом (или просто текстом)
+   — форма-модификатор, независимый от цвета/заливки, комбинируется с
+   .btn--ghost/её модификаторами или голой кнопкой. НЕ комбинировать с
+   .icon-btn — та фиксированной ширины (2.25rem), рассчитана строго на
+   icon-only. */
+.btn--pill {
+	border-radius: calc(infinity * 1px);
+}
+
+/* Группа из 2-3 кнопок "встык", без зазора между ними (переключатель
+   вида/фильтра и т.п.). Работает с любыми кнопками внутри (.icon-btn/
+   .btn--ghost/обычные, разной ширины) — border-radius держит только
+   контейнер, overflow:hidden обрезает прямые углы дочерних элементов
+   по краям группы, border-inline-end между соседями (кроме последнего)
+   рисует тонкий разделитель. */
+.btn-group {
+	display: inline-flex;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+.btn-group > button,
+.btn-group > [type="button"] {
+	border-radius: 0;
+	border: none;
+	border-inline-end: var(--border-width) solid var(--border);
+}
+.btn-group > button:last-child,
+.btn-group > [type="button"]:last-child {
+	border-inline-end: none;
+}
+
+/* Скруглённое "таблеткой" поле — та же форма-семантика, что .btn--pill. */
+.input--pill {
+	border-radius: calc(infinity * 1px);
+}
+
+/* Поле с декоративной иконкой слева (поиск и т.п. — особенно уместно
+   для input[type="search"], но применимо к любому текстовому input).
+   Иконка НЕ интерактивна (pointer-events:none, aria-hidden на вызывающей
+   стороне — клики проходят насквозь к полю), input получает
+   padding-inline-start с запасом под иконку, чтобы введённый текст на
+   неё не заезжал. */
+.input-icon {
+	position: relative;
+	display: block;
+}
+.input-icon > .icon {
+	position: absolute;
+	inset-inline-start: var(--space-xs);
+	top: 50%;
+	translate: 0 -50%;
+	width: 1em;
+	height: 1em;
+	color: var(--muted);
+	pointer-events: none;
+}
+.input-icon > input {
+	padding-inline-start: calc(var(--space-xs) * 2 + 1em);
 }
 
 /* Приподнятая карточка-контейнер — тот же язык, что уже был у
@@ -2096,6 +2185,12 @@ html[data-media-full] .top-corner-actions {
 	inset-inline-end: var(--space-3xs);
 	background: none;
 	border: none;
+	/* minimal.css (@layer elements) даёт button padding: var(--space-2xs)
+	   var(--space-m) по умолчанию — раздувает крестик и сдвигает его от
+	   угла тоста, задуманного через inset-*: var(--space-3xs). Найдено
+	   при систематической проверке всех icon-only кнопок проекта
+	   (MEDIA-OVERLAY-UI-2.md, "живой фидбек №4" — та же ловушка). */
+	padding: 0;
 	cursor: pointer;
 	color: var(--muted);
 	line-height: 1;
@@ -2274,6 +2369,10 @@ html[data-media-full] .top-corner-actions {
 	border-radius: 50%;
 	width: 2rem;
 	height: 2rem;
+	/* minimal.css padding:8px 16px внутри фиксированных 32×32px (border-
+	   box) сжимало иконку почти до нуля по ширине. Найдено при
+	   систематической проверке icon-only кнопок (см. .toast-close выше). */
+	padding: 0;
 	cursor: pointer;
 }
 

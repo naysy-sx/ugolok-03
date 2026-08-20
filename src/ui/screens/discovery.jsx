@@ -192,6 +192,7 @@ export default function Discovery() {
 											right: "var(--space-2xs)",
 											border: "none",
 											background: "none",
+											padding: 0,
 											cursor: "pointer",
 											fontSize: "var(--step-2)",
 											color: sent ? "var(--good)" : "var(--muted)",

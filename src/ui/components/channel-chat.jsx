@@ -74,7 +74,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				{allowAttachments && (
 					<>
 						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-						<button type="button" onClick={() => fileInputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
+						<button type="button" class="message-compose-tool-btn row" onClick={() => fileInputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
 							<IconPaperclip />
 						</button>
 					</>

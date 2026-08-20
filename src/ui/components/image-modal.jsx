@@ -47,6 +47,10 @@ export default function ImageModal({ src, alt, onClose }) {
 					fontSize: "1.5rem",
 					lineHeight: 1,
 					padding: "var(--space-2xs) var(--space-s)",
+					// minimal.css даёт button background-color:var(--accent) по
+					// умолчанию — просвечивал акцентный прямоугольник за крестиком.
+					background: "none",
+					border: "none",
 				}}
 			>
 				✕
