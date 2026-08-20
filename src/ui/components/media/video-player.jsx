@@ -30,7 +30,11 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // соответствующим реальности (кнопка/индикатор молча врали). Теперь отказ
 // синхронизирует состояние сессии через onToggle — пользователь СРАЗУ видит
 // кнопку "▶", не гадает, почему тишина.
-export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, compact, onMeta, onTimeUpdate }) {
+// elRef — необязательный внешний ref на сам DOM-элемент (МИНИ-бар/scrub-полоса
+// пишут el.currentTime напрямую, И-D: "перемотка внутри трека — свойство
+// DOM-элемента, не состояния сессии"). НЕ называется "ref" — тот зарезервирован
+// Preact'ом для форвардинга и не доходит до компонента как обычный проп.
+export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, compact, onMeta, onTimeUpdate, elRef }) {
 	const videoRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
@@ -73,7 +77,10 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
 			{!error && (
 				<video
-					ref={videoRef}
+					ref={(node) => {
+						videoRef.current = node;
+						if (elRef) elRef.current = node;
+					}}
 					controls={!compact}
 					src={src ?? undefined}
 					onEnded={onEnded}

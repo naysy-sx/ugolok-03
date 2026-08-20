@@ -2635,89 +2635,456 @@ html[data-media-full] .top-corner-actions {
    --radius-md — токены проекта вместо литералов rgba(0,0,0,.25)/
    --radius, что были здесь с довеска Этапа D (тот писал "на скорую
    руку", этап 6 — плановая полировка). */
-.media-mini-bar {
+/* ================================================================== *
+ *  MEDIA-OVERLAY-UI-2.md, этапы 8-9 — мини-бар (перевёрстка) + каскад. *
+ *  .media-mini-bar-shell — ОТДЕЛЬНЫЙ от .media-overlay элемент (И-K:  *
+ *  плашка не размонтируется, присутствует в DOM всегда при живой     *
+ *  сессии; full/mini переключают ВИДИМОСТЬ через data-display, не    *
+ *  монтирование — иначе каскаду нечего измерять). Видео/аудио НЕ     *
+ *  дублируется здесь: единственный <video>/<audio> остаётся в        *
+ *  .media-overlay-viewport (И-A), тот сам визуально сжимается FLIP'ом *
+ *  в прямоугольник .media-mini-bar-preview-slot — см. media-overlay.jsx *
+ *  (applyMiniViewportGeometry). Блок взят из mini-bar-mockup.html     *
+ *  между комментариями «МИНИ-БАР» и «Каскад», токены уже совпадали 1-в-1 *
+ *  с проектными (макет писался по актуальным именам custom.css).      *
+ * ================================================================== */
+.media-mini-bar-shell {
 	position: fixed;
-	inset-inline-end: var(--space-m);
-	inset-block-end: var(--space-m);
+	inset-inline-end: var(--space-s);
+	inset-block-end: var(--space-s);
 	z-index: 190;
-	background: var(--surface);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3xs);
+	width: min(24rem, calc(100% - var(--space-s) * 2));
+	padding: var(--space-2xs);
+	padding-block-start: var(--space-xs);
+	background: color-mix(in oklch, var(--surface-raised), transparent 8%);
+	backdrop-filter: blur(14px) saturate(130%);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-md);
-	padding: var(--space-2xs) var(--space-s);
 	box-shadow: var(--shadow);
-	max-width: 20rem;
-	/* Довесок — раньше задавалось инлайн-стилем на отдельном компоненте
-	   (media-mini-bar.jsx, ныне удалён); .media-overlay.jsx общий div больше
-	   так не делает, перенесено сюда. */
-	--gap: var(--space-s);
-	align-items: center;
-	animation: media-mini-bar-in 0.3s var(--ease);
-}
-
-@keyframes media-mini-bar-in {
-	from {
-		transform: translateY(10px) scale(0.96);
-		opacity: 0;
-	}
-	to {
-		transform: translateY(0) scale(1);
-		opacity: 1;
-	}
-}
-
-.media-mini-bar-info {
-	--gap: 0;
-	min-width: 0;
-}
-
-.media-mini-bar-name {
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	transition: opacity 0.2s var(--ease);
 }
 
-.media-mini-bar-time {
+/* full — плашка невидима и не ловит клики, но ОСТАЁТСЯ измеримой
+   (opacity, не display:none — И-K). */
+.media-mini-bar-shell[data-display="full"] {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.media-mini-bar-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2xs);
+	block-size: 1.25rem;
+}
+
+.media-mini-bar-rank {
+	flex: none;
+	font-size: var(--step--2);
 	color: var(--muted);
 	font-variant-numeric: tabular-nums;
 }
 
-/* Уменьшенная версия .media-overlay-btn (та рассчитана на полноэкранный
-   хром, 2.5rem/1.785rem — здесь тесно) — контекстный оверрайд, не
-   отдельный класс: тот же набор кнопок (play/restore/close), просто
-   внутри мини-бара. */
-.media-mini-bar .media-overlay-btn {
-	inline-size: 1.75rem;
-	block-size: 1.75rem;
-	font-size: 1rem;
+.media-mini-bar-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
 }
 
-.media-mini-bar .media-overlay-btn:hover {
-	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+/* Полоса прогресса по верхней кромке — не отдельный элемент в строке,
+   не отнимает горизонталь у имени. */
+.media-mini-bar-progress {
+	position: absolute;
+	inset-inline: 0;
+	inset-block-start: 0;
+	height: 0.5rem;
+	display: flex;
+	align-items: flex-start;
+	cursor: pointer;
 }
 
-/* Довесок — mini больше не отдельный компонент без медиа-элемента внутри
-   (найдено живой проверкой: "свёрнутое" не играло вовсе), .media-overlay.jsx
-   держит <video>/<audio> смонтированным всегда, эта зона — просто маленькая
-   рамка под него (видео) либо пустая (аудио — сам audio-элемент invisible,
-   иконка рядом уже сигналит класс). */
-.media-mini-bar-preview {
-	width: 2.25rem;
-	height: 2.25rem;
-	flex-shrink: 0;
-	overflow: hidden;
+.media-mini-bar-progress::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	inset-block-start: 0;
+	height: 2px;
+	background: color-mix(in oklch, var(--fg), transparent 88%);
+}
+
+.media-mini-bar-progress i {
+	position: relative;
+	display: block;
+	height: 2px;
+	width: calc(var(--p, 0) * 100%);
+	background: var(--accent);
+	transition: height var(--transition-speed) var(--transition-ease);
+}
+
+.media-mini-bar-progress:hover i {
+	height: 4px;
+}
+
+/* Слот превью — квадрат для audio, шире (≈16:9) для video: FLIP'нутый
+   viewport садится ровно в этот прямоугольник (JS измеряет его через
+   getBoundingClientRect). Собственного фона/контента у audio-слота
+   нет — эквалайзер/иконка рисуются здесь же напрямую в JSX. */
+.media-mini-bar-preview-slot {
+	position: relative;
+	flex: none;
+	block-size: 3rem;
+	inline-size: 3rem;
 	border-radius: var(--radius);
+	overflow: hidden;
+	background: color-mix(in oklch, var(--fg), transparent 90%);
+	margin-block-start: var(--space-3xs);
+}
+
+.media-mini-bar-shell[data-cls="video"] .media-mini-bar-preview-slot {
+	inline-size: 5.25rem;
+}
+
+/* Аудио: акцентная подложка вместо нейтральной — эквалайзер/иконка
+   заметнее, тот же приём, что был у .is-audio до этапа 8. */
+.media-mini-bar-preview-slot.is-audio {
+	background: var(--accent);
+	color: var(--accent-contrast);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: color-mix(in oklch, var(--fg), transparent 90%);
 }
 
-/* Этап 6 — аудио: иконка ноты на подложке акцента вместо пустой рамки
-   (видео там же показывает реальный кадр, у аудио своего превью нет —
-   раньше просто нейтральный фон, теперь сигнал класса виднее). */
-.media-mini-bar-preview.is-audio {
+/* Эквалайзер — единственная индикация "звук идёт", когда обложки нет.
+   Анимация только при data-playing="true" (иначе полосы стоят внизу —
+   пауза читается сразу, без текста). */
+.media-mini-bar-eq {
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 2px;
+	block-size: 1.1rem;
+}
+
+.media-mini-bar-eq b {
+	width: 3px;
+	height: 18%;
+	border-radius: 1px;
+	background: currentColor;
+	transition: height 0.2s var(--ease-io);
+}
+
+.media-mini-bar-shell[data-playing="true"] .media-mini-bar-eq b {
+	animation: media-mini-bar-eq 0.9s var(--ease-io) infinite;
+}
+
+.media-mini-bar-eq b:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.media-mini-bar-eq b:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes media-mini-bar-eq {
+	0%,
+	100% {
+		height: 22%;
+	}
+	50% {
+		height: 78%;
+	}
+}
+
+/* Имя файла — расширение отдельным узлом, НЕ сжимается: при обрезке
+   видно «дорога-домой-финальный-монт….mp4», расширение говорит, чего
+   от файла ждать. Бегущая строка — не бесконечная, см. .is-marquee
+   (§8.2, measureMarquee в media-overlay.jsx). */
+.media-mini-bar-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	line-height: 1.25rem;
+}
+
+.media-mini-bar-name-inner {
+	display: flex;
+	max-width: 100%;
+	white-space: nowrap;
+	will-change: transform;
+}
+
+.media-mini-bar-name-stem {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.media-mini-bar-name-ext {
+	flex: none;
+	color: var(--muted);
+}
+
+/* Прокрутка — ТОЛЬКО когда текст реально не влез (JS ставит класс после
+   замера с выключенной обрезкой), два прохода туда-обратно, дальше
+   остановка; продолжение — по наведению/фокусу. WCAG 2.2.2 — движение
+   дольше пяти секунд обязано быть останавливаемым. */
+/* min-width:auto (не 0) — иначе flex-shrink игнорирует overflow:visible и
+   всё равно сжимает stem до clientWidth box'а (автоматический минимум
+   flex-элемента: min-width:auto + overflow:visible => не сжимать ниже
+   содержимого, спека). Без этого JS-замер (scrollWidth-clientWidth) живой
+   проверкой давал 0 при ЛЮБОЙ длине имени — бегущая строка не включалась
+   никогда. */
+.media-mini-bar-name.is-marquee .media-mini-bar-name-stem {
+	overflow: visible;
+	text-overflow: clip;
+	min-width: auto;
+}
+
+.media-mini-bar-name.is-marquee .media-mini-bar-name-inner {
+	animation: media-mini-bar-marquee var(--marquee-dur, 7s) var(--ease-io) 2;
+}
+
+.media-mini-bar-name.is-marquee:hover .media-mini-bar-name-inner,
+.media-mini-bar-name.is-marquee:focus-within .media-mini-bar-name-inner {
+	animation-iteration-count: infinite;
+}
+
+@keyframes media-mini-bar-marquee {
+	0%,
+	12% {
+		transform: translateX(0);
+	}
+	45%,
+	55% {
+		transform: translateX(calc(-1 * var(--marquee-shift, 0px)));
+	}
+	88%,
+	100% {
+		transform: translateX(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.media-mini-bar-name.is-marquee .media-mini-bar-name-inner {
+		animation: none;
+	}
+	.media-mini-bar-name.is-marquee .media-mini-bar-name-stem {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0; /* откатить min-width:auto выше — иначе имя торчит без анимации и без "…" */
+	}
+}
+
+/* Ширина зафиксирована по самому длинному варианту («00:00 / 00:00»),
+   иначе правый край дёргается на каждой секунде. */
+.media-mini-bar-time {
+	flex: none;
+	font-size: var(--step--2);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	min-width: 6.2ch;
+}
+
+.media-mini-bar-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	flex: none;
+}
+
+.media-mini-bar-aux {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	flex: none;
+}
+
+.media-mini-bar-btn {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 2rem;
+	height: 2rem;
+	border-radius: var(--radius-full);
+	color: var(--fg);
+	transition:
+		background-color var(--transition-speed) var(--transition-ease),
+		color var(--transition-speed) var(--transition-ease),
+		transform var(--transition-speed) var(--ease);
+}
+
+.media-mini-bar-btn .icon {
+	width: 1em;
+	height: 1em;
+	max-width: none;
+	flex-shrink: 0;
+}
+
+.media-mini-bar-btn:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 90%);
+}
+
+.media-mini-bar-btn:active {
+	transform: scale(0.9);
+}
+
+.media-mini-bar-btn[disabled] {
+	opacity: 0.35;
+	pointer-events: none;
+}
+
+.media-mini-bar-btn.is-close:hover {
+	background-color: color-mix(in oklch, var(--bad), transparent 60%);
+	color: var(--fg);
+}
+
+/* Единственная заливная кнопка на всю плашку — глаз находит "пуск" без
+   чтения иконок, как в любом плеере. */
+.media-mini-bar-btn.is-play {
+	width: 2.5rem;
+	height: 2.5rem;
 	background: var(--accent);
 	color: var(--accent-contrast);
+}
+
+.media-mini-bar-btn.is-play:hover {
+	background: color-mix(in oklch, var(--accent), white 10%);
+}
+
+/* Повтор (этап 10) — три состояния на одной кнопке; badge различает
+   "один" от "выключен" (иначе только оттенком). */
+.media-mini-bar-btn.is-repeat {
+	position: relative;
+}
+
+.media-mini-bar-btn.is-repeat[data-mode="off"] {
+	color: var(--muted);
+}
+
+.media-mini-bar-btn.is-repeat[data-mode="all"],
+.media-mini-bar-btn.is-repeat[data-mode="one"] {
+	color: var(--accent);
+}
+
+.media-mini-bar-repeat-badge {
+	position: absolute;
+	font-size: 0.5rem;
+	font-weight: var(--weight-bold);
+	transform: translate(0.45rem, 0.45rem);
+	background: var(--surface-raised);
+	border-radius: var(--radius-full);
+	padding: 0 0.15rem;
+	line-height: 1.2;
+}
+
+/* Разворот — обведённая, не плоская: главный выход из свёрнутого
+   состояния, должен читаться как выход, не как мелкая иконка в ряду. */
+.media-mini-bar-btn.is-restore {
+	box-shadow: inset 0 0 0 var(--border-width) var(--border);
+}
+
+.media-mini-bar-btn.is-restore:hover {
+	box-shadow: inset 0 0 0 var(--border-width) var(--accent);
+	color: var(--accent);
+}
+
+/* Обложка и имя — вторая, "широкая" цель для разворота: кнопка 2rem
+   пальцем берётся плохо, полоска шириной в половину плашки — хорошо. */
+.media-mini-bar-grab {
+	cursor: pointer;
+}
+
+.media-mini-bar-grab:hover {
+	color: var(--accent);
+}
+
+@media (max-width: 30rem) {
+	.media-mini-bar-shell {
+		inset-inline: var(--space-2xs);
+		width: auto;
+	}
+	/* Первым уходит повтор — вторичный контрол. Разворот не прячется. */
+	.media-mini-bar-aux .is-repeat {
+		display: none;
+	}
+}
+
+/* ================================================================== *
+ *  Этап 9 — каскад сворачивания/разворачивания.                       *
+ *  Три рамки летят из прямоугольника окна в прямоугольник плашки с    *
+ *  задержкой — глаз успевает проследить траекторию. Рамки живут в     *
+ *  отдельном слое, ничего не двигают, не участвуют в раскладке и не   *
+ *  ловят события (pointer-events:none на слое целиком).               *
+ * ================================================================== */
+.media-fold-layer {
+	position: fixed;
+	inset: 0;
+	z-index: 195;
+	pointer-events: none;
+}
+
+.media-fold-ghost {
+	position: absolute;
+	border: 2px solid var(--accent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklch, var(--accent), transparent 92%);
+}
+
+/* Этап 8 — виewport, сжатый FLIP'ом в mini, должен садиться ровно в
+   .media-mini-bar-preview-slot (JS пишет position/left/top/width/height
+   через applyMiniViewportGeometry — единственный писатель геометрии
+   viewport'а в mini, см. media-overlay.jsx). Остальной хром full-режима
+   (шапка/стрелки/подвал/подложка) гаснет через opacity — не
+   display:none (И-K), сам viewport остаётся кликабельным (разворот по
+   тапу на превью). */
+.media-overlay[data-display="mini"] {
+	pointer-events: none;
+}
+
+.media-overlay[data-display="mini"]::before,
+.media-overlay[data-display="mini"] .media-overlay-top,
+.media-overlay[data-display="mini"] .media-overlay-nav,
+.media-overlay[data-display="mini"] .media-overlay-bottom {
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s var(--ease);
+}
+
+.media-overlay[data-display="mini"] .media-overlay-viewport {
+	pointer-events: auto;
+	cursor: pointer;
+	border-radius: var(--radius);
+	overflow: hidden;
+	padding: 0;
+}
+
+/* audio — визуального кадра нет (эквалайзер/иконка рисуются напрямую в
+   .media-mini-bar-preview-slot, статично, без FLIP) — сам viewport с
+   invisible <audio> просто гаснет, как остальной хром. Только video
+   реально сжимается в слот. */
+.media-overlay[data-display="mini"]:not([data-cls="video"]) .media-overlay-viewport {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.media-overlay[data-display="mini"] .media-overlay-inner {
+	width: 100%;
+	height: 100%;
+}
+
+.media-overlay[data-display="mini"] .media-overlay-inner video {
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	max-height: none;
+	object-fit: cover;
+	border-radius: 0;
 }
 
 /* ================================================================== *

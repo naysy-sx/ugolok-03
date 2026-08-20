@@ -17865,3 +17865,95 @@ cancel/settleEnd), тотальность на всех 25 парах состо
 
 Регрессия 1950/1950 (34 новых теста для автомата + 2 для mediaGoTo с
 этапа 4), build стабильна.
+
+## MEDIA-OVERLAY-UI-2.md — Этапы 8-9 (мини-бар, каскад)
+
+### Архитектура (И-K) — решение через AskUserQuestion
+
+Три варианта обсуждались для показа И full, И mini одновременно в DOM
+без пересоздания единственного `<video>`/`<audio>` (И-A): дублировать
+DOM-узел медиа, портал/телепорт, или дать РЕАЛЬНОМУ viewport'у самому
+визуально сжаться FLIP'ом. Пользователь выбрал третий (рекомендованный)
+вариант явно. Итог:
+- `.media-overlay` — рендерит ПОЛНУЮ full-структуру ВСЕГДА, пока жива
+  сессия; `data-display` переключает видимость (opacity/pointer-events
+  через CSS), не монтирование;
+- `.media-mini-bar-shell` — ОТДЕЛЬНЫЙ, тоже всегда смонтированный
+  элемент; имя/кнопки/прогресс/время — БЕЗ видео/аудио внутри;
+- реальный `.media-overlay-viewport` (несёт `<video>`/`<audio>`, video-
+  only — у audio нет визуального кадра) в mini-режиме получает inline
+  `position:fixed`+геометрию, ТОЧНО совпадающую с
+  `.media-mini-bar-preview-slot` (`applyMiniViewportGeometry`,
+  единственный писатель этой геометрии — И-G-стиль дисциплина);
+- декоративные рамки каскада (`.media-fold-ghost`, три штуки) — ЧИСТО
+  визуальный слой, НЕ несут содержимое, поверх настоящего кадра.
+
+### `src/ui/components/media/media-overlay.jsx` [C, крупная правка]
+
+Новые функции: `measureRect`/`measureNaturalViewportRect` (синхронный
+FLIP-замер, снимает/возвращает inline-style без промежуточного paint),
+`applyMiniViewportGeometry`/`clearMiniViewportGeometry` (video-only,
+единственный писатель геометрии viewport'а в mini), `cancelFold` (§9.3
+— отмена на "свернуть и сразу развернуть" и на unmount), `playFold`
+(три декоративные рамки, WAAPI, реверс меняет очерёдность+
+длительность+кривую — асимметрия §9.2), `playViewportFlip` (тот же
+Invert-Play приём, что открытие/закрытие §3.3, но для самого viewport'а
+между full-геометрией и mini-слотом), `handleMinimize`/`handleRestore`
+(замер FROM-rect ДО вызова `mediaMinimize`/`mediaRestore`, т.к. И-I
+меняет `session.display` мгновенно — TO-rect меряется уже в эффекте
+ПОСЛЕ коммита), `handleProgressSeek` (пишет `el.currentTime` напрямую,
+И-D — перемотка не через автомат).
+
+Три найденных живой проверкой бага (см. PLAN.md/log.md "этапы 8-9" за
+полным разбором первопричины):
+1. `playFold`/`playViewportFlip` — `Animation.finished` иногда не
+   резолвится (троттлинг фоновой/автоматизированной вкладки, playState
+   уже "finished", промис — нет) → декоративные рамки зависали в DOM.
+   Фикс: `setTimeout`-фолбэк с `done`-флагом (тот же приём, что
+   `armSettleWatchers`/`playSwapFade`).
+2. **`handleClose()` (этап 3.3, СТАРЫЙ код) имел ТОТ ЖЕ порок** — только
+   `.finished.then(() => closeMedia())`, без фолбэка. Не декоративная
+   мелочь: без вызова оверлей завис бы открытым НАВСЕГДА по клику
+   "Закрыть"/фон/Escape. Тот же фолбэк добавлен. **Правило на будущее:
+   любой единственный WAAPI `.finished.then(...)`, от которого зависит
+   реальный переход состояния (не только чистка декора), обязан иметь
+   `setTimeout`-фолбэк — в этом окружении/классе браузеров `.finished`
+   ненадёжен.**
+3. `.media-mini-bar-name-stem { min-width: 0 }` (безусловно, унаследовано
+   из mockup'а 1-в-1) отменяет content-based авто-минимум flexbox под
+   `overflow:visible` (`.is-marquee`) — JS-замер (`inner.scrollWidth -
+   box.clientWidth`) ВСЕГДА видел 0, бегущая строка не включалась ни при
+   какой длине имени. Фикс: `.is-marquee .name-stem { min-width: auto }`
+   (спека flexbox: `min-width:auto` + `overflow:visible` ⇒ не сжимать
+   ниже содержимого), reduced-motion override возвращает `min-width: 0`
+   обратно (иначе имя торчит без анимации и без "…").
+
+### `src/styles/custom.css` [C, крупная правка]
+
+Полностью переверстан блок мини-бара по `mini-bar-mockup.html` (токены
+1-в-1 совпали с проектными). Новые правила: `.media-mini-bar-shell` +
+`[data-display="full"]` (opacity:0, И-K), `.media-mini-bar-head/-rank/
+-row/-progress/-preview-slot(+is-audio, +[data-cls=video])/-eq(+keyframes)/
+-name(-inner/-stem/-ext)+marquee(keyframes,is-marquee,reduced-motion)/
+-time/-controls/-aux/-btn(+модификаторы)/-grab`, `.media-fold-layer`
+(`pointer-events:none` — не перехватывает клики, подтверждено
+статически) + `.media-fold-ghost`, `.media-overlay[data-display="mini"]`
+(хром full гаснет через opacity, не display:none — И-K; сам viewport
+остаётся кликабельным, разворот по тапу).
+
+### Живая проверка Chrome-автоматизацией
+
+FLIP-геометрия: после minimize `viewportRect` ТОЧНО совпал с
+`previewSlotRect`. Ghost-cleanup: rapid minimize→restore — 0 рамок
+после фикса (было: зависали на restore-направлении). `handleClose()`:
+подтверждено — оверлей закрывается по клику "Закрыть" (было бы
+неотличимо от рабочего без специальной диагностики — баг проявлялся
+только под тем же троттлингом, что и рамки). Marquee-фикс проверен
+ВРУЧНУЮ (репликация того же алгоритма — `min-width:0`→`auto` даёт
+overflow=300px на 82-символьном имени вместо 0); живой прогон ЧЕРЕЗ
+компонент не подтверждён в ЭТОЙ сессии — `document.hidden===true`
+(вкладка фоновая для рендерера), `requestAnimationFrame` там не
+срабатывает вовсе. Ограничение окружения, не кода — с активным табом
+`rAF` штатно планируется на следующий кадр.
+
+Регрессия 1950/1950, build стабильна.
