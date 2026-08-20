@@ -18,6 +18,7 @@ import IconInfoCircle from "../../icons/info-circle.jsx";
 import IconPlayerPlay from "../../icons/player-play.jsx";
 import IconPlayerPause from "../../icons/player-pause.jsx";
 import IconRepeat from "../../icons/repeat.jsx";
+import IconRepeatOnce from "../../icons/repeat-once.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
 
@@ -1117,10 +1118,7 @@ export default function MediaOverlay() {
 								onClick={handleRepeatCycle}
 								aria-label={repeatLabel}
 							>
-								<IconRepeat />
-								<span class="media-mini-bar-repeat-badge" hidden={session.repeat !== "one"}>
-									1
-								</span>
+								{session.repeat === "one" ? <IconRepeatOnce /> : <IconRepeat />}
 							</button>
 						)}
 						<button type="button" class="media-mini-bar-btn is-restore" onClick={handleRestore} aria-label={t("media.player.restore")}>

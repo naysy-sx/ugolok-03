@@ -3048,8 +3048,11 @@ button[type="button"].media-mini-bar-btn {
 	background: color-mix(in oklch, var(--accent), white 10%);
 }
 
-/* Повтор (этап 10) — три состояния на одной кнопке; badge различает
-   "один" от "выключен" (иначе только оттенком). */
+/* Повтор (этап 10) — три состояния на одной кнопке. Иконка сама меняется
+   между IconRepeat/IconRepeatOnce (media-overlay.jsx) — довесок к
+   живому фидбеку: цифра "1" теперь встроена В КОНТУР иконки, отдельный
+   badge (кружок с "1" поверх кнопки) стал избыточен и удалён вместе с
+   этим правилом. */
 .media-mini-bar-btn.is-repeat {
 	position: relative;
 }
@@ -3074,19 +3077,15 @@ button[type="button"].media-mini-bar-btn {
 	background: color-mix(in oklch, var(--accent), white 10%);
 }
 
-.media-mini-bar-repeat-badge {
-	position: absolute;
-	font-size: 0.5rem;
-	font-weight: var(--weight-bold);
-	transform: translate(0.45rem, 0.45rem);
-	background: var(--surface-raised);
-	/* Не наследовать цвет кнопки (теперь accent-contrast — светлый) —
-	   бейдж всегда на нейтральном var(--surface-raised) фоне, ему нужен
-	   свой контрастный (тёмный) текст, независимо от заливки родителя. */
-	color: var(--fg);
-	border-radius: var(--radius-full);
-	padding: 0 0.15rem;
-	line-height: 1.2;
+/* Пользователь: контур IconRepeat/IconRepeatOnce использует дуги
+   (SVG-команда A) — не выражается через <polyline>/<line>, как у
+   соседних кнопок (см. nav-prev.jsx), значит идёт через <path> и ловит
+   глобальный .icon path{stroke-width:0.6} (строка ~122) — тоньше, чем у
+   соседей. Явный override нужной специфичности (0,3,1 против 0,1,1),
+   пропорция та же, что у соседних 15-viewBox/1.4-stroke иконок:
+   1.4/15×24 ≈ 2.24. */
+.media-mini-bar-btn.is-repeat .icon path {
+	stroke-width: 2.24;
 }
 
 /* Разворот — обведённая, не плоская: главный выход из свёрнутого
