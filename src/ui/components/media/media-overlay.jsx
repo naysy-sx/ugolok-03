@@ -963,6 +963,29 @@ export default function MediaOverlay() {
 					</>
 				)}
 				<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
+					{/* Этап 11 (§11) — полоса перемотки, только audio/video. Пишет
+					    напрямую в el.currentTime через handleProgressSeek (И-D, тот же
+					    обработчик, что уже есть у прогресс-полосы мини-бара — семантика
+					    идентична, разница только в разметке/CSS). */}
+					{session.cls !== "image" && (
+						<div class="media-overlay-scrub">
+							<button
+								type="button"
+								class="media-overlay-btn"
+								onClick={withDragGuard(mediaToggle)}
+								aria-label={playing ? t("media.player.pause") : t("media.player.play")}
+							>
+								{playing ? <IconPlayerPause /> : <IconPlayerPlay />}
+							</button>
+							<span>{formatDuration(miniTime)}</span>
+							<div class="media-overlay-scrub-track" onClick={handleProgressSeek}>
+								<span>
+									<i style={{ "--p": miniDuration > 0 ? miniTime / miniDuration : 0 }} />
+								</span>
+							</div>
+							<span>{formatDuration(miniDuration)}</span>
+						</div>
+					)}
 					{session.cls === "image" && total > 1 && (
 						<div class="media-overlay-strip reel">
 							{[...session.playlist.idx.image].map((pos) => {

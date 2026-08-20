@@ -18067,3 +18067,47 @@ repeatOne/autoplay`) — `autoplay` зарезервирован под буду
 
 Регрессия 1976/1976 (см. log.md про независимо флапающий
 room-session.test.js), build стабильна.
+
+## MEDIA-OVERLAY-UI-2.md — Этап 11 (полоса перемотки полноэкранного вида)
+
+### `src/styles/custom.css` [C, новый блок]
+
+`.media-overlay-scrub`/`.media-overlay-scrub-track`(+`>span`/`i`/
+`i::after`/`:hover i::after`) — из mockup'а, АДАПТИРОВАН: убран
+`position:absolute; inset-inline:0; bottom:0` корневого блока (там
+стоял независимо от `.media-overlay`), вместо этого — обычный flex-ряд,
+рассчитанный на то, что его РОДИТЕЛЬ (`.media-overlay-bottom`) уже сам
+`position:absolute` и уже сам подчиняется `[data-chrome="off"]`.
+Причина: в проекте (в отличие от урезанного mockup'а) уже есть
+полноценный footer с плёнкой миниатюр и панелью сведений — второй
+независимый `position:absolute; bottom:0` элемент визуально
+конфликтовал бы с ним (оба претендуют на нижнюю кромку с собственным
+градиентным фоном).
+
+### `src/ui/components/media/media-overlay.jsx` [C, правка]
+
+Блок вставлен ПЕРВЫМ ребёнком `<footer class="media-overlay-bottom">`
+(до плёнки/панели сведений), `{session.cls !== "image" && (...)}`.
+Play/pause — тот же `mediaToggle`/`playing`, что и остальной хром
+(обёрнут `withDragGuard`, как остальные кнопки full-режима). Времена/
+прогресс — существующие `miniTime`/`miniDuration` (гоняются
+`onTimeUpdate` независимо от display, см. этап 6/8 — НЕ заводилось
+новое состояние). Клик по полосе — `onClick={handleProgressSeek}`
+(функция из этапа 8, БЕЗ ИЗМЕНЕНИЙ — уже пишет `mediaElRef.current.
+currentTime` с той же ratio-математикой и той же защитой на
+`!Number.isFinite(duration)`).
+
+### Живая проверка Chrome-автоматизацией
+
+Рендерится для video (`data-cls="video"`), полностью ОТСУТСТВУЕТ в
+DOM для image (`querySelector('.media-overlay-scrub')` → null).
+Клик по полосе без валидной `duration` (синтетическое тестовое видео
+не догружает `duration` в этом окружении, известное ограничение с
+предыдущих этапов) — не бросает исключение, `handleProgressSeek`'s
+guard отработал как задумано. Наследование chrome-fade подтверждено
+через НАСТОЯЩИЙ `pointermove`-эвент (прямое дёрганье `data-chrome`
+через JS Preact тут же откатывает обратно на следующем ре-рендере —
+ожидаемо, не баг): `data-chrome="off"→"on"` даёт `.media-overlay-
+bottom` (и вложенную полосу) `opacity:0→1`.
+
+Регрессия 1976/1976, build стабильна.

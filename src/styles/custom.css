@@ -2630,6 +2630,65 @@ html[data-media-full] .top-corner-actions {
 	object-fit: cover;
 }
 
+/* Этап 11 — полоса перемотки полноэкранного вида (§11, блок из
+   mini-bar-mockup.html, адаптирован: там .media-overlay-scrub стоял
+   отдельным position:absolute от корня — здесь ВНУТРИ
+   .media-overlay-bottom (первым ребёнком, перед плёнкой/панелью
+   сведений), чтобы естественно уезжать с остальным хромом по общему
+   правилу [data-chrome="off"] .media-overlay-bottom, не задавая новый
+   селектор). Только audio/video — cls==="image" не рендерит вовсе. */
+.media-overlay-scrub {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	font-size: var(--step--1);
+	font-variant-numeric: tabular-nums;
+	padding-block-end: var(--space-xs);
+}
+
+.media-overlay-scrub-track {
+	flex: 1;
+	block-size: 1rem;
+	display: flex;
+	align-items: center;
+	cursor: pointer;
+}
+
+.media-overlay-scrub-track > span {
+	position: relative;
+	display: block;
+	inline-size: 100%;
+	block-size: 4px;
+	border-radius: 2px;
+	background: color-mix(in oklch, var(--fg), transparent 82%);
+}
+
+.media-overlay-scrub-track i {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	inline-size: calc(var(--p, 0) * 100%);
+	border-radius: 2px;
+	background: var(--accent);
+}
+
+.media-overlay-scrub-track i::after {
+	content: "";
+	position: absolute;
+	inset-inline-end: -0.4rem;
+	inset-block-start: 50%;
+	inline-size: 0.8rem;
+	block-size: 0.8rem;
+	border-radius: 50%;
+	background: var(--accent);
+	transform: translateY(-50%) scale(0);
+	transition: transform var(--transition-speed) var(--ease);
+}
+
+.media-overlay-scrub-track:hover i::after {
+	transform: translateY(-50%) scale(1);
+}
+
 /* MEDIA-OVERLAY-UI.md, этап 6 — та же плотность, что остальной хром
    оверлея (не отдельный, более "воздушный" стиль, как было). --shadow/
    --radius-md — токены проекта вместо литералов rgba(0,0,0,.25)/
