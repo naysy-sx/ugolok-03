@@ -1074,16 +1074,19 @@ export default function MediaOverlay() {
 						onClick={handleRestore}
 						title={t("media.player.restore")}
 					>
-						{session.cls === "audio" && (
-							<>
-								<IconMusicNote aria-hidden="true" />
-								<div class="media-mini-bar-eq" aria-hidden="true">
-									<b />
-									<b />
-									<b />
-								</div>
-							</>
-						)}
+						{/* Найдено пользователем живьём: нота и эквалайзер рендерились
+						    ОДНОВРЕМЕННО безусловно — "две иконки сразу". Взаимоисключающе:
+						    эквалайзер (единственная индикация "звук идёт", см. комментарий
+						    ниже) — только пока playing; в паузе — статичная нота. */}
+						{session.cls === "audio" && (playing ? (
+							<div class="media-mini-bar-eq" aria-hidden="true">
+								<b />
+								<b />
+								<b />
+							</div>
+						) : (
+							<IconMusicNote aria-hidden="true" />
+						))}
 					</div>
 					<span class="media-mini-bar-time">
 						{formatDuration(miniTime)} / {formatDuration(miniDuration)}

@@ -2400,7 +2400,14 @@ html[data-media-full] .top-corner-actions {
    (color:var(--fg), подсветка фоном --surface). Здесь кнопка лежит на
    произвольном кадре — нужна своя подложка при наведении и больший
    тач-таргет. */
-.media-overlay-btn {
+/* button[type="button"].media-overlay-btn — тот же запас специфичности
+   (0,2,1), что у .media-mini-bar-btn выше (см. комментарий там):
+   разметка везде <button type="button">, глобальное правило-группа даёт
+   до (0,2,0) на варианте [type="button"]:has(> .icon). justify-content
+   здесь СВОЙ и не конфликтует (визуально было не так заметно, как у
+   мини-бара), но padding:0 всё равно перебивался чужим padding-inline —
+   тот же первопричинный баг. */
+button[type="button"].media-overlay-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -2452,13 +2459,20 @@ html[data-media-full] .top-corner-actions {
    экрана берётся мышью тривиально. На тач-устройствах кромка занята
    системными жестами и недостижима большим пальцем: там стрелок нет
    вовсе, листание свайпом (этап 3). */
-.media-overlay-nav {
+/* button[type="button"].media-overlay-nav — тот же запас специфичности
+   (0,2,1), см. комментарий у .media-mini-bar-btn выше. Без явного
+   padding:0 здесь глобальное правило-группа подставляло свой
+   padding-inline бесконфликтно (тут его никто не переопределял) —
+   стрелка визуально оставалась по центру (свой justify-content:center),
+   но с лишним отступом по бокам внутри узкой 2.75rem кнопки. */
+button[type="button"].media-overlay-nav {
 	position: absolute;
 	inset-block-start: 50%;
 	translate: 0 -50%;
 	z-index: 2;
 	inline-size: 2.75rem;
 	block-size: 4.5rem;
+	padding: 0;
 	border: 0;
 	border-radius: var(--radius-md);
 	background: oklch(0.16 0.02 var(--hue) / 0.45);
@@ -2964,12 +2978,26 @@ html[data-media-full] .top-corner-actions {
 	flex: none;
 }
 
-.media-mini-bar-btn {
+/* Найдено пользователем живьём: иконки внутри кнопок мини-бара "съехали"
+   и на вид сливались с фоном. Причина — глобальное правило (строка
+   ~133) на самом деле ГРУППА двух селекторов через запятую:
+   `button:has(> .icon)` (0,1,1) И `[type="button"]:has(> .icon)`
+   (0,2,0 — атрибут-селектор считается как класс, ПЛЮС :has(.icon)).
+   Разметка везде даёт <button type="button">, значит матчит ВТОРОЙ,
+   более специфичный вариант группы — первая попытка чинить через
+   простое "тег.класс" (0,1,1), как для .btn--danger, была недостаточна:
+   (0,1,1) < (0,2,0), глобальное правило продолжало побеждать. Нужен
+   явный запас: `button[type="button"].media-mini-bar-btn` — тег
+   (0,0,1) + атрибут (0,1,0) + класс (0,1,0) = (0,2,1), гарантированно
+   выше обоих вариантов группы. */
+button[type="button"].media-mini-bar-btn {
 	display: grid;
 	place-items: center;
 	flex: none;
 	width: 2rem;
 	height: 2rem;
+	padding: 0;
+	gap: 0;
 	border-radius: var(--radius-full);
 	color: var(--fg);
 	transition:
@@ -3104,6 +3132,22 @@ html[data-media-full] .top-corner-actions {
    тапу на превью). */
 .media-overlay[data-display="mini"] {
 	pointer-events: none;
+}
+
+/* Найдено пользователем живьём: превью видео в мини-баре — просто серый
+   квадрат, реального кадра не видно. Причина — .media-overlay и
+   .media-mini-bar-shell делят ОДИН z-index (190); при равенстве
+   побеждает порядок в DOM, а .media-mini-bar-shell идёт ВТОРЫМ
+   (JSX-фрагмент: .media-overlay, затем .media-mini-bar-shell, затем
+   .media-fold-layer) — плашка со своим непрозрачным
+   .media-mini-bar-preview-slot рисуется ПОВЕРХ viewport'а, целиком
+   закрывая долетевший туда через FLIP <video> собой, хотя геометрия и
+   opacity у самого viewport'а верны. Видео-only (audio и так гаснет
+   через opacity выше) — приподнимаем .media-overlay РОВНО настолько,
+   чтобы оказаться над плашкой (190), но остаться ниже .call-overlay
+   (200, этап 48). */
+.media-overlay[data-display="mini"][data-cls="video"] {
+	z-index: 191;
 }
 
 .media-overlay[data-display="mini"]::before,
