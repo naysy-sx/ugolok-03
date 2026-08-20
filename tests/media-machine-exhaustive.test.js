@@ -23,7 +23,10 @@ function playlist() {
 }
 
 function stateKey(s) {
-	return s === null ? "null" : `${s.cls}|${s.position}|${s.display}|${s.play}|${s.callActive}`;
+	// Этап 10 (§10.6) — repeat/autoplay ОБЯЗАНЫ входить в ключ: без них обход
+	// в ширину схлопнет состояния, различающиеся только режимом повтора, в
+	// одно — тест продолжил бы проходить, молча перестав быть исчерпывающим.
+	return s === null ? "null" : `${s.cls}|${s.position}|${s.display}|${s.play}|${s.callActive}|${s.repeat}|${s.autoplay}`;
 }
 
 function checkInvariants(pl, prevState, event, payload, next) {
@@ -40,6 +43,21 @@ function checkInvariants(pl, prevState, event, payload, next) {
 		// И5
 		if (next.cls === "image") {
 			assert.notEqual(next.display, "mini", `И5 нарушен: просмотрщик изображений свёрнут, переход ${event} из ${stateKey(prevState)}`);
+		}
+		// Этап 10 — repeat всегда одно из трёх допустимых значений.
+		assert.ok(["off", "all", "one"].includes(next.repeat), `repeat вне {off,all,one}: "${next.repeat}", переход ${event} из ${stateKey(prevState)}`);
+		// Этап 10 — при cls==="image" ended остаётся no-op НЕЗАВИСИМО от repeat
+		// (doEnded проверяет cls раньше repeat — структурная гарантия, но
+		// spec §10.6 требует явной проверки на каждом достижимом состоянии).
+		if (next.cls === "image") {
+			const afterEnded = transition(next, "ended", {}, pl);
+			assert.deepEqual(afterEnded, next, `ended не no-op для image, переход ${event} из ${stateKey(prevState)}`);
+		}
+		// Этап 10 — при repeat==="one" ended не меняет position (доводку к
+		// нулю делает вид, не δ — И-D).
+		if (next.repeat === "one") {
+			const afterEnded = transition(next, "ended", {}, pl);
+			assert.equal(afterEnded.position, next.position, `repeat="one": ended сдвинул position, переход ${event} из ${stateKey(prevState)}`);
 		}
 	}
 	// И3
@@ -72,6 +90,15 @@ test("EVENTS покрыт полностью, δ тотальна и И1–И6 �
 		["callEnd", {}],
 		["ended", {}],
 		["seek", { t: 0 }],
+		// Этап 10 — три режима repeat + оба autoplay как отдельные рёбра:
+		// обход в ширину сам находит все 6 комбинаций repeat×autoplay из
+		// любого достижимого состояния (§10.6: "пространство вырастет в
+		// шесть раз — это ожидаемо").
+		["setRepeat", { mode: "off" }],
+		["setRepeat", { mode: "all" }],
+		["setRepeat", { mode: "one" }],
+		["setAutoplay", { value: true }],
+		["setAutoplay", { value: false }],
 	];
 
 	// Каждое имя события из EVENTS обязано встретиться хотя бы раз среди рёбер обхода —

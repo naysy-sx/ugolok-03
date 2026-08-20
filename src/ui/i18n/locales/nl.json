@@ -458,7 +458,11 @@
 			"minimize": "Minimaliseren",
 			"restore": "Uitvouwen",
 			"trackOf": "{{current}} van {{total}}",
-			"info": "Info"
+			"info": "Info",
+			"repeatOff": "Herhalen: uit",
+			"repeatAll": "Herhalen: alles",
+			"repeatOne": "Herhalen: één",
+			"autoplay": "Automatisch afspelen"
 		},
 		"classNames": {
 			"audio": "audio",

@@ -1,4 +1,4 @@
-import { stepInClass, windowByBudget } from "./playlist.js";
+import { stepInClass, stepInClassRing, firstOfClass, windowByBudget } from "./playlist.js";
 
 export const EVENTS = [
 	"open",
@@ -12,26 +12,47 @@ export const EVENTS = [
 	"callEnd",
 	"ended",
 	"seek",
+	"setRepeat",
+	"setAutoplay",
 ];
 
+// Этап 10 (MEDIA-OVERLAY-UI-2.md §10.1) — repeat/autoplay компоненты
+// кортежа состояния (И-J), но переживают закрытие сессии (state===null
+// сбрасывает ВСЁ) — значения приходят СНАРУЖИ через payload (сохранены в
+// signals/media.js в localStorage), δ их не читает ниоткуда, кроме payload.
 function doOpen(state, payload) {
 	const callActive = state?.callActive ?? false;
-	const play = callActive ? "suspended" : "playing";
-	return { cls: payload.cls, position: payload.position, display: "full", play, callActive };
+	const repeat = payload.repeat ?? "off";
+	const autoplay = payload.autoplay ?? true;
+	const play = callActive ? "suspended" : autoplay ? "playing" : "paused";
+	return { cls: payload.cls, position: payload.position, display: "full", play, callActive, repeat, autoplay };
 }
 
 function doNext(state, payload, playlist) {
 	if (state === null) return state;
-	const p = stepInClass(playlist, state.position, +1);
+	const step = state.repeat === "all" ? stepInClassRing : stepInClass;
+	const p = step(playlist, state.position, +1);
 	if (p === -1) return state;
 	return { ...state, position: p };
 }
 
 function doPrev(state, payload, playlist) {
 	if (state === null) return state;
-	const p = stepInClass(playlist, state.position, -1);
+	const step = state.repeat === "all" ? stepInClassRing : stepInClass;
+	const p = step(playlist, state.position, -1);
 	if (p === -1) return state;
 	return { ...state, position: p };
+}
+
+function doSetRepeat(state, payload) {
+	if (state === null) return state;
+	if (!["off", "all", "one"].includes(payload?.mode)) return state;
+	return { ...state, repeat: payload.mode };
+}
+
+function doSetAutoplay(state, payload) {
+	if (state === null) return state;
+	return { ...state, autoplay: payload?.value === true };
 }
 
 function doToggle(state) {
@@ -68,13 +89,21 @@ function doCallEnd(state) {
 	return { ...state, play, callActive: false };
 }
 
+// Этап 10 (§10.2) — таблица repeat × {есть следующий | последний в классе}.
+// repeat==="one" не двигает позицию вовсе (перемотку к нулю делает вид,
+// см. media-overlay.jsx onEnded — И-D, δ не трогает currentTime).
 function doEnded(state, payload, playlist) {
 	if (state === null) return state;
 	if (state.cls === "image") return state;
 	if (state.callActive) return state;
+	if (state.repeat === "one") return { ...state, play: "playing" };
 	const p = stepInClass(playlist, state.position, +1);
-	if (p === -1) return { ...state, play: "paused" };
-	return { ...state, position: p, play: "playing" };
+	if (p !== -1) return { ...state, position: p, play: "playing" };
+	if (state.repeat === "all") {
+		const first = firstOfClass(playlist, state.cls);
+		if (first !== -1) return { ...state, position: first, play: "playing" };
+	}
+	return { ...state, play: "paused" };
 }
 
 function doSeek(state) {
@@ -93,6 +122,8 @@ const HANDLERS = {
 	callEnd: doCallEnd,
 	ended: doEnded,
 	seek: doSeek,
+	setRepeat: doSetRepeat,
+	setAutoplay: doSetAutoplay,
 };
 
 export function transition(state, event, payload, playlist) {

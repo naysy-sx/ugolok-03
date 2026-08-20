@@ -458,7 +458,11 @@
 			"minimize": "Свернуть",
 			"restore": "Развернуть",
 			"trackOf": "{{current}} из {{total}}",
-			"info": "Сведения"
+			"info": "Сведения",
+			"repeatOff": "Повтор: выключен",
+			"repeatAll": "Повтор: весь список",
+			"repeatOne": "Повтор: текущий",
+			"autoplay": "Автовоспроизведение"
 		},
 		"classNames": {
 			"audio": "аудио",

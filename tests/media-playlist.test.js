@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPlaylist, classesPresent, stepInClass, firstOfClass, windowByBudget } from "../src/domain/media/playlist.js";
+import { buildPlaylist, classesPresent, stepInClass, firstOfClass, lastOfClass, stepInClassRing, windowByBudget } from "../src/domain/media/playlist.js";
 
 function ref(digest, mime, size) {
 	return { digest, key: null, mime, name: digest, size, sourceKind: "attachment", sourceMeta: {} };
@@ -147,4 +147,44 @@ test("windowByBudget: budgetBytes=0 или maxSpan<=1 -> минимальное 
 	const pl = buildPlaylist(items);
 	assert.deepEqual(windowByBudget(pl, 1, 0, 5), { l: 1, r: 2 });
 	assert.deepEqual(windowByBudget(pl, 1, 10000, 1), { l: 1, r: 2 });
+});
+
+// Этап 10 (MEDIA-OVERLAY-UI-2.md §10.3) — кольцевой шаг для repeat==="all".
+// stepInClass сам НЕ меняется (используется в doEnded для честного "конца
+// списка" — spec §"Что сознательно не делается" запрещает его трогать).
+
+test("lastOfClass: последняя позиция класса, -1 если класса нет", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(lastOfClass(pl, "audio"), 0); // единственный
+	assert.equal(lastOfClass(pl, "image"), 3); // rank1, последний image
+	const emptyPl = buildPlaylist([ref("a", "audio/mpeg", 1)]);
+	assert.equal(lastOfClass(emptyPl, "video"), -1);
+});
+
+test("stepInClassRing: внутри класса ведёт себя как stepInClass (не на границе)", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(stepInClassRing(pl, 2, +1), 3); // image: rank0 -> rank1, обычный шаг
+	assert.equal(stepInClassRing(pl, 3, -1), 2);
+});
+
+test("stepInClassRing: на последней позиции класса заворачивает на первую", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(stepInClassRing(pl, 3, +1), 2); // последний image -> первый image
+});
+
+test("stepInClassRing: на первой позиции класса заворачивает на последнюю", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(stepInClassRing(pl, 2, -1), 3); // первый image -> последний image
+});
+
+test("stepInClassRing: единственный элемент класса заворачивает сам на себя (обе стороны)", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(stepInClassRing(pl, 0, +1), 0); // единственный audio
+	assert.equal(stepInClassRing(pl, 0, -1), 0);
+});
+
+test("stepInClassRing: класс 'other' (cls=3) — как stepInClass, всегда -1, без исключений", () => {
+	const pl = buildPlaylist(sampleRefs());
+	assert.equal(stepInClassRing(pl, 4, +1), -1); // o1, единственный other
+	assert.equal(stepInClassRing(pl, 4, -1), -1);
 });

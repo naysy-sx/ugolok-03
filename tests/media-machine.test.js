@@ -19,14 +19,36 @@ function samplePlaylist() {
 	]);
 }
 
-test("EVENTS содержит буквально алфавит SPEC §3.4", () => {
-	assert.deepEqual(EVENTS, ["open", "next", "prev", "toggle", "minimize", "restore", "close", "callStart", "callEnd", "ended", "seek"]);
+test("EVENTS содержит буквально алфавит SPEC §3.4 + этап 10 (setRepeat/setAutoplay)", () => {
+	assert.deepEqual(EVENTS, [
+		"open",
+		"next",
+		"prev",
+		"toggle",
+		"minimize",
+		"restore",
+		"close",
+		"callStart",
+		"callEnd",
+		"ended",
+		"seek",
+		"setRepeat",
+		"setAutoplay",
+	]);
 });
 
-test("open из null: сброс в full/playing, callActive=false (звонка не было)", () => {
+test("open из null: сброс в full/playing, callActive=false, repeat/autoplay по умолчанию (payload их не задаёт)", () => {
 	const pl = samplePlaylist();
 	const s = transition(null, "open", { cls: "audio", position: 0 }, pl);
-	assert.deepEqual(s, { cls: "audio", position: 0, display: "full", play: "playing", callActive: false });
+	assert.deepEqual(s, { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "off", autoplay: true });
+});
+
+test("open: payload.repeat/payload.autoplay переносятся в состояние", () => {
+	const pl = samplePlaylist();
+	const s = transition(null, "open", { cls: "audio", position: 0, repeat: "all", autoplay: false }, pl);
+	assert.equal(s.repeat, "all");
+	assert.equal(s.autoplay, false);
+	assert.equal(s.play, "paused"); // autoplay=false ⟹ не запускать само
 });
 
 test("open — это СБРОС непустого состояния, а не стек (Опр.3 матдокумента)", () => {
@@ -182,6 +204,121 @@ test("ended для cls=image — неприменимо, состояние ка
 	const pl = samplePlaylist();
 	const s = { cls: "image", position: 3, display: "full", play: "paused", callActive: false };
 	assert.deepEqual(transition(s, "ended", {}, pl), s);
+});
+
+// Этап 10 (§10.2) — таблица repeat × {есть следующий | последний в классе}.
+
+test("ended, repeat=off, есть следующий: как раньше — позиция+1, playing", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "off", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.equal(s2.position, 1);
+	assert.equal(s2.play, "playing");
+});
+
+test("ended, repeat=off, последний в классе: пауза, позиция на месте (не закрывается, не зацикливается)", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 1, display: "full", play: "playing", callActive: false, repeat: "off", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.notEqual(s2, null);
+	assert.equal(s2.position, 1);
+	assert.equal(s2.play, "paused");
+});
+
+test("ended, repeat=all, есть следующий: позиция+1, playing (как off)", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "all", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.equal(s2.position, 1);
+	assert.equal(s2.play, "playing");
+});
+
+test("ended, repeat=all, последний в классе: заворачивает на первый элемент класса, playing", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 1, display: "full", play: "playing", callActive: false, repeat: "all", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.equal(s2.position, 0); // первый audio
+	assert.equal(s2.play, "playing");
+});
+
+test("ended, repeat=one, есть следующий: позиция НЕ меняется (не off-поведение), playing", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "one", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.equal(s2.position, 0);
+	assert.equal(s2.play, "playing");
+});
+
+test("ended, repeat=one, последний в классе: то же самое — позиция на месте, playing", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 1, display: "full", play: "playing", callActive: false, repeat: "one", autoplay: true };
+	const s2 = transition(s, "ended", {}, pl);
+	assert.equal(s2.position, 1);
+	assert.equal(s2.play, "playing");
+});
+
+test("ended при callActive — по-прежнему no-op целиком, независимо от repeat (И2)", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "suspended", callActive: true, repeat: "all", autoplay: true };
+	assert.deepEqual(transition(s, "ended", {}, pl), s);
+});
+
+// setRepeat / setAutoplay (§10.2)
+
+test("setRepeat: принимает off/all/one, отклоняет прочее (состояние как есть)", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "off", autoplay: true };
+	assert.equal(transition(s, "setRepeat", { mode: "all" }, pl).repeat, "all");
+	assert.equal(transition(s, "setRepeat", { mode: "one" }, pl).repeat, "one");
+	assert.deepEqual(transition(s, "setRepeat", { mode: "bogus" }, pl), s);
+	assert.deepEqual(transition(s, "setRepeat", {}, pl), s);
+});
+
+test("setRepeat на null — без изменений", () => {
+	const pl = samplePlaylist();
+	assert.equal(transition(null, "setRepeat", { mode: "all" }, pl), null);
+});
+
+test("setRepeat не трогает другие поля состояния", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "video", position: 2, display: "mini", play: "playing", callActive: false, repeat: "off", autoplay: true };
+	const s2 = transition(s, "setRepeat", { mode: "one" }, pl);
+	assert.equal(s2.position, 2);
+	assert.equal(s2.display, "mini");
+	assert.equal(s2.play, "playing");
+});
+
+test("setAutoplay: записывает true/false буквально (payload.value !== true -> false)", () => {
+	const pl = samplePlaylist();
+	const s = { cls: "audio", position: 0, display: "full", play: "playing", callActive: false, repeat: "off", autoplay: true };
+	assert.equal(transition(s, "setAutoplay", { value: false }, pl).autoplay, false);
+	assert.equal(transition(s, "setAutoplay", { value: true }, pl).autoplay, true);
+	assert.equal(transition(s, "setAutoplay", {}, pl).autoplay, false); // payload.value !== true
+});
+
+test("setAutoplay на null — без изменений", () => {
+	const pl = samplePlaylist();
+	assert.equal(transition(null, "setAutoplay", { value: true }, pl), null);
+});
+
+// Кольцевой шаг next/prev при repeat==="all" (§10.3)
+
+test("next/prev при repeat='all' заворачивают на краю класса", () => {
+	const pl = samplePlaylist();
+	const lastImage = { cls: "image", position: 5, display: "full", play: "paused", callActive: false, repeat: "all", autoplay: true };
+	const s2 = transition(lastImage, "next", {}, pl);
+	assert.equal(s2.position, 3); // первый image (см. samplePlaylist: i0=pos3,i1=4,i2=5)
+	const firstAudio = { cls: "audio", position: 0, display: "full", play: "paused", callActive: false, repeat: "all", autoplay: true };
+	const s3 = transition(firstAudio, "prev", {}, pl);
+	assert.equal(s3.position, 1); // последний audio (a1)
+});
+
+test("next/prev при repeat!='all' НЕ заворачивают — прежнее поведение (без изменений на краю)", () => {
+	const pl = samplePlaylist();
+	const lastImage = { cls: "image", position: 5, display: "full", play: "paused", callActive: false, repeat: "off", autoplay: true };
+	assert.deepEqual(transition(lastImage, "next", {}, pl), lastImage);
+	const lastImageOne = { ...lastImage, repeat: "one" };
+	assert.deepEqual(transition(lastImageOne, "next", {}, pl), lastImageOne);
 });
 
 test("seek не меняет ни одного поля MediaState (побочный эффект вне машины)", () => {

@@ -17957,3 +17957,113 @@ overflow=300px на 82-символьном имени вместо 0); живо
 `rAF` штатно планируется на следующий кадр.
 
 Регрессия 1950/1950, build стабильна.
+
+## MEDIA-OVERLAY-UI-2.md — Этап 10 (повтор и автовоспроизведение)
+
+### `src/domain/media/playlist.js` [C, новый экспорт]
+
+```js
+export function lastOfClass(pl, cls): number  // симметрично firstOfClass, -1 если класса нет
+export function stepInClassRing(pl, position, delta): number
+```
+
+`stepInClassRing` — обёртка над `stepInClass` (тот НЕ меняется — spec
+запрещает, он единственный источник честного "конца списка" для
+`doEnded`): при -1 заворачивает на `firstOfClass`/`lastOfClass` того же
+класса. Единственный элемент класса заворачивает сам на себя; класс
+"other" (cls-индекс 3) — как и `stepInClass`, всегда -1, без исключений
+(`firstOfClass`/`lastOfClass` уже защищены от `pl.idx["other"] ===
+undefined`).
+
+### `src/domain/media/media-machine.js` [C, крупная правка]
+
+`EVENTS` дополнен `"setRepeat"`/`"setAutoplay"`. `doOpen` читает
+`payload.repeat ?? "off"`/`payload.autoplay ?? true`, `play` теперь
+`callActive ? "suspended" : autoplay ? "playing" : "paused"` (раньше
+всегда `"playing"` при отсутствии звонка — behavior-breaking изменение,
+но обратная совместимость обеспечена дефолтом `autoplay ?? true`, все
+старые вызовы `doOpen` без `payload.autoplay` продолжают открываться
+`"playing"`). `doSetRepeat`/`doSetAutoplay` — прямые сеттеры полей с
+валидацией (`doSetRepeat` отклоняет значения вне `{off,all,one}`,
+`doSetAutoplay` приводит к строгому `=== true`). `doEnded` — таблица
+§10.2 буквально: `repeat==="one"` не двигает position; иначе обычный
+`stepInClass`; на конце класса при `repeat==="all"` — `firstOfClass`;
+иначе — пауза на месте (как было). `doNext`/`doPrev` выбирают
+`stepInClassRing` вместо `stepInClass` при `state.repeat === "all"`.
+
+### `src/ui/signals/media.js` [C, новый слой]
+
+`mediaPrefs` — модульная переменная (НЕ сигнал — репид/autoplay не
+часть UI-реактивности вне сессии, читаются только в момент диспетчинга
+"open"), инициализируется из `localStorage["ugolok.media.prefs"]` через
+`loadMediaPrefs()` (try/catch — недоступность `localStorage` в
+node --test/приватном режиме тихо даёт дефолты `{repeat:"off",
+autoplay:true}`, НЕ бросает). `saveMediaPrefs` симметрично тихая на
+запись (квота/приватный режим). `openMedia`/`mediaGoTo` ОБА кладут
+`mediaPrefs.repeat/autoplay` в payload события "open" — специально
+одинаково: `mediaGoTo` **не** наследует режим от текущего
+`mediaSession.value`, потому что "open" в δ — это сброс состояния, не
+слияние (см. этап A), и без явной передачи через `mediaPrefs` прыжок
+по миниатюре плёнки молча обнулил бы режим повтора пользователя.
+`setRepeat(mode)`/`setAutoplay(value)` — пишут И в `mediaPrefs`+
+storage, И диспетчат `"setRepeat"`/`"setAutoplay"` в текущую сессию.
+
+### `src/ui/components/media/media-overlay.jsx` [C, правка]
+
+`handleEnded()` — заменяет прямой `onEnded={mediaEnded}` у `<View>`
+(§10.4): читает `mediaSession.peek()?.repeat === "one"` ДО вызова
+`mediaEnded()` (после — состояние уже новое, δ его не меняет для
+"one", но порядок чтения обязателен по духу spec), затем при
+`repeat==="one"` сбрасывает `mediaElRef.current.currentTime = 0` и
+вызывает `.play()` — `.catch(() => mediaToggle())` синхронизирует
+сессию с реальным отказом браузера (та же дисциплина, что в
+video-player.jsx/audio-player.jsx для обычного play()). `canGoPrev`/
+`canGoNext` в мини-баре — `session.repeat === "all" || rank > 0|<total-1`
+(full-режимные стрелки `.media-overlay-nav` и так никогда не были
+disabled — они no-op на границе при `doNext`/`doPrev`, ring просто
+делает их не-no-op). Кнопка повтора (`.media-mini-bar-btn.is-repeat`,
+в `.media-mini-bar-aux`, НЕ рендерится при `cls==="image"` — §10.5) —
+`handleRepeatCycle` циклит `off→all→one→off` через `setRepeat`; badge
+"1" виден только при `repeat==="one"` (`hidden` атрибут).
+
+### `src/ui/icons/repeat.jsx` [новый файл]
+
+Контур 1-в-1 из `mini-bar-mockup.html` (`<path>`×2, stroke-based,
+глобальное `.icon path{stroke-width:0.6}` применяется как обычно).
+
+### i18n
+
+4 новых ключа во всех 12 локалях (`media.player.repeatOff/repeatAll/
+repeatOne/autoplay`) — `autoplay` зарезервирован под будущий UI-тумблер
+настроек, этот этап такого тумблера не добавляет (spec его и не
+описывает — только кнопку повтора, §10.5).
+
+### Живая проверка Chrome-автоматизацией
+
+2 синтетических mp3 через кнопку-фильтр "Аудио" на экране Файлов
+(`openFolderMediaClass` — ОТДЕЛЬНАЯ функция от одиночного `openEntry`
+на dblclick по строке файла, та строит playlist из ОДНОГО файла;
+нужна для получения `total>1`). Кнопка повтора циклит корректно, badge
+только на "one", aria-label меняется по `t("media.player.repeat*")`.
+`repeat="all"`: обе кнопки-стрелки не заблокированы НИ на первом, НИ на
+последнем треке; реальный клик "next" с последнего трека заворачивает
+на первый. Синтетическое DOM-событие `ended` на `<audio>`: `repeat=
+"one"` — position не сдвинулся, `currentTime` сброшен в 0, `play`
+остался `"playing"`; `repeat="all"` на последнем треке — `ended`
+перевёл на первый (через `doEnded`, независимая от `doNext` кодовая
+дорожка — обе проверены отдельно). Persistence: `setRepeat("all")` в
+одной сессии, `closeMedia()`, `openMedia()` заново (даже под НОВЫМ
+аккаунтом браузерной вкладки в одной и той же live-сессии) — новая
+сессия открылась уже с `repeat==="all"` (mediaPrefs пережил close).
+
+Побочно найден (не относится к этапу 10, строка существовала раньше):
+файл с нераспознанным MIME (`classOf` → `"other"`) роняет
+`MediaOverlay` при рендере — `session.playlist.idx[session.cls]` даёт
+`undefined` для `"other"` (в `idx` только audio/video/image), `.length`
+бросает. `openEntry`/`openFolderMediaClass` (files.jsx) не фильтруют
+"other"-класс перед `openMedia` на этом пути (`openFolderMediaClass`
+фильтрует, `openEntry` — нет). Зафиксировано в log.md/PLAN.md, не
+исправлено — вне скоупа MEDIA-OVERLAY-UI-2.md.
+
+Регрессия 1976/1976 (см. log.md про независимо флапающий
+room-session.test.js), build стабильна.

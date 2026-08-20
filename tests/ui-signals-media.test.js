@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mediaSession, openMedia, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../src/ui/signals/media.js";
+import { mediaSession, openMedia, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia, setRepeat, setAutoplay } from "../src/ui/signals/media.js";
 import { callState } from "../src/ui/signals/call.js";
 
 function ref(digest, mime = "image/jpeg") {
@@ -125,6 +125,71 @@ test("callState edge-detection: последовательность OUTGOING_RI
 
 	resetCallState();
 	await Promise.resolve();
+	closeMedia();
+});
+
+// Этап 10 — repeat/autoplay живут вне сигнала (mediaPrefs, модульная
+// переменная в signals/media.js), но должны доходить до mediaSession через
+// payload события "open" и переживать закрытие/повторное открытие сессии
+// (localStorage недоступен в node --test — loadMediaPrefs() тихо падает в
+// try/catch на defaults при импорте модуля, здесь проверяется только
+// В-ПАМЯТИ поведение mediaPrefs, что и есть предмет теста: setRepeat/
+// setAutoplay обязаны сохраняться между сессиями ДАЖЕ без storage).
+
+test("openMedia по умолчанию: repeat='off', autoplay=true (setRepeat/setAutoplay сброшены в начале теста)", () => {
+	resetCallState();
+	closeMedia();
+	setRepeat("off");
+	setAutoplay(true);
+	closeMedia();
+	openMedia({ refs: [ref("a"), ref("b")], position: 0 });
+	assert.equal(mediaSession.value.repeat, "off");
+	assert.equal(mediaSession.value.autoplay, true);
+	closeMedia();
+});
+
+test("setRepeat: меняет repeat текущей сессии и переживает close+повторный openMedia", () => {
+	resetCallState();
+	closeMedia();
+	openMedia({ refs: [ref("a"), ref("b")], position: 0 });
+	setRepeat("all");
+	assert.equal(mediaSession.value.repeat, "all");
+	closeMedia();
+	openMedia({ refs: [ref("a"), ref("b")], position: 0 });
+	assert.equal(mediaSession.value.repeat, "all", "режим повтора обязан пережить закрытие просмотрщика");
+	setRepeat("off"); // сброс для последующих тестов
+	closeMedia();
+});
+
+test("setRepeat: игнорирует недопустимое значение, не трогает mediaPrefs", () => {
+	resetCallState();
+	closeMedia();
+	openMedia({ refs: [ref("a")], position: 0 });
+	setRepeat("bogus");
+	assert.equal(mediaSession.value.repeat, "off");
+	closeMedia();
+});
+
+test("setAutoplay(false): следующий openMedia открывает на паузе (не playing)", () => {
+	resetCallState();
+	closeMedia();
+	setAutoplay(false);
+	openMedia({ refs: [ref("a", "video/mp4")], position: 0 });
+	assert.equal(mediaSession.value.autoplay, false);
+	assert.equal(mediaSession.value.play, "paused");
+	setAutoplay(true); // сброс для последующих тестов
+	closeMedia();
+});
+
+test("mediaGoTo: НЕ сбрасывает repeat/autoplay текущей сессии (переиспользует mediaPrefs, не значения по умолчанию)", () => {
+	resetCallState();
+	closeMedia();
+	setRepeat("one");
+	openMedia({ refs: [ref("a"), ref("b"), ref("c")], position: 0 });
+	assert.equal(mediaSession.value.repeat, "one");
+	mediaGoTo(2);
+	assert.equal(mediaSession.value.repeat, "one", "прыжок по миниатюре не обязан сбрасывать режим повтора");
+	setRepeat("off"); // сброс для последующих тестов
 	closeMedia();
 });
 

@@ -458,7 +458,11 @@
 			"minimize": "Küçült",
 			"restore": "Genişlet",
 			"trackOf": "{{total}} içinden {{current}}",
-			"info": "Bilgi"
+			"info": "Bilgi",
+			"repeatOff": "Tekrar: kapalı",
+			"repeatAll": "Tekrar: tümü",
+			"repeatOne": "Tekrar: bir",
+			"autoplay": "Otomatik oynatma"
 		},
 		"classNames": {
 			"audio": "ses",

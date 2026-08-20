@@ -5852,3 +5852,57 @@ Ghost-cleanup (rapid minimize+restore) и close-во-время-каскада
 — подтверждено статически (grep CSS, cascade не имеет override на детях).
 
 Регрессия 1950/1950, build стабильна.
+
+### Этап 10 — повтор и автовоспроизведение — ЗАКРЫТ
+
+repeat/autoplay — компоненты кортежа состояния (И-J), хранятся ВНЕ δ
+(signals/media.js: mediaPrefs + localStorage `ugolok.media.prefs`),
+входят в состояние ТОЛЬКО через payload события "open" (doOpen читает
+`payload.repeat ?? "off"`/`payload.autoplay ?? true` — δ не читает
+storage сама, остаётся чистой/тестируемой node --test). openMedia И
+mediaGoTo оба кладут `mediaPrefs.repeat/autoplay` в payload —
+mediaGoTo НАРОЧНО не наследует их от старого mediaSession.value:
+"open" в media-machine.js — это СБРОС состояния (уже задокументировано
+на этапе A), а не слияние, так что без явной передачи прыжок по
+миниатюре плёнки молча обнулил бы режим повтора.
+
+doEnded переписан по таблице §10.2. doNext/doPrev используют новую
+`stepInClassRing` (playlist.js) при `state.repeat === "all"` —
+`stepInClass` НЕ тронут (spec §"Что сознательно не делается" это
+прямо запрещает, он остаётся источником честного "конца списка" для
+doEnded). При `repeat === "one"` δ НЕ двигает position — перемотку к
+нулю делает вид (`handleEnded` в media-overlay.jsx, читает
+`mediaSession.peek()?.repeat` ДО вызова `mediaEnded()`).
+
+Тесты писались ДО кода (правило 14): 6 новых в media-playlist.test.js,
+~24 в media-machine.test.js (вся таблица §10.2, setRepeat/setAutoplay,
+ring next/prev), stateKey в exhaustive-тесте расширен на repeat/
+autoplay (217 достижимых состояний против ~36 раньше — рост совпал с
+обещанными в спеке "в шесть раз"), + 4 новых инварианта на каждом
+переходе. 5 новых в ui-signals-media.test.js (persistence через
+close+reopen, mediaGoTo не сбрасывает repeat). 12 локалей получили 4
+новых ключа (repeatOff/repeatAll/repeatOne/autoplay), перевод не
+носителем (тот же компромисс, что этап 70-палитра). Новая иконка
+`icons/repeat.jsx`.
+
+Живой проверкой Chrome-автоматизацией (2 синтетических mp3 через
+"Аудио"-фильтр Файлов, т.к. dblclick по одной строке открывает
+плейлист из ОДНОГО файла — openFolderMediaClass, отдельная функция,
+нужна для playlist с total>1) подтверждено: кнопка повтора циклит
+off→all→one→off с badge только на "one"; обе кнопки-стрелки НЕ
+заблокированы на обоих краях при repeat="all"; реальный клик "next" на
+последнем треке заворачивает на первый; синтетическое событие `ended`
+на audio-элементе — repeat="one" не двигает position и сбрасывает
+currentTime в 0, play остаётся "playing"; repeat="all" на последнем
+треке — `ended` переводит на первый (через doEnded, не через doNext);
+режим повтора пережил закрытие сессии и открытие новой.
+
+Живой проверкой заодно найден (НЕ введён этим этапом, НЕ в его скоуп)
+побочный баг: открытие файла с нераспознанным MIME роняет
+`MediaOverlay` в рендере (`idx["other"]===undefined`, строка
+существовала до этапа 10). Записано в log.md, не чинится — вне скоупа
+MEDIA-OVERLAY-UI-2.md.
+
+Регрессия 1976/1976 (не считая независимо флапающего теста в
+room-session.test.js, не относящегося к медиа), build стабильна.
+Подробности — CONTRACTS.md "Этап 10", log.md "этап 10".

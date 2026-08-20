@@ -23,6 +23,38 @@ export const mediaSession = signal(null); // MediaState & {playlist} | null
 
 let playlistRef = null; // снимок вне сигнала (SPEC §3.3 — "копируется при открытии")
 
+// MEDIA-OVERLAY-UI-2.md, этап 10 (§10.1) — repeat/autoplay обязаны
+// пережить закрытие сессии (mediaSession между сессиями null), поэтому
+// живут ЗДЕСЬ, обычными переменными модуля + localStorage, а не в
+// кортеже состояния автомата напрямую. δ (media-machine.js) их не читает
+// ниоткуда, кроме payload события "open" — это и есть та развязка,
+// которая оставляет δ чистой и тестируемой node --test без DOM/storage.
+const MEDIA_PREFS_KEY = "ugolok.media.prefs";
+
+function loadMediaPrefs() {
+	try {
+		const raw = localStorage.getItem(MEDIA_PREFS_KEY);
+		if (!raw) return { repeat: "off", autoplay: true };
+		const parsed = JSON.parse(raw);
+		return {
+			repeat: ["off", "all", "one"].includes(parsed.repeat) ? parsed.repeat : "off",
+			autoplay: parsed.autoplay !== false,
+		};
+	} catch {
+		return { repeat: "off", autoplay: true };
+	}
+}
+
+function saveMediaPrefs(prefs) {
+	try {
+		localStorage.setItem(MEDIA_PREFS_KEY, JSON.stringify(prefs));
+	} catch {
+		// приватный режим/квота — не критично, значения остаются в памяти вкладки
+	}
+}
+
+let mediaPrefs = loadMediaPrefs();
+
 const resourceOwner = createResourceOwner({
 	// .catch — resourceOwner сам не интересуется результатом (лайфсайкл,
 	// не показ); ошибку показывает view-компонент, вызвав acquireMediaUrl
@@ -51,7 +83,7 @@ function dispatch(event, payload) {
 
 export function openMedia({ refs, position, dedupe }) {
 	playlistRef = buildPlaylist(refs, dedupe ? { dedupeClasses: dedupe } : undefined);
-	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position });
+	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position, repeat: mediaPrefs.repeat, autoplay: mediaPrefs.autoplay });
 }
 
 // MEDIA-OVERLAY-UI.md, этап 4 — прыжок на произвольную позицию плёнкой
@@ -60,8 +92,13 @@ export function openMedia({ refs, position, dedupe }) {
 // неверно, это тот же плейлист). Переиспользует событие "open" —
 // media-machine.js уже умеет ставить произвольную позицию, новый
 // обработчик в автомат не добавляется (spec явно это оговаривает).
+//
+// Этап 10 — repeat/autoplay из mediaPrefs, НЕ из старого mediaSession.value:
+// та же "open" ветка δ иначе молча сбросила бы режим повтора на каждый клик
+// по миниатюре плёнки (doOpen всегда берёт payload.repeat/autoplay, не
+// наследует их от прежнего state — намеренно, "open — это СБРОС, не стек").
 export function mediaGoTo(position) {
-	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position });
+	dispatch("open", { cls: classOf(playlistRef.items[position].mime), position, repeat: mediaPrefs.repeat, autoplay: mediaPrefs.autoplay });
 }
 
 export function mediaNext() {
@@ -86,6 +123,22 @@ export function mediaEnded() {
 
 export function mediaSeek(t) {
 	dispatch("seek", { t });
+}
+
+// Этап 10 — пишут И в состояние (через δ, для текущей сессии), И в
+// mediaPrefs/localStorage (переживает закрытие/новое открытие).
+export function setRepeat(mode) {
+	if (!["off", "all", "one"].includes(mode)) return;
+	mediaPrefs = { ...mediaPrefs, repeat: mode };
+	saveMediaPrefs(mediaPrefs);
+	dispatch("setRepeat", { mode });
+}
+
+export function setAutoplay(value) {
+	const v = value === true;
+	mediaPrefs = { ...mediaPrefs, autoplay: v };
+	saveMediaPrefs(mediaPrefs);
+	dispatch("setAutoplay", { value: v });
 }
 
 export function mediaMinimize() {

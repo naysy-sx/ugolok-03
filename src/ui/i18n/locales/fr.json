@@ -458,7 +458,11 @@
 			"minimize": "Réduire",
 			"restore": "Agrandir",
 			"trackOf": "{{current}} sur {{total}}",
-			"info": "Infos"
+			"info": "Infos",
+			"repeatOff": "Répéter : désactivé",
+			"repeatAll": "Répéter : tout",
+			"repeatOne": "Répéter : un seul",
+			"autoplay": "Lecture automatique"
 		},
 		"classNames": {
 			"audio": "audio",

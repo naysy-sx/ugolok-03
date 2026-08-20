@@ -458,7 +458,11 @@
 			"minimize": "最小化",
 			"restore": "展开",
 			"trackOf": "第 {{current}} / 共 {{total}}",
-			"info": "信息"
+			"info": "信息",
+			"repeatOff": "重复：关闭",
+			"repeatAll": "重复：全部",
+			"repeatOne": "重复：单曲",
+			"autoplay": "自动播放"
 		},
 		"classNames": {
 			"audio": "音频",

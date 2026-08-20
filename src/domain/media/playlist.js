@@ -67,6 +67,26 @@ export function firstOfClass(pl, cls) {
 	return arr[0];
 }
 
+export function lastOfClass(pl, cls) {
+	const arr = pl.idx[cls];
+	if (!arr || arr.length === 0) return -1;
+	return arr[arr.length - 1];
+}
+
+// Этап 10 (MEDIA-OVERLAY-UI-2.md §10.3) — repeat==="all": кнопки края
+// списка не блокируются, шаг с последнего заворачивает на первый (и
+// наоборот). stepInClass сам не меняется — он покрыт тестами и остаётся
+// источником честного "конца списка" для doEnded (тот НЕ заворачивает при
+// repeat==="off"/"one" по таблице §10.2).
+export function stepInClassRing(pl, position, delta) {
+	const p = stepInClass(pl, position, delta);
+	if (p !== -1) return p;
+	const c = pl.cls[position];
+	if (c === 3) return -1;
+	const cls = CLASS_NAMES[c];
+	return delta > 0 ? firstOfClass(pl, cls) : lastOfClass(pl, cls);
+}
+
 export function windowByBudget(pl, position, budgetBytes, maxSpan) {
 	const n = pl.items.length;
 	if (n === 0) return { l: position, r: position };

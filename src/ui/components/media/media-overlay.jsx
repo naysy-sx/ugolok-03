@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { mediaSession, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia } from "../../signals/media.js";
+import { mediaSession, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia, setRepeat } from "../../signals/media.js";
 import { stepInClass } from "../../../domain/media/playlist.js";
 import { elasticDx, verticalCommit } from "../../../domain/media/swipe-gesture.js";
 import { IDLE_STATE, gestureTransition, gestureOutput } from "../../../domain/media/gesture-machine.js";
@@ -17,6 +17,7 @@ import IconRestore from "../../icons/restore.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
 import IconPlayerPlay from "../../icons/player-play.jsx";
 import IconPlayerPause from "../../icons/player-pause.jsx";
+import IconRepeat from "../../icons/repeat.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
 
@@ -793,6 +794,26 @@ export default function MediaOverlay() {
 	// трека свойство DOM-элемента, не состояния сессии), тот же приём, что
 	// будущая scrub-полоса полного вида (этап 11) будет использовать для
 	// того же mediaElRef.
+	// Этап 10 (§10.4) — при repeat==="one" автомат НЕ меняет position (см.
+	// doEnded в media-machine.js), значит вид не получает повода
+	// перезапустить элемент сам — перемотку к нулю и повторный play()
+	// делает эта функция. repeat читается ДО mediaEnded() — тот уже
+	// вызывает δ, после него session.repeat был бы значением уже НОВОГО
+	// состояния (тут репутационно то же самое, т.к. setRepeat отдельное
+	// событие и ended его не меняет — но порядок чтения "до" остаётся
+	// обязательным по духу spec, не полагаемся на то, что δ его не тронет).
+	// .catch — политика автовоспроизведения браузера может отказать; тогда
+	// сессия обязана узнать через mediaToggle(), тот же приём, что уже есть
+	// в video-player.jsx/audio-player.jsx для обычного отказа play().
+	function handleEnded() {
+		const repeatOne = mediaSession.peek()?.repeat === "one";
+		mediaEnded();
+		if (repeatOne && mediaElRef.current) {
+			mediaElRef.current.currentTime = 0;
+			mediaElRef.current.play().catch(() => mediaToggle());
+		}
+	}
+
 	function handleProgressSeek(e) {
 		const el = mediaElRef.current;
 		if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return;
@@ -803,8 +824,22 @@ export default function MediaOverlay() {
 
 	const [stem, ext] = splitName(currentRef.name);
 	const miniDuration = hasDuration ? meta.duration : 0;
-	const canGoPrev = rank > 0; // repeat==="all" (этап 10) снимет это ограничение
-	const canGoNext = rank < total - 1;
+	// Этап 10 (§10.3) — при repeat==="all" края списка не блокированы, шаг
+	// заворачивает (stepInClassRing внутри doNext/doPrev — здесь только UI-
+	// отражение того же условия, кнопки full-режима (.media-overlay-nav)
+	// и так никогда не были disabled, при repeat!=="all" doNext/doPrev
+	// по-прежнему no-op на границе).
+	const canGoPrev = session.repeat === "all" || rank > 0;
+	const canGoNext = session.repeat === "all" || rank < total - 1;
+
+	// Этап 10 (§10.5) — три состояния на одной кнопке: badge отличает "один"
+	// от "выключен" (иначе только оттенком, неразличимо на глаз).
+	const repeatLabel =
+		session.repeat === "off" ? t("media.player.repeatOff") : session.repeat === "all" ? t("media.player.repeatAll") : t("media.player.repeatOne");
+
+	function handleRepeatCycle() {
+		setRepeat(session.repeat === "off" ? "all" : session.repeat === "all" ? "one" : "off");
+	}
 
 	return (
 		<>
@@ -872,7 +907,7 @@ export default function MediaOverlay() {
 								mediaRef={currentRef}
 								playing={playing}
 								onToggle={mediaToggle}
-								onEnded={mediaEnded}
+								onEnded={handleEnded}
 								compact={isMini}
 								onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })}
 								onTimeUpdate={setMiniTime}
@@ -1048,6 +1083,20 @@ export default function MediaOverlay() {
 						</button>
 					</div>
 					<div class="media-mini-bar-aux">
+						{session.cls !== "image" && (
+							<button
+								type="button"
+								class="media-mini-bar-btn is-repeat"
+								data-mode={session.repeat}
+								onClick={handleRepeatCycle}
+								aria-label={repeatLabel}
+							>
+								<IconRepeat />
+								<span class="media-mini-bar-repeat-badge" hidden={session.repeat !== "one"}>
+									1
+								</span>
+							</button>
+						)}
 						<button type="button" class="media-mini-bar-btn is-restore" onClick={handleRestore} aria-label={t("media.player.restore")}>
 							<IconRestore />
 						</button>

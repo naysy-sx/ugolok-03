@@ -458,7 +458,11 @@
 			"minimize": "最小化",
 			"restore": "展開",
 			"trackOf": "{{total}}件中{{current}}件目",
-			"info": "情報"
+			"info": "情報",
+			"repeatOff": "リピート: オフ",
+			"repeatAll": "リピート: 全部",
+			"repeatOne": "リピート: 1曲",
+			"autoplay": "自動再生"
 		},
 		"classNames": {
 			"audio": "音声",
