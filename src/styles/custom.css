@@ -2999,10 +2999,29 @@ button[type="button"].media-mini-bar-btn {
 	padding: 0;
 	gap: 0;
 	border-radius: var(--radius-full);
-	/* Пользователь: обычные (не наведённые) иконки должны быть светлыми,
-	   как уже была анимированная нота/эквалайзер аудио-превью (та же
-	   переменная — accent-contrast), var(--fg) — только на hover. */
-	color: var(--accent-contrast);
+	/* Найдено живьём (тот же класс бага, что с padding/display выше) —
+	   minimal.css задаёт ВСЕМ <button> сплошной background-color:
+	   var(--accent) в @layer elements; custom.css здесь никогда явно не
+	   сбрасывал это свойство (в отличие от .media-overlay-btn, у
+	   которого background:transparent стоял с этапа 1) — border: 0
+	   тоже отсутствовал, что неважно визуально, но по духу тот же
+	   пробел. Итог: КАЖДАЯ кнопка мини-бара (prev/next/close/restore/
+	   repeat-off) незаметно была залита акцентом — он визуально
+	   сливался с похожим по тону фоном плашки, из-за чего активный
+	   repeat (та же заливка, намеренно) вообще не выделялся на общем
+	   фоне — все кнопки выглядели одинаково "залитыми". */
+	background: transparent;
+	border: 0;
+	/* var(--fg), не var(--accent-contrast) — та задумана ПАРОЙ к
+	   акцентному фону (текст поверх заливки, is-play/is-repeat-active),
+	   а не для прозрачного/surface-фона. Живой проверкой найдено: на
+	   background:transparent (фикс выше) accent-contrast-dark (0.1,
+	   почти чёрный — контрастен К ЯРКОМУ 0.74-акценту, но НЕ к
+	   0.28-surface плашки) делал иконки в тёмной теме ПОЧТИ невидимыми
+	   — ровно наоборот того, что просил пользователь ("светлыми").
+	   var(--fg) theme-adaptive и всегда контрастен с surface/фоном по
+	   всему проекту — то, что реально требовалось. */
+	color: var(--fg);
 	transition:
 		background-color var(--transition-speed) var(--transition-ease),
 		color var(--transition-speed) var(--transition-ease),
@@ -3017,8 +3036,8 @@ button[type="button"].media-mini-bar-btn {
 }
 
 .media-mini-bar-btn:hover {
+	/* color не задан отдельно — база уже var(--fg) (см. выше), совпадает */
 	background-color: color-mix(in oklch, var(--fg), transparent 90%);
-	color: var(--fg);
 }
 
 .media-mini-bar-btn:active {
