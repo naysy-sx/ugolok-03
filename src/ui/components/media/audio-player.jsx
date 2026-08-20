@@ -69,7 +69,11 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						if (!playing) onToggle();
 					}}
 					onPause={() => {
-						if (playing) onToggle();
+						// см. video-player.jsx — тот же баг ("повтор превращается в
+						// хаос"), тот же фикс: по спеке HTML5 естественное завершение
+						// трека шлёт "pause" ДО "ended", el.ended отличает его от
+						// ручной паузы пользователя.
+						if (playing && !audioRef.current?.ended) onToggle();
 					}}
 					// compact (свёрнутый вид) — звук продолжает играть, нативные controls
 					// скрыты (у mini-бара свои кнопки); display:none НЕ останавливает

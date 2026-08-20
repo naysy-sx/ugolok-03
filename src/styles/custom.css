@@ -2999,7 +2999,10 @@ button[type="button"].media-mini-bar-btn {
 	padding: 0;
 	gap: 0;
 	border-radius: var(--radius-full);
-	color: var(--fg);
+	/* Пользователь: обычные (не наведённые) иконки должны быть светлыми,
+	   как уже была анимированная нота/эквалайзер аудио-превью (та же
+	   переменная — accent-contrast), var(--fg) — только на hover. */
+	color: var(--accent-contrast);
 	transition:
 		background-color var(--transition-speed) var(--transition-ease),
 		color var(--transition-speed) var(--transition-ease),
@@ -3015,6 +3018,7 @@ button[type="button"].media-mini-bar-btn {
 
 .media-mini-bar-btn:hover {
 	background-color: color-mix(in oklch, var(--fg), transparent 90%);
+	color: var(--fg);
 }
 
 .media-mini-bar-btn:active {
@@ -3054,9 +3058,20 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--muted);
 }
 
+/* Пользователь: цвет текста var(--accent) на прозрачном фоне кнопки
+   сливался с фоном плашки — недостаточно надёжно в любой теме. Тот же
+   приём, что у is-play (единственная уже заливная кнопка): сплошная
+   акцентная заливка + светлая иконка поверх, гарантированно видна
+   независимо от темы/палитры. */
 .media-mini-bar-btn.is-repeat[data-mode="all"],
 .media-mini-bar-btn.is-repeat[data-mode="one"] {
-	color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-contrast);
+}
+
+.media-mini-bar-btn.is-repeat[data-mode="all"]:hover,
+.media-mini-bar-btn.is-repeat[data-mode="one"]:hover {
+	background: color-mix(in oklch, var(--accent), white 10%);
 }
 
 .media-mini-bar-repeat-badge {
@@ -3065,6 +3080,10 @@ button[type="button"].media-mini-bar-btn {
 	font-weight: var(--weight-bold);
 	transform: translate(0.45rem, 0.45rem);
 	background: var(--surface-raised);
+	/* Не наследовать цвет кнопки (теперь accent-contrast — светлый) —
+	   бейдж всегда на нейтральном var(--surface-raised) фоне, ему нужен
+	   свой контрастный (тёмный) текст, независимо от заливки родителя. */
+	color: var(--fg);
 	border-radius: var(--radius-full);
 	padding: 0 0.15rem;
 	line-height: 1.2;

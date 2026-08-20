@@ -92,7 +92,18 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						if (!playing) onToggle();
 					}}
 					onPause={() => {
-						if (playing) onToggle();
+						// Найдено пользователем живьём ("повтор превращается в хаос"):
+						// по HTML5 "reaches the end of the media resource" алгоритму
+						// браузер СНАЧАЛА ставит paused=true и шлёт "pause", и ТОЛЬКО
+						// ПОТОМ шлёт "ended" — естественное завершение трека тоже
+						// проходит через ЭТОТ обработчик. Без проверки el.ended этот
+						// "pause" ошибочно трактовался как ручная пауза пользователя,
+						// onToggle() успевал переключить session.play на "paused" ДО
+						// того, как repeat="one" (handleEnded в media-overlay.jsx)
+						// перезапускал трек — гонка между двумя источниками play/pause
+						// на одном и том же цикле, видимая как "мигающая иконка,
+						// дёрганый звук".
+						if (playing && !videoRef.current?.ended) onToggle();
 					}}
 					style={
 						compact
