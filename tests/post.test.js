@@ -16,6 +16,11 @@ import {
 	receivePost,
 	listChannelPosts,
 	republishAllPostsUnderCurrentKey,
+	setPostDue,
+	clearPostDue,
+	setPostDone,
+	makePostTask,
+	unmakePostTask,
 } from "../src/domain/content/post.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
@@ -107,7 +112,7 @@ test("publishPost: публикует kind 30061, Боб (VIEW-держател�
 
 	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
-	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published" });
+	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null });
 
 	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "published");
@@ -291,7 +296,7 @@ test("republishAllPostsUnderCurrentKey: переиздаёт published-пост 
 	assert.deepEqual(republishedEvent.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`], "тот же d-tag — replaceable замена на relay");
 
 	const plaintext = decryptChannelContent(republishedEvent.content, { 2: newKeyHex });
-	assert.deepEqual(JSON.parse(plaintext), { text: "старый пост", attachments: [], status: "published" });
+	assert.deepEqual(JSON.parse(plaintext), { text: "старый пост", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null });
 
 	// Читатель, получивший грант именно ЭТОЙ (новой) версии, расшифровывает.
 	const aliceChannelRow = fromEncryptedRow(await db.table("channels").get([ALICE_PUB, channelId]), DB_KEY);
@@ -342,4 +347,260 @@ test("АДВЕРСАРНО: republishAllPostsUnderCurrentKey — публика�
 	await assert.doesNotReject(() => republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, flakyPublish));
 	assert.equal(published.length, 1, "упавший пост пропущен, остальные переизданы");
 	assert.deepEqual(published[0].tags.find((t) => t[0] === "d"), ["d", `${channelId}:${okId}`]);
+});
+
+// --- Этап 1 (REDESIGN-SPEC.md) — признаки записи: dueAt/done (plaintext) + title/linkUrl (зашифровано)
+
+test("createDraftPost: title/linkUrl принимаются при создании, dueAt/done всегда стартуют null", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "текст",
+		attachments: [],
+		title: "Заголовок",
+		linkUrl: "https://example.com",
+	});
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.title, "Заголовок");
+	assert.equal(row.linkUrl, "https://example.com");
+	assert.equal(row.dueAt, null);
+	assert.equal(row.done, null);
+});
+
+test("createDraftPost: без title/linkUrl — оба null по умолчанию", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "текст", attachments: [] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.title, null);
+	assert.equal(row.linkUrl, null);
+});
+
+test("AC-16 продолжение: dueAt/done лежат в БД открытым текстом (индексируемые), title/linkUrl — нет", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "x",
+		attachments: [],
+		title: "секретный заголовок",
+		linkUrl: "https://secret.example",
+	});
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	const raw = await db.table("posts").get([ALICE_PUB, postId]);
+	assert.equal(raw.dueAt, 1700000000, "dueAt читается без расшифровки");
+	assert.equal("title" in raw, false, "title не лежит plaintext-полем");
+	assert.equal("linkUrl" in raw, false, "linkUrl не лежит plaintext-полем");
+	assert.equal(JSON.stringify(raw).includes("секретный заголовок"), false, "сырой дамп не содержит title");
+});
+
+test("setPostDue/clearPostDue: устанавливает и снимает срок, не трогая done/title/linkUrl", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "x",
+		attachments: [],
+		title: "T",
+		linkUrl: "https://l",
+	});
+	await makePostTask(ALICE_PUB, postId);
+
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	let row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.dueAt, 1700000000);
+	assert.equal(row.done, false, "done не тронут установкой срока");
+	assert.equal(row.title, "T");
+	assert.equal(row.linkUrl, "https://l");
+
+	await clearPostDue(ALICE_PUB, postId);
+	row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.dueAt, null);
+	assert.equal(row.done, false, "снятие срока не стирает отметку дела");
+	assert.equal(row.title, "T");
+	assert.equal(row.linkUrl, "https://l");
+});
+
+test("makePostTask/unmakePostTask/setPostDone: три состояния done, срок не трогают", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+
+	await makePostTask(ALICE_PUB, postId);
+	let row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.done, false, "makePostTask ставит done=false, не true");
+	assert.equal(row.dueAt, 1700000000);
+
+	await setPostDone(ALICE_PUB, postId, true);
+	row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.done, true);
+	assert.equal(row.dueAt, 1700000000, "отметка выполнения не стирает срок");
+
+	await unmakePostTask(ALICE_PUB, postId);
+	row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.done, null, "unmakePostTask возвращает done в null (не false)");
+	assert.equal(row.dueAt, 1700000000, "unmakePostTask срок НЕ трогает (REDESIGN-SPEC.md, этап 1)");
+});
+
+test("АДВЕРСАРНО: setPostDue/setPostDone/makePostTask/unmakePostTask на несуществующий пост -> DomainError", async () => {
+	await assert.rejects(() => setPostDue(ALICE_PUB, "нет-такого", 1700000000));
+	await assert.rejects(() => clearPostDue(ALICE_PUB, "нет-такого"));
+	await assert.rejects(() => setPostDone(ALICE_PUB, "нет-такого", true));
+	await assert.rejects(() => makePostTask(ALICE_PUB, "нет-такого"));
+	await assert.rejects(() => unmakePostTask(ALICE_PUB, "нет-такого"));
+});
+
+// Изоляция по владельцу — составной ключ [ownerPubkey, postId], тот же класс
+// пробела, что database.js многократно документирует как реальный найденный
+// класс бага (мультиаккаунт на одном устройстве видел чужие данные, этапы
+// 25/30/31/36/72). postId существует, но принадлежит ДРУГОМУ владельцу —
+// строки [BOB_PUB, postId] в базе нет вообще, обязана бросить, а не молча
+// создать чужую запись под чужим postId.
+test("АДВЕРСАРНО: чужой postId под своим ownerPubkey -> DomainError, не создаёт и не трогает чужую запись", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "алисин пост", attachments: [] });
+
+	await assert.rejects(() => setPostDue(BOB_PUB, postId, 1700000000), /пост не найден/);
+	await assert.rejects(() => makePostTask(BOB_PUB, postId), /пост не найден/);
+
+	const bobRow = await db.table("posts").get([BOB_PUB, postId]);
+	assert.equal(bobRow, undefined, "чужая запись под тем же postId не создана");
+	const aliceRow = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(aliceRow.dueAt, null, "запись владельца не задета попыткой чужого ownerPubkey");
+	assert.equal(aliceRow.done, null);
+});
+
+test("setPostDue/setPostDone — локальные, ничего не публикуют", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+
+	const published = [];
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	await makePostTask(ALICE_PUB, postId);
+	assert.deepEqual(published, [], "setPostDue/makePostTask не публикуют события");
+});
+
+test("updateDraftPost: правка text/attachments не стирает title/linkUrl/dueAt/done", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "v1",
+		attachments: [],
+		title: "T",
+		linkUrl: "https://l",
+	});
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	await makePostTask(ALICE_PUB, postId);
+
+	await updateDraftPost(ALICE_PUB, DB_KEY, postId, { text: "v2", attachments: [] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(row.text, "v2");
+	assert.equal(row.title, "T");
+	assert.equal(row.linkUrl, "https://l");
+	assert.equal(row.dueAt, 1700000000);
+	assert.equal(row.done, false);
+});
+
+test("publishPost: relay-payload несёт dueAt/done/title/linkUrl вместе с text/attachments/status", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "текст",
+		attachments: [],
+		title: "Заголовок",
+		linkUrl: "https://example.com",
+	});
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	await makePostTask(ALICE_PUB, postId);
+
+	const published = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
+	const event = published.find((e) => e.kind === 30061);
+	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
+	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
+	assert.deepEqual(JSON.parse(plaintext), {
+		text: "текст",
+		attachments: [],
+		status: "published",
+		dueAt: 1700000000,
+		done: false,
+		title: "Заголовок",
+		linkUrl: "https://example.com",
+	});
+});
+
+test("receivePost: старое событие БЕЗ новых полей -> подставляются null, приём не падает", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const aliceChannelRow = await db.table("channels").get([ALICE_PUB, channelId]);
+	const aliceKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, 1]), DB_KEY);
+	const { sign } = await import("../src/core/crypto/sign.js");
+	const { encryptChannelContent } = await import("../src/core/crypto/channel-key.js");
+
+	// Событие в СТАРОМ формате (до этапа 1) — payload без dueAt/done/title/linkUrl.
+	const oldFormatContent = encryptChannelContent(
+		JSON.stringify({ text: "старый пост", attachments: [], status: "published" }),
+		aliceKeyRow.channelKey,
+		1,
+	);
+	const oldEvent = sign(
+		{
+			kind: 30061,
+			content: oldFormatContent,
+			tags: [
+				["d", `${channelId}:old-format-post`],
+				["h", aliceChannelRow.channelTopic],
+			],
+			created_at: Math.floor(Date.now() / 1000),
+		},
+		ALICE_PRIV,
+	);
+
+	const applied = await receivePost(BOB_PUB, DB_KEY, oldEvent);
+	assert.equal(applied, true);
+	const row = fromEncryptedRow(await db.table("posts").get([BOB_PUB, "old-format-post"]), DB_KEY);
+	assert.equal(row.text, "старый пост");
+	assert.equal(row.dueAt, null);
+	assert.equal(row.done, null);
+	assert.equal(row.title, null);
+	assert.equal(row.linkUrl, null);
+});
+
+test("receivePost: новое событие с полными признаками -> все четыре поля применяются у читателя", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "с признаками",
+		attachments: [],
+		title: "Заголовок",
+		linkUrl: "https://example.com",
+	});
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	await makePostTask(ALICE_PUB, postId);
+
+	const published = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
+	const event = published.find((e) => e.kind === 30061);
+
+	await receivePost(BOB_PUB, DB_KEY, event);
+	const row = fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY);
+	assert.equal(row.dueAt, 1700000000);
+	assert.equal(row.done, false);
+	assert.equal(row.title, "Заголовок");
+	assert.equal(row.linkUrl, "https://example.com");
+});
+
+test("republishAllPostsUnderCurrentKey: переносит текущие локальные dueAt/done/title/linkUrl в переизданный payload", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, {
+		text: "старый пост",
+		attachments: [],
+		title: "Заголовок",
+		linkUrl: "https://example.com",
+	});
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+	await makePostTask(ALICE_PUB, postId);
+
+	const newKeyHex = await rotateChannelKeyManually(channelId, 2);
+	const published = [];
+	await republishAllPostsUnderCurrentKey(ALICE_PUB, ALICE_PRIV, DB_KEY, channelId, capturingPublish(published));
+	const event = published.find((e) => e.kind === 30061);
+	const plaintext = decryptChannelContent(event.content, { 2: newKeyHex });
+	const parsed = JSON.parse(plaintext);
+	assert.equal(parsed.dueAt, 1700000000);
+	assert.equal(parsed.done, false);
+	assert.equal(parsed.title, "Заголовок");
+	assert.equal(parsed.linkUrl, "https://example.com");
 });

@@ -18481,3 +18481,158 @@ navigation-кнопки) — единая скруглённая полоса с
 селектором `input:not([type=button],[reset],[submit],[checkbox],
 [radio],[range],[color])` в minimal.css, демо только документирует
 факт.
+
+---
+
+# Редизайн интерфейса
+
+Источники: `PROCESS-DOCS/REDESIGN-AUDIT.md` (факты о коде на момент
+аудита), `PROCESS-DOCS/REDESIGN/REDESIGN-SPEC.md` (11 этапов, полное
+задание), `PROCESS-DOCS/REDESIGN/REDESIGN-SPEC-LAYOUT.md` (правила
+вёрстки), `PROCESS-DOCS/REDESIGN/ugolok-final.html` (макет-образец).
+PLAN.md, раздел "Этап «Редизайн интерфейса»" — список из 11 этапов
+верхнего уровня.
+
+## Этап 1 — признаки записи в модели (`domain/content/post.js`)
+
+### Новые поля объекта поста
+
+| Поле | Тип | Хранение | plaintext-таблица |
+|---|---|---|---|
+| `dueAt` | `number \| null` (unix seconds) | локально ОТКРЫТО + внутри зашифрованного relay-payload | да, `POSTS_PLAINTEXT_FIELDS` |
+| `done` | `boolean \| null` | локально ОТКРЫТО + внутри зашифрованного relay-payload | да, `POSTS_PLAINTEXT_FIELDS` |
+| `title` | `string \| null` | зашифровано (и локально, и на relay) | нет |
+| `linkUrl` | `string \| null` | зашифровано (и локально, и на relay) | нет |
+
+`done === null` — «это не дело» (признак отсутствует). `done === false`
+— «дело, не сделано». `done === true` — «дело, сделано». Три состояния,
+не булев флаг с дефолтом.
+
+Независимость признаков — жёсткий инвариант: снятие любого признака НЕ
+трогает остальные. `unmakePostTask` обнуляет `done`, `dueAt` не трогает.
+`clearPostDue` обнуляет `dueAt`, `done`/`title`/`linkUrl` не трогает.
+Комбинация «ссылка со сроком» (`linkUrl` + `dueAt` оба непустые) —
+законна.
+
+### `POSTS_PLAINTEXT_FIELDS` (`core/store/table-fields.js`)
+
+Было: `["ownerPubkey", "id", "channelId", "createdAt", "deleted",
+"status", "keyVersion", "lastEventCreatedAt", "lastEventId"]`.
+Стало: тот же список + `"dueAt"`, `"done"`.
+
+### Dexie-схема (`core/store/database.js`)
+
+Новая `db.version(25)`, переопределяет `posts` целиком (Dexie требует
+полный список индексов таблицы при изменении хотя бы одного):
+
+```js
+db.version(25).stores({
+  posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt]"
+});
+```
+
+Индекс по `done` не заводится — записей со сроком мало, фильтрация в
+памяти (сам этап 4 будет читать через `[ownerPubkey+dueAt]` и
+дофильтровывать `done !== true` в JS).
+
+### Сигнатуры функций `post.js`
+
+`createDraftPost` — литерал расширен опциональными полями создания.
+`dueAt`/`done` НЕ принимаются как параметры создания (в форме создания
+поля срока нет, REDESIGN-SPEC.md этап 2) — всегда стартуют `null`:
+
+```js
+export async function createDraftPost(
+  ownerPubkey, dbKey, channelId,
+  { text, attachments = [], title = null, linkUrl = null },
+)
+// литерал: { ..., title, linkUrl, dueAt: null, done: null, ... }
+```
+
+`updateDraftPost` — сигнатура НЕ меняется (`{ text, attachments }`).
+Слияние `{ ...fromEncryptedRow(raw, dbKey), text, attachments }` уже
+переносит `title`/`linkUrl`/`dueAt`/`done` из существующей строки
+неизменными — инвариант «ничего не теряется» выполняется автоматически,
+отдельного кода не требует.
+
+Пять новых функций-действий — **локальные** (пишут в Dexie напрямую
+через частичный `.table("posts").update(...)`, БЕЗ `dbKey` — оба поля
+plaintext — и БЕЗ `ownerPrivKey`/`publish` — republish на relay эти
+функции не делают, тот же паттерн, что `deletePost` использует для
+`{ deleted: true }`). `ownerPubkey` добавлен к сигнатурам из
+REDESIGN-SPEC.md (`setPostDue(postId, dueAt)` и т.п. — там сокращённая
+запись; составной ключ Dexie `[ownerPubkey, id]` требует его в реальной
+сигнатуре, как и во всех остальных функциях `post.js`):
+
+```js
+export async function setPostDue(ownerPubkey, postId, dueAt)   // dueAt: number|null
+export async function clearPostDue(ownerPubkey, postId)        // = setPostDue(ownerPubkey, postId, null)
+export async function setPostDone(ownerPubkey, postId, done)   // done: boolean|null
+export async function makePostTask(ownerPubkey, postId)        // = setPostDone(ownerPubkey, postId, false)
+export async function unmakePostTask(ownerPubkey, postId)      // = setPostDone(ownerPubkey, postId, null)
+```
+
+Каждая бросает `DomainError("пост не найден", "errors.postNotFound")`,
+если строка `[ownerPubkey, postId]` отсутствует — тот же паттерн, что
+`deletePost`/`republishWithStatus`.
+
+Почему без republish: сеть/приватный ключ этим функциям сознательно не
+даны (сигнатуры REDESIGN-SPEC.md их не перечисляют, в отличие от
+`publishPost`/`archivePost`/`deletePost`, где `ownerPrivKey, publish` —
+явные параметры). Синхронизация на relay происходит окольным путём —
+`dueAt`/`done`/`title`/`linkUrl` включены в payload
+`publishPost`/`archivePost`/`unpublishPost`/
+`republishAllPostsUnderCurrentKey` (см. ниже), поэтому ЛЮБОЙ следующий
+статусный переход подхватит и перешлёт актуальные локальные значения.
+Отдельного republish-действия «отправить срок на relay прямо сейчас»
+этап 1 не вводит.
+
+### Сериализация (relay-payload)
+
+Было: `{ text: row.text, attachments: row.attachments, status: newStatus }`
+(`republishWithStatus`, `republishAllPostsUnderCurrentKey`) и
+`{ text, attachments, status: "draft" }`-подобный литерал в
+`createDraftPost` (черновик не публикуется, но поля должны быть на
+строке для будущего первого `publishPost`).
+
+Стало — везде, где строится JSON для `encryptChannelContent`, добавлены
+все четыре поля:
+
+```js
+{ text: row.text, attachments: row.attachments, status: newStatus,
+  dueAt: row.dueAt, done: row.done, title: row.title, linkUrl: row.linkUrl }
+```
+
+`receivePost` — приёмник, разбор `parsed`. Старые события (до этапа 1)
+не содержат новых полей — читать через `??`, не напрямую:
+
+```js
+title: parsed.title ?? null,
+linkUrl: parsed.linkUrl ?? null,
+dueAt: parsed.dueAt ?? null,
+done: parsed.done ?? null,
+```
+
+(добавляются в литерал `db.table("posts").put(toEncryptedRow({...}))`
+внутри `receivePost`, рядом с существующими `text`/`attachments`/`status`).
+
+### Что НЕ меняется
+
+`status`/`post-machine.js` — состояние публикации (черновик/опубликован/
+архив), к признакам записи не относится, не трогать. `transport.js`,
+MLS/NIP-44/NIP-59 в `chat.js`, `channel-key.js` — не трогать (общее
+правило REDESIGN-SPEC.md). Интерфейс (`ui/*`) в этапе 1 не меняется —
+только домен + тесты.
+
+### DoD этапа 1
+
+- [x] `POSTS_PLAINTEXT_FIELDS` содержит `dueAt`, `done`.
+- [x] `database.js` — `db.version(25)`, `posts` с индексом `[ownerPubkey+dueAt]`.
+- [x] `createDraftPost` принимает `title`/`linkUrl`, всегда стартует `dueAt: null, done: null`.
+- [x] `setPostDue`/`clearPostDue`/`setPostDone`/`makePostTask`/`unmakePostTask` реализованы, локальные (без publish).
+- [x] `republishWithStatus`, `republishAllPostsUnderCurrentKey`, `receivePost` читают/пишут все 4 новых поля; старые события без них не падают (`?? null`).
+- [x] Тест инварианта «ничего не теряется»: снятие одного признака не трогает остальные, во всех комбинациях.
+- [x] `npm test` зелёный (полная регрессия, не только `post.test.js`) — 1988/1988.
+- [x] Ни один файл `src/ui/**` не тронут.
+- [x] Адверсарно: изоляция по `[ownerPubkey, postId]` (чужой postId под чужим ownerPubkey) — уже верна, находка не потребовалась.
+- [x] коммит (см. PLAN.md, "Этап 1 — ЗАКРЫТ")

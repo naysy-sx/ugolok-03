@@ -7384,3 +7384,15 @@ DoD:
 - [x] тесты зелёные, регрессия зелёная
 - [x] PLAN.md/CONTRACTS.md/log.md обновлены
 - [x] коммит (7f3d31a)
+
+## Редизайн интерфейса — Этап 1. Признаки записи в модели
+
+1. `table-fields.js` — воркер, `POSTS_PLAINTEXT_FIELDS` +dueAt/+done — зелёный с первого раза, применено точечно.
+2. `database.js` — воркер, `db.version(25)` (posts + индекс `[ownerPubkey+dueAt]`) — зелёный с первого раза, применено точечно.
+3. `post.js` — 5 точек (createDraftPost/republishWithStatus/receivePost/republishAllPostsUnderCurrentKey/5 новых функций) — написано Claude напрямую, не воркером (крипто-инварианты M2/M3, LWW-гейт isNewerVersion — тот же класс риска, что PLAN.md уже отмечает для onboarding.jsx/unlock.jsx).
+
+Тесты: 19 новых в post.test.js, tests-first (упали до кода на export не найден, зелёные после). 2 старых теста поправлены под новую форму payload (deepEqual ожидал старую форму без 4 новых полей). Адверсарно — межвладельческая изоляция [ownerPubkey, postId], находка не потребовалась (уже верно).
+
+Регрессия: post.test.js 29/29, npm test 1988/1988. npx vite build зелёный (862.93 kB gzip). src/ui/** не тронут.
+
+DoD — см. CONTRACTS.md, раздел "Редизайн интерфейса", этап 1 (все пункты [x]).

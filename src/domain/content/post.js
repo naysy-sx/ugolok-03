@@ -19,7 +19,12 @@ async function requirePublishOk(publish, event) {
 
 // DESIGN.md, "Этап 31", формализация 1 — draft НИКОГДА не публикуется, строго
 // локальная запись до первого PUBLISH.
-export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments = [] }) {
+// Редизайн интерфейса, этап 1 (CONTRACTS.md) — title/linkUrl: поля создания,
+// как text. dueAt/done НЕ принимаются здесь — в форме создания поля срока
+// нет (REDESIGN-SPEC.md, этап 2: "в момент написания срок обычно ещё не
+// известен"), оба всегда стартуют null, меняются только через
+// setPostDue/setPostDone и производные ниже.
+export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments = [], title = null, linkUrl = null }) {
 	const postId = crypto.randomUUID();
 	await db.table("posts").put(
 		toEncryptedRow(
@@ -30,6 +35,10 @@ export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, att
 				authorPubkey: ownerPubkey,
 				text,
 				attachments,
+				title,
+				linkUrl,
+				dueAt: null,
+				done: null,
 				status: "draft",
 				keyVersion: null,
 				createdAt: Math.floor(Date.now() / 1000),
@@ -68,8 +77,21 @@ async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsm
 	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, row.channelId]), dbKey);
 	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, row.channelId, meta.currentVersion]), dbKey);
 
+	// Редизайн интерфейса, этап 1 (CONTRACTS.md) — dueAt/done/title/linkUrl едут
+	// в payload вместе с text/attachments/status: setPostDue/setPostDone (ниже)
+	// сами ничего не публикуют (только локальная запись), поэтому именно
+	// ЛЮБОЙ следующий статусный переход подхватывает и рассылает актуальные
+	// локальные значения признаков подписчикам канала.
 	const content = encryptChannelContent(
-		JSON.stringify({ text: row.text, attachments: row.attachments, status: newStatus }),
+		JSON.stringify({
+			text: row.text,
+			attachments: row.attachments,
+			status: newStatus,
+			dueAt: row.dueAt,
+			done: row.done,
+			title: row.title,
+			linkUrl: row.linkUrl,
+		}),
 		keyRow.channelKey,
 		meta.currentVersion,
 	);
@@ -170,6 +192,10 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 		return false;
 	}
 
+	// Редизайн интерфейса, этап 1 (CONTRACTS.md) — события ДО этапа 1 не несут
+	// новых полей вовсе (parsed.dueAt/done/title/linkUrl === undefined) — ??,
+	// не прямое присваивание, иначе приём старого события затирал бы уже
+	// применённые локально признаки значением undefined.
 	await db.table("posts").put(
 		toEncryptedRow(
 			{
@@ -179,6 +205,10 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 				authorPubkey: event.pubkey,
 				text: parsed.text,
 				attachments: parsed.attachments,
+				title: parsed.title ?? null,
+				linkUrl: parsed.linkUrl ?? null,
+				dueAt: parsed.dueAt ?? null,
+				done: parsed.done ?? null,
 				status: parsed.status,
 				keyVersion: meta.currentVersion,
 				createdAt,
@@ -226,7 +256,19 @@ export async function republishAllPostsUnderCurrentKey(ownerPubkey, ownerPrivKey
 
 	for (const post of posts) {
 		try {
-			const content = encryptChannelContent(JSON.stringify({ text: post.text, attachments: post.attachments, status: post.status }), keyRow.channelKey, meta.currentVersion);
+			const content = encryptChannelContent(
+				JSON.stringify({
+					text: post.text,
+					attachments: post.attachments,
+					status: post.status,
+					dueAt: post.dueAt,
+					done: post.done,
+					title: post.title,
+					linkUrl: post.linkUrl,
+				}),
+				keyRow.channelKey,
+				meta.currentVersion,
+			);
 			const event = sign(
 				{
 					kind: 30061,
@@ -245,4 +287,46 @@ export async function republishAllPostsUnderCurrentKey(ownerPubkey, ownerPrivKey
 			console.warn("republishAllPostsUnderCurrentKey: не удалось переиздать пост, остальные всё равно переиздаются", post.id, e);
 		}
 	}
+}
+
+// Редизайн интерфейса, этап 1 (CONTRACTS.md) — пять новых действий над
+// признаками записи. Все ЛОКАЛЬНЫЕ: частичный db.update() на plaintext-поля
+// dueAt/done (тот же приём, что deletePost использует для { deleted: true }),
+// без dbKey (расшифровка не нужна) и без ownerPrivKey/publish (republish на
+// relay не делают — REDESIGN-SPEC.md задаёт им сигнатуры БЕЗ этих
+// параметров, в отличие от publishPost/archivePost/deletePost). Актуальные
+// значения долетают до relay окольным путём — они уже часть payload
+// publishPost/archivePost/unpublishPost/republishAllPostsUnderCurrentKey
+// выше, так что любой следующий статусный переход разошлёт их сам.
+//
+// Инвариант независимости признаков (REDESIGN-SPEC.md, этап 1): смена
+// одного признака никогда не трогает остальные три. setPostDue/setPostDone
+// пишут РОВНО одно поле частичным update() — соседние поля физически не
+// упоминаются в патче, значит не могут быть задеты.
+
+async function requirePostExists(ownerPubkey, postId) {
+	const row = await db.table("posts").get([ownerPubkey, postId]);
+	if (!row) throw new DomainError("пост не найден", "errors.postNotFound");
+}
+
+export async function setPostDue(ownerPubkey, postId, dueAt) {
+	await requirePostExists(ownerPubkey, postId);
+	await db.table("posts").update([ownerPubkey, postId], { dueAt });
+}
+
+export async function clearPostDue(ownerPubkey, postId) {
+	return setPostDue(ownerPubkey, postId, null);
+}
+
+export async function setPostDone(ownerPubkey, postId, done) {
+	await requirePostExists(ownerPubkey, postId);
+	await db.table("posts").update([ownerPubkey, postId], { done });
+}
+
+export async function makePostTask(ownerPubkey, postId) {
+	return setPostDone(ownerPubkey, postId, false);
+}
+
+export async function unmakePostTask(ownerPubkey, postId) {
+	return setPostDone(ownerPubkey, postId, null);
 }

@@ -37,7 +37,12 @@ export const MESSAGES_PLAINTEXT_FIELDS = ["seq", "ownerPubkey", "chatId", "msgId
 // приёма — хронологическая позиция поста в ленте, не трогается republish'ем).
 // LWW-гейт живого пути 30061 — archivePost/unpublishPost/edit republish-ят
 // тот же d-tag, старая версия не должна откатывать status/text.
-export const POSTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "status", "keyVersion", "lastEventCreatedAt", "lastEventId"];
+//
+// Редизайн интерфейса, этап 1 (CONTRACTS.md) — dueAt/done открыты НАМЕРЕННО
+// (нужен индекс [ownerPubkey+dueAt] для выборки "Сегодня" без полного
+// перебора, этап 4): сырой дамп локальной БД раскрывает наличие и дату
+// срока, но не текст. title/linkUrl остаются зашифрованными.
+export const POSTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "createdAt", "deleted", "status", "keyVersion", "lastEventCreatedAt", "lastEventId", "dueAt", "done"];
 
 export const COMMENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "postId", "parentId", "deleted"];
 

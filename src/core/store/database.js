@@ -308,6 +308,16 @@ db.version(24).stores({
   contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey"
 });
 
+// Редизайн интерфейса, этап 1 (CONTRACTS.md) — признаки записи (dueAt/done/
+// title/linkUrl, dueAt/done открыты). posts переопределена целиком (Dexie
+// требует полный список индексов таблицы при изменении хотя бы одного) —
+// добавлен [ownerPubkey+dueAt] для этапа 4 ("Сегодня": выборка по сроку без
+// полного перебора). Индекс по done не заводится — записей со сроком мало,
+// фильтрация done !== true в памяти.
+db.version(25).stores({
+  posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt]"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }
