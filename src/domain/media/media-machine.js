@@ -55,16 +55,24 @@ function doSetAutoplay(state, payload) {
 	return { ...state, autoplay: payload?.value === true };
 }
 
+// Редизайн интерфейса, этап 3 (DESIGN.md) — Static = {image, other}: нет
+// play/pause/currentTime/duration, toggle/minimize/ended для них — no-op.
+// Playable = {audio, video} — единственные классы, где эти события что-то
+// значат. "other" (файлы) присоединяется к image, не заводит третью ветку.
+function isStatic(cls) {
+	return cls === "image" || cls === "other";
+}
+
 function doToggle(state) {
 	if (state === null) return state;
 	if (state.callActive) return state;
-	if (state.cls === "image") return state;
+	if (isStatic(state.cls)) return state;
 	return { ...state, play: state.play === "playing" ? "paused" : "playing" };
 }
 
 function doMinimize(state) {
 	if (state === null) return state;
-	if (state.cls === "image") return state;
+	if (isStatic(state.cls)) return state;
 	return { ...state, display: "mini" };
 }
 
@@ -94,7 +102,7 @@ function doCallEnd(state) {
 // см. media-overlay.jsx onEnded — И-D, δ не трогает currentTime).
 function doEnded(state, payload, playlist) {
 	if (state === null) return state;
-	if (state.cls === "image") return state;
+	if (isStatic(state.cls)) return state;
 	if (state.callActive) return state;
 	if (state.repeat === "one") return { ...state, play: "playing" };
 	const p = stepInClass(playlist, state.position, +1);

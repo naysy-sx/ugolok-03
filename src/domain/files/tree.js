@@ -56,12 +56,16 @@ function removeClassCount(classCount, parentId, mime) {
 
 // Θ(1) — три сравнения с нулём (ALGO.MD §3.5). "other" (индекс 3) наружу не
 // выставляется — для него нет UI-кнопки (MEDIA-SPEC.md §3.10).
+// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) добавлен как
+// полноценный класс, ключ ИМЕННО "other" (не "file" — media-buttons.jsx
+// адресует класс по этому имени, разъехавшийся ключ молча ломает кнопку).
 export function classesPresent(S, parentId) {
 	const arr = S.classCount.get(parentId);
 	return {
 		audio: !!arr && arr[0] > 0,
 		video: !!arr && arr[1] > 0,
 		image: !!arr && arr[2] > 0,
+		other: !!arr && arr[3] > 0,
 	};
 }
 

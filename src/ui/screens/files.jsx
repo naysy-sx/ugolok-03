@@ -44,7 +44,6 @@ import { filterEntries } from "../../domain/files/filter.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFileStreaming } from "../../domain/files/stream-upload.js";
-import { classOf } from "../../domain/media/media-ref.js";
 import { collectFolderScope } from "../../domain/media/scope.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
@@ -517,9 +516,11 @@ export default function Files() {
 		try {
 			const S = treeState.value;
 			const ids = [...liveChildrenOf(S, currentFolderId.value)];
-			const candidates = ids
-				.map((id) => S.nodes.get(id))
-				.filter((node) => node.kind === "file" && node.mime != null && classOf(node.mime) !== "other");
+			// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) больше не
+			// исключается: раньше кандидаты для медиа-оверлея ограничивались
+			// image/video/audio, теперь он умеет открывать и обычные файлы
+			// (file-viewer.jsx, VIEWS.other).
+			const candidates = ids.map((id) => S.nodes.get(id)).filter((node) => node.kind === "file" && node.mime != null);
 
 			const entries = [];
 			for (const node of candidates) {
@@ -672,7 +673,7 @@ export default function Files() {
 					)}
 				</>
 			}
-			mediaButtons={
+			slices={
 				view === "own" && (
 					<>
 						<MediaButtons counts={classesPresent(treeState.value, currentFolderId.value)} onOpen={openFolderMediaClass} />

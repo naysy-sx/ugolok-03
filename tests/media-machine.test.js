@@ -345,3 +345,60 @@ test("allocWindow для image = окно по бюджету вокруг по�
 	assert.ok(window.includes("i1"));
 	assert.ok(window.length >= 1);
 });
+
+// --- Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы): Static
+// (как image — toggle/minimize/ended неприменимы), но НЕ Galleried
+// (как audio/video — allocWindow только текущая позиция, не окно по бюджету).
+
+function samplePlaylistWithOther() {
+	return buildPlaylist([
+		ref("a0", "audio/mpeg", 10), // 0 audio
+		ref("o0", "application/pdf", 10), // 1 other
+		ref("i0", "image/png", 10), // 2 image
+		ref("o1", "application/zip", 10), // 3 other
+		ref("o2", "text/plain", 10), // 4 other
+	]);
+}
+
+test("toggle для cls=other — неприменимо (Static, как image), состояние как есть", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 1, display: "full", play: "paused", callActive: false };
+	assert.deepEqual(transition(s, "toggle", {}, pl), s);
+});
+
+test("minimize для cls=other — неприменимо (Static, как image), состояние как есть", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 1, display: "full", play: "paused", callActive: false };
+	assert.deepEqual(transition(s, "minimize", {}, pl), s);
+});
+
+test("ended для cls=other — неприменимо (Static, как image), состояние как есть", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 1, display: "full", play: "paused", callActive: false };
+	assert.deepEqual(transition(s, "ended", {}, pl), s);
+});
+
+test("next/prev двигают позицию внутри класса other", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 1, display: "full", play: "paused", callActive: false };
+	const s2 = transition(s, "next", {}, pl);
+	assert.equal(s2.position, 3);
+	const s3 = transition(s2, "next", {}, pl);
+	assert.equal(s3.position, 4);
+	const s4 = transition(s3, "next", {}, pl); // граница класса — без изменений
+	assert.deepEqual(s4, s3);
+});
+
+test("allocWindow для cls=other = только текущая позиция (как audio/video, НЕ как image — файлы не 'листаются' окном по бюджету)", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 3, display: "full", play: "paused", callActive: false };
+	assert.deepEqual(allocWindow(s, pl, 1000000), ["o1"]);
+});
+
+test("АДВЕРСАРНО: minimize для cls=other, потом toggle — оба no-op, display/play не расходятся с image-веткой", () => {
+	const pl = samplePlaylistWithOther();
+	const s = { cls: "other", position: 1, display: "full", play: "paused", callActive: false };
+	const afterMinimize = transition(s, "minimize", {}, pl);
+	const afterToggle = transition(afterMinimize, "toggle", {}, pl);
+	assert.deepEqual(afterToggle, s, "ни minimize, ни toggle не меняют state.other — идентично image");
+});

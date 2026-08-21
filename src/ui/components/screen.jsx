@@ -17,7 +17,7 @@ import { t } from "../signals/i18n.js";
 // feed — role="feed" (ARIA-паттерн для динамически подгружаемых лент,
 // сообщения/посты/комментарии), НЕ выставляется по умолчанию — формы
 // (Настройки/Профиль) им не являются.
-export default function Screen({ breadcrumb, title, actions, mediaButtons, footer, feed, children }) {
+export default function Screen({ breadcrumb, title, actions, slices, footer, feed, children }) {
 	const titleId = useId();
 
 	return (
@@ -42,12 +42,14 @@ export default function Screen({ breadcrumb, title, actions, mediaButtons, foote
 			</header>
 
 			{/* Этап E медиа-подсистемы — тонкая зона СРАЗУ ПОД шапкой, до
-			    content-area. Общий слот для chat.jsx/files.jsx (пользователь
-			    этой сессии: "у медиа-кнопок должно быть одно и то же
-			    положение") — даёт консистентность позиции бесплатно, раз оба
-			    экрана уже используют один Screen. Пусто/undefined -> ничего не
-			    рендерится, ноль верстки для остальных экранов. */}
-			{mediaButtons && <div class="media-buttons-zone">{mediaButtons}</div>}
+			    content-area (пользователь этой сессии: "у медиа-кнопок должно
+			    быть одно и то же положение"). Редизайн интерфейса, этап 3
+			    (CONTRACTS.md) — слот переименован mediaButtons -> slices и
+			    расширен на 4 экрана (было — chat.jsx/files.jsx, стало — плюс
+			    channel.jsx, channel-chat.jsx через него же): это ряд срезов
+			    текущего места, не только медиа-кнопки. Пусто/undefined ->
+			    ничего не рендерится, ноль верстки для остальных экранов. */}
+			{slices && <div class="slices-zone">{slices}</div>}
 
 			{/* content-area/content-wrapper — REGLAMENT.md §3 п.3: наложение это
 			    .layer (display:grid, grid-area:1/1 на единственного ребёнка), не

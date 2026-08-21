@@ -27,7 +27,7 @@ import { addComment, getCommentsTree, countCommentsByPost, compareComments } fro
 import { mediaClassesByPost } from "../../domain/content/media-index.js";
 import { collectPostScope, findRefPosition } from "../../domain/media/scope.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
-import { refFromAttachment } from "../../domain/media/media-ref.js";
+import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
 import { openMedia } from "../signals/media.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
@@ -769,6 +769,11 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [mediaClasses, setMediaClasses] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
 	const [navTarget, setNavTarget] = useState(null); // этап 47-довесок-3 — {postId, commentId?} из уведомления
+	// Редизайн интерфейса, этап 3 (CONTRACTS.md) — счётчики/обработчик клика
+	// среза для вкладки "chat", сообщаемые снизу через ChannelChat's
+	// onSlicesChange (её messages — локальное состояние компонента, сюда не
+	// поднимается).
+	const [chatSlices, setChatSlices] = useState({ counts: {}, onOpen: () => {} });
 
 	async function refresh() {
 		const raw = await db.table("channels").get([ownerPubkey, channelId]);
@@ -819,6 +824,32 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		setHasMore(more);
 	}
 
+	// Редизайн интерфейса, этап 3 (CONTRACTS.md) — ряд срезов в шапке для
+	// вкладки "posts": вложения САМИХ постов текущей загруженной страницы
+	// (posts state), БЕЗ комментариев — отличается от per-post кнопки в
+	// PostCard (та включает комментарии ОДНОГО поста, дерево которых грузится
+	// лениво и живёт внутри PostWithComments, не здесь).
+	function collectChannelPostsScope() {
+		return posts.flatMap((p) => (p.attachments ?? []).map((a) => refFromAttachment(a, { postId: p.id })));
+	}
+
+	function postsSlicesCounts() {
+		const present = { audio: false, video: false, image: false, other: false };
+		for (const ref of collectChannelPostsScope()) {
+			const c = classOf(ref.mime);
+			if (c in present) present[c] = true;
+		}
+		return present;
+	}
+
+	function handleOpenPostsSlice(cls) {
+		const refs = collectChannelPostsScope();
+		const playlist = buildPlaylist(refs);
+		const position = playlist.idx[cls]?.[0];
+		if (position === undefined) return;
+		openMedia({ refs, position });
+	}
+
 	// Этап 47-довесок-3 — клик по уведомлению о посте/комментарии/ответе (или по
 	// "Модерация"/"Чат" через subTab) передаёт сюда цель через channelPostTarget
 	// (notification-nav.js). Читаем ОДИН раз и сразу гасим сигнал — иначе повторное
@@ -866,7 +897,17 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const canComment = channelRow.role === "owner" || channelRow.role === "subscriber";
 
 	return (
-		<Screen breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }} title={channelRow.name || t("channels.card.untitled")}>
+		<Screen
+			breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }}
+			title={channelRow.name || t("channels.card.untitled")}
+			slices={
+				tab === "posts" ? (
+					<MediaButtons counts={postsSlicesCounts()} onOpen={handleOpenPostsSlice} />
+				) : tab === "chat" ? (
+					<MediaButtons counts={chatSlices.counts} onOpen={chatSlices.onOpen} />
+				) : undefined
+			}
+		>
 			{/* Markdown-этап E — описание/правила канала намеренно plain, разметка
 			    в них не вводится (CONTRACTS.md, "Markdown — Этап E", п.6). */}
 			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
@@ -990,6 +1031,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 						canWrite={canComment}
 						allowAttachments={channelRow.allowChatAttachments}
 						limiter={limiter}
+						onSlicesChange={setChatSlices}
 					/>
 				</section>
 			)}

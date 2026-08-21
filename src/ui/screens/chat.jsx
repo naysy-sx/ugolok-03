@@ -618,8 +618,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// чат (messages уже в состоянии, collectChatScope — Этап A). Ключи/размер
 	// уже внутри дескриптора вложения (refFromAttachment) — БЕЗ сети, в
 	// отличие от files.jsx's openFolderMediaClass.
+	// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) добавлен,
+	// ключ ИМЕННО "other" (не "file" — media-buttons.jsx адресует класс по
+	// этому имени, разъехавшийся ключ молча ломает кнопку).
 	function classesInMessages() {
-		const present = { audio: false, video: false, image: false };
+		const present = { audio: false, video: false, image: false, other: false };
 		for (const ref of collectChatScope(messages)) {
 			const c = classOf(ref.mime);
 			if (c in present) present[c] = true;
@@ -695,7 +698,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					</button>
 				</>
 			}
-			mediaButtons={<MediaButtons counts={classesInMessages()} onOpen={openChatMediaClass} />}
+			slices={<MediaButtons counts={classesInMessages()} onOpen={openChatMediaClass} />}
 			feed
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>

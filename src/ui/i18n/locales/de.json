@@ -448,7 +448,8 @@
 		"buttons": {
 			"audio": "Audio",
 			"video": "Video",
-			"images": "Bilder"
+			"images": "Bilder",
+			"files": "Dateien"
 		},
 		"player": {
 			"play": "Abspielen",
@@ -467,7 +468,8 @@
 		"classNames": {
 			"audio": "Audio",
 			"video": "Video",
-			"image": "Bilder"
+			"image": "Bilder",
+			"other": "Dateien"
 		},
 		"info": {
 			"size": "Größe",

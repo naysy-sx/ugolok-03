@@ -11,6 +11,9 @@ function ref(digest, mime, size) {
 	return { digest, key: null, mime, name: digest, size, sourceKind: "attachment", sourceMeta: {} };
 }
 
+// Редизайн интерфейса, этап 3 (DESIGN.md) — "o0"/"o1" (other/файлы)
+// добавлены, чтобы обход в ширину реально проходил через 4-й класс, не
+// только через audio/video/image.
 function playlist() {
 	return buildPlaylist([
 		ref("a0", "audio/mpeg", 10),
@@ -19,6 +22,8 @@ function playlist() {
 		ref("i0", "image/png", 10),
 		ref("i1", "image/png", 10),
 		ref("i2", "image/png", 10),
+		ref("o0", "application/pdf", 10),
+		ref("o1", "application/zip", 10),
 	]);
 }
 
@@ -40,18 +45,20 @@ function checkInvariants(pl, prevState, event, payload, next) {
 		}
 		// И4
 		assert.ok(next.position >= 0 && next.position < pl.items.length, `И4 нарушен: position вне [0,|L|), переход ${event} из ${stateKey(prevState)}`);
-		// И5
-		if (next.cls === "image") {
-			assert.notEqual(next.display, "mini", `И5 нарушен: просмотрщик изображений свёрнут, переход ${event} из ${stateKey(prevState)}`);
+		// И5 — редизайн интерфейса, этап 3 (DESIGN.md): распространён с image
+		// на Static={image,other} целиком — файл сворачивать так же нечего.
+		if (next.cls === "image" || next.cls === "other") {
+			assert.notEqual(next.display, "mini", `И5 нарушен: статичный класс (${next.cls}) свёрнут, переход ${event} из ${stateKey(prevState)}`);
 		}
 		// Этап 10 — repeat всегда одно из трёх допустимых значений.
 		assert.ok(["off", "all", "one"].includes(next.repeat), `repeat вне {off,all,one}: "${next.repeat}", переход ${event} из ${stateKey(prevState)}`);
-		// Этап 10 — при cls==="image" ended остаётся no-op НЕЗАВИСИМО от repeat
-		// (doEnded проверяет cls раньше repeat — структурная гарантия, но
-		// spec §10.6 требует явной проверки на каждом достижимом состоянии).
-		if (next.cls === "image") {
+		// Этап 10 — при Static (image/other) ended остаётся no-op НЕЗАВИСИМО
+		// от repeat (doEnded проверяет cls раньше repeat — структурная
+		// гарантия, но spec §10.6 требует явной проверки на каждом
+		// достижимом состоянии).
+		if (next.cls === "image" || next.cls === "other") {
 			const afterEnded = transition(next, "ended", {}, pl);
-			assert.deepEqual(afterEnded, next, `ended не no-op для image, переход ${event} из ${stateKey(prevState)}`);
+			assert.deepEqual(afterEnded, next, `ended не no-op для ${next.cls}, переход ${event} из ${stateKey(prevState)}`);
 		}
 		// Этап 10 — при repeat==="one" ended не меняет position (доводку к
 		// нулю делает вид, не δ — И-D).
@@ -75,6 +82,7 @@ test("EVENTS покрыт полностью, δ тотальна и И1–И6 �
 			{ cls: "audio", position: firstOfClass(pl, "audio") },
 			{ cls: "video", position: firstOfClass(pl, "video") },
 			{ cls: "image", position: firstOfClass(pl, "image") },
+			{ cls: "other", position: firstOfClass(pl, "other") },
 		];
 	}
 
@@ -138,6 +146,7 @@ test("δ не бросает исключение ни на одной паре 
 		{ cls: "audio", position: 0, display: "full", play: "playing", callActive: false },
 		{ cls: "video", position: 2, display: "mini", play: "suspended", callActive: true },
 		{ cls: "image", position: 3, display: "full", play: "paused", callActive: false },
+		{ cls: "other", position: 6, display: "full", play: "paused", callActive: false },
 	];
 	for (const s of sampleStates) {
 		for (const e of EVENTS) {

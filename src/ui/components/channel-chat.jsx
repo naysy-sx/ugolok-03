@@ -13,7 +13,8 @@ import AttachmentView from "./attachment-view.jsx";
 import { splitBubbleAttachments } from "./message-bubble-attachments.js";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
-import { refFromAttachment } from "../../domain/media/media-ref.js";
+import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
+import { buildPlaylist } from "../../domain/media/playlist.js";
 import IconPaperclip from "../icons/paperclip.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
@@ -89,7 +90,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 
 // Общий чат канала (этап 32) — плоская лента, свежие внизу (тот же принцип отображения,
 // что личные чаты, chat.jsx), не дерево (в отличие от комментариев).
-export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter }) {
+export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter, onSlicesChange }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
@@ -141,6 +142,32 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		if (position === -1) return;
 		openMedia({ refs, position });
 	}
+
+	// Редизайн интерфейса, этап 3 (CONTRACTS.md) — тот же паттерн, что
+	// chat.jsx's classesInMessages/openChatMediaClass, включая класс "other".
+	// messages — состояние ЭТОГО компонента, наружу (channel.jsx, слот
+	// Screen's slices) не поднимается — сообщается через onSlicesChange
+	// (тот же приём, что onCountChange у PostWithComments).
+	function classesInMessages() {
+		const present = { audio: false, video: false, image: false, other: false };
+		for (const ref of collectChatScope(messages)) {
+			const c = classOf(ref.mime);
+			if (c in present) present[c] = true;
+		}
+		return present;
+	}
+
+	function openChannelChatMediaClass(cls) {
+		const refs = collectChatScope(messages);
+		const playlist = buildPlaylist(refs);
+		const position = playlist.idx[cls]?.[0];
+		if (position === undefined) return;
+		openMedia({ refs, position });
+	}
+
+	useEffect(() => {
+		onSlicesChange?.({ counts: classesInMessages(), onOpen: openChannelChatMediaClass });
+	}, [messages]);
 
 	return (
 		<div class="stack" style={{ "--gap": "var(--space-s)" }}>

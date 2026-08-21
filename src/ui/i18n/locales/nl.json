@@ -448,7 +448,8 @@
 		"buttons": {
 			"audio": "Audio",
 			"video": "Video",
-			"images": "Afbeeldingen"
+			"images": "Afbeeldingen",
+			"files": "Bestanden"
 		},
 		"player": {
 			"play": "Afspelen",
@@ -467,7 +468,8 @@
 		"classNames": {
 			"audio": "audio",
 			"video": "video",
-			"image": "afbeeldingen"
+			"image": "afbeeldingen",
+			"other": "bestanden"
 		},
 		"info": {
 			"size": "Grootte",

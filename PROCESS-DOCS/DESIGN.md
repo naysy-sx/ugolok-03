@@ -7029,3 +7029,188 @@ SETTLING принципиально не может быть пиксельны�
 Тесты — `tests/media-gesture-machine.test.js`, ДО реализации модуля.
 `tests/media-swipe-gesture.test.js` не трогается (spec §7.4
 буквально это запрещает — математика уже верна и уже покрыта).
+
+## Редизайн интерфейса, этап 3 — класс "other" (файлы) в медиа-плейлисте
+
+Триаж (п.13a): **алгоритмическая (б)** — нетривиальный инвариант
+(разбиение 4 классов на пересекающиеся подмножества по двум разным
+осям, ниже), обширное существующее адверсарное покрытие тестами на
+границе классов (`tests/media-playlist.test.js`, в т.ч. буквально
+"класс 'other' (cls=3) — как stepInClass, всегда -1, без исключений" —
+контракт, который этот этап явно меняет, с полной регрессией, п.13
+skill).
+
+### Формализация
+
+Класс вложения `cls ∈ {audio, video, image, other}` (`CLASS_NAMES`,
+`media-ref.js`, порядок фиксирован индексами 0-3, менять нельзя —
+на нём завязаны `Int32Array`-счётчики в трёх местах: `media-index.js`,
+`domain/files/tree.js`'s `classCount`, `playlist.js`).
+
+Раньше `other` было ИСКЛЮЧЕНО из плейлиста как класс навигации (`idx`
+не имел ключа `other`, `stepInClass`/`stepInClassRing` возвращали `-1`
+безусловно при `cls===3`) — по дизайну (`media.buttons.jsx`'s
+комментарий "'other' никогда не показывается — MEDIA-SPEC.md §3.10").
+Этот этап явно отменяет это решение: `other` становится ПОЛНОЦЕННЫМ
+навигируемым классом (по требованию REDESIGN-SPEC.md, этап 3,
+подтверждено пользователем — "сделать полноценно").
+
+**Два независимых разбиения классов** (не одно и то же!):
+
+| | audio | video | image | other |
+|---|---|---|---|---|
+| **Playable** (play/pause/currentTime/duration осмысленны) | да | да | нет | нет |
+| **Galleried** (свайп-полоса соседних превью в DOM, `.media-overlay-strip`, `windowByBudget`-предзагрузка соседей) | нет | нет | да | нет |
+
+Т.е. `other` — Static (как `image`, нет плеера) но НЕ Galleried
+(как `audio`/`video`, нет DOM-полосы соседних превью, синхронный
+settle без анимации). Три класса из четырёх (`audio`/`video`/`other`)
+рендерятся через ОДИН `<View>` (`VIEWS[cls]`), `image` — единственное
+исключение с собственной 3-слайдовой раскладкой (`media-overlay.jsx`,
+строки ~882-905, НЕ трогается).
+
+**Инвариант, который нельзя нарушить**: для `cls ∈ {audio, video,
+image}` — байт-в-байт то же поведение, что до этапа (все существующие
+тесты `media-playlist.test.js`/`media-machine.test.js`/
+`media-machine-exhaustive.test.js` зелёные без правки ассертов, КРОМЕ
+ОДНОГО явно устаревшего теста ниже).
+
+### Изменения по файлам
+
+**`domain/media/playlist.js`**
+- `buildPlaylist`: `idx` получает 4-й ключ `other:
+  new Int32Array(cnt[3])`; убрать guard `if (c < 3)` в цикле заполнения
+  `idx` (строка `if (c < 3) idx[CLASS_NAMES[c]][r] = p;` →
+  `idx[CLASS_NAMES[c]][r] = p;`, без условия).
+- `stepInClass`: убрать `if (c === 3) return -1;` — класс 3 теперь
+  обычный, `CLASS_NAMES[3]` резолвится в `"other"`, `idx.other`
+  уже существует.
+- `stepInClassRing`: убрать собственный `if (c === 3) return -1;`
+  (после снятия guard'а в `stepInClass` он сам вернёт корректную
+  позицию или `-1` на границе класса, ring-обёртка сработает как для
+  любого другого класса).
+- `classesPresent(pl)`: добавить `other: pl.idx.other.length > 0`.
+- `dedupeClasses` (дефолт `["audio", "video"]`) — **не меняется**.
+  `other` остаётся недедуплицированным, как `image` (тот же файл,
+  дважды приложенный к разным записям — самостоятельные позиции в
+  плейлисте, не "один и тот же трек").
+
+**`domain/media/media-machine.js`** — три guard'а `state.cls ===
+"image"` формализуют "Static" (не Playable), должны читать `state.cls
+=== "image" || state.cls === "other"`:
+- `doToggle` (play/pause — no-op для static).
+- `doMinimize` (нечего сворачивать — no-op для static, тот же принцип,
+  что И5 для картинки, теперь + файл).
+- `doEnded` (событие "закончилось" не наступает у static — no-op).
+
+`allocWindow` — **не меняется**: guard `state.cls !== "image"` уже
+корректно отделяет Galleried (только image, окно соседей по бюджету
+байт) от остальных (`other` уже туда попадает, предзагрузка только
+текущей позиции — то же, что уже верно для audio/video).
+
+**`ui/components/media/media-overlay.jsx`** — 10 мест с `session.cls`,
+классифицированы по ДВУМ осям выше, не все меняются:
+
+| Строка (было) | Ось | Правка |
+|---|---|---|
+| `session.cls !== "video"` (528, FLIP видео) | ни то ни другое (video-специфично) | не трогать |
+| `session.cls === "image"` (541, marquee заголовка) | не завязано ни на одну ось напрямую | не трогать (`other` получает marquee как audio/video — по умолчанию, не по особому случаю) |
+| `session.cls !== "image"` (573, `canMinimize`) | Static | → `session.cls !== "image" && session.cls !== "other"` |
+| `session.cls === "image"` (589-590, соседние позиции для полосы) | Galleried | не трогать |
+| `session.cls !== "image"` (668, settle без анимации — "у audio/video трека в DOM нет") | Galleried (по DOM-структуре) | не трогать — `other` уже корректно в ветке "нет трека" |
+| `session.cls !== "image"` (717, swap-fade) | Galleried (та же ветка, что 668) | не трогать |
+| `session.cls === "image"` (882, ветка разметки: полоса vs `<View>`) | Galleried (структурная развилка) | не трогать — `other` уже попадает в `<View>`-ветку |
+| `session.cls !== "image"` (971, ПОЛОСА ПЕРЕМОТКИ full-view — комментарий "Этап 11, только audio/video" буквально) | Playable, НЕ "не image" | → явный `session.cls === "audio" \|\| session.cls === "video"` (новая переменная `isPlayable`) |
+| `session.cls === "image"` (990, точки-превью полосы) | Galleried | не трогать |
+| `session.cls !== "image"` (1113, кнопка "повтор" в мини-баре) | Playable (по духу того же Этапа 11, что 971) | → `isPlayable` (практически недостижимо для image/other — `canMinimize` уже блокирует `display:"mini"`, правка ради согласованности/на случай будущих изменений `canMinimize`) |
+
+`data-cls={session.cls}` (857, 1053) — не логика, атрибут для CSS;
+существующие CSS-правила на `[data-cls="video"]`/`:not([data-cls=
+"video"])` уже корректно обобщаются, новых правил под `other` не
+требуется (у `other` нет собственного визуального режима, кроме
+своего `<View>`).
+
+**Новый компонент `ui/components/media/file-viewer.jsx`** —
+4-й "глупый вид" (`VIEWS.other`), по прямому образцу `image-viewer.jsx`
+(та же структура: `{mediaRef, onMeta}`, состояние `{digest,url|src}`,
+ошибка/загрузка). Отличия от готовых образцов:
+- Не эйджер-loading (в отличие от `ImageViewer`, который сразу тянет
+  байты через `getRange`) — `acquireMediaUrl` для НЕ-`image/*` mime
+  всегда возвращает `{kind:"bridge", src}` (SW-мост, `media-url.js`,
+  строки 32-38 — ветка "иначе" уже единая для video/audio/other, без
+  изменений в `media-url.js`). Компонент просто рендерит `<a
+  href={src} download={mediaRef.name}>` — реальные байты не текут,
+  пока пользователь не кликнет "скачать" (тот же принцип открытости,
+  что видео "без сети" в `attachment-view.jsx`, Этап F1).
+- Не использует `onMeta` (нет width/height/duration у произвольного
+  файла) — `hasResolution`/`hasDuration` в `media-overlay.jsx`
+  останутся `false` САМИ, без отдельного условия (уже завязаны на
+  присутствие `meta.width`/`meta.duration`, не на `cls`).
+- Иконка — `IconFileText` (тот же, что `FILE_TYPE_ICONS.file` в
+  `attachment-view.jsx`), имя+размер — `formatFileSize` (общая
+  утилита, реэкспортирована `attachment-view.jsx`).
+
+**i18n** — `media.classNames.other` (метка в meta-строке "N из M ·
+{{className}} · {{size}}") + `media.buttons.files` (подпись новой
+кнопки MediaButtons) — во все 12 словарей.
+
+**`ui/components/media/media-buttons.jsx`** — 4-й элемент `CLASSES`:
+`{ cls: "other", Icon: IconFileText, labelKey: "media.buttons.files",
+modifier: "btn--good" }` — модификатор ПОВТОРЯЕТ `image` (`btn--good`);
+свободных цветовых модификаторов (`btn--info`=audio, `btn--warn`=video)
+не осталось, третий семантический цвет пришлось бы делить — решение:
+делить с image, не заводить 4-й цвет специально под эту кнопку (не
+запрошено, минимальное изменение).
+
+**`domain/files/tree.js`** — `classesPresent(S, parentId)`: добавить
+`other: !!arr && arr[3] > 0` (индекс уже ведётся `classCount`,
+Int32Array(4), просто не читался). Ключ ИМЕННО `other`, не `file` —
+`media-buttons.jsx`'s `present()` проверяет `cls in counts` по имени
+`"other"` (совпадает с `CLASS_NAMES`/`playlist.js`), разъехавшееся имя
+ключа сделало бы кнопку "Файлы" в разделе "Файлы" молча невидимой
+(объектная форма `counts`, не `Int32Array` — числовой fallback по
+индексу для неё не сработает). "file" — только в тексте лейбла
+(`media.buttons.files`), не в имени ключа данных нигде в проекте.
+
+**`ui/screens/files.jsx`** — `openFolderMediaClass`: убрать фильтр
+`classOf(node.mime) !== "other"` (строка ~522) — файлы-кандидаты
+больше не исключаются. `MediaButtons counts={classesPresent(...)}`
+получит `file` автоматически после правки `tree.js` выше.
+
+**`ui/screens/chat.jsx`** — `classesInMessages()`: `present` получает
+4-й ключ `other: false` (НЕ `file` — та же причина, что в `tree.js`
+выше: `MediaButtons`/`playlist.idx` адресуют класс по имени `"other"`
+везде, разъехавшийся ключ молча ломает кнопку); в цикле —
+`if (c in present) present[c] = true;` уже работает без изменений,
+поскольку `c` (результат `classOf`) и ключ объекта теперь совпадают
+дословно.
+
+**`ui/screens/channel.jsx`/`domain/content/media-index.js`** — уже
+считает все 4 индекса (`Int32Array(4)`, без фильтрации) — `post-
+card.jsx`'s `MediaButtons` получит кнопку "Файлы" автоматически, без
+правок домена, только за счёт 4-й записи в `CLASSES` (media-
+buttons.jsx выше).
+
+### Тесты (пишутся ДО правок, из инвариантов выше)
+
+`tests/media-playlist.test.js` — обновить/добавить:
+- `buildPlaylist`/`classesPresent`: `idx.other`/`classesPresent(...).
+  other` теперь населены, не отсутствуют.
+- `stepInClass`/`firstOfClass`/`lastOfClass` для `other` — тот же
+  набор кейсов, что уже есть для `audio`/`video`/`image`.
+- **Обновить (не добавить)** тест "класс 'other' (cls=3) — как
+  stepInClass, всегда -1, без исключений" — старый контракт, этап
+  явно его меняет (skill, п.13: "менять может только Claude отдельным
+  явным решением с немедленной полной регрессией" — это оно). Новое
+  ожидание: `stepInClassRing` для `other` ведёт себя как для любого
+  другого класса (кольцо на границе, no-op при единственном элементе).
+
+`tests/media-machine.test.js`/`media-machine-exhaustive.test.js` —
+добавить `cls:"other"` в матрицу состояний, где она параметризована по
+классу (`doToggle`/`doMinimize`/`doEnded` — no-op, как `image`;
+`allocWindow` — как `audio`/`video`, не как `image`).
+
+Живая проверка (после кода) — Chrome, открыть file-вложение из
+чата/канала/чата-канала/хранилища, убедиться: плеера/scrub-бара нет,
+"скачать" реально скачивает, next/prev внутри класса "Файлы" работает,
+свернуть — кнопка недоступна (как для картинки).

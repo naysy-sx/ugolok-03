@@ -1,20 +1,23 @@
 import IconMusicNote from "../../icons/music-note.jsx";
 import IconVideoCamera from "../../icons/video-camera.jsx";
 import IconImage from "../../icons/image-icon.jsx";
+import IconFileText from "../../icons/file-text.jsx";
 import { t } from "../../signals/i18n.js";
 
-// counts: Int32Array(4) ([audio,video,image,other]) | {audio,video,image}
-// booleans | null/undefined. Рендерит ДО 3 маленьких цветных кнопок — только
-// для классов с реальным присутствием (count>0 / true). "other" никогда не
-// показывается (нет своей UI-кнопки — MEDIA-SPEC.md §3.10). Первый проход
-// размещения/визуала (Этап E, пользователь этой сессии: "потом визуал ещё
-// долго полировать") — переиспользует уже существующие цветные модификаторы
-// .btn--ghost.btn--info/warn/good (Этап 70-довесок), а не заводит новую
-// цветовую систему заново.
+// counts: Int32Array(4) ([audio,video,image,other]) | {audio,video,image,file}
+// booleans | null/undefined. Рендерит ДО 4 маленьких цветных кнопок — только
+// для классов с реальным присутствием (count>0 / true). Редизайн интерфейса,
+// этап 3 (DESIGN.md) — "other"/файлы получил свою кнопку (было: "'other'
+// никогда не показывается", MEDIA-SPEC.md §3.10 — решение явно отменено,
+// media-overlay.jsx теперь умеет открывать файлы, см. file-viewer.jsx).
+// Свободных цветовых модификаторов не осталось (--info=audio, --warn=video),
+// "Файлы" делит --good с "Изображения" — не заводить 4-й цвет ради одной
+// кнопки, не запрошено.
 const CLASSES = [
 	{ cls: "audio", Icon: IconMusicNote, labelKey: "media.buttons.audio", modifier: "btn--info" },
 	{ cls: "video", Icon: IconVideoCamera, labelKey: "media.buttons.video", modifier: "btn--warn" },
 	{ cls: "image", Icon: IconImage, labelKey: "media.buttons.images", modifier: "btn--good" },
+	{ cls: "other", Icon: IconFileText, labelKey: "media.buttons.files", modifier: "btn--good" },
 ];
 
 function present(counts, cls, index) {

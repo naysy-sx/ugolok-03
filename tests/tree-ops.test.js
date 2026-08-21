@@ -328,16 +328,18 @@ test("setMime: на purged узел — mime проставляется (для 
 	assert.equal(S.classCount.has(ROOT_ID), false, "purged — classCount не инкрементирован");
 });
 
-test("classesPresent: пустая папка — все три класса false", () => {
+test("classesPresent: пустая папка — все четыре класса false", () => {
 	const S = createInitialState();
-	assert.deepEqual(classesPresent(S, ROOT_ID), { audio: false, video: false, image: false });
+	assert.deepEqual(classesPresent(S, ROOT_ID), { audio: false, video: false, image: false, other: false });
 });
 
-test("classesPresent: Θ(1) через classCount — отражает реальное присутствие каждого класса, 'other' наружу не выставляется", () => {
+// Редизайн интерфейса, этап 3 (DESIGN.md) — КОНТРАКТ ИЗМЕНЁН явным решением:
+// "other" (файлы) теперь выставляется наружу, как остальные три класса
+// (было — намеренно скрыт, "'other' наружу не выставляется").
+test("classesPresent: Θ(1) через classCount — отражает реальное присутствие каждого класса, включая other", () => {
 	let S = createInitialState();
 	S = applyOp(S, createFile(S, ROOT_ID, "a.mp3", id("file"), "d1", label(), null, null, "audio/mpeg"));
 	S = applyOp(S, createFile(S, ROOT_ID, "b.pdf", id("file"), "d2", label(), null, null, "application/pdf"));
 	const present = classesPresent(S, ROOT_ID);
-	assert.deepEqual(present, { audio: true, video: false, image: false });
-	assert.equal("other" in present, false);
+	assert.deepEqual(present, { audio: true, video: false, image: false, other: true });
 });

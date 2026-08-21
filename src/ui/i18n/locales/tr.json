@@ -448,7 +448,8 @@
 		"buttons": {
 			"audio": "Ses",
 			"video": "Video",
-			"images": "Görseller"
+			"images": "Görseller",
+			"files": "Dosyalar"
 		},
 		"player": {
 			"play": "Oynat",
@@ -467,7 +468,8 @@
 		"classNames": {
 			"audio": "ses",
 			"video": "video",
-			"image": "görseller"
+			"image": "görseller",
+			"other": "dosyalar"
 		},
 		"info": {
 			"size": "Boyut",

@@ -859,12 +859,13 @@ html[data-media-full] .top-corner-actions {
 	border-block-end: var(--border-width) solid var(--border);
 }
 
-/* Этап E медиа-подсистемы — зона под шапкой, общая для chat.jsx/files.jsx
-   (screen.jsx's mediaButtons-слот). Первый проход размещения — маленькая
-   тонкая полоса, кнопки сами берут цвет из уже существующих .btn--ghost.
-   btn--info/warn/good (media-buttons.jsx). Пользователь этой сессии заранее
-   предупредил, что визуал будет отдельно дополировываться позже. */
-.media-buttons-zone {
+/* Этап E медиа-подсистемы — зона под шапкой (screen.jsx's слот, этап 3
+   редизайна переименовал mediaButtons -> slices, тот же класс расширен на
+   4 экрана вместо 2). Первый проход размещения — маленькая тонкая полоса,
+   кнопки сами берут цвет из уже существующих .btn--ghost.btn--info/warn/
+   good (media-buttons.jsx). Пользователь этой сессии заранее предупредил,
+   что визуал будет отдельно дополировываться позже. */
+.slices-zone {
 	padding-inline: var(--space-m);
 	padding-block: var(--space-2xs);
 	border-block-end: var(--border-width) solid var(--border);

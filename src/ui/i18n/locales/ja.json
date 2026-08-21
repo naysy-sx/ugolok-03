@@ -448,7 +448,8 @@
 		"buttons": {
 			"audio": "音声",
 			"video": "動画",
-			"images": "画像"
+			"images": "画像",
+			"files": "ファイル"
 		},
 		"player": {
 			"play": "再生",
@@ -467,7 +468,8 @@
 		"classNames": {
 			"audio": "音声",
 			"video": "動画",
-			"image": "画像"
+			"image": "画像",
+			"other": "ファイル"
 		},
 		"info": {
 			"size": "サイズ",

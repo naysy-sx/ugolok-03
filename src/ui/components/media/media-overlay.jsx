@@ -8,6 +8,7 @@ import { getMemoryCachedUrl } from "../../attachment-memory-cache.js";
 import VideoPlayer from "./video-player.jsx";
 import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
+import FileViewer from "./file-viewer.jsx";
 import IconMusicNote from "../../icons/music-note.jsx";
 import IconCross from "../../icons/cross.jsx";
 import IconNavPrev from "../../icons/nav-prev.jsx";
@@ -41,7 +42,7 @@ function prefersReducedMotion() {
 	return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-const VIEWS = { video: VideoPlayer, audio: AudioPlayer, image: ImageViewer };
+const VIEWS = { video: VideoPlayer, audio: AudioPlayer, image: ImageViewer, other: FileViewer };
 
 function formatDuration(seconds) {
 	const total = Math.round(seconds);
@@ -63,7 +64,8 @@ function splitName(name) {
 }
 
 // Корень медиа-сессии (Этап D) — единственное место, монтирующее один из
-// трёх "глупых" видов по mediaSession.value.cls. Ничего не рендерит, если
+// четырёх "глупых" видов по mediaSession.value.cls (video/audio/image —
+// Этап D; other/файлы — редизайн интерфейса, этап 3, DESIGN.md). Ничего не рендерит, если
 // сессии нет (И3 — allocWindow тогда тоже пуст, здесь симметрично — нечего
 // показывать).
 //
@@ -570,7 +572,13 @@ export default function MediaOverlay() {
 	const playing = session.play === "playing";
 	const View = VIEWS[session.cls];
 	const isMini = session.display === "mini";
-	const canMinimize = session.cls !== "image"; // И5 — картинка не сворачивается
+	// Редизайн интерфейса, этап 3 (DESIGN.md) — Playable={audio,video} (есть
+	// play/pause/scrub), Static={image,other} — нет. canMinimize/isPlayable
+	// формализуют то же разбиение, что media-machine.js's isStatic (домен),
+	// здесь дублируется, а не импортируется — это UI-слой, домен про DOM/JSX
+	// не знает и не должен (та же граница, что везде в проекте).
+	const isPlayable = session.cls === "audio" || session.cls === "video";
+	const canMinimize = isPlayable; // И5 — статичные классы (картинка/файл) не сворачиваются
 	const rank = session.playlist.rank[session.position];
 	const total = session.playlist.idx[session.cls].length;
 
@@ -964,11 +972,13 @@ export default function MediaOverlay() {
 					</>
 				)}
 				<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
-					{/* Этап 11 (§11) — полоса перемотки, только audio/video. Пишет
+					{/* Этап 11 (§11) — полоса перемотки, только audio/video (isPlayable,
+					    не просто "не image" — редизайн интерфейса, этап 3, DESIGN.md:
+					    у "other"/файла тоже нет currentTime/duration). Пишет
 					    напрямую в el.currentTime через handleProgressSeek (И-D, тот же
 					    обработчик, что уже есть у прогресс-полосы мини-бара — семантика
 					    идентична, разница только в разметке/CSS). */}
-					{session.cls !== "image" && (
+					{isPlayable && (
 						<div class="media-overlay-scrub">
 							<button
 								type="button"
@@ -1110,7 +1120,11 @@ export default function MediaOverlay() {
 						</button>
 					</div>
 					<div class="media-mini-bar-aux">
-						{session.cls !== "image" && (
+						{/* isPlayable, не "не image" — редизайн интерфейса, этап 3
+						    (DESIGN.md): практически недостижимо для image/other (canMinimize
+						    уже блокирует display:"mini" для обоих), правка ради
+						    согласованности с scrub-баром выше. */}
+						{isPlayable && (
 							<button
 								type="button"
 								class="media-mini-bar-btn is-repeat"

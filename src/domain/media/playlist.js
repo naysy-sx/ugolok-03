@@ -21,10 +21,14 @@ export function buildPlaylist(refs, { dedupeClasses = ["audio", "video"] } = {})
 		cnt[c]++;
 	}
 
+	// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) стал
+	// полноценным навигируемым классом, как остальные три (было — исключён
+	// из idx, стало — четвёртый ключ на общих основаниях).
 	const idx = {
 		audio: new Int32Array(cnt[0]),
 		video: new Int32Array(cnt[1]),
 		image: new Int32Array(cnt[2]),
+		other: new Int32Array(cnt[3]),
 	};
 	const rank = new Int32Array(items.length);
 	const pos = [0, 0, 0, 0];
@@ -32,7 +36,7 @@ export function buildPlaylist(refs, { dedupeClasses = ["audio", "video"] } = {})
 		const c = cls[p];
 		const r = pos[c]++;
 		rank[p] = r;
-		if (c < 3) idx[CLASS_NAMES[c]][r] = p;
+		idx[CLASS_NAMES[c]][r] = p;
 	}
 
 	const pref = new Float64Array(items.length + 1);
@@ -48,12 +52,12 @@ export function classesPresent(pl) {
 		audio: pl.idx.audio.length > 0,
 		video: pl.idx.video.length > 0,
 		image: pl.idx.image.length > 0,
+		other: pl.idx.other.length > 0,
 	};
 }
 
 export function stepInClass(pl, position, delta) {
 	const c = pl.cls[position];
-	if (c === 3) return -1;
 	const className = CLASS_NAMES[c];
 	const r = pl.rank[position] + delta;
 	const arr = pl.idx[className];
@@ -82,7 +86,6 @@ export function stepInClassRing(pl, position, delta) {
 	const p = stepInClass(pl, position, delta);
 	if (p !== -1) return p;
 	const c = pl.cls[position];
-	if (c === 3) return -1;
 	const cls = CLASS_NAMES[c];
 	return delta > 0 ? firstOfClass(pl, cls) : lastOfClass(pl, cls);
 }

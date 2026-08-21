@@ -448,7 +448,8 @@
 		"buttons": {
 			"audio": "音频",
 			"video": "视频",
-			"images": "图片"
+			"images": "图片",
+			"files": "文件"
 		},
 		"player": {
 			"play": "播放",
@@ -467,7 +468,8 @@
 		"classNames": {
 			"audio": "音频",
 			"video": "视频",
-			"image": "图片"
+			"image": "图片",
+			"other": "文件"
 		},
 		"info": {
 			"size": "大小",
