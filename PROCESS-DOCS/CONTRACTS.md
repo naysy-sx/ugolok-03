@@ -18424,3 +18424,60 @@ navigation-кнопки) — единая скруглённая полоса с
 
 Регрессия 1976/1976, build стабильна (`design-system.html`
 подтверждённо не попадает в build — не в rollup input).
+
+## Общепроектная работа, довесок — заливные (fill) модификаторы, размеры, доп. поля
+
+Пользователь, живьём разглядывая `design-system.html`: (1) нет полностью
+круглой ЗАЛИВНОЙ icon-only кнопки (как `.media-mini-bar-btn.is-play`,
+но переиспользуемой, не привязанной к медиа-подсистеме); (2)
+`.btn--ghost.btn--danger/warn/good/info` — только обводка, невзрачно,
+предложил заливной вариант с белым/тёмным (theme-adaptive) текстом;
+(3) не хватает демо остальных типов `input` (пароль, дата, число) +
+`select` (предложил двойную стрелочку вместо одинарной) + `textarea` +
+`disabled`-поля; (4) не хватает размерных модификаторов кнопки/поля
+(sm/lg).
+
+### Новые классы (`src/styles/custom.css`, рядом с `.icon-btn`/`.btn--ghost`)
+
+```css
+.icon-btn--fill   /* заливка var(--accent) + var(--accent-contrast), сочетается
+                      с icon-btn--danger/warn/good/info: составной селектор
+                      .icon-btn.icon-btn--fill.icon-btn--danger (0,3,0) —
+                      та же причина специфичности, что у .icon-btn.icon-btn--danger */
+.btn--fill        /* пара-модификатор к .btn--ghost (симметрично: ghost=обводка,
+                      fill=заливка). САМ ПО СЕБЕ не задаёт стилей — голый <button>
+                      уже залит акцентом по умолчанию (minimal.css). Существует
+                      только как специфичностный якорь для составного селектора
+                      .btn--fill.btn--danger (0,2,0), та же причина что
+                      .btn--ghost.btn--danger. */
+.btn--fill.btn--danger / .btn--warn / .btn--good / .btn--info
+                  /* background-color: var(--bad|warn|good|info), color:
+                     var(--accent-contrast) (тот же токен, что .btn.btn--good —
+                     bad/warn/good/info флипают яркость между темами так же,
+                     как accent). :hover — color-mix(in oklch, цвет, black 12%),
+                     формула из уже существующего --accent-hover/.btn.btn--good. */
+.btn--sm / .btn--lg     /* padding+font-size на шкале --space-*/--step-*,
+                            без compound-селектора (только padding/font-size,
+                            не цвет — конфликтов специфичности типа
+                            ".such button{color}" здесь нет). */
+.input--sm / .input--lg /* то же для input/textarea/select. */
+```
+
+### Правки `src/styles/minimal.css` (базовый слой, не custom.css)
+
+- `select` background-image: одинарная стрелка → двойная (▲▼,
+  тот же `%23888888`/0.7em, что раньше — просили только форму, не цвет).
+- Добавлен `input:disabled, textarea:disabled, select:disabled` —
+  раньше `:disabled` был задан только кнопкам (`opacity:0.55;
+  cursor:not-allowed`), поля вообще не имели disabled-стиля.
+
+### `design-system.html`
+
+Новые демо-блоки: `.icon-btn--fill` (+ 4 цвета), `.btn--fill` (+ 4
+цвета), `.btn--sm/--lg`, `.input--sm/--lg`, доп. типы `input`
+(password/дата/число), `textarea`, `select`, `input[disabled]`.
+
+Пароль/дата/число НЕ получают новых классов — уже накрыты общим
+селектором `input:not([type=button],[reset],[submit],[checkbox],
+[radio],[range],[color])` в minimal.css, демо только документирует
+факт.

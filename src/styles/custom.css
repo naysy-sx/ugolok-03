@@ -237,6 +237,46 @@ button:has(> .icon),
 	background-color: transparent;
 }
 
+/* Этап 70-довесок-2 — заливная пара к .btn--ghost (пользователь: обводка
+   у семантических кнопок "невзрачная"). .btn--fill САМ ПО СЕБЕ ничего не
+   задаёт — голый <button> и так залит акцентом по умолчанию (minimal.css,
+   @layer elements) — класс существует только как специфичностный якорь
+   составного селектора .btn--fill.btn--X (0,2,0), та же причина, что у
+   .btn--ghost.btn--danger выше (одиночный .btn--danger рисковал бы
+   проиграть контейнерным ".такой-то button{color}" правилам, 0,1,1 против
+   0,1,0). color: var(--accent-contrast) — тот же токен, что уже красит
+   .btn.btn--good (auth-экраны): --bad/--warn/--good/--info флипают
+   яркость между темами так же, как --accent, значит их контрастная пара
+   та же самая. */
+.btn--fill.btn--danger {
+	background-color: var(--bad);
+	color: var(--accent-contrast);
+}
+.btn--fill.btn--danger:hover {
+	background-color: color-mix(in oklch, var(--bad), black 12%);
+}
+.btn--fill.btn--warn {
+	background-color: var(--warn);
+	color: var(--accent-contrast);
+}
+.btn--fill.btn--warn:hover {
+	background-color: color-mix(in oklch, var(--warn), black 12%);
+}
+.btn--fill.btn--good {
+	background-color: var(--good);
+	color: var(--accent-contrast);
+}
+.btn--fill.btn--good:hover {
+	background-color: color-mix(in oklch, var(--good), black 12%);
+}
+.btn--fill.btn--info {
+	background-color: var(--info);
+	color: var(--accent-contrast);
+}
+.btn--fill.btn--info:hover {
+	background-color: color-mix(in oklch, var(--info), black 12%);
+}
+
 /* Круглая иконка-кнопка — карандаш/корзина/копировать и т.п., без
    собственного текста (aria-label обязателен на вызывающей стороне). */
 .icon-btn {
@@ -296,6 +336,53 @@ button:has(> .icon),
 .icon-btn.icon-btn--info:hover {
 	background-color: color-mix(in oklch, var(--info), transparent 88%);
 	color: var(--info);
+}
+
+/* Этап 70-довесок-2 — заливной вариант (пользователь: "нет полностью
+   круглой кнопки только с иконкой, как play в мини-баре" — тот же
+   приём, что .media-mini-bar-btn.is-play, но переиспользуемым
+   примитивом общего UI, не привязанным к медиа-подсистеме). Составной
+   тройной селектор .icon-btn.icon-btn--fill.icon-btn--X (0,3,0) —
+   та же причина специфичности, что у .icon-btn.icon-btn--danger
+   (0,2,0) выше: без запаса цветовые варианты боролись бы с ним по
+   source-order, а не предсказуемо. color: var(--accent-contrast)
+   продублирован в каждом цветном варианте явно (не унаследован от
+   базового .icon-btn--fill) — тот же урок, что уже есть в файле:
+   implicit source-order — источник исторических багов этого проекта. */
+.icon-btn.icon-btn--fill {
+	background: var(--accent);
+	color: var(--accent-contrast);
+}
+.icon-btn.icon-btn--fill:hover {
+	background: color-mix(in oklch, var(--accent), black 12%);
+}
+.icon-btn.icon-btn--fill.icon-btn--danger {
+	background: var(--bad);
+	color: var(--accent-contrast);
+}
+.icon-btn.icon-btn--fill.icon-btn--danger:hover {
+	background: color-mix(in oklch, var(--bad), black 12%);
+}
+.icon-btn.icon-btn--fill.icon-btn--warn {
+	background: var(--warn);
+	color: var(--accent-contrast);
+}
+.icon-btn.icon-btn--fill.icon-btn--warn:hover {
+	background: color-mix(in oklch, var(--warn), black 12%);
+}
+.icon-btn.icon-btn--fill.icon-btn--good {
+	background: var(--good);
+	color: var(--accent-contrast);
+}
+.icon-btn.icon-btn--fill.icon-btn--good:hover {
+	background: color-mix(in oklch, var(--good), black 12%);
+}
+.icon-btn.icon-btn--fill.icon-btn--info {
+	background: var(--info);
+	color: var(--accent-contrast);
+}
+.icon-btn.icon-btn--fill.icon-btn--info:hover {
+	background: color-mix(in oklch, var(--info), black 12%);
 }
 
 /* ================================================================== *
@@ -367,6 +454,33 @@ button:has(> .icon),
 }
 .input-icon > input {
 	padding-inline-start: calc(var(--space-xs) * 2 + 1em);
+}
+
+/* Этап 70-довесок-2 — размерные модификаторы кнопки/поля. На уже
+   существующей шкале --space-* / --step-* (никаких новых токенов) —
+   пропорция та же, что у базовых button/input (padding block/inline на
+   соседних ступенях шкалы, --space-2xs/--space-m и --space-2xs/
+   --space-xs соответственно): --sm/--lg просто сдвигают обе стороны
+   пары на одну ступень шкалы вниз/вверх. Одиночный класс без
+   compound-селектора — трогают только padding/font-size, не цвет,
+   значит не подвержены той специфичностной ловушке, что вынудила
+   .btn--ghost.btn--danger на составной селектор (там дело было в
+   конфликте с контейнерными "such button{color}"-правилами). */
+.btn--sm {
+	padding: var(--space-3xs) var(--space-s);
+	font-size: var(--step--1);
+}
+.btn--lg {
+	padding: var(--space-xs) var(--space-l);
+	font-size: var(--step-1);
+}
+.input--sm {
+	padding: var(--space-3xs) var(--space-2xs);
+	font-size: var(--step--1);
+}
+.input--lg {
+	padding: var(--space-xs) var(--space-s);
+	font-size: var(--step-1);
 }
 
 /* Приподнятая карточка-контейнер — тот же язык, что уже был у

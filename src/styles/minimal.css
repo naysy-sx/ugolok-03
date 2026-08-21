@@ -719,11 +719,25 @@
 	/* У select сброс снял нативную стрелку (appearance:none). Возвращаем
      каретку своей SVG-иконкой — поле остаётся стилистически своим, но
      снова читается как выпадающий список. */
+	/* Этап 70-довесок-2 — пользователь предложил двойную стрелочку
+     (▲▼) вместо одинарной вниз: сильнее читается как "открыть список",
+     не как "стрелка вниз" на кнопке. Тот же размер/позиция/цвет, что
+     раньше — просили только форму, не оформление. */
 	select {
 		padding-inline-end: var(--space-xl);
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888888' stroke-width='2' d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4-4 4 4M4 10l4 4 4-4'/%3E%3C/svg%3E");
 		background-position: right var(--space-s) center;
-		background-size: 0.7em;
+		background-size: 0.8em;
+	}
+	/* Этап 70-довесок-2 — раньше :disabled был задан только кнопкам
+     (button:disabled выше) — поля вообще не имели disabled-стиля,
+     хотя атрибут на них штатно используется по всему проекту. Тот же
+     приём (cursor+opacity), что у кнопок. */
+	input:disabled,
+	textarea:disabled,
+	select:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
 	}
 	::placeholder {
 		color: var(--muted);
