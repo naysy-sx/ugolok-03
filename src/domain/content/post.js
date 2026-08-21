@@ -24,7 +24,7 @@ async function requirePublishOk(publish, event) {
 // нет (REDESIGN-SPEC.md, этап 2: "в момент написания срок обычно ещё не
 // известен"), оба всегда стартуют null, меняются только через
 // setPostDue/setPostDone и производные ниже.
-export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments = [], title = null, linkUrl = null }) {
+export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments = [], title = null, linkUrl = null, tags = [] }) {
 	const postId = crypto.randomUUID();
 	await db.table("posts").put(
 		toEncryptedRow(
@@ -37,6 +37,7 @@ export async function createDraftPost(ownerPubkey, dbKey, channelId, { text, att
 				attachments,
 				title,
 				linkUrl,
+				tags,
 				dueAt: null,
 				done: null,
 				status: "draft",
@@ -91,6 +92,7 @@ async function republishWithStatus(ownerPubkey, ownerPrivKey, dbKey, postId, fsm
 			done: row.done,
 			title: row.title,
 			linkUrl: row.linkUrl,
+			tags: row.tags,
 		}),
 		keyRow.channelKey,
 		meta.currentVersion,
@@ -207,6 +209,7 @@ export async function receivePost(ownerPubkey, dbKey, event) {
 				attachments: parsed.attachments,
 				title: parsed.title ?? null,
 				linkUrl: parsed.linkUrl ?? null,
+				tags: parsed.tags ?? [],
 				dueAt: parsed.dueAt ?? null,
 				done: parsed.done ?? null,
 				status: parsed.status,
@@ -265,6 +268,7 @@ export async function republishAllPostsUnderCurrentKey(ownerPubkey, ownerPrivKey
 					done: post.done,
 					title: post.title,
 					linkUrl: post.linkUrl,
+					tags: post.tags,
 				}),
 				keyRow.channelKey,
 				meta.currentVersion,
@@ -329,4 +333,19 @@ export async function makePostTask(ownerPubkey, postId) {
 
 export async function unmakePostTask(ownerPubkey, postId) {
 	return setPostDone(ownerPubkey, postId, null);
+}
+
+// Редизайн интерфейса, этап 1-довесок (CONTRACTS.md) — tags: string[],
+// зашифровано (Tier 1, как text/attachments/title/linkUrl) — decrypt-merge-
+// encrypt, НЕ частичный db.update() (тот же класс, что updateDraftPost).
+// В отличие от updateDraftPost — работает при ЛЮБОМ статусе (тегировать
+// можно и опубликованный пост), тот же принцип, что setPostDue/setPostDone.
+// НЕ публикует — актуальные теги долетают до relay окольным путём, через
+// следующий статусный переход (row.tags уже часть payload republishWithStatus/
+// republishAllPostsUnderCurrentKey выше).
+export async function setPostTags(ownerPubkey, dbKey, postId, tags) {
+	const raw = await db.table("posts").get([ownerPubkey, postId]);
+	if (!raw) throw new DomainError("пост не найден", "errors.postNotFound");
+	const merged = { ...fromEncryptedRow(raw, dbKey), tags };
+	await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
 }

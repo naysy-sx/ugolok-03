@@ -21,6 +21,7 @@ import {
 	setPostDone,
 	makePostTask,
 	unmakePostTask,
+	setPostTags,
 } from "../src/domain/content/post.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
@@ -112,7 +113,7 @@ test("publishPost: публикует kind 30061, Боб (VIEW-держател�
 
 	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
-	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null });
+	assert.deepEqual(JSON.parse(plaintext), { text: "первая статья", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null, tags: [] });
 
 	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
 	assert.equal(row.status, "published");
@@ -296,7 +297,7 @@ test("republishAllPostsUnderCurrentKey: переиздаёт published-пост 
 	assert.deepEqual(republishedEvent.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`], "тот же d-tag — replaceable замена на relay");
 
 	const plaintext = decryptChannelContent(republishedEvent.content, { 2: newKeyHex });
-	assert.deepEqual(JSON.parse(plaintext), { text: "старый пост", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null });
+	assert.deepEqual(JSON.parse(plaintext), { text: "старый пост", attachments: [], status: "published", dueAt: null, done: null, title: null, linkUrl: null, tags: [] });
 
 	// Читатель, получивший грант именно ЭТОЙ (новой) версии, расшифровывает.
 	const aliceChannelRow = fromEncryptedRow(await db.table("channels").get([ALICE_PUB, channelId]), DB_KEY);
@@ -519,6 +520,7 @@ test("publishPost: relay-payload несёт dueAt/done/title/linkUrl вмест�
 		done: false,
 		title: "Заголовок",
 		linkUrl: "https://example.com",
+		tags: [],
 	});
 });
 
@@ -603,4 +605,89 @@ test("republishAllPostsUnderCurrentKey: переносит текущие лок
 	assert.equal(parsed.done, false);
 	assert.equal(parsed.title, "Заголовок");
 	assert.equal(parsed.linkUrl, "https://example.com");
+});
+
+// --- Этап 1-довесок (CONTRACTS.md) — tags: string[], зашифровано, дефолт []
+
+test("createDraftPost: tags принимаются при создании, по умолчанию []", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId: withTags } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [], tags: ["mls", "разобраться"] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, withTags]), DB_KEY);
+	assert.deepEqual(row.tags, ["mls", "разобраться"]);
+
+	const { postId: noTags } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "y", attachments: [] });
+	const row2 = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, noTags]), DB_KEY);
+	assert.deepEqual(row2.tags, []);
+});
+
+test("AC-16 продолжение: tags лежит зашифрованным — сырой дамп не содержит значений тегов", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [], tags: ["секретный-тег"] });
+	const raw = await db.table("posts").get([ALICE_PUB, postId]);
+	assert.equal("tags" in raw, false);
+	assert.equal(JSON.stringify(raw).includes("секретный-тег"), false);
+});
+
+test("setPostTags: работает при любом статусе, не публикует, не трогает остальные признаки", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
+	await setPostDue(ALICE_PUB, postId, 1700000000);
+
+	const published = [];
+	await setPostTags(ALICE_PUB, DB_KEY, postId, ["грант"]);
+	assert.deepEqual(published, [], "setPostTags не публикует на черновике");
+	let row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.deepEqual(row.tags, ["грант"]);
+	assert.equal(row.dueAt, 1700000000, "теги не стирают срок");
+
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
+	const afterPublish = published.length;
+	await setPostTags(ALICE_PUB, DB_KEY, postId, ["грант", "второй"]);
+	assert.equal(published.length, afterPublish, "setPostTags после публикации тоже локальна");
+	row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.deepEqual(row.tags, ["грант", "второй"]);
+});
+
+test("АДВЕРСАРНО: setPostTags на несуществующий пост -> DomainError", async () => {
+	await assert.rejects(() => setPostTags(ALICE_PUB, DB_KEY, "нет-такого", ["x"]));
+});
+
+test("updateDraftPost: правка text/attachments не стирает tags", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [], tags: ["a", "b"] });
+	await updateDraftPost(ALICE_PUB, DB_KEY, postId, { text: "v2", attachments: [] });
+	const row = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.deepEqual(row.tags, ["a", "b"]);
+});
+
+test("publishPost/receivePost: tags едет в relay-payload, старые события без tags -> []", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [], tags: ["mls"] });
+	const published = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
+	const event = published.find((e) => e.kind === 30061);
+	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
+	assert.deepEqual(JSON.parse(decryptChannelContent(event.content, { 1: bobKeyRow.channelKey })).tags, ["mls"]);
+
+	await receivePost(BOB_PUB, DB_KEY, event);
+	const bobRow = fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY);
+	assert.deepEqual(bobRow.tags, ["mls"]);
+
+	// Старое событие (до довеска) без поля tags вовсе.
+	const { encryptChannelContent } = await import("../src/core/crypto/channel-key.js");
+	const { sign } = await import("../src/core/crypto/sign.js");
+	const aliceChannelRow = await db.table("channels").get([ALICE_PUB, channelId]);
+	const aliceKeyRow = fromEncryptedRow(await db.table("channelKeys").get([ALICE_PUB, channelId, 1]), DB_KEY);
+	const oldEvent = sign(
+		{
+			kind: 30061,
+			content: encryptChannelContent(JSON.stringify({ text: "старый", attachments: [], status: "published" }), aliceKeyRow.channelKey, 1),
+			tags: [["d", `${channelId}:old-no-tags`], ["h", aliceChannelRow.channelTopic]],
+			created_at: Math.floor(Date.now() / 1000),
+		},
+		ALICE_PRIV,
+	);
+	await receivePost(BOB_PUB, DB_KEY, oldEvent);
+	const oldRow = fromEncryptedRow(await db.table("posts").get([BOB_PUB, "old-no-tags"]), DB_KEY);
+	assert.deepEqual(oldRow.tags, []);
 });

@@ -18636,3 +18636,58 @@ MLS/NIP-44/NIP-59 в `chat.js`, `channel-key.js` — не трогать (общ
 - [x] Ни один файл `src/ui/**` не тронут.
 - [x] Адверсарно: изоляция по `[ownerPubkey, postId]` (чужой postId под чужим ownerPubkey) — уже верна, находка не потребовалась.
 - [x] коммит (см. PLAN.md, "Этап 1 — ЗАКРЫТ")
+
+## Этап 1-довесок — тэги записи
+
+Найдено при работе над этапом 2 (карточка показывает `chip--tag` по
+макету) — в модели поста, заведённой этапом 1, тегов не было вовсе.
+Пользователь подтвердил: добавить, для поиска/навигации по записям.
+
+### Поле
+
+`tags: string[]` — **зашифровано** (тот же Tier, что `title`/`linkUrl`/
+`text`/`attachments`: содержательное поле, не структурный индекс).
+Фильтрация по тегу — в памяти, по уже расшифрованному списку постов
+(тот же приём, что `listChannelPosts` целиком: пост-канал — не тот
+объём данных, где нужен Dexie-индекс). Дефолт `[]`, не `null`
+(единообразно с `attachments`, а не с `title`/`linkUrl` — теги всегда
+массив, даже пустой, не «нет признака»).
+
+Никакой Dexie-миграции не требуется — поле живёт внутри зашифрованного
+`ciphertext`-блоба (как `title`/`linkUrl`/`text`/`attachments`), не в
+plaintext-колонке; `POSTS_PLAINTEXT_FIELDS` не меняется.
+
+### Сигнатуры
+
+`createDraftPost` — четвёртый опциональный параметр `tags = []`, в
+общем списке с `title`/`linkUrl` (поле создания, как текст — теги
+обычно известны сразу).
+
+Новая функция (decrypt-merge-encrypt, тот же паттерн, что
+`updateDraftPost`, не частичный `.update()` — теги зашифрованы, в
+отличие от `dueAt`/`done`):
+
+```js
+export async function setPostTags(ownerPubkey, dbKey, postId, tags)
+```
+
+Работает при ЛЮБОМ статусе поста (не только `draft`, в отличие от
+`updateDraftPost`) — тегировать можно и опубликованный пост, тот же
+принцип, что `setPostDue`/`setPostDone`. НЕ публикует (та же логика,
+что due/done — актуальные теги долетают до relay окольным путём, через
+следующий статусный переход, который читает `row.tags` из БД).
+
+### Сериализация
+
+`tags` добавлено в relay-payload везде, где уже есть `dueAt/done/
+title/linkUrl` (`republishWithStatus`, `receivePost`, `republishAllPostsUnderCurrentKey`).
+Приёмник: `parsed.tags ?? []` (не `?? null` — дефолт массива).
+
+### DoD
+
+- [x] `createDraftPost` принимает `tags`, по умолчанию `[]`.
+- [x] `setPostTags` реализована, decrypt-merge-encrypt, работает при любом статусе, не публикует.
+- [x] `republishWithStatus`/`receivePost`/`republishAllPostsUnderCurrentKey` несут `tags`; старые события без него -> `[]`.
+- [x] Тест: `updateDraftPost` не стирает теги (тот же инвариант, что title/linkUrl).
+- [x] `npm test` зелёный — 1995/1995.
+- [x] коммит
