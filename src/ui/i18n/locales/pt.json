@@ -676,7 +676,28 @@
 		"actionsAria": "Ações para a publicação «{{excerpt}}»",
 		"noTextFallback": "sem texto",
 		"archiveButton": "Arquivar",
-		"unpublishButton": "Remover publicação"
+		"unpublishButton": "Remover publicação",
+		"dueChip": "prazo até {{date}}",
+		"overdueChip": "atrasado {{count}}",
+		"overdueDays": {
+			"one": "{{count}} dia",
+			"few": "{{count}} dias",
+			"many": "{{count}} dias",
+			"other": "{{count}} dias"
+		},
+		"makeTaskButton": "Transformar em tarefa",
+		"unmakeTaskButton": "Remover de tarefas",
+		"setDueButton": "Definir prazo",
+		"clearDueButton": "Remover prazo",
+		"setDuePrompt": "Prazo (AAAA-MM-DD):",
+		"setDueInvalid": "Não foi possível reconhecer a data"
+	},
+	"recordKind": {
+		"task": "tarefa",
+		"link": "link",
+		"article": "artigo",
+		"collection": "coleção",
+		"note": "nota"
 	},
 	"markdownToolbar": {
 		"boldAria": "Negrito",

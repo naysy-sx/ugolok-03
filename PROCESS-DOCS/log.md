@@ -7412,3 +7412,19 @@ DoD — см. CONTRACTS.md, раздел "Редизайн интерфейса"
 Тесты: 6 новых в post.test.js (35/35). Полная регрессия 1995/1995
 (предыдущий разовый фейл incremental-sync.test.js не повторился — флака,
 не связана с этим изменением). npm test зелёный, src/ui/** не тронут.
+
+## Редизайн интерфейса — Этап 2. Вывод типа и карточка записи
+
+1. `record-kind.js` — воркер, kindOf/attachmentPlacement/константа — зелёный с первого раза (17/17 тестов), применено точечно (только реформат отступов таб/пробел).
+2. i18n — 11 ключей (recordKind.* + postCard.dueChip/overdueChip/overdueDays/makeTaskButton/unmakeTaskButton/setDueButton/clearDueButton/setDuePrompt/setDueInvalid) вручную во все 12 словарей — не воркер (переводы, не код).
+3. `post-card.jsx` — переписан целиком Claude напрямую (структурный файл, высокая цена ошибки разметки), не воркером.
+4. `custom.css` — новые классы `.rec*`/`.gthumb*`/`.rec-chip*`/`.task*`/`.link*`, токены макета переведены на токены проекта (таблица в CONTRACTS.md) — Claude напрямую.
+5. `channel.jsx` — колбэки setPostDue/setPostDone/makePostTask/unmakePostTask/clearPostDue подключены, автор-шапка и её useEffect убраны, внешняя .card-обёртка снята.
+
+Живая проверка Chrome (iframe нужной ширины внутри служебной redesign-preview.html, т.к. окно Chrome не резалось ниже ~785px) нашла 3 реальных бага ДО коммита: коллизия .chip с существующим компонентом contacts.jsx (переименовано в .rec-chip), горизонтальное переполнение от несбиваемого URL/тега (overflow-wrap отсутствовал на голых div/h3), .link__meta понадобился min-width:0 (flex-row blowout). Плюс собственная накладка — забыл применить переименование .chip→.rec-chip в самом post-card.jsx, поймано grep до сборки.
+
+Инцидент: `pkill -f "vite"` при остановке тестового dev-сервера, похоже, остановил и уже запущенный dev-сервер пользователя (порт 5173) — сказано пользователю, чинится `npm run dev`.
+
+Регрессия: post.test.js 35/35 (довесок), record-kind.test.js 17/17, i18n.test.js 16/16, npm test 2012/2012. npx vite build зелёный (868.37 kB gzip).
+
+DoD — см. CONTRACTS.md, разделы "Этап 1-довесок"/"Этап 2" (все пункты [x]).

@@ -676,7 +676,28 @@
 		"actionsAria": "Acciones para la publicación «{{excerpt}}»",
 		"noTextFallback": "sin texto",
 		"archiveButton": "Archivar",
-		"unpublishButton": "Despublicar"
+		"unpublishButton": "Despublicar",
+		"dueChip": "vence el {{date}}",
+		"overdueChip": "atrasado por {{count}}",
+		"overdueDays": {
+			"one": "{{count}} día",
+			"few": "{{count}} días",
+			"many": "{{count}} días",
+			"other": "{{count}} días"
+		},
+		"makeTaskButton": "Convertir en tarea",
+		"unmakeTaskButton": "Quitar de tareas",
+		"setDueButton": "Establecer vencimiento",
+		"clearDueButton": "Quitar vencimiento",
+		"setDuePrompt": "Vencimiento (AAAA-MM-DD):",
+		"setDueInvalid": "No se pudo reconocer la fecha"
+	},
+	"recordKind": {
+		"task": "tarea",
+		"link": "enlace",
+		"article": "artículo",
+		"collection": "colección",
+		"note": "nota"
 	},
 	"markdownToolbar": {
 		"boldAria": "Negrita",

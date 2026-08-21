@@ -676,7 +676,28 @@
 		"actionsAria": "Acties voor bericht ‘{{excerpt}}’",
 		"noTextFallback": "geen tekst",
 		"archiveButton": "Archiveren",
-		"unpublishButton": "Publicatie intrekken"
+		"unpublishButton": "Publicatie intrekken",
+		"dueChip": "vervalt op {{date}}",
+		"overdueChip": "{{count}} te laat",
+		"overdueDays": {
+			"one": "{{count}} dag",
+			"few": "{{count}} dagen",
+			"many": "{{count}} dagen",
+			"other": "{{count}} dagen"
+		},
+		"makeTaskButton": "Maak er een taak van",
+		"unmakeTaskButton": "Uit taken verwijderen",
+		"setDueButton": "Vervaldatum instellen",
+		"clearDueButton": "Vervaldatum verwijderen",
+		"setDuePrompt": "Vervaldatum (JJJJ-MM-DD):",
+		"setDueInvalid": "Datum niet herkend"
+	},
+	"recordKind": {
+		"task": "taak",
+		"link": "link",
+		"article": "artikel",
+		"collection": "verzameling",
+		"note": "notitie"
 	},
 	"markdownToolbar": {
 		"boldAria": "Vet",

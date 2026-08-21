@@ -676,7 +676,28 @@
 		"actionsAria": "投稿「{{excerpt}}」の操作",
 		"noTextFallback": "テキストなし",
 		"archiveButton": "アーカイブ",
-		"unpublishButton": "公開を取り消す"
+		"unpublishButton": "公開を取り消す",
+		"dueChip": "期限 {{date}}",
+		"overdueChip": "{{count}}遅れ",
+		"overdueDays": {
+			"one": "{{count}}日",
+			"few": "{{count}}日",
+			"many": "{{count}}日",
+			"other": "{{count}}日"
+		},
+		"makeTaskButton": "「タスク」にする",
+		"unmakeTaskButton": "タスクから外す",
+		"setDueButton": "期限を設定",
+		"clearDueButton": "期限を削除",
+		"setDuePrompt": "期限 (YYYY-MM-DD):",
+		"setDueInvalid": "日付を認識できませんでした"
+	},
+	"recordKind": {
+		"task": "タスク",
+		"link": "リンク",
+		"article": "記事",
+		"collection": "コレクション",
+		"note": "メモ"
 	},
 	"markdownToolbar": {
 		"boldAria": "太字",

@@ -676,7 +676,28 @@
 		"actionsAria": "Azioni per il post «{{excerpt}}»",
 		"noTextFallback": "senza testo",
 		"archiveButton": "Archivia",
-		"unpublishButton": "Rimuovi pubblicazione"
+		"unpublishButton": "Rimuovi pubblicazione",
+		"dueChip": "scade il {{date}}",
+		"overdueChip": "in ritardo di {{count}}",
+		"overdueDays": {
+			"one": "{{count}} giorno",
+			"few": "{{count}} giorni",
+			"many": "{{count}} giorni",
+			"other": "{{count}} giorni"
+		},
+		"makeTaskButton": "Trasforma in attività",
+		"unmakeTaskButton": "Rimuovi dalle attività",
+		"setDueButton": "Imposta scadenza",
+		"clearDueButton": "Rimuovi scadenza",
+		"setDuePrompt": "Scadenza (AAAA-MM-GG):",
+		"setDueInvalid": "Data non riconosciuta"
+	},
+	"recordKind": {
+		"task": "attività",
+		"link": "link",
+		"article": "articolo",
+		"collection": "raccolta",
+		"note": "nota"
 	},
 	"markdownToolbar": {
 		"boldAria": "Grassetto",

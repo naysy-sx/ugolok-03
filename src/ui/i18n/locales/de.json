@@ -676,7 +676,28 @@
 		"actionsAria": "Aktionen für Beitrag „{{excerpt}}“",
 		"noTextFallback": "kein Text",
 		"archiveButton": "Archivieren",
-		"unpublishButton": "Veröffentlichung zurückziehen"
+		"unpublishButton": "Veröffentlichung zurückziehen",
+		"dueChip": "fällig am {{date}}",
+		"overdueChip": "überfällig seit {{count}}",
+		"overdueDays": {
+			"one": "{{count}} Tag",
+			"few": "{{count}} Tagen",
+			"many": "{{count}} Tagen",
+			"other": "{{count}} Tagen"
+		},
+		"makeTaskButton": "Als Aufgabe markieren",
+		"unmakeTaskButton": "Aus Aufgaben entfernen",
+		"setDueButton": "Fälligkeitsdatum setzen",
+		"clearDueButton": "Fälligkeitsdatum entfernen",
+		"setDuePrompt": "Fälligkeitsdatum (JJJJ-MM-TT):",
+		"setDueInvalid": "Datum konnte nicht erkannt werden"
+	},
+	"recordKind": {
+		"task": "Aufgabe",
+		"link": "Link",
+		"article": "Artikel",
+		"collection": "Sammlung",
+		"note": "Notiz"
 	},
 	"markdownToolbar": {
 		"boldAria": "Fett",

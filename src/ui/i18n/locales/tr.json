@@ -676,7 +676,28 @@
 		"actionsAria": "«{{excerpt}}» gönderisi için işlemler",
 		"noTextFallback": "metin yok",
 		"archiveButton": "Arşivle",
-		"unpublishButton": "Yayından kaldır"
+		"unpublishButton": "Yayından kaldır",
+		"dueChip": "son tarih {{date}}",
+		"overdueChip": "{{count}} gecikti",
+		"overdueDays": {
+			"one": "{{count}} gün",
+			"few": "{{count}} gün",
+			"many": "{{count}} gün",
+			"other": "{{count}} gün"
+		},
+		"makeTaskButton": "Göreve dönüştür",
+		"unmakeTaskButton": "Görevlerden kaldır",
+		"setDueButton": "Son tarih belirle",
+		"clearDueButton": "Son tarihi kaldır",
+		"setDuePrompt": "Son tarih (YYYY-AA-GG):",
+		"setDueInvalid": "Tarih tanınamadı"
+	},
+	"recordKind": {
+		"task": "görev",
+		"link": "bağlantı",
+		"article": "makale",
+		"collection": "koleksiyon",
+		"note": "not"
 	},
 	"markdownToolbar": {
 		"boldAria": "Kalın",

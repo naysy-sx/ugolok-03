@@ -676,7 +676,28 @@
 		"actionsAria": "Actions pour la publication « {{excerpt}} »",
 		"noTextFallback": "sans texte",
 		"archiveButton": "Archiver",
-		"unpublishButton": "Dépublier"
+		"unpublishButton": "Dépublier",
+		"dueChip": "à faire avant le {{date}}",
+		"overdueChip": "en retard de {{count}}",
+		"overdueDays": {
+			"one": "{{count}} jour",
+			"few": "{{count}} jours",
+			"many": "{{count}} jours",
+			"other": "{{count}} jours"
+		},
+		"makeTaskButton": "Transformer en tâche",
+		"unmakeTaskButton": "Retirer des tâches",
+		"setDueButton": "Définir une échéance",
+		"clearDueButton": "Retirer l'échéance",
+		"setDuePrompt": "Échéance (AAAA-MM-JJ) :",
+		"setDueInvalid": "Impossible de reconnaître cette date"
+	},
+	"recordKind": {
+		"task": "tâche",
+		"link": "lien",
+		"article": "article",
+		"collection": "collection",
+		"note": "note"
 	},
 	"markdownToolbar": {
 		"boldAria": "Gras",

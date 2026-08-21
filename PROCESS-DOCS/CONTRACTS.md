@@ -18691,3 +18691,153 @@ title/linkUrl` (`republishWithStatus`, `receivePost`, `republishAllPostsUnderCur
 - [x] Тест: `updateDraftPost` не стирает теги (тот же инвариант, что title/linkUrl).
 - [x] `npm test` зелёный — 1995/1995.
 - [x] коммит
+
+## Этап 2 — вывод типа и карточка записи
+
+### `domain/content/record-kind.js` — `kindOf(post)`
+
+Чистая функция, порядок проверки ЖЁСТКИЙ (первое совпадение выигрывает,
+REDESIGN-SPEC.md, этап 2 — соглашение, не следствие модели, не менять
+порядок нигде в интерфейсе):
+
+```js
+export function kindOf(post) {
+  if (post.done !== null) return "task";
+  if (post.linkUrl) return "link";
+  if (post.title) return "article";
+  if (!post.text && post.attachments.length > 1) return "collection";
+  return "note";
+}
+```
+
+Ровно 5 исходов. Макет (`ugolok-final.html`) показывает СЕМЬ разных
+подписей в левой колонке (дело/заметка/ссылка/**запись**/подборка/
+**пост**/статья) — «запись» и «пост» НЕ отдельные исходы `kindOf`, это
+иллюстративная вариативность статичного макета (пост про изображение с
+коротким текстом и пост с одним аудио — оба, по алгоритму, `note`, у
+обоих `title`/`linkUrl` пусты, `done === null`, текст непустой). Карточка
+показывает ОДНУ подпись на исход, `t("recordKind." + kindOf(post))`,
+везде одинаково (REDESIGN-SPEC.md: "одна запись обязана называться
+одинаково везде").
+
+Метки (`i18n`, ключ `recordKind.*`, во всех 12 словарях):
+`task` → «дело», `link` → «ссылка», `article` → «статья», `collection` →
+«подборка», `note` → «заметка».
+
+### Правило единственного вложения
+
+Именованная константа `GUTTER_THUMBNAIL_TEXT_THRESHOLD = 280`
+(`record-kind.js`, экспортируется).
+
+```js
+export function attachmentPlacement(post) {
+  // "gutter" | "inline" — куда идёт ЕДИНСТВЕННОЕ вложение (только когда
+  // ровно одно; при 0 или >1 всегда "inline" — как сейчас через AttachmentView).
+}
+```
+
+- ровно одно вложение, `type === "image"` или `"video"`, `post.text.length >= GUTTER_THUMBNAIL_TEXT_THRESHOLD` → `"gutter"`.
+- ровно одно вложение, `type === "audio"` → всегда `"inline"` (правило описано как исключение из общего в REDESIGN-SPEC.md — реализуется само собой: audio не входит в условие выше).
+- иначе (0, >1, или single image/video с коротким текстом, или single `file`) → `"inline"`, рендер как сейчас (`AttachmentView`/`splitBubbleAttachments`, без изменений).
+
+Раскладка считается от `post.text` (не меняется после публикации) —
+не пересчитывается на каждый рендер иначе, чем детерминированно от
+одних и тех же входов; отдельного мемо/эффекта не требует (чистая
+функция от пропсов).
+
+### Видео в gutter — известное ограничение (подтверждено пользователем)
+
+В проекте сейчас НЕТ извлечения кадра-превью для видео
+(`attachment-view.jsx`: `VideoAttachment` рендерит только иконку+имя+
+размер, кадр никогда не декодируется). Промотированное в gutter видео
+показывает ИКОНКУ (video-camera, та же, что `MediaPreview` использует
+сейчас) внутри `.gthumb`, не кадр. Настоящая миниатюра — отдельная фича
+вне рамок редизайна.
+
+### Тэги — чипы
+
+`chip--tag` рендерится по `post.tags` (этап 1-довесок), не более макета
+не ограничивает — рендерим все.
+
+### Перевод CSS-токенов макета на реальные токены проекта
+
+`ugolok-final.html` — самодостаточный тёмный прототип со СВОИМИ
+переменными (`--ink0..3`, `--line`, `--text`, `--dim`, `--lamp`, `--bad`,
+`--good`, `--radius`, `--r-sm`, spacing `--s3xs..--sl`). Проект уже имеет
+рабочую light/dark-систему (`light-dark()`, `--bg/--surface/--surface-
+raised/--border/--muted/--fg/--accent/--bad/--warn/--good/--info`,
+`--radius/--radius-md/--radius-lg/--radius-full`, `--space-xs/s/m/l/xl`,
+типографика `--step-*`) — audit H4, REDESIGN-SPEC-LAYOUT.md §2 сам
+ссылается на `--step-*` по имени. Макет — структурный/раскладочный
+образец; **значения переменных берутся из системы проекта**, не
+копируются буквально (иначе светлая тема ломается — в макете нет
+`@media (prefers-color-scheme: light)` вовсе, хотя меню самого макета
+показывает пункт «Тема · тёмная», то есть светлая тема ожидается
+существующей). Пользователь подтвердил: старый `.card` вокруг поста —
+не обязан выживать без изменений, `.rec` несёт собственную поверхность.
+
+| Макет | Проект | Где используется |
+|---|---|---|
+| `--line` | `--border` | рамка `.rec`, `.chip--tag`, `.link` |
+| `--text` | `--fg` | `.rec__text`, `.rec__title` |
+| `--dim` | `--muted` | `.rec__kind`, `.rec__time`, `.chip` (обычный), `.link__d` |
+| `--lamp` | `--accent` | `.chip--due`, `task input:checked`, `.gthumb:hover` |
+| `--bad` | `--bad` | `.chip--late` (имя совпадает, значение — из проекта) |
+| `--ink1` (фон `.rec`) | `--surface-raised` | `.rec`, `.link`, `.chip` (обычный) фон |
+| `--ink2`/`--ink3` (второй слой, hover) | `--surface` / `color-mix(in oklch, var(--surface-raised), var(--fg) 8%)` | `.gthumb` градиент, hover-состояния |
+| `--radius` (10px, карточка) | `--radius-lg` (роль «карточка», как у существующего `.card`) | `.rec` |
+| `--r-sm` (7px, мелкие элементы) | `--radius` (0.625rem, базовый) | `.gthumb`, `.link__fav`, `task input` |
+| `20px` (пилюля, литерал в макете) | `--radius-full` | `.chip`, `.slice`, `.pill` (этап 3), `.badge` |
+| spacing `--s3xs..--sl` (6 шагов, px) | `--space-3xs/2xs/xs/s/m/l` (проектная шкала, `--step-*` не участвует — это шрифт) | gap-переменные композиционных классов, `style={{"--gap": "var(--space-*)"}}` |
+| `font-size` в px (11px/12.5px/14.5px/16px…) | `--step--2/--1/0/1` (ближайший подходящий шаг) | подписи `.rec__kind`/`.rec__time`/`.rec__text`/`.rec__title` |
+
+### Разметка `.rec` (структура из макета, класс-в-класс, без выдумывания новых)
+
+```
+article.rec (grid: var(--gut) 1fr, --gut=96px — REDESIGN-SPEC.md прямо
+             называет левую колонку "96 px", это единственное явное
+             px-значение раздела 2, не нарушает §2 запрет "width/height у
+             блоков" — это column-track grid-template-columns, не width
+             элемента)
+  div.rec__gutter
+    span.rec__kind      — t("recordKind." + kindOf(post))
+    span.rec__time      — formatDateTime(post.createdAt) (короткая форма,
+                           как сейчас в post-card.jsx, не полная дата)
+    [button.gthumb]      — только при attachmentPlacement === "gutter"
+  div.rec__body
+    [label.task]          — kindOf === "task": input[checkbox] + rec__text
+    [p.rec__text]          — kindOf !== "task": текст как сейчас (MarkdownView, profile="rich")
+    [div.link]              — kindOf === "link": .link__fav + .link__t + .link__d
+    [h3.rec__title]         — kindOf === "article": post.title
+    [AttachmentView/splitBubbleAttachments] — attachmentPlacement === "inline" (как сейчас)
+    [div.chips]             — due/late/tag чипы, если есть хоть один
+    div.rec__foot           — комментарии (кнопка), MediaButtons, ActionsMenu (владелец) —
+                               ФУНКЦИОНАЛЬНОСТЬ post-card.jsx НЕ убирается этим этапом,
+                               просто переезжает в rec__foot (REDESIGN-SPEC.md не отменяет
+                               существующие возможности карточки, описывает только новую
+                               визуальную структуру + типизацию)
+```
+
+Внешняя обёртка `PostWithComments` (`channel.jsx`) перестаёт заворачивать
+`PostCard` в `<div class="card stack">` — `.rec` теперь сама несёт
+фон/рамку/тень, двойная обёртка карточка-в-карточке не нужна (решение
+пользователя, живой чат). Блок комментариев (`comment-section`) остаётся
+отдельным элементом ПОД `.rec`, не внутри него.
+
+### DoD этапа 2
+
+- [x] `record-kind.js`: `kindOf` (5 исходов, порядок из спеки), `attachmentPlacement`, `GUTTER_THUMBNAIL_TEXT_THRESHOLD` — тесты на все исходы + приоритет + границы (279/280 символов, аудио никогда не gutter). 17/17, воркер с первого раза.
+- [x] 11 ключей `recordKind.*`/`postCard.*` (chips + 4 кнопки ActionsMenu + 2 сообщения prompt) — во всех 12 словарях, `tests/i18n.test.js` зелёный (16/16).
+- [x] `post-card.jsx` перестроен на `.rec`-структуру, старая функциональность (комментарии/медиа-кнопки/меню владельца) сохранена в `.rec__foot`. Дополнительно (текст REDESIGN-SPEC.md, этап 2, "Действия записи"): чекбокс дела реально переключает `setPostDone`, ActionsMenu получил «Сделать делом»/«Убрать из дел»/«Поставить срок»/«Снять срок» (`onSetDue` — `window.prompt` ГГГГ-ММ-ДД, простейший рабочий вариант, не кастомный пикер — можно заменить в отдельном проходе полировки).
+- [x] `custom.css` — новые классы `.rec*`/`.gthumb*`/`.rec-chips`/`.rec-chip*`/`.task*`/`.link*`, значения — из таблицы перевода токенов, НЕ буквальные из макета.
+- [x] `channel.jsx` — внешняя `.card`-обёртка вокруг `PostCard` убрана (осталась `.stack`), автор-шапка убрана вместе с обслуживавшим её `useEffect`/`ensureProfilesFetched` (мёртв после удаления `authorName`/`authorAvatar` из пропсов).
+- [x] `npm test` зелёный (полная регрессия) — 2012/2012.
+- [x] `npx vite build` зелёный — 868.37 kB gzip.
+- [x] Живая проверка Chrome (iframe нужной ширины внутри служебной `redesign-preview.html`, удалена после проверки — реальное окно Chrome не сжимается ниже ~785px, обычный resize_window не подошёл для мобильных ширин), все 6 ширин × обе темы: `scrollWidth - clientWidth === 0`, ноль "широких" элементов. Визуально (320/360/768, обе темы) — без наездов, длинные URL/теги без пробелов корректно переносятся.
+
+### Находки живой проверки (все исправлены до коммита)
+
+1. **`.chip`/`.chips` — коллизия имён.** Уже заняты в проекте (`custom.css`, "пилюля-триггер" `contacts.jsx` "+ в группу" — другой вид: `white-space:nowrap`, другая заливка). Мой блок (позже в каскаде) перебил бы существующий компонент на экране контактов. Переименовано в `.rec-chip`/`.rec-chips` — макет использовал `.chip`, отклонение от буквального копирования класса оправдано реальной коллизией, не вкусовщиной.
+2. **Переполнение по горизонтали от несбиваемого текста.** `.link__t`/`.link__d` (URL) и `.rec__title` — голые `<div>`/`<h3>`, не `<p>` (в отличие от `.rec__text`, который заворачивает `MarkdownView`, чья `<p>` уже наследует глобальный `overflow-wrap: break-word` из `minimal.css`). Длинный URL/тег без единого пробела раздувал `.rec` вбок. Добавлен `overflow-wrap: break-word` на `.rec__title`/`.link__t`/`.link__d`/`.rec-chip`.
+3. **`.link` — flex-row без `min-width:0` на дочернем блоке.** `overflow-wrap` сам по себе не сработал бы: строчный flex-контейнер (в отличие от `.rec__body`, `flex-direction:column`, там это не нужно) не даёт дочернему элементу сжаться меньше содержимого без явного `min-width:0`. Новый класс `.link__meta` на обёртке `link__t`+`link__d` — добавлен и в CSS, и в `post-card.jsx` (изначально забыт в JSX при первом проходе, найдено повторным grep перед коммитом).
+4. **JSX не синхронизирован с переименованием CSS-классов (найдено ДО живой проверки, чистым grep).** Первый проход переименовал `.chip`→`.rec-chip` только в CSS и в тестовой странице, но не в `post-card.jsx` — три места (`chip chip--late`, `chip chip--due`, `chips`, `chip chip--tag`) остались со старыми именами. Исправлено до сборки/тестов.

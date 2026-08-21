@@ -4531,6 +4531,214 @@ button[type="button"].media-mini-bar-btn {
 }
 
 /* ================================================================== *
+ *  Редизайн интерфейса, этап 2 — карточка записи (.rec), из макета     *
+ *  PROCESS-DOCS/REDESIGN/ugolok-final.html. Структура/классы — как в   *
+ *  макете (CONTRACTS.md, "Этап 2", разметка .rec класс-в-класс).       *
+ *  Значения переменных — ПЕРЕВЕДЕНЫ на реальные токены проекта (та же  *
+ *  таблица в CONTRACTS.md), макет самодостаточен и тёмный-only, у него *
+ *  нет светлой темы, буквальные значения сломали бы её.                *
+ * ================================================================== */
+.rec {
+	display: grid;
+	grid-template-columns: 6rem 1fr; /* REDESIGN-SPEC.md, этап 2 — "левая колонка (96 px)", явно зафиксировано текстом задания */
+	gap: var(--space-s);
+	padding: var(--space-s) var(--space-m) var(--space-s) var(--space-s);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+}
+.rec:hover {
+	border-color: color-mix(in oklch, var(--border), var(--fg) 20%);
+}
+.rec__gutter {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	align-items: flex-start;
+	padding-top: 2px;
+	min-width: 0;
+}
+.rec__kind {
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.rec__time {
+	font-size: var(--step--2);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+.rec__body {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+}
+.rec__text {
+	font-size: var(--step-0);
+}
+.rec__title {
+	font-size: var(--step-1);
+	font-weight: var(--weight-bold);
+	overflow-wrap: break-word; /* заголовок — пользовательский текст, без гарантии пробелов */
+}
+.rec__foot {
+	display: flex;
+	gap: var(--space-s);
+	align-items: center;
+	flex-wrap: wrap;
+	font-size: var(--step--2);
+	color: var(--muted);
+}
+.rec__foot button {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+.rec__foot button:hover {
+	color: var(--fg);
+}
+
+/* Единственное вложение (image/video) в левой колонке при длинном тексте
+   (record-kind.js, attachmentPlacement === "gutter") — квадратная
+   миниатюра. Оборачивает НАСТОЯЩИЙ AttachmentView (не новый компонент) —
+   картинка кадрируется в квадрат, видео (у которого сейчас нет извлечения
+   кадра, CONTRACTS.md "Этап 2", известное ограничение) показывает свою
+   обычную превью-кнопку (иконка+имя+размер, attachment-view.jsx
+   MediaPreview) — здесь имя/размер скрыты, остаётся только иконка по
+   центру квадрата. */
+.gthumb {
+	width: 100%;
+	aspect-ratio: 1;
+	overflow: hidden;
+	border-radius: var(--radius);
+	background: linear-gradient(150deg, var(--surface), color-mix(in oklch, var(--surface), var(--fg) 6%));
+	border: var(--border-width) solid var(--border);
+	display: grid;
+	place-items: center;
+}
+.gthumb:hover {
+	border-color: var(--accent);
+}
+.gthumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	cursor: pointer;
+}
+.gthumb .media-attachment-preview {
+	width: 100%;
+	height: 100%;
+	justify-content: center;
+	padding: 0;
+}
+.gthumb .media-attachment-preview span {
+	display: none; /* MediaPreview рассчитан на строку в теле (иконка+имя+размер) — в квадрате-миниатюре остаётся только иконка */
+}
+
+/* Названы rec-chip*, не chip* — .chip УЖЕ занят (custom.css выше,
+   "пилюля-триггер" contacts.jsx "+ в группу", другой вид: nowrap,
+   другая заливка). Макет использовал .chip/.chips — переименовано во
+   избежание коллизии с существующим компонентом проекта, а не по вкусу. */
+.rec-chips {
+	display: flex;
+	gap: var(--space-2xs);
+	flex-wrap: wrap;
+	align-items: center;
+}
+.rec-chip {
+	padding: 2px var(--space-2xs);
+	border-radius: var(--radius-full);
+	font-size: var(--step--2);
+	background-color: var(--surface-raised);
+	color: var(--muted);
+	border: var(--border-width) solid transparent;
+	overflow-wrap: break-word; /* тег — произвольный пользовательский текст, без гарантии пробелов */
+}
+.rec-chip--due {
+	background-color: var(--warn-surface);
+	color: var(--warn);
+}
+.rec-chip--late {
+	background-color: var(--bad-surface);
+	color: var(--bad);
+}
+.rec-chip--tag {
+	background-color: transparent;
+	border-color: var(--border);
+}
+
+/* Дело (kindOf === "task") — чекбокс СВОЕЙ формы (не native appearance:auto
+   + accent-color, как остальные чекбоксы проекта, minimal.css) — макет
+   называет этот компонент явно (REDESIGN-SPEC.md, этап 2), сохранён
+   класс-в-класс, а не заменён на общий стиль полей. */
+.task {
+	display: flex;
+	gap: var(--space-xs);
+	align-items: flex-start;
+}
+.task input {
+	appearance: none;
+	width: 1.0625rem;
+	height: 1.0625rem;
+	flex: none;
+	margin-top: 2px;
+	border: 1.5px solid var(--border);
+	border-radius: calc(var(--radius) / 2); /* нет отдельного "мелкого" токена радиуса — производное от базового --radius, не новый глобальный токен и не голый px-литерал */
+	cursor: pointer;
+}
+.task input:checked {
+	background-color: var(--accent);
+	border-color: var(--accent);
+}
+.task input:checked + span {
+	color: var(--muted);
+	text-decoration: line-through;
+}
+
+/* Ссылка (kindOf === "link") — карточка под текстом. */
+.link {
+	display: flex;
+	gap: var(--space-xs);
+	align-items: center;
+	padding: var(--space-xs);
+	border-radius: var(--radius);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+}
+.link__fav {
+	width: 2rem;
+	height: 2rem;
+	border-radius: var(--radius);
+	flex: none;
+	display: grid;
+	place-items: center;
+	background-color: var(--surface-raised);
+	color: var(--info);
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+}
+/* min-width:0 — .link — flex-родитель, без этого дочерний блок не
+   ужимается меньше своего содержимого (URL без пробелов, живая
+   проверка Chrome нашла переполнение) — overflow-wrap один без этого
+   не сработал бы, элемент не получил бы шанс сжаться. */
+.link__meta {
+	min-width: 0;
+}
+.link__t {
+	font-size: var(--step--1);
+	font-weight: 500;
+	overflow-wrap: break-word; /* заголовок ссылки, без гарантии title — падает обратно на сам linkUrl (без пробелов) */
+}
+.link__d {
+	font-size: var(--step--2);
+	color: var(--muted);
+	overflow-wrap: break-word; /* linkUrl — реальный URL, без пробелов, живая проверка Chrome нашла переполнение до этой правки */
+}
+
+/* ================================================================== *
  *  Пост + дерево комментариев — VISUAL.md v2, интеграция (пользователь *
  *  оставил разворот внутри списка постов канала, не отдельным         *
  *  экраном — см. PostWithComments, channel.jsx).                      *

@@ -676,7 +676,28 @@
 		"actionsAria": "对帖子“{{excerpt}}”的操作",
 		"noTextFallback": "无文本",
 		"archiveButton": "归档",
-		"unpublishButton": "取消发布"
+		"unpublishButton": "取消发布",
+		"dueChip": "截止 {{date}}",
+		"overdueChip": "逾期 {{count}}",
+		"overdueDays": {
+			"one": "{{count}}天",
+			"few": "{{count}}天",
+			"many": "{{count}}天",
+			"other": "{{count}}天"
+		},
+		"makeTaskButton": "设为任务",
+		"unmakeTaskButton": "从任务中移除",
+		"setDueButton": "设置截止日期",
+		"clearDueButton": "清除截止日期",
+		"setDuePrompt": "截止日期 (YYYY-MM-DD)：",
+		"setDueInvalid": "无法识别该日期"
+	},
+	"recordKind": {
+		"task": "任务",
+		"link": "链接",
+		"article": "文章",
+		"collection": "合集",
+		"note": "笔记"
 	},
 	"markdownToolbar": {
 		"boldAria": "粗体",

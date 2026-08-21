@@ -676,7 +676,28 @@
 		"actionsAria": "Działania dla posta „{{excerpt}}”",
 		"noTextFallback": "bez tekstu",
 		"archiveButton": "Archiwizuj",
-		"unpublishButton": "Cofnij publikację"
+		"unpublishButton": "Cofnij publikację",
+		"dueChip": "termin {{date}}",
+		"overdueChip": "opóźnienie {{count}}",
+		"overdueDays": {
+			"one": "{{count}} dzień",
+			"few": "{{count}} dni",
+			"many": "{{count}} dni",
+			"other": "{{count}} dnia"
+		},
+		"makeTaskButton": "Zamień w zadanie",
+		"unmakeTaskButton": "Usuń z zadań",
+		"setDueButton": "Ustaw termin",
+		"clearDueButton": "Usuń termin",
+		"setDuePrompt": "Termin (RRRR-MM-DD):",
+		"setDueInvalid": "Nie rozpoznano daty"
+	},
+	"recordKind": {
+		"task": "zadanie",
+		"link": "link",
+		"article": "artykuł",
+		"collection": "kolekcja",
+		"note": "notatka"
 	},
 	"markdownToolbar": {
 		"boldAria": "Pogrubienie",

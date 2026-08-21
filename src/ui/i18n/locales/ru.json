@@ -676,7 +676,28 @@
 		"actionsAria": "Действия с постом «{{excerpt}}»",
 		"noTextFallback": "без текста",
 		"archiveButton": "Архивировать",
-		"unpublishButton": "Снять с публикации"
+		"unpublishButton": "Снять с публикации",
+		"dueChip": "до {{date}}",
+		"overdueChip": "просрочено на {{count}}",
+		"overdueDays": {
+			"one": "{{count}} день",
+			"few": "{{count}} дня",
+			"many": "{{count}} дней",
+			"other": "{{count}} дня"
+		},
+		"makeTaskButton": "Сделать делом",
+		"unmakeTaskButton": "Убрать из дел",
+		"setDueButton": "Поставить срок",
+		"clearDueButton": "Снять срок",
+		"setDuePrompt": "Срок в формате ГГГГ-ММ-ДД:",
+		"setDueInvalid": "Не получилось распознать дату"
+	},
+	"recordKind": {
+		"task": "дело",
+		"link": "ссылка",
+		"article": "статья",
+		"collection": "подборка",
+		"note": "заметка"
 	},
 	"markdownToolbar": {
 		"boldAria": "Жирный",

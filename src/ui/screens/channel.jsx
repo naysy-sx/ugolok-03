@@ -8,7 +8,18 @@ import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched, profiles, groups, refreshGroups } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
-import { createDraftPost, publishPost, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
+import {
+	createDraftPost,
+	publishPost,
+	archivePost,
+	unpublishPost,
+	deletePost,
+	setPostDue,
+	clearPostDue,
+	setPostDone,
+	makePostTask,
+	unmakePostTask,
+} from "../../domain/content/post.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
@@ -614,14 +625,6 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		document.getElementById(`comment-${highlightCommentId}`)?.scrollIntoView({ block: "center" });
 	}, [highlightCommentId, tree]);
 
-	// Этап 69 — шапка PostCard показывает автора всегда (не только когда
-	// комментарии развёрнуты и refreshComments сам подтягивает авторов
-	// комментариев), поэтому профиль автора ПОСТА подтягивается отдельно, тем
-	// же приёмом, что flattenAuthors в refreshComments.
-	useEffect(() => {
-		ensureProfilesFetched([post.authorPubkey], fetchProfiles).catch(() => {});
-	}, [post.authorPubkey]);
-
 	async function runAction(fn) {
 		try {
 			await fn();
@@ -662,20 +665,39 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 		openMedia({ refs, position });
 	}
 
-	const author = commentAuthorInfo(post.authorPubkey);
+	// Редизайн интерфейса, этап 2 (CONTRACTS.md) — setPostDue/setPostDone и
+	// производные ЛОКАЛЬНЫЕ (не публикуют, этап 1) — runAction всё равно
+	// оборачивает их тем же приёмом, что архивацию/удаление: онлайновый
+	// путь до relay доедет окольно, при следующем статусном переходе
+	// (post.js, республикация несёт актуальные dueAt/done), а onPostChanged
+	// (runAction) обновляет ленту сразу, локально.
+	function handleSetDue() {
+		const input = window.prompt(t("postCard.setDuePrompt"));
+		if (input === null) return; // отменено
+		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.trim());
+		const dueAt = match ? Math.floor(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime() / 1000) : NaN;
+		if (!match || Number.isNaN(dueAt)) {
+			window.alert(t("postCard.setDueInvalid"));
+			return;
+		}
+		runAction(() => setPostDue(ownerPubkey, post.id, dueAt));
+	}
 
 	return (
-		<div id={`post-${post.id}`} class="card stack" style={{ "--gap": 0 }}>
+		<div id={`post-${post.id}`} class="stack" style={{ "--gap": 0 }}>
 			<PostCard
 				post={post}
-				authorName={author.name}
-				authorAvatar={author.avatar}
 				isOwner={isOwner}
 				commentCount={expanded ? countNodes(tree) : commentCount}
 				onOpenComments={() => setExpanded((v) => !v)}
 				mediaCounts={mediaCounts}
 				onOpenMediaClass={handleOpenMediaClass}
 				onOpenAttachment={(a) => openAttachment(a, { postId: post.id })}
+				onToggleDone={(done) => runAction(() => setPostDone(ownerPubkey, post.id, done))}
+				onMakeTask={() => runAction(() => makePostTask(ownerPubkey, post.id))}
+				onUnmakeTask={() => runAction(() => unmakePostTask(ownerPubkey, post.id))}
+				onSetDue={handleSetDue}
+				onClearDue={() => runAction(() => clearPostDue(ownerPubkey, post.id))}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {

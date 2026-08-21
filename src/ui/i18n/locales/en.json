@@ -676,7 +676,28 @@
 		"actionsAria": "Actions for post «{{excerpt}}»",
 		"noTextFallback": "no text",
 		"archiveButton": "Archive",
-		"unpublishButton": "Unpublish"
+		"unpublishButton": "Unpublish",
+		"dueChip": "due {{date}}",
+		"overdueChip": "overdue by {{count}}",
+		"overdueDays": {
+			"one": "{{count}} day",
+			"few": "{{count}} days",
+			"many": "{{count}} days",
+			"other": "{{count}} days"
+		},
+		"makeTaskButton": "Make a task",
+		"unmakeTaskButton": "Remove from tasks",
+		"setDueButton": "Set due date",
+		"clearDueButton": "Clear due date",
+		"setDuePrompt": "Due date (YYYY-MM-DD):",
+		"setDueInvalid": "Could not parse that date"
+	},
+	"recordKind": {
+		"task": "task",
+		"link": "link",
+		"article": "article",
+		"collection": "collection",
+		"note": "note"
 	},
 	"markdownToolbar": {
 		"boldAria": "Bold",
