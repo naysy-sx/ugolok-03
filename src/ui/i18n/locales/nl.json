@@ -130,7 +130,7 @@
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
-		"groupAllLink": "all ›",
+		"groupAllLink": "all",
 		"pinAria": "Pin “{{name}}”",
 		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "Menu openen",

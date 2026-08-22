@@ -819,14 +819,22 @@ html[data-media-full] .top-corner-actions {
 	width: 100%;
 	background: none;
 	border: none;
+	/* тот же padding-inline, что у строк ниже (.stream) — левый край
+	   заголовка и левый край имени в списке стоят на одной вертикали
+	   ВСЕГДА, а не только когда подложка наведения это показывает
+	   (ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 4). */
 	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
 	margin-block-end: 0;
-	border-radius: var(--radius-sm);
+	color: var(--muted);
 	cursor: pointer;
+	transition: color var(--transition-speed) var(--transition-ease);
 }
+/* Подложки НЕТ намеренно (было var(--surface-raised)): заголовок —
+   кнопка, отклик нужен, но фон для этого слишком громкий. Хватает
+   потепления текста и сдвига стрелки "все ›" ниже. */
 .grouphead:hover,
 .grouphead:focus-visible {
-	background-color: var(--surface-raised);
+	color: var(--fg);
 }
 /* "Избранное" — тот же кикер, но НЕ кнопка (сам заголовок никуда не ведёт). */
 .grouphead-plain {
@@ -840,9 +848,18 @@ html[data-media-full] .top-corner-actions {
 	font-weight: var(--weight-normal);
 	font-size: var(--step--2);
 	color: var(--muted);
+	transition: color var(--transition-speed) var(--transition-ease);
+}
+.grouphead__all::after {
+	content: " ›";
+	display: inline-block;
+	transition: transform var(--transition-speed) var(--ease);
 }
 .grouphead:hover .grouphead__all {
 	color: var(--accent);
+}
+.grouphead:hover .grouphead__all::after {
+	transform: translateX(2px);
 }
 
 /* Список переписок/каналов внутри группы — без буллетов/отступа списка,
@@ -855,40 +872,62 @@ html[data-media-full] .top-corner-actions {
 }
 .stream-row {
 	border-radius: var(--radius-sm);
+	padding-inline-end: var(--space-3xs);
+	transition: background-color var(--transition-speed) var(--transition-ease);
 }
+/* Было var(--surface-raised) — холодная серая плашка, спорящая с тёплым
+   акцентом остального приложения. Заменено на слабую подмешку акцента —
+   тот же свет лампы, только едва заметный. */
 .stream-row:hover {
-	background-color: var(--surface-raised);
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+}
+/* Открытая переписка/канал — без этого в списке из тридцати строк не
+   видно, где находишься (nav-groups.jsx сравнивает place.value с
+   pubkey/id строки). Полоска слева, а не заливка: тише, чем hover. */
+.stream-row.is-active {
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+	box-shadow: inset 2px 0 0 var(--accent);
+}
+.stream-row.is-active .stream__name {
+	color: var(--fg);
+	font-weight: 500;
 }
 .stream {
-	min-width: 0;
+	min-inline-size: 0;
 	background: none;
 	border: none;
-	padding: var(--space-2xs) var(--space-xs);
+	/* Было --space-2xs/--space-xs асимметрично — имена в списке стояли на
+	   8px правее заголовков групп, заметно только при наведении. Отступ
+	   одинаковый со всех сторон — подложка hover читается ровной плашкой,
+	   высоту строки всё равно задаёт --avatar-s. */
+	padding: var(--space-3xs);
 	color: var(--fg);
 	font: inherit;
-	font-size: var(--step-0);
+	font-size: var(--step--1);
+	line-height: 1.35;
 	text-align: start;
 	cursor: pointer;
 }
 /* Аватар-заглушка строки — квадрат со скруглением --radius-sm (та же форма,
    что компактные icon-btn выше), НЕ круг: тот же язык, что идентити-аватар
-   (.account-avatar-sm) и .ava--sm макета. */
+   и .ava--sm макета. */
 .stream-ava {
 	flex: none;
-	width: 1.75rem;
-	height: 1.75rem;
+	inline-size: var(--avatar-s);
+	block-size: var(--avatar-s);
 	border-radius: var(--radius-sm);
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	color: var(--muted);
 	font-size: var(--step--1);
 	font-weight: var(--weight-bold);
+	object-fit: cover;
 }
 .stream__name {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	min-width: 0;
+	min-inline-size: 0;
 }
 /* Пин-тумблер (⚑/⚐, текстовый глиф) — едва виден по умолчанию, тот же
    hover-паттерн, что .profile-edit-btn (проявляется по hover строки, не
@@ -898,12 +937,15 @@ html[data-media-full] .top-corner-actions {
 	flex: none;
 	background: none;
 	border: none;
-	padding: var(--space-3xs);
+	/* По горизонтали больше, чем по вертикали — иначе флажок упирается
+	   в правый край подложки. */
+	padding: var(--space-3xs) var(--space-2xs);
 	color: var(--accent);
 	font-size: 0.95rem;
 	line-height: 1;
 	cursor: pointer;
 	opacity: 0.25;
+	transition: opacity var(--transition-speed) var(--transition-ease);
 }
 .stream-row:hover .pin-toggle,
 .pin-toggle:focus-visible,

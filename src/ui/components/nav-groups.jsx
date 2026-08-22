@@ -3,7 +3,7 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
 import { contacts, profiles, ensureProfilesFetched } from "../signals/contacts.js";
-import { openChat, openChannel, goTo } from "../signals/place.js";
+import { place, openChat, openChannel, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
@@ -54,10 +54,14 @@ function PinToggle({ pinned, onToggle, label }) {
 	);
 }
 
-function StreamItem({ avatar, name, onOpen, pinned, onTogglePin, pinLabel }) {
+// active (ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 4) — строка текущего места
+// (place.value, сравнение в NavGroups): без неё в списке из тридцати
+// переписок/каналов не видно, где находишься. .bar, не .row — строка
+// никогда не переносится (длинное имя обрезается .stream__name).
+function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabel }) {
 	return (
-		<li class="stream-row row" style={{ alignItems: "center" }}>
-			<button type="button" class="stream row grow" style={{ alignItems: "center" }} onClick={onOpen}>
+		<li class={`stream-row bar${active ? " is-active" : ""}`} style={{ "--gap": "0", alignItems: "center" }}>
+			<button type="button" class="stream bar grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={onOpen}>
 				{avatar}
 				<span class="stream__name">{name}</span>
 			</button>
@@ -153,6 +157,12 @@ export default function NavGroups({ unreadJournalCount }) {
 	const visibleOwned = owned.filter((c) => matches(c.name || ""));
 	const visibleSubscribed = subscribed.filter((c) => matches(c.name || ""));
 
+	// Активная строка (этап 4) — сравнение с ЕДИНЫМ источником "где я
+	// нахожусь" (place.js), не отдельным локальным состоянием: то же
+	// значение уже двигает саму навигацию (openChat/openChannel).
+	const isChannelActive = (id) => place.value.kind === "channel" && place.value.id === id;
+	const isPersonActive = (pk) => place.value.kind === "chat" && place.value.id === pk;
+
 	return (
 		<>
 			{/* Разметка по макету — .pane__top заканчивается строкой поиска
@@ -192,6 +202,7 @@ export default function NavGroups({ unreadJournalCount }) {
 									avatar={<ChannelAvatarThumb channel={channelByIdMap.get(c.id) ?? c} small />}
 									name={c.name}
 									onOpen={() => openChannel(c.id)}
+									active={isChannelActive(c.id)}
 									pinned
 									onTogglePin={() => handleTogglePinChannel(c.id, true)}
 									pinLabel={t("shell.unpinAria", { name: c.name })}
@@ -203,6 +214,7 @@ export default function NavGroups({ unreadJournalCount }) {
 									avatar={<PersonAvatar pubkey={pk} name={personName(pk)} />}
 									name={personName(pk)}
 									onOpen={() => openChat(pk)}
+									active={isPersonActive(pk)}
 									pinned
 									onTogglePin={() => handleTogglePinPerson(pk, true)}
 									pinLabel={t("shell.unpinAria", { name: personName(pk) })}
@@ -224,6 +236,7 @@ export default function NavGroups({ unreadJournalCount }) {
 								avatar={<PersonAvatar pubkey={pk} name={personName(pk)} />}
 								name={personName(pk)}
 								onOpen={() => openChat(pk)}
+								active={isPersonActive(pk)}
 								pinned={pinned.people.includes(pk)}
 								onTogglePin={() => handleTogglePinPerson(pk, pinned.people.includes(pk))}
 								pinLabel={t(pinned.people.includes(pk) ? "shell.unpinAria" : "shell.pinAria", { name: personName(pk) })}
@@ -244,6 +257,7 @@ export default function NavGroups({ unreadJournalCount }) {
 								avatar={<ChannelAvatarThumb channel={c} small />}
 								name={c.name || t("channels.card.untitled")}
 								onOpen={() => openChannel(c.id)}
+								active={isChannelActive(c.id)}
 								pinned={pinned.channels.includes(c.id)}
 								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
 								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
@@ -264,6 +278,7 @@ export default function NavGroups({ unreadJournalCount }) {
 								avatar={<ChannelAvatarThumb channel={c} small />}
 								name={c.name || t("channels.card.untitled")}
 								onOpen={() => openChannel(c.id)}
+								active={isChannelActive(c.id)}
 								pinned={pinned.channels.includes(c.id)}
 								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
 								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
