@@ -116,6 +116,7 @@
 		"sidebarAriaLabel": "Профиль и главное меню",
 		"navAriaLabel": "Главное меню",
 		"quickConnect": "Быстрая связь",
+		"quickConnectHint": "разговор без учётной записи",
 		"logout": "Выйти",
 		"unreadAriaLabel": "непрочитано: {{count}}",
 		"openMenu": "Открыть меню",

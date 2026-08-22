@@ -137,7 +137,8 @@
 		"closeMenu": "Menu sluiten",
 		"switchToLightTheme": "Overschakelen naar licht thema",
 		"switchToDarkTheme": "Overschakelen naar donker thema",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "Bezig met controleren…",

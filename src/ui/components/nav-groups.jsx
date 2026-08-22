@@ -27,7 +27,7 @@ function initial(name) {
 
 function Avatar({ name }) {
 	return (
-		<span class="stream-ava row" aria-hidden="true" style={{ alignItems: "center", justifyContent: "center" }}>
+		<span class="stream-ava bar" aria-hidden="true" style={{ alignItems: "center", justifyContent: "center" }}>
 			{initial(name)}
 		</span>
 	);
@@ -133,8 +133,12 @@ export default function NavGroups({ unreadJournalCount }) {
 	const visibleSubscribed = subscribed.filter((c) => matches(c.name || ""));
 
 	return (
-		<div class="nav-groups stack" style={{ "--gap": "var(--space-s)" }}>
-			<div class="sidebar-row bar grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+		<>
+			{/* Разметка по макету — .pane__top заканчивается строкой поиска
+			    (карточка идентити выше — отдельный компонент, тот же фикс-блок
+			    визуально благодаря общему padding-inline). НЕ scroller — эта
+			    строка остаётся на месте, скроллится только .pane__body ниже. */}
+			<div class="sidebar-row bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 				<label class="visually-hidden" for={searchId}>
 					{t("shell.searchLabel")}
 				</label>
@@ -153,76 +157,81 @@ export default function NavGroups({ unreadJournalCount }) {
 				<AddMenu />
 			</div>
 
-			{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (
-				<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-					<p class="eyebrow grouphead-plain">{t("shell.favoritesHeading")}</p>
-					<ul class="streams stack" style={{ "--gap": "var(--space-3xs)" }}>
-						{favoriteChannels.map((c) => (
-							<StreamItem key={`fc-${c.id}`} name={c.name} onOpen={() => openChannel(c.id)} pinned onTogglePin={() => handleTogglePinChannel(c.id, true)} pinLabel={t("shell.unpinAria", { name: c.name })} />
-						))}
-						{favoritePeople.map((pk) => (
-							<StreamItem key={`fp-${pk}`} name={personName(pk)} onOpen={() => openChat(pk)} pinned onTogglePin={() => handleTogglePinPerson(pk, true)} pinLabel={t("shell.unpinAria", { name: personName(pk) })} />
+			{/* .pane__body — единственный .scroller сайдбара (REGLAMENT.md §1 —
+			    "ровно один .scroller на каждом пути от .shell до листа"; путь
+			    через .sidebar теперь заходит СЮДА, не в сам <aside>, см. app.jsx). */}
+			<div class="pane__body stack scroller grow" style={{ "--gap": "var(--space-s)" }}>
+				{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (
+					<div class="stack" style={{ "--gap": "1px" }}>
+						<p class="eyebrow grouphead-plain">{t("shell.favoritesHeading")}</p>
+						<ul class="streams stack" style={{ "--gap": "1px" }}>
+							{favoriteChannels.map((c) => (
+								<StreamItem key={`fc-${c.id}`} name={c.name} onOpen={() => openChannel(c.id)} pinned onTogglePin={() => handleTogglePinChannel(c.id, true)} pinLabel={t("shell.unpinAria", { name: c.name })} />
+							))}
+							{favoritePeople.map((pk) => (
+								<StreamItem key={`fp-${pk}`} name={personName(pk)} onOpen={() => openChat(pk)} pinned onTogglePin={() => handleTogglePinPerson(pk, true)} pinLabel={t("shell.unpinAria", { name: personName(pk) })} />
+							))}
+						</ul>
+					</div>
+				)}
+
+				<div class="stack" style={{ "--gap": "1px" }}>
+					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
+						{t("shell.peopleGroupHeading")}
+						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
+					</button>
+					<ul class="streams stack" style={{ "--gap": "1px" }}>
+						{visibleConversations.map((c) => (
+							<StreamItem
+								key={c.chatId}
+								name={personName(c.chatId)}
+								onOpen={() => openChat(c.chatId)}
+								pinned={pinned.people.includes(c.chatId)}
+								onTogglePin={() => handleTogglePinPerson(c.chatId, pinned.people.includes(c.chatId))}
+								pinLabel={t(pinned.people.includes(c.chatId) ? "shell.unpinAria" : "shell.pinAria", { name: personName(c.chatId) })}
+							/>
 						))}
 					</ul>
 				</div>
-			)}
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<button type="button" class="eyebrow grouphead row" style={{ alignItems: "center", justifyContent: "space-between" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
-					{t("shell.peopleGroupHeading")}
-					<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-				</button>
-				<ul class="streams stack" style={{ "--gap": "var(--space-3xs)" }}>
-					{visibleConversations.map((c) => (
-						<StreamItem
-							key={c.chatId}
-							name={personName(c.chatId)}
-							onOpen={() => openChat(c.chatId)}
-							pinned={pinned.people.includes(c.chatId)}
-							onTogglePin={() => handleTogglePinPerson(c.chatId, pinned.people.includes(c.chatId))}
-							pinLabel={t(pinned.people.includes(c.chatId) ? "shell.unpinAria" : "shell.pinAria", { name: personName(c.chatId) })}
-						/>
-					))}
-				</ul>
-			</div>
+				<div class="stack" style={{ "--gap": "1px" }}>
+					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
+						{t("shell.myChannelsGroupHeading")}
+						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
+					</button>
+					<ul class="streams stack" style={{ "--gap": "1px" }}>
+						{visibleOwned.map((c) => (
+							<StreamItem
+								key={c.id}
+								name={c.name || t("channels.card.untitled")}
+								onOpen={() => openChannel(c.id)}
+								pinned={pinned.channels.includes(c.id)}
+								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
+								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
+							/>
+						))}
+					</ul>
+				</div>
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<button type="button" class="eyebrow grouphead row" style={{ alignItems: "center", justifyContent: "space-between" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
-					{t("shell.myChannelsGroupHeading")}
-					<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-				</button>
-				<ul class="streams stack" style={{ "--gap": "var(--space-3xs)" }}>
-					{visibleOwned.map((c) => (
-						<StreamItem
-							key={c.id}
-							name={c.name || t("channels.card.untitled")}
-							onOpen={() => openChannel(c.id)}
-							pinned={pinned.channels.includes(c.id)}
-							onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-							pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
-						/>
-					))}
-				</ul>
+				<div class="stack" style={{ "--gap": "1px" }}>
+					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
+						{t("shell.subscriptionsGroupHeading")}
+						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
+					</button>
+					<ul class="streams stack" style={{ "--gap": "1px" }}>
+						{visibleSubscribed.map((c) => (
+							<StreamItem
+								key={c.id}
+								name={c.name || t("channels.card.untitled")}
+								onOpen={() => openChannel(c.id)}
+								pinned={pinned.channels.includes(c.id)}
+								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
+								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
+							/>
+						))}
+					</ul>
+				</div>
 			</div>
-
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<button type="button" class="eyebrow grouphead row" style={{ alignItems: "center", justifyContent: "space-between" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
-					{t("shell.subscriptionsGroupHeading")}
-					<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-				</button>
-				<ul class="streams stack" style={{ "--gap": "var(--space-3xs)" }}>
-					{visibleSubscribed.map((c) => (
-						<StreamItem
-							key={c.id}
-							name={c.name || t("channels.card.untitled")}
-							onOpen={() => openChannel(c.id)}
-							pinned={pinned.channels.includes(c.id)}
-							onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-							pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
-						/>
-					))}
-				</ul>
-			</div>
-		</div>
+		</>
 	);
 }

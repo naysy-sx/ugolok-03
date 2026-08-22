@@ -137,7 +137,8 @@
 		"closeMenu": "Zamknij menu",
 		"switchToLightTheme": "Przełącz na jasny motyw",
 		"switchToDarkTheme": "Przełącz na ciemny motyw",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "Sprawdzanie…",

@@ -116,6 +116,7 @@
 		"sidebarAriaLabel": "Profile and main menu",
 		"navAriaLabel": "Main menu",
 		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account",
 		"logout": "Log out",
 		"unreadAriaLabel": "unread: {{count}}",
 		"openMenu": "Open menu",

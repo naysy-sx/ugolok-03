@@ -137,7 +137,8 @@
 		"closeMenu": "Menü schließen",
 		"switchToLightTheme": "Zum hellen Design wechseln",
 		"switchToDarkTheme": "Zum dunklen Design wechseln",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "Wird geprüft…",

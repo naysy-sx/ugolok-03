@@ -137,7 +137,8 @@
 		"closeMenu": "メニューを閉じる",
 		"switchToLightTheme": "ライトテーマに切り替える",
 		"switchToDarkTheme": "ダークテーマに切り替える",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "確認中…",

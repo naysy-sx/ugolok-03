@@ -25,27 +25,6 @@
  * (например is-active ниже), а не автогенерируемые инлайн-style.
  */
 
-/* Пункт главного меню с иконкой (Radix Icons, MIT — см. src/ui/icons/) —
-   иконка перед подписью, размер иконки завязан на font-size кнопки (width/
-   height: 1em на самой svg), поэтому отдельно ничего не масштабируем здесь. */
-/* .row (раскладка) уже в JSX — здесь только полная ширина (не покрыта
-   composition-моделью, это не gap/direction, а inline-size). */
-.nav-item-btn {
-	width: 100%;
-}
-.nav-item-btn svg {
-	flex: none;
-	/* Пользователь: иконка тем же цветом, что текст следом (currentColor),
-	   сливалась с подписью — приглушили, подпись остаётся доминантой. */
-	opacity: 0.3;
-}
-/* "Выйти" (.exit-btn) сюда не входит — иконка уже приглушена своим
-   var(--muted), а не currentColor из общего текста; двойное приглушение
-   делало её почти невидимой. */
-.exit-btn svg {
-	opacity: 1;
-}
-
 /* Найдено живой проверкой этапа с компактными иконками модерации
    (channel-chat.jsx): SVG внутри inline-flex кнопки (.icon-btn/
    .back-button) иногда схлопывается по ширине почти до нуля — классический
@@ -60,58 +39,10 @@
 	min-height: 1em;
 }
 
-/* Пользователь: "главное меню выглядит как стопка кирпичей... пусть выглядят
-   как ссылки (но в разметке остаются кнопками), при наведении — красивая
-   анимация подчёркивания через псевдоэлемент". Разметка не меняется —
-   только внешний вид: прозрачный фон, подчёркивание растёт из скрытого
-   ::after слева направо. "Выйти" (.exit-btn) сюда НЕ входит — стилизуется
-   отдельно ниже, пользователь явно попросил оставить его кнопкой. */
-.sidebar .nav-item-btn {
-	position: relative;
-	/* Начало подчёркивания (::after ниже) — после иконки, а не от края
-	   кнопки; 29px подобраны визуально в инспекторе (ни один --space-*
-	   токен не совпал с шириной иконка+gap+padding), отдельная переменная —
-	   чтобы не заводить magic number прямо в правиле. */
-	--nav-underline-offset: 1.8125rem;
-	background: none;
-	border: none;
-	color: var(--fg);
-	font-weight: var(--weight-normal);
-	padding-block: var(--space-2xs);
-	padding-inline: var(--space-3xs);
-	border-radius: 0;
-}
-.sidebar .nav-item-btn::after {
-	content: "";
-	position: absolute;
-	inset-inline-start: var(--nav-underline-offset);
-	inset-inline-end: var(--space-3xs);
-	inset-block-end: 0.2em;
-	block-size: 2px;
-	background-color: var(--accent);
-	opacity: 0.3;
-	transform: scaleX(0);
-	transform-origin: left;
-	transition: transform var(--transition-speed) var(--transition-ease);
-}
-.sidebar .nav-item-btn:hover,
-.sidebar .nav-item-btn:focus-visible,
-.sidebar .nav-item-btn.is-active {
-	color: var(--accent);
-}
-.sidebar .nav-item-btn:hover::after,
-.sidebar .nav-item-btn:focus-visible::after,
-.sidebar .nav-item-btn.is-active::after {
-	transform: scaleX(1);
-}
-
-/* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2),
-   прижата вправо (margin-inline-start:auto — .nav-item-btn/.sidebar-row уже
-   flex-строка). Раньше жил только внутри старого NAV_ITEMS-списка (.sidebar
-   nav), теперь также на колокольчике "Журнал" панели групп (nav-groups.jsx) —
-   селектор ослаблен до .sidebar, чтобы работать в обоих местах. */
+/* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2).
+   Раньше жил внутри старого NAV_ITEMS-списка (удалён, этап 10.2), теперь
+   только на колокольчике "Журнал" панели групп (.journal-bell-btn ниже). */
 .sidebar .nav-badge {
-	margin-inline-start: auto;
 	background-color: var(--accent-2);
 	color: var(--accent-2-contrast);
 	border-radius: calc(infinity * 1px);
@@ -119,20 +50,6 @@
 	font-size: var(--step--2);
 	font-weight: var(--weight-bold);
 	line-height: 1.6;
-}
-
-/* "Выйти" — единственная кнопка главного меню, которая ОСТАЁТСЯ кнопкой
-   (пользователь: "просто подогнать под общий стиль") — тот же тихий
-   ghost-стиль, что у action-buttons/back-button, не сплошная заливка. */
-.sidebar .exit-btn {
-	background-color: transparent;
-	color: var(--muted);
-	border: var(--border-width) solid var(--border);
-	font-weight: var(--weight-normal);
-}
-.sidebar .exit-btn:hover {
-	background-color: var(--surface-raised);
-	color: var(--fg);
 }
 
 /* Radix Icons — заливка (fill), не обводка: у них нет stroke-width, чтобы
@@ -640,8 +557,18 @@ html[data-media-full] .top-corner-actions {
 	position: relative; /* якорь для .sidebar-backdrop ниже (< 768px) */
 }
 
-/* .rigid/.stack/.scroller/.box (раскладка) уже в JSX — здесь то, что
-   регламент не покрывает: адаптивное превращение в выдвижную панель. */
+/* Разметка по макету — <aside> сам больше не .scroller/.box (тот был один
+   на весь сайдбар); скроллится только .pane__body внутри (nav-groups.jsx,
+   grow+scroller). overflow:hidden здесь — тот же приём, что .shell/
+   .main-content: прячет то немногое, что могло бы вылезти из своих трёх
+   регионов (.pane__top/.pane__body/.pane__bottom), не участвует в скролле
+   сам. */
+.sidebar {
+	overflow: hidden;
+}
+
+/* .rigid/.stack (раскладка) уже в JSX — здесь то, что регламент не
+   покрывает: адаптивное превращение в выдвижную панель. */
 
 /* Адаптив (пользователь: "весь sidebar я предлагаю прятать в бургер-кнопку")
    — ниже 768px сайдбар больше не стоит в потоке над контентом (там он
@@ -700,159 +627,75 @@ html[data-media-full] .top-corner-actions {
 	}
 	.sidebar {
 		flex: 0 0 auto;
-		width: 15rem;
+		/* 18rem=288px — макет (ugolok-final.html) задаёт --aside:292px
+		   буквально; было 15rem (240px), заметно уже мокапа. */
+		width: 18rem;
 		border-block-end: none;
 		border-inline-end: var(--border-width) solid var(--border);
 	}
 }
 
-.profile-card {
-	/* .stack (раскладка) уже в JSX. */
-	container-type: inline-size; /* VISUAL.md v2 — cqi для заглушки-буквы аватара */
-	text-align: start;
-	padding-block-end: var(--space-m);
-	border-block-end: var(--border-width) solid var(--border);
+/* ================================================================== *
+ *  Идентити-карточка сайдбара (sidebar-profile-card.jsx) — разметка   *
+ *  по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html: .idwrap/       *
+ *  .idcard__btn/.ava/.idcard__name/.idcard__bio/.chev). Вся строка —  *
+ *  ОДИН <summary>-триггер (details.menu.idwrap), не два отдельных     *
+ *  клик-таргета, как было раньше (карандаш + отдельная кнопка меню).  *
+ * ================================================================== */
+/* .menu уже даёт position:relative — но inline-flex (годится для
+   компактных icon-only триггеров); идентити-карточка — блочная, во всю
+   ширину колонки, как .idcard__btn в макете. */
+.menu.idwrap {
+	display: flex;
 }
-
-/* Аватар в aside — найдено пользователем: этот класс раньше не имел ВООБЩЕ
-   никакого CSS вне .auth-layout (стартовый экран), поэтому реальное фото
-   рендерилось нативным img без ограничения размера — источник и "квадрат
-   вместо круга" (явное требование пользователя, в отличие от круглых
-   аватаров на unlock.jsx — там не трогаем), и вероятный источник "странных
-   отступов" в карточке (неограниченная высота реальной фотографии). */
-/* VISUAL.md v2 — во всю ширину колонки aside (не фиксированный 12rem):
-   на узком drawer'е (адаптив, min(80vw,20rem)) фиксированный размер мог
-   переполнить колонку на совсем маленьких телефонах, текучая ширина —
-   надёжнее. container-type на .profile-card (ниже) даёт cqi для
-   заглушки-буквы. */
-.profile-card-avatar-btn {
-	position: relative;
-	display: block;
+.idcard__btn {
 	width: 100%;
-	background: none;
-	border: none;
-	padding: 0;
+	padding: var(--space-xs);
 	border-radius: var(--radius);
-	cursor: pointer;
-	overflow: hidden;
+	list-style: none;
 }
-.profile-card-avatar-btn:disabled {
-	cursor: default;
+.idcard__btn::-webkit-details-marker {
+	display: none;
 }
-.app-layout .account-avatar-large {
+.idwrap:hover .idcard__btn,
+.idcard__btn:focus-visible {
+	background-color: var(--surface-raised);
+}
+/* Компактный (40px) аватар идентити-карточки — квадрат со скруглением
+   --radius (та же форма, что карточки/панели), НЕ круг (то же решение
+   пользователя, что было у большого аватара: "строго квадратным"). */
+.app-layout .account-avatar-sm {
 	display: block;
-	width: 100%;
-	aspect-ratio: 1;
+	flex: none;
+	width: 2.5rem;
+	height: 2.5rem;
 	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
-	transition: filter var(--transition-speed) var(--transition-ease);
 }
-.profile-card-avatar-btn:hover:not(:disabled) .account-avatar-large,
-.profile-card-avatar-btn:focus-visible .account-avatar-large {
-	filter: brightness(1.06);
-}
-/* "Стеклянная" подсказка (VISUAL.md v2) — лупа проявляется снизу по
-   hover/фокусу, намекая "кликабельно, открыть фото"; pointer-events:none —
-   кликабельная цель ровно одна (сама кнопка), не оверлей поверх неё. */
-.profile-card-avatar-glass {
-	/* .row (раскладка) уже в JSX. */
-	position: absolute;
-	inset-inline: 0;
-	inset-block-end: 0;
-	block-size: 34%;
-	padding-block-end: var(--space-2xs);
-	background-image: linear-gradient(to top, oklch(0.15 0.03 var(--hue) / 0.72), transparent);
-	color: white;
-	font-size: 1.3rem;
-	opacity: 0;
-	transform: translateY(3px);
-	transition:
-		opacity 220ms var(--ease),
-		transform 220ms var(--ease);
-	pointer-events: none;
-}
-.profile-card-avatar-btn:hover .profile-card-avatar-glass,
-.profile-card-avatar-btn:focus-visible .profile-card-avatar-glass {
-	opacity: 1;
-	transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-	.profile-card-avatar-glass {
-		transition: opacity 1ms linear;
-		transform: none;
-	}
-}
-.app-layout .account-avatar-fallback {
+.app-layout .account-avatar-sm.account-avatar-fallback {
 	/* .row (раскладка) уже в JSX (account-avatar.jsx). */
 	color: var(--muted);
-	font-size: clamp(1.8rem, 20cqi, 3rem); /* VISUAL.md v2 — контейнерная типографика */
+	font-size: var(--step-0);
 	font-weight: var(--weight-bold);
 }
-
-.profile-card-body {
-	max-inline-size: 100%;
+.idcard__body {
 	min-inline-size: 0;
 }
-.profile-card-body h2 {
-	/* .row (раскладка) уже в JSX. */
-	font-size: var(--step-1);
-	margin-block: 0;
-	max-inline-size: 100%;
+.idcard__name {
+	font-weight: var(--weight-bold);
+	font-size: var(--step-0);
 }
-/* Длинный логин (например автосгенерированный) не должен раздвигать
-   фиксированную ширину сайдбара и прятать под собой кнопку-карандаш —
-   обрезаем троеточием, полное имя остаётся доступным через title. */
-.profile-card-body h2 span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	min-inline-size: 0;
-}
-/* Иконка-карандаш рядом с именем — база .icon-btn (круглая иконка-кнопка),
-   здесь только opacity-реакция: едва видима (0.2), проявляется по hover
-   на ВСЕЙ карточке (.profile-card), не только на самой кнопке — иначе
-   пользователь должен был бы сначала найти едва видимую цель, чтобы её
-   обнаружить. */
-.profile-edit-btn {
-	flex-shrink: 0;
-	opacity: 0.2;
-	transition: opacity var(--transition-speed) var(--transition-ease);
-}
-.profile-card:hover .profile-edit-btn,
-.profile-edit-btn:focus-visible {
-	opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-	.profile-edit-btn {
-		transition: opacity 1ms linear;
-	}
-}
-
-/* Био в кавычках (идея пользователя) — крупные декоративные кавычки цветом
-   "сквозняка" (--accent-2, холодный компаньон лампового --accent),
-   курсивный serif для тёплого "разговор по душам" тона. */
-.profile-bio {
-	color: var(--fg);
-	font-family: var(--font-serif);
-	font-style: italic;
+.idcard__bio {
 	font-size: var(--step--1);
-	margin-block: var(--space-2xs) 0;
-	text-wrap: pretty;
+	color: var(--muted);
 }
-.profile-bio::before,
-.profile-bio::after {
-	font-family: var(--font-display);
-	font-style: normal;
-	color: var(--accent-2);
-	opacity: 0.7;
-}
-.profile-bio::before {
-	content: "“";
-}
-.profile-bio::after {
-	content: "”";
+.idwrap .chev {
+	flex: none;
+	margin-inline-start: auto;
+	color: var(--muted);
+	font-size: var(--step--2);
 }
 
 /* ================================================================== *
@@ -880,48 +723,89 @@ html[data-media-full] .top-corner-actions {
 	font-size: var(--step--2);
 }
 
-/* Строка поиска+колокольчик+"＋" наверху панели групп. .file-search-field
-   (files.jsx) переиспользуется как есть для самого поля — здесь только
-   компоновка соседних icon-btn. */
+/* Три региона панели — .pane__top/.pane__body/.pane__bottom (макет). Каждый
+   держит СВОЙ padding-inline, а не один общий на весь <aside> — та же
+   раскладка, что ugolok-final.html: скроллится только .pane__body
+   (grow+scroller, объявлен в JSX nav-groups.jsx), верх/низ остаются
+   на месте. */
+.pane__top {
+	padding: var(--space-xs) var(--space-xs) 0;
+}
+/* Строка поиска+колокольчик+"＋" — визуально продолжение .pane__top (тот же
+   padding-inline), но отдельный DOM-узел (nav-groups.jsx) — не scroller,
+   стоит между .pane__top и .pane__body. .file-search-field (files.jsx)
+   переиспользован как есть для самого поля — здесь только его контекстные
+   отступы и компоновка соседних icon-btn/меню. */
+.sidebar-row {
+	padding: 0 var(--space-xs) var(--space-2xs);
+}
 .sidebar-row .file-search-field {
 	max-width: none;
+	padding-inline: var(--space-xs);
+	padding-block: var(--space-3xs);
+}
+.sidebar-row .file-search-field input {
+	font-size: var(--step--1);
+}
+/* Компактные icon-only кнопки панели (колокольчик/"＋") — макет использует
+   заметно меньшую (28px), квадратную с рамкой форму, не общий 36px круглый
+   .icon-btn (тот остаётся стандартом для остального приложения — здесь
+   только локальное переопределение размера/формы, не новый класс). */
+.pane__top .icon-btn,
+.sidebar-row .icon-btn {
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: var(--radius-sm);
+	border-color: var(--border);
+}
+.pane__body {
+	padding: 0 var(--space-xs) var(--space-xs);
 }
 
 /* Заголовок группы ("Люди"/"Мои каналы"/"Подписки") — тот же .eyebrow
    (кикер), что уже используют unlock.jsx/placeholder.jsx, здесь как кнопка
-   (переход "все ›") — .row перебивает block-раскладку .eyebrow на flex,
-   margin-block-end гасим, он у кнопки не нужен. */
+   (переход "все ›") — .bar перебивает block-раскладку .eyebrow на flex-строку
+   без переноса, margin гасим/переопределяем под плотность макета. */
 .grouphead {
 	width: 100%;
 	background: none;
 	border: none;
-	padding: 0;
-	margin-block-end: var(--space-3xs);
+	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
+	margin-block-end: 0;
+	border-radius: var(--radius-sm);
 	cursor: pointer;
 }
 .grouphead:hover,
 .grouphead:focus-visible {
-	color: var(--accent-hover);
+	background-color: var(--surface-raised);
 }
 /* "Избранное" — тот же кикер, но НЕ кнопка (сам заголовок никуда не ведёт). */
 .grouphead-plain {
-	margin-block-end: var(--space-3xs);
+	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
+	margin-block-end: 0;
 }
 .grouphead__all {
+	margin-inline-start: auto;
 	text-transform: none;
 	letter-spacing: normal;
 	font-weight: var(--weight-normal);
+	font-size: var(--step--2);
 	color: var(--muted);
 }
+.grouphead:hover .grouphead__all {
+	color: var(--accent);
+}
 
-/* Список переписок/каналов внутри группы — без буллетов/отступа списка. */
+/* Список переписок/каналов внутри группы — без буллетов/отступа списка,
+   зазор между строками почти нулевой (макет: 1px) — плотность важнее
+   воздуха в списке из десятков переписок/каналов. */
 .streams {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 .stream-row {
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm);
 }
 .stream-row:hover {
 	background-color: var(--surface-raised);
@@ -930,17 +814,21 @@ html[data-media-full] .top-corner-actions {
 	min-width: 0;
 	background: none;
 	border: none;
-	padding: var(--space-2xs) var(--space-3xs);
+	padding: var(--space-2xs) var(--space-xs);
 	color: var(--fg);
 	font: inherit;
+	font-size: var(--step-0);
 	text-align: start;
 	cursor: pointer;
 }
+/* Аватар-заглушка строки — квадрат со скруглением --radius-sm (та же форма,
+   что компактные icon-btn выше), НЕ круг: тот же язык, что идентити-аватар
+   (.account-avatar-sm) и .ava--sm макета. */
 .stream-ava {
 	flex: none;
 	width: 1.75rem;
 	height: 1.75rem;
-	border-radius: var(--radius-full);
+	border-radius: var(--radius-sm);
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	color: var(--muted);
@@ -987,12 +875,41 @@ html[data-media-full] .top-corner-actions {
 	text-align: center;
 }
 
-/* Низ панели ("Быстрая связь" + статус соединения) — прижат к низу
-   прокручиваемого сайдбара (.sidebar уже .scroller), не к низу вьюпорта. */
+/* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)
+   выше уже grow+scroller и толкает этот блок к низу колонки, margin-auto
+   не нужен (было нужно раньше, когда весь <aside> скроллился одним куском). */
 .pane__bottom {
-	margin-block-start: auto;
-	padding-block-start: var(--space-s);
+	padding: var(--space-2xs) var(--space-xs);
 	border-block-start: var(--border-width) solid var(--border);
+}
+/* "Быстрая связь" — пунктирная рамка, сплошная+акцентная по hover (макет);
+   ПРЕФИКС .quick НЕ пересекается с семейством .quick-* (quick.jsx, экран
+   "Быстрая связь" целиком) — разные сущности, здесь только кнопка-вход. */
+.quick {
+	width: 100%;
+	/* Ловушка файла (см. комментарий в самом верху custom.css) — глобальный
+	   элементный button{background-color:var(--accent)} (minimal.css,
+	   @layer elements) побеждает молча на СВОЙСТВАХ, которые .quick не
+	   задаёт явно; background:none обязателен, не подразумевается. */
+	background: none;
+	padding: var(--space-2xs) var(--space-xs);
+	border-radius: var(--radius-sm);
+	border: var(--border-width) dashed var(--border);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.quick:hover,
+.quick:focus-visible {
+	color: var(--fg);
+	border-color: var(--accent);
+	border-style: solid;
+}
+.quick small {
+	display: block;
+	color: var(--muted);
+	font-size: var(--step--2);
+	font-weight: var(--weight-normal);
+	line-height: 1.3;
 }
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
@@ -5359,7 +5276,7 @@ button[type="button"].media-mini-bar-btn {
 	align-items: center;
 	justify-content: center;
 	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 	background: none;
 	color: var(--muted);
 	font-size: 1rem;
@@ -5397,7 +5314,7 @@ button[type="button"].media-mini-bar-btn {
 	align-items: center;
 	justify-content: center;
 	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 	background: none;
 	color: var(--muted);
 	font-size: 1rem;
@@ -5463,7 +5380,7 @@ button[type="button"].media-mini-bar-btn {
 	font-size: 0.9em;
 	background-color: var(--surface-raised);
 	padding: 0.1em 0.4em;
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 }
 .app-layout .md-code-block,
 .auth-layout .md-code-block {

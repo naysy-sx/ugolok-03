@@ -222,39 +222,50 @@ function MainShell() {
 			{sidebarOpen && <div class="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
 			<aside
 				id="app-sidebar"
-				class={`sidebar rigid stack scroller box${sidebarOpen ? " sidebar-open" : ""}`}
-				style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}
+				class={`sidebar rigid stack${sidebarOpen ? " sidebar-open" : ""}`}
 				aria-label={t("shell.sidebarAriaLabel")}
 			>
-				{/* Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — карточка личности
-				    (аватар+меню из 10 пунктов) и панель групп (поиск/＋/избранное/
-				    Люди/Мои каналы/Подписки) заменяют старый плоский NAV_ITEMS-список
-				    (удалён целиком, см. CONTRACTS.md). Тема теперь пункт identity-меню,
-				    не отдельная ThemeStatusPanel (компонент-файл сохранён — решение
-				    CONTRACTS.md, просто больше не рендерится здесь). */}
-				<SidebarProfileCard
-					onEditProfile={() => selectNavItem("profile")}
-					onOpenStorage={() => selectNavItem("storage")}
-					onOpenSettings={() => selectNavItem("settings")}
-					onOpenHelp={() => selectNavItem("help")}
-					onOpenDiagnostics={() => selectNavItem("diagnostics")}
-					themeMode={themeMode}
-					onToggleTheme={handleToggleTheme}
-				/>
+				{/* Разметка по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html) —
+				    .pane__top/.pane__body/.pane__bottom вместо одного box/scroller
+				    на весь <aside>: скроллится только середина (группы, внутри
+				    NavGroups), карточка личности сверху и низ панели остаются на
+				    месте. REGLAMENT.md §1 — единственный .scroller на этом пути
+				    теперь внутри NavGroups (.pane__body), не сам <aside>. */}
+				<div class="pane__top stack" style={{ "--gap": "var(--space-2xs)" }}>
+					{/* Карточка личности (identity-меню из 10 пунктов) — единый
+					    <summary>-триггер, см. sidebar-profile-card.jsx. Тема — пункт
+					    identity-меню, не отдельная ThemeStatusPanel (компонент-файл
+					    сохранён — решение CONTRACTS.md, просто больше не рендерится
+					    здесь). */}
+					<SidebarProfileCard
+						onEditProfile={() => selectNavItem("profile")}
+						onOpenStorage={() => selectNavItem("storage")}
+						onOpenSettings={() => selectNavItem("settings")}
+						onOpenHelp={() => selectNavItem("help")}
+						onOpenDiagnostics={() => selectNavItem("diagnostics")}
+						themeMode={themeMode}
+						onToggleTheme={handleToggleTheme}
+					/>
+				</div>
 				<NavGroups unreadJournalCount={unreadJournalCount} />
 				{/* ROOMS-SPEC.md §1.4 — вход в отдельную верхнеуровневую ветку (см.
 				    App() ниже), не переключение activeId: "Быстрая связь" не является
 				    вкладкой MainShell, у неё своя, независимая от аккаунта, identity.
-				    "Выйти" сюда больше не дублируется — уже есть в identity-меню. */}
-				<div class="pane__bottom stack grow" style={{ "--gap": "var(--space-2xs)", justifyContent: "flex-end" }}>
+				    "Выйти" сюда больше не дублируется — уже есть в identity-меню.
+				    .pane__body (NavGroups) — grow, сам толкает этот блок к низу
+				    прокручиваемой колонки, margin-auto больше не нужен. */}
+				<div class="pane__bottom stack" style={{ "--gap": "var(--space-2xs)" }}>
 					<button
 						type="button"
-						class="nav-item-btn row"
-						style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
+						class="quick bar"
+						style={{ "--gap": "var(--space-xs)", alignItems: "center" }}
 						onClick={() => (roomsScreenActive.value = true)}
 					>
-						<IconGlobe />
-						{t("shell.quickConnect")}
+						<IconGlobe aria-hidden="true" />
+						<span class="stack" style={{ "--gap": "0" }}>
+							{t("shell.quickConnect")}
+							<small>{t("shell.quickConnectHint")}</small>
+						</span>
 					</button>
 					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
 					    главным меню, на любом экране, не только там, где раньше был

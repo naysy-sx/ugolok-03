@@ -137,7 +137,8 @@
 		"closeMenu": "关闭菜单",
 		"switchToLightTheme": "切换到浅色主题",
 		"switchToDarkTheme": "切换到深色主题",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "正在检查…",

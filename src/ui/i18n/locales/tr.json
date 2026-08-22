@@ -137,7 +137,8 @@
 		"closeMenu": "Menüyü kapat",
 		"switchToLightTheme": "Açık temaya geç",
 		"switchToDarkTheme": "Koyu temaya geç",
-		"quickConnect": "Quick Connect"
+		"quickConnect": "Quick Connect",
+		"quickConnectHint": "conversation without an account"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",
