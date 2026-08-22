@@ -9,8 +9,7 @@ import { ensureProfilesFetched } from "../signals/contacts.js";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import AttachmentTray from "./media/attachment-tray.jsx";
-import AttachmentView from "./attachment-view.jsx";
-import { splitBubbleAttachments } from "./message-bubble-attachments.js";
+import MessageBubble from "./message-bubble.jsx";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
@@ -25,7 +24,6 @@ import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
-import MarkdownView from "./markdown-view.jsx";
 import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
@@ -217,35 +215,35 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 				<p style={{ color: "var(--muted)" }}>{t("channelChat.noMessages")}</p>
 			) : (
 				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
-					{messages.map((m) => {
-						const { above, below } = splitBubbleAttachments(m.attachments);
-						return (
-							<li key={m.id} class="channel-message-row">
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-									<ContactIdentity pubkey={m.authorPubkey} />
-									<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
-									{m.authorPubkey !== ownerPubkey && (
-										<ModerationActions
-											compact
-											viewerPubkey={ownerPubkey}
-											viewerPrivKey={privKey}
-											channelOwnerPubkey={channelOwnerPubkey}
-											channelId={channelId}
-											targetPubkey={m.authorPubkey}
-											contentType="chat_message"
-											contentId={m.id}
-											contentText={m.text}
-										/>
-									)}
-								</div>
-								{above && <AttachmentView attachment={above} onOpen={(a) => openAttachment(m, a)} origin={{ kind: "channelMessage", id: m.id }} />}
-								<MarkdownView source={m.text} profile="lite" />
-								{below.map((a, i) => (
-									<AttachmentView key={i} attachment={a} onOpen={(a) => openAttachment(m, a)} origin={{ kind: "channelMessage", id: m.id }} />
-								))}
-							</li>
-						);
-					})}
+					{messages.map((m) => (
+						<li key={m.id} class="channel-message-row stack" style={{ "--gap": "var(--space-3xs)" }}>
+							<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<ContactIdentity pubkey={m.authorPubkey} />
+								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
+								{m.authorPubkey !== ownerPubkey && (
+									<ModerationActions
+										compact
+										viewerPubkey={ownerPubkey}
+										viewerPrivKey={privKey}
+										channelOwnerPubkey={channelOwnerPubkey}
+										channelId={channelId}
+										targetPubkey={m.authorPubkey}
+										contentType="chat_message"
+										contentId={m.id}
+										contentText={m.text}
+									/>
+								)}
+							</div>
+							{/* Этап 11 "Хвост" (REDESIGN-SPEC.md) — общий MessageBubble вместо
+							    собственной <li>-разметки: правка/удаление/статусы доставки
+							    отключены (не переданы onEdit/onDeleteForMe/onDeleteForBoth —
+							    в чате канала их нет), модерация остаётся в шапке выше, не в
+							    самом бабле. originKind="channelMessage" — иначе "Сохранить к
+							    себе" пометило бы вложение как origin.kind:"message" (личный
+							    чат), не отличить источник (FILES-DOCS/TASK.md). */}
+							<MessageBubble message={m} isOwn={m.authorPubkey === ownerPubkey} maxLength={MESSAGE_MAX_LENGTH} onOpenAttachment={openAttachment} originKind="channelMessage" />
+						</li>
+					))}
 				</ul>
 			)}
 			<div ref={bottomRef} />

@@ -25,12 +25,16 @@ function formatTimestamp(sentAt) {
 // у чужих сообщений доступно только "Удалить у себя", без раскрывающегося меню.
 // mode: null | "confirming-delete" | "editing" — один открытый режим за раз, без
 // модалки/библиотеки (бюджет бандла), инлайн в самом сообщении.
+// originKind — "message" (личный/групповой чат) или "channelMessage" (чат канала,
+// этап 11 "Хвост" — ChannelChat переведён на этот компонент); попадает в
+// AttachmentView's origin (F-AT-… "Сохранить к себе", этап 9), где различает,
+// откуда именно пришло вложение.
 // senderName — опционален, НЕ используется в chat.jsx (1:1/групповой чат уже
 // показывает собеседника через свой заголовок экрана). Нужен в multi-party
 // сценарии (quick.jsx, комнаты "Быстрая связь" — до 5 участников в одной
 // ленте) — без подписи невозможно понять, кто именно написал (найдено живой
 // проверкой пользователем).
-export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment }) {
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message" }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
@@ -89,10 +93,10 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
-			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: "message", id: message.id }} />}
+			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: originKind, id: message.id }} />}
 			{message.text && <MarkdownView source={message.text} profile="lite" />}
 			{below.map((a, i) => (
-				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: "message", id: message.id }} />
+				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: originKind, id: message.id }} />
 			))}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}

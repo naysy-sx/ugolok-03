@@ -651,6 +651,12 @@ html[data-media-full] .top-corner-actions {
    на месте — открывает/закрывает только бургер в углу. */
 .sidebar-backdrop {
 	display: none;
+	/* Этап 11 "Хвост" (REDESIGN-SPEC.md) — вынесено в именованную переменную
+	   (не в глобальный :root — используется только здесь, тот же приём,
+	   что --bubble-radius/--rule-accent выше в файле): было буквальным
+	   oklch(...) внутри @media-блока ниже, теперь единственное место со
+	   значением, на него ссылаются. */
+	--sidebar-backdrop-tint: oklch(0.2 0.03 var(--hue) / 0.45);
 }
 @media (max-width: 47.99em) {
 	.sidebar {
@@ -674,7 +680,7 @@ html[data-media-full] .top-corner-actions {
 		position: fixed;
 		inset: 0;
 		z-index: 240;
-		background-color: oklch(0.2 0.03 var(--hue) / 0.45);
+		background-color: var(--sidebar-backdrop-tint);
 	}
 }
 

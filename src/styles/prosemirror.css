@@ -37,7 +37,11 @@
 }
 
 .ProseMirror-selectednode {
-	outline: 2px solid #8cf;
+	/* Этап 11 "Хвост" (REDESIGN-SPEC.md) — было буквальным #8cf (демо-цвет
+	   ProseMirror), единственный литеральный hex в проекте; заменено на
+	   var(--accent), тот же токен, что глобальный :focus-visible
+	   (minimal.css) — выделение узла редактора это тот же смысл "фокус". */
+	outline: 2px solid var(--accent);
 }
 
 li.ProseMirror-selectednode {
@@ -51,7 +55,7 @@ li.ProseMirror-selectednode:after {
 	right: -2px;
 	top: -2px;
 	bottom: -2px;
-	border: 2px solid #8cf;
+	border: 2px solid var(--accent);
 	pointer-events: none;
 }
 
