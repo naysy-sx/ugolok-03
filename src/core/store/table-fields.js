@@ -118,3 +118,9 @@ export const JOURNAL_ENTRIES_PLAINTEXT_FIELDS = ["id", "owner", "createdAt", "ca
 // нечего, toEncryptedRow применяется для единообразия (тот же приём, что
 // PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS выше).
 export const CHAT_ACTIVITY_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastAt", "lastFrom"];
+
+// Редизайн интерфейса, этап 6 (CONTRACTS.md) — pinned: закреплённое
+// (каналы+люди). Только ownerPubkey plaintext (структурный индекс) — тот
+// же принцип, что UI_SETTINGS_PLAINTEXT_FIELDS выше, содержимое (channels/
+// people) шифруется dbKey локально, событие на relay — NIP-44 self-encrypt.
+export const PINNED_PLAINTEXT_FIELDS = ["ownerPubkey"];

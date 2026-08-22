@@ -327,6 +327,12 @@ db.version(26).stores({
   chatActivity: "[ownerPubkey+chatId], ownerPubkey"
 });
 
+// Редизайн интерфейса, этап 6 (CONTRACTS.md) — закреплённое (каналы+люди),
+// одна строка на аккаунт, тот же принцип, что uiSettings/discoverySettings.
+db.version(27).stores({
+  pinned: "ownerPubkey"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

@@ -19168,3 +19168,99 @@ export async function listConversations(ownerPubkey, dbKey)
 - [x] `npm test` зелёный (полная регрессия) — 2050/2050 (один флаковый фейл `room-session.test.js` — гонка в НЕСВЯЗАННОМ тесте "Быстрая связь"/голос, воспроизведён отдельным прогоном файла как флак, 23/23 при повторном запуске, не имеет отношения к этапу 5).
 - [x] `npx vite build` зелёный (870.98 kB gzip).
 - [~] Живая проверка: подтверждена ЧАСТИЧНО. Приложение с новой схемой (`db.version(26)`) загружается на реальном существующем аккаунте (`stage4tester`) без ошибок в консоли, настройки/данные не потеряны. Полный E2E (два новых аккаунта, обмен сообщениями, чтение `chatActivity` из реального IndexedDB) НЕ проведён — у свежесозданного второго тестового аккаунта (`stage5partner`) завис статус relay ("синхронизация…" не переходит в "на связи"), заявка в контакты не дошла; это инфраструктурная проблема bootstrap/discovery, не связанная с кодом этого этапа (`chat.js`/`chat-activity.js` её не касаются), решено не тратить время на её отладку в рамках этапа 5. Компенсировано: 8 доменных тестов этого этапа (`chat-activity.test.js` — 5, `chat.test.js` — 4 новых) гоняют РЕАЛЬНЫЙ MLS encrypt/decrypt цикл (`establishAliceToBob`/`asBob`, тот же приём, что весь остальной `chat.test.js`), не моки.
+
+## Этап 6 — закреплённое
+
+Рутина (skill-триаж): одно замещаемое NIP-44-событие со всем списком —
+тот же архитектурный паттерн, что `uiSettings` (kind 30072) уже
+использует (build/parse/load/save/rebuild, LWW через `pickLatest`).
+DESIGN.md не заводился. Явно БЕЗ UI — потребитель (блок "Избранное" в
+боковой панели) появится в этапе 10, тот же принцип, что этап 5.
+
+### Аудит занятых kind в диапазоне 30060–30069
+
+Пройден весь `src/` (не только диапазон из примера ТЗ):
+
+| kind | Занят под |
+|---|---|
+| 30060 | метаданные канала (`channel.js`) |
+| 30061 | посты (`post.js`) |
+| 30062 | комментарии (`comments.js`) |
+| 30063 | чат канала (`channel-chat.js`) |
+| 30064 | `CHANNEL_BAN_KIND` (`moderation.js`) |
+| 30065 | `CHANNEL_VISIBILITY_SYNC_KIND` (`channel-visibility.js`) |
+| 30066 | **свободен — взят под закреплённое** |
+| 30067–30069 | свободны |
+
+(Справочно, вне запрошенного диапазона: 30070 read-status, 30071 draft,
+30072 uiSettings, 30073 discovery, 30074 channel-read-status, 30075
+file-share-grant — все заняты, следующий свободный ПОСЛЕ 30069 — 30076,
+но этап явно просит смотреть 30060–30069.)
+
+```js
+export const PINNED_KIND = 30066;
+```
+
+### `domain/contacts/pinned.js` [новый файл]
+
+Личная, НЕ публичная настройка (только синхронизация между СВОИМИ
+устройствами) — NIP-44 self-encrypt содержимого, тот же приём, что
+`buildUiSettingsEvent`/`parseUiSettingsEvent` (`ui-settings.js:110-120`).
+**Отдельный kind, не поле внутри `uiSettings`** — решение Claude:
+`uiSettings` уже одно замещаемое событие СО ВСЕМИ настройками разом;
+если бы список закреплённого жил тем же событием, конкурентное
+редактирование на двух офлайн-устройствах (закрепили канал на одном,
+поменяли тему на другом) при LWW-мёрдже (`pickLatest`, побеждает
+событие целиком, не по полям) стёрло бы одно из двух изменений
+молча — тот же класс проблемы, что REDESIGN-SPEC.md явно решает для
+`chatActivity` отдельной таблицей вместо поля в существующей.
+
+```js
+export function buildPinnedEvent(privKey, pinned, createdAt = Math.floor(Date.now() / 1000))
+export function parsePinnedEvent(event, privKey)
+export async function loadPinned(ownerPubkey, dbKey)     // -> {channels: [], people: []} по умолчанию
+export async function savePinned(ownerPubkey, privKey, dbKey, pinned, publish)
+export async function rebuildPinned(ownerPubkey, privKey, dbKey) // бутстрап из своих исторических событий, тот же приём, что rebuildUiSettings
+export async function pinChannel(ownerPubkey, privKey, dbKey, channelId, publish)   // идемпотентно, дедуп по Set
+export async function unpinChannel(ownerPubkey, privKey, dbKey, channelId, publish) // фильтрация списка, БЕЗ события удаления
+export async function pinPerson(ownerPubkey, privKey, dbKey, pubkey, publish)
+export async function unpinPerson(ownerPubkey, privKey, dbKey, pubkey, publish)
+```
+
+Тег: `["d", "pinned"]` (буквально, не opaque — тот же принцип, что
+`"settings"`/`"discovery"`, F-SY-03: не privacy-чувствительно, d-тег на
+relay всё равно виден только как непрозрачная строка адресуемого
+события, содержимое зашифровано).
+
+### Схема — `db.version(27)`, таблица `pinned`
+
+```js
+db.version(27).stores({
+  pinned: "ownerPubkey"
+});
+```
+
+Только `ownerPubkey` plaintext (структурный индекс — тот же принцип,
+что `uiSettings`):
+
+```js
+export const PINNED_PLAINTEXT_FIELDS = ["ownerPubkey"];
+```
+
+### Инвариант "снятие пометки не порождает событие удаления"
+
+`unpinChannel`/`unpinPerson` — читают текущий список, фильтруют, зовут
+`savePinned` с укороченным списком. Как и `uiSettings`, `pinned` —
+ЗАМЕЩАЕМОЕ событие (`kind` в диапазоне 30000-39999, addressable по
+`d`-тегу, NIP-01) — relay сам держит только последнюю версию, отдельного
+`kind:5` (NIP-09) не требуется и не создаётся.
+
+### DoD этапа 6
+
+- [x] Тесты: `pinChannel`/`unpinChannel`/`pinPerson`/`unpinPerson` — идемпотентность (повторный `pinChannel` того же id не дублирует), список `people` не трогается при пине канала и наоборот (независимость двух половин списка), `unpin` несуществующего id — no-op, не бросает.
+- [x] `buildPinnedEvent`/`parsePinnedEvent` — round-trip, `kind === PINNED_KIND`, `d`-тег буквально `"pinned"`.
+- [x] `rebuildPinned` — бутстрап из последнего своего события (LWW через `pickLatest`, тест на конкурирующие события — побеждает больший `created_at`).
+- [x] АДВЕРСАРНО: снятие пометки НЕ публикует `kind:5` (проверка списка опубликованных событий — только `PINNED_KIND`, ничего кроме).
+- [x] `npm test` зелёный (полная регрессия) — 2062/2062.
+- [x] `npx vite build` зелёный (870.99 kB gzip).
+- [x] Живая проверка: по прецеденту этапа 5, ограничена подтверждением загрузки приложения с новой схемой (`db.version(27)`) на реальном аккаунте (`stage4tester`) без ошибок в консоли + прямой проверкой через raw IndexedDB API, что object store `pinned` реально создан движком (`indexedDB.open("ugolok")` → `objectStoreNames` содержит `pinned`/`chatActivity`). Без UI на этот функционал (задел этапа 10) полноценный клик-тест невозможен — компенсировано 12 доменными тестами.
