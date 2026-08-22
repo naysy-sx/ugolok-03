@@ -21,7 +21,6 @@ export const NAV_ITEMS = [
   { id: "channels", labelKey: "nav.channels" },
   { id: "files", labelKey: "nav.files" },
   { id: "contacts", labelKey: "nav.contacts" },
-  { id: "discovery", labelKey: "nav.discovery" },
   { id: "settings", labelKey: "nav.settings" },
   { id: "profile", labelKey: "nav.profile" },
   { id: "help", labelKey: "nav.help" },

@@ -12,7 +12,6 @@ const REQUIRED_IDS = [
 	"settings",
 	"profile",
 	"diagnostics",
-	"discovery", // этап 46
 	"journal", // этап 50
 ];
 

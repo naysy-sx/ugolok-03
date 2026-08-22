@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect, useRef, useId } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
@@ -19,6 +19,8 @@ import {
 	SelfHostedFingerprintMismatchError,
 } from "../../domain/settings/ui-settings.js";
 import { decodePairingCode, fetchAgentStatus } from "../../domain/selfhost/pairing.js";
+import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
+import { listOwnedChannels } from "../../domain/content/channel.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
 import FilePicker from "../components/file-picker.jsx";
@@ -418,6 +420,105 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 	);
 }
 
+// Редизайн интерфейса, этап 8 (CONTRACTS.md) — перенесено 1:1 из
+// discovery.jsx (файл удалён этим же этапом), тот же паттерн, что
+// RelayBlossomSection/SelfHostedSection выше в этом файле. Домен не
+// тронут — loadDiscoverySettings/publishDiscoverySettings те же самые.
+function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
+	const instanceId = useId();
+	const [settings, setSettings] = useState(null); // {visible, showChannels, channelIds}
+	const [ownedChannels, setOwnedChannels] = useState([]);
+	const [error, setError] = useState("");
+
+	useEffect(() => {
+		loadDiscoverySettings(ownerPubkey).then(setSettings);
+		listOwnedChannels(ownerPubkey, dbKey).then(setOwnedChannels);
+	}, [ownerPubkey]);
+
+	async function persist(next) {
+		setSettings(next);
+		try {
+			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
+		} catch (err) {
+			setError(errorMessage(err));
+		}
+	}
+
+	function handleVisibleToggle(checked) {
+		if (!checked) {
+			// Скрыть — сразу, без промежуточного "OK" (симметрично тому, что показ
+			// каналов/выбор каналов подтверждаются явно, а спрятаться можно немедленно).
+			persist({ ...settings, visible: false });
+		} else {
+			// Показать — только раскрывает панель настроек ниже, публикация — по "OK".
+			setSettings({ ...settings, visible: true });
+		}
+	}
+
+	function toggleChannelId(channelId) {
+		setSettings((prev) => {
+			const has = prev.channelIds.includes(channelId);
+			return { ...prev, channelIds: has ? prev.channelIds.filter((id) => id !== channelId) : [...prev.channelIds, channelId] };
+		});
+	}
+
+	if (!settings) return null;
+
+	return (
+		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-label={t("discovery.showMeToggle")}>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</p>
+			)}
+			<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+				<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
+				{t("discovery.showMeToggle")}
+			</label>
+
+			{settings.visible && (
+				<div class="stack" style={{ "--gap": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
+					<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<input
+							type="checkbox"
+							checked={settings.showChannels}
+							onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
+						/>
+						{t("discovery.showChannelsToggle")}
+					</label>
+
+					{settings.showChannels && (
+						<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
+							<legend>{t("discovery.whichChannelsLegend")}</legend>
+							{ownedChannels.length === 0 ? (
+								<p style={{ color: "var(--muted)" }}>{t("discovery.noOwnChannels")}</p>
+							) : (
+								ownedChannels.map((c) => (
+									<label key={c.id} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+										<input
+											id={`${instanceId}-ch-${c.id}`}
+											type="checkbox"
+											checked={settings.channelIds.includes(c.id)}
+											onChange={() => toggleChannelId(c.id)}
+										/>
+										{c.name}
+									</label>
+								))
+							)}
+						</fieldset>
+					)}
+
+					<div>
+						<button type="button" onClick={() => persist(settings)}>
+							OK
+						</button>
+					</div>
+				</div>
+			)}
+		</section>
+	);
+}
+
 export default function Profile() {
 	const id = currentUser.value.id;
 	const login = currentUser.value.login;
@@ -699,6 +800,8 @@ export default function Profile() {
 					</div>
 				</form>
 			</div>
+
+			<VisibilitySection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 
 			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-files-heading">
 				<h2 id="profile-files-heading" class="sect-title">

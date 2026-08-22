@@ -9,7 +9,6 @@ import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
-import Discovery from "./ui/screens/discovery.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
 import Files from "./ui/screens/files.jsx";
@@ -66,7 +65,6 @@ const NAV_ICONS = {
 	channels: IconReader,
 	files: IconFolder,
 	contacts: IconPeople,
-	discovery: IconGlobe,
 	settings: IconGear,
 	profile: IconPerson,
 	help: IconHelpCircle,
@@ -339,7 +337,6 @@ function MainShell() {
 				{activeId === "contacts" && <Contacts />}
 				{activeId === "messages" && <Chat />}
 				{activeId === "channels" && <Channels />}
-				{activeId === "discovery" && <Discovery />}
 				{activeId === "settings" && <Settings />}
 				{activeId === "journal" && <Journal />}
 				{activeId === "files" && <Files />}
@@ -348,7 +345,6 @@ function MainShell() {
 					activeId !== "contacts" &&
 					activeId !== "messages" &&
 					activeId !== "channels" &&
-					activeId !== "discovery" &&
 					activeId !== "settings" &&
 					activeId !== "journal" &&
 					activeId !== "files" && <Placeholder title={t(NAV_ITEMS.find(item => item.id === activeId).labelKey)} />}
