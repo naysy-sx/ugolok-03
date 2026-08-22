@@ -12,11 +12,10 @@ import {
 } from "../../domain/content/channel.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
-import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { place, openChannel } from "../signals/place.js";
 import ChannelDetail from "./channel.jsx";
+import ChannelAvatarThumb from "../components/channel-avatar-thumb.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
 import { t, currentLocale, errorMessage } from "../signals/i18n.js";
@@ -29,49 +28,6 @@ const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 function formatUpdatedDate(unixSeconds) {
 	if (typeof unixSeconds !== "number") return null;
 	return new Date(unixSeconds * 1000).toLocaleDateString(currentLocale.value, { day: "2-digit", month: "long", year: "numeric" });
-}
-
-// Найдено пользователем: "аватары каналов в списке каналов не отображаются" —
-// channel.avatar это ЗАШИФРОВАННЫЙ дескриптор вложения (тот же {manifestDigest,
-// fileKey, mime, ...}, что вложения в чате — этап 53 И7 7.4, переезд на
-// content.js), а не готовый URL — раньше код просто проверял channel.avatar ?
-// 🖼️-эмодзи вместо реальной расшифровки. Тот же приём, что ImageAttachment
-// (attachment-view.jsx), только без модалки — это маленькая иконка списка,
-// не полноэкранный просмотр.
-function ChannelAvatarThumb({ channel }) {
-	const ownerPubkey = currentUser.value.id;
-	const dbKey = dbKeySig.value;
-	const [url, setUrl] = useState(() => (channel.avatar ? (getMemoryCachedUrl(channel.avatar.manifestDigest) ?? null) : null));
-
-	useEffect(() => {
-		if (!channel.avatar) {
-			setUrl(null);
-			return;
-		}
-		const memUrl = getMemoryCachedUrl(channel.avatar.manifestDigest);
-		if (memUrl) {
-			setUrl(memUrl);
-			return;
-		}
-		let cancelled = false;
-		getOrDownloadMessageAttachment(ownerPubkey, dbKey, channel.avatar, { serverUrl: BLOSSOM_SERVER_URL })
-			.then((bytes) => {
-				if (!cancelled) setUrl(putMemoryCachedAttachment(channel.avatar.manifestDigest, bytes, channel.avatar.mime));
-			})
-			.catch(() => {}); // тихо — остаётся буква-заглушка, не мешаем списку ошибкой
-		return () => {
-			cancelled = true;
-		};
-	}, [channel.avatar?.manifestDigest]);
-
-	if (url) {
-		return <img src={url} alt="" class="channel-avatar-thumb" />;
-	}
-	return (
-		<div class="channel-avatar-thumb channel-avatar-thumb-fallback row" style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
-			{(channel.name || "?").trim().charAt(0).toUpperCase()}
-		</div>
-	);
 }
 
 function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
