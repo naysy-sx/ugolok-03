@@ -1,5 +1,5 @@
 import { listInboxRequests, acceptInboxRequest, rejectInboxRequest } from "../../domain/messaging/inbox-requests.js";
-import { openChat } from "./chat.js";
+import { openChat } from "./place.js";
 
 export async function refreshInboxRequests(ownerPubkey, dbKey) {
 	return listInboxRequests(ownerPubkey, dbKey);

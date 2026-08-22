@@ -5,7 +5,7 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { refreshInboxRequests, acceptInboxRequestAction, rejectInboxRequestAction } from "../src/ui/signals/inbox.js";
-import { activeChatPubkey } from "../src/ui/signals/chat.js";
+import { place, DEFAULT_PLACE } from "../src/ui/signals/place.js";
 import { storeInboxRequest } from "../src/domain/messaging/inbox-requests.js";
 import { createOwnKeyPackage } from "../src/core/crypto/mls-session.js";
 import { ensureChatEstablished } from "../src/domain/messaging/chat.js";
@@ -28,7 +28,7 @@ beforeEach(async () => {
 	await db.table("mlsGroups").clear();
 	await db.table("ownKeyPackage").clear();
 	await db.table("knownContactDevices").clear();
-	activeChatPubkey.value = null;
+	place.value = DEFAULT_PLACE;
 });
 
 after(() => {
@@ -69,7 +69,7 @@ test("acceptInboxRequestAction: присоединяется к MLS-группе
 	await acceptInboxRequestAction(ALICE_PUB, ALICE_PRIV, DB_KEY, STRANGER_PUB, refreshGroupMessageSubscription, publish);
 
 	assert.equal(refreshCalls, 1, "refreshGroupMessageSubscription обязана быть вызвана (находка 3)");
-	assert.equal(activeChatPubkey.value, STRANGER_PUB, "должен переключить UI на новый чат");
+	assert.deepEqual(place.value, { kind: "chat", id: STRANGER_PUB }, "должен переключить UI на новый чат");
 	assert.equal((await refreshInboxRequests(ALICE_PUB, DB_KEY)).length, 0, "запись должна быть удалена");
 });
 

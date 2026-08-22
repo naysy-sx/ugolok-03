@@ -7,7 +7,7 @@ import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity, bumpMessagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched, profiles, groups, refreshGroups } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
-import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
+import { place, openChannel } from "../signals/place.js";
 import {
 	createDraftPost,
 	publishPost,
@@ -898,17 +898,25 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		openMedia({ refs, position });
 	}
 
-	// Этап 47-довесок-3 — клик по уведомлению о посте/комментарии/ответе (или по
-	// "Модерация"/"Чат" через subTab) передаёт сюда цель через channelPostTarget
-	// (notification-nav.js). Читаем ОДИН раз и сразу гасим сигнал — иначе повторное
-	// ручное открытие того же канала снова прыгало бы к старой цели.
+	// Редизайн интерфейса, этап 10.1 (CONTRACTS.md/DESIGN.md) — клик по
+	// уведомлению о посте/комментарии/ответе (или по "Модерация"/"Чат" через
+	// subTab) передаёт сюда цель через place.postId/commentId/subTab
+	// (единое состояние места, было — отдельный сигнал channelPostTarget).
+	// Гвард place.value.id === channelId — не применять чужую цель, если
+	// пользователь успел уйти на другой канал/экран между диспетчеризацией
+	// и рендером (TOCTOU). Консьюминг — обнуляем ИМЕННО postId/commentId
+	// мерджем поверх ТЕКУЩЕГО place.value, оставляя kind/id/subTab как есть —
+	// иначе повторное ручное открытие того же канала снова прыгало бы к
+	// старой цели.
 	useEffect(() => {
-		const target = channelPostTarget.value;
-		if (!target) return;
+		const target = place.value;
+		if (target.kind !== "channel" || target.id !== channelId) return;
 		if (target.subTab) setTab(target.subTab);
 		if (target.postId) setNavTarget({ postId: target.postId, commentId: target.commentId });
-		channelPostTarget.value = null;
-	}, [channelPostTarget.value]);
+		if (target.postId || target.commentId) {
+			place.value = { ...target, postId: undefined, commentId: undefined };
+		}
+	}, [place.value]);
 
 	// Целевой пост может быть старше уже загруженного окна (loadPostsWindow грузит
 	// только последние 10) — догружаем более старые страницы, пока не найдём его

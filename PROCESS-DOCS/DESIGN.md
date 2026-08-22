@@ -7214,3 +7214,118 @@ buttons.jsx выше).
 чата/канала/чата-канала/хранилища, убедиться: плеера/scrub-бара нет,
 "скачать" реально скачивает, next/prev внутри класса "Файлы" работает,
 свернуть — кнопка недоступна (как для картинки).
+
+## Редизайн интерфейса, этап 10 — состояние места (10.1)
+
+Триаж: алгоритмическая (skill п.13a) — пространство состояний "где я
+нахожусь" с неочевидными переходами (11 форм цели навигации из
+уведомлений, консьюминг deep-link полей, кросс-толк между экранами).
+Формализация ниже — Claude, не воркер (skill п.13b).
+
+### Формализация
+
+Состояние — один сигнал:
+
+```
+place = { kind, id?, subTab?, postId?, commentId? }
+kind ∈ { journal, today, people, channels, channel, chat, storage,
+         settings, profile, help, diagnostics }
+```
+
+**Инвариант поля `id`:**
+- `kind === "channel"` → `id` ВСЕГДА определено (конкретный канал).
+- `kind === "chat"` → `id` ОПЦИОНАЛЕН (`undefined` = список переписок,
+  pubkey = открытая переписка) — единственный kind, где отсутствие id
+  не значит "список другого экрана", а значит "тот же экран, режим
+  списка" (`chat.jsx` уже так устроен изнутри, App() не решает).
+- Остальные kind — `id` не используется вообще.
+
+**Инвариант полей `subTab`/`postId`/`commentId`:** определены ТОЛЬКО
+при `kind === "channel"`. Любой переход `goTo(next)` — ПОЛНАЯ замена
+объекта (`place.value = next`), не merge — переключение на другой kind
+физически не может унести за собой чужие postId/commentId (класс бага,
+который сейчас существует: три независимых сигнала не гарантируют
+такой сброс, отчёт A1/A3).
+
+**Консьюминг deep-link:** `postId`/`commentId` — одноразовая цель
+(канал уже открыт на нужном посте/комментарии, повторный ре-рендер той
+же страницы не должен снова прыгать/подсвечивать). `channel.jsx`
+после применения обнуляет ИМЕННО эти два поля мерджем поверх ТЕКУЩЕГО
+`place.value` (`{...place.value, postId: undefined, commentId:
+undefined}`), сохраняя kind/id/subTab — тот же эффект, что раньше давал
+`channelPostTarget.value = null` после чтения, адаптированный на общий
+объект. Гвард по `place.value.id === channelId` — эффект не
+срабатывает, если пользователь успел уйти на другой канал/экран между
+диспетчеризацией и рендером (устраняет TOCTOU класса "применили цель
+не туда").
+
+### Таблица переходов (замена трёх сигналов одним)
+
+| Было | Стало |
+|---|---|
+| `activeId` (`useState`, app.jsx) | `place.value.kind` |
+| `activeChatPubkey` (`signals/chat.js`) | `place.value.kind==="chat" ? place.value.id : null` |
+| `activeChannelId` (`signals/channel-nav.js`) | `place.value.kind==="channel" ? place.value.id : null` |
+| `channelPostTarget` (`signals/channel-nav.js`) | `place.value.{subTab,postId,commentId}` (только при kind="channel") |
+| `openChat(pubkey\|null)` | не меняется по сигнатуре — `place.value = pubkey ? {kind:"chat",id:pubkey} : {kind:"chat"}` |
+| `openChannel(channelId\|null)` | НОВАЯ вторая сигнатура `openChannel(channelId, target={})` — заменяет ДВА раздельных вызова (`openChannel`+`setChannelPostTarget`) ОДНИМ атомарным присваиванием; `setChannelPostTarget` как отдельная публичная функция удаляется, оба её вызывающих (`notification-nav.js`, `today.jsx`) переходят на второй параметр |
+| `selectNavItem(id)` (app.jsx, ручной сброс чужих сигналов) | `goTo({kind: id})` — ручной сброс не нужен, replace делает это структурно |
+| 3 ручных `useEffect`-синхронизатора (`activeId` ⇐ `activeChatPubkey`/`activeChannelId`/`pendingNavTarget`) | исчезают целиком — рендер уже читает `place.value.kind` напрямую, синхронизировать нечего |
+
+### Разбор всех форм `navTarget` (уведомления, 9 конкретных литералов на 5 вызывающих файлов)
+
+| Источник | Литерал (было) | `place` (стало) |
+|---|---|---|
+| `contacts.js:77` | `{screen:"contacts"}` | `{kind:"people"}` |
+| `call.js:33`, `transport.js:1656` | `{screen:"messages", contactPubkey}` | `{kind:"chat", id: contactPubkey}` |
+| `transport.js:537` | `{screen:"messages"}` | `{kind:"chat"}` |
+| `transport.js:1384` (канал удалён) | `{screen:"channels"}` | `{kind:"channels"}` |
+| `transport.js:1227` (новый пост) | `{screen:"channels", channelId, postId, subTab:"posts"}` | `{kind:"channel", id, postId, subTab:"posts"}` |
+| `transport.js:592` (история недоступна) | `{screen:"channels", channelId, subTab:"posts"}` | `{kind:"channel", id, subTab:"posts"}` |
+| `transport.js:1273` (комментарий) | `{screen:"channels", channelId, postId, commentId, subTab:"posts"}` | `{kind:"channel", id, postId, commentId, subTab:"posts"}` |
+| `transport.js:1346` (чат канала) | `{screen:"channels", channelId, subTab:"chat"}` | `{kind:"channel", id, subTab:"chat"}` |
+| `transport.js:1404`/`:632` (бан/жалоба) | `{screen:"channels", channelId, subTab:"moderation"}` | `{kind:"channel", id, subTab:"moderation"}` |
+
+`applyNavTarget` в новой форме — ОДНА развилка вместо двух (`messages`/
+`channels`), маппинг таблицы выше буквально:
+
+```js
+export function applyNavTarget(target) {
+	if (target.screen === "messages") {
+		openChat(target.contactPubkey ?? null);
+	} else if (target.screen === "channels") {
+		openChannel(target.channelId ?? null, { postId: target.postId, commentId: target.commentId, subTab: target.subTab });
+	} else if (target.screen === "contacts") {
+		goTo({ kind: "people" });
+	}
+}
+```
+
+Литералы-строители (`navTarget`/`commentNavTarget`/... в
+`transport.js`/`contacts.js`/`call.js`) НЕ переписываются на новый
+словарь — они остаются в старой форме `{screen, ...}` (это формат,
+который уже путешествует через `journal`-таблицу как часть
+`navTarget`-поля персистентной записи, менять его — отдельная миграция
+данных, вне этого этапа); перевод в `place` происходит ТОЛЬКО в
+`applyNavTarget`, единственной точке потребления.
+
+### Экран ↔ kind (кто что рендерит)
+
+| kind | Компонент | Примечание |
+|---|---|---|
+| `journal` | `Journal` | `DEFAULT_PLACE` |
+| `today` | `Today` | этап 4 — было локальным `useState` внутри `Journal`, ЭТИМ этапом поднято на top-level (тот же компонент, `onBack` теперь `() => goTo({kind:"journal"})`) |
+| `people` | `Contacts` | было `contacts` |
+| `channels` \| `channel` | `Channels` (внутри сама решает список/деталь по `place.value.kind==="channel"`) | было `activeChannelId` |
+| `chat` | `Chat` (внутри решает список/окно по `place.value.id`) | было `messages`/`activeChatPubkey` |
+| `storage` | `Files` | было `files` (этап 9 уже увёл вход в меню, тут — просто новое имя kind) |
+| `settings`/`profile`/`help`/`diagnostics` | как были | без изменений в поведении |
+
+### Что НЕ трогает этот шаг
+
+`roomsScreenActive` ("Быстрая связь") — отдельная top-level ветка ВНЕ
+`MainShell`, ТЗ явно требует не трогать, `place` её не описывает.
+Визуальная панель (10.2) — отдельный шаг, 10.1 меняет только слой
+состояния/навигации, старая разметка сайдбара продолжает работать
+(потребляя `place.value.kind` вместо `activeId`), чтобы 10.1 можно было
+проверить и закоммитить независимо от 10.2.

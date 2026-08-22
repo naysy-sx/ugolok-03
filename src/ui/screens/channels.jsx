@@ -15,7 +15,7 @@ import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { activeChannelId, openChannel } from "../signals/channel-nav.js";
+import { place, openChannel } from "../signals/place.js";
 import ChannelDetail from "./channel.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
@@ -375,8 +375,8 @@ function ChannelsList() {
 }
 
 export default function Channels() {
-	if (activeChannelId.value) {
-		return <ChannelDetail ownerPubkey={currentUser.value.id} privKey={privKeySig.value} dbKey={dbKeySig.value} channelId={activeChannelId.value} />;
+	if (place.value.kind === "channel" && place.value.id) {
+		return <ChannelDetail ownerPubkey={currentUser.value.id} privKey={privKeySig.value} dbKey={dbKeySig.value} channelId={place.value.id} />;
 	}
 	return <ChannelsList />;
 }

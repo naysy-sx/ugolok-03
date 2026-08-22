@@ -15,11 +15,16 @@
 // src/ui/i18n/locales/*.json ("nav.*"), переводится вызовом t(item.labelKey)
 // в месте рендера (app.jsx) — сам файл остаётся чистыми данными без
 // зависимости от i18n-модуля.
+// Редизайн интерфейса, этап 10.1 (CONTRACTS.md/DESIGN.md) — id приведены к
+// словарю place.kind (place.js): "contacts"->"people", "messages"->"chat",
+// "files"->"storage" (последнее уже увёл в меню под аватаром этап 9, тут
+// просто переименование). labelKey НЕ переименованы — тот же переведённый
+// текст под тем же ключом словаря, id это лишь внутренний идентификатор.
 export const NAV_ITEMS = [
   { id: "journal", labelKey: "nav.journal" },
-  { id: "messages", labelKey: "nav.messages" },
+  { id: "chat", labelKey: "nav.messages" },
   { id: "channels", labelKey: "nav.channels" },
-  { id: "contacts", labelKey: "nav.contacts" },
+  { id: "people", labelKey: "nav.contacts" },
   { id: "settings", labelKey: "nav.settings" },
   { id: "profile", labelKey: "nav.profile" },
   { id: "help", labelKey: "nav.help" },

@@ -4,7 +4,7 @@ import { publish } from "../signals/transport.js";
 import { dueRecords, refreshDueRecords, refreshDueBadge } from "../signals/today.js";
 import { groupDueRecords } from "../../domain/content/due-schedule.js";
 import { setPostDue, clearPostDue, setPostDone, makePostTask, unmakePostTask, archivePost, unpublishPost, deletePost } from "../../domain/content/post.js";
-import { openChannel, setChannelPostTarget } from "../signals/channel-nav.js";
+import { openChannel } from "../signals/place.js";
 import Screen from "../components/screen.jsx";
 import PostCard from "../components/post-card.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
@@ -16,8 +16,7 @@ import { t, errorMessage } from "../signals/i18n.js";
 // PostCard (post-card.jsx:139, ActionsMenu), поэтому любая запись, дошедшая
 // сюда через listDueRecords(текущий аккаунт), обязана быть его собственной.
 function goToRecord(record) {
-	openChannel(record.channelId);
-	setChannelPostTarget({ postId: record.id });
+	openChannel(record.channelId, { postId: record.id });
 }
 
 // Клик по остальной площади карточки уводит в канал (REDESIGN-SPEC.md,

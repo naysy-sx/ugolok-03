@@ -12,7 +12,7 @@ import {
 	refreshLiveProfileSubscription,
 	nextLamportTick,
 } from "../signals/transport.js";
-import { activeChatPubkey, openChat } from "../signals/chat.js";
+import { place, openChat } from "../signals/place.js";
 import { contacts, profiles, refreshAll, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
@@ -969,8 +969,8 @@ export default function Chat() {
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
 
-	if (activeChatPubkey.value) {
-		return <ChatWindow ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} contactPubkey={activeChatPubkey.value} />;
+	if (place.value.kind === "chat" && place.value.id) {
+		return <ChatWindow ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} contactPubkey={place.value.id} />;
 	}
 
 	if (composing) {

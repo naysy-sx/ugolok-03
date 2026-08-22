@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
-import { NAV_ITEMS, DEFAULT_ACTIVE } from "./ui/nav-items.js";
+import { NAV_ITEMS } from "./ui/nav-items.js";
 import Quick from "./ui/screens/quick.jsx";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
@@ -11,6 +11,7 @@ import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Settings from "./ui/screens/settings.jsx";
 import Journal from "./ui/screens/journal.jsx";
+import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
 import Help from "./ui/screens/help.jsx";
 import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
@@ -21,8 +22,7 @@ import { applyCustomPalette } from "./ui/theme/palette-apply.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
 import { applyThemeMode, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { setLocale, t } from "./ui/signals/i18n.js";
-import { activeChatPubkey } from "./ui/signals/chat.js";
-import { activeChannelId } from "./ui/signals/channel-nav.js";
+import { place, goTo } from "./ui/signals/place.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
@@ -60,9 +60,9 @@ export const roomsScreenActive = signal(false);
 // живёт здесь, во view-слое.
 const NAV_ICONS = {
 	journal: IconBell,
-	messages: IconChatBubble,
+	chat: IconChatBubble,
 	channels: IconReader,
-	contacts: IconPeople,
+	people: IconPeople,
 	settings: IconGear,
 	profile: IconPerson,
 	help: IconHelpCircle,
@@ -70,7 +70,6 @@ const NAV_ICONS = {
 };
 
 function MainShell() {
-	const [activeId, setActiveId] = useState(DEFAULT_ACTIVE);
 	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const ownerPubkey = currentUser.value.id;
@@ -147,29 +146,17 @@ function MainShell() {
 		configureDefaultBackend({ onToast: (title, body, onClick) => pushToast({ title, body, onClick }), audioSrc: NOTIFICATION_SOUND_DATA_URI });
 	}, []);
 
-	// Клик по контакту (contacts.jsx) устанавливает activeChatPubkey — переключаем
-	// вкладку на "Сообщения"; сам экран (chat.jsx, этап 27) реагирует на
-	// activeChatPubkey.value самостоятельно (список чатов ↔ открытая переписка).
-	useEffect(() => {
-		if (activeChatPubkey.value) setActiveId("messages");
-	}, [activeChatPubkey.value]);
-
-	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 47-довесок-3) — тот же принцип, что выше для
-	// activeChatPubkey, но для каналов ЕГО НЕ БЫЛО ВООБЩЕ: openChannel(id) менял
-	// сигнал, но вкладку нава не переключал — работало, только если пользователь
-	// УЖЕ был на "Каналах". Без этого клик по уведомлению о канале открывал бы
-	// нужный канал "невидимо" за текущей вкладкой.
-	useEffect(() => {
-		if (activeChannelId.value) setActiveId("channels");
-	}, [activeChannelId.value]);
-
-	// Этап 47-довесок-3 — клик по уведомлению (тост/нативное) переходит "к месту
-	// события": сначала переключаем вкладку нава, затем форвардим специфику
-	// экрана (контакт/канал/пост/комментарий) в уже существующие сигналы.
+	// Редизайн интерфейса, этап 10.1 (CONTRACTS.md/DESIGN.md) — клик по
+	// уведомлению (тост/нативное) переходит "к месту события": applyNavTarget
+	// пишет ПРЯМО в place (единое состояние места) — отдельного переключения
+	// вкладки нава не нужно, рендер уже читает place.value.kind напрямую.
+	// Раньше здесь было ТРИ отдельных useEffect-синхронизатора (activeId ⇐
+	// activeChatPubkey/activeChannelId/pendingNavTarget, отчёт A1/A3) — вся
+	// причина их существования (три независимых сигнала могли разойтись)
+	// устранена самим единым place, синхронизировать больше нечего.
 	useEffect(() => {
 		const target = pendingNavTarget.value;
 		if (!target) return;
-		setActiveId(target.screen);
 		applyNavTarget(target);
 		pendingNavTarget.value = null;
 	}, [pendingNavTarget.value]);
@@ -200,20 +187,16 @@ function MainShell() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [sidebarOpen]);
 
-	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ: повторный клик по тому же контакту в "Контактах"
-	// после ухода со вкладки "Сообщения" ЧЕРЕЗ САЙДБАР (не стрелкой "назад"
-	// внутри чата, та уже сама вызывает openChat(null)) не переключал вкладку.
-	// Причина: activeChatPubkey.value оставался равен pubkey того же контакта,
-	// useEffect ниже завязан на ИЗМЕНЕНИЕ значения ([activeChatPubkey.value]),
-	// а повторное присваивание того же значения не считается изменением —
-	// эффект не срабатывает повторно. Тот же класс бага для activeChannelId.
-	// Починка — здесь, а не в contacts.jsx/chat.js: уход на ЛЮБУЮ ДРУГУЮ
-	// вкладку сбрасывает "открытый чат/канал", гарантируя, что следующий
-	// клик всегда будет РЕАЛЬНЫМ изменением значения.
+	// Редизайн интерфейса, этап 10.1 — раньше здесь был ручной сброс ЧУЖИХ
+	// сигналов (activeChatPubkey/activeChannelId), нужный из-за найденного
+	// пользователем бага (повторный клик по тому же контакту после ухода на
+	// другую вкладку не переключал её — activeChatPubkey не МЕНЯЛ значение,
+	// эффект на него не срабатывал повторно). place — ПОЛНАЯ замена объекта
+	// (goTo/place.js), кросс-сигнальной рассинхронизации структурно не
+	// бывает: id всегда однозначно относится к ТЕКУЩЕМУ kind, отдельно
+	// сбрасывать нечего.
 	function selectNavItem(id) {
-		if (id !== "messages") activeChatPubkey.value = null;
-		if (id !== "channels") activeChannelId.value = null;
-		setActiveId(id);
+		goTo({ kind: id });
 		setSidebarOpen(false);
 	}
 
@@ -274,7 +257,7 @@ function MainShell() {
 						{NAV_ITEMS.map(item => {
 							const ItemIcon = NAV_ICONS[item.id];
 							const badgeCount =
-								item.id === "messages"
+								item.id === "chat"
 									? unreadMessagesCount.value
 									: item.id === "channels"
 										? unreadChannelsCount.value
@@ -285,10 +268,10 @@ function MainShell() {
 								<li key={item.id}>
 									<button
 										type="button"
-										class={`nav-item-btn row${item.id === activeId ? " is-active" : ""}`}
+										class={`nav-item-btn row${item.id === place.value.kind ? " is-active" : ""}`}
 										style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
 										onClick={() => selectNavItem(item.id)}
-										aria-current={item.id === activeId ? "page" : null}
+										aria-current={item.id === place.value.kind ? "page" : null}
 									>
 										<ItemIcon />
 										{t(item.labelKey)}
@@ -329,23 +312,22 @@ function MainShell() {
 				</button>
 			</aside>
 			<div class="main-content grow">
-				{activeId === "diagnostics" && <Diagnostics />}
-				{activeId === "profile" && <Profile />}
-				{activeId === "help" && <Help />}
-				{activeId === "contacts" && <Contacts />}
-				{activeId === "messages" && <Chat />}
-				{activeId === "channels" && <Channels />}
-				{activeId === "settings" && <Settings />}
-				{activeId === "journal" && <Journal />}
-				{activeId === "files" && <Files />}
-				{activeId !== "diagnostics" &&
-					activeId !== "profile" &&
-					activeId !== "contacts" &&
-					activeId !== "messages" &&
-					activeId !== "channels" &&
-					activeId !== "settings" &&
-					activeId !== "journal" &&
-					activeId !== "files" && <Placeholder title={t(NAV_ITEMS.find(item => item.id === activeId).labelKey)} />}
+				{place.value.kind === "diagnostics" && <Diagnostics />}
+				{place.value.kind === "profile" && <Profile />}
+				{place.value.kind === "help" && <Help />}
+				{place.value.kind === "people" && <Contacts />}
+				{place.value.kind === "chat" && <Chat />}
+				{(place.value.kind === "channels" || place.value.kind === "channel") && <Channels />}
+				{place.value.kind === "settings" && <Settings />}
+				{place.value.kind === "journal" && <Journal />}
+				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
+				{place.value.kind === "storage" && <Files />}
+				{(() => {
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "chat", "channels", "channel", "settings", "journal", "today", "storage"];
+					if (KNOWN_KINDS.includes(place.value.kind)) return null;
+					const item = NAV_ITEMS.find((i) => i.id === place.value.kind);
+					return <Placeholder title={item ? t(item.labelKey) : place.value.kind} />;
+				})()}
 			</div>
 			</div>
 			</div>

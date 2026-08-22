@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, fetchDiscoveryProfiles } from "../signals/transport.js";
-import { openChat } from "../signals/chat.js";
+import { openChat } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconPencil from "../icons/pencil.jsx";

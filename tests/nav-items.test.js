@@ -5,9 +5,11 @@ import ru from "../src/ui/i18n/locales/ru.json" with { type: "json" };
 
 // "subscriptions" переименован в "channels" на этапе 30 (пожелание пользователя —
 // полноценный экран каналов вместо пустой заглушки-placeholder).
+// Этап 10.1 — id приведены к словарю place.kind: "contacts"->"people",
+// "messages"->"chat".
 const REQUIRED_IDS = [
-	"contacts",
-	"messages",
+	"people",
+	"chat",
 	"channels",
 	"settings",
 	"profile",
