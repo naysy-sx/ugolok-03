@@ -290,10 +290,17 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	const plainLength = text ? toPlainText(parseRich(text)).length : 0;
 	const plainTooLong = plainLength > POST_MAX_LENGTH;
 	const sourceTooLong = text.length > POST_SOURCE_MAX_LENGTH;
+	// Редизайн интерфейса, 10-довесок-5 — текст обязателен, ЕСЛИ вложений
+	// меньше двух (пустой пост без единого вложения бессмысленен). При ≥2
+	// вложениях пустой текст разрешён — это ровно условие kind==="collection"
+	// (record-kind.js: !post.text && attachments.length > 1), без этой
+	// поблажки подборки были недостижимы через composer вовсе (находка живой
+	// проверки .mgrid, CONTRACTS.md "Этап 10-довесок-5").
+	const emptyPost = text.length === 0 && tray.items.length < 2;
 
 	async function handleSubmit(e) {
 		e.preventDefault();
-		if (busy || text.length === 0 || plainTooLong || sourceTooLong) return;
+		if (busy || emptyPost || plainTooLong || sourceTooLong) return;
 		if (tray.items.some((item) => item.error)) return;
 		if (!limiter.tryAction("post")) {
 			setError(t("common.rateLimitError"));
@@ -370,7 +377,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 						<button type="button" onClick={() => setFilePickerOpen(true)}>
 							<IconFolder /> {t("channel.composer.attachFromStorageButton")}
 						</button>
-						<button type="submit" disabled={busy || text.length === 0 || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
+						<button type="submit" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 						</button>
 						<button type="button" onClick={onCancel} disabled={busy}>
