@@ -222,6 +222,7 @@
 		"jumpToDate": "Naar datum gaan",
 		"showAll": "Alles tonen",
 		"markAllRead": "Als gelezen markeren",
+		"dueButton": "◈ Today ({{count}})",
 		"empty": "Er is nog niets gebeurd — hier verschijnen meldingen.",
 		"emptyDate": "Geen gebeurtenissen op deze dag.",
 		"unreadDot": "ongelezen",
@@ -700,6 +701,13 @@
 		"article": "artikel",
 		"collection": "verzameling",
 		"note": "notitie"
+	},
+	"today": {
+		"title": "Today",
+		"overdueGroup": "Overdue",
+		"todayGroup": "Today",
+		"laterGroup": "Later",
+		"empty": "No open due items."
 	},
 	"markdownToolbar": {
 		"boldAria": "Vet",

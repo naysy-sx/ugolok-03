@@ -222,6 +222,7 @@
 		"jumpToDate": "日付に移動",
 		"showAll": "すべて表示",
 		"markAllRead": "既読にする",
+		"dueButton": "◈ Today ({{count}})",
 		"empty": "まだ何も起きていません — ここに通知が表示されます。",
 		"emptyDate": "この日の出来事はありません。",
 		"unreadDot": "未読",
@@ -700,6 +701,13 @@
 		"article": "記事",
 		"collection": "コレクション",
 		"note": "メモ"
+	},
+	"today": {
+		"title": "Today",
+		"overdueGroup": "Overdue",
+		"todayGroup": "Today",
+		"laterGroup": "Later",
+		"empty": "No open due items."
 	},
 	"markdownToolbar": {
 		"boldAria": "太字",

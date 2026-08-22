@@ -349,3 +349,25 @@ export async function setPostTags(ownerPubkey, dbKey, postId, tags) {
 	const merged = { ...fromEncryptedRow(raw, dbKey), tags };
 	await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
 }
+
+// Редизайн интерфейса, этап 4 (CONTRACTS.md) — экран "Сегодня". Читает
+// СТРОГО через индекс [ownerPubkey+dueAt] (db.version(25), этап 1), без
+// полного перебора таблицы — тот же приём диапазона, что chat.js:43.
+// dueAt: null физически отсутствует в этом индексе (IndexedDB не
+// индексирует null как ключ), поэтому записи без срока сюда не попадают
+// сами по себе — отдельный фильтр "непустой срок" не нужен. done !== true
+// и !deleted — plaintext-поля, фильтруются на сырых строках ДО расшифровки.
+// Результат уже отсортирован индексом по возрастанию dueAt (общий префикс
+// ownerPubkey, дальше — числовой порядок второй компоненты ключа).
+//
+// until (unix seconds, опционален) — верхняя граница: счётчик на кнопке
+// зовёт С until (конец сегодня, дешевле — меньше строк на расшифровку),
+// экран "Сегодня" зовёт БЕЗ until (весь список, дороже, но реже).
+export async function listDueRecords(ownerPubkey, dbKey, { until } = {}) {
+	const raw = await db
+		.table("posts")
+		.where("[ownerPubkey+dueAt]")
+		.between([ownerPubkey, 0], [ownerPubkey, until ?? Number.MAX_SAFE_INTEGER], true, true)
+		.toArray();
+	return raw.filter((r) => !r.deleted && r.done !== true).map((r) => fromEncryptedRow(r, dbKey));
+}

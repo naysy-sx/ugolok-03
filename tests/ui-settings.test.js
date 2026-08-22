@@ -23,6 +23,7 @@ import {
 	pairSelfHostedServer,
 	unpairSelfHostedServer,
 	SelfHostedFingerprintMismatchError,
+	markDueDateEverSet,
 } from "../src/domain/settings/ui-settings.js";
 import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
 import { parseDmRelayListEvent } from "../src/domain/identity/dm-relay-list.js";
@@ -433,4 +434,26 @@ test("unpairSelfHostedServer: сбрасывает в null", async () => {
 test("DEFAULT_SETTINGS.selfHostedServer — null по умолчанию (старые записи без этого поля не ломаются)", async () => {
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.selfHostedServer, null);
+});
+
+// Редизайн интерфейса, этап 4 (CONTRACTS.md) — markDueDateEverSet
+
+test("DEFAULT_SETTINGS.everSetDueDate — false по умолчанию", async () => {
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.everSetDueDate, false);
+});
+
+test("markDueDateEverSet: первый вызов сохраняет true и публикует", async () => {
+	const published = [];
+	await markDueDateEverSet(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.everSetDueDate, true);
+	assert.equal(published.length, 1);
+});
+
+test("markDueDateEverSet: идемпотентно — второй вызов не публикует повторно", async () => {
+	const published = [];
+	await markDueDateEverSet(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	await markDueDateEverSet(ALICE_PUB, ALICE_PRIV, DB_KEY, capturingPublish(published));
+	assert.equal(published.length, 1, "второй вызов не должен был опубликовать событие снова");
 });

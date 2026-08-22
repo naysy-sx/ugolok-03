@@ -53,6 +53,11 @@ export const DEFAULT_SETTINGS = {
 	blossomUrls: [],
 	activeBlossomUrl: null,
 	selfHostedServer: null, // null | {host, port, token, fingerprint, pairedAt} — Этап 63, И3
+	// Редизайн интерфейса, этап 4 (CONTRACTS.md) — "срок хоть раз ставили".
+	// Управляет появлением кнопки "Сегодня": один раз true -> навсегда true,
+	// даже когда открытых дел с сроком снова стало 0 (REDESIGN-SPEC.md:
+	// "мигающий туда-сюда элемент хуже лишней кнопки").
+	everSetDueDate: false,
 };
 
 // Этап 70 — МИНИМАЛЬНАЯ таблица только для одноразовой миграции старого
@@ -291,4 +296,15 @@ export async function pairSelfHostedServer(ownerPubkey, privKey, dbKey, pairing,
 export async function unpairSelfHostedServer(ownerPubkey, privKey, dbKey, publish) {
 	const settings = await loadUiSettings(ownerPubkey, dbKey);
 	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, selfHostedServer: null }, publish);
+}
+
+// Редизайн интерфейса, этап 4 (CONTRACTS.md) — вызывается UI (channel.jsx's
+// handleSetDue), НЕ post.js: setPostDue (этап 1) намеренно без
+// privKey/publish, менять эту сигнатуру нельзя без отдельного решения с
+// полной регрессией (skill, правило 13). Идемпотентно — уже true, значит
+// сохранять/публиковать нечего, не спамим relay на каждую установку срока.
+export async function markDueDateEverSet(ownerPubkey, privKey, dbKey, publish) {
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
+	if (settings.everSetDueDate) return;
+	await saveUiSettings(ownerPubkey, privKey, dbKey, { ...settings, everSetDueDate: true }, publish);
 }

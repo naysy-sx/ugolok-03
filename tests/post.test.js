@@ -22,6 +22,7 @@ import {
 	makePostTask,
 	unmakePostTask,
 	setPostTags,
+	listDueRecords,
 } from "../src/domain/content/post.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
 import { CHANNEL_KEYS_PLAINTEXT_FIELDS, CHANNEL_KEY_META_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
@@ -690,4 +691,73 @@ test("publishPost/receivePost: tags едет в relay-payload, старые со
 	await receivePost(BOB_PUB, DB_KEY, oldEvent);
 	const oldRow = fromEncryptedRow(await db.table("posts").get([BOB_PUB, "old-no-tags"]), DB_KEY);
 	assert.deepEqual(oldRow.tags, []);
+});
+
+// Редизайн интерфейса, этап 4 (CONTRACTS.md) — listDueRecords, выборка через
+// индекс [ownerPubkey+dueAt] (этап 1), без полного перебора.
+
+test("listDueRecords: пустой аккаунт (ни одной записи со сроком) -> []", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "без срока", attachments: [] });
+	assert.deepEqual(await listDueRecords(ALICE_PUB, DB_KEY), []);
+});
+
+test("listDueRecords: сортировка по возрастанию dueAt", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const late = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "поздний", attachments: [] });
+	const early = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "ранний", attachments: [] });
+	const mid = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "средний", attachments: [] });
+	await setPostDue(ALICE_PUB, late.postId, 3000);
+	await setPostDue(ALICE_PUB, early.postId, 1000);
+	await setPostDue(ALICE_PUB, mid.postId, 2000);
+	const result = await listDueRecords(ALICE_PUB, DB_KEY);
+	assert.deepEqual(result.map((r) => r.text), ["ранний", "средний", "поздний"]);
+});
+
+test("listDueRecords: done === true исключается, done === null («ссылка со сроком») остаётся", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const doneTask = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "сделано", attachments: [] });
+	await setPostDue(ALICE_PUB, doneTask.postId, 1000);
+	await makePostTask(ALICE_PUB, doneTask.postId);
+	await setPostDone(ALICE_PUB, doneTask.postId, true);
+
+	const openTask = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "не сделано", attachments: [] });
+	await setPostDue(ALICE_PUB, openTask.postId, 2000);
+	await makePostTask(ALICE_PUB, openTask.postId);
+
+	const linkWithDue = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "ссылка со сроком", attachments: [], linkUrl: "https://x.example" });
+	await setPostDue(ALICE_PUB, linkWithDue.postId, 3000);
+
+	const result = await listDueRecords(ALICE_PUB, DB_KEY);
+	assert.deepEqual(result.map((r) => r.text), ["не сделано", "ссылка со сроком"]);
+});
+
+test("listDueRecords: удалённая запись исключается", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "будет удалена", attachments: [] });
+	await setPostDue(ALICE_PUB, postId, 1000);
+	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	assert.deepEqual(await listDueRecords(ALICE_PUB, DB_KEY), []);
+});
+
+test("listDueRecords: чужой ownerPubkey не подмешивается (межвладельческая изоляция)", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(BOB_PUB, DB_KEY, channelId, { text: "боб", attachments: [] });
+	await setPostDue(BOB_PUB, postId, 1000);
+	assert.deepEqual(await listDueRecords(ALICE_PUB, DB_KEY), []);
+	assert.equal((await listDueRecords(BOB_PUB, DB_KEY)).length, 1);
+});
+
+test("listDueRecords: until ограничивает верхнюю границу диапазона", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const soon = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "скоро", attachments: [] });
+	const later = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "потом", attachments: [] });
+	await setPostDue(ALICE_PUB, soon.postId, 1000);
+	await setPostDue(ALICE_PUB, later.postId, 5000);
+
+	const bounded = await listDueRecords(ALICE_PUB, DB_KEY, { until: 2000 });
+	assert.deepEqual(bounded.map((r) => r.text), ["скоро"]);
+
+	const unbounded = await listDueRecords(ALICE_PUB, DB_KEY);
+	assert.deepEqual(unbounded.map((r) => r.text), ["скоро", "потом"]);
 });

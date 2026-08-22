@@ -18917,3 +18917,165 @@ moderation/settings — переключают содержимое ВНУТРИ
 - [x] `npm test` зелёный (полная регрессия) — 2025/2025.
 - [x] `npx vite build` зелёный.
 - [x] Живая проверка реального приложения (не статичный препросмотр — создан тестовый аккаунт/канал/пост/чат канала/файл, живой relay+blossom): ряд срезов появляется и стоит одинаково в шапке канала (вкладка "Посты" и "Чат"), в разделе "Файлы"; клик по "Файлы" открывает `FileViewer` — иконка/имя/размер/"Скачать", без scrub-бара, без кнопки "свернуть" (как для картинки); per-post кнопка в `PostCard` тоже получила "Файлы". Консоль без ошибок на всех переходах. Ширины 320-1440/обе темы — не проверялись живым запуском в этом этапе (стадия не меняла CSS-разметку "с нуля", только переиспользует уже проверенные этапом 2 классы `.rec__foot`/`MediaButtons`), только доменные тесты + один реальный проход.
+
+## Этап 4 — «Сегодня»
+
+Рутина (skill-триаж 13a): выборка по уже существующему индексу
+(этап 1) + группировка по календарной дате + новый экран, переиспользующий
+`PostCard`. Ни CRDT, ни пространства состояний с нетривиальными
+переходами — DESIGN.md не заводится.
+
+### `domain/content/post.js` — `listDueRecords`
+
+```js
+export async function listDueRecords(ownerPubkey, dbKey, { until } = {})
+```
+
+Читает **только** через индекс `[ownerPubkey+dueAt]` (`db.version(25)`,
+этап 1) — `.where("[ownerPubkey+dueAt]").between([ownerPubkey, 0],
+[ownerPubkey, until ?? Number.MAX_SAFE_INTEGER], true, true)`, тот же
+приём диапазона, что `chat.js:43`. `dueAt: null` физически отсутствует
+в этом индексе (IndexedDB не индексирует `null` как ключ) — отдельный
+фильтр "непустой срок" не нужен, только `!deleted && done !== true`
+(plaintext-поля, фильтруются ДО расшифровки). Результат уже
+отсортирован индексом по возрастанию `dueAt` (общий префикс
+`ownerPubkey`, дальше — числовой порядок ключа) — повторной сортировки
+нет.
+
+`until` (unix seconds, опционален) — верхняя граница диапазона.
+Решение Claude: два разных вызывающих контекста с разной ценой
+расшифровки —
+- счётчик на кнопке зовёт **с** `until` = конец сегодняшнего дня
+  (только просрочено+сегодня, дешёвая выборка, дергается часто);
+- экран "Сегодня" зовёт **без** `until` (весь список, дороже,
+  дергается только при открытии экрана).
+
+### `domain/content/due-schedule.js` [новый файл] — `groupDueRecords`
+
+```js
+export function groupDueRecords(records, nowUnix = Math.floor(Date.now() / 1000))
+// -> { overdue: Post[], today: Post[], later: Post[] }
+```
+
+Границы календарного дня — **локальное** время (тот же принцип, что
+`journal.jsx`'s `dayKey`), не UTC. `records` уже отсортирован
+(`listDueRecords`) — функция обязана сохранять относительный порядок
+внутри каждой группы (`stable` partition, не пересортировывать).
+
+### `domain/settings/ui-settings.js` — флаг «срок хоть раз ставили»
+
+`DEFAULT_SETTINGS.everSetDueDate: false` (новое поле, синхронизируется
+как часть kind 30072, тот же канал, что остальные настройки).
+
+```js
+export async function markDueDateEverSet(ownerPubkey, privKey, dbKey, publish)
+```
+
+Идемпотентно: если `settings.everSetDueDate` уже `true` — не читает
+дальше, ничего не сохраняет и не публикует (не спамит relay на каждую
+установку срока). Иначе — `saveUiSettings(..., { ...settings,
+everSetDueDate: true }, publish)`.
+
+Точка вызова — **UI**, не `post.js`: `channel.jsx`'s `handleSetDue`,
+сразу после успешного `setPostDue` с непустым `dueAt`. Причина: у
+`setPostDue` (этап 1, CONTRACTS.md) сигнатура сознательно БЕЗ
+`privKey`/`publish` — функция локальная, менять эту сигнатуру нельзя
+без отдельного решения с полной регрессией (skill, правило 13). Флаг
+живёт в отдельном вызове рядом, не внутри `post.js`.
+
+### `ui/signals/today.js` [новый файл]
+
+Тот же паттерн, что `signals/journal.js` (`refreshJournal`/
+`journalEntries`):
+
+```js
+export const dueBadgeCount = signal(0);
+export const dueRecords = signal([]);
+
+export async function refreshDueBadge(ownerPubkey, dbKey) // until = конец сегодня
+export async function refreshDueRecords(ownerPubkey, dbKey) // без until, полный список
+```
+
+### `ui/screens/today.jsx` [новый файл]
+
+`<Screen breadcrumb={{label: t("nav.journal"), onBack}} title={t("today.title")}>`
+— три секции `overdue`/`today`/`later` (`groupDueRecords`), пустые
+группы не рендерятся. Внутри — **та же** `PostCard`, что в ленте
+канала (REDESIGN-SPEC.md, этап 4), с РАБОЧИМИ обработчиками
+(`onToggleDone`/`onMakeTask`/.../`onArchive`/`onDelete` — те же
+функции `post.js`, что `channel.jsx` уже использует) — не read-only
+копия карточки. `PostCard`'а контракт (этап 2) НЕ меняется, новых
+пропов не добавлено.
+
+Клик по записи ведёт в её канал/к записи (REDESIGN-SPEC.md): обёртка
+`<div class="today-record" onClick={handleClick}>` вокруг каждой
+`PostCard`, где `handleClick` игнорирует клик, если
+`e.target.closest("button, input, a, summary")` — то есть чекбокс/
+`ActionsMenu`/остальные интерактивные элементы карточки продолжают
+работать как обычно, клик по остальной площади карточки зовёт
+`openChannel(record.channelId)` + `setChannelPostTarget({postId:
+record.id})` (`ui/signals/channel-nav.js`) — тот же механизм, что
+`applyNavTarget`'s `"channels"`-ветка (`notification-nav.js:25-27`)
+уже использует для перехода из журнала.
+
+### `ui/screens/journal.jsx` — кнопка «◈ Сегодня»
+
+Правило появления (REDESIGN-SPEC.md): кнопки физически нет, пока
+`everSetDueDate === false`; после первого `true` — навсегда, даже при
+`dueBadgeCount === 0`. Читается через `loadUiSettings` (`useState` +
+`useEffect`, тот же паттерн, что `settings.jsx`), не через отдельный
+реактивный settings-сигнал (в проекте такого пока нет ни для одного
+экрана).
+
+Кнопка добавлена в существующий `actions` `<Screen>` журнала, рядом с
+"Отметить прочитанным" (готовой шапки `head-actions` с "Что
+произошло"/"＋ Запись" из макета в проекте ещё нет вообще — это
+элементы ДРУГОГО, нереализованного экрана "лента", не `journal.jsx`;
+`journal.jsx` — это персистентный лог уведомлений, ближайший
+реализованный аналог "стартового экрана" из макета). Решение Claude:
+не заводить head-actions-ряд заново ради одной кнопки — это задача
+этапа 10 (боковая панель+состояние места), тут кнопка просто занимает
+уже существующий слот `actions`.
+
+Клик переключает локальный `useState` (`todayOpen`) — вместо тела
+журнала рендерится `<Today onBack={() => setTodayOpen(false)} .../>`.
+Без нового `NAV_ITEM`, без нового top-level сигнала — тот же уровень
+"мягкого входа", что описан в REDESIGN-SPEC.md ("отдельного раздела
+нет").
+
+### `ui/screens/channel.jsx` — обновление счётчика при изменении признаков
+
+`dueBadgeCount`/`everSetDueDate` не пересчитываются реактивно сами —
+экран журнала перечитывает их на `[ownerPubkey, messagingActivity.value]`
+(тот же триггер, что уже использует для остального). `messagingActivity`
+(`signals/chats.js`) бампается ТОЛЬКО транспортным диспетчером на
+удалённые события — локальные действия (`setPostDue` и т.п.) её не
+трогали. Новый маленький хелпер рядом с `runAction`:
+
+```js
+function runDueAction(fn) {
+	return runAction(fn).then(bumpMessagingActivity);
+}
+```
+
+Используется вместо `runAction` в 5 обработчиках, завязанных на
+признаки записи: `onToggleDone`/`onMakeTask`/`onUnmakeTask`/`onSetDue`
+(`handleSetDue`)/`onClearDue`. `onArchive`/`onUnpublish`/`onDelete` —
+не тронуты, `runAction` как был.
+
+### i18n
+
+Новый top-level раздел `today` (12 словарей): `title`, `overdueGroup`,
+`todayGroup`, `laterGroup`, `empty`. Плюс `journal.dueButton` —
+`"◈ Сегодня ({{count}})"`-подобный текст с параметром `count`.
+
+### DoD этапа 4
+
+- [x] `listDueRecords` — тесты на: пустой список (нет ни одной записи со сроком), фильтр `done !== true` (включая `done === null` — «ссылка со сроком» ПОКАЗЫВАЕТСЯ), исключение `deleted`, исключение чужого `ownerPubkey`, сортировка по возрастанию `dueAt`, `until` реально ограничивает диапазон.
+- [x] `groupDueRecords` — тесты на три корзины + границы суток (23:59:59 сегодня -> `today`, 00:00:00 завтра -> `later`) + сохранение порядка внутри корзины.
+- [x] `markDueDateEverSet` — тест идемпотентности (второй вызов не публикует повторно).
+- [x] Кнопки нет в чистом аккаунте, появляется после первого `setPostDue`, не исчезает после `clearPostDue`/`unmakePostTask` (живая проверка: снятие срока/дела оставило счётчик "Сегодня (0)" видимым).
+- [x] Экран "Сегодня" не читает таблицу `posts` целиком (проверяется по факту использования индекса в `listDueRecords`, не отдельным тестом на план запроса).
+- [x] `npm test` зелёный (полная регрессия) — 2041/2041.
+- [x] `npx vite build` зелёный (870.93 kB gzip).
+- [x] Живая проверка в Chrome (реальный аккаунт `stage4tester`, реальный канал "Помойка", реальные посты, живой relay): кнопка "Сегодня" появляется с верным числом после первой установки срока, экран группирует верно (запись со сроком "вчера" — в "Просрочено", со сроком "сегодня" — в "Сегодня", посчитано календарным днём, не строгим временем), клик по телу карточки уводит в канал к записи (autoExpand сработал), чекбокс/меню на самом экране "Сегодня" работают на месте — отметка "выполнено" убрала запись из списка без перехода. Обе темы (light/dark) — читаемо. Консоль без ошибок. Найдена и записана в REDESIGN-NOTES.md (не исправлена — контракт этапа 2, не в рамках этого этапа) визуальная нестыковка: `DueChip` в течение дня показывает "просрочено", хотя `groupDueRecords` уже верно относит запись к "Сегодня".

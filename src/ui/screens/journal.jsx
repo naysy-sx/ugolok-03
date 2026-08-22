@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../signals/journal.js";
 import { messagingActivity } from "../signals/chats.js";
+import { loadUiSettings } from "../../domain/settings/ui-settings.js";
+import { dueBadgeCount, refreshDueBadge } from "../signals/today.js";
+import Today from "./today.jsx";
 import Screen from "../components/screen.jsx";
 import IconEnvelopeClosed from "../icons/envelope-closed.jsx";
 import IconReader from "../icons/reader.jsx";
@@ -85,9 +88,16 @@ export default function Journal() {
 	const dbKey = dbKeySig.value;
 	const [page, setPage] = useState(0);
 	const [jumpDate, setJumpDate] = useState("");
+	// Редизайн интерфейса, этап 4 (CONTRACTS.md) — кнопка "Сегодня": локальный
+	// стейт вместо нового NAV_ITEM/сигнала, тот же уровень "мягкого входа",
+	// что описан в REDESIGN-SPEC.md ("отдельного раздела нет").
+	const [todayOpen, setTodayOpen] = useState(false);
+	const [everSetDueDate, setEverSetDueDate] = useState(false);
 
 	useEffect(() => {
 		refreshJournal(ownerPubkey, dbKey);
+		refreshDueBadge(ownerPubkey, dbKey);
+		loadUiSettings(ownerPubkey, dbKey).then((s) => setEverSetDueDate(s.everSetDueDate));
 	}, [ownerPubkey, messagingActivity.value]);
 
 	const entries = journalEntries.value;
@@ -141,11 +151,22 @@ export default function Journal() {
 		setPage(0);
 	}
 
+	// Все хуки компонента уже вызваны выше безусловно — ранний возврат здесь,
+	// ПОСЛЕ них, Rules of Hooks не нарушает.
+	if (todayOpen) {
+		return <Today onBack={() => setTodayOpen(false)} />;
+	}
+
 	return (
 		<Screen
 			title={t("nav.journal")}
 			actions={
 				<>
+					{everSetDueDate && (
+						<button type="button" class="btn btn--ghost" onClick={() => setTodayOpen(true)}>
+							{t("journal.dueButton", { count: dueBadgeCount.value })}
+						</button>
+					)}
 					{oldestDay && (
 						<label class="date-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 							{/* Пользователь: убрать SVG-иконку (рядом с ней всё равно

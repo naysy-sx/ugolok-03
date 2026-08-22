@@ -222,6 +222,7 @@
 		"jumpToDate": "跳转到日期",
 		"showAll": "显示全部",
 		"markAllRead": "标记为已读",
+		"dueButton": "◈ Today ({{count}})",
 		"empty": "目前还没有发生任何事情——通知将显示在这里。",
 		"emptyDate": "这一天没有事件。",
 		"unreadDot": "未读",
@@ -700,6 +701,13 @@
 		"article": "文章",
 		"collection": "合集",
 		"note": "笔记"
+	},
+	"today": {
+		"title": "Today",
+		"overdueGroup": "Overdue",
+		"todayGroup": "Today",
+		"laterGroup": "Later",
+		"empty": "No open due items."
 	},
 	"markdownToolbar": {
 		"boldAria": "粗体",

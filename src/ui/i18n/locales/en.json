@@ -222,6 +222,7 @@
 		"jumpToDate": "Jump to date",
 		"showAll": "Show all",
 		"markAllRead": "Mark as read",
+		"dueButton": "◈ Today ({{count}})",
 		"empty": "Nothing has happened yet — notifications will appear here.",
 		"emptyDate": "No events on this day.",
 		"unreadDot": "unread",
@@ -700,6 +701,13 @@
 		"article": "article",
 		"collection": "collection",
 		"note": "note"
+	},
+	"today": {
+		"title": "Today",
+		"overdueGroup": "Overdue",
+		"todayGroup": "Today",
+		"laterGroup": "Later",
+		"empty": "No open due items."
 	},
 	"markdownToolbar": {
 		"boldAria": "Bold",

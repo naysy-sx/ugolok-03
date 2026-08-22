@@ -222,6 +222,7 @@
 		"jumpToDate": "Ir para a data",
 		"showAll": "Mostrar tudo",
 		"markAllRead": "Marcar como lida",
+		"dueButton": "◈ Today ({{count}})",
 		"empty": "Ainda não aconteceu nada — as notificações aparecerão aqui.",
 		"emptyDate": "Não há eventos neste dia.",
 		"unreadDot": "não lida",
@@ -700,6 +701,13 @@
 		"article": "artigo",
 		"collection": "coleção",
 		"note": "nota"
+	},
+	"today": {
+		"title": "Today",
+		"overdueGroup": "Overdue",
+		"todayGroup": "Today",
+		"laterGroup": "Later",
+		"empty": "No open due items."
 	},
 	"markdownToolbar": {
 		"boldAria": "Negrito",

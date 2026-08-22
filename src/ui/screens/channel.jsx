@@ -4,7 +4,7 @@ import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
-import { messagingActivity } from "../signals/chats.js";
+import { messagingActivity, bumpMessagingActivity } from "../signals/chats.js";
 import { ensureProfilesFetched, profiles, groups, refreshGroups } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
 import { openChannel, channelPostTarget } from "../signals/channel-nav.js";
@@ -20,6 +20,7 @@ import {
 	makePostTask,
 	unmakePostTask,
 } from "../../domain/content/post.js";
+import { markDueDateEverSet } from "../../domain/settings/ui-settings.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
@@ -671,6 +672,16 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 	// путь до relay доедет окольно, при следующем статусном переходе
 	// (post.js, республикация несёт актуальные dueAt/done), а onPostChanged
 	// (runAction) обновляет ленту сразу, локально.
+	//
+	// Редизайн интерфейса, этап 4 (CONTRACTS.md) — journal.jsx перечитывает
+	// счётчик "Сегодня" на messagingActivity, а её бампает только транспортный
+	// диспетчер на УДАЛЁННЫЕ события — локальные действия здесь её не трогали.
+	// runDueAction — тот же runAction + бамп, ТОЛЬКО для 5 обработчиков,
+	// завязанных на признаки записи (не archive/unpublish/delete).
+	function runDueAction(fn) {
+		return runAction(fn).then(bumpMessagingActivity);
+	}
+
 	function handleSetDue() {
 		const input = window.prompt(t("postCard.setDuePrompt"));
 		if (input === null) return; // отменено
@@ -680,7 +691,10 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 			window.alert(t("postCard.setDueInvalid"));
 			return;
 		}
-		runAction(() => setPostDue(ownerPubkey, post.id, dueAt));
+		runDueAction(async () => {
+			await setPostDue(ownerPubkey, post.id, dueAt);
+			await markDueDateEverSet(ownerPubkey, privKey, dbKey, publish);
+		});
 	}
 
 	return (
@@ -693,11 +707,11 @@ function PostWithComments({ post, isOwner, canComment, ownerPubkey, privKey, dbK
 				mediaCounts={mediaCounts}
 				onOpenMediaClass={handleOpenMediaClass}
 				onOpenAttachment={(a) => openAttachment(a, { postId: post.id })}
-				onToggleDone={(done) => runAction(() => setPostDone(ownerPubkey, post.id, done))}
-				onMakeTask={() => runAction(() => makePostTask(ownerPubkey, post.id))}
-				onUnmakeTask={() => runAction(() => unmakePostTask(ownerPubkey, post.id))}
+				onToggleDone={(done) => runDueAction(() => setPostDone(ownerPubkey, post.id, done))}
+				onMakeTask={() => runDueAction(() => makePostTask(ownerPubkey, post.id))}
+				onUnmakeTask={() => runDueAction(() => unmakePostTask(ownerPubkey, post.id))}
 				onSetDue={handleSetDue}
-				onClearDue={() => runAction(() => clearPostDue(ownerPubkey, post.id))}
+				onClearDue={() => runDueAction(() => clearPostDue(ownerPubkey, post.id))}
 				onArchive={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onUnpublish={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}
 				onDelete={() => {
