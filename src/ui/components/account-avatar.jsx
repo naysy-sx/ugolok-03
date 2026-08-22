@@ -2,16 +2,17 @@
 // источника, кроме локального превью (keystore's avatar, data:URL), нет: Blossom-URL
 // профиля появляется только ПОСЛЕ входа (profile.jsx). Без фото — заглушка с первой
 // буквой логина, тот же приём, что ContactIdentity (contacts.jsx) внутри приложения.
-// small — компактный вариант (идентити-карточка сайдбара, разметка по
-// макету ugolok-final.html: .ava, 40px) — третий размер рядом с обычным
-// (unlock.jsx account-picker) и large (unlock.jsx/sidebar-card, было).
+// ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — один класс, размер переменной
+// (--avatar), не три класса (account-avatar/-sm/-large) плюс разводящее
+// .app-layout .account-avatar-sm, нужное только потому, что три имени
+// конфликтовали между собой.
 export default function AccountAvatar({ avatar, login, large, small }) {
-	const sizeClass = large ? "account-avatar-large" : small ? "account-avatar-sm" : "account-avatar";
+	const size = large ? "var(--avatar-l)" : small ? "var(--avatar-s)" : "var(--avatar-m)";
 	if (avatar) {
-		return <img src={avatar} alt="" class={sizeClass} />;
+		return <img src={avatar} alt="" class="account-avatar" style={{ "--avatar": size }} />;
 	}
 	return (
-		<div class={`${sizeClass} account-avatar-fallback row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+		<div class="account-avatar account-avatar-fallback row" style={{ "--avatar": size, alignItems: "center", justifyContent: "center" }} aria-hidden="true">
 			{(login || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);

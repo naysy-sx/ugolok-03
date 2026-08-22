@@ -357,6 +357,17 @@
 		--radius-md: 0.875rem; /* VISUAL.md v2 — кнопки/поля между --radius и --radius-lg */
 		--radius-lg: 1.25rem; /* крупные панели/карточки-витрины */
 		--radius-full: calc(infinity * 1px); /* формальный токен для уже привычного пилюльного скругления */
+		/* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — размер аватара переменной,
+		   не отдельным классом на каждый размер (было .account-avatar/-sm/
+		   -large + разводящее .app-layout .account-avatar-sm). */
+		--avatar-s: 1.75rem; /* строки списков (.stream-ava) */
+		--avatar-m: 2.5rem; /* строки контактов, экран входа */
+		--avatar-l: 4rem; /* крупный вариант экрана входа */
+		--avatar: var(--avatar-m);
+		/* Пропорция портрета в карточке учётной записи. 1 — как в
+		   FEATURE-SPECS/VISUAL.md; 3/2 — заметно компактнее при той же
+		   узнаваемости. Меняется одним числом. */
+		--account-ava-ratio: 3 / 2;
 		--marker-color: currentColor; /* цвет маркеров списка; .prose ставит акцент */
 		--border-width: 1px;
 		/* Тёплые тени (VISUAL.md) — не нейтрально-чёрные: тень окрашена той же

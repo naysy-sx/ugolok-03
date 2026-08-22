@@ -655,24 +655,27 @@ html[data-media-full] .top-corner-actions {
 .idcard__btn:focus-visible {
 	background-color: var(--surface-raised);
 }
-/* Компактный (40px) аватар идентити-карточки — квадрат со скруглением
-   --radius (та же форма, что карточки/панели), НЕ круг (то же решение
-   пользователя, что было у большого аватара: "строго квадратным"). */
-.app-layout .account-avatar-sm {
+/* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — один класс, размер переменной
+   --avatar (уже проставлена компонентом инлайн-стилем), не три класса
+   (account-avatar/-sm/-large) плюс разводящее .app-layout .account-avatar-sm,
+   нужное только потому, что три имени конфликтовали между собой. */
+.account-avatar {
 	display: block;
+	inline-size: var(--avatar);
+	block-size: var(--avatar);
 	flex: none;
-	width: 2.5rem;
-	height: 2.5rem;
 	object-fit: cover;
-	border-radius: var(--radius);
-	border: var(--border-width) solid var(--border);
+	border: 0;
+	border-radius: var(--radius-sm);
 	background-color: var(--surface-raised);
+	padding: 0;
+	margin: 0;
 }
-.app-layout .account-avatar-sm.account-avatar-fallback {
-	/* .row (раскладка) уже в JSX (account-avatar.jsx). */
+.account-avatar-fallback {
 	color: var(--muted);
-	font-size: var(--step-0);
+	font-size: var(--step--1);
 	font-weight: var(--weight-bold);
+	line-height: 1;
 }
 .idcard__body {
 	min-inline-size: 0;
@@ -1809,8 +1812,6 @@ html[data-media-full] .top-corner-actions {
 
 .auth-layout {
 	--radius: calc(var(--space-unit) * 0.5);
-	--avatar-size: calc(var(--space-unit) * 2.5);
-	--avatar-size-l: calc(var(--space-unit) * 4);
 	--rule-accent: calc(var(--border-width) * 3);
 	--surface-raised: color-mix(in oklch, var(--surface), var(--fg) 5%);
 }
@@ -2294,24 +2295,20 @@ html[data-media-full] .top-corner-actions {
 	background-color: color-mix(in oklch, var(--accent), var(--surface-raised) 85%);
 }
 
-/* background:var(--surface), НЕ --surface-raised — тот совпал бы с фоном
-   самой кнопки (.account-picker-btn ниже), буква-заглушка (нет фото)
-   стала бы не видна на одинаковом фоне. */
+/* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — account-avatar.jsx теперь ВСЕГДА
+   рендерит один класс (.account-avatar), размер приходит переменной --avatar
+   (уже проставленной компонентом инлайн-стилем) — было два правила по
+   имени класса (.account-avatar/.account-avatar-large), различить их так
+   больше нельзя. Внешний вид крупного варианta (рамка+скруглённый угол на
+   var(--surface-raised)) взят для ОБОИХ размеров — тот же язык, что общий
+   .account-avatar сайдбара (custom.css ниже). */
 .auth-layout .account-avatar {
 	aspect-ratio: 1;
-	object-fit: cover;
-	background-color: var(--surface);
-	inline-size: var(--avatar-size);
-}
-/* Квадратный с лёгким закруглением (пользователь) — не общий border-radius
-   с .account-avatar (та — острые углы, обрезаются overflow:hidden кнопки). */
-.auth-layout .account-avatar-large {
-	aspect-ratio: 1;
+	inline-size: var(--avatar);
 	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
-	inline-size: var(--avatar-size-l);
 }
 
 /* Заглушка вместо фото, пока у аккаунта нет сохранённого аватара — первая
