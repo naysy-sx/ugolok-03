@@ -463,7 +463,8 @@
 			"mb": "{{count}} МБ"
 		},
 		"openVideoAria": "Открыть видео {{name}}",
-		"openAudioAria": "Открыть аудио {{name}}"
+		"openAudioAria": "Открыть аудио {{name}}",
+		"openAria": "Открыть вложение {{name}}"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "Поставить срок",
 		"clearDueButton": "Снять срок",
 		"setDuePrompt": "Срок в формате ГГГГ-ММ-ДД:",
-		"setDueInvalid": "Не получилось распознать дату"
+		"setDueInvalid": "Не получилось распознать дату",
+		"collectionSummary": {
+			"one": "{{count}} файл · {{size}}",
+			"few": "{{count}} файла · {{size}}",
+			"many": "{{count}} файлов · {{size}}",
+			"other": "{{count}} файла · {{size}}"
+		},
+		"collectionMoreTile": "ещё {{count}}"
 	},
 	"recordKind": {
 		"task": "дело",
@@ -852,6 +860,7 @@
 		"exitButton": "Назад",
 		"overlayAria": "Быстрая связь",
 		"minimizeAria": "Свернуть в панель",
+		"closeAria": "Закрыть и завершить связь",
 		"entry": {
 			"title": "Быстрая связь",
 			"lead": "Временная комната для текста и голоса — без регистрации, без обмена ключами заранее. Комната исчезает сама, когда все выходят.",

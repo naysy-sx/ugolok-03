@@ -463,7 +463,8 @@
 			"mb": "{{count}} MB"
 		},
 		"openVideoAria": "Video openen {{name}}",
-		"openAudioAria": "Audio openen {{name}}"
+		"openAudioAria": "Audio openen {{name}}",
+		"openAria": "Bijlage {{name}} openen"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "Vervaldatum instellen",
 		"clearDueButton": "Vervaldatum verwijderen",
 		"setDuePrompt": "Vervaldatum (JJJJ-MM-DD):",
-		"setDueInvalid": "Datum niet herkend"
+		"setDueInvalid": "Datum niet herkend",
+		"collectionSummary": {
+			"one": "{{count}} bestand · {{size}}",
+			"few": "{{count}} bestanden · {{size}}",
+			"many": "{{count}} bestanden · {{size}}",
+			"other": "{{count}} bestanden · {{size}}"
+		},
+		"collectionMoreTile": "nog {{count}}"
 	},
 	"recordKind": {
 		"task": "taak",
@@ -852,6 +860,7 @@
 		"exitButton": "Back",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
+		"closeAria": "Close and end the call",
 		"entry": {
 			"title": "Quick Connect",
 			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",

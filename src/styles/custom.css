@@ -578,12 +578,6 @@ html[data-media-full] .top-corner-actions {
    на месте — открывает/закрывает только бургер в углу. */
 .sidebar-backdrop {
 	display: none;
-	/* Этап 11 "Хвост" (REDESIGN-SPEC.md) — вынесено в именованную переменную
-	   (не в глобальный :root — используется только здесь, тот же приём,
-	   что --bubble-radius/--rule-accent выше в файле): было буквальным
-	   oklch(...) внутри @media-блока ниже, теперь единственное место со
-	   значением, на него ссылаются. */
-	--sidebar-backdrop-tint: oklch(0.2 0.03 var(--hue) / 0.45);
 }
 @media (max-width: 47.99em) {
 	.sidebar {
@@ -607,7 +601,7 @@ html[data-media-full] .top-corner-actions {
 		position: fixed;
 		inset: 0;
 		z-index: 240;
-		background-color: var(--sidebar-backdrop-tint);
+		background-color: var(--overlay-backdrop-tint);
 	}
 }
 
@@ -931,13 +925,34 @@ html[data-media-full] .top-corner-actions {
  *  MediaOverlay/CallOverlay: полноэкранный фиксированный слой, ЛЕЖИТ  *
  *  между .media-overlay (z-index 190) и .call-overlay (200) — оба     *
  *  экрана голосовые/видео-подобные, тот же смысловой уровень.         *
+ *  Пользователь (живая проверка): "не выглядит как модальное окно" — *
+ *  не было ни затемнённого фона позади (сплошной --bg на весь экран, *
+ *  MainShell не просвечивал), ни явной кнопки закрытия — только      *
+ *  сворачивание. Добавлены оба: .rooms-overlay теперь backdrop (тот  *
+ *  же --overlay-backdrop-tint, что выдвижная панель сайдбара) с      *
+ *  отступом от краёв, само окно — .rooms-overlay-panel, плавающая    *
+ *  карточка со своим непрозрачным фоном (Quick не должен просвечивать*
+ *  сквозь себя самого) и скруглением/тенью.                          *
  * ================================================================== */
 .rooms-overlay {
 	position: fixed;
 	inset: 0;
 	z-index: 197;
-	background-color: var(--bg);
+	background-color: var(--overlay-backdrop-tint);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--space-l);
+}
+.rooms-overlay-panel {
+	position: relative;
+	inline-size: 100%;
+	max-inline-size: 60rem;
+	max-block-size: 100%;
 	overflow-y: auto;
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow);
+	background-color: var(--bg);
 }
 /* Свёрнуто — НЕ display:none: Quick внутри остаётся смонтированным
    (React/Preact не трогает DOM-поддерево скрытого display:none элемента,
@@ -950,20 +965,33 @@ html[data-media-full] .top-corner-actions {
 	inline-size: 1px;
 	block-size: 1px;
 	overflow: hidden;
+	padding: 0;
 }
-.rooms-overlay-minimize {
-	/* position:absolute (не fixed) НАРОЧНО — найдено живой проверкой: fixed
-	   позиционируется от viewport'а всегда, игнорируя то, что сам
-	   .rooms-overlay уехал за экран (.is-minimized, inset-inline-start:
-	   -9999px) — кнопка оставалась приклеенной к углу экрана поверх
-	   остального интерфейса даже свёрнутой. .rooms-overlay сам уже
-	   position:fixed — ближайший позиционированный предок для absolute. */
+/* Обе кнопки — над .rooms-overlay-panel (position:absolute от неё, не от
+   всего экрана — найдено живой проверкой на первом заходе: fixed
+   игнорировал то, что сам слой уехал за экран .is-minimized, кнопка
+   оставалась приклеенной к углу поверх интерфейса даже свёрнутой). */
+.rooms-overlay-controls {
 	position: absolute;
 	inset-block-start: var(--space-s);
 	inset-inline-end: var(--space-s);
 	z-index: 1;
+	display: flex;
+	gap: var(--space-2xs);
+}
+.rooms-overlay-minimize,
+.rooms-overlay-close {
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--border);
+}
+/* Закрытие завершает комнату (тот же onExit, что "Назад" внутри Quick) —
+   danger-тон, та же семантика, что .icon-btn--danger (необратимое
+   действие, не просто "свернуть"). */
+.rooms-overlay-close {
+	color: var(--bad);
+}
+.rooms-overlay-close:hover {
+	background-color: color-mix(in oklch, var(--bad), transparent 88%);
 }
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
@@ -1027,10 +1055,16 @@ html[data-media-full] .top-corner-actions {
    пользователя с более раннего этапа: "заголовок акцентным цветом...
    максимальный размер"), пользователь явно подтвердил смену под макет при
    визуальной сверке. var(--step-0) — ближайший токен к 17px. */
+/* Пользователь пересмотрел решение (было --step-0/var(--fg), под макет) —
+   заголовок раздела крупнее (--step-2) и акцентным цветом: макет тут не
+   довод, "прикольный цвет" — вкусовое решение пользователя поверх макета,
+   не расхождение с ним, которое нужно чинить. Контраст accent/bg отдельно
+   проверен (tests/palette-generator.test.js, порог 3.0 — WCAG для
+   крупного текста, тот же расчёт, что был у прежнего --step-5-варианта). */
 .app-layout .header-actions h1 {
-	font-size: var(--step-0);
+	font-size: var(--step-2);
 	margin-block: 0;
-	color: var(--fg);
+	color: var(--accent);
 	min-width: 0;
 }
 /* .row (раскладка) уже в JSX — margin-inline-start:auto здесь НЕ
@@ -4820,6 +4854,88 @@ button[type="button"].media-mini-bar-btn {
 }
 .gthumb .media-attachment-preview span {
 	display: none; /* MediaPreview рассчитан на строку в теле (иконка+имя+размер) — в квадрате-миниатюре остаётся только иконка */
+}
+
+/* Компактный превью не-голосового аудио (attachment-view.jsx AudioPreview) —
+   макет .audio/.wave. Волна декоративная (фиксированный узор, не анализ
+   файла — Этап F, F1 запрещает сеть на превью), audio__len показывает
+   РАЗМЕР файла (formatFileSize), не длительность — той тоже неоткуда
+   взяться без скачивания. .bar (REGLAMENT) уже даёт display:flex/nowrap/gap
+   через JSX --gap — здесь только оформление, не раскладка. */
+.audio {
+	align-items: center;
+	padding: var(--space-2xs) var(--space-xs);
+	border-radius: var(--radius-sm);
+	background-color: var(--surface);
+	border-color: var(--border);
+}
+.audio__play {
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: var(--radius-full);
+	flex: none;
+	display: grid;
+	place-items: center;
+	background-color: var(--surface-raised);
+	color: var(--accent);
+	font-size: var(--step--2);
+	padding-inline-start: 2px;
+}
+.wave {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: 1;
+	height: 1.625rem;
+	overflow: hidden;
+	min-width: 0;
+}
+.wave i {
+	display: block;
+	width: 3px;
+	border-radius: 2px;
+	background-color: var(--surface-raised);
+	flex: none;
+}
+.audio__len {
+	font-size: var(--step--2);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	flex: none;
+}
+
+/* Сетка-подборка (kind==="collection", record-kind.js — пост без текста и с
+   несколькими вложениями) — макет .mgrid/.tile. Плитка показывает
+   миниатюру ТОЛЬКО если картинка уже в attachment-memory-cache.js (тот же
+   приём "без сети", что плёнка кадров media-overlay.jsx, CONTRACTS.md
+   довесок Этапа 4) — иначе иконку+размер (та же причина отсутствия
+   длительности, что у .audio выше). */
+.mgrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+	gap: var(--space-3xs);
+}
+.tile {
+	aspect-ratio: 1;
+	border-radius: var(--radius-sm);
+	display: grid;
+	place-items: center;
+	gap: var(--space-3xs);
+	font-size: var(--step--2);
+	color: var(--muted);
+	background-color: var(--surface);
+	background-repeat: no-repeat;
+	border: var(--border-width) solid var(--border);
+	padding: 0;
+	text-align: center;
+}
+.tile--more {
+	background-color: var(--surface-raised);
+}
+.collection-summary {
+	font-size: var(--step--1);
+	color: var(--muted);
+	margin: 0;
 }
 
 /* Названы rec-chip*, не chip* — .chip УЖЕ занят (custom.css выше,

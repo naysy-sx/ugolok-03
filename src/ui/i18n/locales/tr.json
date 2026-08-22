@@ -463,7 +463,8 @@
 			"mb": "{{count}} MB"
 		},
 		"openVideoAria": "Videoyu aç {{name}}",
-		"openAudioAria": "Sesi aç {{name}}"
+		"openAudioAria": "Sesi aç {{name}}",
+		"openAria": "{{name}} ekini aç"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "Son tarih belirle",
 		"clearDueButton": "Son tarihi kaldır",
 		"setDuePrompt": "Son tarih (YYYY-AA-GG):",
-		"setDueInvalid": "Tarih tanınamadı"
+		"setDueInvalid": "Tarih tanınamadı",
+		"collectionSummary": {
+			"one": "{{count}} dosya · {{size}}",
+			"few": "{{count}} dosya · {{size}}",
+			"many": "{{count}} dosya · {{size}}",
+			"other": "{{count}} dosya · {{size}}"
+		},
+		"collectionMoreTile": "{{count}} tane daha"
 	},
 	"recordKind": {
 		"task": "görev",
@@ -852,6 +860,7 @@
 		"exitButton": "Back",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
+		"closeAria": "Close and end the call",
 		"entry": {
 			"title": "Quick Connect",
 			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",

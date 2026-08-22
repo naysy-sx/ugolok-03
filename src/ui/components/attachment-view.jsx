@@ -12,7 +12,7 @@ import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
 import IconFolder from "../icons/folder.jsx";
-import { t, errorMessage } from "../signals/i18n.js";
+import { t, tPlural, errorMessage } from "../signals/i18n.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
@@ -161,7 +161,7 @@ function AudioAttachment({ attachment, onOpen }) {
 	}, [attachment]);
 
 	if (!attachment.voice) {
-		return <MediaPreview attachment={attachment} Icon={IconMusicNote} onOpen={onOpen} ariaLabelKey="attachment.openAudioAria" />;
+		return <AudioPreview attachment={attachment} onOpen={onOpen} />;
 	}
 
 	if (error) {
@@ -191,10 +191,44 @@ function VideoAttachment({ attachment, onOpen }) {
 	return <MediaPreview attachment={attachment} Icon={IconVideoCamera} onOpen={onOpen} ariaLabelKey="attachment.openVideoAria" />;
 }
 
-// Общий вид превью для видео и не-голосового аудио (Этап F, F1) — иконка+имя+
-// размер, кликabельная строка, тот же визуальный паттерн, что FileAttachment,
-// но <button>, не <p> (интерактивность). Без состояния загрузки — синхронно,
-// name/size/mime уже есть в дескрипторе, сеть не нужна для самого превью.
+// Волна для .audio — декоративный фиксированный узор (буквально та же
+// последовательность высот, что в самом макете PROCESS-DOCS/REDESIGN/
+// ugolok-final.html) — НЕ анализ реального файла: Этап F, F1 запрещает
+// сеть на превью, а амплитуду не получить без скачивания+расшифровки.
+const AUDIO_WAVE_HEIGHTS = [8, 15, 22, 11, 26, 17, 7, 20, 13, 24, 9, 18, 27, 12, 6, 19, 14, 23, 10, 16, 25, 11, 21, 8, 17, 13, 26, 9, 20, 15, 22, 7, 18, 24, 12, 19];
+
+// Компактный превью не-голосового аудио — макет .audio/.wave. audio__len
+// показывает РАЗМЕР файла (formatFileSize), не длительность — по той же
+// причине, что волна декоративна (см. выше): длительность узнаётся только
+// у реального <audio>-элемента, а тот появляется лишь после клика (открытие
+// в MediaOverlay), не в этом превью.
+function AudioPreview({ attachment, onOpen }) {
+	return (
+		<button
+			type="button"
+			class="audio bar"
+			style={{ "--gap": "var(--space-xs)" }}
+			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
+			aria-label={t("attachment.openAudioAria", { name: attachment.name })}
+		>
+			<span class="audio__play" aria-hidden="true">
+				▶
+			</span>
+			<span class="wave" aria-hidden="true">
+				{AUDIO_WAVE_HEIGHTS.map((h, i) => (
+					<i key={i} style={{ height: `${h}px` }} />
+				))}
+			</span>
+			<span class="audio__len">{formatFileSize(attachment.size)}</span>
+		</button>
+	);
+}
+
+// Общий вид превью для видео (Этап F, F1) — иконка+имя+размер, кликabельная
+// строка, тот же визуальный паттерн, что FileAttachment, но <button>, не <p>
+// (интерактивность). Без состояния загрузки — синхронно, name/size/mime уже
+// есть в дескрипторе, сеть не нужна для самого превью. (Аудио — своя ветка,
+// AudioPreview выше, с макетным .audio/.wave вместо этой строки.)
 function MediaPreview({ attachment, Icon, onOpen, ariaLabelKey }) {
 	return (
 		<button
@@ -280,6 +314,63 @@ function AttachmentSaveButton({ attachment, origin }) {
 				</small>
 			)}
 		</>
+	);
+}
+
+// Плитка сетки-подборки — макет .tile. Картинка — фоновая миниатюра ТОЛЬКО
+// если уже в attachment-memory-cache.js (тот же приём "без сети", что
+// плёнка кадров media-overlay.jsx, CONTRACTS.md довесок Этапа 4:
+// getMemoryCachedUrl, undefined -> без миниатюры, без спиннера, без
+// сетевого запроса). Остальные типы (и картинка без готовой миниатюры) —
+// иконка+размер, та же причина отсутствия "длительности", что у AudioPreview.
+function CollectionTile({ attachment, onOpen }) {
+	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
+	const thumbUrl = attachment.type === "image" ? getMemoryCachedUrl(attachment.manifestDigest) : null;
+	return (
+		<button
+			type="button"
+			class="tile"
+			style={thumbUrl ? { backgroundImage: `url(${thumbUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
+			aria-label={t("attachment.openAria", { name: attachmentDisplayName(attachment) })}
+		>
+			{!thumbUrl && (
+				<>
+					<Icon aria-hidden="true" />
+					<span>{formatFileSize(attachment.size)}</span>
+				</>
+			)}
+		</button>
+	);
+}
+
+// Сетка-подборка — макет .mgrid/.tile, для kind==="collection" (record-kind.js
+// — пост без текста и с несколькими вложениями). Плиток больше COLLECTION_TILE_LIMIT
+// — последняя плитка "ещё N" (не кликабельна, просто счётчик, div — не button,
+// не сравнивать с .tile--more:hover других плиток). "Слушать подряд"/аналог
+// НЕ добавлен: MediaButtons (post-card.jsx footer) уже даёт ровно это действие
+// через onOpenMediaClass — тот же playlist для класса вложений поста, дублировать
+// вторую кнопку с тем же эффектом было бы лишней сущностью, не довеском к макету.
+const COLLECTION_TILE_LIMIT = 5;
+
+export function CollectionGrid({ attachments, onOpen }) {
+	const visible = attachments.slice(0, COLLECTION_TILE_LIMIT);
+	const overflow = attachments.length - visible.length;
+	const totalSize = attachments.reduce((sum, a) => sum + (a.size || 0), 0);
+	return (
+		<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+			<div class="mgrid">
+				{visible.map((a, i) => (
+					<CollectionTile key={i} attachment={a} onOpen={onOpen} />
+				))}
+				{overflow > 0 && (
+					<div class="tile tile--more" aria-hidden="true">
+						{t("postCard.collectionMoreTile", { count: overflow })}
+					</div>
+				)}
+			</div>
+			<p class="collection-summary">{tPlural("postCard.collectionSummary", attachments.length, { size: formatFileSize(totalSize) })}</p>
+		</div>
 	);
 }
 

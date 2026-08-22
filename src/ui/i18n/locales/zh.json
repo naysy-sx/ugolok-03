@@ -463,7 +463,8 @@
 			"mb": "{{count}} MB"
 		},
 		"openVideoAria": "打开视频 {{name}}",
-		"openAudioAria": "打开音频 {{name}}"
+		"openAudioAria": "打开音频 {{name}}",
+		"openAria": "打开附件 {{name}}"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "设置截止日期",
 		"clearDueButton": "清除截止日期",
 		"setDuePrompt": "截止日期 (YYYY-MM-DD)：",
-		"setDueInvalid": "无法识别该日期"
+		"setDueInvalid": "无法识别该日期",
+		"collectionSummary": {
+			"one": "{{count}} 个文件 · {{size}}",
+			"few": "{{count}} 个文件 · {{size}}",
+			"many": "{{count}} 个文件 · {{size}}",
+			"other": "{{count}} 个文件 · {{size}}"
+		},
+		"collectionMoreTile": "还有{{count}}个"
 	},
 	"recordKind": {
 		"task": "任务",
@@ -852,6 +860,7 @@
 		"exitButton": "Back",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
+		"closeAria": "Close and end the call",
 		"entry": {
 			"title": "Quick Connect",
 			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",

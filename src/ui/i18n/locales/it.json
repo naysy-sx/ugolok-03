@@ -463,7 +463,8 @@
 			"mb": "{{count}} MB"
 		},
 		"openVideoAria": "Apri video {{name}}",
-		"openAudioAria": "Apri audio {{name}}"
+		"openAudioAria": "Apri audio {{name}}",
+		"openAria": "Apri allegato {{name}}"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "Imposta scadenza",
 		"clearDueButton": "Rimuovi scadenza",
 		"setDuePrompt": "Scadenza (AAAA-MM-GG):",
-		"setDueInvalid": "Data non riconosciuta"
+		"setDueInvalid": "Data non riconosciuta",
+		"collectionSummary": {
+			"one": "{{count}} file · {{size}}",
+			"few": "{{count}} file · {{size}}",
+			"many": "{{count}} file · {{size}}",
+			"other": "{{count}} file · {{size}}"
+		},
+		"collectionMoreTile": "altri {{count}}"
 	},
 	"recordKind": {
 		"task": "attività",
@@ -852,6 +860,7 @@
 		"exitButton": "Back",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
+		"closeAria": "Close and end the call",
 		"entry": {
 			"title": "Quick Connect",
 			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",

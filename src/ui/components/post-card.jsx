@@ -1,4 +1,4 @@
-import AttachmentView from "./attachment-view.jsx";
+import AttachmentView, { CollectionGrid } from "./attachment-view.jsx";
 import { splitBubbleAttachments } from "./message-bubble-attachments.js";
 import { shortPubkey } from "../format.js";
 import ActionsMenu from "./actions-menu.jsx";
@@ -89,6 +89,8 @@ export default function PostCard({
 							<MarkdownView source={post.text} profile="rich" />
 						</span>
 					</label>
+				) : kind === "collection" ? (
+					<CollectionGrid attachments={post.attachments} onOpen={onOpenAttachment} />
 				) : (
 					<>
 						{above && <AttachmentView attachment={above} onOpen={onOpenAttachment} origin={{ kind: "post", id: post.id }} />}
@@ -113,6 +115,7 @@ export default function PostCard({
 				{kind === "article" && <h3 class="rec__title">{post.title}</h3>}
 
 				{placement === "inline" &&
+					kind !== "collection" &&
 					below.map((a, i) => <AttachmentView key={i} attachment={a} onOpen={onOpenAttachment} origin={{ kind: "post", id: post.id }} />)}
 
 				{hasChips && (

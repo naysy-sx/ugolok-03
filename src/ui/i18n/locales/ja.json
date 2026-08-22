@@ -463,7 +463,8 @@
 			"mb": "{{count}} MB"
 		},
 		"openVideoAria": "動画を開く {{name}}",
-		"openAudioAria": "音声を開く {{name}}"
+		"openAudioAria": "音声を開く {{name}}",
+		"openAria": "添付ファイル {{name}} を開く"
 	},
 	"media": {
 		"buttons": {
@@ -723,7 +724,14 @@
 		"setDueButton": "期限を設定",
 		"clearDueButton": "期限を削除",
 		"setDuePrompt": "期限 (YYYY-MM-DD):",
-		"setDueInvalid": "日付を認識できませんでした"
+		"setDueInvalid": "日付を認識できませんでした",
+		"collectionSummary": {
+			"one": "{{count}}件のファイル · {{size}}",
+			"few": "{{count}}件のファイル · {{size}}",
+			"many": "{{count}}件のファイル · {{size}}",
+			"other": "{{count}}件のファイル · {{size}}"
+		},
+		"collectionMoreTile": "他{{count}}件"
 	},
 	"recordKind": {
 		"task": "タスク",
@@ -852,6 +860,7 @@
 		"exitButton": "Back",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
+		"closeAria": "Close and end the call",
 		"entry": {
 			"title": "Quick Connect",
 			"lead": "A temporary room for text and voice — no registration, no key exchange beforehand. The room disappears on its own once everyone leaves.",
