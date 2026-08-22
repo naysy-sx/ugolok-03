@@ -609,8 +609,15 @@
 		"backToSectionAria": "返回“{{label}}”",
 		"sectionActionsAria": "版块操作"
 	},
+	"account": {
+		"portraitAria": "个人资料和头像",
+		"portraitHint": "更换照片",
+		"copyKeyAria": "复制我的密钥",
+		"menuAria": "账户菜单",
+		"keyCopied": "密钥已复制",
+		"keyCopyFailed": "无法复制密钥"
+	},
 	"sidebarCard": {
-		"profileAria": "用户资料",
 		"openPhotoAria": "打开头像照片",
 		"editProfileButton": "编辑个人资料",
 		"photoAlt": "头像照片",
@@ -622,8 +629,7 @@
 		"menuMnemonic": "Secret phrase",
 		"menuRecover": "Recover access",
 		"menuHelp": "Help",
-		"menuDiagnostics": "Diagnostics",
-		"menuDeleteAccount": "Delete account"
+		"menuDiagnostics": "Diagnostics"
 	},
 	"themeStatus": {
 		"panelAria": "主题",

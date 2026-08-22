@@ -33,7 +33,7 @@ import CallOverlay from "./ui/components/call-overlay.jsx";
 import MediaOverlay from "./ui/components/media/media-overlay.jsx";
 import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
-import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
+import AccountCard from "./ui/components/account-card.jsx";
 import NavGroups from "./ui/components/nav-groups.jsx";
 import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
 import ActiveRoomSummary from "./ui/components/active-room-summary.jsx";
@@ -241,12 +241,12 @@ function MainShell() {
 				    месте. REGLAMENT.md §1 — единственный .scroller на этом пути
 				    теперь внутри NavGroups (.pane__body), не сам <aside>. */}
 				<div class="pane__top stack" style={{ "--gap": "var(--space-2xs)" }}>
-					{/* Карточка личности (identity-меню из 10 пунктов) — единый
-					    <summary>-триггер, см. sidebar-profile-card.jsx. Тема — пункт
-					    identity-меню, не отдельная ThemeStatusPanel (компонент-файл
-					    сохранён — решение CONTRACTS.md, просто больше не рендерится
-					    здесь). */}
-					<SidebarProfileCard
+					{/* Карточка учётной записи — три отдельные цели клика (портрет/
+					    ключ/меню), см. account-card.jsx (ASIDE-REDESIGN/SIDEBAR-SPEC.md,
+					    этап 3). Тема — пункт меню, не отдельная ThemeStatusPanel
+					    (компонент-файл сохранён — решение CONTRACTS.md, просто больше
+					    не рендерится здесь). */}
+					<AccountCard
 						onEditProfile={() => selectNavItem("profile")}
 						onOpenStorage={() => selectNavItem("storage")}
 						onOpenSettings={() => selectNavItem("settings")}

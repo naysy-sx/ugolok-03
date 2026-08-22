@@ -630,66 +630,135 @@ html[data-media-full] .top-corner-actions {
 }
 
 /* ================================================================== *
- *  Идентити-карточка сайдбара (sidebar-profile-card.jsx) — разметка   *
- *  по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html: .idwrap/       *
- *  .idcard__btn/.ava/.idcard__name/.idcard__bio/.chev). Вся строка —  *
- *  ОДИН <summary>-триггер (details.menu.idwrap), не два отдельных     *
- *  клик-таргета, как было раньше (карандаш + отдельная кнопка меню).  *
+ *  КАРТОЧКА УЧЁТНОЙ ЗАПИСИ (account-card.jsx) — ASIDE-REDESIGN/       *
+ *  SIDEBAR-SPEC.md, этап 3. Не <details>, не одна кликабельная цель   *
+ *  на всю карточку (было — sidebar-profile-card.jsx): три отдельные   *
+ *  мелкие цели (портрет, «ключ», «ещё»), а не одна большая — та не    *
+ *  давала разместить внутри мелкие действия, и на выезжающей панели   *
+ *  телефона большой триггер срабатывал от случайного касания.        *
  * ================================================================== */
-/* .menu уже даёт position:relative — но inline-flex (годится для
-   компактных icon-only триггеров); идентити-карточка — блочная, во всю
-   ширину колонки, как .idcard__btn в макете. */
-.menu.idwrap {
-	display: flex;
+.account {
+	padding-block-end: var(--space-s);
+	/* .account-portrait's clamp(...cqi...) ниже — заглушка-буква масштабируется
+	   от ширины КОЛОНКИ сайдбара, не вьюпорта. */
+	container-type: inline-size;
 }
-.idcard__btn {
-	width: 100%;
-	padding: var(--space-xs);
-	border-radius: var(--radius);
-	list-style: none;
-}
-.idcard__btn::-webkit-details-marker {
-	display: none;
-}
-.idwrap:hover .idcard__btn,
-.idcard__btn:focus-visible {
-	background-color: var(--surface-raised);
-}
-/* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — один класс, размер переменной
-   --avatar (уже проставлена компонентом инлайн-стилем), не три класса
-   (account-avatar/-sm/-large) плюс разводящее .app-layout .account-avatar-sm,
-   нужное только потому, что три имени конфликтовали между собой. */
-.account-avatar {
+
+/* Портрет во всю ширину колонки. Ловушка файла: <button> получает из
+   @layer elements background-color/color/border/padding/font — все
+   четыре обязаны быть здесь явно, иначе портрет станет акцентной
+   кнопкой. */
+.account-portrait {
+	position: relative;
 	display: block;
-	inline-size: var(--avatar);
-	block-size: var(--avatar);
-	flex: none;
-	object-fit: cover;
-	border: 0;
-	border-radius: var(--radius-sm);
-	background-color: var(--surface-raised);
+	inline-size: 100%;
+	aspect-ratio: var(--account-ava-ratio);
 	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	overflow: hidden;
+	background-color: var(--surface-raised);
+	background-image: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+/* Аватар внутри портрета игнорирует --avatar: здесь он заполняет кадр. */
+.account-portrait .account-avatar {
+	inline-size: 100%;
+	block-size: 100%;
+	border-radius: 0;
+	font-size: clamp(1.8rem, 20cqi, 2.6rem);
+}
+/* При наведении снизу выплывает подпись ("Сменить фото", data-hint) —
+   аватар остаётся кнопкой просмотра/замены, и ничем больше. */
+.account-portrait::after {
+	content: attr(data-hint);
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: 0;
+	padding: var(--space-2xs) var(--space-xs);
+	font-size: var(--step--2);
+	color: oklch(0.98 0 0);
+	background-image: linear-gradient(to top, oklch(0.15 0.02 var(--hue) / 0.72), transparent);
+	transform: translateY(100%);
+	transition: transform var(--transition-speed) var(--ease);
+}
+.account-portrait:hover::after,
+.account-portrait:focus-visible::after {
+	transform: translateY(0);
+}
+
+/* Точка присутствия — молчит, когда всё хорошо: зелёная и почти
+   незаметная, дышит очень медленно (под prefers-reduced-motion
+   глобальное правило minimal.css её остановит). */
+.account-dot {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	inline-size: 0.625rem;
+	block-size: 0.625rem;
+	border-radius: 50%;
+	background-color: var(--good);
+	box-shadow: 0 0 0 2px oklch(0.15 0.02 var(--hue) / 0.35);
+	animation: account-dot-breathe 4s var(--transition-ease) infinite;
+}
+.account-dot--warn {
+	background-color: var(--warn);
+}
+@keyframes account-dot-breathe {
+	0%, 100% { opacity: 0.5 }
+	50% { opacity: 1 }
+}
+
+.account-line {
+	padding-block-start: var(--space-2xs);
+}
+.account-name {
+	font-size: var(--step-0);
+	font-weight: var(--weight-bold);
+	line-height: 1.3;
+	color: var(--fg);
+}
+.account-bio {
+	font-size: var(--step--1);
+	line-height: 1.4;
+	color: var(--muted);
 	margin: 0;
 }
-.account-avatar-fallback {
-	color: var(--muted);
-	font-size: var(--step--1);
-	font-weight: var(--weight-bold);
-	line-height: 1;
+/* Строка состояния: тишина означает норму. Появляется в DOM только при
+   сбое (account-card.jsx: {degraded && ...}) — поэтому её замечают, в
+   отличие от вечного "3 реле на связи". */
+.account-alert {
+	font-size: var(--step--2);
+	line-height: 1.4;
+	color: var(--warn);
+	margin: 0;
 }
-.idcard__body {
-	min-inline-size: 0;
+
+/* ================================================================== *
+ *  МЕНЮ (.menu-pop) — свет вместо монолита. Базовые position/border/  *
+ *  padding — ниже по файлу (общий паттерн .menu на всё приложение),   *
+ *  здесь только два слоя света (та же подпись, что фон панели) и      *
+ *  список-группировка пунктов со стыком между группами.               *
+ * ================================================================== */
+.menu-pop {
+	background-image:
+		radial-gradient(120% 150% at 100% -15%, color-mix(in oklch, var(--accent), transparent 88%), transparent 55%),
+		linear-gradient(152deg, color-mix(in oklch, var(--accent-2), transparent 93%) 0%, transparent 48%);
 }
-.idcard__name {
-	font-weight: var(--weight-bold);
-	font-size: var(--step-0);
+.menu-pop ul {
+	list-style: none;
 }
-.idcard__bio {
-	font-size: var(--step--1);
-	color: var(--muted);
+.menu-pop ul + ul {
+	border-block-start: var(--border-width) solid var(--border);
+	padding-block-start: var(--space-3xs);
+	margin-block-start: var(--space-3xs);
 }
-.idwrap .chev {
-	flex: none;
+/* Подсказка справа от пункта меню ("тёмная"/"светлая" у пункта "Тема") —
+   приглушённым цветом, прижата вправо в той же flex-строке кнопки
+   (.menu-pop button уже display:flex). */
+.menu-hint {
 	margin-inline-start: auto;
 	color: var(--muted);
 	font-size: var(--step--2);
@@ -702,23 +771,6 @@ html[data-media-full] .top-corner-actions {
  *  минимум, максимум переиспользования .icon-btn/.menu/.eyebrow/      *
  *  .file-search-field (files.jsx).                                    *
  * ================================================================== */
-
-/* Разделитель между пунктами меню (identity-меню, sidebar-profile-card.jsx) —
-   тот же язык, что .section-header/.jgroup__date (тонкая линия var(--border)),
-   первая подобная граница внутри .menu-pop в проекте. */
-.menu-pop .sep {
-	block-size: var(--border-width);
-	background-color: var(--border);
-	margin-block: var(--space-3xs);
-}
-/* Подсказка справа от пункта меню ("тёмная"/"светлая" у пункта "Тема") —
-   приглушённым цветом, прижата вправо в той же flex-строке кнопки
-   (.menu-pop button уже display:flex). */
-.menu-hint {
-	margin-inline-start: auto;
-	color: var(--muted);
-	font-size: var(--step--2);
-}
 
 /* Три региона панели — .pane__top/.pane__body/.pane__bottom (макет). Каждый
    держит СВОЙ padding-inline, а не один общий на весь <aside> — та же

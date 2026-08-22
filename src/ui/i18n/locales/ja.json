@@ -609,8 +609,15 @@
 		"backToSectionAria": "「{{label}}」に戻る",
 		"sectionActionsAria": "セクションの操作"
 	},
+	"account": {
+		"portraitAria": "プロフィールとアバター",
+		"portraitHint": "写真を変更",
+		"copyKeyAria": "自分の鍵をコピー",
+		"menuAria": "アカウントメニュー",
+		"keyCopied": "鍵をコピーしました",
+		"keyCopyFailed": "鍵をコピーできませんでした"
+	},
 	"sidebarCard": {
-		"profileAria": "ユーザープロフィール",
 		"openPhotoAria": "プロフィール写真を開く",
 		"editProfileButton": "プロフィールを編集",
 		"photoAlt": "プロフィール写真",
@@ -622,8 +629,7 @@
 		"menuMnemonic": "Secret phrase",
 		"menuRecover": "Recover access",
 		"menuHelp": "Help",
-		"menuDiagnostics": "Diagnostics",
-		"menuDeleteAccount": "Delete account"
+		"menuDiagnostics": "Diagnostics"
 	},
 	"themeStatus": {
 		"panelAria": "テーマ",

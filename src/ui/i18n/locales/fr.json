@@ -609,8 +609,15 @@
 		"backToSectionAria": "Retour à « {{label}} »",
 		"sectionActionsAria": "Actions de la section"
 	},
+	"account": {
+		"portraitAria": "Profil et avatar",
+		"portraitHint": "Changer la photo",
+		"copyKeyAria": "Copier ma clé",
+		"menuAria": "Menu du compte",
+		"keyCopied": "Clé copiée",
+		"keyCopyFailed": "Impossible de copier la clé"
+	},
 	"sidebarCard": {
-		"profileAria": "Profil utilisateur",
 		"openPhotoAria": "Ouvrir la photo de profil",
 		"editProfileButton": "Modifier le profil",
 		"photoAlt": "Photo de profil",
@@ -622,8 +629,7 @@
 		"menuMnemonic": "Secret phrase",
 		"menuRecover": "Recover access",
 		"menuHelp": "Help",
-		"menuDiagnostics": "Diagnostics",
-		"menuDeleteAccount": "Delete account"
+		"menuDiagnostics": "Diagnostics"
 	},
 	"themeStatus": {
 		"panelAria": "Thème",

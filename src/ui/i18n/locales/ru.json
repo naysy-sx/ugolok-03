@@ -609,8 +609,15 @@
 		"backToSectionAria": "Назад к разделу «{{label}}»",
 		"sectionActionsAria": "Действия раздела"
 	},
+	"account": {
+		"portraitAria": "Профиль и аватар",
+		"portraitHint": "Сменить фото",
+		"copyKeyAria": "Скопировать мой ключ",
+		"menuAria": "Меню учётной записи",
+		"keyCopied": "Ключ скопирован",
+		"keyCopyFailed": "Не удалось скопировать ключ"
+	},
 	"sidebarCard": {
-		"profileAria": "Профиль пользователя",
 		"openPhotoAria": "Открыть фото профиля",
 		"editProfileButton": "Изменить профиль",
 		"photoAlt": "Фото профиля",
@@ -622,8 +629,7 @@
 		"menuMnemonic": "Секретная фраза",
 		"menuRecover": "Восстановить доступ",
 		"menuHelp": "Справка",
-		"menuDiagnostics": "Диагностика",
-		"menuDeleteAccount": "Удалить учётную запись"
+		"menuDiagnostics": "Диагностика"
 	},
 	"themeStatus": {
 		"panelAria": "Тема оформления",
