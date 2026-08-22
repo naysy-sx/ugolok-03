@@ -36,6 +36,8 @@ import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
 import NavGroups from "./ui/components/nav-groups.jsx";
 import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
+import ActiveRoomSummary from "./ui/components/active-room-summary.jsx";
+import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
 
 // ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
@@ -44,6 +46,13 @@ import IconGlobe from "./ui/icons/globe.jsx";
 // заходами, см. ROOMS-SPEC). Сигнал модульного уровня, не useState внутри
 // MainShell — доступен App() снаружи MainShell для переключения ветки.
 export const roomsScreenActive = signal(false);
+// Редизайн интерфейса, "область контента" (пользователь) — "Быстрая связь"
+// теперь модальным окном ПОВЕРХ MainShell вместо полноэкранной замены, со
+// сворачиванием в активную сводку сайдбара (тот же принцип, что media-mini-bar
+// у видео/музыки) — но ТОЛЬКО когда есть куда сворачивать (залогинен, есть
+// MainShell/сайдбар); гостевой вход unlock.jsx's temp-chat — свой независимый
+// Quick, этого сигнала не касается.
+export const roomsMinimized = signal(false);
 
 function MainShell() {
 	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js
@@ -255,18 +264,30 @@ function MainShell() {
 				    .pane__body (NavGroups) — grow, сам толкает этот блок к низу
 				    прокручиваемой колонки, margin-auto больше не нужен. */}
 				<div class="pane__bottom stack" style={{ "--gap": "var(--space-2xs)" }}>
-					<button
-						type="button"
-						class="quick bar"
-						style={{ "--gap": "var(--space-xs)", alignItems: "center" }}
-						onClick={() => (roomsScreenActive.value = true)}
-					>
-						<IconGlobe aria-hidden="true" />
-						<span class="stack" style={{ "--gap": "0" }}>
-							{t("shell.quickConnect")}
-							<small>{t("shell.quickConnectHint")}</small>
-						</span>
-					</button>
+					{/* Редизайн интерфейса, "область контента" — комната открыта (не
+					    обязательно свёрнута: пока развёрнута, сайдбар всё равно скрыт
+					    под .rooms-overlay, но React/Preact продолжает его рендерить)
+					    → активная сводка вместо статичной кнопки-входа, тот же принцип,
+					    что .call-bar (CallOverlay). */}
+					{roomsScreenActive.value ? (
+						<ActiveRoomSummary onExpand={() => (roomsMinimized.value = false)} />
+					) : (
+						<button
+							type="button"
+							class="quick bar"
+							style={{ "--gap": "var(--space-xs)", alignItems: "center" }}
+							onClick={() => {
+								roomsScreenActive.value = true;
+								roomsMinimized.value = false;
+							}}
+						>
+							<IconGlobe aria-hidden="true" />
+							<span class="stack" style={{ "--gap": "0" }}>
+								{t("shell.quickConnect")}
+								<small>{t("shell.quickConnectHint")}</small>
+							</span>
+						</button>
+					)}
 					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
 					    главным меню, на любом экране, не только там, где раньше был
 					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
@@ -296,16 +317,34 @@ function MainShell() {
 	);
 }
 
+function handleRoomsExit() {
+	roomsScreenActive.value = false;
+	roomsMinimized.value = false;
+}
+
 export default function App() {
-	// ROOMS-SPEC.md §1.4 — проверяется ПЕРВЫМ, до currentUser: "Быстрая связь"
-	// стоит НАД веткой вход/MainShell, не внутри неё. Гостевой доступ (не
-	// залогинен) — через собственную вкладку unlock.jsx (см. "temp-chat" там),
-	// этот сигнал включается только из MainShell (кнопка в сайдбаре).
-	if (roomsScreenActive.value) {
-		return <Quick onExit={() => (roomsScreenActive.value = false)} />;
+	const user = currentUser.value;
+
+	// Редизайн интерфейса, "область контента" — залогинен + комната открыта:
+	// MainShell остаётся смонтирован ПОД оверлеем (не заменяется), сворачивание —
+	// просто CSS у RoomsOverlay (см. её комментарий), сайдбар покажет
+	// ActiveRoomSummary вместо статичной кнопки, пока roomsScreenActive.
+	if (user && roomsScreenActive.value) {
+		return (
+			<>
+				<MainShell />
+				<RoomsOverlay minimized={roomsMinimized.value} onExit={handleRoomsExit} onMinimize={() => (roomsMinimized.value = true)} />
+			</>
+		);
 	}
 
-	const user = currentUser.value;
+	// ROOMS-SPEC.md §1.4 — не залогинен, но "Быстрая связь" всё равно открыта:
+	// сворачивать НЕКУДА (сайдбара нет) — тот же полноэкранный Quick, что был
+	// всегда, без модального оверлея/сводки. Гостевой доступ (temp-chat) —
+	// собственная, независимая от этого сигнала ветка внутри unlock.jsx.
+	if (roomsScreenActive.value) {
+		return <Quick onExit={handleRoomsExit} />;
+	}
 
 	if (user) {
 		return <MainShell />;

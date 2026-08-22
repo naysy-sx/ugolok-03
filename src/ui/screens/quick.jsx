@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "preact/hooks";
+import { signal } from "@preact/signals";
 import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../../domain/rooms/room-session.js";
 import MessageBubble from "../components/message-bubble.jsx";
 import RoomAudioVisualizer from "../components/room-audio-visualizer.jsx";
@@ -20,6 +21,17 @@ const RELAY_URL = BUILD_DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
 // room-session.js сам navigator/config.js не импортирует (граница слоёв, та
 // же, что у media-controller.js/call-runtime.js) — конфиг подключается здесь.
 const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
+
+// Редизайн интерфейса, "область контента" — сворачивание в панель сайдбара
+// (app.jsx's ActiveRoomSummary), тот же принцип, что mediaSession (media.js):
+// лёгкое зеркало самого нужного (название+число участников) в сигнал
+// модульного уровня, чтобы читать его СНАРУЖИ Quick без размонтирования
+// компонента — размонтирование закрыло бы сессию (см. cleanup-эффект ниже,
+// ROOMS-SPEC §0 "закрытие вкладки — конец, без уборки", тот же принцип на
+// уровне компонента). НЕ полноценный перенос состояния комнаты в сигналы
+// (session/present/messages остаются локальным state, как были) — только
+// то, что нужно для сводки снаружи.
+export const activeRoomSummary = signal(null); // {name, count} | null, пока сессии нет
 
 // "Инвайт-ссылка" — Этап 3 сознательно НЕ строит настоящий https://-роут
 // (нужна была бы интеграция с router.js — отдельная задача); это копируемая
@@ -116,8 +128,18 @@ export default function Quick({ onExit }) {
 	// Закрытие вкладки — конец, без уборки (ROOMS-SPEC §0); размонтирование
 	// экрана внутри SPA — тот же принцип на уровне компонента.
 	useEffect(() => {
-		return () => sessionRef.current?.close();
+		return () => {
+			sessionRef.current?.close();
+			activeRoomSummary.value = null;
+		};
 	}, []);
+
+	// Зеркало для сводки снаружи (см. комментарий у activeRoomSummary выше) —
+	// без cleanup на каждый ре-run (present меняется часто, при каждом
+	// join/leave) — сброс в null только при размонтировании, эффектом выше.
+	useEffect(() => {
+		activeRoomSummary.value = session ? { name: activeRoomName, count: present.length } : null;
+	}, [session, activeRoomName, present]);
 
 	useEffect(() => {
 		return () => clearTimeout(inviteCopyTimerRef.current);

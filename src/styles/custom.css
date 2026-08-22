@@ -911,6 +911,60 @@ html[data-media-full] .top-corner-actions {
 	font-weight: var(--weight-normal);
 	line-height: 1.3;
 }
+/* Активная сводка (ActiveRoomSummary) — комната уже открыта, эта кнопка
+   всегда возвращает к ней (развёрнута или свёрнута, app.jsx). Сплошная
+   рамка+акцентный текст вместо приглушённой пунктирной — тот же язык,
+   что .call-bar (CallOverlay) для идущего звонка: заметно, что "занято". */
+.quick-active {
+	border-style: solid;
+	border-color: var(--accent);
+	color: var(--fg);
+}
+.quick-active svg {
+	flex: none;
+	color: var(--accent);
+}
+
+/* ================================================================== *
+ *  "Быстрая связь" модальным окном (rooms-overlay.jsx) — редизайн     *
+ *  интерфейса, "область контента". Тот же принцип close+minimize, что *
+ *  MediaOverlay/CallOverlay: полноэкранный фиксированный слой, ЛЕЖИТ  *
+ *  между .media-overlay (z-index 190) и .call-overlay (200) — оба     *
+ *  экрана голосовые/видео-подобные, тот же смысловой уровень.         *
+ * ================================================================== */
+.rooms-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 197;
+	background-color: var(--bg);
+	overflow-y: auto;
+}
+/* Свёрнуто — НЕ display:none: Quick внутри остаётся смонтированным
+   (React/Preact не трогает DOM-поддерево скрытого display:none элемента,
+   но лучше перестраховаться) и его WebRTC/аудио должны продолжать
+   работать — просто визуально убираем за пределы экрана, тот же приём,
+   что .visually-hidden (minimal.css), только для целого экрана, не текста. */
+.rooms-overlay.is-minimized {
+	position: fixed;
+	inset-inline-start: -9999px;
+	inline-size: 1px;
+	block-size: 1px;
+	overflow: hidden;
+}
+.rooms-overlay-minimize {
+	/* position:absolute (не fixed) НАРОЧНО — найдено живой проверкой: fixed
+	   позиционируется от viewport'а всегда, игнорируя то, что сам
+	   .rooms-overlay уехал за экран (.is-minimized, inset-inline-start:
+	   -9999px) — кнопка оставалась приклеенной к углу экрана поверх
+	   остального интерфейса даже свёрнутой. .rooms-overlay сам уже
+	   position:fixed — ближайший позиционированный предок для absolute. */
+	position: absolute;
+	inset-block-start: var(--space-s);
+	inset-inline-end: var(--space-s);
+	z-index: 1;
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+}
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
    прокручиваемой зоны. content-section заполняет .main-content целиком. */
