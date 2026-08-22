@@ -238,7 +238,7 @@
 		"jumpToDate": "Ir para a data",
 		"showAll": "Mostrar tudo",
 		"markAllRead": "Marcar como lida",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "Ainda não aconteceu nada — as notificações aparecerão aqui.",
 		"emptyDate": "Não há eventos neste dia.",
 		"unreadDot": "não lida",

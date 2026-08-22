@@ -238,7 +238,7 @@
 		"jumpToDate": "Tarihe git",
 		"showAll": "Tümünü göster",
 		"markAllRead": "Okundu olarak işaretle",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "Henüz bir şey olmadı — bildirimler burada görünecek.",
 		"emptyDate": "Bu günde hiç olay yok.",
 		"unreadDot": "okunmamış",

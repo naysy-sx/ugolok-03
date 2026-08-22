@@ -238,7 +238,7 @@
 		"jumpToDate": "跳转到日期",
 		"showAll": "显示全部",
 		"markAllRead": "标记为已读",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "目前还没有发生任何事情——通知将显示在这里。",
 		"emptyDate": "这一天没有事件。",
 		"unreadDot": "未读",

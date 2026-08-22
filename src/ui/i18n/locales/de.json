@@ -238,7 +238,7 @@
 		"jumpToDate": "Zum Datum springen",
 		"showAll": "Alle anzeigen",
 		"markAllRead": "Als gelesen markieren",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "Noch ist nichts passiert — hier erscheinen Benachrichtigungen.",
 		"emptyDate": "An diesem Tag gibt es keine Ereignisse.",
 		"unreadDot": "ungelesen",

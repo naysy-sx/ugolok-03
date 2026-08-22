@@ -238,7 +238,7 @@
 		"jumpToDate": "Naar datum gaan",
 		"showAll": "Alles tonen",
 		"markAllRead": "Als gelezen markeren",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "Er is nog niets gebeurd — hier verschijnen meldingen.",
 		"emptyDate": "Geen gebeurtenissen op deze dag.",
 		"unreadDot": "ongelezen",

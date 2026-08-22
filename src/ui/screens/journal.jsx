@@ -153,8 +153,8 @@ export default function Journal() {
 			actions={
 				<>
 					{everSetDueDate && (
-						<button type="button" class="btn btn--ghost" onClick={() => goTo({ kind: "today" })}>
-							{t("journal.dueButton", { count: dueBadgeCount.value })}
+						<button type="button" class="btn btn--ghost pill-due bar" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={() => goTo({ kind: "today" })}>
+							◈ {t("journal.dueButton")} <span class="pill__n">{dueBadgeCount.value}</span>
 						</button>
 					)}
 					{oldestDay && (

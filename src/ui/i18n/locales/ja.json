@@ -238,7 +238,7 @@
 		"jumpToDate": "日付に移動",
 		"showAll": "すべて表示",
 		"markAllRead": "既読にする",
-		"dueButton": "◈ Today ({{count}})",
+		"dueButton": "Today",
 		"empty": "まだ何も起きていません — ここに通知が表示されます。",
 		"emptyDate": "この日の出来事はありません。",
 		"unreadDot": "未読",

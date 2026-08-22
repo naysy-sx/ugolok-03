@@ -981,10 +981,10 @@ html[data-media-full] .top-corner-actions {
 
 /* Этап E медиа-подсистемы — зона под шапкой (screen.jsx's слот, этап 3
    редизайна переименовал mediaButtons -> slices, тот же класс расширен на
-   4 экрана вместо 2). Первый проход размещения — маленькая тонкая полоса,
-   кнопки сами берут цвет из уже существующих .btn--ghost.btn--info/warn/
-   good (media-buttons.jsx). Пользователь этой сессии заранее предупредил,
-   что визуал будет отдельно дополировываться позже. */
+   4 экрана вместо 2). Разметка по макету (область контента, довесок) —
+   визуал дополирован: монохромные .slice вместо цветных btn--info/warn/
+   good, счётчик рядом с каждым (число уже вычислялось, просто не
+   выводилось). */
 .slices-zone {
 	padding-inline: var(--space-m);
 	padding-block: var(--space-2xs);
@@ -992,6 +992,27 @@ html[data-media-full] .top-corner-actions {
 }
 .media-buttons-bar {
 	flex-wrap: wrap;
+}
+/* Ловушка файла (см. комментарий вверху custom.css) — background:none
+   явно, иначе элементный button{background-color:var(--accent)} молча
+   побеждает на этом свойстве. */
+.slice {
+	background: none;
+	padding: var(--space-3xs) var(--space-2xs);
+	border-radius: var(--radius-full);
+	border: var(--border-width) solid var(--border);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.slice:hover,
+.slice:focus-visible {
+	color: var(--fg);
+	border-color: color-mix(in oklch, var(--border), var(--fg) 20%);
+	background-color: var(--surface-raised);
+}
+.slice__n {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
 }
 /* .header-actions — теперь просто .row в JSX (align-items:center инлайн,
    раскладка не задаёт justify-content: initial-значение и так flex-start,
@@ -1001,29 +1022,15 @@ html[data-media-full] .top-corner-actions {
    держит сама .action-buttons через margin-inline-start:auto ниже — так
    заголовок остаётся сразу после стрелки "Назад" независимо от числа
    "средних" элементов в строке). */
-/* Пользователь: "заголовок не отцентрирован по вертикали" — виновник
-   был margin-block-end у <h1> (элементный слой minimal.css), который
-   :first-child не снимает (снимает только margin-block-start). Плюс
-   пользователь явно просил максимальный размер (h1 = --step-5). */
+/* Разметка по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html, .scr-title —
+   17px, обычный цвет текста) — было --step-5 акцентным цветом (решение
+   пользователя с более раннего этапа: "заголовок акцентным цветом...
+   максимальный размер"), пользователь явно подтвердил смену под макет при
+   визуальной сверке. var(--step-0) — ближайший токен к 17px. */
 .app-layout .header-actions h1 {
-	font-size: var(--step-5);
+	font-size: var(--step-0);
 	margin-block: 0;
-	/* Пользователь: заголовок акцентным цветом — "выглядит органично,
-	   вносит разнообразие в ощущение приложения" — один класс, ОДНО место
-	   правки на все экраны (Screen.jsx — общий каркас для всех разделов).
-	   var(--accent), не var(--accent-dark): та жёстко фиксирует ветку
-	   тёмной темы (light-dark() внутри неё же не читается снаружи),
-	   заголовок выглядел бы неправильно в светлой теме. Контраст
-	   accent/bg отдельно проверен (tests/palette-generator.test.js,
-	   порог 3.0 — WCAG для крупного текста, не 4.5 — обычный текст был бы
-	   неверным порогом здесь): худший случай по всей сетке — 3.775. */
-	color: var(--accent);
-	/* Пользователь: заголовок всё ещё визуально чуть ниже центра строки —
-	   у крупного дисплейного шрифта над буквами есть лишнее "воздушное"
-	   пространство (line-box выше самих глифов); небольшой отрицательный
-	   отступ сверху компенсирует его на глаз, без влияния на реальную
-	   высоту строки. */
-	margin-block-start: calc(var(--step--1) * -1);
+	color: var(--fg);
 	min-width: 0;
 }
 /* .row (раскладка) уже в JSX — margin-inline-start:auto здесь НЕ
@@ -1057,10 +1064,39 @@ html[data-media-full] .top-corner-actions {
 	   --radius-full, разные скругления в одной строке читались как
 	   недосмотр. */
 	border-radius: var(--radius-full);
+	/* Разметка по макету (.pill/.ghost — padding ~5-6px 11px, font-size 13px) —
+	   было крупнее (наследовало элементный button из minimal.css). */
+	padding: var(--space-3xs) var(--space-s);
+	font-size: var(--step--1);
 }
 .action-buttons button:hover,
 .action-buttons :where([type="button"]):hover {
 	background-color: var(--surface-raised);
+}
+/* Кнопка "Сегодня" (journal.jsx) — разметка по макету (.pill--due): рамка+
+   текст семантического тона "срок" — тот же --warn, что .rec-chip--due
+   (этап 2, уже принятое решение "due" = предупреждающий тон, не общий
+   акцент), не буквальный --lamp макета. .pill__n — залитый бейдж-счётчик
+   рядом, тот же принцип, что .rec-chip, просто с числом, не текстом. */
+.pill-due {
+	border-color: var(--warn);
+	color: var(--warn);
+}
+.pill-due:hover {
+	border-color: var(--warn);
+	background-color: var(--warn-surface);
+}
+.pill__n {
+	min-width: 1.125rem;
+	padding-inline: var(--space-3xs);
+	border-radius: var(--radius-full);
+	background-color: var(--warn);
+	/* Нет отдельного --warn-contrast — тот же токен, что уже используют
+	   заливные семантические варианты .icon-btn--fill.icon-btn--warn. */
+	color: var(--accent-contrast);
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	text-align: center;
 }
 
 /* Кнопка "Назад" перед заголовком (пользователь: "большая красивая
@@ -1068,28 +1104,29 @@ html[data-media-full] .top-corner-actions {
    .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
 /* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
    завязан на width/height, не на padding вокруг текста (текста больше нет). */
-/* Найдено пользователем: var(--muted) + тонкий SVG-шеврон на фоне были
-   почти не видны, а ховер показывал только фоновый "диск" — саму иконку
-   не выделял вообще. Теперь кнопка без фона в обоих состояниях (не
-   визуальная "таблетка", просто кликабельная стрелка), сама стрелка
-   контрастнее по умолчанию (var(--fg), не var(--muted)) и подсвечивается
-   акцентом по ховеру/фокусу — не фон вокруг нее. */
+/* Разметка по макету (.back — 30px, --radius-sm, рамка var(--line)) — было
+   крупнее (2.5rem=40px) и совсем без рамки/фона (решение с более раннего
+   этапа — "не визуальная таблетка"); пользователь подтвердил смену под
+   макет при визуальной сверке. Рамка + чуть меньший размер компактнее, но
+   акцентная подсветка по ховеру/фокусу (найдено пользователем — тонкий
+   шеврон на голом фоне был плохо виден) сохранена. */
 .back-button {
 	/* .row (раскладка) уже в JSX. */
 	flex: none;
-	width: 2.5rem;
-	height: 2.5rem;
+	width: 1.875rem;
+	height: 1.875rem;
 	padding: 0;
 	background-color: transparent;
 	color: var(--fg);
-	border-color: transparent;
-	border-radius: calc(infinity * 1px);
-	font-size: var(--step-2);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+	font-size: var(--step-0);
 }
 .back-button:hover,
 .back-button:focus-visible {
 	background-color: transparent;
 	color: var(--accent);
+	border-color: var(--accent);
 }
 
 /* Этап 66 — было position:relative+flex:1+min-height:0 (content-area) /
@@ -4690,7 +4727,9 @@ button[type="button"].media-mini-bar-btn {
 	padding: var(--space-s) var(--space-m) var(--space-s) var(--space-s);
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-lg);
+	/* Разметка по макету — было --radius-lg (20px), макет держит тот же
+	   --radius (10px), что и остальные карточки/панели проекта. */
+	border-radius: var(--radius);
 }
 .rec:hover {
 	border-color: color-mix(in oklch, var(--border), var(--fg) 20%);
