@@ -372,3 +372,18 @@ export async function deleteGroupAction(ownerPubkey, privKey, dbKey, groupId, pu
 	});
 	await refreshGroups(ownerPubkey, dbKey);
 }
+
+// Редизайн интерфейса, этап 7 (CONTRACTS.md) — перенесено ЦЕЛИКОМ из
+// signals/discovery.js (удалён, больше никто его не импортировал): грид
+// "Хотят познакомиться" переехал с экрана "Обзор" на экран "Люди", тем же
+// сигналом/функцией, тот же принцип, что вся остальная контактная логика
+// уже живёт в этом файле. `contacts` — уже определён выше в этом же файле,
+// отдельного импорта не требует (был cross-file импорт в старом discovery.js).
+export const discoveryProfiles = signal([]); // [{pubkey, visible, showChannels, channels, updatedAt}]
+
+// Отфильтровано: только visible===true И НЕ уже в contacts (DESIGN.md, этап 46 —
+// человек, уже добавленный в контакты, не нуждается в повторном "знакомстве").
+export async function refreshDiscoveryProfiles(ownerPubkey) {
+	const rows = await db.table("discoveryProfiles").toArray();
+	discoveryProfiles.value = rows.filter((r) => r.visible && !contacts.value.includes(r.pubkey));
+}

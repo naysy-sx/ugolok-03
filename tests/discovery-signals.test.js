@@ -4,8 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { contacts } from "../src/ui/signals/contacts.js";
-import { discoveryProfiles, refreshDiscoveryProfiles } from "../src/ui/signals/discovery.js";
+import { contacts, discoveryProfiles, refreshDiscoveryProfiles } from "../src/ui/signals/contacts.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(9);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -35,8 +34,9 @@ after(() => {
 // (sendContactRequestAction/cancelContactRequestAction/outgoingRequests) — их
 // поведение (включая ЭТУ гарантию — "Обзор" не добавляет адресата оптимистично,
 // это уже структурно верно для ОБОИХ путей теперь) покрыто contacts-signals.test.js.
-// refreshDiscoveryProfiles — единственное, что осталось СВОИМ у discovery.js
-// (kind 30073, не связано с contact-relationship FSM).
+// refreshDiscoveryProfiles — единственное, что осталось от discovery-специфичной
+// логики (kind 30073, не связано с contact-relationship FSM); физически теперь в
+// signals/contacts.js (этап 7, CONTRACTS.md — грид переехал на экран "Люди").
 
 test("refreshDiscoveryProfiles: показывает только visible=true И НЕ уже существующих контактов", async () => {
 	await db.table("discoveryProfiles").bulkPut([
