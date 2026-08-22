@@ -308,6 +308,7 @@
 			"newPostTitle": "Nowy post",
 			"postTextLabel": "Treść posta",
 			"attachButton": "Załącz",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publikowanie…",
 			"publishButton": "Opublikuj",
 			"tooLongError": "Tekst zbyt długi (limit: {{max}} znaków)"
@@ -434,6 +435,9 @@
 		"loadingVoice": "Wczytywanie wiadomości głosowej…",
 		"downloading": "Pobieranie…",
 		"download": "Pobierz",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Nie udało się wczytać obrazu: {{error}}",
 		"loadingImage": "Wczytywanie obrazu…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "Profil użytkownika",
 		"openPhotoAria": "Otwórz zdjęcie profilowe",
 		"editProfileButton": "Edytuj profil",
-		"photoAlt": "Zdjęcie profilowe"
+		"photoAlt": "Zdjęcie profilowe",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "Motyw",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "Wiadomość na czacie kanału",
 		"noMessages": "Jeszcze brak wiadomości na czacie kanału.",
-		"readOnlyNotice": "Tylko do odczytu — zasubskrybuj, aby pisać na czacie."
+		"readOnlyNotice": "Tylko do odczytu — zasubskrybuj, aby pisać na czacie.",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "Wybór pliku",

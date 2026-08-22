@@ -308,6 +308,7 @@
 			"newPostTitle": "Nieuw bericht",
 			"postTextLabel": "Berichttekst",
 			"attachButton": "Bijvoegen",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publiceren…",
 			"publishButton": "Publiceren",
 			"tooLongError": "Tekst te lang (limiet: {{max}} tekens)"
@@ -434,6 +435,9 @@
 		"loadingVoice": "Spraakbericht laden…",
 		"downloading": "Downloaden…",
 		"download": "Downloaden",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Kon afbeelding niet laden: {{error}}",
 		"loadingImage": "Afbeelding laden…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "Gebruikersprofiel",
 		"openPhotoAria": "Profielfoto openen",
 		"editProfileButton": "Profiel bewerken",
-		"photoAlt": "Profielfoto"
+		"photoAlt": "Profielfoto",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "Thema",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "Bericht in de kanaalchat",
 		"noMessages": "Nog geen berichten in de kanaalchat.",
-		"readOnlyNotice": "Alleen-lezen — abonneer om in de chat te schrijven."
+		"readOnlyNotice": "Alleen-lezen — abonneer om in de chat te schrijven.",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "Bestand selecteren",

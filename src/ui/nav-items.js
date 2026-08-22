@@ -19,7 +19,6 @@ export const NAV_ITEMS = [
   { id: "journal", labelKey: "nav.journal" },
   { id: "messages", labelKey: "nav.messages" },
   { id: "channels", labelKey: "nav.channels" },
-  { id: "files", labelKey: "nav.files" },
   { id: "contacts", labelKey: "nav.contacts" },
   { id: "settings", labelKey: "nav.settings" },
   { id: "profile", labelKey: "nav.profile" },

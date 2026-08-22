@@ -308,6 +308,7 @@
 			"newPostTitle": "Yeni gönderi",
 			"postTextLabel": "Gönderi metni",
 			"attachButton": "Ekle",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "Yayınlanıyor…",
 			"publishButton": "Yayınla",
 			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)"
@@ -434,6 +435,9 @@
 		"loadingVoice": "Sesli mesaj yükleniyor…",
 		"downloading": "İndiriliyor…",
 		"download": "İndir",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Görsel yüklenemedi: {{error}}",
 		"loadingImage": "Görsel yükleniyor…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "Kullanıcı profili",
 		"openPhotoAria": "Profil fotoğrafını aç",
 		"editProfileButton": "Profili düzenle",
-		"photoAlt": "Profil fotoğrafı"
+		"photoAlt": "Profil fotoğrafı",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "Tema",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "Kanal sohbetine mesaj",
 		"noMessages": "Kanal sohbetinde henüz mesaj yok.",
-		"readOnlyNotice": "Salt okunur — sohbete yazmak için abone olun."
+		"readOnlyNotice": "Salt okunur — sohbete yazmak için abone olun.",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "Dosya seçimi",

@@ -36,6 +36,9 @@ import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import { validateAttachment, MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { getManifest } from "../../domain/files/content.js";
+import { getFileKeyFor, projected } from "../signals/files.js";
+import FilePicker from "../components/file-picker.jsx";
 import AttachmentTray from "../components/media/attachment-tray.jsx";
 import AttachmentView from "../components/attachment-view.jsx";
 import { splitBubbleAttachments } from "../components/message-bubble-attachments.js";
@@ -50,6 +53,7 @@ import IconTrash from "../icons/trash.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
+import IconFolder from "../icons/folder.jsx";
 import IconSend from "../icons/send.jsx";
 import IconCross from "../icons/cross.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
@@ -268,6 +272,10 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 	const [error, setError] = useState("");
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const fileInputRef = useRef(null);
+	// Редизайн интерфейса, этап 9 (CONTRACTS.md) — вставка файла из хранилища,
+	// 1:1 перенесено из chat.jsx (handleAttachmentFromStorage) — дедупликация
+	// по digest (MATH.md §7), файл НЕ перезаливается заново.
+	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const author = commentAuthorInfo(ownerPubkey);
 	// Этап 69 — свой аватар в композере рендерится ДО того, как что-либо
 	// ещё в этом дереве компонентов гарантированно подтянуло profiles[ownerPubkey]
@@ -305,7 +313,28 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 		}
 	}
 
+	// Редизайн интерфейса, этап 9 (CONTRACTS.md) — 1:1 chat.jsx's
+	// handleAttachmentFromStorage: дескриптор ссылается на ТОТ ЖЕ
+	// manifestDigest/fileKey узла, файл не перезаливается под новым ключом.
+	async function handleAttachmentFromStorage([nodeId]) {
+		setFilePickerOpen(false);
+		const node = projected.value.nodes.get(nodeId);
+		if (!node || node.kind !== "file") return;
+		try {
+			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const fileKey = await getFileKeyFor(node.blob);
+			if (!fileKey) {
+				setError(t("chat.window.fileKeyNotFoundError"));
+				return;
+			}
+			tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest }]);
+		} catch (err) {
+			setError(errorMessage(err));
+		}
+	}
+
 	return (
+		<>
 		<form class="card box stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -338,6 +367,9 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 						<button type="button" onClick={() => fileInputRef.current?.click()}>
 							<IconPaperclip /> {t("channel.composer.attachButton")}
 						</button>
+						<button type="button" onClick={() => setFilePickerOpen(true)}>
+							<IconFolder /> {t("channel.composer.attachFromStorageButton")}
+						</button>
 						<button type="submit" disabled={busy || text.length === 0 || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 						</button>
@@ -348,6 +380,8 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 				</div>
 			</div>
 		</form>
+		{filePickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}
+		</>
 	);
 }
 
@@ -464,7 +498,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					</header>
 					{above && (
 						<div class="cmt__media">
-							<AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} />
+							<AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} origin={{ kind: "comment", id: comment.id }} />
 						</div>
 					)}
 					<div class="cmt__text">
@@ -473,7 +507,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 					{below.length > 0 && (
 						<div class="cmt__media">
 							{below.map((a, i) => (
-								<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} />
+								<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(a, { commentId: comment.id })} origin={{ kind: "comment", id: comment.id }} />
 							))}
 						</div>
 					)}

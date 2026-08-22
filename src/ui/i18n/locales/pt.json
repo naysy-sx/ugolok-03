@@ -308,6 +308,7 @@
 			"newPostTitle": "Nova publicação",
 			"postTextLabel": "Texto da publicação",
 			"attachButton": "Anexar",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publicando…",
 			"publishButton": "Publicar",
 			"tooLongError": "Texto muito longo (limite: {{max}} caracteres)"
@@ -434,6 +435,9 @@
 		"loadingVoice": "Carregando mensagem de voz…",
 		"downloading": "Baixando…",
 		"download": "Baixar",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Não foi possível carregar a imagem: {{error}}",
 		"loadingImage": "Carregando imagem…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "Perfil do usuário",
 		"openPhotoAria": "Abrir foto do perfil",
 		"editProfileButton": "Editar perfil",
-		"photoAlt": "Foto do perfil"
+		"photoAlt": "Foto do perfil",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "Tema",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "Mensagem no chat do canal",
 		"noMessages": "Ainda não há mensagens no chat do canal.",
-		"readOnlyNotice": "Somente leitura — inscreva-se para escrever no chat."
+		"readOnlyNotice": "Somente leitura — inscreva-se para escrever no chat.",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "Seleção de arquivo",

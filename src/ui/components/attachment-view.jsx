@@ -1,13 +1,17 @@
 import { useState, useEffect } from "preact/hooks";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
-import { currentUser, dbKeySig } from "../signals/auth.js";
+import { currentUser, dbKeySig, privKeySig } from "../signals/auth.js";
+import { publish } from "../signals/transport.js";
+import { initFiles, createFileEntry } from "../signals/files.js";
+import { PreconditionError } from "../../domain/files/ops.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
+import IconFolder from "../icons/folder.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
@@ -223,14 +227,92 @@ function FileAttachment({ attachment }) {
 	);
 }
 
+// Редизайн интерфейса, этап 9 (CONTRACTS.md) — "Сохранить к себе": вложение
+// ленты (сообщение/чат канала/пост/комментарий) -> узел хранилища, с полем
+// origin ({kind, id}), которое раньше было ВСЕГДА null (отчёт E2). initFiles
+// — идемпотентный бутстрап (тот же вызов, что file-picker.jsx) — вложение
+// может открываться, даже если "Файлы"/FilePicker ни разу не открывались за
+// сессию, без него createFileEntry писал бы под cachedOwnerPubkey===null.
+function base64ToFileKeyBytes(fileKeyBase64) {
+	return Uint8Array.from(atob(fileKeyBase64), (c) => c.charCodeAt(0));
+}
+
+function AttachmentSaveButton({ attachment, origin }) {
+	const [status, setStatus] = useState("idle"); // idle | busy | done | error
+	const [error, setError] = useState("");
+
+	async function handleSave() {
+		setStatus("busy");
+		setError("");
+		try {
+			const ownerPubkey = currentUser.value.id;
+			await initFiles(ownerPubkey, privKeySig.value, publish);
+			const fileKeyBytes = base64ToFileKeyBytes(attachment.fileKey);
+			const op = await createFileEntry(attachmentDisplayName(attachment) || attachment.name, attachment.manifestDigest, fileKeyBytes, origin, attachment.mime);
+			if (op instanceof PreconditionError) {
+				setError(errorMessage(op));
+				setStatus("error");
+				return;
+			}
+			setStatus("done");
+		} catch (err) {
+			setError(errorMessage(err));
+			setStatus("error");
+		}
+	}
+
+	if (status === "done") {
+		return (
+			<p role="status" style={{ color: "var(--muted)" }}>
+				{t("attachment.savedToStorage")}
+			</p>
+		);
+	}
+
+	return (
+		<>
+			<button type="button" class="btn--ghost" onClick={handleSave} disabled={status === "busy"}>
+				<IconFolder aria-hidden="true" /> {status === "busy" ? t("attachment.saving") : t("attachment.saveToStorage")}
+			</button>
+			{error && (
+				<small role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</small>
+			)}
+		</>
+	);
+}
+
 // Диспетчер по attachment.type (F-AT-02) — единственная точка входа для рендера
 // вложения, переиспользуется message-bubble.jsx; задел на будущий раздел "мои файлы"
 // (тот же дескриптор, та же отрисовка по типу).
-export default function AttachmentView({ attachment, onOpen }) {
-	if (attachment.type === "image") return <ImageAttachment attachment={attachment} onOpen={onOpen} />;
-	if (attachment.type === "video") return <VideoAttachment attachment={attachment} onOpen={onOpen} />;
-	if (attachment.type === "audio") return <AudioAttachment attachment={attachment} onOpen={onOpen} />;
-	return <FileAttachment attachment={attachment} />;
+// origin ({kind, id}, этап 9) — опционален, обратная совместимость: БЕЗ него
+// рендер не меняется ни на пиксель (существующие вызовы без origin не
+// оборачиваются). С origin — контент оборачивается, снизу добавляется кнопка
+// "Сохранить к себе". Решение Claude (сужение охвата): gutter-миниатюра поста
+// (post-card.jsx, этап 2 — узкая 6rem-колонка) origin намеренно НЕ получает —
+// вторая строка с кнопкой физически не влезает без слома вёрстки; та же
+// картинка как обычное inline-вложение кнопку получает.
+export default function AttachmentView({ attachment, onOpen, origin }) {
+	const content =
+		attachment.type === "image" ? (
+			<ImageAttachment attachment={attachment} onOpen={onOpen} />
+		) : attachment.type === "video" ? (
+			<VideoAttachment attachment={attachment} onOpen={onOpen} />
+		) : attachment.type === "audio" ? (
+			<AudioAttachment attachment={attachment} onOpen={onOpen} />
+		) : (
+			<FileAttachment attachment={attachment} />
+		);
+
+	if (!origin) return content;
+
+	return (
+		<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+			{content}
+			<AttachmentSaveButton attachment={attachment} origin={origin} />
+		</div>
+	);
 }
 
 // Единая ссылка "Скачать" (item 10, "ко всем вложениям... перед 'Удалить'") —

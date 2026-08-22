@@ -308,6 +308,7 @@
 			"newPostTitle": "新帖子",
 			"postTextLabel": "帖子内容",
 			"attachButton": "添加附件",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "发布中…",
 			"publishButton": "发布",
 			"tooLongError": "文本过长（上限 {{max}} 字符）"
@@ -434,6 +435,9 @@
 		"loadingVoice": "正在加载语音消息…",
 		"downloading": "下载中…",
 		"download": "下载",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "图片加载失败：{{error}}",
 		"loadingImage": "正在加载图片…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "用户资料",
 		"openPhotoAria": "打开头像照片",
 		"editProfileButton": "编辑个人资料",
-		"photoAlt": "头像照片"
+		"photoAlt": "头像照片",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "主题",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "频道聊天消息",
 		"noMessages": "频道聊天中暂无消息。",
-		"readOnlyNotice": "只读——订阅后才能在聊天中发言。"
+		"readOnlyNotice": "只读——订阅后才能在聊天中发言。",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "选择文件",

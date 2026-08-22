@@ -47,7 +47,6 @@ import IconActivityLog from "./ui/icons/activity-log.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
 import IconBell from "./ui/icons/bell.jsx";
-import IconFolder from "./ui/icons/folder.jsx";
 import IconHelpCircle from "./ui/icons/help-circle.jsx";
 
 // ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
@@ -63,7 +62,6 @@ const NAV_ICONS = {
 	journal: IconBell,
 	messages: IconChatBubble,
 	channels: IconReader,
-	files: IconFolder,
 	contacts: IconPeople,
 	settings: IconGear,
 	profile: IconPerson,
@@ -270,7 +268,7 @@ function MainShell() {
 				style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}
 				aria-label={t("shell.sidebarAriaLabel")}
 			>
-				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} />
+				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} onOpenStorage={() => selectNavItem("files")} />
 				<nav role="navigation" class="grow" aria-label={t("shell.navAriaLabel")}>
 					<ul role="list">
 						{NAV_ITEMS.map(item => {

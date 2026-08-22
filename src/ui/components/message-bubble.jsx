@@ -89,10 +89,10 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
-			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} />}
+			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: "message", id: message.id }} />}
 			{message.text && <MarkdownView source={message.text} profile="lite" />}
 			{below.map((a, i) => (
-				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} />
+				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: "message", id: message.id }} />
 			))}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
 				{timestamp && <small>{timestamp}</small>}

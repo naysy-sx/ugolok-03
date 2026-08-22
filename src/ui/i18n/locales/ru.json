@@ -308,6 +308,7 @@
 			"newPostTitle": "Новый пост",
 			"postTextLabel": "Текст поста",
 			"attachButton": "Прикрепить",
+			"attachFromStorageButton": "Из хранилища",
 			"publishingButton": "Публикация…",
 			"publishButton": "Опубликовать",
 			"tooLongError": "Слишком длинный текст (лимит — {{max}} символов)"
@@ -434,6 +435,9 @@
 		"loadingVoice": "Загрузка голосового…",
 		"downloading": "Скачивание…",
 		"download": "Скачать",
+		"saveToStorage": "Сохранить к себе",
+		"saving": "Сохранение…",
+		"savedToStorage": "Сохранено в хранилище",
 		"imageLoadError": "Не удалось загрузить картинку: {{error}}",
 		"loadingImage": "Загрузка картинки…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "Профиль пользователя",
 		"openPhotoAria": "Открыть фото профиля",
 		"editProfileButton": "Изменить профиль",
-		"photoAlt": "Фото профиля"
+		"photoAlt": "Фото профиля",
+		"accountMenuAria": "Меню аккаунта",
+		"storageMenuItem": "Хранилище"
 	},
 	"themeStatus": {
 		"panelAria": "Тема оформления",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "Сообщение в чат канала",
 		"noMessages": "Пока нет сообщений в чате канала.",
-		"readOnlyNotice": "Только чтение — подпишитесь, чтобы писать в чат."
+		"readOnlyNotice": "Только чтение — подпишитесь, чтобы писать в чат.",
+		"attachFromStorageAria": "Прикрепить файл из хранилища"
 	},
 	"filePicker": {
 		"dialogAria": "Выбор файла",

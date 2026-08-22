@@ -15,7 +15,12 @@ import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
+import { getManifest } from "../../domain/files/content.js";
+import { getFileKeyFor, projected } from "../signals/files.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import FilePicker from "./file-picker.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
+import IconFolder from "../icons/folder.jsx";
 import { ContactIdentity } from "../screens/contacts.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import { formatDateTime } from "./post-card.jsx";
@@ -24,6 +29,7 @@ import MarkdownView from "./markdown-view.jsx";
 import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
+const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments, limiter, onSent }) {
 	const [text, setText] = useState("");
@@ -32,6 +38,9 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const fileInputRef = useRef(null);
 	const textareaRef = useRef(null);
+	// Редизайн интерфейса, этап 9 (CONTRACTS.md) — вставка файла из хранилища,
+	// 1:1 перенесено из chat.jsx (handleAttachmentFromStorage).
+	const [filePickerOpen, setFilePickerOpen] = useState(false);
 
 	async function handleSubmit(e) {
 		e.preventDefault();
@@ -56,7 +65,25 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 		}
 	}
 
+	async function handleAttachmentFromStorage([nodeId]) {
+		setFilePickerOpen(false);
+		const node = projected.value.nodes.get(nodeId);
+		if (!node || node.kind !== "file") return;
+		try {
+			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const fileKey = await getFileKeyFor(node.blob);
+			if (!fileKey) {
+				setError(t("chat.window.fileKeyNotFoundError"));
+				return;
+			}
+			tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest }]);
+		} catch (err) {
+			setError(errorMessage(err));
+		}
+	}
+
 	return (
+		<>
 		<form class="stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -78,6 +105,9 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 						<button type="button" class="message-compose-tool-btn row" onClick={() => fileInputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
 							<IconPaperclip />
 						</button>
+						<button type="button" class="message-compose-tool-btn row" onClick={() => setFilePickerOpen(true)} aria-label={t("channelChat.attachFromStorageAria")}>
+							<IconFolder />
+						</button>
 					</>
 				)}
 				<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
@@ -85,6 +115,8 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				</button>
 			</div>
 		</form>
+		{filePickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}
+		</>
 	);
 }
 
@@ -206,10 +238,10 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 										/>
 									)}
 								</div>
-								{above && <AttachmentView attachment={above} onOpen={(a) => openAttachment(m, a)} />}
+								{above && <AttachmentView attachment={above} onOpen={(a) => openAttachment(m, a)} origin={{ kind: "channelMessage", id: m.id }} />}
 								<MarkdownView source={m.text} profile="lite" />
 								{below.map((a, i) => (
-									<AttachmentView key={i} attachment={a} onOpen={(a) => openAttachment(m, a)} />
+									<AttachmentView key={i} attachment={a} onOpen={(a) => openAttachment(m, a)} origin={{ kind: "channelMessage", id: m.id }} />
 								))}
 							</li>
 						);

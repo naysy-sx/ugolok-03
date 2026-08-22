@@ -308,6 +308,7 @@
 			"newPostTitle": "新しい投稿",
 			"postTextLabel": "投稿本文",
 			"attachButton": "添付",
+			"attachFromStorageButton": "From storage",
 			"publishingButton": "公開中…",
 			"publishButton": "公開する",
 			"tooLongError": "テキストが長すぎます（上限 {{max}} 文字）"
@@ -434,6 +435,9 @@
 		"loadingVoice": "音声メッセージを読み込み中…",
 		"downloading": "ダウンロード中…",
 		"download": "ダウンロード",
+		"saveToStorage": "Save to storage",
+		"saving": "Saving…",
+		"savedToStorage": "Saved to storage",
 		"imageLoadError": "画像を読み込めませんでした: {{error}}",
 		"loadingImage": "画像を読み込み中…",
 		"units": {
@@ -591,7 +595,9 @@
 		"profileAria": "ユーザープロフィール",
 		"openPhotoAria": "プロフィール写真を開く",
 		"editProfileButton": "プロフィールを編集",
-		"photoAlt": "プロフィール写真"
+		"photoAlt": "プロフィール写真",
+		"accountMenuAria": "Account menu",
+		"storageMenuItem": "Storage"
 	},
 	"themeStatus": {
 		"panelAria": "テーマ",
@@ -727,7 +733,8 @@
 	"channelChat": {
 		"messageLabel": "チャンネルチャットへのメッセージ",
 		"noMessages": "まだチャンネルチャットにメッセージはありません。",
-		"readOnlyNotice": "閲覧のみ — チャットに書き込むには登録してください。"
+		"readOnlyNotice": "閲覧のみ — チャットに書き込むには登録してください。",
+		"attachFromStorageAria": "Attach file from storage"
 	},
 	"filePicker": {
 		"dialogAria": "ファイル選択",

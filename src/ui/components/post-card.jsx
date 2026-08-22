@@ -91,7 +91,7 @@ export default function PostCard({
 					</label>
 				) : (
 					<>
-						{above && <AttachmentView attachment={above} onOpen={onOpenAttachment} />}
+						{above && <AttachmentView attachment={above} onOpen={onOpenAttachment} origin={{ kind: "post", id: post.id }} />}
 						<div class="rec__text">
 							<MarkdownView source={post.text} profile="rich" />
 						</div>
@@ -113,7 +113,7 @@ export default function PostCard({
 				{kind === "article" && <h3 class="rec__title">{post.title}</h3>}
 
 				{placement === "inline" &&
-					below.map((a, i) => <AttachmentView key={i} attachment={a} onOpen={onOpenAttachment} />)}
+					below.map((a, i) => <AttachmentView key={i} attachment={a} onOpen={onOpenAttachment} origin={{ kind: "post", id: post.id }} />)}
 
 				{hasChips && (
 					<div class="rec-chips">
