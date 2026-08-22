@@ -66,7 +66,7 @@
    только внешний вид: прозрачный фон, подчёркивание растёт из скрытого
    ::after слева направо. "Выйти" (.exit-btn) сюда НЕ входит — стилизуется
    отдельно ниже, пользователь явно попросил оставить его кнопкой. */
-.sidebar nav .nav-item-btn {
+.sidebar .nav-item-btn {
 	position: relative;
 	/* Начало подчёркивания (::after ниже) — после иконки, а не от края
 	   кнопки; 29px подобраны визуально в инспекторе (ни один --space-*
@@ -81,7 +81,7 @@
 	padding-inline: var(--space-3xs);
 	border-radius: 0;
 }
-.sidebar nav .nav-item-btn::after {
+.sidebar .nav-item-btn::after {
 	content: "";
 	position: absolute;
 	inset-inline-start: var(--nav-underline-offset);
@@ -94,20 +94,23 @@
 	transform-origin: left;
 	transition: transform var(--transition-speed) var(--transition-ease);
 }
-.sidebar nav .nav-item-btn:hover,
-.sidebar nav .nav-item-btn:focus-visible,
-.sidebar nav .nav-item-btn.is-active {
+.sidebar .nav-item-btn:hover,
+.sidebar .nav-item-btn:focus-visible,
+.sidebar .nav-item-btn.is-active {
 	color: var(--accent);
 }
-.sidebar nav .nav-item-btn:hover::after,
-.sidebar nav .nav-item-btn:focus-visible::after,
-.sidebar nav .nav-item-btn.is-active::after {
+.sidebar .nav-item-btn:hover::after,
+.sidebar .nav-item-btn:focus-visible::after,
+.sidebar .nav-item-btn.is-active::after {
 	transform: scaleX(1);
 }
 
 /* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2),
-   прижата вправо (margin-inline-start:auto — .nav-item-btn уже flex-строка). */
-.sidebar nav .nav-badge {
+   прижата вправо (margin-inline-start:auto — .nav-item-btn/.sidebar-row уже
+   flex-строка). Раньше жил только внутри старого NAV_ITEMS-списка (.sidebar
+   nav), теперь также на колокольчике "Журнал" панели групп (nav-groups.jsx) —
+   селектор ослаблен до .sidebar, чтобы работать в обоих местах. */
+.sidebar .nav-badge {
 	margin-inline-start: auto;
 	background-color: var(--accent-2);
 	color: var(--accent-2-contrast);
@@ -844,6 +847,146 @@ html[data-media-full] .top-corner-actions {
 }
 .profile-bio::after {
 	content: "”";
+}
+
+/* ================================================================== *
+ *  Панель групп сайдбара (nav-groups.jsx) — редизайн интерфейса,      *
+ *  этап 10.2/10.3 (CONTRACTS.md). Композиция (stack/row/grow) уже     *
+ *  в JSX — здесь только цвет/размер/отступ, новых ad-hoc классов      *
+ *  минимум, максимум переиспользования .icon-btn/.menu/.eyebrow/      *
+ *  .file-search-field (files.jsx).                                    *
+ * ================================================================== */
+
+/* Разделитель между пунктами меню (identity-меню, sidebar-profile-card.jsx) —
+   тот же язык, что .section-header/.jgroup__date (тонкая линия var(--border)),
+   первая подобная граница внутри .menu__pop в проекте. */
+.menu__pop .sep {
+	block-size: var(--border-width);
+	background-color: var(--border);
+	margin-block: var(--space-3xs);
+}
+/* Подсказка справа от пункта меню ("тёмная"/"светлая" у пункта "Тема") —
+   приглушённым цветом, прижата вправо в той же flex-строке кнопки
+   (.menu__pop button уже display:flex). */
+.menu-item-hint {
+	margin-inline-start: auto;
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+
+/* Строка поиска+колокольчик+"＋" наверху панели групп. .file-search-field
+   (files.jsx) переиспользуется как есть для самого поля — здесь только
+   компоновка соседних icon-btn. */
+.sidebar-row .file-search-field {
+	max-width: none;
+}
+
+/* Заголовок группы ("Люди"/"Мои каналы"/"Подписки") — тот же .eyebrow
+   (кикер), что уже используют unlock.jsx/placeholder.jsx, здесь как кнопка
+   (переход "все ›") — .row перебивает block-раскладку .eyebrow на flex,
+   margin-block-end гасим, он у кнопки не нужен. */
+.grouphead {
+	width: 100%;
+	background: none;
+	border: none;
+	padding: 0;
+	margin-block-end: var(--space-3xs);
+	cursor: pointer;
+}
+.grouphead:hover,
+.grouphead:focus-visible {
+	color: var(--accent-hover);
+}
+/* "Избранное" — тот же кикер, но НЕ кнопка (сам заголовок никуда не ведёт). */
+.grouphead-plain {
+	margin-block-end: var(--space-3xs);
+}
+.grouphead__all {
+	text-transform: none;
+	letter-spacing: normal;
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+}
+
+/* Список переписок/каналов внутри группы — без буллетов/отступа списка. */
+.streams {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.stream-row {
+	border-radius: var(--radius);
+}
+.stream-row:hover {
+	background-color: var(--surface-raised);
+}
+.stream {
+	min-width: 0;
+	background: none;
+	border: none;
+	padding: var(--space-2xs) var(--space-3xs);
+	color: var(--fg);
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+.stream-ava {
+	flex: none;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+}
+.stream__name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+/* Пин-тумблер (⚑/⚐, текстовый глиф) — едва виден по умолчанию, тот же
+   hover-паттерн, что .profile-edit-btn (проявляется по hover строки, не
+   только самой кнопки), закреплённый — не гасим (сам факт закрепления
+   должен быть виден без наведения). */
+.pin-toggle {
+	flex: none;
+	background: none;
+	border: none;
+	padding: var(--space-3xs);
+	color: var(--accent);
+	font-size: 0.95rem;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0.25;
+}
+.stream-row:hover .pin-toggle,
+.pin-toggle:focus-visible,
+.pin-toggle[aria-pressed="true"] {
+	opacity: 1;
+}
+
+/* Бейдж колокольчика "Журнал" — та же пилюля, что .nav-badge, но в углу
+   круглой icon-only кнопки (там нет текстовой строки, чтобы встать рядом). */
+.journal-bell-btn {
+	position: relative;
+}
+.journal-bell-btn .nav-badge {
+	position: absolute;
+	inset-block-start: -0.15em;
+	inset-inline-end: -0.15em;
+	min-width: 1.1em;
+	text-align: center;
+}
+
+/* Низ панели ("Быстрая связь" + статус соединения) — прижат к низу
+   прокручиваемого сайдбара (.sidebar уже .scroller), не к низу вьюпорта. */
+.pane__bottom {
+	margin-block-start: auto;
+	padding-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--border);
 }
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
@@ -4235,6 +4378,14 @@ button[type="button"].media-mini-bar-btn {
 .menu {
 	position: relative;
 	display: inline-flex;
+	/* Найдено живой проверкой (этап 10.3, панель групп): без flex:none
+	   .menu внутри узкой .bar-строки (поиск+колокольчик+"＋") ужимался
+	   flex-shrink'ом ниже ширины своего summary (.icon-btn, 36px
+	   fixed) — сам summary (класс icon-btn уже flex:none) визуально
+	   вылезал за пределы съёженного <details>, выглядело как обрезанная
+	   кнопка. .menu — всегда триггер фиксированного размера, не текст,
+	   которому есть смысл сжиматься. */
+	flex: none;
 }
 /* Найдено пользователем: клик "прыгал" высотой — глобальный
    details[open] > summary { margin-block-end: var(--space-s) } (minimal.css,

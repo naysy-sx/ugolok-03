@@ -1,12 +1,23 @@
 import { useState, useEffect } from "preact/hooks";
-import { currentUser } from "../signals/auth.js";
+import { currentUser, lock } from "../signals/auth.js";
 import { profileActivity } from "../signals/profile.js";
 import { getProfile } from "../../core/crypto/keystore.js";
+import { resolveEffectiveTheme } from "../theme/theme-mode.js";
 import AccountAvatar from "./account-avatar.jsx";
 import ImageModal from "./image-modal.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconFolder from "../icons/folder.jsx";
+import IconGear from "../icons/gear.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconSun from "../icons/sun.jsx";
+import IconMoon from "../icons/moon.jsx";
+import IconLockClosed from "../icons/lock-closed.jsx";
+import IconHelpCircle from "../icons/help-circle.jsx";
+import IconActivityLog from "../icons/activity-log.jsx";
+import IconExit from "../icons/exit.jsx";
+import IconTrash from "../icons/trash.jsx";
+import IconDotsVertical from "../icons/dots-vertical.jsx";
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { t } from "../signals/i18n.js";
 
@@ -14,7 +25,7 @@ import { t } from "../signals/i18n.js";
 // только на вкладке "Профиль" (решение пользователя). Данные из того же
 // keystore, что profile.jsx — profileActivity синхронизирует карточку с
 // правками, сделанными там (тот же приём, что messagingActivity в chats.js).
-export default function SidebarProfileCard({ onEditProfile, onOpenStorage }) {
+export default function SidebarProfileCard({ onEditProfile, onOpenStorage, onOpenSettings, onOpenHelp, onOpenDiagnostics, themeMode, onToggleTheme }) {
 	const id = currentUser.value.id;
 	const login = currentUser.value.login;
 	const [avatar, setAvatar] = useState("");
@@ -87,13 +98,51 @@ export default function SidebarProfileCard({ onEditProfile, onOpenStorage }) {
 					<button type="button" class="icon-btn profile-edit-btn" onClick={onEditProfile} aria-label={t("sidebarCard.editProfileButton")}>
 						<IconPencil />
 					</button>
+					{/* Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — расширение
+					    того же <details class="menu">, что этап 9 завёл под один
+					    пункт "Хранилище". Большинство пунктов ведут на ОДИН и тот же
+					    экран "Настройки" (там уже живут MnemonicReveal/
+					    DeleteAccountPanel) — решение задокументировано в
+					    CONTRACTS.md, не выдумывать несуществующие отдельные экраны
+					    ради формального соответствия количеству пунктов макета. */}
 					<details class="menu" ref={menuRef} onClick={handleMenuClick}>
 						<summary class="icon-btn" aria-label={t("sidebarCard.accountMenuAria")}>
-							<IconFolder />
+							<IconDotsVertical />
 						</summary>
 						<div class="menu__pop stack" style={{ "--gap": "2px" }}>
+							<button type="button" onClick={onEditProfile}>
+								<IconPerson /> {t("sidebarCard.menuProfile")}
+							</button>
+							<button type="button" onClick={onOpenSettings}>
+								<IconGear /> {t("sidebarCard.menuSettings")}
+							</button>
+							<button type="button" onClick={onToggleTheme}>
+								{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />} {t("sidebarCard.menuTheme")}
+								<span class="menu-item-hint">{resolveEffectiveTheme(themeMode) === "dark" ? t("themeStatus.dark") : t("themeStatus.light")}</span>
+							</button>
+							<div class="sep" />
+							<button type="button" onClick={onOpenSettings}>
+								<IconLockClosed /> {t("sidebarCard.menuMnemonic")}
+							</button>
+							<button type="button" onClick={onOpenSettings}>
+								<IconLockClosed /> {t("sidebarCard.menuRecover")}
+							</button>
+							<div class="sep" />
 							<button type="button" onClick={onOpenStorage}>
 								<IconFolder /> {t("sidebarCard.storageMenuItem")}
+							</button>
+							<button type="button" onClick={onOpenHelp}>
+								<IconHelpCircle /> {t("sidebarCard.menuHelp")}
+							</button>
+							<button type="button" onClick={onOpenDiagnostics}>
+								<IconActivityLog /> {t("sidebarCard.menuDiagnostics")}
+							</button>
+							<div class="sep" />
+							<button type="button" onClick={lock}>
+								<IconExit /> {t("shell.logout")}
+							</button>
+							<button type="button" class="danger" onClick={onOpenSettings}>
+								<IconTrash /> {t("sidebarCard.menuDeleteAccount")}
 							</button>
 						</div>
 					</details>

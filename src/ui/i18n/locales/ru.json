@@ -121,7 +121,23 @@
 		"openMenu": "Открыть меню",
 		"closeMenu": "Закрыть меню",
 		"switchToLightTheme": "Включить светлую тему",
-		"switchToDarkTheme": "Включить тёмную тему"
+		"switchToDarkTheme": "Включить тёмную тему",
+		"searchLabel": "Поиск по чатам и каналам",
+		"searchPlaceholder": "Поиск по чатам и каналам",
+		"journalBellAria": "Журнал",
+		"addMenuAria": "Новый чат или канал",
+		"addMenuCompose": "Написать",
+		"addMenuCreateChannel": "Создать канал",
+		"favoritesHeading": "Избранное",
+		"peopleGroupHeading": "Люди",
+		"peopleGroupTitle": "Все люди, группы и заявки",
+		"myChannelsGroupHeading": "Мои каналы",
+		"myChannelsGroupTitle": "Все мои каналы",
+		"subscriptionsGroupHeading": "Подписки",
+		"subscriptionsGroupTitle": "Все подписки и чужие каналы",
+		"groupAllLink": "все ›",
+		"pinAria": "Закрепить «{{name}}»",
+		"unpinAria": "Открепить «{{name}}»"
 	},
 	"unlock": {
 		"checking": "Проверка…",
@@ -597,7 +613,15 @@
 		"editProfileButton": "Изменить профиль",
 		"photoAlt": "Фото профиля",
 		"accountMenuAria": "Меню аккаунта",
-		"storageMenuItem": "Хранилище"
+		"storageMenuItem": "Хранилище",
+		"menuProfile": "Профиль и аватар",
+		"menuSettings": "Настройки",
+		"menuTheme": "Тема",
+		"menuMnemonic": "Секретная фраза",
+		"menuRecover": "Восстановить доступ",
+		"menuHelp": "Справка",
+		"menuDiagnostics": "Диагностика",
+		"menuDeleteAccount": "Удалить учётную запись"
 	},
 	"themeStatus": {
 		"panelAria": "Тема оформления",

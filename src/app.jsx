@@ -1,6 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
-import { NAV_ITEMS } from "./ui/nav-items.js";
 import Quick from "./ui/screens/quick.jsx";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
@@ -14,7 +13,7 @@ import Journal from "./ui/screens/journal.jsx";
 import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
 import Help from "./ui/screens/help.jsx";
-import { currentUser, lock, dbKeySig, privKeySig } from "./ui/signals/auth.js";
+import { currentUser, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
@@ -27,7 +26,6 @@ import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
 import { journalEntries, refreshJournal } from "./ui/signals/journal.js";
-import { unreadMessagesCount, unreadChannelsCount, refreshUnreadMessagesCount, refreshUnreadChannelsCount } from "./ui/signals/notifications.js";
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { pushToast } from "./ui/signals/toasts.js";
 import ToastHost from "./ui/components/toast-host.jsx";
@@ -36,18 +34,9 @@ import MediaOverlay from "./ui/components/media/media-overlay.jsx";
 import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import SidebarProfileCard from "./ui/components/sidebar-profile-card.jsx";
-import ThemeStatusPanel from "./ui/components/theme-status.jsx";
+import NavGroups from "./ui/components/nav-groups.jsx";
 import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
-import IconChatBubble from "./ui/icons/chat-bubble.jsx";
-import IconReader from "./ui/icons/reader.jsx";
-import IconPeople from "./ui/icons/people.jsx";
-import IconGear from "./ui/icons/gear.jsx";
-import IconPerson from "./ui/icons/person.jsx";
-import IconActivityLog from "./ui/icons/activity-log.jsx";
-import IconExit from "./ui/icons/exit.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
-import IconBell from "./ui/icons/bell.jsx";
-import IconHelpCircle from "./ui/icons/help-circle.jsx";
 
 // ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
 // уровня, НЕ внутри MainShell (иначе гостевые if внутри общей оболочки дают
@@ -55,19 +44,6 @@ import IconHelpCircle from "./ui/icons/help-circle.jsx";
 // заходами, см. ROOMS-SPEC). Сигнал модульного уровня, не useState внутри
 // MainShell — доступен App() снаружи MainShell для переключения ветки.
 export const roomsScreenActive = signal(false);
-
-// nav-items.js — чистые данные (см. комментарий там), маппинг id → иконка
-// живёт здесь, во view-слое.
-const NAV_ICONS = {
-	journal: IconBell,
-	chat: IconChatBubble,
-	channels: IconReader,
-	people: IconPeople,
-	settings: IconGear,
-	profile: IconPerson,
-	help: IconHelpCircle,
-	diagnostics: IconActivityLog,
-};
 
 function MainShell() {
 	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js
@@ -167,8 +143,7 @@ function MainShell() {
 	// если пользователь ни разу не открывал "Контакты" в этой сессии (contacts.value
 	// иначе остался бы пустым, unread-сумма всегда 0).
 	useEffect(() => {
-		refreshContacts(ownerPubkey).then(() => refreshUnreadMessagesCount(ownerPubkey));
-		refreshUnreadChannelsCount(ownerPubkey, dbKey);
+		refreshContacts(ownerPubkey);
 		// Этап 50 — тот же триггер, для бейджа "Журнал [N]" (непрочитанные записи).
 		refreshJournal(ownerPubkey, dbKey);
 	}, [ownerPubkey, messagingActivity.value]);
@@ -251,65 +226,41 @@ function MainShell() {
 				style={{ "--gap": "var(--space-m)", "--pad": "var(--space-m)" }}
 				aria-label={t("shell.sidebarAriaLabel")}
 			>
-				<SidebarProfileCard onEditProfile={() => selectNavItem("profile")} onOpenStorage={() => selectNavItem("files")} />
-				<nav role="navigation" class="grow" aria-label={t("shell.navAriaLabel")}>
-					<ul role="list">
-						{NAV_ITEMS.map(item => {
-							const ItemIcon = NAV_ICONS[item.id];
-							const badgeCount =
-								item.id === "chat"
-									? unreadMessagesCount.value
-									: item.id === "channels"
-										? unreadChannelsCount.value
-										: item.id === "journal"
-											? unreadJournalCount
-											: 0;
-							return (
-								<li key={item.id}>
-									<button
-										type="button"
-										class={`nav-item-btn row${item.id === place.value.kind ? " is-active" : ""}`}
-										style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
-										onClick={() => selectNavItem(item.id)}
-										aria-current={item.id === place.value.kind ? "page" : null}
-									>
-										<ItemIcon />
-										{t(item.labelKey)}
-										{badgeCount > 0 && (
-											<span class="nav-badge" aria-label={t("shell.unreadAriaLabel", { count: badgeCount })}>
-												{badgeCount}
-											</span>
-										)}
-									</button>
-								</li>
-							);
-						})}
-					</ul>
-					{/* Переключатель темы (пользователь) — был плавающей кнопкой в углу
-					    экрана, теперь панель здесь, тот же визуальный язык, что
-					    ConnectionStatusPanel сразу под ней. */}
-					<ThemeStatusPanel themeMode={themeMode} onToggle={handleToggleTheme} />
+				{/* Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — карточка личности
+				    (аватар+меню из 10 пунктов) и панель групп (поиск/＋/избранное/
+				    Люди/Мои каналы/Подписки) заменяют старый плоский NAV_ITEMS-список
+				    (удалён целиком, см. CONTRACTS.md). Тема теперь пункт identity-меню,
+				    не отдельная ThemeStatusPanel (компонент-файл сохранён — решение
+				    CONTRACTS.md, просто больше не рендерится здесь). */}
+				<SidebarProfileCard
+					onEditProfile={() => selectNavItem("profile")}
+					onOpenStorage={() => selectNavItem("storage")}
+					onOpenSettings={() => selectNavItem("settings")}
+					onOpenHelp={() => selectNavItem("help")}
+					onOpenDiagnostics={() => selectNavItem("diagnostics")}
+					themeMode={themeMode}
+					onToggleTheme={handleToggleTheme}
+				/>
+				<NavGroups unreadJournalCount={unreadJournalCount} />
+				{/* ROOMS-SPEC.md §1.4 — вход в отдельную верхнеуровневую ветку (см.
+				    App() ниже), не переключение activeId: "Быстрая связь" не является
+				    вкладкой MainShell, у неё своя, независимая от аккаунта, identity.
+				    "Выйти" сюда больше не дублируется — уже есть в identity-меню. */}
+				<div class="pane__bottom stack grow" style={{ "--gap": "var(--space-2xs)", justifyContent: "flex-end" }}>
+					<button
+						type="button"
+						class="nav-item-btn row"
+						style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
+						onClick={() => (roomsScreenActive.value = true)}
+					>
+						<IconGlobe />
+						{t("shell.quickConnect")}
+					</button>
 					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
 					    главным меню, на любом экране, не только там, где раньше был
 					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
 					<ConnectionStatusPanel />
-				</nav>
-				{/* ROOMS-SPEC.md §1.4 — вход в отдельную верхнеуровневую ветку (см.
-				    App() ниже), не переключение activeId: "Быстрая связь" не является
-				    вкладкой MainShell, у неё своя, независимая от аккаунта, identity. */}
-				<button
-					type="button"
-					class="nav-item-btn row"
-					style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
-					onClick={() => (roomsScreenActive.value = true)}
-				>
-					<IconGlobe />
-					{t("shell.quickConnect")}
-				</button>
-				<button type="button" class="nav-item-btn exit-btn row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={lock}>
-					<IconExit />
-					{t("shell.logout")}
-				</button>
+				</div>
 			</aside>
 			<div class="main-content grow">
 				{place.value.kind === "diagnostics" && <Diagnostics />}
@@ -325,8 +276,7 @@ function MainShell() {
 				{(() => {
 					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "chat", "channels", "channel", "settings", "journal", "today", "storage"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
-					const item = NAV_ITEMS.find((i) => i.id === place.value.kind);
-					return <Placeholder title={item ? t(item.labelKey) : place.value.kind} />;
+					return <Placeholder title={place.value.kind} />;
 				})()}
 			</div>
 			</div>

@@ -121,7 +121,23 @@
 		"openMenu": "Open menu",
 		"closeMenu": "Close menu",
 		"switchToLightTheme": "Switch to light theme",
-		"switchToDarkTheme": "Switch to dark theme"
+		"switchToDarkTheme": "Switch to dark theme",
+		"searchLabel": "Search chats and channels",
+		"searchPlaceholder": "Search chats and channels",
+		"journalBellAria": "Journal",
+		"addMenuAria": "New chat or channel",
+		"addMenuCompose": "Write",
+		"addMenuCreateChannel": "Create channel",
+		"favoritesHeading": "Favorites",
+		"peopleGroupHeading": "People",
+		"peopleGroupTitle": "All people, groups and requests",
+		"myChannelsGroupHeading": "My channels",
+		"myChannelsGroupTitle": "All my channels",
+		"subscriptionsGroupHeading": "Subscriptions",
+		"subscriptionsGroupTitle": "All subscriptions and other channels",
+		"groupAllLink": "all ›",
+		"pinAria": "Pin \u201c{{name}}\u201d",
+		"unpinAria": "Unpin \u201c{{name}}\u201d"
 	},
 	"unlock": {
 		"checking": "Checking…",
@@ -597,7 +613,15 @@
 		"editProfileButton": "Edit profile",
 		"photoAlt": "Profile photo",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage"
+		"storageMenuItem": "Storage",
+		"menuProfile": "Profile and avatar",
+		"menuSettings": "Settings",
+		"menuTheme": "Theme",
+		"menuMnemonic": "Secret phrase",
+		"menuRecover": "Recover access",
+		"menuHelp": "Help",
+		"menuDiagnostics": "Diagnostics",
+		"menuDeleteAccount": "Delete account"
 	},
 	"themeStatus": {
 		"panelAria": "Theme",
