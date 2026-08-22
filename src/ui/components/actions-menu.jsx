@@ -15,7 +15,7 @@ export default function ActionsMenu({ label, children }) {
 			<summary class="icon-btn" aria-label={label}>
 				<IconDotsVertical />
 			</summary>
-			<div class="menu__pop stack" style={{ "--gap": "2px" }}>
+			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
 				{children}
 			</div>
 		</details>

@@ -733,7 +733,7 @@ function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
 			<summary class="chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", cursor: "pointer" }}>
 				<IconPlus /> {t("contacts.addToGroupLabel")}
 			</summary>
-			<div class="menu__pop stack" style={{ "--gap": "2px" }}>
+			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
 				{available.map((g) => (
 					<label key={g.id} class="menu-check">
 						<input type="checkbox" disabled={disabled} onChange={() => onAdd(g.id)} />

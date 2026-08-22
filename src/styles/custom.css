@@ -105,7 +105,7 @@ button:has(> .icon),
 	text-decoration: none;
 }
 /* Разрушительное действие (напр. "Удалить канал") — обводка+текст тем же
-   цветом, что .menu__pop button.danger, не сплошная заливка (та за
+   цветом, что .menu-pop button.danger, не сплошная заливка (та за
    первичным CTA) вперемешку с красным текстом (было раньше — читалось
    как баг, синяя кнопка с красной надписью).
    ВСЕГДА в паре с .btn--ghost, не отдельным классом — составной селектор
@@ -702,16 +702,16 @@ html[data-media-full] .top-corner-actions {
 
 /* Разделитель между пунктами меню (identity-меню, sidebar-profile-card.jsx) —
    тот же язык, что .section-header/.jgroup__date (тонкая линия var(--border)),
-   первая подобная граница внутри .menu__pop в проекте. */
-.menu__pop .sep {
+   первая подобная граница внутри .menu-pop в проекте. */
+.menu-pop .sep {
 	block-size: var(--border-width);
 	background-color: var(--border);
 	margin-block: var(--space-3xs);
 }
 /* Подсказка справа от пункта меню ("тёмная"/"светлая" у пункта "Тема") —
    приглушённым цветом, прижата вправо в той же flex-строке кнопки
-   (.menu__pop button уже display:flex). */
-.menu-item-hint {
+   (.menu-pop button уже display:flex). */
+.menu-hint {
 	margin-inline-start: auto;
 	color: var(--muted);
 	font-size: var(--step--2);
@@ -4454,7 +4454,7 @@ button[type="button"].media-mini-bar-btn {
 /* Найдено пользователем: клик "прыгал" высотой — глобальный
    details[open] > summary { margin-block-end: var(--space-s) } (minimal.css,
    рассчитан на .req/.replies, где тело реально идёт В ПОТОКЕ после summary)
-   у .menu раздувал сам инлайн-флекс-контейнер, хотя .menu__pop ниже —
+   у .menu раздувал сам инлайн-флекс-контейнер, хотя .menu-pop ниже —
    position:absolute, из потока и так убран, отступ ему не нужен. */
 .menu[open] > summary {
 	margin-block-end: 0;
@@ -4465,7 +4465,7 @@ button[type="button"].media-mini-bar-btn {
 .menu > summary::-webkit-details-marker {
 	display: none;
 }
-.menu__pop {
+.menu-pop {
 	/* .stack (раскладка) уже в JSX. */
 	position: absolute;
 	inset-inline-end: 0;
@@ -4481,8 +4481,8 @@ button[type="button"].media-mini-bar-btn {
 /* display:flex ОСТАЁТСЯ (не .row) — children произвольные, приходят от
    десятков вызывающих мест (ActionsMenu.children), менять каждое ради
    composition-класса непропорционально риску. */
-.menu__pop button,
-.menu__pop .menu-check {
+.menu-pop button,
+.menu-pop .menu-check {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
@@ -4497,18 +4497,18 @@ button[type="button"].media-mini-bar-btn {
 	padding: var(--space-2xs) var(--space-s);
 	border-radius: var(--radius);
 }
-.menu__pop button:hover,
-.menu__pop .menu-check:hover {
+.menu-pop button:hover,
+.menu-pop .menu-check:hover {
 	background-color: var(--surface);
 }
-.menu__pop button.danger {
+.menu-pop button.danger {
 	color: var(--bad);
 }
 /* Этап 70-довесок — тот же приём, что button.danger, для действий из
    выпадающего меню, которые серьёзны, но не деструктивны (напр.
    "Заблокировать" — обратимо через "Разблокировать", в отличие от
    удаления). */
-.menu__pop button.warn {
+.menu-pop button.warn {
 	color: var(--warn);
 }
 .menu-check input {

@@ -66,7 +66,7 @@ export default function SidebarProfileCard({ onEditProfile, onOpenStorage, onOpe
 					▾
 				</span>
 			</summary>
-			<div class="menu__pop stack" style={{ "--gap": "2px" }}>
+			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
 				<button type="button" onClick={onEditProfile}>
 					<IconPerson /> {t("sidebarCard.menuProfile")}
 				</button>
@@ -75,7 +75,7 @@ export default function SidebarProfileCard({ onEditProfile, onOpenStorage, onOpe
 				</button>
 				<button type="button" onClick={onToggleTheme}>
 					{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />} {t("sidebarCard.menuTheme")}
-					<span class="menu-item-hint">{resolveEffectiveTheme(themeMode) === "dark" ? t("themeStatus.dark") : t("themeStatus.light")}</span>
+					<span class="menu-hint">{resolveEffectiveTheme(themeMode) === "dark" ? t("themeStatus.dark") : t("themeStatus.light")}</span>
 				</button>
 				<div class="sep" />
 				<button type="button" onClick={onOpenSettings}>

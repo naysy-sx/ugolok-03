@@ -77,7 +77,7 @@ function AddMenu() {
 			<summary class="icon-btn" aria-label={t("shell.addMenuAria")}>
 				<IconPlus />
 			</summary>
-			<div class="menu__pop stack" style={{ "--gap": "2px" }}>
+			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
 				<button type="button" onClick={() => goTo({ kind: "chat" })}>
 					{t("shell.addMenuCompose")}
 				</button>
