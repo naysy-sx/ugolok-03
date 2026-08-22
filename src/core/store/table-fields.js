@@ -111,3 +111,10 @@ export const CONTACT_RELATIONSHIPS_PLAINTEXT_FIELDS = ["owner", "peer", "state",
 // navTarget — содержательные поля (текст уведомления + куда перейти),
 // остаются зашифрованными — прямое продолжение CONTACT_REQUESTS_PLAINTEXT_FIELDS.
 export const JOURNAL_ENTRIES_PLAINTEXT_FIELDS = ["id", "owner", "createdAt", "category", "read"];
+
+// Редизайн интерфейса, этап 5 (CONTRACTS.md) — chatActivity: свежесть
+// переписок для сортировки боковой панели (этап 10). Все поля plaintext
+// (REDESIGN-SPEC.md: "Всё открыто, ничего не шифруется") — шифровать
+// нечего, toEncryptedRow применяется для единообразия (тот же приём, что
+// PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS выше).
+export const CHAT_ACTIVITY_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastAt", "lastFrom"];

@@ -318,6 +318,15 @@ db.version(25).stores({
   posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt]"
 });
 
+// Редизайн интерфейса, этап 5 (CONTRACTS.md) — chatActivity: одна строка на
+// [ownerPubkey+chatId], только ПОСЛЕДНЕЕ событие переписки (не история) —
+// свежесть для сортировки боковой панели (этап 10). Индекс "ownerPubkey" —
+// гидратация списка переписок аккаунта, сортировка по lastAt в памяти (тот
+// же приём, что listChatPartners: объём — число переписок, не сообщений).
+db.version(26).stores({
+  chatActivity: "[ownerPubkey+chatId], ownerPubkey"
+});
+
 export async function resetLocalDatabase() {
   await db.delete();
 }

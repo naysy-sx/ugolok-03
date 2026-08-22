@@ -35,6 +35,7 @@ import {
 	recreateChatConversation,
 	upsertMessage,
 } from "../src/domain/messaging/chat.js";
+import { listConversations } from "../src/domain/messaging/chat-activity.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -58,6 +59,7 @@ beforeEach(async () => {
 	await db.table("contactRelationships").clear();
 	await db.table("pendingOutgoingMessages").clear();
 	await db.table("processedGroupEvents").clear();
+	await db.table("chatActivity").clear();
 });
 
 after(() => {
@@ -477,6 +479,75 @@ test("AC-09 АДВЕРСАРНО: sendMessage — publish() бросает ис�
 	assert.equal(result.queued, true);
 	const outboxRows = await db.table("outbox").where("eventId").equals(result.eventId).toArray();
 	assert.equal(outboxRows.length, 1);
+});
+
+// Редизайн интерфейса, этап 5 (CONTRACTS.md) — chatActivity: три точки
+// записи внутри chat.js (doSendMessage x2, doReceiveGroupMessageEvent).
+
+test("Этап 5: sendMessage (успех) пишет chatActivity — chatId=BOB_PUB, lastFrom=ALICE_PUB, lastAt=sentAt", async () => {
+	await establishAliceToBob();
+	const before = Math.floor(Date.now() / 1000);
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "активность", 1, async () => ({ ok: true }));
+	const after = Math.floor(Date.now() / 1000);
+
+	const rows = await listConversations(ALICE_PUB, DB_KEY);
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].chatId, BOB_PUB);
+	assert.equal(rows[0].lastFrom, ALICE_PUB);
+	assert.ok(rows[0].lastAt >= before && rows[0].lastAt <= after);
+});
+
+test("Этап 5: sendMessage (publish упал, ветка failed) ВСЁ РАВНО пишет chatActivity — локальное действие пользователя учитывается", async () => {
+	await establishAliceToBob();
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "не долетит", 2, async () => ({ ok: false, reason: "нет сети" }));
+
+	const rows = await listConversations(ALICE_PUB, DB_KEY);
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].lastFrom, ALICE_PUB);
+});
+
+test("Этап 5: receiveGroupMessageEvent пишет chatActivity владельцу-получателю — lastFrom=senderPubkey", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const publishedEvents = [];
+	const publish = async (event) => {
+		publishedEvents.push(event);
+		return { ok: true };
+	};
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "для Боба", 1, publish);
+	const realEvent = publishedEvents.find((e) => e.kind === 445);
+
+	await asBob(groupIdHex, bobSerializedState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, realEvent, async () => ({ ok: true })));
+
+	const bobRows = await listConversations(BOB_PUB, DB_KEY);
+	assert.equal(bobRows.length, 1);
+	assert.equal(bobRows[0].chatId, ALICE_PUB);
+	assert.equal(bobRows[0].lastFrom, ALICE_PUB, "отправитель — Алиса, не Боб");
+});
+
+test("Этап 5: старый формат payload БЕЗ sentAt — chatActivity всё равно пишется, lastAt = момент приёма", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const aliceGroupRow = fromEncryptedRow(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), DB_KEY);
+	const aliceState = deserializeState(aliceGroupRow.state);
+	const legacyPayload = { text: "старое сообщение без sentAt", lamportTs: 1, msgId: "legacy-activity-1", senderPubkey: ALICE_PUB };
+	const sendResult = await encryptApplicationMessage(aliceState, new TextEncoder().encode(JSON.stringify(legacyPayload)));
+	const aliceEnvKeys = await deriveNostrEnvelopeKeys(aliceState);
+	const legacyEvent = {
+		kind: 445,
+		tags: [["h", groupIdHex]],
+		content: nip44Encrypt(encodeBase64(sendResult.wireBytes), aliceEnvKeys.privateKey, bytesToHex(aliceEnvKeys.publicKey)),
+		id: "legacy-activity-event",
+		pubkey: "irrelevant",
+	};
+
+	const before = Math.floor(Date.now() / 1000);
+	await asBob(groupIdHex, bobSerializedState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, legacyEvent, async () => ({ ok: true })));
+	const after = Math.floor(Date.now() / 1000);
+
+	const bobRows = await listConversations(BOB_PUB, DB_KEY);
+	assert.equal(bobRows.length, 1);
+	assert.ok(bobRows[0].lastAt >= before && bobRows[0].lastAt <= after, "без sentAt в payload используется момент приёма, запись не пропадает");
 });
 
 test("receiveGroupMessageEvent: неизвестный groupId (h-тег) — discard, не бросает", async () => {

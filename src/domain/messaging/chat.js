@@ -26,6 +26,7 @@ import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES
 import { DomainError } from "../errors.js";
 import { isKnownContact } from "./inbox-requests.js";
 import { withGroupLock } from "../../core/store/mls-lock.js";
+import { touchChatActivity } from "./chat-activity.js";
 
 // Этап 74 — T2.3 (CONTRACTS.md/DESIGN.md "Этап 74"): по прецеденту
 // pendingUndecryptedByGroup/UNDECRYPTED_RETRY_TTL_MS (transport.js) — 5 минут,
@@ -358,6 +359,11 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 			sentAt,
 			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 		}, dbKey);
+		// Редизайн интерфейса, этап 5 (CONTRACTS.md) — даже неотправленное
+		// сообщение — реальное локальное действие пользователя в ЭТОМ чате
+		// прямо сейчас, поднимает переписку по свежести, не оставляет её
+		// "протухшей" до успешной доставки.
+		await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
 		return { eventId: event.id, queued: true };
 	}
 
@@ -373,6 +379,8 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		sentAt,
 		...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 	}, dbKey);
+	// Редизайн интерфейса, этап 5 (CONTRACTS.md) — свежесть переписки.
+	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
 
 	await mirrorBestEffort(
 		privKey,
@@ -506,6 +514,12 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 		msgId: parsed.msgId,
 		...extra,
 	}, dbKey);
+	// Редизайн интерфейса, этап 5 (CONTRACTS.md) — свежесть переписки для
+	// ПОЛУЧАТЕЛЯ. lastFrom — уже вычисленный senderPubkey (T1.2, тот же
+	// принцип, что upsertMessage выше). extra.sentAt отсутствует у старого
+	// формата (до этапа 29) — момент ПОЛУЧЕНИЯ не хуже приближение, чем
+	// полное отсутствие записи активности.
+	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, senderPubkey, extra.sentAt ?? Math.floor(Date.now() / 1000));
 
 	// Этап 74 — T1.3: то же вычисленное значение — иначе зеркало несёт ВТОРОЙ
 	// экземпляр той же жёсткой ошибки RC-1.
