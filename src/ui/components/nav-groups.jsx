@@ -158,6 +158,13 @@ export default function NavGroups({ unreadJournalCount }) {
 	const visibleOwned = owned.filter((c) => matches(c.name || ""));
 	const visibleSubscribed = subscribed.filter((c) => matches(c.name || ""));
 
+	// ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — пустое состояние: ПОЛНЫЕ
+	// списки (до search-фильтра), не visiblePeople/visibleOwned/
+	// visibleSubscribed — иначе пустой поисковый запрос без совпадений
+	// показывал бы приглашение "начни знакомиться" вместо честного "ничего
+	// не найдено" (тот список НЕ пуст, просто фильтр ничего не оставил).
+	const isEmpty = conversations.length + contactsWithoutConversation.length === 0 && owned.length === 0 && subscribed.length === 0;
+
 	// Активная строка (этап 4) — сравнение с ЕДИНЫМ источником "где я
 	// нахожусь" (place.js), не отдельным локальным состоянием: то же
 	// значение уже двигает саму навигацию (openChat/openChannel).
@@ -233,6 +240,16 @@ export default function NavGroups({ unreadJournalCount }) {
 					</div>
 				)}
 
+				{isEmpty ? (
+					<div class="empty">
+						<h3>{t("shell.emptyTitle")}</h3>
+						<p>{t("shell.emptyBody")}</p>
+						<button type="button" class="act act--primary" onClick={() => goTo({ kind: "discovery" })}>
+							<IconCompass /> {t("shell.emptyAction")}
+						</button>
+					</div>
+				) : (
+				<>
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
 						{t("shell.peopleGroupHeading")}
@@ -301,6 +318,8 @@ export default function NavGroups({ unreadJournalCount }) {
 						))}
 					</ul>
 				</div>
+				</>
+				)}
 			</div>
 		</>
 	);

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
-import { openChat } from "../signals/place.js";
+import { place, openChat } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconPencil from "../icons/pencil.jsx";
@@ -133,6 +133,22 @@ export default function Contacts() {
 			})
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
+
+	// ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — "Добавить контакт" (низ
+	// панели, app.jsx) ведёт СЮДА с place.focus==="add": ключевое требование
+	// ТЗ — привести человека сразу к полю ввода, а не на экран, где надо
+	// нажать ещё одну кнопку (та же ошибка, что была у "Написать"). Без
+	// модального <dialog> (в проекте его нет нигде, ради одной кнопки вводить
+	// фокус-ловушку не стоит) — просто фокус+скролл на уже существующее поле.
+	// Зависимость — только place.value.focus, не весь place.value: смена
+	// kind без смены focus (напр. с "add" на что-то ещё внутри "people")
+	// перезапускать эффект не должна.
+	useEffect(() => {
+		if (place.value.focus !== "add") return;
+		const input = document.getElementById("add-contact-input");
+		input?.focus();
+		input?.scrollIntoView({ block: "nearest" });
+	}, [place.value.focus]);
 
 	// F-CT-04, этап 49 — сигналы (contacts/incomingRequests/outgoingRequests/
 	// rejectedByMe) теперь реактивны САМИ ПО СЕБЕ (EMIT из contact-runtime.js на

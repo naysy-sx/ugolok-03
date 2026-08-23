@@ -40,6 +40,7 @@ import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
 import ActiveRoomSummary from "./ui/components/active-room-summary.jsx";
 import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
 import IconGlobe from "./ui/icons/globe.jsx";
+import IconPersonAdd from "./ui/icons/person-add.jsx";
 
 // ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
 // уровня, НЕ внутри MainShell (иначе гостевые if внутри общей оболочки дают
@@ -267,6 +268,23 @@ function MainShell() {
 				    .pane__body (NavGroups) — grow, сам толкает этот блок к низу
 				    прокручиваемой колонки, margin-auto больше не нужен. */}
 				<div class="pane__bottom stack" style={{ "--gap": "var(--space-2xs)" }}>
+					{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — "Добавить контакт"
+					    вместо "+" в строке поиска (убран этапом 1): ведёт СРАЗУ на поле
+					    ввода ключа, не на экран, где надо ещё раз нажать кнопку (та же
+					    ошибка, что была у "Написать" — бесполезность под другой
+					    надписью). goTo напрямую, не selectNavItem — тому не передать
+					    focus, но setSidebarOpen(false) всё равно нужен (мобильная
+					    панель закрывается по любому переходу на экран, ТЗ-1 §4.2). */}
+					<button
+						type="button"
+						class="act act--primary"
+						onClick={() => {
+							goTo({ kind: "people", focus: "add" });
+							setSidebarOpen(false);
+						}}
+					>
+						<IconPersonAdd /> {t("shell.addContact")}
+					</button>
 					{/* Редизайн интерфейса, "область контента" — комната открыта (не
 					    обязательно свёрнута: пока развёрнута, сайдбар всё равно скрыт
 					    под .rooms-overlay, но React/Preact продолжает его рендерить)

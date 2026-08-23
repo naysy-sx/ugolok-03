@@ -1214,6 +1214,76 @@ html[data-media-full] .top-corner-actions {
 	background-color: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
+/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — подписанная строка-действие
+   (иконка+текст, на всю ширину): "Добавить контакт" (низ панели, app.jsx)
+   и кнопка внутри .empty ниже. .act--primary — то же самое, но с рамкой
+   и лёгкой акцентной подложкой (первичное действие отличимо от обычного
+   пункта списка на глаз, без текста "primary"). Кнопка — элементный слой
+   даёт background/color/border/padding/font, все обязаны быть здесь
+   явно (шапка ТЗ-2 §0). */
+.act {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	inline-size: 100%;
+	text-align: start;
+	padding: var(--space-2xs) var(--space-xs);
+	background: none;
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-sm);
+	color: var(--fg);
+	font-size: var(--step--1);
+	line-height: 1.35;
+	cursor: pointer;
+	transition: background-color var(--transition-speed) var(--transition-ease), border-color var(--transition-speed) var(--transition-ease);
+}
+.act:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+}
+.act svg {
+	color: var(--muted);
+}
+.act:hover svg {
+	color: var(--accent);
+}
+.act--primary {
+	border-color: var(--border);
+	background-color: color-mix(in oklch, var(--accent), transparent 94%);
+}
+.act--primary:hover {
+	border-color: var(--accent);
+}
+
+/* Пустое состояние списка (nav-groups.jsx) — ни одного контакта/канала
+   вообще: вместо честной, но неприветливой пустоты — приглашение в
+   "Знакомства". Заметное (пунктирная рамка+свет), т.к. видит его только
+   человек на самом первом шаге — обжившийся аккаунт этот блок больше не
+   покажет (условие isEmpty гаснет после первого контакта/канала). */
+.empty {
+	margin-block-start: var(--space-m);
+	padding: var(--space-s);
+	border: var(--border-width) dashed var(--border);
+	border-radius: var(--radius);
+	text-align: center;
+	background-image: radial-gradient(120% 90% at 50% 0%, color-mix(in oklch, var(--accent), transparent 92%), transparent 65%);
+}
+.empty h3 {
+	font-size: var(--step-0);
+	font-weight: 500;
+	line-height: 1.3;
+	margin: 0;
+}
+.empty p {
+	font-size: var(--step--2);
+	color: var(--muted);
+	line-height: 1.4;
+	margin-block-start: var(--space-3xs);
+}
+.empty .act {
+	margin-block-start: var(--space-s);
+	justify-content: center;
+}
+
 /* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)
    выше уже grow+scroller и толкает этот блок к низу колонки, margin-auto
    не нужен (было нужно раньше, когда весь <aside> скроллился одним куском). */
