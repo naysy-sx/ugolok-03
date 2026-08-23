@@ -4320,37 +4320,40 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--bad);
 }
 
-/* Панель статуса соединения (пользователь, item 4) — постоянно под главным
-   меню, на любом экране (раньше был ad-hoc "Соединение: ..." только на
-   Контактах/Сообщениях — теперь один источник правды). Мелкий шрифт (URL
-   не главное), цвет — на самом статусе, не на строке целиком.
-   .theme-status-panel — тот же визуальный язык (пользователь: убрал
-   плавающую кнопку-переключатель темы в углу экрана, перенёс сюда, над
-   этой панелью) — общий border-block-start только у неё (первая в паре,
-   отделяет ОБЕ панели вместе от списка меню выше), связка панелей —
-   через margin-block-start у .connection-status-panel. */
+/* .theme-status-panel — компонент больше не рендерится (тема переехала в
+   меню карточки учётной записи, этап 3 редизайна), но класс встречается в
+   theme-status.jsx, поэтому CSS не удаляем — просто больше не делим
+   правила с .connection-status-panel. */
 /* .stack (раскладка) уже в JSX. */
-.sidebar .theme-status-panel,
-.sidebar .connection-status-panel {
+.sidebar .theme-status-panel {
 	font-size: var(--step--2);
 	color: var(--muted);
-}
-.sidebar .theme-status-panel p,
-.sidebar .connection-status-panel p {
-	margin: 0;
-}
-.sidebar .connection-status-panel small {
-	display: block;
-	word-break: break-all;
-}
-.sidebar .theme-status-panel {
 	padding-block-start: var(--space-s);
 	margin-block-start: var(--space-s);
 	border-block-start: var(--border-width) solid var(--border);
 }
-.sidebar .connection-status-panel {
-	margin-block-start: var(--space-s);
-	padding-block-end: var(--space-s);
+.sidebar .theme-status-panel p {
+	margin: 0;
+}
+
+/* ============================================================== *
+ *  СТАТУС СОЕДИНЕНИЯ — существует только при проблеме            *
+ *  (SIDEBAR-SPEC.md §6) — тишина означает норму: постоянные       *
+ *  строки с URL были диагностикой, а не окружающей информацией,  *
+ *  полные адреса Relay/Blossom переехали на экран «Диагностика». *
+ * ============================================================== */
+.conn {
+	padding: var(--space-2xs) var(--space-xs);
+	font-size: var(--step--2);
+	line-height: 1.4;
+	color: var(--warn);
+}
+.conn-dot {
+	flex: none;
+	inline-size: 0.5rem;
+	block-size: 0.5rem;
+	border-radius: 50%;
+	background-color: currentColor;
 }
 /* Ссылка-кнопка (не боксовая кнопка) — тот же приём, что .btn-link на
    стартовом экране (auth-layout), но без justify-self:center (здесь

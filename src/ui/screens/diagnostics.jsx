@@ -1,5 +1,5 @@
 import { useState, useEffect } from "preact/hooks";
-import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
+import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS as DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { db } from "../../core/store/database.js";
 import { validateEventId } from "../../domain/events/validators.js";
 import { mergeEvent } from "../../core/sync/g-set.js";
@@ -765,7 +765,8 @@ export default function Diagnostics() {
 		>
 			<small style={{ color: "var(--muted)" }}>
 				build <code>{BUILD_HASH}</code> · relays:{" "}
-				{DEFAULT_RELAYS.length ? DEFAULT_RELAYS.join(", ") : "—"}
+				{DEFAULT_RELAYS.length ? DEFAULT_RELAYS.join(", ") : "—"} · blossom:{" "}
+				{DEFAULT_BLOSSOM_SERVERS.length ? DEFAULT_BLOSSOM_SERVERS.join(", ") : "—"}
 			</small>
 
 			<p

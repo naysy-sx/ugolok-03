@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Уголок — боковая панель целиком</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;700&family=Unbounded:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   ТОКЕНЫ — из src/styles/minimal.css (@layer tokens), без изменений.
+   Новое помечено отдельно.
+   ================================================================ */
+:root {
+	color-scheme: light dark;
+
+	--accent-hue: 265;
+	--hue: var(--accent-hue);
+
+	--bg: light-dark(oklch(0.99 0.004 var(--accent-hue)), oklch(0.17 0.022 var(--accent-hue)));
+	--surface: light-dark(oklch(0.94 0.022 var(--accent-hue)), oklch(0.22 0.022 var(--accent-hue)));
+	--surface-raised: light-dark(oklch(0.88 0.022 var(--accent-hue)), oklch(0.28 0.022 var(--accent-hue)));
+	--border: light-dark(oklch(0.83 0.022 var(--accent-hue)), oklch(0.33 0.022 var(--accent-hue)));
+	--muted: light-dark(oklch(0.54 0.022 var(--accent-hue)), oklch(0.62 0.022 var(--accent-hue)));
+	--fg: light-dark(oklch(0.27 0.0352 var(--accent-hue)), oklch(0.89 0.0352 var(--accent-hue)));
+
+	--accent: light-dark(oklch(0.55 0.085 var(--accent-hue)), oklch(0.74 0.085 var(--accent-hue)));
+	--accent-2-hue: calc(var(--accent-hue) + 150);
+	--accent-2: light-dark(oklch(0.53 0.0765 var(--accent-2-hue)), oklch(0.72 0.0765 var(--accent-2-hue)));
+	--good: light-dark(oklch(0.48 0.0696 145), oklch(0.65 0.15 145));
+	--warn: light-dark(oklch(0.52 0.0783 75), oklch(0.75 0.16 75));
+	--bad: light-dark(oklch(0.5 0.0725 25), oklch(0.68 0.2 25));
+
+	--space-3xs: clamp(0.2rem, 0.164rem + 0.179vw, 0.25rem);
+	--space-2xs: clamp(0.4rem, 0.329rem + 0.357vw, 0.5rem);
+	--space-xs: clamp(0.6rem, 0.493rem + 0.536vw, 0.75rem);
+	--space-s: clamp(0.8rem, 0.657rem + 0.714vw, 1rem);
+	--space-m: clamp(1.2rem, 0.986rem + 1.071vw, 1.5rem);
+	--space-l: clamp(1.6rem, 1.314rem + 1.429vw, 2rem);
+
+	--ratio: 1.2;
+	--step-0: 1rem;
+	--step--1: calc(var(--step-0) / var(--ratio));
+	--step--2: calc(var(--step--1) / var(--ratio));
+	--step-1: calc(var(--step-0) * var(--ratio));
+	--weight-normal: 400;
+	--weight-bold: 700;
+
+	--radius-sm: 0.4375rem;
+	--radius: 0.625rem;
+	--radius-full: calc(infinity * 1px);
+	--border-width: 1px;
+	--shadow:
+		0 1px 2px oklch(0.2 0.03 var(--hue) / 0.10),
+		0 6px 20px oklch(0.2 0.03 var(--hue) / 0.12);
+
+	--transition-speed: 150ms;
+	--transition-ease: cubic-bezier(0.2, 0, 0.2, 1);
+	--ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+	--font-body: "Golos Text", system-ui, sans-serif;
+	--font-display: "Unbounded", var(--font-body);
+
+	/* ── НОВОЕ ───────────────────────────────────────────────────
+	   Размер аватара — переменная, а не класс на каждый размер
+	   (было .account-avatar / -sm / -large + разводящий .app-layout). */
+	--avatar-s: 1.75rem;   /* строки списков */
+	--avatar-m: 2.5rem;    /* строки контактов */
+	--avatar: var(--avatar-m);
+	/* Пропорция портрета в карточке. 1 — как в VISUAL.md; 3/2 — заметно
+	   компактнее при той же узнаваемости. Меняется одним числом. */
+	--account-ava-ratio: 3 / 2;
+}
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+
+/* ================================================================
+   КОМПОЗИЦИОННЫЕ КЛАССЫ — @layer composition, minimal.css
+   ================================================================ */
+.stack    { display: flex; flex-direction: column; gap: var(--gap, var(--space-s)); }
+.bar      { display: flex; flex-direction: row; flex-wrap: nowrap; gap: var(--gap, var(--space-s)); align-items: var(--align, center); }
+.row      { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--gap, var(--space-s)); }
+.grow     { flex: 1 1 auto; }
+.rigid    { flex: 0 0 auto; }
+.scroller { overflow-y: auto; overscroll-behavior: contain; }
+.truncate {
+	overflow: hidden; text-overflow: ellipsis;
+	display: -webkit-box; -webkit-box-orient: vertical;
+	-webkit-line-clamp: var(--lines, 1);
+}
+.layer     { display: grid; }
+.layer > * { grid-area: 1 / 1; }
+.visually-hidden {
+	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+	overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ================================================================
+   СБРОС И ЭЛЕМЕНТЫ (упрощённый слепок @layer reset/elements)
+   ================================================================ */
+*, *::before, *::after { box-sizing: border-box; min-width: 0; }
+:where(:not(dialog)) { margin: 0; padding: 0; }
+button { font: inherit; cursor: pointer; }
+input  { font: inherit; }
+ul     { list-style: none; }
+
+body {
+	background-color: var(--bg);
+	color: var(--fg);
+	font-family: var(--font-body);
+	font-size: var(--step-0);
+	line-height: 1.5;
+	min-height: 100dvh;
+	padding: var(--space-l) var(--space-m) 5rem;
+}
+
+/* ================================================================
+   ДЕМО-КАРКАС (в приложении этого нет)
+   ================================================================ */
+.page { max-width: 74rem; margin-inline: auto; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-m); margin-block-end: var(--space-l); flex-wrap: wrap; }
+.page-title { font-family: var(--font-display); font-weight: 600; font-size: calc(var(--step-0) * 1.44); line-height: 1.2; }
+.page-sub { color: var(--muted); font-size: var(--step--1); margin-block-start: var(--space-3xs); max-width: 54ch; }
+.controls { display: flex; gap: var(--space-2xs); flex-wrap: wrap; }
+.pill {
+	font-size: var(--step--1); color: var(--fg);
+	background-color: var(--surface); border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-full); padding: var(--space-2xs) var(--space-s);
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.pill:hover { background-color: var(--surface-raised); }
+.demo-row { display: flex; gap: var(--space-l); flex-wrap: wrap; align-items: flex-start; }
+.demo-label { font-size: var(--step--2); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-block-end: var(--space-2xs); }
+.frame {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	overflow: hidden;
+	block-size: 44rem;
+	display: flex;
+	background-color: var(--bg);
+}
+.frame--desktop { inline-size: 19rem; }
+.frame--phone   { inline-size: 23rem; position: relative; }
+.fake-content {
+	flex: 1 1 auto;
+	padding: var(--space-m);
+	color: var(--muted);
+	font-size: var(--step--1);
+	background-color: color-mix(in oklch, var(--surface), transparent 60%);
+}
+
+/* ================================================================
+   SIDEBAR — три региона: .pane__top / .pane__body / .pane__bottom
+   ================================================================ */
+.sidebar {
+	overflow: hidden;
+	inline-size: 100%;
+	background-color: var(--bg);
+	/* Свет из угла — общая подпись приложения, тот же приём, что в ленте */
+	background-image: radial-gradient(90% 30% at 100% 0%, color-mix(in oklch, var(--accent), transparent 92%), transparent 60%);
+}
+.pane__top    { padding: var(--space-xs) var(--space-xs) 0; }
+.sidebar-row  { padding: 0 var(--space-xs) var(--space-2xs); }
+.pane__body   { padding: 0 var(--space-xs) var(--space-xs); }
+.pane__bottom {
+	padding: var(--space-2xs) var(--space-xs);
+	border-block-start: var(--border-width) solid var(--border);
+}
+
+/* ================================================================
+   КАРТОЧКА УЧЁТНОЙ ЗАПИСИ — .account
+   Не <details>, не кликается целиком: три отдельные мелкие цели
+   (портрет, «скопировать ключ», «ещё»), а не одна большая.
+   ================================================================ */
+.account {
+	padding-block-end: var(--space-s);
+}
+/* портрет во всю ширину колонки */
+.account-portrait {
+	position: relative;
+	display: block;
+	inline-size: 100%;
+	aspect-ratio: var(--account-ava-ratio);
+	border-radius: var(--radius);
+	overflow: hidden;
+	border: 0;
+	padding: 0;
+	background-color: var(--surface-raised);
+}
+.account-portrait img {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+	display: block;
+}
+/* при наведении снизу выплывает подпись — аватар остаётся кнопкой
+   просмотра/замены (FEATURE-SPECS/VISUAL.md), и ничем больше */
+.account-portrait::after {
+	content: "Сменить фото";
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: 0;
+	padding: var(--space-2xs) var(--space-xs);
+	font-size: var(--step--2);
+	color: oklch(0.98 0 0);
+	background-image: linear-gradient(to top, oklch(0.15 0.02 var(--hue) / 0.72), transparent);
+	transform: translateY(100%);
+	transition: transform var(--transition-speed) var(--ease);
+}
+.account-portrait:hover::after,
+.account-portrait:focus-visible::after { transform: translateY(0); }
+
+/* точка присутствия — молчит, когда всё хорошо: зелёная и почти незаметная */
+.account-dot {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	inline-size: 0.625rem;
+	block-size: 0.625rem;
+	border-radius: 50%;
+	background-color: var(--good);
+	box-shadow: 0 0 0 2px oklch(0.15 0.02 var(--hue) / 0.35);
+	animation: breathe 4s var(--transition-ease) infinite;
+}
+@keyframes breathe { 0%, 100% { opacity: 0.5 } 50% { opacity: 1 } }
+html.is-degraded .account-dot { background-color: var(--warn); }
+
+/* строка «имя + действия» */
+.account-line { padding-block-start: var(--space-2xs); }
+.account-name {
+	font-size: var(--step-0);
+	font-weight: var(--weight-bold);
+	line-height: 1.3;
+}
+.account-bio {
+	font-size: var(--step--1);
+	color: var(--muted);
+	line-height: 1.4;
+}
+
+/* Строка состояния: тишина означает норму. Появляется только при сбое —
+   поэтому её замечают, в отличие от вечного «3 реле на связи». */
+.account-alert {
+	display: none;
+	font-size: var(--step--2);
+	color: var(--warn);
+}
+html.is-degraded .account-alert { display: block; }
+
+/* ================================================================
+   ИКОНОЧНЫЕ КНОПКИ — .icon-btn (custom.css), в панели уменьшены
+   ================================================================ */
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	padding: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	border: var(--border-width) solid transparent;
+	color: var(--fg);
+	transition: background-color var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease);
+}
+.icon-btn:hover { background-color: var(--surface-raised); }
+.pane__top .icon-btn,
+.sidebar-row .icon-btn {
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	border-radius: var(--radius-sm);
+	border-color: var(--border);
+	color: var(--muted);
+}
+.pane__top .icon-btn:hover,
+.sidebar-row .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+.icon { inline-size: 1em; block-size: 1em; flex: none; }
+
+/* ================================================================
+   .menu — выпадающее меню на <details>, паттерн проекта.
+   menu__pop переименован в menu-pop.
+   ================================================================ */
+.menu { position: relative; display: inline-flex; flex: none; }
+.menu > summary { list-style: none; cursor: pointer; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-pop {
+	position: absolute;
+	inset-inline-end: 0;
+	inset-block-start: calc(100% + var(--space-3xs));
+	z-index: 20;
+	min-inline-size: 12rem;
+	padding: var(--space-3xs);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	/* два слоя света: лампа из того же угла + холодный «сквозняк» поперёк,
+	   чтобы плоскость не читалась монолитом */
+	background-image:
+		radial-gradient(120% 150% at 100% -15%, color-mix(in oklch, var(--accent), transparent 88%), transparent 55%),
+		linear-gradient(152deg, color-mix(in oklch, var(--accent-2), transparent 93%) 0%, transparent 48%);
+}
+/* однотипные пункты — список, а не россыпь кнопок; группы разделены стыком */
+.menu-pop ul + ul {
+	border-block-start: var(--border-width) solid var(--border);
+	padding-block-start: var(--space-3xs);
+	margin-block-start: var(--space-3xs);
+}
+.menu-pop button {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	inline-size: 100%;
+	text-align: start;
+	background: none;
+	border: none;
+	color: inherit;
+	font-weight: var(--weight-normal);
+	font-size: var(--step--1);
+	padding: var(--space-2xs) var(--space-xs);
+	border-radius: var(--radius-sm);
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.menu-pop button:hover { background-color: color-mix(in oklch, var(--surface), transparent 20%); }
+.menu-hint { margin-inline-start: auto; color: var(--muted); font-size: var(--step--2); }
+
+/* ================================================================
+   СТРОКА ПОИСКА
+   ================================================================ */
+.file-search-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding-inline: var(--space-xs);
+	padding-block: var(--space-3xs);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--muted);
+}
+.file-search-field:focus-within { border-color: var(--accent); }
+.file-search-field input {
+	flex: 1 1 auto;
+	background: none;
+	border: none;
+	outline: none;
+	color: var(--fg);
+	font-size: var(--step--1);
+}
+.journal-bell-btn { position: relative; }
+.nav-badge {
+	position: absolute;
+	inset-block-start: -0.35em;
+	inset-inline-end: -0.35em;
+	min-inline-size: 1.1em;
+	padding-inline: 0.25em;
+	text-align: center;
+	font-size: var(--step--2);
+	line-height: 1.4;
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	color: var(--bg);
+}
+
+/* ================================================================
+   ГРУППЫ И СТРОКИ СПИСКА
+   ================================================================ */
+.eyebrow {
+	font-size: var(--step--2);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+}
+.grouphead {
+	inline-size: 100%;
+	background: none;
+	border: none;
+	/* тот же padding-inline, что у строк ниже — левый край текста заголовка
+	   и левый край имени в списке стоят на одной вертикали ВСЕГДА,
+	   а не только когда подложка hover это показывает */
+	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
+	color: var(--muted);
+	transition: color var(--transition-speed) var(--transition-ease);
+}
+/* Заголовок — кнопка («все ›»), значит отклик нужен. Но подложка для этого
+   слишком громкая: хватает потепления текста и сдвига стрелки. */
+.grouphead:hover { color: var(--fg); }
+.grouphead-plain { padding: var(--space-s) var(--space-3xs) var(--space-2xs); }
+.grouphead__all {
+	margin-inline-start: auto;
+	text-transform: none;
+	letter-spacing: normal;
+	font-size: var(--step--2);
+	color: var(--muted);
+	transition: color var(--transition-speed) var(--transition-ease);
+}
+.grouphead__all::after {
+	content: " ›";
+	display: inline-block;
+	transition: transform var(--transition-speed) var(--ease);
+}
+.grouphead:hover .grouphead__all { color: var(--accent); }
+.grouphead:hover .grouphead__all::after { transform: translateX(2px); }
+
+.stream-row {
+	border-radius: var(--radius-sm);
+	padding-inline-end: var(--space-3xs);
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+/* Было var(--surface-raised) — холодная серая плашка, спорившая с тёплой
+   интонацией приложения. Тот же свет лампы, только очень слабый. */
+.stream-row:hover { background-color: color-mix(in oklch, var(--accent), transparent 92%); }
+/* Открытая переписка — без этого в списке из тридцати строк не видно,
+   где ты находишься. Полоска слева, а не заливка: тише, чем hover. */
+.stream-row.is-active {
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+	box-shadow: inset 2px 0 0 var(--accent);
+}
+.stream-row.is-active .stream__name { color: var(--fg); font-weight: 500; }
+.stream {
+	min-inline-size: 0;
+	background: none;
+	border: none;
+	/* отступ одинаковый со всех сторон — подложка hover читается ровной
+	   плашкой, а не приплюснутой; высоту строки всё равно задаёт аватар */
+	padding: var(--space-3xs);
+	color: var(--fg);
+	font-size: var(--step--1);
+	line-height: 1.35;
+	text-align: start;
+}
+.stream-ava {
+	flex: none;
+	inline-size: var(--avatar-s);
+	block-size: var(--avatar-s);
+	border-radius: var(--radius-sm);
+	background-color: var(--surface-raised);
+	border: var(--border-width) solid var(--border);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	object-fit: cover;
+}
+.stream__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-inline-size: 0; }
+.pin-toggle {
+	flex: none;
+	background: none;
+	border: none;
+	/* было --space-3xs со всех сторон — флажок упирался в правый край
+	   подложки; по горизонтали нужен больший отступ, чем по вертикали */
+	padding: var(--space-3xs) var(--space-2xs);
+	color: var(--accent);
+	font-size: 0.95rem;
+	line-height: 1;
+	opacity: 0.25;
+	transition: opacity var(--transition-speed) var(--transition-ease);
+}
+.stream-row:hover .pin-toggle,
+.pin-toggle:focus-visible,
+.pin-toggle[aria-pressed="true"] { opacity: 1; }
+
+/* ================================================================
+   НИЗ ПАНЕЛИ
+   ================================================================ */
+.quick {
+	inline-size: 100%;
+	background: none;
+	padding: var(--space-2xs) var(--space-xs);
+	border-radius: var(--radius-sm);
+	border: var(--border-width) dashed var(--border);
+	color: var(--muted);
+	font-size: var(--step--1);
+	text-align: start;
+}
+.quick:hover { color: var(--fg); border-color: var(--accent); border-style: solid; }
+.quick small { display: block; color: var(--muted); font-size: var(--step--2); line-height: 1.3; }
+
+/* Статус соединения — тот же принцип: молчит, пока всё в порядке */
+.conn {
+	display: none;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-2xs) var(--space-xs);
+	font-size: var(--step--2);
+	color: var(--warn);
+}
+html.is-degraded .conn { display: flex; }
+.conn-dot { inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background-color: var(--warn); flex: none; }
+
+/* ================================================================
+   ТЕЛЕФОН: панель выезжает поверх содержимого
+   ================================================================ */
+.frame--phone .sidebar {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	z-index: 250;
+	inline-size: min(80%, 20rem);
+	border-inline-end: var(--border-width) solid var(--border);
+	box-shadow: var(--shadow);
+	transform: translateX(-100%);
+	transition: transform var(--transition-speed) var(--transition-ease);
+	display: flex;
+	flex-direction: column;
+}
+.frame--phone.is-open .sidebar { transform: translateX(0); }
+.sidebar-backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 240;
+	background-color: oklch(0.15 0.02 var(--hue) / 0.45);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--transition-speed) var(--transition-ease);
+}
+.frame--phone.is-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
+.hamburger {
+	position: absolute;
+	inset-block-start: var(--space-s);
+	inset-inline-start: var(--space-s);
+	z-index: 260;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+	<header class="page-head">
+		<div>
+			<h1 class="page-title">Боковая панель целиком</h1>
+			<p class="page-sub">Карточка не кликается: портрет, «скопировать ключ» и «ещё» — три отдельные цели. Строка состояния молчит, пока всё в порядке. Меню аккаунта — обычный выпадающий список у маленькой кнопки.</p>
+		</div>
+		<div class="controls">
+			<button type="button" class="pill" id="degradeBtn">Показать сбой связи</button>
+			<button type="button" class="pill" id="themeBtn">Тёмная тема</button>
+		</div>
+	</header>
+
+	<div class="demo-row">
+		<div>
+			<p class="demo-label">Десктоп · панель в потоке</p>
+			<div class="frame frame--desktop"><div class="mount" data-mount></div></div>
+		</div>
+
+		<div>
+			<p class="demo-label">Меню аккаунта раскрыто</p>
+			<div class="frame frame--desktop"><div class="mount" data-mount data-open-menu></div></div>
+		</div>
+
+		<div>
+			<p class="demo-label">Телефон · выезжающая панель</p>
+			<div class="frame frame--phone" id="phone">
+				<div class="fake-content">
+					<p style="margin-block-start: 2.5rem">Экран под панелью остаётся на месте: панель — временный слой, а не раздел.</p>
+				</div>
+				<div class="sidebar-backdrop" data-close></div>
+				<div class="mount" data-mount></div>
+				<button type="button" class="icon-btn hamburger" id="burger" aria-label="Открыть меню" style="background-color: var(--surface); border-color: var(--border)">
+					<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- ================================================================
+     РАЗМЕТКА ПАНЕЛИ — один экземпляр, ниже клонируется во все рамки
+     ================================================================ -->
+<template id="sidebarTemplate">
+<aside class="sidebar rigid stack" style="--gap: 0" aria-label="Навигация">
+
+	<!-- ── регион 1: карточка учётной записи ───────────────────── -->
+	<div class="pane__top stack" style="--gap: var(--space-2xs)">
+		<div class="account stack" style="--gap: var(--space-3xs)">
+
+			<button type="button" class="account-portrait" aria-label="Открыть аватар">
+				<img alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23cdbdea'/%3E%3Cstop offset='1' stop-color='%238b78b6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='80' fill='url(%23g)'/%3E%3Ccircle cx='60' cy='33' r='15' fill='%23fdfcff' opacity='.93'/%3E%3Cpath d='M28 80c0-18 14-28 32-28s32 10 32 28z' fill='%23fdfcff' opacity='.93'/%3E%3C/svg%3E" />
+				<span class="account-dot" aria-hidden="true"></span>
+			</button>
+
+			<div class="account-line bar" style="--gap: var(--space-3xs)">
+				<strong class="account-name grow truncate" title="kukusya_ne_kusayus_chestnoe_slovo">kukusya_ne_kusayus_chestnoe_slovo</strong>
+
+				<button type="button" class="icon-btn" aria-label="Скопировать мой ключ" title="Скопировать мой ключ">
+					<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor"/>
+						<path d="M10.5 3.5A1.5 1.5 0 0 0 9 2H4a1.5 1.5 0 0 0-1.5 1.5v5A1.5 1.5 0 0 0 4 10" stroke="currentColor"/>
+					</svg>
+				</button>
+
+				<details class="menu">
+					<summary class="icon-btn" aria-label="Меню учётной записи" title="Меню учётной записи">
+						<svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.8" cy="8" r="1.2"/></svg>
+					</summary>
+					<div class="menu-pop stack" style="--gap: 0">
+						<ul class="stack" style="--gap: 1px">
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M7.5.9a3.6 3.6 0 0 1 1 7.1c1.2.1 2.2.6 3 1.3 1 1 1.5 2.4 1.5 4.3a.5.5 0 0 1-1 0c0-1.7-.4-2.9-1.2-3.6-.7-.7-1.8-1.1-3.3-1.1s-2.6.4-3.3 1.1c-.7.7-1.2 1.9-1.2 3.6a.5.5 0 0 1-1 0c0-1.9.5-3.3 1.5-4.3.8-.7 1.8-1.2 3-1.3a3.6 3.6 0 0 1 1-7.1Zm0 1a2.6 2.6 0 1 0 0 5.3 2.6 2.6 0 0 0 0-5.3Z" fill="currentColor"/></svg>Профиль и аватар</button></li>
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><circle cx="7.5" cy="7.5" r="2.2" stroke="currentColor"/><path d="M7.5 1.2 8 2.7a5 5 0 0 1 1.5.6l1.3-.8 1 1-.8 1.3q.4.7.6 1.5l1.5.5v1.4l-1.5.5a5 5 0 0 1-.6 1.5l.8 1.3-1 1-1.3-.8a5 5 0 0 1-1.5.6L7.5 13.8h-1.4l-.5-1.5a5 5 0 0 1-1.5-.6l-1.3.8-1-1 .8-1.3a5 5 0 0 1-.6-1.5L1.2 8.2V6.8l1.5-.5q.2-.8.6-1.5l-.8-1.3 1-1 1.3.8q.7-.4 1.5-.6l.5-1.5Z" stroke="currentColor" stroke-linejoin="round"/></svg>Настройки</button></li>
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M6.5 1.5a6.2 6.2 0 1 0 6.9 8.4 6.2 6.2 0 0 1-6.9-8.4Z" fill="currentColor"/></svg>Тема<span class="menu-hint">светлая</span></button></li>
+						</ul>
+						<ul class="stack" style="--gap: 1px">
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><rect x="2.5" y="6.5" width="10" height="7" rx="1" stroke="currentColor"/><path d="M4.7 6.5V4.6a2.8 2.8 0 0 1 5.6 0v1.9" stroke="currentColor"/></svg>Секретная фраза</button></li>
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M2 3h3.5L7 4.5h6a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5v-7A.5.5 0 0 1 2 3Z" fill="currentColor"/></svg>Хранилище</button></li>
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M1 2h3M5 2h9M1 5h2M4 5h7M1 8h3M5 8h9M1 11h2M4 11h7" stroke="currentColor" stroke-linecap="round"/></svg>Диагностика</button></li>
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor"/><path d="M5.8 5.8a1.8 1.8 0 0 1 3.5.6c0 1.2-1.8 1.8-1.8 1.8" stroke="currentColor" stroke-linecap="round"/><circle cx="7.5" cy="10.6" r=".6" fill="currentColor"/></svg>Справка</button></li>
+						</ul>
+						<ul class="stack" style="--gap: 1px">
+							<li><button type="button"><svg class="icon" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M10.5 1.5H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h7.5M12 5l2.2 2.5L12 10M6.5 7.5h7.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>Выйти</button></li>
+						</ul>
+					</div>
+				</details>
+			</div>
+
+			<p class="account-bio truncate" style="--lines: 2">Не кусаюсь, честное слово. Пишу про сети, вяжу носки коту и спорю о протоколах.</p>
+			<p class="account-alert">Основное реле недоступно</p>
+		</div>
+	</div>
+
+	<!-- ── регион 2: поиск и быстрые действия ──────────────────── -->
+	<div class="sidebar-row bar" style="--gap: var(--space-2xs)">
+		<label class="visually-hidden" for="q">Поиск</label>
+		<div class="file-search-field grow">
+			<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor"/><path d="m10.5 10.5 3 3" stroke="currentColor" stroke-linecap="round"/></svg>
+			<input id="q" type="search" placeholder="Поиск" />
+		</div>
+		<button type="button" class="icon-btn journal-bell-btn" aria-label="Журнал">
+			<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 7a4 4 0 0 1 8 0c0 3 1 4 1 4H3s1-1 1-4Z" stroke="currentColor" stroke-linejoin="round"/><path d="M6.5 13a1.6 1.6 0 0 0 3 0" stroke="currentColor" stroke-linecap="round"/></svg>
+			<span class="nav-badge">3</span>
+		</button>
+		<details class="menu">
+			<summary class="icon-btn" aria-label="Добавить">
+				<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+			</summary>
+			<div class="menu-pop stack" style="--gap: 1px">
+				<ul class="stack" style="--gap: 1px">
+					<li><button type="button">Написать человеку</button></li>
+					<li><button type="button">Создать канал</button></li>
+				</ul>
+			</div>
+		</details>
+	</div>
+
+	<!-- ── регион 3: группы (единственный скроллер панели) ─────── -->
+	<div class="pane__body stack scroller grow" style="--gap: var(--space-s)">
+
+		<div class="stack" style="--gap: 1px">
+			<p class="eyebrow grouphead-plain">Избранное</p>
+			<ul class="stack" style="--gap: 1px">
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">Р</span><span class="stream__name">Роман</span></button><button type="button" class="pin-toggle" aria-pressed="true" aria-label="Открепить">⚑</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">К</span><span class="stream__name">Крипта по-русски</span></button><button type="button" class="pin-toggle" aria-pressed="true" aria-label="Открепить">⚑</button></li>
+			</ul>
+		</div>
+
+		<div class="stack" style="--gap: 1px">
+			<button type="button" class="eyebrow grouphead bar" style="--gap: var(--space-2xs)">Люди<span class="grouphead__all">все ›</span></button>
+			<ul class="stack" style="--gap: 1px">
+				<li class="stream-row is-active bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">С</span><span class="stream__name">Света</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">Д</span><span class="stream__name">Дмитрий Анатольевич Ко…</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">М</span><span class="stream__name">Марина</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">?</span><span class="stream__name">npub1q8v…f30d</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+			</ul>
+		</div>
+
+		<div class="stack" style="--gap: 1px">
+			<button type="button" class="eyebrow grouphead bar" style="--gap: var(--space-2xs)">Мои каналы<span class="grouphead__all">все ›</span></button>
+			<ul class="stack" style="--gap: 1px">
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">У</span><span class="stream__name">Уголок · разработка</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">К</span><span class="stream__name">Кактусы и другие колючие</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+			</ul>
+		</div>
+
+		<div class="stack" style="--gap: 1px">
+			<button type="button" class="eyebrow grouphead bar" style="--gap: var(--space-2xs)">Подписки<span class="grouphead__all">все ›</span></button>
+			<ul class="stack" style="--gap: 1px">
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">Н</span><span class="stream__name">Nostr по-русски</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">В</span><span class="stream__name">Вязание для начинающих</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+				<li class="stream-row bar" style="--gap: 0"><button type="button" class="stream bar grow" style="--gap: var(--space-2xs)"><span class="stream-ava bar" style="align-items:center; justify-content:center" aria-hidden="true">С</span><span class="stream__name">Self-hosting</span></button><button type="button" class="pin-toggle" aria-pressed="false" aria-label="Закрепить">⚐</button></li>
+			</ul>
+		</div>
+	</div>
+
+	<!-- ── регион 4: низ панели ────────────────────────────────── -->
+	<div class="pane__bottom stack" style="--gap: var(--space-2xs)">
+		<button type="button" class="quick bar" style="--gap: var(--space-xs)">
+			<svg class="icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor"/><path d="M2 8h12M8 2c1.8 2 1.8 10 0 12M8 2C6.2 4 6.2 12 8 14" stroke="currentColor"/></svg>
+			<span class="stack" style="--gap: 0">Быстрая связь<small>Комната без учётной записи</small></span>
+		</button>
+		<div class="conn"><span class="conn-dot" aria-hidden="true"></span>Нет связи с реле — сообщения ждут отправки</div>
+	</div>
+
+</aside>
+</template>
+
+<script>
+	const tpl = document.getElementById("sidebarTemplate");
+	document.querySelectorAll("[data-mount]").forEach((mount) => {
+		mount.replaceWith(tpl.content.cloneNode(true));
+	});
+	// у второй рамки меню аккаунта пришпилено открытым
+	const frames = document.querySelectorAll(".frame--desktop");
+	if (frames[1]) frames[1].querySelector(".menu").open = true;
+
+	// одно открытое меню за раз (в приложении это делает use-details-menu.js)
+	document.addEventListener("click", (e) => {
+		document.querySelectorAll("details.menu[open]").forEach((d) => {
+			if (!d.contains(e.target)) d.open = false;
+		});
+	});
+
+	const root = document.documentElement;
+	const themeBtn = document.getElementById("themeBtn");
+	root.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+	const paintTheme = () => { themeBtn.textContent = root.dataset.theme === "dark" ? "Светлая тема" : "Тёмная тема"; };
+	paintTheme();
+	themeBtn.addEventListener("click", () => {
+		root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+		paintTheme();
+	});
+
+	const degradeBtn = document.getElementById("degradeBtn");
+	degradeBtn.addEventListener("click", () => {
+		root.classList.toggle("is-degraded");
+		degradeBtn.textContent = root.classList.contains("is-degraded") ? "Всё в порядке" : "Показать сбой связи";
+	});
+
+	const phone = document.getElementById("phone");
+	document.getElementById("burger").addEventListener("click", () => phone.classList.toggle("is-open"));
+	phone.querySelector("[data-close]").addEventListener("click", () => phone.classList.remove("is-open"));
+</script>
+</body>
+</html>
