@@ -7870,3 +7870,5 @@ build зелёный.
 DoD этапа 10-довесок-5 полностью закрыт.
 
 SIDEBAR-SPEC-2 этап 1: nav-groups.jsx (AddMenu+bell убраны, sidebar-row упрощён) — воркер испортил файл (лишние удаления импортов, сломанный JSX), откат+ручной Edit точечно. CSS (.journal-bell-btn/.nav-badge) и i18n (4 ключа, 12 локалей) — правки напрямую. node --test 2100/2103 (3 сторонних strfry), vite build зелёный 898KB. Коммит следующим шагом.
+
+SIDEBAR-SPEC-2 этап 2: account-card.jsx переструктурирован (меню-на-имени вместо многоточия, IconChevronDown новая, порядок портрет/меню/био/ключ), app.jsx проброс onOpenJournal+unreadJournalCount, custom.css (.account-menu/.account-trigger/.account-chev/.unread-dot/.account-key, .account-line удалён), account.menuJournal в 12 локалях. Правка напрямую (не через worker.sh — тот же класс задачи подвёл на этапе 1). node --test 2100/2103, vite build зелёный, живая Chrome-проверка на изолированном стенде (порт 5182) — меню/шеврон/порядок/копирование подтверждены.

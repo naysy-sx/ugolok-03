@@ -610,6 +610,7 @@
 		"portraitHint": "Cambiar foto",
 		"copyKeyAria": "Copiar mi clave",
 		"menuAria": "Menú de la cuenta",
+		"menuJournal": "Registro",
 		"keyCopied": "Clave copiada",
 		"keyCopyFailed": "No se pudo copiar la clave"
 	},

@@ -610,6 +610,7 @@
 		"portraitHint": "Change photo",
 		"copyKeyAria": "Copy my key",
 		"menuAria": "Account menu",
+		"menuJournal": "Journal",
 		"keyCopied": "Key copied",
 		"keyCopyFailed": "Could not copy the key"
 	},

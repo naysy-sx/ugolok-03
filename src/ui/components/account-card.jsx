@@ -19,8 +19,19 @@ import IconHelpCircle from "../icons/help-circle.jsx";
 import IconActivityLog from "../icons/activity-log.jsx";
 import IconExit from "../icons/exit.jsx";
 import IconCopy from "../icons/copy.jsx";
-import IconDotsHorizontal from "../icons/dots-horizontal.jsx";
+import IconChevronDown from "../icons/chevron-down.jsx";
+import IconBell from "../icons/bell.jsx";
 import { t } from "../signals/i18n.js";
+
+// Первые 9 символов npub + многоточие + последние 4 (ASIDE-REDESIGN/
+// SIDEBAR-SPEC-2.md, этап 2) — npub bech32, алфавит фиксированной ширины,
+// обрезка по числу символов здесь допустима (не текст произвольной длины).
+// В буфер обмена (handleCopyKey ниже) идёт ПОЛНЫЙ npub, эта строка — только
+// для отображения.
+function shortNpub(pubkeyHex) {
+	const npub = npubEncode(pubkeyHex);
+	return `${npub.slice(0, 9)}…${npub.slice(-4)}`;
+}
 
 // ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 3 — карточка учётной записи БОЛЬШЕ
 // НЕ <details> и не одна кликабельная цель на всю карточку (было —
@@ -30,7 +41,7 @@ import { t } from "../signals/i18n.js";
 // срабатывает от случайного касания при скролле. Три отдельные мелкие
 // цели: портрет (открыть "Профиль"), кнопка "скопировать ключ", кнопка
 // "ещё" (меню).
-export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettings, onOpenHelp, onOpenDiagnostics, themeMode, onToggleTheme }) {
+export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettings, onOpenHelp, onOpenDiagnostics, onOpenJournal, unreadJournalCount, themeMode, onToggleTheme }) {
 	const id = currentUser.value.id;
 	const login = currentUser.value.login;
 	const [avatar, setAvatar] = useState("");
@@ -77,81 +88,91 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 				<span class={`account-dot${degraded ? " account-dot--warn" : ""}`} aria-hidden="true" />
 			</button>
 
-			<div class="account-line bar" style={{ "--gap": "var(--space-2xs)" }}>
-				<strong class="account-name grow truncate" title={login || id}>
-					{login || id.slice(0, 16) + "…"}
-				</strong>
-
-				<button type="button" class="icon-btn" onClick={handleCopyKey} aria-label={t("account.copyKeyAria")} title={t("account.copyKeyAria")}>
-					<IconCopy />
-				</button>
-
-				<details class="menu" ref={menuRef} onClick={handleMenuClick}>
-					<summary class="icon-btn" aria-label={t("account.menuAria")}>
-						<IconDotsHorizontal />
-					</summary>
-					<div class="menu-pop stack" style={{ "--gap": "0" }}>
-						<ul class="stack" style={{ "--gap": "1px" }}>
-							<li>
-								<button type="button" onClick={onEditProfile}>
-									<IconPerson /> {t("sidebarCard.menuProfile")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onOpenSettings}>
-									<IconGear /> {t("sidebarCard.menuSettings")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onToggleTheme}>
-									{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />} {t("sidebarCard.menuTheme")}
-									<span class="menu-hint">{resolveEffectiveTheme(themeMode) === "dark" ? t("themeStatus.dark") : t("themeStatus.light")}</span>
-								</button>
-							</li>
-						</ul>
-						<ul class="stack" style={{ "--gap": "1px" }}>
-							<li>
-								<button type="button" onClick={onOpenSettings}>
-									<IconLockClosed /> {t("sidebarCard.menuMnemonic")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onOpenSettings}>
-									<IconLockClosed /> {t("sidebarCard.menuRecover")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onOpenStorage}>
-									<IconFolder /> {t("sidebarCard.storageMenuItem")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onOpenDiagnostics}>
-									<IconActivityLog /> {t("sidebarCard.menuDiagnostics")}
-								</button>
-							</li>
-							<li>
-								<button type="button" onClick={onOpenHelp}>
-									<IconHelpCircle /> {t("sidebarCard.menuHelp")}
-								</button>
-							</li>
-						</ul>
-						<ul class="stack" style={{ "--gap": "1px" }}>
-							<li>
-								<button type="button" onClick={lock}>
-									<IconExit /> {t("shell.logout")}
-								</button>
-							</li>
-						</ul>
-					</div>
-				</details>
-			</div>
+			<details class="account-menu" ref={menuRef} onClick={handleMenuClick}>
+				<summary aria-label={t("account.menuAria")}>
+					<span class="account-trigger">
+						<strong class="account-name truncate" title={login || id}>
+							{login || id.slice(0, 16) + "…"}
+						</strong>
+						{unreadJournalCount > 0 && <span class="unread-dot" aria-hidden="true" />}
+						<span class="account-chev" aria-hidden="true">
+							<IconChevronDown />
+						</span>
+					</span>
+				</summary>
+				<div class="menu-pop stack" style={{ "--gap": "0" }}>
+					<ul class="stack" style={{ "--gap": "1px" }}>
+						<li>
+							<button type="button" onClick={onEditProfile}>
+								<IconPerson /> {t("sidebarCard.menuProfile")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenSettings}>
+								<IconGear /> {t("sidebarCard.menuSettings")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onToggleTheme}>
+								{resolveEffectiveTheme(themeMode) === "dark" ? <IconSun /> : <IconMoon />} {t("sidebarCard.menuTheme")}
+								<span class="menu-hint">{resolveEffectiveTheme(themeMode) === "dark" ? t("themeStatus.dark") : t("themeStatus.light")}</span>
+							</button>
+						</li>
+					</ul>
+					<ul class="stack" style={{ "--gap": "1px" }}>
+						<li>
+							<button type="button" onClick={onOpenJournal}>
+								<IconBell /> {t("account.menuJournal")}
+								{unreadJournalCount > 0 && <span class="menu-hint">{unreadJournalCount}</span>}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenSettings}>
+								<IconLockClosed /> {t("sidebarCard.menuMnemonic")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenSettings}>
+								<IconLockClosed /> {t("sidebarCard.menuRecover")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenStorage}>
+								<IconFolder /> {t("sidebarCard.storageMenuItem")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenDiagnostics}>
+								<IconActivityLog /> {t("sidebarCard.menuDiagnostics")}
+							</button>
+						</li>
+						<li>
+							<button type="button" onClick={onOpenHelp}>
+								<IconHelpCircle /> {t("sidebarCard.menuHelp")}
+							</button>
+						</li>
+					</ul>
+					<ul class="stack" style={{ "--gap": "1px" }}>
+						<li>
+							<button type="button" onClick={lock}>
+								<IconExit /> {t("shell.logout")}
+							</button>
+						</li>
+					</ul>
+				</div>
+			</details>
 
 			{bio && (
 				<p class="account-bio truncate" style={{ "--lines": "2" }} title={bio}>
 					{bio}
 				</p>
 			)}
+
+			<button type="button" class="account-key" onClick={handleCopyKey} title={t("account.copyKeyAria")}>
+				<span class="grow truncate">{shortNpub(id)}</span>
+				<IconCopy />
+			</button>
+
 			{degraded && <p class="account-alert">{t(relay.labelKey)}</p>}
 		</div>
 	);

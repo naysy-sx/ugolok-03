@@ -755,8 +755,51 @@ html[data-media-full] .top-corner-actions {
 	50% { opacity: 1 }
 }
 
-.account-line {
-	padding-block-start: var(--space-2xs);
+/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 2 — меню учётной записи переехало
+   с многоточия на имя (кнопка-детекция действия невозможна: "меню
+   учётной записи" — не действие с предметом, а разнородный список, а имя
+   уже стоит на экране и само сообщает область действия). .account-line
+   (обёртка имя+ключ+многоточие в ряд) — удалена вместе с прежней
+   разметкой, .account-menu/.account-trigger/.account-key заняли её место
+   структурно (portrait → меню-на-имени → био → ключ). */
+.account-menu {
+	position: relative;
+	display: block;
+	margin-block-start: var(--space-2xs);
+	border: 0;
+	border-radius: 0;
+	padding: 0;
+}
+/* <summary> — реальный тег, элементный слой (@layer elements) даёт ему
+   list-style/cursor/font-weight — все три обязаны быть здесь явно (шапка
+   ТЗ-2 §0), даже там, где совпадают с тем, что нужно. */
+.account-menu > summary {
+	list-style: none;
+	cursor: pointer;
+	font-weight: var(--weight-normal);
+	padding: 0;
+	margin-block-end: 0;
+}
+.account-menu > summary::-webkit-details-marker {
+	display: none;
+}
+.account-menu[open] > summary {
+	margin-block-end: 0;
+}
+/* Подложка на hover/focus обнимает ИМЯ, а не всю ширину карточки —
+   отдельный внутренний span, а не сам summary (тот на всю строку). */
+.account-trigger {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	padding: var(--space-3xs) var(--space-2xs);
+	margin-inline-start: calc(-1 * var(--space-2xs));
+	border-radius: var(--radius-sm);
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.account-menu > summary:hover .account-trigger,
+.account-menu > summary:focus-visible .account-trigger {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
 }
 .account-name {
 	font-size: var(--step-0);
@@ -764,12 +807,80 @@ html[data-media-full] .top-corner-actions {
 	line-height: 1.3;
 	color: var(--fg);
 }
+.account-chev {
+	flex: none;
+	display: grid;
+	color: var(--muted);
+	transition: transform var(--transition-speed) var(--ease), color var(--transition-speed) var(--transition-ease);
+}
+.account-menu > summary:hover .account-chev {
+	color: var(--accent);
+}
+.account-menu[open] .account-chev {
+	transform: rotate(180deg);
+	color: var(--accent);
+}
+.unread-dot {
+	flex: none;
+	inline-size: 0.4rem;
+	block-size: 0.4rem;
+	border-radius: 50%;
+	background-color: var(--accent);
+	margin-inline-start: var(--space-3xs);
+}
+/* Триггер теперь слева (не многоточие справа, как раньше) — меню
+   прижимается к левому краю, составной селектор поверх общего .menu-pop
+   (тот не трогаем — общий паттерн выпадашки на всё приложение). */
+.account-menu .menu-pop {
+	inset-inline-start: 0;
+	inset-inline-end: auto;
+}
+
 .account-bio {
+	margin-block-start: var(--space-3xs);
+	padding-inline: var(--space-3xs);
 	font-size: var(--step--1);
 	line-height: 1.4;
 	color: var(--muted);
-	margin: 0;
 }
+/* Строка ключа — <button>, элементный слой даёт background/color/border/
+   padding/font, все явно обнулены/заданы (шапка ТЗ-2 §0). Моноширинный
+   шрифт отличает ключ от имени строкой выше. */
+.account-key {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	inline-size: 100%;
+	text-align: start;
+	margin-block-start: var(--space-2xs);
+	margin-inline-start: calc(-1 * var(--space-2xs));
+	padding: var(--space-3xs) var(--space-2xs);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-sm);
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: var(--step--2);
+	line-height: 1.4;
+	opacity: 0.85;
+	cursor: pointer;
+	transition: background-color var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease), opacity var(--transition-speed) var(--transition-ease);
+}
+.account-key:hover,
+.account-key:focus-visible {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+	color: var(--fg);
+	opacity: 1;
+}
+.account-key svg {
+	flex: none;
+	opacity: 0.7;
+}
+.account-key:hover svg {
+	opacity: 1;
+	color: var(--accent);
+}
+
 /* Строка состояния: тишина означает норму. Появляется в DOM только при
    сбое (account-card.jsx: {degraded && ...}) — поэтому её замечают, в
    отличие от вечного "3 реле на связи". */

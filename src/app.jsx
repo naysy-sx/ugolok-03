@@ -252,6 +252,8 @@ function MainShell() {
 						onOpenSettings={() => selectNavItem("settings")}
 						onOpenHelp={() => selectNavItem("help")}
 						onOpenDiagnostics={() => selectNavItem("diagnostics")}
+						onOpenJournal={() => selectNavItem("journal")}
+						unreadJournalCount={unreadJournalCount}
 						themeMode={themeMode}
 						onToggleTheme={handleToggleTheme}
 					/>

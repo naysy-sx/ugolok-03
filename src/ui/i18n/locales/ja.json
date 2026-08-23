@@ -610,6 +610,7 @@
 		"portraitHint": "写真を変更",
 		"copyKeyAria": "自分の鍵をコピー",
 		"menuAria": "アカウントメニュー",
+		"menuJournal": "ジャーナル",
 		"keyCopied": "鍵をコピーしました",
 		"keyCopyFailed": "鍵をコピーできませんでした"
 	},
