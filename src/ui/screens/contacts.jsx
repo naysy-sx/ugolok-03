@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, fetchDiscoveryProfiles } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { openChat } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
@@ -38,8 +38,6 @@ import {
 	acceptContactRequestAction,
 	rejectContactRequestAction,
 	cancelContactRequestAction,
-	discoveryProfiles,
-	refreshDiscoveryProfiles,
 } from "../signals/contacts.js";
 import PermissionEditor from "../components/permission-editor.jsx";
 import Screen from "../components/screen.jsx";
@@ -123,17 +121,6 @@ export default function Contacts() {
 		ensureConnected(ownerPubkey, privKey, dbKey)
 			.then(async () => {
 				refreshAll();
-				// Редизайн интерфейса, этап 7 (CONTRACTS.md) — грид "Хотят
-				// познакомиться" переехал с "Обзора". Порядок важен (найдено живой
-				// проверкой ещё на "Обзоре", этап 46): refreshAll() ВЫШЕ уже обновил
-				// contacts.value синхронно (recomputeContactSignals — без await
-				// внутри) — refreshDiscoveryProfiles фильтрует по СВЕЖЕМУ списку
-				// контактов, иначе только что принятый контакт продолжал бы
-				// показываться карточкой.
-				await fetchDiscoveryProfiles();
-				await refreshDiscoveryProfiles(ownerPubkey);
-				const discoveryPubkeys = discoveryProfiles.value.map((p) => p.pubkey);
-				await ensureProfilesFetched(discoveryPubkeys, fetchProfiles).catch(() => {});
 				await refreshGroups(ownerPubkey, dbKey);
 				// именно здесь, не раньше: до этой точки fetchProfiles бросил бы
 				// (нет соединения). Экран открыт заново — refreshProfiles подтягивает
@@ -268,15 +255,6 @@ export default function Contacts() {
 		}
 	}
 
-	// Редизайн интерфейса, этап 7 (CONTRACTS.md) — переехало из discovery.jsx,
-	// переведено на runRowAction (busyRef-гейт + rowError) вместо собственных
-	// busy/error state, которые были в discovery.jsx — тот же паттерн, что уже
-	// используют остальные действия этого экрана.
-	function handleToggleDiscoveryCard(pubkey) {
-		const alreadySent = outgoingRequests.value.some((r) => r.peerPubkey === pubkey);
-		runRowAction(() => (alreadySent ? cancelContactRequestAction(pubkey) : sendContactRequestAction(pubkey)));
-	}
-
 	// Контакты и заблокированные теперь СТРУКТУРНО взаимоисключающие (единая
 	// contactRelationships, один state на peer — этап 49, CONTACTS-FSM.md) —
 	// отдельный фильтр здесь больше не нужен.
@@ -284,77 +262,6 @@ export default function Contacts() {
 		selectedGroupIds.size === 0
 			? contacts.value
 			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
-
-	// REDESIGN-SPEC.md, этап 7 — "когда контактов нет, раздел знакомства
-	// становится ГЛАВНЫМ содержимым экрана, а не подвалом под пустым списком".
-	// hasNoContacts — по contacts.value (реальные контакты), НЕ по
-	// visibleContacts (тот пуст и при активном фильтре групп без совпадений,
-	// это другая ситуация — список есть, просто фильтр ничего не показал).
-	const hasNoContacts = contacts.value.length === 0;
-
-	function renderDiscoverySection(prominent) {
-		return (
-			<section class={`stack${prominent ? " card" : ""}`} aria-labelledby="discovery-heading" style={{ "--gap": "var(--space-s)" }}>
-				<h2 id="discovery-heading" style={prominent ? undefined : { font: "inherit", fontWeight: "var(--weight-bold)" }}>
-					{t("discovery.wantToMeetTitle")}
-				</h2>
-				{discoveryProfiles.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{t("discovery.noOneVisible")}</p>
-				) : (
-					<div class="grid" style={{ "--gap": "var(--space-s)" }}>
-						{discoveryProfiles.value.map((card) => {
-							const sent = outgoingRequests.value.some((r) => r.peerPubkey === card.pubkey);
-							return (
-								<article
-									key={card.pubkey}
-									class="stack box"
-									style={{
-										"--gap": "var(--space-2xs)",
-										"--pad": "var(--space-s)",
-										position: "relative",
-										border: "var(--border-width) solid var(--border)",
-										borderRadius: "var(--radius)",
-									}}
-								>
-									<button
-										type="button"
-										disabled={busy}
-										onClick={() => handleToggleDiscoveryCard(card.pubkey)}
-										aria-pressed={sent}
-										aria-label={sent ? t("discovery.cancelRequestAria") : t("discovery.sendRequestAria")}
-										style={{
-											position: "absolute",
-											top: "var(--space-2xs)",
-											right: "var(--space-2xs)",
-											border: "none",
-											background: "none",
-											padding: 0,
-											cursor: "pointer",
-											fontSize: "var(--step-2)",
-											color: sent ? "var(--good)" : "var(--muted)",
-										}}
-									>
-										{sent ? "✓" : "○"}
-									</button>
-									<ContactIdentity pubkey={card.pubkey} />
-									{card.showChannels && card.channels.length > 0 && (
-										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
-											{card.channels.map((c) => (
-												<li key={c.id}>
-													<strong>{c.name}</strong>
-													{c.description && <>: {c.description}</>}
-												</li>
-											))}
-										</ul>
-									)}
-								</article>
-							);
-						})}
-					</div>
-				)}
-			</section>
-		);
-	}
 
 	return (
 		<Screen title={t("nav.contacts")}>
@@ -501,11 +408,6 @@ export default function Contacts() {
 				</aside>
 
 				<div class="contacts-main stack" style={{ "--gap": "var(--space-l)" }}>
-					{/* REDESIGN-SPEC.md, этап 7 — пустой список контактов: секция
-					    знакомства становится ГЛАВНЫМ содержимым, перед основным
-					    списком (который тут же покажет свой собственный empty-state). */}
-					{hasNoContacts && renderDiscoverySection(true)}
-
 					{/* Пользователь: "существующие контакты — главный рабочий блок,
 					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
@@ -621,11 +523,6 @@ export default function Contacts() {
 							</ul>
 						)}
 					</section>
-
-					{/* REDESIGN-SPEC.md, этап 7 — контакты уже есть: секция знакомства —
-					    вторичная (после "Входящие"), но раскрытая, не <details>, как и
-					    была на "Обзоре". */}
-					{!hasNoContacts && renderDiscoverySection(false)}
 
 					{/* Пользователь: не диктовал явно, но "Входящие" остаётся всегда
 					    развёрнутым (требует решения) — эти два списка вторичны

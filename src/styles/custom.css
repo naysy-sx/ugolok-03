@@ -1172,6 +1172,48 @@ html[data-media-full] .top-corner-actions {
 	color: var(--bg);
 }
 
+/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4 — «Знакомства», постоянная
+   первая строка списка (nav-groups.jsx), тот же визуальный язык, что
+   .stream-row/.stream (hover-подложка, отступы), но своя пара классов:
+   это не элемент списка контактов/каналов (нет пин-тумблера, нет
+   непрочитанного), смешивать с .stream-row было бы обманом разметки. */
+.discover-row {
+	border-radius: var(--radius-sm);
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.discover-row:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+}
+.discover-row.is-active {
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+	box-shadow: inset 2px 0 0 var(--accent);
+}
+.discover {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	inline-size: 100%;
+	text-align: start;
+	background: none;
+	border: none;
+	padding: var(--space-3xs);
+	color: var(--fg);
+	font-size: var(--step--1);
+	line-height: 1.35;
+	cursor: pointer;
+}
+.discover-mark {
+	flex: none;
+	inline-size: var(--avatar-s);
+	block-size: var(--avatar-s);
+	display: grid;
+	place-items: center;
+	border-radius: var(--radius-sm);
+	border: var(--border-width) solid transparent;
+	color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+}
+
 /* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)
    выше уже grow+scroller и толкает этот блок к низу колонки, margin-auto
    не нужен (было нужно раньше, когда весь <aside> скроллился одним куском). */

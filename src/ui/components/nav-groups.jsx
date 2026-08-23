@@ -21,6 +21,7 @@ import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconStar from "../icons/star.jsx";
+import IconCompass from "../icons/compass.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -183,6 +184,21 @@ export default function NavGroups({ unreadJournalCount }) {
 			    "ровно один .scroller на каждом пути от .shell до листа"; путь
 			    через .sidebar теперь заходит СЮДА, не в сам <aside>, см. app.jsx). */}
 			<div class="pane__body stack scroller grow" style={{ "--gap": "var(--space-s)" }}>
+				{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4 — "Знакомства" постоянной
+				    первой строкой, до всех групп (включая "Избранное"): раздел живёт
+				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
+				    компас, не лупа (та уже занята полем поиска строкой выше). */}
+				<ul class="stack" style={{ "--gap": "1px" }}>
+					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}`}>
+						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
+							<span class="discover-mark">
+								<IconCompass />
+							</span>
+							<span class="stream__name">{t("shell.discoverHeading")}</span>
+						</button>
+					</li>
+				</ul>
+
 				{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (
 					<div class="stack" style={{ "--gap": "1px" }}>
 						<p class="eyebrow grouphead-plain">{t("shell.favoritesHeading")}</p>

@@ -6,6 +6,7 @@ import Placeholder from "./ui/screens/placeholder.jsx";
 import Unlock from "./ui/screens/unlock.jsx";
 import Profile from "./ui/screens/profile.jsx";
 import Contacts from "./ui/screens/contacts.jsx";
+import Discovery from "./ui/screens/discovery.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Settings from "./ui/screens/settings.jsx";
@@ -301,6 +302,7 @@ function MainShell() {
 				{place.value.kind === "profile" && <Profile />}
 				{place.value.kind === "help" && <Help />}
 				{place.value.kind === "people" && <Contacts />}
+				{place.value.kind === "discovery" && <Discovery />}
 				{place.value.kind === "chat" && <Chat />}
 				{(place.value.kind === "channels" || place.value.kind === "channel") && <Channels />}
 				{place.value.kind === "settings" && <Settings />}
@@ -308,7 +310,7 @@ function MainShell() {
 				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
 				{place.value.kind === "storage" && <Files />}
 				{(() => {
-					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "chat", "channels", "channel", "settings", "journal", "today", "storage"];
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "journal", "today", "storage"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
 					return <Placeholder title={place.value.kind} />;
 				})()}

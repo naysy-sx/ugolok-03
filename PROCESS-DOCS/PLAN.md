@@ -6990,7 +6990,7 @@ main/unlock) спека тоже упоминает ошибочно — пра�
 БД), `custom.css`, локали (`account.favAdd/favRemove`, удалить
 `shell.pinAria/unpinAria`, если больше не используются).
 
-### Этап 4 — «Знакомства»: отдельный экран, первая строка списка — не начат
+### Этап 4 — «Знакомства»: отдельный экран, первая строка списка — ЗАКРЫТ (код+тесты+живая Chrome-проверка)
 Файлы: `screens/discovery.jsx` (новый, `renderDiscoverySection` из
 `contacts.jsx` переезжает целиком), `contacts.jsx` (секция и её проп
 `prominent`/`hasNoContacts`-ветки убираются, `DiscoverySection`-логика
