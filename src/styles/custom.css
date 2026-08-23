@@ -565,6 +565,8 @@ html[data-media-full] .top-corner-actions {
    сам. */
 .sidebar {
 	overflow: hidden;
+	/* свет из угла — та же подпись, что в ленте сообщений */
+	background-image: radial-gradient(90% 30% at 100% 0%, color-mix(in oklch, var(--accent), transparent 92%), transparent 60%);
 }
 
 /* .rigid/.stack (раскладка) уже в JSX — здесь то, что регламент не
@@ -796,16 +798,26 @@ html[data-media-full] .top-corner-actions {
 .sidebar-row .file-search-field input {
 	font-size: var(--step--1);
 }
-/* Компактные icon-only кнопки панели (колокольчик/"＋") — макет использует
-   заметно меньшую (28px), квадратную с рамкой форму, не общий 36px круглый
-   .icon-btn (тот остаётся стандартом для остального приложения — здесь
-   только локальное переопределение размера/формы, не новый класс). */
-.pane__top .icon-btn,
-.sidebar-row .icon-btn {
-	width: 1.75rem;
-	height: 1.75rem;
+/* Компактные icon-only кнопки панели (колокольчик/"＋", карточка учётной
+   записи) — макет использует заметно меньшую (28px), квадратную с рамкой
+   форму, не общий 36px круглый .icon-btn (тот остаётся стандартом для
+   остального приложения — здесь только локальное переопределение
+   размера/формы/цвета, не новый класс). Было продублировано двумя
+   селекторами (.pane__top .icon-btn и .sidebar-row .icon-btn) — после того
+   как карточка перестала быть <details>, сводится к одному: оба региона
+   лежат внутри .sidebar. */
+.sidebar .icon-btn {
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
 	border-radius: var(--radius-sm);
 	border-color: var(--border);
+	color: var(--muted);
+}
+.sidebar .icon-btn:hover,
+.sidebar .icon-btn:focus-visible {
+	color: var(--accent);
+	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
 }
 .pane__body {
 	padding: 0 var(--space-xs) var(--space-xs);
