@@ -90,6 +90,20 @@ export async function migrateLegacyContactTables(ownerPubkey, dbKey) {
 	});
 }
 
+// Найдено живым фидбеком пользователя — sendRequest(peer) не проверял peer !==
+// ownerPubkey: заявка "самому себе" реально отправлялась и реально приходила
+// (INCOMING_PENDING на собственный pubkey). Корень — не в UI (npub можно
+// скопировать и вставить куда угодно, включая собственный), а в самом
+// FSM-диспетчере — единственное надёжное место поймать это для ЛЮБОГО
+// вызывающего (discovery.jsx/contacts.jsx уже сегодня, и любой будущий путь).
+export class SelfContactRequestError extends Error {
+	constructor() {
+		super("нельзя отправить заявку самому себе");
+		this.name = "SelfContactRequestError";
+		this.key = "errors.cannotAddSelf";
+	}
+}
+
 const RUMOR_KIND_TO_EVENT_TYPE = {
 	[CONTACT_REQUEST_KIND]: "REMOTE_REQUEST",
 	[CONTACT_ACCEPTED_KIND]: "REMOTE_ACCEPT",
@@ -196,6 +210,7 @@ export function createContactRuntime(options) {
 	}
 
 	function sendRequest(peer, greeting = "") {
+		if (peer === ownerPubkey) throw new SelfContactRequestError();
 		return dispatch(peer, { type: "USER_SEND_REQUEST", greeting });
 	}
 	function accept(peer) {

@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "Der Blossom-Server hat einen manipulierten Chunk {{chunkIndex}} zurückgegeben (Digest stimmt nicht überein)",
 		"blossomManifestTampered": "Der Blossom-Server hat ein manipuliertes Manifest zurückgegeben (Digest stimmt nicht überein)",
 		"blossomRejectedFile": "Der Blossom-Server hat die Datei abgelehnt{{detail}}",
+		"cannotAddSelf": "du kannst dir selbst keine Kontaktanfrage senden",
 		"cannotDeleteOthersMessage": "Sie können eine fremde Nachricht nicht löschen",
 		"cannotEditDeletedMessage": "Sie können eine gelöschte Nachricht nicht bearbeiten",
 		"cannotEditOthersMessage": "Sie können eine fremde Nachricht nicht bearbeiten",

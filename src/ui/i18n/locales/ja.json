@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "Blossomサーバーが改ざんされたチャンク{{chunkIndex}}を返しました（ダイジェストが一致しません）",
 		"blossomManifestTampered": "Blossomサーバーが改ざんされたマニフェストを返しました（ダイジェストが一致しません）",
 		"blossomRejectedFile": "Blossomサーバーがファイルを拒否しました{{detail}}",
+		"cannotAddSelf": "自分自身に連絡先リクエストは送れません",
 		"cannotDeleteOthersMessage": "他人のメッセージは削除できません",
 		"cannotEditDeletedMessage": "削除済みのメッセージは編集できません",
 		"cannotEditOthersMessage": "他人のメッセージは編集できません",

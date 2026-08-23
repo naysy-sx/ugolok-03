@@ -5,7 +5,7 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { unwrap as nip59Unwrap, wrap as nip59Wrap } from "../src/core/crypto/nip59.js";
-import { createContactRuntime, migrateLegacyContactTables } from "../src/domain/contacts/contact-runtime.js";
+import { createContactRuntime, migrateLegacyContactTables, SelfContactRequestError } from "../src/domain/contacts/contact-runtime.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND, buildContactRequestRumor } from "../src/domain/contacts/requests.js";
 import { parseContactListEvent, parseMuteListEvent } from "../src/domain/contacts/contacts.js";
 import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-table.js";
@@ -97,6 +97,21 @@ test("sendRequest: публикует gift-wrapped CONTACT_REQUEST_KIND, пер�
 	const row = await readRelationship(OWNER_PUBKEY, BOB_PUBKEY);
 	assert.equal(row.state, "OUTGOING_PENDING");
 	assert.ok(stateChanges.some((c) => c.peer === BOB_PUBKEY && c.stateName === "OUTGOING_PENDING"));
+});
+
+// Живой фидбек пользователя — заявка самому себе реально уходила и реально
+// "приходила" (kukusya мог добавиться к kukusya). sendRequest — единственная
+// точка входа для ЛЮБОГО вызывающего (discovery.jsx/contacts.jsx), поэтому
+// гейт стоит здесь, не в UI.
+test("sendRequest: себе самому — SelfContactRequestError, ничего не публикуется и не персистится", async () => {
+	const { runtime, published, stateChanges } = makeRuntime();
+	await runtime.load();
+	await assert.rejects(async () => runtime.sendRequest(OWNER_PUBKEY, "привет"), SelfContactRequestError);
+
+	assert.equal(published.length, 0, "gift-wrap не должен был уйти на relay");
+	assert.equal(stateChanges.length, 0, "состояние не должно было измениться");
+	const row = await readRelationship(OWNER_PUBKEY, OWNER_PUBKEY);
+	assert.equal(row, null, "запись отношения с самим собой не должна была появиться");
 });
 
 // --- handleIncomingRumor: REMOTE_REQUEST ---

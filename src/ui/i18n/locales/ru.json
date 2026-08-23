@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "Blossom-сервер вернул подменённый чанк {{chunkIndex}} (digest не совпадает)",
 		"blossomManifestTampered": "Blossom-сервер вернул подменённый манифест (digest не совпадает)",
 		"blossomRejectedFile": "Blossom-сервер отклонил файл{{detail}}",
+		"cannotAddSelf": "нельзя отправить заявку самому себе",
 		"cannotDeleteOthersMessage": "нельзя удалить чужое сообщение",
 		"cannotEditDeletedMessage": "нельзя редактировать удалённое сообщение",
 		"cannotEditOthersMessage": "нельзя редактировать чужое сообщение",

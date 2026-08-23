@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "El servidor Blossom devolvió un fragmento {{chunkIndex}} manipulado (el digest no coincide)",
 		"blossomManifestTampered": "El servidor Blossom devolvió un manifiesto manipulado (el digest no coincide)",
 		"blossomRejectedFile": "El servidor Blossom rechazó el archivo{{detail}}",
+		"cannotAddSelf": "no puedes enviarte una solicitud de contacto a ti mismo",
 		"cannotDeleteOthersMessage": "no puedes eliminar un mensaje ajeno",
 		"cannotEditDeletedMessage": "no puedes editar un mensaje eliminado",
 		"cannotEditOthersMessage": "no puedes editar un mensaje ajeno",

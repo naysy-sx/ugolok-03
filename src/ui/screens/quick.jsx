@@ -603,13 +603,13 @@ export default function Quick({ onExit }) {
 	return (
 		<div class="quick-entry stack" style={{ "--gap": "var(--space-m)" }}>
 			<span class="quick-lamp" aria-hidden="true" />
+			{/* Живой фидбек пользователя — кнопка "Назад" (onExit) здесь была
+			    дублем: RoomsOverlay (rooms-overlay.jsx) уже оборачивает ВЕСЬ
+			    Quick (и этот экран входа, и комнату) собственной явной кнопкой
+			    закрытия (.rooms-overlay-close) — второй выход рядом с
+			    заголовком больше не нужен. */}
 			<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }}>
 				<h2>{t("quick.entry.title")}</h2>
-				{typeof onExit === "function" && (
-					<button type="button" class="btn--ghost" onClick={onExit}>
-						{t("quick.exitButton")}
-					</button>
-				)}
 			</header>
 			<p class="hero-lead">{t("quick.entry.lead")}</p>
 

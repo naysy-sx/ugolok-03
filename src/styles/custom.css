@@ -849,7 +849,6 @@ html[data-media-full] .top-corner-actions {
    было видно БОЛЬШЕ, не меньше. */
 .account-bio {
 	margin-block: var(--space-3xs) var(--space-2xs);
-	padding-inline: var(--space-3xs);
 	font-size: var(--font-size-bio);
 	line-height: 1.4;
 	color: var(--muted);
@@ -928,8 +927,19 @@ html[data-media-full] .top-corner-actions {
 		radial-gradient(120% 150% at 100% -15%, color-mix(in oklch, var(--accent), transparent 88%), transparent 55%),
 		linear-gradient(152deg, color-mix(in oklch, var(--accent-2), transparent 93%) 0%, transparent 48%);
 }
+/* Живой фидбек пользователя — "конские отступы" внутри меню: elements-слой
+   даёт ГОЛОМУ <ul> padding-inline-start:var(--space-l) (32px, аффорданс
+   списка) И margin-block:var(--space-m) (24px, как у <p>) — list-style:none
+   ниже снимал только маркер, не эти два. <li> туда же добавляет свои
+   margin-block:var(--space-3xs) (4px) — тоже явно в ноль, пункты меню
+   плотные, не проза. */
 .menu-pop ul {
 	list-style: none;
+	padding-inline-start: 0;
+	margin-block: 0;
+}
+.menu-pop li {
+	margin-block: 0;
 }
 .menu-pop ul + ul {
 	border-block-start: var(--border-width) solid var(--border);
@@ -1163,7 +1173,13 @@ html[data-media-full] .top-corner-actions {
 	flex: none;
 	background: none;
 	border: none;
-	padding: var(--space-3xs) var(--space-2xs);
+	/* Живой фидбек пользователя — правый паддинг отдельно, поменьше
+	   (5px), чтобы звезда вставала точно под "все ›" заголовка группы
+	   выше (тот справа не добавляет своего отступа сверх padding
+	   .grouphead-строки — симметричные 8px здесь смещали её левее). */
+	padding-block: var(--space-3xs);
+	padding-inline-start: var(--space-2xs);
+	padding-inline-end: 5px;
 	color: var(--muted);
 	line-height: 0;
 	opacity: 0.2;
@@ -1332,6 +1348,11 @@ html[data-media-full] .top-corner-actions {
 	border: var(--border-width) dashed var(--border);
 	color: var(--muted);
 	font-size: var(--step--1);
+	/* Живой фидбек пользователя — заголовок+подпись читались центрированными
+	   внутри строки: не авторский стиль, УА-дефолт <button>{text-align:center}
+	   (ни один слой файла его не перебивал явно — та же ловушка, что уже не
+	   раз описана в шапке этого файла). */
+	text-align: start;
 }
 .quick:hover,
 .quick:focus-visible {
@@ -1393,7 +1414,14 @@ html[data-media-full] .top-corner-actions {
 	overflow-y: auto;
 	border-radius: var(--radius-lg);
 	box-shadow: var(--shadow);
-	background-color: var(--bg);
+	/* Живой фидбек пользователя — было var(--bg) (нейтральный фон), а
+	   .quick-entry/.quick-room внутри (max-inline-size:34rem/60rem
+	   соответственно, центрированы) красят себя в var(--quick-tint) —
+	   по бокам узкого .quick-entry оставались некрасивые белые полосы
+	   до края панели. Тот же тон здесь напрямую (--quick-tint — custom
+	   property СВОИХ .quick-entry/.quick-room, наружу, на предка, не
+	   наследуется — нужно явное значение). */
+	background-color: var(--good-surface);
 }
 /* Свёрнуто — НЕ display:none: Quick внутри остаётся смонтированным
    (React/Preact не трогает DOM-поддерево скрытого display:none элемента,

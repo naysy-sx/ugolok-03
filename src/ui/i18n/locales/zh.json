@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "Blossom 服务器返回了被篡改的分片 {{chunkIndex}}（摘要不匹配）",
 		"blossomManifestTampered": "Blossom 服务器返回了被篡改的清单（摘要不匹配）",
 		"blossomRejectedFile": "Blossom 服务器拒绝了该文件{{detail}}",
+		"cannotAddSelf": "不能给自己发送联系人请求",
 		"cannotDeleteOthersMessage": "无法删除他人的消息",
 		"cannotEditDeletedMessage": "无法编辑已删除的消息",
 		"cannotEditOthersMessage": "无法编辑他人的消息",

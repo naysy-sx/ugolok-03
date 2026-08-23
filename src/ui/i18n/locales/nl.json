@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "De Blossom-server retourneerde een gemanipuleerd chunk {{chunkIndex}} (digest komt niet overeen)",
 		"blossomManifestTampered": "De Blossom-server retourneerde een gemanipuleerd manifest (digest komt niet overeen)",
 		"blossomRejectedFile": "De Blossom-server heeft het bestand geweigerd{{detail}}",
+		"cannotAddSelf": "je kunt jezelf geen contactverzoek sturen",
 		"cannotDeleteOthersMessage": "u kunt het bericht van iemand anders niet verwijderen",
 		"cannotEditDeletedMessage": "u kunt een verwijderd bericht niet bewerken",
 		"cannotEditOthersMessage": "u kunt het bericht van iemand anders niet bewerken",

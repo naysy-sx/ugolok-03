@@ -834,6 +834,7 @@
 		"blossomChunkTampered": "Blossom sunucusu değiştirilmiş bir {{chunkIndex}} parçası döndürdü (digest eşleşmiyor)",
 		"blossomManifestTampered": "Blossom sunucusu değiştirilmiş bir manifest döndürdü (digest eşleşmiyor)",
 		"blossomRejectedFile": "Blossom sunucusu dosyayı reddetti{{detail}}",
+		"cannotAddSelf": "kendine kişi isteği gönderemezsin",
 		"cannotDeleteOthersMessage": "başkasının mesajını silemezsiniz",
 		"cannotEditDeletedMessage": "silinmiş bir mesajı düzenleyemezsiniz",
 		"cannotEditOthersMessage": "başkasının mesajını düzenleyemezsiniz",

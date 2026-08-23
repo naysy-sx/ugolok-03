@@ -385,5 +385,9 @@ export const discoveryProfiles = signal([]); // [{pubkey, visible, showChannels,
 // человек, уже добавленный в контакты, не нуждается в повторном "знакомстве").
 export async function refreshDiscoveryProfiles(ownerPubkey) {
 	const rows = await db.table("discoveryProfiles").toArray();
-	discoveryProfiles.value = rows.filter((r) => r.visible && !contacts.value.includes(r.pubkey));
+	// Живой фидбек пользователя — свой же профиль (если сам включил "показывать
+	// меня в обзоре") мог попасть в собственную ленту "Знакомств"; защита в
+	// дополнение к гейту в contact-runtime.js (тот ловит уже на отправке
+	// заявки, этот — чтобы карточка самого себя вообще не появлялась).
+	discoveryProfiles.value = rows.filter((r) => r.visible && r.pubkey !== ownerPubkey && !contacts.value.includes(r.pubkey));
 }
