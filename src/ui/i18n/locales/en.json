@@ -132,9 +132,7 @@
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
-		"groupAllLink": "all",
-		"pinAria": "Pin \u201c{{name}}\u201d",
-		"unpinAria": "Unpin \u201c{{name}}\u201d"
+		"groupAllLink": "all"
 	},
 	"unlock": {
 		"checking": "Checking…",
@@ -610,6 +608,8 @@
 		"portraitHint": "Change photo",
 		"copyKeyAria": "Copy my key",
 		"menuAria": "Account menu",
+		"favAdd": "Add “{{name}}” to favorites",
+		"favRemove": "Remove “{{name}}” from favorites",
 		"menuJournal": "Journal",
 		"keyCopied": "Key copied",
 		"keyCopyFailed": "Could not copy the key"

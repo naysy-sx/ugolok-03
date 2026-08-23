@@ -1110,28 +1110,66 @@ html[data-media-full] .top-corner-actions {
 	white-space: nowrap;
 	min-inline-size: 0;
 }
-/* Пин-тумблер (⚑/⚐, текстовый глиф) — едва виден по умолчанию, тот же
-   hover-паттерн, что .profile-edit-btn (проявляется по hover строки, не
-   только самой кнопки), закреплённый — не гасим (сам факт закрепления
-   должен быть виден без наведения). */
-.pin-toggle {
+/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 3 — непрочитанное: точка на
+   аватаре (.ava-dot, обёртка вокруг avatar заводится в StreamItem —
+   nav-groups.jsx, комментарий там про <img> без детей), имя строки
+   плотнее. Числа в строке НЕТ — только точка (см. .group-count ниже,
+   у ЗАГОЛОВКА группы число уместно, там оно одно на весь список). */
+.has-unread .stream__name {
+	font-weight: 500;
+	color: var(--fg);
+}
+.ava-dot {
+	position: absolute;
+	inset-block-start: -3px;
+	inset-inline-end: -3px;
+	inline-size: 0.55rem;
+	block-size: 0.55rem;
+	border-radius: 50%;
+	background-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--bg);
+}
+/* Звезда (было — текстовый флажок ⚑/⚐, .pin-toggle) — то же самое место в
+   разметке и тот же hover-паттерн (проявляется по hover строки), просто
+   честнее сообщает "избранное": флажок читался как "пометить"/
+   "пожаловаться", жест из почты и модерации. */
+.fav-toggle {
 	flex: none;
 	background: none;
 	border: none;
-	/* По горизонтали больше, чем по вертикали — иначе флажок упирается
-	   в правый край подложки. */
 	padding: var(--space-3xs) var(--space-2xs);
-	color: var(--accent);
-	font-size: 0.95rem;
-	line-height: 1;
+	color: var(--muted);
+	line-height: 0;
+	opacity: 0.2;
 	cursor: pointer;
-	opacity: 0.25;
-	transition: opacity var(--transition-speed) var(--transition-ease);
+	transition: opacity var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease);
 }
-.stream-row:hover .pin-toggle,
-.pin-toggle:focus-visible,
-.pin-toggle[aria-pressed="true"] {
+.stream-row:hover .fav-toggle,
+.fav-toggle:focus-visible {
 	opacity: 1;
+}
+.fav-toggle[aria-pressed="true"] {
+	opacity: 1;
+	color: var(--gold);
+}
+/* Сумма непрочитанного в заголовке группы ("Люди"/"Мои каналы"/"Подписки") —
+   в отличие от строки списка (там только точка), в заголовке число уместно:
+   оно одно на весь список, а не на каждую из тридцати строк, и остаётся
+   видимым, даже когда сам список свёрнут/отфильтрован поиском (считается по
+   ПОЛНЫМ спискам в nav-groups.jsx, не по видимым после фильтра). */
+.group-count {
+	margin-inline-start: var(--space-2xs);
+	min-inline-size: 1.35em;
+	padding-inline: 0.35em;
+	text-align: center;
+	font-size: var(--step--2);
+	line-height: 1.55;
+	font-weight: 500;
+	letter-spacing: normal;
+	text-transform: none;
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	color: var(--bg);
 }
 
 /* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)

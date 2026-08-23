@@ -7,10 +7,20 @@ import { place, openChat, openChannel, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
+import {
+	unreadMessagesCount,
+	unreadOwnedChannelsCount,
+	unreadSubscribedChannelsCount,
+	unreadByContact,
+	unreadByChannel,
+	refreshUnreadMessagesCount,
+	refreshUnreadChannelsCount,
+} from "../signals/notifications.js";
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+import IconStar from "../icons/star.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -41,13 +51,15 @@ function PersonAvatar({ pubkey, name }) {
 	);
 }
 
-// Пин-тумблер — текстовый глиф (⚑/⚐), тот же приём, что уже есть в проекте
-// для лёгких одноразовых индикаторов (discovery-card ✓/○, кнопка "◈ Сегодня") —
-// не заводим новый SVG-компонент ради одной иконки.
-function PinToggle({ pinned, onToggle, label }) {
+// Избранное (ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 3) — было текстовым
+// глифом-флажком (⚑/⚐); звезда честнее сообщает "избранное" (флажок читался
+// как "пометить"/"пожаловаться" — жест из почты и модерации). Домен
+// (pinChannel/unpinChannel, kind 30066) не менялся — это переименование
+// только UI-слоя, group.value/группа "Избранное" уже существовали.
+function FavToggle({ pinned, onToggle, label }) {
 	return (
-		<button type="button" class="pin-toggle" onClick={onToggle} aria-pressed={pinned} aria-label={label}>
-			{pinned ? "⚑" : "⚐"}
+		<button type="button" class="fav-toggle" onClick={onToggle} aria-pressed={pinned} aria-label={label}>
+			<IconStar filled={pinned} />
 		</button>
 	);
 }
@@ -56,14 +68,25 @@ function PinToggle({ pinned, onToggle, label }) {
 // (place.value, сравнение в NavGroups): без неё в списке из тридцати
 // переписок/каналов не видно, где находишься. .bar, не .row — строка
 // никогда не переносится (длинное имя обрезается .stream__name).
-function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabel }) {
+//
+// unread (этап 3) — точка на аватаре, число НЕ показываем (пользователь:
+// счётчик в строке отнимает у имени четверть ширины панели). .stream-ava
+// иногда рендерится как <img> (PersonAvatar с реальным фото) — у img не
+// бывает дочерних узлов, поэтому .ava-dot кладём не ВНУТРЬ аватара
+// (ТЗ-2 §5.2 предполагало именно так), а в тонкую позиционирующую обёртку
+// вокруг него — тот же визуальный результат (точка в углу), без невалидного
+// DOM.
+function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabel, unread = 0 }) {
 	return (
-		<li class={`stream-row bar${active ? " is-active" : ""}`} style={{ "--gap": "0", alignItems: "center" }}>
+		<li class={`stream-row bar${active ? " is-active" : ""}${unread > 0 ? " has-unread" : ""}`} style={{ "--gap": "0", alignItems: "center" }}>
 			<button type="button" class="stream bar grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={onOpen}>
-				{avatar}
+				<span style={{ position: "relative", display: "inline-flex", flex: "none" }}>
+					{avatar}
+					{unread > 0 && <span class="ava-dot" aria-hidden="true" />}
+				</span>
 				<span class="stream__name">{name}</span>
 			</button>
-			<PinToggle pinned={pinned} onToggle={onTogglePin} label={pinLabel} />
+			<FavToggle pinned={pinned} onToggle={onTogglePin} label={pinLabel} />
 		</li>
 	);
 }
@@ -86,6 +109,8 @@ export default function NavGroups({ unreadJournalCount }) {
 			listOwnedChannels(ownerPubkey, dbKey),
 			listSubscribedChannels(ownerPubkey, dbKey),
 			loadPinned(ownerPubkey, dbKey),
+			refreshUnreadMessagesCount(ownerPubkey),
+			refreshUnreadChannelsCount(ownerPubkey, dbKey),
 		]);
 		setConversations(convs);
 		setOwned([...ownedChannels].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)));
@@ -169,9 +194,10 @@ export default function NavGroups({ unreadJournalCount }) {
 									name={c.name}
 									onOpen={() => openChannel(c.id)}
 									active={isChannelActive(c.id)}
+									unread={unreadByChannel.value[c.id] ?? 0}
 									pinned
 									onTogglePin={() => handleTogglePinChannel(c.id, true)}
-									pinLabel={t("shell.unpinAria", { name: c.name })}
+									pinLabel={t("account.favRemove", { name: c.name })}
 								/>
 							))}
 							{favoritePeople.map((pk) => (
@@ -181,9 +207,10 @@ export default function NavGroups({ unreadJournalCount }) {
 									name={personName(pk)}
 									onOpen={() => openChat(pk)}
 									active={isPersonActive(pk)}
+									unread={unreadByContact.value[pk] ?? 0}
 									pinned
 									onTogglePin={() => handleTogglePinPerson(pk, true)}
-									pinLabel={t("shell.unpinAria", { name: personName(pk) })}
+									pinLabel={t("account.favRemove", { name: personName(pk) })}
 								/>
 							))}
 						</ul>
@@ -193,6 +220,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
 						{t("shell.peopleGroupHeading")}
+						{unreadMessagesCount.value > 0 && <span class="group-count">{unreadMessagesCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
 					</button>
 					<ul class="streams stack" style={{ "--gap": "1px" }}>
@@ -203,9 +231,10 @@ export default function NavGroups({ unreadJournalCount }) {
 								name={personName(pk)}
 								onOpen={() => openChat(pk)}
 								active={isPersonActive(pk)}
+								unread={unreadByContact.value[pk] ?? 0}
 								pinned={pinned.people.includes(pk)}
 								onTogglePin={() => handleTogglePinPerson(pk, pinned.people.includes(pk))}
-								pinLabel={t(pinned.people.includes(pk) ? "shell.unpinAria" : "shell.pinAria", { name: personName(pk) })}
+								pinLabel={t(pinned.people.includes(pk) ? "account.favRemove" : "account.favAdd", { name: personName(pk) })}
 							/>
 						))}
 					</ul>
@@ -214,6 +243,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
 						{t("shell.myChannelsGroupHeading")}
+						{unreadOwnedChannelsCount.value > 0 && <span class="group-count">{unreadOwnedChannelsCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
 					</button>
 					<ul class="streams stack" style={{ "--gap": "1px" }}>
@@ -224,9 +254,10 @@ export default function NavGroups({ unreadJournalCount }) {
 								name={c.name || t("channels.card.untitled")}
 								onOpen={() => openChannel(c.id)}
 								active={isChannelActive(c.id)}
+								unread={unreadByChannel.value[c.id] ?? 0}
 								pinned={pinned.channels.includes(c.id)}
 								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
+								pinLabel={t(pinned.channels.includes(c.id) ? "account.favRemove" : "account.favAdd", { name: c.name || t("channels.card.untitled") })}
 							/>
 						))}
 					</ul>
@@ -235,6 +266,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
 						{t("shell.subscriptionsGroupHeading")}
+						{unreadSubscribedChannelsCount.value > 0 && <span class="group-count">{unreadSubscribedChannelsCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
 					</button>
 					<ul class="streams stack" style={{ "--gap": "1px" }}>
@@ -245,9 +277,10 @@ export default function NavGroups({ unreadJournalCount }) {
 								name={c.name || t("channels.card.untitled")}
 								onOpen={() => openChannel(c.id)}
 								active={isChannelActive(c.id)}
+								unread={unreadByChannel.value[c.id] ?? 0}
 								pinned={pinned.channels.includes(c.id)}
 								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-								pinLabel={t(pinned.channels.includes(c.id) ? "shell.unpinAria" : "shell.pinAria", { name: c.name || t("channels.card.untitled") })}
+								pinLabel={t(pinned.channels.includes(c.id) ? "account.favRemove" : "account.favAdd", { name: c.name || t("channels.card.untitled") })}
 							/>
 						))}
 					</ul>

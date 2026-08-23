@@ -127,8 +127,6 @@
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
 		"groupAllLink": "all",
-		"pinAria": "Pin “{{name}}”",
-		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "Menu openen",
 		"closeMenu": "Menu sluiten",
 		"switchToLightTheme": "Overschakelen naar licht thema",
@@ -610,6 +608,8 @@
 		"portraitHint": "Foto wijzigen",
 		"copyKeyAria": "Mijn sleutel kopiëren",
 		"menuAria": "Accountmenu",
+		"favAdd": "„{{name}}“ toevoegen aan favorieten",
+		"favRemove": "„{{name}}“ verwijderen uit favorieten",
 		"menuJournal": "Journaal",
 		"keyCopied": "Sleutel gekopieerd",
 		"keyCopyFailed": "Kopiëren van sleutel mislukt"

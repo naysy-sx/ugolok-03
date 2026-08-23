@@ -132,9 +132,7 @@
 		"myChannelsGroupTitle": "Все мои каналы",
 		"subscriptionsGroupHeading": "Подписки",
 		"subscriptionsGroupTitle": "Все подписки и чужие каналы",
-		"groupAllLink": "все",
-		"pinAria": "Закрепить «{{name}}»",
-		"unpinAria": "Открепить «{{name}}»"
+		"groupAllLink": "все"
 	},
 	"unlock": {
 		"checking": "Проверка…",
@@ -610,6 +608,8 @@
 		"portraitHint": "Сменить фото",
 		"copyKeyAria": "Скопировать мой ключ",
 		"menuAria": "Меню учётной записи",
+		"favAdd": "Добавить «{{name}}» в избранное",
+		"favRemove": "Убрать «{{name}}» из избранного",
 		"menuJournal": "Журнал",
 		"keyCopied": "Ключ скопирован",
 		"keyCopyFailed": "Не удалось скопировать ключ"

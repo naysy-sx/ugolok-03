@@ -127,8 +127,6 @@
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
 		"groupAllLink": "all",
-		"pinAria": "Pin “{{name}}”",
-		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "メニューを開く",
 		"closeMenu": "メニューを閉じる",
 		"switchToLightTheme": "ライトテーマに切り替える",
@@ -610,6 +608,8 @@
 		"portraitHint": "写真を変更",
 		"copyKeyAria": "自分の鍵をコピー",
 		"menuAria": "アカウントメニュー",
+		"favAdd": "「{{name}}」をお気に入りに追加",
+		"favRemove": "「{{name}}」をお気に入りから削除",
 		"menuJournal": "ジャーナル",
 		"keyCopied": "鍵をコピーしました",
 		"keyCopyFailed": "鍵をコピーできませんでした"

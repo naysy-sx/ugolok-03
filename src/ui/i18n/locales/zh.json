@@ -127,8 +127,6 @@
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
 		"groupAllLink": "all",
-		"pinAria": "Pin “{{name}}”",
-		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "打开菜单",
 		"closeMenu": "关闭菜单",
 		"switchToLightTheme": "切换到浅色主题",
@@ -610,6 +608,8 @@
 		"portraitHint": "更换照片",
 		"copyKeyAria": "复制我的密钥",
 		"menuAria": "账户菜单",
+		"favAdd": "将「{{name}}」加入收藏",
+		"favRemove": "将「{{name}}」移出收藏",
 		"menuJournal": "动态",
 		"keyCopied": "密钥已复制",
 		"keyCopyFailed": "无法复制密钥"

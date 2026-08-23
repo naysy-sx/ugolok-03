@@ -127,8 +127,6 @@
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
 		"groupAllLink": "all",
-		"pinAria": "Pin “{{name}}”",
-		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "Menüyü aç",
 		"closeMenu": "Menüyü kapat",
 		"switchToLightTheme": "Açık temaya geç",
@@ -610,6 +608,8 @@
 		"portraitHint": "Fotoğrafı değiştir",
 		"copyKeyAria": "Anahtarımı kopyala",
 		"menuAria": "Hesap menüsü",
+		"favAdd": "“{{name}}” favorilere ekle",
+		"favRemove": "“{{name}}” favorilerden kaldır",
 		"menuJournal": "Günlük",
 		"keyCopied": "Anahtar kopyalandı",
 		"keyCopyFailed": "Anahtar kopyalanamadı"

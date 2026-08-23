@@ -344,6 +344,12 @@
 		--info-edge-dark: oklch(0.33 0.0478 235);
 		--info-edge: light-dark(var(--info-edge-light), var(--info-edge-dark));
 
+		/* Золото избранного (ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 3) —
+		   .fav-toggle[aria-pressed="true"], единственное место в проекте, не
+		   входит в семью --bad/--warn/--good/--info (не статус, а
+		   "избранное"-акцент), поэтому без -surface/-edge пары. */
+		--gold: light-dark(oklch(0.62 0.12 85), oklch(0.8 0.13 85));
+
 		/* ---- Форма, глубина, движение ----------------------------------- */
 		/* Этап "разметка по макету" (REDESIGN/ugolok-final.html — --r-sm:7px)
 		   — раньше жил только как незавершённый фолбэк var(--radius-sm, 4px)

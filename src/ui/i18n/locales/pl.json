@@ -127,8 +127,6 @@
 		"subscriptionsGroupHeading": "Subscriptions",
 		"subscriptionsGroupTitle": "All subscriptions and other channels",
 		"groupAllLink": "all",
-		"pinAria": "Pin “{{name}}”",
-		"unpinAria": "Unpin “{{name}}”",
 		"openMenu": "Otwórz menu",
 		"closeMenu": "Zamknij menu",
 		"switchToLightTheme": "Przełącz na jasny motyw",
@@ -610,6 +608,8 @@
 		"portraitHint": "Zmień zdjęcie",
 		"copyKeyAria": "Skopiuj mój klucz",
 		"menuAria": "Menu konta",
+		"favAdd": "Dodaj „{{name}}” do ulubionych",
+		"favRemove": "Usuń „{{name}}” z ulubionych",
 		"menuJournal": "Dziennik",
 		"keyCopied": "Klucz skopiowany",
 		"keyCopyFailed": "Nie udało się skopiować klucza"
