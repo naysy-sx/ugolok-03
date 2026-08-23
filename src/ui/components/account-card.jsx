@@ -163,13 +163,13 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 			</details>
 
 			{bio && (
-				<p class="account-bio truncate" style={{ "--lines": "2" }} title={bio}>
+				<p class="account-bio truncate" style={{ "--lines": "5" }} title={bio}>
 					{bio}
 				</p>
 			)}
 
 			<button type="button" class="account-key" onClick={handleCopyKey} title={t("account.copyKeyAria")}>
-				<span class="grow truncate">{shortNpub(id)}</span>
+				<span class="truncate">{shortNpub(id)}</span>
 				<IconCopy />
 			</button>
 

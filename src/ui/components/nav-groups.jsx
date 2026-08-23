@@ -195,7 +195,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				    первой строкой, до всех групп (включая "Избранное"): раздел живёт
 				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
 				    компас, не лупа (та уже занята полем поиска строкой выше). */}
-				<ul class="stack" style={{ "--gap": "1px" }}>
+				<ul class="streams stack" style={{ "--gap": "1px" }}>
 					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}`}>
 						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
 							<span class="discover-mark">

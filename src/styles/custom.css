@@ -786,30 +786,33 @@ html[data-media-full] .top-corner-actions {
 .account-menu[open] > summary {
 	margin-block-end: 0;
 }
-/* Подложка на hover/focus обнимает ИМЯ, а не всю ширину карточки —
-   отдельный внутренний span, а не сам summary (тот на всю строку). */
+/* Живой фидбек пользователя — подложка на hover РАНЬШЕ обнимала имя своим
+   собственным боксом (padding+отрицательный margin-inline-start), и её
+   края не совпадали с левым краем аватара/био ("не на одной линии, прямо
+   бросается в глаза"). Подложку убрали совсем — hover теперь только цвет
+   (имя+шеврон, правила ниже), поэтому и сам компенсирующий padding/margin
+   trick для несуществующей больше подложки не нужен: .account-trigger —
+   чистая раскладка (флекс-строка), без декоративного бокса. */
 .account-trigger {
 	display: flex;
 	align-items: center;
 	gap: var(--space-3xs);
-	padding: var(--space-3xs) var(--space-2xs);
-	margin-inline-start: calc(-1 * var(--space-2xs));
-	border-radius: var(--radius-sm);
-	transition: background-color var(--transition-speed) var(--transition-ease);
 }
-.account-menu > summary:hover .account-trigger,
-.account-menu > summary:focus-visible .account-trigger {
-	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+.account-menu > summary:hover .account-name,
+.account-menu > summary:focus-visible .account-name {
+	color: var(--accent);
 }
 .account-name {
-	font-size: var(--step-0);
+	font-size: var(--step-2);
 	font-weight: var(--weight-bold);
 	line-height: 1.3;
 	color: var(--fg);
+	transition: color var(--transition-speed) var(--transition-ease);
 }
 .account-chev {
 	flex: none;
 	display: grid;
+	place-items: center;
 	color: var(--muted);
 	transition: transform var(--transition-speed) var(--ease), color var(--transition-speed) var(--transition-ease);
 }
@@ -836,22 +839,43 @@ html[data-media-full] .top-corner-actions {
 	inset-inline-end: auto;
 }
 
+/* margin-block-end НЕ наследуется от global <p>{margin-block:var(--space-m)}
+   (elements-слой) молча — только start был переопределён раньше, отсюда
+   "конский отступ" под био (живой фидбек пользователя): 24px вместо
+   задуманных небольших. Оба конца обязаны быть здесь явно. font-size —
+   --font-size-bio (14px, живой фидбек — не хватало плотности плавной
+   шкалы между --step--1 и --step-0), --lines в JSX теперь 5, не 2:
+   весь этот редизайн панели затевался в том числе ради того, чтобы био
+   было видно БОЛЬШЕ, не меньше. */
 .account-bio {
-	margin-block-start: var(--space-3xs);
+	margin-block: var(--space-3xs) var(--space-2xs);
 	padding-inline: var(--space-3xs);
-	font-size: var(--step--1);
+	font-size: var(--font-size-bio);
 	line-height: 1.4;
 	color: var(--muted);
 }
 /* Строка ключа — <button>, элементный слой даёт background/color/border/
    padding/font, все явно обнулены/заданы (шапка ТЗ-2 §0). Моноширинный
-   шрифт отличает ключ от имени строкой выше. */
+   шрифт отличает ключ от имени строкой выше.
+   Живой фидбек пользователя — три правки разом:
+   1. inline-size:100% + span.grow убраны — иконка была "где-то далеко"
+      у правого края на всю ширину карточки; теперь бокс по контенту,
+      иконка сразу после текста через gap.
+   2. hover был закрашенной подложкой (та же проблема несовпадающих
+      краёв, что у .account-trigger) — теперь только цвет.
+   3. padding-inline ЛОВУШКА ФАЙЛА: <svg class="icon"> — прямой child
+      button → срабатывает глобальное [type="button"]:has(> .icon)
+      (самое начало custom.css), специфичность (0,2,0) выше голого
+      .account-key (0,1,0) — раздувало паддинг до var(--step-0) (16px)
+      вместо var(--space-2xs) (8px), из-за чего текст ключа не совпадал
+      по левому краю с именем/био на те же лишние 8px. Тот же класс
+      бага, что уже чинился у .icon-btn/.message-compose-tool-btn —
+      состав.md сноска, "не просить воркера" здесь ни при чём, просто
+      забыто при первом заходе (SIDEBAR-SPEC-2, этап 2). */
 .account-key {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2xs);
-	inline-size: 100%;
-	text-align: start;
 	margin-block-start: var(--space-2xs);
 	margin-inline-start: calc(-1 * var(--space-2xs));
 	padding: var(--space-3xs) var(--space-2xs);
@@ -864,11 +888,13 @@ html[data-media-full] .top-corner-actions {
 	line-height: 1.4;
 	opacity: 0.85;
 	cursor: pointer;
-	transition: background-color var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease), opacity var(--transition-speed) var(--transition-ease);
+	transition: color var(--transition-speed) var(--transition-ease), opacity var(--transition-speed) var(--transition-ease);
+}
+.account-key:has(> .icon) {
+	padding-inline: var(--space-2xs);
 }
 .account-key:hover,
 .account-key:focus-visible {
-	background-color: color-mix(in oklch, var(--accent), transparent 92%);
 	color: var(--fg);
 	opacity: 1;
 }
@@ -4889,6 +4915,11 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius);
 	box-shadow: var(--shadow);
 	padding: var(--space-3xs);
+	/* Живой фидбек пользователя — 16px (--step-0, дефолт body) был слишком
+	   крупным для плотного меню ("Профиль и аватар" переносился на вторую
+	   строку при обычной ширине .menu-pop); .menu-pop button ниже наследует
+	   через font:inherit. */
+	font-size: var(--font-size-menu);
 }
 /* display:flex ОСТАЁТСЯ (не .row) — children произвольные, приходят от
    десятков вызывающих мест (ActionsMenu.children), менять каждое ради
@@ -4908,6 +4939,14 @@ button[type="button"].media-mini-bar-btn {
 	cursor: pointer;
 	padding: var(--space-2xs) var(--space-s);
 	border-radius: var(--radius);
+}
+/* ЛОВУШКА ФАЙЛА — тот же класс бага, что у .account-key выше: пункты
+   меню содержат <svg class="icon"> прямым child'ом кнопки → срабатывает
+   глобальное [type="button"]:has(> .icon) (0,2,0), раздувает
+   padding-inline до var(--step-0) вместо задуманного var(--space-s) —
+   при узкой .menu-pop это и добавляло лишнюю ширину/перенос текста. */
+.menu-pop button:has(> .icon) {
+	padding-inline: var(--space-s);
 }
 .menu-pop button:hover,
 .menu-pop .menu-check:hover {
