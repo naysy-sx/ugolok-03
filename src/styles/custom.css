@@ -224,6 +224,21 @@ button:has(> .icon),
 	background-color: var(--surface-raised);
 	color: var(--fg);
 }
+/* ПОВЕРХ padding:0 выше — тот же баг, что уже пойман и исправлен у
+   .message-compose-tool-btn/.message-compose-send-btn (см. ниже по файлу):
+   иконки внутри .icon-btn — реальные <svg class="icon">, поэтому срабатывает
+   глобальное button:has(> .icon)/[type="button"]:has(> .icon) { padding-inline:
+   var(--step-0) } (самое начало файла). При border-box и фиксированной
+   inline-size (36px здесь, 28px у .sidebar .icon-btn) паддинг раздувает бокс
+   шире объявленного (content-box не бывает отрицательным) — кнопка
+   превращается в прямоугольник, и тот же border-radius на нём выглядит
+   "другим", чем на соседнем квадратном <summary class="icon-btn"> (не button —
+   правило его не касается). Живой фидбек пользователя: "у кнопок в
+   account-line/sidebar-row bar разные border-radius". Составной селектор
+   класс+:has = (0,2,0), тот же приём, что у .message-compose-tool-btn. */
+.icon-btn:has(> .icon) {
+	padding-inline: 0;
+}
 /* Этап 70-довесок — та же семантика, что .btn--danger/warn/good/info, для
    иконочных кнопок (корзина/бан и т.п. без текста) — база тонирована сразу
    (не только hover), т.к. у иконки нет текста-подсказки самого действия.
@@ -855,7 +870,10 @@ html[data-media-full] .top-corner-actions {
 	inline-size: 1.75rem;
 	block-size: 1.75rem;
 	border-radius: var(--radius-sm);
-	border-color: var(--border);
+	/* border-color раньше был var(--border) (видимая рамка постоянно) — живой
+	   фидбек пользователя: без рамки в покое линия чище, граница остаётся
+	   только откликом на hover/focus-visible ниже (border-width уже
+	   зарезервирован базовым .icon-btn, скачка размера при наведении нет). */
 	color: var(--muted);
 }
 .sidebar .icon-btn:hover,
@@ -4597,6 +4615,18 @@ button[type="button"].media-mini-bar-btn {
 	   кнопка. .menu — всегда триггер фиксированного размера, не текст,
 	   которому есть смысл сжиматься. */
 	flex: none;
+	/* Живой фидбек пользователя: у "..."/"+" (summary.icon-btn) рамка была
+	   видна, а у соседних обычных <button class="icon-btn"> — нет, хотя оба
+	   набора кнопок используют одинаковый .icon-btn (с прозрачной рамкой
+	   в покое). Причина — не в .icon-btn, а в самом <details>: голый
+	   details {border: var(--border-width) solid var(--border); border-radius:
+	   var(--radius)} (minimal.css, elements-слой) ничем не перебивался у
+	   .menu — комментарий рядом с этим правилом прямо предупреждал, что
+	   он остаётся дефолтом "для голых <details> без собственного класса",
+	   но .menu из custom.css никогда не задавал border явно. Обрамляло
+	   summary снаружи чужой рамкой (10px радиус, не 7px .icon-btn) —
+	   выглядело как "рамка есть у меню, нет у кнопки". */
+	border: none;
 }
 /* Найдено пользователем: клик "прыгал" высотой — глобальный
    details[open] > summary { margin-block-end: var(--space-s) } (minimal.css,
@@ -5364,11 +5394,15 @@ button[type="button"].media-mini-bar-btn {
    свою рамку-аутлайн, которая с внешней рамкой поля читалась двойным
    кольцом — живой фидбек пользователя. */
 .file-search-field {
-	/* .row (раскладка) уже в JSX. */
+	/* .row (раскладка) уже в JSX. Отступ — целиком здесь, на обёртке
+	   (и block, и inline): <input> ниже обнуляет свой собственный,
+	   иначе набивка удваивается — тот же приём для обоих направлений,
+	   живой фидбек пользователя (сначала поймали только inline). */
 	max-width: 24rem;
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
 	padding-inline: var(--space-s);
+	padding-block: var(--space-2xs);
 	background-color: var(--surface);
 	color: var(--muted);
 	transition: border-color var(--transition-speed) var(--transition-ease);
@@ -5379,15 +5413,15 @@ button[type="button"].media-mini-bar-btn {
 .file-search-field input {
 	flex: 1;
 	min-width: 0;
-	/* Ловушка файла: global input сброс (@layer elements) даёт padding-
-	   inline/border-radius — оба обязаны быть здесь явно нулём, иначе
-	   набивка внешнего блока удваивается (сжимает текст/плейсхолдер), а
-	   скругление инпута торчит из-под скругления обёртки. */
+	/* Ловушка файла: global input сброс (@layer elements) даёт padding/
+	   border-radius — оба обязаны быть здесь явно нулём, иначе набивка
+	   обёртки удваивается (сжимает текст/плейсхолдер по вертикали и
+	   горизонтали), а скругление инпута торчит из-под скругления
+	   обёртки. */
 	border: none;
 	border-radius: 0;
 	background: none;
-	padding-block: var(--space-2xs);
-	padding-inline: 0;
+	padding: 0;
 }
 .file-search-field input:focus-visible {
 	outline: none;

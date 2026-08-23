@@ -77,7 +77,7 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 				<span class={`account-dot${degraded ? " account-dot--warn" : ""}`} aria-hidden="true" />
 			</button>
 
-			<div class="account-line bar" style={{ "--gap": "var(--space-3xs)" }}>
+			<div class="account-line bar" style={{ "--gap": "var(--space-2xs)" }}>
 				<strong class="account-name grow truncate" title={login || id}>
 					{login || id.slice(0, 16) + "…"}
 				</strong>
