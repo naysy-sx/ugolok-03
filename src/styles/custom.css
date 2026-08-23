@@ -39,19 +39,6 @@
 	min-height: 1em;
 }
 
-/* Бейдж непрочитанного — компактная пилюля цветом-компаньоном (--accent-2).
-   Раньше жил внутри старого NAV_ITEMS-списка (удалён, этап 10.2), теперь
-   только на колокольчике "Журнал" панели групп (.journal-bell-btn ниже). */
-.sidebar .nav-badge {
-	background-color: var(--accent-2);
-	color: var(--accent-2-contrast);
-	border-radius: calc(infinity * 1px);
-	padding-inline: var(--space-2xs);
-	font-size: var(--step--2);
-	font-weight: var(--weight-bold);
-	line-height: 1.6;
-}
-
 /* Живой фидбек пользователя — здесь раньше было .icon path{stroke-width:.6},
    задуманное как лёгкое утолщение ЗАЛИВНЫХ (fill) Radix-иконок. На деле
    било по ВСЕМ <path> внутри .icon без разбора, включая обводочные
@@ -1034,19 +1021,6 @@ html[data-media-full] .top-corner-actions {
 .pin-toggle:focus-visible,
 .pin-toggle[aria-pressed="true"] {
 	opacity: 1;
-}
-
-/* Бейдж колокольчика "Журнал" — та же пилюля, что .nav-badge, но в углу
-   круглой icon-only кнопки (там нет текстовой строки, чтобы встать рядом). */
-.journal-bell-btn {
-	position: relative;
-}
-.journal-bell-btn .nav-badge {
-	position: absolute;
-	inset-block-start: -0.15em;
-	inset-inline-end: -0.15em;
-	min-width: 1.1em;
-	text-align: center;
 }
 
 /* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)

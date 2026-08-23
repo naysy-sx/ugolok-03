@@ -10,9 +10,7 @@ import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "..
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
-import IconPlus from "../icons/plus.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
-import IconBell from "../icons/bell.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -67,29 +65,6 @@ function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabe
 			</button>
 			<PinToggle pinned={pinned} onToggle={onTogglePin} label={pinLabel} />
 		</li>
-	);
-}
-
-// "＋" — 2 пункта, оба ведут на экран, где нужная кнопка уже существует
-// (chat.jsx's "Написать"/channels.jsx's "Создать канал") — решение Claude:
-// не заводить новое кросс-компонентное состояние "открой сразу форму"
-// ради экономии одного клика (CONTRACTS.md, этап 10.2).
-function AddMenu() {
-	const { ref, handleMenuClick } = useDetailsMenu();
-	return (
-		<details class="menu" ref={ref} onClick={handleMenuClick}>
-			<summary class="icon-btn" aria-label={t("shell.addMenuAria")}>
-				<IconPlus />
-			</summary>
-			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
-				<button type="button" onClick={() => goTo({ kind: "chat" })}>
-					{t("shell.addMenuCompose")}
-				</button>
-				<button type="button" onClick={() => goTo({ kind: "channels" })}>
-					{t("shell.addMenuCreateChannel")}
-				</button>
-			</div>
-		</details>
 	);
 }
 
@@ -169,23 +144,14 @@ export default function NavGroups({ unreadJournalCount }) {
 			    (карточка идентити выше — отдельный компонент, тот же фикс-блок
 			    визуально благодаря общему padding-inline). НЕ scroller — эта
 			    строка остаётся на месте, скроллится только .pane__body ниже. */}
-			<div class="sidebar-row bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+			<div class="sidebar-row">
 				<label class="visually-hidden" for={searchId}>
 					{t("shell.searchLabel")}
 				</label>
-				<div class="file-search-field row grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
 					<input id={searchId} type="search" placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
 				</div>
-				<button type="button" class="icon-btn journal-bell-btn" onClick={() => goTo({ kind: "journal" })} aria-label={t("shell.journalBellAria")}>
-					<IconBell />
-					{unreadJournalCount > 0 && (
-						<span class="nav-badge" aria-label={t("shell.unreadAriaLabel", { count: unreadJournalCount })}>
-							{unreadJournalCount}
-						</span>
-					)}
-				</button>
-				<AddMenu />
 			</div>
 
 			{/* .pane__body — единственный .scroller сайдбара (REGLAMENT.md §1 —

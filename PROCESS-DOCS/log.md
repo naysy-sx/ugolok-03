@@ -7868,3 +7868,5 @@ kindOf. Домен (createDraftPost) уже не требовал непусто
 build зелёный.
 
 DoD этапа 10-довесок-5 полностью закрыт.
+
+SIDEBAR-SPEC-2 этап 1: nav-groups.jsx (AddMenu+bell убраны, sidebar-row упрощён) — воркер испортил файл (лишние удаления импортов, сломанный JSX), откат+ручной Edit точечно. CSS (.journal-bell-btn/.nav-badge) и i18n (4 ключа, 12 локалей) — правки напрямую. node --test 2100/2103 (3 сторонних strfry), vite build зелёный 898KB. Коммит следующим шагом.

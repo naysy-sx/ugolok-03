@@ -6946,3 +6946,69 @@ CONTRACTS.md ("Этап 10-довесок-4") — контракт и DoD.
 изолированным перепрогоном), build зелёный (897 KB gzip).
 
 CONTRACTS.md ("Этап 10-довесок-5") — контракт и DoD.
+
+## SIDEBAR-SPEC-2 (PROCESS-DOCS/REDESIGN/ASIDE-REDESIGN/SIDEBAR-SPEC-2.md) — панель: верх, список, низ
+
+Продолжение SIDEBAR-SPEC.md (уже в ветке, коммит `24d35ee`). Эталон —
+`aside-final.html` того же каталога. Порядок коммитов задан ТЗ §10.
+
+Решённый вопрос (§5.3, спрошено у пользователя перед стартом): `PinToggle`
+уже переносит элемент в группу "Избранное" сверху списка — поведение
+"избранное", не "поднять наверх". Идём со звездой, только актуализируем
+aria-label (`account.favAdd`/`favRemove` вместо `shell.pinAria`/`unpinAria`).
+Домен (`pinChannel`/`unpinChannel`, kind 30066, `pinned.js`) не трогаем —
+это только UI-переименование.
+
+Найденное расхождение со спекой: §6 говорит `goTo({kind:"contacts", ...})`,
+но экран контактов в этом проекте смонтирован на `place.value.kind ===
+"people"` (app.jsx), файла/kind `"contacts"` не существует. Используем
+`{kind: "people", focus: "add"}` — тот же экран (`contacts.jsx`), тот же
+смысл, просто верное имя kind. `router.js` (верхнеуровневые onboarding/
+main/unlock) спека тоже упоминает ошибочно — правки идут в `place.js`
+(add "discovery" как валидный kind, без явной валидации типа) и в
+`app.jsx` (switch по `place.value.kind`), не в `router.js`.
+
+### Этап 1 — поиск на всю ширину, удаление AddMenu — ЗАКРЫТ (код+тесты; живая Chrome-проверка — за пользователем)
+Файлы: `nav-groups.jsx`, `custom.css`, локали (удалить
+`shell.addMenuAria/addMenuCompose/addMenuCreateChannel/journalBellAria`).
+`.journal-bell-btn`/`.nav-badge` — удалить, если после этого нигде не
+используются (колокольчик уходит целиком, счётчик журнала переезжает в
+карточку в этапе 2).
+
+### Этап 2 — карточка: меню на имени, порядок, ключ, «Журнал» — не начат
+Файлы: `account-card.jsx`, `app.jsx` (передать `unreadJournalCount` в
+карточку вместо/вместе с `NavGroups`), `custom.css`, локали. Новая иконка
+`chevron-down.jsx` (Radix ChevronDownIcon, MIT, тот же стиль, что соседние
+`chevron-right.jsx`). `IconDotsHorizontal` — убрать импорт/использование
+(файл иконки можно оставить неиспользуемым или удалить, если нигде больше
+не импортируется — проверить `grep`).
+
+### Этап 3 — список: звезда, точки непрочитанного, суммы — не начат
+Файлы: `nav-groups.jsx` (`PinToggle`→`FavToggle`, `StreamItem` проп
+`unread`), `notifications.js` (`unreadByContact`/`unreadByChannel` сигналы,
+заполняются в существующих `refreshUnread*Count` без второго прохода по
+БД), `custom.css`, локали (`account.favAdd/favRemove`, удалить
+`shell.pinAria/unpinAria`, если больше не используются).
+
+### Этап 4 — «Знакомства»: отдельный экран, первая строка списка — не начат
+Файлы: `screens/discovery.jsx` (новый, `renderDiscoverySection` из
+`contacts.jsx` переезжает целиком), `contacts.jsx` (секция и её проп
+`prominent`/`hasNoContacts`-ветки убираются, `DiscoverySection`-логика
+только там теперь), `app.jsx` (`place.value.kind === "discovery"` →
+`<Discovery />`, добавить в `KNOWN_KINDS`), `place.js` (комментарий —
+новый валидный `kind`, без валидации по коду), `nav-groups.jsx` (строка
+"Знакомства" первой в `.pane__body`), новая иконка `compass.jsx` (не
+лупа — она уже занята поиском), `custom.css`, локали.
+
+### Этап 5 — низ панели: «Добавить контакт», пустое состояние — не начат
+Файлы: `app.jsx` (низ `.pane__bottom` — кнопка `.act.act--primary`
+"Добавить контакт" `goTo({kind:"people", focus:"add"})` + существующая
+`.quick`), `contacts.jsx` (`useEffect` на `place.value.focus === "add"` →
+фокус+scrollIntoView поля npub), `nav-groups.jsx` (блок `.empty`, когда
+все три группы пусты), `custom.css`, локали (`shell.addContact`,
+`shell.emptyTitle/Body/Action`). Новая иконка не нужна (`IconPersonAdd`
+уже существует).
+
+Каждый этап — коммит, приёмка по чеклисту ТЗ §10 (пункты по номеру
+этапа) + полная регрессия `node --test` + `npx vite build`. CONTRACTS.md
+получает раздел на каждый этап до первого вызова воркера этого этапа.
