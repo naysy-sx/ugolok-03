@@ -52,15 +52,16 @@
 	line-height: 1.6;
 }
 
-/* Radix Icons — заливка (fill), не обводка: у них нет stroke-width, чтобы
-   буквально "утолщить линию". Накладываем тонкую обводку того же цвета
-   поверх заливки — визуально бьёт по самым тонким местам фигуры (рамка
-   "пузыря", контур шестерёнки), не разбухая на сплошных участках. Подкрутить
-   толщину — одна цифра здесь, ничего не трогая в самих иконках. */
-.icon path {
-	stroke: currentColor;
-	stroke-width: 0.6;
-}
+/* Живой фидбек пользователя — здесь раньше было .icon path{stroke-width:.6},
+   задуманное как лёгкое утолщение ЗАЛИВНЫХ (fill) Radix-иконок. На деле
+   било по ВСЕМ <path> внутри .icon без разбора, включая обводочные
+   самодельные иконки (stroke-based, свой stroke-width на самом элементе —
+   CSS всегда сильнее presentation-атрибута), сбивая их толщину линии до
+   0.6 независимо от объявленной (видно по комментариям cross.jsx/
+   nav-prev.jsx/minimize.jsx — их пришлось рисовать через <line>/<polyline>/
+   <rect>, обходя <path> стороной, только чтобы не попасть под это правило).
+   Убрано целиком: заливные иконки чище без лишней обводки, обводочные —
+   получили обратно свою заявленную толщину. */
 
 /* Найдено пользователем: "иконки сталкивают текст после них вниз" — кнопка
    с иконкой перед текстом (<IconX /> Текст) внутри обычного button (inline-
@@ -623,9 +624,11 @@ html[data-media-full] .top-corner-actions {
 	}
 	.sidebar {
 		flex: 0 0 auto;
-		/* 18rem=288px — макет (ugolok-final.html) задаёт --aside:292px
-		   буквально; было 15rem (240px), заметно уже мокапа. */
-		width: 18rem;
+		/* Было 18rem (288px, буквально по --aside:292px мокапа) — живой
+		   фидбек пользователя: на экране заметно шире соседних приложений,
+		   контенту не нужно столько места. 16rem (256px) — компромисс между
+		   мокапом и компактностью. */
+		width: 16rem;
 		border-block-end: none;
 		border-inline-end: var(--border-width) solid var(--border);
 	}
@@ -644,6 +647,43 @@ html[data-media-full] .top-corner-actions {
 	/* .account-portrait's clamp(...cqi...) ниже — заглушка-буква масштабируется
 	   от ширины КОЛОНКИ сайдбара, не вьюпорта. */
 	container-type: inline-size;
+}
+
+/* Базовое правило account-avatar.jsx (см. компонент) — общее для всех мест,
+   где он встроен: портрета карточки (ниже), .auth-layout (экран входа,
+   custom.css, "ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2") и вложенного в
+   auth-layout .account-picker-btn (список "Аккаунты на устройстве").
+   Раньше этого правила не было вовсе — контексты заново перечисляли одни
+   и те же свойства (inline-size/object-fit/border-radius/background-color),
+   не имея общего родителя; каждый override ниже теперь — только настоящая
+   разница со своим контекстом, не полный список свойств заново. */
+.account-avatar {
+	display: block;
+	inline-size: var(--avatar);
+	block-size: var(--avatar);
+	flex: none;
+	object-fit: cover;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background-color: var(--surface-raised);
+	padding: 0;
+	margin: 0;
+}
+.account-avatar-fallback {
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	line-height: 1;
+}
+/* Заглушка — <div class="account-avatar account-avatar-fallback row">, не
+   <img>: display:block выше (нужен, чтобы <img> честно заполнял
+   .account-portrait без строчного зазора снизу) отменяет display:flex
+   у .row (составной селектор специфичнее одиночного .account-avatar) —
+   без этого буква переставала центрироваться и текла обычной строкой
+   (живой фидбек пользователя, найдено на экране входа: .account-picker-btn
+   внутри .auth-layout — третье место встраивания компонента). */
+.account-avatar.account-avatar-fallback {
+	display: flex;
 }
 
 /* Портрет во всю ширину колонки. Ловушка файла: <button> получает из
@@ -792,8 +832,13 @@ html[data-media-full] .top-corner-actions {
 }
 .sidebar-row .file-search-field {
 	max-width: none;
-	padding-inline: var(--space-xs);
+	/* Было var(--space-xs) — живой фидбек пользователя: плейсхолдер
+	   "Поиск по чатам" обрезался в узкой колонке сайдбара. */
+	padding-inline: var(--space-2xs);
 	padding-block: var(--space-3xs);
+	/* Тот же радиус, что у соседних компактных .icon-btn (.sidebar
+	   .icon-btn) — было var(--radius) базового поля, заметно крупнее. */
+	border-radius: var(--radius-sm);
 }
 .sidebar-row .file-search-field input {
 	font-size: var(--step--1);
@@ -838,6 +883,9 @@ html[data-media-full] .top-corner-actions {
 	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
 	margin-block-end: 0;
 	color: var(--muted);
+	/* .eyebrow даёт bold — живой фидбек пользователя: заголовок группы
+	   в референсном HTML обычного начертания, не жирный. */
+	font-weight: var(--weight-normal);
 	cursor: pointer;
 	transition: color var(--transition-speed) var(--transition-ease);
 }
@@ -852,6 +900,7 @@ html[data-media-full] .top-corner-actions {
 .grouphead-plain {
 	padding: var(--space-s) var(--space-3xs) var(--space-2xs);
 	margin-block-end: 0;
+	font-weight: var(--weight-normal);
 }
 .grouphead__all {
 	margin-inline-start: auto;
@@ -863,8 +912,12 @@ html[data-media-full] .top-corner-actions {
 	transition: color var(--transition-speed) var(--transition-ease);
 }
 .grouphead__all::after {
-	content: " ›";
+	/* Без ведущего пробела в content — расстояние даёт margin, не ширина
+	   пробела шрифта (ненадёжна на мелком кегле, живой фидбек пользователя:
+	   "›" стояла впритык к слову). */
+	content: "›";
 	display: inline-block;
+	margin-inline-start: 2px;
 	transition: transform var(--transition-speed) var(--ease);
 }
 .grouphead:hover .grouphead__all {
@@ -2403,26 +2456,15 @@ html[data-media-full] .top-corner-actions {
 
 /* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — account-avatar.jsx теперь ВСЕГДА
    рендерит один класс (.account-avatar), размер приходит переменной --avatar
-   (уже проставленной компонентом инлайн-стилем) — было два правила по
-   имени класса (.account-avatar/.account-avatar-large), различить их так
-   больше нельзя. Внешний вид крупного варианta (рамка+скруглённый угол на
-   var(--surface-raised)) взят для ОБОИХ размеров — тот же язык, что общий
-   .account-avatar сайдбара (custom.css ниже). */
+   (уже проставленной компонентом инлайн-стилем). Базовое правило .account-
+   avatar (custom.css, выше, у .account-portrait) уже даёт inline/block-
+   size/object-fit/фон — здесь только разница экрана входа: крупнее радиус
+   и рамка, которых у компактного варианта сайдбара нет. Заглушка вместо
+   фото — тоже полностью из базового .account-avatar-fallback, здесь
+   добавить нечего. */
 .auth-layout .account-avatar {
-	aspect-ratio: 1;
-	inline-size: var(--avatar);
-	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
-	background-color: var(--surface-raised);
-}
-
-/* Заглушка вместо фото, пока у аккаунта нет сохранённого аватара — первая
-   буква логина на цветном фоне, тот же приём, что ContactIdentity в чате. */
-.auth-layout .account-avatar-fallback {
-	/* .row (раскладка) уже в JSX (account-avatar.jsx). */
-	color: var(--muted);
-	font-weight: var(--weight-bold);
 }
 
 .auth-box {
@@ -3604,13 +3646,12 @@ button[type="button"].media-mini-bar-btn {
 	background: color-mix(in oklch, var(--accent), white 10%);
 }
 
-/* Пользователь: контур IconRepeat/IconRepeatOnce использует дуги
-   (SVG-команда A) — не выражается через <polyline>/<line>, как у
-   соседних кнопок (см. nav-prev.jsx), значит идёт через <path> и ловит
-   глобальный .icon path{stroke-width:0.6} (строка ~122) — тоньше, чем у
-   соседей. Явный override нужной специфичности (0,3,1 против 0,1,1),
-   пропорция та же, что у соседних 15-viewBox/1.4-stroke иконок:
-   1.4/15×24 ≈ 2.24. */
+/* IconRepeat/IconRepeatOnce (repeat.jsx/repeat-once.jsx) не объявляют свой
+   stroke-width вовсе (в отличие от соседних 15-viewBox/1.4-stroke иконок) —
+   без этого правила линия была бы дефолтной толщины браузера (1),
+   заметно тоньше соседей. Пропорция та же, что у них: 1.4/15×24 ≈ 2.24
+   (у этой иконки viewBox 24, не 15). Не связано с глобальным .icon path
+   (то правило убрано — см. комментарий в начале файла). */
 .media-mini-bar-btn.is-repeat .icon path {
 	stroke-width: 2.24;
 }
@@ -5317,7 +5358,11 @@ button[type="button"].media-mini-bar-btn {
 }
 
 /* Поле фильтра (3.7 TASK.md) — тот же язык, что contact-add-field, но без
-   слияния с кнопкой (фильтр применяется на ввод, действия не требует). */
+   слияния с кнопкой (фильтр применяется на ввод, действия не требует).
+   Фокус — на ВНЕШНЕМ блоке (:focus-within меняет border-color), не на
+   самом <input>: глобальный input:focus-visible (minimal.css) даёт ему
+   свою рамку-аутлайн, которая с внешней рамкой поля читалась двойным
+   кольцом — живой фидбек пользователя. */
 .file-search-field {
 	/* .row (раскладка) уже в JSX. */
 	max-width: 24rem;
@@ -5326,13 +5371,26 @@ button[type="button"].media-mini-bar-btn {
 	padding-inline: var(--space-s);
 	background-color: var(--surface);
 	color: var(--muted);
+	transition: border-color var(--transition-speed) var(--transition-ease);
+}
+.file-search-field:focus-within {
+	border-color: var(--accent);
 }
 .file-search-field input {
 	flex: 1;
 	min-width: 0;
+	/* Ловушка файла: global input сброс (@layer elements) даёт padding-
+	   inline/border-radius — оба обязаны быть здесь явно нулём, иначе
+	   набивка внешнего блока удваивается (сжимает текст/плейсхолдер), а
+	   скругление инпута торчит из-под скругления обёртки. */
 	border: none;
+	border-radius: 0;
 	background: none;
 	padding-block: var(--space-2xs);
+	padding-inline: 0;
+}
+.file-search-field input:focus-visible {
+	outline: none;
 }
 
 /* .row (раскладка) уже в JSX. */
