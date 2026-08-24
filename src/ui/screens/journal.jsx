@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef } from "preact/hooks";
+import { useEffect, useState, useId } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
-import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../signals/journal.js";
+import { journalEntries, refreshJournal, openJournalEntry, markAllRead, markOneRead } from "../signals/journal.js";
 import { messagingActivity } from "../signals/chats.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { dueBadgeCount, refreshDueBadge } from "../signals/today.js";
 import { goTo } from "../signals/place.js";
+import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import Screen from "../components/screen.jsx";
 import IconEnvelopeClosed from "../icons/envelope-closed.jsx";
 import IconReader from "../icons/reader.jsx";
@@ -14,9 +15,9 @@ import IconPhoneCall from "../icons/phone-call.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconPerson from "../icons/person.jsx";
 import IconCheck from "../icons/check.jsx";
-import IconChevronLeft from "../icons/chevron-left.jsx";
-import IconChevronRight from "../icons/chevron-right.jsx";
-import { t, currentLocale } from "../signals/i18n.js";
+import IconFunnel from "../icons/funnel.jsx";
+import IconChevronDown from "../icons/chevron-down.jsx";
+import { t, tPlural, currentLocale } from "../signals/i18n.js";
 
 // Этап 50 (CONTACTS-FSM.md §7) — категория -> подпись + иконка + оттенок
 // чипа (VISUAL.md v2, Claude Opus: "разные типы записи узнаются по цвету
@@ -25,22 +26,36 @@ import { t, currentLocale } from "../signals/i18n.js";
 // (акцент-компаньон) для социального/обратной связи (ответы/контакты),
 // bad для модерации (предупреждающий смысл), muted для остального.
 //
-// Этап 64 — labelKey (не готовый текст), переводится t(meta.labelKey) В
-// РЕНДЕРЕ (не здесь — это модульная константа, вычисляется один раз при
-// импорте, реактивности на смену языка тут нет).
+// labelKey — форма ЕДИНСТВЕННОГО числа ("Сообщение"), она больше нигде не
+// выводится в строке записи (см. ниже, категорию несёт иконка), но остаётся
+// как подпись для screen reader'а. filterLabelKey — собирательная форма
+// ("Сообщения") для чипа/пункта меню фильтра: это разные грамматические
+// формы, один ключ на оба места дал бы кривой текст хотя бы в одном из них.
 const CATEGORY_META = {
-	messages: { labelKey: "journal.category.messages", Icon: IconEnvelopeClosed, tone: "lamp" },
-	channels: { labelKey: "journal.category.channels", Icon: IconReader, tone: "muted" },
-	replies: { labelKey: "journal.category.replies", Icon: IconChatBubble, tone: "draught" },
-	contacts: { labelKey: "journal.category.contacts", Icon: IconPeople, tone: "draught" },
-	calls: { labelKey: "journal.category.calls", Icon: IconPhoneCall, tone: "lamp" },
-	moderation: { labelKey: "journal.category.moderation", Icon: IconLockClosed, tone: "bad" },
-	inbox: { labelKey: "journal.category.inbox", Icon: IconPerson, tone: "muted" },
+	messages: { labelKey: "journal.category.messages", filterLabelKey: "journal.filter.messages", Icon: IconEnvelopeClosed, tone: "lamp" },
+	channels: { labelKey: "journal.category.channels", filterLabelKey: "journal.filter.channels", Icon: IconReader, tone: "muted" },
+	replies: { labelKey: "journal.category.replies", filterLabelKey: "journal.filter.replies", Icon: IconChatBubble, tone: "draught" },
+	contacts: { labelKey: "journal.category.contacts", filterLabelKey: "journal.filter.contacts", Icon: IconPeople, tone: "draught" },
+	calls: { labelKey: "journal.category.calls", filterLabelKey: "journal.filter.calls", Icon: IconPhoneCall, tone: "lamp" },
+	moderation: { labelKey: "journal.category.moderation", filterLabelKey: "journal.filter.moderation", Icon: IconLockClosed, tone: "bad" },
+	inbox: { labelKey: "journal.category.inbox", filterLabelKey: "journal.filter.inbox", Icon: IconPerson, tone: "muted" },
 };
 
-// Этап 50-довесок-N (пользователь, живая проверка пагинации подтверждена —
-// найден и исправлен реальный баг ниже, теперь разумное число на странице).
-const PAGE_SIZE = 15;
+// Порядок категорий в фильтре — фиксированный, от самого частого и личного
+// к самому редкому и служебному. НЕ Object.keys(CATEGORY_META) и не
+// сортировка по счётчику: порядок, скачущий от количества записей, ломает
+// мышечную память (вчера "Звонки" были третьими, сегодня пятые).
+const FILTER_ORDER = ["messages", "inbox", "replies", "contacts", "calls", "channels", "moderation"];
+
+// Лента раскрывается ПО ДНЯМ, а не по числу записей. Пагинация страницами
+// была снята вместе с классом багов, который она порождала: "страница" —
+// статичный индекс в список, растущий сверху, поэтому новая запись сдвигала
+// весь массив и та же страница показывала другие записи (реальный баг,
+// найденный пользователем живьём, лечился костылём prevLengthRef). У дня
+// такого свойства нет: календарный день — устойчивый ключ, новая запись
+// попадает в свой день и ничего не сдвигает.
+const INITIAL_DAYS = 3;
+const DAYS_STEP = 1;
 
 // Только время — дата уже вынесена в заголовок группы дня (jgroup__date),
 // повторять её в каждой строке избыточно (VISUAL.md v2: .jtime "21:16").
@@ -49,9 +64,8 @@ function formatEntryTime(ms) {
 }
 
 // Ключ календарного дня в ЛОКАЛЬНОМ времени (не UTC) — обязан совпадать с тем,
-// что показывает formatEntryTime (тоже локальное время) и с value <input type="date">
-// (плоская дата без временной зоны), иначе группировка "разъедется" с отображением
-// около полуночи в не-UTC поясах.
+// что показывает formatEntryTime (тоже локальное время), иначе группировка
+// "разъедется" с отображением около полуночи в не-UTC поясах.
 function dayKey(ms) {
 	const d = new Date(ms);
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -61,14 +75,28 @@ function formatDaySeparator(ms) {
 	return new Date(ms).toLocaleDateString(currentLocale.value, { day: "2-digit", month: "long", year: "numeric" });
 }
 
-// Группировка страницы по календарному дню — стабильный порядок (страница
-// уже отсортирована по occurredAt), каждая группа — отдельная <section> с
-// собственным заголовком (a11y: список читается как оглавление по дням, не
-// плоской лентой).
-function groupByDay(pageEntries) {
+// "Сегодня · 24 августа" вместо голой даты для двух ближайших дней —
+// человек читает ленту сверху, и первые две группы почти всегда именно
+// эти. Точка отсчёта берётся В МОМЕНТ РЕНДЕРА: если приложение оставили
+// открытым через полночь, подпись обновится на следующей перерисовке, не
+// раньше. Сознательное упрощение — таймер ради подписи не заводим.
+function dayLabel(ms) {
+	const now = Date.now();
+	const key = dayKey(ms);
+	const absolute = formatDaySeparator(ms);
+	if (key === dayKey(now)) return `${t("journal.today")} · ${absolute}`;
+	if (key === dayKey(now - 86400000)) return `${t("journal.yesterday")} · ${absolute}`;
+	return absolute;
+}
+
+// Группировка по календарному дню — стабильный порядок (список уже
+// отсортирован по occurredAt по убыванию), каждая группа — отдельная
+// <section> с собственным заголовком (a11y: список читается как оглавление
+// по дням, не плоской лентой).
+function groupByDay(entries) {
 	const groups = [];
 	let current = null;
-	for (const entry of pageEntries) {
+	for (const entry of entries) {
 		const key = dayKey(entry.occurredAt);
 		if (!current || current.key !== key) {
 			current = { key, entries: [] };
@@ -79,16 +107,149 @@ function groupByDay(pageEntries) {
 	return groups;
 }
 
+// titleKey/bodyKey (записи ПОСЛЕ этапа 64) рендерятся t()'ом в ТЕКУЩЕЙ
+// локали читателя; записи без ключа (старый формат) показывают уже
+// сохранённый title/body как есть — они навсегда остаются на русском
+// (пользователь подтвердил, без миграции).
+function entryText(entry) {
+	return {
+		title: entry.titleKey ? t(entry.titleKey, entry.titleParams) : entry.title,
+		body: entry.bodyKey ? t(entry.bodyKey, entry.bodyParams) : entry.body,
+	};
+}
+
+// Строка записи. Категория БОЛЬШЕ НЕ дублируется словом в начале заголовка
+// (было "Сообщение: Ирина Соколова"): её несёт цветная иконка слева, а
+// слово съедало ровно то место, где на телефоне должна быть суть — .jtitle
+// обрезался многоточием на середине имени. Для screen reader'а подпись
+// категории осталась, в .visually-hidden.
+function JournalItem({ entry, onOpen, onMarkRead }) {
+	const meta = CATEGORY_META[entry.category];
+	const Icon = meta?.Icon ?? IconPerson;
+	const categoryLabel = meta ? t(meta.labelKey) : entry.category;
+	const { title, body } = entryText(entry);
+
+	return (
+		<li class="jitem" data-read={entry.read || undefined}>
+			<button type="button" class="jitem__link" onClick={onOpen}>
+				<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+					<Icon />
+				</span>
+				<span class="jbody stack" style={{ "--gap": "2px" }}>
+					<span class="visually-hidden">{categoryLabel}</span>
+					<span class="jtitle truncate" style={{ "--lines": "2" }}>
+						{title}
+					</span>
+					{body && (
+						<span class="jmeta truncate" style={{ "--lines": "1" }}>
+							{body}
+						</span>
+					)}
+				</span>
+				<span class="jside stack" style={{ "--gap": "var(--space-3xs)", alignItems: "flex-end", justifyContent: "center" }}>
+					<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
+					{!entry.read && <span class="jdot" aria-label={t("journal.unreadDot")} />}
+				</span>
+			</button>
+			{!entry.read && onMarkRead && (
+				<button type="button" class="icon-btn jread" onClick={onMarkRead} aria-label={t("journal.markOneRead")} title={t("journal.markOneRead")}>
+					<IconCheck />
+				</button>
+			)}
+		</li>
+	);
+}
+
+// Фильтр по категории существует в ДВУХ видах одновременно в DOM, а
+// показывается всегда ровно один — выбор делает @container по ширине
+// .slices-zone (custom.css), не JS: узкому контейнеру достаётся
+// выпадающее меню, широкому — ряд чипов, где весь набор категорий со
+// счётчиками виден без открывания. Состояние (`value`) у обоих общее,
+// дублируется только разметка.
+function CategoryFilter({ value, counts, total, onChange }) {
+	const { ref, handleMenuClick } = useDetailsMenu();
+	const activeMeta = value ? CATEGORY_META[value] : null;
+	const ActiveIcon = activeMeta?.Icon ?? IconFunnel;
+	const activeLabel = activeMeta ? t(activeMeta.filterLabelKey) : t("journal.filter.all");
+	const activeCount = value ? (counts[value] ?? 0) : total;
+
+	return (
+		<>
+			<div class="filter-slot grow bar" style={{ justifyContent: "flex-end" }}>
+				<details class={`menu jfilter${activeMeta ? ` jcat--${activeMeta.tone}` : ""}`} ref={ref} onClick={handleMenuClick}>
+					<summary class="chip bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center", cursor: "pointer" }} aria-label={t("journal.filterAria")}>
+						<ActiveIcon />
+						<span>{activeLabel}</span>
+						<span class="slice__n">{activeCount}</span>
+						<IconChevronDown />
+					</summary>
+					<div class="menu-pop stack" style={{ "--gap": "0" }}>
+						<ul class="stack" style={{ "--gap": "1px" }}>
+							<li>
+								<button type="button" aria-current={value === null ? "true" : undefined} onClick={() => onChange(null)}>
+									<IconFunnel />
+									<span class="jcat__label">{t("journal.filter.all")}</span>
+									<span class="menu-hint">{total}</span>
+								</button>
+							</li>
+						</ul>
+						<ul class="stack" style={{ "--gap": "1px" }}>
+							{FILTER_ORDER.map((key) => {
+								const meta = CATEGORY_META[key];
+								const Icon = meta.Icon;
+								return (
+									<li key={key}>
+										<button type="button" class={`jcat--${meta.tone}`} aria-current={value === key ? "true" : undefined} onClick={() => onChange(key)}>
+											<Icon />
+											<span class="jcat__label">{t(meta.filterLabelKey)}</span>
+											<span class="menu-hint">{counts[key] ?? 0}</span>
+										</button>
+									</li>
+								);
+							})}
+						</ul>
+					</div>
+				</details>
+			</div>
+
+			<div class="filter-reel reel" style={{ "--gap": "var(--space-2xs)" }} role="group" aria-label={t("journal.filterAria")}>
+				<button type="button" class={`slice bar rigid${value === null ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-pressed={value === null} onClick={() => onChange(null)}>
+					<IconFunnel />
+					<span>{t("journal.filter.all")}</span>
+					<span class="slice__n">{total}</span>
+				</button>
+				{FILTER_ORDER.map((key) => {
+					const meta = CATEGORY_META[key];
+					const Icon = meta.Icon;
+					return (
+						<button key={key} type="button" class={`slice jcat jcat--${meta.tone} bar rigid${value === key ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-pressed={value === key} onClick={() => onChange(key)}>
+							<Icon />
+							<span>{t(meta.filterLabelKey)}</span>
+							<span class="slice__n">{counts[key] ?? 0}</span>
+						</button>
+					);
+				})}
+			</div>
+		</>
+	);
+}
+
 // Стартовый экран после логина (place.js, DEFAULT_PLACE) — персистентный
 // лог ВСЕХ сработавших уведомлений (notifyAndLog, journal.js), не заменяет
-// тосты/бейджи (они остаются как есть, быстрая реакция) — дополнительный слой
-// "что вообще произошло", пока пользователя не было на экране.
+// тосты/бейджи (они остаются как есть, быстрая реакция).
+//
+// Экран отвечает на вопрос "что я пропустил", поэтому разделён на две
+// вкладки: "Новое" — только непрочитанное, плоским списком (группировать по
+// дням нечего: это всё свежее), "История" — весь лог по дням. Прочитанное
+// уходит из первой во вторую само.
 export default function Journal() {
 	const ownerPubkey = currentUser.value.id;
 	const dbKey = dbKeySig.value;
-	const [page, setPage] = useState(0);
-	const [jumpDate, setJumpDate] = useState("");
+	const [tab, setTab] = useState("new");
+	const [category, setCategory] = useState(null);
+	const [visibleDays, setVisibleDays] = useState(INITIAL_DAYS);
 	const [everSetDueDate, setEverSetDueDate] = useState(false);
+	const tabsId = useId();
 
 	useEffect(() => {
 		refreshJournal(ownerPubkey, dbKey);
@@ -96,55 +257,64 @@ export default function Journal() {
 		loadUiSettings(ownerPubkey, dbKey).then((s) => setEverSetDueDate(s.everSetDueDate));
 	}, [ownerPubkey, messagingActivity.value]);
 
-	const entries = journalEntries.value;
-	// Фильтр по выбранной дате (jumpDate) — применяется ДО пагинации, иначе при
-	// малых журналах (totalPages == 1, PAGE_SIZE = 15) выбор даты был бы виден
-	// только сменой номера страницы, а список на экране не менялся (баг,
-	// найденный пользователем: filteredEntries тут — единственное место, где
-	// jumpDate реально влияет на то, что видно).
-	const filteredEntries = jumpDate ? entries.filter((e) => dayKey(e.occurredAt) === jumpDate) : entries;
-
-	// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живая проверка) — реальный баг был не в сортировке
-	// (occurredAt по убыванию и так верный, см. journal.js), а в том, что "page"
-	// это СТАТИЧНЫЙ числовой индекс в список, который растёт снизу вверх (новая
-	// запись — всегда entries[0], сортировка по времени убывающая): пока
-	// пользователь смотрел, скажем, страницу 2, новое событие сдвигало ВЕСЬ
-	// массив на одну позицию, и та же страница 2 начинала показывать СОВСЕМ
-	// другие (более старые) записи — новое событие визуально оказывалось "где-то
-	// в середине" вместо ожидаемого верха списка. prevLengthRef — рост длины
-	// однозначно означает "пришла новая запись" (записи в этой модели никогда не
-	// удаляются, только read-флаг меняется — длина иначе не меняется), сбрасываем
-	// на страницу 0, где и обязана быть самая свежая запись.
-	const prevLengthRef = useRef(entries.length);
+	// Смена вкладки или фильтра начинает просмотр заново — иначе человек,
+	// раскрывший двадцать дней в "Истории", получит их же после переключения
+	// на другую категорию, где двадцати дней может не быть вовсе.
 	useEffect(() => {
-		if (entries.length > prevLengthRef.current) {
-			setPage(0);
-		}
-		prevLengthRef.current = entries.length;
-	}, [entries.length]);
+		setVisibleDays(INITIAL_DAYS);
+	}, [tab, category]);
 
-	const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
-	// Страница могла "исчезнуть" (записи прочитаны/удалены на другом устройстве,
-	// список сократился) — не показывать пустую страницу молча.
-	const clampedPage = Math.min(page, totalPages - 1);
-	const pageEntries = filteredEntries.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
-	// Кнопка "отметить прочитанным" всегда действует на ВЕСЬ журнал, не только
-	// на видимый (отфильтрованный по дате) срез — hasUnread поэтому считается
-	// по entries, не по filteredEntries.
+	const entries = journalEntries.value;
 	const hasUnread = entries.some((e) => !e.read);
-	const dayGroups = groupByDay(pageEntries);
 
-	const oldestDay = entries.length > 0 ? dayKey(entries[entries.length - 1].occurredAt) : null;
-	const newestDay = entries.length > 0 ? dayKey(entries[0].occurredAt) : null;
+	// Счётчики считаются по НАБОРУ ТЕКУЩЕЙ ВКЛАДКИ, а не по всему журналу:
+	// во вкладке "Новое" чип "Звонки 3" обязан означать три непрочитанных
+	// звонка, иначе человек жмёт на него и получает пустой список.
+	const scope = tab === "new" ? entries.filter((e) => !e.read) : entries;
+	const counts = scope.reduce((acc, e) => {
+		acc[e.category] = (acc[e.category] ?? 0) + 1;
+		return acc;
+	}, {});
+	const visible = category ? scope.filter((e) => e.category === category) : scope;
 
-	function handleJumpToDate(dateStr) {
-		setJumpDate(dateStr);
-		setPage(0);
+	const allGroups = groupByDay(visible);
+	const shownGroups = allGroups.slice(0, visibleDays);
+	const nextGroup = allGroups[visibleDays];
+
+	function handleOpen(entry) {
+		openJournalEntry(ownerPubkey, dbKey, entry);
 	}
 
-	function handleShowAll() {
-		setJumpDate("");
-		setPage(0);
+	function handleMarkOne(entry) {
+		markOneRead(ownerPubkey, dbKey, entry.id);
+	}
+
+	// Три разных пустоты, три разных текста. Одна общая заглушка на все
+	// случаи ("Ничего нет") оставляет человека гадать, пусто ли вообще всё
+	// или он сам сузил список фильтром до нуля.
+	function renderEmpty() {
+		if (entries.length === 0) {
+			return (
+				<div class="empty">
+					<h3>{t("journal.emptyTitle")}</h3>
+					<p>{t("journal.emptyBody")}</p>
+				</div>
+			);
+		}
+		if (tab === "new" && !category) {
+			return (
+				<div class="empty">
+					<h3>{t("journal.allReadTitle")}</h3>
+					<p>{t("journal.allReadBody")}</p>
+				</div>
+			);
+		}
+		return (
+			<div class="empty">
+				<h3>{t("journal.emptyFilterTitle")}</h3>
+				<p>{t("journal.emptyFilterBody")}</p>
+			</div>
+		);
 	}
 
 	return (
@@ -157,90 +327,66 @@ export default function Journal() {
 							◈ {t("journal.dueButton")} <span class="pill__n">{dueBadgeCount.value}</span>
 						</button>
 					)}
-					{oldestDay && (
-						<label class="date-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
-							{/* Пользователь: убрать SVG-иконку (рядом с ней всё равно
-							    рисуется системная иконка календаря самого <input
-							    type="date">, две подряд — лишнее), вместо нёё —
-							    информативная текстовая подпись. */}
-							<span aria-hidden="true">{t("journal.selectDate")}</span>
-							<span class="visually-hidden">{t("journal.jumpToDate")}</span>
-							<input type="date" min={oldestDay} max={newestDay} value={jumpDate} onInput={(e) => handleJumpToDate(e.currentTarget.value)} />
-						</label>
-					)}
-					{jumpDate && (
-						<button type="button" class="btn btn--ghost" onClick={handleShowAll}>
-							{t("journal.showAll")}
-						</button>
-					)}
 					<button type="button" disabled={!hasUnread} onClick={() => markAllRead(ownerPubkey, dbKey)}>
 						<IconCheck />
 						<span class="mark-txt">{t("journal.markAllRead")}</span>
 					</button>
 				</>
 			}
+			slices={
+				<>
+					<div class="filter-row bar" style={{ "--gap": "var(--space-s)", alignItems: "flex-end" }}>
+						<div class="tabs bar" style={{ "--gap": "0" }} role="tablist" aria-label={t("journal.tabsAria")}>
+							<button type="button" id={`${tabsId}-new`} class="tab bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} role="tab" aria-selected={tab === "new"} aria-controls={`${tabsId}-panel`} onClick={() => setTab("new")}>
+								{t("journal.tabNew")}
+								{hasUnread && <span class="pill__n">{entries.filter((e) => !e.read).length}</span>}
+							</button>
+							<button type="button" id={`${tabsId}-all`} class="tab bar" role="tab" aria-selected={tab === "all"} aria-controls={`${tabsId}-panel`} onClick={() => setTab("all")}>
+								{t("journal.tabAll")}
+							</button>
+						</div>
+						<CategoryFilter value={category} counts={counts} total={scope.length} onChange={setCategory} />
+					</div>
+				</>
+			}
 		>
-			{entries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("journal.empty")}</p>
-			) : filteredEntries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("journal.emptyDate")}</p>
-			) : (
-				<div class="journal">
-					{dayGroups.map((group) => (
-						<section class="jgroup" key={group.key} aria-labelledby={`jg-${group.key}`}>
-							<h2 class="jgroup__date" id={`jg-${group.key}`}>
-								{formatDaySeparator(group.entries[0].occurredAt)}
-							</h2>
-							<ol class="jfeed">
-								{group.entries.map((entry) => {
-									const meta = CATEGORY_META[entry.category];
-									const Icon = meta?.Icon ?? IconPerson;
-									const categoryLabel = meta ? t(meta.labelKey) : entry.category;
-									// Этап 64 — titleKey/bodyKey (записи ПОСЛЕ этого этапа) рендерятся
-									// t()'ом в ТЕКУЩЕЙ локали читателя; записи без ключа (старый формат,
-									// ДО этого этапа) показывают уже сохранённый title/body как есть —
-									// они навсегда остаются на русском (пользователь подтвердил, без миграции).
-									const entryTitle = entry.titleKey ? t(entry.titleKey, entry.titleParams) : entry.title;
-									const entryBody = entry.bodyKey ? t(entry.bodyKey, entry.bodyParams) : entry.body;
-									return (
-										<li class="jitem" key={entry.id} data-read={entry.read || undefined}>
-											<button type="button" class="jitem__link" onClick={() => openJournalEntry(ownerPubkey, dbKey, entry)}>
-												<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
-													<Icon />
-												</span>
-												<span class="jbody stack" style={{ "--gap": "2px" }}>
-													<span class="jtitle">
-														{categoryLabel}: {entryTitle}
-													</span>
-													{entryBody && <span class="jmeta">{entryBody}</span>}
-												</span>
-												<span class="jside stack" style={{ "--gap": "var(--space-3xs)", alignItems: "flex-end", justifyContent: "center" }}>
-													<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
-													{!entry.read && <span class="jdot" aria-label={t("journal.unreadDot")} />}
-												</span>
-											</button>
-										</li>
-									);
-								})}
-							</ol>
-						</section>
-					))}
-
-					{totalPages > 1 && (
-						<nav class="pager row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }} aria-label={t("journal.pagerAriaLabel")}>
-							<button type="button" class="btn btn--ghost" disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>
-								<IconChevronLeft /> {t("common.back")}
-							</button>
-							<span class="pager__status" aria-current="page">
-								{t("journal.pageStatus", { current: clampedPage + 1, total: totalPages })}
-							</span>
-							<button type="button" class="btn btn--ghost" disabled={clampedPage >= totalPages - 1} onClick={() => setPage(clampedPage + 1)}>
-								{t("common.forward")} <IconChevronRight />
-							</button>
-						</nav>
-					)}
-				</div>
-			)}
+			<div class="journal" id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={tab === "new" ? `${tabsId}-new` : `${tabsId}-all`}>
+				{visible.length === 0 ? (
+					renderEmpty()
+				) : tab === "new" ? (
+					<>
+						<p class="jlead">{tPlural("journal.newLead", visible.length)}</p>
+						<ol class="jfeed">
+							{visible.map((entry) => (
+								<JournalItem key={entry.id} entry={entry} onOpen={() => handleOpen(entry)} onMarkRead={() => handleMarkOne(entry)} />
+							))}
+						</ol>
+						<p class="jlead jlead--foot">{t("journal.newFoot")}</p>
+					</>
+				) : (
+					<>
+						{shownGroups.map((group) => (
+							<section class="jgroup" key={group.key} aria-labelledby={`jg-${group.key}`}>
+								<h2 class="jgroup__date stick" id={`jg-${group.key}`}>
+									{dayLabel(group.entries[0].occurredAt)}
+								</h2>
+								<ol class="jfeed">
+									{group.entries.map((entry) => (
+										<JournalItem key={entry.id} entry={entry} onOpen={() => handleOpen(entry)} />
+									))}
+								</ol>
+							</section>
+						))}
+						{nextGroup && (
+							<div class="jmore row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }}>
+								<button type="button" class="btn btn--ghost" onClick={() => setVisibleDays(visibleDays + DAYS_STEP)}>
+									{t("journal.showMoreDay", { date: formatDaySeparator(nextGroup.entries[0].occurredAt) })}
+								</button>
+							</div>
+						)}
+					</>
+				)}
+			</div>
 		</Screen>
 	);
 }

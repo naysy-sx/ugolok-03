@@ -28,3 +28,12 @@ export async function markAllRead(ownerPubkey, dbKey) {
 	await markAllJournalEntriesRead(ownerPubkey, dbKey);
 	await refreshJournal(ownerPubkey, dbKey);
 }
+
+// Точечное "прочитано" на одной записи — обратимая альтернатива
+// разрушительному markAllRead: помечает read БЕЗ навигации (в отличие от
+// openJournalEntry, который делает и то, и другое). Нужно вкладке "Новое":
+// человек разбирает список, не уходя с экрана.
+export async function markOneRead(ownerPubkey, dbKey, entryId) {
+	await markJournalEntryRead(entryId);
+	await refreshJournal(ownerPubkey, dbKey);
+}

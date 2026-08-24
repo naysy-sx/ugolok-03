@@ -3,7 +3,7 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { writeJournalEntry } from "../src/domain/notifications/journal.js";
-import { journalEntries, refreshJournal, openJournalEntry, markAllRead } from "../src/ui/signals/journal.js";
+import { journalEntries, refreshJournal, openJournalEntry, markAllRead, markOneRead } from "../src/ui/signals/journal.js";
 import { pendingNavTarget } from "../src/ui/signals/notification-nav.js";
 
 const OWNER_PUBKEY = "a".repeat(64);
@@ -66,4 +66,25 @@ test("markAllRead: помечает все записи прочитанными
 	await markAllRead(OWNER_PUBKEY, DB_KEY);
 
 	assert.ok(journalEntries.value.every((e) => e.read === true));
+});
+
+test("markOneRead: помечает одну запись прочитанной, остальные не трогает", async () => {
+	const a = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "a", body: "", navTarget: { screen: "messages" } });
+	await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "calls", title: "b", body: "", navTarget: { screen: "messages" } });
+	await refreshJournal(OWNER_PUBKEY, DB_KEY);
+
+	await markOneRead(OWNER_PUBKEY, DB_KEY, a.id);
+
+	const byId = Object.fromEntries(journalEntries.value.map((e) => [e.id, e]));
+	assert.equal(byId[a.id].read, true);
+	assert.equal(journalEntries.value.filter((e) => !e.read).length, 1);
+});
+
+test("markOneRead: не выполняет навигацию (в отличие от openJournalEntry)", async () => {
+	const entry = await writeJournalEntry(OWNER_PUBKEY, DB_KEY, { category: "messages", title: "a", body: "", navTarget: { screen: "messages" } });
+	await refreshJournal(OWNER_PUBKEY, DB_KEY);
+
+	await markOneRead(OWNER_PUBKEY, DB_KEY, entry.id);
+
+	assert.equal(pendingNavTarget.value, null);
 });
