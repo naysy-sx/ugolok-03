@@ -890,7 +890,6 @@
 		},
 		"room": {
 			"titleFallback": "Комната",
-			"leaveButton": "Выйти",
 			"participantsAriaLabel": "Участники",
 			"participantsTitle": "Участники ({{count}})",
 			"selfMarker": "вы",

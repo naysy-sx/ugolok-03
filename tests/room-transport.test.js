@@ -76,6 +76,34 @@ test("openRoomTransport: подключается, публикует, собы�
 	assert.equal(received[0].id, event.id);
 });
 
+// Живой фидбек пользователя (room-session.js's close() теперь публикует
+// best-effort exit) — publisher.js батчит (setTimeout, batchWindowMs), close()
+// раньше рвал соединение СРАЗУ, не дожидаясь отложенного флаша: событие,
+// поставленное в очередь непосредственно перед close(), никогда бы не ушло.
+test("close(): publish() непосредственно перед close() всё равно уходит (flush в close(), не батч-таймер)", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+
+	const hTopic = "topic-close".padStart(64, "0");
+	const aliceKey = generateSecretKey();
+	const bobKey = generateSecretKey();
+
+	const received = [];
+	const alice = await openRoomTransport({ relayUrl, hTopic, selfPubkey: getPublicKey(aliceKey), onEvent: () => {} });
+	const bob = await openRoomTransport({ relayUrl, hTopic, selfPubkey: getPublicKey(bobKey), onEvent: (e) => received.push(e) });
+	t.after(() => bob.close());
+
+	await flushUntilSettled(relay); // дренируем обе начальные подписки
+
+	const event = rawEvent(aliceKey, ROOM_CHAT_KIND, [["h", hTopic]], "leaving-stub");
+	alice.publish(event); // НЕ await — реальный send() внутри батчится на batchWindowMs
+	alice.close(); // без flush() внутри close() событие осталось бы в очереди навсегда — соединение уже разорвано
+
+	await flushUntilSettled(relay);
+	await waitFor(() => received.length > 0);
+	assert.equal(received[0].id, event.id, "событие должно было уйти ДО разрыва соединения, не потеряться в батч-очереди");
+});
+
 test("предфильтр h: событие с чужим h-тегом не доходит до onEvent, даже если релей его прислал бы (защита в глубину)", async (t) => {
 	const { relay, bridge, relayUrl } = await setup();
 	t.after(() => bridge.stop());

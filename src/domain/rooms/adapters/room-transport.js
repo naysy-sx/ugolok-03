@@ -82,6 +82,13 @@ export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null,
 	}
 
 	function close() {
+		// Живой фидбек пользователя (room-session.js's close() теперь публикует
+		// best-effort exit-событие) — publisher.publish() батчит (batchWindowMs,
+		// по умолчанию 200мс, publisher.js), реальный connection.send() уходит
+		// ОТЛОЖЕННО через setTimeout. Без явного flush() здесь только что
+		// поставленное в очередь событие просто не успевало бы уйти — conn.close()
+		// рвёт соединение раньше, чем сработает отложенный таймер батча.
+		publisher.flush();
 		conn.close();
 	}
 

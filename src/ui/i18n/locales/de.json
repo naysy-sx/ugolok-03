@@ -890,7 +890,6 @@
 		},
 		"room": {
 			"titleFallback": "Room",
-			"leaveButton": "Leave",
 			"participantsAriaLabel": "Participants",
 			"participantsTitle": "Participants ({{count}})",
 			"selfMarker": "you",

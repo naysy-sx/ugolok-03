@@ -1176,7 +1176,10 @@ html[data-media-full] .top-corner-actions {
 	/* Живой фидбек пользователя — правый паддинг отдельно, поменьше
 	   (5px), чтобы звезда вставала точно под "все ›" заголовка группы
 	   выше (тот справа не добавляет своего отступа сверх padding
-	   .grouphead-строки — симметричные 8px здесь смещали её левее). */
+	   .grouphead-строки — симметричные 8px здесь смещали её левее).
+	   Значение здесь — фолбэк/документация намерения; реально побеждает
+	   .fav-toggle:has(> .icon) ниже (см. её комментарий, та же ловушка,
+	   что уже трижды в этом файле). */
 	padding-block: var(--space-3xs);
 	padding-inline-start: var(--space-2xs);
 	padding-inline-end: 5px;
@@ -1185,6 +1188,16 @@ html[data-media-full] .top-corner-actions {
 	opacity: 0.2;
 	cursor: pointer;
 	transition: opacity var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease);
+}
+/* ЛОВУШКА ФАЙЛА (в третий раз в этом файле — см. .account-key/.menu-pop
+   button выше) — IconStar рендерит <svg class="icon"> прямым child'ом
+   кнопки → глобальное [type="button"]:has(> .icon) (самое начало файла)
+   специфичностью (0,2,0) перебивало обе padding-inline-* строки выше
+   (те — на голом .fav-toggle, 0,1,0) единым var(--step-0)=16px — звезда
+   съезжала мимо "все". Составной селектор класс+:has = тоже (0,2,0),
+   позже в файле — побеждает по source order. */
+.fav-toggle:has(> .icon) {
+	padding-inline: var(--space-2xs) 5px;
 }
 .stream-row:hover .fav-toggle,
 .fav-toggle:focus-visible {
@@ -1279,6 +1292,14 @@ html[data-media-full] .top-corner-actions {
 	cursor: pointer;
 	transition: background-color var(--transition-speed) var(--transition-ease), border-color var(--transition-speed) var(--transition-ease);
 }
+/* ЛОВУШКА ФАЙЛА — та же самая, что у .fav-toggle/.account-key/.menu-pop
+   button: "Добавить контакт" (app.jsx) и кнопка внутри .empty (nav-groups.jsx)
+   держат IconPersonAdd/IconCompass прямым child'ом → глобальное
+   [type="button"]:has(> .icon) иначе раздувало бы padding-inline до
+   var(--step-0) вместо var(--space-xs). */
+.act:has(> .icon) {
+	padding-inline: var(--space-xs);
+}
 .act:hover {
 	background-color: color-mix(in oklch, var(--accent), transparent 92%);
 }
@@ -1354,6 +1375,13 @@ html[data-media-full] .top-corner-actions {
 	   раз описана в шапке этого файла). */
 	text-align: start;
 }
+/* ЛОВУШКА ФАЙЛА — IconGlobe прямым child'ом (app.jsx) → глобальное
+   [type="button"]:has(> .icon) иначе раздувало бы padding-inline до
+   var(--step-0) вместо var(--space-xs). Тот же случай, что .act/
+   .fav-toggle/.account-key/.menu-pop button выше. */
+.quick:has(> .icon) {
+	padding-inline: var(--space-xs);
+}
 .quick:hover,
 .quick:focus-visible {
 	color: var(--fg);
@@ -1408,10 +1436,23 @@ html[data-media-full] .top-corner-actions {
 }
 .rooms-overlay-panel {
 	position: relative;
+	/* isolation:isolate — ::before ниже держит z-index:-1 (тот же приём,
+	   что раньше на .quick-entry, оттуда и переехал); без своего
+	   stacking context это -1 убегает к ближайшему АКТУАЛЬНОМУ контексту
+	   выше (скорее всего — самому корню), блик рисуется где-то позади
+	   ВСЕЙ страницы, а не просто позади фона панели, и не виден вовсе. */
+	isolation: isolate;
 	inline-size: 100%;
 	max-inline-size: 60rem;
 	max-block-size: 100%;
 	overflow-y: auto;
+	/* Живой фидбек пользователя — появился лишний горизонтальный скролл:
+	   блик (::before ниже) высовывается за правый край (inset-inline-end
+	   отрицательный), а overflow-y:auto само по себе тянет X-ось туда же
+	   (спека: "visible" на одной оси при НЕ-visible на другой сама
+	   становится auto) — раньше блик жил в .quick-entry с overflow:hidden
+	   на обеих осях сразу, теперь оси нужно развести явно. */
+	overflow-x: hidden;
 	border-radius: var(--radius-lg);
 	box-shadow: var(--shadow);
 	/* Живой фидбек пользователя — было var(--bg) (нейтральный фон), а
@@ -1422,6 +1463,31 @@ html[data-media-full] .top-corner-actions {
 	   property СВОИХ .quick-entry/.quick-room, наружу, на предка, не
 	   наследуется — нужно явное значение). */
 	background-color: var(--good-surface);
+}
+/* Живой фидбек пользователя — тёплый акцентный отсвет тоже переехал сюда с
+   .quick-entry::before (тот теперь без своего фонового решения вообще —
+   panel красит и фон, и этот отсвет уже на уровне всей модалки, не только
+   узкой стартовой карточки внутри). isolation/overflow не нужны отдельно:
+   position:relative уже есть, overflow-y:auto уже клипает обе оси (auto на
+   одной оси — не visible на другой по спеке), z-index:-1 держит блик под
+   контентом. */
+.rooms-overlay-panel::before {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	inset-block-start: -8rem;
+	inset-inline-end: -6rem;
+	inline-size: min(26rem, 80%);
+	aspect-ratio: 1;
+	border-radius: 50%;
+	pointer-events: none;
+	background: radial-gradient(
+		circle,
+		color-mix(in oklch, var(--accent), transparent 66%) 0%,
+		color-mix(in oklch, var(--accent), transparent 88%) 42%,
+		transparent 70%
+	);
+	animation: quick-lamp-breathe 9s var(--ease-io) infinite alternate;
 }
 /* Свёрнуто — НЕ display:none: Quick внутри остаётся смонтированным
    (React/Preact не трогает DOM-поддерево скрытого display:none элемента,
@@ -1800,15 +1866,6 @@ html[data-media-full] .top-corner-actions {
 	block-size: 2.625rem;
 	color: var(--accent);
 }
-/* Кнопка выхода переехала рядом с заголовком (было — отдельным блоком в
-   правом углу шапки, там свободного места было больше) — на своей строке
-   с h2 места мало, особенно на узких экранах, поэтому компактнее базовой
-   button{padding:var(--space-2xs) var(--space-m)} (elements-слой). */
-.quick-room-leave {
-	padding: var(--space-3xs) var(--space-xs);
-	font-size: var(--step--1);
-}
-
 /* ---- Сцена (голос) --------------------------------------------------
    Кнопка входа в голос, счётчик мест, спектрограмма и индикаторы
    говорящих — одно целое, а не четыре соседа по потоку. */
@@ -2369,13 +2426,13 @@ html[data-media-full] .top-corner-actions {
 		color-mix(in oklch, var(--good-surface-light), white 62%),
 		color-mix(in oklch, var(--good-surface-dark), white 7%)
 	);
-	background-color: var(--quick-tint);
 }
 .quick-room {
 	/* --step-* — шкала кегля, не отступов (и, в отличие от --space-*, не
 	   текучая) — найдено внешним ревью: осталось от .quick-entry/.quick-room
 	   общего правила ДО их разделения, `.quick-entry` тогда получил
 	   правильные --space-l/--radius-lg (выше), сюда забыли перенести. */
+	background-color: var(--quick-tint);
 	padding: var(--space-l);
 	border-radius: var(--radius-lg);
 }
@@ -2399,24 +2456,6 @@ html[data-media-full] .top-corner-actions {
 }
 .quick-entry :is(h1, h2, h3, h4) {
 	margin-block: 0;
-}
-.quick-entry::before {
-	content: "";
-	position: absolute;
-	z-index: -1;
-	inset-block-start: -8rem;
-	inset-inline-end: -6rem;
-	inline-size: min(26rem, 80%);
-	aspect-ratio: 1;
-	border-radius: 50%;
-	pointer-events: none;
-	background: radial-gradient(
-		circle,
-		color-mix(in oklch, var(--accent), transparent 66%) 0%,
-		color-mix(in oklch, var(--accent), transparent 88%) 42%,
-		transparent 70%
-	);
-	animation: quick-lamp-breathe 9s var(--ease-io) infinite alternate;
 }
 @keyframes quick-lamp-breathe {
 	from {

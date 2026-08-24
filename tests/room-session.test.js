@@ -301,23 +301,33 @@ test("sendChat до готовности (!isReady) — отклоняется, 
 	await flushUntilSettled(relay); // дать PROBE'у Боба реально уйти до close() в t.after
 });
 
-test("τ-исчезновение: один участник закрывается абруптно (close без exit-события), через τ пропадает у второго", async (t) => {
+// Живой фидбек пользователя — раньше close() НИКОГДА не публиковал exit
+// (см. пересмотренный комментарий в room-session.js), поэтому этот тест
+// раньше симулировал "абруптное закрытие" буквальным вызовом bob.close().
+// Теперь close() публикует best-effort exit (граница графов ниже), а
+// НАСТОЯЩИЙ абруптный обрыв (вкладка реально исчезла) не вызывает НИ ОДНОЙ
+// строчки JS вообще — точнее симулируется тем, что heartbeat просто
+// перестаёт приходить, без какого-либо вызова close(). bob.close() в
+// t.after — только уборка ресурсов теста (WebSocket), уже ПОСЛЕ всех
+// проверок ниже, на τ-факт не влияет.
+test("τ-исчезновение: heartbeat абруптно перестаёт приходить (вкладка исчезла, JS не успел отработать), через τ пропадает у второго", async (t) => {
 	const { relay, bridge, relayUrl } = await setup();
 	t.after(() => bridge.stop());
 	const clock = makeClock(1000);
 	const { alice, bob, timerA, timerB } = await openTwoParticipants(relay, relayUrl, clock);
 	t.after(() => alice.close());
+	t.after(() => bob.close());
 
 	assert.equal(alice.getPresent().length, 2, "оба видны перед уходом");
 
-	bob.close(); // абруптно, БЕЗ exit-события — имитация закрытой вкладки
+	// Абруптно: timerB просто больше не тикает — heartbeat перестаёт
+	// приходить, ни один код Боба (включая close()) не вызывается.
 
-	// Сразу после закрытия Боб ещё присутствует (аренда не истекла)
 	await pump(relay, clock, [timerA], { rounds: 2, stepMs: 1000 });
 	assert.equal(
 		alice.getPresent().some((p) => p.pubkey === bob.getPubkeyHex()),
 		true,
-		"аренда Боба ещё не истекла сразу после close()",
+		"аренда Боба ещё не истекла сразу после исчезновения heartbeat",
 	);
 
 	// Прыжок часов далеко за τ=45000мс, тик Алисы (sweep делает prune/present)
@@ -328,7 +338,34 @@ test("τ-исчезновение: один участник закрывает�
 	assert.equal(
 		alice.getPresent().some((p) => p.pubkey === bob.getPubkeyHex()),
 		false,
-		"через τ Боб исчез из present() Алисы — лизинг истёк, явного exit не было",
+		"через τ Боб исчез из present() Алисы — лизинг истёк, heartbeat не приходил",
+	);
+	assert.equal(alice.getPresent().length, 1, "осталась только Алиса");
+});
+
+test("close(): явный уход публикует best-effort exit — присутствие исчезает у другого участника СРАЗУ, не дожидаясь τ", async (t) => {
+	const { relay, bridge, relayUrl } = await setup();
+	t.after(() => bridge.stop());
+	const clock = makeClock(1000);
+	const { alice, bob, timerA, timerB } = await openTwoParticipants(relay, relayUrl, clock);
+	t.after(() => alice.close());
+
+	assert.equal(alice.getPresent().length, 2, "оба видны перед уходом");
+
+	bob.close(); // graceful — JS успевает отработать (кнопка закрытия внутри приложения)
+
+	// Реальная доставка exit-события по WebSocket — отдельно от продвижения
+	// часов (то, ниже, только для τ-математики; сама доставка асинхронна и
+	// требует настоящих раундов flush, pump() внутри даёт их маловато).
+	await flushUntilSettled(relay);
+	// Шаг часов НАМНОГО меньше τ=45000мс — если бы exit не публиковался, Боб
+	// оставался бы видимым ещё десятки секунд (см. тест выше, абруптный случай).
+	await pump(relay, clock, [timerA], { rounds: 2, stepMs: 1000 });
+
+	assert.equal(
+		alice.getPresent().some((p) => p.pubkey === bob.getPubkeyHex()),
+		false,
+		"после явного close() Боб исчезает сразу, не дожидаясь τ-лизинга",
 	);
 	assert.equal(alice.getPresent().length, 1, "осталась только Алиса");
 });

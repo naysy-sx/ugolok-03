@@ -8,7 +8,6 @@ import IconQuickRoomPeople from "../icons/quick-room-people.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconCopy from "../icons/copy.jsx";
-import IconLogOut from "../icons/log-out.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
 
@@ -338,20 +337,6 @@ export default function Quick({ onExit }) {
 		}
 	}
 
-	function handleLeave() {
-		sessionRef.current?.close();
-		sessionRef.current = null;
-		setSession(null);
-		setRaceOutcome(null);
-		setActiveRoomName("");
-		setActiveRoomPassword("");
-		setVoiceActive(false);
-		setVoiceError("");
-		setRemoteStreams(new Map());
-		setLocalStream(null);
-		setScreen("entry");
-	}
-
 	// Текст не зависит от голоса ни в одном сценарии (ROOMS-SPEC §7) — отказ
 	// joinVoice() (микрофон запрещён/голос заполнен/TURN недоступен) оставляет
 	// комнату и чат полностью рабочими, только показывает сообщение об ошибке.
@@ -429,12 +414,6 @@ export default function Quick({ onExit }) {
 						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
 							<div class="bar" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
 								<h2 class="quick-room-title truncate grow">{activeRoomName || t("quick.room.titleFallback")}</h2>
-								{/* Уход из комнаты необратим (без ссылки на руках обратно не
-								    попасть) — --warn, не нейтральный ghost. */}
-								<button type="button" class="quick-room-leave btn--ghost btn--warn bar rigid" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={handleLeave}>
-									<IconLogOut class="icon rigid" aria-hidden="true" />
-									{t("quick.room.leaveButton")}
-								</button>
 							</div>
 							{inviteLink && (
 								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
