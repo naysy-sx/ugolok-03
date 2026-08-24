@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",
+		"immutableNotice": "Takma ad ve ana parola oluşturulduktan sonra değiştirilemez — dikkatli seçin.",
 		"dbError": {
 			"message": "Yerel veritabanı açılamadı — uygulama güncellemesinden sonra uyumsuz bir biçimde kalmış olabilir.",
 			"warning": "Bu işlem, bu cihazdaki tüm yerel verileri (hesaplar, sohbetler, kanallar) silecek ve yeniden giriş yapmanızı veya kayıt olmanızı gerektirecektir.",

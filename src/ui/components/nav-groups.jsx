@@ -152,11 +152,16 @@ export default function NavGroups({ unreadJournalCount }) {
 	// открытых чатов, видел бы пустую группу — найдено пользователем).
 	// Контакты — НЕ полный экран управления (группы/заявки остаются только
 	// на "Люди"), просто ещё несколько строк в том же списке.
+	// Избранные исключены отсюда (найдено пользователем — раньше пункт
+	// дублировался и в "Избранном", и в своей обычной группе): у каждого
+	// контакта/канала/подписки теперь ровно одна строка в списке.
 	const conversationPubkeys = new Set(conversations.map((c) => c.chatId));
 	const contactsWithoutConversation = contacts.value.filter((pk) => !conversationPubkeys.has(pk));
-	const visiblePeople = [...conversations.map((c) => c.chatId), ...contactsWithoutConversation].filter((pk) => matches(personName(pk)));
-	const visibleOwned = owned.filter((c) => matches(c.name || ""));
-	const visibleSubscribed = subscribed.filter((c) => matches(c.name || ""));
+	const visiblePeople = [...conversations.map((c) => c.chatId), ...contactsWithoutConversation]
+		.filter((pk) => matches(personName(pk)))
+		.filter((pk) => !pinned.people.includes(pk));
+	const visibleOwned = owned.filter((c) => matches(c.name || "")).filter((c) => !pinned.channels.includes(c.id));
+	const visibleSubscribed = subscribed.filter((c) => matches(c.name || "")).filter((c) => !pinned.channels.includes(c.id));
 
 	// ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — пустое состояние: ПОЛНЫЕ
 	// списки (до search-фильтра), не visiblePeople/visibleOwned/

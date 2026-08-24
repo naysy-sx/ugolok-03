@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Checking…",
+		"immutableNotice": "The nickname and master password can't be changed after creation — choose carefully.",
 		"dbError": {
 			"message": "Could not open the local database — it may be in an incompatible format left over from an app update.",
 			"warning": "This will erase all local data on this device (accounts, conversations, channels) and require signing in or registering again.",

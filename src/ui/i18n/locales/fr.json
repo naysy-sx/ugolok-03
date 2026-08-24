@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Vérification…",
+		"immutableNotice": "Le pseudo et le mot de passe principal ne pourront pas être modifiés après la création — choisissez-les avec soin.",
 		"dbError": {
 			"message": "Impossible d'ouvrir la base de données locale — elle est peut-être restée dans un format incompatible après une mise à jour de l'application.",
 			"warning": "Cette action effacera toutes les données locales sur cet appareil (comptes, conversations, chaînes) et nécessitera une nouvelle connexion ou inscription.",

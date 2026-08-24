@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Sprawdzanie…",
+		"immutableNotice": "Pseudonimu i hasła głównego nie będzie można zmienić po utworzeniu — wybierz je uważnie.",
 		"dbError": {
 			"message": "Nie udało się otworzyć lokalnej bazy danych — mogła pozostać w niekompatybilnym formacie po aktualizacji aplikacji.",
 			"warning": "Spowoduje to usunięcie wszystkich lokalnych danych na tym urządzeniu (kont, rozmów, kanałów) i będzie wymagać ponownego logowania lub rejestracji.",

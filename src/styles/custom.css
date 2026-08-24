@@ -733,9 +733,13 @@ html[data-media-full] .top-corner-actions {
 	transform: translateY(0);
 }
 
-/* Точка присутствия — молчит, когда всё хорошо: зелёная и почти
-   незаметная, дышит очень медленно (под prefers-reduced-motion
-   глобальное правило minimal.css её остановит). */
+/* Точка присутствия — молчит, когда всё хорошо: дышит очень медленно
+   (под prefers-reduced-motion глобальное правило minimal.css её
+   остановит). Цвет — НЕ var(--good)/var(--warn): те токены рассчитаны
+   на крупные поверхности (кнопки, текст), их светлая версия при 10px
+   читалась пользователем как "всегда серая точка, будто не реагирует
+   на статус" — здесь нужен более яркий и насыщенный оттенок того же
+   тона, чтобы "онлайн" было видно с одного взгляда. */
 .account-dot {
 	position: absolute;
 	inset-block-start: var(--space-2xs);
@@ -743,15 +747,15 @@ html[data-media-full] .top-corner-actions {
 	inline-size: 0.625rem;
 	block-size: 0.625rem;
 	border-radius: 50%;
-	background-color: var(--good);
+	background-color: light-dark(oklch(0.64 0.19 145), oklch(0.76 0.19 145));
 	box-shadow: 0 0 0 2px oklch(0.15 0.02 var(--hue) / 0.35);
 	animation: account-dot-breathe 4s var(--transition-ease) infinite;
 }
 .account-dot--warn {
-	background-color: var(--warn);
+	background-color: light-dark(oklch(0.64 0.17 85), oklch(0.76 0.17 85));
 }
 @keyframes account-dot-breathe {
-	0%, 100% { opacity: 0.5 }
+	0%, 100% { opacity: 0.75 }
 	50% { opacity: 1 }
 }
 

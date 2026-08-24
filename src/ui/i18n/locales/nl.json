@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Bezig met controleren…",
+		"immutableNotice": "Bijnaam en hoofdwachtwoord kunnen na het aanmaken niet meer worden gewijzigd — kies zorgvuldig.",
 		"dbError": {
 			"message": "Kan de lokale database niet openen — deze is mogelijk in een onverenigbaar formaat achtergebleven na een app-update.",
 			"warning": "Hierdoor worden alle lokale gegevens op dit apparaat gewist (accounts, gesprekken, kanalen) en moet je opnieuw inloggen of registreren.",

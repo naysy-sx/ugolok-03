@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Wird geprüft…",
+		"immutableNotice": "Spitzname und Master-Passwort können nach der Erstellung nicht mehr geändert werden — wählen Sie sorgfältig.",
 		"dbError": {
 			"message": "Die lokale Datenbank konnte nicht geöffnet werden — sie liegt möglicherweise noch in einem nach einem App-Update inkompatiblen Format vor.",
 			"warning": "Dadurch werden alle lokalen Daten auf diesem Gerät gelöscht (Konten, Unterhaltungen, Kanäle) und eine erneute Anmeldung oder Registrierung ist erforderlich.",

@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Verificando…",
+		"immutableNotice": "O apelido e a senha mestra não poderão ser alterados após a criação — escolha com cuidado.",
 		"dbError": {
 			"message": "Não foi possível abrir o banco de dados local — ele pode ter permanecido em um formato incompatível após uma atualização do aplicativo.",
 			"warning": "Isso apagará todos os dados locais neste dispositivo (contas, conversas, canais) e exigirá novo login ou registro.",

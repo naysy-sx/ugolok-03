@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Verifica in corso…",
+		"immutableNotice": "Il nickname e la password principale non potranno essere modificati dopo la creazione — sceglieteli con attenzione.",
 		"dbError": {
 			"message": "Impossibile aprire il database locale — potrebbe essere rimasto in un formato incompatibile dopo un aggiornamento dell'app.",
 			"warning": "Questa operazione cancellerà tutti i dati locali su questo dispositivo (account, conversazioni, canali) e richiederà un nuovo accesso o una nuova registrazione.",

@@ -452,6 +452,7 @@ export default function Unlock() {
 				<form class="stack" style={{ "--gap": "var(--space-m)" }} onSubmit={handleAdvancedPasswordSubmit}>
 					<fieldset class="stack" style={{ "--gap": "var(--space-m)" }}>
 						<legend>{t("unlock.advancedPassword.title")}</legend>
+						<p style={{ color: "var(--muted)" }}>{t("unlock.immutableNotice")}</p>
 						<label for="adv-login">{t("unlock.advancedPassword.loginLabel")}</label>
 						<input id="adv-login" type="text" autocomplete="username" value={advLogin} onInput={(e) => setAdvLogin(e.currentTarget.value)} />
 						<label for="adv-password">{t("unlock.advancedPassword.passwordLabel", { min: MIN_PASSWORD_LENGTH })}</label>
@@ -622,6 +623,7 @@ export default function Unlock() {
 					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-live="polite">
 						<h4>{t("unlock.main.registerBox.title")}</h4>
 						<p class="auth-widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
+						<p class="auth-widget-subtitle">{t("unlock.immutableNotice")}</p>
 						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
 							<div class="form-group">
 								<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>

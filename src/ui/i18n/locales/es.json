@@ -141,6 +141,7 @@
 	},
 	"unlock": {
 		"checking": "Comprobando…",
+		"immutableNotice": "El apodo y la contraseña maestra no se podrán cambiar después de crearlos — elígelos con cuidado.",
 		"dbError": {
 			"message": "No se pudo abrir la base de datos local — puede que haya quedado en un formato incompatible tras una actualización de la aplicación.",
 			"warning": "Esto borrará todos los datos locales en este dispositivo (cuentas, conversaciones, canales) y requerirá volver a iniciar sesión o registrarse.",
