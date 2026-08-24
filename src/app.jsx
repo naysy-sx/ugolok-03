@@ -296,7 +296,7 @@ function MainShell() {
 						<button
 							type="button"
 							class="quick bar"
-							style={{ "--gap": "var(--space-xs)", alignItems: "center" }}
+							style={{ "--gap": "var(--space-xs)", "--align": "center" }}
 							onClick={() => {
 								roomsScreenActive.value = true;
 								roomsMinimized.value = false;

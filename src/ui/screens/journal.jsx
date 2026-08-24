@@ -132,7 +132,7 @@ function JournalItem({ entry, onOpen, onMarkRead }) {
 	return (
 		<li class="jitem" data-read={entry.read || undefined}>
 			<button type="button" class="jitem__link" onClick={onOpen}>
-				<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+				<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ "--align": "center", justifyContent: "center" }} aria-hidden="true">
 					<Icon />
 				</span>
 				<span class="jbody stack" style={{ "--gap": "2px" }}>
@@ -146,7 +146,7 @@ function JournalItem({ entry, onOpen, onMarkRead }) {
 						</span>
 					)}
 				</span>
-				<span class="jside stack" style={{ "--gap": "var(--space-3xs)", alignItems: "flex-end", justifyContent: "center" }}>
+				<span class="jside stack" style={{ "--gap": "var(--space-3xs)", "--align": "flex-end", justifyContent: "center" }}>
 					<span class="jtime">{formatEntryTime(entry.occurredAt)}</span>
 					{!entry.read && <span class="jdot" aria-label={t("journal.unreadDot")} />}
 				</span>
@@ -177,7 +177,7 @@ function CategoryFilter({ value, counts, total, onChange }) {
 		<>
 			<div class="filter-slot grow bar" style={{ justifyContent: "flex-end" }}>
 				<details class={`menu jfilter${activeMeta ? ` jcat--${activeMeta.tone}` : ""}`} ref={ref} onClick={handleMenuClick}>
-					<summary class="chip bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center", cursor: "pointer" }} aria-label={t("journal.filterAria")}>
+					<summary class="chip bar" style={{ "--gap": "var(--space-2xs)", "--align": "center", cursor: "pointer" }} aria-label={t("journal.filterAria")}>
 						<ActiveIcon />
 						<span>{activeLabel}</span>
 						<span class="slice__n">{activeCount}</span>
@@ -213,7 +213,7 @@ function CategoryFilter({ value, counts, total, onChange }) {
 			</div>
 
 			<div class="filter-reel reel" style={{ "--gap": "var(--space-2xs)" }} role="group" aria-label={t("journal.filterAria")}>
-				<button type="button" class={`slice bar rigid${value === null ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-pressed={value === null} onClick={() => onChange(null)}>
+				<button type="button" class={`slice bar rigid${value === null ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-pressed={value === null} onClick={() => onChange(null)}>
 					<IconFunnel />
 					<span>{t("journal.filter.all")}</span>
 					<span class="slice__n">{total}</span>
@@ -222,7 +222,7 @@ function CategoryFilter({ value, counts, total, onChange }) {
 					const meta = CATEGORY_META[key];
 					const Icon = meta.Icon;
 					return (
-						<button key={key} type="button" class={`slice jcat jcat--${meta.tone} bar rigid${value === key ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-pressed={value === key} onClick={() => onChange(key)}>
+						<button key={key} type="button" class={`slice jcat jcat--${meta.tone} bar rigid${value === key ? " slice--on" : ""}`} style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-pressed={value === key} onClick={() => onChange(key)}>
 							<Icon />
 							<span>{t(meta.filterLabelKey)}</span>
 							<span class="slice__n">{counts[key] ?? 0}</span>
@@ -323,7 +323,7 @@ export default function Journal() {
 			actions={
 				<>
 					{everSetDueDate && (
-						<button type="button" class="btn btn--ghost pill-due bar" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={() => goTo({ kind: "today" })}>
+						<button type="button" class="btn btn--ghost pill-due bar" style={{ "--gap": "var(--space-3xs)", "--align": "center" }} onClick={() => goTo({ kind: "today" })}>
 							◈ {t("journal.dueButton")} <span class="pill__n">{dueBadgeCount.value}</span>
 						</button>
 					)}
@@ -335,9 +335,9 @@ export default function Journal() {
 			}
 			slices={
 				<>
-					<div class="filter-row bar" style={{ "--gap": "var(--space-s)", alignItems: "flex-end" }}>
+					<div class="filter-row bar" style={{ "--gap": "var(--space-s)", "--align": "flex-end" }}>
 						<div class="tabs bar" style={{ "--gap": "0" }} role="tablist" aria-label={t("journal.tabsAria")}>
-							<button type="button" id={`${tabsId}-new`} class="tab bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} role="tab" aria-selected={tab === "new"} aria-controls={`${tabsId}-panel`} onClick={() => setTab("new")}>
+							<button type="button" id={`${tabsId}-new`} class="tab bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} role="tab" aria-selected={tab === "new"} aria-controls={`${tabsId}-panel`} onClick={() => setTab("new")}>
 								{t("journal.tabNew")}
 								{hasUnread && <span class="pill__n">{entries.filter((e) => !e.read).length}</span>}
 							</button>
@@ -378,7 +378,7 @@ export default function Journal() {
 							</section>
 						))}
 						{nextGroup && (
-							<div class="jmore row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }}>
+							<div class="jmore row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "center" }}>
 								<button type="button" class="btn btn--ghost" onClick={() => setVisibleDays(visibleDays + DAYS_STEP)}>
 									{t("journal.showMoreDay", { date: formatDaySeparator(nextGroup.entries[0].occurredAt) })}
 								</button>

@@ -44,7 +44,7 @@ export default function ChannelAvatarThumb({ channel, small }) {
 		return <img src={url} alt="" class={sizeClass} />;
 	}
 	return (
-		<div class={`${sizeClass} channel-avatar-thumb-fallback row`} style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+		<div class={`${sizeClass} channel-avatar-thumb-fallback row`} style={{ "--align": "center", justifyContent: "center" }} aria-hidden="true">
 			{(channel.name || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);

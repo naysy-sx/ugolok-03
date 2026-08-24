@@ -12,7 +12,7 @@ export default function AccountAvatar({ avatar, login, large, small }) {
 		return <img src={avatar} alt="" class="account-avatar" style={{ "--avatar": size }} />;
 	}
 	return (
-		<div class="account-avatar account-avatar-fallback row" style={{ "--avatar": size, alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+		<div class="account-avatar account-avatar-fallback row" style={{ "--avatar": size, "--align": "center", justifyContent: "center" }} aria-hidden="true">
 			{(login || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);

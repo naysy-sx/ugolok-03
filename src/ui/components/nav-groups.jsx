@@ -46,7 +46,7 @@ function PersonAvatar({ pubkey, name }) {
 		return <img src={picture} alt="" class="stream-ava" />;
 	}
 	return (
-		<span class="stream-ava bar" aria-hidden="true" style={{ alignItems: "center", justifyContent: "center" }}>
+		<span class="stream-ava bar" aria-hidden="true" style={{ "--align": "center", justifyContent: "center" }}>
 			{initial(name)}
 		</span>
 	);
@@ -79,8 +79,8 @@ function FavToggle({ pinned, onToggle, label }) {
 // DOM.
 function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabel, unread = 0 }) {
 	return (
-		<li class={`stream-row bar${active ? " is-active" : ""}${unread > 0 ? " has-unread" : ""}`} style={{ "--gap": "0", alignItems: "center" }}>
-			<button type="button" class="stream bar grow" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onClick={onOpen}>
+		<li class={`stream-row bar${active ? " is-active" : ""}${unread > 0 ? " has-unread" : ""}`} style={{ "--gap": "0", "--align": "center" }}>
+			<button type="button" class="stream bar grow" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={onOpen}>
 				<span style={{ position: "relative", display: "inline-flex", flex: "none" }}>
 					{avatar}
 					{unread > 0 && <span class="ava-dot" aria-hidden="true" />}
@@ -186,7 +186,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				<label class="visually-hidden" for={searchId}>
 					{t("shell.searchLabel")}
 				</label>
-				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
 					<input id={searchId} type="search" placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
 				</div>
@@ -256,7 +256,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				) : (
 				<>
 				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
+					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
 						{t("shell.peopleGroupHeading")}
 						{unreadMessagesCount.value > 0 && <span class="group-count">{unreadMessagesCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
@@ -279,7 +279,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				</div>
 
 				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
+					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
 						{t("shell.myChannelsGroupHeading")}
 						{unreadOwnedChannelsCount.value > 0 && <span class="group-count">{unreadOwnedChannelsCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
@@ -302,7 +302,7 @@ export default function NavGroups({ unreadJournalCount }) {
 				</div>
 
 				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ alignItems: "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
+					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
 						{t("shell.subscriptionsGroupHeading")}
 						{unreadSubscribedChannelsCount.value > 0 && <span class="group-count">{unreadSubscribedChannelsCount.value}</span>}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>

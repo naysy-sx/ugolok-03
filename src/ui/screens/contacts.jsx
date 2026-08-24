@@ -54,7 +54,7 @@ export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 	const avatar = profile?.picture ? (
 		<img src={profile.picture} alt="" width="40" height="40" class="contact-avatar" />
 	) : (
-		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ alignItems: "center", justifyContent: "center" }}>
+		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ "--align": "center", justifyContent: "center" }}>
 			{(displayName || "?").trim().charAt(0).toUpperCase()}
 		</div>
 	);
@@ -73,7 +73,7 @@ export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 
 	if (!onClick) {
 		return (
-			<div class="contact-identity row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="contact-identity row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{avatar}
 				{text}
 			</div>
@@ -86,7 +86,7 @@ export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 			onClick={onClick}
 			aria-label={t("contacts.openChatAria", { name: displayName })}
 			class="contact-identity contact-identity-btn row"
-			style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+			style={{ "--gap": "var(--space-s)", "--align": "center" }}
 		>
 			{avatar}
 			{text}
@@ -291,8 +291,8 @@ export default function Contacts() {
 					</p>
 				)}
 
-				<form class="row contacts-add-form" style={{ "--gap": "0", alignItems: "stretch" }} onSubmit={handleAddContact}>
-					<div class="row grow contact-add-field" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<form class="row contacts-add-form" style={{ "--gap": "0", "--align": "stretch" }} onSubmit={handleAddContact}>
+					<div class="row grow contact-add-field" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						<IconPersonAdd aria-hidden="true" />
 						<label class="visually-hidden" for="add-contact-input">
 							{t("contacts.addContactLabel")}
@@ -321,7 +321,7 @@ export default function Contacts() {
 					<h2 id="groups-heading">{t("contacts.groupsHeading")}</h2>
 					<ul role="list" class="group-filter-list stack">
 						<li>
-							<span class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+							<span class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 								<input
 									id="group-filter-all"
 									type="checkbox"
@@ -333,7 +333,7 @@ export default function Contacts() {
 						</li>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<div class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+								<div class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 									<input
 										id={`group-filter-${g.id}`}
 										type="checkbox"
@@ -343,7 +343,7 @@ export default function Contacts() {
 									{renamingGroupId === g.id ? (
 										<form
 											class="row"
-											style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+											style={{ "--gap": "var(--space-s)", "--align": "center" }}
 											onSubmit={(e) => {
 												e.preventDefault();
 												runRowAction(async () => {
@@ -401,7 +401,7 @@ export default function Contacts() {
 						))}
 					</ul>
 
-					<form class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }} onSubmit={handleCreateGroup}>
+					<form class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={handleCreateGroup}>
 						<label class="visually-hidden" for="new-group-name">
 							{t("contacts.newGroupNameLabel")}
 						</label>
@@ -441,9 +441,9 @@ export default function Contacts() {
 								const isExpanded = expandedPubkey === pubkey;
 								return (
 									<li key={pubkey} class="contact-row contact-row-expandable row" style={{ "--gap": "var(--space-2xs)" }}>
-										<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+										<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
-											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 												<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
 													<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
 												</button>
@@ -471,9 +471,9 @@ export default function Contacts() {
 											</div>
 										</div>
 
-										<div class="contact-row-groups row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+										<div class="contact-row-groups row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 											{memberOfGroups.map((g) => (
-												<span key={g.id} class="group-chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+												<span key={g.id} class="group-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 													{g.name}
 													<button
 														type="button"
@@ -524,9 +524,9 @@ export default function Contacts() {
 						) : (
 							<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 								{incomingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+									<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 											<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
 												{t("contacts.acceptButton")}
 											</button>
@@ -546,7 +546,7 @@ export default function Contacts() {
 					    (VISUAL.md v2 .req), чтобы не отвлекали от главного. */}
 					<div class="requests stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<details class="req">
-							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 								{t("contacts.outgoingSummary")} <span class="req__count">{outgoingRequests.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
@@ -556,9 +556,9 @@ export default function Contacts() {
 								) : (
 									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 										{outgoingRequests.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 												<ContactIdentity pubkey={req.peerPubkey} />
-												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 													<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
 														{t("contacts.cancelRequestButton")}
 													</button>
@@ -571,7 +571,7 @@ export default function Contacts() {
 						</details>
 
 						<details class="req">
-							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 								{t("contacts.rejectedSummary")} <span class="req__count">{rejectedByMe.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
@@ -581,11 +581,11 @@ export default function Contacts() {
 								) : (
 									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 										{rejectedByMe.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 												<ContactIdentity pubkey={req.peerPubkey} />
 												{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
 												написать самому тому, чью заявку отклонил(а) раньше. */}
-												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 													<button
 														type="button"
 														disabled={busy}
@@ -604,16 +604,16 @@ export default function Contacts() {
 
 					<div class="requests stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<details class="req">
-							<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+							<summary class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 								{t("contacts.blockedSummary")} <span class="req__count">{blockedContacts.value.length}</span>
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
 								<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 									{blockedContacts.value.map((pubkey) => (
-										<li key={pubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+										<li key={pubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 											<ContactIdentity pubkey={pubkey} />
-											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 												<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
 													{t("contacts.unblockButton")}
 												</button>
@@ -643,7 +643,7 @@ function AddToGroupControl({ groups, excludeGroupIds, onAdd, disabled }) {
 
 	return (
 		<details class="menu" ref={ref} onClick={handleMenuClick}>
-			<summary class="chip row" style={{ "--gap": "var(--space-3xs)", alignItems: "center", cursor: "pointer" }}>
+			<summary class="chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center", cursor: "pointer" }}>
 				<IconPlus /> {t("contacts.addToGroupLabel")}
 			</summary>
 			<div class="menu-pop stack" style={{ "--gap": "2px" }}>

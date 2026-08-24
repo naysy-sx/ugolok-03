@@ -84,7 +84,7 @@ function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRem
 			)}
 			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
 				{urls.map((url) => (
-					<li key={url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<li key={url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						<span class="srv__url">{url}</span>
 						{url === activeUrl && <span class="badge-on">{t("profile.server.activeLabel")}</span>}
 						{url !== activeUrl && (
@@ -171,7 +171,7 @@ function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
 			)}
 			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
 				{urls.map((r) => (
-					<li key={r.url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<li key={r.url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						<span class="srv__url">{r.url}</span>
 						<label>
 							<input
@@ -471,14 +471,14 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 					{error}
 				</p>
 			)}
-			<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
 				{t("discovery.showMeToggle")}
 			</label>
 
 			{settings.visible && (
 				<div class="stack" style={{ "--gap": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
-					<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<input
 							type="checkbox"
 							checked={settings.showChannels}
@@ -494,7 +494,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 								<p style={{ color: "var(--muted)" }}>{t("discovery.noOwnChannels")}</p>
 							) : (
 								ownedChannels.map((c) => (
-									<label key={c.id} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+									<label key={c.id} class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 										<input
 											id={`${instanceId}-ch-${c.id}`}
 											type="checkbox"
@@ -705,7 +705,7 @@ export default function Profile() {
 				<h2 id="profile-npub-heading" class="sect-title">
 					{t("profile.identifierHeading")}
 				</h2>
-				<div class="keybox row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<div class="keybox row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<code>{npubEncode(id)}</code>
 					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
 						<IconCopy />
@@ -726,7 +726,7 @@ export default function Profile() {
 			    себе (фото + кнопка под ним), а "О себе" остаётся единственным
 			    видимым заголовком блока. */}
 			<div class="profile-photo-layout">
-				<div class="profile-photo-col stack" style={{ "--gap": "var(--space-s)", alignItems: "center" }} aria-label={t("profile.avatarColumnAria")}>
+				<div class="profile-photo-col stack" style={{ "--gap": "var(--space-s)", "--align": "center" }} aria-label={t("profile.avatarColumnAria")}>
 					{/* avatarUrl (публичный Blossom URL) — фолбэк, когда локального
 					    data-url кэша ещё нет: НОВОЕ устройство подтягивает bio/avatarUrl
 					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
@@ -744,7 +744,7 @@ export default function Profile() {
 					role="img"
 					aria-label={t("profile.avatarNotSetAria")}
 					class="profile-avatar-square profile-avatar-square-fallback row"
-					style={{ alignItems: "center", justifyContent: "center" }}
+					style={{ "--align": "center", justifyContent: "center" }}
 				>
 							{initial}
 						</div>
@@ -783,7 +783,7 @@ export default function Profile() {
 							onInput={(e) => setBio(e.currentTarget.value)}
 						/>
 					</fieldset>
-					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<button type="submit" disabled={!bioIsDirty}>
 							{t("common.save")}
 						</button>

@@ -27,7 +27,7 @@ function TrayItem({ item, onRemove, onPositionChange }) {
 	return (
 		<div
 			class="row box"
-			style={{ "--gap": "var(--space-s)", "--pad": "var(--space-2xs)", alignItems: "center", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
+			style={{ "--gap": "var(--space-s)", "--pad": "var(--space-2xs)", "--align": "center", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
 		>
 			{canPreviewImage ? (
 				<img src={objectUrl} alt="" style={{ maxWidth: "6rem", maxHeight: "6rem", borderRadius: "var(--radius)" }} />
@@ -46,9 +46,9 @@ function TrayItem({ item, onRemove, onPositionChange }) {
 				)}
 			</span>
 			{item.type === "image" && (
-				<fieldset class="row" style={{ "--gap": "var(--space-s)", border: "none", padding: 0, alignItems: "center" }}>
+				<fieldset class="row" style={{ "--gap": "var(--space-s)", border: "none", padding: 0, "--align": "center" }}>
 					<legend class="visually-hidden">Положение картинки относительно текста</legend>
-					<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 						<input
 							id={`${instanceId}-above`}
 							type="radio"
@@ -58,7 +58,7 @@ function TrayItem({ item, onRemove, onPositionChange }) {
 						/>
 						<label for={`${instanceId}-above`}>Над сообщением</label>
 					</span>
-					<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 						<input
 							id={`${instanceId}-below`}
 							type="radio"

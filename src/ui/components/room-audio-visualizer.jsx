@@ -169,7 +169,7 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 	return (
 		<div class="room-audio-visualizer stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
 			<canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} class="room-spectrogram" aria-hidden="true" />
-			<label class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+			<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 				{t("quick.room.volumeLabel")}
 				<input type="range" min="0" max="1" step="0.05" value={gain} onInput={(e) => setGain(Number(e.currentTarget.value))} />
 			</label>

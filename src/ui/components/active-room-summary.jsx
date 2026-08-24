@@ -14,7 +14,7 @@ import { t } from "../signals/i18n.js";
 export default function ActiveRoomSummary({ onExpand }) {
 	const summary = activeRoomSummary.value;
 	return (
-		<button type="button" class="quick quick-active bar" style={{ "--gap": "var(--space-xs)", alignItems: "center" }} onClick={onExpand}>
+		<button type="button" class="quick quick-active bar" style={{ "--gap": "var(--space-xs)", "--align": "center" }} onClick={onExpand}>
 			{summary ? <span class="quick-live-dot" aria-hidden="true" /> : <IconGlobe aria-hidden="true" />}
 			<span class="stack grow" style={{ "--gap": "0" }}>
 				<span class="truncate">{summary?.name || t("shell.quickConnect")}</span>

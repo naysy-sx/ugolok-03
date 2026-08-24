@@ -48,7 +48,7 @@ export default function ConnectionStatusPanel() {
 	const worst = TONE_RANK[blossom.tone] > TONE_RANK[relay.tone] ? blossom : relay;
 
 	return (
-		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-live="polite">
+		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-live="polite">
 			<span class="conn-dot" aria-hidden="true" />
 			{worst.labelKey ? t(worst.labelKey) : worst.label}
 		</div>

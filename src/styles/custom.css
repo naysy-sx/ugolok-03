@@ -1607,7 +1607,11 @@ html[data-media-full] .top-corner-actions {
    побеждает на этом свойстве. */
 .slice {
 	background: none;
-	padding: var(--space-3xs) var(--space-2xs);
+	/* inline уже --space-3xs (было --space-2xs) — найдено пользователем: на
+	   "Журнале" при 7 категориях + "Все события" ряд чипов обрезался
+	   вправо (.reel скроллится, но без видимого скроллбара это читалось
+	   как "обрезано"), плотнее упаковка отодвигает порог. */
+	padding: var(--space-3xs) var(--space-3xs);
 	border-radius: var(--radius-full);
 	border: var(--border-width) solid var(--border);
 	color: var(--muted);
@@ -5080,13 +5084,17 @@ button[type="button"].media-mini-bar-btn {
 }
 
 /* Ровно ОДИН вид фильтра виден в каждый момент — дублирующего органа
-   управления на экране нет. Порог по ширине .slices-zone (§6.2). */
-@container (max-width: 52em) {
+   управления на экране нет. Порог по ширине .slices-zone (§6.2). Было
+   52em — семь категорий + "Все события" не помещались в ряд вплоть до
+   ~1500px контейнера и уезжали в .reel-скролл без видимого скроллбара,
+   выглядело как обрезка. 93.75em = 1500px при корневых 16px, найдено
+   пользователем живьём. */
+@container (max-width: 93.75em) {
 	.filter-reel {
 		display: none;
 	}
 }
-@container (min-width: 52em) {
+@container (min-width: 93.75em) {
 	.filter-slot {
 		display: none;
 	}

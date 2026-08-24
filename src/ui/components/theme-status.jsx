@@ -15,7 +15,7 @@ export default function ThemeStatusPanel({ themeMode, onToggle }) {
 			<p>
 				{t("themeStatus.label")}: <span>{isDark ? t("themeStatus.dark") : t("themeStatus.light")}</span>
 			</p>
-			<button type="button" class="theme-status-toggle row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={onToggle}>
+			<button type="button" class="theme-status-toggle row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }} onClick={onToggle}>
 				{isDark ? <IconSun /> : <IconMoon />} {t("themeStatus.toggleLink")}
 			</button>
 		</div>

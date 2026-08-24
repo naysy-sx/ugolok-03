@@ -70,7 +70,7 @@ function PaletteSection({ customPalette, onChange }) {
 						class="row"
 						style={{
 							"--gap": "var(--space-3xs)",
-							alignItems: "center",
+							"--align": "center",
 							border: customPalette.accentHue === p.hue ? "2px solid var(--fg)" : "var(--border-width) solid var(--border)",
 						}}
 					>
@@ -327,7 +327,7 @@ export default function Settings() {
 			<section class="stack" style={{ "--gap": "var(--space-s)" }}>
 				<h2 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.notificationsTitle")}</h2>
 
-				<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+				<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 					<input type="checkbox" checked={n.enabled} onChange={(e) => handleToggleEnabled(e.currentTarget.checked)} />
 					{t("settings.enableNotifications")}
 				</label>
@@ -336,7 +336,7 @@ export default function Settings() {
 					<p
 						role="alert"
 						class="row"
-						style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
+						style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between", background: "var(--surface)", padding: "var(--space-2xs)", borderRadius: "var(--radius)" }}
 					>
 						{browserPermission === "denied"
 							? t("settings.browserBlockedNotifications")
@@ -352,11 +352,11 @@ export default function Settings() {
 				<div class="stack" style={{ "--gap": "var(--space-2xs)", opacity: n.enabled ? 1 : 0.5 }} inert={!n.enabled || undefined}>
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.contacts")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.newContactRequestsLabel")}
 							<LevelSelect id={`${instanceId}-contacts-newRequests`} value={n.contacts.newRequests} onChange={(l) => handleContactLevel("newRequests", l)} />
 						</label>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.requestAcceptedLabel")}
 							<LevelSelect id={`${instanceId}-contacts-accepted`} value={n.contacts.accepted} onChange={(l) => handleContactLevel("accepted", l)} />
 						</label>
@@ -364,7 +364,7 @@ export default function Settings() {
 
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.messages")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.defaultForNewLabel")}
 							<LevelSelect id={`${instanceId}-messages-default`} value={n.messages.default} onChange={handleMessagesDefault} />
 						</label>
@@ -399,15 +399,15 @@ export default function Settings() {
 
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("nav.channels")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.postsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-posts`} value={n.channels.posts} onChange={(l) => handleChannelsDefault("posts", l)} />
 						</label>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.commentsDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-comments`} value={n.channels.comments} onChange={(l) => handleChannelsDefault("comments", l)} />
 						</label>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.chatDefaultLabel")}
 							<LevelSelect id={`${instanceId}-channels-chat`} value={n.channels.chat} onChange={(l) => handleChannelsDefault("chat", l)} />
 						</label>
@@ -446,7 +446,7 @@ export default function Settings() {
 
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.repliesSectionTitle")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.replyReceivedLabel")}
 							<LevelSelect id={`${instanceId}-replies`} value={n.replies} onChange={handleRepliesLevel} />
 						</label>
@@ -454,7 +454,7 @@ export default function Settings() {
 
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("settings.strangersSectionTitle")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.strangerWantsToWriteLabel")}
 							<LevelSelect id={`${instanceId}-inbox`} value={n.inbox} onChange={handleInboxLevel} />
 						</label>
@@ -462,7 +462,7 @@ export default function Settings() {
 
 					<section class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("journal.category.moderation")}</h3>
-						<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+						<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 							{t("settings.newReportLabel")}
 							<LevelSelect id={`${instanceId}-moderation-reports`} value={n.moderation.reports} onChange={handleModerationReportsLevel} />
 						</label>

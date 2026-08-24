@@ -102,13 +102,17 @@
 
 ### Параметры — через переменные, не через классы
 
-Зазор, минимальная ширина колонки, порог перелома, мера строки — переменные
-на элементе. Значения берутся **только из токенов**, не из чисел.
+Зазор, минимальная ширина колонки, порог перелома, мера строки, выравнивание
+по поперечной оси — переменные на элементе. Значения берутся **только из
+токенов**, не из чисел (`--align` — исключение: значение здесь не токен, а
+ключевое слово `align-items`, `center`/`flex-start`/`flex-end`/`stretch`
+и т.п. — сам список этих слов и есть его "шкала").
 
 ```html
 <div class="stack" style="--gap: var(--space-l)">
 <div class="grid" style="--min: 14rem; --gap: var(--space-m)">
 <div class="center" style="--measure: 46rem">
+<div class="bar" style="--gap: var(--space-xs); --align: center">
 ```
 
 Классы `.stack-sm` / `.stack-md` / `.stack-lg` **запрещены** — это
@@ -235,12 +239,25 @@ auto`, без `absolute`.
 ## 5. Реализация
 
 ```css
-.stack  { display: flex; flex-direction: column; gap: var(--gap, 0); }
-.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
-.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0); }
+/* align-items: var(--align, normal) — на всех пяти flex-контейнерах разом,
+   не только там, где сегодня есть спрос: несогласованность ("у .bar есть
+   параметр, у .reel почему-то нет") сама по себе баг модели (раздел 1 —
+   класс одного уровня не должен вести себя как особый случай без причины).
+   Фолбэк normal — initial-значение align-items, поведение при НЕ заданном
+   --align не меняется ни на пиксель: контейнеры, где выравнивание задаётся
+   впрямую инлайновым align-items на элементе (обходя композиционный слой),
+   продолжают работать как раньше — инлайн-стиль в каскаде побеждает класс. */
+.stack  { display: flex; flex-direction: column; gap: var(--gap, 0);
+          align-items: var(--align, normal); }
+.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+          align-items: var(--align, normal); }
+.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
+          align-items: var(--align, normal); }
 .reel   { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
-          overflow-x: auto; } /* см. примечание про overflow-x/-y ниже */
-.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
+          overflow-x: auto; /* см. примечание про overflow-x/-y ниже */
+          align-items: var(--align, normal); }
+.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+          align-items: var(--align, normal); }
 /* Формула Хейдона Пикерина ("The Switcher"): при ширине контейнера МЕНЬШЕ
    --threshold выражение в скобках положительно и умножается на 999 — basis
    выстреливает в тысячи %, элемент не помещается в строку и переносится;
@@ -282,6 +299,20 @@ auto`, без `absolute`.
             display: -webkit-box; -webkit-box-orient: vertical;
             -webkit-line-clamp: var(--lines, 1); }
 ```
+
+**`--align` — правка композиционного слоя, не рутинная.** Раздел 1 разрешает
+менять композицию только «при находке новой раскладки»: поперечное
+выравнивание — не новая раскладка, а обнаруженная дыра в параметрах
+существующей (тот же класс задачи, что `--gap`/`--min`/`--threshold` — «как
+делят место», раздел 1, строка «Композиция»). Найдено на Уголке: 176 мест
+инлайнового `alignItems` прямо в JSX `style={}` — сигнал, что композиционный
+слой не покрывал реальную потребность и разметка обходила его напрямую.
+Решение принято владельцем композиции (не воркером — раздел «Дисциплина
+вызовов» skill'а `orchestrate-workers`), с немедленной полной регрессией
+после. Миграция уже существующих 176 мест на `--align` — отдельная задача:
+само добавление параметра поведение нигде не меняет (см. комментарий у
+`align-items: var(--align, normal)` выше), несделанная миграция не является
+багом.
 
 `min-inline-size: 0` на `.grow` обязателен: без него флекс-ребёнок не сжимается
 меньше содержимого, и длинное слово ломает раскладку. Самая частая причина

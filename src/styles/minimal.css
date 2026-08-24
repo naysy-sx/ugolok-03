@@ -1000,12 +1000,21 @@
  *  (.stack-sm и т.п. запрещены регламентом).                      *
  * ============================================================== */
 @layer composition {
-	.stack  { display: flex; flex-direction: column; gap: var(--gap, 0); }
-	.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
-	.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0); }
+	/* align-items: var(--align, normal) на всех пяти flex-контейнерах —
+	   REGLAMENT.md §5 (правка композиционного слоя, найдено 176 инлайновых
+	   alignItems в JSX). Фолбэк normal = initial-значение align-items,
+	   поведение БЕЗ заданного --align не меняется. */
+	.stack  { display: flex; flex-direction: column; gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
 	.reel   { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
-	          overflow-x: auto; } /* REGLAMENT.md §5 — overflow-inline не существует как свойство */
-	.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0); }
+	          overflow-x: auto; /* REGLAMENT.md §5 — overflow-inline не существует как свойство */
+	          align-items: var(--align, normal); }
+	.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
 	/* Формула Хейдона Пикерина ("The Switcher") — см. REGLAMENT.md §5 за разбором. */
 	.switch > * { flex-basis: calc((var(--threshold, 30rem) - 100%) * 999);
 	              flex-grow: 1; }

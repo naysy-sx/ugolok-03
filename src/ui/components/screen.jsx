@@ -23,18 +23,18 @@ export default function Screen({ breadcrumb, title, actions, slices, footer, fee
 	return (
 		<section class="content-section stack">
 			<header class="section-header rigid stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
-				<div class="header-actions row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+				<div class="header-actions row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 					{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
 					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
 					    кнопки, видимого текста больше нет. */}
 					{breadcrumb && (
-						<button type="button" class="back-button row" style={{ alignItems: "center", justifyContent: "center" }} onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
+						<button type="button" class="back-button row" style={{ "--align": "center", justifyContent: "center" }} onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
 							<IconCornerBack />
 						</button>
 					)}
 					<h1 id={titleId}>{title}</h1>
 					{actions && (
-						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
+						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
 							{actions}
 						</div>
 					)}

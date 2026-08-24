@@ -408,15 +408,15 @@ export default function Quick({ onExit }) {
 				: tPlural("quick.room.voiceFreeSlots", voiceFree, { max: MAX_VOICE_PARTICIPANTS });
 		return (
 			<div class={voiceActive ? "quick-room stack is-voice-live" : "quick-room stack"} style={{ "--gap": "var(--space-m)" }}>
-				<header class="quick-room-header row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-					<div class="bar grow" style={{ "--gap": "var(--space-l)", alignItems: "flex-start" }}>
+				<header class="quick-room-header row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<div class="bar grow" style={{ "--gap": "var(--space-l)", "--align": "flex-start" }}>
 						<IconQuickRoomPeople class="icon quick-room-icon rigid" aria-hidden="true" />
 						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="bar" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
+							<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
 								<h2 class="quick-room-title truncate grow">{activeRoomName || t("quick.room.titleFallback")}</h2>
 							</div>
 							{inviteLink && (
-								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 									<code class="quick-invite-code grow truncate">{inviteLink}</code>
 									<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
 										<IconCopy class="icon" aria-hidden="true" />
@@ -434,7 +434,7 @@ export default function Quick({ onExit }) {
 						</div>
 					</div>
 					{typeof onExit === "function" && (
-						<div class="row rigid" style={{ "--gap": "var(--space-2xs)", alignItems: "center", marginInlineStart: "auto" }}>
+						<div class="row rigid" style={{ "--gap": "var(--space-2xs)", "--align": "center", marginInlineStart: "auto" }}>
 							<button type="button" class="btn--ghost" onClick={onExit}>
 								{t("quick.exitButton")}
 							</button>
@@ -458,13 +458,13 @@ export default function Quick({ onExit }) {
 				)}
 
 				<section class="quick-stage stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-s)" }} aria-labelledby="quick-stage-title">
-					<div class="quick-stage-header bar" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="quick-stage-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<h3 id="quick-stage-title" class="grow truncate">
 							{t("quick.room.voiceSectionTitle")}
 						</h3>
 						<small class="quick-voice-count rigid">{voiceStatusText}</small>
 						{voiceActive ? (
-							<button type="button" class="btn--ghost rigid bar" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={handleLeaveVoice}>
+							<button type="button" class="btn--ghost rigid bar" style={{ "--gap": "var(--space-3xs)", "--align": "center" }} onClick={handleLeaveVoice}>
 								<span class="quick-live-dot" aria-hidden="true" />
 								{t("quick.room.leaveVoiceButton")}
 							</button>
@@ -473,7 +473,7 @@ export default function Quick({ onExit }) {
 							<button
 								type="button"
 								class="btn btn--good rigid bar"
-								style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}
+								style={{ "--gap": "var(--space-3xs)", "--align": "center" }}
 								disabled={voiceBusy || voiceFree <= 0}
 								onClick={handleJoinVoice}
 							>
@@ -519,7 +519,7 @@ export default function Quick({ onExit }) {
 									<li
 										key={p.pubkey}
 										class={isSelf ? "quick-participant quick-participant-self row" : "quick-participant row"}
-										style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}
+										style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
 									>
 										<IconUserBadge class="icon quick-participant-icon" aria-hidden="true" />
 										<span class="quick-participant-name grow truncate">
@@ -587,7 +587,7 @@ export default function Quick({ onExit }) {
 			    Quick (и этот экран входа, и комнату) собственной явной кнопкой
 			    закрытия (.rooms-overlay-close) — второй выход рядом с
 			    заголовком больше не нужен. */}
-			<header class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }}>
+			<header class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "center" }}>
 				<h2>{t("quick.entry.title")}</h2>
 			</header>
 			<p class="hero-lead">{t("quick.entry.lead")}</p>
@@ -638,7 +638,7 @@ export default function Quick({ onExit }) {
 								<label for="quick-create-password">{t("quick.entry.passwordLabel")}</label>
 								<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
 							</div>
-							<label class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+							<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 								<input type="checkbox" checked={openMode} onChange={(e) => setOpenMode(e.currentTarget.checked)} />
 								{t("quick.entry.openModeLabel")}
 							</label>

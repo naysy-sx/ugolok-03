@@ -104,7 +104,7 @@ function ImageAttachment({ attachment, onOpen }) {
 	}
 	if (!url) {
 		return (
-			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
+			<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center", color: "var(--muted)" }}>
 				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingImage")}
 			</p>
 		);
@@ -173,7 +173,7 @@ function AudioAttachment({ attachment, onOpen }) {
 	}
 	if (!url) {
 		return (
-			<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", color: "var(--muted)" }}>
+			<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center", color: "var(--muted)" }}>
 				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingVoice")}
 			</p>
 		);
@@ -234,7 +234,7 @@ function MediaPreview({ attachment, Icon, onOpen, ariaLabelKey }) {
 		<button
 			type="button"
 			class="btn--ghost media-attachment-preview row"
-			style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+			style={{ "--gap": "var(--space-s)", "--align": "center" }}
 			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
 			aria-label={t(ariaLabelKey, { name: attachment.name })}
 		>
@@ -252,7 +252,7 @@ function MediaPreview({ attachment, Icon, onOpen, ariaLabelKey }) {
 function FileAttachment({ attachment }) {
 	const Icon = FILE_TYPE_ICONS.file;
 	return (
-		<p class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+		<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 			<Icon aria-hidden="true" />
 			<span>
 				{attachment.name} ({formatFileSize(attachment.size)})

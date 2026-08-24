@@ -96,7 +96,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			{(tray.items.length > 0 || tray.errors.length > 0) && (
 				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{allowAttachments && (
 					<>
 						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
@@ -217,7 +217,7 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
 					{messages.map((m) => (
 						<li key={m.id} class="channel-message-row stack" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+							<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 								<ContactIdentity pubkey={m.authorPubkey} />
 								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
 								{m.authorPubkey !== ownerPubkey && (

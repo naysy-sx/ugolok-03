@@ -87,7 +87,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 					{error}
 				</p>
 			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button type="submit" class="btn--ghost btn--danger" disabled={busy}>
 					{busy ? t("settings.deleteAccount.deletingButton") : t("settings.deleteAccount.deletePermanentlyButton")}
 				</button>

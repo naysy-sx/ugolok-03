@@ -92,7 +92,7 @@ export default function FilePicker({ predicate = () => true, multiple = false, o
 				) : (
 					<PickerBody folderId={folderId} setFolderId={setFolderId} predicate={predicate} selected={selected} multiple={multiple} onOpenEntry={openEntry} />
 				)}
-				<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "flex-end" }}>
+				<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "flex-end" }}>
 					{multiple && (
 						<button type="button" onClick={confirmSelection} disabled={selected.size === 0}>
 							{t("filePicker.selectButton")} {selected.size > 0 ? `(${selected.size})` : ""}
@@ -132,9 +132,9 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 
 	return (
 		<>
-			<nav class="row" aria-label={t("filePicker.breadcrumbAria")} style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<nav class="row" aria-label={t("filePicker.breadcrumbAria")} style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{path.map((crumb, i) => (
-					<span key={crumb.id} class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<span key={crumb.id} class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						{i > 0 && <IconChevronRight aria-hidden="true" />}
 						<button type="button" class="btn--ghost" onClick={() => setFolderId(crumb.id)}>
 							{crumb.name}

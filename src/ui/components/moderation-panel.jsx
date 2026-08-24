@@ -55,7 +55,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 				</p>
 			)}
 
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<p>
 					{t("moderation.totalReports", { total: stats.total, unviewed: stats.unviewed })}
 				</p>
@@ -71,7 +71,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 					<h3>{t("moderation.topIgnoredTitle")}</h3>
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{stats.topIgnored.map((entry) => (
-							<li key={entry.pubkey} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+							<li key={entry.pubkey} class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 								<ContactIdentity pubkey={entry.pubkey} />
 								<small style={{ color: "var(--muted)" }}>{t("moderation.ignoredByCount", { count: entry.count })}</small>
 							</li>
@@ -111,15 +111,15 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 									opacity: r.viewed ? 0.7 : 1,
 								}}
 							>
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 									<strong>{REASON_LABEL_KEYS[r.reason] ? t(REASON_LABEL_KEYS[r.reason]) : r.reason}</strong>
 									{!r.viewed && <small style={{ color: "var(--accent)" }}>{t("moderation.newLabel")}</small>}
 								</div>
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 									<span>{t("moderation.fromLabel")}</span>
 									<ContactIdentity pubkey={r.reporterPubkey} />
 								</div>
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 									<span>{t("moderation.toLabel")}</span>
 									<ContactIdentity pubkey={r.targetPubkey} />
 								</div>
@@ -127,7 +127,7 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 								    видеть исходник жалобы буквально, рендер разметки позволил бы
 								    спрятать содержимое (пустая ссылка, схлопнутая структура). */}
 								<p style={{ whiteSpace: "pre-wrap", color: "var(--muted)" }}>{r.contentText}</p>
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 									{!r.viewed && (
 										<button type="button" onClick={() => markReportViewed(ownerPubkey, r.id).then(refresh)}>
 											{t("moderation.markViewedButton")}

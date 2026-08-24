@@ -198,14 +198,14 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 								class="row"
 								style={{
 									"--gap": "var(--space-s)",
-									alignItems: "center",
+									"--align": "center",
 									justifyContent: "space-between",
 									paddingBlock: "var(--space-s)",
 									borderBlockEnd: "var(--border-width) solid var(--border)",
 								}}
 							>
 								<ContactIdentity pubkey={req.senderPubkey} />
-								<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 									<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
 										{t("contacts.acceptButton")}
 									</button>
@@ -238,7 +238,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 									class="row"
 									style={{
 										"--gap": "var(--space-s)",
-										alignItems: "center",
+										"--align": "center",
 										justifyContent: "space-between",
 										width: "100%",
 										background: "none",
@@ -713,7 +713,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{recordingState === "recording" && (
-						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status">
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
 							<span class="recording-dot" aria-hidden="true" /> {t("chat.window.recordingStatus")}
 							<button type="button" onClick={handleStopRecording}>
 								<IconStop /> {t("common.stop")}
@@ -725,7 +725,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{recordingState === "recorded" && recordedVoiceUrl && (
-						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 							<audio controls src={recordedVoiceUrl} />
 							<button type="button" onClick={handleDiscardRecordedVoice}>
 								<IconCross /> {t("chat.window.deleteRecordingButton")}
@@ -734,18 +734,18 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{uploadingAttachment && (
-						<p class="row recording-status" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status">
+						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
 							<span class="spinner" aria-hidden="true" /> {t("chat.window.uploadingAttachment")}
 						</p>
 					)}
 
 					<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
-					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} onSubmit={handleSend}>
+					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
 						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFilesSelected} aria-hidden="true" tabIndex={-1} />
 						<button
 							type="button"
 							class="message-compose-tool-btn row"
-							style={{ alignItems: "center", justifyContent: "center" }}
+							style={{ "--align": "center", justifyContent: "center" }}
 							onClick={() => fileInputRef.current?.click()}
 							disabled={recordingState !== "idle"}
 							aria-label={t("chat.window.attachFileAria")}
@@ -755,7 +755,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<button
 							type="button"
 							class="message-compose-tool-btn row"
-							style={{ alignItems: "center", justifyContent: "center" }}
+							style={{ "--align": "center", justifyContent: "center" }}
 							onClick={() => setAttachmentPickerOpen(true)}
 							disabled={recordingState !== "idle"}
 							aria-label={t("chat.window.attachFromStorageAria")}
@@ -765,7 +765,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<button
 							type="button"
 							class="message-compose-tool-btn row"
-							style={{ alignItems: "center", justifyContent: "center" }}
+							style={{ "--align": "center", justifyContent: "center" }}
 							onClick={handleStartRecording}
 							disabled={recordingState !== "idle" || tray.items.length > 0}
 							aria-label={t("chat.window.recordVoiceAria")}
@@ -787,7 +787,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<button
 							type="submit"
 							class="message-compose-send-btn row"
-							style={{ alignItems: "center", justifyContent: "center" }}
+							style={{ "--align": "center", justifyContent: "center" }}
 							disabled={busy || (text.length === 0 && tray.items.length === 0 && !recordedVoiceBlob) || tray.items.some((item) => item.error)}
 							aria-label={t("common.send")}
 						>

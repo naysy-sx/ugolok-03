@@ -695,10 +695,10 @@ export default function Files() {
 				/>
 			) : (
 			<div ref={containerRef} tabIndex={-1} class="files-shell stack" style={{ "--gap": "var(--space-m)" }}>
-				<div class="row file-breadcrumbs" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-					<ol role="list" class="row file-breadcrumb-list" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+				<div class="row file-breadcrumbs" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<ol role="list" class="row file-breadcrumb-list" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 						{path.map((crumb, i) => (
-							<li key={crumb.id} class="row file-breadcrumb-item" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+							<li key={crumb.id} class="row file-breadcrumb-item" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 								{i > 0 && <IconChevronRight aria-hidden="true" />}
 								{i === path.length - 1 ? (
 									<span>{crumb.name}</span>
@@ -718,7 +718,7 @@ export default function Files() {
 					)}
 				</div>
 
-				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
 					<label class="visually-hidden" for="file-search">
 						{t("files.filterLabel")}
@@ -733,7 +733,7 @@ export default function Files() {
 				</div>
 
 				{newFolderOpen && (
-					<form class="row file-new-folder-form" style={{ "--gap": "var(--space-s)", alignItems: "center" }} onSubmit={handleCreateFolder}>
+					<form class="row file-new-folder-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={handleCreateFolder}>
 						<label class="visually-hidden" for="new-folder-name">
 							{t("files.folderNameLabel")}
 						</label>
@@ -750,7 +750,7 @@ export default function Files() {
 					</p>
 				)}
 				{uploadState && (
-					<div class="row file-upload-progress" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status">
+					<div class="row file-upload-progress" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
 						<span>
 							{t("files.uploadingProgress", {
 								name: uploadState.fileName,
@@ -771,7 +771,7 @@ export default function Files() {
 				)}
 
 				{selected.size > 0 && (
-					<div class="row file-selection-toolbar" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row file-selection-toolbar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<span>{t("files.selectionCount", { count: selected.size })}</span>
 						<button type="button" class="btn--ghost" onClick={copySelected}>
 							<IconCopy /> {t("common.copy")}
@@ -805,7 +805,7 @@ export default function Files() {
 							<li
 								key={entry.id}
 								class={"row file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
-								style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+								style={{ "--gap": "var(--space-s)", "--align": "center" }}
 								draggable={!inTrash && renamingId !== entry.id}
 								onDragStart={(e) => handleRowDragStart(entry, e)}
 								onDragEnd={handleRowDragEnd}
@@ -816,7 +816,7 @@ export default function Files() {
 								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={t("files.selectRowAria", { name: entry.displayName })} />
 								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
 								{renamingId === entry.id ? (
-									<form class="row grow file-rename-form" style={{ "--gap": "var(--space-s)", alignItems: "center" }} onSubmit={submitRename}>
+									<form class="row grow file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
 										<label class="visually-hidden" for={`rename-${entry.id}`}>
 											{t("files.newNameLabel")}
 										</label>
@@ -939,8 +939,8 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 			) : (
 				<ul role="list" class="stack">
 					{contacts.value.map((pubkey) => (
-						<li key={pubkey} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
-							<label class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<li key={pubkey} class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+							<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 								<input type="checkbox" checked={selected.has(pubkey)} onChange={() => onToggle(pubkey)} />
 								{profiles.value[pubkey]?.name || pubkey.slice(0, 16)}
 							</label>
@@ -953,7 +953,7 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 					{error}
 				</p>
 			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button type="button" disabled={busy || selected.size === 0} onClick={onSubmit}>
 					{busy ? t("files.uploading") : t("files.shareButton")}
 				</button>
@@ -975,7 +975,7 @@ function AccessPanel({ grantees, onRevoke, onClose }) {
 			) : (
 				<ul role="list" class="stack">
 					{grantees.map((pubkey) => (
-						<li key={pubkey} class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<li key={pubkey} class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 							<IconPeople aria-hidden="true" />
 							<span class="grow">{profiles.value[pubkey]?.name || pubkey.slice(0, 16)}</span>
 							<button type="button" class="btn--ghost btn--danger" onClick={() => onRevoke(pubkey)}>
@@ -1004,7 +1004,7 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 				) : (
 					<ul role="list" class="stack">
 						{activeMounts.value.map((m) => (
-							<li key={m.mountId} class="row file-row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+							<li key={m.mountId} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 								<IconGlobe aria-hidden="true" class="file-row-icon" />
 								<span class="grow">{profiles.value[m.ownerPubkey]?.name || `${m.ownerPubkey.slice(0, 16)}…`}</span>
 								<button type="button" class="btn--ghost" onClick={() => openMountView(m.mountId)}>
@@ -1036,7 +1036,7 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 
 	return (
 		<div class="stack">
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button type="button" class="btn--ghost" onClick={closeMountView}>
 					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> {t("files.backToMountsList")}
 				</button>
@@ -1056,7 +1056,7 @@ function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountVie
 			) : (
 				<ul role="list" class="file-row-list">
 					{entries.map((entry) => (
-						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
 							{entry.kind === "dir" ? (
 								<button type="button" class="file-row-name" onClick={() => setMountFolderId(entry.id)}>

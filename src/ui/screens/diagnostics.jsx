@@ -662,7 +662,7 @@ function Row({ c }) {
 			class="row"
 			style={{
 				"--gap": "var(--space-s)",
-				alignItems: "flex-start",
+				"--align": "flex-start",
 				paddingBlock: "var(--space-s)",
 				borderBlockEnd: "var(--border-width) solid var(--border)",
 			}}
@@ -696,8 +696,8 @@ function StatusRow({ label, status, tone, action, hint }) {
 				borderBlockEnd: "var(--border-width) solid var(--border)",
 			}}
 		>
-			<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
-				<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
+				<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 					<span aria-hidden="true" style={{ color: tone }}>●</span>
 					<span>{label}</span>
 				</span>
@@ -828,7 +828,7 @@ export default function Diagnostics() {
 						</button>
 					}
 				/>
-				<li class="row" style={{ "--gap": "var(--space-s)", alignItems: "center", paddingBlock: "var(--space-s)" }}>
+				<li class="row" style={{ "--gap": "var(--space-s)", "--align": "center", paddingBlock: "var(--space-s)" }}>
 					Соединение:{" "}
 					<SyncIndicator state={transportSync.connState} synced={transportSync.synced} url={transportSync.relayUrl} />
 				</li>

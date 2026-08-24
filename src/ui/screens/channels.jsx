@@ -33,8 +33,8 @@ function formatUpdatedDate(unixSeconds) {
 function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 	const updated = formatUpdatedDate(channel.updatedAt);
 	return (
-		<li class="channel-card-item row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "space-between" }}>
-			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link row grow" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+		<li class="channel-card-item row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
+			<button type="button" onClick={() => onOpen(channel.id)} class="channel-card-link row grow" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<ChannelAvatarThumb channel={channel} />
 				<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 					<strong>{channel.name || t("channels.card.untitled")}</strong>
@@ -180,7 +180,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
-			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 				<input
 					id={`${instanceId}-allow-chat-attachments`}
 					type="checkbox"
@@ -201,7 +201,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+								<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 									<input
 										id={`${instanceId}-group-${g.id}`}
 										type="checkbox"
@@ -218,7 +218,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				)}
 			</fieldset>
 
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button type="submit" disabled={busy || name.length === 0}>
 					{busy ? t("channels.create.submitting") : t("common.create")}
 				</button>

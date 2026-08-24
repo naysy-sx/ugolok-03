@@ -34,7 +34,7 @@ export default function SyncProgressBar() {
 	const labelText = lastEntry ? lastEntry.text : t("syncProgress.defaultLabel");
 
 	return (
-		<div class="sync-progress-bar stack" style={{ alignItems: "center" }} role="status" aria-live="polite">
+		<div class="sync-progress-bar stack" style={{ "--align": "center" }} role="status" aria-live="polite">
 			<div class="sync-progress-bar-track" aria-hidden="true" />
 			<span 
 				class="sync-progress-bar-label" 

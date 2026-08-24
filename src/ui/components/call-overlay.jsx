@@ -135,7 +135,7 @@ export default function CallOverlay() {
 	// висела бесконечно — крестик даёт закрыть сразу, не дожидаясь автовозврата.
 	if (call.name === "ENDED") {
 		return (
-			<div class="call-overlay call-overlay-ended row" style={{ "--gap": "var(--space-s)", alignItems: "center", justifyContent: "center" }} role="status" aria-live="polite">
+			<div class="call-overlay call-overlay-ended row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "center" }} role="status" aria-live="polite">
 				<p>{call.reason ? t("call.endedWithReason", { reason: callEndReasonLabel(call.reason) }) : t("call.ended")}</p>
 				<button type="button" class="call-overlay-ended-close" onClick={dismissEndedCall} aria-label={t("common.close")}>
 					×
@@ -151,13 +151,13 @@ export default function CallOverlay() {
 		return (
 			<div
 				class="call-overlay call-overlay-ringing stack"
-				style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+				style={{ "--gap": "var(--space-s)", "--align": "center" }}
 				role="dialog"
 				aria-modal="true"
 				aria-label={incoming ? t("call.incomingAria") : t("call.outgoingAria")}
 			>
 				<RingtoneAudio />
-				<div class="call-overlay-avatar row" style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+				<div class="call-overlay-avatar row" style={{ "--align": "center", justifyContent: "center" }} aria-hidden="true">
 					{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 				</div>
 				<p class="call-overlay-title">
@@ -185,7 +185,7 @@ export default function CallOverlay() {
 
 	if (call.name === "CONNECTING") {
 		return (
-			<div class="call-overlay call-overlay-ringing stack" style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status" aria-live="polite">
+			<div class="call-overlay call-overlay-ringing stack" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status" aria-live="polite">
 				<p class="call-overlay-title">{t("call.connectingTo", { name: displayName(call.peerPubkey) })}</p>
 			</div>
 		);
@@ -195,14 +195,14 @@ export default function CallOverlay() {
 	// остальному интерфейсу (пользователь может листать другие разделы во время звонка).
 	const reconnecting = call.name === "RECONNECTING";
 	return (
-		<div class={`call-bar row${reconnecting ? " call-bar-reconnecting" : ""}`} style={{ "--gap": "var(--space-s)", alignItems: "center" }} role="status" aria-live="polite">
-			<div class="call-bar-avatar row" style={{ alignItems: "center", justifyContent: "center" }} aria-hidden="true">
+		<div class={`call-bar row${reconnecting ? " call-bar-reconnecting" : ""}`} style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status" aria-live="polite">
+			<div class="call-bar-avatar row" style={{ "--align": "center", justifyContent: "center" }} aria-hidden="true">
 				{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 			</div>
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<strong>{reconnecting ? t("call.reconnecting") : t("call.connectedWith", { name: displayName(call.peerPubkey) })}</strong>
 				{!reconnecting && connectedAtRef.current && (
-					<span class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<CallDuration startedAt={connectedAtRef.current} />
 						<Waveform stream={remoteMediaStream.value || localMediaStream.value} />
 					</span>
@@ -212,7 +212,7 @@ export default function CallOverlay() {
 			<button
 				type="button"
 				class="call-btn-reject call-bar-hangup row"
-				style={{ alignItems: "center", justifyContent: "center" }}
+				style={{ "--align": "center", justifyContent: "center" }}
 				onClick={hangupCall}
 				aria-label={t("call.hangupAria")}
 			>

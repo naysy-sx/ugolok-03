@@ -72,9 +72,9 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 				onInput={(e) => setResourceInput(e.currentTarget.value)}
 			/>
 
-			<fieldset class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }} disabled={!resourceInput}>
+			<fieldset class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }} disabled={!resourceInput}>
 				<legend>{t("permissions.legend")}</legend>
-				<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+				<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 					<input
 						id={viewId}
 						type="checkbox"
@@ -83,7 +83,7 @@ export default function PermissionEditor({ ownerPubkey, privKey, subject, resour
 					/>
 					<label for={viewId}>{t("permissions.viewLabel")}</label>
 				</span>
-				<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+				<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 					<input
 						id={commentId}
 						type="checkbox"

@@ -310,7 +310,7 @@ export default function Unlock() {
 					<p>{t("unlock.createConfirm.instructions")}</p>
 					<label for="confirm-mnemonic">{t("unlock.createConfirm.label")}</label>
 					<textarea id="confirm-mnemonic" value={confirmInput} onInput={(e) => setConfirmInput(e.currentTarget.value)} />
-					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<button
 							type="button"
 							onClick={async () => {
@@ -352,7 +352,7 @@ export default function Unlock() {
 					<p>{t("unlock.importMnemonic.instructions")}</p>
 					<label for="import-mnemonic">{t("unlock.importMnemonic.label")}</label>
 					<textarea id="import-mnemonic" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
-					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<button
 							type="button"
 							onClick={async () => {
@@ -403,7 +403,7 @@ export default function Unlock() {
 					</p>
 					<label for="import-key">{t("unlock.importKey.label")}</label>
 					<input id="import-key" type="password" value={importInput} onInput={(e) => setImportInput(e.currentTarget.value)} />
-					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<button
 							type="button"
 							onClick={() => {
@@ -516,8 +516,8 @@ export default function Unlock() {
 
 	return (
 		<div class="auth-layout">
-			<header class="site-header row" style={{ "--gap": "var(--space-s) var(--space-m)", alignItems: "center" }}>
-				<div class="logo row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
+			<header class="site-header row" style={{ "--gap": "var(--space-s) var(--space-m)", "--align": "center" }}>
+				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
 					<span class="logo-name">{t("app.name")}</span>
 				</div>
 				<nav class="main-nav" aria-label={t("unlock.main.navAriaLabel")}>
@@ -574,7 +574,7 @@ export default function Unlock() {
 									<button
 										type="button"
 										class="account-picker-btn row"
-										style={{ "--gap": "var(--space-s)", alignItems: "center" }}
+										style={{ "--gap": "var(--space-s)", "--align": "center" }}
 										aria-current={openLoginForId === acc.id ? "true" : undefined}
 										onClick={() => openLoginFor(acc.id)}
 									>
@@ -589,7 +589,7 @@ export default function Unlock() {
 
 				{openAccount && (
 					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-live="polite">
-						<div class="auth-box-header row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+						<div class="auth-box-header row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 							<AccountAvatar avatar={openAccount.avatar} login={openAccount.login || openAccount.id} large />
 							<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 								<h4>{openAccount.login || openAccount.id.slice(0, 16) + "…"}</h4>

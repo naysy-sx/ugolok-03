@@ -35,7 +35,7 @@ export default function MediaButtons({ counts, onOpen }) {
 	return (
 		<div class="media-buttons-bar row" style={{ "--gap": "var(--space-2xs)" }}>
 			{visible.map(({ cls, Icon, labelKey, n }) => (
-				<button key={cls} type="button" class="slice bar" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }} onClick={() => onOpen(cls)}>
+				<button key={cls} type="button" class="slice bar" style={{ "--gap": "var(--space-3xs)", "--align": "center" }} onClick={() => onOpen(cls)}>
 					<Icon aria-hidden="true" /> {t(labelKey)} <span class="slice__n">{n}</span>
 				</button>
 			))}

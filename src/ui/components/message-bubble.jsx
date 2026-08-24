@@ -65,7 +65,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 		return (
 			<div class={bubbleClass} style={bubbleStyle}>
 				<textarea value={editText} maxLength={maxLength} rows={2} onInput={(e) => setEditText(e.currentTarget.value)} />
-				<footer class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+				<footer class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 					<button
 						type="button"
 						disabled={editText.length === 0}
@@ -98,7 +98,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 			{below.map((a, i) => (
 				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: originKind, id: message.id }} />
 			))}
-			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{timestamp && <small>{timestamp}</small>}
 				{isOwn && statusLabel && <small>{statusLabel}</small>}
 				{message.edited && <small>{t("message.editedLabel")}</small>}

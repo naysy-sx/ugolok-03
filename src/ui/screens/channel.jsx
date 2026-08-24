@@ -215,7 +215,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
 			</div>
 
-			<div class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
 				<label for="edit-channel-allow-chat-attachments">{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
@@ -231,7 +231,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<span class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+								<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 									<input
 										id={`${instanceId}-group-${g.id}`}
 										type="checkbox"
@@ -248,7 +248,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 				)}
 			</fieldset>
 
-			<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button type="submit" disabled={busy || name.length === 0}>
 					{busy ? t("common.saving") : t("common.save")}
 				</button>
@@ -348,11 +348,11 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 					{error}
 				</p>
 			)}
-			<div class="bar" style={{ "--gap": "var(--space-m)", alignItems: "flex-start" }}>
+			<div class="bar" style={{ "--gap": "var(--space-m)", "--align": "flex-start" }}>
 				{author.avatar ? (
 					<img src={author.avatar} alt="" class="post__ava rigid" />
 				) : (
-					<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+					<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
 						{(author.name || "?").trim().charAt(0).toUpperCase()}
 					</div>
 				)}
@@ -369,7 +369,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 					{(tray.items.length > 0 || tray.errors.length > 0) && (
 						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 					)}
-					<div class="row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
 						<button type="button" onClick={() => fileInputRef.current?.click()}>
 							<IconPaperclip /> {t("channel.composer.attachButton")}
@@ -428,11 +428,11 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 	}
 
 	return (
-		<form class="composer bar" style={{ "--gap": "var(--space-s)", alignItems: "flex-start" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
+		<form class="composer bar" style={{ "--gap": "var(--space-s)", "--align": "flex-start" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
 			{author.avatar ? (
 				<img src={author.avatar} alt="" class="cmt__ava rigid" />
 			) : (
-				<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+				<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
 					{(author.name || "?").trim().charAt(0).toUpperCase()}
 				</div>
 			)}
@@ -460,7 +460,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 				{(tray.items.length > 0 || tray.errors.length > 0) && (
 					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
 				)}
-				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
 					<button type="button" class="icon-btn" onClick={() => fileInputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
 						<IconPaperclip />
@@ -490,16 +490,16 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 
 	return (
 		<li id={`comment-${comment.id}`} class={`cmt${isTarget ? " is-target-comment" : ""}`}>
-			<article class="cmt__box bar" style={{ "--gap": "var(--space-m)", alignItems: "flex-start" }}>
+			<article class="cmt__box bar" style={{ "--gap": "var(--space-m)", "--align": "flex-start" }}>
 				{author.avatar ? (
 					<img src={author.avatar} alt="" class="cmt__ava rigid" />
 				) : (
-					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ alignItems: "center", justifyContent: "center" }}>
+					<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
 						{(author.name || "?").trim().charAt(0).toUpperCase()}
 					</div>
 				)}
 				<div class="stack grow" style={{ "--gap": "var(--space-2xs)" }}>
-					<header class="cmt__head row" style={{ "--gap": "var(--space-2xs)", alignItems: "baseline" }}>
+					<header class="cmt__head row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
 						<span class="cmt__name">{author.name}</span>
 						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 					</header>
@@ -518,7 +518,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 							))}
 						</div>
 					)}
-					<footer class="cmt__actions row" style={{ "--gap": "var(--space-s)", alignItems: "center" }}>
+					<footer class="cmt__actions row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<time class="cmt__time">{formatDateTime(comment.createdAt)}</time>
 						{canComment && (
 							<button type="button" class="btn--ghost" onClick={() => setReplying((v) => !v)}>
@@ -569,7 +569,7 @@ function CommentNode({ comment, canComment, ownerPubkey, privKey, dbKey, channel
 			    разошедшееся с уже принятым в регламенте словарём. */}
 			{comment.replies.length > 0 && (
 				<details class="replies" open>
-					<summary class="row" style={{ "--gap": "var(--space-3xs)", alignItems: "center" }}>
+					<summary class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 						<IconChevronRight class="icon replies__chev" aria-hidden="true" />
 						{t("channel.threadLabel", { count: tPlural("channel.repliesCount", comment.replies.length) })}
 					</summary>
@@ -976,7 +976,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
 			{channelRow.rules && (
 				<details class="req">
-					<summary class="row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }}>
+					<summary class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						{t("channels.create.rulesLabel")}
 						<IconChevronRight class="icon req__chev" aria-hidden="true" />
 					</summary>
@@ -991,7 +991,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 				</p>
 			)}
 
-			<nav class="tabs row" style={{ "--gap": "var(--space-2xs)", alignItems: "center" }} aria-label={t("channel.tabsAriaLabel")}>
+			<nav class="tabs row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-label={t("channel.tabsAriaLabel")}>
 				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
 					{t("channel.tabs.posts")}
 				</button>
