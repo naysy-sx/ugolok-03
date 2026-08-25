@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Nouvelles demandes de contact",
 		"requestAcceptedLabel": "Demande acceptée",
 		"defaultForNewLabel": "Par défaut pour les nouveaux",
-		"perContactNotificationsCaption": "Notifications par contact",
-		"notificationColumnHeader": "Notification",
 		"postsDefaultLabel": "Publications — par défaut",
 		"commentsDefaultLabel": "Commentaires — par défaut",
 		"chatDefaultLabel": "Chat commun — par défaut",
-		"perChannelNotificationsCaption": "Notifications par chaîne — publications/commentaires/chat commun",
 		"postsColumnHeader": "Publications",
 		"commentsColumnHeader": "Commentaires",
 		"chatColumnHeader": "Chat commun",
-		"repliesSectionTitle": "Réponses",
 		"replyReceivedLabel": "Quelqu'un a répondu à ma publication/mon commentaire",
-		"strangersSectionTitle": "Demandes d'inconnus",
 		"strangerWantsToWriteLabel": "Un inconnu veut vous écrire",
 		"newReportLabel": "Nouveau signalement",
 		"moderationAlwaysShownHint": "Les avertissements, bannissements et suppressions de chaîne sont toujours affichés — ce n'est pas configurable.",
-		"mnemonicSectionTitle": "Phrase secrète de récupération",
 		"sessionSectionTitle": "Session",
 		"lockNowButton": "Verrouiller maintenant",
 		"dangerZoneTitle": "Zone dangereuse",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Mot de passe",
 			"deletingButton": "Suppression…",
 			"deletePermanentlyButton": "Supprimer définitivement"
-		}
+		},
+		"tabsAria": "Sections des paramètres",
+		"tabs": {
+			"view": "Affichage",
+			"notifications": "Notifications",
+			"network": "Réseau",
+			"session": "Session"
+		},
+		"viewSectionHint": "La couleur d'accent définit toute la palette — l'arrière-plan, les surfaces et les bordures en découlent.",
+		"themeLabel": "Thème",
+		"theme": {
+			"system": "Comme le système",
+			"light": "Clair",
+			"dark": "Sombre"
+		},
+		"otherSectionTitle": "Autre",
+		"contactExceptions": "Exceptions pour certains contacts · {{count}}",
+		"channelExceptions": "Exceptions pour certains canaux · {{count}}",
+		"networkTitle": "Réseau",
+		"networkHint": "Sur quoi repose l'application : d'où viennent les événements, où sont téléversés les fichiers, à quel serveur personnel vous êtes connecté.",
+		"sessionHint": "Les clés seront déchargées de la mémoire, le mot de passe sera nécessaire."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil et menu principal",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Choisir depuis le stockage",
 		"aboutMeLegend": "À propos de moi",
 		"bioLabel": "Bio",
-		"filesComingSoon": "L'envoi et la gestion de fichiers apparaîtront plus tard."
+		"visibilityTitle": "Rencontres",
+		"visibilityHint": "Tant que c'est désactivé, personne ne vous voit, sauf ceux à qui vous avez vous-même donné la clé."
 	},
 	"screen": {
 		"backToSectionAria": "Retour à « {{label}} »",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Clé et récupération",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Clé et récupération",
+		"mnemonicTitle": "Phrase secrète",
+		"mnemonicHint": "Le seul moyen de récupérer l'accès si vous avez oublié votre mot de passe ou perdu votre appareil.",
+		"mnemonicWarning": "Douze mots, c'est votre compte. Quiconque les connaît, c'est vous. Notez-les sur papier et ne les gardez pas sur cet appareil.",
+		"recoverTitle": "Récupération d'accès",
+		"recoverBody": "La récupération par phrase se fait sur l'écran de connexion. Appuyez sur le bouton ci-dessous — l'application déchargera les clés de la mémoire et reviendra à la connexion ; choisissez-y « Avancé » puis connexion par phrase secrète.",
+		"recoverButton": "Verrouiller et passer à la récupération"
 	}
 }

@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Nieuwe contactverzoeken",
 		"requestAcceptedLabel": "Verzoek geaccepteerd",
 		"defaultForNewLabel": "Standaard voor nieuwe",
-		"perContactNotificationsCaption": "Meldingen per contact",
-		"notificationColumnHeader": "Melding",
 		"postsDefaultLabel": "Berichten — standaard",
 		"commentsDefaultLabel": "Reacties — standaard",
 		"chatDefaultLabel": "Gedeelde chat — standaard",
-		"perChannelNotificationsCaption": "Meldingen per kanaal — berichten/reacties/gedeelde chat",
 		"postsColumnHeader": "Berichten",
 		"commentsColumnHeader": "Reacties",
 		"chatColumnHeader": "Gedeelde chat",
-		"repliesSectionTitle": "Reacties",
 		"replyReceivedLabel": "Iemand heeft gereageerd op mijn bericht/reactie",
-		"strangersSectionTitle": "Verzoeken van onbekenden",
 		"strangerWantsToWriteLabel": "Een onbekende wil je iets schrijven",
 		"newReportLabel": "Nieuwe melding",
 		"moderationAlwaysShownHint": "Waarschuwingen, verbanningen en verwijdering van kanalen worden altijd getoond — dit is niet instelbaar.",
-		"mnemonicSectionTitle": "Geheime herstelzin",
 		"sessionSectionTitle": "Sessie",
 		"lockNowButton": "Nu vergrendelen",
 		"dangerZoneTitle": "Gevarenzone",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Wachtwoord",
 			"deletingButton": "Bezig met verwijderen…",
 			"deletePermanentlyButton": "Definitief verwijderen"
-		}
+		},
+		"tabsAria": "Instellingensecties",
+		"tabs": {
+			"view": "Weergave",
+			"notifications": "Meldingen",
+			"network": "Netwerk",
+			"session": "Sessie"
+		},
+		"viewSectionHint": "De accentkleur bepaalt het hele palet — achtergrond, oppervlakken en randen volgen hieruit.",
+		"themeLabel": "Thema",
+		"theme": {
+			"system": "Zoals het systeem",
+			"light": "Licht",
+			"dark": "Donker"
+		},
+		"otherSectionTitle": "Overig",
+		"contactExceptions": "Uitzonderingen voor afzonderlijke contacten · {{count}}",
+		"channelExceptions": "Uitzonderingen voor afzonderlijke kanalen · {{count}}",
+		"networkTitle": "Netwerk",
+		"networkHint": "Waarmee de app werkt: waar gebeurtenissen vandaan komen, waarheen bestanden worden geüpload, met welke eigen server u verbonden bent.",
+		"sessionHint": "De sleutels worden uit het geheugen verwijderd, het wachtwoord is dan nodig."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profiel en hoofdmenu",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Kiezen uit opslag",
 		"aboutMeLegend": "Over mij",
 		"bioLabel": "Bio",
-		"filesComingSoon": "Bestanden uploaden en beheren verschijnt later."
+		"visibilityTitle": "Kennismaken",
+		"visibilityHint": "Zolang dit is uitgeschakeld, ziet niemand u, behalve degenen aan wie u zelf de sleutel heeft gegeven."
 	},
 	"screen": {
 		"backToSectionAria": "Terug naar ‘{{label}}’",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Sleutel en herstel",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Sleutel en herstel",
+		"mnemonicTitle": "Geheime zin",
+		"mnemonicHint": "De enige manier om weer toegang te krijgen als u uw wachtwoord bent vergeten of uw apparaat kwijt bent.",
+		"mnemonicWarning": "Twaalf woorden zijn uw account. Wie ze kent, is u. Schrijf ze op papier en bewaar ze niet op dit apparaat.",
+		"recoverTitle": "Toegang herstellen",
+		"recoverBody": "Herstel via de zin gebeurt op het inlogscherm. Klik hieronder op de knop — de app verwijdert de sleutels uit het geheugen en keert terug naar het inloggen; kies daar «Geavanceerd» en inloggen met geheime zin.",
+		"recoverButton": "Vergrendelen en naar herstel gaan"
 	}
 }

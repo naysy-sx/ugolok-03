@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "New contact requests",
 		"requestAcceptedLabel": "Request accepted",
 		"defaultForNewLabel": "Default for new",
-		"perContactNotificationsCaption": "Notifications per contact",
-		"notificationColumnHeader": "Notification",
 		"postsDefaultLabel": "Posts — default",
 		"commentsDefaultLabel": "Comments — default",
 		"chatDefaultLabel": "Shared chat — default",
-		"perChannelNotificationsCaption": "Notifications per channel — posts/comments/shared chat",
 		"postsColumnHeader": "Posts",
 		"commentsColumnHeader": "Comments",
 		"chatColumnHeader": "Shared chat",
-		"repliesSectionTitle": "Replies",
 		"replyReceivedLabel": "Someone replied to my post/comment",
-		"strangersSectionTitle": "Requests from strangers",
 		"strangerWantsToWriteLabel": "Someone unfamiliar wants to message you",
 		"newReportLabel": "New report",
 		"moderationAlwaysShownHint": "Warnings, bans, and channel deletion are always shown — this isn't configurable.",
-		"mnemonicSectionTitle": "Secret recovery phrase",
 		"sessionSectionTitle": "Session",
 		"lockNowButton": "Lock now",
 		"dangerZoneTitle": "Danger zone",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Password",
 			"deletingButton": "Deleting…",
 			"deletePermanentlyButton": "Delete permanently"
-		}
+		},
+		"tabsAria": "Settings sections",
+		"tabs": {
+			"view": "View",
+			"notifications": "Notifications",
+			"network": "Network",
+			"session": "Session"
+		},
+		"viewSectionHint": "The accent color sets the whole palette — background, surfaces, and borders follow it.",
+		"themeLabel": "Theme",
+		"theme": {
+			"system": "System",
+			"light": "Light",
+			"dark": "Dark"
+		},
+		"otherSectionTitle": "Other",
+		"contactExceptions": "Exceptions for individual contacts · {{count}}",
+		"channelExceptions": "Exceptions for individual channels · {{count}}",
+		"networkTitle": "Network",
+		"networkHint": "What the app runs on: where events come from, where files upload to, which server of your own you're connected to.",
+		"sessionHint": "Keys will be unloaded from memory; the password will be required."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Choose from storage",
 		"aboutMeLegend": "About me",
 		"bioLabel": "Bio",
-		"filesComingSoon": "File upload and management will appear later."
+		"visibilityTitle": "Discovery",
+		"visibilityHint": "While this is off, no one sees you except those you've given the key to yourself."
 	},
 	"screen": {
 		"backToSectionAria": "Back to «{{label}}»",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Key and recovery",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Key and recovery",
+		"mnemonicTitle": "Secret phrase",
+		"mnemonicHint": "The only way to regain access if you forget your password or lose your device.",
+		"mnemonicWarning": "Twelve words are your account. Whoever knows them is you. Write them on paper and don't keep them on this device.",
+		"recoverTitle": "Access recovery",
+		"recoverBody": "Recovery by phrase happens on the sign-in screen. Press the button below — the app will unload keys from memory and return to sign-in; there, choose “Advanced” and sign in with your secret phrase.",
+		"recoverButton": "Lock and go to recovery"
 	}
 }

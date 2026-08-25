@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "新しい連絡先リクエスト",
 		"requestAcceptedLabel": "リクエストが承認されました",
 		"defaultForNewLabel": "新規のデフォルト",
-		"perContactNotificationsCaption": "連絡先ごとの通知",
-		"notificationColumnHeader": "通知",
 		"postsDefaultLabel": "投稿 — デフォルト",
 		"commentsDefaultLabel": "コメント — デフォルト",
 		"chatDefaultLabel": "共通チャット — デフォルト",
-		"perChannelNotificationsCaption": "チャンネルごとの通知 — 投稿/コメント/共通チャット",
 		"postsColumnHeader": "投稿",
 		"commentsColumnHeader": "コメント",
 		"chatColumnHeader": "共通チャット",
-		"repliesSectionTitle": "返信",
 		"replyReceivedLabel": "誰かが自分の投稿/コメントに返信した",
-		"strangersSectionTitle": "見知らぬ人からのリクエスト",
 		"strangerWantsToWriteLabel": "知らない人があなたにメッセージを送りたがっています",
 		"newReportLabel": "新しい通報",
 		"moderationAlwaysShownHint": "警告、BAN、チャンネル削除は常に表示されます — これは設定できません。",
-		"mnemonicSectionTitle": "秘密の回復フレーズ",
 		"sessionSectionTitle": "セッション",
 		"lockNowButton": "今すぐロック",
 		"dangerZoneTitle": "危険ゾーン",
@@ -110,7 +104,27 @@
 			"passwordLabel": "パスワード",
 			"deletingButton": "削除中…",
 			"deletePermanentlyButton": "完全に削除"
-		}
+		},
+		"tabsAria": "設定のセクション",
+		"tabs": {
+			"view": "表示",
+			"notifications": "通知",
+			"network": "ネットワーク",
+			"session": "セッション"
+		},
+		"viewSectionHint": "アクセントカラーがパレット全体を決めます — 背景、表面、境界線はそれに従います。",
+		"themeLabel": "テーマ",
+		"theme": {
+			"system": "システムに従う",
+			"light": "ライト",
+			"dark": "ダーク"
+		},
+		"otherSectionTitle": "その他",
+		"contactExceptions": "個別の連絡先の例外 · {{count}}",
+		"channelExceptions": "個別のチャンネルの例外 · {{count}}",
+		"networkTitle": "ネットワーク",
+		"networkHint": "アプリが何を通じて動作しているか — イベントの取得元、ファイルのアップロード先、接続している自前のサーバー。",
+		"sessionHint": "鍵はメモリから解放され、パスワードが必要になります。"
 	},
 	"shell": {
 		"sidebarAriaLabel": "プロフィールとメインメニュー",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "ストレージから選択",
 		"aboutMeLegend": "自己紹介",
 		"bioLabel": "自己紹介文",
-		"filesComingSoon": "ファイルのアップロードと管理は後日追加されます。"
+		"visibilityTitle": "出会い",
+		"visibilityHint": "オフの間は、自分から鍵を渡した相手以外には誰にも見えません。"
 	},
 	"screen": {
 		"backToSectionAria": "「{{label}}」に戻る",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "鍵と復旧",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "鍵と復旧",
+		"mnemonicTitle": "秘密のフレーズ",
+		"mnemonicHint": "パスワードを忘れたり端末を紛失したりした場合にアクセスを取り戻す唯一の方法です。",
+		"mnemonicWarning": "12個の単語があなたのアカウントそのものです。それを知る者があなたです。紙に書き留め、この端末には保存しないでください。",
+		"recoverTitle": "アクセスの復旧",
+		"recoverBody": "フレーズによる復旧はログイン画面で行います。下のボタンを押すと、アプリはメモリから鍵を解放してログイン画面に戻ります。そこで「詳細設定」を選び、秘密のフレーズでのログインを行ってください。",
+		"recoverButton": "ロックして復旧へ進む"
 	}
 }

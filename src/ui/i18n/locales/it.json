@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Nuove richieste di contatto",
 		"requestAcceptedLabel": "Richiesta accettata",
 		"defaultForNewLabel": "Predefinito per i nuovi",
-		"perContactNotificationsCaption": "Notifiche per contatto",
-		"notificationColumnHeader": "Notifica",
 		"postsDefaultLabel": "Post — predefinito",
 		"commentsDefaultLabel": "Commenti — predefinito",
 		"chatDefaultLabel": "Chat comune — predefinito",
-		"perChannelNotificationsCaption": "Notifiche per canale — post/commenti/chat comune",
 		"postsColumnHeader": "Post",
 		"commentsColumnHeader": "Commenti",
 		"chatColumnHeader": "Chat comune",
-		"repliesSectionTitle": "Risposte",
 		"replyReceivedLabel": "Qualcuno ha risposto al mio post/commento",
-		"strangersSectionTitle": "Richieste da sconosciuti",
 		"strangerWantsToWriteLabel": "Uno sconosciuto vuole scriverti",
 		"newReportLabel": "Nuova segnalazione",
 		"moderationAlwaysShownHint": "Avvisi, ban ed eliminazione del canale sono sempre mostrati — non è configurabile.",
-		"mnemonicSectionTitle": "Frase segreta di recupero",
 		"sessionSectionTitle": "Sessione",
 		"lockNowButton": "Blocca ora",
 		"dangerZoneTitle": "Zona pericolosa",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Password",
 			"deletingButton": "Eliminazione…",
 			"deletePermanentlyButton": "Elimina definitivamente"
-		}
+		},
+		"tabsAria": "Sezioni delle impostazioni",
+		"tabs": {
+			"view": "Aspetto",
+			"notifications": "Notifiche",
+			"network": "Rete",
+			"session": "Sessione"
+		},
+		"viewSectionHint": "Il colore d'accento definisce l'intera palette — sfondo, superfici e bordi lo seguono.",
+		"themeLabel": "Tema",
+		"theme": {
+			"system": "Come il sistema",
+			"light": "Chiaro",
+			"dark": "Scuro"
+		},
+		"otherSectionTitle": "Altro",
+		"contactExceptions": "Eccezioni per singoli contatti · {{count}}",
+		"channelExceptions": "Eccezioni per singoli canali · {{count}}",
+		"networkTitle": "Rete",
+		"networkHint": "Come funziona l'app: da dove arrivano gli eventi, dove vengono caricati i file, a quale server personale sei connesso.",
+		"sessionHint": "Le chiavi verranno scaricate dalla memoria; sarà richiesta la password."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profilo e menu principale",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Scegli dall'archivio",
 		"aboutMeLegend": "Su di me",
 		"bioLabel": "Biografia",
-		"filesComingSoon": "Il caricamento e la gestione dei file appariranno più avanti."
+		"visibilityTitle": "Conoscenze",
+		"visibilityHint": "Finché è disattivato, nessuno ti vede tranne chi hai dato tu stesso la chiave."
 	},
 	"screen": {
 		"backToSectionAria": "Torna a «{{label}}»",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Chiave e recupero",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Chiave e recupero",
+		"mnemonicTitle": "Frase segreta",
+		"mnemonicHint": "L'unico modo per recuperare l'accesso se hai dimenticato la password o perso il dispositivo.",
+		"mnemonicWarning": "Dodici parole sono il tuo account. Chi le conosce, sei tu. Scrivile su carta e non conservarle su questo dispositivo.",
+		"recoverTitle": "Recupero dell'accesso",
+		"recoverBody": "Il recupero tramite frase avviene nella schermata di accesso. Premi il pulsante qui sotto — l'app scaricherà le chiavi dalla memoria e tornerà all'accesso; lì scegli «Avanzate» e accesso tramite frase segreta.",
+		"recoverButton": "Blocca e vai al recupero"
 	}
 }

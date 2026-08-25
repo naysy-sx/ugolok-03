@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Новые запросы в контакты",
 		"requestAcceptedLabel": "Запрос принят",
 		"defaultForNewLabel": "По умолчанию для новых",
-		"perContactNotificationsCaption": "Уведомления по каждому контакту",
-		"notificationColumnHeader": "Уведомление",
 		"postsDefaultLabel": "Посты — по умолчанию",
 		"commentsDefaultLabel": "Комментарии — по умолчанию",
 		"chatDefaultLabel": "Общий чат — по умолчанию",
-		"perChannelNotificationsCaption": "Уведомления по каждому каналу — посты/комментарии/общий чат",
 		"postsColumnHeader": "Посты",
 		"commentsColumnHeader": "Комментарии",
 		"chatColumnHeader": "Общий чат",
-		"repliesSectionTitle": "Ответы",
 		"replyReceivedLabel": "Кто-то ответил на мой пост/комментарий",
-		"strangersSectionTitle": "Заявки от незнакомцев",
 		"strangerWantsToWriteLabel": "Кто-то незнакомый хочет написать вам",
 		"newReportLabel": "Новая жалоба",
 		"moderationAlwaysShownHint": "Предупреждения, бан и удаление канала показываются всегда — это не настраивается.",
-		"mnemonicSectionTitle": "Секретная фраза восстановления",
 		"sessionSectionTitle": "Сеанс",
 		"lockNowButton": "Заблокировать сейчас",
 		"dangerZoneTitle": "Опасная зона",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Пароль",
 			"deletingButton": "Удаление…",
 			"deletePermanentlyButton": "Удалить безвозвратно"
-		}
+		},
+		"tabsAria": "Разделы настроек",
+		"tabs": {
+			"view": "Вид",
+			"notifications": "Уведомления",
+			"network": "Сеть",
+			"session": "Сессия"
+		},
+		"viewSectionHint": "Цвет акцента задаёт всю палитру — фон, поверхности и границы следуют за ним.",
+		"themeLabel": "Тема",
+		"theme": {
+			"system": "Как в системе",
+			"light": "Светлая",
+			"dark": "Тёмная"
+		},
+		"otherSectionTitle": "Остальное",
+		"contactExceptions": "Исключения для отдельных собеседников · {{count}}",
+		"channelExceptions": "Исключения для отдельных каналов · {{count}}",
+		"networkTitle": "Сеть",
+		"networkHint": "Через что работает приложение: откуда приходят события, куда загружаются файлы, к какому своему серверу вы подключены.",
+		"sessionHint": "Ключи будут выгружены из памяти, потребуется пароль."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Профиль и главное меню",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Выбрать из хранилища",
 		"aboutMeLegend": "О себе",
 		"bioLabel": "Био",
-		"filesComingSoon": "Загрузка и управление файлами появится позже."
+		"visibilityTitle": "Знакомства",
+		"visibilityHint": "Пока выключено, вас не видит никто, кроме тех, кому вы сами дали ключ."
 	},
 	"screen": {
 		"backToSectionAria": "Назад к разделу «{{label}}»",
@@ -653,8 +668,7 @@
 		"menuProfile": "Профиль и аватар",
 		"menuSettings": "Настройки",
 		"menuTheme": "Тема",
-		"menuMnemonic": "Секретная фраза",
-		"menuRecover": "Восстановить доступ",
+		"menuMnemonic": "Ключ и восстановление",
 		"menuHelp": "Справка",
 		"menuDiagnostics": "Диагностика"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Некорректная пригласительная ссылка.",
 			"notFound": "Комната не найдена. Проверьте название и пароль — или попросите свежую ссылку."
 		}
+	},
+	"security": {
+		"title": "Ключ и восстановление",
+		"mnemonicTitle": "Секретная фраза",
+		"mnemonicHint": "Единственный способ вернуть доступ, если вы забыли пароль или потеряли устройство.",
+		"mnemonicWarning": "Двенадцать слов — это и есть ваша учётная запись. Кто их знает, тот вы. Запишите на бумаге и держите не в этом устройстве.",
+		"recoverTitle": "Восстановление доступа",
+		"recoverBody": "Восстановление по фразе происходит на экране входа. Нажмите кнопку ниже — приложение выгрузит ключи из памяти и вернётся к входу, там выберите «Дополнительно» и вход по секретной фразе.",
+		"recoverButton": "Заблокировать и перейти к восстановлению"
 	}
 }

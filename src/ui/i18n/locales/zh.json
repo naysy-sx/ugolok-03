@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "新的联系人请求",
 		"requestAcceptedLabel": "请求已接受",
 		"defaultForNewLabel": "新项目默认值",
-		"perContactNotificationsCaption": "各联系人的通知",
-		"notificationColumnHeader": "通知",
 		"postsDefaultLabel": "帖子——默认",
 		"commentsDefaultLabel": "评论——默认",
 		"chatDefaultLabel": "公共聊天——默认",
-		"perChannelNotificationsCaption": "各频道的通知——帖子/评论/公共聊天",
 		"postsColumnHeader": "帖子",
 		"commentsColumnHeader": "评论",
 		"chatColumnHeader": "公共聊天",
-		"repliesSectionTitle": "回复",
 		"replyReceivedLabel": "有人回复了我的帖子/评论",
-		"strangersSectionTitle": "陌生人的请求",
 		"strangerWantsToWriteLabel": "一位陌生人想给您写信",
 		"newReportLabel": "新的举报",
 		"moderationAlwaysShownHint": "警告、封禁和频道删除始终显示——此项不可配置。",
-		"mnemonicSectionTitle": "秘密恢复短语",
 		"sessionSectionTitle": "会话",
 		"lockNowButton": "立即锁定",
 		"dangerZoneTitle": "危险区域",
@@ -110,7 +104,27 @@
 			"passwordLabel": "密码",
 			"deletingButton": "正在删除…",
 			"deletePermanentlyButton": "永久删除"
-		}
+		},
+		"tabsAria": "设置分区",
+		"tabs": {
+			"view": "外观",
+			"notifications": "通知",
+			"network": "网络",
+			"session": "会话"
+		},
+		"viewSectionHint": "强调色决定整个配色方案 — 背景、表面和边框都随之变化。",
+		"themeLabel": "主题",
+		"theme": {
+			"system": "跟随系统",
+			"light": "浅色",
+			"dark": "深色"
+		},
+		"otherSectionTitle": "其他",
+		"contactExceptions": "单个联系人的例外 · {{count}}",
+		"channelExceptions": "单个频道的例外 · {{count}}",
+		"networkTitle": "网络",
+		"networkHint": "应用依赖的网络：事件来自哪里，文件上传到哪里，您连接的是哪个自建服务器。",
+		"sessionHint": "密钥将从内存中清除，需要重新输入密码。"
 	},
 	"shell": {
 		"sidebarAriaLabel": "个人资料与主菜单",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "从存储中选择",
 		"aboutMeLegend": "关于我",
 		"bioLabel": "简介",
-		"filesComingSoon": "文件上传与管理功能将在稍后推出。"
+		"visibilityTitle": "结识",
+		"visibilityHint": "关闭时，除了您亲自给过密钥的人之外，没有人能看到您。"
 	},
 	"screen": {
 		"backToSectionAria": "返回“{{label}}”",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "密钥与恢复",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "密钥与恢复",
+		"mnemonicTitle": "助记词",
+		"mnemonicHint": "如果您忘记密码或丢失设备，这是恢复访问的唯一方法。",
+		"mnemonicWarning": "十二个词就是您的账户。知道它们的人就是您。请写在纸上，不要保存在此设备上。",
+		"recoverTitle": "恢复访问",
+		"recoverBody": "通过助记词恢复在登录界面进行。点击下方按钮 — 应用会从内存中清除密钥并返回登录界面，请在那里选择「高级」并使用助记词登录。",
+		"recoverButton": "锁定并前往恢复"
 	}
 }

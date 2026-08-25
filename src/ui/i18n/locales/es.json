@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Nuevas solicitudes de contacto",
 		"requestAcceptedLabel": "Solicitud aceptada",
 		"defaultForNewLabel": "Predeterminado para nuevos",
-		"perContactNotificationsCaption": "Notificaciones por contacto",
-		"notificationColumnHeader": "Notificación",
 		"postsDefaultLabel": "Publicaciones — predeterminado",
 		"commentsDefaultLabel": "Comentarios — predeterminado",
 		"chatDefaultLabel": "Chat común — predeterminado",
-		"perChannelNotificationsCaption": "Notificaciones por canal — publicaciones/comentarios/chat común",
 		"postsColumnHeader": "Publicaciones",
 		"commentsColumnHeader": "Comentarios",
 		"chatColumnHeader": "Chat común",
-		"repliesSectionTitle": "Respuestas",
 		"replyReceivedLabel": "Alguien respondió a mi publicación/comentario",
-		"strangersSectionTitle": "Solicitudes de desconocidos",
 		"strangerWantsToWriteLabel": "Alguien desconocido quiere escribirte",
 		"newReportLabel": "Nueva denuncia",
 		"moderationAlwaysShownHint": "Las advertencias, baneos y eliminación de canal siempre se muestran — esto no es configurable.",
-		"mnemonicSectionTitle": "Frase secreta de recuperación",
 		"sessionSectionTitle": "Sesión",
 		"lockNowButton": "Bloquear ahora",
 		"dangerZoneTitle": "Zona de peligro",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Contraseña",
 			"deletingButton": "Eliminando…",
 			"deletePermanentlyButton": "Eliminar definitivamente"
-		}
+		},
+		"tabsAria": "Secciones de ajustes",
+		"tabs": {
+			"view": "Vista",
+			"notifications": "Notificaciones",
+			"network": "Red",
+			"session": "Sesión"
+		},
+		"viewSectionHint": "El color de acento define toda la paleta: el fondo, las superficies y los bordes lo siguen.",
+		"themeLabel": "Tema",
+		"theme": {
+			"system": "Como el sistema",
+			"light": "Claro",
+			"dark": "Oscuro"
+		},
+		"otherSectionTitle": "Otros",
+		"contactExceptions": "Excepciones para contactos individuales · {{count}}",
+		"channelExceptions": "Excepciones para canales individuales · {{count}}",
+		"networkTitle": "Red",
+		"networkHint": "Cómo funciona la aplicación: de dónde vienen los eventos, dónde se suben los archivos, a qué servidor propio está conectado.",
+		"sessionHint": "Las claves se descargarán de la memoria; se requerirá la contraseña."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil y menú principal",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Elegir del almacenamiento",
 		"aboutMeLegend": "Sobre mí",
 		"bioLabel": "Biografía",
-		"filesComingSoon": "La subida y gestión de archivos aparecerá más adelante."
+		"visibilityTitle": "Conocer gente",
+		"visibilityHint": "Mientras esté desactivado, nadie le verá excepto quienes usted haya dado la clave."
 	},
 	"screen": {
 		"backToSectionAria": "Volver a «{{label}}»",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Clave y recuperación",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Clave y recuperación",
+		"mnemonicTitle": "Frase secreta",
+		"mnemonicHint": "La única forma de recuperar el acceso si olvida su contraseña o pierde su dispositivo.",
+		"mnemonicWarning": "Doce palabras son su cuenta. Quien las conozca, es usted. Anótelas en papel y no las guarde en este dispositivo.",
+		"recoverTitle": "Recuperación de acceso",
+		"recoverBody": "La recuperación mediante frase se realiza en la pantalla de inicio de sesión. Pulse el botón de abajo: la aplicación descargará las claves de la memoria y volverá al inicio de sesión; allí elija «Avanzado» e inicio de sesión por frase secreta.",
+		"recoverButton": "Bloquear e ir a la recuperación"
 	}
 }

@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Nowe zaproszenia do kontaktów",
 		"requestAcceptedLabel": "Zaproszenie zaakceptowane",
 		"defaultForNewLabel": "Domyślne dla nowych",
-		"perContactNotificationsCaption": "Powiadomienia dla każdego kontaktu",
-		"notificationColumnHeader": "Powiadomienie",
 		"postsDefaultLabel": "Posty — domyślnie",
 		"commentsDefaultLabel": "Komentarze — domyślnie",
 		"chatDefaultLabel": "Czat wspólny — domyślnie",
-		"perChannelNotificationsCaption": "Powiadomienia dla każdego kanału — posty/komentarze/czat wspólny",
 		"postsColumnHeader": "Posty",
 		"commentsColumnHeader": "Komentarze",
 		"chatColumnHeader": "Czat wspólny",
-		"repliesSectionTitle": "Odpowiedzi",
 		"replyReceivedLabel": "Ktoś odpowiedział na mój post/komentarz",
-		"strangersSectionTitle": "Zaproszenia od nieznajomych",
 		"strangerWantsToWriteLabel": "Nieznajomy chce do Ciebie napisać",
 		"newReportLabel": "Nowa skarga",
 		"moderationAlwaysShownHint": "Ostrzeżenia, bany i usunięcie kanału są zawsze pokazywane — nie da się tego skonfigurować.",
-		"mnemonicSectionTitle": "Tajna fraza odzyskiwania",
 		"sessionSectionTitle": "Sesja",
 		"lockNowButton": "Zablokuj teraz",
 		"dangerZoneTitle": "Strefa niebezpieczna",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Hasło",
 			"deletingButton": "Usuwanie…",
 			"deletePermanentlyButton": "Usuń trwale"
-		}
+		},
+		"tabsAria": "Sekcje ustawień",
+		"tabs": {
+			"view": "Widok",
+			"notifications": "Powiadomienia",
+			"network": "Sieć",
+			"session": "Sesja"
+		},
+		"viewSectionHint": "Kolor akcentu określa całą paletę — tło, powierzchnie i obramowania są od niego zależne.",
+		"themeLabel": "Motyw",
+		"theme": {
+			"system": "Jak w systemie",
+			"light": "Jasny",
+			"dark": "Ciemny"
+		},
+		"otherSectionTitle": "Pozostałe",
+		"contactExceptions": "Wyjątki dla poszczególnych kontaktów · {{count}}",
+		"channelExceptions": "Wyjątki dla poszczególnych kanałów · {{count}}",
+		"networkTitle": "Sieć",
+		"networkHint": "Na czym działa aplikacja: skąd pochodzą zdarzenia, dokąd przesyłane są pliki, z jakim własnym serwerem jesteś połączony.",
+		"sessionHint": "Klucze zostaną wyładowane z pamięci, potrzebne będzie hasło."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil i menu główne",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Wybierz z magazynu",
 		"aboutMeLegend": "O mnie",
 		"bioLabel": "Bio",
-		"filesComingSoon": "Przesyłanie i zarządzanie plikami pojawi się później."
+		"visibilityTitle": "Poznawanie",
+		"visibilityHint": "Dopóki to wyłączone, nikt Cię nie widzi poza tymi, którym sam podałeś/aś klucz."
 	},
 	"screen": {
 		"backToSectionAria": "Wróć do „{{label}}”",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Klucz i odzyskiwanie",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Klucz i odzyskiwanie",
+		"mnemonicTitle": "Tajna fraza",
+		"mnemonicHint": "Jedyny sposób na odzyskanie dostępu, jeśli zapomnisz hasła lub zgubisz urządzenie.",
+		"mnemonicWarning": "Dwanaście słów to Twoje konto. Kto je zna, jest Tobą. Zapisz je na papierze i nie przechowuj ich na tym urządzeniu.",
+		"recoverTitle": "Odzyskiwanie dostępu",
+		"recoverBody": "Odzyskiwanie za pomocą frazy odbywa się na ekranie logowania. Naciśnij przycisk poniżej — aplikacja wyładuje klucze z pamięci i wróci do logowania; tam wybierz „Zaawansowane” i logowanie tajną frazą.",
+		"recoverButton": "Zablokuj i przejdź do odzyskiwania"
 	}
 }

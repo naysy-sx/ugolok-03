@@ -4,30 +4,19 @@ import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, reconnectWithNewSettings } from "../signals/transport.js";
+import { ensureConnected, publish } from "../signals/transport.js";
 import { projected, getFileKeyFor } from "../signals/files.js";
-import {
-	loadUiSettings,
-	addRelayUrl,
-	removeRelayUrl,
-	setRelayRole,
-	addBlossomUrl,
-	removeBlossomUrl,
-	setActiveBlossomUrl,
-	pairSelfHostedServer,
-	unpairSelfHostedServer,
-	SelfHostedFingerprintMismatchError,
-} from "../../domain/settings/ui-settings.js";
-import { decodePairingCode, fetchAgentStatus } from "../../domain/selfhost/pairing.js";
+import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
 import FilePicker from "../components/file-picker.jsx";
+import DeleteAccountPanel from "../components/delete-account-panel.jsx";
 import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
-import IconPlus from "../icons/plus.jsx";
+import IconEye from "../icons/eye.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
@@ -41,383 +30,6 @@ function readFileAsDataUrl(file) {
 		reader.onerror = () => reject(reader.error);
 		reader.readAsDataURL(file);
 	});
-}
-
-// CONTRACTS.md, этап 34 — пользователь: "в профиль необходимо добавить возможность
-// добавления и переключения на другие relay сервера". Blossom — тот же паттерн, без
-// переподключения (URL читается per-upload, не держит постоянное соединение).
-function ServerListEditor({ title, urlPlaceholder, urls, activeUrl, onAdd, onRemove, onSetActive, busy }) {
-	const [newUrl, setNewUrl] = useState("");
-	const [error, setError] = useState("");
-
-	async function handleAdd(e) {
-		e.preventDefault();
-		const trimmed = newUrl.trim();
-		if (!trimmed) return;
-		setError("");
-		try {
-			await onAdd(trimmed);
-			setNewUrl("");
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	async function runAction(fn) {
-		setError("");
-		try {
-			await fn();
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	return (
-		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby={`srv-${title}`}>
-			<h2 id={`srv-${title}`} class="sect-title">
-				{title}
-			</h2>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
-				{urls.map((url) => (
-					<li key={url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<span class="srv__url">{url}</span>
-						{url === activeUrl && <span class="badge-on">{t("profile.server.activeLabel")}</span>}
-						{url !== activeUrl && (
-							<button type="button" class="btn--ghost" disabled={busy} onClick={() => runAction(() => onSetActive(url))}>
-								{t("profile.server.makeActiveButton")}
-							</button>
-						)}
-						<button
-							type="button"
-							class="icon-btn"
-							disabled={busy}
-							onClick={() => runAction(() => onRemove(url))}
-							aria-label={t("profile.server.deleteAria", { url })}
-						>
-							<IconTrash />
-						</button>
-					</li>
-				))}
-				{urls.length === 0 && (
-					<li style={{ color: "var(--muted)" }} class="srv__item">
-						{t("profile.server.emptyList")}
-					</li>
-				)}
-			</ul>
-			<form class="srv__add row" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleAdd}>
-				<label class="visually-hidden" for={`${title}-new-url`}>
-					{t("profile.server.addLabel")}
-				</label>
-				<input
-					id={`${title}-new-url`}
-					type="text"
-					placeholder={urlPlaceholder}
-					value={newUrl}
-					onInput={(e) => setNewUrl(e.currentTarget.value)}
-				/>
-				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
-					<IconPlus /> {t("common.add")}
-				</button>
-			</form>
-		</section>
-	);
-}
-
-// Этап 58 — мультирелейный транспорт: relayUrls теперь {url,read,write}[],
-// "один активный" не имеет смысла при одновременной работе с несколькими
-// (CONTRACTS.md/DESIGN.md, этап 58). Blossom остаётся single-active
-// (ServerListEditor выше, без изменений) — это отдельный, более поздний
-// вопрос (этап 62/63), не путать.
-function RelayListEditor({ urls, onAdd, onRemove, onSetRole, busy }) {
-	const [newUrl, setNewUrl] = useState("");
-	const [error, setError] = useState("");
-
-	async function handleAdd(e) {
-		e.preventDefault();
-		const trimmed = newUrl.trim();
-		if (!trimmed) return;
-		setError("");
-		try {
-			await onAdd(trimmed);
-			setNewUrl("");
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	async function runAction(fn) {
-		setError("");
-		try {
-			await fn();
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	return (
-		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby="srv-relay">
-			<h2 id="srv-relay" class="sect-title">
-				{t("profile.relay.heading")}
-			</h2>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			<ul role="list" class="srv__list stack" style={{ "--gap": "var(--space-2xs)" }}>
-				{urls.map((r) => (
-					<li key={r.url} class="srv__item row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<span class="srv__url">{r.url}</span>
-						<label>
-							<input
-								type="checkbox"
-								checked={r.read}
-								disabled={busy}
-								onChange={(e) => runAction(() => onSetRole(r.url, { read: e.currentTarget.checked, write: r.write }))}
-							/>
-							{t("profile.relay.readLabel")}
-						</label>
-						<label>
-							<input
-								type="checkbox"
-								checked={r.write}
-								disabled={busy}
-								onChange={(e) => runAction(() => onSetRole(r.url, { read: r.read, write: e.currentTarget.checked }))}
-							/>
-							{t("profile.relay.writeLabel")}
-						</label>
-						<button
-							type="button"
-							class="icon-btn"
-							disabled={busy}
-							onClick={() => runAction(() => onRemove(r.url))}
-							aria-label={t("profile.server.deleteAria", { url: r.url })}
-						>
-							<IconTrash />
-						</button>
-					</li>
-				))}
-				{urls.length === 0 && (
-					<li style={{ color: "var(--muted)" }} class="srv__item">
-						{t("profile.server.emptyList")}
-					</li>
-				)}
-			</ul>
-			<form class="srv__add row" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleAdd}>
-				<label class="visually-hidden" for="relay-new-url">
-					{t("profile.server.addLabel")}
-				</label>
-				<input id="relay-new-url" type="text" placeholder="wss://relay.example.com" value={newUrl} onInput={(e) => setNewUrl(e.currentTarget.value)} />
-				<button type="submit" class="btn--ghost" disabled={busy || !newUrl.trim()}>
-					<IconPlus /> {t("common.add")}
-				</button>
-			</form>
-		</section>
-	);
-}
-
-// Этап 63, И3 — экран сопряжения с self-hosted инстансом (agent/install.sh).
-// Вставка пейринг-кода ДЕКОДИРУЕТСЯ и ПРОВЕРЯЕТСЯ живым запросом /status
-// ДО сохранения (pairSelfHostedServer) — не сохраняем то, до чего не смогли
-// достучаться (частая причина отказа — пользователь ещё не открыл https://
-// host:port/ в отдельной вкладке и не принял самоподписанный сертификат,
-// см. CONTRACTS.md "Этап 63, И3": браузер не даёт JS проверить TLS-
-// сертификат напрямую, единственный реальный путь — штатный browser-flow).
-function SelfHostedSection({ ownerPubkey, privKey, dbKey }) {
-	const [settings, setSettings] = useState(null);
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const [code, setCode] = useState("");
-	const [status, setStatus] = useState(null);
-
-	async function refresh() {
-		setSettings(await loadUiSettings(ownerPubkey, dbKey));
-	}
-
-	useEffect(() => {
-		refresh().catch(() => {});
-	}, [ownerPubkey]);
-
-	async function attemptPair(force) {
-		setError("");
-		setBusy(true);
-		try {
-			const pairing = decodePairingCode(code.trim());
-			const agentStatus = await fetchAgentStatus(pairing);
-			await pairSelfHostedServer(ownerPubkey, privKey, dbKey, pairing, publish, { force });
-			setStatus(agentStatus);
-			setCode("");
-			await refresh();
-		} catch (err) {
-			if (err instanceof SelfHostedFingerprintMismatchError) {
-				const confirmed = window.confirm(t("profile.selfHosted.fingerprintMismatchConfirm"));
-				if (confirmed) {
-					setBusy(false);
-					await attemptPair(true);
-					return;
-				}
-				setError(t("profile.selfHosted.pairingCancelled"));
-			} else {
-				setError(errorMessage(err));
-			}
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	async function handlePairSubmit(e) {
-		e.preventDefault();
-		if (!code.trim() || busy) return;
-		await attemptPair(false);
-	}
-
-	async function handleUnpair() {
-		if (!window.confirm(t("profile.selfHosted.unpairConfirm"))) return;
-		setBusy(true);
-		setError("");
-		try {
-			await unpairSelfHostedServer(ownerPubkey, privKey, dbKey, publish);
-			setStatus(null);
-			await refresh();
-		} catch (err) {
-			setError(errorMessage(err));
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	async function handleRefreshStatus() {
-		if (!settings?.selfHostedServer) return;
-		setBusy(true);
-		setError("");
-		try {
-			setStatus(await fetchAgentStatus(settings.selfHostedServer));
-		} catch (err) {
-			setError(errorMessage(err));
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	if (!settings) return null;
-	const paired = settings.selfHostedServer;
-
-	return (
-		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-labelledby="selfhost-heading">
-			<h2 id="selfhost-heading" class="sect-title">
-				{t("profile.selfHosted.heading")}
-			</h2>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			{paired ? (
-				<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-					<p>
-						{t("profile.selfHosted.connectedLabel")}{" "}
-						<strong>
-							{paired.host}:{paired.port}
-						</strong>
-					</p>
-					<p style={{ color: "var(--muted)", fontSize: "0.85em" }}>{t("profile.selfHosted.fingerprintLabel", { fingerprint: paired.fingerprint })}</p>
-					{status && (
-						<ul role="list">
-							{(status.services || []).map((s) => (
-								<li key={s.Service}>
-									{s.Service}: {s.State}
-								</li>
-							))}
-						</ul>
-					)}
-					<div style={{ display: "flex", gap: "var(--space-2xs)" }}>
-						<button type="button" class="btn--ghost" disabled={busy} onClick={handleRefreshStatus}>
-							{t("profile.selfHosted.refreshStatusButton")}
-						</button>
-						<button type="button" class="btn--ghost btn--warn" disabled={busy} onClick={handleUnpair}>
-							{t("profile.selfHosted.disconnectButton")}
-						</button>
-					</div>
-				</div>
-			) : (
-				<form class="stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handlePairSubmit}>
-					<p style={{ color: "var(--muted)" }}>
-						{t("profile.selfHosted.instructionsBeforeCode")} <code>install.sh</code> {t("profile.selfHosted.instructionsAfterCode")}
-					</p>
-					<label class="visually-hidden" for="pairing-code">
-						{t("profile.selfHosted.pairingCodeLabel")}
-					</label>
-					<textarea
-						id="pairing-code"
-						rows={3}
-						placeholder={t("profile.selfHosted.pairingCodePlaceholder")}
-						value={code}
-						onInput={(e) => setCode(e.currentTarget.value)}
-					/>
-					<button type="submit" class="btn--ghost" disabled={busy || !code.trim()}>
-						{t("profile.selfHosted.connectButton")}
-					</button>
-				</form>
-			)}
-		</section>
-	);
-}
-
-function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
-	const [settings, setSettings] = useState(null);
-	const [busy, setBusy] = useState(false);
-
-	async function refresh() {
-		setSettings(await loadUiSettings(ownerPubkey, dbKey));
-	}
-
-	useEffect(() => {
-		refresh().catch(() => {});
-	}, [ownerPubkey]);
-
-	async function withBusy(fn) {
-		setBusy(true);
-		try {
-			await fn();
-			await refresh();
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	if (!settings) return null;
-
-	return (
-		<div class="stack" style={{ "--gap": "var(--space-m)" }}>
-			<RelayListEditor
-				urls={settings.relayUrls}
-				busy={busy}
-				onAdd={(url) => withBusy(() => addRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeRelayUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onSetRole={(url, role) =>
-					withBusy(async () => {
-						await setRelayRole(ownerPubkey, privKey, dbKey, url, role, publish);
-						await reconnectWithNewSettings(ownerPubkey, privKey, dbKeySig.value);
-					})
-				}
-			/>
-			<ServerListEditor
-				title={t("profile.blossomServersTitle")}
-				urlPlaceholder="https://blossom.example.com"
-				urls={settings.blossomUrls}
-				activeUrl={settings.activeBlossomUrl}
-				busy={busy}
-				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-			/>
-		</div>
-	);
 }
 
 // Редизайн интерфейса, этап 8 (CONTRACTS.md) — перенесено 1:1 из
@@ -465,52 +77,67 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 	if (!settings) return null;
 
 	return (
-		<section class="stack" style={{ "--gap": "var(--space-2xs)" }} aria-label={t("discovery.showMeToggle")}>
+		<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
+			<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+					<IconEye />
+					{t("profile.visibilityTitle")}
+				</h2>
+				<p class="panel__hint">{t("profile.visibilityHint")}</p>
+			</div>
+
 			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
+				<p role="alert" class="callout callout--bad">
 					{error}
 				</p>
 			)}
-			<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<input type="checkbox" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
-				{t("discovery.showMeToggle")}
+
+			<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+				<span class="set-row__text">{t("discovery.showMeToggle")}</span>
+				<input type="checkbox" class="set-row__switch" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
 			</label>
 
+			{/* Вложенность больше НЕ передаётся отступом слева (был инлайновый
+			    marginInlineStart — margin на компоненте, REGLAMENT.md §3 п.1).
+			    Зависимые настройки просто идут следом: включённый верхний
+			    переключатель и так их показывает, а выключенный — скрывает. */}
 			{settings.visible && (
-				<div class="stack" style={{ "--gap": "var(--space-2xs)", marginInlineStart: "var(--space-m)" }}>
-					<label class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+				<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
+					<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+						<span class="set-row__text">{t("discovery.showChannelsToggle")}</span>
 						<input
 							type="checkbox"
+							class="set-row__switch"
 							checked={settings.showChannels}
 							onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
 						/>
-						{t("discovery.showChannelsToggle")}
 					</label>
 
 					{settings.showChannels && (
-						<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
-							<legend>{t("discovery.whichChannelsLegend")}</legend>
+						<fieldset class="stack" style={{ "--gap": "var(--space-2xs)", border: "none", padding: 0 }}>
+							<legend class="sect-title">{t("discovery.whichChannelsLegend")}</legend>
 							{ownedChannels.length === 0 ? (
-								<p style={{ color: "var(--muted)" }}>{t("discovery.noOwnChannels")}</p>
+								<p class="panel__hint">{t("discovery.noOwnChannels")}</p>
 							) : (
 								ownedChannels.map((c) => (
-									<label key={c.id} class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+									<label key={c.id} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+										<span class="set-row__text">{c.name}</span>
 										<input
 											id={`${instanceId}-ch-${c.id}`}
 											type="checkbox"
+											class="set-row__switch"
 											checked={settings.channelIds.includes(c.id)}
 											onChange={() => toggleChannelId(c.id)}
 										/>
-										{c.name}
 									</label>
 								))
 							)}
 						</fieldset>
 					)}
 
-					<div>
-						<button type="button" onClick={() => persist(settings)}>
-							OK
+					<div class="row" style={{ "--gap": "var(--space-s)" }}>
+						<button type="button" class="rigid" onClick={() => persist(settings)}>
+							{t("common.save")}
 						</button>
 					</div>
 				</div>
@@ -701,117 +328,106 @@ export default function Profile() {
 	return (
 		<Screen title={login || t("profile.noNameFallback")}>
 			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
-			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-npub-heading">
-				<h2 id="profile-npub-heading" class="sect-title">
-					{t("profile.identifierHeading")}
-				</h2>
-				<div class="keybox row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					<code>{npubEncode(id)}</code>
-					<button type="button" class="icon-btn" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
-						<IconCopy />
-					</button>
-				</div>
-				{copyStatus && (
-					<p role="status" style={{ color: "var(--muted)" }}>
-						{copyStatus}
-					</p>
-				)}
-				<p class="hint">{t("profile.identifierHint")}</p>
-			</section>
-
-			{/* Пользователь: "перекомпоновать блоки с аватаром и о себе — две
-			    колонки: в первой маленькой квадратный аватар и кнопка 'Заменить'
-			    внизу, во второй большой — блок 'О себе'". aria-label вместо
-			    видимого <h2> "Аватар" — левая колонка теперь читается сама по
-			    себе (фото + кнопка под ним), а "О себе" остаётся единственным
-			    видимым заголовком блока. */}
-			<div class="profile-photo-layout">
-				<div class="profile-photo-col stack" style={{ "--gap": "var(--space-s)", "--align": "center" }} aria-label={t("profile.avatarColumnAria")}>
-					{/* avatarUrl (публичный Blossom URL) — фолбэк, когда локального
-					    data-url кэша ещё нет: НОВОЕ устройство подтягивает bio/avatarUrl
-					    из своего же kind 0 при bootstrap (hydrateOwnProfile, profile.js),
-					    но avatar (сам файл как data-url) — только через локальную загрузку;
-					    без фолбэка аватар выглядел бы пустым до первой замены на новом
-					    устройстве, хотя публичная копия уже известна.
-					    Этап 74 — Часть B, T6.3: приоритет avatar||avatarUrl НЕ меняется —
-					    корректность (устаревший локальный кэш не должен маскировать новый
-					    avatarUrl) обеспечивает инвалидация в hydrateOwnProfile (T6.1,
-					    profile.js), не порядок здесь. Не "чинить" приоритет на обратный. */}
-					{avatar || avatarUrl ? (
-						<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
-					) : (
-						<div
-					role="img"
-					aria-label={t("profile.avatarNotSetAria")}
-					class="profile-avatar-square profile-avatar-square-fallback row"
-					style={{ "--align": "center", justifyContent: "center" }}
-				>
-							{initial}
+				<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
+					<div class="ident row" style={{ "--gap": "var(--space-m)" }}>
+						{/* Фото и две кнопки под ним были парой, делающей одно и то
+						    же, но в двух разных формах: "Заменить" — <label>-пилюля
+						    (--radius-full), "Из хранилища" — обычная кнопка
+						    (--radius). Теперь обе
+						    внутри одной накладки на нижней кромке фотографии.
+						    .layer — композиционный класс: обе дочки в одной
+						    ячейке грида, накладка прижата вниз через .self-end. */}
+						<div class="ident__photo">
+							<div class="ava layer">
+								{/* Приоритет avatar || avatarUrl НЕ менять — см. комментарий
+								    этапа 74 в истории файла: корректность обеспечивает
+								    инвалидация в hydrateOwnProfile, а не порядок здесь. */}
+								{avatar || avatarUrl ? (
+									<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
+								) : (
+									<div
+										role="img"
+										aria-label={t("profile.avatarNotSetAria")}
+										class="profile-avatar-square profile-avatar-square-fallback row"
+										style={{ "--align": "center", justifyContent: "center" }}
+									>
+										{initial}
+									</div>
+								)}
+								<div class="ava__actions over self-end bar" style={{ "--gap": "var(--space-3xs)" }}>
+									<label for="profile-avatar-input" class="ava__btn bar">
+										{t("profile.replaceAvatarLabel")}
+									</label>
+									<input id="profile-avatar-input" class="visually-hidden" type="file" accept="image/*" onChange={handleAvatarChange} />
+									<button type="button" class="ava__btn bar" onClick={() => setAvatarPickerOpen(true)}>
+										{t("profile.chooseFromStorageButton")}
+									</button>
+								</div>
+							</div>
+							{avatarError && (
+								<p role="alert" class="callout callout--bad">
+									{avatarError}
+								</p>
+							)}
 						</div>
-					)}
-					<label for="profile-avatar-input" class="profile-avatar-replace-btn">
-						{t("profile.replaceAvatarLabel")}
-					</label>
-					<input
-						id="profile-avatar-input"
-						class="visually-hidden"
-						type="file"
-						accept="image/*"
-						onChange={handleAvatarChange}
-					/>
-					<button type="button" class="btn--ghost" onClick={() => setAvatarPickerOpen(true)}>
-						{t("profile.chooseFromStorageButton")}
-					</button>
-					{avatarError && (
-						<p role="alert" style={{ color: "var(--bad)" }}>
-							{avatarError}
-						</p>
-					)}
-				</div>
-				{avatarPickerOpen && (
-					<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
-				)}
 
-				<form class="stack profile-bio-col" style={{ "--gap": "var(--space-m)" }} onSubmit={handleBioSubmit}>
-					<fieldset class="stack" style={{ "--gap": "var(--space-m)" }}>
-						<legend class="sect-title">{t("profile.aboutMeLegend")}</legend>
-						<label for="profile-bio">{t("profile.bioLabel")}</label>
-						<textarea
-							id="profile-bio"
-							rows="4"
-							value={bio}
-							onInput={(e) => setBio(e.currentTarget.value)}
-						/>
-					</fieldset>
-					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-						<button type="submit" disabled={!bioIsDirty}>
-							{t("common.save")}
-						</button>
-						{bioStatus && (
-							<span role="status" style={{ color: "var(--muted)" }}>
-								{bioStatus}
-							</span>
+						{avatarPickerOpen && (
+							<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
 						)}
-						{publishStatus && (
-							<span role="status" style={{ color: "var(--muted)" }}>
-								{publishStatus}
-							</span>
-						)}
+
+						<form class="ident__body stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleBioSubmit}>
+							<h2 class="ident__name">{login || t("profile.noNameFallback")}</h2>
+
+							<div class="keybox row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+								<code>{npubEncode(id)}</code>
+								<button type="button" class="icon-btn rigid" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
+									<IconCopy />
+								</button>
+							</div>
+							{copyStatus && (
+								<p role="status" class="panel__hint">
+									{copyStatus}
+								</p>
+							)}
+							<p class="panel__hint">{t("profile.identifierHint")}</p>
+
+							<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+								<label for="profile-bio">{t("profile.bioLabel")}</label>
+								<textarea id="profile-bio" rows="4" value={bio} onInput={(e) => setBio(e.currentTarget.value)} />
+							</div>
+
+							<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+								<button type="submit" class="rigid" disabled={!bioIsDirty}>
+									{t("common.save")}
+								</button>
+								{bioStatus && (
+									<span role="status" class="panel__hint">
+										{bioStatus}
+									</span>
+								)}
+								{publishStatus && (
+									<span role="status" class="panel__hint">
+										{publishStatus}
+									</span>
+								)}
+							</div>
+						</form>
 					</div>
-				</form>
-			</div>
+				</section>
 
-			<VisibilitySection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
+				<VisibilitySection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 
-			<section class="stack" style={{ "--gap": "var(--space-m)" }} aria-labelledby="profile-files-heading">
-				<h2 id="profile-files-heading" class="sect-title">
-					{t("nav.files")}
-				</h2>
-				<div class="files-empty">{t("profile.filesComingSoon")}</div>
-			</section>
-
-			<RelayBlossomSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
-			<SelfHostedSection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
+				{/* Переехало из "Настроек": удаление относится к тому, КТО ты, а
+				    не к тому, как ведёт себя приложение. */}
+				<section class="panel panel--danger stack" style={{ "--gap": "var(--space-m)" }}>
+					<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
+						<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							<IconTrash />
+							{t("settings.dangerZoneTitle")}
+						</h2>
+					</div>
+					<DeleteAccountPanel ownerPubkey={id} login={login} privKey={privKeySig.value} dbKey={dbKeySig.value} />
+				</section>
 			</div>
 		</Screen>
 	);

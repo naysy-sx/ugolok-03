@@ -41,7 +41,7 @@ function shortNpub(pubkeyHex) {
 // срабатывает от случайного касания при скролле. Три отдельные мелкие
 // цели: портрет (открыть "Профиль"), кнопка "скопировать ключ", кнопка
 // "ещё" (меню).
-export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettings, onOpenHelp, onOpenDiagnostics, onOpenJournal, unreadJournalCount, themeMode, onToggleTheme }) {
+export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettings, onOpenSecurity, onOpenHelp, onOpenDiagnostics, onOpenJournal, unreadJournalCount, themeMode, onToggleTheme }) {
 	const id = currentUser.value.id;
 	const login = currentUser.value.login;
 	const [avatar, setAvatar] = useState("");
@@ -127,13 +127,8 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 							</button>
 						</li>
 						<li>
-							<button type="button" onClick={onOpenSettings}>
+							<button type="button" onClick={onOpenSecurity}>
 								<IconLockClosed /> {t("sidebarCard.menuMnemonic")}
-							</button>
-						</li>
-						<li>
-							<button type="button" onClick={onOpenSettings}>
-								<IconLockClosed /> {t("sidebarCard.menuRecover")}
 							</button>
 						</li>
 						<li>

@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Neue Kontaktanfragen",
 		"requestAcceptedLabel": "Anfrage angenommen",
 		"defaultForNewLabel": "Standard für neue",
-		"perContactNotificationsCaption": "Benachrichtigungen pro Kontakt",
-		"notificationColumnHeader": "Benachrichtigung",
 		"postsDefaultLabel": "Beiträge — Standard",
 		"commentsDefaultLabel": "Kommentare — Standard",
 		"chatDefaultLabel": "Gemeinsamer Chat — Standard",
-		"perChannelNotificationsCaption": "Benachrichtigungen pro Kanal — Beiträge/Kommentare/gemeinsamer Chat",
 		"postsColumnHeader": "Beiträge",
 		"commentsColumnHeader": "Kommentare",
 		"chatColumnHeader": "Gemeinsamer Chat",
-		"repliesSectionTitle": "Antworten",
 		"replyReceivedLabel": "Jemand hat auf meinen Beitrag/Kommentar geantwortet",
-		"strangersSectionTitle": "Anfragen von Unbekannten",
 		"strangerWantsToWriteLabel": "Jemand Unbekanntes möchte Ihnen schreiben",
 		"newReportLabel": "Neue Meldung",
 		"moderationAlwaysShownHint": "Warnungen, Sperrungen und Kanallöschungen werden immer angezeigt — das ist nicht einstellbar.",
-		"mnemonicSectionTitle": "Geheime Wiederherstellungsphrase",
 		"sessionSectionTitle": "Sitzung",
 		"lockNowButton": "Jetzt sperren",
 		"dangerZoneTitle": "Gefahrenzone",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Passwort",
 			"deletingButton": "Wird gelöscht…",
 			"deletePermanentlyButton": "Endgültig löschen"
-		}
+		},
+		"tabsAria": "Einstellungsbereiche",
+		"tabs": {
+			"view": "Ansicht",
+			"notifications": "Benachrichtigungen",
+			"network": "Netzwerk",
+			"session": "Sitzung"
+		},
+		"viewSectionHint": "Die Akzentfarbe bestimmt die gesamte Palette — Hintergrund, Oberflächen und Ränder folgen ihr.",
+		"themeLabel": "Thema",
+		"theme": {
+			"system": "Wie im System",
+			"light": "Hell",
+			"dark": "Dunkel"
+		},
+		"otherSectionTitle": "Sonstiges",
+		"contactExceptions": "Ausnahmen für einzelne Kontakte · {{count}}",
+		"channelExceptions": "Ausnahmen für einzelne Kanäle · {{count}}",
+		"networkTitle": "Netzwerk",
+		"networkHint": "Womit die App arbeitet: woher Ereignisse kommen, wohin Dateien hochgeladen werden, mit welchem eigenen Server Sie verbunden sind.",
+		"sessionHint": "Die Schlüssel werden aus dem Speicher entladen, das Passwort wird benötigt."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil und Hauptmenü",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Aus dem Speicher wählen",
 		"aboutMeLegend": "Über mich",
 		"bioLabel": "Bio",
-		"filesComingSoon": "Datei-Upload und -Verwaltung erscheinen später."
+		"visibilityTitle": "Kennenlernen",
+		"visibilityHint": "Solange dies deaktiviert ist, sieht Sie niemand außer denjenigen, denen Sie selbst den Schlüssel gegeben haben."
 	},
 	"screen": {
 		"backToSectionAria": "Zurück zu „{{label}}“",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Schlüssel und Wiederherstellung",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Schlüssel und Wiederherstellung",
+		"mnemonicTitle": "Geheime Wortfolge",
+		"mnemonicHint": "Der einzige Weg, den Zugang wiederherzustellen, wenn Sie Ihr Passwort vergessen oder Ihr Gerät verloren haben.",
+		"mnemonicWarning": "Zwölf Wörter sind Ihr Konto. Wer sie kennt, ist Sie. Schreiben Sie sie auf Papier und bewahren Sie sie nicht auf diesem Gerät auf.",
+		"recoverTitle": "Zugriffswiederherstellung",
+		"recoverBody": "Die Wiederherstellung per Wortfolge erfolgt auf dem Anmeldebildschirm. Klicken Sie unten auf die Schaltfläche — die App entlädt die Schlüssel aus dem Speicher und kehrt zur Anmeldung zurück; wählen Sie dort „Erweitert“ und Anmeldung per geheimer Wortfolge.",
+		"recoverButton": "Sperren und zur Wiederherstellung wechseln"
 	}
 }

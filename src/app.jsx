@@ -10,6 +10,7 @@ import Discovery from "./ui/screens/discovery.jsx";
 import Chat from "./ui/screens/chat.jsx";
 import Channels from "./ui/screens/channels.jsx";
 import Settings from "./ui/screens/settings.jsx";
+import Security from "./ui/screens/security.jsx";
 import Journal from "./ui/screens/journal.jsx";
 import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
@@ -252,6 +253,7 @@ function MainShell() {
 						onEditProfile={() => selectNavItem("profile")}
 						onOpenStorage={() => selectNavItem("storage")}
 						onOpenSettings={() => selectNavItem("settings")}
+						onOpenSecurity={() => selectNavItem("security")}
 						onOpenHelp={() => selectNavItem("help")}
 						onOpenDiagnostics={() => selectNavItem("diagnostics")}
 						onOpenJournal={() => selectNavItem("journal")}
@@ -324,11 +326,12 @@ function MainShell() {
 				{place.value.kind === "chat" && <Chat />}
 				{(place.value.kind === "channels" || place.value.kind === "channel") && <Channels />}
 				{place.value.kind === "settings" && <Settings />}
+				{place.value.kind === "security" && <Security />}
 				{place.value.kind === "journal" && <Journal />}
 				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
 				{place.value.kind === "storage" && <Files />}
 				{(() => {
-					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "journal", "today", "storage"];
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
 					return <Placeholder title={place.value.kind} />;
 				})()}

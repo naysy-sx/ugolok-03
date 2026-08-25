@@ -76,22 +76,16 @@
 		"newContactRequestsLabel": "Yeni kişi istekleri",
 		"requestAcceptedLabel": "İstek kabul edildi",
 		"defaultForNewLabel": "Yeniler için varsayılan",
-		"perContactNotificationsCaption": "Kişi başına bildirimler",
-		"notificationColumnHeader": "Bildirim",
 		"postsDefaultLabel": "Gönderiler — varsayılan",
 		"commentsDefaultLabel": "Yorumlar — varsayılan",
 		"chatDefaultLabel": "Ortak sohbet — varsayılan",
-		"perChannelNotificationsCaption": "Kanal başına bildirimler — gönderiler/yorumlar/ortak sohbet",
 		"postsColumnHeader": "Gönderiler",
 		"commentsColumnHeader": "Yorumlar",
 		"chatColumnHeader": "Ortak sohbet",
-		"repliesSectionTitle": "Yanıtlar",
 		"replyReceivedLabel": "Biri gönderime/yorumuma yanıt verdi",
-		"strangersSectionTitle": "Yabancılardan gelen istekler",
 		"strangerWantsToWriteLabel": "Tanımadığınız biri size yazmak istiyor",
 		"newReportLabel": "Yeni şikayet",
 		"moderationAlwaysShownHint": "Uyarılar, yasaklamalar ve kanal silme işlemleri her zaman gösterilir — bu ayarlanamaz.",
-		"mnemonicSectionTitle": "Gizli kurtarma ifadesi",
 		"sessionSectionTitle": "Oturum",
 		"lockNowButton": "Şimdi kilitle",
 		"dangerZoneTitle": "Tehlikeli bölge",
@@ -110,7 +104,27 @@
 			"passwordLabel": "Parola",
 			"deletingButton": "Siliniyor…",
 			"deletePermanentlyButton": "Kalıcı olarak sil"
-		}
+		},
+		"tabsAria": "Ayar bölümleri",
+		"tabs": {
+			"view": "Görünüm",
+			"notifications": "Bildirimler",
+			"network": "Ağ",
+			"session": "Oturum"
+		},
+		"viewSectionHint": "Vurgu rengi tüm paleti belirler — arka plan, yüzeyler ve kenarlıklar ona göre şekillenir.",
+		"themeLabel": "Tema",
+		"theme": {
+			"system": "Sistemdeki gibi",
+			"light": "Açık",
+			"dark": "Koyu"
+		},
+		"otherSectionTitle": "Diğer",
+		"contactExceptions": "Belirli kişiler için istisnalar · {{count}}",
+		"channelExceptions": "Belirli kanallar için istisnalar · {{count}}",
+		"networkTitle": "Ağ",
+		"networkHint": "Uygulamanın ne üzerinden çalıştığı: olaylar nereden geliyor, dosyalar nereye yükleniyor, hangi kendi sunucunuza bağlısınız.",
+		"sessionHint": "Anahtarlar bellekten kaldırılacak, şifre gerekecek."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil ve ana menü",
@@ -627,7 +641,8 @@
 		"chooseFromStorageButton": "Depodan seç",
 		"aboutMeLegend": "Hakkımda",
 		"bioLabel": "Biyografi",
-		"filesComingSoon": "Dosya yükleme ve yönetimi daha sonra eklenecek."
+		"visibilityTitle": "Tanışma",
+		"visibilityHint": "Bu kapalıyken, kendisine anahtar verdikleriniz dışında sizi kimse göremez."
 	},
 	"screen": {
 		"backToSectionAria": "«{{label}}» bölümüne dön",
@@ -653,8 +668,7 @@
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
-		"menuMnemonic": "Secret phrase",
-		"menuRecover": "Recover access",
+		"menuMnemonic": "Anahtar ve kurtarma",
 		"menuHelp": "Help",
 		"menuDiagnostics": "Diagnostics"
 	},
@@ -951,5 +965,14 @@
 			"invalidLink": "Invalid invite link.",
 			"notFound": "Room not found. Check the name and password — or ask for a fresh link."
 		}
+	},
+	"security": {
+		"title": "Anahtar ve kurtarma",
+		"mnemonicTitle": "Gizli ifade",
+		"mnemonicHint": "Şifrenizi unutursanız veya cihazınızı kaybederseniz erişimi geri almanın tek yolu.",
+		"mnemonicWarning": "On iki kelime hesabınızın ta kendisidir. Onları bilen sizsinizdir. Kağıda yazın ve bu cihazda saklamayın.",
+		"recoverTitle": "Erişim kurtarma",
+		"recoverBody": "İfade ile kurtarma giriş ekranında yapılır. Aşağıdaki düğmeye basın — uygulama anahtarları bellekten kaldırır ve girişe döner; orada «Gelişmiş» seçeneğini ve gizli ifadeyle girişi seçin.",
+		"recoverButton": "Kilitle ve kurtarmaya geç"
 	}
 }
