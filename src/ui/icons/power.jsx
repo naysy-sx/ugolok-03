@@ -1,10 +1,11 @@
+// Phosphor Icons (MIT) — power, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z";
+
 export default function IconPower(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path
-				d="M7.5 1a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5a.5.5 0 0 1 .5-.5zM4.4 3.2a.5.5 0 0 1 .1.7 4.5 4.5 0 1 0 6 0 .5.5 0 1 1 .6-.8 5.5 5.5 0 1 1-7.2 0 .5.5 0 0 1 .5.1z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

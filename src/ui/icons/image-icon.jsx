@@ -1,11 +1,11 @@
-// Тип вложения "изображение" в ссылке "Скачать" (attachment-view.jsx,
-// item 10) — реальный контур Feather Icons (image, MIT), обводка.
-export default function IconImage(props) {
-	return (
-		<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2" style={{ strokeWidth: "2" }} />
-			<circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="2" style={{ strokeWidth: "2" }} />
-			<polyline points="21 15 16 10 5 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" style={{ strokeWidth: "2" }} />
-		</svg>
-	);
+// Phosphor Icons (MIT) — image, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V158.75l-26.07-26.06a16,16,0,0,0-22.63,0l-20,20-44-44a16,16,0,0,0-22.62,0L40,149.37V56ZM40,172l52-52,80,80H40Zm176,28H194.63l-36-36,20-20L216,181.38V200ZM144,100a12,12,0,1,1,12,12A12,12,0,0,1,144,100Z";
+
+export default function IconImageIcon(props) {
+	return <Icon path={PATH} {...props} />;
 }

@@ -1,10 +1,11 @@
-// Кнопка "Остановить" (запись голосового, chat.jsx, item 13) — простой
-// залитый квадрат, универсальный символ "стоп" (как на физических
-// плеерах/диктофонах).
+// Phosphor Icons (MIT) — stop, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z";
+
 export default function IconStop(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<rect x="3" y="3" width="9" height="9" rx="1.5" fill="currentColor" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

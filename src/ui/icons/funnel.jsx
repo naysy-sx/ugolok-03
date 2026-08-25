@@ -1,13 +1,11 @@
-// Фильтр по категории записей "Журнала" — воронка. Самодельный контур в
-// том же стиле, что заливные Radix-иконки проекта (viewBox 0 0 15 15,
-// fill="currentColor", размер в em) — в наборе Radix Icons воронки нет.
+// Phosphor Icons (MIT) — funnel, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M230.6,49.53A15.81,15.81,0,0,0,216,40H40A16,16,0,0,0,28.19,66.76l.08.09L96,139.17V216a16,16,0,0,0,24.87,13.32l32-21.34A16,16,0,0,0,160,194.66V139.17l67.74-72.32.08-.09A15.8,15.8,0,0,0,230.6,49.53ZM40,56h0Zm106.18,74.58A8,8,0,0,0,144,136v58.66L112,216V136a8,8,0,0,0-2.16-5.47L40,56H216Z";
+
 export default function IconFunnel(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path
-				d="M1.5 3h12a.5.5 0 0 1 .38.82L9.5 9.06V13a.5.5 0 0 1-.72.45l-2-1A.5.5 0 0 1 6.5 12V9.06L2.12 3.82A.5.5 0 0 1 2.5 3z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

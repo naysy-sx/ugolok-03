@@ -1,27 +1,11 @@
-// Кнопка "Записать голосовое сообщение" (chat.jsx, item 11) — реальный
-// контур Feather Icons (mic, MIT), обводка — тот же приём override, что
-// paperclip.jsx/back-button (viewBox 24×24, инлайн stroke-width).
+// Phosphor Icons (MIT) — microphone, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm40,143.6V240a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64,64,0,0,0,128,0,8,8,0,0,1,16,0A80.11,80.11,0,0,1,136,207.6Z";
+
 export default function IconMicrophone(props) {
-	return (
-		<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path
-				d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				style={{ strokeWidth: "2" }}
-			/>
-			<path
-				d="M19 10v2a7 7 0 0 1-14 0v-2"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				style={{ strokeWidth: "2" }}
-			/>
-			<line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round" style={{ strokeWidth: "2" }} />
-			<line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round" style={{ strokeWidth: "2" }} />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

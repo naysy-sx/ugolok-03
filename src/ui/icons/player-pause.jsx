@@ -1,11 +1,11 @@
-// MEDIA-OVERLAY-UI.md, этап 1 — иконка "пауза" (мини-бар и будущие
-// собственные контролы). Нарисована вручную по стилю иконок проекта
-// (viewBox 0 0 15 15, currentColor) — две заливные полосы.
+// Phosphor Icons (MIT) — pause, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z";
+
 export default function IconPlayerPause(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<rect x="4" y="2.5" width="2.3" height="10" rx="0.6" fill="currentColor" />
-			<rect x="8.7" y="2.5" width="2.3" height="10" rx="0.6" fill="currentColor" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

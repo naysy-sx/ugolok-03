@@ -1,10 +1,11 @@
+// Phosphor Icons (MIT) — bell, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z";
+
 export default function IconBell(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path
-				d="M7.5 1a3.5 3.5 0 0 0-3.5 3.5v2.2c0 .5-.2.98-.55 1.33l-.6.6A.75.75 0 0 0 3.38 10h8.24a.75.75 0 0 0 .53-1.28l-.6-.6A1.88 1.88 0 0 1 11 6.79V4.5A3.5 3.5 0 0 0 7.5 1zM6 11a1.5 1.5 0 0 0 3 0H6z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

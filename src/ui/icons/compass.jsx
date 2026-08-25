@@ -1,13 +1,11 @@
-// «Знакомства» (ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4) — ТЗ прямо
-// запрещает лупу (занята поиском строкой выше, два значения одного
-// значка на одном экране путают). Компас — окружность + стрелка-игла,
-// самодельный контур (Radix Icons компаса не даёт), тот же формат
-// viewBox 15×15/currentColor, что остальные такие иконки проекта.
+// Phosphor Icons (MIT) — compass, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216ZM172.42,72.84l-64,32a8.05,8.05,0,0,0-3.58,3.58l-32,64A8,8,0,0,0,80,184a8.1,8.1,0,0,0,3.58-.84l64-32a8.05,8.05,0,0,0,3.58-3.58l32-64a8,8,0,0,0-10.74-10.74ZM138,138,97.89,158.11,118,118l40.15-20.07Z";
+
 export default function IconCompass(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1" />
-			<path d="M9.8 5.2L6.6 6.6L5.2 9.8L8.4 8.4L9.8 5.2Z" fill="currentColor" stroke="currentColor" stroke-width="0.6" stroke-linejoin="round" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

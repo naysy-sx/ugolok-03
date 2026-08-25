@@ -18,7 +18,8 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"test": "node --test tests/*.test.js"
+		"test": "node --test tests/*.test.js",
+		"gen:icons": "node scripts/gen-icons.mjs"
 	},
 	"dependencies": {
 		"@fontsource/golos-text": "^5.3.0",
@@ -53,6 +54,7 @@
 		"ts-mls": "2.0.0-rc.14"
 	},
 	"devDependencies": {
+		"@phosphor-icons/core": "^2.1.1",
 		"@preact/preset-vite": "^2.10.5",
 		"fake-indexeddb": "^6.2.5",
 		"playwright": "^1.61.1",

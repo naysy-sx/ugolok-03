@@ -1,15 +1,11 @@
-// MEDIA-OVERLAY-UI.md, этап 1 — иконка "сведения" (кнопка info-панели,
-// сама панель появится на этапе 2). Нарисована вручную по стилю иконок
-// проекта (viewBox 0 0 15 15, currentColor) — круг с точкой и штрихом.
-// stroke-width 1.4 — та же ширина, что у cross.jsx (эталон: уже используется
-// по всему приложению) — единый штрих у всех иконок в шапке оверлея, живой
-// фидбек пользователя ("stroke разная").
+// Phosphor Icons (MIT) — info, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z";
+
 export default function IconInfoCircle(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4" />
-			<circle cx="7.5" cy="4.8" r="0.75" fill="currentColor" />
-			<line x1="7.5" y1="6.8" x2="7.5" y2="10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

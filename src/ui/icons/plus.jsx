@@ -1,9 +1,11 @@
-// Кнопка "Создать канал" (channels.jsx) — тот же геометрический стиль
-// (viewBox 0 0 15 15, currentColor), что остальные иконки проекта.
+// Phosphor Icons (MIT) — plus, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z";
+
 export default function IconPlus(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path d="M7 1.5h1v5h5v1h-5v5H7v-5H2v-1h5z" fill="currentColor" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

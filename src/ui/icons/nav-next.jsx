@@ -1,9 +1,11 @@
-// Стрелка "следующий" (media-overlay.jsx) — зеркало nav-prev.jsx, см.
-// комментарий там про отказ от <path> (`.icon path` бьёт stroke-width).
+// Phosphor Icons (MIT) — caret-right, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z";
+
 export default function IconNavNext(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<polyline points="5.5,3 10,7.5 5.5,12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

@@ -1,16 +1,11 @@
-// Иконка "повтор" (этап 10, MEDIA-OVERLAY-UI-2.md §10.5) — контур выбран
-// пользователем (Tabler Icons "repeat", unicode eb72, MIT). viewBox 24×24
-// (не 15×15, как у соседних кнопок) — контур с дугами (SVG-команда A),
-// не выражается через <polyline>/<line>, значит идёт через <path> и ловит
-// глобальный .icon path{stroke-width:0.6} (custom.css) — толщина
-// восстановлена отдельным правилом с более высокой специфичностью
-// (.media-mini-bar-btn.is-repeat .icon path), пропорционально толщине
-// соседних 15-viewBox/1.4-stroke иконок: 1.4/15×24 ≈ 2.24, см. CSS.
+// Phosphor Icons (MIT) — repeat, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z";
+
 export default function IconRepeat(props) {
-	return (
-		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path d="M4 12v-3a3 3 0 0 1 3 -3h13m-3 -3l3 3l-3 3" />
-			<path d="M20 12v3a3 3 0 0 1 -3 3h-13m3 3l-3 -3l3 -3" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

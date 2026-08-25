@@ -1,11 +1,11 @@
-// Тип вложения "аудио" в ссылке "Скачать" (attachment-view.jsx, item 10) —
-// реальный контур Feather Icons (music, MIT), обводка.
+// Phosphor Icons (MIT) — music-note, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M210.3,56.34l-80-24A8,8,0,0,0,120,40V148.26A48,48,0,1,0,136,184V98.75l69.7,20.91A8,8,0,0,0,216,112V64A8,8,0,0,0,210.3,56.34ZM88,216a32,32,0,1,1,32-32A32,32,0,0,1,88,216ZM200,101.25l-64-19.2V50.75L200,70Z";
+
 export default function IconMusicNote(props) {
-	return (
-		<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style={{ strokeWidth: "2" }} />
-			<circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2" style={{ strokeWidth: "2" }} />
-			<circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2" style={{ strokeWidth: "2" }} />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

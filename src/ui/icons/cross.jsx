@@ -1,12 +1,11 @@
-// Кнопка "Отменить" (запись голосового, chat.jsx, item 13) — простой крест,
-// <line> вместо <path> — не задет глобальным .icon path{stroke-width:.6}
-// (рассчитанным на залитые фигуры), поэтому свой stroke-width работает
-// напрямую, без инлайн-override.
+// Phosphor Icons (MIT) — x, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z";
+
 export default function IconCross(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<line x1="3" y1="3" x2="12" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-			<line x1="12" y1="3" x2="3" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

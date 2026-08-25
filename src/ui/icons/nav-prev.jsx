@@ -1,14 +1,11 @@
-// Стрелка "предыдущий" (media-overlay.jsx). НЕ переиспользует общий
-// chevron-left.jsx (тот заливной, fill="currentColor" — Radix-контур для
-// пагинации) — рядом в шапке оверлея стоят обводочные иконки (cross.jsx,
-// info-circle.jsx, minimize.jsx, все stroke-width 1.4). <polyline>, не
-// <path> — глобальное custom.css правило `.icon path { stroke-width: 0.6 }`
-// (компенсатор для заливных Radix-иконок) бьёт любой <path> внутри .icon,
-// включая обводочные — см. подробный комментарий в minimize.jsx.
+// Phosphor Icons (MIT) — caret-left, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z";
+
 export default function IconNavPrev(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<polyline points="9.5,3 5,7.5 9.5,12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

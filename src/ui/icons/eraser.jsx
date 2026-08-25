@@ -1,11 +1,11 @@
-// Кнопка "Очистить переписку" (chat.jsx, item 8) — ластик: тот же
-// геометрический стиль (viewBox 0 0 15 15, currentColor), что остальные
-// иконки проекта, отличается от .trash (удаление сообщения) — тут "стереть
-// историю", не "удалить объект".
+// Phosphor Icons (MIT) — eraser, начертание regular.
+// Сгенерировано scripts/gen-icons.mjs. Руками не править: правка
+// потеряется при следующей генерации. Менять — в таблице MAP скрипта.
+import Icon from "./icon.jsx";
+
+const PATH =
+	"M225,80.4,183.6,39a24,24,0,0,0-33.94,0L31,157.66a24,24,0,0,0,0,33.94l30.06,30.06A8,8,0,0,0,66.74,224H216a8,8,0,0,0,0-16h-84.7L225,114.34A24,24,0,0,0,225,80.4ZM108.68,208H70.05L42.33,180.28a8,8,0,0,1,0-11.31L96,115.31,148.69,168Zm105-105L160,156.69,107.31,104,161,50.34a8,8,0,0,1,11.32,0l41.38,41.38a8,8,0,0,1,0,11.31Z";
+
 export default function IconEraser(props) {
-	return (
-		<svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon" {...props}>
-			<rect x="3" y="5.5" width="9" height="4.5" rx="1" transform="rotate(-40 7.5 7.5)" fill="currentColor" />
-		</svg>
-	);
+	return <Icon path={PATH} {...props} />;
 }

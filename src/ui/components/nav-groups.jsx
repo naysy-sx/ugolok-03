@@ -21,6 +21,7 @@ import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconStar from "../icons/star.jsx";
+import IconStarFill from "../icons/star-fill.jsx";
 import IconCompass from "../icons/compass.jsx";
 import { t } from "../signals/i18n.js";
 
@@ -58,9 +59,13 @@ function PersonAvatar({ pubkey, name }) {
 // (pinChannel/unpinChannel, kind 30066) не менялся — это переименование
 // только UI-слоя, group.value/группа "Избранное" уже существовали.
 function FavToggle({ pinned, onToggle, label }) {
+	// Раньше один файл star.jsx сам переключал fill по пропу — генератор
+	// Phosphor (ICONS-PHOSPHOR.md §3) даёт для "включено" отдельный файл
+	// -fill, а не проп, поэтому переключение теперь на уровне компонента.
+	const Star = pinned ? IconStarFill : IconStar;
 	return (
 		<button type="button" class="fav-toggle" onClick={onToggle} aria-pressed={pinned} aria-label={label}>
-			<IconStar filled={pinned} />
+			<Star />
 		</button>
 	);
 }
