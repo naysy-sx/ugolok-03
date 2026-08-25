@@ -974,5 +974,52 @@
 		"recoverTitle": "Zugriffswiederherstellung",
 		"recoverBody": "Die Wiederherstellung per Wortfolge erfolgt auf dem Anmeldebildschirm. Klicken Sie unten auf die Schaltfläche — die App entlädt die Schlüssel aus dem Speicher und kehrt zur Anmeldung zurück; wählen Sie dort „Erweitert“ und Anmeldung per geheimer Wortfolge.",
 		"recoverButton": "Sperren und zur Wiederherstellung wechseln"
+	},
+	"diagnostics": {
+		"title": "Diagnose",
+		"connectionTitle": "Verbindung",
+		"connectionHint": "Latenz — vollständige Umlaufzeit zum Relay und zurück, einschließlich Verbindungsaufbau.",
+		"noRelays": "Keine Relays konfiguriert.",
+		"probeAgain": "Erneut messen",
+		"probing": "Messe…",
+		"storageTitle": "Speicher",
+		"deviceStorage": "Auf diesem Gerät",
+		"serverStorageUnavailable": "Der Dateiserver meldet noch nicht, wie viel Speicher belegt und wie viel zugewiesen ist.",
+		"gaugeAria": "{{pct}} Prozent belegt",
+		"problemsTitle": "Erfordert Aufmerksamkeit",
+		"problemsTitleN": "Erfordert Aufmerksamkeit · {{count}}",
+		"noProblems": "Momentan nichts. Hier erscheint nur, was Sie selbst beheben können.",
+		"missingApi": "Ihr Browser unterstützt „{{name}}“ nicht — ein Teil der App wird nicht funktionieren.",
+		"desyncedChat": "Der Chat mit „{{name}}“ ist in zwei Zustände auseinandergelaufen: {{count}} Nachrichten in Folge konnten nicht entschlüsselt werden. Neuerstellen stellt den Chat wieder her, aber nicht entschlüsselte Nachrichten kehren nicht zurück.",
+		"recreate": "Neu erstellen",
+		"recreating": "Erstelle neu…",
+		"bootLogSummary": "Startprotokoll · {{count}} Einträge, davon {{problems}} bedenklich",
+		"engineSummary": "Engine-Prüfungen",
+		"check": "Prüfen",
+		"copyReport": "Bericht kopieren",
+		"buildLine": "Build {{hash}} · Datenbankschema {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "keine Antwort",
+			"unknown": "unbekannt",
+			"relays": "schnellstes Relay · {{online}} von {{total}} online",
+			"deviceOf": "auf dem Gerät belegt von {{total}}",
+			"ofTotal": "{{used}} von {{total}}",
+			"deviceNoQuota": "auf dem Gerät belegt",
+			"storageUnknown": "—",
+			"storageServerHint": "auf dem Dateiserver belegt",
+			"problems": "erfordern Aufmerksamkeit"
+		},
+		"engine": {
+			"crypto": "Kryptografie",
+			"keys": "Schlüssel und Ableitung",
+			"worker": "Dateiverschlüsselung",
+			"crdt": "Zustandszusammenführung",
+			"database": "Datenbank",
+			"outbox": "Sendewarteschlange",
+			"serviceWorker": "Offline-Modus und Cache",
+			"release": "Build-Integrität",
+			"transport": "Relays und Synchronisierung"
+		}
 	}
 }

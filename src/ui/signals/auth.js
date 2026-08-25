@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import { deriveMasterSecret, deriveDbKey } from "../../core/crypto/derivation.js";
 import { clearMemoryCache } from "../attachment-memory-cache.js";
 import { closeMedia } from "./media.js";
+import { logInfo } from "../../core/diag/boot-log.js";
 
 export const currentUser = signal(null);
 export const privKeySig = signal(null);
@@ -15,6 +16,7 @@ export function login(id, loginName, privKeyBytes, now = Date.now()) {
   privKeySig.value = privKeyBytes;
   masterSecretSig.value = deriveMasterSecret(privKeyBytes);
   dbKeySig.value = deriveDbKey(masterSecretSig.value);
+  logInfo("ключи расшифрованы");
   touch(now);
 }
 

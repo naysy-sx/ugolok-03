@@ -1,4 +1,5 @@
 import Dexie from "dexie";
+import { logInfo } from "../diag/boot-log.js";
 
 export const db = new Dexie("ugolok");
 db.version(1).stores({
@@ -331,6 +332,10 @@ db.version(26).stores({
 // одна строка на аккаунт, тот же принцип, что uiSettings/discoverySettings.
 db.version(27).stores({
   pinned: "ownerPubkey"
+});
+
+db.on("ready", () => {
+  logInfo(`база данных открыта, схема ${db.verno}`);
 });
 
 export async function resetLocalDatabase() {

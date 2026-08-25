@@ -974,5 +974,52 @@
 		"recoverTitle": "Recuperação de acesso",
 		"recoverBody": "A recuperação por frase acontece na tela de login. Clique no botão abaixo — o aplicativo descarregará as chaves da memória e voltará ao login; lá escolha «Avançado» e login por frase secreta.",
 		"recoverButton": "Bloquear e ir para a recuperação"
+	},
+	"diagnostics": {
+		"title": "Diagnóstico",
+		"connectionTitle": "Conexão",
+		"connectionHint": "Latência — ida e volta completa até o relay, incluindo o estabelecimento da conexão.",
+		"noRelays": "Nenhum relay configurado.",
+		"probeAgain": "Medir novamente",
+		"probing": "Medindo…",
+		"storageTitle": "Armazenamento",
+		"deviceStorage": "Neste dispositivo",
+		"serverStorageUnavailable": "O servidor de arquivos ainda não informa quanto espaço está usado nem quanto foi alocado.",
+		"gaugeAria": "{{pct}} por cento usado",
+		"problemsTitle": "Requer atenção",
+		"problemsTitleN": "Requer atenção · {{count}}",
+		"noProblems": "Nada no momento. Aqui só aparece o que você mesmo pode corrigir.",
+		"missingApi": "Seu navegador não suporta «{{name}}» — parte do aplicativo não funcionará.",
+		"desyncedChat": "A conversa com «{{name}}» se dividiu em dois estados: {{count}} mensagens seguidas não foram descriptografadas. Recriar restaurará a conversa, mas as mensagens não descriptografadas não voltarão.",
+		"recreate": "Recriar",
+		"recreating": "Recriando…",
+		"bootLogSummary": "Registro de inicialização · {{count}} entradas, {{problems}} delas preocupantes",
+		"engineSummary": "Verificações do motor",
+		"check": "Verificar",
+		"copyReport": "Copiar relatório",
+		"buildLine": "Build {{hash}} · esquema do banco {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "sem resposta",
+			"unknown": "desconhecido",
+			"relays": "relay mais rápido · {{online}} de {{total}} online",
+			"deviceOf": "usado no dispositivo de {{total}}",
+			"ofTotal": "{{used}} de {{total}}",
+			"deviceNoQuota": "usado no dispositivo",
+			"storageUnknown": "—",
+			"storageServerHint": "usado no servidor de arquivos",
+			"problems": "requerem atenção"
+		},
+		"engine": {
+			"crypto": "Criptografia",
+			"keys": "Chaves e derivação",
+			"worker": "Criptografia de arquivos",
+			"crdt": "Fusão de estados",
+			"database": "Banco de dados",
+			"outbox": "Fila de envio",
+			"serviceWorker": "Modo offline e cache",
+			"release": "Integridade do build",
+			"transport": "Relays e sincronização"
+		}
 	}
 }

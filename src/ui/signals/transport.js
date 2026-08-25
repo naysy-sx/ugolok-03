@@ -3,6 +3,7 @@ import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
+import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
@@ -90,6 +91,12 @@ async function channelNameFor(ownerPubkey, dbKey, channelId) {
 
 export const connState = signal("disconnected");
 export const synced = signal(false);
+
+// Диагностика читает состояние пула, но не должна знать про переменную
+// connection и её жизненный цикл (она пересоздаётся при смене настроек).
+export function getRelayMembers() {
+	return connection?.getMembers?.() ?? [];
+}
 
 let connection = null;
 let publisher = null;
@@ -353,6 +360,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	connection = createRelayPool(relayEntries, {
 		onStateChange: (s) => {
 			connState.value = s;
+			// Обработчик получает только агрегированное состояние пула, а не url
+			// конкретного реле (см. relay-pool.js) — поимённое состояние экран
+			// диагностики берёт из getRelayMembers(), здесь достаточно агрегата.
+			if (s === "connected") logInfo("реле: соединение установлено");
+			if (s === "disconnected") logWarn("реле: связь потеряна");
 			// Повторное подключение после обрыва (relay-pool.js's autoReconnect) —
 			// publisher уже существует на этот момент (пережил обрыв, message-
 			// handler'ы не сбрасываются). На САМОМ первом "connected" publisher
@@ -698,6 +710,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		verifyBatch,
 		onCaughtUp: () => {
 			synced.value = true;
+			logInfo("синхронизация завершена");
 			logSync(t("syncLog.complete"));
 			// Инкрементальная синхронизация — отдельный, более поздний рубеж, чем
 			// основной bootstrap выше (может донести то, что пришло уже во время

@@ -974,5 +974,52 @@
 		"recoverTitle": "Récupération d'accès",
 		"recoverBody": "La récupération par phrase se fait sur l'écran de connexion. Appuyez sur le bouton ci-dessous — l'application déchargera les clés de la mémoire et reviendra à la connexion ; choisissez-y « Avancé » puis connexion par phrase secrète.",
 		"recoverButton": "Verrouiller et passer à la récupération"
+	},
+	"diagnostics": {
+		"title": "Diagnostic",
+		"connectionTitle": "Connexion",
+		"connectionHint": "Latence — aller-retour complet jusqu'au relay, y compris l'établissement de la connexion.",
+		"noRelays": "Aucun relay configuré.",
+		"probeAgain": "Mesurer à nouveau",
+		"probing": "Mesure en cours…",
+		"storageTitle": "Stockage",
+		"deviceStorage": "Sur cet appareil",
+		"serverStorageUnavailable": "Le serveur de fichiers n'indique pas encore l'espace utilisé ni l'espace alloué.",
+		"gaugeAria": "{{pct}} pour cent utilisé",
+		"problemsTitle": "Nécessite votre attention",
+		"problemsTitleN": "Nécessite votre attention · {{count}}",
+		"noProblems": "Rien pour l'instant. Seul ce que vous pouvez corriger vous-même apparaît ici.",
+		"missingApi": "Votre navigateur ne prend pas en charge « {{name}} » — une partie de l'application ne fonctionnera pas.",
+		"desyncedChat": "La conversation avec « {{name}} » s'est scindée en deux états : {{count}} messages consécutifs n'ont pas pu être déchiffrés. La recréer restaurera la conversation, mais les messages non déchiffrés ne reviendront pas.",
+		"recreate": "Recréer",
+		"recreating": "Recréation…",
+		"bootLogSummary": "Journal de démarrage · {{count}} entrées, dont {{problems}} préoccupantes",
+		"engineSummary": "Vérifications du moteur",
+		"check": "Vérifier",
+		"copyReport": "Copier le rapport",
+		"buildLine": "Build {{hash}} · schéma de base {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "pas de réponse",
+			"unknown": "inconnu",
+			"relays": "relay le plus rapide · {{online}} sur {{total}} en ligne",
+			"deviceOf": "utilisé sur l'appareil sur {{total}}",
+			"ofTotal": "{{used}} sur {{total}}",
+			"deviceNoQuota": "utilisé sur l'appareil",
+			"storageUnknown": "—",
+			"storageServerHint": "utilisé sur le serveur de fichiers",
+			"problems": "nécessitent votre attention"
+		},
+		"engine": {
+			"crypto": "Cryptographie",
+			"keys": "Clés et dérivation",
+			"worker": "Chiffrement des fichiers",
+			"crdt": "Fusion des états",
+			"database": "Base de données",
+			"outbox": "File d'envoi",
+			"serviceWorker": "Mode hors ligne et cache",
+			"release": "Intégrité du build",
+			"transport": "Relays et synchronisation"
+		}
 	}
 }

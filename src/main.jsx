@@ -5,6 +5,10 @@ import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
 import { startIdleWatcher } from "./ui/signals/auth.js";
+import { BUILD_HASH } from "./config.js";
+import { logInfo } from "./core/diag/boot-log.js";
+
+logInfo(`запуск, сборка ${BUILD_HASH}`);
 
 startIdleWatcher();
 
@@ -38,7 +42,10 @@ if ("serviceWorker" in navigator) {
 	// vite.config.js's devServiceWorkerPlugin теперь раздаёт service-worker.js
 	// и в dev (с IS_DEV-веткой внутри самого SW — precache/cache-first статики
 	// выключены, чтобы не сломать HMR), поэтому регистрация безусловна.
-	navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {});
+	navigator.serviceWorker
+		.register(`${import.meta.env.BASE_URL}service-worker.js`)
+		.then(() => logInfo("service worker зарегистрирован"))
+		.catch(() => {});
 }
 
 const root = document.getElementById("app");

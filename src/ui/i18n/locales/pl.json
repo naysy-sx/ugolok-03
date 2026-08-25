@@ -974,5 +974,52 @@
 		"recoverTitle": "Odzyskiwanie dostępu",
 		"recoverBody": "Odzyskiwanie za pomocą frazy odbywa się na ekranie logowania. Naciśnij przycisk poniżej — aplikacja wyładuje klucze z pamięci i wróci do logowania; tam wybierz „Zaawansowane” i logowanie tajną frazą.",
 		"recoverButton": "Zablokuj i przejdź do odzyskiwania"
+	},
+	"diagnostics": {
+		"title": "Diagnostyka",
+		"connectionTitle": "Połączenie",
+		"connectionHint": "Opóźnienie — pełny czas w obie strony do przekaźnika, łącznie z nawiązaniem połączenia.",
+		"noRelays": "Brak skonfigurowanych przekaźników.",
+		"probeAgain": "Zmierz ponownie",
+		"probing": "Mierzenie…",
+		"storageTitle": "Pamięć",
+		"deviceStorage": "Na tym urządzeniu",
+		"serverStorageUnavailable": "Serwer plików nie podaje jeszcze, ile miejsca jest zajęte ani ile przydzielono.",
+		"gaugeAria": "Zajęto {{pct}} procent",
+		"problemsTitle": "Wymaga uwagi",
+		"problemsTitleN": "Wymaga uwagi · {{count}}",
+		"noProblems": "Obecnie nic. Tu pojawia się tylko to, co możesz naprawić sam.",
+		"missingApi": "Twoja przeglądarka nie obsługuje „{{name}}” — część aplikacji nie będzie działać.",
+		"desyncedChat": "Rozmowa z „{{name}}” rozeszła się na dwa stany: {{count}} wiadomości z rzędu nie udało się odszyfrować. Odtworzenie przywróci rozmowę, ale nieodszyfrowane wiadomości nie wrócą.",
+		"recreate": "Odtwórz",
+		"recreating": "Odtwarzanie…",
+		"bootLogSummary": "Dziennik uruchamiania · wpisów {{count}}, w tym niepokojących {{problems}}",
+		"engineSummary": "Sprawdzenia silnika",
+		"check": "Sprawdź",
+		"copyReport": "Skopiuj raport",
+		"buildLine": "Kompilacja {{hash}} · schemat bazy {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "brak odpowiedzi",
+			"unknown": "nieznane",
+			"relays": "najszybszy przekaźnik · online {{online}} z {{total}}",
+			"deviceOf": "zajęte na urządzeniu z {{total}}",
+			"ofTotal": "{{used}} z {{total}}",
+			"deviceNoQuota": "zajęte na urządzeniu",
+			"storageUnknown": "—",
+			"storageServerHint": "zajęte na serwerze plików",
+			"problems": "wymaga uwagi"
+		},
+		"engine": {
+			"crypto": "Kryptografia",
+			"keys": "Klucze i derywacja",
+			"worker": "Szyfrowanie plików",
+			"crdt": "Scalanie stanów",
+			"database": "Baza danych",
+			"outbox": "Kolejka wysyłki",
+			"serviceWorker": "Tryb offline i pamięć podręczna",
+			"release": "Integralność kompilacji",
+			"transport": "Przekaźniki i synchronizacja"
+		}
 	}
 }

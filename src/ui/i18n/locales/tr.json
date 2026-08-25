@@ -974,5 +974,52 @@
 		"recoverTitle": "Erişim kurtarma",
 		"recoverBody": "İfade ile kurtarma giriş ekranında yapılır. Aşağıdaki düğmeye basın — uygulama anahtarları bellekten kaldırır ve girişe döner; orada «Gelişmiş» seçeneğini ve gizli ifadeyle girişi seçin.",
 		"recoverButton": "Kilitle ve kurtarmaya geç"
+	},
+	"diagnostics": {
+		"title": "Tanılama",
+		"connectionTitle": "Bağlantı",
+		"connectionHint": "Gecikme — bağlantı kurulumu dahil, röleye gidiş-dönüş süresi.",
+		"noRelays": "Röle yapılandırılmamış.",
+		"probeAgain": "Yeniden ölç",
+		"probing": "Ölçülüyor…",
+		"storageTitle": "Depolama",
+		"deviceStorage": "Bu cihazda",
+		"serverStorageUnavailable": "Dosya sunucusu henüz ne kadar alan kullanıldığını ne de ne kadar ayrıldığını bildirmiyor.",
+		"gaugeAria": "Yüzde {{pct}} kullanıldı",
+		"problemsTitle": "Dikkat gerektiriyor",
+		"problemsTitleN": "Dikkat gerektiriyor · {{count}}",
+		"noProblems": "Şu anda hiçbir şey yok. Burada yalnızca kendinizin düzeltebileceği şeyler görünür.",
+		"missingApi": "Tarayıcınız «{{name}}» desteklemiyor — uygulamanın bir kısmı çalışmayacak.",
+		"desyncedChat": "«{{name}}» ile olan sohbet iki duruma ayrıldı: art arda {{count}} mesaj çözülemedi. Yeniden oluşturmak sohbeti geri yükler, ancak çözülemeyen mesajlar geri gelmez.",
+		"recreate": "Yeniden oluştur",
+		"recreating": "Yeniden oluşturuluyor…",
+		"bootLogSummary": "Başlatma günlüğü · {{count}} kayıt, bunların {{problems}} tanesi endişe verici",
+		"engineSummary": "Motor kontrolleri",
+		"check": "Kontrol et",
+		"copyReport": "Raporu kopyala",
+		"buildLine": "Yapı {{hash}} · veritabanı şeması {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "yanıt yok",
+			"unknown": "bilinmiyor",
+			"relays": "en hızlı röle · {{total}} içinden {{online}} çevrimiçi",
+			"deviceOf": "cihazda kullanılan, {{total}} içinden",
+			"ofTotal": "{{total}} içinden {{used}}",
+			"deviceNoQuota": "cihazda kullanılan",
+			"storageUnknown": "—",
+			"storageServerHint": "dosya sunucusunda kullanılan",
+			"problems": "dikkat gerektiriyor"
+		},
+		"engine": {
+			"crypto": "Kriptografi",
+			"keys": "Anahtarlar ve türetme",
+			"worker": "Dosya şifreleme",
+			"crdt": "Durum birleştirme",
+			"database": "Veritabanı",
+			"outbox": "Gönderme kuyruğu",
+			"serviceWorker": "Çevrimdışı mod ve önbellek",
+			"release": "Yapı bütünlüğü",
+			"transport": "Röleler ve senkronizasyon"
+		}
 	}
 }

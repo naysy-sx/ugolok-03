@@ -974,5 +974,52 @@
 		"recoverTitle": "Toegang herstellen",
 		"recoverBody": "Herstel via de zin gebeurt op het inlogscherm. Klik hieronder op de knop — de app verwijdert de sleutels uit het geheugen en keert terug naar het inloggen; kies daar «Geavanceerd» en inloggen met geheime zin.",
 		"recoverButton": "Vergrendelen en naar herstel gaan"
+	},
+	"diagnostics": {
+		"title": "Diagnose",
+		"connectionTitle": "Verbinding",
+		"connectionHint": "Latentie — volledige retourtijd naar de relay, inclusief het opzetten van de verbinding.",
+		"noRelays": "Geen relays geconfigureerd.",
+		"probeAgain": "Opnieuw meten",
+		"probing": "Meten…",
+		"storageTitle": "Opslag",
+		"deviceStorage": "Op dit apparaat",
+		"serverStorageUnavailable": "De bestandsserver meldt nog niet hoeveel ruimte gebruikt en toegewezen is.",
+		"gaugeAria": "{{pct}} procent gebruikt",
+		"problemsTitle": "Vereist aandacht",
+		"problemsTitleN": "Vereist aandacht · {{count}}",
+		"noProblems": "Op dit moment niets. Hier verschijnt alleen wat u zelf kunt oplossen.",
+		"missingApi": "Uw browser ondersteunt „{{name}}” niet — een deel van de app zal niet werken.",
+		"desyncedChat": "Het gesprek met „{{name}}” is uiteengelopen in twee toestanden: {{count}} berichten achter elkaar konden niet worden ontsleuteld. Opnieuw aanmaken herstelt het gesprek, maar niet-ontsleutelde berichten komen niet terug.",
+		"recreate": "Opnieuw aanmaken",
+		"recreating": "Bezig met opnieuw aanmaken…",
+		"bootLogSummary": "Opstartlogboek · {{count}} vermeldingen, waarvan {{problems}} verontrustend",
+		"engineSummary": "Enginecontroles",
+		"check": "Controleren",
+		"copyReport": "Rapport kopiëren",
+		"buildLine": "Build {{hash}} · databaseschema {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "geen antwoord",
+			"unknown": "onbekend",
+			"relays": "snelste relay · {{online}} van {{total}} online",
+			"deviceOf": "gebruikt op apparaat van {{total}}",
+			"ofTotal": "{{used}} van {{total}}",
+			"deviceNoQuota": "gebruikt op apparaat",
+			"storageUnknown": "—",
+			"storageServerHint": "gebruikt op bestandsserver",
+			"problems": "vereisen aandacht"
+		},
+		"engine": {
+			"crypto": "Cryptografie",
+			"keys": "Sleutels en afleiding",
+			"worker": "Bestandsversleuteling",
+			"crdt": "Statusfusie",
+			"database": "Database",
+			"outbox": "Verzendwachtrij",
+			"serviceWorker": "Offline-modus en cache",
+			"release": "Build-integriteit",
+			"transport": "Relays en synchronisatie"
+		}
 	}
 }

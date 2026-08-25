@@ -1,3 +1,1088 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Уголок · Диагностика · вариант Б — приборная панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;700&family=Unbounded:wght@700&display=swap" rel="stylesheet">
+<!-- Дословные minimal.css и custom.css проекта, без правок. Новое — ниже. -->
+<style>
+/*! minimal.css — сброс + управляемые дефолты на переменных
+ *  Цель: современные движки (середина 2026). Всё оформление рулится
+ *  кастомными свойствами из слоя `tokens`.
+ *
+ *  Слои каскада, от низкого приоритета к высокому:
+ *      reset    — выжигаем стили браузера до предсказуемого нуля
+ *      tokens   — публичный API: каждая «крутилка» живёт здесь как --переменная
+ *      base     — html/body, цветовая схема, фокус, ритм документа
+ *      elements — вменяемые дефолты для голых тегов, все на переменных
+ *      utilities — тонкий opt-in слой классов, не относящихся к раскладке
+ *                  (.prose, .eyebrow, .visually-hidden, .spinner …). Раскладочные
+ *                  .flow/.cluster/.grid-auto/старый .center отсюда удалены —
+ *                  этап 66В, PROCESS-DOCS/PLAN.md — все экраны src/ui на слое
+ *                  `composition` ниже.
+ *      composition — обязательный слой раскладки (PROCESS-DOCS/REGLAMENT.md).
+ *
+ *  Твои собственные стили, написанные ВНЕ слоёв, по правилу каскада бьют
+ *  всё перечисленное выше — без войн специфичности и без !important.
+ *
+ *  Чтобы перекрасить/перешить тему: меняешь токены. Остального почти не касаешься.
+ */
+
+@layer reset, tokens, base, elements, utilities, composition;
+
+/* ============================================================== *
+ *  reset                                                         *
+ * ============================================================== */
+@layer reset {
+	/* Box-model: предсказуемые размеры; min-width:0 не даёт flex/grid-детям
+     распирать контейнер; бордер по умолчанию 0-ширины solid — граница
+     теперь «в одну ширину» от тебя. */
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+		min-width: 0;
+		border: 0 solid;
+		background-repeat: no-repeat;
+	}
+
+	/* Сносим дефолтные отступы везде, кроме нативного <dialog>. */
+	:where(:not(dialog)) {
+		margin: 0;
+		padding: 0;
+	}
+
+	/* Документ: гасим авто-ресайз текста в iOS при повороте; убираем
+     подсветку тапа; разумный tab-size. */
+	html {
+		-webkit-text-size-adjust: 100%;
+		text-size-adjust: 100%;
+		-webkit-tap-highlight-color: transparent;
+		tab-size: 4;
+	}
+
+	/* Заголовки стартуют нейтральными; масштаб и насыщенность даёт слой `elements`. */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: inherit;
+		font-weight: inherit;
+	}
+
+	/* Списки теряют маркеры и отступ здесь; управляемо возвращаются в `elements`. */
+	ul,
+	ol,
+	menu {
+		list-style: none;
+	}
+
+	/* Медиа: блочные, не вылезают за контейнер, пропорции сохранены.
+     italic = так стилизуется alt-текст, когда картинка не загрузилась. */
+	img,
+	svg,
+	video,
+	canvas,
+	audio,
+	iframe,
+	embed,
+	object {
+		display: block;
+	}
+	img,
+	svg,
+	video,
+	canvas {
+		max-width: 100%;
+		height: auto;
+	}
+	img {
+		font-style: italic;
+	}
+
+	/* <picture> — прозрачная обёртка; пусть раскладкой рулит вложенный <img>. */
+	picture {
+		display: contents;
+	}
+
+	/* Контролы форм наследуют типографику вместо браузерной и сбрасывают
+     нативную «обвеску», чтобы стилизоваться с чистого листа. */
+	input,
+	button,
+	textarea,
+	select,
+	input[type="file"]::-webkit-file-upload-button {
+		font: inherit;
+		letter-spacing: inherit;
+		color: inherit;
+		background-color: transparent;
+		appearance: none;
+	}
+	textarea {
+		resize: vertical; /* горизонтальный ресайз ломает большинство раскладок */
+		field-sizing: content; /* растёт под контент где поддержано; иначе игнорируется */
+	}
+
+	/* Таблицы по умолчанию схлопывают границы и жмутся к содержимому. */
+	table {
+		border-collapse: collapse;
+		border-color: inherit;
+	}
+
+	/* Уважаем атрибут [hidden] даже после сброса выше. */
+	[hidden] {
+		display: none !important;
+	}
+}
+
+/* ============================================================== *
+ *  tokens — публичный API. Меняй эти значения, чтобы перешить тему. *
+ * ============================================================== */
+@layer tokens {
+	:root {
+		/* ---- Шкала шрифта -----------------------------------------------
+       Геометрическая шкала: каждый шаг = предыдущий * --ratio. Тело
+       (--step-0) остаётся фиксированным rem, чтобы зум браузера и
+       пользовательские настройки шрифта всегда работали. На мобиле ratio
+       меньше (заголовки компактнее), на широком экране больше (драматичнее)
+       — переключается на брейкпоинте ниже, при этом каждое значение
+       остаётся чистым rem (безопасно для зума).                         */
+		--font-size-base: 1rem; /* = тело текста; 16px по умолчанию */
+		--ratio: 1.2; /* мобильный / узкий */
+
+		--step--2: calc(var(--step--1) / var(--ratio));
+		--step--1: calc(var(--step-0) / var(--ratio));
+		--step-0: var(--font-size-base);
+		--step-1: calc(var(--step-0) * var(--ratio));
+		--step-2: calc(var(--step-1) * var(--ratio));
+		--step-3: calc(var(--step-2) * var(--ratio));
+		--step-4: calc(var(--step-3) * var(--ratio));
+		--step-5: calc(var(--step-4) * var(--ratio));
+
+		/* Живой фидбек пользователя — два места, где нужен конкретный
+		   пиксельный размер между --step--1 (12.8px) и --step-0 (16px),
+		   вне пропорциональной шкалы --step-*: био карточки учётной записи
+		   (ASIDE-REDESIGN/SIDEBAR-SPEC-2.md) и текст выпадающего меню
+		   (.menu-pop, общий паттерн на всё приложение). */
+		--font-size-bio: 0.875rem; /* 14px */
+		--font-size-menu: 0.9375rem; /* 15px */
+
+		/* Текучие display-размеры для двух самых крупных заголовков. Границы
+       повторяют step-5 / step-4 при двух ratio на диапазоне 20rem–80rem;
+       rem-якоря сверху и снизу сохраняют работу зума — текучая только
+       середина, что допустимо для крупного display-текста (не для тела). */
+		--font-h1: clamp(2.49rem, 2.3rem + 0.94vw, 3.05rem);
+		--font-h2: clamp(2.07rem, 1.96rem + 0.6vw, 2.44rem);
+
+		--line-height: 1.6; /* тело */
+		--line-height-heading: 1.15;
+		--measure: 65ch; /* макс. длина читаемой строки */
+		--weight-normal: 400;
+		--weight-bold: 700;
+
+		/* Лёгкое уплотнение трекинга у крупных заголовков — придаёт display-тексту
+       более собранный, «журнальный» вид. Применяется только к h1–h3 ниже;
+       мелкий текст не трогаем, там это вредит читаемости. */
+		--heading-letter-spacing: -0.015em;
+
+		/* Кириллице-безопасный системный стек: именованные фолбэки ловят те
+       платформы, где `system-ui` резолвится в шрифт без нужных глифов. */
+		/* Golos Text — тело (кириллица-first, гуманистический, тёплый, OFL,
+     см. styles/fonts.css) — самый дешёвый и сильный рычаг "тёплой узнаваемости"
+     (VISUAL.md, Claude Opus): системный стек остаётся фолбэком на время
+     загрузки шрифта/для сред без него. */
+		--font-body:
+			"Golos Text", system-ui, -apple-system, "Segoe UI", Roboto,
+			"Helvetica Neue", Arial, "Noto Sans", sans-serif;
+		--font-mono:
+			ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+			"Liberation Mono", monospace;
+		/* Засечный шрифт — редакторский контраст к гротеску тела. Применяется
+       к blockquote/figcaption и к заголовкам .prose. Не нужен контраст?
+       Поставь --font-serif: inherit, и засечки исчезнут везде разом. */
+		--font-serif: Georgia, "Times New Roman", Times, serif;
+		/* Unbounded — дисплейный (логотип/h1/пустые экраны, VISUAL.md — из двух
+     вариантов Opus выбран "геометричный, дерзкий", не серифно-литературный).
+     Точечно (.brand-heading/.empty-state), не на все заголовки подряд —
+     Opus прямо предупреждала не тратить смелость на каждый h2/h3. */
+		--font-display: "Unbounded", var(--font-body);
+
+		/* ---- Шкала отступов -----------------------------------------------
+       VISUAL.md v2 (Claude Opus) — пользователь: "вертикальный ритм
+       напрочь отсутствует, отступы должны быть пропорциональными и
+       математически красивыми, но при изменении разрешения плавно
+       уменьшаются — clamp в помощь". Каждый шаг — clamp(MIN, текучая
+       середина, MAX): MAX равен СТАРОМУ статичному значению (тот же
+       --space-unit*N, что раньше — ни один уже сверстанный и проверенный
+       вживую экран на ≥768px не сдвигается ни на пиксель), MIN — ровно
+       0.8×MAX (единый коэффициент на ВСЮ шкалу — "математически красиво"
+       одним числом, не подобранные на глаз частные случаи). Интерполяция
+       линейна между 20rem (320px) и 48rem (768px, тот же порог, что уже
+       используется для --ratio ниже) — тот же приём, что --font-h1/--font-h2
+       (текучие давно, только для этих двух заголовков), теперь на всю шкалу
+       отступов разом. */
+		--space-unit: 1rem;
+		--space-3xs: clamp(0.2rem, 0.164rem + 0.179vw, 0.25rem);
+		--space-2xs: clamp(0.4rem, 0.329rem + 0.357vw, 0.5rem);
+		--space-xs: clamp(0.6rem, 0.493rem + 0.536vw, 0.75rem);
+		--space-s: clamp(0.8rem, 0.657rem + 0.714vw, 1rem);
+		--space-m: clamp(1.2rem, 0.986rem + 1.071vw, 1.5rem);
+		--space-l: clamp(1.6rem, 1.314rem + 1.429vw, 2rem);
+		--space-xl: clamp(2.4rem, 1.971rem + 2.143vw, 3rem);
+		--space-2xl: clamp(3.2rem, 2.629rem + 2.857vw, 4rem);
+		--space-3xl: clamp(4.8rem, 3.943rem + 4.286vw, 6rem);
+
+		/* ---- Цвет -------------------------------------------------------
+       Этап 70 — генератор палитры (src/ui/theme/palette-generator.js,
+       applyCustomPalette). Каждый токен ниже — light-dark(var(--X-light),
+       var(--X-dark)): ДВЕ ветки, выставленные JS ЦЕЛИКОМ готовыми oklch()-
+       строками (не color-mix() из --bg/--fg — тот приём убран, генератор
+       считает роль напрямую от lBg+дельта, см. DESIGN.md). Значения ниже —
+       build-time дефолт (совпадает с applyCustomPalette(DEFAULT_CUSTOM_PALETTE),
+       см. palette-apply.js) — то, что видно ДО первого запуска JS; после
+       загрузки JS выставляет те же custom properties инлайн-стилем на
+       :root, тот полностью перекрывает эти значения (выше специфичность).
+       light-dark() требует `color-scheme` (задан в `base`) — перевернуть
+       страницу или любой блок целиком — поставить на него `color-scheme:
+       light` / `dark`. */
+		--accent-hue: 265;
+		/* --hue — алиас, не отдельная константа (была --hue:55, независимая от
+     accent-hue, "тёплый янтарь" — этап 70 сознательно объединил нейтрали и
+     акцент в один узел, см. CONTRACTS.md/DESIGN.md, решение подтверждено
+     пользователем). Используется --shadow ниже и custom.css (оверлеи/
+     градиенты) — держит их в тон общей палитре, а не в устаревшем hue. */
+		--hue: var(--accent-hue);
+
+		--bg-light: oklch(0.99 0.004 var(--accent-hue));
+		--bg-dark: oklch(0.17 0.022 var(--accent-hue));
+		--bg: light-dark(var(--bg-light), var(--bg-dark));
+
+		--surface-light: oklch(0.94 0.022 var(--accent-hue));
+		--surface-dark: oklch(0.22 0.022 var(--accent-hue));
+		--surface: light-dark(var(--surface-light), var(--surface-dark));
+
+		/* Приподнятые элементы (карточки поверх surface — этап 34, auth-layout) —
+     раньше жил ЛОКАЛЬНО только в .auth-layout с фолбэком var(--surface-raised,
+     var(--surface)) в паре мест (call-overlay); теперь глобальный токен —
+     один источник истины для всего приложения. */
+		--surface-raised-light: oklch(0.88 0.022 var(--accent-hue));
+		--surface-raised-dark: oklch(0.28 0.022 var(--accent-hue));
+		--surface-raised: light-dark(var(--surface-raised-light), var(--surface-raised-dark));
+
+		--border-light: oklch(0.83 0.022 var(--accent-hue));
+		--border-dark: oklch(0.33 0.022 var(--accent-hue));
+		--border: light-dark(var(--border-light), var(--border-dark));
+
+		/* Затемняющая подложка за всплывающим слоем (выдвижная панель
+		   сайдбара на узких экранах, модальное окно "Быстрая связь") —
+		   раньше жила ЛОКАЛЬНО в custom.css как --sidebar-backdrop-tint,
+		   на элементе .sidebar-backdrop (области видимости кастомных
+		   свойств хватало только там же); понадобилась во ВТОРОМ месте
+		   (область контента, довесок) — поднята сюда, единственный
+		   источник истины для обоих. Не завязана на light-dark — сама
+		   подложка всегда тёмная (в тон hue), независимо от активной темы,
+		   иначе в светлой теме затемнение выглядело бы инвертированным.*/
+		--overlay-backdrop-tint: oklch(0.2 0.03 var(--hue) / 0.45);
+
+		--muted-light: oklch(0.54 0.022 var(--accent-hue));
+		--muted-dark: oklch(0.62 0.022 var(--accent-hue));
+		--muted: light-dark(var(--muted-light), var(--muted-dark));
+
+		--fg-light: oklch(0.27 0.0352 var(--accent-hue));
+		--fg-dark: oklch(0.89 0.0352 var(--accent-hue));
+		--fg: light-dark(var(--fg-light), var(--fg-dark));
+
+		/* --accent — "лампа" (VISUAL.md): тепло, исходящие сообщения, primary-
+     кнопки. Управляется ЦЕЛИКОМ через --accent-hue (settings.jsx — генератор
+     палитры, именованные пресеты + "Настроить", см. CONTRACTS.md этап 70). */
+		--accent-light: oklch(0.55 0.085 var(--accent-hue));
+		--accent-dark: oklch(0.74 0.085 var(--accent-hue));
+		--accent: light-dark(var(--accent-light), var(--accent-dark));
+		--accent-contrast-light: oklch(1 0 0);
+		--accent-contrast-dark: oklch(0.1 0 0);
+		--accent-contrast: light-dark(var(--accent-contrast-light), var(--accent-contrast-dark));
+		--accent-hover: color-mix(in oklch, var(--accent), black 12%);
+
+		/* --accent-2 — "сквозняк" (VISUAL.md): холодный контраст лампе — ссылки,
+     кольцо фокуса, вторичные акценты. Смещение hue на фиксированный угол
+     (не жёсткий цвет) — тёплый/холодный конфликт остаётся при ЛЮБОМ accentHue. */
+		--accent-2-hue: calc(var(--accent-hue) + 150);
+		--accent-2-light: oklch(0.53 0.0765 var(--accent-2-hue));
+		--accent-2-dark: oklch(0.72 0.0765 var(--accent-2-hue));
+		--accent-2: light-dark(var(--accent-2-light), var(--accent-2-dark));
+		--accent-2-contrast: oklch(0.99 0 0);
+		--accent-2-hover: color-mix(in oklch, var(--accent-2), black 12%);
+
+		/* Служебные тона (ошибка/предупреждение/успех/инфо) — раньше существовали
+     ТОЛЬКО как фолбэк-литералы var(--bad, oklch(...)) в ~50 местах по коду
+     (сам токен нигде не был объявлен). Этап 70 — реальные токены, те же
+     h/c-константы, что уже были в фолбэках (не выдуманы заново), L пересчитан
+     под контраст WCAG на обеих полярностях (см. DESIGN.md, инвариант И1). */
+		--bad-light: oklch(0.5 0.0725 25);
+		--bad-dark: oklch(0.68 0.2 25);
+		--bad: light-dark(var(--bad-light), var(--bad-dark));
+		--bad-surface-light: oklch(0.94 0.024 25);
+		--bad-surface-dark: oklch(0.22 0.0319 25);
+		--bad-surface: light-dark(var(--bad-surface-light), var(--bad-surface-dark));
+		--bad-edge-light: oklch(0.83 0.09 25);
+		--bad-edge-dark: oklch(0.33 0.0478 25);
+		--bad-edge: light-dark(var(--bad-edge-light), var(--bad-edge-dark));
+
+		--warn-light: oklch(0.5 0.0725 85);
+		--warn-dark: oklch(0.66 0.1 85);
+		--warn: light-dark(var(--warn-light), var(--warn-dark));
+		--warn-surface-light: oklch(0.94 0.024 85);
+		--warn-surface-dark: oklch(0.22 0.0319 85);
+		--warn-surface: light-dark(var(--warn-surface-light), var(--warn-surface-dark));
+		--warn-edge-light: oklch(0.83 0.09 85);
+		--warn-edge-dark: oklch(0.33 0.0478 85);
+		--warn-edge: light-dark(var(--warn-edge-light), var(--warn-edge-dark));
+
+		--good-light: oklch(0.48 0.0696 145);
+		--good-dark: oklch(0.65 0.15 145);
+		--good: light-dark(var(--good-light), var(--good-dark));
+		--good-surface-light: oklch(0.94 0.024 145);
+		--good-surface-dark: oklch(0.22 0.0319 145);
+		--good-surface: light-dark(var(--good-surface-light), var(--good-surface-dark));
+		--good-edge-light: oklch(0.83 0.09 145);
+		--good-edge-dark: oklch(0.33 0.0478 145);
+		--good-edge: light-dark(var(--good-edge-light), var(--good-edge-dark));
+
+		--info-light: oklch(0.48 0.0696 235);
+		--info-dark: oklch(0.66 0.1 235);
+		--info: light-dark(var(--info-light), var(--info-dark));
+		--info-surface-light: oklch(0.94 0.024 235);
+		--info-surface-dark: oklch(0.22 0.0319 235);
+		--info-surface: light-dark(var(--info-surface-light), var(--info-surface-dark));
+		--info-edge-light: oklch(0.83 0.09 235);
+		--info-edge-dark: oklch(0.33 0.0478 235);
+		--info-edge: light-dark(var(--info-edge-light), var(--info-edge-dark));
+
+		/* Золото избранного (ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 3) —
+		   .fav-toggle[aria-pressed="true"], единственное место в проекте, не
+		   входит в семью --bad/--warn/--good/--info (не статус, а
+		   "избранное"-акцент), поэтому без -surface/-edge пары. */
+		--gold: light-dark(oklch(0.62 0.12 85), oklch(0.8 0.13 85));
+
+		/* ---- Форма, глубина, движение ----------------------------------- */
+		/* Этап "разметка по макету" (REDESIGN/ugolok-final.html — --r-sm:7px)
+		   — раньше жил только как незавершённый фолбэк var(--radius-sm, 4px)
+		   в трёх местах custom.css (markdown-toolbar-btn/md-code-inline),
+		   реальным токеном не был. Теперь настоящий токен: компактные
+		   интерактивные элементы (поле поиска, строка чата/канала, кнопка-
+		   иконка панели) — свой, чуть более острый радиус, чем --radius у
+		   карточек/панелей. */
+		--radius-sm: 0.4375rem;
+		--radius: 0.625rem; /* "уютные" скруглённые углы (было 0 — острые) */
+		--radius-md: 0.875rem; /* VISUAL.md v2 — кнопки/поля между --radius и --radius-lg */
+		--radius-lg: 1.25rem; /* крупные панели/карточки-витрины */
+		--radius-full: calc(infinity * 1px); /* формальный токен для уже привычного пилюльного скругления */
+		/* ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 2 — размер аватара переменной,
+		   не отдельным классом на каждый размер (было .account-avatar/-sm/
+		   -large + разводящее .app-layout .account-avatar-sm). */
+		--avatar-s: 1.75rem; /* строки списков (.stream-ava) */
+		--avatar-m: 2.5rem; /* строки контактов, экран входа */
+		--avatar-l: 4rem; /* крупный вариант экрана входа */
+		--avatar: var(--avatar-m);
+		/* Пропорция портрета в карточке учётной записи — как в
+		   FEATURE-SPECS/VISUAL.md. Живой фидбег пользователя: 3/2 читалось
+		   как обрезанное фото, не как аватар. Меняется одним числом. */
+		--account-ava-ratio: 1;
+		--marker-color: currentColor; /* цвет маркеров списка; .prose ставит акцент */
+		--border-width: 1px;
+		/* Тёплые тени (VISUAL.md) — не нейтрально-чёрные: тень окрашена той же
+     --hue, что и остальная сцена, поэтому карточка "садится" в неё, а не
+     холодит контраст постороннним серым/чёрным. */
+		--shadow:
+			0 1px 2px oklch(0.2 0.03 var(--hue) / 0.10),
+			0 6px 20px oklch(0.2 0.03 var(--hue) / 0.12);
+
+		--transition-speed: 150ms; /* одна крутилка на все hover/active-анимации */
+		--transition-ease: cubic-bezier(0.2, 0, 0.2, 1);
+		/* VISUAL.md v2 — пользователь: "идеальная плавность" для hover-анимаций.
+     --ease (easeOutQuart-подобная) — для элементов, что ПОЯВЛЯЮТСЯ/растут
+     (лупа на аватаре, разворот деталей); --ease-io — симметричный
+     вход/выход (открытие/закрытие панелей). Не замена --transition-ease
+     (та осталась для простых цветовых hover, где уже проверена вживую) —
+     новый более выразительный переход добавляется точечно, там, где
+     ощутимо "выезжает"/"раскрывается" целый элемент, а не просто цвет. */
+		--ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+		--ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+
+		/* ---- Layout-крутилки для авторских раскладок (custom.css) ------- */
+		--grid-min: 16rem; /* мин. ширина колонки в auto-fit сетках */
+		--container: 70rem; /* макс. ширина .auth-layout */
+		--app-max-width: 100rem; /* макс. ширина .app-shell-inner — отдельный
+			токен, не --measure: тот наследуется в p{max-width}, общий на
+			ВЕСЬ проект для длины строки прозы (65ch) — общее имя протекло бы
+			в каждый <p> внутри залогиненного приложения. */
+	}
+
+	/* Широкие экраны: более драматичная шкала. Меняется только --ratio,
+     вся ступенчатая шкала пересчитывается из него. Значения остаются
+     чистым rem (безопасно для зума). */
+	@media (min-width: 48em) {
+		:root {
+			--ratio: 1.25;
+		}
+	}
+}
+
+/* ============================================================== *
+ *  base — документ, цветовая схема, фокус, ритм чтения           *
+ * ============================================================== */
+@layer base {
+	html {
+		color-scheme: light dark; /* включает light-dark(); темит UI форм/скроллбары */
+		font-family: var(--font-body);
+		line-height: var(--line-height);
+	}
+
+	/* Переключатель тем (пользователь: "переключатель сверху стоит добавить") —
+     без него light-dark() слепо следует ТОЛЬКО системному prefers-color-scheme.
+     data-theme на html форсирует одну ветвь light-dark() независимо от ОС;
+     без атрибута (по умолчанию) поведение не меняется — та же color-scheme:
+     light dark, что и раньше. Атрибут ставит theme-toggle.js (app.jsx). */
+	html[data-theme="light"] {
+		color-scheme: light;
+	}
+	html[data-theme="dark"] {
+		color-scheme: dark;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		html {
+			scroll-behavior: smooth;
+		}
+	}
+
+	body {
+		min-height: 100vh;
+		min-height: 100dvh; /* заполняет область под мобильным UI браузера */
+		background-color: var(--bg);
+		color: var(--fg);
+		font-size: var(
+			--step-0
+		); /* тело привязано к базовому токену, не к дефолту браузера */
+		text-rendering: optimizeLegibility;
+		font-optical-sizing: auto; /* оптический размер у вариативных шрифтов */
+		font-kerning: normal; /* кёрнинг пар глифов */
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	/* Видимый фокус с клавиатуры — пол доступности; никогда не убираем. */
+	:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 1px;
+	}
+
+	::selection {
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+	}
+
+	/* Переход по якорю не прячет цель под липкой шапкой. */
+	:target {
+		scroll-margin-block-start: var(--space-l);
+	}
+
+	/* Аккуратный перенос строк для прозы и заголовков. */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		text-wrap: balance;
+	}
+	p {
+		text-wrap: pretty;
+	}
+	p,
+	li,
+	figcaption,
+	blockquote {
+		overflow-wrap: break-word;
+	}
+}
+
+/* ============================================================== *
+ *  elements — управляемые дефолты для голых тегов               *
+ * ============================================================== */
+@layer elements {
+	/* ---- Заголовки --------------------------------------------------- */
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		line-height: var(--line-height-heading);
+		font-weight: var(--weight-bold);
+		margin-block-start: var(--space-xl);
+		margin-block-end: var(--space-s);
+		scroll-margin-block-start: var(--space-l);
+	}
+	h1 {
+		font-size: var(--font-h1);
+	}
+	h2 {
+		font-size: var(--font-h2);
+	}
+	h3 {
+		font-size: var(--step-3);
+	}
+	h4 {
+		font-size: var(--step-2);
+	}
+	h5 {
+		font-size: var(--step-1);
+	}
+	h6 {
+		font-size: var(--step-0);
+	}
+	/* Уплотнение трекинга только у крупных заголовков. */
+	h1,
+	h2,
+	h3 {
+		letter-spacing: var(--heading-letter-spacing);
+	}
+	:is(h1, h2, h3, h4, h5, h6):first-child {
+		margin-block-start: 0;
+	}
+
+	/* ---- Проза ------------------------------------------------------- */
+	p,
+	ul,
+	ol,
+	dl,
+	blockquote,
+	pre,
+	table,
+	figure {
+		margin-block: var(--space-m);
+	}
+	p {
+		max-width: var(--measure);
+	}
+
+	/* Возвращаем спискам аффордансы (сброс их убрал) — отступ управляем. */
+	ul,
+	ol {
+		padding-inline-start: var(--space-l);
+	}
+	ul {
+		list-style: disc;
+	}
+	ol {
+		list-style: decimal;
+	}
+	li {
+		margin-block: var(--space-3xs);
+	}
+	li::marker {
+		color: var(--marker-color);
+	}
+	:where(ul, ol) :where(ul, ol) {
+		margin-block: 0;
+	} /* поджимаем вложенность */
+
+	/* Навигационные списки — без маркеров. ::before с zero-width space
+     возвращает семантику списка для VoiceOver в Safari: он «теряет»
+     список, когда снят list-style. Символ невидим, ничего не сдвигает. */
+	nav :where(ul, ol) {
+		list-style: none;
+		padding-inline-start: 0;
+	}
+	nav li::before {
+		content: "\200B";
+		float: left;
+	}
+
+	dt {
+		font-weight: var(--weight-bold);
+	}
+	dd {
+		margin-inline-start: var(--space-l);
+	}
+
+	/* ---- Ссылки ------------------------------------------------------ */
+	a {
+		color: var(--accent);
+		text-decoration-line: underline;
+		text-decoration-thickness: from-font;
+		text-underline-offset: 0.15em;
+		transition: color var(--transition-speed) var(--transition-ease);
+	}
+	a:hover {
+		color: var(--accent-hover);
+		text-decoration-line: none;
+	}
+
+	/* ---- Выделение и инлайн ------------------------------------------ */
+	b,
+	strong {
+		font-weight: var(--weight-bold);
+	}
+	small {
+		font-size: var(--step--1);
+	}
+	mark {
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+		padding-inline: 0.2em;
+		border-radius: 0.2em;
+	}
+	sub,
+	sup {
+		font-size: 0.75em;
+		line-height: 0;
+		position: relative;
+	}
+	sub {
+		bottom: -0.25em;
+	}
+	sup {
+		top: -0.5em;
+	}
+
+	/* ---- Код --------------------------------------------------------- */
+	code,
+	kbd,
+	samp,
+	pre {
+		font-family: var(--font-mono);
+		font-size: 0.9em;
+	}
+	:not(pre) > code,
+	kbd {
+		background-color: var(--surface);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.1em 0.35em;
+	}
+	pre {
+		background-color: var(--surface);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: var(--space-s);
+		overflow-x: auto;
+	}
+	pre code {
+		background: none;
+		border: 0;
+		padding: 0;
+		font-size: inherit;
+	}
+
+	/* ---- Цитаты и линии ---------------------------------------------- */
+	blockquote {
+		border-inline-start: 0.25rem solid var(--accent);
+		padding-inline-start: var(--space-m);
+		color: var(--muted);
+		font-family: var(--font-serif); /* засечный контраст */
+		font-style: italic;
+	}
+	hr {
+		border-block-start: var(--border-width) solid var(--border);
+		margin-block: var(--space-xl);
+	}
+
+	/* ---- Figure (гасим огромные UA-отступы, берём под контроль) ------ */
+	figure {
+		margin-inline: 0;
+	}
+	figcaption {
+		margin-block-start: var(--space-2xs);
+		font-size: var(--step--1);
+		color: var(--muted);
+		font-family: var(--font-serif); /* засечный контраст */
+		text-wrap: balance;
+	}
+
+	/* ---- Кнопки ------------------------------------------------------ */
+	button,
+	[type="button"],
+	[type="reset"],
+	[type="submit"] {
+		display: inline-block;
+		padding: var(--space-2xs) var(--space-m);
+		border: var(--border-width) solid transparent;
+		border-radius: var(--radius);
+		background-color: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: var(--weight-bold);
+		line-height: 1.2;
+		cursor: pointer;
+		transition:
+			background-color var(--transition-speed) var(--transition-ease),
+			transform var(--transition-speed) var(--transition-ease);
+	}
+	button:hover,
+	[type="button"]:hover,
+	[type="reset"]:hover,
+	[type="submit"]:hover {
+		background-color: var(--accent-hover);
+	}
+	button:active,
+	[type="button"]:active,
+	[type="reset"]:active,
+	[type="submit"]:active {
+		transform: translateY(1px);
+	}
+	button:disabled,
+	button[disabled],
+	[type="button"]:disabled,
+	[type="reset"]:disabled,
+	[type="submit"]:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+
+	/* ---- Поля -------------------------------------------------------- */
+	input:not(
+		[type="button"],
+		[type="reset"],
+		[type="submit"],
+		[type="checkbox"],
+		[type="radio"],
+		[type="range"],
+		[type="color"]
+	),
+	textarea,
+	select {
+		width: 100%;
+		max-width: 100%;
+		padding: var(--space-2xs) var(--space-xs);
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		background-color: var(--surface);
+		line-height: 1.4;
+	}
+	input:focus-visible,
+	textarea:focus-visible,
+	select:focus-visible {
+		border-color: var(--accent);
+	}
+	/* У select сброс снял нативную стрелку (appearance:none). Возвращаем
+     каретку своей SVG-иконкой — поле остаётся стилистически своим, но
+     снова читается как выпадающий список. */
+	/* Этап 70-довесок-2 — пользователь предложил двойную стрелочку
+     (▲▼) вместо одинарной вниз: сильнее читается как "открыть список",
+     не как "стрелка вниз" на кнопке. Тот же размер/позиция/цвет, что
+     раньше — просили только форму, не оформление. */
+	select {
+		padding-inline-end: var(--space-xl);
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23888888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4-4 4 4M4 10l4 4 4-4'/%3E%3C/svg%3E");
+		background-position: right var(--space-s) center;
+		background-size: 0.8em;
+	}
+	/* Этап 70-довесок-2 — раньше :disabled был задан только кнопкам
+     (button:disabled выше) — поля вообще не имели disabled-стиля,
+     хотя атрибут на них штатно используется по всему проекту. Тот же
+     приём (cursor+opacity), что у кнопок. */
+	input:disabled,
+	textarea:disabled,
+	select:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+	::placeholder {
+		color: var(--muted);
+		opacity: 1;
+	}
+	label {
+		cursor: pointer;
+	}
+	/* Подпись поля: <label>Телефон</label> над контролом. :not(:has(...))
+     отличает её от label'а, оборачивающего сам контрол (радио/чекбокс),
+     — тот остаётся обычным инлайном и не раздувается. */
+	label:not(:has(input, select, textarea)) {
+		display: block;
+		margin-block-end: var(--space-3xs);
+		font-size: var(--step--1);
+		font-weight: var(--weight-bold);
+	}
+	fieldset {
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+		padding: var(--space-s);
+	}
+	legend {
+		padding-inline: var(--space-2xs);
+	}
+
+	/* Возвращаем нативную отрисовку и ожидаемые курсоры этим контролам:
+     reset снял appearance у всех input, но этим он нужен — иначе
+     чекбоксы/радио/ползунок исчезают, а accent-color красить нечего. */
+	[type="checkbox"],
+	[type="radio"],
+	[type="range"],
+	[type="color"] {
+		appearance: auto;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+	:where(
+		a[href],
+		button,
+		label[for],
+		select,
+		summary,
+		[type="checkbox"],
+		[type="radio"]
+	) {
+		touch-action: manipulation; /* убирает 300мс задержку двойного тапа-зума */
+	}
+
+	/* ---- Таблицы ----------------------------------------------------- */
+	th,
+	td {
+		padding: var(--space-2xs) var(--space-s);
+		border: var(--border-width) solid var(--border);
+		text-align: start;
+		vertical-align: top;
+		font-variant-numeric: tabular-nums; /* колонки чисел выравниваются по разрядам */
+	}
+	th {
+		font-weight: var(--weight-bold);
+		background-color: var(--surface);
+	}
+	caption {
+		text-align: start;
+		color: var(--muted);
+		margin-block-end: var(--space-2xs);
+	}
+
+	/* ---- Details / summary ------------------------------------------- */
+	/* padding убран (пользователь): глобальный отступ протекал во ВСЕ
+	   <details>, включая .menu (ActionsMenu, actions-menu.jsx) — тот не
+	   задаёт свой padding, т.к. задуман как маленькая круглая кнопка-меню
+	   (.icon-btn внутри), а получал раздутый бокс на var(--space-s) со
+	   всех сторон. border/border-radius остаются дефолтом для голых
+	   <details> без собственного класса; .req/.replies уже держат свои
+	   border/border-radius явно (custom.css) — эта правка их не касается.
+	   .req/.replies теряли ПАДДИНГ отсюда же — компенсировано их
+	   собственными правилами в custom.css (не молчаливый регресс). */
+	details {
+		border: var(--border-width) solid var(--border);
+		border-radius: var(--radius);
+	}
+	summary {
+		cursor: pointer;
+		font-weight: var(--weight-bold);
+	}
+	details[open] > summary {
+		margin-block-end: var(--space-s);
+	}
+}
+
+/* ============================================================== *
+ *  utilities — тонкий opt-in слой классов                       *
+ * ============================================================== */
+@layer utilities {
+	/* Заполнить произвольный бокс без искажений (opt-in, никогда не глобально). */
+	.cover {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	/* Прелоадер загрузки/скачивания вложений (этап 29-довесок) — чистый CSS, без
+	   библиотеки. prefers-reduced-motion уже глушит анимацию глобально (см. низ файла). */
+	.spinner {
+		display: inline-block;
+		width: 1em;
+		height: 1em;
+		border: 0.15em solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		vertical-align: -0.15em;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	/* Быстрые помощники выравнивания. */
+	.text-center {
+		text-align: center;
+	}
+	.text-end {
+		text-align: end;
+	}
+
+	/* Визуально скрыто, но доступно скринридерам. */
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* ---- .prose — «журнальный» режим (opt-in характер) ---------------
+     Включаешь на блоке-обёртке: <article class="prose">. База НАМЕРЕННО
+     не навязывает этот характер всем — он живёт здесь, по желанию. */
+	.prose {
+		font-variant-numeric: oldstyle-nums proportional-nums; /* старостильные цифры в тексте */
+		--marker-color: var(--accent); /* акцентные маркеры списков */
+	}
+	/* Зебра в таблицах контента — чётные строки слегка темнее, читаемость
+     широких таблиц растёт. Только в .prose: служебные таблицы не пачкаем. */
+	.prose tbody tr:nth-child(even) {
+		background-color: var(--surface);
+	}
+	/* Вводный абзац (standfirst): первый абзац после h1 — крупнее и спокойнее. */
+	.prose > h1 + p {
+		font-size: var(--step-1);
+		line-height: 1.5;
+		color: var(--muted);
+		text-wrap: balance;
+		max-width: var(--measure);
+	}
+	/* Надзаголовок-«кикер»: <p class="eyebrow">РУБРИКА</p> над заголовком. */
+	.eyebrow {
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		font-size: var(--step--1);
+		font-weight: var(--weight-bold);
+		color: var(--accent);
+		margin-block-end: var(--space-2xs);
+	}
+	/* Буквица: <p class="dropcap">. Без поддержки initial-letter буква
+     просто остаётся обычного размера (акцентной/жирной) — не ломается. */
+	.dropcap::first-letter {
+		-webkit-initial-letter: 3;
+		initial-letter: 3;
+		font-weight: var(--weight-bold);
+		color: var(--accent);
+		margin-inline-end: 0.08em;
+	}
+	/* Висячая пунктуация — оптически ровный край абзаца. Только Safari
+     (mid-2026); в остальных просто игнорируется, ничего не ломая. */
+	@supports (hanging-punctuation: first) {
+		.prose {
+			hanging-punctuation: first last;
+		}
+	}
+}
+
+/* ============================================================== *
+ *  Прогрессивное улучшение (только Chromium на середину 2026)    *
+ *  Плавная анимация открытия/закрытия <details> к авто-высоте.   *
+ *  Обёрнуто в @supports: в остальных просто игнорируется.        *
+ * ============================================================== */
+@supports (interpolate-size: allow-keywords) {
+	:root {
+		interpolate-size: allow-keywords;
+	}
+	details::details-content {
+		block-size: 0;
+		overflow: clip;
+		transition:
+			block-size var(--transition-speed) var(--transition-ease),
+			content-visibility var(--transition-speed) allow-discrete;
+	}
+	details[open]::details-content {
+		block-size: auto;
+	}
+}
+
+/* ============================================================== *
+ *  composition — обязательный слой раскладки, PROCESS-DOCS/       *
+ *  REGLAMENT.md. Ничего, кроме display/flex/grid/gap/overflow/    *
+ *  размера — ни одного цвета, шрифта, радиуса, тени (раздел 1).   *
+ *  Параметры — через --переменные на элементе, не через классы    *
+ *  (.stack-sm и т.п. запрещены регламентом).                      *
+ * ============================================================== */
+@layer composition {
+	/* align-items: var(--align, normal) на всех пяти flex-контейнерах —
+	   REGLAMENT.md §5 (правка композиционного слоя, найдено 176 инлайновых
+	   alignItems в JSX). Фолбэк normal = initial-значение align-items,
+	   поведение БЕЗ заданного --align не меняется. */
+	.stack  { display: flex; flex-direction: column; gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	.row    { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	.bar    { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	.reel   { display: flex; flex-wrap: nowrap; gap: var(--gap, 0);
+	          overflow-x: auto; /* REGLAMENT.md §5 — overflow-inline не существует как свойство */
+	          align-items: var(--align, normal); }
+	.switch { display: flex; flex-wrap: wrap;   gap: var(--gap, 0);
+	          align-items: var(--align, normal); }
+	/* Формула Хейдона Пикерина ("The Switcher") — см. REGLAMENT.md §5 за разбором. */
+	.switch > * { flex-basis: calc((var(--threshold, 30rem) - 100%) * 999);
+	              flex-grow: 1; }
+	.grid   { display: grid; gap: var(--gap, 0);
+	          grid-template-columns: repeat(auto-fit,
+	            minmax(min(var(--min, 16rem), 100%), 1fr)); }
+	/* --h без фолбэка НАРОЧНО — без явной высоты колонкам некуда переносить. */
+	.columns{ display: flex; flex-direction: column; flex-wrap: wrap;
+	          block-size: var(--h); gap: var(--gap, 0); }
+	.canvas { overflow: auto; }
+	.layer  { display: grid; }
+	.layer > * { grid-area: 1 / 1; }
+
+	.grow   { flex: 1 1 auto; min-inline-size: 0; min-block-size: 0; }
+	.rigid  { flex: 0 0 auto; }
+	.self-start  { align-self: start; }
+	.self-center { align-self: center; }
+	.self-end    { align-self: end; }
+	.over        { z-index: 1; }
+
+	.screen   { min-block-size: 100dvh;
+	            padding-block-end: env(safe-area-inset-bottom); }
+	.shell    { block-size: 100dvh; overflow: hidden;
+	            padding-block-end: env(safe-area-inset-bottom); }
+	.scroller { overflow-y: auto; overscroll-behavior: contain; } /* REGLAMENT.md §5 — overflow-block не существует как свойство */
+	.stick    { position: sticky; inset-block-start: 0; }
+	.anchored { overflow-anchor: auto; }
+
+	.box      { padding: var(--pad, 0); }
+	.center   { max-inline-size: var(--measure, 65ch); margin-inline: auto; }
+	/* --aspect, не --ratio: --ratio уже глобальный токен модульной шкалы
+	   шрифта (см. `tokens`, --step-*) — совпадение имён унаследовало бы
+	   1.2/1.25 внутрь любого голого .ratio, фолбэк 16/9 не сработал бы
+	   никогда (переменная не "не задана", она задана на :root). */
+	.ratio    { aspect-ratio: var(--aspect, 16/9); }
+	.truncate { overflow: hidden; text-overflow: ellipsis;
+	            display: -webkit-box; -webkit-box-orient: vertical;
+	            -webkit-line-clamp: var(--lines, 1); }
+}
+
+/* ============================================================== *
+ *  Override доступности — вне слоёв, чтобы побеждать всё.        *
+ *  Уважаем пользователей, попросивших меньше движения.          *
+ * ============================================================== */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+</style>
+<style>
 /*
  * custom.css — файл для ручной кастомизации вёрстки.
  *
@@ -6642,6 +7727,350 @@ button[type="button"].media-mini-bar-btn {
 	}
 }
 
+</style>
+<style>
+
+/* ================================================================== *
+ *  СЛОВАРЬ, добавляемый парой "Профиль/Настройки". Всё это — новые    *
+ *  классы проектного слоя; раскладку по-прежнему держат               *
+ *  композиционные (.stack/.row/.bar/.grow/.rigid), здесь только вид   *
+ *  и параметры гибкости конкретных детей.                             *
+ * ================================================================== */
+
+/* ---- 0. Одна линия под "головой" экрана --------------------------- *
+ * Правка не этих экранов, а всего приложения: .section-header рисует
+ * границу снизу, .slices-zone — свою, а .tabs — ещё одну. Три линии
+ * подряд, и ряд вкладок между ними как в тисках. Линия должна быть
+ * одна, под всей головой, и подчёркивание активной вкладки обязано
+ * лечь ровно на неё. Затронуты все экраны со slices-zone.             */
+.section-header:has(+ .slices-zone) {
+	border-block-end: none;
+}
+.section-header {
+	container-type: inline-size;
+}
+.slices-zone:has(.tabs) {
+	padding-block-start: var(--space-2xs);
+	padding-block-end: 0;
+}
+.slices-zone .tabs {
+	margin-block: 0;
+	border-block-end: none;
+}
+.slices-zone .tab {
+	padding-block: var(--space-xs);
+}
+
+/* ---- 1. Панель раздела ------------------------------------------- *
+ * Настройки были плоским свитком из <section class="stack"> без
+ * единой границы: девять разделов подряд, ничем не разделённых, —
+ * отсюда ощущение "на скорую руку". Панель даёт разделу физические
+ * границы, и отступ между разделами перестаёт быть единственным
+ * средством группировки.                                              */
+.panel {
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: var(--space-m);
+}
+.panel__title {
+	font-family: var(--font-display);
+	font-size: var(--step-1);
+	letter-spacing: var(--heading-letter-spacing);
+	margin-block: 0;
+}
+.panel__title > .icon {
+	color: var(--muted);
+	flex: none;
+}
+.panel__hint {
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block: 0;
+}
+
+/* Поля и селекты на фоне панели: у обоих был var(--surface), и контрол
+   растворялся в подложке — от него оставалась одна рамка. Панель
+   поднимает свои контролы на тон выше себя. Чекбоксы/радио/ползунок
+   исключены: им appearance:auto вернули нативную отрисовку, красить их
+   фон нечем и незачем. */
+.panel :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="range"], [type="color"]) {
+	background-color: var(--surface-raised);
+}
+
+/* НАЙДЕННЫЙ ДЕФЕКТ: .sect-title несёт собственный margin-block-end,
+   и при этом всегда лежит внутри .stack со своим --gap. Отступ под
+   заголовком складывался из двух источников — отсюда "невозможно
+   смотреть на отступы". Отступ задаёт только раскладка. */
+.sect-title {
+	margin-block: 0;
+}
+
+/* ---- 2. Строка настройки ------------------------------------------ *
+ * Повторяющаяся молекула "подпись слева — контрол справа": в проекте
+ * она написана руками 46 раз через инлайновый
+ * justify-content:space-between. Здесь она названа, и вместе с именем
+ * получает поведение при нехватке ширины: подпись имеет базис 16rem,
+ * поэтому в узком контейнере контрол переносится ПОД неё сам, без
+ * единого запроса к ширине.                                           */
+.set-row__text {
+	flex: 1 1 16rem;
+	min-inline-size: 0;
+}
+.set-row__hint {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+
+/* НАЙДЕННЫЙ ДЕФЕКТ: в minimal.css (слой elements) у select стоит
+   width:100%. Для формы это верно, но в строке настройки давало
+   селект во всю ширину экрана ради выбора из четырёх слов. Правило
+   там НЕ трогаем — переопределяем точечно на контроле строки. */
+.set-row__control {
+	flex: 0 1 auto;
+	inline-size: auto;
+	min-inline-size: 11rem;
+}
+.set-row__switch {
+	flex: none;
+	inline-size: 1.15rem;
+	block-size: 1.15rem;
+}
+
+/* Разделители между строками — вместо того чтобы разносить их
+   отступами всё дальше друг от друга. */
+.set-list > * + * {
+	border-block-start: var(--border-width) solid var(--border);
+	padding-block-start: var(--space-s);
+}
+
+/* ---- 3. Образцы цвета --------------------------------------------- *
+ * Было: пятнадцать <button>, то есть пятнадцать заливок акцентным
+ * цветом, внутри каждой — кружок нужного оттенка и подпись. Цвет,
+ * который выбираешь, конкурировал с цветом кнопки, на которой он
+ * нарисован. Стало: сам образец И ЕСТЬ кнопка. Подписи убраны —
+ * "олива" и "бирюза" не сообщают ничего сверх видимого цвета.        */
+.swatch {
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	padding: 3px;
+	border: 2px solid transparent;
+	border-radius: var(--radius-full);
+	background-color: transparent;
+	cursor: pointer;
+}
+.swatch:hover {
+	background-color: transparent;
+	border-color: var(--border);
+}
+.swatch:active {
+	transform: none;
+}
+.swatch > span {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	border-radius: inherit;
+}
+.swatch[aria-pressed="true"] {
+	border-color: var(--fg);
+}
+
+/* ---- 4. Сегмент из двух-трёх взаимоисключающих кнопок -------------- */
+.seg .slice {
+	border-radius: 0;
+}
+.seg .slice:first-child {
+	border-start-start-radius: var(--radius-full);
+	border-end-start-radius: var(--radius-full);
+}
+.seg .slice:last-child {
+	border-start-end-radius: var(--radius-full);
+	border-end-end-radius: var(--radius-full);
+}
+.seg .slice + .slice {
+	margin-inline-start: calc(var(--border-width) * -1);
+}
+/* Кнопки состыкованы отрицательным отступом, поэтому левая граница
+   соседа ложится поверх правой границы активной. Активную поднимаем
+   над соседями — иначе у неё "пропадает" рамка с одной стороны. */
+.seg .slice--on {
+	position: relative;
+	z-index: 1;
+}
+.slice--on {
+	color: var(--fg);
+	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), transparent 86%);
+}
+
+/* ---- 5. Врезка-предупреждение ------------------------------------- *
+ * Было: <p> с инлайновыми background/padding/borderRadius в трёх
+ * местах, каждый раз заново.                                          */
+.callout {
+	padding: var(--space-s);
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface-raised);
+	font-size: var(--step--1);
+}
+.callout--warn {
+	border-color: color-mix(in oklch, var(--warn, var(--accent)), transparent 55%);
+}
+.callout--bad {
+	border-color: color-mix(in oklch, var(--bad), transparent 55%);
+	color: var(--bad);
+}
+
+/* ---- 6. Опасная зона ---------------------------------------------- */
+.panel--danger {
+	border-color: color-mix(in oklch, var(--bad), transparent 55%);
+	background-color: color-mix(in oklch, var(--bad), transparent 94%);
+}
+.panel--danger .panel__title,
+.panel--danger .panel__title > .icon {
+	color: var(--bad);
+}
+
+/* ---- 7. Раскрывающиеся исключения --------------------------------- *
+ * Таблицы "уровень уведомления на каждый контакт / канал" висели на
+ * экране развёрнутыми всегда: у человека с сорока контактами это
+ * восемьдесят строк между двумя обычными настройками. Теперь это
+ * <details> со счётчиком, свёрнутый по умолчанию, и внутри — те же
+ * .set-row, а не <table>: четыре колонки селектов на телефон не
+ * помещаются в принципе.                                              */
+.exceptions {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	background-color: var(--surface-raised);
+}
+.exceptions > summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: var(--step--1);
+	list-style: none;
+	padding: var(--space-xs) var(--space-s);
+	border-radius: inherit;
+}
+.exceptions > summary:hover {
+	color: var(--fg);
+}
+.exceptions[open] > summary {
+	border-block-end: var(--border-width) solid var(--border);
+	border-end-start-radius: 0;
+	border-end-end-radius: 0;
+}
+.exceptions > summary::-webkit-details-marker {
+	display: none;
+}
+/* Отступ внутренностей задаёт обёртка (padding), а не сами строки —
+   раньше он был инлайновым padding-block-start на первом же элементе,
+   отчего слева и справа содержимое упиралось в границу. */
+.exceptions__body {
+	padding: var(--space-s);
+}
+.exceptions > summary > .icon {
+	transition: rotate var(--transition-speed) var(--transition-ease);
+}
+.exceptions[open] > summary > .icon {
+	rotate: 180deg;
+}
+
+/* ---- 8. Личность в шапке профиля ---------------------------------- */
+.ident {
+	--gap: var(--space-m);
+}
+.ident__photo {
+	flex: 0 0 auto;
+}
+.ident__body {
+	flex: 1 1 18rem;
+	min-inline-size: 0;
+}
+/* ---- 8a. Аватар с накладной панелью действий ---------------------- *
+ * Было: розовая пилюля "Заменить" (label, --radius-full) и обычная
+ * кнопка "Из хранилища" (--radius) в один ряд — разные формы у пары,
+ * которая делает одно и то же. Стало: обе внутри одной накладки на
+ * нижней кромке фотографии, одинаковые. .layer — композиционный класс
+ * (обе дочки в одной ячейке грида), накладка прижата .self-end.       */
+.ava {
+	inline-size: 12rem;
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+.ava__actions {
+	padding: var(--space-3xs);
+	background-color: color-mix(in oklch, var(--bg), transparent 20%);
+	backdrop-filter: blur(8px);
+	justify-content: center;
+}
+.ava__btn {
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	padding: var(--space-3xs) var(--space-2xs);
+	border: none;
+	border-radius: var(--radius-sm);
+	background-color: transparent;
+	color: var(--fg);
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	line-height: 1.2;
+	cursor: pointer;
+}
+.ava__btn:hover {
+	background-color: var(--surface-raised);
+}
+.ava__btn:active {
+	transform: none;
+}
+
+/* НАЙДЕННЫЙ ДЕФЕКТ: у .keybox рамка И заливка var(--surface) — на
+   панели того же тона от блока оставалась только рамка, а сам он не
+   читался как поле. Рамка убрана, различие несёт тон. */
+.keybox {
+	border: none;
+	background-color: var(--surface-raised);
+}
+
+.ident__name {
+	font-family: var(--font-display);
+	font-size: var(--step-2);
+	letter-spacing: var(--heading-letter-spacing);
+	margin-block: 0;
+}
+
+/* ---- 9. Оглавление сбоку (вариант А) ------------------------------ */
+.set-nav {
+	flex: 0 0 13rem;
+	align-self: start;
+	position: sticky;
+	inset-block-start: 0;
+	padding-block: var(--space-2xs);
+}
+.set-nav a {
+	display: block;
+	padding: var(--space-2xs) var(--space-s);
+	border-radius: var(--radius);
+	color: var(--muted);
+	text-decoration: none;
+}
+.set-nav a:hover {
+	background-color: var(--surface);
+	color: var(--fg);
+}
+.set-nav a[aria-current="true"] {
+	background-color: var(--surface);
+	color: var(--fg);
+	font-weight: var(--weight-bold);
+}
+@container (max-width: 46em) {
+	.set-nav {
+		display: none;
+	}
+}
+
+
 /* ================================================================== *
  *  СЛОВАРЬ экрана "Диагностика". Всё остальное на экране собрано из   *
  *  уже описанного в MOLECULES.md: .panel, .callout, .set-row/         *
@@ -6745,3 +8174,240 @@ button[type="button"].media-mini-bar-btn {
 	word-break: break-all;
 }
 .buildinfo code { font-size: inherit; }
+
+
+.mock-bar {
+	position: fixed; inset-block-start: 0; inset-inline-end: 0; z-index: 999;
+	display: flex; gap: var(--space-2xs); align-items: center;
+	padding: var(--space-2xs) var(--space-s);
+	background-color: var(--surface-raised);
+	border-start-start-radius: var(--radius); border-end-start-radius: var(--radius);
+	border: var(--border-width) solid var(--border); border-inline-end: none;
+	font-size: var(--step--2); color: var(--muted);
+}
+.mock-bar button { padding: var(--space-3xs) var(--space-xs); font-size: var(--step--2); }
+.mock-aside {
+	display: flex; align-items: flex-end; justify-content: center;
+	padding: var(--space-s); color: var(--muted); font-size: var(--step--2);
+	border-inline-end: var(--border-width) solid var(--border);
+}
+.mock-note {
+	margin-block: var(--space-2xl) var(--space-m);
+	text-align: center; color: var(--muted); font-size: var(--step--2);
+	text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+</style>
+</head>
+<body>
+<div class="mock-bar"><span>Диагностика · вариант Б — приборная панель</span><button type="button" id="mock-theme">тема</button></div>
+<div class="shell stack">
+  <div class="app-shell-inner grow stack">
+    <div class="app-layout grow">
+      <aside class="sidebar rigid stack mock-aside" aria-hidden="true">панель (заглушка)</aside>
+      <main class="main-content grow">
+  <section class="content-section stack">
+    <header class="section-header rigid stack box" style="--gap: var(--space-2xs); --pad: var(--space-m)">
+      <div class="header-actions row" style="--gap: var(--space-s); --align: center">
+        <h1>Диагностика</h1>
+      </div>
+    </header>
+    <div class="content-area grow layer">
+      <div class="content-wrapper scroller box" style="--pad: var(--space-m)">
+        <div class="stack" style="--gap: var(--space-l)">
+          <div class="metric-grid">
+            <div class="metric stack" style="--gap: var(--space-3xs)">
+              <span class="metric__value bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span>38 мс</span>
+              <span class="metric__label">быстрейшее реле · 2 из 3 на связи</span>
+            </div>
+            <div class="metric stack" style="--gap: var(--space-3xs)">
+              <span class="metric__value bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span>3,1 ГБ</span>
+              <span class="metric__label">занято на сервере из 10</span>
+            </div>
+            <div class="metric stack" style="--gap: var(--space-3xs)">
+              <span class="metric__value bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span>2 мин</span>
+              <span class="metric__label">с последней синхронизации</span>
+            </div>
+            <div class="metric stack" style="--gap: var(--space-3xs)">
+              <span class="metric__value bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--bad" aria-hidden="true"></span>1</span>
+              <span class="metric__label">требует внимания</span>
+            </div>
+          </div>
+
+<section class="panel stack" style="--gap: var(--space-m)">
+  <div class="panel__head stack" style="--gap: var(--space-3xs)">
+    <h2 class="panel__title bar" style="--gap: var(--space-2xs); --align: center"><svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon"><path d="M7.5 1a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM2.02 8h2.5c.06 1.6.38 3.02.87 4.03A5.51 5.51 0 0 1 2.02 8zm2.5-1h-2.5a5.51 5.51 0 0 1 3.37-4.03C4.9 3.98 4.58 5.4 4.52 7zM7.5 2.13c.63.55 1.2 2.2 1.28 4.87H6.22C6.3 4.33 6.87 2.68 7.5 2.13zM6.22 8h2.56c-.08 2.67-.65 4.32-1.28 4.87C6.87 12.32 6.3 10.67 6.22 8zm3.76 0h2.5a5.51 5.51 0 0 1-3.37 4.03c.49-1.01.81-2.43.87-4.03zm0-1c-.06-1.6-.38-3.02-.87-4.03A5.51 5.51 0 0 1 12.48 7h-2.5z" fill="currentColor"/></svg>Соединение</h2>
+    <p class="panel__hint">Задержка — время полного оборота запроса до реле и обратно.</p>
+  </div>
+  <div class="set-list stack" style="--gap: var(--space-s)">
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center">
+        <span class="dot dot--good" aria-hidden="true"></span><span class="truncate" style="--lines: 1">wss://relay.ugolok.net</span>
+      </div>
+      <span class="gauge__legend rigid">38 мс · синхронно</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center">
+        <span class="dot dot--good" aria-hidden="true"></span><span class="truncate" style="--lines: 1">wss://nos.lol</span>
+      </div>
+      <span class="gauge__legend rigid">112 мс · синхронно</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center">
+        <span class="dot dot--warn" aria-hidden="true"></span><span class="truncate" style="--lines: 1">wss://relay.damus.io</span>
+      </div>
+      <span class="gauge__legend rigid">нет ответа · переподключение</span>
+    </div>
+  </div>
+</section>
+<section class="panel stack" style="--gap: var(--space-m)">
+  <div class="panel__head stack" style="--gap: var(--space-3xs)">
+    <h2 class="panel__title bar" style="--gap: var(--space-2xs); --align: center"><svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h8A1.5 1.5 0 0 1 13 3.5v2A1.5 1.5 0 0 1 11.5 7h-8A1.5 1.5 0 0 1 2 5.5v-2zm1.5-.5a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5h-8zM2 9.5A1.5 1.5 0 0 1 3.5 8h8A1.5 1.5 0 0 1 13 9.5v2a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 2 11.5v-2zm1.5-.5a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 0-.5-.5h-8zM4.5 4.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zm0 6a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z" fill="currentColor"/></svg>Хранилище</h2>
+  </div>
+  <div class="set-list stack" style="--gap: var(--space-s)">
+    <div class="stack" style="--gap: var(--space-2xs)">
+      <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+        <span class="set-row__text">Файлы на сервере</span>
+        <span class="gauge__legend rigid">3,1 из 10 ГБ</span>
+      </div>
+  <div class="stack" style="--gap: var(--space-2xs)">
+    <div class="gauge" role="img" aria-label="Занято 31 % · свободно 6,9 ГБ">
+      <div class="gauge__fill" style="inline-size: 31%"></div>
+    </div>
+    <span class="gauge__legend">Занято 31 % · свободно 6,9 ГБ</span>
+  </div>
+    </div>
+    <div class="stack" style="--gap: var(--space-2xs)">
+      <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+        <span class="set-row__text">На этом устройстве</span>
+        <span class="gauge__legend rigid">180 МБ из 2,0 ГБ</span>
+      </div>
+  <div class="stack" style="--gap: var(--space-2xs)">
+    <div class="gauge" role="img" aria-label="Браузер выделил 2,0 ГБ · занято 180 МБ">
+      <div class="gauge__fill" style="inline-size: 9%"></div>
+    </div>
+    <span class="gauge__legend">Браузер выделил 2,0 ГБ · занято 180 МБ</span>
+  </div>
+    </div>
+  </div>
+</section>
+<section class="panel stack" style="--gap: var(--space-m)">
+  <div class="panel__head stack" style="--gap: var(--space-3xs)">
+    <h2 class="panel__title bar" style="--gap: var(--space-2xs); --align: center"><svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon"><path d="M7.5 1 2.5 3v4.2c0 3.1 2.06 5.9 5 6.8 2.94-.9 5-3.7 5-6.8V3l-5-2zm0 1.1 4 1.6v3.5c0 2.5-1.6 4.8-4 5.7-2.4-.9-4-3.2-4-5.7V3.7l4-1.6z" fill="currentColor"/></svg>Что требует внимания · 1</h2>
+  </div>
+  <div class="callout callout--bad row" style="--gap: var(--space-s); --align: center">
+    <span class="grow">Переписка с Ириной Соколовой разошлась на два состояния — 14 сообщений подряд не расшифровались. Пересоздание восстановит переписку, но старые нерасшифрованные сообщения не вернутся.</span>
+    <button type="button" class="btn--ghost rigid">Пересоздать</button>
+  </div>
+</section>
+
+          <div class="stack" style="--gap: var(--space-s)">
+  <details class="exceptions">
+    <summary class="bar" style="--gap: var(--space-2xs); --align: center"><svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon"><path d="M3.13523 6.15803C3.3241 5.95657 3.64052 5.94637 3.84197 6.13523L7.5 9.56464L11.158 6.13523C11.3595 5.94637 11.6759 5.95657 11.8648 6.15803C12.0536 6.35949 12.0434 6.67591 11.842 6.86477L7.84197 10.6148C7.64964 10.7951 7.35036 10.7951 7.15803 10.6148L3.15803 6.86477C2.95657 6.67591 2.94637 6.35949 3.13523 6.15803Z" fill="currentColor"/></svg>Журнал загрузки · 9 записей</summary>
+    <div class="exceptions__body stack" style="--gap: var(--space-s)">
+<div class="logview scroller stack" style="--gap: 0">
+      <div class="logview__line"><span class="logview__t">00.00</span><span>запуск, сборка a3f9c1</span></div>
+      <div class="logview__line"><span class="logview__t">00.04</span><span>база данных открыта, версия схемы 21</span></div>
+      <div class="logview__line"><span class="logview__t">00.09</span><span>ключи расшифрованы</span></div>
+      <div class="logview__line"><span class="logview__t">00.21</span><span>wss://relay.ugolok.net — соединение установлено</span></div>
+      <div class="logview__line"><span class="logview__t">00.24</span><span>wss://nos.lol — соединение установлено</span></div>
+      <div class="logview__line logview__line--warn"><span class="logview__t">00.31</span><span>wss://relay.damus.io — таймаут, повтор через 5 с</span></div>
+      <div class="logview__line"><span class="logview__t">00.48</span><span>синхронизация: 412 событий за 1,9 с</span></div>
+      <div class="logview__line"><span class="logview__t">01.02</span><span>service worker активен, кэш свежий</span></div>
+      <div class="logview__line logview__line--bad"><span class="logview__t">01.10</span><span>одна переписка не расшифровалась — см. «Что требует внимания»</span></div>
+    </div>
+    </div>
+  </details>
+  <details class="exceptions">
+    <summary class="bar" style="--gap: var(--space-2xs); --align: center"><svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" aria-hidden="true" class="icon"><path d="M3.13523 6.15803C3.3241 5.95657 3.64052 5.94637 3.84197 6.13523L7.5 9.56464L11.158 6.13523C11.3595 5.94637 11.6759 5.95657 11.8648 6.15803C12.0536 6.35949 12.0434 6.67591 11.842 6.86477L7.84197 10.6148C7.64964 10.7951 7.35036 10.7951 7.15803 10.6148L3.15803 6.86477C2.95657 6.67591 2.94637 6.35949 3.13523 6.15803Z" fill="currentColor"/></svg>Проверки движка · 12 из 12 пройдено</summary>
+    <div class="exceptions__body stack" style="--gap: var(--space-s)">
+<div class="set-list stack" style="--gap: var(--space-s)">
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>Криптография</span></div>
+      <span class="gauge__legend rigid">подпись, NIP-44, NIP-59 — ок</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>Ключи и деривация</span></div>
+      <span class="gauge__legend rigid">NIP-06, keystore — ок</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>База и офлайн-очередь</span></div>
+      <span class="gauge__legend rigid">21 таблица, очередь пуста</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>Service Worker и кэш</span></div>
+      <span class="gauge__legend rigid">активен, версия совпадает</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>Обработка потока событий</span></div>
+      <span class="gauge__legend rigid">5000 событий за 1,4 с</span>
+    </div>
+    <div class="set-row row" style="--gap: var(--space-2xs) var(--space-m); --align: center">
+      <div class="set-row__text bar" style="--gap: var(--space-2xs); --align: center"><span class="dot dot--good" aria-hidden="true"></span><span>Реле: пул, AUTH, подписки</span></div>
+      <span class="gauge__legend rigid">3 реле, 2 активны</span>
+    </div>
+</div>
+    </div>
+  </details>
+          </div>
+
+        <p class="buildinfo">
+          Сборка <code>a3f9c1</code> · схема базы 21 · Chrome 139 на Linux ·
+          <button type="button" class="btn--ghost" style="padding: 0 var(--space-2xs)">Скопировать отчёт</button>
+        </p>
+        </div>
+      </div>
+    </div>
+  </section>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+  var root = document.documentElement;
+  root.dataset.theme = "dark";
+  document.getElementById("mock-theme").addEventListener("click", function () {
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  });
+  document.querySelectorAll('[role="tab"]').forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var name = tab.dataset.pane;
+      document.querySelectorAll('[role="tab"]').forEach(function (t) {
+        t.setAttribute("aria-selected", String(t === tab));
+      });
+      document.querySelectorAll("[data-pane].pane").forEach(function (p) {
+        p.hidden = p.dataset.pane !== name;
+      });
+    });
+  });
+  document.querySelectorAll(".swatch").forEach(function (s) {
+    s.addEventListener("click", function () {
+      s.closest(".swatch-grid").querySelectorAll(".swatch").forEach(function (o) {
+        o.setAttribute("aria-pressed", String(o === s));
+      });
+    });
+  });
+  document.querySelectorAll(".seg").forEach(function (g) {
+    g.querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        g.querySelectorAll("button").forEach(function (o) {
+          o.classList.toggle("slice--on", o === b);
+          o.setAttribute("aria-pressed", String(o === b));
+        });
+      });
+    });
+  });
+</script>
+
+
+<script>
+  document.querySelectorAll("[data-pane-toggle]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var pane = document.querySelector('[data-pane="details"]');
+      pane.hidden = !pane.hidden;
+    });
+  });
+</script>
+</body>
+</html>

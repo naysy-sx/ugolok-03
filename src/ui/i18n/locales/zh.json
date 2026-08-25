@@ -974,5 +974,52 @@
 		"recoverTitle": "恢复访问",
 		"recoverBody": "通过助记词恢复在登录界面进行。点击下方按钮 — 应用会从内存中清除密钥并返回登录界面，请在那里选择「高级」并使用助记词登录。",
 		"recoverButton": "锁定并前往恢复"
+	},
+	"diagnostics": {
+		"title": "诊断",
+		"connectionTitle": "连接",
+		"connectionHint": "延迟——到中继服务器往返的完整时间，包括建立连接。",
+		"noRelays": "尚未配置中继服务器。",
+		"probeAgain": "重新测量",
+		"probing": "测量中…",
+		"storageTitle": "存储",
+		"deviceStorage": "在此设备上",
+		"serverStorageUnavailable": "文件服务器尚未报告已用空间和分配空间。",
+		"gaugeAria": "已使用 {{pct}} 百分比",
+		"problemsTitle": "需要关注",
+		"problemsTitleN": "需要关注 · {{count}}",
+		"noProblems": "目前没有问题。这里只显示您自己可以解决的问题。",
+		"missingApi": "您的浏览器不支持「{{name}}」——应用的部分功能将无法使用。",
+		"desyncedChat": "与「{{name}}」的对话已分裂为两种状态：连续 {{count}} 条消息未能解密。重新创建将恢复对话，但未解密的消息不会恢复。",
+		"recreate": "重新创建",
+		"recreating": "正在重新创建…",
+		"bootLogSummary": "启动日志 · 共 {{count}} 条，其中 {{problems}} 条需要留意",
+		"engineSummary": "引擎检查",
+		"check": "检查",
+		"copyReport": "复制报告",
+		"buildLine": "构建 {{hash}} · 数据库结构 {{schema}}",
+		"metrics": {
+			"ms": "{{n}} 毫秒",
+			"noAnswer": "无响应",
+			"unknown": "未知",
+			"relays": "最快中继 · {{total}} 个中有 {{online}} 个在线",
+			"deviceOf": "设备已用，共 {{total}}",
+			"ofTotal": "{{used}} / {{total}}",
+			"deviceNoQuota": "设备已用",
+			"storageUnknown": "—",
+			"storageServerHint": "文件服务器已用",
+			"problems": "需要关注"
+		},
+		"engine": {
+			"crypto": "加密",
+			"keys": "密钥与派生",
+			"worker": "文件加密",
+			"crdt": "状态合并",
+			"database": "数据库",
+			"outbox": "发送队列",
+			"serviceWorker": "离线模式与缓存",
+			"release": "构建完整性",
+			"transport": "中继与同步"
+		}
 	}
 }

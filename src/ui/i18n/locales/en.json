@@ -974,5 +974,52 @@
 		"recoverTitle": "Access recovery",
 		"recoverBody": "Recovery by phrase happens on the sign-in screen. Press the button below — the app will unload keys from memory and return to sign-in; there, choose “Advanced” and sign in with your secret phrase.",
 		"recoverButton": "Lock and go to recovery"
+	},
+	"diagnostics": {
+		"title": "Diagnostics",
+		"connectionTitle": "Connection",
+		"connectionHint": "Latency — round trip to the relay and back, including connection setup.",
+		"noRelays": "No relays configured.",
+		"probeAgain": "Measure again",
+		"probing": "Measuring…",
+		"storageTitle": "Storage",
+		"deviceStorage": "On this device",
+		"serverStorageUnavailable": "The file server doesn't report how much space is used or allotted yet.",
+		"gaugeAria": "{{pct}} percent used",
+		"problemsTitle": "Needs attention",
+		"problemsTitleN": "Needs attention · {{count}}",
+		"noProblems": "Nothing right now. Only things you can fix yourself appear here.",
+		"missingApi": "Your browser doesn't support “{{name}}” — part of the app won't work.",
+		"desyncedChat": "The chat with “{{name}}” has split into two states: {{count}} messages in a row failed to decrypt. Recreating will restore the chat, but undecrypted messages won't come back.",
+		"recreate": "Recreate",
+		"recreating": "Recreating…",
+		"bootLogSummary": "Boot log · {{count}} entries, {{problems}} of them concerning",
+		"engineSummary": "Engine checks",
+		"check": "Check",
+		"copyReport": "Copy report",
+		"buildLine": "Build {{hash}} · database schema {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "no answer",
+			"unknown": "unknown",
+			"relays": "fastest relay · {{online}} of {{total}} online",
+			"deviceOf": "used on device of {{total}}",
+			"ofTotal": "{{used}} of {{total}}",
+			"deviceNoQuota": "used on device",
+			"storageUnknown": "—",
+			"storageServerHint": "used on file server",
+			"problems": "need attention"
+		},
+		"engine": {
+			"crypto": "Cryptography",
+			"keys": "Keys and derivation",
+			"worker": "File encryption",
+			"crdt": "State merging",
+			"database": "Database",
+			"outbox": "Send queue",
+			"serviceWorker": "Offline mode and cache",
+			"release": "Build integrity",
+			"transport": "Relays and sync"
+		}
 	}
 }

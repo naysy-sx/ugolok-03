@@ -1,10 +1,9 @@
 import { useState, useEffect } from "preact/hooks";
-import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS as DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
 import { db } from "../../core/store/database.js";
 import { validateEventId } from "../../domain/events/validators.js";
 import { mergeEvent } from "../../core/sync/g-set.js";
 import { lwwWinner } from "../../core/sync/lww.js";
-import { useRoute, ROUTES } from "../../ui/router.js";
 import { enqueue, listPending, markSent } from "../../core/store/outbox.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
@@ -17,22 +16,23 @@ import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/cry
 import { wrap as nip59Wrap, unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
-import Dexie from "dexie";
-import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
-import { toEncryptedRow } from "../../core/store/encrypted-table.js";
-import { generateSyntheticEvents } from "../../domain/events/synthetic-fixtures.js";
 import { createRelayConnection } from "../../core/transport/relay-pool.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
-import SyncIndicator from "../components/sync-indicator.jsx";
+import { useRelayStatus, useDeviceStorage, useBootLog, formatBytes } from "../signals/diagnostics.js";
 import Screen from "../components/screen.jsx";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { profiles } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
 import { listDesyncedChats, recreateChatConversation } from "../../domain/messaging/chat.js";
+import { t } from "../signals/i18n.js";
+import IconGlobe from "../icons/globe.jsx";
+import IconServer from "../icons/server.jsx";
+import IconShield from "../icons/shield.jsx";
+import IconChevronDown from "../icons/chevron-down.jsx";
 
 function envChecks() {
 	return [
@@ -390,12 +390,6 @@ function cryptoWorkerTone(state) {
 	return "var(--muted)";
 }
 
-function pSpikeTone(state) {
-	if (state.startsWith("ok")) return "var(--good)";
-	if (state.startsWith("ошибка")) return "var(--bad)";
-	return "var(--muted)";
-}
-
 function transportSyncTone(state) {
 	if (state.startsWith("ok")) return "var(--good)";
 	if (state.startsWith("ошибка")) return "var(--bad)";
@@ -436,92 +430,6 @@ function useCryptoWorkerStatus() {
 		})();
 	}, []);
 	return state;
-}
-
-function usePSpikeBenchmark() {
-	const [status, setStatus] = useState("не запущен");
-
-	async function run() {
-		setStatus("генерация синтетических событий (не входит в замер)…");
-		// Отдать кадр браузеру ДО тяжёлой синхронной работы — иначе виден только
-		// клик, статус выше физически не успевает отрисоваться до начала генерации.
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		let worker;
-		let benchDb;
-		try {
-			const { fixtures, giftwrapRecipientPrivKey } = await generateSyntheticEvents(5000);
-			const ownerPubHex = bytesToHex(getPublicKey(giftwrapRecipientPrivKey));
-
-			benchDb = new Dexie("ugolok-p-spike-bench-" + Date.now());
-			benchDb.version(1).stores({ derived: "foldKey" });
-			await benchDb.open();
-			const dbKey = crypto.getRandomValues(new Uint8Array(32));
-
-			worker = new CryptoWorker();
-			const api = Comlink.wrap(worker);
-
-			setStatus("прогон пайплайна (идёт замер)…");
-			const t0 = performance.now();
-
-			const verified = await api.batchVerify(fixtures.map((f) => f.event));
-
-			// проход 1: fold-решение по МЕТАДАННЫМ (created_at/id) — без расшифровки,
-			// расшифровывать имеет смысл только реального победителя LWW, не все версии
-			const winnerByFoldKey = new Map();
-			const fixtureByEventId = new Map();
-			for (let i = 0; i < fixtures.length; i++) {
-				if (!verified[i]) continue;
-				const f = fixtures[i];
-				if (f.kindGroup === "giftwrap") continue;
-				fixtureByEventId.set(f.event.id, f);
-				const existing = winnerByFoldKey.get(f.foldKey);
-				winnerByFoldKey.set(f.foldKey, existing ? lwwWinner(existing, f.event) : f.event);
-			}
-
-			// проход 2: расшифровка + запись только победителей
-			for (const [foldKey, winnerEvent] of winnerByFoldKey) {
-				const f = fixtureByEventId.get(winnerEvent.id);
-				let value;
-				if (f.kindGroup === "profile") {
-					value = JSON.parse(f.event.content);
-				} else if (f.kindGroup === "permission-proxy") {
-					value = JSON.parse(nip44Decrypt(f.event.content, giftwrapRecipientPrivKey, ownerPubHex));
-				} else {
-					const [nonceB64, ciphertextB64] = f.event.content.split(":");
-					const nonce = Uint8Array.from(atob(nonceB64), (c) => c.charCodeAt(0));
-					const ciphertext = Uint8Array.from(atob(ciphertextB64), (c) => c.charCodeAt(0));
-					value = chacha20poly1305(f.channelKey, nonce).decrypt(ciphertext);
-				}
-				await benchDb.table("derived").put(toEncryptedRow({ foldKey, value }, ["foldKey"], dbKey));
-			}
-
-			// gift wrap'ы — журнал (G-Set), не fold: каждый расшифровывается и пишется как есть
-			let journalCount = 0;
-			for (let i = 0; i < fixtures.length; i++) {
-				if (!verified[i] || fixtures[i].kindGroup !== "giftwrap") continue;
-				nip59Unwrap(fixtures[i].event, giftwrapRecipientPrivKey);
-				await mergeEvent(fixtures[i].event);
-				journalCount++;
-			}
-
-			const elapsedMs = performance.now() - t0;
-			const withinBudget = elapsedMs <= 30000;
-			setStatus(
-				(withinBudget ? "ok" : "ошибка") +
-					` (${elapsedMs.toFixed(0)} мс на 5000 событий, журнал ${journalCount}, materialized ${winnerByFoldKey.size}; порог NF-09 30000 мс)`,
-			);
-		} catch (e) {
-			setStatus("ошибка: " + (e?.message || e));
-		} finally {
-			worker?.terminate();
-			if (benchDb) {
-				benchDb.close();
-				await benchDb.delete();
-			}
-		}
-	}
-
-	return { status, run };
 }
 
 // НЕ секрет: фиксированная тестовая identity ТОЛЬКО для этого self-check
@@ -654,218 +562,270 @@ function useDesyncedChats() {
 	return { chats, recreate, busyContact };
 }
 
-function Row({ c }) {
-	const tone = c.ok ? "var(--good)" : c.critical ? "var(--bad)" : "var(--warn)";
-	const mark = c.ok ? "✓" : c.critical ? "✗" : "!";
+// Панель раздела — та же молекула, что в settings.jsx/profile.jsx
+// (MOLECULES.md). НЕ заводи здесь свою: если понадобится общая, вынести
+// её в отдельный модуль — но это отдельная задача, не эта.
+function Panel({ title, hint, icon: Icon, children }) {
 	return (
-		<li
-			class="row"
-			style={{
-				"--gap": "var(--space-s)",
-				"--align": "flex-start",
-				paddingBlock: "var(--space-s)",
-				borderBlockEnd: "var(--border-width) solid var(--border)",
-			}}
-		>
-			<span
-				aria-hidden="true"
-				style={{ color: tone, fontWeight: "var(--weight-bold)" }}
-			>
-				{mark}
-			</span>
-			<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<span>{c.label}</span>
-				{c.hint && <small style={{ color: "var(--muted)" }}>{c.hint}</small>}
-			</span>
-		</li>
-	);
-}
-
-// Единая визуальная оболочка для всех проверок этапов (было: ~15 самостоятельно
-// стилизованных <p>, каждая со своим inline-color — отсюда жалоба "пёстро и
-// разрозненно"). tone/статус остаются per-check логикой (releaseHashTone,
-// dbTone, ... — семантика "что считается ok" у них разная и намеренно не унифицирована),
-// меняется только то, КАК это рисуется.
-function StatusRow({ label, status, tone, action, hint }) {
-	return (
-		<li
-			class="stack"
-			style={{
-				"--gap": "var(--space-3xs)",
-				paddingBlock: "var(--space-s)",
-				borderBlockEnd: "var(--border-width) solid var(--border)",
-			}}
-		>
-			<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-				<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<span aria-hidden="true" style={{ color: tone }}>●</span>
-					<span>{label}</span>
-				</span>
-				{action}
-			</span>
-			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
-				{status}
-				{hint ? ` · ${hint}` : ""}
-			</small>
-		</li>
-	);
-}
-
-function Section({ title, children }) {
-	return (
-		<section class="stack" style={{ "--gap": "var(--space-s)" }}>
-			<h2
-				style={{
-					fontSize: "0.8rem",
-					fontWeight: "var(--weight-bold)",
-					textTransform: "uppercase",
-					letterSpacing: "0.04em",
-					color: "var(--muted)",
-				}}
-			>
-				{title}
-			</h2>
-			<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-				{children}
-			</ul>
+		<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
+			<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+					{Icon && <Icon />}
+					{title}
+				</h2>
+				{hint && <p class="panel__hint">{hint}</p>}
+			</div>
+			{children}
 		</section>
+	);
+}
+
+// Плитка показателя. tone=null — когда числа нет и красить нечего;
+// зелёная точка у неизвестного значения врала бы.
+function Metric({ value, label, tone }) {
+	return (
+		<div class="metric stack" style={{ "--gap": "var(--space-3xs)" }}>
+			<span class="metric__value bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+				{tone && <span class={`dot dot--${tone}`} aria-hidden="true" />}
+				{value}
+			</span>
+			<span class="metric__label">{label}</span>
+		</div>
+	);
+}
+
+function Gauge({ used, total }) {
+	const pct = Math.min(100, Math.round((used / total) * 100));
+	const tone = pct >= 90 ? " gauge--bad" : pct >= 75 ? " gauge--warn" : "";
+	return (
+		<div class={`gauge${tone}`} role="img" aria-label={t("diagnostics.gaugeAria", { pct })}>
+			<div class="gauge__fill" style={{ inlineSize: `${pct}%` }} />
+		</div>
+	);
+}
+
+function EngineRow({ label, status, tone, action }) {
+	return (
+		<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+			<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+				<span class="dot" style={{ backgroundColor: tone }} aria-hidden="true" />
+				<span>{label}</span>
+			</div>
+			<span class="gauge__legend rigid truncate" style={{ "--lines": "1" }}>
+				{status}
+			</span>
+			{action}
+		</div>
 	);
 }
 
 export default function Diagnostics() {
 	const checks = envChecks();
+	const missingApis = checks.filter((c) => c.critical && !c.ok);
+
+	const relays = useRelayStatus();
+	const device = useDeviceStorage();
+	const bootLog = useBootLog();
+	const desynced = useDesyncedChats();
+
 	const sw = useServiceWorker();
 	const dbStatus = useDatabaseStatus();
 	const cacheStatus = useCacheStatus();
 	const coreLogicStatus = useCoreLogicStatus();
-
-	const pass = checks.filter((c) => c.critical).every((c) => c.ok);
-
-	const route = useRoute();
 	const outboxStatus = useOutboxStatus();
 	const releaseHashStatus = useReleaseHashStatus();
 	const nip06Status = useNip06Status();
 	const keystoreStatus = useKeystoreStatus();
 	const signCryptoStatus = useSignCryptoStatus();
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
-	const pSpike = usePSpikeBenchmark();
 	const transportSync = useTransportSyncCheck();
-	const desynced = useDesyncedChats();
+
+	const onlineRelays = relays.members.filter((m) => m.state === "connected");
+	const latencies = Object.values(relays.latency).filter((v) => v != null);
+	const bestLatency = latencies.length ? Math.min(...latencies) : null;
+
+	// Проблема — это то, что человек может либо исправить, либо обязан
+	// знать. Отсутствие критического API и разошедшаяся переписка сюда
+	// попадают; "service worker ещё не активен" — нет, это состояние, а
+	// не проблема, и живёт в проверках движка.
+	const problemCount = missingApis.length + desynced.chats.length;
+
+	function copyReport() {
+		const report = [
+			`build ${BUILD_HASH}`,
+			`db ${db.verno}`,
+			navigator.userAgent,
+			"",
+			...relays.members.map((m) => `${m.url} — ${m.state} — ${relays.latency[m.url] ?? "—"} ms`),
+			"",
+			...bootLog.lines.map((l) => `${(l.at / 1000).toFixed(2)} [${l.level}] ${l.message}`),
+		].join("\n");
+		navigator.clipboard?.writeText(report);
+	}
 
 	return (
-		<Screen title="Проверка движка">
-		<div
-			class="stack"
-			style={{
-				"--gap": "var(--space-m)",
-				"--ok": "oklch(0.62 0.17 150)",
-				"--bad": "oklch(0.58 0.21 25)",
-				"--warn": "oklch(0.72 0.15 85)",
-			}}
-		>
-			<small style={{ color: "var(--muted)" }}>
-				build <code>{BUILD_HASH}</code> · relays:{" "}
-				{DEFAULT_RELAYS.length ? DEFAULT_RELAYS.join(", ") : "—"} · blossom:{" "}
-				{DEFAULT_BLOSSOM_SERVERS.length ? DEFAULT_BLOSSOM_SERVERS.join(", ") : "—"}
-			</small>
+		<Screen title={t("diagnostics.title")}>
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
+				{/* Четыре плитки — весь ответ на вопрос "как дела" до первого
+				    клика. Больше четырёх не добавлять: пятая превращает сводку
+				    обратно в список, из которого этот экран и вытаскивали. */}
+				<div class="metric-grid">
+					<Metric
+						tone={bestLatency == null ? "warn" : "good"}
+						value={bestLatency == null ? t("diagnostics.metrics.noAnswer") : t("diagnostics.metrics.ms", { n: bestLatency })}
+						label={t("diagnostics.metrics.relays", { online: onlineRelays.length, total: relays.members.length })}
+					/>
+					<Metric
+						tone={device.usage == null ? null : "good"}
+						value={device.usage == null ? t("diagnostics.metrics.unknown") : formatBytes(device.usage)}
+						label={device.quota == null ? t("diagnostics.metrics.deviceNoQuota") : t("diagnostics.metrics.deviceOf", { total: formatBytes(device.quota) })}
+					/>
+					<Metric
+						tone={null}
+						value={t("diagnostics.metrics.storageUnknown")}
+						label={t("diagnostics.metrics.storageServerHint")}
+					/>
+					<Metric
+						tone={problemCount > 0 ? "bad" : "good"}
+						value={String(problemCount)}
+						label={t("diagnostics.metrics.problems")}
+					/>
+				</div>
 
-			<p
-				role="status"
-				style={{
-					paddingBlock: "var(--space-s)",
-					paddingInline: "var(--space-m)",
-					background: "var(--surface)",
-					borderInlineStart: `3px solid ${pass ? "var(--good)" : "var(--bad)"}`,
-					color: pass ? "var(--good)" : "var(--bad)",
-				}}
-			>
-				{pass
-					? "Критические API доступны — окружение пригодно"
-					: "Нет критического API — клиент здесь не запустится"}
-			</p>
-
-			<Section title="Окружение">
-				{checks.map((c) => (
-					<Row c={c} />
-				))}
-				<StatusRow label="Маршрут" status={route} tone="var(--fg)" hint={`доступны: ${ROUTES.join(", ")}`} />
-			</Section>
-
-			<Section title="Ядро и криптография">
-				<StatusRow label="Этап 4 · CRDT-примитивы" status={coreLogicStatus} tone={coreLogicTone(coreLogicStatus)} />
-				<StatusRow label="Этап 7 · NIP-06" status={nip06Status} tone={nip06Tone(nip06Status)} />
-				<StatusRow label="Этап 8 · KeyStore + деривация" status={keystoreStatus} tone={keystoreTone(keystoreStatus)} />
-				<StatusRow label="Этап 9 · sign / NIP-44 / NIP-59" status={signCryptoStatus} tone={nip9Tone(signCryptoStatus)} />
-				<StatusRow label="Этап 10 · файлы + crypto worker" status={cryptoWorkerStatus} tone={cryptoWorkerTone(cryptoWorkerStatus)} />
-			</Section>
-
-			<Section title="Хранилище и офлайн">
-				<StatusRow label="База данных" status={dbStatus} tone={dbTone(dbStatus)} />
-				<StatusRow label="Этап 5 · роутер + outbox" status={outboxStatus} tone={stage5Tone(outboxStatus)} />
-				<StatusRow label="Service Worker" status={sw} tone="var(--fg)" />
-				<StatusRow label="Кэш (Service Worker)" status={cacheStatus} tone={cacheTone(cacheStatus)} />
-				<StatusRow label="Этап 6 · release-хеш" status={releaseHashStatus} tone={releaseHashTone(releaseHashStatus)} />
-			</Section>
-
-			<Section title="Транспорт и синхронизация">
-				<StatusRow
-					label="Этап 15 · P-SPIKE (5000 событий)"
-					status={pSpike.status}
-					tone={pSpikeTone(pSpike.status)}
-					action={
-						<button type="button" onClick={pSpike.run}>
-							Запустить
-						</button>
-					}
-				/>
-				<StatusRow
-					label="Этапы 16-20 · relay pool + AUTH + publisher/subscriber + bootstrap + sync"
-					status={transportSync.status}
-					tone={transportSyncTone(transportSync.status)}
-					action={
-						<button type="button" onClick={transportSync.run}>
-							Проверить
-						</button>
-					}
-				/>
-				<li class="row" style={{ "--gap": "var(--space-s)", "--align": "center", paddingBlock: "var(--space-s)" }}>
-					Соединение:{" "}
-					<SyncIndicator state={transportSync.connState} synced={transportSync.synced} url={transportSync.relayUrl} />
-				</li>
-			</Section>
-
-			{currentUser.value && (
-				<Section title="Переписки">
-					{desynced.chats.length === 0 ? (
-						<li style={{ paddingBlock: "var(--space-s)", color: "var(--muted)" }}>
-							Расхождений не обнаружено.
-						</li>
+				<Panel title={t("diagnostics.connectionTitle")} hint={t("diagnostics.connectionHint")} icon={IconGlobe}>
+					{relays.members.length === 0 ? (
+						<p class="panel__hint">{t("diagnostics.noRelays")}</p>
 					) : (
-						desynced.chats.map((c) => (
-							<StatusRow
-								key={c.contactPubkey}
-								label={`Расхождение · ${profiles.value[c.contactPubkey]?.name || shortPubkey(c.contactPubkey)}`}
-								status={`${c.consecutiveDecryptFailures} сообщений подряд не расшифровались — переписка, вероятно, разошлась на два независимых состояния`}
-								tone="var(--bad)"
-								action={
-									<button
-										type="button"
-										disabled={desynced.busyContact === c.contactPubkey}
-										onClick={() => desynced.recreate(c.contactPubkey)}
-									>
-										{desynced.busyContact === c.contactPubkey ? "Пересоздаю…" : "Пересоздать"}
-									</button>
-								}
-							/>
-						))
+						<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
+							{relays.members.map((m) => (
+								<div key={m.url} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+									<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+										<span class={`dot dot--${m.state === "connected" ? "good" : "warn"}`} aria-hidden="true" />
+										<span class="truncate" style={{ "--lines": "1" }}>{m.url}</span>
+									</div>
+									<span class="gauge__legend rigid">
+										{relays.latency[m.url] == null ? t("diagnostics.metrics.noAnswer") : t("diagnostics.metrics.ms", { n: relays.latency[m.url] })}
+									</span>
+								</div>
+							))}
+						</div>
 					)}
-				</Section>
-			)}
+					<div class="row" style={{ "--gap": "var(--space-s)" }}>
+						<button type="button" class="btn--ghost rigid" disabled={relays.probing} onClick={relays.refresh}>
+							{relays.probing ? t("diagnostics.probing") : t("diagnostics.probeAgain")}
+						</button>
+					</div>
+				</Panel>
 
-			<small style={{ color: "var(--muted)", wordBreak: "break-all" }}>
-				{navigator.userAgent}
-			</small>
-		</div>
+				<Panel title={t("diagnostics.storageTitle")} icon={IconServer}>
+					<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
+						<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+							<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+								<span class="set-row__text">{t("diagnostics.deviceStorage")}</span>
+								<span class="gauge__legend rigid">
+									{device.usage == null
+										? t("diagnostics.metrics.unknown")
+										: device.quota == null
+											? formatBytes(device.usage)
+											: t("diagnostics.metrics.ofTotal", { used: formatBytes(device.usage), total: formatBytes(device.quota) })}
+								</span>
+							</div>
+							{device.usage != null && device.quota ? <Gauge used={device.usage} total={device.quota} /> : null}
+						</div>
+
+						{/* Лимит хранилища не показывается числом, пока сервер его не
+						    сообщает. Подставить сюда сумму размеров из files_nodes
+						    нельзя: это "загруженное с ЭТОГО устройства", а не
+						    "занятое на сервере", и расхождение молча вводило бы в
+						    заблуждение. См. §10 п.1. */}
+						<p class="panel__hint">{t("diagnostics.serverStorageUnavailable")}</p>
+					</div>
+				</Panel>
+
+				<Panel title={problemCount > 0 ? t("diagnostics.problemsTitleN", { count: problemCount }) : t("diagnostics.problemsTitle")} icon={IconShield}>
+					{problemCount === 0 && <p class="panel__hint">{t("diagnostics.noProblems")}</p>}
+
+					{missingApis.map((c) => (
+						<p key={c.label} class="callout callout--bad">
+							{t("diagnostics.missingApi", { name: c.label })}
+						</p>
+					))}
+
+					{desynced.chats.map((c) => (
+						<div key={c.contactPubkey} class="callout callout--bad row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+							<span class="grow">
+								{t("diagnostics.desyncedChat", {
+									name: profiles.value[c.contactPubkey]?.name || shortPubkey(c.contactPubkey),
+									count: c.consecutiveDecryptFailures,
+								})}
+							</span>
+							<button
+								type="button"
+								class="btn--ghost rigid"
+								disabled={desynced.busyContact === c.contactPubkey}
+								onClick={() => desynced.recreate(c.contactPubkey)}
+							>
+								{desynced.busyContact === c.contactPubkey ? t("diagnostics.recreating") : t("diagnostics.recreate")}
+							</button>
+						</div>
+					))}
+				</Panel>
+
+				<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+					<details class="exceptions">
+						<summary class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							<IconChevronDown />
+							{t("diagnostics.bootLogSummary", { count: bootLog.lines.length, problems: bootLog.problems })}
+						</summary>
+						<div class="exceptions__body">
+							<div class="logview scroller stack" style={{ "--gap": "0" }}>
+								{bootLog.lines.map((line, i) => (
+									<div key={i} class={`logview__line${line.level === "info" ? "" : ` logview__line--${line.level === "warn" ? "warn" : "bad"}`}`}>
+										<span class="logview__t">{(line.at / 1000).toFixed(2)}</span>
+										<span>{line.message}</span>
+									</div>
+								))}
+							</div>
+						</div>
+					</details>
+
+					<details class="exceptions">
+						<summary class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							<IconChevronDown />
+							{t("diagnostics.engineSummary")}
+						</summary>
+						<div class="exceptions__body">
+							<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
+								<EngineRow label={t("diagnostics.engine.crypto")} status={signCryptoStatus} tone={nip9Tone(signCryptoStatus)} />
+								<EngineRow label={t("diagnostics.engine.keys")} status={`${nip06Status} · ${keystoreStatus}`} tone={keystoreTone(keystoreStatus)} />
+								<EngineRow label={t("diagnostics.engine.worker")} status={cryptoWorkerStatus} tone={cryptoWorkerTone(cryptoWorkerStatus)} />
+								<EngineRow label={t("diagnostics.engine.crdt")} status={coreLogicStatus} tone={coreLogicTone(coreLogicStatus)} />
+								<EngineRow label={t("diagnostics.engine.database")} status={dbStatus} tone={dbTone(dbStatus)} />
+								<EngineRow label={t("diagnostics.engine.outbox")} status={outboxStatus} tone={stage5Tone(outboxStatus)} />
+								<EngineRow label={t("diagnostics.engine.serviceWorker")} status={`${sw} · ${cacheStatus}`} tone={cacheTone(cacheStatus)} />
+								<EngineRow label={t("diagnostics.engine.release")} status={releaseHashStatus} tone={releaseHashTone(releaseHashStatus)} />
+								<EngineRow
+									label={t("diagnostics.engine.transport")}
+									status={transportSync.status}
+									tone={transportSyncTone(transportSync.status)}
+									action={
+										<button type="button" class="btn--ghost rigid" onClick={transportSync.run}>
+											{t("diagnostics.check")}
+										</button>
+									}
+								/>
+							</div>
+						</div>
+					</details>
+				</div>
+
+				<p class="buildinfo">
+					{t("diagnostics.buildLine", { hash: BUILD_HASH, schema: db.verno })} · {navigator.userAgent}{" "}
+					<button type="button" class="btn--ghost" onClick={copyReport}>
+						{t("diagnostics.copyReport")}
+					</button>
+				</p>
+			</div>
 		</Screen>
 	);
 }

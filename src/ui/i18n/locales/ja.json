@@ -974,5 +974,52 @@
 		"recoverTitle": "アクセスの復旧",
 		"recoverBody": "フレーズによる復旧はログイン画面で行います。下のボタンを押すと、アプリはメモリから鍵を解放してログイン画面に戻ります。そこで「詳細設定」を選び、秘密のフレーズでのログインを行ってください。",
 		"recoverButton": "ロックして復旧へ進む"
+	},
+	"diagnostics": {
+		"title": "診断",
+		"connectionTitle": "接続",
+		"connectionHint": "遅延 — 接続確立を含む、リレーへの往復にかかる時間。",
+		"noRelays": "リレーが設定されていません。",
+		"probeAgain": "再測定",
+		"probing": "測定中…",
+		"storageTitle": "ストレージ",
+		"deviceStorage": "この端末上",
+		"serverStorageUnavailable": "ファイルサーバーはまだ使用量と割当量を報告していません。",
+		"gaugeAria": "{{pct}}パーセント使用",
+		"problemsTitle": "対応が必要",
+		"problemsTitleN": "対応が必要 · {{count}}",
+		"noProblems": "現在は問題ありません。ここには自分で直せることだけが表示されます。",
+		"missingApi": "お使いのブラウザは「{{name}}」に対応していません — アプリの一部が動作しません。",
+		"desyncedChat": "「{{name}}」とのやり取りは2つの状態に分岐しました：{{count}}件のメッセージが連続して復号できませんでした。再作成するとやり取りは復元されますが、復号できなかったメッセージは戻りません。",
+		"recreate": "再作成",
+		"recreating": "再作成中…",
+		"bootLogSummary": "起動ログ · {{count}}件（うち要注意 {{problems}}件）",
+		"engineSummary": "エンジンのチェック",
+		"check": "確認",
+		"copyReport": "レポートをコピー",
+		"buildLine": "ビルド {{hash}} · DBスキーマ {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "応答なし",
+			"unknown": "不明",
+			"relays": "最速リレー · {{total}}件中{{online}}件がオンライン",
+			"deviceOf": "端末上の使用量（全{{total}}中）",
+			"ofTotal": "{{total}}中{{used}}",
+			"deviceNoQuota": "端末上の使用量",
+			"storageUnknown": "—",
+			"storageServerHint": "ファイルサーバー上の使用量",
+			"problems": "要対応"
+		},
+		"engine": {
+			"crypto": "暗号処理",
+			"keys": "鍵と鍵導出",
+			"worker": "ファイル暗号化",
+			"crdt": "状態のマージ",
+			"database": "データベース",
+			"outbox": "送信キュー",
+			"serviceWorker": "オフラインモードとキャッシュ",
+			"release": "ビルドの整合性",
+			"transport": "リレーと同期"
+		}
 	}
 }

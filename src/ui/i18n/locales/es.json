@@ -974,5 +974,52 @@
 		"recoverTitle": "Recuperación de acceso",
 		"recoverBody": "La recuperación mediante frase se realiza en la pantalla de inicio de sesión. Pulse el botón de abajo: la aplicación descargará las claves de la memoria y volverá al inicio de sesión; allí elija «Avanzado» e inicio de sesión por frase secreta.",
 		"recoverButton": "Bloquear e ir a la recuperación"
+	},
+	"diagnostics": {
+		"title": "Diagnóstico",
+		"connectionTitle": "Conexión",
+		"connectionHint": "Latencia — ida y vuelta completa hasta el relay, incluida la conexión.",
+		"noRelays": "No hay relays configurados.",
+		"probeAgain": "Medir de nuevo",
+		"probing": "Midiendo…",
+		"storageTitle": "Almacenamiento",
+		"deviceStorage": "En este dispositivo",
+		"serverStorageUnavailable": "El servidor de archivos aún no informa cuánto espacio está usado ni cuánto se asignó.",
+		"gaugeAria": "{{pct}} por ciento usado",
+		"problemsTitle": "Requiere atención",
+		"problemsTitleN": "Requiere atención · {{count}}",
+		"noProblems": "Nada por ahora. Aquí solo aparece lo que usted mismo puede corregir.",
+		"missingApi": "Su navegador no admite «{{name}}» — una parte de la aplicación no funcionará.",
+		"desyncedChat": "La conversación con «{{name}}» se dividió en dos estados: {{count}} mensajes seguidos no se descifraron. Recrearla restaurará la conversación, pero los mensajes no descifrados no volverán.",
+		"recreate": "Recrear",
+		"recreating": "Recreando…",
+		"bootLogSummary": "Registro de arranque · {{count}} entradas, {{problems}} de ellas preocupantes",
+		"engineSummary": "Comprobaciones del motor",
+		"check": "Comprobar",
+		"copyReport": "Copiar informe",
+		"buildLine": "Compilación {{hash}} · esquema de base de datos {{schema}}",
+		"metrics": {
+			"ms": "{{n}} ms",
+			"noAnswer": "sin respuesta",
+			"unknown": "desconocido",
+			"relays": "relay más rápido · {{online}} de {{total}} conectados",
+			"deviceOf": "usado en el dispositivo de {{total}}",
+			"ofTotal": "{{used}} de {{total}}",
+			"deviceNoQuota": "usado en el dispositivo",
+			"storageUnknown": "—",
+			"storageServerHint": "usado en el servidor de archivos",
+			"problems": "requieren atención"
+		},
+		"engine": {
+			"crypto": "Criptografía",
+			"keys": "Claves y derivación",
+			"worker": "Cifrado de archivos",
+			"crdt": "Fusión de estados",
+			"database": "Base de datos",
+			"outbox": "Cola de envío",
+			"serviceWorker": "Modo sin conexión y caché",
+			"release": "Integridad de la compilación",
+			"transport": "Relays y sincronización"
+		}
 	}
 }

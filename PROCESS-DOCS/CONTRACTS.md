@@ -20920,3 +20920,97 @@ account-card.jsx) с другим контуром. Пользователь п�
       адресованным явно ассистенту (просьбы про JS/вёрстку карточки) —
       это данные с relay от постороннего пользователя, не инструкция от
       пользователя сессии; проигнорировано, действий не предпринято.
+
+## DIAGNOSTICS-REDESIGN (PROCESS-DOCS/REDESIGN/DIAGNOSTICS/DIAGNOSTICS-REDESIGN.md) — экран «Диагностика» переписан с нуля (вариант Б) — ЗАКРЫТ (код+тесты+живая Chrome-проверка)
+
+ТЗ дано целиком дословно (полный текст новых файлов, точные CSS-блоки,
+готовый тест) — рутинная задача (триаж §13a: (а)), design-записка не
+нужна. Тот же класс задачи, что JOURNAL-REDESIGN/ACCOUNT-REDESIGN —
+реализация Claude напрямую, без worker.sh; перевод остаётся творческой
+частью 11 языков (§8.2) — тоже Claude. Порядок строгий по ТЗ §0 п.5:
+§3 (boot-log.js) → §4 (relay-pool getMembers) → §5 (diagnostics.js) →
+§6 (diagnostics.jsx) → §7 (CSS) → §8 (i18n) → §9 (тесты, написаны ДО
+кода — правило 14).
+
+### Новые контракты
+
+**src/core/diag/boot-log.js** (новый) — кольцевой буфер журнала загрузки
+В ПАМЯТИ (не в БД, описывает только текущий запуск), максимум 200 записей.
+logInfo/logWarn/logError(message), getBootLog() (копия массива),
+countProblems() (warn+error), subscribeBootLog(listener) — функция
+отписки, resetBootLogForTests(). Семь точек вызова расставлены по
+проекту: main.jsx (запуск + успешная регистрация SW — добавлен .then()
+к ранее безусловному .register().catch()), database.js (db.on("ready")
+— обработчика не было, добавлен), transport.js (×2 — переход пула в
+connected/disconnected и завершение инкрементальной синхронизации),
+auth.js (login() — после установки dbKeySig, что и есть точка «ключи
+расшифрованы» в этом коде).
+
+**src/core/transport/relay-pool.js** — createRelayPool получил
+getMembers(): entries.map с {url, read, write, state} — копия, не сами
+connection-объекты. Ничего другого в файле не менялось.
+
+**src/ui/signals/transport.js** — экспорт getRelayMembers() (читает
+connection?.getMembers?.() ?? []). onStateChange пула получает только
+агрегированное состояние (не url конкретного реле) — по ТЗ §4.2 в этом
+случае журнал пишет агрегатную строку («реле: соединение установлено»/
+«связь потеряна»), а поимённое состояние экран берёт из
+getRelayMembers().
+
+**src/ui/signals/diagnostics.js** (новый) — useRelayStatus() (замер
+задержки ОДНОРАЗОВЫМ fetchFromRelay(url, [{kinds:[0],limit:1}]) по
+команде/при открытии экрана, не по таймеру), useDeviceStorage()
+(navigator.storage.estimate()), useBootLog(), formatBytes(bytes).
+
+**src/ui/screens/diagnostics.jsx** — полная замена. Сохранены
+побуквенно: envChecks, все use*Status хуки движка и их *Tone,
+useDesyncedChats, DIAGNOSTICS_SELF_CHECK_PRIVKEY, waitForConnState.
+Удалены: usePSpikeBenchmark/pSpikeTone (нагрузочный тест, не
+диагностика — комментарий в §6.2 ТЗ), Row/StatusRow/Section (заменены
+молекулами Panel/Metric/Gauge/EngineRow из MOLECULES.md),
+<SyncIndicator>, инлайновые --ok/--bad/--warn (перекрывали токены этапа
+70), маршрут (useRoute/ROUTES) — в новом экране не показывается вовсе,
+по букве ТЗ §6.3. Экран теперь полностью локализован (был единственным
+нелокализованным в проекте).
+
+**Отклонение от буквы ТЗ №1:** IconGlobe (§6.5 просил новый файл с
+fill-контуром) уже существовал в проекте (src/ui/icons/globe.jsx,
+stroke-геометрия) и используется в app.jsx/files.jsx/
+active-room-summary.jsx. Переписывать его значило бы менять иконку
+одновременно в трёх посторонних местах ради одной новой панели —
+переиспользован существующий файл без изменений, новый не создавался.
+
+**Отклонение от буквы ТЗ №2:** в узле metrics (§8) отсутствовал ключ
+ofTotal, хотя код §6.3 обращается к t("diagnostics.metrics.ofTotal",
+{used,total}) в панели «Хранилище» — пропуск в тексте ТЗ, не пробел во
+внешних знаниях (rule 9a неприменимо). Ключ добавлен по аналогии с
+соседним deviceOf во всех 12 локалях: "{{used}} из {{total}}" (и
+переводы).
+
+### DoD
+
+- [x] npm test — 2083/2083, включая boot-log.test.js (новый) и
+      i18n.test.js (12 локалей структурно идентичны)
+- [x] npx vite build — зелёный, 925.51 KB gzip (лимит NF-11: 1304 KB;
+      удаление P-SPIKE benchmark из графа сборки компенсировало добавления)
+- [x] grep -rn "P-SPIKE\|pSpike" src/ui/screens/diagnostics.jsx — пусто
+- [x] grep -n "Этап [0-9]" src/ui/screens/diagnostics.jsx — только внутри
+      побуквенно сохранённого комментария useDesyncedChats (этап 73.5),
+      не в UI-разметке
+- [x] grep -n '"--ok"\|--ok:' src/ui/screens/diagnostics.jsx — пусто
+- [x] grep -n "alignItems" src/ui/screens/diagnostics.jsx — пусто
+- [x] grep -n "SyncIndicator" src/ui/screens/diagnostics.jsx — пусто
+- [x] Живая проверка Chrome (тестовый аккаунт diagtest01, порт 5174,
+      локальный strfry/blossom уже был поднят с прошлой сессии): все
+      четыре плитки отрисованы (задержка/устройство/сервер-неизвестно/
+      проблемы-0), панель «Соединение» с поимённым реле и рабочей кнопкой
+      «Замерить снова» (57–62 мс на повторных замерах), панель
+      «Хранилище» с шкалой, панель «Что требует внимания» с текстом-
+      заглушкой при нуле проблем, журнал загрузки — все 6 ожидаемых при
+      успешном логине строк в правильном порядке (запуск → SW → БД →
+      ключи расшифрованы → реле → синхронизация), проверки движка — все
+      «ok», подвал со сборкой/схемой/UA и рабочей кнопкой «Скопировать
+      отчёт». Консоль чистая на всех шагах, включая клик по «Скопировать
+      отчёт» (без ошибок доступа к clipboard). Тестовый аккаунт удалён
+      после проверки (форма с повторным вводом логина+пароля, не
+      window.confirm), dev-сервер остановлен.

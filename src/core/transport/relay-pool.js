@@ -259,6 +259,17 @@ export function createRelayPool(entries, options = {}) {
   return {
     getState: aggregateState,
     getUrl,
+    // Диагностика: агрегат getState() отвечает "хоть что-то живо?", а
+    // человеку на экране нужно "какое именно реле молчит". Отдаём копию
+    // (map по connections), а не сами connection-объекты — снаружи пул
+    // доступен только на чтение.
+    getMembers: () =>
+      entries.map((entry, i) => ({
+        url: entry.url,
+        read: !!entry.read,
+        write: !!entry.write,
+        state: connections[i].getState(),
+      })),
     addMessageHandler,
     connect,
     send,
