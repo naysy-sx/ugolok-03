@@ -114,23 +114,33 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 					</label>
 
 					{settings.showChannels && (
-						<fieldset class="stack" style={{ "--gap": "var(--space-2xs)", border: "none", padding: 0 }}>
+						<fieldset
+							class="stack"
+							style={{ "--gap": "var(--space-s)", borderInlineStart: "none", borderInlineEnd: "none", borderBlockEnd: "none", paddingInline: 0, paddingBlockEnd: 0 }}
+						>
+							{/* border-block-start/padding-block-start НЕ обнуляем (в отличие от
+							    остальных сторон) — это тот самый разделитель, который рисует
+							    .set-list > * + * родителя (fieldset — второй ребёнок .set-list
+							    выше). Обнулить их инлайном значило бы молча погасить чужой
+							    разделитель, найдено при живой проверке пользователем. */}
 							<legend class="sect-title">{t("discovery.whichChannelsLegend")}</legend>
 							{ownedChannels.length === 0 ? (
 								<p class="panel__hint">{t("discovery.noOwnChannels")}</p>
 							) : (
-								ownedChannels.map((c) => (
-									<label key={c.id} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-										<span class="set-row__text">{c.name}</span>
-										<input
-											id={`${instanceId}-ch-${c.id}`}
-											type="checkbox"
-											class="set-row__switch"
-											checked={settings.channelIds.includes(c.id)}
-											onChange={() => toggleChannelId(c.id)}
-										/>
-									</label>
-								))
+								<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
+									{ownedChannels.map((c) => (
+										<label key={c.id} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+											<span class="set-row__text">{c.name}</span>
+											<input
+												id={`${instanceId}-ch-${c.id}`}
+												type="checkbox"
+												class="set-row__switch"
+												checked={settings.channelIds.includes(c.id)}
+												onChange={() => toggleChannelId(c.id)}
+											/>
+										</label>
+									))}
+								</div>
 							)}
 						</fieldset>
 					)}

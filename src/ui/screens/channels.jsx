@@ -190,7 +190,12 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				<label for={`${instanceId}-allow-chat-attachments`}>{t("channels.create.allowChatAttachmentsLabel")}</label>
 			</div>
 
-			<fieldset class="stack" style={{ "--gap": "var(--space-3xs)", border: "none", padding: 0 }}>
+			{/* Не в панели/боксе — своей рамки+радиуса+отступа не заглушаем
+			    (fieldset в minimal.css уже token-based), тот же вид, что у
+			    unlock.jsx/permission-editor.jsx. Найдено живой проверкой:
+			    обнулённый border/padding без внешней рамки-опоры выглядит
+			    голым. */}
+			<fieldset class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<legend>{t("channels.create.visibilityLegend")}</legend>
 				<p style={{ color: "var(--muted)" }}>
 					{t("channels.create.visibilityHint")}
