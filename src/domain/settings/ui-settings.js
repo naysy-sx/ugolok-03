@@ -5,6 +5,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
 import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
@@ -135,11 +136,16 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 		// интерфейса определяется системным языком, а не жёстко зашитым "ru"
 		// (DEFAULT_SETTINGS.language) — тот же принцип, что relayUrls/
 		// blossomUrls уже получают build-time дефолт именно в этой ветке.
+		const boot = readBootstrapEndpoints();
+		const relayUrls = boot.relayUrl
+			? [{ url: boot.relayUrl, read: true, write: true }]
+			: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true }));
+		const blossomUrls = boot.blossomUrl ? [boot.blossomUrl] : [...BUILD_DEFAULT_BLOSSOM_SERVERS];
 		return mergeWithDefaults({
 			language: detectSystemLocale(),
-			relayUrls: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true })),
-			blossomUrls: [...BUILD_DEFAULT_BLOSSOM_SERVERS],
-			activeBlossomUrl: BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? null,
+			relayUrls,
+			blossomUrls,
+			activeBlossomUrl: blossomUrls[0] ?? null,
 		});
 	}
 	const { ownerPubkey: _drop, ...settings } = row;

@@ -29,6 +29,7 @@ import { parseRelayListEvent } from "../src/domain/identity/relay-list.js";
 import { parseDmRelayListEvent } from "../src/domain/identity/dm-relay-list.js";
 import { DEFAULT_CUSTOM_PALETTE } from "../src/ui/theme/palette-apply.js";
 import { ACCENT_FORBIDDEN_ZONES } from "../src/ui/theme/palette-generator.js";
+import { writeBootstrapEndpoints } from "../src/domain/settings/bootstrap-endpoints.js";
 
 function isHueForbidden(hue) {
 	return ACCENT_FORBIDDEN_ZONES.some((zone) => {
@@ -107,6 +108,39 @@ test("loadUiSettings: без локальной записи -> дефолт", a
 	assert.equal(settings.customPalette, null, "совсем новый аккаунт без accentColorId — customPalette не выдумывается, null (build-дефолт применяется на уровне applyCustomPalette, не тут)");
 	assert.equal(settings.uiScale, "medium");
 	assert.deepEqual(settings.notifications, DEFAULT_SETTINGS.notifications);
+});
+
+test("loadUiSettings: нет uiSettings — relay/blossom из bootstrap-endpoints, не молча BUILD_DEFAULT", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		writeBootstrapEndpoints(
+			{
+				relayUrl: "wss://relay.example:7777",
+				blossomUrl: "https://blossom.example:8080",
+			},
+			storage,
+		);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay.example:7777", read: true, write: true }]);
+		assert.deepEqual(settings.blossomUrls, ["https://blossom.example:8080"]);
+		assert.equal(settings.activeBlossomUrl, "https://blossom.example:8080");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
 });
 
 // Этап 70 — миграция старого accentColorId (14 именованных пресетов, удалены

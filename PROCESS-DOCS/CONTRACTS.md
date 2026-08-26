@@ -1876,12 +1876,11 @@ export default function SyncIndicator({ state, synced, url });
 Затрагивает `vite.config.js` и `server/strfry/whitelist.json`:
 
 ```js
-function buildDefaultRelays(command);
-// command === "serve" (npm run dev) и BUILD_DEFAULT_RELAYS не задан явно
-// через env → ["ws://127.0.0.1:7777"] (локальный strfry, не placeholder).
-// command === "build"/"preview" → прежнее поведение, ["wss://relay.example"]
-// (продакшн-плейсхолдер, обязана переопределить конфигурация деплоя).
-// Явный env BUILD_DEFAULT_RELAYS всегда выигрывает в обоих режимах.
+function buildDefaultRelays();
+// Без BUILD_DEFAULT_RELAYS → ["ws://127.0.0.1:7777"] и в serve, и в build.
+// (Суперседит прежнее ветвление command === "serve" / плейсхолдер прод.
+// Актуальная правка: «build и serve — одни localhost-дефолты» ниже.)
+// Явный env BUILD_DEFAULT_RELAYS всегда выигрывает.
 
 function devRelayPlugin(); // apply: "serve" — на build/preview не действует
 // configureServer: если server/strfry/strfry-src/strfry не собран — warn и
@@ -1925,20 +1924,46 @@ realm `ugolok.local`, relay-порты `49160–49200`, `no-cli`/`no-tls`/
 `make -jN` (перелинковка после `brew upgrade` secp256k1/lmdb/libuv).
 
 ```js
-function buildDefaultIceServers(command);
-// command === "serve" и BUILD_DEFAULT_ICE_SERVERS не задан явно:
-//   [
-//     { urls: "stun:127.0.0.1:3478" },
-//     { urls: "turn:127.0.0.1:3478", username: "ugolok", credential: "ugolok-dev" },
-//     { urls: "stun:stun.l.google.com:19302" },
-//   ]
-// command === "build"/"preview": прежнее [{ urls: "stun:stun.l.google.com:19302" }]
-// Явный env BUILD_DEFAULT_ICE_SERVERS всегда выигрывает.
+function buildDefaultIceServers();
+// Без BUILD_DEFAULT_ICE_SERVERS — локальный coturn + Google STUN fallback,
+// и в serve, и в build. Актуальная правка ниже.
 
 function devTurnPlugin(); // apply: "serve"
 // configureServer: нет turnserver в PATH и типичных Homebrew-путях —
 // warn и no-op; иначе spawn server/coturn/run.sh.
 ```
+
+### Правка контракта: build и serve — одни localhost-дефолты
+
+По прямой просьбе пользователя: production-сборка (`npm run build`) без
+env больше не компилирует плейсхолдеры `wss://relay.example` /
+`https://blossom.example` / один публичный Google STUN. Дефолт — локальный
+остров, тот же, что `npm run dev`. Настоящий деплой переопределяет через
+`BUILD_DEFAULT_*` / `BUILD_BOOTSTRAP_RELAYS`.
+
+```js
+function buildDefaultRelays();
+// env BUILD_DEFAULT_RELAYS (JSON) → иначе ["ws://127.0.0.1:7777"]
+
+function buildBootstrapRelays();
+// env BUILD_BOOTSTRAP_RELAYS (JSON) → иначе buildDefaultRelays()
+
+function buildDefaultBlossomServers();
+// env BUILD_DEFAULT_BLOSSOM_SERVERS (JSON) → иначе ["http://127.0.0.1:8080"]
+
+function buildDefaultIceServers();
+// env BUILD_DEFAULT_ICE_SERVERS (JSON) → иначе
+//   [
+//     { urls: "stun:127.0.0.1:3478" },
+//     { urls: "turn:127.0.0.1:3478", username: "ugolok", credential: "ugolok-dev" },
+//     { urls: "stun:stun.l.google.com:19302" },
+//   ]
+```
+
+Ветвления `command === "serve"` в этих четырёх функциях больше нет.
+`command` у `defineConfig` остаётся — им по-прежнему пользуются только
+dev-плагины (`apply: "serve"`). `src/config.js` не меняется: читает те же
+`__BUILD_*__` define.
 
 `server/strfry/whitelist.json` — правка дефолта: раньше `[]` (deny-all),
 теперь содержит РОВНО один pubkey —
@@ -4091,9 +4116,9 @@ export function createVoiceRecorder(options = {});
 // config.js
 export const BUILD_DEFAULT_BLOSSOM_SERVERS = typeof __BUILD_DEFAULT_BLOSSOM_SERVERS__ !== "undefined"
   ? __BUILD_DEFAULT_BLOSSOM_SERVERS__ : [];
-// vite.config.js — buildDefaultBlossomServers(command), тот же приём, что
-// buildDefaultRelays: env override -> иначе dev: ["http://127.0.0.1:8080"]
-// (server/blossom/, довесок этапа 28), прод: ["https://blossom.example"] (плейсхолдер).
+// vite.config.js — buildDefaultBlossomServers(), тот же приём, что
+// buildDefaultRelays: env override -> иначе ["http://127.0.0.1:8080"]
+// (локальный остров, и serve, и build). Настоящий деплой — через env.
 ```
 
 ### UI (`chat.jsx`, `message-bubble.jsx`, новые компоненты)
@@ -7136,11 +7161,10 @@ UI-тумблере). `call.js`'s `notifyIncomingCall` вызывается из
 
 ### ICE-серверы (конфигурация)
 
-`vite.config.js`'s `buildDefaultIceServers(command)` — тот же паттерн, что
-relay/Blossom. В `serve` (`npm run dev`) без явного env: локальный coturn
+`vite.config.js`'s `buildDefaultIceServers()` — тот же паттерн, что
+relay/Blossom. Без явного env (и serve, и build): локальный coturn
 (`stun`/`turn` на `127.0.0.1:3478`, статический user `ugolok:ugolok-dev`)
-первым, публичный Google STUN — fallback. В `build`/`preview` без env —
-только публичный STUN (`stun:stun.l.google.com:19302`); прод обязана
+первым, публичный Google STUN — fallback. Настоящий деплой обязан
 переопределить через `BUILD_DEFAULT_ICE_SERVERS` env, добавив свой coturn
 ПЕРВЫМ. Экспортирован как `BUILD_DEFAULT_ICE_SERVERS` в `config.js`,
 потребляется `call.js`'s `configureCallRuntime`.
@@ -9524,9 +9548,9 @@ consumer'а.
 
 ```js
 // vite.config.js, по образцу buildDefaultRelays
-function buildBootstrapRelays(command);
+function buildBootstrapRelays();
 // env BUILD_BOOTSTRAP_RELAYS (JSON-массив) -> если задан, используется;
-// иначе — ТЕ ЖЕ значения, что buildDefaultRelays(command) (сегодня свой
+// иначе — ТЕ ЖЕ значения, что buildDefaultRelays() (сегодня свой
 // relay и bootstrap-relay физически один и тот же сервер — отдельная
 // ручка нужна на будущее, когда ugolok.tech-координатор разойдётся с
 // собственными relay пользователей, см. память проекта, staged rollout).
@@ -12162,13 +12186,20 @@ async function applyProfileUpdates(updates: Map<pubkey, {name?,about?,picture?,c
 `ensureProfilesFetched`/`refreshProfiles` (после `fetchProfiles`) И из
 `refreshLiveProfileSubscription`'s onBatch (`transport.js`, contact-
 ветка, T6.2) — оба пути унифицированы (T7), не два разных сравнения.
-Для каждой записи: `incoming === null` → безусловно пишется в
-`profiles.value[pk] = null` (СУЩЕСТВУЮЩЕЕ поведение `refreshProfiles`,
-`contacts-signals.test.js` — "контакт больше не найден -> обновляет на
-null", НЕ меняется этим этапом) — но НИКОГДА не пишется в
-`contactProfiles` (T5.3 — только про персист, не про сигнал: "не
-кэшировать null НАВСЕГДА" означает не персистить, не запрещает сессионный
-null в сигнале). Иначе (incoming — реальный профиль) —
+Для каждой записи: `incoming === null` — «relay ответил EOSE без
+события», это НЕ удаление профиля. Если в `profiles.value[pk]` уже лежит
+объект (гидрирован из `contactProfiles` или ранее получен по сети) —
+оставить его, `null` не пишется ни в сигнал, ни в персист. Если ключа
+нет — `profiles.value[pk] = null` (сессионный «запрошен, не найден»,
+чтобы `ensureProfilesFetched` не рефетчил каждый рендер). В
+`contactProfiles` `null` НИКОГДА не пишется (T5.3).
+
+Суперседит прежнее «безусловно пишется в сигнал»: живой сбой после
+сноса `strfry-db` (хотфикс трио) — пустой relay затирал UI до npub/
+инициала, хотя IndexedDB-кэш был цел. Свой профиль не страдал: aside
+карточка читает keystore, не `profiles`.
+
+Иначе (incoming — реальный профиль) —
 `isNewerVersion(incoming, profiles.value[pk])` → применяется в
 `profiles.value` И, если `contacts.value.includes(pk)`, в таблицу
 `contactProfiles` (через `ownerPubkeyRef`/`dbKeyRef`, уже существующие
@@ -21185,3 +21216,136 @@ on/off-состояния); `bell-fill.jsx` сгенерирован по таб
       мелкости не увидел.
 - [x] Консоль чистая на всех шагах живой проверки. Тестовый аккаунт
       удалён после проверки, dev-сервер остановлен.
+
+---
+
+## Редизайн стартового экрана (Unlock) + device-level endpoints
+
+ТЗ: `PROCESS-DOCS/REDESIGN/STARTPAGE/UNLOCK-REDESIGN-TZ.md`.
+Не ломает потоки `step` unlock.jsx, `login`/`encryptAndStore`/
+`decryptPrivateKey`/`setRememberedAccountId`, Quick, HelpContent,
+мультирелейный редактор settings.jsx (этап 58–60).
+
+Локали проекта — 12 файлов (`ru,en,es,de,ja,fr,pt,it,nl,pl,tr,zh`),
+не 13.
+
+### `src/domain/settings/bootstrap-endpoints.js` (новый)
+
+Device-level слой. До логина нет `ownerPubkey`/`dbKey` — в
+зашифрованную `uiSettings` не писать. Модуль не импортирует UI,
+Preact, Dexie.
+
+Хранилище: `localStorage`, ключ `ugolok.bootstrapEndpoints.v1`.
+
+```js
+export const BOOTSTRAP_ENDPOINTS_KEY = "ugolok.bootstrapEndpoints.v1";
+
+// Форма значения (то, что лежит в localStorage и что возвращает read):
+// {
+//   relayUrl: string,
+//   blossomUrl: string,
+//   iceServers: Array<{ urls: string, username?: string, credential?: string }>
+// }
+// ICE в uiSettings / kind-событие НЕ кладётся — device-level достаточно
+// для стартового экрана и звонков с этого устройства.
+
+export function parseRelayUrl(raw);    // string | null. ws:// | wss://, trim. пустая → null
+export function parseBlossomUrl(raw);  // string | null. http:// | https://, trim, без хвостового /
+export function parseIceUrl(raw);      // {urls, username?, credential?} | null.
+                                       // turn: | turns: | stun: | stuns:.
+                                       // localhost/127.0.0.1/::1 → username "ugolok", credential "ugolok-dev".
+                                       // чужой URL — только {urls}, без кредлов.
+export function iceUrlFromServers(iceServers); // строка для поля формы: первый turn:/turns:, иначе первый urls
+
+export function readBootstrapEndpoints(storage?);
+// 1) валидная запись в storage (или globalThis.localStorage) — она
+// 2) иначе build-time: BUILD_DEFAULT_RELAYS[0] ?? "",
+//    BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? "",
+//    [...BUILD_DEFAULT_ICE_SERVERS]
+// storage с интерфейсом getItem/setItem/removeItem — для node-тестов.
+// Нет localStorage → как «нет записи». Битый JSON → как «нет записи».
+
+export function writeBootstrapEndpoints(value, storage?);
+// Мержит с текущим read(). Каждое присутствующее поле валидируется
+// отдельно: невалидный/пустой relayUrl НЕ записывается и НЕ портит
+// предыдущее валидное значение (то же для blossomUrl / iceServers).
+// Пишет сразу при успешном parse, не ждёт логина.
+// Возвращает итоговое значение после мержа.
+
+export function resetBootstrapEndpoints(storage?);
+// Удаляет ключ (или перезаписывает build-time). Последующий read —
+// снова build-time дефолты.
+```
+
+### `src/core/transport/endpoint-health.js` (новый)
+
+Без UI. В Node-тестах — подмена глобалов `WebSocket` / `fetch` /
+`RTCPeerConnection`. Реальную сеть не трогать.
+
+```js
+export async function probeRelay(url, { timeoutMs = 2500 } = {});
+// WebSocket, замер до onopen. onerror/timeout → {ok:false, ms:null}.
+// На open — сразу close(), REQ/EVENT не слать.
+// { ok: boolean, ms: number | null, error?: string }
+
+export async function probeBlossom(url, { timeoutMs = 2500 } = {});
+// fetch GET + AbortSignal timeout. 2xx–4xx → ok (404 на корне нормален).
+// сеть/abort → {ok:false, ms:null}.
+
+export async function probeIce(iceServers, { timeoutMs = 3000 } = {});
+// RTCPeerConnection({iceServers}), createDataChannel, createOffer,
+// setLocalDescription. Успех: первый ICE candidate ИЛИ
+// iceGatheringState === "complete". Timeout без того и другого → ok:false.
+// Затем close(). Не требовать allocate на внешнем TURN.
+```
+
+Пороги latency только для цвета текста UI: &lt;50 good / &lt;150 warn / иначе bad.
+
+### `src/domain/settings/ui-settings.js` — правка фолбэка первого запуска
+
+Принятый контракт `loadUiSettings` (нет строки → in-memory дефолт)
+сохраняется. Меняется только источник URL при отсутствии локальной
+записи: `readBootstrapEndpoints()`, а не напрямую `BUILD_DEFAULT_*`.
+Если bootstrap.relayUrl пуст — как раньше, `BUILD_DEFAULT_RELAYS`.
+Существующая запись uiSettings не перетирается.
+
+ICE в uiSettings по-прежнему нет.
+
+### `src/ui/signals/transport.js`
+
+Последний фолбэк пустого `relayEntries`: bootstrap.relayUrl, затем
+`BUILD_DEFAULT_RELAYS[0]`, затем `ws://127.0.0.1:7777`. После логина
+источник списка — `loadUiSettings().relayUrls`, как сейчас.
+
+### `src/ui/signals/call.js` / `src/ui/screens/quick.jsx`
+
+ICE/relay до settings: `readBootstrapEndpoints()`, не замороженные
+module-level константы из `BUILD_DEFAULT_*` (Quick читает в момент
+create/join, чтобы смена URL на стартовом экране попадала в комнату
+той же сессии).
+
+### `src/ui/screens/unlock.jsx` / `src/ui/components/connection-endpoints.jsx`
+
+- `step` без изменений набора.
+- `step === "main"`: одна колонка; вкладки `role="tablist"` login|create
+  (по умолчанию login, если есть аккаунты, иначе create). Переключение
+  вкладок поля не сбрасывает.
+- Hero: `unlock.main.hero.title` / `lead` без Nostr/MLS.
+- Шапка: логотип + вторичная кнопка справки (`mainView === "help"`).
+  Топ-nav «Главная | Быстрая связь | Справка» и кнопка «Создать
+  пространство» убраны.
+- Основной путь Создать: ник+пароль → `create-generate` →
+  `create-confirm` → `encryptAndStore` → `done`. Фразу показывать
+  обязательно; `isQuickRegister` на этом пути false.
+- `openAdvanced("create"|"import-mnemonic"|"import-key")` — как сейчас,
+  в свёрнутом `<details>` «Другие способы».
+- Быстрая связь: карточка под формой; клик → `mainView === "temp-chat"`
+  (виджеты аккаунтов скрыты, Quick как сейчас).
+- Клик по аккаунту: выбирает его, фокус в пароль. Remembered —
+  выбран и помечен `unlock.main.recentBadge`.
+- Блок «Подключение»: `<details>` свёрнут; debounce ввода 350 мс;
+  Войти/Создать не блокируются при health bad.
+- Ошибки: `role="alert"`.
+
+Приёмка: `tests/bootstrap-endpoints.test.js`, `tests/endpoint-health.test.js`
+(≥10 `test(...)` суммарно), полная регрессия `npm test`, `npm run build`.

@@ -457,8 +457,15 @@ test("refreshProfiles: пустой список -> не вызывает fetch"
 	assert.equal(called, false);
 });
 
-test("refreshProfiles: контакт больше не найден -> обновляет на null (не оставляет устаревшую запись, поведение сигнала НЕ менялось этим этапом)", async () => {
-	profiles.value = { [ALICE_STUB_PK]: { name: "Алиса", createdAt: 1000, id: "ev1" } };
+test("refreshProfiles: пустой ответ relay не стирает закэшированный профиль", async () => {
+	const cached = { name: "Алиса", createdAt: 1000, id: "ev1" };
+	profiles.value = { [ALICE_STUB_PK]: cached };
+	await refreshProfiles([ALICE_STUB_PK], async () => new Map());
+	assert.deepEqual(profiles.value[ALICE_STUB_PK], cached);
+});
+
+test("refreshProfiles: пустой ответ для pubkey без кэша -> null (не рефетчить каждый рендер)", async () => {
+	profiles.value = {};
 	await refreshProfiles([ALICE_STUB_PK], async () => new Map());
 	assert.equal(profiles.value[ALICE_STUB_PK], null);
 });
@@ -518,15 +525,24 @@ test("applyProfileUpdates: старая версия не откатывает �
 	assert.equal(row.about, "новое", "таблица тоже не должна откатиться");
 });
 
-test("applyProfileUpdates: null (не найден) НИКОГДА не персистится, даже для реального контакта", async () => {
+test("applyProfileUpdates: null не стирает закэшированный профиль и не трогает персист", async () => {
 	await setupRuntime();
 	contacts.value = [ALICE_STUB_PK];
 	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био", picture: "", createdAt: 1000, id: "ev1" }]]));
 	await applyProfileUpdates(new Map([[ALICE_STUB_PK, null]]));
 
-	assert.equal(profiles.value[ALICE_STUB_PK], null, "сигнал обновляется на null как раньше");
+	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса", "пустой ответ relay не клобберит кэш");
 	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
 	assert.ok(raw, "персист НЕ должен быть стёрт временным 'не найден' — T5.3");
+});
+
+test("applyProfileUpdates: null без кэша -> сессионный null, в таблицу не пишется", async () => {
+	await setupRuntime();
+	contacts.value = [ALICE_STUB_PK];
+	await applyProfileUpdates(new Map([[ALICE_STUB_PK, null]]));
+	assert.equal(profiles.value[ALICE_STUB_PK], null);
+	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
+	assert.equal(raw, undefined);
 });
 
 test("applyProfileUpdates: возвращает true, если что-то изменилось, false — если нет (echo/устаревшее)", async () => {

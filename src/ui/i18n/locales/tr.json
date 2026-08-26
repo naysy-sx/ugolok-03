@@ -205,7 +205,7 @@
 			"createSpaceButton": "Alan oluştur",
 			"accountsWidget": {
 				"title": "Bu cihazdaki hesaplar",
-				"empty": "Henüz yerel bir hesap yok — sağdan ilkini oluşturun.",
+				"empty": "Henüz yerel hesap yok — ilkini oluşturun.",
 				"ariaLabel": "Profil seç"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "Anahtarla giriş yap (nsec)"
 			},
 			"hero": {
-				"title": "Merkezi sunucu olmadan iletişim için özel bir alan",
-				"lead": "{{appName}}, sohbetler için uçtan uca şifreleme (MLS) ve cihazda veritabanı şifrelemesi sağlayan, Nostr protokolü üzerine kurulu bir mesajlaşma uygulamasıdır. Genel internet olmadan, yerel ağda çalışır."
+				"title": "Kendi özel mesajlaşmanız",
+				"lead": "Sizinkiler için sıcak bir köşe. Sohbet ve aramalar — başkalarının sunucuları olmadan."
 			},
 			"footer": {
 				"tagline": "{{appName}} — özel bir mesajlaşma uygulaması.",
 				"alphaNotice": "Alfa test aşaması. Veriler, ana parolanızdan türetilen bir anahtarla şifrelenir ve bu cihazda yerel olarak saklanır."
 			},
 			"sidebarAriaLabel": "Hesap ve erişim yönetimi",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "Giriş",
+				"create": "Oluştur"
+			},
+			"recentBadge": "son",
+			"orDivider": "veya",
+			"quickCard": {
+				"title": "Hızlı bağlantı",
+				"subtitle": "Hesapsız oda · bağlantı veya kod ile"
+			},
+			"helpLink": "Yardım",
+			"create": {
+				"continue": "Devam"
+			},
+			"connection": {
+				"title": "Bağlantı",
+				"summaryLocal": "yerel ada",
+				"summaryOk": "tüm servisler tamam",
+				"summaryChecking": "denetleniyor…",
+				"summaryBad": "erişilemeyenler var",
+				"intro": "Bu cihazın servis adresleri. URL yapıştırınca denetim hemen başlar.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "denetleniyor…",
+				"statusOk": "erişilebilir",
+				"statusBad": "yanıt yok",
+				"latency": "yanıt {{ms}} ms",
+				"hintBad": "adresi ve servisin çalıştığını kontrol edin",
+				"hintIdle": "bir URL yapıştırın — denetim hemen başlar",
+				"resetDefaults": "Varsayılan adresleri geri yükle",
+				"invalidRelay": "Relay adresine benzemiyor",
+				"invalidBlossom": "Blossom adresine benzemiyor",
+				"invalidTurn": "TURN adresine benzemiyor",
+				"ariaLabel": "Bağlantı adresleri"
+			}
 		}
 	},
 	"placeholder": {

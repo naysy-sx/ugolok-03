@@ -205,7 +205,7 @@
 			"createSpaceButton": "Crear espacio",
 			"accountsWidget": {
 				"title": "Cuentas en este dispositivo",
-				"empty": "Todavía no hay ninguna cuenta local — crea la primera a la derecha.",
+				"empty": "Todavía no hay cuentas locales — crea la primera.",
 				"ariaLabel": "Elegir perfil"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "Acceder con una clave (nsec)"
 			},
 			"hero": {
-				"title": "Un espacio privado para comunicarse sin servidor central",
-				"lead": "{{appName}} es un mensajero basado en el protocolo Nostr con cifrado de extremo a extremo (MLS) para las conversaciones y cifrado de la base de datos en el dispositivo. Funciona en una red local, sin necesidad de internet público."
+				"title": "Tu mensajero privado",
+				"lead": "Un rincón cálido para los tuyos. Chat y llamadas — sin servidores ajenos."
 			},
 			"footer": {
 				"tagline": "{{appName}} — un mensajero privado.",
 				"alphaNotice": "Fase de pruebas alfa. Los datos se cifran con una clave derivada de tu contraseña maestra y se guardan localmente en este dispositivo."
 			},
 			"sidebarAriaLabel": "Gestión de cuentas y acceso",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "Entrar",
+				"create": "Crear"
+			},
+			"recentBadge": "reciente",
+			"orDivider": "o",
+			"quickCard": {
+				"title": "Conexión rápida",
+				"subtitle": "Sala sin cuenta · por enlace o código"
+			},
+			"helpLink": "Ayuda",
+			"create": {
+				"continue": "Continuar"
+			},
+			"connection": {
+				"title": "Conexión",
+				"summaryLocal": "isla local",
+				"summaryOk": "todos los servicios bien",
+				"summaryChecking": "comprobando…",
+				"summaryBad": "hay servicios caídos",
+				"intro": "Direcciones de los servicios de este dispositivo. La comprobación empieza al pegar la URL.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "comprobando…",
+				"statusOk": "disponible",
+				"statusBad": "no responde",
+				"latency": "latencia {{ms}} ms",
+				"hintBad": "comprueba la dirección y que el servicio esté en marcha",
+				"hintIdle": "pega una URL — la comprobación empieza al instante",
+				"resetDefaults": "Restaurar direcciones predeterminadas",
+				"invalidRelay": "no parece una dirección de Relay",
+				"invalidBlossom": "no parece una dirección de Blossom",
+				"invalidTurn": "no parece una dirección de TURN",
+				"ariaLabel": "Direcciones de conexión"
+			}
 		}
 	},
 	"placeholder": {

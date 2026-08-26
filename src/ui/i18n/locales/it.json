@@ -205,7 +205,7 @@
 			"createSpaceButton": "Crea uno spazio",
 			"accountsWidget": {
 				"title": "Account su questo dispositivo",
-				"empty": "Nessun account locale ancora — crea il primo a destra.",
+				"empty": "Non ci sono ancora account locali — creane il primo.",
 				"ariaLabel": "Scegli profilo"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "Accedi con una chiave (nsec)"
 			},
 			"hero": {
-				"title": "Uno spazio privato per comunicare senza server centrale",
-				"lead": "{{appName}} è un messenger costruito sul protocollo Nostr con crittografia end-to-end (MLS) per le conversazioni e crittografia del database sul dispositivo. Funziona su rete locale, senza internet pubblico."
+				"title": "Il tuo messenger privato",
+				"lead": "Un angolo caldo per i tuoi. Chat e chiamate — senza server di altri."
 			},
 			"footer": {
 				"tagline": "{{appName}} — un messenger privato.",
 				"alphaNotice": "Test alfa. I dati vengono cifrati con una chiave derivata dalla tua password principale e conservati localmente su questo dispositivo."
 			},
 			"sidebarAriaLabel": "Gestione di account e accesso",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "Accedi",
+				"create": "Crea"
+			},
+			"recentBadge": "recente",
+			"orDivider": "oppure",
+			"quickCard": {
+				"title": "Connessione rapida",
+				"subtitle": "Stanza senza account · tramite link o codice"
+			},
+			"helpLink": "Guida",
+			"create": {
+				"continue": "Continua"
+			},
+			"connection": {
+				"title": "Connessione",
+				"summaryLocal": "isola locale",
+				"summaryOk": "tutti i servizi ok",
+				"summaryChecking": "verifica…",
+				"summaryBad": "alcuni non raggiungibili",
+				"intro": "Indirizzi dei servizi di questo dispositivo. Il controllo inizia appena incolli un URL.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "verifica…",
+				"statusOk": "raggiungibile",
+				"statusBad": "nessuna risposta",
+				"latency": "latenza {{ms}} ms",
+				"hintBad": "controlla l'indirizzo e che il servizio sia avviato",
+				"hintIdle": "incolla un URL — il controllo parte subito",
+				"resetDefaults": "Ripristina gli indirizzi predefiniti",
+				"invalidRelay": "non sembra un indirizzo Relay",
+				"invalidBlossom": "non sembra un indirizzo Blossom",
+				"invalidTurn": "non sembra un indirizzo TURN",
+				"ariaLabel": "Indirizzi di connessione"
+			}
 		}
 	},
 	"placeholder": {

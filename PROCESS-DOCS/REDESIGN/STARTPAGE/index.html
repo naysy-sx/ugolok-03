@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="dark light" />
+        <title>Уголок — стартовый экран (концепт v2)</title>
+        <style>
+            /*
+          Палитра из референсов (MP110 + тепло MP040):
+          Neverything #13181B · Victorian Peacock #104A65 · Aquaverde #A3C0BD
+          Orioles Orange #FB4F14 · Writer's Parchment #E9D6BD · White Crest #F9F8EF
+        */
+            :root {
+                --bg: #13181b;
+                --bg-elevated: #1a2126;
+                --surface: #212a30;
+                --surface-hover: #2a343c;
+                --fg: #f9f8ef;
+                --muted: #a3c0bd;
+                --faint: #6b8582;
+                --border: #2e3a42;
+                --accent: #fb4f14;
+                --accent-soft: color-mix(in srgb, #fb4f14 18%, transparent);
+                --accent-contrast: #f9f8ef;
+                --trust: #104a65;
+                --good: #7bc47f;
+                --good-soft: color-mix(in srgb, #7bc47f 16%, transparent);
+                --warn: #e5b84a;
+                --warn-soft: color-mix(in srgb, #e5b84a 14%, transparent);
+                --bad: #e85a4f;
+                --bad-soft: color-mix(in srgb, #e85a4f 14%, transparent);
+                --radius: 14px;
+                --radius-sm: 9px;
+                --radius-lg: 18px;
+                --shadow:
+                    0 1px 2px rgba(0, 0, 0, 0.25),
+                    0 12px 32px rgba(0, 0, 0, 0.35);
+                --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+                --space-1: 0.25rem;
+                --space-2: 0.5rem;
+                --space-3: 0.75rem;
+                --space-4: 1rem;
+                --space-5: 1.5rem;
+                --space-6: 2rem;
+                --measure: 28rem;
+                --measure-wide: 34rem;
+                --ease: cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            @media (prefers-color-scheme: light) {
+                :root {
+                    --bg: #f9f8ef;
+                    --bg-elevated: #ffffff;
+                    --surface: #f3ede3;
+                    --surface-hover: #e9d6bd;
+                    --fg: #13181b;
+                    --muted: #104a65;
+                    --faint: #6b7c80;
+                    --border: #d4c8b8;
+                    --accent: #e04510;
+                    --accent-soft: color-mix(in srgb, #e04510 12%, transparent);
+                    --accent-contrast: #f9f8ef;
+                    --trust: #104a65;
+                    --good: #2f8f4e;
+                    --good-soft: color-mix(in srgb, #2f8f4e 12%, transparent);
+                    --warn: #b8860b;
+                    --warn-soft: color-mix(in srgb, #b8860b 12%, transparent);
+                    --bad: #c43c32;
+                    --bad-soft: color-mix(in srgb, #c43c32 12%, transparent);
+                    --shadow:
+                        0 1px 2px rgba(19, 24, 27, 0.04),
+                        0 12px 28px rgba(19, 24, 27, 0.08);
+                }
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html {
+                -webkit-text-size-adjust: 100%;
+            }
+            body {
+                font-family: var(--font);
+                font-size: 15px;
+                line-height: 1.5;
+                color: var(--fg);
+                background:
+                    radial-gradient(
+                        ellipse 80% 50% at 50% -10%,
+                        color-mix(in srgb, var(--trust) 22%, transparent),
+                        transparent
+                    ),
+                    var(--bg);
+                min-height: 100dvh;
+                -webkit-font-smoothing: antialiased;
+            }
+            button,
+            input {
+                font: inherit;
+                color: inherit;
+            }
+            button {
+                cursor: pointer;
+                border: none;
+                background: none;
+            }
+            ul {
+                list-style: none;
+            }
+            h1,
+            h2,
+            h3 {
+                font-weight: 650;
+                letter-spacing: -0.02em;
+                line-height: 1.25;
+            }
+            :focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 2px;
+            }
+
+            .page {
+                min-height: 100dvh;
+                display: flex;
+                flex-direction: column;
+                max-width: 960px;
+                margin-inline: auto;
+                padding: var(--space-4);
+                padding-bottom: 5rem;
+            }
+            .topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: var(--space-4);
+                padding-block: var(--space-3);
+                margin-bottom: var(--space-5);
+            }
+            .logo {
+                display: flex;
+                align-items: center;
+                gap: var(--space-2);
+                font-size: 1.35rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                color: var(--accent);
+            }
+            .logo-mark {
+                width: 28px;
+                height: 28px;
+                border-radius: 8px;
+                background: linear-gradient(145deg, var(--accent), #c73a0c);
+                box-shadow: 0 2px 8px var(--accent-soft);
+            }
+            .topbar-meta {
+                font-size: 0.78rem;
+                color: var(--faint);
+                display: flex;
+                align-items: center;
+                gap: var(--space-2);
+            }
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35em;
+                padding: 0.2rem 0.55rem;
+                border-radius: 999px;
+                background: var(--good-soft);
+                color: var(--good);
+                font-weight: 600;
+                font-size: 0.72rem;
+            }
+            .pill::before {
+                content: "";
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: currentColor;
+                box-shadow: 0 0 6px currentColor;
+            }
+
+            .stage {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: var(--space-5);
+                width: 100%;
+            }
+            .hero {
+                text-align: center;
+                max-width: 22rem;
+            }
+            .hero h1 {
+                font-size: clamp(1.45rem, 4vw, 1.8rem);
+                margin-bottom: var(--space-2);
+            }
+            .hero p {
+                color: var(--muted);
+                font-size: 0.95rem;
+            }
+
+            .card {
+                width: 100%;
+                max-width: var(--measure);
+                background: var(--bg-elevated);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow);
+                overflow: hidden;
+            }
+            .card-body {
+                padding: var(--space-5);
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-4);
+            }
+            .card-header {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-1);
+            }
+            .card-header h2 {
+                font-size: 1.12rem;
+            }
+            .card-header p {
+                font-size: 0.875rem;
+                color: var(--muted);
+            }
+
+            .modes {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 3px;
+                background: var(--surface);
+                border-radius: var(--radius-sm);
+                padding: 3px;
+            }
+            .mode-btn {
+                padding: var(--space-2) var(--space-3);
+                border-radius: calc(var(--radius-sm) - 1px);
+                font-size: 0.9rem;
+                font-weight: 550;
+                color: var(--faint);
+                transition:
+                    background 0.15s var(--ease),
+                    color 0.15s var(--ease);
+            }
+            .mode-btn:hover {
+                color: var(--fg);
+            }
+            .mode-btn[aria-selected="true"] {
+                background: var(--bg-elevated);
+                color: var(--fg);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            }
+
+            .accounts {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-2);
+            }
+            .account {
+                display: flex;
+                align-items: center;
+                gap: var(--space-3);
+                width: 100%;
+                padding: var(--space-3);
+                border-radius: var(--radius);
+                border: 1px solid transparent;
+                background: var(--surface);
+                text-align: left;
+                transition:
+                    background 0.15s,
+                    border-color 0.15s;
+            }
+            .account:hover {
+                background: var(--surface-hover);
+            }
+            .account[aria-pressed="true"] {
+                border-color: color-mix(
+                    in srgb,
+                    var(--accent) 55%,
+                    var(--border)
+                );
+                background: var(--accent-soft);
+            }
+            .avatar {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: linear-gradient(145deg, var(--accent), #c73a0c);
+                display: grid;
+                place-items: center;
+                font-weight: 700;
+                font-size: 0.95rem;
+                color: var(--accent-contrast);
+                flex-shrink: 0;
+            }
+            .account-info {
+                flex: 1;
+                min-width: 0;
+            }
+            .account-name {
+                font-weight: 600;
+                font-size: 0.95rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .account-meta {
+                font-size: 0.75rem;
+                color: var(--faint);
+            }
+            .badge {
+                font-size: 0.7rem;
+                font-weight: 600;
+                padding: 0.15rem 0.5rem;
+                border-radius: 999px;
+                background: var(--good-soft);
+                color: var(--good);
+                flex-shrink: 0;
+            }
+
+            .form {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-3);
+            }
+            .field {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-1);
+            }
+            .field label {
+                font-size: 0.8rem;
+                font-weight: 550;
+                color: var(--muted);
+            }
+            .field input {
+                padding: 0.7rem 0.85rem;
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border);
+                background: var(--bg);
+                transition:
+                    border-color 0.15s,
+                    box-shadow 0.15s;
+                width: 100%;
+            }
+            .field input:focus {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
+            }
+            .field-hint {
+                font-size: 0.75rem;
+                color: var(--faint);
+            }
+
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: var(--space-2);
+                padding: 0.75rem 1.1rem;
+                border-radius: var(--radius-sm);
+                font-weight: 600;
+                font-size: 0.925rem;
+                transition:
+                    filter 0.15s,
+                    transform 0.1s,
+                    opacity 0.15s,
+                    background 0.15s;
+            }
+            .btn:active {
+                transform: scale(0.98);
+            }
+            .btn-primary {
+                background: var(--accent);
+                color: var(--accent-contrast);
+            }
+            .btn-primary:hover {
+                filter: brightness(1.08);
+            }
+            .btn-ghost {
+                background: transparent;
+                color: var(--muted);
+                border: 1px solid var(--border);
+            }
+            .btn-ghost:hover {
+                background: var(--surface);
+                color: var(--fg);
+            }
+            .btn-block {
+                width: 100%;
+            }
+
+            .divider {
+                display: flex;
+                align-items: center;
+                gap: var(--space-3);
+                color: var(--faint);
+                font-size: 0.75rem;
+            }
+            .divider::before,
+            .divider::after {
+                content: "";
+                flex: 1;
+                height: 1px;
+                background: var(--border);
+            }
+
+            .secondary {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: var(--space-3);
+                width: 100%;
+                max-width: var(--measure);
+            }
+            .quick-card {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                gap: var(--space-3);
+                padding: var(--space-3) var(--space-4);
+                border-radius: var(--radius);
+                border: 1px dashed
+                    color-mix(in srgb, var(--good) 40%, var(--border));
+                background: transparent;
+                text-align: left;
+                transition:
+                    border-color 0.15s,
+                    background 0.15s;
+            }
+            .quick-card:hover {
+                border-color: var(--good);
+                background: var(--good-soft);
+            }
+            .quick-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: var(--good-soft);
+                color: var(--good);
+                display: grid;
+                place-items: center;
+                flex-shrink: 0;
+            }
+            .quick-icon svg {
+                width: 18px;
+                height: 18px;
+            }
+            .quick-text strong {
+                display: block;
+                font-size: 0.9rem;
+                font-weight: 600;
+            }
+            .quick-text span {
+                font-size: 0.8rem;
+                color: var(--muted);
+            }
+
+            /* Connection panel */
+            .conn {
+                width: 100%;
+                max-width: var(--measure-wide);
+            }
+            .conn details {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-lg);
+                overflow: hidden;
+            }
+            .conn summary {
+                list-style: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: var(--space-3);
+                padding: var(--space-3) var(--space-4);
+                user-select: none;
+            }
+            .conn summary::-webkit-details-marker {
+                display: none;
+            }
+            .conn summary:hover {
+                background: var(--surface);
+            }
+            .conn-summary-main {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .conn-summary-title {
+                font-weight: 600;
+                font-size: 0.9rem;
+                display: flex;
+                align-items: center;
+                gap: var(--space-2);
+                flex-wrap: wrap;
+            }
+            .conn-summary-sub {
+                font-size: 0.78rem;
+                color: var(--faint);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .conn-chevron {
+                color: var(--faint);
+                transition: transform 0.2s var(--ease);
+                flex-shrink: 0;
+            }
+            .conn details[open] .conn-chevron {
+                transform: rotate(180deg);
+            }
+            .conn-body {
+                padding: var(--space-4);
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-3);
+                border-top: 1px solid var(--border);
+            }
+            .conn-intro {
+                font-size: 0.85rem;
+                color: var(--muted);
+                line-height: 1.45;
+            }
+
+            .svc {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-2);
+                padding: var(--space-3);
+                background: var(--surface);
+                border-radius: var(--radius);
+                border: 1px solid transparent;
+                transition: border-color 0.2s;
+            }
+            .svc.is-ok {
+                border-color: color-mix(in srgb, var(--good) 35%, transparent);
+            }
+            .svc.is-bad {
+                border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+            }
+            .svc.is-checking {
+                border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+            }
+            .svc-head {
+                display: flex;
+                align-items: center;
+                gap: var(--space-2);
+            }
+            .svc-label {
+                font-size: 0.78rem;
+                font-weight: 650;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: var(--faint);
+                flex: 1;
+            }
+            .svc-status {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35em;
+                font-size: 0.72rem;
+                font-weight: 600;
+                padding: 0.15rem 0.5rem;
+                border-radius: 999px;
+                background: var(--surface-hover);
+                color: var(--faint);
+            }
+            .svc-status.ok {
+                background: var(--good-soft);
+                color: var(--good);
+            }
+            .svc-status.bad {
+                background: var(--bad-soft);
+                color: var(--bad);
+            }
+            .svc-status.checking {
+                background: var(--warn-soft);
+                color: var(--warn);
+            }
+            .svc-status .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: currentColor;
+            }
+            .svc-status.checking .dot {
+                animation: pulse 0.9s ease infinite;
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.35;
+                }
+            }
+            .svc-row input {
+                width: 100%;
+                padding: 0.55rem 0.7rem;
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border);
+                background: var(--bg);
+                font-size: 0.82rem;
+                font-family:
+                    ui-monospace, "Cascadia Code", "SF Mono", monospace;
+            }
+            .svc-row input:focus {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px var(--accent-soft);
+            }
+            .svc-meta {
+                font-size: 0.75rem;
+                color: var(--faint);
+            }
+            .svc-meta strong {
+                color: var(--muted);
+                font-weight: 600;
+            }
+            .latency-good {
+                color: var(--good) !important;
+            }
+            .latency-mid {
+                color: var(--warn) !important;
+            }
+            .latency-bad {
+                color: var(--bad) !important;
+            }
+
+            .conn-defaults {
+                font-size: 0.78rem;
+                color: var(--faint);
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--space-2);
+                align-items: center;
+            }
+            .conn-defaults button {
+                color: var(--muted);
+                text-decoration: underline;
+                text-underline-offset: 2px;
+                text-decoration-color: var(--border);
+                font-size: 0.78rem;
+            }
+            .conn-defaults button:hover {
+                color: var(--fg);
+            }
+
+            .advanced {
+                width: 100%;
+                max-width: var(--measure);
+            }
+            .advanced details summary {
+                cursor: pointer;
+                color: var(--faint);
+                text-align: center;
+                padding: var(--space-2);
+                list-style: none;
+                font-size: 0.85rem;
+            }
+            .advanced summary::-webkit-details-marker {
+                display: none;
+            }
+            .advanced summary:hover {
+                color: var(--muted);
+            }
+            .advanced-list {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-1);
+                margin-top: var(--space-2);
+                padding: var(--space-3);
+                background: var(--surface);
+                border-radius: var(--radius);
+                border: 1px solid var(--border);
+            }
+            .advanced-list button {
+                text-align: left;
+                padding: var(--space-2) var(--space-3);
+                border-radius: var(--radius-sm);
+                color: var(--muted);
+                font-size: 0.85rem;
+            }
+            .advanced-list button:hover {
+                background: var(--surface-hover);
+                color: var(--fg);
+            }
+
+            .foot {
+                margin-top: var(--space-6);
+                text-align: center;
+                font-size: 0.75rem;
+                color: var(--faint);
+                line-height: 1.6;
+            }
+
+            .steps {
+                display: flex;
+                gap: var(--space-2);
+                justify-content: center;
+            }
+            .step-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--border);
+            }
+            .step-dot.active {
+                background: var(--accent);
+                transform: scale(1.25);
+            }
+            .step-dot.done {
+                background: var(--good);
+            }
+
+            .seed-box {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: var(--space-2);
+                padding: var(--space-3);
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                font-family: ui-monospace, "Cascadia Code", monospace;
+                font-size: 0.85rem;
+            }
+            .seed-word {
+                display: flex;
+                gap: 0.4em;
+                padding: var(--space-1) var(--space-2);
+            }
+            .seed-word .n {
+                color: var(--faint);
+                min-width: 1.4em;
+                user-select: none;
+            }
+
+            .warn {
+                display: flex;
+                gap: var(--space-3);
+                padding: var(--space-3);
+                background: var(--accent-soft);
+                border-left: 3px solid var(--accent);
+                border-radius: var(--radius-sm);
+                font-size: 0.85rem;
+                color: var(--muted);
+            }
+            .warn strong {
+                color: var(--fg);
+            }
+
+            .demo-bar {
+                position: fixed;
+                bottom: 0;
+                inset-inline: 0;
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: var(--space-2);
+                padding: var(--space-3);
+                background: color-mix(in srgb, var(--bg) 88%, transparent);
+                backdrop-filter: blur(14px);
+                border-top: 1px solid var(--border);
+                z-index: 50;
+            }
+            .demo-bar button {
+                padding: 0.4rem 0.75rem;
+                border-radius: 999px;
+                font-size: 0.75rem;
+                font-weight: 550;
+                background: var(--surface);
+                color: var(--muted);
+                border: 1px solid var(--border);
+            }
+            .demo-bar button.active {
+                background: var(--accent);
+                color: var(--accent-contrast);
+                border-color: transparent;
+            }
+            .demo-bar > span {
+                font-size: 0.7rem;
+                color: var(--faint);
+                align-self: center;
+            }
+
+            .panel {
+                animation: fadeIn 0.28s var(--ease);
+            }
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(6px);
+                }
+                to {
+                    opacity: 1;
+                    transform: none;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <header class="topbar">
+                <div class="logo">
+                    <span class="logo-mark" aria-hidden="true"></span>
+                    Уголок
+                </div>
+                <div class="topbar-meta">
+                    <span class="pill">остров онлайн</span>
+                    <span>альфа</span>
+                </div>
+            </header>
+
+            <div class="stage" id="stage"></div>
+
+            <footer class="foot">
+                Данные шифруются на устройстве.<br />
+                Нет центрального сервера — только ваш остров.
+            </footer>
+        </div>
+
+        <div class="demo-bar" role="toolbar" aria-label="Сценарии демо">
+            <span>сценарий:</span>
+            <button type="button" data-scene="returning" class="active">
+                Есть аккаунт
+            </button>
+            <button type="button" data-scene="first">Первый визит</button>
+            <button type="button" data-scene="create">Создание</button>
+            <button type="button" data-scene="seed">Фраза</button>
+        </div>
+
+        <script>
+            const DEFAULTS = {
+                relay: "ws://127.0.0.1:7777",
+                blossom: "http://127.0.0.1:8080",
+                turn: "turn:127.0.0.1:3478",
+            };
+
+            const MOCK_HEALTH = {
+                "ws://127.0.0.1:7777": { ok: true, ms: 12 },
+                "http://127.0.0.1:8080": { ok: true, ms: 18 },
+                "turn:127.0.0.1:3478": { ok: true, ms: 9 },
+                "wss://relay.example": { ok: false, ms: null },
+                "https://blossom.example": { ok: false, ms: null },
+            };
+
+            const ACCOUNTS = [
+                {
+                    id: "1",
+                    name: "anna",
+                    initial: "A",
+                    last: "сегодня",
+                    preferred: true,
+                },
+                {
+                    id: "2",
+                    name: "work-desk",
+                    initial: "W",
+                    last: "3 дня назад",
+                    preferred: false,
+                },
+            ];
+
+            const SEED = [
+                "яблоня",
+                "ветер",
+                "тишина",
+                "мост",
+                "лампа",
+                "река",
+                "камень",
+                "утро",
+                "книга",
+                "север",
+                "огонь",
+                "путь",
+            ];
+
+            const iconVoice =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
+            const iconChevron =
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+            let scene = "returning";
+            let selectedId = "1";
+            let urls = { ...DEFAULTS };
+            let health = {
+                relay: { state: "idle", ms: null },
+                blossom: { state: "idle", ms: null },
+                turn: { state: "idle", ms: null },
+            };
+            const checkTimers = {};
+            const stage = document.getElementById("stage");
+
+            function scheduleCheck(kind) {
+                clearTimeout(checkTimers[kind]);
+                const value = urls[kind].trim();
+                if (!value) {
+                    health[kind] = { state: "idle", ms: null };
+                    patchSvc(kind);
+                    updateSummary();
+                    return;
+                }
+                health[kind] = { state: "checking", ms: null };
+                patchSvc(kind);
+                updateSummary();
+
+                checkTimers[kind] = setTimeout(
+                    () => {
+                        const known = MOCK_HEALTH[value];
+                        let result;
+                        if (known) {
+                            result = known;
+                        } else if (/^(wss?:|https?:|turns?:)/i.test(value)) {
+                            const ms = 40 + Math.floor(Math.random() * 180);
+                            result = { ok: Math.random() > 0.25, ms };
+                        } else {
+                            result = { ok: false, ms: null };
+                        }
+                        health[kind] = {
+                            state: result.ok ? "ok" : "bad",
+                            ms: result.ok ? result.ms : null,
+                        };
+                        patchSvc(kind);
+                        updateSummary();
+                    },
+                    450 + Math.random() * 400,
+                );
+            }
+
+            function latencyClass(ms) {
+                if (ms == null) return "";
+                if (ms < 50) return "latency-good";
+                if (ms < 150) return "latency-mid";
+                return "latency-bad";
+            }
+
+            function statusHtml(kind) {
+                const h = health[kind];
+                if (h.state === "checking")
+                    return '<span class="svc-status checking"><span class="dot"></span>проверка…</span>';
+                if (h.state === "ok")
+                    return '<span class="svc-status ok"><span class="dot"></span>доступен</span>';
+                if (h.state === "bad")
+                    return '<span class="svc-status bad"><span class="dot"></span>не отвечает</span>';
+                return '<span class="svc-status"><span class="dot"></span>—</span>';
+            }
+
+            function metaHtml(kind) {
+                const h = health[kind];
+                if (h.state === "ok" && h.ms != null)
+                    return (
+                        'отклик <strong class="' +
+                        latencyClass(h.ms) +
+                        '">' +
+                        h.ms +
+                        " мс</strong>"
+                    );
+                if (h.state === "bad")
+                    return "проверьте адрес и что сервис запущен";
+                if (h.state === "checking") return "пинг…";
+                return "вставьте URL — проверка начнётся сразу";
+            }
+
+            function svcClass(kind) {
+                const s = health[kind].state;
+                if (s === "ok") return "svc is-ok";
+                if (s === "bad") return "svc is-bad";
+                if (s === "checking") return "svc is-checking";
+                return "svc";
+            }
+
+            function patchSvc(kind) {
+                const el = document.querySelector('[data-svc="' + kind + '"]');
+                if (!el) return;
+                el.className = svcClass(kind);
+                const st = el.querySelector("[data-status]");
+                const meta = el.querySelector("[data-meta]");
+                if (st) st.innerHTML = statusHtml(kind);
+                if (meta) meta.innerHTML = metaHtml(kind);
+            }
+
+            function overallStatus() {
+                const states = ["relay", "blossom", "turn"].map(
+                    (k) => health[k].state,
+                );
+                if (states.every((s) => s === "ok"))
+                    return { label: "все сервисы в порядке", cls: "ok" };
+                if (states.some((s) => s === "bad"))
+                    return { label: "есть недоступные", cls: "bad" };
+                if (states.some((s) => s === "checking"))
+                    return { label: "проверяем…", cls: "checking" };
+                return { label: "локальный остров", cls: "" };
+            }
+
+            function updateSummary() {
+                const title = document.querySelector("[data-conn-title]");
+                const sub = document.querySelector("[data-conn-sub]");
+                if (!title || !sub) return;
+                const o = overallStatus();
+                title.innerHTML =
+                    'Подключение <span class="svc-status ' +
+                    o.cls +
+                    '"><span class="dot"></span>' +
+                    o.label +
+                    "</span>";
+                sub.textContent =
+                    "Relay · Blossom · TURN  ·  " + shortUrl(urls.relay);
+            }
+
+            function shortUrl(u) {
+                return u.replace(/^wss?:\/\//, "").replace(/^https?:\/\//, "");
+            }
+
+            function escapeAttr(s) {
+                return String(s)
+                    .replace(/&/g, "&amp;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/</g, "&lt;");
+            }
+
+            function svcBlock(kind, title, placeholder) {
+                return (
+                    '<div class="' +
+                    svcClass(kind) +
+                    '" data-svc="' +
+                    kind +
+                    '">' +
+                    '<div class="svc-head">' +
+                    '<span class="svc-label">' +
+                    title +
+                    "</span>" +
+                    "<span data-status>" +
+                    statusHtml(kind) +
+                    "</span>" +
+                    "</div>" +
+                    '<div class="svc-row">' +
+                    '<input type="url" inputmode="url" spellcheck="false" autocomplete="off" data-url="' +
+                    kind +
+                    '" value="' +
+                    escapeAttr(urls[kind]) +
+                    '" placeholder="' +
+                    placeholder +
+                    '" aria-label="' +
+                    title +
+                    ' URL" />' +
+                    "</div>" +
+                    '<div class="svc-meta" data-meta>' +
+                    metaHtml(kind) +
+                    "</div>" +
+                    "</div>"
+                );
+            }
+
+            function viewConnection() {
+                return (
+                    '<div class="conn panel">' +
+                    '<details id="conn-details">' +
+                    "<summary>" +
+                    '<div class="conn-summary-main">' +
+                    '<div class="conn-summary-title" data-conn-title>Подключение <span class="svc-status"><span class="dot"></span>локальный остров</span></div>' +
+                    '<div class="conn-summary-sub" data-conn-sub>Relay · Blossom · TURN  ·  ' +
+                    shortUrl(urls.relay) +
+                    "</div>" +
+                    "</div>" +
+                    '<span class="conn-chevron" aria-hidden="true">' +
+                    iconChevron +
+                    "</span>" +
+                    "</summary>" +
+                    '<div class="conn-body">' +
+                    '<p class="conn-intro">По умолчанию клиент смотрит на сервисы <strong>на этом компьютере</strong>. Можно подставить свои адреса — доступность и скорость проверяются сразу при вводе.</p>' +
+                    svcBlock("relay", "Relay", "ws:// или wss://") +
+                    svcBlock("blossom", "Blossom", "http:// или https://") +
+                    svcBlock("turn", "TURN / STUN", "turn: или turns:") +
+                    '<div class="conn-defaults"><span>Сейчас: локальный остров</span>' +
+                    '<button type="button" data-reset-urls>Вернуть адреса по умолчанию</button></div>' +
+                    "</div>" +
+                    "</details>" +
+                    "</div>"
+                );
+            }
+
+            function viewHero() {
+                return '<div class="hero"><h1>Свой закрытый мессенджер</h1><p>Тёплый угол для своих.<br />Переписка и звонки — без чужих серверов.</p></div>';
+            }
+
+            function viewSecondary() {
+                return (
+                    '<div class="secondary panel"><div class="divider">или</div>' +
+                    '<button type="button" class="quick-card">' +
+                    '<div class="quick-icon">' +
+                    iconVoice +
+                    "</div>" +
+                    '<div class="quick-text"><strong>Быстрая связь</strong>' +
+                    "<span>Комната без аккаунта · по ссылке или коду</span></div>" +
+                    "</button></div>"
+                );
+            }
+
+            function viewAdvanced() {
+                return (
+                    '<div class="advanced"><details><summary>Другие способы входа</summary>' +
+                    '<div class="advanced-list">' +
+                    '<button type="button">Войти по мнемонической фразе</button>' +
+                    '<button type="button">Войти по ключу (nsec)</button>' +
+                    '<button type="button">Создать с показом фразы сразу</button>' +
+                    "</div></details></div>"
+                );
+            }
+
+            function viewLogin() {
+                return (
+                    viewHero() +
+                    '<div class="card panel"><div class="card-body">' +
+                    '<div class="modes" role="tablist">' +
+                    '<button type="button" class="mode-btn" role="tab" aria-selected="true" data-mode="login">Войти</button>' +
+                    '<button type="button" class="mode-btn" role="tab" aria-selected="false" data-mode="create">Создать</button>' +
+                    "</div>" +
+                    '<div class="card-header"><h2>Аккаунты на устройстве</h2><p>Выберите профиль и введите мастер-пароль</p></div>' +
+                    '<div class="accounts">' +
+                    ACCOUNTS.map(function (a) {
+                        return (
+                            '<button type="button" class="account" data-account="' +
+                            a.id +
+                            '" aria-pressed="' +
+                            (selectedId === a.id ? "true" : "false") +
+                            '">' +
+                            '<div class="avatar">' +
+                            a.initial +
+                            "</div>" +
+                            '<div class="account-info"><div class="account-name">' +
+                            a.name +
+                            '</div><div class="account-meta">вход: ' +
+                            a.last +
+                            "</div></div>" +
+                            (a.preferred
+                                ? '<span class="badge">недавний</span>'
+                                : "") +
+                            "</button>"
+                        );
+                    }).join("") +
+                    "</div>" +
+                    '<form class="form" onsubmit="return false">' +
+                    '<div class="field"><label for="pw">Мастер-пароль</label>' +
+                    '<input id="pw" type="password" autocomplete="current-password" placeholder="••••••••" /></div>' +
+                    '<button type="submit" class="btn btn-primary btn-block">Войти в Уголок</button>' +
+                    "</form>" +
+                    "</div></div>" +
+                    viewConnection() +
+                    viewSecondary() +
+                    viewAdvanced()
+                );
+            }
+
+            function viewFirst() {
+                return (
+                    viewHero() +
+                    '<div class="card panel"><div class="card-body">' +
+                    '<div class="modes" role="tablist">' +
+                    '<button type="button" class="mode-btn" role="tab" aria-selected="false" data-mode="login">Войти</button>' +
+                    '<button type="button" class="mode-btn" role="tab" aria-selected="true" data-mode="create">Создать</button>' +
+                    "</div>" +
+                    '<div class="card-header"><h2>Создать пространство</h2><p>Аккаунт хранится только на этом устройстве</p></div>' +
+                    '<form class="form" onsubmit="return false">' +
+                    '<div class="field"><label for="nick">Никнейм</label>' +
+                    '<input id="nick" type="text" autocomplete="username" placeholder="как вас будут видеть" />' +
+                    '<span class="field-hint">Нельзя изменить позже</span></div>' +
+                    '<div class="field"><label for="pw1">Мастер-пароль</label>' +
+                    '<input id="pw1" type="password" autocomplete="new-password" placeholder="минимум 8 символов" /></div>' +
+                    '<div class="field"><label for="pw2">Ещё раз</label>' +
+                    '<input id="pw2" type="password" autocomplete="new-password" /></div>' +
+                    '<button type="submit" class="btn btn-primary btn-block" data-go-seed>Продолжить</button>' +
+                    "</form>" +
+                    "</div></div>" +
+                    viewConnection() +
+                    viewSecondary() +
+                    viewAdvanced()
+                );
+            }
+
+            function viewSeed() {
+                return (
+                    '<div class="card panel" style="max-width:26rem"><div class="card-body">' +
+                    '<div class="steps" aria-hidden="true">' +
+                    '<span class="step-dot done"></span><span class="step-dot active"></span><span class="step-dot"></span>' +
+                    "</div>" +
+                    '<div class="card-header"><h2>Фраза восстановления</h2>' +
+                    "<p>Запишите эти 12 слов. Это единственный способ вернуть доступ.</p></div>" +
+                    '<div class="seed-box" aria-label="Мнемоническая фраза">' +
+                    SEED.map(function (w, i) {
+                        return (
+                            '<div class="seed-word"><span class="n">' +
+                            (i + 1) +
+                            ".</span>" +
+                            w +
+                            "</div>"
+                        );
+                    }).join("") +
+                    "</div>" +
+                    '<div class="warn"><div><strong>Не храните фразу в облаке и не отправляйте никому.</strong> Без неё восстановить аккаунт невозможно.</div></div>' +
+                    '<button type="button" class="btn btn-primary btn-block" data-go-done>Я записал фразу — продолжить</button>' +
+                    '<button type="button" class="btn btn-ghost btn-block" data-go-back>Назад</button>' +
+                    "</div></div>"
+                );
+            }
+
+            function render() {
+                if (scene === "returning") stage.innerHTML = viewLogin();
+                else if (scene === "first" || scene === "create")
+                    stage.innerHTML = viewFirst();
+                else if (scene === "seed") stage.innerHTML = viewSeed();
+                bind();
+                ["relay", "blossom", "turn"].forEach(function (k) {
+                    scheduleCheck(k);
+                });
+            }
+
+            function bind() {
+                stage.querySelectorAll("[data-mode]").forEach(function (btn) {
+                    btn.addEventListener("click", function () {
+                        scene =
+                            btn.dataset.mode === "login"
+                                ? "returning"
+                                : "first";
+                        render();
+                    });
+                });
+                stage
+                    .querySelectorAll("[data-account]")
+                    .forEach(function (btn) {
+                        btn.addEventListener("click", function () {
+                            selectedId = btn.dataset.account;
+                            render();
+                            requestAnimationFrame(function () {
+                                var pw = document.getElementById("pw");
+                                if (pw) pw.focus();
+                            });
+                        });
+                    });
+                var goSeed = stage.querySelector("[data-go-seed]");
+                if (goSeed)
+                    goSeed.addEventListener("click", function () {
+                        scene = "seed";
+                        render();
+                    });
+                var goBack = stage.querySelector("[data-go-back]");
+                if (goBack)
+                    goBack.addEventListener("click", function () {
+                        scene = "first";
+                        render();
+                    });
+                var goDone = stage.querySelector("[data-go-done]");
+                if (goDone)
+                    goDone.addEventListener("click", function () {
+                        stage.innerHTML =
+                            '<div class="card panel" style="max-width:22rem;text-align:center"><div class="card-body">' +
+                            '<div class="avatar" style="margin:0 auto;width:56px;height:56px;font-size:1.4rem">✓</div>' +
+                            '<div class="card-header"><h2>Пространство готово</h2><p>Можно переходить к контактам и чатам</p></div>' +
+                            '<button type="button" class="btn btn-primary btn-block">Открыть Уголок</button>' +
+                            "</div></div>";
+                    });
+
+                stage.querySelectorAll("[data-url]").forEach(function (input) {
+                    var kind = input.dataset.url;
+                    var t;
+                    input.addEventListener("input", function () {
+                        urls[kind] = input.value;
+                        clearTimeout(t);
+                        t = setTimeout(function () {
+                            scheduleCheck(kind);
+                        }, 320);
+                    });
+                    input.addEventListener("change", function () {
+                        urls[kind] = input.value;
+                        scheduleCheck(kind);
+                    });
+                });
+
+                var reset = stage.querySelector("[data-reset-urls]");
+                if (reset)
+                    reset.addEventListener("click", function () {
+                        urls = Object.assign({}, DEFAULTS);
+                        render();
+                        requestAnimationFrame(function () {
+                            var d = document.getElementById("conn-details");
+                            if (d) d.open = true;
+                        });
+                    });
+            }
+
+            document
+                .querySelectorAll(".demo-bar [data-scene]")
+                .forEach(function (btn) {
+                    btn.addEventListener("click", function () {
+                        document
+                            .querySelectorAll(".demo-bar [data-scene]")
+                            .forEach(function (b) {
+                                b.classList.remove("active");
+                            });
+                        btn.classList.add("active");
+                        scene = btn.dataset.scene;
+                        render();
+                    });
+                });
+
+            render();
+        </script>
+    </body>
+</html>

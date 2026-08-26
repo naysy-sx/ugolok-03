@@ -206,7 +206,7 @@
 			"createSpaceButton": "Create a space",
 			"accountsWidget": {
 				"title": "Accounts on this device",
-				"empty": "No local accounts yet — create the first one on the right.",
+				"empty": "No local accounts yet — create the first one.",
 				"ariaLabel": "Choose a profile"
 			},
 			"loginForm": {
@@ -234,14 +234,54 @@
 				"importKey": "Sign in with a key (nsec)"
 			},
 			"hero": {
-				"title": "A private space for messaging without a central server",
-				"lead": "{{appName}} is a messenger built on the Nostr protocol with end-to-end encryption (MLS) for conversations and device-side database encryption. Works on a local network, without the public internet."
+				"title": "Your private messenger",
+				"lead": "A warm corner for your people. Chat and calls — without someone else's servers."
 			},
 			"footer": {
 				"tagline": "{{appName}} — a private messenger.",
 				"alphaNotice": "Alpha testing. Data is encrypted with a key derived from your master password and stored locally on this device."
 			},
-			"sidebarAriaLabel": "Account and access management"
+			"sidebarAriaLabel": "Account and access management",
+			"modes": {
+				"login": "Sign in",
+				"create": "Create"
+			},
+			"recentBadge": "recent",
+			"orDivider": "or",
+			"quickCard": {
+				"title": "Quick Connect",
+				"subtitle": "A room without an account · by link or code"
+			},
+			"helpLink": "Help",
+			"create": {
+				"continue": "Continue"
+			},
+			"connection": {
+				"title": "Connection",
+				"summaryLocal": "local island",
+				"summaryOk": "all services OK",
+				"summaryChecking": "checking…",
+				"summaryBad": "some unreachable",
+				"intro": "Service addresses for this device. Checking starts as soon as you paste a URL.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "checking…",
+				"statusOk": "reachable",
+				"statusBad": "no response",
+				"latency": "latency {{ms}} ms",
+				"hintBad": "check the address and that the service is running",
+				"hintIdle": "paste a URL — checking starts right away",
+				"resetDefaults": "Restore default addresses",
+				"invalidRelay": "does not look like a Relay address",
+				"invalidBlossom": "does not look like a Blossom address",
+				"invalidTurn": "does not look like a TURN address",
+				"ariaLabel": "Connection addresses"
+			}
 		}
 	},
 	"placeholder": {

@@ -205,7 +205,7 @@
 			"createSpaceButton": "スペースを作成",
 			"accountsWidget": {
 				"title": "この端末のアカウント",
-				"empty": "ローカルアカウントはまだありません。右側から最初のアカウントを作成してください。",
+				"empty": "この端末にアカウントはまだありません。最初のアカウントを作成してください。",
 				"ariaLabel": "プロフィールを選択"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "鍵（nsec）でサインイン"
 			},
 			"hero": {
-				"title": "中央サーバーなしでやり取りできるプライベートな空間",
-				"lead": "{{appName}} は Nostr プロトコル上に構築されたメッセンジャーで、会話にはエンドツーエンド暗号化（MLS）、端末側のデータベースには暗号化を施しています。パブリックインターネットを使わず、ローカルネットワークで動作します。"
+				"title": "自分たちの非公開メッセンジャー",
+				"lead": "大切な人のための温かな場所。チャットも通話も、他人のサーバーなしで。"
 			},
 			"footer": {
 				"tagline": "{{appName}} — プライベートなメッセンジャー。",
 				"alphaNotice": "アルファテスト中です。データはマスターパスワードから導出された鍵で暗号化され、この端末にローカルに保存されます。"
 			},
 			"sidebarAriaLabel": "アカウントとアクセスの管理",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "ログイン",
+				"create": "作成"
+			},
+			"recentBadge": "最近",
+			"orDivider": "または",
+			"quickCard": {
+				"title": "クイック接続",
+				"subtitle": "アカウントなしの部屋 · リンクまたはコード"
+			},
+			"helpLink": "ヘルプ",
+			"create": {
+				"continue": "続ける"
+			},
+			"connection": {
+				"title": "接続",
+				"summaryLocal": "ローカルの島",
+				"summaryOk": "すべてのサービスは正常",
+				"summaryChecking": "確認中…",
+				"summaryBad": "応答しないサービスあり",
+				"intro": "この端末のサービスアドレス。URL を貼るとすぐに確認が始まります。",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "確認中…",
+				"statusOk": "利用可",
+				"statusBad": "応答なし",
+				"latency": "応答 {{ms}} ms",
+				"hintBad": "アドレスとサービスが起動しているか確認してください",
+				"hintIdle": "URL を貼るとすぐに確認が始まります",
+				"resetDefaults": "既定のアドレスに戻す",
+				"invalidRelay": "Relay のアドレスではないようです",
+				"invalidBlossom": "Blossom のアドレスではないようです",
+				"invalidTurn": "TURN のアドレスではないようです",
+				"ariaLabel": "接続アドレス"
+			}
 		}
 	},
 	"placeholder": {

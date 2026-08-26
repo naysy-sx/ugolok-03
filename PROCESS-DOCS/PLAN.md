@@ -7202,3 +7202,52 @@ CONTRACTS.md «Правка контракта: npm run dev поднимает �
 
 Paste: `pasteHere(destId)` + полоса буфера в папке + Ctrl+V на document
 (вход в папку снимал фокус с files-shell). `files.jsx` напрямую.
+
+---
+
+## Хотфикс: `npm run build` — те же localhost-дефолты, что serve
+
+Не этап PLAN.md. По просьбе пользователя: `buildDefaultRelays` /
+`buildBootstrapRelays` / `buildDefaultBlossomServers` /
+`buildDefaultIceServers` больше не ветвятся по `command`. Без env —
+локальный остров (`ws://127.0.0.1:7777`, `http://127.0.0.1:8080`,
+coturn :3478 + Google STUN fallback) и в `npm run dev`, и в
+`npm run build`. Env `BUILD_DEFAULT_*` / `BUILD_BOOTSTRAP_RELAYS`
+по-прежнему выигрывает. Dev-плагины не трогались.
+
+Тесты: `tests/dev-stack.test.js` 6/6. `npm run build` без env —
+localhost в `dist/index.html`. Регрессия 2109/2110, 1 флейк
+`files-batch` I-NO-QUADRATIC (изолированный повтор зелёный).
+
+---
+
+## Хотфикс: пустой relay не стирает имена/аватары контактов
+
+После сноса `strfry-db` (хотфикс трио) kind:0 контактов пропали с
+relay. `refreshProfiles` получал пустой Map и через
+`applyProfileUpdates(null)` безусловно затирал гидратированный кэш
+в сигнале — aside/контакты/заголовок чата показывали `shortPubkey`
+и инициал. Свой профиль жив (keystore).
+
+Контракт: `incoming===null` пишет сессионный null, только если ключа
+ещё нет; уже лежащий объект не трогает. Персист как был (T5.3).
+`tests/contacts-signals.test.js`.
+
+---
+
+## Редизайн стартового экрана (Unlock) + device-level endpoints
+
+ТЗ: `PROCESS-DOCS/REDESIGN/STARTPAGE/UNLOCK-REDESIGN-TZ.md`.
+Референс UX: `PROCESS-DOCS/REDESIGN/STARTPAGE/index.html`.
+
+- [x] **Редизайн Unlock** — одна колонка, вкладки Войти/Создать,
+  блок «Подключение» (live health), основной путь создания показывает
+  фразу, bootstrap-endpoints в localStorage до логина.
+    - Триаж (13a): **рутина**. DESIGN-записка не нужна.
+    - `unlock.jsx` / `connection-endpoints.jsx` — напрямую.
+    - `bootstrap-endpoints.js` — воркер (2-я итерация).
+    - `endpoint-health.js` — вручную после двух браков воркера.
+    - Приёмка: 14 новых тестов + ui-settings фолбэк; регрессия
+      2126/2127 (флейк И9, повтор зелёный); build 933 KB gzip;
+      Playwright ru mobile/desktop. Коммит отложен: дерево не чистое
+      (хотфиксы contacts/vite).

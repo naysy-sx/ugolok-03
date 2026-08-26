@@ -37,35 +37,74 @@ test("build не спавнит dev-серверы", async () => {
 	assert.ok(!names.includes("ugolok:dev-turn"));
 });
 
-test("serve define указывает на локальные relay/blossom/coturn", async () => {
-	const cfg = await resolveConfig("serve");
-	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_RELAYS__"), [
-		"ws://127.0.0.1:7777",
-	]);
-	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_BLOSSOM_SERVERS__"), [
-		"http://127.0.0.1:8080",
-	]);
-	const ice = parseDefine(cfg, "__BUILD_DEFAULT_ICE_SERVERS__");
-	assert.deepEqual(ice[0], { urls: "stun:127.0.0.1:3478" });
-	assert.deepEqual(ice[1], {
+const LOCAL_RELAYS = ["ws://127.0.0.1:7777"];
+const LOCAL_BLOSSOM = ["http://127.0.0.1:8080"];
+const LOCAL_ICE = [
+	{ urls: "stun:127.0.0.1:3478" },
+	{
 		urls: "turn:127.0.0.1:3478",
 		username: "ugolok",
 		credential: "ugolok-dev",
-	});
-	assert.deepEqual(ice[2], { urls: "stun:stun.l.google.com:19302" });
+	},
+	{ urls: "stun:stun.l.google.com:19302" },
+];
+
+function assertLocalIslandDefines(cfg) {
+	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_RELAYS__"), LOCAL_RELAYS);
+	assert.deepEqual(parseDefine(cfg, "__BUILD_BOOTSTRAP_RELAYS__"), LOCAL_RELAYS);
+	assert.deepEqual(
+		parseDefine(cfg, "__BUILD_DEFAULT_BLOSSOM_SERVERS__"),
+		LOCAL_BLOSSOM,
+	);
+	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_ICE_SERVERS__"), LOCAL_ICE);
+}
+
+test("serve define указывает на локальные relay/blossom/coturn", async () => {
+	assertLocalIslandDefines(await resolveConfig("serve"));
 });
 
-test("build define не целится в localhost relay/blossom/coturn", async () => {
-	const cfg = await resolveConfig("build");
-	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_RELAYS__"), [
-		"wss://relay.example",
+test("build define — те же localhost-дефолты, что serve", async () => {
+	assertLocalIslandDefines(await resolveConfig("build"));
+});
+
+test("env BUILD_DEFAULT_* переопределяет дефолт и в build, и в serve", async () => {
+	const keys = [
+		"BUILD_DEFAULT_RELAYS",
+		"BUILD_BOOTSTRAP_RELAYS",
+		"BUILD_DEFAULT_BLOSSOM_SERVERS",
+		"BUILD_DEFAULT_ICE_SERVERS",
+	];
+	const prev = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+	process.env.BUILD_DEFAULT_RELAYS = JSON.stringify(["wss://custom.relay"]);
+	process.env.BUILD_BOOTSTRAP_RELAYS = JSON.stringify(["wss://custom.bootstrap"]);
+	process.env.BUILD_DEFAULT_BLOSSOM_SERVERS = JSON.stringify([
+		"https://custom.blossom",
 	]);
-	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_BLOSSOM_SERVERS__"), [
-		"https://blossom.example",
+	process.env.BUILD_DEFAULT_ICE_SERVERS = JSON.stringify([
+		{ urls: "stun:custom:3478" },
 	]);
-	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_ICE_SERVERS__"), [
-		{ urls: "stun:stun.l.google.com:19302" },
-	]);
+	try {
+		for (const command of ["build", "serve"]) {
+			const cfg = await resolveConfig(command);
+			assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_RELAYS__"), [
+				"wss://custom.relay",
+			]);
+			assert.deepEqual(parseDefine(cfg, "__BUILD_BOOTSTRAP_RELAYS__"), [
+				"wss://custom.bootstrap",
+			]);
+			assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_BLOSSOM_SERVERS__"), [
+				"https://custom.blossom",
+			]);
+			assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_ICE_SERVERS__"), [
+				{ urls: "stun:custom:3478" },
+			]);
+		}
+	} finally {
+		for (const k of keys) {
+			if (prev[k] === undefined) delete process.env[k];
+			else process.env[k] = prev[k];
+		}
+	}
 });
 
 test("server/coturn: setup.sh, run.sh, turnserver.conf на месте", async () => {

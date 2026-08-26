@@ -205,7 +205,7 @@
 			"createSpaceButton": "Utwórz przestrzeń",
 			"accountsWidget": {
 				"title": "Konta na tym urządzeniu",
-				"empty": "Nie ma jeszcze żadnego lokalnego konta — utwórz pierwsze po prawej.",
+				"empty": "Nie ma jeszcze lokalnych kont — utwórz pierwsze.",
 				"ariaLabel": "Wybór profilu"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "Zaloguj się kluczem (nsec)"
 			},
 			"hero": {
-				"title": "Prywatna przestrzeń do komunikacji bez serwera centralnego",
-				"lead": "{{appName}} to komunikator zbudowany na protokole Nostr z szyfrowaniem end-to-end (MLS) dla rozmów oraz szyfrowaniem bazy danych na urządzeniu. Działa w sieci lokalnej, bez publicznego internetu."
+				"title": "Twój prywatny komunikator",
+				"lead": "Ciepły kąt dla swoich. Czat i rozmowy — bez cudzych serwerów."
 			},
 			"footer": {
 				"tagline": "{{appName}} — prywatny komunikator.",
 				"alphaNotice": "Testy alfa. Dane są szyfrowane kluczem pochodzącym z Twojego hasła głównego i przechowywane lokalnie na tym urządzeniu."
 			},
 			"sidebarAriaLabel": "Zarządzanie kontami i dostępem",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "Zaloguj się",
+				"create": "Utwórz"
+			},
+			"recentBadge": "ostatnie",
+			"orDivider": "lub",
+			"quickCard": {
+				"title": "Szybkie połączenie",
+				"subtitle": "Pokój bez konta · przez link lub kod"
+			},
+			"helpLink": "Pomoc",
+			"create": {
+				"continue": "Kontynuuj"
+			},
+			"connection": {
+				"title": "Połączenie",
+				"summaryLocal": "lokalna wyspa",
+				"summaryOk": "wszystkie usługi w porządku",
+				"summaryChecking": "sprawdzanie…",
+				"summaryBad": "są niedostępne",
+				"intro": "Adresy usług tego urządzenia. Sprawdzanie zaczyna się zaraz po wklejeniu URL.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "sprawdzanie…",
+				"statusOk": "dostępny",
+				"statusBad": "brak odpowiedzi",
+				"latency": "odpowiedź {{ms}} ms",
+				"hintBad": "sprawdź adres i czy usługa działa",
+				"hintIdle": "wklej URL — sprawdzanie zacznie się od razu",
+				"resetDefaults": "Przywróć adresy domyślne",
+				"invalidRelay": "to nie wygląda na adres Relay",
+				"invalidBlossom": "to nie wygląda na adres Blossom",
+				"invalidTurn": "to nie wygląda na adres TURN",
+				"ariaLabel": "Adresy połączenia"
+			}
 		}
 	},
 	"placeholder": {

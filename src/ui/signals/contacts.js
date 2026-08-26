@@ -220,9 +220,10 @@ export async function removeContactAction(peerPubkeyOrNpub) {
 // ensureProfilesFetched/refreshProfiles ниже И из transport.js's
 // refreshLiveProfileSubscription (контактная ветка, T6.2) — оба пути через
 // один и тот же LWW-гейт (T7), не два разных сравнения. incoming===null —
-// СУЩЕСТВУЮЩЕЕ поведение (сигнал безусловно обновляется на null, "не
-// найден"), НЕ меняется этим этапом — но null НИКОГДА не персистится
-// (T5.3 — асимметрия персиста и сигнала, DESIGN.md). Персист — ТОЛЬКО для
+// «relay EOSE без события»: если в сигнале уже объект — не трогать
+// (снос strfry-db не должен затирать гидратированный кэш до npub).
+// Ключа нет — сессионный null, чтобы не рефетчить каждый рендер.
+// null НИКОГДА не персистится (T5.3). Персист — ТОЛЬКО для
 // реальных контактов (contacts.value), не для произвольных pubkey (авторы
 // постов канала и т.п. тоже проходят через ensureProfilesFetched).
 export async function applyProfileUpdates(updates) {
@@ -230,8 +231,10 @@ export async function applyProfileUpdates(updates) {
 	let changed = false;
 	for (const [pk, incoming] of updates) {
 		if (incoming === null) {
-			next[pk] = null;
-			changed = true;
+			if (!(pk in next)) {
+				next[pk] = null;
+				changed = true;
+			}
 			continue;
 		}
 		if (isNewerVersion(incoming, next[pk])) {

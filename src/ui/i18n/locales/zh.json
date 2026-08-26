@@ -205,7 +205,7 @@
 			"createSpaceButton": "创建空间",
 			"accountsWidget": {
 				"title": "此设备上的账户",
-				"empty": "此设备上还没有本地账户——请在右侧创建第一个。",
+				"empty": "此设备上还没有本地账户 — 请创建第一个。",
 				"ariaLabel": "选择个人资料"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "使用密钥登录（nsec）"
 			},
 			"hero": {
-				"title": "无需中心服务器即可通信的私密空间",
-				"lead": "{{appName}} 是基于 Nostr 协议构建的即时通讯工具，聊天采用端到端加密（MLS），设备端数据库也进行加密。可在本地网络中运行，无需公共互联网。"
+				"title": "属于你的私密通讯",
+				"lead": "给自己人的温暖角落。聊天和通话——不经过别人的服务器。"
 			},
 			"footer": {
 				"tagline": "{{appName}} —— 私密即时通讯工具。",
 				"alphaNotice": "内测阶段。数据使用由您的主密码派生的密钥加密，并在此设备上本地存储。"
 			},
 			"sidebarAriaLabel": "账户与访问管理",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "登录",
+				"create": "创建"
+			},
+			"recentBadge": "最近",
+			"orDivider": "或",
+			"quickCard": {
+				"title": "快速连接",
+				"subtitle": "无需账户的房间 · 通过链接或口令"
+			},
+			"helpLink": "帮助",
+			"create": {
+				"continue": "继续"
+			},
+			"connection": {
+				"title": "连接",
+				"summaryLocal": "本地小岛",
+				"summaryOk": "所有服务正常",
+				"summaryChecking": "正在检查…",
+				"summaryBad": "有无法访问的服务",
+				"intro": "此设备的服务地址。粘贴 URL 后会立即开始检查。",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "正在检查…",
+				"statusOk": "可访问",
+				"statusBad": "无响应",
+				"latency": "响应 {{ms}} 毫秒",
+				"hintBad": "请检查地址以及服务是否已启动",
+				"hintIdle": "粘贴 URL — 检查会立即开始",
+				"resetDefaults": "恢复默认地址",
+				"invalidRelay": "不像是 Relay 地址",
+				"invalidBlossom": "不像是 Blossom 地址",
+				"invalidTurn": "不像是 TURN 地址",
+				"ariaLabel": "连接地址"
+			}
 		}
 	},
 	"placeholder": {

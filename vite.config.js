@@ -164,58 +164,47 @@ function devTurnPlugin() {
     };
 }
 
-// F-RL-01: дефолт-relay компилируется в бандл из env. В dev без явного
-// override — локальный strfry (devRelayPlugin поднимает его сам), чтобы
-// диагностика/самопроверки всегда имели реальный relay; в проде плейсхолдер,
-// который обязана переопределить реальная конфигурация деплоя.
-function buildDefaultRelays(command) {
+// Дефолт локального острова (localhost) для serve и build: локальный strfry.
+// Настоящий деплой обязан переопределить через BUILD_DEFAULT_RELAYS.
+function buildDefaultRelays() {
     if (process.env.BUILD_DEFAULT_RELAYS)
         return JSON.parse(process.env.BUILD_DEFAULT_RELAYS);
-    return command === "serve"
-        ? ["ws://127.0.0.1:7777"]
-        : ["wss://relay.example"];
+    return ["ws://127.0.0.1:7777"];
 }
 
-// Этап 61 — тот же приём, что buildDefaultRelays: отдельная env-ручка на
-// будущее (когда bootstrap-координатор ugolok.tech разойдётся с собственным
-// relay пользователя, см. память проекта, staged rollout), но сегодня это
-// физически один и тот же сервер — дефолт совпадает с buildDefaultRelays.
-function buildBootstrapRelays(command) {
+// Этап 61 — отдельная env-ручка на будущее (когда bootstrap-координатор
+// ugolok.tech разойдётся с собственным relay пользователя). Сегодня это
+// физически один сервер — дефолт совпадает с buildDefaultRelays.
+// Настоящий деплой — через BUILD_BOOTSTRAP_RELAYS.
+function buildBootstrapRelays() {
     if (process.env.BUILD_BOOTSTRAP_RELAYS)
         return JSON.parse(process.env.BUILD_BOOTSTRAP_RELAYS);
-    return buildDefaultRelays(command);
+    return buildDefaultRelays();
 }
 
-// Этап 29 — тот же приём, что buildDefaultRelays выше: F-AT-09 (список Blossom-серверов
-// в settings) — только этап 32, а вложения отправлять уже нужно сейчас. dev — локальный
-// сервер (server/blossom/, довесок этапа 28), прод — плейсхолдер, обязана переопределить
-// конфигурация деплоя.
-function buildDefaultBlossomServers(command) {
+// Дефолт локального острова (localhost) для serve и build: server/blossom/.
+// Настоящий деплой обязан переопределить через BUILD_DEFAULT_BLOSSOM_SERVERS.
+function buildDefaultBlossomServers() {
     if (process.env.BUILD_DEFAULT_BLOSSOM_SERVERS)
         return JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
-    return command === "serve"
-        ? ["http://127.0.0.1:8080"]
-        : ["https://blossom.example"];
+    return ["http://127.0.0.1:8080"];
 }
 
-// Этап 48 + хотфикс трио: в serve поднимаем локальный coturn (devTurnPlugin),
-// поэтому ICE в dev — свой STUN/TURN первым, Google STUN как fallback.
-// build/preview без env — по-прежнему только публичный STUN; прод обязана
-// переопределить через BUILD_DEFAULT_ICE_SERVERS, добавив свой coturn ПЕРВЫМ.
-function buildDefaultIceServers(command) {
+// Дефолт локального острова (localhost) для serve и build: свой STUN/TURN
+// первым, Google STUN как fallback. Настоящий деплой обязан переопределить
+// через BUILD_DEFAULT_ICE_SERVERS, добавив свой coturn ПЕРВЫМ.
+function buildDefaultIceServers() {
     if (process.env.BUILD_DEFAULT_ICE_SERVERS)
         return JSON.parse(process.env.BUILD_DEFAULT_ICE_SERVERS);
-    return command === "serve"
-        ? [
-              { urls: "stun:127.0.0.1:3478" },
-              {
-                  urls: "turn:127.0.0.1:3478",
-                  username: "ugolok",
-                  credential: "ugolok-dev",
-              },
-              { urls: "stun:stun.l.google.com:19302" },
-          ]
-        : [{ urls: "stun:stun.l.google.com:19302" }];
+    return [
+        { urls: "stun:127.0.0.1:3478" },
+        {
+            urls: "turn:127.0.0.1:3478",
+            username: "ugolok",
+            credential: "ugolok-dev",
+        },
+        { urls: "stun:stun.l.google.com:19302" },
+    ];
 }
 
 // Этап E, найдено живой проверкой пользователя — в dev SW вообще не
@@ -303,16 +292,12 @@ export default defineConfig(({ command }) => ({
     ],
     define: {
         __BUILD_HASH__: JSON.stringify(BUILD_HASH),
-        __BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays(command)),
-        __BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(
-            buildBootstrapRelays(command),
-        ),
+        __BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays()),
+        __BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(buildBootstrapRelays()),
         __BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(
-            buildDefaultBlossomServers(command),
+            buildDefaultBlossomServers(),
         ),
-        __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(
-            buildDefaultIceServers(command),
-        ),
+        __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
     },
     build: {
         target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры

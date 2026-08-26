@@ -1,4 +1,4 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
 import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile } from "../../core/crypto/keystore.js";
@@ -14,6 +14,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
+import ConnectionEndpoints from "../components/connection-endpoints.jsx";
 import Quick from "./quick.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
@@ -35,12 +36,11 @@ export default function Unlock() {
 	// (см. components/help-content.jsx).
 	const [mainView, setMainView] = useState("home");
 
-	// Какой из виджетов сейчас раскрыт — взаимоисключающе (тот же принцип, что
-	// showRegisterForm()/openLoginFor() в исходном прототипе: открытие одного
-	// закрывает другой). null у openLoginForId — виджет входа свёрнут.
+	// Вкладки Войти | Создать на step === "main" (взаимоисключающие).
+	const [authMode, setAuthMode] = useState("create");
 	const [openLoginForId, setOpenLoginForId] = useState(null);
-	const [registerBoxOpen, setRegisterBoxOpen] = useState(false);
 	const [loginPassword, setLoginPassword] = useState("");
+	const passwordInputRef = useRef(null);
 
 	const [regLogin, setRegLogin] = useState("");
 	const [regPassword, setRegPassword] = useState("");
@@ -56,6 +56,7 @@ export default function Unlock() {
 
 	const [npub, setNpub] = useState("");
 	const [isQuickRegister, setIsQuickRegister] = useState(false);
+	const [mainCreatePending, setMainCreatePending] = useState(false);
 	const [pendingLogin, setPendingLogin] = useState("");
 	const [error, setError] = useState("");
 	// Био под именем в раскрытой карточке входа (пользователь) — listAccounts()
@@ -71,12 +72,9 @@ export default function Unlock() {
 				const list = await listAccounts();
 				setAccounts(list);
 				if (list.length === 0) {
-					// Гость без единого локального аккаунта — сразу открыть форму
-					// регистрации, не заставлять искать кнопку в пустом виджете.
-					setRegisterBoxOpen(true);
+					setAuthMode("create");
 				} else {
-					// Вернувшийся пользователь — сразу раскрыть форму входа для
-					// запомненного аккаунта (тот же приём, что старый Unlock).
+					setAuthMode("login");
 					const remembered = getRememberedAccountId();
 					const match = list.find((a) => a.id === remembered);
 					setOpenLoginForId(match ? match.id : list[0].id);
@@ -111,6 +109,11 @@ export default function Unlock() {
 		};
 	}, [openLoginForId]);
 
+	useEffect(() => {
+		if (step !== "main" || authMode !== "login" || !openLoginForId) return;
+		passwordInputRef.current?.focus();
+	}, [openLoginForId, authMode, step]);
+
 	async function handleResetDatabase() {
 		await resetLocalDatabase();
 		location.reload();
@@ -119,17 +122,8 @@ export default function Unlock() {
 	function openLoginFor(id) {
 		setError("");
 		setLoginPassword("");
-		setRegisterBoxOpen(false);
+		setAuthMode("login");
 		setOpenLoginForId(id);
-	}
-
-	function openRegisterBox() {
-		setError("");
-		setRegLogin("");
-		setRegPassword("");
-		setRegPasswordConfirm("");
-		setOpenLoginForId(null);
-		setRegisterBoxOpen(true);
 	}
 
 	async function handleLoginSubmit(e) {
@@ -181,22 +175,16 @@ export default function Unlock() {
 		}
 		setError("");
 		const generated = generateMnemonic();
-		const key = await mnemonicToPrivateKey(generated);
-		const id = bytesToHex(getPublicKey(key));
-		// Этап 44 (ревью Opus) — раньше generated отбрасывалась после однократного
-		// использования, фраза восстановления нигде не сохранялась. Сохраняем
-		// зашифрованной ТЕМ ЖЕ паролем — "Показать фразу" в настройках (обещание,
-		// которое уже давал шаг "done" ниже) теперь честно работает.
-		await encryptAndStore(key, regPassword, id, { login: regLogin.trim() }, generated);
-		setPrivKey(key);
+		setMnemonic(generated);
 		setPendingLogin(regLogin.trim());
-		setNpub(npubEncode(id));
-		setIsQuickRegister(true);
-		setStep("done");
+		setMainCreatePending(true);
+		setIsQuickRegister(false);
+		setStep("create-generate");
 	}
 
 	function openAdvanced(kind) {
 		setError("");
+		setMainCreatePending(false);
 		setAdvLogin("");
 		setPassword("");
 		setPasswordConfirm("");
@@ -285,15 +273,20 @@ export default function Unlock() {
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.createGenerate.instructions")}</p>
 					<MnemonicDisplay words={mnemonic.split(" ")} />
-					<button
-						type="button"
-						onClick={() => {
-							setConfirmInput("");
-							setStep("create-confirm");
-						}}
-					>
-						{t("unlock.createGenerate.savedButton")}
-					</button>
+					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<button
+							type="button"
+							onClick={() => {
+								setConfirmInput("");
+								setStep("create-confirm");
+							}}
+						>
+							{t("unlock.createGenerate.savedButton")}
+						</button>
+						<button type="button" onClick={() => setStep("main")}>
+							{t("common.back")}
+						</button>
+					</div>
 				</div>
 			</main>
 		);
@@ -322,7 +315,16 @@ export default function Unlock() {
 								setError("");
 								const key = await mnemonicToPrivateKey(mnemonic);
 								setPrivKey(key);
-								setStep("advanced-password");
+								if (mainCreatePending) {
+									const id = bytesToHex(getPublicKey(key));
+									await encryptAndStore(key, regPassword, id, { login: pendingLogin }, mnemonic);
+									setNpub(npubEncode(id));
+									setIsQuickRegister(false);
+									setMainCreatePending(false);
+									setStep("done");
+								} else {
+									setStep("advanced-password");
+								}
 							}}
 						>
 							{t("common.confirm")}
@@ -513,192 +515,190 @@ export default function Unlock() {
 
 	// ── step === "main" — собственно стартовый экран ─────────────────────────
 	const openAccount = accounts.find((a) => a.id === openLoginForId);
+	const rememberedId = getRememberedAccountId();
 
 	return (
-		<div class="auth-layout">
-			<header class="site-header row" style={{ "--gap": "var(--space-s) var(--space-m)", "--align": "center" }}>
+		<div class="screen auth-layout">
+			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
 					<span class="logo-name">{t("app.name")}</span>
 				</div>
-				<nav class="main-nav" aria-label={t("unlock.main.navAriaLabel")}>
-					{/* Кнопки, не ссылки — переключают содержимое <main> этой же страницы,
-					    не настоящая навигация (тот же принцип, что везде в проекте:
-					    реальное действие — реальный <button>, не div/a с подложной ролью). */}
-					<ul class="nav-links row" style={{ "--gap": "var(--space-2xs) var(--space-m)" }}>
-						<li>
-							<button type="button" class={mainView === "home" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("home")}>
-								{t("unlock.main.navHome")}
-							</button>
-						</li>
-						<li>
-							<button
-								type="button"
-								class={mainView === "temp-chat" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"}
-								onClick={() => setMainView("temp-chat")}
-							>
-								{t("unlock.main.navTempChat")}
-							</button>
-						</li>
-						<li>
-							<button type="button" class={mainView === "help" ? "nav-link-btn nav-link-btn--active" : "nav-link-btn"} onClick={() => setMainView("help")}>
-								{t("nav.help")}
-							</button>
-						</li>
-					</ul>
-				</nav>
-				{error && (
-					<p role="alert" style={{ color: "var(--bad)", margin: 0 }}>
-						{error}
-					</p>
-				)}
 				<div class="header-actions">
-					<button type="button" class="btn" onClick={openRegisterBox}>
-						{t("unlock.main.createSpaceButton")}
+					<button
+						type="button"
+						class={mainView === "help" ? "btn-link nav-link-btn--active" : "btn-link"}
+						onClick={() => setMainView(mainView === "help" ? "home" : "help")}
+					>
+						{t("unlock.main.helpLink")}
 					</button>
 				</div>
 			</header>
 
-			{/* Быстрая связь — эфемерная ветка вне аккаунтов устройства (ROOMS-SPEC
-			    §1.4): виджеты входа/регистрации/мнемоники здесь бессмысленны и
-			    только отвлекают от самой комнаты (найдено пользователем). */}
-			{mainView !== "temp-chat" && (
-			<aside class="auth-sidebar grid" style={{ "--gap": "var(--space-m)" }} aria-label={t("unlock.main.sidebarAriaLabel")}>
-				<section class="auth-widget accounts-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
-					<h3>{t("unlock.main.accountsWidget.title")}</h3>
-					{accounts.length === 0 ? (
-						<p class="auth-widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
-					) : (
-						<ul class="accounts-list stack" style={{ "--gap": "var(--space-3xs)" }}>
-							{accounts.map((acc) => (
-								<li key={acc.id}>
-									<button
-										type="button"
-										class="account-picker-btn row"
-										style={{ "--gap": "var(--space-s)", "--align": "center" }}
-										aria-current={openLoginForId === acc.id ? "true" : undefined}
-										onClick={() => openLoginFor(acc.id)}
-									>
-										<AccountAvatar avatar={acc.avatar} login={acc.login || acc.id} />
-										<span class="account-name">{acc.login || acc.id.slice(0, 16) + "…"}</span>
-									</button>
-								</li>
-							))}
-						</ul>
-					)}
-				</section>
-
-				{openAccount && (
-					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-live="polite">
-						<div class="auth-box-header row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							<AccountAvatar avatar={openAccount.avatar} login={openAccount.login || openAccount.id} large />
-							<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-								<h4>{openAccount.login || openAccount.id.slice(0, 16) + "…"}</h4>
-								{openAccountBio && <small class="auth-widget-subtitle">{openAccountBio}</small>}
-							</div>
-						</div>
-						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleLoginSubmit}>
-							<div class="form-group">
-								<label for="login-password">{t("unlock.main.loginForm.passwordLabel")}</label>
-								<input
-									id="login-password"
-									type="password"
-									autocomplete="current-password"
-									value={loginPassword}
-									onInput={(e) => setLoginPassword(e.currentTarget.value)}
-								/>
-							</div>
-							<button type="submit" class="btn btn-block">
-								{t("unlock.main.loginForm.submitButton", { appName: t("app.name") })}
-							</button>
-							{accounts.length > 1 && (
-								<button type="button" class="btn-link" onClick={() => setOpenLoginForId(null)}>
-									{t("unlock.main.loginForm.switchAccountButton")}
-								</button>
-							)}
-						</form>
-					</section>
-				)}
-
-				{registerBoxOpen && (
-					<section class="auth-widget auth-box stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }} aria-live="polite">
-						<h4>{t("unlock.main.registerBox.title")}</h4>
-						<p class="auth-widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
-						<p class="auth-widget-subtitle">{t("unlock.immutableNotice")}</p>
-						<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
-							<div class="form-group">
-								<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
-								<input
-									id="reg-login"
-									type="text"
-									autocomplete="username"
-									value={regLogin}
-									onInput={(e) => setRegLogin(e.currentTarget.value)}
-								/>
-							</div>
-							<div class="form-group">
-								<label for="reg-password">{t("unlock.main.registerBox.passwordLabel")}</label>
-								<input
-									id="reg-password"
-									type="password"
-									autocomplete="new-password"
-									value={regPassword}
-									onInput={(e) => setRegPassword(e.currentTarget.value)}
-								/>
-							</div>
-							<div class="form-group">
-								<label for="reg-password-confirm">{t("unlock.advancedPassword.passwordConfirmLabel")}</label>
-								<input
-									id="reg-password-confirm"
-									type="password"
-									autocomplete="new-password"
-									value={regPasswordConfirm}
-									onInput={(e) => setRegPasswordConfirm(e.currentTarget.value)}
-								/>
-							</div>
-							<button type="submit" class="btn btn-block">
-								{t("unlock.main.registerBox.submitButton")}
-							</button>
-							{accounts.length > 0 && (
-								<button type="button" class="btn-link" onClick={() => setRegisterBoxOpen(false)}>
-									{t("common.cancel")}
-								</button>
-							)}
-						</form>
-					</section>
-				)}
-
-				<section class="auth-widget stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
-					<h3>{t("unlock.main.otherWays.title")}</h3>
-					<p class="auth-widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
-					<ul class="link-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-						<li>
-							<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>
-								{t("unlock.main.otherWays.createWithPhrase")}
-							</button>
-						</li>
-						<li>
-							<button type="button" class="link-list-item" onClick={() => openAdvanced("import-mnemonic")}>
-								{t("unlock.main.otherWays.importMnemonic")}
-							</button>
-						</li>
-						<li>
-							<button type="button" class="link-list-item" onClick={() => openAdvanced("import-key")}>
-								{t("unlock.main.otherWays.importKey")}
-							</button>
-						</li>
-					</ul>
-				</section>
-			</aside>
-			)}
-
 			<main class="main">
 				{mainView === "home" && (
-					<section class="hero-section">
-						<h1>{t("unlock.main.hero.title")}</h1>
-						<p class="hero-lead">
-							{t("unlock.main.hero.lead", { appName: t("app.name") })}
-						</p>
-					</section>
+					<div class="unlock-home stack" style={{ "--gap": "var(--space-l)" }}>
+						<section class="hero-section">
+							<h1>{t("unlock.main.hero.title")}</h1>
+							<p class="hero-lead">{t("unlock.main.hero.lead")}</p>
+						</section>
+
+						<section class="auth-widget stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
+							<div class="unlock-modes bar" role="tablist" aria-label={t("unlock.main.modes.login")}>
+								<button
+									type="button"
+									role="tab"
+									id="unlock-tab-login"
+									aria-selected={authMode === "login"}
+									aria-controls="unlock-panel-login"
+									onClick={() => setAuthMode("login")}
+								>
+									{t("unlock.main.modes.login")}
+								</button>
+								<button
+									type="button"
+									role="tab"
+									id="unlock-tab-create"
+									aria-selected={authMode === "create"}
+									aria-controls="unlock-panel-create"
+									onClick={() => setAuthMode("create")}
+								>
+									{t("unlock.main.modes.create")}
+								</button>
+							</div>
+
+							{authMode === "login" && (
+								<div id="unlock-panel-login" role="tabpanel" aria-labelledby="unlock-tab-login" class="stack" style={{ "--gap": "var(--space-s)" }}>
+									{accounts.length === 0 ? (
+										<p class="auth-widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
+									) : (
+										<ul class="accounts-list stack" style={{ "--gap": "var(--space-3xs)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
+											{accounts.map((acc) => (
+												<li key={acc.id}>
+													<button
+														type="button"
+														class="account-picker-btn row"
+														style={{ "--gap": "var(--space-s)", "--align": "center" }}
+														aria-current={openLoginForId === acc.id ? "true" : undefined}
+														aria-pressed={openLoginForId === acc.id}
+														onClick={() => openLoginFor(acc.id)}
+													>
+														<AccountAvatar avatar={acc.avatar} login={acc.login || acc.id} />
+														<span class="account-info stack" style={{ "--gap": "0", minWidth: 0, flex: 1 }}>
+															<span class="account-name">{acc.login || acc.id.slice(0, 16) + "…"}</span>
+														</span>
+														{acc.id === rememberedId && <span class="unlock-recent-badge">{t("unlock.main.recentBadge")}</span>}
+													</button>
+												</li>
+											))}
+										</ul>
+									)}
+									{openAccount && (
+										<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleLoginSubmit}>
+											<div class="form-group">
+												<label for="login-password">{t("unlock.main.loginForm.passwordLabel")}</label>
+												<input
+													id="login-password"
+													ref={passwordInputRef}
+													type="password"
+													autocomplete="current-password"
+													value={loginPassword}
+													onInput={(e) => setLoginPassword(e.currentTarget.value)}
+												/>
+											</div>
+											<button type="submit" class="btn btn-block">
+												{t("unlock.main.loginForm.submitButton", { appName: t("app.name") })}
+											</button>
+										</form>
+									)}
+								</div>
+							)}
+
+							{authMode === "create" && (
+								<div id="unlock-panel-create" role="tabpanel" aria-labelledby="unlock-tab-create" class="stack" style={{ "--gap": "var(--space-s)" }}>
+									<h2 class="visually-hidden">{t("unlock.main.registerBox.title")}</h2>
+									<p class="auth-widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
+									<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
+										<div class="form-group">
+											<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
+											<input
+												id="reg-login"
+												type="text"
+												autocomplete="username"
+												value={regLogin}
+												onInput={(e) => setRegLogin(e.currentTarget.value)}
+											/>
+										</div>
+										<div class="form-group">
+											<label for="reg-password">{t("unlock.main.registerBox.passwordLabel")}</label>
+											<input
+												id="reg-password"
+												type="password"
+												autocomplete="new-password"
+												value={regPassword}
+												onInput={(e) => setRegPassword(e.currentTarget.value)}
+											/>
+										</div>
+										<div class="form-group">
+											<label for="reg-password-confirm">{t("unlock.advancedPassword.passwordConfirmLabel")}</label>
+											<input
+												id="reg-password-confirm"
+												type="password"
+												autocomplete="new-password"
+												value={regPasswordConfirm}
+												onInput={(e) => setRegPasswordConfirm(e.currentTarget.value)}
+											/>
+										</div>
+										<button type="submit" class="btn btn-block">
+											{t("unlock.main.create.continue")}
+										</button>
+									</form>
+								</div>
+							)}
+
+							{error && (
+								<p role="alert" style={{ color: "var(--bad)", margin: 0 }}>
+									{error}
+								</p>
+							)}
+						</section>
+
+						<ConnectionEndpoints />
+
+						<div class="unlock-or" role="separator">
+							<span>{t("unlock.main.orDivider")}</span>
+						</div>
+
+						<button type="button" class="unlock-quick-card" onClick={() => setMainView("temp-chat")}>
+							<span class="stack" style={{ "--gap": "var(--space-3xs)", textAlign: "start" }}>
+								<strong>{t("unlock.main.quickCard.title")}</strong>
+								<span class="auth-widget-subtitle">{t("unlock.main.quickCard.subtitle")}</span>
+							</span>
+						</button>
+
+						<details class="unlock-advanced">
+							<summary>{t("unlock.main.otherWays.title")}</summary>
+							<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+								<p class="auth-widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
+								<ul class="link-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+									<li>
+										<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>
+											{t("unlock.main.otherWays.createWithPhrase")}
+										</button>
+									</li>
+									<li>
+										<button type="button" class="link-list-item" onClick={() => openAdvanced("import-mnemonic")}>
+											{t("unlock.main.otherWays.importMnemonic")}
+										</button>
+									</li>
+									<li>
+										<button type="button" class="link-list-item" onClick={() => openAdvanced("import-key")}>
+											{t("unlock.main.otherWays.importKey")}
+										</button>
+									</li>
+								</ul>
+							</div>
+						</details>
+					</div>
 				)}
 				{mainView === "temp-chat" && <Quick />}
 				{mainView === "help" && <HelpContent />}
@@ -706,9 +706,6 @@ export default function Unlock() {
 
 			<footer class="site-footer">
 				<p>{t("unlock.main.footer.tagline", { appName: t("app.name") })}</p>
-				<p>
-					{t("unlock.main.footer.alphaNotice")}
-				</p>
 			</footer>
 		</div>
 	);

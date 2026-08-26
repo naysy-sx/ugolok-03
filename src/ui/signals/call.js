@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { createCallRuntime } from "../../domain/calls/call-runtime.js";
 import { BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
+import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
@@ -56,7 +57,10 @@ export function configureCallRuntime({ myPubkey, privKey, publish, dbKey }) {
 		myPubkey,
 		privKey,
 		publish,
-		iceServers: BUILD_DEFAULT_ICE_SERVERS,
+		iceServers: (() => {
+			const ice = readBootstrapEndpoints().iceServers;
+			return ice.length ? ice : BUILD_DEFAULT_ICE_SERVERS;
+		})(),
 		onStateChange: (stateName) => {
 			const snapshot = runtime.getState();
 			callState.value = snapshot;

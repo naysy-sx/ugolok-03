@@ -7935,3 +7935,57 @@ ICONS-PHOSPHOR (все 71 иконка проекта — на Phosphor Icons, �
 Ctrl/Cmd+V на document, правый клик открывает ⋯, пустой буфер — no-op.
 Кнопки вставки только при живом copy/cut (`hasClipboardItems` /
 `clipboardHasContent`).
+
+## Хотфикс: build = serve localhost-дефолты
+
+Пользователь: `npm run build` без env должен целиться в локальный
+остров, не в relay.example. Только `vite.config.js` (+ тест контракта,
+иначе старый `dev-stack` красный).
+
+1. `buildDefaultRelays` — воркер, 1-я итерация: срезал env-override,
+   bootstrap не звал `buildDefaultRelays()`. Брак.
+2. 2-я итерация: буквальный код принят. JSDoc воркера при вставке
+   заменён на `//` (стиль файла). `defineConfig` — вызовы без `command`.
+   Плагины не трогались.
+
+`tests/dev-stack.test.js`: build define = serve define; env override
+build+serve. 6/6. `npm run build` без env: в бандле `ws://127.0.0.1:7777`,
+`http://127.0.0.1:8080`, `stun`/`turn:127.0.0.1:3478`. Строки
+`relay.example.com` / `blossom.example.com` остались — placeholder
+инпутов settings.jsx, не дефолт define. Регрессия 2109/2110, флейк
+I-NO-QUADRATIC (повтор 3/3). `dist/` не коммитился.
+
+## Хотфикс: пустой relay не стирает профили контактов
+
+Пользователь: aside/контакты/h1 — npub+инициал, свой профиль жив.
+Причина: strfry-db снесён (хотфикс трио, MDB_INVALID); kind:0 контактов
+нет на relay. `refreshProfiles` → `applyProfileUpdates(null)` клобберил
+сигнал; IDB `contactProfiles` цел. Свой профиль — keystore, не `profiles`.
+
+1. `applyProfileUpdates` null-ветка — воркер, принято (ещё короче
+   предложенного: пишет null только если `!(pk in next)`).
+2. Комментарий над функцией — вручную, стиль файла.
+
+`tests/contacts-signals.test.js` 48/48. Регрессия 2112/2112.
+
+## Редизайн Unlock + bootstrap-endpoints
+
+ТЗ: PROCESS-DOCS/REDESIGN/STARTPAGE/UNLOCK-REDESIGN-TZ.md.
+
+1. `bootstrap-endpoints.js` — воркер 1-я итерация: импорт
+   `BOOTSTRAP_ENDPOINTS_KEY` из config, функции без export. Брак.
+   2-я итерация: буквальный код принят, 8/8.
+2. `endpoint-health.js` — воркер 1-я: `resolve is not defined`.
+   2-я: 5 строк мусора. Применено вручную (PLAN: тривиальный
+   полностью специфицированный микрозапрос). 6/6.
+3. `unlock.jsx` / `connection-endpoints.jsx` / i18n / CSS /
+   ui-settings/transport/call/quick — напрямую.
+   Находка: debounce TURN на маунте затирал массив ICE до одного
+   URL (терялись STUN fallback). Пишем iceServers только если
+   поле реально изменилось относительно `iceUrlFromServers`.
+
+Тесты: bootstrap+health 14, ui-settings bootstrap-фолбэк, i18n 12/12.
+`npm test` 2126/2127, флейк `room-session` И9 (повтор 24/24).
+`npm run build` 933.17 KB gzip. Playwright (chrome, :5173): mobile+
+desktop, вкладки, подключение, сброс, Quick, справка, путь Создать →
+фраза. Коммит не делался: в дереве чужие хотфиксы (contacts/vite).

@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
+import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { createPublisher } from "../../core/transport/publisher.js";
@@ -355,7 +356,8 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		}
 	}
 	if (relayEntries.length === 0) {
-		relayEntries = [{ url: DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777", read: true, write: true }];
+		const boot = readBootstrapEndpoints();
+		relayEntries = [{ url: boot.relayUrl || DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777", read: true, write: true }];
 	}
 	connection = createRelayPool(relayEntries, {
 		onStateChange: (s) => {

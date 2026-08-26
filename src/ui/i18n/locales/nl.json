@@ -205,7 +205,7 @@
 			"createSpaceButton": "Ruimte aanmaken",
 			"accountsWidget": {
 				"title": "Accounts op dit apparaat",
-				"empty": "Nog geen lokaal account — maak de eerste rechts aan.",
+				"empty": "Nog geen lokale accounts — maak de eerste aan.",
 				"ariaLabel": "Profiel kiezen"
 			},
 			"loginForm": {
@@ -233,15 +233,55 @@
 				"importKey": "Inloggen met een sleutel (nsec)"
 			},
 			"hero": {
-				"title": "Een privéruimte om te communiceren zonder centrale server",
-				"lead": "{{appName}} is een messenger gebouwd op het Nostr-protocol met end-to-end-encryptie (MLS) voor gesprekken en versleuteling van de database op het apparaat. Werkt op een lokaal netwerk, zonder openbaar internet."
+				"title": "Jouw privé-messenger",
+				"lead": "Een warme hoek voor je mensen. Chat en gesprekken — zonder servers van anderen."
 			},
 			"footer": {
 				"tagline": "{{appName}} — een privémessenger.",
 				"alphaNotice": "Alfatest. Gegevens worden versleuteld met een sleutel afgeleid van je hoofdwachtwoord en lokaal op dit apparaat opgeslagen."
 			},
 			"sidebarAriaLabel": "Accounts en toegang beheren",
-			"navTempChat": "Quick Connect"
+			"navTempChat": "Quick Connect",
+			"modes": {
+				"login": "Inloggen",
+				"create": "Aanmaken"
+			},
+			"recentBadge": "recent",
+			"orDivider": "of",
+			"quickCard": {
+				"title": "Snelle verbinding",
+				"subtitle": "Kamer zonder account · via link of code"
+			},
+			"helpLink": "Help",
+			"create": {
+				"continue": "Doorgaan"
+			},
+			"connection": {
+				"title": "Verbinding",
+				"summaryLocal": "lokaal eiland",
+				"summaryOk": "alle diensten in orde",
+				"summaryChecking": "controleren…",
+				"summaryBad": "sommige onbereikbaar",
+				"intro": "Serviceadressen van dit apparaat. De controle start zodra je een URL plakt.",
+				"relayLabel": "Relay",
+				"blossomLabel": "Blossom",
+				"turnLabel": "TURN",
+				"relayPlaceholder": "ws://127.0.0.1:7777",
+				"blossomPlaceholder": "http://127.0.0.1:8080",
+				"turnPlaceholder": "turn:127.0.0.1:3478",
+				"statusIdle": "—",
+				"statusChecking": "controleren…",
+				"statusOk": "bereikbaar",
+				"statusBad": "geen antwoord",
+				"latency": "reactie {{ms}} ms",
+				"hintBad": "controleer het adres en of de dienst draait",
+				"hintIdle": "plak een URL — de controle start meteen",
+				"resetDefaults": "Standaardadressen herstellen",
+				"invalidRelay": "dit lijkt geen Relay-adres",
+				"invalidBlossom": "dit lijkt geen Blossom-adres",
+				"invalidTurn": "dit lijkt geen TURN-adres",
+				"ariaLabel": "Verbindingsadressen"
+			}
 		}
 	},
 	"placeholder": {

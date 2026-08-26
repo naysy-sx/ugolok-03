@@ -10,16 +10,20 @@ import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconCopy from "../icons/copy.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
+import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
 
 // ROOMS-SPEC.md §1.4 — отдельная ветка ВНЕ MainShell, переиспользует
 // message-bubble.jsx через пропсы (форма сообщения совпадает), НЕ chat.jsx
 // (другой жизненный цикл). room-session.js отдаёт сигналы через plain-
 // callback onChange (не @preact/signals) — каждое изменение перечитывает
 // снимок present()/getMessages()/getRoomState() в локальный state.
-const RELAY_URL = BUILD_DEFAULT_RELAYS[0] ?? "ws://127.0.0.1:7777";
-// room-session.js сам navigator/config.js не импортирует (граница слоёв, та
-// же, что у media-controller.js/call-runtime.js) — конфиг подключается здесь.
-const ICE_SERVERS = BUILD_DEFAULT_ICE_SERVERS;
+function bootstrapRelayUrl() {
+	return readBootstrapEndpoints().relayUrl || BUILD_DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777";
+}
+function bootstrapIceServers() {
+	const ice = readBootstrapEndpoints().iceServers;
+	return ice.length ? ice : BUILD_DEFAULT_ICE_SERVERS;
+}
 
 // Редизайн интерфейса, "область контента" — сворачивание в панель сайдбара
 // (app.jsx's ActiveRoomSummary), тот же принцип, что mediaSession (media.js):
@@ -239,9 +243,9 @@ export default function Quick({ onExit }) {
 				name: roomName,
 				password: roomPassword,
 				nick: nick || t("quick.anonymousNick"),
-				relayUrl: RELAY_URL,
+				relayUrl: bootstrapRelayUrl(),
 				openMode,
-				iceServers: ICE_SERVERS,
+				iceServers: bootstrapIceServers(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -269,8 +273,8 @@ export default function Quick({ onExit }) {
 				password: decoded.password,
 				suffix: decoded.suffix,
 				nick: nick || t("quick.anonymousNick"),
-				relayUrl: RELAY_URL,
-				iceServers: ICE_SERVERS,
+				relayUrl: bootstrapRelayUrl(),
+				iceServers: bootstrapIceServers(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -292,8 +296,8 @@ export default function Quick({ onExit }) {
 				name: joinPwName,
 				password: joinPwPassword,
 				nick: nick || t("quick.anonymousNick"),
-				relayUrl: RELAY_URL,
-				iceServers: ICE_SERVERS,
+				relayUrl: bootstrapRelayUrl(),
+				iceServers: bootstrapIceServers(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -322,8 +326,8 @@ export default function Quick({ onExit }) {
 				password: activeRoomPassword,
 				suffix: raceOutcome.winningSuffix,
 				nick: nick || t("quick.anonymousNick"),
-				relayUrl: RELAY_URL,
-				iceServers: ICE_SERVERS,
+				relayUrl: bootstrapRelayUrl(),
+				iceServers: bootstrapIceServers(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,

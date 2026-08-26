@@ -2396,18 +2396,13 @@ html[data-media-full] .top-corner-actions {
 	row-gap: var(--space-xl);
 	column-gap: var(--space-l);
 
-	/* Пользователь: на смартфонах виджеты входа/регистрации (sidebar) —
-	   ПЕРЕД героем-заставкой (main), не после — иначе на узком экране
-	   первым делом видишь маркетинговый текст, а форму входа приходится
-	   долго скроллить. На ≥48em (media ниже) свой, независимый порядок
-	   областей (бок о бок, не друг под другом) — колонки той раскладки
-	   этот порядок не наследуют. */
+	/* Редизайн Unlock: одна колонка (hero → форма → подключение →
+	   быстрая связь). Сайдбар больше не отдельная область. */
 	grid-template-areas:
 		"header"
-		"sidebar"
 		"main"
 		"footer";
-	grid-template-rows: auto auto 1fr auto;
+	grid-template-rows: auto 1fr auto;
 }
 
 .site-header {
@@ -2425,6 +2420,158 @@ html[data-media-full] .top-corner-actions {
 
 .auth-layout input {
 	background-color: var(--bg);
+}
+
+.unlock-home {
+	max-inline-size: var(--measure);
+	margin-inline: auto;
+	padding-block: var(--space-m) var(--space-xl);
+}
+
+.unlock-modes {
+	background-color: var(--surface-raised);
+	border-radius: var(--radius-sm);
+	padding: 3px;
+}
+.unlock-modes [role="tab"] {
+	flex: 1;
+	background: none;
+	border: 0;
+	padding-block: var(--space-2xs);
+	padding-inline: var(--space-s);
+	border-radius: calc(var(--radius-sm) - 1px);
+	color: var(--muted);
+	font-weight: 550;
+}
+.unlock-modes [role="tab"][aria-selected="true"] {
+	background-color: var(--bg);
+	color: var(--fg);
+}
+
+.unlock-recent-badge {
+	flex-shrink: 0;
+	font-size: var(--step--1);
+	font-weight: 600;
+	padding: 0.15rem 0.5rem;
+	border-radius: 999px;
+	background: var(--good-surface);
+	color: var(--good);
+}
+
+.unlock-or {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.unlock-or::before,
+.unlock-or::after {
+	content: "";
+	flex: 1;
+	height: var(--border-width);
+	background: var(--border);
+}
+
+.unlock-quick-card {
+	display: flex;
+	width: 100%;
+	text-align: start;
+	padding: var(--space-s) var(--space-m);
+	border-radius: var(--radius);
+	border: var(--border-width) dashed color-mix(in oklch, var(--good), var(--border) 55%);
+	background: transparent;
+	color: inherit;
+}
+.unlock-quick-card:hover {
+	background: var(--good-surface);
+	border-color: var(--good);
+}
+
+.unlock-conn summary,
+.unlock-advanced summary {
+	list-style: none;
+	cursor: pointer;
+	color: var(--muted);
+}
+.unlock-conn summary::-webkit-details-marker,
+.unlock-advanced summary::-webkit-details-marker {
+	display: none;
+}
+.unlock-conn-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	padding-block: var(--space-2xs);
+}
+.unlock-advanced {
+	text-align: center;
+}
+.unlock-advanced[open] summary {
+	margin-block-end: var(--space-s);
+}
+
+.endpoint-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	font-size: var(--step--1);
+	font-weight: 600;
+	padding: 0.15rem 0.5rem;
+	border-radius: 999px;
+	background: var(--surface-raised);
+	color: var(--muted);
+}
+.endpoint-status-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+.endpoint-status--ok {
+	background: var(--good-surface);
+	color: var(--good);
+}
+.endpoint-status--bad {
+	background: var(--bad-surface);
+	color: var(--bad);
+}
+.endpoint-status--checking {
+	background: var(--warn-surface);
+	color: var(--warn);
+}
+.endpoint-latency--good {
+	color: var(--good);
+}
+.endpoint-latency--warn {
+	color: var(--warn);
+}
+.endpoint-latency--bad {
+	color: var(--bad);
+}
+
+.unlock-svc {
+	padding: var(--space-s);
+	background: var(--surface-raised);
+	border-radius: var(--radius);
+	border: var(--border-width) solid transparent;
+}
+.unlock-svc.is-ok {
+	border-color: color-mix(in oklch, var(--good), transparent 65%);
+}
+.unlock-svc.is-bad {
+	border-color: color-mix(in oklch, var(--bad), transparent 60%);
+}
+.unlock-svc.is-checking {
+	border-color: color-mix(in oklch, var(--warn), transparent 60%);
+}
+.unlock-svc label {
+	font-size: var(--step--1);
+	font-weight: 550;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 
@@ -2656,27 +2803,11 @@ html[data-media-full] .top-corner-actions {
 @media (min-width: 48em) {
 	.auth-layout {
 		grid-template-areas:
-			"header header"
-			"main   sidebar"
-			"footer footer";
-		grid-template-columns: minmax(0, 2fr) minmax(var(--grid-min), 1fr);
+			"header"
+			"main"
+			"footer";
+		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: auto 1fr auto;
-	}
-
-	/* Липкий + скроллящийся внутри себя, но ТОЛЬКО на широких экранах —
-	   состояние, включаемое медиа-запросом, не статическая раскладка;
-	   REGLAMENT.md сознательно не покрывает такие переключения (тот же
-	   принцип, что .sidebar ниже, превращающийся в выезжающую
-	   панель) — .stick/.self-start/.scroller как JSX-классы работали бы
-	   ВСЕГДА, а не только с этого брейкпоинта. */
-	.auth-sidebar {
-		position: sticky;
-		inset-block-start: var(--space-m);
-		align-self: start;
-		max-block-size: calc(100dvh - var(--space-m) * 2);
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		scrollbar-width: thin;
 	}
 }
 
@@ -2948,21 +3079,13 @@ html[data-media-full] .top-corner-actions {
 }
 
 .hero-section {
-	padding-block: var(--space-2xl, var(--space-xl)) var(--space-xl);
-}
-/* Пользователь: на смартфонах sidebar (виджеты входа) теперь стоит ПЕРЕД
-   main (см. grid-template-areas выше) — собственный верхний отступ
-   героя-заставки здесь лишний, сразу после виджетов и так есть row-gap
-   самой сетки .auth-layout. Нижний отступ (--space-xl) не трогаем —
-   разделяет main/sidebar друг от друга по-прежнему нужен. */
-@media (max-width: 47.99em) {
-	.hero-section {
-		padding-block-start: 0;
-	}
+	text-align: center;
+	padding-block: var(--space-s) 0;
 }
 
 .hero-section h1 {
 	max-width: var(--measure);
+	margin-inline: auto;
 }
 
 .hero-lead {
@@ -2970,7 +3093,8 @@ html[data-media-full] .top-corner-actions {
 	line-height: 1.5;
 	color: var(--muted);
 	max-width: var(--measure);
-	margin-block: var(--space-m) var(--space-l);
+	margin-block: var(--space-2xs) 0;
+	margin-inline: auto;
 }
 
 .site-footer {
