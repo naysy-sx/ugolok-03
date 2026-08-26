@@ -11,7 +11,7 @@ import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue,
 import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../../domain/files/sync.js";
 import { db } from "../../core/store/database.js";
 import { dbKeySig } from "./auth.js";
-import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard } from "../../domain/files/clipboard.js";
+import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard, hasClipboardItems } from "../../domain/files/clipboard.js";
 import { createUndoStack, pushUndo, popUndo, canUndo as canUndoNow, recordMove, recordRename, recordCreate } from "../../domain/files/undo.js";
 import { createLamportClock } from "../../core/sync/lamport.js";
 import { getOrCreateDeviceId } from "../../domain/identity/device.js";
@@ -26,6 +26,7 @@ export const currentFolderId = signal(ROOT_ID);
 export const clipboard = signal(createClipboard());
 export const selectedIds = signal(new Set());
 export const canUndo = signal(false);
+export const clipboardHasContent = computed(() => hasClipboardItems(clipboard.value, treeState.value.nodes));
 
 export const projected = computed(() => project(treeState.value));
 
@@ -113,6 +114,7 @@ export async function label(ownerPubkeyForInit) {
 // сессии. Вызывающая сторона (files.jsx) передаёт privKeySig.value и
 // publish из transport.js.
 export async function initFiles(ownerPubkey, privKey, publish) {
+	const ownerChanged = cachedOwnerPubkey !== ownerPubkey;
 	cachedOwnerPubkey = ownerPubkey;
 	cachedPrivKey = privKey;
 	cachedPublish = publish;
@@ -133,6 +135,7 @@ export async function initFiles(ownerPubkey, privKey, publish) {
 		await saveTreeState(ownerPubkey, treeState.value);
 	}
 	currentFolderId.value = ROOT_ID;
+	if (ownerChanged) clipboard.value = createClipboard();
 	undoStack = createUndoStack();
 	canUndo.value = false;
 
@@ -339,12 +342,13 @@ export async function purgeNode(id) {
 	await applyAndPersist([op]); // НЕ кладём в undo-стек — purge монотонен, необратим (§5.6 MATH.md)
 }
 
-export async function copySelectionHere(nodeIds) {
+export async function copySelectionHere(nodeIds, destId = currentFolderId.value) {
 	const ops = [];
 	const createdRootIds = [];
+	const dest = destId ?? currentFolderId.value;
 	for (const nodeId of nodeIds) {
 		const newIds = collectNewIds(treeState.value, nodeId);
-		const subtreeOps = opCopy(treeState.value, nodeId, currentFolderId.value, newIds, await label());
+		const subtreeOps = opCopy(treeState.value, nodeId, dest, newIds, await label());
 		ops.push(...subtreeOps);
 		createdRootIds.push(newIds.get(nodeId));
 	}
@@ -369,10 +373,14 @@ export function collectNewIds(S, rootId) {
 }
 
 export function copySelection(nodeIds) {
-	clipboard.value = copyToClipboard(clipboard.value, [...nodeIds]);
+	const ids = [...nodeIds];
+	if (ids.length === 0) return;
+	clipboard.value = copyToClipboard(clipboard.value, ids);
 }
 export function cutSelection(nodeIds) {
-	clipboard.value = cutToClipboard(clipboard.value, [...nodeIds]);
+	const ids = [...nodeIds];
+	if (ids.length === 0) return;
+	clipboard.value = cutToClipboard(clipboard.value, ids);
 }
 export function cancelSelection() {
 	clipboard.value = cancelClipboard(clipboard.value);
@@ -382,15 +390,17 @@ export function cancelSelection() {
 // paste — no-op для него, не ошибка (остальные из выделения обрабатываются
 // нормально). Проверяем существование (живой узел в ТЕКУЩЕМ дереве) здесь,
 // перед конструированием операций.
-export async function pasteHere() {
+export async function pasteHere(destId = currentFolderId.value) {
 	const c = clipboard.value;
+	if (c.state === "empty") return;
+	const dest = destId ?? currentFolderId.value;
 	const liveIds = c.selection.filter((id) => treeState.value.nodes.get(id) && !treeState.value.nodes.get(id).purged);
 	if (c.state === "cut") {
 		for (const id of liveIds) {
-			await moveNode(id, currentFolderId.value);
+			await moveNode(id, dest);
 		}
 	} else if (c.state === "copied") {
-		await copySelectionHere(liveIds);
+		await copySelectionHere(liveIds, dest);
 	}
 	clipboard.value = pasteClipboard(c);
 	selectedIds.value = new Set();

@@ -589,7 +589,43 @@
 		"moveToTrashConfirm": "移动到回收站？",
 		"moveManyToTrashConfirm": "将 {{count}} 个对象移动到回收站？",
 		"purgeConfirm": "永久删除？此操作不可撤销。",
-		"sharedFolderDefaultName": "共享文件夹（{{pubkey}}）"
+		"sharedFolderDefaultName": "共享文件夹（{{pubkey}}）",
+		"typeAll": "All",
+		"typeImages": "Images",
+		"typeVideo": "Video",
+		"typeAudio": "Audio",
+		"typeDocs": "Documents",
+		"viewListAria": "List",
+		"viewGridAria": "Tiles",
+		"viewToggleAria": "View",
+		"playSequential": "Play all",
+		"watchSequential": "Watch all",
+		"watch": "View",
+		"clearTypeFilterAria": "Show all",
+		"typeEmpty": "No files of this type",
+		"searchPlaceholder": "Search in this folder",
+		"fileInfoTitle": "File info",
+		"fileInfoCloseAria": "Close",
+		"kindPdf": "PDF",
+		"kindSheet": "Spreadsheet",
+		"kindDocument": "Document",
+		"fileCount": {
+			"one": "{{count}} file",
+			"few": "{{count}} files",
+			"many": "{{count}} files",
+			"other": "{{count}} files"
+		},
+		"breadcrumbAria": "Path",
+		"objectCount": {
+			"one": "{{count}} item",
+			"few": "{{count}} items",
+			"many": "{{count}} items",
+			"other": "{{count}} items"
+		},
+		"pasteInto": "粘贴",
+		"pasteHere": "粘贴到此处",
+		"clipboardCopied": "已复制：{{count}}",
+		"clipboardCut": "已剪切：{{count}}"
 	},
 	"profile": {
 		"server": {

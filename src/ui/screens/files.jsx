@@ -2,14 +2,21 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import Screen from "../components/screen.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import IconFolder from "../icons/folder.jsx";
-import IconPlus from "../icons/plus.jsx";
+import IconFolderPlus from "../icons/folder-plus.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconCopy from "../icons/copy.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
-import IconFileText from "../icons/file-text.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconCross from "../icons/cross.jsx";
+import IconUpload from "../icons/upload.jsx";
+import IconViewList from "../icons/view-list.jsx";
+import IconSquaresFour from "../icons/squares-four.jsx";
+import IconMusicNote from "../icons/music-note.jsx";
+import IconVideoCamera from "../icons/video-camera.jsx";
+import IconImage from "../icons/image-icon.jsx";
+import IconFileText from "../icons/file-text.jsx";
+import IconPlayerPlay from "../icons/player-play.jsx";
 import { currentUser, privKeySig } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import {
@@ -18,6 +25,7 @@ import {
 	currentEntries,
 	breadcrumbPath,
 	clipboard,
+	clipboardHasContent,
 	canUndo,
 	createFolder,
 	createFileEntry,
@@ -29,24 +37,32 @@ import {
 	copySelection,
 	cutSelection,
 	pasteHere,
+	cancelSelection,
 	undo,
 	openFolder,
 	getFileKeyFor,
 	treeState,
+	projected,
 } from "../signals/files.js";
 import { sharedNodeIds, initShares, shareFolder, revokeAccess, listGrantees } from "../signals/shares.js";
 import { activeMounts, mountProjections, ensureMountProjection, saveMountedItemToOwn, unmountShare } from "../signals/mounts.js";
 import { contacts, profiles } from "../signals/contacts.js";
 import { dbKeySig } from "../signals/auth.js";
-import { ROOT_ID, TRASH_ID, LOST_FOUND_ID, classesPresent, liveChildrenOf } from "../../domain/files/tree.js";
+import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
-import { filterEntries } from "../../domain/files/filter.js";
+import { filterEntries, filterByClass } from "../../domain/files/filter.js";
+import { layoutFor } from "../../domain/files/view-layout.js";
+import { buildVisibleMediaPlaylist } from "../../domain/files/visible-media.js";
+import { classOf } from "../../domain/media/media-ref.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFileStreaming } from "../../domain/files/stream-upload.js";
-import { collectFolderScope } from "../../domain/media/scope.js";
-import { buildPlaylist } from "../../domain/media/playlist.js";
-import MediaButtons from "../components/media/media-buttons.jsx";
+import TypeFilterBar from "../components/files-type-filter.jsx";
+import FileInfoDialog from "../components/file-info-dialog.jsx";
+import FileKindIcon from "../components/file-kind-icon.jsx";
+import { formatFileSize } from "../components/attachment-view.jsx";
+import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-meta.js";
+import IconRestore from "../icons/restore.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
@@ -55,11 +71,10 @@ import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
 import IconPeople from "../icons/people.jsx";
-import IconPaperclip from "../icons/paperclip.jsx";
 import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import { openMedia } from "../signals/media.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
-import { t, errorMessage as translateErrorMessage } from "../signals/i18n.js";
+import { t, tPlural, errorMessage as translateErrorMessage } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
@@ -68,6 +83,13 @@ const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // параллелизм, и общее число одновременных задач росло бы с числом видимых
 // строк, а не оставалось 2-4 (ALGO.MD §15).
 const thumbnailQueue = createThumbnailQueue(3);
+
+const TYPE_MODE = {
+	image: { labelKey: "files.typeImages", Icon: IconImage, playKey: "files.watch" },
+	video: { labelKey: "files.typeVideo", Icon: IconVideoCamera, playKey: "files.watchSequential" },
+	audio: { labelKey: "files.typeAudio", Icon: IconMusicNote, playKey: "files.playSequential" },
+	other: { labelKey: "files.typeDocs", Icon: IconFileText, playKey: null },
+};
 
 // Миниатюра по видимости (IntersectionObserver) — задача 3.8 TASK.md.
 // Манифест (mime/size) неизвестен из самого узла дерева (Node.blob — только
@@ -88,7 +110,7 @@ const thumbnailQueue = createThumbnailQueue(3);
 // уменьшенная и полная версии никогда не делили один ключ.
 const THUMB_CACHE_PREFIX = "thumb:";
 
-function FileThumbnail({ entry, ownerPubkey }) {
+function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb" }) {
 	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
 	const [failed, setFailed] = useState(false);
 	const elRef = useRef(null);
@@ -143,17 +165,48 @@ function FileThumbnail({ entry, ownerPubkey }) {
 		};
 	}, [entry.blob, url, failed]);
 
-	if (url) return <img src={url} alt="" class="file-row-thumb" />;
-	// ref — на обычный <span>, не напрямую на иконку: IconFileText — простой
-	// функциональный компонент без forwardRef, ref на него не долетает до
-	// настоящего DOM-узла (найдено живой проверкой — IntersectionObserver
-	// падал на не-Element). Span визуально прозрачен (inline, без своих
-	// стилей), просто держит точку наблюдения.
+	if (url) return <img src={url} alt="" class={imgClass} />;
+	// ref — на обычный <span>, не напрямую на иконку: Icon* без forwardRef,
+	// ref на него не долетает до DOM (найдено живой проверкой).
 	return (
 		<span ref={elRef} style={{ display: "inline-flex" }}>
-			<IconFileText aria-hidden="true" class="file-row-icon" />
+			<FileKindIcon mime={entry.mime} />
 		</span>
 	);
+}
+
+function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
+	const [size, setSize] = useState(null);
+	useEffect(() => {
+		if (entry.kind !== "file" || !entry.blob) return;
+		let cancelled = false;
+		(async () => {
+			let m = await getCachedManifest(ownerPubkey, entry.blob);
+			if (!m) {
+				try {
+					m = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+					if (m) await putCachedManifest(ownerPubkey, entry.blob, m);
+				} catch {
+					return;
+				}
+			}
+			if (!cancelled && m?.size != null) setSize(m.size);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [entry.blob, entry.kind, ownerPubkey]);
+
+	if (STATUS_LABEL_KEYS[entry.status]) {
+		return <small class={cls}>{t(STATUS_LABEL_KEYS[entry.status])}</small>;
+	}
+	if (entry.kind === "dir") {
+		const n = liveChildCount(projected.value.children, entry.id);
+		return <small class={cls}>{tPlural("files.objectCount", n)}</small>;
+	}
+	const text = joinMeta([fileExtLabel(entry.displayName), size != null ? formatFileSize(size) : ""]);
+	if (!text) return null;
+	return <small class={cls}>{text}</small>;
 }
 
 // "Ремонт" (project(), tree.js) сделал что-то за пользователя молча —
@@ -212,6 +265,9 @@ export default function Files() {
 	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, chunksDone, chunksTotal} | null
 	const [uploadError, setUploadError] = useState("");
 	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
+	const [typeFilter, setTypeFilter] = useState("all");
+	const [viewOverride, setViewOverride] = useState({});
+	const [docInfo, setDocInfo] = useState(null); // {entry, mediaRef} | null
 	const fileInputRef = useRef(null);
 	const uploadAbortRef = useRef(null);
 
@@ -244,7 +300,7 @@ export default function Files() {
 			uploadAbortRef.current = controller;
 			setUploadState({ fileName: file.name, fileIndex: i + 1, filesTotal: files.length, chunksDone: 0, chunksTotal: 1 });
 			try {
-				const { manifestDigest, fileKey } = await putFileStreaming(file, {
+				const { manifest, manifestDigest, fileKey } = await putFileStreaming(file, {
 					name: file.name,
 					mime: file.type || "application/octet-stream",
 					serverUrl: BLOSSOM_URL,
@@ -252,6 +308,7 @@ export default function Files() {
 					signal: controller.signal,
 					onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, ...p } : prev)),
 				});
+				if (manifest) await putCachedManifest(ownerPubkey, manifestDigest, manifest);
 				const result = await createFileEntry(file.name, manifestDigest, fileKey, null, file.type || "application/octet-stream");
 				const message = errorMessage(result);
 				if (message) {
@@ -409,9 +466,22 @@ export default function Files() {
 		setDebouncedQuery("");
 	}, [currentFolderId.value]);
 
-	const entries = sortEntries(filterEntries(currentEntries.value, debouncedQuery), "name");
+	const layout = layoutFor(typeFilter, viewOverride);
+	const folderEntries = currentEntries.value;
+	const entries = sortEntries(
+		filterEntries(filterByClass(folderEntries, typeFilter), debouncedQuery),
+		"name",
+	);
 	const path = breadcrumbPath.value;
 	const inTrash = currentFolderId.value === TRASH_ID;
+	const classArr = treeState.value.classCount.get(currentFolderId.value);
+	const typeCounts = {
+		all: folderEntries.length,
+		audio: classArr?.[0] ?? 0,
+		video: classArr?.[1] ?? 0,
+		image: classArr?.[2] ?? 0,
+		other: classArr?.[3] ?? 0,
+	};
 
 	// Виртуализация (задача 3.2 TASK.md): "папка на 10⁴ элементов не
 	// рендерится целиком". Рендерятся только entries[start:end] — окно
@@ -466,94 +536,79 @@ export default function Files() {
 		setRenamingId(null);
 	}
 
-	// Этап D медиа-подсистемы — заменяет FilePlayer/playingDigest. Одиночный
-	// MediaRef (не через collectFolderScope — форма entries здесь плоская,
-	// не CRDT-узел с .name.value, DESIGN.md "D6" разбирает подробно; playlist
-	// по всей папке целиком — отдельный путь, openFolderMediaClass ниже,
-	// подключён только в Этапе E). mime/name/size — ТОЛЬКО из манифеста; тот
-	// же кэш getCachedManifest/putCachedManifest, что уже использует
-	// миниатюра выше — не новая сетевая стоимость на повторный клик.
-	async function openEntry(entry) {
-		if (entry.kind === "dir") {
-			openFolder(entry.id);
-			setSelected(new Set());
-			return;
+	async function resolveMediaRef(node) {
+		let manifest = await getCachedManifest(ownerPubkey, node.blob);
+		if (!manifest) {
+			manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			await putCachedManifest(ownerPubkey, node.blob, manifest);
 		}
-		try {
-			let manifest = await getCachedManifest(ownerPubkey, entry.blob);
-			if (!manifest) {
-				manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
-				await putCachedManifest(ownerPubkey, entry.blob, manifest);
-			}
-			// Этап E, E1-доп — та же событийная дозаливка, что FileThumbnail.
-			if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
-			const fileKey = await getFileKeyFor(entry.blob);
-			if (!fileKey) {
-				setError(t("chat.window.fileKeyNotFoundError"));
-				return;
-			}
-			openMedia({
-				refs: [{ digest: entry.blob, key: fileKey, mime: manifest.mime, name: manifest.name, size: manifest.size, sourceKind: "node", sourceMeta: { nodeId: entry.id } }],
-				position: 0,
-			});
-		} catch (err) {
-			setError(translateErrorMessage(err));
-		}
+		if (node.mime == null) backfillMime(node.id, manifest.mime).catch(() => {});
+		const fileKey = await getFileKeyFor(node.blob);
+		if (!fileKey) return null;
+		return {
+			digest: node.blob,
+			key: fileKey,
+			mime: manifest.mime,
+			name: manifest.name,
+			size: manifest.size,
+			sourceKind: "node",
+			sourceMeta: { nodeId: node.id },
+		};
 	}
 
-	// Этап E, E3 (CONTRACTS.md/DESIGN.md "Этап E") — клик по кнопке
-	// "Аудио"/"Видео"/"Изображения" под шапкой. В отличие от openEntry — ТУТ
-	// действительно нужен collectFolderScope (Этап A, впервые подключается
-	// в реальном UI): сырые живые дети ТЕКУЩЕЙ папки (treeState.value, не
-	// projected — collectFolderScope ждёт entry.node.name.value, сырую форму
-	// узла), отфильтрованные до файлов нужного класса, mime уже денормализован
-	// в узле (Этап E1) — манифест нужен ТОЛЬКО за size (единственная реально
-	// сетевая часть этого пути, пропорциональная числу файлов класса, не всей
-	// папке). Ключи — getFileKeyFor, как везде.
-	async function openFolderMediaClass(cls) {
+	async function openVisibleMedia(clickedId) {
+		const { items, position } = buildVisibleMediaPlaylist(entries, clickedId);
+		if (items.length === 0) return;
 		setMediaButtonsBusy(true);
 		setError("");
 		try {
-			const S = treeState.value;
-			const ids = [...liveChildrenOf(S, currentFolderId.value)];
-			// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) больше не
-			// исключается: раньше кандидаты для медиа-оверлея ограничивались
-			// image/video/audio, теперь он умеет открывать и обычные файлы
-			// (file-viewer.jsx, VIEWS.other).
-			const candidates = ids.map((id) => S.nodes.get(id)).filter((node) => node.kind === "file" && node.mime != null);
-
-			const entries = [];
-			for (const node of candidates) {
-				let manifest = await getCachedManifest(ownerPubkey, node.blob);
-				if (!manifest) {
-					manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
-					await putCachedManifest(ownerPubkey, node.blob, manifest);
+			const refs = [];
+			for (const node of items) {
+				const ref = await resolveMediaRef(node);
+				if (!ref) {
+					setError(t("chat.window.fileKeyNotFoundError"));
+					return;
 				}
-				entries.push({ node, mime: node.mime, size: manifest.size });
+				refs.push(ref);
 			}
-
-			const refs = collectFolderScope(entries, (entry) => null);
-			// keyOf синхронный по контракту scope.js, но getFileKeyFor асинхронна —
-			// резолвим ключи отдельным проходом ПОСЛЕ сборки MediaRef[] (те же
-			// сигнатуры, key заполняется по digest, не меняет длину/порядок массива).
-			for (const ref of refs) {
-				ref.key = await getFileKeyFor(ref.digest);
-			}
-			const missingKey = refs.find((r) => !r.key);
-			if (missingKey) {
-				setError(t("chat.window.fileKeyNotFoundError"));
-				return;
-			}
-
-			const playlist = buildPlaylist(refs);
-			const position = playlist.idx[cls]?.[0];
-			if (position === undefined) return; // classesPresent соврать не должно, но защититься дёшево
 			openMedia({ refs, position });
 		} catch (err) {
 			setError(translateErrorMessage(err));
 		} finally {
 			setMediaButtonsBusy(false);
 		}
+	}
+
+	async function openEntry(entry) {
+		if (entry.kind === "dir") {
+			openFolder(entry.id);
+			setSelected(new Set());
+			return;
+		}
+		const cls = entry.mime ? classOf(entry.mime) : "other";
+		if (cls === "audio" || cls === "video" || cls === "image") {
+			await openVisibleMedia(entry.id);
+			return;
+		}
+		try {
+			const mediaRef = await resolveMediaRef(entry);
+			if (!mediaRef) {
+				setError(t("chat.window.fileKeyNotFoundError"));
+				return;
+			}
+			setDocInfo({ entry, mediaRef });
+		} catch (err) {
+			setError(translateErrorMessage(err));
+		}
+	}
+
+	function clearTypeFilter() {
+		setTypeFilter("all");
+	}
+
+	function setLayoutForType(next) {
+		if (typeFilter === "all") return;
+		setViewOverride((prev) => ({ ...prev, [typeFilter]: next }));
 	}
 
 	async function handleDelete(ids) {
@@ -586,23 +641,29 @@ export default function Files() {
 	}
 
 	// §7 TASK.md: "работают Ctrl+C / Ctrl+X / Ctrl+V / Delete / F2 / Ctrl+Z".
+	// Слушаем document, не files-shell: при входе в папку кнопка-имя
+	// размонтируется и фокус уходит на body — иначе Ctrl+V молчит.
 	// Игнорируем, если фокус в поле ввода (не перехватывать обычный текстовый
 	// copy/paste пользователя внутри формы переименования/создания папки).
 	useEffect(() => {
 		function isTypingTarget(e) {
 			const tag = e.target.tagName;
-			return tag === "INPUT" || tag === "TEXTAREA";
+			return tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable;
 		}
 		function handleKeyDown(e) {
 			if (isTypingTarget(e)) return;
+			if (view !== "own" || inTrash) return;
 			const mod = e.ctrlKey || e.metaKey;
 			if (mod && e.key.toLowerCase() === "c") {
+				if (selected.size === 0) return;
 				e.preventDefault();
 				copySelected();
 			} else if (mod && e.key.toLowerCase() === "x") {
+				if (selected.size === 0) return;
 				e.preventDefault();
 				cutSelected();
 			} else if (mod && e.key.toLowerCase() === "v") {
+				if (!clipboardHasContent.value) return;
 				e.preventDefault();
 				pasteHere();
 			} else if (mod && e.key.toLowerCase() === "z") {
@@ -624,32 +685,32 @@ export default function Files() {
 				}
 			}
 		}
-		const node = containerRef.current;
-		node?.addEventListener("keydown", handleKeyDown);
-		return () => node?.removeEventListener("keydown", handleKeyDown);
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
 	});
+
+	function openRowActionsMenu(e) {
+		const details = e.currentTarget.querySelector("details.menu");
+		if (!details) return;
+		e.preventDefault();
+		details.open = true;
+	}
 
 	if (!ready) return null;
 
 	return (
 		<>
 		<Screen
-			title={t("nav.files")}
+			title={path[path.length - 1]?.name || t("nav.files")}
 			actions={
 				<>
-					<button type="button" class={view === "own" ? undefined : "btn--ghost"} onClick={() => setView("own")}>
-						{t("files.myFilesTab")}
-					</button>
-					<button type="button" class={view === "mounts" ? undefined : "btn--ghost"} onClick={() => setView("mounts")}>
-						<IconGlobe aria-hidden="true" /> {t("files.receivedFoldersTab")}{activeMounts.value.length > 0 ? ` (${activeMounts.value.length})` : ""}
-					</button>
 					{view === "own" && (
 						<>
-							<button type="button" onClick={() => setNewFolderOpen((v) => !v)}>
-								<IconPlus /> {t("files.newFolderButton")}
+							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadState}>
+								<IconUpload aria-hidden="true" /> {t("files.uploadFileButton")}
 							</button>
-							<button type="button" class="btn--ghost" onClick={triggerFileUpload} disabled={!!uploadState}>
-								<IconPaperclip aria-hidden="true" /> {t("files.uploadFileButton")}
+							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)}>
+								<IconFolderPlus aria-hidden="true" /> {t("files.newFolderButton")}
 							</button>
 							<input
 								ref={fileInputRef}
@@ -659,27 +720,44 @@ export default function Files() {
 								style={{ display: "none" }}
 								aria-label={t("files.selectFilesAria")}
 							/>
-							{clipboard.value.state !== "empty" && (
-								<button type="button" class="btn--ghost" onClick={pasteHere}>
-									{t("files.pasteButton", { count: clipboard.value.selection.length })}
-								</button>
-							)}
-							{canUndo.value && (
-								<button type="button" class="btn--ghost" onClick={undo}>
-									{t("common.undo")}
-								</button>
-							)}
 						</>
+					)}
+					<button
+						type="button"
+						class={(view === "mounts" ? "" : "btn--ghost ") + "bar"}
+						style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+						aria-pressed={view === "mounts"}
+						onClick={() => setView((v) => (v === "mounts" ? "own" : "mounts"))}
+					>
+						<IconGlobe aria-hidden="true" /> {t("files.receivedFoldersTab")}
+						{activeMounts.value.length > 0 ? <span class="slice__n">{activeMounts.value.length}</span> : null}
+					</button>
+					{view === "own" && !inTrash && (
+						<button type="button" class="icon-btn" onClick={() => openFolder(TRASH_ID)} aria-label={t("files.trashButton")} title={t("files.trashButton")}>
+							<IconTrash />
+						</button>
+					)}
+					{view === "own" && clipboardHasContent.value && !inTrash && (
+						<button
+							type="button"
+							class="btn--ghost bar"
+							style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+							onClick={() => pasteHere()}
+						>
+							{t("files.pasteButton", { count: clipboard.value.selection.length })}
+						</button>
+					)}
+					{view === "own" && canUndo.value && (
+						<button type="button" class="icon-btn" onClick={undo} aria-label={t("common.undo")} title={t("common.undo")}>
+							<IconRestore />
+						</button>
 					)}
 				</>
 			}
 			slices={
-				view === "own" && (
-					<>
-						<MediaButtons counts={classesPresent(treeState.value, currentFolderId.value)} onOpen={openFolderMediaClass} />
-						{mediaButtonsBusy && <span class="spinner" aria-hidden="true" />}
-					</>
-				)
+				view === "own" ? (
+					<TypeFilterBar counts={typeCounts} active={typeFilter} onSelect={setTypeFilter} />
+				) : null
 			}
 		>
 			{view === "mounts" ? (
@@ -695,10 +773,10 @@ export default function Files() {
 				/>
 			) : (
 			<div ref={containerRef} tabIndex={-1} class="files-shell stack" style={{ "--gap": "var(--space-m)" }}>
-				<div class="row file-breadcrumbs" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<ol role="list" class="row file-breadcrumb-list" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+				{path.length > 1 && (
+					<nav class="row file-breadcrumbs" style={{ "--gap": "var(--space-3xs)", "--align": "center" }} aria-label={t("files.breadcrumbAria")}>
 						{path.map((crumb, i) => (
-							<li key={crumb.id} class="row file-breadcrumb-item" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+							<span key={crumb.id} class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
 								{i > 0 && <IconChevronRight aria-hidden="true" />}
 								{i === path.length - 1 ? (
 									<span>{crumb.name}</span>
@@ -707,16 +785,61 @@ export default function Files() {
 										{crumb.name}
 									</button>
 								)}
-							</li>
+							</span>
 						))}
-					</ol>
-					<span class="grow" />
-					{!inTrash && (
-						<button type="button" class="btn--ghost" onClick={() => openFolder(TRASH_ID)}>
-							<IconTrash /> {t("files.trashButton")}
+					</nav>
+				)}
+
+				{typeFilter !== "all" && TYPE_MODE[typeFilter] && (
+					<div class="mode-bar row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<span class="mode-bar__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							{(() => {
+								const Icon = TYPE_MODE[typeFilter].Icon;
+								return <Icon aria-hidden="true" />;
+							})()}
+							{t(TYPE_MODE[typeFilter].labelKey)}
+						</span>
+						<span class="mode-bar__n">{tPlural("files.fileCount", entries.length)}</span>
+						<span class="grow" />
+						{TYPE_MODE[typeFilter].playKey && entries.some((e) => e.kind === "file") && (
+							<button
+								type="button"
+								class="btn--ghost bar rigid"
+								style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+								onClick={() => openVisibleMedia(null)}
+								disabled={mediaButtonsBusy}
+							>
+								{mediaButtonsBusy && <span class="spinner" aria-hidden="true" />}
+								<IconPlayerPlay aria-hidden="true" /> {t(TYPE_MODE[typeFilter].playKey)}
+							</button>
+						)}
+						<div class="seg view-toggle bar rigid" style={{ "--gap": 0 }} role="group" aria-label={t("files.viewToggleAria")}>
+							<button
+								type="button"
+								class={"slice bar rigid" + (layout === "list" ? " slice--on" : "")}
+								aria-label={t("files.viewListAria")}
+								aria-pressed={layout === "list"}
+								title={t("files.viewListAria")}
+								onClick={() => setLayoutForType("list")}
+							>
+								<IconViewList />
+							</button>
+							<button
+								type="button"
+								class={"slice bar rigid" + (layout === "grid" ? " slice--on" : "")}
+								aria-label={t("files.viewGridAria")}
+								aria-pressed={layout === "grid"}
+								title={t("files.viewGridAria")}
+								onClick={() => setLayoutForType("grid")}
+							>
+								<IconSquaresFour />
+							</button>
+						</div>
+						<button type="button" class="icon-btn rigid" aria-label={t("files.clearTypeFilterAria")} onClick={clearTypeFilter}>
+							<IconCross />
 						</button>
-					)}
-				</div>
+					</div>
+				)}
 
 				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
@@ -726,11 +849,28 @@ export default function Files() {
 					<input
 						id="file-search"
 						type="search"
+						class="grow"
 						value={searchInput}
 						onInput={(e) => setSearchInput(e.currentTarget.value)}
-						placeholder={t("files.filterPlaceholder")}
+						placeholder={t("files.searchPlaceholder")}
 					/>
 				</div>
+
+				{clipboardHasContent.value && !inTrash && (
+					<div class="row file-selection-toolbar" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
+						<span>
+							{clipboard.value.state === "cut"
+								? t("files.clipboardCut", { count: clipboard.value.selection.length })
+								: t("files.clipboardCopied", { count: clipboard.value.selection.length })}
+						</span>
+						<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => pasteHere()}>
+							{t("files.pasteHere")}
+						</button>
+						<button type="button" class="btn--ghost" onClick={cancelSelection}>
+							{t("common.cancel")}
+						</button>
+					</div>
+				)}
 
 				{newFolderOpen && (
 					<form class="row file-new-folder-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={handleCreateFolder}>
@@ -789,7 +929,75 @@ export default function Files() {
 				)}
 
 				{entries.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{inTrash ? t("files.trashEmpty") : t("files.folderEmpty")}</p>
+					<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+						<p style={{ color: "var(--muted)" }}>
+							{inTrash ? t("files.trashEmpty") : typeFilter !== "all" ? t("files.typeEmpty") : t("files.folderEmpty")}
+						</p>
+						{!inTrash && clipboardHasContent.value && typeFilter === "all" && (
+							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center", alignSelf: "start" }} onClick={() => pasteHere()}>
+								{t("files.pasteHere")}
+							</button>
+						)}
+					</div>
+				) : layout === "grid" ? (
+					<ul role="list" class="file-grid">
+						{entries.map((entry) => (
+							<li key={entry.id} class="file-tile" onContextMenu={openRowActionsMenu}>
+								<div class="file-tile__frame">
+									{entry.kind === "dir" ? (
+										<IconFolder aria-hidden="true" class="icon" />
+									) : (
+										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" />
+									)}
+								</div>
+								{!inTrash && (
+									<div class="file-tile__menu" onClick={(e) => e.stopPropagation()}>
+										<ActionsMenu label={t("files.rowActionsAria", { name: entry.displayName })}>
+											<button type="button" onClick={() => startRename(entry)}>
+												<IconPencil /> {t("contacts.renameAction")}
+											</button>
+											<button type="button" onClick={() => copySelection([entry.id])}>
+												<IconCopy /> {t("common.copy")}
+											</button>
+											<button type="button" onClick={() => cutSelection([entry.id])}>
+												{t("files.cutButton")}
+											</button>
+											{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
+												<button type="button" onClick={() => pasteHere(entry.id)}>
+													{t("files.pasteInto")}
+												</button>
+											)}
+											{entry.kind === "dir" &&
+												(sharedNodeIds.value.has(entry.id) ? (
+													<button type="button" onClick={() => openAccessPanel(entry.id)}>
+														<IconGlobe /> {t("files.manageAccessButton")}
+													</button>
+												) : (
+													<button type="button" onClick={() => openShareDialog(entry.id)}>
+														<IconGlobe /> {t("files.shareButton")}
+													</button>
+												))}
+											<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
+												<IconTrash /> {t("common.delete")}
+											</button>
+										</ActionsMenu>
+									</div>
+								)}
+								<button
+									type="button"
+									class="file-tile__name truncate"
+									style={{ "--lines": 1 }}
+									onClick={(e) => {
+										if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
+										openEntry(entry);
+									}}
+								>
+									{entry.displayName}
+								</button>
+								<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-tile__meta" />
+							</li>
+						))}
+					</ul>
 				) : (
 					<>
 						<div ref={anchorRef} aria-hidden="true" />
@@ -806,6 +1014,7 @@ export default function Files() {
 								key={entry.id}
 								class={"row file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
 								style={{ "--gap": "var(--space-s)", "--align": "center" }}
+								onContextMenu={openRowActionsMenu}
 								draggable={!inTrash && renamingId !== entry.id}
 								onDragStart={(e) => handleRowDragStart(entry, e)}
 								onDragEnd={handleRowDragEnd}
@@ -813,7 +1022,6 @@ export default function Files() {
 								onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
 								onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
 							>
-								<input type="checkbox" checked={selected.has(entry.id)} onChange={() => toggleSelect(entry.id)} aria-label={t("files.selectRowAria", { name: entry.displayName })} />
 								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
 								{renamingId === entry.id ? (
 									<form class="row grow file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
@@ -831,12 +1039,9 @@ export default function Files() {
 								) : (
 									<button
 										type="button"
-										class="file-row-name"
-										onDblClick={(e) => {
-											// MEDIA-OVERLAY-UI.md, этап 3.3 — только для файлов: у навигации в
-											// папку своей медиа-сессии нет, оставлять здесь чужую геометрию
-											// нельзя (её потом ошибочно подхватил бы следующий openMedia без
-											// собственного захвата, например кнопка класса MediaButtons).
+										class="file-row-name grow truncate"
+										style={{ "--lines": 1 }}
+										onClick={(e) => {
 											if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
 											openEntry(entry);
 										}}
@@ -844,11 +1049,10 @@ export default function Files() {
 										{entry.displayName}
 									</button>
 								)}
-								{STATUS_LABEL_KEYS[entry.status] && <small class="file-row-status">{t(STATUS_LABEL_KEYS[entry.status])}</small>}
+								<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-row-status" />
 								{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
 									<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
 								)}
-								<span class="grow" />
 								{inTrash ? (
 									<>
 										<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)}>
@@ -869,6 +1073,11 @@ export default function Files() {
 										<button type="button" onClick={() => cutSelection([entry.id])}>
 											{t("files.cutButton")}
 										</button>
+										{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
+											<button type="button" onClick={() => pasteHere(entry.id)}>
+												{t("files.pasteInto")}
+											</button>
+										)}
 										{entry.kind === "dir" && (
 											sharedNodeIds.value.has(entry.id) ? (
 												<button type="button" onClick={() => openAccessPanel(entry.id)}>
@@ -905,6 +1114,9 @@ export default function Files() {
 		)}
 		{accessPanelTarget && (
 			<AccessPanel grantees={grantees} onRevoke={(pubkey) => handleRevoke(accessPanelTarget, pubkey)} onClose={() => setAccessPanelTarget(null)} />
+		)}
+		{docInfo && (
+			<FileInfoDialog entry={docInfo.entry} mediaRef={docInfo.mediaRef} onClose={() => setDocInfo(null)} />
 		)}
 		</>
 	);

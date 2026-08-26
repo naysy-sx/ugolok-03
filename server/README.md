@@ -20,8 +20,11 @@ server/strfry/setup.sh   # клонирует + собирает strfry (оди�
 server/strfry/run.sh     # поднимает relay на ws://127.0.0.1:7777
 ```
 
-`setup.sh` идемпотентен — повторный запуск ничего не переустановит,
-если `server/strfry/strfry-src/` уже существует.
+`setup.sh` идемпотентен: если `strfry-src/` ещё нет — клонирует и собирает;
+если уже есть — делает `make` (перелинковка после `brew upgrade`
+secp256k1/lmdb/libuv). Homebrew иногда обновляет `.dylib`, и старый
+бинарник падает с dyld «Library not loaded» / exit 134 — это как раз
+лечится повторным `setup.sh`, без удаления дерева.
 
 ### Зависимости сборки
 
@@ -119,3 +122,30 @@ SQLite (не отдельными файлами на диске), создаё�
 адверсарный сценарий (заведомо неверный `x`-тег в auth-событии —
 сервер реально отклоняет `400`, клиент корректно пробрасывает ошибку).
 См. CONTRACTS.md/log.md, этап 28.
+
+## coturn/ — локальный TURN/STUN
+
+Третья нога того же dev-трио, что strfry и Blossom: `npm run dev`
+поднимает coturn сам (`devTurnPlugin` в `vite.config.js`). Нужен, чтобы
+ICE в dev не ходил только на публичный Google STUN.
+
+### Первый запуск
+
+```bash
+server/coturn/setup.sh   # brew install coturn, если turnserver ещё нет
+server/coturn/run.sh     # поднимает stun/turn на 127.0.0.1:3478
+```
+
+`setup.sh` идемпотентен. При обычной разработке достаточно `npm run dev`.
+
+### Конфигурация (`turnserver.conf`)
+
+- `listening-ip`/`relay-ip`/`external-ip` = `127.0.0.1` — только localhost.
+- `listening-port=3478`, relay-порты `49160–49200`.
+- `lt-cred-mech` + `user=ugolok:ugolok-dev` — статические dev-креды, не
+  продакшен `use-auth-secret` агента (`agent/compose/coturn.conf.tmpl`).
+- `no-tls`/`no-dtls`/`no-cli` — без TLS и без admin CLI.
+
+Клиент в `serve` получает ICE
+`stun:127.0.0.1:3478` + `turn:127.0.0.1:3478` (user `ugolok`) + Google
+STUN как fallback.

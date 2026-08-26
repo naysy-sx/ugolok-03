@@ -56,8 +56,11 @@ function devRelayPlugin() {
                 if (code !== 0 && signal !== "SIGTERM") {
                     // Частая причина — порт 7777 уже занят другим strfry (запущен вручную
                     // или другим `vite dev`); не роняем dev-сервер из-за этого.
+                    // code=134 / dyld «Library not loaded» — Homebrew обновил secp256k1
+                    // (или lmdb/libuv): бинарник собран против старого .dylib.
+                    // Лечится `server/strfry/setup.sh` (теперь делает make, не skip).
                     server.config.logger.warn(
-                        `[ugolok:dev-relay] strfry завершился (code=${code}).`,
+                        `[ugolok:dev-relay] strfry завершился (code=${code}). Если dyld «Library not loaded» — server/strfry/setup.sh.`,
                     );
                 }
             });
@@ -122,6 +125,45 @@ function devBlossomPlugin() {
     };
 }
 
+function devTurnPlugin() {
+    const runScript = fileURLToPath(
+        new URL("./server/coturn/run.sh", import.meta.url),
+    );
+    let child;
+    return {
+        name: "ugolok:dev-turn",
+        apply: "serve",
+        configureServer(server) {
+            if (!existsSync(runScript)) {
+                server.config.logger.warn(
+                    "[ugolok:dev-turn] coturn не установлен (см. server/README.md) — ICE останется без локального TURN.",
+                );
+                return;
+            }
+
+            child = spawn(runScript, [], { stdio: ["ignore", "pipe", "pipe"] });
+            child.stdout.on("data", (d) =>
+                process.stdout.write(`[coturn] ${d}`),
+            );
+            child.stderr.on("data", (d) =>
+                process.stderr.write(`[coturn] ${d}`),
+            );
+            child.on("exit", (code, signal) => {
+                if (code !== 0 && signal !== "SIGTERM") {
+                    server.config.logger.warn(
+                        `[ugolok:dev-turn] coturn завершился (code=${code}).`,
+                    );
+                }
+            });
+            const stop = () => {
+                if (child && !child.killed) child.kill();
+            };
+            process.once("exit", stop);
+            server.httpServer?.once("close", stop);
+        },
+    };
+}
+
 // F-RL-01: дефолт-relay компилируется в бандл из env. В dev без явного
 // override — локальный strfry (devRelayPlugin поднимает его сам), чтобы
 // диагностика/самопроверки всегда имели реальный relay; в проде плейсхолдер,
@@ -156,15 +198,24 @@ function buildDefaultBlossomServers(command) {
         : ["https://blossom.example"];
 }
 
-// Этап 48 — тот же приём, что relay/Blossom выше: свой STUN (coturn) — часть
-// self-hosted-трио (relay+Blossom+STUN, решение пользователя, PLAN.md "Этап 48"),
-// но в dev-окружении локального coturn нет (в отличие от strfry/blossom — свои
-// dev-серверы уже подняты), поэтому и в dev, и в проде дефолт — публичный STUN;
-// продовый деплой обязан переопределить через env, добавив свой coturn ПЕРВЫМ.
-function buildDefaultIceServers() {
+// Этап 48 + хотфикс трио: в serve поднимаем локальный coturn (devTurnPlugin),
+// поэтому ICE в dev — свой STUN/TURN первым, Google STUN как fallback.
+// build/preview без env — по-прежнему только публичный STUN; прод обязана
+// переопределить через BUILD_DEFAULT_ICE_SERVERS, добавив свой coturn ПЕРВЫМ.
+function buildDefaultIceServers(command) {
     if (process.env.BUILD_DEFAULT_ICE_SERVERS)
         return JSON.parse(process.env.BUILD_DEFAULT_ICE_SERVERS);
-    return [{ urls: "stun:stun.l.google.com:19302" }];
+    return command === "serve"
+        ? [
+              { urls: "stun:127.0.0.1:3478" },
+              {
+                  urls: "turn:127.0.0.1:3478",
+                  username: "ugolok",
+                  credential: "ugolok-dev",
+              },
+              { urls: "stun:stun.l.google.com:19302" },
+          ]
+        : [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
 // Этап E, найдено живой проверкой пользователя — в dev SW вообще не
@@ -242,7 +293,12 @@ export default defineConfig(({ command }) => ({
         emitServiceWorker(BUILD_HASH),
         viteSingleFile(),
         ...(command === "serve"
-            ? [devRelayPlugin(), devBlossomPlugin(), devServiceWorkerPlugin()]
+            ? [
+                  devRelayPlugin(),
+                  devBlossomPlugin(),
+                  devTurnPlugin(),
+                  devServiceWorkerPlugin(),
+              ]
             : []),
     ],
     define: {
@@ -254,7 +310,9 @@ export default defineConfig(({ command }) => ({
         __BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(
             buildDefaultBlossomServers(command),
         ),
-        __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
+        __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(
+            buildDefaultIceServers(command),
+        ),
     },
     build: {
         target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры

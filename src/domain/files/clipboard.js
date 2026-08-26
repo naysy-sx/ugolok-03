@@ -43,3 +43,15 @@ export function cancelClipboard(clipboard) {
 	if (clipboard.state === "empty") return clipboard;
 	return { state: transition(CLIPBOARD_TRANSITIONS, clipboard.state, "CANCEL"), selection: [] };
 }
+
+// UI вставки (шапка / полоса / ⋯ папки) — только если в буфере есть
+// хотя бы один живой узел. copied/cut с пустым или полностью purged
+// выделением кнопки не показывают.
+export function hasClipboardItems(clipboard, nodes) {
+	if (clipboard.state !== "copied" && clipboard.state !== "cut") return false;
+	if (clipboard.selection.length === 0) return false;
+	return clipboard.selection.some((id) => {
+		const node = nodes.get(id);
+		return node && !node.purged;
+	});
+}

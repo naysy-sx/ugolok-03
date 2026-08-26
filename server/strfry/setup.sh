@@ -18,5 +18,10 @@ if [ ! -d "./strfry-src" ]; then
 	make setup-golpe
 	make -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
 else
-	echo "strfry-src уже существует — пропускаю клонирование/сборку. Удалите директорию для пересборки с нуля."
+	# Не skip: Homebrew периодически обновляет secp256k1/lmdb/libuv, и уже
+	# собранный бинарник остаётся привязан к старому .dylib (dyld exit 134).
+	# Incremental make перелинковывает без полного клона.
+	echo "strfry-src уже есть — пересобираю (нужно после brew upgrade secp256k1/lmdb/libuv)."
+	cd strfry-src
+	make -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
 fi

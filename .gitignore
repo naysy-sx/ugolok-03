@@ -18,3 +18,8 @@ server/strfry/strfry.log
 server/blossom/blossom-src/
 server/blossom/blossom-db/
 server/blossom/blossom.log
+
+# server/coturn — локальный TURN/STUN (Homebrew coturn). Конфиг и скрипты
+# версионируются, pid/лог — нет.
+server/coturn/turnserver.pid
+server/coturn/coturn.log

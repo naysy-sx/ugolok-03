@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createClipboard, copyToClipboard, cutToClipboard, paste, cancelClipboard } from "../src/domain/files/clipboard.js";
+import { createClipboard, copyToClipboard, cutToClipboard, paste, cancelClipboard, hasClipboardItems } from "../src/domain/files/clipboard.js";
 
 test("Empty --copy--> Copied --paste--> Empty (§4.1 MATH.md, буквально)", () => {
 	let c = createClipboard();
@@ -46,4 +46,18 @@ test("cancel из copied/cut возвращает в empty, из empty — no-op
 
 	const stillEmpty = cancelClipboard(createClipboard());
 	assert.equal(stillEmpty.state, "empty");
+});
+
+test("hasClipboardItems: кнопка вставки только при copied/cut с живым узлом", () => {
+	const nodes = new Map([
+		["a", { purged: false }],
+		["dead", { purged: true }],
+	]);
+	assert.equal(hasClipboardItems(createClipboard(), nodes), false);
+	assert.equal(hasClipboardItems(copyToClipboard(createClipboard(), []), nodes), false);
+	assert.equal(hasClipboardItems(copyToClipboard(createClipboard(), ["gone"]), nodes), false);
+	assert.equal(hasClipboardItems(copyToClipboard(createClipboard(), ["dead"]), nodes), false);
+	assert.equal(hasClipboardItems(copyToClipboard(createClipboard(), ["a"]), nodes), true);
+	assert.equal(hasClipboardItems(cutToClipboard(createClipboard(), ["a"]), nodes), true);
+	assert.equal(hasClipboardItems(cutToClipboard(createClipboard(), ["dead", "a"]), nodes), true);
 });

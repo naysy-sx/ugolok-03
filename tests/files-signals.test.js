@@ -3,6 +3,7 @@ import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { ROOT_ID, TRASH_ID } from "../src/domain/files/tree.js";
+import { createClipboard } from "../src/domain/files/clipboard.js";
 import { dbKeySig } from "../src/ui/signals/auth.js";
 import {
 	initFiles,
@@ -11,6 +12,7 @@ import {
 	currentEntries,
 	breadcrumbPath,
 	clipboard,
+	clipboardHasContent,
 	canUndo,
 	createFolder,
 	createFileEntry,
@@ -42,6 +44,7 @@ beforeEach(async () => {
 	// поведение сигнального моста, не сетевую синхронизацию (files-sync.test.js).
 	// initFiles/queueForPublish оба безопасно no-op без них (CONTRACTS.md, И5).
 	await initFiles(OWNER);
+	clipboard.value = createClipboard();
 });
 
 after(() => {
@@ -185,6 +188,39 @@ test("copySelection/pasteHere: копия появляется в целевой
 
 	openFolder(container.id);
 	assert.ok(currentEntries.value.some((e) => e.id === a.id), "оригинал остался на месте");
+});
+
+test("pasteHere(destId): вставка в папку без перехода в неё", async () => {
+	const container = await createFolder("Контейнер");
+	openFolder(container.id);
+	const a = await createFolder("A");
+	const b = await createFolder("B");
+	copySelection([a.id]);
+	assert.equal(currentFolderId.value, container.id);
+	await pasteHere(b.id);
+	assert.equal(currentFolderId.value, container.id, "текущая папка не меняется");
+	openFolder(b.id);
+	assert.equal(currentEntries.value.length, 1);
+	assert.notEqual(currentEntries.value[0].id, a.id);
+});
+
+test("clipboardHasContent: false пока нет живого copy/cut", async () => {
+	assert.equal(clipboardHasContent.value, false);
+	copySelection([]);
+	assert.equal(clipboardHasContent.value, false);
+	const a = await createFolder("A");
+	copySelection([a.id]);
+	assert.equal(clipboardHasContent.value, true);
+	await pasteHere();
+	assert.equal(clipboardHasContent.value, false);
+});
+
+test("pasteHere при пустом буфере — no-op, не throw", async () => {
+	assert.equal(clipboard.value.state, "empty");
+	const before = currentEntries.value.map((e) => e.id);
+	await assert.doesNotReject(() => pasteHere());
+	assert.equal(clipboard.value.state, "empty");
+	assert.deepEqual(currentEntries.value.map((e) => e.id), before);
 });
 
 test("cutSelection/pasteHere: узел ПЕРЕМЕЩАЕТСЯ (не копируется), тот же id", async () => {

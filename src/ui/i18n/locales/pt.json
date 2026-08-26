@@ -589,7 +589,43 @@
 		"moveToTrashConfirm": "Mover para a lixeira?",
 		"moveManyToTrashConfirm": "Mover {{count}} itens para a lixeira?",
 		"purgeConfirm": "Excluir permanentemente? Esta ação é irreversível.",
-		"sharedFolderDefaultName": "Pasta compartilhada ({{pubkey}})"
+		"sharedFolderDefaultName": "Pasta compartilhada ({{pubkey}})",
+		"typeAll": "All",
+		"typeImages": "Images",
+		"typeVideo": "Video",
+		"typeAudio": "Audio",
+		"typeDocs": "Documents",
+		"viewListAria": "List",
+		"viewGridAria": "Tiles",
+		"viewToggleAria": "View",
+		"playSequential": "Play all",
+		"watchSequential": "Watch all",
+		"watch": "View",
+		"clearTypeFilterAria": "Show all",
+		"typeEmpty": "No files of this type",
+		"searchPlaceholder": "Search in this folder",
+		"fileInfoTitle": "File info",
+		"fileInfoCloseAria": "Close",
+		"kindPdf": "PDF",
+		"kindSheet": "Spreadsheet",
+		"kindDocument": "Document",
+		"fileCount": {
+			"one": "{{count}} file",
+			"few": "{{count}} files",
+			"many": "{{count}} files",
+			"other": "{{count}} files"
+		},
+		"breadcrumbAria": "Path",
+		"objectCount": {
+			"one": "{{count}} item",
+			"few": "{{count}} items",
+			"many": "{{count}} items",
+			"other": "{{count}} items"
+		},
+		"pasteInto": "Colar",
+		"pasteHere": "Colar aqui",
+		"clipboardCopied": "Copiado: {{count}}",
+		"clipboardCut": "Recortado: {{count}}"
 	},
 	"profile": {
 		"server": {

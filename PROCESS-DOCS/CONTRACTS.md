@@ -1891,6 +1891,55 @@ function devRelayPlugin(); // apply: "serve" — на build/preview не дей�
 // закрытии dev-сервера (process "exit" + httpServer "close").
 ```
 
+### Правка контракта: `npm run dev` поднимает трио relay + Blossom + TURN
+
+По прямой просьбе пользователя (диагностика: «реле: связь потеряна»,
+локальный strfry не слушал :7777). Причина живого сбоя — не Vite-плагин:
+бинарник `server/strfry/strfry-src/strfry` был собран против
+`libsecp256k1.6.dylib`, Homebrew позже отдал secp256k1 0.8.0 с
+`.7.dylib`, dyld ронял процесс сразу (exit 134). `devBlossomPlugin`
+при этом работал (процесс `app` на :8080).
+
+Контракт `npm run dev` (`vite` command `"serve"`):
+
+- одновременно спавнятся три процесса: strfry (`ws://127.0.0.1:7777`),
+  Blossom (`http://127.0.0.1:8080`), coturn (`stun`/`turn` на
+  `127.0.0.1:3478`);
+- плагины `devRelayPlugin` / `devBlossomPlugin` / `devTurnPlugin`
+  (`apply: "serve"`), имена `ugolok:dev-relay` / `ugolok:dev-blossom` /
+  `ugolok:dev-turn`;
+- нет бинарника — warn и no-op, dev-сервер не падает;
+- stdout/stderr с префиксами `[strfry]` / `[blossom]` / `[coturn]`;
+- kill при закрытии Vite (`process "exit"` + `httpServer "close"`).
+
+`server/coturn/` — тот же каркас, что `server/strfry/` и
+`server/blossom/`: `setup.sh` (Homebrew `coturn`, идемпотентно),
+`run.sh` (`exec turnserver -c ./turnserver.conf`, cwd = эта папка,
+не daemon), `turnserver.conf` (версионируется). Слушает только
+`127.0.0.1:3478`, `lt-cred-mech`, статический user `ugolok:ugolok-dev`
+(только локальный dev, не продакшен `use-auth-secret` агента),
+realm `ugolok.local`, relay-порты `49160–49200`, `no-cli`/`no-tls`/
+`no-dtls`. Pidfile — `server/coturn/turnserver.pid` (gitignore).
+
+`server/strfry/setup.sh`: если `strfry-src/` уже есть — не no-op, а
+`make -jN` (перелинковка после `brew upgrade` secp256k1/lmdb/libuv).
+
+```js
+function buildDefaultIceServers(command);
+// command === "serve" и BUILD_DEFAULT_ICE_SERVERS не задан явно:
+//   [
+//     { urls: "stun:127.0.0.1:3478" },
+//     { urls: "turn:127.0.0.1:3478", username: "ugolok", credential: "ugolok-dev" },
+//     { urls: "stun:stun.l.google.com:19302" },
+//   ]
+// command === "build"/"preview": прежнее [{ urls: "stun:stun.l.google.com:19302" }]
+// Явный env BUILD_DEFAULT_ICE_SERVERS всегда выигрывает.
+
+function devTurnPlugin(); // apply: "serve"
+// configureServer: нет turnserver в PATH и типичных Homebrew-путях —
+// warn и no-op; иначе spawn server/coturn/run.sh.
+```
+
 `server/strfry/whitelist.json` — правка дефолта: раньше `[]` (deny-all),
 теперь содержит РОВНО один pubkey —
 `d5b776f29d9783a9f33e422f285c723cb6cc5b4442d6778e4c24b723f0eae998`,
@@ -1904,6 +1953,42 @@ identity не секрет (используется только для это�
 реальных данных) — предсказуемый pubkey можно внести в whitelist один раз;
 свойство "whitelist реально блокирует не-whitelisted pubkey" не ослаблено,
 проверяется отдельно (AC-14, этап 17).
+
+## Хранилище (FILES-REDESIGN, вариант Б)
+
+Экран `files.jsx`. Чипы типов — фильтры, не `openMedia`. Полный текст —
+`PROCESS-DOCS/REDESIGN/FILES/FILES-REDESIGN.md`.
+
+```js
+// src/domain/files/filter.js
+function filterByClass(entries, typeFilter);
+// typeFilter: "all"|"image"|"video"|"audio"|"other"
+// all — как пришло (папки+файлы). иначе kind==="file" && mime!=null && classOf(mime)===typeFilter.
+
+// src/domain/files/view-layout.js
+function recommendedLayout(typeFilter); // image|video → "grid", иначе "list"
+function layoutFor(typeFilter, overrideMap); // all всегда "list"; иначе override[type] ?? recommended
+
+// src/domain/files/file-icon.js
+function iconForFile(mime); // "file-pdf"|"file-xls"|"file-doc"|"file-audio"|"file-video"|"file-image"|"file-text"
+
+// src/domain/files/visible-media.js
+function buildVisibleMediaPlaylist(entries, clickedId);
+// { items: entries image|video|audio в порядке входа, position }
+// clickedId == null → position 0 («подряд»). pdf/папки выкинуты.
+```
+
+Клик по чипу типа в files.jsx НЕ вызывает `openMedia`. `MediaButtons` в
+чате/канале/`post-card` не меняется.
+
+`pasteHere(destId = currentFolderId.value)` — вставка буфера в указанную
+папку (меню «Вставить» на папке) или в текущую (полоса буфера / шапка /
+Ctrl+V). Пустой буфер — no-op, не throw. Ctrl+V слушает `document`, пока
+смонтирован экран «Файлы».
+
+Кнопки вставки (шапка, полоса, пустая папка, ⋯ папки) видны только если
+`clipboardHasContent` — состояние copied/cut и в `selection` есть хотя бы
+один живой (не purged) узел. Пустой copy/cut буфер не заполняет.
 
 ## Этап 21 — Битовая маска прав + журнальный движок
 
@@ -7051,13 +7136,14 @@ UI-тумблере). `call.js`'s `notifyIncomingCall` вызывается из
 
 ### ICE-серверы (конфигурация)
 
-`vite.config.js`'s `buildDefaultIceServers()` — тот же паттерн, что
-relay/Blossom; дефолт (dev И прод) — публичный STUN
-(`stun:stun.l.google.com:19302`), т.к. локального coturn в dev-окружении
-нет (в отличие от strfry/blossom); прод обязана переопределить через
-`BUILD_DEFAULT_ICE_SERVERS` env, добавив свой coturn ПЕРВЫМ. Экспортирован
-как `BUILD_DEFAULT_ICE_SERVERS` в `config.js`, потребляется
-`call.js`'s `configureCallRuntime`.
+`vite.config.js`'s `buildDefaultIceServers(command)` — тот же паттерн, что
+relay/Blossom. В `serve` (`npm run dev`) без явного env: локальный coturn
+(`stun`/`turn` на `127.0.0.1:3478`, статический user `ugolok:ugolok-dev`)
+первым, публичный Google STUN — fallback. В `build`/`preview` без env —
+только публичный STUN (`stun:stun.l.google.com:19302`); прод обязана
+переопределить через `BUILD_DEFAULT_ICE_SERVERS` env, добавив свой coturn
+ПЕРВЫМ. Экспортирован как `BUILD_DEFAULT_ICE_SERVERS` в `config.js`,
+потребляется `call.js`'s `configureCallRuntime`.
 
 ### НАЙДЕННЫЙ И ИСПРАВЛЕННЫЙ ПРОТОКОЛЬНЫЙ БАГ (живой E2E, критично)
 
