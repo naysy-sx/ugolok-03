@@ -21382,3 +21382,98 @@ FilePicker в `chat.jsx`/`channel-chat.jsx`: `multiple={true}`, один confirm
 - `.message-compose-field`: Enter отправляет (`isComposeSubmitKey`), Shift+Enter — новая строка. IME `isComposing` — не отправка.
 
 Приёмка: `tests/compute-menu-pop-position.test.js`, `tests/compose-submit-key.test.js`.
+
+## Редизайн канала A + реакции kind 30067
+
+ТЗ: `PROCESS-DOCS/REDESIGN/CHANNEL/CHANNEL-REDESIGN-A-TZ.md`.
+Эталон вида: `PROCESS-DOCS/REDESIGN/CHANNEL/channel-redesign.html`.
+При расхождении ТЗ побеждает в домене/маршрутизации, макет — во внешнем виде.
+
+### Навигация (`place.js`)
+
+`place.kind` остаётся `"channel"`. Режим — по `place.postId`:
+
+- нет `postId` → лента канала (шапка, вкладки, компактные `feed-item`);
+- есть `postId` → страница одной записи; `commentId` — подсветка + scrollIntoView.
+- `subTab: "chat"` → вкладка чата ленты, `postId` игнорировать.
+
+```js
+openChannel(channelId)
+openChannel(channelId, { postId, commentId?, subTab? })
+export function openChannelPost(channelId, postId, commentId) {
+  place.value = { kind: "channel", id: channelId, postId, commentId };
+}
+```
+
+Назад со страницы записи → `openChannel(channelId)` (лента того же канала), не список.
+`postId` после открытия страницы НЕ сбрасывать. `commentId` можно обнулить после scrollIntoView.
+
+### Домен реакций (`src/domain/content/reactions.js`)
+
+Kind **30067**, parameterized-replaceable. Не NIP-25 (`kind:7`).
+Шифрование: `encryptChannelContent` / `decryptChannelContent` текущим `channelKey` (тот же уровень, что comments: только `currentVersion`).
+
+```js
+export const CHANNEL_REACTION_KIND = 30067;
+export const CHANNEL_REACTION_SET = ["👍", "❤️", "😂", "🔥", "👀"];
+```
+
+Теги: `["d", `${channelId}:${targetType}:${targetId}`]`, `["h", channelTopic]`.
+`targetType`: `"post"` | `"comment"`.
+Payload (JSON в content): `{ targetType, targetId, postId, channelId, emoji }` где `emoji` ∈ SET или `null` (снятие).
+Автор события = реактор. Один реактор × одна цель = одно событие (замена по d-tag).
+
+Auth на приёме — как `receiveComment`: владелец канала всегда; иначе `canAuthorComment` по кэшированному allowlist. VIEW-only → `false`.
+Цели нет локально (пост с этим id и тем же `channelId`, либо комментарий с этим id и `deleted !== true`) → `false`, не писать, очереди отложенных нет.
+LWW: `isNewerVersion({ createdAt: event.created_at, id: event.id }, { createdAt: lastEventCreatedAt, id: lastEventId })`. Старое не откатывает.
+`emoji: null` хранить строку (чтобы LWW знал версию снятия); `aggregateReactions` игнорирует `null`.
+
+Публичные функции (имена фиксированы):
+
+```js
+setReaction(ownerPubkey, ownerPrivKey, dbKey, channelId, targetType, targetId, postId, emoji, publish)
+receiveReaction(ownerPubkey, dbKey, event) // true | false | throw ChannelContentNotReadyError
+listReactionsForPost(ownerPubkey, dbKey, postId) // пост + комментарии этого поста
+listReactionsForTargets(ownerPubkey, dbKey, targetIds) // только targetType==="post", один where, не N запросов
+aggregateReactions(rows, viewerPubkey) // { counts: {emoji: n>0}, mine: emoji|null }
+getPost(ownerPubkey, dbKey, postId) // в post.js; null если нет/удалён
+```
+
+Реакции **не** двигают `markChannelAsRead`, не пишутся в «Сегодня», не создают inbox-уведомление. После apply — `bumpMessagingActivity()` (страница записи перечитает агрегаты).
+
+Каскадный GC при `deletePost`/удалении комментария в этой задаче **не** делается (orphan-строки в Dexie допустимы).
+
+### Dexie
+
+`db.version(28)`:
+
+```
+channelReactions: "[ownerPubkey+channelId+targetType+targetId+reactorPubkey], [ownerPubkey+postId], [ownerPubkey+targetId]"
+```
+
+`CHANNEL_REACTIONS_PLAINTEXT_FIELDS` = ownerPubkey, channelId, targetType, targetId, postId, reactorPubkey, emoji, createdAt, lastEventCreatedAt, lastEventId.
+
+### Транспорт
+
+`processOneChannelContentEvent`: `event.kind === 30067` → `receiveReaction`. Без `notifyAndLog`.
+Подписка `channel-content`: kinds включают `30067` рядом с 30061/30062/30063.
+
+### UI
+
+Лента: `feed-item.jsx`, без `.rec`, без дерева комментариев, без полного markdown. Реакции — текстовая сумма, без пикера.
+Страница записи: `.post-page`, вложения через `planBubbleAttachments` + `BubbleAttachmentCluster` / `BubbleFileChips` / `AttachmentView` (voice), дерево комментариев без `<details class="replies">`.
+`reaction-row.jsx`: `{ counts, mine, canReact, onToggle(emoji), compact? }`. Rate-limit: `limiter.tryAction("react")`, окно 5 с.
+Правила канала: чип + `.rules-panel` popover, не `<details class="req">`.
+
+## Правка опубликованного поста канала
+
+`editPost(ownerPubkey, ownerPrivKey, dbKey, postId, { text, attachments, title? }, publish)`
+
+- Только `authorPubkey === ownerPubkey`. Иначе DomainError `errors.onlyAuthorCanEditPost`.
+- `deleted` → DomainError `errors.cannotEditDeletedPost`.
+- `title` в патче опционален: `undefined` — не трогать; иначе записать.
+- `text`/`attachments` обязательны в патче.
+- `dueAt`/`done`/`linkUrl`/`tags`/`createdAt` не трогать.
+- `draft` — только локальный put (как `updateDraftPost`), без publish.
+- `published`/`archived` — тот же kind 30061, тот же d-tag, **статус не меняется** (не FSM-переход). Сначала publish, затем локальный put с `lastEventCreatedAt`/`lastEventId`. `createdAt` прежний.
+- Приём — существующий `receivePost` (авторство + LWW).

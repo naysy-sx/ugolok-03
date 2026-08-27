@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publicando…",
 			"publishButton": "Publicar",
-			"tooLongError": "Texto muito longo (limite: {{max}} caracteres)"
+			"tooLongError": "Texto muito longo (limite: {{max}} caracteres)",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Novo comentário",
@@ -450,11 +451,29 @@
 			"posts": "Publicações",
 			"chat": "Chat",
 			"moderation": "Moderação",
-			"editChannelWithName": "Editar canal «{{name}}»"
+			"editChannelWithName": "Editar canal «{{name}}»",
+			"settings": "Settings"
 		},
 		"writePostButton": "Escrever publicação",
 		"loadOlderButton": "Carregar publicações mais antigas",
-		"noPosts": "Ainda não há publicações neste canal."
+		"noPosts": "Ainda não há publicações neste canal.",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "Abrir chat com {{name}}",
@@ -879,7 +898,8 @@
 			"many": "{{count}} arquivos · {{size}}",
 			"other": "{{count}} arquivos · {{size}}"
 		},
-		"collectionMoreTile": "mais {{count}}"
+		"collectionMoreTile": "mais {{count}}",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "tarefa",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "o relay rejeitou a publicação",
 		"selfHostedFingerprintMismatch": "a impressão digital do servidor difere da salva anteriormente para este endereço — o servidor pode ter sido trocado",
 		"tooManyAttachments": "você pode anexar no máximo {{max}} arquivos por vez",
-		"urlNotInList": "a URL não está na lista — adicione-a primeiro"
+		"urlNotInList": "a URL não está na lista — adicione-a primeiro",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

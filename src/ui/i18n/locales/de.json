@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "Wird veröffentlicht…",
 			"publishButton": "Veröffentlichen",
-			"tooLongError": "Text zu lang (Limit: {{max}} Zeichen)"
+			"tooLongError": "Text zu lang (Limit: {{max}} Zeichen)",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Neuer Kommentar",
@@ -450,11 +451,29 @@
 			"posts": "Beiträge",
 			"chat": "Chat",
 			"moderation": "Moderation",
-			"editChannelWithName": "Kanal „{{name}}“ bearbeiten"
+			"editChannelWithName": "Kanal „{{name}}“ bearbeiten",
+			"settings": "Settings"
 		},
 		"writePostButton": "Beitrag schreiben",
 		"loadOlderButton": "Ältere Beiträge laden",
-		"noPosts": "In diesem Kanal gibt es noch keine Beiträge."
+		"noPosts": "In diesem Kanal gibt es noch keine Beiträge.",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "Chat mit {{name}} öffnen",
@@ -879,7 +898,8 @@
 			"many": "{{count}} Dateien · {{size}}",
 			"other": "{{count}} Dateien · {{size}}"
 		},
-		"collectionMoreTile": "{{count}} weitere"
+		"collectionMoreTile": "{{count}} weitere",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "Aufgabe",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "der Relay hat die Veröffentlichung abgelehnt",
 		"selfHostedFingerprintMismatch": "der Fingerabdruck des Servers weicht von dem zuvor für diese Adresse gespeicherten ab — der Server wurde möglicherweise ausgetauscht",
 		"tooManyAttachments": "man kann höchstens {{max}} Dateien auf einmal anhängen",
-		"urlNotInList": "die URL ist nicht in der Liste — zuerst hinzufügen"
+		"urlNotInList": "die URL ist nicht in der Liste — zuerst hinzufügen",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

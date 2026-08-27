@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "发布中…",
 			"publishButton": "发布",
-			"tooLongError": "文本过长（上限 {{max}} 字符）"
+			"tooLongError": "文本过长（上限 {{max}} 字符）",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "新评论",
@@ -450,11 +451,29 @@
 			"posts": "帖子",
 			"chat": "聊天",
 			"moderation": "管理",
-			"editChannelWithName": "编辑频道“{{name}}”"
+			"editChannelWithName": "编辑频道“{{name}}”",
+			"settings": "Settings"
 		},
 		"writePostButton": "撰写帖子",
 		"loadOlderButton": "加载更早的帖子",
-		"noPosts": "该频道还没有帖子。"
+		"noPosts": "该频道还没有帖子。",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "与 {{name}} 开始聊天",
@@ -879,7 +898,8 @@
 			"many": "{{count}} 个文件 · {{size}}",
 			"other": "{{count}} 个文件 · {{size}}"
 		},
-		"collectionMoreTile": "还有{{count}}个"
+		"collectionMoreTile": "还有{{count}}个",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "任务",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "relay 拒绝了发布",
 		"selfHostedFingerprintMismatch": "服务器指纹与此前为该地址保存的指纹不同——服务器可能已被替换",
 		"tooManyAttachments": "一次最多只能添加 {{max}} 个文件",
-		"urlNotInList": "该 URL 不在列表中——请先添加"
+		"urlNotInList": "该 URL 不在列表中——请先添加",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

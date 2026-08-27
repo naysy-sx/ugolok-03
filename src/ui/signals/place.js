@@ -30,3 +30,9 @@ export function openChannel(channelId, target = {}) {
 		? { kind: "channel", id: channelId, subTab: target.subTab, postId: target.postId, commentId: target.commentId }
 		: { kind: "channels" };
 }
+
+// ТЗ редизайн канала A — явный вход на страницу записи. postId живёт,
+// пока пользователь не вернётся в ленту (openChannel(channelId)).
+export function openChannelPost(channelId, postId, commentId) {
+	place.value = { kind: "channel", id: channelId, postId, commentId };
+}

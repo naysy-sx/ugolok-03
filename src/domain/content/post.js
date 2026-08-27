@@ -65,6 +65,69 @@ export async function updateDraftPost(ownerPubkey, dbKey, postId, { text, attach
 	await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
 }
 
+// Правка поста канала: published/archived — republish того же d-tag БЕЗ смены
+// статуса (не FSM-переход). draft — только локально, как updateDraftPost.
+// Сначала publish, потом локальный put — иначе при отказе relay текст уже уехал бы.
+export async function editPost(ownerPubkey, ownerPrivKey, dbKey, postId, { text, attachments, title }, publish) {
+	const raw = await db.table("posts").get([ownerPubkey, postId]);
+	if (!raw) throw new DomainError("пост не найден", "errors.postNotFound");
+	if (raw.deleted) throw new DomainError("нельзя редактировать удалённый пост", "errors.cannotEditDeletedPost");
+	const row = fromEncryptedRow(raw, dbKey);
+	if (row.authorPubkey !== ownerPubkey) throw new DomainError("редактировать пост может только автор", "errors.onlyAuthorCanEditPost");
+
+	const merged = { ...row, text, attachments };
+	if (title !== undefined) merged.title = title;
+
+	if (raw.status === "draft") {
+		await db.table("posts").put(toEncryptedRow(merged, POSTS_PLAINTEXT_FIELDS, dbKey));
+		return { postId };
+	}
+
+	const channelRow = await db.table("channels").get([ownerPubkey, merged.channelId]);
+	const meta = fromEncryptedRow(await db.table("channelKeyMeta").get([ownerPubkey, merged.channelId]), dbKey);
+	const keyRow = fromEncryptedRow(await db.table("channelKeys").get([ownerPubkey, merged.channelId, meta.currentVersion]), dbKey);
+	const content = encryptChannelContent(
+		JSON.stringify({
+			text: merged.text,
+			attachments: merged.attachments,
+			status: merged.status,
+			dueAt: merged.dueAt,
+			done: merged.done,
+			title: merged.title,
+			linkUrl: merged.linkUrl,
+			tags: merged.tags,
+		}),
+		keyRow.channelKey,
+		meta.currentVersion,
+	);
+	const event = sign(
+		{
+			kind: 30061,
+			content,
+			tags: [
+				["d", `${merged.channelId}:${postId}`],
+				["h", channelRow.channelTopic],
+			],
+			created_at: Math.floor(Date.now() / 1000),
+		},
+		ownerPrivKey,
+	);
+	await requirePublishOk(publish, event);
+	await db.table("posts").put(
+		toEncryptedRow(
+			{
+				...merged,
+				keyVersion: meta.currentVersion,
+				lastEventCreatedAt: event.created_at,
+				lastEventId: event.id,
+			},
+			POSTS_PLAINTEXT_FIELDS,
+			dbKey,
+		),
+	);
+	return { eventId: event.id };
+}
+
 // Общая часть publishPost/archivePost/unpublishPost — DESIGN.md формализация 1:
 // статус — ЧАСТЬ синхронизируемого payload'а, republish того же d-tag (kind 30061
 // параметризованно-replaceable, NIP-01) заменяет предыдущую версию у всех читателей.
@@ -134,6 +197,14 @@ export async function unpublishPost(ownerPubkey, ownerPrivKey, dbKey, postId, pu
 // переживает republish/смену event.id при статусных переходах, в отличие от
 // удаления по конкретному "e"-тегу. Черновик (никогда не публиковался) — нечего
 // отзывать на relay, только локальная отметка.
+// ТЗ редизайн канала A — страница записи грузит пост точечно, не через
+// окно ленты. null: нет строки / deleted / чужой ownerPubkey (ключ составной).
+export async function getPost(ownerPubkey, dbKey, postId) {
+	const raw = await db.table("posts").get([ownerPubkey, postId]);
+	if (!raw || raw.deleted) return null;
+	return fromEncryptedRow(raw, dbKey);
+}
+
 export async function deletePost(ownerPubkey, ownerPrivKey, postId, publish) {
 	const row = await db.table("posts").get([ownerPubkey, postId]);
 	if (!row) throw new DomainError("пост не найден", "errors.postNotFound");

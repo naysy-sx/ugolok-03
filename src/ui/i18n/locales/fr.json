@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publication…",
 			"publishButton": "Publier",
-			"tooLongError": "Texte trop long (limite : {{max}} caractères)"
+			"tooLongError": "Texte trop long (limite : {{max}} caractères)",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nouveau commentaire",
@@ -450,11 +451,29 @@
 			"posts": "Publications",
 			"chat": "Chat",
 			"moderation": "Modération",
-			"editChannelWithName": "Modifier la chaîne « {{name}} »"
+			"editChannelWithName": "Modifier la chaîne « {{name}} »",
+			"settings": "Settings"
 		},
 		"writePostButton": "Écrire une publication",
 		"loadOlderButton": "Charger les publications plus anciennes",
-		"noPosts": "Il n'y a pas encore de publications dans cette chaîne."
+		"noPosts": "Il n'y a pas encore de publications dans cette chaîne.",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "Ouvrir la discussion avec {{name}}",
@@ -879,7 +898,8 @@
 			"many": "{{count}} fichiers · {{size}}",
 			"other": "{{count}} fichiers · {{size}}"
 		},
-		"collectionMoreTile": "{{count}} de plus"
+		"collectionMoreTile": "{{count}} de plus",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "tâche",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "le relay a rejeté la publication",
 		"selfHostedFingerprintMismatch": "l'empreinte du serveur diffère de celle enregistrée précédemment pour cette adresse — le serveur a peut-être été remplacé",
 		"tooManyAttachments": "vous pouvez joindre au maximum {{max}} fichiers à la fois",
-		"urlNotInList": "l'URL n'est pas dans la liste — ajoutez-la d'abord"
+		"urlNotInList": "l'URL n'est pas dans la liste — ajoutez-la d'abord",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

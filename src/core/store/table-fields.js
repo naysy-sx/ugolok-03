@@ -124,3 +124,9 @@ export const CHAT_ACTIVITY_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastAt"
 // же принцип, что UI_SETTINGS_PLAINTEXT_FIELDS выше, содержимое (channels/
 // people) шифруется dbKey локально, событие на relay — NIP-44 self-encrypt.
 export const PINNED_PLAINTEXT_FIELDS = ["ownerPubkey"];
+
+// ТЗ редизайн канала A — реакции kind 30067. emoji в plaintext: закрытый набор из пяти, не секрет.
+export const CHANNEL_REACTIONS_PLAINTEXT_FIELDS = [
+  "ownerPubkey", "channelId", "targetType", "targetId", "postId",
+  "reactorPubkey", "emoji", "createdAt", "lastEventCreatedAt", "lastEventId"
+];

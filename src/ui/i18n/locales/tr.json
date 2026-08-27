@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "Yayınlanıyor…",
 			"publishButton": "Yayınla",
-			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)"
+			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Yeni yorum",
@@ -450,11 +451,29 @@
 			"posts": "Gönderiler",
 			"chat": "Sohbet",
 			"moderation": "Moderasyon",
-			"editChannelWithName": "«{{name}}» kanalını düzenle"
+			"editChannelWithName": "«{{name}}» kanalını düzenle",
+			"settings": "Settings"
 		},
 		"writePostButton": "Gönderi yaz",
 		"loadOlderButton": "Daha eski gönderileri yükle",
-		"noPosts": "Bu kanalda henüz gönderi yok."
+		"noPosts": "Bu kanalda henüz gönderi yok.",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "{{name}} ile sohbeti aç",
@@ -879,7 +898,8 @@
 			"many": "{{count}} dosya · {{size}}",
 			"other": "{{count}} dosya · {{size}}"
 		},
-		"collectionMoreTile": "{{count}} tane daha"
+		"collectionMoreTile": "{{count}} tane daha",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "görev",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "relay yayını reddetti",
 		"selfHostedFingerprintMismatch": "sunucunun parmak izi bu adres için daha önce kaydedilenden farklı — sunucu değiştirilmiş olabilir",
 		"tooManyAttachments": "bir seferde en fazla {{max}} dosya ekleyebilirsiniz",
-		"urlNotInList": "URL listede yok — önce ekleyin"
+		"urlNotInList": "URL listede yok — önce ekleyin",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

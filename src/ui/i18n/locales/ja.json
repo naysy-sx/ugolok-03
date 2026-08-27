@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "公開中…",
 			"publishButton": "公開する",
-			"tooLongError": "テキストが長すぎます（上限 {{max}} 文字）"
+			"tooLongError": "テキストが長すぎます（上限 {{max}} 文字）",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "新しいコメント",
@@ -450,11 +451,29 @@
 			"posts": "投稿",
 			"chat": "チャット",
 			"moderation": "モデレーション",
-			"editChannelWithName": "チャンネル「{{name}}」を編集"
+			"editChannelWithName": "チャンネル「{{name}}」を編集",
+			"settings": "Settings"
 		},
 		"writePostButton": "投稿を書く",
 		"loadOlderButton": "過去の投稿を読み込む",
-		"noPosts": "このチャンネルにはまだ投稿がありません。"
+		"noPosts": "このチャンネルにはまだ投稿がありません。",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "{{name}} とのチャットを開く",
@@ -879,7 +898,8 @@
 			"many": "{{count}}件のファイル · {{size}}",
 			"other": "{{count}}件のファイル · {{size}}"
 		},
-		"collectionMoreTile": "他{{count}}件"
+		"collectionMoreTile": "他{{count}}件",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "タスク",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "relayが公開を拒否しました",
 		"selfHostedFingerprintMismatch": "サーバーの指紋がこのアドレスに以前保存されたものと異なります — サーバーがすり替えられた可能性があります",
 		"tooManyAttachments": "一度に添付できるのは最大{{max}}個のファイルです",
-		"urlNotInList": "URLがリストにありません — 先に追加してください"
+		"urlNotInList": "URLがリストにありません — 先に追加してください",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

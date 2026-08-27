@@ -40,6 +40,7 @@ import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate,
 import { applyChannelUnviewRumor, rebuildChannelVisibilityGroups } from "../../domain/content/channel-visibility.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
+import { CHANNEL_REACTION_KIND, receiveReaction } from "../../domain/content/reactions.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
 import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
@@ -1336,6 +1337,11 @@ async function processOneChannelContentEvent(ownerPubkey, dbKey, settings, event
 				}
 			}
 		}
+	} else if (event.kind === CHANNEL_REACTION_KIND) {
+		// ТЗ редизайн канала A — kind 30067. Не двигаем read-cursor канала,
+		// не создаём inbox-уведомление. bumpMessagingActivity — у батча ниже,
+		// чтобы открытая страница записи перечитала агрегаты.
+		await receiveReaction(ownerPubkey, dbKey, event);
 	} else if (event.kind === 30063) {
 		// Этап 32 — receiveChannelMessage сама проверяет COMMENT-allowlist
 		// (тот же принцип, что receiveComment) — здесь только диспетчеризация.
@@ -1514,7 +1520,8 @@ export async function refreshChannelContentSubscription(ownerPubkey, dbKey) {
 		});
 		connection.addMessageHandler(channelContentSubscriber.handleMessage);
 	}
-	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_BAN_KIND, 5] }]);
+	// ТЗ редизайн канала A: 30067 явно в списке kinds топика (рядом с 30061/30062/30063).
+	channelContentSubscriber.subscribe("channel-content", [{ "#h": topics, kinds: [30060, 30054, 30061, 30062, 30063, CHANNEL_REACTION_KIND, CHANNEL_BAN_KIND, 5] }]);
 }
 
 let fileShareGrantSubscriber = null;

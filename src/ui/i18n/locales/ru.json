@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "Из хранилища",
 			"publishingButton": "Публикация…",
 			"publishButton": "Опубликовать",
-			"tooLongError": "Слишком длинный текст (лимит — {{max}} символов)"
+			"tooLongError": "Слишком длинный текст (лимит — {{max}} символов)",
+			"titleLabel": "Заголовок (необязательно)"
 		},
 		"commentComposer": {
 			"ariaLabel": "Новый комментарий",
@@ -450,11 +451,29 @@
 			"posts": "Посты",
 			"chat": "Чат",
 			"moderation": "Модерация",
-			"editChannelWithName": "Редактировать канал «{{name}}»"
+			"editChannelWithName": "Редактировать канал «{{name}}»",
+			"settings": "Настройки"
 		},
 		"writePostButton": "Написать пост",
 		"loadOlderButton": "Загрузить более старые посты",
-		"noPosts": "В этом канале пока нет постов."
+		"noPosts": "В этом канале пока нет постов.",
+		"postPageTitle": "Запись",
+		"postUnavailable": "Эта запись недоступна.",
+		"rulesChip": "Правила",
+		"sortNewestFirst": "новые сверху",
+		"moreComments": "Ещё комментарии",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "К ленте канала",
+		"updatedLabel": "обновлён {{date}}",
+		"kicker": {
+			"owner": "свой канал",
+			"subscriber": "подписчик",
+			"available": "доступен"
+		},
+		"reactions": {
+			"addAria": "Добавить реакцию",
+			"pickerAria": "Выбор реакции"
+		}
 	},
 	"contacts": {
 		"openChatAria": "Открыть чат с {{name}}",
@@ -879,7 +898,8 @@
 			"many": "{{count}} файлов · {{size}}",
 			"other": "{{count}} файла · {{size}}"
 		},
-		"collectionMoreTile": "ещё {{count}}"
+		"collectionMoreTile": "ещё {{count}}",
+		"editButton": "Редактировать"
 	},
 	"recordKind": {
 		"task": "дело",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "relay отклонил публикацию",
 		"selfHostedFingerprintMismatch": "отпечаток сервера отличается от сохранённого ранее для этого адреса — возможно, сервер подменили",
 		"tooManyAttachments": "за раз можно приложить не более {{max}} файлов",
-		"urlNotInList": "URL отсутствует в списке — сначала добавьте"
+		"urlNotInList": "URL отсутствует в списке — сначала добавьте",
+		"invalidReactionEmoji": "эмодзи реакции не из алфавита",
+		"invalidReactionTarget": "неверный targetType реакции",
+		"onlyAuthorCanEditPost": "редактировать пост может только автор",
+		"cannotEditDeletedPost": "нельзя редактировать удалённый пост"
 	},
 	"quick": {
 		"anonymousNick": "Гость",

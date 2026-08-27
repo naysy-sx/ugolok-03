@@ -1,6 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { place, DEFAULT_PLACE, goTo, openChat, openChannel } from "../src/ui/signals/place.js";
+import { place, DEFAULT_PLACE, goTo, openChat, openChannel, openChannelPost } from "../src/ui/signals/place.js";
 import { applyNavTarget } from "../src/ui/signals/notification-nav.js";
 
 beforeEach(() => {
@@ -46,6 +46,14 @@ test("openChannel(null): kind='channels' (список), не 'channel' с пу�
 	openChannel("chan-1");
 	openChannel(null);
 	assert.deepEqual(place.value, { kind: "channels" });
+});
+
+test("openChannelPost: kind='channel' с postId/commentId, не сбрасывает их", () => {
+	openChannelPost("chan-1", "p1", "c1");
+	assert.deepEqual(place.value, { kind: "channel", id: "chan-1", postId: "p1", commentId: "c1" });
+	openChannelPost("chan-1", "p2");
+	assert.equal(place.value.postId, "p2");
+	assert.equal(place.value.commentId, undefined);
 });
 
 test("АДВЕРСАРНО: смена канала БЕЗ target сбрасывает postId/commentId предыдущего канала (не утекают в новый)", () => {

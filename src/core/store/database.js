@@ -334,6 +334,13 @@ db.version(27).stores({
   pinned: "ownerPubkey"
 });
 
+// ТЗ редизайн канала A — реакции kind 30067. PK: один реактор × одна цель.
+// [ownerPubkey+postId] — страница записи (пост + комментарии этого поста).
+// [ownerPubkey+targetId] — батч ленты (listReactionsForTargets).
+db.version(28).stores({
+  channelReactions: "[ownerPubkey+channelId+targetType+targetId+reactorPubkey], [ownerPubkey+postId], [ownerPubkey+targetId]"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

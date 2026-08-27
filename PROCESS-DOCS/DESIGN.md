@@ -7329,3 +7329,54 @@ export function applyNavTarget(target) {
 состояния/навигации, старая разметка сайдбара продолжает работать
 (потребляя `place.value.kind` вместо `activeId`), чтобы 10.1 можно было
 проверить и закоммитить независимо от 10.2.
+
+## Редизайн канала A + реакции 30067
+
+### Зачем страница записи вместо expand в ленте
+
+Инвариант ленты: высота элемента не зависит от числа комментариев.
+Раньше `PostWithComments.expanded` монтировал `getCommentsTree` + полное
+тело markdown в том же скролле. При сотнях/тысячах комментариев соседние
+посты уезжали, `countCommentsByPost` на окно ленты оставался дешёвым,
+а раскрытие — нет.
+
+Решение: `place.postId` — режим «страница записи», живёт пока пользователь
+не нажмёт назад (`openChannel(channelId)`). Дерево грузится один раз на
+этот postId. Пагинация корня (50 веток, порог 100) — чтобы тысяча узлов
+не монтировалась разом; deep-link `commentId` побеждает пагинацию
+(догрузить корни, пока цель не найдётся).
+
+`postId` больше не съедается эффектом после скролла — иначе «назад»
+и повторный deep-link теряли бы режим.
+
+### Почему реакции — replaceable на человека×цель, не NIP-25
+
+NIP-25 (`kind:7`) — публичные реакты на произвольное событие, plaintext
+эмодзи, не шифруются channelKey, не вписываются в allowlist COMMENT.
+Канал — закрытый круг: тот же auth, что `receiveComment` (владелец
+имплицитно; иначе кэш 30054). Kind **30067** (свободен: 30060–30066,
+30070/30074 заняты).
+
+d-tag = `${channelId}:${targetType}:${targetId}`: parameterized-replaceable
+NIP-01 даёт «один реактор × одна цель = одно событие» без отдельного
+тома tombstone. Смена 👍→❤️ и снятие (`emoji: null`) — republish того
+же d-tag. Строка с `emoji: null` хранится, чтобы LWW не принял старый
+👍 после снятия.
+
+Алфавит закрыт (5 эмодзи): агрегация детерминирована, чужой эмодзи на
+приёме отбрасывается. Не модерируются отдельно; orphan после удаления
+цели допустим (агрегат по пропавшей цели не показывается).
+
+### Псевдокод ядра `receiveReaction`
+
+```
+channel ← по h-тегу + ownerPubkey; нет → throw ChannelContentNotReadyError
+decrypt currentVersion; null/нет ключа → throw ChannelContentNotReadyError
+если event.pubkey ≠ creatorPubkey и !canAuthorComment(allowlist) → false
+payload.emoji ∉ SET ∪ {null} → false
+цели нет (пост id+channelId / комментарий id, !deleted) → false
+existing ← PK (owner, channelId, targetType, targetId, reactor=event.pubkey)
+если existing и !isNewerVersion(incoming, existing) → false
+put строка (emoji может быть null)
+return true
+```

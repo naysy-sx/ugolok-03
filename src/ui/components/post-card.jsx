@@ -4,6 +4,12 @@ import { shortPubkey } from "../format.js";
 import ActionsMenu from "./actions-menu.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconTrash from "../icons/trash.jsx";
+import IconCheckSquare from "../icons/check-square.jsx";
+import IconSquare from "../icons/square.jsx";
+import IconCalendar from "../icons/calendar.jsx";
+import IconCalendarX from "../icons/calendar-x.jsx";
+import IconArchive from "../icons/archive.jsx";
+import IconEyeSlash from "../icons/eye-slash.jsx";
 import { t, tPlural, currentLocale } from "../signals/i18n.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import MarkdownView from "./markdown-view.jsx";
@@ -28,7 +34,7 @@ const DAY_SECONDS = 86400;
 // и запись ещё не отмечена выполненной (done === true "гасит" срочность:
 // дело сделано, спешить больше некуда). Работает и для "ссылки со сроком"
 // (done === null, dueAt непустой) — признаки независимы, REDESIGN-SPEC.md.
-function DueChip({ post }) {
+export function DueChip({ post }) {
 	if (post.dueAt === null || post.done === true) return null;
 	const nowSeconds = Math.floor(Date.now() / 1000);
 	if (post.dueAt < nowSeconds) {
@@ -142,17 +148,33 @@ export default function PostCard({
 					{isOwner && (
 						<ActionsMenu label={t("postCard.actionsAria", { excerpt: toPreviewText(post.text, { profile: "rich", maxLength: 40 }) || t("postCard.noTextFallback") })}>
 							{kind === "task" ? (
-								<button type="button" onClick={onUnmakeTask}>{t("postCard.unmakeTaskButton")}</button>
+								<button type="button" onClick={onUnmakeTask}>
+									<IconSquare /> {t("postCard.unmakeTaskButton")}
+								</button>
 							) : (
-								<button type="button" onClick={onMakeTask}>{t("postCard.makeTaskButton")}</button>
+								<button type="button" onClick={onMakeTask}>
+									<IconCheckSquare /> {t("postCard.makeTaskButton")}
+								</button>
 							)}
 							{post.dueAt === null ? (
-								<button type="button" onClick={onSetDue}>{t("postCard.setDueButton")}</button>
+								<button type="button" onClick={onSetDue}>
+									<IconCalendar /> {t("postCard.setDueButton")}
+								</button>
 							) : (
-								<button type="button" onClick={onClearDue}>{t("postCard.clearDueButton")}</button>
+								<button type="button" onClick={onClearDue}>
+									<IconCalendarX /> {t("postCard.clearDueButton")}
+								</button>
 							)}
-							{post.status === "published" && <button type="button" onClick={onArchive}>{t("postCard.archiveButton")}</button>}
-							{post.status === "published" && <button type="button" onClick={onUnpublish}>{t("postCard.unpublishButton")}</button>}
+							{post.status === "published" && (
+								<button type="button" onClick={onArchive}>
+									<IconArchive /> {t("postCard.archiveButton")}
+								</button>
+							)}
+							{post.status === "published" && (
+								<button type="button" onClick={onUnpublish}>
+									<IconEyeSlash /> {t("postCard.unpublishButton")}
+								</button>
+							)}
 							<button type="button" class="danger" onClick={onDelete}>
 								<IconTrash /> {t("common.delete")}
 							</button>

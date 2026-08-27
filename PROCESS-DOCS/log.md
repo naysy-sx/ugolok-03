@@ -8037,6 +8037,11 @@ margin-block-end:0 (глобальный details[open] > summary). Quick-кар�
 3. JSX/CSS/хук — напрямую. Popover API в overflow дал 0×0; парковка `.menu-pop` на `body` + `position:fixed`.
 4. Playwright fixture: pad 8px own=other, own-link white, first/last margin 0, ul gap 0, audio radius 18px, меню 176×85 поверх aside/скролла.
 
+## Живой фидбек: фон ленты чата
+
+Градиент с `.message-list` на `.content-wrapper:has(.message-list)` —
+не скроллится с сообщениями, закрывает padding скроллера.
+
 ## Живой фидбек: aside quick + account-dot
 
 `.quick .stack { align-items:start }` — `--align:center` с `.bar` больше не центрирует подпись. `.account-dot` кольцо светлое (`oklch(0.97)`), не тёмное.
@@ -8048,3 +8053,19 @@ margin-block-end:0 (глобальный details[open] > summary). Quick-кар�
 ## Живой фидбек: клип нативного audio
 
 Радиус/фон у `<audio>` браузер не красит. Обёртка `.audio-shell` (`overflow:hidden` + radius как у пузыря). JSX: attachment-view, chat compose, audio-player. Скрытые call-overlay не трогал.
+
+## Редизайн канала A + реакции 30067
+
+1. `table-fields.js` CHANNEL_REACTIONS_PLAINTEXT_FIELDS — воркер срезал шапку файла, шапка возвращена вручную (1 блок).
+2. `database.js` db.version(28) channelReactions — напрямую (6 строк схемы).
+3. `reactions.js` — воркер: брак default-импорта `db`/`sign`. Исправлено точечно (named import), 12/12 тестов.
+4. `getPost` / `openChannelPost` / транспорт 30067 — напрямую (крупный transport.js, прецедент точечных правок).
+5. UI ленты/страницы записи — напрямую (крупный JSX, прецедент unlock/profile). Коммит не делался (ТЗ §1.14).
+
+## Правка опубликованного поста
+
+`editPost` в `post.js` — напрямую (фрагмент, воркер не звался: риск переписать 400-строчный файл). 6 новых тестов зелёные. UI: `PostEditForm` на странице записи, пункт меню «Редактировать». Статус не меняется, тот же d-tag 30061.
+
+## Иконки в меню поста
+
+Все пункты `ActionsMenu` записи: check-square / square, calendar / calendar-x, archive, eye-slash. Плюс уже были pencil и trash. Карточка «Сегодня» тоже.

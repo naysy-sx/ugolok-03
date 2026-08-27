@@ -7286,3 +7286,23 @@ relay. `refreshProfiles` получал пустой Map и через
 - Enter в `.message-compose-field` отправляет, Shift+Enter — новая строка.
 
 Триаж (13a): **рутина**. `compute-menu-pop-position.js` — воркер. Остальное напрямую.
+
+---
+
+## Редизайн канала A + реакции 30067
+
+ТЗ: `PROCESS-DOCS/REDESIGN/CHANNEL/CHANNEL-REDESIGN-A-TZ.md`.
+Эталон: `PROCESS-DOCS/REDESIGN/CHANNEL/channel-redesign.html`.
+
+- [~] **Лента + страница записи + реакции kind 30067**
+    - Триаж (13a): домен реакций — **алгоритмика** (DESIGN.md: LWW,
+      allowlist, replaceable d-tag). UI — **рутина**, крупный JSX
+      (прецедент unlock/profile/channel.jsx) — напрямую, не воркером.
+    - Не-цели: реакции в чатах, вариант B, NIP-25, смена палитры.
+    - Реализация на дереве. Коммит отложен (ТЗ §1.14, заказчик не просил).
+    - Тесты: `reactions.test.js` 12/12, `comments`/`post`/`place` зелёные.
+
+- [~] **Правка опубликованного поста** — `editPost`, UI на странице записи.
+    - Триаж (13a): **рутина**. Не unpublish→draft: статус не меняется,
+      republish того же d-tag (как archive, без FSM-события).
+    - Тесты `post.test.js` 47/47. Коммит отложен.

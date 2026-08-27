@@ -9,6 +9,7 @@ import { decryptChannelContent, encryptChannelKeyGrant } from "../src/core/crypt
 import {
 	createDraftPost,
 	updateDraftPost,
+	editPost,
 	publishPost,
 	archivePost,
 	unpublishPost,
@@ -159,6 +160,90 @@ test("unpublishPost: published -> draft, можно отредактироват
 	const bobKeyRow = fromEncryptedRow(await db.table("channelKeys").get([BOB_PUB, channelId, 1]), DB_KEY);
 	const plaintext = decryptChannelContent(event.content, { 1: bobKeyRow.channelKey });
 	assert.equal(JSON.parse(plaintext).text, "v2 отредактировано");
+});
+
+test("editPost: опубликованный пост — тот же d-tag, статус published, createdAt прежний, Боб видит новый текст", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [], title: "заголовок", tags: ["a"] });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	const before = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+
+	const published = [];
+	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "v2 правка", attachments: [] }, capturingPublish(published));
+	const event = published.find((e) => e.kind === 30061);
+	assert.ok(event);
+	assert.deepEqual(event.tags.find((t) => t[0] === "d"), ["d", `${channelId}:${postId}`]);
+
+	const aliceRow = fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY);
+	assert.equal(aliceRow.text, "v2 правка");
+	assert.equal(aliceRow.status, "published");
+	assert.equal(aliceRow.createdAt, before.createdAt);
+	assert.equal(aliceRow.title, "заголовок");
+	assert.deepEqual(aliceRow.tags, ["a"]);
+
+	const applied = await receivePost(BOB_PUB, DB_KEY, event);
+	assert.equal(applied, true);
+	const bobRow = fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY);
+	assert.equal(bobRow.text, "v2 правка");
+	assert.equal(bobRow.status, "published");
+	assert.equal(bobRow.title, "заголовок");
+});
+
+test("editPost: title в патче обновляется, без title — прежний", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "t", attachments: [], title: "старый" });
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish([]));
+	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "t2", attachments: [] }, capturingPublish([]));
+	assert.equal(fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY).title, "старый");
+	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "t3", attachments: [], title: "новый" }, capturingPublish([]));
+	assert.equal(fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY).title, "новый");
+});
+
+test("editPost: черновик — локально, без publish", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [] });
+	const published = [];
+	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "v2", attachments: [] }, capturingPublish(published));
+	assert.equal(published.length, 0);
+	assert.equal(fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY).text, "v2");
+	assert.equal(fromEncryptedRow(await db.table("posts").get([ALICE_PUB, postId]), DB_KEY).status, "draft");
+});
+
+test("АДВЕРСАРНО: editPost удалённого поста -> DomainError", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "x", attachments: [] });
+	await deletePost(ALICE_PUB, ALICE_PRIV, postId, capturingPublish([]));
+	await assert.rejects(
+		() => editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "y", attachments: [] }, capturingPublish([])),
+		(err) => err.name === "DomainError",
+	);
+});
+
+test("АДВЕРСАРНО: подписчик не может editPost чужой записи (authorPubkey !== owner)", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [] });
+	const published = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(published));
+	await receivePost(BOB_PUB, DB_KEY, published.find((e) => e.kind === 30061));
+	await assert.rejects(
+		() => editPost(BOB_PUB, BOB_PRIV, DB_KEY, postId, { text: "взлом", attachments: [] }, capturingPublish([])),
+		(err) => err.name === "DomainError",
+	);
+	assert.equal(fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY).text, "v1");
+});
+
+test("editPost: старое событие после правки не откатывает текст у читателя", async () => {
+	const { channelId } = await setupChannelWithBobViewing();
+	const { postId } = await createDraftPost(ALICE_PUB, DB_KEY, channelId, { text: "v1", attachments: [] });
+	const first = [];
+	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(first));
+	const firstEvent = first.find((e) => e.kind === 30061);
+	await receivePost(BOB_PUB, DB_KEY, firstEvent);
+	const edited = [];
+	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "v2", attachments: [] }, capturingPublish(edited));
+	await receivePost(BOB_PUB, DB_KEY, edited.find((e) => e.kind === 30061));
+	assert.equal(await receivePost(BOB_PUB, DB_KEY, firstEvent), false);
+	assert.equal(fromEncryptedRow(await db.table("posts").get([BOB_PUB, postId]), DB_KEY).text, "v2");
 });
 
 test("deletePost: черновик (никогда не публиковался) — только локально, БЕЗ kind 5", async () => {

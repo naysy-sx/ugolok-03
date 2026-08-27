@@ -417,7 +417,8 @@
 			"attachFromStorageButton": "From storage",
 			"publishingButton": "Publishing…",
 			"publishButton": "Publish",
-			"tooLongError": "Text too long (limit — {{max}} characters)"
+			"tooLongError": "Text too long (limit — {{max}} characters)",
+			"titleLabel": "Title (optional)"
 		},
 		"commentComposer": {
 			"ariaLabel": "New comment",
@@ -450,11 +451,29 @@
 			"posts": "Posts",
 			"chat": "Chat",
 			"moderation": "Moderation",
-			"editChannelWithName": "Edit channel «{{name}}»"
+			"editChannelWithName": "Edit channel «{{name}}»",
+			"settings": "Settings"
 		},
 		"writePostButton": "Write a post",
 		"loadOlderButton": "Load older posts",
-		"noPosts": "There are no posts in this channel yet."
+		"noPosts": "There are no posts in this channel yet.",
+		"postPageTitle": "Post",
+		"postUnavailable": "This post is unavailable.",
+		"rulesChip": "Rules",
+		"sortNewestFirst": "newest first",
+		"moreComments": "More comments",
+		"feedCommentCount": "💬 {{count}}",
+		"backToFeed": "Back to channel",
+		"updatedLabel": "updated {{date}}",
+		"kicker": {
+			"owner": "your channel",
+			"subscriber": "subscriber",
+			"available": "available"
+		},
+		"reactions": {
+			"addAria": "Add reaction",
+			"pickerAria": "Reaction picker"
+		}
 	},
 	"contacts": {
 		"openChatAria": "Open chat with {{name}}",
@@ -879,7 +898,8 @@
 			"many": "{{count}} files · {{size}}",
 			"other": "{{count}} files · {{size}}"
 		},
-		"collectionMoreTile": "{{count}} more"
+		"collectionMoreTile": "{{count}} more",
+		"editButton": "Edit"
 	},
 	"recordKind": {
 		"task": "task",
@@ -1002,7 +1022,11 @@
 		"relayRejected": "the relay rejected the publish",
 		"selfHostedFingerprintMismatch": "the server's fingerprint differs from the one saved earlier for this address — the server may have been swapped",
 		"tooManyAttachments": "you can attach at most {{max}} files at once",
-		"urlNotInList": "the URL is not in the list — add it first"
+		"urlNotInList": "the URL is not in the list — add it first",
+		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
+		"invalidReactionTarget": "invalid reaction target type",
+		"onlyAuthorCanEditPost": "only the author can edit the post",
+		"cannotEditDeletedPost": "cannot edit a deleted post"
 	},
 	"quick": {
 		"anonymousNick": "Guest",
