@@ -7306,3 +7306,43 @@ relay. `refreshProfiles` получал пустой Map и через
     - Триаж (13a): **рутина**. Не unpublish→draft: статус не меняется,
       republish того же d-tag (как archive, без FSM-события).
     - Тесты `post.test.js` 47/47. Коммит отложен.
+
+---
+
+## CHANNEL-V2 — переработка экрана канала + починка профилей
+
+ТЗ: `PROCESS-DOCS/REDESIGN/CHANNEL-2/CHANNEL-V2-TASK.md` (части A–J).
+Эталон: `PROCESS-DOCS/REDESIGN/CHANNEL-2/ugolok-channel-redesign.html`.
+Шесть коммитов (часть J ТЗ), каждый самостоятельно рабочий.
+
+- [x] **A1–A5 — профили («коды вместо имён»)**
+    - Триаж (13a): **рутина** (все 4 причины и код — литерально в ТЗ),
+      DESIGN-записка не требовалась.
+    - A1: `ensureProfilePublished` — флаг ставится ПОСЛЕ publish→{ok:true},
+      не до. Отменяет решение этапа 25-прототипа — см. CONTRACTS.md.
+    - A2: `ensureProfilesFresh` (остывание 60с на pubkey, `force`) вместо
+      `ensureProfilesFetched` в 5 точках (`channel-chat.jsx` ×2,
+      `channel-post-page.jsx` ×2, `moderation-panel.jsx` ×1).
+    - A3: `watchProfiles`/`listWatchedProfiles` (bounded 256, FIFO) —
+      живая подписка `refreshLiveProfileSubscription` подмешивает авторов
+      канала в `authors`. Сделано (не откачено).
+    - A4: `contactProfiles` — `db.version(29)`, поле `watched` (0 контакт /
+      1 «просто увиденный»), `trimWatchedProfiles(owner, keep=500)`.
+      Отменяет решение этапа 74 (персист только для контактов).
+    - Отступ от буквы ТЗ: `channel-chat.jsx`'s "новый useEffect force:true"
+      заменён на useRef-флаг внутри уже существующего эффекта — буквальная
+      реализация была гонкой (см. CONTRACTS.md, часть A, «Отступ»).
+    - `trimWatchedProfiles` — единственная функция части A без литерального
+      кода в ТЗ, через воркера (1 брак: `sortBy(...,"desc").toArray()` —
+      не Dexie API, поправлено вручную, 2 строки).
+    - Тесты: `tests/profile-resolution.test.js` (новый, 9/9, включает
+      адверсарную фазу FIFO-вытеснения), `profile.test.js` 15/15 (2 теста
+      обновлены под отменённое решение A1), `contacts-signals.test.js`
+      (1 тест обновлён под A4). Полная регрессия: 2231/2234 (3 незав.
+      провала — vendored `server/strfry/strfry-src`, не относится к проекту).
+
+- [ ] **B1–B2 — состояние вкладки + слоты Screen**
+- [ ] **B3–B5 + C1–C4 — полоса вкладок, шапка канала, лента**
+- [ ] **D1–D4 — страница записи**
+- [ ] **E1–E4 — общий чат**
+- [ ] **F1–F5 + G1–G5 + H — модерация, настройки, i18n**

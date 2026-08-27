@@ -21477,3 +21477,82 @@ channelReactions: "[ownerPubkey+channelId+targetType+targetId+reactorPubkey], [o
 - `draft` — только локальный put (как `updateDraftPost`), без publish.
 - `published`/`archived` — тот же kind 30061, тот же d-tag, **статус не меняется** (не FSM-переход). Сначала publish, затем локальный put с `lastEventCreatedAt`/`lastEventId`. `createdAt` прежний.
 - Приём — существующий `receivePost` (авторство + LWW).
+
+## CHANNEL-V2, часть A — разрешение профилей (коды вместо имён)
+
+ТЗ: `PROCESS-DOCS/REDESIGN/CHANNEL-2/CHANNEL-V2-TASK.md`, часть A.
+
+### Смена решения (A1) — `ensureProfilePublished`
+
+БЫЛО (этап 25-прототип, `chat.js`'s `ensureOwnKeyPackagePublished`): флаг
+`profileAutoPublished` пишется ДО попытки `publish`, повторных попыток при
+сбое нет — цена ошибки: аккаунт остаётся без `kind:0` навсегда после одного
+неудачного connect. СТАЛО: флаг пишется ТОЛЬКО после `publish` → `{ok: true}`;
+при `{ok: false}`/исключении флаг не ставится, следующий `connect()` пробует
+снова. Тест `ensureProfilePublished АДВЕРСАРНО: publish бросает исключение`
+(`tests/profile.test.js`) обновлён под новый контракт — старый инвариант
+(«флаг стоит независимо от результата») был именно тем решением, которое
+здесь отменяется.
+
+### Смена решения (A4) — `applyProfileUpdates`
+
+БЫЛО (этап 74, T5.1): персист в `contactProfiles` только для
+`contacts.value.includes(pk)` — авторы канала (не контакты) не переживали
+перезагрузку. СТАЛО: персистится любой полученный непустой профиль,
+различаются полем `watched` (`0` — контакт, `1` — «просто увиденный автор»).
+Тест `applyProfileUpdates: НЕ-контакт ... НЕ персистится`
+(`tests/contacts-signals.test.js`) обновлён под новый контракт.
+
+### `ensureProfilesFresh(pubkeys, fetchProfilesFn, { force = false })`
+
+`src/ui/signals/contacts.js`. Замена `ensureProfilesFetched` в точках,
+перечисленных ниже (`ensureProfilesFetched` сама остаётся, не удаляется).
+Кэш `null` (профиль не найден) перезапрашивается не чаще раза в минуту на
+pubkey (`PROFILE_RETRY_MS`), `force: true` игнорирует остывание, но не
+трогает уже известные (непустые) профили. `resetProfileRetryState()` —
+сброс остывания, вызывается из `connect()` (`transport.js`).
+
+Точки замены (файл → место → `force`):
+
+| Файл | Место | `force` |
+|---|---|---|
+| `channel-chat.jsx` | `refresh()` | `false` |
+| `channel-chat.jsx` | «первый refresh после смены канала» (см. ниже) | `true` |
+| `channel-post-page.jsx` | `refreshComments()` | `false` |
+| `channel-post-page.jsx` | `loadPost()`, по `post.authorPubkey` | `true` |
+| `moderation-panel.jsx` | `refresh()`, по `reporterPubkey`/`targetPubkey`/`banned` | `true` |
+
+**Отступ от буквы ТЗ (`channel-chat.jsx`).** ТЗ просил отдельный
+`useEffect` на `[ownerPubkey, channelId]` с `force: true`. Буквально это
+гонка: на смену канала `messages` ещё держит СТАРОЕ окно (async
+`loadChannelChatWindow` не успел отработать), второй эффект форсировал бы
+профили не тех авторов. Вместо второго эффекта — `useRef`-флаг:
+`useEffect` на `[ownerPubkey, channelId]` только взводит флаг, `refresh()`
+читает и гасит его — тот же результат (первый `refresh()` после открытия
+канала — `force: true`, остальные — `false`), без гонки.
+
+### `watchProfiles(pubkeys)` / `listWatchedProfiles()`
+
+`src/ui/signals/contacts.js`. Bounded (`MAX_WATCHED_PROFILES = 256`,
+FIFO-вытеснение) множество pubkey, чей `kind:0` нужно ловить живой
+подпиской, помимо контактов. `refreshLiveProfileSubscription`
+(`transport.js`) подмешивает `listWatchedProfiles()` в `authors`. Вызывать
+`watchProfiles(authors)` рядом с каждым `force: true`-вызовом
+`ensureProfilesFresh` выше; если вернула `false` — переподписку не дёргать.
+
+### Dexie — `db.version(29)`
+
+```
+contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey, [ownerPubkey+watched+seenAt]"
+```
+
+Апгрейд существующих строк: `watched: 0, seenAt: 0` (это контакты, не
+чистятся). `watched`/`seenAt` — новые plaintext-поля,
+`CONTACT_PROFILES_PLAINTEXT_FIELDS` (`table-fields.js`) расширен.
+
+### `trimWatchedProfiles(ownerPubkey, keep = 500)`
+
+`src/ui/signals/contacts.js`. Удаляет строки `contactProfiles` с
+`watched: 1` сверх `keep` самых свежих по `seenAt` (сортировка убыв.,
+хвост — на удаление). `watched: 0` не трогает никогда. Вызывается один раз
+из `connect()` после `hydrateProfilesFromCache`.

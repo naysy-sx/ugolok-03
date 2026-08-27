@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { sendChannelMessage } from "../../domain/content/channel-chat.js";
 import { loadChannelChatWindow } from "../../core/sync/lazy-channel.js";
-import { publish, fetchProfiles } from "../signals/transport.js";
+import { publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
-import { ensureProfilesFetched } from "../signals/contacts.js";
+import { ensureProfilesFresh, watchProfiles } from "../signals/contacts.js";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import AttachmentTray from "./media/attachment-tray.jsx";
@@ -135,6 +135,13 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	const [error, setError] = useState("");
 	const bottomRef = useRef(null);
 	const pendingScrollRef = useRef(false);
+	// CHANNEL-V2 часть A2 — ТЗ просил отдельный useEffect на [ownerPubkey, channelId]
+	// с force:true. Буквально это гонка: на смену канала messages ещё держит СТАРОЕ
+	// окно (loadChannelChatWindow асинхронна), второй эффект форсировал бы профили
+	// не тех авторов. Вместо второго эффекта — флаг: этот useEffect только взводит
+	// его при смене канала, refresh() читает и гасит — тот же результат (первый
+	// refresh() после открытия канала — force:true, остальные — false), без гонки.
+	const forceProfileRefreshRef = useRef(true);
 
 	async function refresh() {
 		const { messages: fresh, hasMore: more } = await loadChannelChatWindow(ownerPubkey, dbKey, channelId, { limit: 15 });
@@ -150,9 +157,19 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		}
 		// Найдено пользователем: авторы чата канала могут не быть контактами — профиль
 		// (никнейм/аватар) всё равно нужен, ensureProfilesFetched не ограничен контактами.
+		// CHANNEL-V2 часть A2/A3 — ensureProfilesFresh вместо ensureProfilesFetched (null
+		// перезапрашивается с остыванием), watchProfiles — авторы канала ловятся живой
+		// подпиской (A3), не только явным запросом.
 		const authors = [...new Set(fresh.map((m) => m.authorPubkey))];
-		ensureProfilesFetched(authors, fetchProfiles).catch(() => {});
+		const force = forceProfileRefreshRef.current;
+		forceProfileRefreshRef.current = false;
+		if (watchProfiles(authors)) refreshLiveProfileSubscription(ownerPubkey);
+		ensureProfilesFresh(authors, fetchProfiles, { force }).catch(() => {});
 	}
+
+	useEffect(() => {
+		forceProfileRefreshRef.current = true;
+	}, [ownerPubkey, channelId]);
 
 	useEffect(() => {
 		refresh().catch((e) => setError(errorMessage(e)));

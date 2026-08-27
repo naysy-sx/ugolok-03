@@ -97,7 +97,11 @@ export const PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId"
 // индекс plaintext (нужен для .get/.where-гидратации) — name/about/
 // picture/createdAt/id шифруются (прецедент contactRelationships:
 // содержательные поля шифруются, структурные индексы — нет).
-export const CONTACT_PROFILES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey"];
+// CHANNEL-V2 часть A4 — watched/seenAt добавлены: watched (0 — контакт,
+// 1 — "просто увиденный" автор канала) и seenAt (unix seconds) нужны в
+// plaintext для составного индекса [ownerPubkey+watched+seenAt]
+// (trimWatchedProfiles чистит watched:1 сверх лимита по свежести).
+export const CONTACT_PROFILES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "watched", "seenAt"];
 
 // Этап 49 — contactRelationships (единая таблица, CONTACTS-FSM.md §3). state/
 // resolvedAt/sentAt — структурные метаданные и индексы ([owner+peer], [owner+state]

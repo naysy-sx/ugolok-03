@@ -1,9 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
-import { publish, fetchProfiles } from "../signals/transport.js";
+import { publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity, bumpMessagingActivity } from "../signals/chats.js";
-import { ensureProfilesFetched } from "../signals/contacts.js";
+import { ensureProfilesFresh, watchProfiles } from "../signals/contacts.js";
 import { place, openChannel } from "../signals/place.js";
 import {
 	archivePost,
@@ -131,7 +131,12 @@ export default function ChannelPostPage({
 	async function refreshComments() {
 		const fresh = await getCommentsTree(ownerPubkey, dbKey, postId);
 		setTree(fresh);
-		ensureProfilesFetched([...new Set(flattenAuthors(fresh))], fetchProfiles).catch(() => {});
+		// CHANNEL-V2 часть A2 — ensureProfilesFresh вместо ensureProfilesFetched:
+		// null (профиль не найден на релее) теперь перезапрашивается с остыванием,
+		// не кэшируется навсегда.
+		const commentAuthors = [...new Set(flattenAuthors(fresh))];
+		if (watchProfiles(commentAuthors)) refreshLiveProfileSubscription(ownerPubkey);
+		ensureProfilesFresh(commentAuthors, fetchProfiles).catch(() => {});
 		const createdAts = flattenCreatedAt(fresh);
 		if (createdAts.length > 0) {
 			markChannelAsRead(ownerPubkey, privKey, channelId, Math.max(...createdAts), publish)
@@ -149,6 +154,11 @@ export default function ChannelPostPage({
 		}
 		setMissing(false);
 		setPost(found);
+		// CHANNEL-V2 часть A2/A3 — автор ЗАПИСИ форсируется отдельно (force:true):
+		// он важнее авторов дерева комментариев (refreshComments, force:false) —
+		// имя автора записи видно первым делом, ждать минуту остывания не должно.
+		if (watchProfiles([found.authorPubkey])) refreshLiveProfileSubscription(ownerPubkey);
+		ensureProfilesFresh([found.authorPubkey], fetchProfiles, { force: true }).catch(() => {});
 		await refreshComments();
 		await loadReactions();
 	}

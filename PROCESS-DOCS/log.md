@@ -8069,3 +8069,15 @@ margin-block-end:0 (глобальный details[open] > summary). Quick-кар�
 ## Иконки в меню поста
 
 Все пункты `ActionsMenu` записи: check-square / square, calendar / calendar-x, archive, eye-slash. Плюс уже были pencil и trash. Карточка «Сегодня» тоже.
+
+## CHANNEL-V2, часть A (профили) — коммит 1/6
+
+1. Тесты `tests/profile-resolution.test.js` до кода (5 приёмочных + адверсарная фаза watchProfiles).
+2. `profile.js`'s `ensureProfilePublished` — напрямую (код литерален в ТЗ, флаг после publish, не до).
+3. `contacts.js`: `ensureProfilesFresh`+`resetProfileRetryState`, `watchProfiles`+`listWatchedProfiles`, правка `applyProfileUpdates` (watched/seenAt) — напрямую, всё литерально в ТЗ.
+4. `contacts.js`'s `trimWatchedProfiles` — единственная функция без готового кода в ТЗ, воркер. 1 брак (`sortBy(k,"desc").toArray()` — не существует в Dexie), поправлено вручную (2 строки).
+5. `table-fields.js` (watched/seenAt в PLAINTEXT_FIELDS), `database.js` (`version(29)`, апгрейд существующих строк) — напрямую, схема на 6 строк.
+6. `transport.js`: `resetProfileRetryState`+`trimWatchedProfiles` в `connect()`, `listWatchedProfiles()` в authors живой подписки — напрямую (точечные правки в большом файле).
+7. Точки вызова `ensureProfilesFresh`: `channel-chat.jsx` (useRef-флаг вместо второго useEffect — буквальный вариант ТЗ был гонкой), `channel-post-page.jsx`, `moderation-panel.jsx` — напрямую.
+8. 2 существующих теста обновлены под намеренно отменённые ТЗ решения (A1, A4) — см. CONTRACTS.md.
+9. Регрессия 2231/2234 (3 незав. провала — vendored strfry). Коммит.

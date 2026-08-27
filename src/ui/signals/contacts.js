@@ -240,9 +240,15 @@ export async function applyProfileUpdates(updates) {
 		if (isNewerVersion(incoming, next[pk])) {
 			next[pk] = incoming;
 			changed = true;
-			if (contacts.value.includes(pk) && ownerPubkeyRef && dbKeyRef) {
+			// CHANNEL-V2 часть A4 — решение отменено: было "только contacts.value.includes(pk)",
+			// авторы канала (не контакты) не переживали перезагрузку. Теперь персистится
+			// любой полученный непустой профиль; watched отличает контакта (0, никогда не
+			// чистится) от "просто увиденного" автора (1, чистит trimWatchedProfiles).
+			if (ownerPubkeyRef && dbKeyRef) {
+				const watched = contacts.value.includes(pk) ? 0 : 1;
+				const seenAt = Math.floor(Date.now() / 1000);
 				await db.table("contactProfiles").put(
-					toEncryptedRow({ ownerPubkey: ownerPubkeyRef, contactPubkey: pk, ...incoming }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKeyRef),
+					toEncryptedRow({ ownerPubkey: ownerPubkeyRef, contactPubkey: pk, ...incoming, watched, seenAt }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKeyRef),
 				);
 			}
 		}
@@ -285,6 +291,71 @@ export async function refreshProfiles(pubkeys, fetchProfilesFn) {
 	const fetched = await fetchProfilesFn(pubkeys);
 	const updates = new Map(pubkeys.map((pk) => [pk, fetched.get(pk) ?? null]));
 	await applyProfileUpdates(updates);
+}
+
+// CHANNEL-V2 часть A2 — профиль, которого нет на релее, кэшируется как null
+// (см. ensureProfilesFetched) и больше не запрашивается никогда. Для контактов
+// это лечится refreshProfiles на открытии экрана, для авторов канала лечить
+// было нечем: они не контакты, экран у них общий с лентой. Здесь — середина:
+// null перезапрашивается, но не чаще раза в минуту на pubkey, иначе refresh()
+// по messagingActivity превратится в поток REQ.
+const PROFILE_RETRY_MS = 60_000;
+const lastProfileAttempt = new Map();
+
+export function resetProfileRetryState() {
+	lastProfileAttempt.clear();
+}
+
+// force — «экран только что открыли»: остывание игнорируется, но уже
+// известные профили всё равно не перезапрашиваются (их обновляет живая
+// подписка, refreshLiveProfileSubscription).
+export async function ensureProfilesFresh(pubkeys, fetchProfilesFn, { force = false } = {}) {
+	const now = Date.now();
+	const need = pubkeys.filter((pk) => {
+		if (profiles.value[pk]) return false;
+		if (force) return true;
+		return now - (lastProfileAttempt.get(pk) ?? 0) >= PROFILE_RETRY_MS;
+	});
+	if (need.length === 0) return;
+	for (const pk of need) lastProfileAttempt.set(pk, now);
+	await refreshProfiles(need, fetchProfilesFn);
+}
+
+// CHANNEL-V2 часть A3 — живая подписка kind:0 раньше знала только про
+// контакты. Авторы канала контактами не являются — их обновлённый профиль не
+// приезжал никогда. Ограничение сверху — на фильтр релея: authors
+// неограниченной длины стрельнёт по лимитам strfry раньше, чем принесёт пользу.
+const MAX_WATCHED_PROFILES = 256;
+const watchedProfilePubkeys = new Set();
+
+export function watchProfiles(pubkeys) {
+	let added = false;
+	for (const pk of pubkeys) {
+		if (watchedProfilePubkeys.has(pk)) continue;
+		watchedProfilePubkeys.add(pk);
+		added = true;
+	}
+	while (watchedProfilePubkeys.size > MAX_WATCHED_PROFILES) {
+		// Set сохраняет порядок вставки — выбывает самый давний.
+		watchedProfilePubkeys.delete(watchedProfilePubkeys.values().next().value);
+	}
+	return added;
+}
+
+export function listWatchedProfiles() {
+	return [...watchedProfilePubkeys];
+}
+
+// CHANNEL-V2 часть A4.4 — чистка "просто увиденных" авторов (watched:1),
+// чтобы contactProfiles не росла неограниченно. watched:0 (контакты) не
+// трогаются вовсе — фильтр по watched уже в самом where(), не после выборки.
+export async function trimWatchedProfiles(ownerPubkey, keep = 500) {
+	const rows = await db.table("contactProfiles").where({ ownerPubkey, watched: 1 }).toArray();
+	rows.sort((a, b) => b.seenAt - a.seenAt);
+	if (rows.length > keep) {
+		const keysToDelete = rows.slice(keep).map((row) => [ownerPubkey, row.contactPubkey]);
+		await db.table("contactProfiles").bulkDelete(keysToDelete);
+	}
 }
 
 // --- Группы (не затронуто этапом 49 — отдельная структура, kind 30050) ---

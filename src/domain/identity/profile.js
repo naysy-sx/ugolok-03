@@ -134,19 +134,26 @@ export async function applyLiveOwnProfileEvent(ownerPubkey, event) {
   return before.bio !== after.bio || before.avatarUrl !== after.avatarUrl || before.avatar !== after.avatar;
 }
 
-// Тот же идиом, что chat.js's ensureOwnKeyPackagePublished (этап 25): локальный
-// флаг персистится ДО попытки publish, повторных попыток при сбое сознательно
-// нет. ОТЛИЧИЕ от прототипа: publish обёрнут в try/catch внутри самой функции —
-// имя в профиле косметическое, сбой сети не должен ронять connect()/блокировать
-// вход (в отличие от MLS KeyPackage, который функционально необходим).
+// CHANNEL-V2 часть A1 (ТЗ, PROCESS-DOCS/REDESIGN/CHANNEL-2/CHANNEL-V2-TASK.md) —
+// решение отменено: было "флаг вперёд, ретраев нет" (тот же идиом, что chat.js's
+// ensureOwnKeyPackagePublished, этап 25). Цена: единственный неудачный первый
+// connect навсегда оставлял пользователя без kind:0 — на релее просто нет
+// события, из которого чужой клиент возьмёт имя (все видят npub). Флаг теперь
+// ставится ТОЛЬКО после подтверждения релея (publish → {ok:true}); publish
+// по-прежнему обёрнут в try/catch — имя в профиле косметическое, сбой сети не
+// должен ронять connect()/блокировать вход (в отличие от MLS KeyPackage).
+// Цена ретрая — одно kind:0 на connect, пока публикация не пройдёт; дешевле,
+// чем безымянный аккаунт навсегда.
 export async function ensureProfilePublished(ownerPubkey, login, privKey, publish) {
   const record = await db.table('keystore').get(ownerPubkey);
   if (record?.profileAutoPublished) return;
-  await db.table('keystore').update(ownerPubkey, { profileAutoPublished: true });
   try {
     const current = await getProfile(ownerPubkey);
     const event = buildProfileEvent(privKey, { name: login, about: current.bio || undefined, picture: current.avatarUrl || undefined });
-    await publish(event);
+    const result = await publish(event);
+    if (result?.ok) {
+      await db.table('keystore').update(ownerPubkey, { profileAutoPublished: true });
+    }
   } catch (e) {
     console.warn('ensureProfilePublished: не удалось опубликовать профиль', e);
   }

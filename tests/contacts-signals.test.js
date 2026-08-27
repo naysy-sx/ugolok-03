@@ -491,7 +491,7 @@ test("refreshProfiles: равный createdAt, тайбрейк по id — ме
 // Этап 74 — Часть B, T5.2: персист — ТОЛЬКО для реальных контактов
 // (contacts.value), НЕ для произвольных pubkey (авторы постов канала и т.п.).
 
-test("applyProfileUpdates: реальный контакт -> персистится в contactProfiles", async () => {
+test("applyProfileUpdates: реальный контакт -> персистится в contactProfiles, watched:0", async () => {
 	await setupRuntime();
 	contacts.value = [ALICE_STUB_PK];
 	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", about: "био", picture: "", createdAt: 1000, id: "ev1" }]]));
@@ -502,16 +502,25 @@ test("applyProfileUpdates: реальный контакт -> персистит
 	const row = fromEncryptedRow(raw, DB_KEY);
 	assert.equal(row.name, "Алиса");
 	assert.equal(row.createdAt, 1000);
+	assert.equal(row.watched, 0);
 });
 
-test("applyProfileUpdates: НЕ-контакт (например, автор поста канала) -> в profiles.value попадает, НЕ персистится", async () => {
+// CHANNEL-V2, часть A4 (ТЗ, PROCESS-DOCS/REDESIGN/CHANNEL-2/CHANNEL-V2-TASK.md):
+// решение здесь ОТМЕНЕНО. Было: персист только для contacts.value.includes(pk) —
+// авторы канала (не контакты) не переживали перезагрузку, холодный старт
+// офлайн снова показывал npub. Стало: персистится любой полученный непустой
+// профиль, watched:1 отличает "просто увиденного" от контакта (watched:0) —
+// именно watched:1 подлежит чистке (trimWatchedProfiles), watched:0 — никогда.
+test("applyProfileUpdates: НЕ-контакт (например, автор поста канала) -> персистится с watched:1 (CHANNEL-V2 A4 — переживает перезагрузку)", async () => {
 	await setupRuntime();
 	contacts.value = []; // явно не контакт
 	await applyProfileUpdates(new Map([[ALICE_STUB_PK, { name: "Алиса", createdAt: 1000, id: "ev1" }]]));
 
 	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
 	const raw = await db.table("contactProfiles").get([OWNER_PUBKEY, ALICE_STUB_PK]);
-	assert.equal(raw, undefined, "не-контакт не должен персистироваться");
+	assert.ok(raw, "не-контакт теперь тоже персистируется");
+	const row = fromEncryptedRow(raw, DB_KEY);
+	assert.equal(row.watched, 1);
 });
 
 test("applyProfileUpdates: старая версия не откатывает уже персистированную новую (и не перезаписывает таблицу)", async () => {

@@ -32,7 +32,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -322,6 +322,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// "холодный старт офлайн показывает закэшированные профили контактов, не
 	// инициалы". Не зависит от соединения/контактов — только ownerPubkey/dbKey.
 	await hydrateProfilesFromCache(pubkeyHex, dbKey);
+	// CHANNEL-V2 часть A2/A4 — переподключение это повод попробовать профили
+	// заново, не дожидаясь минуты остывания; чистка "просто увиденных" авторов
+	// канала (watched:1) — раз на connect, contactProfiles не растёт без предела.
+	resetProfileRetryState();
+	await trimWatchedProfiles(pubkeyHex).catch(() => {});
 	logSync(t("syncLog.connecting"));
 	// Этап 34 — найденное решение (бутстрап-проблема): relay-список нужен ДО того, как
 	// можно что-либо получить С relay (включая kind 30072 с синхронизированным списком).
@@ -1078,9 +1083,13 @@ export async function refreshLiveProfileSubscription(ownerPubkey) {
 		});
 		connection.addMessageHandler(profileSubscriber.handleMessage);
 	}
-	// Повторный вызов (новый контакт добавлен) — тот же приём, что groupMessageSubscriber:
-	// переподписка тем же subId идемпотентна и дёшево обновляет набор authors.
-	profileSubscriber.subscribe("live-profiles", [{ authors: [ownerPubkey, ...contacts.value], kinds: [0] }]);
+	// CHANNEL-V2 часть A3 — authors расширен listWatchedProfiles(): раньше живая
+	// подписка знала только про контакты, обновлённый kind:0 автора канала
+	// (не контакта) не приезжал никогда, только на следующий явный запрос.
+	// Повторный вызов (новый контакт добавлен/новый автор попал в watch) — тот
+	// же приём, что groupMessageSubscriber: переподписка тем же subId идемпотентна
+	// и дёшево обновляет набор authors.
+	profileSubscriber.subscribe("live-profiles", [{ authors: [...new Set([ownerPubkey, ...contacts.value, ...listWatchedProfiles()])], kinds: [0] }]);
 }
 
 let contactListSubscriber = null;

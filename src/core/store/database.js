@@ -341,6 +341,18 @@ db.version(28).stores({
   channelReactions: "[ownerPubkey+channelId+targetType+targetId+reactorPubkey], [ownerPubkey+postId], [ownerPubkey+targetId]"
 });
 
+// CHANNEL-V2 часть A4 — watched (0 контакт / 1 "просто увиденный" автор
+// канала) + seenAt: раньше персист в contactProfiles шёл только для
+// контактов, авторы канала не переживали перезагрузку. Новый составной
+// индекс — для trimWatchedProfiles (чистка watched:1 сверх лимита по
+// свежести, watched:0 не трогается никогда). Апгрейд существующих строк —
+// они все контакты (персист раньше и не знал других), watched:0/seenAt:0.
+db.version(29).stores({
+  contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey, [ownerPubkey+watched+seenAt]"
+}).upgrade(async (tx) => {
+  await tx.table("contactProfiles").toCollection().modify({ watched: 0, seenAt: 0 });
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

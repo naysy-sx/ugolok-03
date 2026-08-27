@@ -148,7 +148,13 @@ test("ensureProfilePublished АДВЕРСАРНО: только bio без avata
 	assert.equal("picture" in content, false);
 });
 
-test("ensureProfilePublished АДВЕРСАРНО: publish бросает исключение — флаг всё равно стоит (не повторяет попытку при следующем логине), сам вызов НЕ бросает наружу", async () => {
+// CHANNEL-V2, часть A1 (ТЗ, PROCESS-DOCS/REDESIGN/CHANNEL-2/CHANNEL-V2-TASK.md):
+// решение здесь ОТМЕНЕНО. Было: флаг ставится ДО publish, сбой не блокирует
+// вход, повтора нет — цена: единственный неудачный первый connect навсегда
+// оставлял аккаунт без kind:0 (все видят npub вместо имени). Стало: флаг —
+// только ПОСЛЕ подтверждения релея; сбой не блокирует вход (try/catch
+// остаётся), но следующий connect() пробует опубликовать снова.
+test("ensureProfilePublished АДВЕРСАРНО: publish бросает исключение — флаг НЕ стоит (следующий connect пробует снова), сам вызов НЕ бросает наружу", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);
 	await assert.doesNotReject(() =>
@@ -157,7 +163,22 @@ test("ensureProfilePublished АДВЕРСАРНО: publish бросает иск
 		}),
 	);
 	const row = await db.table("keystore").get(OWNER_PUBKEY);
-	assert.equal(row.profileAutoPublished, true, "флаг ставится ДО попытки публикации — сбой сети не должен блокировать login/connect");
+	assert.equal(row.profileAutoPublished, undefined, "флаг НЕ ставится при сбое — иначе аккаунт остаётся без kind:0 навсегда");
+});
+
+test("ensureProfilePublished: publish резолвится {ok:false} — флаг НЕ стоит, повторный вызов пробует снова", async () => {
+	await db.table("keystore").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	let calls = 0;
+	const publish = async () => {
+		calls++;
+		return { ok: false, reason: "relay отклонил" };
+	};
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
+	assert.equal((await db.table("keystore").get(OWNER_PUBKEY)).profileAutoPublished, undefined);
+
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
+	assert.equal(calls, 2, "{ok:false} не ставит флаг — повторный вызов пробует опубликовать снова");
 });
 
 // Найдено пользователем: вход в существующий аккаунт с чистого устройства

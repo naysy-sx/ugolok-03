@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
-import { publish } from "../signals/transport.js";
+import { publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
+import { ensureProfilesFresh, watchProfiles } from "../signals/contacts.js";
 import {
 	listReports,
 	markReportViewed,
@@ -24,9 +25,17 @@ export default function ModerationPanel({ ownerPubkey, privKey, dbKey, channelId
 	const [busy, setBusy] = useState(false);
 
 	async function refresh() {
-		setReports(await listReports(ownerPubkey, dbKey, channelId));
+		const freshReports = await listReports(ownerPubkey, dbKey, channelId);
+		const freshBanned = await listBannedMembers(ownerPubkey, channelId);
+		setReports(freshReports);
 		setStats(await getModerationStats(ownerPubkey, dbKey, channelId));
-		setBanned(await listBannedMembers(ownerPubkey, channelId));
+		setBanned(freshBanned);
+		// CHANNEL-V2 часть A2/A3 — до этой правки модерация вообще не запрашивала
+		// профили: в списке жалоб npub стоял всегда, даже когда профиль был
+		// доступен (отдельный симптом той же болезни, что и лента канала).
+		const pubkeys = [...new Set([...freshReports.flatMap((r) => [r.reporterPubkey, r.targetPubkey]), ...freshBanned])];
+		if (watchProfiles(pubkeys)) refreshLiveProfileSubscription(ownerPubkey);
+		ensureProfilesFresh(pubkeys, fetchProfiles, { force: true }).catch(() => {});
 	}
 
 	useEffect(() => {
