@@ -26,9 +26,13 @@ const POST_SOURCE_MAX_LENGTH = 20000;
 const COMMENT_MAX_LENGTH = 4000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
+// CHANNEL-V2 часть D1 — isNpub добавлен: вызывающий код раньше не мог
+// отличить настоящее имя от npub-заглушки и красил npub как обычное имя,
+// из-за чего строка авторов читалась как набор ошибок.
 export function commentAuthorInfo(pubkey) {
 	const profile = profiles.value[pubkey];
-	return { name: profile?.name || shortPubkey(pubkey), avatar: profile?.picture };
+	const name = profile?.name?.trim();
+	return { name: name || shortPubkey(pubkey), avatar: profile?.picture, isNpub: !name };
 }
 
 export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPublished, onCancel }) {

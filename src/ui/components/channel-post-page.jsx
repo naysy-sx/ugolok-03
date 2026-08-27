@@ -46,7 +46,7 @@ import { DueChip, formatDateTime } from "./post-card.jsx";
 import ReactionRow from "./reaction-row.jsx";
 import CommentNode from "./comment-node.jsx";
 import ChannelBubbleAttachments from "./channel-bubble-attachments.jsx";
-import { CommentComposer, PostEditForm } from "./channel-shared.jsx";
+import { CommentComposer, PostEditForm, commentAuthorInfo } from "./channel-shared.jsx";
 
 const ROOT_PAGE = 50;
 const FULL_TREE_THRESHOLD = 100;
@@ -282,6 +282,12 @@ export default function ChannelPostPage({
 	}
 
 	const hasChips = post.dueAt !== null || (post.tags && post.tags.length > 0);
+	// CHANNEL-V2 часть D1 — автора на странице записи не было вообще, хотя
+	// .post__ava/.post__ava-fallback/.post__author лежали мёртвым CSS с
+	// этапа 69 (см. комментарий post-card.jsx:57). Действия переезжают в ту
+	// же строку, справа — раньше ActionsMenu висел ниже текста за распоркой
+	// <span class="grow" />, что читалось как случайность.
+	const author = commentAuthorInfo(post.authorPubkey);
 
 	return (
 		<Screen
@@ -295,10 +301,69 @@ export default function ChannelPostPage({
 						{error}
 					</p>
 				)}
-				<p class="post-page__meta">
-					{t(`recordKind.${kind}`)} · {formatDateTime(post.createdAt)}
-					{post.status === "archived" ? ` · ${t("postCard.archivedLabel")}` : ""}
-				</p>
+				<div class="post-byline bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					{author.avatar ? (
+						<img src={author.avatar} alt="" class="post__ava rigid" />
+					) : (
+						<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
+							{(author.name || "?").trim().charAt(0).toUpperCase()}
+						</div>
+					)}
+					<div class="stack grow" style={{ "--gap": "0" }}>
+						<span class={author.isNpub ? "post__author post__author--npub" : "post__author"}>{author.name}</span>
+						<span class="post-page__meta">
+							{t(`recordKind.${kind}`)} · {formatDateTime(post.createdAt)}
+							{post.status === "archived" ? ` · ${t("postCard.archivedLabel")}` : ""}
+						</span>
+					</div>
+					{isOwner && (
+						<ActionsMenu label={t("postCard.actionsAria", { excerpt: toPreviewText(post.text, { profile: "rich", maxLength: 40 }) || t("postCard.noTextFallback") })}>
+							{!editing && (
+								<button type="button" onClick={() => setEditing(true)}>
+									<IconPencil /> {t("postCard.editButton")}
+								</button>
+							)}
+							{kind === "task" ? (
+								<button type="button" onClick={() => runDueAction(() => unmakePostTask(ownerPubkey, post.id))}>
+									<IconSquare /> {t("postCard.unmakeTaskButton")}
+								</button>
+							) : (
+								<button type="button" onClick={() => runDueAction(() => makePostTask(ownerPubkey, post.id))}>
+									<IconCheckSquare /> {t("postCard.makeTaskButton")}
+								</button>
+							)}
+							{post.dueAt === null ? (
+								<button type="button" onClick={handleSetDue}>
+									<IconCalendar /> {t("postCard.setDueButton")}
+								</button>
+							) : (
+								<button type="button" onClick={() => runDueAction(() => clearPostDue(ownerPubkey, post.id))}>
+									<IconCalendarX /> {t("postCard.clearDueButton")}
+								</button>
+							)}
+							{post.status === "published" && (
+								<button type="button" onClick={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}>
+									<IconArchive /> {t("postCard.archiveButton")}
+								</button>
+							)}
+							{post.status === "published" && (
+								<button type="button" onClick={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}>
+									<IconEyeSlash /> {t("postCard.unpublishButton")}
+								</button>
+							)}
+							<button type="button" class="danger" onClick={() => {
+								if (window.confirm(t("channel.deletePostConfirm"))) {
+									runAction(async () => {
+										await deletePost(ownerPubkey, privKey, post.id, publish);
+										openChannel(channelId);
+									});
+								}
+							}}>
+								<IconTrash /> {t("common.delete")}
+							</button>
+						</ActionsMenu>
+					)}
+				</div>
 				{editing ? (
 					<PostEditForm
 						post={post}
@@ -351,56 +416,6 @@ export default function ChannelPostPage({
 						))}
 					</div>
 				)}
-				<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<span class="grow" />
-					{isOwner && (
-						<ActionsMenu label={t("postCard.actionsAria", { excerpt: toPreviewText(post.text, { profile: "rich", maxLength: 40 }) || t("postCard.noTextFallback") })}>
-							{!editing && (
-								<button type="button" onClick={() => setEditing(true)}>
-									<IconPencil /> {t("postCard.editButton")}
-								</button>
-							)}
-							{kind === "task" ? (
-								<button type="button" onClick={() => runDueAction(() => unmakePostTask(ownerPubkey, post.id))}>
-									<IconSquare /> {t("postCard.unmakeTaskButton")}
-								</button>
-							) : (
-								<button type="button" onClick={() => runDueAction(() => makePostTask(ownerPubkey, post.id))}>
-									<IconCheckSquare /> {t("postCard.makeTaskButton")}
-								</button>
-							)}
-							{post.dueAt === null ? (
-								<button type="button" onClick={handleSetDue}>
-									<IconCalendar /> {t("postCard.setDueButton")}
-								</button>
-							) : (
-								<button type="button" onClick={() => runDueAction(() => clearPostDue(ownerPubkey, post.id))}>
-									<IconCalendarX /> {t("postCard.clearDueButton")}
-								</button>
-							)}
-							{post.status === "published" && (
-								<button type="button" onClick={() => runAction(() => archivePost(ownerPubkey, privKey, dbKey, post.id, publish))}>
-									<IconArchive /> {t("postCard.archiveButton")}
-								</button>
-							)}
-							{post.status === "published" && (
-								<button type="button" onClick={() => runAction(() => unpublishPost(ownerPubkey, privKey, dbKey, post.id, publish))}>
-									<IconEyeSlash /> {t("postCard.unpublishButton")}
-								</button>
-							)}
-							<button type="button" class="danger" onClick={() => {
-								if (window.confirm(t("channel.deletePostConfirm"))) {
-									runAction(async () => {
-										await deletePost(ownerPubkey, privKey, post.id, publish);
-										openChannel(channelId);
-									});
-								}
-							}}>
-								<IconTrash /> {t("common.delete")}
-							</button>
-						</ActionsMenu>
-					)}
-				</div>
 				<ReactionRow
 					counts={postAgg.counts}
 					mine={postAgg.mine}

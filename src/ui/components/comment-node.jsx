@@ -46,7 +46,7 @@ export default function CommentNode({
 				)}
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 					<header class="cmt__head row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
-						<span class="cmt__name">{author.name}</span>
+						<span class={author.isNpub ? "cmt__name cmt__name--npub" : "cmt__name"}>{author.name}</span>
 						{isOP && <span class="cmt__op">{t("channel.comment.authorBadge")}</span>}
 						<time class="cmt__time">{formatDateTime(comment.createdAt)}</time>
 						{canComment && (

@@ -8122,9 +8122,16 @@ button[type="button"].media-mini-bar-btn {
 	background: var(--surface);
 }
 
+/* CHANNEL-V2 часть D4.3 — было display:block без ширины: button растягивался
+   на всю ширину контейнера, текст с default text-align читался прижатым
+   влево, не по центру, несмотря на margin:auto (auto центрирует ТОЛЬКО при
+   ограниченной ширине). inline-size:fit-content — центрирование реально
+   работает. */
 .load-more {
-	margin: 1rem auto 0;
+	margin-block-start: var(--space-m);
+	margin-inline: auto;
 	display: block;
+	inline-size: fit-content;
 }
 
 /* ================================================================== *
@@ -8236,4 +8243,45 @@ button[type="button"].media-mini-bar-btn {
 .empty p {
 	font-size: var(--step--1);
 	margin-block: 0;
+}
+
+/* D1 — строка автора записи (.post__ava/.post__ava-fallback/.post__author
+   лежали мёртвым CSS с этапа 69, см. post-card.jsx:57 — переиспользованы
+   как есть, размеры не менялись). */
+.post-byline {
+	min-inline-size: 0;
+}
+/* Ключ вместо имени — моноширинно и тише, чтобы не путать с никнеймом. Тот
+   же приём, что .contact-identity-npub. Общее тело для записи (D1) и
+   комментариев (D4.1) — один селектор через запятую, не дублируется. */
+.post__author--npub,
+.cmt__name--npub {
+	font-family: var(--font-mono);
+	font-weight: 400;
+	font-size: var(--step--1);
+	color: var(--muted);
+}
+
+/* D3 — глобальный p{margin-block: var(--space-m)} (minimal.css) иначе
+   добавляет отступ сверху первому абзацу и снизу последнему — родитель уже
+   даёт зазор через --gap. .chat-msg__text появится в части E (общий чат),
+   правило готово заранее — селектор без совпадений безвреден. */
+.post-page__body > :first-child,
+.cmt__text > :first-child,
+.chat-msg__text > :first-child {
+	margin-block-start: 0;
+}
+.post-page__body > :last-child,
+.cmt__text > :last-child,
+.chat-msg__text > :last-child {
+	margin-block-end: 0;
+}
+
+/* D4.2 — комментарий, на который привёл переход из уведомления. outline, не
+   border: рамка сдвинула бы соседей на свою толщину. Класс уже ставился в
+   JSX, в CSS не был описан вовсе. */
+.is-target-comment > .cmt__box {
+	outline: 2px solid var(--accent);
+	outline-offset: var(--space-3xs);
+	border-radius: var(--radius-sm);
 }

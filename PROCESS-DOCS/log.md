@@ -8100,3 +8100,12 @@ margin-block-end:0 (глобальный details[open] > summary). Quick-кар�
 6. Regression-находка: параллельный `node --test` показал плавающий провал МОЕГО НОВОГО теста group-by-day (см. п.3) — не он один: editPost/И9-createRoom тоже плавают под нагрузкой (досессионные, timestamp-в-одну-секунду, не трогал).
 7. Билд (`vite build`) зелёный, регламентные grep (margin/@media/физические размеры/position:absolute) по новому CSS-блоку — чисто.
 8. Регрессия 2238/2241 (3 незав. vendored). Живой просмотр в браузере НЕ выполнен (расширение claude-in-chrome не подключено). Коммит.
+
+## CHANNEL-V2, часть D1-D4 (страница записи) — коммит 4/6
+
+1. `channel-shared.jsx`'s `commentAuthorInfo` — `isNpub` — напрямую, литерально из ТЗ.
+2. `channel-post-page.jsx`: `.post-byline` наверху статьи, `ActionsMenu` туда же (был в отдельном row ниже текста) — напрямую, крупный JSX.
+3. `comment-node.jsx`: `.cmt__name--npub` — точечная правка (1 строка).
+4. D2 сверен по факту: плейсхолдер уже был проброшен (репозиторий менялся), дублирующего счётчика нет — ничего делать не потребовалось.
+5. CSS: `.post-byline`/`.post__author--npub`+`.cmt__name--npub` (общее тело)/схлопывание первого-последнего отступа/`.is-target-comment` outline — в блок CHANNEL-V2. `.load-more` — баг найден и исправлен (display:block без ширины не давал margin:auto центрировать).
+6. Билд зелёный, регламентные grep чисто. Регрессия 2237/2241 (3 vendored + И9 room-session, не трогал). Коммит.
