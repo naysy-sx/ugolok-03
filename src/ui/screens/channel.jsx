@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from "preact/hooks";
+import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish } from "../signals/transport.js";
@@ -37,18 +37,41 @@ const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
-function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRow, onSaved, onDeleted }) {
+function sameSet(a, b) {
+	if (a.size !== b.size) return false;
+	for (const x of a) if (!b.has(x)) return false;
+	return true;
+}
+
+// CHANNEL-V2 часть G1-G5 — было: одна сплошная форма (название/описание/
+// правила, <input type="file"> без превью, чекбокс в ряду, group-список,
+// «Сохранить»/«Отмена» посреди страницы, «Удалить канал» чуть ниже той же
+// формой, window.confirm). Теперь: три сгруппированных fieldset, превью
+// аватара + живой счётчик символов, переключатели вместо голых чекбоксов,
+// сохранение — в подвале Screen'а (form={formId}, форма и кнопка физически
+// разъехались, связаны нативным HTML-атрибутом), опасная зона — отдельным
+// блоком с двухшаговым подтверждением вместо window.confirm.
+//
+// onBarChange — тот же приём, что onSlicesChange у ChannelChat: подвал
+// рисует channel.jsx (слот Screen, вне этого компонента), поэтому dirty/
+// busy/formId сообщаются наверх колбэком, а не пробрасываются пропом вниз.
+function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRow, onSaved, onDeleted, onBarChange }) {
 	const instanceId = useId();
+	const formId = useId();
 	const [name, setName] = useState(channelRow.name || "");
 	const [description, setDescription] = useState(channelRow.description || "");
 	const [rules, setRules] = useState(channelRow.rules || "");
 	const [allowChatAttachments, setAllowChatAttachments] = useState(channelRow.allowChatAttachments ?? true);
 	const [avatarFile, setAvatarFile] = useState(null);
 	const [avatarError, setAvatarError] = useState("");
+	const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
 	const [originalGroupIds, setOriginalGroupIds] = useState(() => new Set());
+	const [confirming, setConfirming] = useState(false);
+	const [confirmText, setConfirmText] = useState("");
+	const avatarInputRef = useRef(null);
 
 	useEffect(() => {
 		refreshGroups(ownerPubkey, dbKey).catch(() => {});
@@ -58,6 +81,19 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			setOriginalGroupIds(asSet);
 		});
 	}, [ownerPubkey, channelId]);
+
+	// Превью — из URL.createObjectURL(avatarFile), не из готового URL канала
+	// (файл ещё не загружен на Blossom). revokeObjectURL в cleanup — иначе
+	// blob: URL живёт до перезагрузки вкладки.
+	useEffect(() => {
+		if (!avatarFile) {
+			setAvatarPreviewUrl(null);
+			return;
+		}
+		const url = URL.createObjectURL(avatarFile);
+		setAvatarPreviewUrl(url);
+		return () => URL.revokeObjectURL(url);
+	}, [avatarFile]);
 
 	function toggleGroup(groupId) {
 		setSelectedGroupIds((prev) => {
@@ -81,9 +117,17 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 		}
 	}
 
+	const dirty =
+		name !== (channelRow.name || "") ||
+		description !== (channelRow.description || "") ||
+		rules !== (channelRow.rules || "") ||
+		allowChatAttachments !== (channelRow.allowChatAttachments ?? true) ||
+		avatarFile !== null ||
+		!sameSet(selectedGroupIds, originalGroupIds);
+
 	async function handleSave(e) {
 		e.preventDefault();
-		if (busy || name.length === 0) return;
+		if (busy || !dirty || name.length === 0) return;
 		if (avatarFile && avatarError) return;
 		setBusy(true);
 		setError("");
@@ -113,8 +157,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 	}
 
 	async function handleDelete() {
-		if (busy) return;
-		if (!window.confirm(t("channel.settings.deleteConfirm", { name: channelRow.name }))) return;
+		if (busy || confirmText !== channelRow.name) return;
 		setBusy(true);
 		setError("");
 		try {
@@ -126,82 +169,135 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 		}
 	}
 
+	useEffect(() => {
+		onBarChange?.({ dirty, busy, formId, canSave: dirty && !busy && name.length > 0, onCancel: onSaved });
+	}, [dirty, busy, formId, name.length]);
+
 	return (
-		<form class="stack channel-settings-form" onSubmit={handleSave} style={{ "--gap": "var(--space-s)" }}>
+		<form id={formId} class="set-form stack" onSubmit={handleSave} style={{ "--gap": "var(--space-l)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<label for="edit-channel-name">{t("channels.create.nameLabel")}</label>
-				<input id="edit-channel-name" type="text" value={name} maxLength={NAME_MAX_LENGTH} onInput={(e) => setName(e.currentTarget.value)} required />
-			</div>
+			<fieldset class="set-group stack" style={{ "--gap": "var(--space-s)" }}>
+				<legend>{t("channel.settings.groupAppearance")}</legend>
+				<p class="set-group__hint">{t("channel.settings.groupAppearanceHint")}</p>
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<label for="edit-channel-description">{t("channels.create.descriptionLabel")}</label>
-				<textarea id="edit-channel-description" value={description} maxLength={DESCRIPTION_MAX_LENGTH} onInput={(e) => setDescription(e.currentTarget.value)} rows={3} />
-			</div>
+				<div class="avatar-field bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					{avatarPreviewUrl ? (
+						<img src={avatarPreviewUrl} alt="" class="avatar-field__preview rigid" />
+					) : (
+						<div aria-hidden="true" class="avatar-field__preview avatar-field__preview--empty rigid">
+							{(name || "?").trim().charAt(0).toUpperCase()}
+						</div>
+					)}
+					<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
+						<div class="row" style={{ "--gap": "var(--space-2xs)" }}>
+							<input ref={avatarInputRef} id="edit-channel-avatar" type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarSelected} />
+							<button type="button" onClick={() => avatarInputRef.current?.click()}>
+								{t("channel.settings.chooseAvatarButton")}
+							</button>
+						</div>
+						<small class="field__foot">{avatarError || t("channel.settings.avatarHint")}</small>
+					</div>
+				</div>
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<label for="edit-channel-rules">{t("channels.create.rulesLabel")}</label>
-				<textarea id="edit-channel-rules" value={rules} maxLength={RULES_MAX_LENGTH} onInput={(e) => setRules(e.currentTarget.value)} rows={4} />
-			</div>
+				<div class="field stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<label for="edit-channel-name">{t("channels.create.nameLabel")}</label>
+					<input id="edit-channel-name" type="text" value={name} maxLength={NAME_MAX_LENGTH} onInput={(e) => setName(e.currentTarget.value)} required />
+					<div class="field__foot bar" style={{ "--gap": "var(--space-s)" }}>
+						<span class="grow">{t("channel.settings.nameHint")}</span>
+						<span class={`field__count${name.length >= NAME_MAX_LENGTH ? " field__count--over" : ""}`}>
+							{name.length} / {NAME_MAX_LENGTH}
+						</span>
+					</div>
+				</div>
 
-			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<label for="edit-channel-avatar">{t("channel.settings.changeAvatarLabel")}</label>
-				<input id="edit-channel-avatar" type="file" accept="image/*" onChange={handleAvatarSelected} />
-				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
-			</div>
+				<div class="field stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<label for="edit-channel-description">{t("channels.create.descriptionLabel")}</label>
+					<textarea id="edit-channel-description" value={description} maxLength={DESCRIPTION_MAX_LENGTH} onInput={(e) => setDescription(e.currentTarget.value)} rows={3} />
+					<div class="field__foot bar" style={{ "--gap": "var(--space-s)" }}>
+						<span class="grow" />
+						<span class={`field__count${description.length >= DESCRIPTION_MAX_LENGTH ? " field__count--over" : ""}`}>
+							{description.length} / {DESCRIPTION_MAX_LENGTH}
+						</span>
+					</div>
+				</div>
 
-			<div class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
-				<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
-				<label for="edit-channel-allow-chat-attachments">{t("channels.create.allowChatAttachmentsLabel")}</label>
-			</div>
+				<div class="field stack" style={{ "--gap": "var(--space-3xs)" }}>
+					<label for="edit-channel-rules">{t("channels.create.rulesLabel")}</label>
+					<textarea id="edit-channel-rules" value={rules} maxLength={RULES_MAX_LENGTH} onInput={(e) => setRules(e.currentTarget.value)} rows={4} />
+					<div class="field__foot bar" style={{ "--gap": "var(--space-s)" }}>
+						<span class="grow" />
+						<span class={`field__count${rules.length >= RULES_MAX_LENGTH ? " field__count--over" : ""}`}>
+							{rules.length} / {RULES_MAX_LENGTH}
+						</span>
+					</div>
+				</div>
+			</fieldset>
 
-			<fieldset class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+			<fieldset class="set-group stack" style={{ "--gap": "var(--space-s)" }}>
+				<legend>{t("channel.settings.groupRules")}</legend>
+				<p class="set-group__hint">{t("channel.settings.groupRulesHint")}</p>
+				<label class="opt">
+					<input id="edit-channel-allow-chat-attachments" type="checkbox" checked={allowChatAttachments} onChange={(e) => setAllowChatAttachments(e.currentTarget.checked)} />
+					<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+						<span class="opt__t">{t("channels.create.allowChatAttachmentsLabel")}</span>
+						<span class="opt__d">{t("channel.settings.allowChatAttachmentsHint")}</span>
+					</span>
+				</label>
+			</fieldset>
+
+			<fieldset class="set-group stack" style={{ "--gap": "var(--space-s)" }}>
 				<legend>{t("channel.settings.visibilityLabel")}</legend>
-				<p style={{ color: "var(--muted)" }}>
-					{t("channels.create.visibilityHint")}
-				</p>
+				<p class="set-group__hint">{t("channels.create.visibilityHint")}</p>
 				{groups.value.length === 0 ? (
 					<p style={{ color: "var(--muted)" }}>{t("channels.create.noGroups")}</p>
 				) : (
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+					<ul role="list" class="group-list">
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<span class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+								<label class="opt">
 									<input
 										id={`${instanceId}-group-${g.id}`}
 										type="checkbox"
 										checked={selectedGroupIds.has(g.id)}
 										onChange={() => toggleGroup(g.id)}
 									/>
-									<label for={`${instanceId}-group-${g.id}`}>
-										{t("channels.create.groupWithCount", { name: g.name, count: g.memberPubkeys.length })}
-									</label>
-								</span>
+									<span class="opt__t">{t("channels.create.groupWithCount", { name: g.name, count: g.memberPubkeys.length })}</span>
+								</label>
 							</li>
 						))}
 					</ul>
 				)}
 			</fieldset>
 
-			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button type="submit" disabled={busy || name.length === 0}>
-					{busy ? t("common.saving") : t("common.save")}
-				</button>
-				<button type="button" onClick={onSaved} disabled={busy}>
-					{t("common.cancel")}
-				</button>
-			</div>
-
-			<div style={{ paddingBlockStart: "var(--space-m)", borderBlockStart: "var(--border-width) solid var(--border)" }}>
-				<button type="button" class="btn--ghost btn--danger" disabled={busy} onClick={handleDelete}>
-					<IconTrash /> {t("channel.settings.deleteButton")}
-				</button>
-			</div>
+			<section class="danger-zone box" style={{ "--pad": "var(--space-s)" }}>
+				<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
+					<h3>{t("channel.settings.deleteTitle")}</h3>
+					<p>{t("channel.settings.deleteExplain")}</p>
+				</div>
+				{confirming ? (
+					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+						<label for={`${instanceId}-confirm`}>{t("channel.settings.deleteTypeName", { name: channelRow.name })}</label>
+						<input id={`${instanceId}-confirm`} type="text" value={confirmText} onInput={(e) => setConfirmText(e.currentTarget.value)} />
+						<div class="row" style={{ "--gap": "var(--space-2xs)" }}>
+							<button type="button" class="btn--ghost" onClick={() => setConfirming(false)}>
+								{t("common.cancel")}
+							</button>
+							<button type="button" class="danger-zone__go" disabled={busy || confirmText !== channelRow.name} onClick={handleDelete}>
+								<IconTrash /> {t("channel.settings.deleteButton")}
+							</button>
+						</div>
+					</div>
+				) : (
+					<button type="button" class="danger-zone__go rigid" onClick={() => setConfirming(true)}>
+						<IconTrash /> {t("channel.settings.deleteButton")}
+					</button>
+				)}
+			</section>
 		</form>
 	);
 }
@@ -219,6 +315,10 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// CHANNEL-V2 часть B5 — кнопка «Новая запись» переехала в шапку экрана
 	// (Screen's actions), composerOpen поднят сюда из ChannelPostsTab.
 	const [composerOpen, setComposerOpen] = useState(false);
+	// CHANNEL-V2 часть G4 — save-bar настроек рисуется в footer Screen'а (вне
+	// ChannelSettingsForm), dirty/busy/formId сообщаются наверх тем же
+	// приёмом, что onSlicesChange у ChannelChat.
+	const [settingsBar, setSettingsBar] = useState({ dirty: false, busy: false, formId: "", canSave: false, onCancel: () => {} });
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
@@ -424,6 +524,18 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 						allowAttachments={channelRow.allowChatAttachments}
 						limiter={limiter}
 					/>
+				) : tab === "settings" && isOwner ? (
+					<div class="save-bar bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<span class={`save-bar__state grow${settingsBar.dirty ? " save-bar__state--dirty" : ""}`}>
+							{settingsBar.busy ? t("common.saving") : settingsBar.dirty ? t("channel.settings.dirtyNotice") : t("channel.settings.savedNotice")}
+						</span>
+						<button type="button" class="btn--ghost" onClick={settingsBar.onCancel} disabled={settingsBar.busy}>
+							{t("common.cancel")}
+						</button>
+						<button type="submit" form={settingsBar.formId} class="btn--primary" disabled={!settingsBar.canSave}>
+							{settingsBar.busy ? t("common.saving") : t("common.save")}
+						</button>
+					</div>
 				) : undefined
 			}
 		>
@@ -446,6 +558,7 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 							refresh();
 						}}
 						onDeleted={() => openChannel(null)}
+						onBarChange={setSettingsBar}
 					/>
 				</section>
 			)}

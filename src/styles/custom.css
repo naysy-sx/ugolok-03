@@ -8369,3 +8369,291 @@ button[type="button"].media-mini-bar-btn {
 		opacity: 1;
 	}
 }
+
+/* F1 — статистика модерации. */
+.mod-stat {
+	flex-basis: 8rem;
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+}
+.mod-stat__n {
+	display: block;
+	font-size: var(--step-2);
+	font-weight: var(--weight-bold);
+	font-family: var(--font-display);
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+.mod-stat__l {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+.mod-stat--alert {
+	border-color: var(--warn-edge);
+	background-color: var(--warn-surface);
+}
+.mod-stat--alert .mod-stat__n {
+	color: var(--warn);
+}
+
+/* F2 — фильтр вместо трёх списков подряд. */
+.mod-filter {
+	font-size: var(--step--1);
+	padding-block: var(--space-3xs);
+	padding-inline: var(--space-xs);
+	border-radius: var(--radius-full);
+	background: none;
+	border: var(--border-width) solid var(--border);
+	color: var(--muted);
+	white-space: nowrap;
+}
+.mod-filter[aria-pressed="true"] {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+	border-color: var(--fg);
+}
+
+/* F3 — карточка жалобы. Непрочитанное отличается полосой слева, не
+   opacity: прежний opacity:0.7 гасил и текст жалобы — то есть ровно то,
+   что модератор читает. Контраст важнее эффекта "потускнело". */
+.mod-report {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	border-inline-start: 3px solid var(--warn);
+	background-color: var(--surface);
+}
+.mod-report--viewed {
+	border-inline-start-color: var(--border);
+	background: none;
+}
+.mod-report__reason {
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+}
+.mod-report__new {
+	font-size: var(--step--2);
+	color: var(--accent-contrast);
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+	padding-inline: var(--space-2xs);
+}
+/* Текст жалобы — чужой и, возможно, враждебный: моноширинно и в рамке,
+   чтобы его нельзя было спутать с интерфейсом. */
+.mod-report__quote {
+	margin-block: 0;
+	margin-inline: 0;
+	padding-block: var(--space-2xs);
+	padding-inline-start: var(--space-s);
+	border-inline-start: 2px solid var(--border);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--font-mono);
+	font-size: var(--step--2);
+}
+.mod-report__flow {
+	color: var(--muted);
+	font-size: var(--step--2);
+	min-inline-size: 0;
+}
+
+/* F4 — компактная строка личности (ContactIdentity, 2.5rem+имя+био блоком,
+   неуместен в строке "от X к Y" — два блока по 40px и два био). */
+.identity-inline {
+	min-inline-size: 0;
+}
+.identity-inline__ava {
+	inline-size: 1.6rem;
+	block-size: 1.6rem;
+	aspect-ratio: 1;
+	flex: none;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+}
+.identity-inline__ava-fallback {
+	display: grid;
+	place-items: center;
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	color: var(--muted);
+}
+.identity-inline__name {
+	font-weight: var(--weight-bold);
+	color: var(--fg);
+	font-size: var(--step--1);
+}
+.identity-inline__name--npub {
+	font-family: var(--font-mono);
+	font-weight: 400;
+	font-size: var(--step--2);
+	color: var(--muted);
+}
+
+/* F5 — заблокированные, список чипов. */
+.mod-banned {
+	list-style: none;
+	margin-block: 0;
+	padding-inline-start: 0;
+}
+.mod-banned li {
+	border: var(--border-width) solid var(--bad-edge);
+	background-color: var(--bad-surface);
+	border-radius: var(--radius-full);
+	padding-block: var(--space-3xs);
+	padding-inline: var(--space-2xs);
+}
+
+/* G1 — три группы полей настроек, разделительная линия принадлежит группе,
+   зазор — родителю. */
+.set-form {
+	max-inline-size: 44rem;
+}
+.set-group {
+	border: 0;
+	margin-inline: 0;
+	padding-inline: 0;
+	padding-block: 0;
+	border-block-start: var(--border-width) solid var(--border);
+	padding-block-start: var(--space-l);
+}
+.set-group:first-of-type {
+	border-block-start: 0;
+	padding-block-start: 0;
+}
+.set-group > legend {
+	padding-inline: 0;
+	font-weight: var(--weight-bold);
+	font-size: var(--step-0);
+}
+.set-group__hint {
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block: 0;
+}
+
+/* G2 — поле с превью и счётчиком. maxLength молча обрезает, без счётчика
+   человек не понимает, почему текст перестал вводиться. */
+.field > label {
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+}
+.field input,
+.field textarea {
+	inline-size: 100%;
+}
+.field__foot {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+.field__count {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.field__count--over {
+	color: var(--bad);
+}
+.avatar-field__preview {
+	inline-size: 4.5rem;
+	block-size: 4.5rem;
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+}
+.avatar-field__preview--empty {
+	display: grid;
+	place-items: center;
+	color: var(--muted);
+	font-size: var(--step-1);
+	font-weight: var(--weight-bold);
+}
+
+/* G3 — переключатели вместо голых чекбоксов: что включается и чем грозит
+   нигде не было сказано. */
+.opt {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: var(--space-s);
+	align-items: start;
+	cursor: pointer;
+}
+.opt input {
+	inline-size: 1.1rem;
+	block-size: 1.1rem;
+	margin-block-start: 0.25rem;
+	margin-inline: 0;
+	accent-color: var(--accent);
+}
+.opt__t {
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+}
+.opt__d {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+.group-list {
+	list-style: none;
+	margin-block: 0;
+	padding-inline-start: 0;
+}
+.group-list .opt {
+	align-items: center;
+	padding-block: var(--space-2xs);
+	padding-inline: var(--space-s);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+}
+.group-list .opt:has(input:checked) {
+	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent) 8%, transparent);
+}
+
+/* G4 — сохранение в подвале Screen'а, с индикатором изменений. */
+.save-bar__state {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.save-bar__state--dirty {
+	color: var(--warn);
+}
+
+/* G5 — опасная зона: двухшаговое подтверждение вместо window.confirm
+   (необратимая операция — половина людей жмёт "ОК" не читая). */
+.danger-zone {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: var(--space-s);
+	align-items: center;
+	border: var(--border-width) solid var(--bad-edge);
+	background-color: var(--bad-surface);
+	border-radius: var(--radius);
+}
+.danger-zone h3 {
+	font-size: var(--step--1);
+	font-family: var(--font-body);
+	margin-block: 0;
+}
+.danger-zone p {
+	color: var(--muted);
+	font-size: var(--step--2);
+	margin-block: 0;
+}
+.danger-zone__go {
+	background: none;
+	border-color: var(--bad);
+	color: var(--bad);
+	font-weight: var(--weight-bold);
+}
+.danger-zone__go:hover:not(:disabled) {
+	background-color: var(--bad);
+	color: var(--accent-contrast);
+}
+@container (max-inline-size: 30rem) {
+	.danger-zone {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

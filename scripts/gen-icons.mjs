@@ -17,6 +17,7 @@ const OUT = "src/ui/icons";
 const MAP = {
 	"activity-log": "notebook",
 	"arrow-left": "arrow-left",
+	"arrow-right": "arrow-right",
 	archive: "archive",
 	bell: "bell",
 	calendar: "calendar-blank",
