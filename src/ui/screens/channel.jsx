@@ -23,9 +23,12 @@ import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import ChannelChat from "../components/channel-chat.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
 import Screen from "../components/screen.jsx";
+import ActionsMenu from "../components/actions-menu.jsx";
 import IconTrash from "../icons/trash.jsx";
+import IconPencil from "../icons/pencil.jsx";
+import IconGear from "../icons/gear.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
-import { ChannelHead, ChannelPostsTab } from "../components/channel-feed.jsx";
+import { ChannelLead, ChannelSubtitle, ChannelAbout, ChannelPostsTab } from "../components/channel-feed.jsx";
 import ChannelPostPage from "../components/channel-post-page.jsx";
 
 const NAME_MAX_LENGTH = 100;
@@ -212,6 +215,9 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [reactionCountsByPost, setReactionCountsByPost] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
 	const [chatSlices, setChatSlices] = useState({ counts: {}, onOpen: () => {} });
+	// CHANNEL-V2 часть B5 — кнопка «Новая запись» переехала в шапку экрана
+	// (Screen's actions), composerOpen поднят сюда из ChannelPostsTab.
+	const [composerOpen, setComposerOpen] = useState(false);
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
@@ -339,26 +345,14 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		);
 	}
 
-	return (
-		<Screen
-			breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }}
-			title={channelRow.name || t("channels.card.untitled")}
-			slices={
-				tab === "posts" ? (
-					<MediaButtons counts={postsSlicesCounts()} onOpen={handleOpenPostsSlice} />
-				) : tab === "chat" ? (
-					<MediaButtons counts={chatSlices.counts} onOpen={chatSlices.onOpen} />
-				) : undefined
-			}
-		>
-			<ChannelHead channelRow={channelRow} />
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-
-			<nav class="tabs row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-label={t("channel.tabsAriaLabel")}>
+	// CHANNEL-V2 часть B3 — вкладки и срезы в ОДНОЙ закреплённой полосе (были
+	// две: <nav class="tabs"> внутри прокручиваемого children уезжала вверх
+	// при прокрутке, MediaButtons жили в slices отдельно). .reel — вкладок
+	// максимум четыре, у владельца на узком экране не переносятся, а
+	// прокручиваются.
+	const tabsBar = (
+		<div class="ch-bar bar" style={{ "--gap": "var(--space-s)", "--align": "stretch" }}>
+			<nav class="tabs reel grow" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
 				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
 					{t("channel.tabs.posts")}
 				</button>
@@ -376,6 +370,53 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 					</button>
 				)}
 			</nav>
+			<div class="ch-bar__slices bar rigid" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+				{tab === "posts" ? (
+					<MediaButtons counts={postsSlicesCounts()} onOpen={handleOpenPostsSlice} />
+				) : tab === "chat" ? (
+					<MediaButtons counts={chatSlices.counts} onOpen={chatSlices.onOpen} />
+				) : null}
+			</div>
+		</div>
+	);
+
+	return (
+		<Screen
+			breadcrumb={{ label: t("nav.channels"), onBack: () => openChannel(null) }}
+			title={channelRow.name || t("channels.card.untitled")}
+			lead={<ChannelLead channelRow={channelRow} />}
+			subtitle={<ChannelSubtitle channelRow={channelRow} />}
+			headerExtra={<ChannelAbout channelRow={channelRow} />}
+			actions={
+				<>
+					{isOwner && tab === "posts" && (
+						<button type="button" class="btn--primary" onClick={() => setComposerOpen(true)}>
+							<IconPencil /> {t("channel.writePostButton")}
+						</button>
+					)}
+					{/* CHANNEL-V2 часть B5 — «Скопировать ссылку» пропущен: готового
+					    формата внутренней ссылки на канал в проекте нет (ТЗ явно
+					    разрешает пропустить пункт в этом случае, не выдумывая формат).
+					    Меню остаётся только владельцу — без ссылки единственный
+					    пункт в нём — «Настройки», гостю показывать пустое меню
+					    незачем. */}
+					{isOwner && (
+						<ActionsMenu label={t("channel.channelActionsAria", { name: channelRow.name })}>
+							<button type="button" onClick={() => setTab("settings")}>
+								<IconGear /> {t("channel.tabs.settings")}
+							</button>
+						</ActionsMenu>
+					)}
+				</>
+			}
+			slices={tabsBar}
+			feed={tab === "posts" || tab === "chat"}
+		>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</p>
+			)}
 
 			{tab === "settings" && isOwner && (
 				<section role="tabpanel">
@@ -408,6 +449,9 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 					reactionCountsByPost={reactionCountsByPost}
 					onLoadMore={handleLoadMore}
 					onPublished={refresh}
+					composerOpen={composerOpen}
+					onComposerClose={() => setComposerOpen(false)}
+					onOpenComposer={() => setComposerOpen(true)}
 				/>
 			)}
 

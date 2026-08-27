@@ -16,17 +16,22 @@ function firstVisual(attachments) {
 	return (attachments ?? []).find((a) => a.type === "image" || a.type === "video") ?? null;
 }
 
+// CHANNEL-V2 часть C2 — решение отменено: было резать текст заметки без
+// заголовка на 90-м символе и выдавать обрубок как title (рисуется <h3>
+// жирным) — "жирные обрубки" в ленте. Первая строка КОРОТКОГО текста — это
+// настоящий заголовок (автор так и написал), обрубок посреди фразы —
+// НЕ заголовок: synthetic:true рисуется обычным текстом (feed-title--synthetic),
+// обрезает .truncate (--lines:3), не slice (не режет слово посреди).
 function feedText(post) {
 	const kind = kindOf(post);
 	const bodyPreview = toPreviewText(post.text, { profile: "rich", maxLength: 180 });
-	if (kind === "article" && post.title) return { title: post.title, excerpt: bodyPreview };
-	if (kind === "link") return { title: post.title || post.linkUrl || "", excerpt: bodyPreview };
+	if (kind === "article" && post.title) return { title: post.title, excerpt: bodyPreview, synthetic: false };
+	if (kind === "link") return { title: post.title || post.linkUrl || "", excerpt: bodyPreview, synthetic: false };
 	const plain = toPreviewText(post.text, { profile: "rich", maxLength: 400 });
-	if (!plain) return { title: t(`recordKind.${kind}`), excerpt: "" };
+	if (!plain) return { title: t(`recordKind.${kind}`), excerpt: "", synthetic: true };
 	const nl = plain.indexOf("\n");
-	if (nl > 0) return { title: plain.slice(0, nl), excerpt: plain.slice(nl + 1).trim() };
-	if (plain.length <= 90) return { title: plain, excerpt: "" };
-	return { title: plain.slice(0, 90) + "…", excerpt: plain.slice(90).trim() };
+	if (nl > 0 && nl <= 90) return { title: plain.slice(0, nl), excerpt: plain.slice(nl + 1).trim(), synthetic: false };
+	return { title: plain, excerpt: "", synthetic: true };
 }
 
 function reactionSummary(counts) {
@@ -65,39 +70,53 @@ function FeedThumb({ attachment }) {
 	return <img class="feed-thumb" src={url} alt="" />;
 }
 
-// ТЗ редизайн канала A — компактный элемент ленты, без .rec и без дерева комментариев.
-export default function FeedItem({ post, commentCount, reactionCounts, onOpen }) {
+function isoOf(unixSeconds) {
+	return new Date(unixSeconds * 1000).toISOString();
+}
+
+// CHANNEL-V2 часть C1 — было "5.2rem | 1fr | auto" без единого медиа- или
+// контейнерного запроса: на узкой колонке фиксированные 5.2rem под вид
+// записи отнимали место у заголовка, а превью/счётчик/реакции стояли в
+// столбик в правой колонке. Теперь две колонки (контент/превью), вид записи
+// и время — строкой над заголовком, счётчики — строкой под текстом.
+export default function FeedItem({ post, commentCount, reactionCounts, unread, onOpen }) {
 	const kind = kindOf(post);
-	const { title, excerpt } = feedText(post);
+	const { title, excerpt, synthetic } = feedText(post);
 	const visual = firstVisual(post.attachments);
 	const reacts = reactionSummary(reactionCounts);
 	const hasChips = post.dueAt !== null || (post.tags && post.tags.length > 0);
 
 	return (
 		<button type="button" class="feed-item" onClick={onOpen}>
-			<div>
+			<span class="feed-meta row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
+				{unread && <span class="feed-unread" aria-label={t("channel.feedUnreadAria")} />}
 				<span class="feed-kind">{t(`recordKind.${kind}`)}</span>
-				<time class="feed-time">{formatDateTime(post.createdAt)}</time>
-			</div>
-			<div>
-				<h3 class="feed-title">{title}</h3>
-				{excerpt ? <p class="feed-excerpt">{excerpt}</p> : null}
-				{hasChips && (
-					<div class="rec-chips">
-						<DueChip post={post} />
-						{(post.tags ?? []).map((tag) => (
-							<span class="rec-chip rec-chip--tag" key={tag}>
-								{tag}
-							</span>
-						))}
-					</div>
-				)}
-			</div>
-			<div class="feed-aside">
-				{visual && <FeedThumb attachment={visual} />}
+				<time class="feed-time" dateTime={isoOf(post.createdAt)}>{formatDateTime(post.createdAt)}</time>
+			</span>
+
+			{synthetic
+				? <p class="feed-title feed-title--synthetic truncate" style={{ "--lines": "3" }}>{title}</p>
+				: <h3 class="feed-title">{title}</h3>}
+
+			{excerpt ? <p class="feed-excerpt truncate" style={{ "--lines": "2" }}>{excerpt}</p> : null}
+
+			{hasChips && (
+				<span class="feed-chips row" style={{ "--gap": "var(--space-3xs)" }}>
+					<DueChip post={post} />
+					{(post.tags ?? []).map((tag) => (
+						<span class="rec-chip rec-chip--tag" key={tag}>
+							{tag}
+						</span>
+					))}
+				</span>
+			)}
+
+			<span class="feed-foot row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<span class="feed-count">{t("channel.feedCommentCount", { count: commentCount ?? 0 })}</span>
 				{reacts ? <span class="feed-reacts">{reacts}</span> : null}
-			</div>
+			</span>
+
+			{visual && <FeedThumb attachment={visual} />}
 		</button>
 	);
 }

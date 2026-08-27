@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { t } from "../signals/i18n.js";
 import { openChannelPost } from "../signals/place.js";
+import { groupByDay } from "../group-by-day.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
 import { PostComposer } from "./channel-shared.jsx";
 import FeedItem from "./feed-item.jsx";
@@ -13,55 +14,59 @@ function kickerLabel(role) {
 	return t("channel.kicker.available");
 }
 
-export function ChannelHead({ channelRow }) {
-	const [rulesOpen, setRulesOpen] = useState(false);
-	const popRef = useRef(null);
+// CHANNEL-V2 часть B4 — ChannelHead (единый блок в прокручиваемой ленте:
+// аватар/кикер/описание/всплывашка правил) заменён тремя частями, которые
+// channel.jsx раскладывает по слотам Screen — шапка больше не уезжает при
+// прокрутке, не съедает первый экран на телефоне.
+export function ChannelLead({ channelRow }) {
+	return <ChannelAvatarThumb channel={channelRow} small />;
+}
 
-	useEffect(() => {
-		if (!rulesOpen) return;
-		function onDoc(e) {
-			if (!popRef.current?.contains(e.target)) setRulesOpen(false);
-		}
-		function onKey(e) {
-			if (e.key === "Escape") setRulesOpen(false);
-		}
-		document.addEventListener("mousedown", onDoc);
-		document.addEventListener("keydown", onKey);
-		return () => {
-			document.removeEventListener("mousedown", onDoc);
-			document.removeEventListener("keydown", onKey);
-		};
-	}, [rulesOpen]);
-
+export function ChannelSubtitle({ channelRow }) {
 	return (
-		<div class="ch-head">
-			<ChannelAvatarThumb channel={channelRow} />
-			<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-				<p class="ch-kicker">
-					{kickerLabel(channelRow.role)}
-					{channelRow.updatedAt ? ` · ${t("channel.updatedLabel", { date: formatDateTime(channelRow.updatedAt) })}` : ""}
-				</p>
-				{channelRow.description && <p class="channel-description">{channelRow.description}</p>}
-			</div>
-			{channelRow.rules ? (
-				<div class="rules-pop" ref={popRef}>
-					<button type="button" class="chip" onClick={() => setRulesOpen((v) => !v)}>
-						{t("channel.rulesChip")}
-					</button>
-					{rulesOpen && (
-						<div class="rules-panel">
-							<p>{channelRow.rules}</p>
+		<p class="ch-kicker truncate" style={{ "--lines": "1" }}>
+			{kickerLabel(channelRow.role)}
+			{channelRow.updatedAt ? ` · ${t("channel.updatedLabel", { date: formatDateTime(channelRow.updatedAt) })}` : ""}
+		</p>
+	);
+}
+
+// Раскрытие вместо всплывающей панели: панель была на position:absolute с
+// физическими top/right, закрывалась по клику вне (два глобальных слушателя
+// на document) и перекрывала первый пост. Раскрытие ничего не перекрывает,
+// живёт в закреплённой шапке и не требует ни одного слушателя.
+export function ChannelAbout({ channelRow }) {
+	const [open, setOpen] = useState(false);
+	if (!channelRow.description && !channelRow.rules) return null;
+	return (
+		<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+			<button type="button" class="ch-about-toggle self-start" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+				{t("channel.aboutToggle")}
+			</button>
+			{open && (
+				<dl class="ch-about box stack" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-s)" }}>
+					{channelRow.description && (
+						<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+							<dt>{t("channels.create.descriptionLabel")}</dt>
+							<dd>{channelRow.description}</dd>
 						</div>
 					)}
-				</div>
-			) : (
-				<span />
+					{channelRow.rules && (
+						<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+							<dt>{t("channels.create.rulesLabel")}</dt>
+							<dd>{channelRow.rules}</dd>
+						</div>
+					)}
+				</dl>
 			)}
 		</div>
 	);
 }
 
-// ТЗ редизайн канала A — вкладка «Посты»: компактная лента без дерева комментариев.
+// CHANNEL-V2 часть B5 — «Новая запись» переехала в шапку экрана (Screen's
+// actions, channel.jsx): composerOpen/onComposerClose приходят пропами
+// сверху вместо локального showComposer, кнопка-триггер здесь больше не
+// рисуется. C3/C4 — разделители дней и осмысленное пустое состояние.
 export function ChannelPostsTab({
 	ownerPubkey,
 	privKey,
@@ -75,20 +80,16 @@ export function ChannelPostsTab({
 	reactionCountsByPost,
 	onLoadMore,
 	onPublished,
+	composerOpen,
+	onComposerClose,
+	onOpenComposer,
 }) {
-	const [showComposer, setShowComposer] = useState(false);
-
 	return (
 		<section role="tabpanel" class="stack" style={{ "--gap": "var(--space-s)" }}>
 			<div class="ch-toolbar">
 				<span class="ch-stats">{t("channel.sortNewestFirst")}</span>
-				{isOwner && !showComposer && (
-					<button type="button" class="post-cta--compact" onClick={() => setShowComposer(true)}>
-						<IconPencil /> {t("channel.writePostButton")}
-					</button>
-				)}
 			</div>
-			{isOwner && showComposer && (
+			{isOwner && composerOpen && (
 				<PostComposer
 					ownerPubkey={ownerPubkey}
 					privKey={privKey}
@@ -96,10 +97,10 @@ export function ChannelPostsTab({
 					channelId={channelId}
 					limiter={limiter}
 					onPublished={() => {
-						setShowComposer(false);
+						onComposerClose();
 						onPublished();
 					}}
-					onCancel={() => setShowComposer(false)}
+					onCancel={onComposerClose}
 				/>
 			)}
 			{hasMore && (
@@ -108,17 +109,32 @@ export function ChannelPostsTab({
 				</button>
 			)}
 			{posts.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("channel.noPosts")}</p>
+				<div class="empty stack" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+					<h2>{t("channel.emptyPostsTitle")}</h2>
+					<p>{isOwner ? t("channel.emptyPostsOwnerHint") : t("channel.emptyPostsGuestHint")}</p>
+					{isOwner && (
+						<button type="button" class="btn--primary" onClick={onOpenComposer}>
+							<IconPencil /> {t("channel.writePostButton")}
+						</button>
+					)}
+				</div>
 			) : (
-				<div>
-					{[...posts].reverse().map((post) => (
-						<FeedItem
-							key={post.id}
-							post={post}
-							commentCount={commentCounts[post.id] ?? 0}
-							reactionCounts={reactionCountsByPost[post.id]}
-							onOpen={() => openChannelPost(channelId, post.id)}
-						/>
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+					{groupByDay([...posts].reverse()).map(({ key, dayLabel, items }) => (
+						<section key={key} class="stack" style={{ "--gap": "0" }}>
+							<h2 class="day-sep bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+								{dayLabel}
+							</h2>
+							{items.map((post) => (
+								<FeedItem
+									key={post.id}
+									post={post}
+									commentCount={commentCounts[post.id] ?? 0}
+									reactionCounts={reactionCountsByPost[post.id]}
+									onOpen={() => openChannelPost(channelId, post.id)}
+								/>
+							))}
+						</section>
 					))}
 				</div>
 			)}

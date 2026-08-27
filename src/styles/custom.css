@@ -5313,16 +5313,9 @@ button[type="button"].media-mini-bar-btn {
  *  Внутренняя страница канала (channel.jsx)                          *
  * ================================================================== */
 
-/* Описание канала — не проходной абзац, курсив + черта впереди (пользователь:
-   "подумай сам и реши как лучше"), тот же приём, что цитата, лёгкий акцент
-   слева тонкой линией по цвету границы. */
-.channel-description {
-	margin-block-start: 0;
-	font-style: italic;
-	color: var(--muted);
-	border-inline-start: var(--border-width) solid var(--border);
-	padding-inline-start: var(--space-s);
-}
+/* .channel-description удалён (CHANNEL-V2 B4) — ChannelHead, единственный
+   потребитель класса, заменён ChannelAbout (раскрытие в шапке, описание
+   рисуется как <dd> внутри .ch-about, не отдельным курсивным абзацем). */
 
 /* "Написать пост" — главное действие канала (пользователь: "выглядит как
    маленькая заурядная кнопочка"), крупнее обычной кнопки на ~25% и в акцентном
@@ -7787,12 +7780,10 @@ button[type="button"].media-mini-bar-btn {
  *  «Сегодня». .chip глобальный не переопределяем.                     *
  * ================================================================== */
 
-.ch-head {
-	display: grid;
-	grid-template-columns: auto 1fr auto;
-	gap: var(--space-s);
-	align-items: start;
-}
+/* .ch-head/.rules-pop/.rules-panel удалены (CHANNEL-V2 B4) — ChannelHead
+   заменён ChannelLead/ChannelSubtitle/ChannelAbout (слоты Screen), правила
+   канала теперь раскрытие в закреплённой шапке, не всплывающая панель на
+   position:absolute. */
 .ch-kicker,
 .ch-stats {
 	color: var(--muted);
@@ -7804,36 +7795,6 @@ button[type="button"].media-mini-bar-btn {
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-s);
-}
-.rules-pop .chip {
-	display: inline-flex;
-	background: var(--surface-raised);
-	border: var(--border-width) solid var(--border);
-	color: var(--fg);
-	border-radius: var(--radius-full);
-	padding: 0.28rem 0.7rem;
-	font-size: var(--step--1);
-}
-.rules-pop {
-	position: relative;
-}
-.rules-panel {
-	position: absolute;
-	z-index: 6;
-	top: calc(100% + 6px);
-	right: 0;
-	width: min(26rem, 82vw);
-	background: var(--surface-raised);
-	border: var(--border-width) solid var(--border);
-	border-radius: var(--radius-lg);
-	box-shadow: var(--shadow);
-	padding: var(--space-s);
-}
-.rules-panel p {
-	margin: 0.4rem 0 0;
-	color: var(--muted);
-	white-space: pre-wrap;
-	font-size: var(--step--1);
 }
 
 .composer-card {
@@ -7852,31 +7813,48 @@ button[type="button"].media-mini-bar-btn {
 	border-color: transparent;
 }
 
+/* CHANNEL-V2 часть C1 — было "5.2rem | 1fr | auto" без единого медиа- или
+   контейнерного запроса: на узкой колонке фиксированные 5.2rem под вид
+   записи отнимали место у заголовка. Вид и время переехали в строку над
+   заголовком, счётчик/реакции — строкой под текстом (feed-aside удалён). */
 .feed-item {
 	display: grid;
-	grid-template-columns: 5.2rem minmax(0, 1fr) auto;
-	gap: var(--space-s);
-	width: 100%;
-	text-align: left;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"meta    thumb"
+		"title   thumb"
+		"excerpt thumb"
+		"chips   thumb"
+		"foot    thumb";
+	column-gap: var(--space-s);
+	row-gap: var(--space-3xs);
+	inline-size: 100%;
+	text-align: start;
 	background: none;
 	border: 0;
-	border-bottom: var(--border-width) solid var(--border);
+	border-block-end: var(--border-width) solid var(--border);
 	border-radius: 0;
-	padding: var(--space-s) 0;
+	padding-block: var(--space-s);
+	padding-inline: var(--space-2xs);
 	color: inherit;
 	font: inherit;
 	box-shadow: none;
 }
 .feed-item:hover {
-	background: color-mix(in oklch, var(--surface-raised) 55%, transparent);
 	background-color: color-mix(in oklch, var(--surface-raised) 55%, transparent);
 }
 .feed-item:active {
 	transform: none;
 }
+.feed-meta    { grid-area: meta; }
+.feed-title   { grid-area: title; }
+.feed-excerpt { grid-area: excerpt; }
+.feed-chips   { grid-area: chips; }
+.feed-foot    { grid-area: foot; }
+.feed-thumb   { grid-area: thumb; align-self: start; }
+
 .feed-kind,
 .feed-time {
-	display: block;
 	color: var(--muted);
 	font-size: var(--step--2);
 }
@@ -7885,43 +7863,55 @@ button[type="button"].media-mini-bar-btn {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
+.feed-unread {
+	inline-size: var(--space-2xs);
+	block-size: var(--space-2xs);
+	border-radius: 50%;
+	background-color: var(--accent);
+	flex: none;
+}
 .feed-title {
-	margin: 0 0 0.15rem;
 	font-size: var(--step-1);
 	font-weight: var(--weight-bold);
 	font-family: var(--font-body);
+	line-height: 1.3;
+	margin-block: 0;
+}
+/* CHANNEL-V2 часть C2 — не заголовок, а начало текста заметки без
+   заголовка (обрубок посреди фразы) — не должен выглядеть как заголовок. */
+.feed-title--synthetic {
+	font-size: var(--step-0);
+	font-weight: 400;
 }
 .feed-excerpt {
-	margin: 0;
 	color: var(--muted);
 	font-size: var(--step--1);
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
+	margin-block: 0;
 }
-.feed-aside {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 0.4rem;
-}
-.feed-count {
-	color: var(--muted);
-	font-size: var(--step--1);
-}
-.feed-thumb {
-	width: 3.25rem;
-	height: 3.25rem;
-	border-radius: var(--radius-sm);
-	object-fit: cover;
-	background: var(--surface);
-}
+.feed-count,
 .feed-reacts {
-	display: flex;
-	gap: 0.25rem;
 	color: var(--muted);
 	font-size: var(--step--2);
+}
+.feed-thumb {
+	inline-size: 4rem;
+	block-size: 4rem;
+	border-radius: var(--radius-sm);
+	object-fit: cover;
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+}
+/* Контейнер объявлен на .content-wrapper (custom.css) — здесь только запрос.
+   Медиазапрос был бы неверен: рядом стоит сайдбар, ширина окна и ширина
+   колонки — разные величины. */
+@container (max-inline-size: 30rem) {
+	.feed-thumb {
+		inline-size: 3rem;
+		block-size: 3rem;
+	}
+	.feed-title {
+		font-size: var(--step-0);
+	}
 }
 
 .post-page {
@@ -8148,4 +8138,102 @@ button[type="button"].media-mini-bar-btn {
    и выталкивает кнопки действий за край. Тот же приём, что уже стоит на h1. */
 .screen-title {
 	min-inline-size: 0;
+}
+
+/* B3 — вкладки слева, срезы справа — одна закреплённая полоса вместо двух
+   (вкладки раньше жили в прокручиваемом контенте и уезжали вверх). */
+.ch-bar {
+	justify-content: space-between;
+	min-inline-size: 0;
+}
+/* .reel даёт прокрутку — полосу прокрутки под вкладками прячем, она тут
+   визуальный мусор: вкладок максимум четыре и они видны почти всегда. */
+.tabs.reel {
+	scrollbar-width: none;
+}
+.tabs.reel::-webkit-scrollbar {
+	display: none;
+}
+.ch-bar .tab {
+	white-space: nowrap;
+}
+/* Срезы прижаты к нижней границе полосы, на одну линию с подчёркиванием
+   активной вкладки. */
+.ch-bar__slices {
+	padding-block-end: var(--space-2xs);
+}
+
+/* B4 — раскрывающийся блок "О канале" вместо всплывающей панели. */
+.ch-about-toggle {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--muted);
+	font-size: var(--step--2);
+	text-align: start;
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+.ch-about-toggle:hover {
+	color: var(--fg);
+	background: none;
+}
+.ch-about {
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	font-size: var(--step--1);
+}
+.ch-about dt {
+	color: var(--muted);
+	font-size: var(--step--2);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+/* Правила канала пишут списком в несколько строк — переносы значимы. */
+.ch-about dd {
+	margin-inline-start: 0;
+	white-space: pre-wrap;
+}
+
+/* C3 — разделители дней. Одна линия слева и справа от подписи — тот же
+   разделитель в ленте и в чате (E3), поэтому класс общий, живёт не в
+   секции ленты. */
+.day-sep {
+	color: var(--muted);
+	font-size: var(--step--2);
+	font-family: var(--font-body);
+	font-weight: 400;
+	margin-block: 0;
+	padding-block: var(--space-s);
+	position: sticky;
+	inset-block-start: 0;
+	background-color: var(--bg);
+	z-index: 1;
+}
+.day-sep::before,
+.day-sep::after {
+	content: "";
+	flex: 1;
+	block-size: 1px;
+	background-color: var(--border);
+}
+
+/* C4 — пустое состояние ленты. Переиспользуется в чате (E) и в модерации
+   (F) — свои классы под каждое пустое место не заводятся. */
+.empty {
+	color: var(--muted);
+	text-align: center;
+	padding-block: var(--space-xl);
+	padding-inline: var(--space-s);
+}
+.empty h2 {
+	color: var(--fg);
+	font-size: var(--step-1);
+	font-family: var(--font-body);
+	margin-block: 0;
+}
+.empty p {
+	font-size: var(--step--1);
+	margin-block: 0;
 }
