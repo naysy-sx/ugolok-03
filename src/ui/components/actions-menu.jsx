@@ -7,7 +7,7 @@ import IconDotsVertical from "../icons/dots-vertical.jsx";
 // клавиатуры "из коробки". Закрытие по клику вне/по пункту/по Escape —
 // useDetailsMenu (тот же хук использует AddToGroupControl, contacts.jsx,
 // для чекбокс-варианта меню).
-export default function ActionsMenu({ label, children }) {
+export default function ActionsMenu({ label, children, popClass }) {
 	const { ref, handleMenuClick } = useDetailsMenu();
 
 	return (
@@ -15,7 +15,7 @@ export default function ActionsMenu({ label, children }) {
 			<summary class="icon-btn" aria-label={label}>
 				<IconDotsVertical />
 			</summary>
-			<div class="menu-pop stack" style={{ "--gap": "2px" }}>
+			<div class={`menu-pop stack${popClass ? ` ${popClass}` : ""}`} style={{ "--gap": "2px" }}>
 				{children}
 			</div>
 		</details>

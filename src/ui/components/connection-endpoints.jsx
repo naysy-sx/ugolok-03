@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { t } from "../signals/i18n.js";
+import IconChevronDown from "../icons/chevron-down.jsx";
 import {
 	readBootstrapEndpoints,
 	writeBootstrapEndpoints,
@@ -134,25 +135,28 @@ export default function ConnectionEndpoints() {
 	}
 
 	return (
-		<section class="auth-widget stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }} aria-label={t("unlock.main.connection.ariaLabel")}>
-			<details class="unlock-conn">
-				<summary class="unlock-conn-summary">
-					<span class="stack" style={{ "--gap": "2px", minWidth: 0 }}>
-						<span class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-							<strong>{t("unlock.main.connection.title")}</strong>
+		<section class="unlock-conn" aria-label={t("unlock.main.connection.ariaLabel")}>
+			<details>
+				<summary>
+					<div class="unlock-conn-main">
+						<div class="unlock-conn-title">
+							{t("unlock.main.connection.title")}
 							<span class={`endpoint-status${summaryTone ? ` endpoint-status--${summaryTone}` : ""}`}>
 								<span class="endpoint-status-dot" aria-hidden="true" />
 								{t(summaryKey)}
 							</span>
-						</span>
-						<span class="auth-widget-subtitle">
+						</div>
+						<div class="unlock-conn-sub">
 							{t("unlock.main.connection.relayLabel")} · {t("unlock.main.connection.blossomLabel")} · {t("unlock.main.connection.turnLabel")}
 							{relay ? ` · ${shortHost(relay)}` : ""}
-						</span>
+						</div>
+					</div>
+					<span class="unlock-conn-chevron" aria-hidden="true">
+						<IconChevronDown />
 					</span>
 				</summary>
-				<div class="stack" style={{ "--gap": "var(--space-s)" }}>
-					<p class="auth-widget-subtitle">{t("unlock.main.connection.intro")}</p>
+				<div class="unlock-conn-body">
+					<p class="unlock-conn-intro">{t("unlock.main.connection.intro")}</p>
 					<EndpointField
 						kind="relay"
 						label={t("unlock.main.connection.relayLabel")}
@@ -180,9 +184,11 @@ export default function ConnectionEndpoints() {
 						invalidHint={t("unlock.main.connection.invalidTurn")}
 						onInput={setTurn}
 					/>
-					<button type="button" class="btn-link" onClick={handleReset}>
-						{t("unlock.main.connection.resetDefaults")}
-					</button>
+					<div class="unlock-conn-reset">
+						<button type="button" onClick={handleReset}>
+							{t("unlock.main.connection.resetDefaults")}
+						</button>
+					</div>
 				</div>
 			</details>
 		</section>
@@ -200,9 +206,11 @@ function EndpointField({ kind, label, placeholder, value, health, invalidHint, o
 	else hint = t("unlock.main.connection.hintIdle");
 
 	return (
-		<div class={`stack unlock-svc${health.state === "ok" ? " is-ok" : health.state === "bad" ? " is-bad" : health.state === "checking" ? " is-checking" : ""}`} style={{ "--gap": "var(--space-2xs)" }}>
-			<div class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-				<label for={id}>{label}</label>
+		<div class={`unlock-svc${health.state === "ok" ? " is-ok" : health.state === "bad" ? " is-bad" : health.state === "checking" ? " is-checking" : ""}`}>
+			<div class="unlock-svc-head">
+				<label class="unlock-svc-label" for={id}>
+					{label}
+				</label>
 				<span class={`endpoint-status${health.state !== "idle" ? ` endpoint-status--${health.state}` : ""}`}>
 					<span class="endpoint-status-dot" aria-hidden="true" />
 					{t(statusKey(health.state))}
@@ -210,16 +218,16 @@ function EndpointField({ kind, label, placeholder, value, health, invalidHint, o
 			</div>
 			<input
 				id={id}
+				class="unlock-svc-input"
 				type="url"
 				inputMode="url"
 				spellcheck={false}
 				autocomplete="off"
 				placeholder={placeholder}
 				value={value}
-				style={{ fontFamily: "var(--font-mono)" }}
 				onInput={(e) => onInput(e.currentTarget.value)}
 			/>
-			<small class="auth-widget-subtitle">{hint}</small>
+			<small class="unlock-svc-meta">{hint}</small>
 		</div>
 	);
 }

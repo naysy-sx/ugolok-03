@@ -7989,3 +7989,62 @@ I-NO-QUADRATIC (повтор 3/3). `dist/` не коммитился.
 `npm run build` 933.17 KB gzip. Playwright (chrome, :5173): mobile+
 desktop, вкладки, подключение, сброс, Quick, справка, путь Создать →
 фраза. Коммит не делался: в дереве чужие хотфиксы (contacts/vite).
+
+## Живой фидбек: вёрстка Unlock ближе к референсу
+
+Пользователь: нет градиента, карточки/input не как в
+`PROCESS-DOCS/REDESIGN/STARTPAGE/index.html`, `.unlock-conn`
+съехал влево.
+
+Причины: градиент был не на html/body; карточка — плоский
+`.auth-widget` без тени; поля с padding `--space-2xs`; conn
+обёрнут в `.box` + `.bar` без `flex:1` у лейбла +
+`.auth-widget-subtitle { margin-inline: auto }`.
+
+Правка напрямую (CSS+JSX). Градиент `--info` на html:has(.auth-layout).
+Карточка `.card.unlock-card` + тень. Conn — details сам карточка,
+лейбл `flex:1`. Playwright: left title/sub/intro/svc совпали.
+
+## Живой фидбек: аккаунт-ряд, padding аватара, Quick выше
+
+`.account-name` на unlock больше не наследует step-2/bold сайдбара —
+0.95rem/600, имя по левому краю, ellipsis. Аватар `large` (4rem),
+padding кнопки `space-s / 2`, круглый. У `unlock-conn summary`
+margin-block-end:0 (глобальный details[open] > summary). Quick-карточка
+между Войти/Создать и Подключение.
+
+## Живой фидбек: account-meta «вход: сегодня»
+
+В макете под именем — `.account-meta`. Не рисовали: lastUnlockAt
+не хранился. `recordLastUnlock` в keystore, строка «вход: сегодня /
+вчера / N дней назад». Появляется после следующего входа (у старых
+записей поля ещё нет).
+
+## Редизайн чата, вариант A «Альбом»
+
+1. `tests/bubble-attachment-plan.test.js` + `tests/extract-video-poster.test.js` + дописка `attachment-tray-core` — тесты до кода.
+2. `bubble-attachment-plan.js` — воркер; 2 фейла (`isVisual(undefined)`, `isVoice` вернул строку). Точечно `!!`. 18/18.
+3. `extract-video-poster.js` — воркер: FileReader в node + `video` вне scope. Переписан вручную. 6/6.
+4. `attachment-tray-core.js` — воркер: дубль import + `visualizationCount` + обрезанный planUpload. Переписан вручную. Старые+новые тесты зелёные.
+5. JSX/CSS/i18n/хук/шапка/FilePicker multiple — напрямую (крупный UI).
+6. Приёмка: §9 62/62; split 8/8 без изменений; i18n 12/12 `layoutHint`; chats-signals 62/62.
+7. Визуал: Playwright + реальные классы custom.css, 360 и 1280, dark/light. Duo 2 кол., trio span, quad 2×2, media 20.5rem на 1280, tray 52px. Живой чат с контактом не открывался — экран Unlock, без сессии.
+
+## Живой фидбек: пузыри / меню / композ
+
+1. Тесты `compute-menu-pop-position` + `compose-submit-key` до кода.
+2. Воркер: `compute-menu-pop-position.js` — 9/9 с первого раза.
+3. JSX/CSS/хук — напрямую. Popover API в overflow дал 0×0; парковка `.menu-pop` на `body` + `position:fixed`.
+4. Playwright fixture: pad 8px own=other, own-link white, first/last margin 0, ul gap 0, audio radius 18px, меню 176×85 поверх aside/скролла.
+
+## Живой фидбек: aside quick + account-dot
+
+`.quick .stack { align-items:start }` — `--align:center` с `.bar` больше не центрирует подпись. `.account-dot` кольцо светлое (`oklch(0.97)`), не тёмное.
+
+## Живой фидбек: превью видео в плитке
+
+`background-image` + `cover` уже были, но `poster` часто не попадал в дескриптор (extract async, send раньше). `uploadAll` ждёт кадр; плитка ставит cover инлайном; если файла нет в дескрипторе — кадр из memory-cache без сети.
+
+## Живой фидбек: клип нативного audio
+
+Радиус/фон у `<audio>` браузер не красит. Обёртка `.audio-shell` (`overflow:hidden` + radius как у пузыря). JSX: attachment-view, chat compose, audio-player. Скрытые call-overlay не трогал.

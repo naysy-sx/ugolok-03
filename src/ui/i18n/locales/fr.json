@@ -281,6 +281,17 @@
 				"invalidBlossom": "cela ne ressemble pas à une adresse Blossom",
 				"invalidTurn": "cela ne ressemble pas à une adresse TURN",
 				"ariaLabel": "Adresses de connexion"
+			},
+			"accountMeta": {
+				"today": "connexion : aujourd'hui",
+				"yesterday": "connexion : hier",
+				"daysAgo": {
+					"one": "connexion : il y a {{count}} jour",
+					"few": "connexion : il y a {{count}} jours",
+					"many": "connexion : il y a {{count}} jours",
+					"other": "connexion : il y a {{count}} jours"
+				},
+				"date": "connexion : {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Le message est trop long (maximum {{max}} caractères)",
 			"clearHistoryConfirm": "Effacer la conversation ? Les messages seront supprimés uniquement chez vous — votre contact gardera tout.",
 			"fileKeyNotFoundError": "Clé du fichier introuvable — le fichier n'est peut-être pas encore entièrement synchronisé.",
-			"sendAttachmentConfirm": "Le fichier sera envoyé en pièce jointe — une fois envoyée, la clé sera transmise au destinataire et cela ne pourra pas être annulé. Continuer ?"
+			"sendAttachmentConfirm": "Le fichier sera envoyé en pièce jointe — une fois envoyée, la clé sera transmise au destinataire et cela ne pourra pas être annulé. Continuer ?",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Message vocal"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Ouvrir la vidéo {{name}}",
 		"openAudioAria": "Ouvrir l'audio {{name}}",
-		"openAria": "Ouvrir la pièce jointe {{name}}"
+		"openAria": "Ouvrir la pièce jointe {{name}}",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

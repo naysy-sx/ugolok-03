@@ -372,7 +372,7 @@ function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPubli
 						</p>
 					)}
 					{(tray.items.length > 0 || tray.errors.length > 0) && (
-						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
+						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 					)}
 					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
@@ -463,7 +463,7 @@ function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId, paren
 					autoFocus={autoFocus}
 				/>
 				{(tray.items.length > 0 || tray.errors.length > 0) && (
-					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
+					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 				)}
 				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />

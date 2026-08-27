@@ -5,6 +5,7 @@ import {
 	addFiles,
 	addFromStorage,
 	setItemPosition,
+	setTrayLayout,
 	removeItem,
 	planUpload,
 } from "../src/ui/hooks/attachment-tray-core.js";
@@ -15,7 +16,7 @@ function fakeFile(name, mime, size) {
 }
 
 test("emptyTrayState: форма", () => {
-	assert.deepEqual(emptyTrayState(), { items: [], errors: [] });
+	assert.deepEqual(emptyTrayState(), { items: [], errors: [], layout: null });
 });
 
 test("addFiles: валидные файлы в пределах maxItems — все добавлены, errors пуст, id уникальны, type верный", () => {
@@ -28,6 +29,7 @@ test("addFiles: валидные файлы в пределах maxItems — в�
 	assert.equal(state.items[1].type, "video");
 	assert.equal(state.items[0].error, undefined);
 	assert.equal(state.items[0].position, "below");
+	assert.equal(state.layout, "duo");
 });
 
 test("addFiles: неизвестный mime классифицируется как file", () => {
@@ -127,7 +129,7 @@ test("planUpload: без ошибок — возвращает Job[] в поря
 	let state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.pdf", "application/pdf", 1)], 5);
 	state = addFromStorage(state, [{ manifestDigest: "d1", fileKey: new Uint8Array([9]), manifest: { mime: "video/mp4", name: "v.mp4", size: 1 } }], 5);
 	state = setItemPosition(state, state.items[0].id, "above");
-	const jobs = planUpload(state.items);
+	const jobs = planUpload(state);
 	assert.equal(jobs.length, 3);
 	assert.equal(jobs[0].kind, "upload");
 	assert.equal(jobs[0].isImage, true);
@@ -141,9 +143,49 @@ test("planUpload: без ошибок — возвращает Job[] в поря
 
 test("planUpload: хотя бы один item.error — бросает, ничего не возвращает", () => {
 	const state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("bad.exe", "application/x-msdownload", 1)], 5);
-	assert.throws(() => planUpload(state.items));
+	assert.throws(() => planUpload(state));
 });
 
 test("planUpload: пустой items — возвращает пустой массив", () => {
-	assert.deepEqual(planUpload([]), []);
+	assert.deepEqual(planUpload(emptyTrayState()), []);
+});
+
+test("addFiles: после 2 картинок layout авто duo", () => {
+	const state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.png", "image/png", 1)], 5);
+	assert.equal(state.layout, "duo");
+});
+
+test("setTrayLayout: hero сохраняется при visual >= 2", () => {
+	let state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.png", "image/png", 1)], 5);
+	state = setTrayLayout(state, "hero");
+	assert.equal(state.layout, "hero");
+});
+
+test("removeItem: удаление до 1 visual сбрасывает layout", () => {
+	let state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.png", "image/png", 1)], 5);
+	state = setTrayLayout(state, "hero");
+	state = removeItem(state, state.items[0].id);
+	assert.equal(state.items.length, 1);
+	assert.equal(state.layout, null);
+});
+
+test("planUpload: layout на visual, не на pdf", () => {
+	let state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.pdf", "application/pdf", 1), fakeFile("c.png", "image/png", 1)], 5);
+	state = setTrayLayout(state, "hero");
+	const jobs = planUpload(state);
+	assert.equal(jobs[0].layout, "hero");
+	assert.equal(jobs[1].layout, undefined);
+	assert.equal(jobs[2].layout, "hero");
+});
+
+test("planUpload: poster с item уходит в job видео, не в картинку", () => {
+	let state = addFiles(emptyTrayState(), [fakeFile("a.png", "image/png", 1), fakeFile("b.mp4", "video/mp4", 1)], 5);
+	state = {
+		...state,
+		items: state.items.map((item) => (item.type === "video" ? { ...item, poster: "data:image/jpeg;base64,xx" } : item)),
+	};
+	const jobs = planUpload(state);
+	assert.equal(jobs[0].poster, undefined);
+	assert.equal(jobs[1].poster, "data:image/jpeg;base64,xx");
+	assert.equal(jobs[1].layout, "duo");
 });

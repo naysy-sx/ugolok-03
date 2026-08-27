@@ -281,6 +281,17 @@
 				"invalidBlossom": "sieht nicht nach einer Blossom-Adresse aus",
 				"invalidTurn": "sieht nicht nach einer TURN-Adresse aus",
 				"ariaLabel": "Verbindungsadressen"
+			},
+			"accountMeta": {
+				"today": "Anmeldung: heute",
+				"yesterday": "Anmeldung: gestern",
+				"daysAgo": {
+					"one": "Anmeldung: vor {{count}} Tag",
+					"few": "Anmeldung: vor {{count}} Tagen",
+					"many": "Anmeldung: vor {{count}} Tagen",
+					"other": "Anmeldung: vor {{count}} Tagen"
+				},
+				"date": "Anmeldung: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Die Nachricht ist zu lang (maximal {{max}} Zeichen)",
 			"clearHistoryConfirm": "Verlauf löschen? Nachrichten werden nur bei Ihnen gelöscht — Ihr Kontakt behält alles.",
 			"fileKeyNotFoundError": "Dateischlüssel nicht gefunden — die Datei ist möglicherweise noch nicht vollständig synchronisiert.",
-			"sendAttachmentConfirm": "Die Datei wird als Anhang gesendet — nach dem Senden geht der Schlüssel an den Empfänger und kann nicht rückgängig gemacht werden. Fortfahren?"
+			"sendAttachmentConfirm": "Die Datei wird als Anhang gesendet — nach dem Senden geht der Schlüssel an den Empfänger und kann nicht rückgängig gemacht werden. Fortfahren?",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Sprachnachricht"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Video öffnen {{name}}",
 		"openAudioAria": "Audio öffnen {{name}}",
-		"openAria": "Anhang {{name}} öffnen"
+		"openAria": "Anhang {{name}} öffnen",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

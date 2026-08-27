@@ -281,6 +281,17 @@
 				"invalidBlossom": "Blossom adresine benzemiyor",
 				"invalidTurn": "TURN adresine benzemiyor",
 				"ariaLabel": "Bağlantı adresleri"
+			},
+			"accountMeta": {
+				"today": "giriş: bugün",
+				"yesterday": "giriş: dün",
+				"daysAgo": {
+					"one": "giriş: {{count}} gün önce",
+					"few": "giriş: {{count}} gün önce",
+					"many": "giriş: {{count}} gün önce",
+					"other": "giriş: {{count}} gün önce"
+				},
+				"date": "giriş: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Mesaj çok uzun (en fazla {{max}} karakter)",
 			"clearHistoryConfirm": "Sohbet temizlensin mi? Mesajlar yalnızca sizde silinir — kişideki her şey kalır.",
 			"fileKeyNotFoundError": "Dosya anahtarı bulunamadı — dosya henüz tam olarak senkronize edilmemiş olabilir.",
-			"sendAttachmentConfirm": "Dosya ek olarak gönderilecek — gönderildikten sonra anahtar alıcıya gider ve geri alınamaz. Devam edilsin mi?"
+			"sendAttachmentConfirm": "Dosya ek olarak gönderilecek — gönderildikten sonra anahtar alıcıya gider ve geri alınamaz. Devam edilsin mi?",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Sesli mesaj"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Videoyu aç {{name}}",
 		"openAudioAria": "Sesi aç {{name}}",
-		"openAria": "{{name}} ekini aç"
+		"openAria": "{{name}} ekini aç",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

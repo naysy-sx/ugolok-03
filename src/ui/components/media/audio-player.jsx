@@ -53,34 +53,36 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			)}
 			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
 			{!error && (
-				<audio
-					ref={(node) => {
-						audioRef.current = node;
-						if (elRef) elRef.current = node;
-					}}
-					controls={!compact}
-					src={src ?? undefined}
-					onEnded={onEnded}
-					onLoadedMetadata={(e) => {
-						onMeta?.({ duration: e.currentTarget.duration });
-					}}
-					onTimeUpdate={onTimeUpdate ? (e) => onTimeUpdate(e.currentTarget.currentTime) : undefined}
-					onPlay={() => {
-						if (!playing) onToggle();
-					}}
-					onPause={() => {
-						// см. video-player.jsx — тот же баг ("повтор превращается в
-						// хаос"), тот же фикс: по спеке HTML5 естественное завершение
-						// трека шлёт "pause" ДО "ended", el.ended отличает его от
-						// ручной паузы пользователя.
-						if (playing && !audioRef.current?.ended) onToggle();
-					}}
-					// compact (свёрнутый вид) — звук продолжает играть, нативные controls
-					// скрыты (у mini-бара свои кнопки); display:none НЕ останавливает
-					// воспроизведение аудио в фоне (в отличие от video, где точно так же
-					// не останавливает — там просто нет смысла скрывать, есть картинка).
-					style={{ display: compact ? "none" : src ? undefined : "none" }}
-				/>
+				<div class="audio-shell" style={{ display: compact || !src ? "none" : undefined }}>
+					<audio
+						ref={(node) => {
+							audioRef.current = node;
+							if (elRef) elRef.current = node;
+						}}
+						controls={!compact}
+						src={src ?? undefined}
+						onEnded={onEnded}
+						onLoadedMetadata={(e) => {
+							onMeta?.({ duration: e.currentTarget.duration });
+						}}
+						onTimeUpdate={onTimeUpdate ? (e) => onTimeUpdate(e.currentTarget.currentTime) : undefined}
+						onPlay={() => {
+							if (!playing) onToggle();
+						}}
+						onPause={() => {
+							// см. video-player.jsx — тот же баг ("повтор превращается в
+							// хаос"), тот же фикс: по спеке HTML5 естественное завершение
+							// трека шлёт "pause" ДО "ended", el.ended отличает его от
+							// ручной паузы пользователя.
+							if (playing && !audioRef.current?.ended) onToggle();
+						}}
+						// compact (свёрнутый вид) — звук продолжает играть, нативные controls
+						// скрыты (у mini-бара свои кнопки); display:none НЕ останавливает
+						// воспроизведение аудио в фоне (в отличие от video, где точно так же
+						// не останавливает — там просто нет смысла скрывать, есть картинка).
+						style={{ display: compact ? "none" : src ? undefined : "none" }}
+					/>
+				</div>
 			)}
 		</div>
 	);

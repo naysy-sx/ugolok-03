@@ -13,6 +13,7 @@ import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
 import IconFolder from "../icons/folder.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
+import { truncateFileName } from "./bubble-attachment-plan.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
@@ -49,7 +50,7 @@ const FILE_TYPE_ICONS = { image: IconImage, video: IconVideoCamera, audio: IconM
 // единственное место захвата для всех трёх кликабельных превью ниже, три
 // экранных пути (chat.jsx/channel.jsx/channel-chat.jsx openAttachment) правятся
 // этим одним изменением.
-function openWithOrigin(e, attachment, onOpen) {
+export function openWithOrigin(e, attachment, onOpen) {
 	setMediaOrigin(e.currentTarget.getBoundingClientRect());
 	onOpen(attachment);
 }
@@ -64,7 +65,7 @@ function openWithOrigin(e, attachment, onOpen) {
 // бабле продолжает идти через attachment-memory-cache.js (эта функция), fullscreen-
 // вид — через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша
 // одной и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
-function ImageAttachment({ attachment, onOpen }) {
+export function ImageAttachment({ attachment, onOpen }) {
 	// Ленивая инициализация из общего слоя памяти (attachment-memory-cache.js) —
 	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
 	// без вспышки спиннера (найдено ревью: URL.revokeObjectURL на каждом unmount
@@ -112,10 +113,10 @@ function ImageAttachment({ attachment, onOpen }) {
 
 	return (
 		<img
+			class="attachment-image"
 			src={url}
 			alt={attachment.name || ""}
 			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
-			style={{ maxWidth: "100%", borderRadius: "var(--radius)", cursor: "pointer", display: "block" }}
 		/>
 	);
 }
@@ -178,7 +179,11 @@ function AudioAttachment({ attachment, onOpen }) {
 			</p>
 		);
 	}
-	return <audio controls src={url} />;
+	return (
+		<div class="audio-shell">
+			<audio controls src={url} />
+		</div>
+	);
 }
 
 // Видео — Этап F, F1 (DESIGN.md "Этап F, F1"): БЕЗ сети вовсе — превью
@@ -195,7 +200,7 @@ function VideoAttachment({ attachment, onOpen }) {
 // последовательность высот, что в самом макете PROCESS-DOCS/REDESIGN/
 // ugolok-final.html) — НЕ анализ реального файла: Этап F, F1 запрещает
 // сеть на превью, а амплитуду не получить без скачивания+расшифровки.
-const AUDIO_WAVE_HEIGHTS = [8, 15, 22, 11, 26, 17, 7, 20, 13, 24, 9, 18, 27, 12, 6, 19, 14, 23, 10, 16, 25, 11, 21, 8, 17, 13, 26, 9, 20, 15, 22, 7, 18, 24, 12, 19];
+export const AUDIO_WAVE_HEIGHTS = [8, 15, 22, 11, 26, 17, 7, 20, 13, 24, 9, 18, 27, 12, 6, 19, 14, 23, 10, 16, 25, 11, 21, 8, 17, 13, 26, 9, 20, 15, 22, 7, 18, 24, 12, 19];
 
 // Компактный превью не-голосового аудио — макет .audio/.wave. audio__len
 // показывает РАЗМЕР файла (formatFileSize), не длительность — по той же
@@ -271,7 +276,7 @@ function base64ToFileKeyBytes(fileKeyBase64) {
 	return Uint8Array.from(atob(fileKeyBase64), (c) => c.charCodeAt(0));
 }
 
-function AttachmentSaveButton({ attachment, origin }) {
+export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 	const [status, setStatus] = useState("idle"); // idle | busy | done | error
 	const [error, setError] = useState("");
 
@@ -295,6 +300,10 @@ function AttachmentSaveButton({ attachment, origin }) {
 		}
 	}
 
+	const saveLabel = menu
+		? t("attachment.saveNamed", { name: truncateFileName(attachmentDisplayName(attachment)) })
+		: t("attachment.saveToStorage");
+
 	if (status === "done") {
 		return (
 			<p role="status" style={{ color: "var(--muted)" }}>
@@ -305,8 +314,8 @@ function AttachmentSaveButton({ attachment, origin }) {
 
 	return (
 		<>
-			<button type="button" class="btn--ghost" onClick={handleSave} disabled={status === "busy"}>
-				<IconFolder aria-hidden="true" /> {status === "busy" ? t("attachment.saving") : t("attachment.saveToStorage")}
+			<button type="button" class={menu ? undefined : "btn--ghost"} onClick={handleSave} disabled={status === "busy"}>
+				<IconFolder aria-hidden="true" /> {status === "busy" ? t("attachment.saving") : saveLabel}
 			</button>
 			{error && (
 				<small role="alert" style={{ color: "var(--bad)" }}>
@@ -410,10 +419,14 @@ export default function AttachmentView({ attachment, onOpen, origin }) {
 // используется message-bubble.jsx в футере сообщения, ДО кнопки "Удалить".
 // Формат: {{иконка типа}} Скачать {{имя}} ({{размер}}). voiceInline (F-AT-08,
 // ≤32КБ) декодируется прямо из payload, без сети — как AudioAttachment.
-export function AttachmentDownloadLink({ attachment }) {
+export function AttachmentDownloadLink({ attachment, menu = false }) {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
+	const displayName = attachmentDisplayName(attachment);
+	const label = menu
+		? t("attachment.downloadNamed", { name: truncateFileName(displayName) })
+		: `${t("attachment.download")} ${displayName} (${formatFileSize(attachment.size)})`;
 
 	async function handleDownload() {
 		setBusy(true);
@@ -438,7 +451,7 @@ export function AttachmentDownloadLink({ attachment }) {
 	return (
 		<>
 			<button type="button" onClick={handleDownload} disabled={busy}>
-				<Icon /> {busy ? t("attachment.downloading") : t("attachment.download")} {attachmentDisplayName(attachment)} ({formatFileSize(attachment.size)})
+				<Icon /> {busy ? t("attachment.downloading") : label}
 			</button>
 			{error && (
 				<small role="alert" style={{ color: "var(--bad)" }}>

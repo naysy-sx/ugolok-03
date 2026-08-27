@@ -281,6 +281,17 @@
 				"invalidBlossom": "dit lijkt geen Blossom-adres",
 				"invalidTurn": "dit lijkt geen TURN-adres",
 				"ariaLabel": "Verbindingsadressen"
+			},
+			"accountMeta": {
+				"today": "aanmelding: vandaag",
+				"yesterday": "aanmelding: gisteren",
+				"daysAgo": {
+					"one": "aanmelding: {{count}} dag geleden",
+					"few": "aanmelding: {{count}} dagen geleden",
+					"many": "aanmelding: {{count}} dagen geleden",
+					"other": "aanmelding: {{count}} dagen geleden"
+				},
+				"date": "aanmelding: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Bericht is te lang (maximaal {{max}} tekens)",
 			"clearHistoryConfirm": "Gesprek wissen? Berichten worden alleen bij jou verwijderd — je contact behoudt alles.",
 			"fileKeyNotFoundError": "Bestandssleutel niet gevonden — het bestand is mogelijk nog niet volledig gesynchroniseerd.",
-			"sendAttachmentConfirm": "Het bestand wordt als bijlage verzonden — na verzending gaat de sleutel naar de ontvanger en kan dit niet ongedaan worden gemaakt. Doorgaan?"
+			"sendAttachmentConfirm": "Het bestand wordt als bijlage verzonden — na verzending gaat de sleutel naar de ontvanger en kan dit niet ongedaan worden gemaakt. Doorgaan?",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Spraakbericht"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Video openen {{name}}",
 		"openAudioAria": "Audio openen {{name}}",
-		"openAria": "Bijlage {{name}} openen"
+		"openAria": "Bijlage {{name}} openen",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

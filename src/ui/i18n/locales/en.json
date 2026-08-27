@@ -281,6 +281,17 @@
 				"invalidBlossom": "does not look like a Blossom address",
 				"invalidTurn": "does not look like a TURN address",
 				"ariaLabel": "Connection addresses"
+			},
+			"accountMeta": {
+				"today": "signed in: today",
+				"yesterday": "signed in: yesterday",
+				"daysAgo": {
+					"one": "signed in: {{count}} day ago",
+					"few": "signed in: {{count}} days ago",
+					"many": "signed in: {{count}} days ago",
+					"other": "signed in: {{count}} days ago"
+				},
+				"date": "signed in: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Message is too long (maximum {{max}} characters)",
 			"clearHistoryConfirm": "Clear the conversation? Messages will be deleted only for you — your contact will keep everything.",
 			"fileKeyNotFoundError": "File key not found — the file may not be fully synced yet.",
-			"sendAttachmentConfirm": "The file will be sent as an attachment — once sent, the key goes to the recipient and can't be undone. Continue?"
+			"sendAttachmentConfirm": "The file will be sent as an attachment — once sent, the key goes to the recipient and can't be undone. Continue?",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Voice message"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Open video {{name}}",
 		"openAudioAria": "Open audio {{name}}",
-		"openAria": "Open attachment {{name}}"
+		"openAria": "Open attachment {{name}}",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

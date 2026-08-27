@@ -63,21 +63,30 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 		}
 	}
 
-	async function handleAttachmentFromStorage([nodeId]) {
+	async function handleAttachmentFromStorage(ids) {
 		setFilePickerOpen(false);
-		const node = projected.value.nodes.get(nodeId);
-		if (!node || node.kind !== "file") return;
-		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
-			const fileKey = await getFileKeyFor(node.blob);
-			if (!fileKey) {
-				setError(t("chat.window.fileKeyNotFoundError"));
-				return;
+		if (!ids || ids.length === 0) return;
+		if (!window.confirm(t("chat.window.sendAttachmentConfirm"))) return;
+		const refs = [];
+		let lastError = "";
+		for (const id of ids) {
+			const node = projected.value.nodes.get(id);
+			if (!node || node.kind !== "file") continue;
+			try {
+				const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+				const fileKey = await getFileKeyFor(node.blob);
+				if (!fileKey) {
+					lastError = t("chat.window.fileKeyNotFoundError");
+					continue;
+				}
+				refs.push({ manifestDigest: node.blob, fileKey, manifest });
+			} catch (err) {
+				lastError = errorMessage(err);
 			}
-			tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest }]);
-		} catch (err) {
-			setError(errorMessage(err));
 		}
+		if (lastError) setError(lastError);
+		if (refs.length === 0) return;
+		tray.addFromStorage(refs);
 	}
 
 	return (
@@ -94,7 +103,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 			<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
 			<textarea id="channel-chat-text" ref={textareaRef} value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
 			{(tray.items.length > 0 || tray.errors.length > 0) && (
-				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
+				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 			)}
 			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{allowAttachments && (
@@ -113,7 +122,7 @@ function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments
 				</button>
 			</div>
 		</form>
-		{filePickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}
+		{filePickerOpen && <FilePicker predicate={() => true} multiple={true} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}
 		</>
 	);
 }

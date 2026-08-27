@@ -55,7 +55,32 @@ export async function decryptMnemonic(password, id) {
 
 export async function listAccounts() {
   const records = await db.table("keystore").toArray();
-  return records.map((r) => ({ id: r.id, login: r.login, avatar: r.avatar ?? '', hasMnemonic: !!r.mnemonicCiphertext }));
+  return records.map((r) => ({
+    id: r.id,
+    login: r.login,
+    avatar: r.avatar ?? "",
+    hasMnemonic: !!r.mnemonicCiphertext,
+    lastUnlockAt: r.lastUnlockAt,
+  }));
+}
+
+export async function recordLastUnlock(id, now = Date.now()) {
+  await db.table("keystore").update(id, { lastUnlockAt: now });
+}
+
+function startOfLocalDay(ms) {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function lastUnlockBucket(ts, now = Date.now()) {
+  if (ts == null || !Number.isFinite(Number(ts))) return null;
+  const days = Math.round((startOfLocalDay(now) - startOfLocalDay(Number(ts))) / 86400000);
+  if (days <= 0) return { kind: "today" };
+  if (days === 1) return { kind: "yesterday" };
+  if (days < 30) return { kind: "days", count: days };
+  return { kind: "date", ts: Number(ts) };
 }
 
 export async function getProfile(id) {

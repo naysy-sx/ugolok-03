@@ -51,6 +51,7 @@ import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentTray from "../components/media/attachment-tray.jsx";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
 import FilePicker from "../components/file-picker.jsx";
+import ActionsMenu from "../components/actions-menu.jsx";
 import Screen from "../components/screen.jsx";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
@@ -59,6 +60,7 @@ import { classOf, refFromAttachment } from "../../domain/media/media-ref.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
+import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
@@ -437,24 +439,32 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// держит fileKey НАВСЕГДА — отозвать нельзя (решение №9 TASK.md),
 	// предупреждение — ДО обращения к хранилищу, простой window.confirm() (тот
 	// же приём, что аватар 7.2/необратимые действия files.jsx).
-	async function handleAttachmentFromStorage([nodeId]) {
+	async function handleAttachmentFromStorage(ids) {
 		setAttachmentPickerOpen(false);
-		const node = projected.value.nodes.get(nodeId);
-		if (!node || node.kind !== "file") return;
+		if (!ids || ids.length === 0) return;
 		if (!window.confirm(t("chat.window.sendAttachmentConfirm"))) return;
-		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
-			const fileKey = await getFileKeyFor(node.blob);
-			if (!fileKey) {
-				setError(t("chat.window.fileKeyNotFoundError"));
-				return;
+		const refs = [];
+		let lastError = "";
+		for (const id of ids) {
+			const node = projected.value.nodes.get(id);
+			if (!node || node.kind !== "file") continue;
+			try {
+				const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+				const fileKey = await getFileKeyFor(node.blob);
+				if (!fileKey) {
+					lastError = t("chat.window.fileKeyNotFoundError");
+					continue;
+				}
+				refs.push({ manifestDigest: node.blob, fileKey, manifest });
+			} catch (err) {
+				lastError = errorMessage(err);
 			}
-			setRecordingState("idle");
-			setRecordedVoiceBlob(null);
-			tray.addFromStorage([{ manifestDigest: node.blob, fileKey, manifest }]);
-		} catch (err) {
-			setError(errorMessage(err));
 		}
+		if (lastError) setError(lastError);
+		if (refs.length === 0) return;
+		setRecordingState("idle");
+		setRecordedVoiceBlob(null);
+		tray.addFromStorage(refs);
 	}
 
 	async function handleStartRecording() {
@@ -693,9 +703,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
 						<IconPhoneCall /> {t("common.call")}
 					</button>
-					<button type="button" class="btn--ghost btn--danger" onClick={handleClearHistory}>
-						<IconEraser /> {t("chat.window.clearHistoryButton")}
-					</button>
+					<ActionsMenu label={t("chat.window.chatMenuAria")}>
+						<button type="button" class="danger" onClick={handleClearHistory}>
+							<IconEraser /> {t("chat.window.clearHistoryMenu")}
+						</button>
+					</ActionsMenu>
 				</>
 			}
 			slices={<MediaButtons counts={classesInMessages()} onOpen={openChatMediaClass} />}
@@ -709,7 +721,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					)}
 
 					{(tray.items.length > 0 || tray.errors.length > 0) && (
-						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
+						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 					)}
 
 					{recordingState === "recording" && (
@@ -726,7 +738,9 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 					{recordingState === "recorded" && recordedVoiceUrl && (
 						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							<audio controls src={recordedVoiceUrl} />
+							<div class="audio-shell">
+								<audio controls src={recordedVoiceUrl} />
+							</div>
 							<button type="button" onClick={handleDiscardRecordedVoice}>
 								<IconCross /> {t("chat.window.deleteRecordingButton")}
 							</button>
@@ -782,6 +796,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							value={text}
 							maxLength={MAX_MESSAGE_LENGTH}
 							onInput={handleTextInput}
+							onKeyDown={(e) => {
+								if (!isComposeSubmitKey(e)) return;
+								e.preventDefault();
+								handleSend(e);
+							}}
 							rows={2}
 						/>
 						<button
@@ -826,7 +845,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				})}
 				<div ref={bottomRef} />
 			</div>
-			{attachmentPickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setAttachmentPickerOpen(false)} />}
+			{attachmentPickerOpen && <FilePicker predicate={() => true} multiple={true} onSelect={handleAttachmentFromStorage} onCancel={() => setAttachmentPickerOpen(false)} />}
 		</Screen>
 	);
 }
@@ -942,7 +961,7 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 					<input type="file" multiple onChange={handleFilesSelected} disabled={busy} />
 				</label>
 				{(tray.items.length > 0 || tray.errors.length > 0) && (
-					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} onPositionChange={tray.setPosition} />
+					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 				)}
 				<button
 					type="submit"

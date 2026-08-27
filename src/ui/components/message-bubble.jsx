@@ -1,8 +1,12 @@
 import { useState } from "preact/hooks";
-import AttachmentView, { AttachmentDownloadLink } from "./attachment-view.jsx";
+import AttachmentView, { AttachmentDownloadLink, AttachmentSaveButton } from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
-import { splitBubbleAttachments } from "./message-bubble-attachments.js";
+import { planBubbleAttachments } from "./bubble-attachment-plan.js";
+import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cluster.jsx";
+import ActionsMenu from "./actions-menu.jsx";
+import IconPencil from "../icons/pencil.jsx";
+import IconTrash from "../icons/trash.jsx";
 
 const STATUS_LABEL_KEYS = {
 	created: "message.status.created",
@@ -13,37 +17,17 @@ const STATUS_LABEL_KEYS = {
 	discarded: "message.status.discarded",
 };
 
-// sentAt (этап 29) — wall-clock время отправки, ОТСУТСТВУЕТ у сообщений старого формата
-// (до этого этапа) — тогда просто не показываем метку, не 'Invalid Date'.
 function formatTimestamp(sentAt) {
 	if (typeof sentAt !== "number") return null;
 	return new Date(sentAt * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
-// "Удалить у обоих"/"Редактировать" технически возможны ТОЛЬКО для своих сообщений
-// (deleteMessage/editMessage проверяют авторство, CONTRACTS.md этап 27-довесок-5/6) —
-// у чужих сообщений доступно только "Удалить у себя", без раскрывающегося меню.
-// mode: null | "confirming-delete" | "editing" — один открытый режим за раз, без
-// модалки/библиотеки (бюджет бандла), инлайн в самом сообщении.
-// originKind — "message" (личный/групповой чат) или "channelMessage" (чат канала,
-// этап 11 "Хвост" — ChannelChat переведён на этот компонент); попадает в
-// AttachmentView's origin (F-AT-… "Сохранить к себе", этап 9), где различает,
-// откуда именно пришло вложение.
-// senderName — опционален, НЕ используется в chat.jsx (1:1/групповой чат уже
-// показывает собеседника через свой заголовок экрана). Нужен в multi-party
-// сценарии (quick.jsx, комнаты "Быстрая связь" — до 5 участников в одной
-// ленте) — без подписи невозможно понять, кто именно написал (найдено живой
-// проверкой пользователем).
 export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message" }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
-	// Ассиметричный "хвостик" пузыря (VISUAL.md, Claude Opus) — исходящее
-	// поджато справа-снизу, входящее зеркально слева-снизу; сам скруглённый
-	// радиус живёт в CSS (.message-bubble-own/-other), не инлайн-стилем —
-	// нужен был класс, а не style, чтобы завязать цвета/радиус на палитру.
 	const bubbleClass = `message-bubble stack box ${isOwn ? "message-bubble-own self-end" : "message-bubble-other self-start"}`;
-	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs) var(--space-s)" };
+	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" };
 
 	if (message.deleted) {
 		return (
@@ -56,10 +40,11 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	const statusLabel = STATUS_LABEL_KEYS[message.status] ? t(STATUS_LABEL_KEYS[message.status]) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
-	// position (F-AT-02, CONTRACTS.md этап 29) — ТОЛЬКО для type==="image", и только
-	// у ПЕРВОГО такого вложения (этап B, MEDIA-SPEC.md §3.7 — attachments теперь
-	// массив); остальные типы/позиции вложений всегда рендерятся под текстом.
-	const { above, below } = splitBubbleAttachments(message.attachments);
+	const plan = planBubbleAttachments(message.attachments);
+	const origin = { kind: originKind, id: message.id };
+	const open = (a) => onOpenAttachment?.(message, a);
+	const attachments = message.attachments ?? [];
+	const hasMenu = attachments.length > 0 || (isOwn && typeof onEdit === "function") || typeof onDeleteForMe === "function";
 
 	if (mode === "editing") {
 		return (
@@ -93,31 +78,35 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
-			{above && <AttachmentView attachment={above} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: originKind, id: message.id }} />}
+			<BubbleAttachmentCluster plan={plan} onOpen={open} />
 			{message.text && <MarkdownView source={message.text} profile="lite" />}
-			{below.map((a, i) => (
-				<AttachmentView key={i} attachment={a} onOpen={(a) => onOpenAttachment?.(message, a)} origin={{ kind: originKind, id: message.id }} />
+			<BubbleFileChips plan={plan} onOpen={open} />
+			{plan.voices.map((a, i) => (
+				<AttachmentView key={`voice-${i}`} attachment={a} />
 			))}
 			<footer class="row message-bubble-meta" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{timestamp && <small>{timestamp}</small>}
 				{isOwn && statusLabel && <small>{statusLabel}</small>}
 				{message.edited && <small>{t("message.editedLabel")}</small>}
-				{mode !== "confirming-delete" && (
-					<>
+				{mode !== "confirming-delete" && hasMenu && (
+					<ActionsMenu label={t("attachment.actionsMenuAria")} popClass="menu-pop--bubble">
+						{attachments.map((a, i) => (
+							<AttachmentDownloadLink key={`dl-${i}`} attachment={a} menu />
+						))}
+						{attachments.map((a, i) => (
+							<AttachmentSaveButton key={`sv-${i}`} attachment={a} origin={origin} menu />
+						))}
 						{isOwn && typeof onEdit === "function" && (
 							<button type="button" onClick={() => setMode("editing")}>
-								{t("message.editButton")}
+								<IconPencil /> {t("message.editButton")}
 							</button>
 						)}
-						{(message.attachments ?? []).map((a, i) => (
-							<AttachmentDownloadLink key={i} attachment={a} />
-						))}
 						{typeof onDeleteForMe === "function" && (
-							<button type="button" class="btn--ghost btn--danger" onClick={() => setMode("confirming-delete")}>
-								{t("common.delete")}
+							<button type="button" class="danger" onClick={() => setMode("confirming-delete")}>
+								<IconTrash /> {t("common.delete")}
 							</button>
 						)}
-					</>
+					</ActionsMenu>
 				)}
 				{mode === "confirming-delete" && (
 					<>

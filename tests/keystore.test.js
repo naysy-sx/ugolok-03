@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { encryptAndStore, decryptPrivateKey, decryptMnemonic, listAccounts, getProfile, updateProfile } from "../src/core/crypto/keystore.js";
+import { encryptAndStore, decryptPrivateKey, decryptMnemonic, listAccounts, getProfile, updateProfile, recordLastUnlock, lastUnlockBucket } from "../src/core/crypto/keystore.js";
 
 before(async () => {
 	await db.open();
@@ -92,7 +92,28 @@ test("listAccounts: возвращает {id, login} для каждого ак�
 		assert.equal(acc.salt, undefined);
 		assert.equal(acc.iv, undefined);
 		assert.equal(acc.ciphertext, undefined);
+		assert.equal(acc.lastUnlockAt, undefined);
 	}
+});
+
+test("recordLastUnlock + listAccounts: lastUnlockAt пишется и читается, секреты не утекают", async () => {
+	await encryptAndStore(crypto.getRandomValues(new Uint8Array(32)), "pw", "acc-1", { login: "alice" });
+	const at = Date.UTC(2026, 7, 26, 12, 0, 0);
+	await recordLastUnlock("acc-1", at);
+	const accounts = await listAccounts();
+	assert.equal(accounts.length, 1);
+	assert.equal(accounts[0].lastUnlockAt, at);
+	assert.equal(accounts[0].ciphertext, undefined);
+});
+
+test("lastUnlockBucket: сегодня / вчера / N дней / дата", () => {
+	const now = new Date(2026, 7, 26, 18, 0, 0).getTime();
+	assert.deepEqual(lastUnlockBucket(new Date(2026, 7, 26, 1, 0, 0).getTime(), now), { kind: "today" });
+	assert.deepEqual(lastUnlockBucket(new Date(2026, 7, 25, 23, 0, 0).getTime(), now), { kind: "yesterday" });
+	assert.deepEqual(lastUnlockBucket(new Date(2026, 7, 23, 12, 0, 0).getTime(), now), { kind: "days", count: 3 });
+	assert.equal(lastUnlockBucket(new Date(2026, 6, 1, 12, 0, 0).getTime(), now).kind, "date");
+	assert.equal(lastUnlockBucket(null, now), null);
+	assert.equal(lastUnlockBucket(undefined, now), null);
 });
 
 test("getProfile: свежесозданный аккаунт — login из meta, avatar/bio/avatarUrl пустые строки", async () => {

@@ -7251,3 +7251,38 @@ relay. `refreshProfiles` получал пустой Map и через
       2126/2127 (флейк И9, повтор зелёный); build 933 KB gzip;
       Playwright ru mobile/desktop. Коммит отложен: дерево не чистое
       (хотфиксы contacts/vite).
+
+---
+
+## Редизайн чата, вариант A «Альбом»
+
+ТЗ: `PROCESS-DOCS/REDESIGN/CHAT/CHAT-VARIANT-A-TZ.md`.
+Эталон: `PROCESS-DOCS/REDESIGN/CHAT/index.html`.
+
+- [x] **Альбомная сетка вложений в пузыре** — кластер visual
+  (single/duo/trio/quad/hero/stack), видео-плитка с постером,
+  чипы file/audio, лоток-filmstrip + раскладка, меню `⋯` вместо
+  Download/Save в потоке, шапка чата без красной «Очистить».
+    - Триаж (13a): **рутина**. DESIGN-записка не нужна.
+    - `layout`/`poster` только внутри `attachments[]` (receive уже
+      копирует массив целиком).
+    - `splitBubbleAttachments` не менялся (post-card/комменты).
+    - Чистые модули: воркер + точечные правки после брака
+      (boolean, FileReader, импорты tray-core). JSX/CSS — напрямую
+      (крупный UI, прецедент unlock/profile).
+    - Тесты §9 зелёные. Коммит отложен: дерево не чистое.
+
+---
+
+## Живой фидбек: пузыри / меню / композ
+
+Не этап PLAN.md. Семь точечных правок поверх варианта A.
+
+- `--pad` own/other: `var(--space-2xs)` со всех сторон.
+- `<audio>`: радиус как у пузыря, фон не браузерный серый.
+- Меню пузыря: текст/иконки `var(--fg)`, `font-size: var(--step--1)`, карандаш/корзина.
+- `.md-view` в пузыре: first/last без внешних отступов, меньше gap p/ul, ссылки own — `accent-contrast`.
+- Выпадашки больше не режет скролл ленты и aside: `useDetailsMenu` паркует `.menu-pop` на `body` + `computeMenuPopPosition`.
+- Enter в `.message-compose-field` отправляет, Shift+Enter — новая строка.
+
+Триаж (13a): **рутина**. `compute-menu-pop-position.js` — воркер. Остальное напрямую.

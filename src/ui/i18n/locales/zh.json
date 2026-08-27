@@ -281,6 +281,17 @@
 				"invalidBlossom": "不像是 Blossom 地址",
 				"invalidTurn": "不像是 TURN 地址",
 				"ariaLabel": "连接地址"
+			},
+			"accountMeta": {
+				"today": "登录：今天",
+				"yesterday": "登录：昨天",
+				"daysAgo": {
+					"one": "登录：{{count}} 天前",
+					"few": "登录：{{count}} 天前",
+					"many": "登录：{{count}} 天前",
+					"other": "登录：{{count}} 天前"
+				},
+				"date": "登录：{{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "消息过长（最多 {{max}} 个字符）",
 			"clearHistoryConfirm": "清空聊天记录？消息仅会从您这里删除——对方仍会保留全部内容。",
 			"fileKeyNotFoundError": "未找到文件密钥——该文件可能尚未完全同步。",
-			"sendAttachmentConfirm": "文件将作为附件发送——发送后密钥将交给接收方，无法撤销。是否继续？"
+			"sendAttachmentConfirm": "文件将作为附件发送——发送后密钥将交给接收方，无法撤销。是否继续？",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "语音消息"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "打开视频 {{name}}",
 		"openAudioAria": "打开音频 {{name}}",
-		"openAria": "打开附件 {{name}}"
+		"openAria": "打开附件 {{name}}",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

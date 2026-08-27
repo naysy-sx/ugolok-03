@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { generateMnemonic, validateMnemonic, mnemonicToPrivateKey } from "../../core/crypto/mnemonic.js";
 import { getPublicKey } from "../../core/crypto/keys.js";
-import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile } from "../../core/crypto/keystore.js";
+import { encryptAndStore, decryptPrivateKey, listAccounts, getProfile, recordLastUnlock, lastUnlockBucket } from "../../core/crypto/keystore.js";
+import { t, tPlural, errorMessage, currentLocale } from "../signals/i18n.js";
 import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { login, setRememberedAccountId, getRememberedAccountId, dbKeySig } from "../signals/auth.js";
@@ -15,10 +16,22 @@ import MnemonicDisplay from "../components/mnemonic-display.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
 import ConnectionEndpoints from "../components/connection-endpoints.jsx";
+import IconMicrophone from "../icons/microphone.jsx";
 import Quick from "./quick.jsx";
-import { t, errorMessage } from "../signals/i18n.js";
+
 
 const MIN_PASSWORD_LENGTH = 8;
+
+function lastUnlockLabel(ts) {
+	const bucket = lastUnlockBucket(ts);
+	if (!bucket) return null;
+	if (bucket.kind === "today") return t("unlock.main.accountMeta.today");
+	if (bucket.kind === "yesterday") return t("unlock.main.accountMeta.yesterday");
+	if (bucket.kind === "days") return tPlural("unlock.main.accountMeta.daysAgo", bucket.count);
+	return t("unlock.main.accountMeta.date", {
+		date: new Intl.DateTimeFormat(currentLocale.value, { day: "numeric", month: "short" }).format(new Date(bucket.ts)),
+	});
+}
 
 // Стартовый экран — первое, что видит и гость, и вернувшийся пользователь (единый
 // экран по решению пользователя: раньше это были два разных роута/компонента,
@@ -137,6 +150,7 @@ export default function Unlock() {
 			const account = accounts.find((a) => a.id === openLoginForId);
 			login(openLoginForId, account?.login ?? "", key);
 			setRememberedAccountId(openLoginForId);
+			recordLastUnlock(openLoginForId).catch(() => {});
 			// Найдено пользователем (баг) — тема/масштаб/акцент применялись только
 			// внутри MainShell'а ПОСЛЕ навигации (app.jsx), поэтому на секунду
 			// показывался build-дефолт вместо сохранённой темы ЭТОГО аккаунта.
@@ -503,6 +517,7 @@ export default function Unlock() {
 							const id = bytesToHex(getPublicKey(privKey));
 							login(id, pendingLogin, privKey);
 							setRememberedAccountId(id);
+							recordLastUnlock(id).catch(() => {});
 							navigate("/main");
 						}}
 					>
@@ -520,7 +535,8 @@ export default function Unlock() {
 	return (
 		<div class="screen auth-layout">
 			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
+				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+					<span class="unlock-logo-mark" aria-hidden="true" />
 					<span class="logo-name">{t("app.name")}</span>
 				</div>
 				<div class="header-actions">
@@ -536,14 +552,14 @@ export default function Unlock() {
 
 			<main class="main">
 				{mainView === "home" && (
-					<div class="unlock-home stack" style={{ "--gap": "var(--space-l)" }}>
+					<div class="unlock-home">
 						<section class="hero-section">
 							<h1>{t("unlock.main.hero.title")}</h1>
 							<p class="hero-lead">{t("unlock.main.hero.lead")}</p>
 						</section>
 
-						<section class="auth-widget stack box" style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
-							<div class="unlock-modes bar" role="tablist" aria-label={t("unlock.main.modes.login")}>
+						<section class="card unlock-card stack" style={{ "--gap": "var(--space-m)" }}>
+							<div class="unlock-modes" role="tablist" aria-label={t("unlock.main.modes.login")}>
 								<button
 									type="button"
 									role="tab"
@@ -567,12 +583,16 @@ export default function Unlock() {
 							</div>
 
 							{authMode === "login" && (
-								<div id="unlock-panel-login" role="tabpanel" aria-labelledby="unlock-tab-login" class="stack" style={{ "--gap": "var(--space-s)" }}>
-									{accounts.length === 0 ? (
-										<p class="auth-widget-subtitle">{t("unlock.main.accountsWidget.empty")}</p>
-									) : (
-										<ul class="accounts-list stack" style={{ "--gap": "var(--space-3xs)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
-											{accounts.map((acc) => (
+								<div id="unlock-panel-login" role="tabpanel" aria-labelledby="unlock-tab-login" class="stack" style={{ "--gap": "var(--space-m)" }}>
+									<div class="unlock-card-header stack" style={{ "--gap": "var(--space-3xs)" }}>
+										<h2>{t("unlock.main.accountsWidget.title")}</h2>
+										{accounts.length === 0 && <p class="unlock-muted">{t("unlock.main.accountsWidget.empty")}</p>}
+									</div>
+									{accounts.length > 0 && (
+										<ul class="accounts-list stack" style={{ "--gap": "var(--space-2xs)" }} aria-label={t("unlock.main.accountsWidget.ariaLabel")}>
+											{accounts.map((acc) => {
+												const meta = lastUnlockLabel(acc.lastUnlockAt);
+												return (
 												<li key={acc.id}>
 													<button
 														type="button"
@@ -582,14 +602,16 @@ export default function Unlock() {
 														aria-pressed={openLoginForId === acc.id}
 														onClick={() => openLoginFor(acc.id)}
 													>
-														<AccountAvatar avatar={acc.avatar} login={acc.login || acc.id} />
-														<span class="account-info stack" style={{ "--gap": "0", minWidth: 0, flex: 1 }}>
+														<AccountAvatar large avatar={acc.avatar} login={acc.login || acc.id} />
+														<span class="account-info stack" style={{ "--gap": "2px", "--align": "start", minWidth: 0, flex: 1 }}>
 															<span class="account-name">{acc.login || acc.id.slice(0, 16) + "…"}</span>
+															{meta && <span class="account-meta">{meta}</span>}
 														</span>
 														{acc.id === rememberedId && <span class="unlock-recent-badge">{t("unlock.main.recentBadge")}</span>}
 													</button>
 												</li>
-											))}
+												);
+											})}
 										</ul>
 									)}
 									{openAccount && (
@@ -614,9 +636,11 @@ export default function Unlock() {
 							)}
 
 							{authMode === "create" && (
-								<div id="unlock-panel-create" role="tabpanel" aria-labelledby="unlock-tab-create" class="stack" style={{ "--gap": "var(--space-s)" }}>
-									<h2 class="visually-hidden">{t("unlock.main.registerBox.title")}</h2>
-									<p class="auth-widget-subtitle">{t("unlock.main.registerBox.subtitle")}</p>
+								<div id="unlock-panel-create" role="tabpanel" aria-labelledby="unlock-tab-create" class="stack" style={{ "--gap": "var(--space-m)" }}>
+									<div class="unlock-card-header stack" style={{ "--gap": "var(--space-3xs)" }}>
+										<h2>{t("unlock.main.registerBox.title")}</h2>
+										<p class="unlock-muted">{t("unlock.main.registerBox.subtitle")}</p>
+									</div>
 									<form class="auth-form stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleRegisterSubmit}>
 										<div class="form-group">
 											<label for="reg-login">{t("unlock.main.registerBox.loginLabel")}</label>
@@ -662,24 +686,23 @@ export default function Unlock() {
 							)}
 						</section>
 
-						<ConnectionEndpoints />
-
-						<div class="unlock-or" role="separator">
-							<span>{t("unlock.main.orDivider")}</span>
-						</div>
-
 						<button type="button" class="unlock-quick-card" onClick={() => setMainView("temp-chat")}>
-							<span class="stack" style={{ "--gap": "var(--space-3xs)", textAlign: "start" }}>
+							<span class="unlock-quick-icon" aria-hidden="true">
+								<IconMicrophone />
+							</span>
+							<span class="unlock-quick-text">
 								<strong>{t("unlock.main.quickCard.title")}</strong>
-								<span class="auth-widget-subtitle">{t("unlock.main.quickCard.subtitle")}</span>
+								<span>{t("unlock.main.quickCard.subtitle")}</span>
 							</span>
 						</button>
 
+						<ConnectionEndpoints />
+
 						<details class="unlock-advanced">
 							<summary>{t("unlock.main.otherWays.title")}</summary>
-							<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-								<p class="auth-widget-subtitle">{t("unlock.main.otherWays.subtitle")}</p>
-								<ul class="link-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+							<div class="unlock-advanced-list stack" style={{ "--gap": "var(--space-3xs)" }}>
+								<p class="unlock-muted">{t("unlock.main.otherWays.subtitle")}</p>
+								<ul class="link-list stack" style={{ "--gap": "var(--space-3xs)" }}>
 									<li>
 										<button type="button" class="link-list-item" onClick={() => openAdvanced("create")}>
 											{t("unlock.main.otherWays.createWithPhrase")}

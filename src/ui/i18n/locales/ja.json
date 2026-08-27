@@ -281,6 +281,17 @@
 				"invalidBlossom": "Blossom のアドレスではないようです",
 				"invalidTurn": "TURN のアドレスではないようです",
 				"ariaLabel": "接続アドレス"
+			},
+			"accountMeta": {
+				"today": "ログイン: 今日",
+				"yesterday": "ログイン: 昨日",
+				"daysAgo": {
+					"one": "ログイン: {{count}}日前",
+					"few": "ログイン: {{count}}日前",
+					"many": "ログイン: {{count}}日前",
+					"other": "ログイン: {{count}}日前"
+				},
+				"date": "ログイン: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "メッセージが長すぎます（最大 {{max}} 文字）",
 			"clearHistoryConfirm": "会話を消去しますか？ メッセージはあなた側だけで削除され、相手にはそのまま残ります。",
 			"fileKeyNotFoundError": "ファイルキーが見つかりません — ファイルがまだ完全に同期されていない可能性があります。",
-			"sendAttachmentConfirm": "ファイルは添付として送信されます — 送信後、鍵は相手に渡り、取り消せません。続けますか？"
+			"sendAttachmentConfirm": "ファイルは添付として送信されます — 送信後、鍵は相手に渡り、取り消せません。続けますか？",
+			"chatMenuAria": "Chat actions",
+			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "音声メッセージ"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "動画を開く {{name}}",
 		"openAudioAria": "音声を開く {{name}}",
-		"openAria": "添付ファイル {{name}} を開く"
+		"openAria": "添付ファイル {{name}} を開く",
+		"layoutGroup": "Attachment layout",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Hero",
+		"layoutStack": "Stack",
+		"layoutHint": "Layout is saved in the message and shown the same way to the other person",
+		"videoBadge": "video",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Message actions",
+		"downloadNamed": "Download {{name}}",
+		"saveNamed": "Save to storage {{name}}"
 	},
 	"media": {
 		"buttons": {

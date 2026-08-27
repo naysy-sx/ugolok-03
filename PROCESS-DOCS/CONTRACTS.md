@@ -21349,3 +21349,36 @@ create/join, чтобы смена URL на стартовом экране по
 
 Приёмка: `tests/bootstrap-endpoints.test.js`, `tests/endpoint-health.test.js`
 (≥10 `test(...)` суммарно), полная регрессия `npm test`, `npm run build`.
+
+## Редизайн чата, вариант A (альбом)
+
+`layout` и `poster` живут только в элементах `message.attachments[]`.
+Валидный `layout`: `single|duo|trio|quad|hero|stack`. На каждом visual
+(`image`/`video`) нового сообщения одно и то же `layout`. `file`/`audio`
+поле не несут. Чтение: первое visual с валидным layout, иначе
+`inferLayout(n)` (1→single, 2→duo, 3→trio, 4+→quad). Старые сообщения
+без layout — всегда infer. `MessageBubble` больше не поднимает
+`position==="above"` над текстом; `splitBubbleAttachments` без изменений
+для post-card/комментов.
+
+`planBubbleAttachments` → `{ layout, visual, files, audios, voices }`.
+Постер видео: `extractVideoPoster(file) → data URL | null`, потолок 32 КБ,
+в дескриптор копируется после upload/reference. Сеть для превью видео
+в пузыре запрещена.
+
+Лоток: `state.layout` (null если visual<2). `uploadAll` пишет
+`descriptor.layout` и `descriptor.poster` после
+`uploadMessageAttachmentStreaming`/`referenceStoredFile`.
+FilePicker в `chat.jsx`/`channel-chat.jsx`: `multiple={true}`, один confirm
+на пачку.
+
+## Живой фидбек: пузыри / меню / композ
+
+- `--pad` пузыря (own и other): `var(--space-2xs)` со всех сторон.
+- Нативный `<audio>`: `border-radius` как у родителя-пузыря, фон не браузерный серый.
+- `.message-bubble-meta .menu-pop`: цвет текста/иконок `var(--fg)` (не наследует contrast пузыря). `.message-bubble-meta .menu-pop button { font-size: var(--step--1) }`. Edit/Delete — `IconPencil` / `IconTrash`.
+- `.message-bubble .md-view`: у `:first-child` нулевой margin/padding-block-start, у `:last-child` — block-end. Gap `p`/`ul` меньше элементного `space-m`. Ссылки в `.message-bubble-own` — `var(--accent-contrast)`.
+- `.menu-pop` не клипается скроллом ленты / `overflow:hidden` aside: на время открытия хук переносит `.menu-pop` на `document.body` + `position:fixed` + `computeMenuPopPosition(trigger, pop, viewport, {gap, align})` → `{top, left}`. Align `end` по умолчанию, `start` у `.account-menu`. Флип вверх, если снизу не влезает; кламп в вьюпорт. При закрытии узел возвращается в `<details>`.
+- `.message-compose-field`: Enter отправляет (`isComposeSubmitKey`), Shift+Enter — новая строка. IME `isComposing` — не отправка.
+
+Приёмка: `tests/compute-menu-pop-position.test.js`, `tests/compose-submit-key.test.js`.

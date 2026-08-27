@@ -281,6 +281,17 @@
 				"invalidBlossom": "не похоже на адрес Blossom",
 				"invalidTurn": "не похоже на адрес TURN",
 				"ariaLabel": "Адреса подключения"
+			},
+			"accountMeta": {
+				"today": "вход: сегодня",
+				"yesterday": "вход: вчера",
+				"daysAgo": {
+					"one": "вход: {{count}} день назад",
+					"few": "вход: {{count}} дня назад",
+					"many": "вход: {{count}} дней назад",
+					"other": "вход: {{count}} дней назад"
+				},
+				"date": "вход: {{date}}"
 			}
 		}
 	},
@@ -506,7 +517,9 @@
 			"messageTooLong": "Сообщение слишком длинное (максимум {{max}} символов)",
 			"clearHistoryConfirm": "Очистить переписку? Сообщения удалятся только у вас, у собеседника всё останется.",
 			"fileKeyNotFoundError": "Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.",
-			"sendAttachmentConfirm": "Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?"
+			"sendAttachmentConfirm": "Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?",
+			"chatMenuAria": "Действия чата",
+			"clearHistoryMenu": "Очистить переписку"
 		},
 		"voiceMessageName": "Голосовое сообщение"
 	},
@@ -542,7 +555,19 @@
 		},
 		"openVideoAria": "Открыть видео {{name}}",
 		"openAudioAria": "Открыть аудио {{name}}",
-		"openAria": "Открыть вложение {{name}}"
+		"openAria": "Открыть вложение {{name}}",
+		"layoutGroup": "Раскладка вложений",
+		"layoutDuo": "2",
+		"layoutTrio": "3",
+		"layoutQuad": "4",
+		"layoutHero": "Герой",
+		"layoutStack": "Столбик",
+		"layoutHint": "Раскладка сохранится в сообщении и так же покажется собеседнику",
+		"videoBadge": "видео",
+		"moreCount": "+{{count}}",
+		"actionsMenuAria": "Действия с сообщением",
+		"downloadNamed": "Скачать {{name}}",
+		"saveNamed": "Сохранить к себе {{name}}"
 	},
 	"media": {
 		"buttons": {
