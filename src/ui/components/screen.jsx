@@ -17,7 +17,12 @@ import { t } from "../signals/i18n.js";
 // feed — role="feed" (ARIA-паттерн для динамически подгружаемых лент,
 // сообщения/посты/комментарии), НЕ выставляется по умолчанию — формы
 // (Настройки/Профиль) им не являются.
-export default function Screen({ breadcrumb, title, actions, slices, footer, feed, children }) {
+// CHANNEL-V2 часть B2 — три необязательных слота добавлены: lead (аватар
+// перед заголовком), subtitle (роль/подписчики/дата ПОД заголовком, не
+// рядом), headerExtra (раскрывающийся блок ПОД строкой заголовка, целиком
+// внутри закреплённой шапки — канал §B4). Все три undefined по умолчанию ->
+// разметка ровно та же, что была, остальные экраны не задеты.
+export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra, actions, slices, footer, feed, children }) {
 	const titleId = useId();
 
 	return (
@@ -32,13 +37,21 @@ export default function Screen({ breadcrumb, title, actions, slices, footer, fee
 							<IconCornerBack />
 						</button>
 					)}
-					<h1 id={titleId}>{title}</h1>
+					{lead}
+					{/* Обёртка нужна только чтобы подзаголовок встал ПОД заголовком, а
+					    не рядом с ним в общем ряду. .grow — чтобы .action-buttons
+					    (margin-inline-start:auto) по-прежнему уезжала вправо. */}
+					<div class="screen-title grow stack" style={{ "--gap": "0" }}>
+						<h1 id={titleId}>{title}</h1>
+						{subtitle}
+					</div>
 					{actions && (
 						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
 							{actions}
 						</div>
 					)}
 				</div>
+				{headerExtra}
 			</header>
 
 			{/* Этап E медиа-подсистемы — тонкая зона СРАЗУ ПОД шапкой, до

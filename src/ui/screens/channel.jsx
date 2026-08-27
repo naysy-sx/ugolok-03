@@ -6,7 +6,7 @@ import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { groups, refreshGroups } from "../signals/contacts.js";
-import { place, openChannel } from "../signals/place.js";
+import { place, goTo, openChannel } from "../signals/place.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
 import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
@@ -208,7 +208,6 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [posts, setPosts] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
-	const [tab, setTab] = useState("posts");
 	const [commentCounts, setCommentCounts] = useState({});
 	const [reactionCountsByPost, setReactionCountsByPost] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
@@ -216,6 +215,21 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
+
+	// CHANNEL-V2 часть B1 — состояние вкладки: один источник (place.value), не
+	// два. Раньше вкладка жила в локальном useState, а place.subTab обновлял её
+	// только в обратную сторону (useEffect ниже) — клик по вкладке place не
+	// трогал вообще: "назад" после смены вкладки не работало, глубокая ссылка
+	// на вкладку не воспроизводилась.
+	const onThisChannel = target.kind === "channel" && target.id === channelId;
+	const tab = onThisChannel ? (target.subTab ?? "posts") : "posts";
+
+	// Смена вкладки — полная замена места (goTo, не merge): postId/commentId
+	// намеренно сбрасываются, иначе уход в «Настройки» и возврат в «Посты»
+	// молча выкинул бы на страницу записи, открытой до этого.
+	function setTab(next) {
+		goTo({ kind: "channel", id: channelId, subTab: next });
+	}
 
 	async function refresh() {
 		const raw = await db.table("channels").get([ownerPubkey, channelId]);
@@ -288,13 +302,6 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		if (position === undefined) return;
 		openMedia({ refs, position });
 	}
-
-	// ТЗ редизайн канала A — postId больше не съедается. subTab чата игнорирует postId.
-	useEffect(() => {
-		const next = place.value;
-		if (next.kind !== "channel" || next.id !== channelId) return;
-		if (next.subTab) setTab(next.subTab);
-	}, [place.value]);
 
 	if (loading) {
 		return (
