@@ -937,9 +937,11 @@
 	},
 	"channelChat": {
 		"messageLabel": "Wiadomość na czacie kanału",
-		"noMessages": "Jeszcze brak wiadomości na czacie kanału.",
 		"readOnlyNotice": "Tylko do odczytu — zasubskrybuj, aby pisać na czacie.",
-		"attachFromStorageAria": "Attach file from storage"
+		"attachFromStorageAria": "Attach file from storage",
+		"placeholder": "Write in the chat…",
+		"emptyTitle": "It's quiet here",
+		"emptyHint": "Write the first message in the channel's chat."
 	},
 	"filePicker": {
 		"dialogAria": "Wybór pliku",

@@ -22,7 +22,11 @@ import { t } from "../signals/i18n.js";
 // рядом), headerExtra (раскрывающийся блок ПОД строкой заголовка, целиком
 // внутри закреплённой шапки — канал §B4). Все три undefined по умолчанию ->
 // разметка ровно та же, что была, остальные экраны не задеты.
-export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra, actions, slices, footer, feed, children }) {
+// CHANNEL-V2 часть E4 — anchored: .anchored (composition-класс minimal.css,
+// overflow-anchor:auto) на .content-wrapper для вкладки чата — прокрутка
+// держится низа при подгрузке старых сообщений. false по умолчанию — ни на
+// что, кроме чата, не влияет.
+export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra, actions, slices, footer, feed, anchored, children }) {
 	const titleId = useId();
 
 	return (
@@ -69,7 +73,7 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 			    position:absolute;inset:0. .grow даёт min-block-size:0 — ровно то,
 			    ради чего раньше обходили флекс position'ом (см. историю правок). */}
 			<div class="content-area grow layer" role={feed ? "feed" : undefined} aria-labelledby={titleId}>
-				<div class="content-wrapper scroller box" style={{ "--pad": "var(--space-m)" }}>{children}</div>
+				<div class={`content-wrapper scroller box${anchored ? " anchored" : ""}`} style={{ "--pad": "var(--space-m)" }}>{children}</div>
 			</div>
 
 			{footer && <footer class="section-footer rigid box" style={{ "--pad": "var(--space-m)" }}>{footer}</footer>}

@@ -937,9 +937,11 @@
 	},
 	"channelChat": {
 		"messageLabel": "Сообщение в чат канала",
-		"noMessages": "Пока нет сообщений в чате канала.",
 		"readOnlyNotice": "Только чтение — подпишитесь, чтобы писать в чат.",
-		"attachFromStorageAria": "Прикрепить файл из хранилища"
+		"attachFromStorageAria": "Прикрепить файл из хранилища",
+		"placeholder": "Написать в чат…",
+		"emptyTitle": "Пока тихо",
+		"emptyHint": "Напишите первое сообщение в общем чате канала."
 	},
 	"filePicker": {
 		"dialogAria": "Выбор файла",

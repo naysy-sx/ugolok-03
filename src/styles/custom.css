@@ -7334,25 +7334,10 @@ button[type="button"].media-mini-bar-btn {
 	overflow-x: auto;
 }
 
-/* ================================================================== *
- *  Общий чат канала (channel-chat.jsx) — "Пожаловаться"/"Игнорировать" *
- *  теперь маленькие иконки (moderation-actions.jsx), пользователь:    *
- *  скрыты по умолчанию, появляются только при наведении на строку     *
- *  сообщения (или фокусе с клавиатуры — focus-within, не только hover).*
- * ================================================================== */
-.msg-mod-actions {
-	opacity: 0;
-	transition: opacity var(--transition-speed) var(--transition-ease);
-}
-.channel-message-row:hover .msg-mod-actions,
-.channel-message-row:focus-within .msg-mod-actions {
-	opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-	.msg-mod-actions {
-		transition: none;
-	}
-}
+/* .msg-mod-actions/.channel-message-row удалены (CHANNEL-V2 E2) — общий чат
+   канала теперь тоже прячет "Пожаловаться"/"Игнорировать" в ActionsMenu
+   (chat-msg__actions, блок CHANNEL-V2 в конце файла), не в собственных
+   всегда-в-DOM иконках. */
 
 /* ================================================================== *
  *  СЛОВАРЬ, добавляемый парой "Профиль/Настройки". Всё это — новые    *
@@ -8252,10 +8237,12 @@ button[type="button"].media-mini-bar-btn {
 	min-inline-size: 0;
 }
 /* Ключ вместо имени — моноширинно и тише, чтобы не путать с никнеймом. Тот
-   же приём, что .contact-identity-npub. Общее тело для записи (D1) и
-   комментариев (D4.1) — один селектор через запятую, не дублируется. */
+   же приём, что .contact-identity-npub. Общее тело для записи (D1),
+   комментариев (D4.1) и общего чата (E2) — один селектор через запятую,
+   не дублируется. */
 .post__author--npub,
-.cmt__name--npub {
+.cmt__name--npub,
+.chat-msg__name--npub {
 	font-family: var(--font-mono);
 	font-weight: 400;
 	font-size: var(--step--1);
@@ -8284,4 +8271,101 @@ button[type="button"].media-mini-bar-btn {
 	outline: 2px solid var(--accent);
 	outline-offset: var(--space-3xs);
 	border-radius: var(--radius-sm);
+}
+
+/* E1 — композитор общего чата в подвале Screen. .composer__field/
+   .composer__tools скопом сильнее bare .comment-text-field (CommentComposer
+   тоже несёт класс .composer, историческая случайность) — textarea, не
+   растущий выше трети экрана, не должен был задеть высоту комментария.
+   .message-compose-tool-btn НЕ переопределяется здесь: класс общий с
+   личным чатом (chat.jsx, не трогать), его текущий стиль (2.25rem,
+   круглая, приглушённый цвет) и так подходит без изменений. */
+.composer__field textarea {
+	min-block-size: 2.6rem;
+	max-block-size: 9rem;
+	inline-size: 100%;
+	resize: vertical;
+}
+.composer__field {
+	min-inline-size: 0;
+}
+.readonly-notice {
+	color: var(--muted);
+	font-size: var(--step--1);
+	text-align: center;
+	margin-block: 0;
+}
+
+/* E2 — сообщения общего чата, сгруппированные по автору. Колонка аватара —
+   та же ширина, что у комментариев (.cmt__ava), чтобы чат и обсуждение
+   читались как один язык, а не два разных списка. */
+.chat-log,
+.chat-group {
+	list-style: none;
+	margin-block: 0;
+	padding-inline-start: 0;
+}
+.chat-msg {
+	display: grid;
+	grid-template-columns: 2.125rem minmax(0, 1fr);
+	column-gap: var(--space-2xs);
+	align-items: start;
+}
+.chat-msg__ava,
+.chat-msg__ava-slot {
+	inline-size: 2.125rem;
+	block-size: 2.125rem;
+}
+.chat-msg__ava {
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+	font-size: 0.85rem;
+}
+.chat-msg__ava-fallback {
+	display: grid;
+	place-items: center;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+}
+.chat-msg__name {
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+}
+.chat-msg__badge {
+	font-size: var(--step--2);
+	color: var(--accent);
+	border: var(--border-width) solid currentColor;
+	border-radius: var(--radius-full);
+	padding-inline: var(--space-3xs);
+}
+.chat-msg__time {
+	color: var(--muted);
+	font-size: var(--step--2);
+}
+.chat-msg__text {
+	overflow-wrap: anywhere;
+}
+/* Своё сообщение отличается цветом имени, не выключкой вправо: в общем
+   чате важнее "кто сказал", чем "я или не я", и правая колонка ломала бы
+   единую сетку аватаров. */
+.chat-msg--own .chat-msg__name {
+	color: var(--accent-2);
+}
+/* Действия появляются по наведению — иначе кнопка модерации висит у
+   каждого чужого сообщения и перебивает текст. */
+.chat-msg__actions {
+	margin-inline-start: auto;
+	opacity: 0;
+}
+.chat-msg:hover .chat-msg__actions,
+.chat-msg:focus-within .chat-msg__actions {
+	opacity: 1;
+}
+@media (hover: none) {
+	.chat-msg__actions {
+		opacity: 1;
+	}
 }

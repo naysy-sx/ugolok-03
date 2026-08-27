@@ -21,6 +21,7 @@ import { validateAttachment } from "../../domain/files/attachment-validation.js"
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import ChannelChat from "../components/channel-chat.jsx";
+import ChannelComposer from "../components/channel-composer.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
 import Screen from "../components/screen.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
@@ -411,6 +412,20 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			}
 			slices={tabsBar}
 			feed={tab === "posts" || tab === "chat"}
+			anchored={tab === "chat"}
+			footer={
+				tab === "chat" ? (
+					<ChannelComposer
+						ownerPubkey={ownerPubkey}
+						privKey={privKey}
+						dbKey={dbKey}
+						channelId={channelId}
+						canWrite={canComment}
+						allowAttachments={channelRow.allowChatAttachments}
+						limiter={limiter}
+					/>
+				) : undefined
+			}
 		>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -463,9 +478,6 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 						dbKey={dbKey}
 						channelId={channelId}
 						channelOwnerPubkey={channelRow.creatorPubkey}
-						canWrite={canComment}
-						allowAttachments={channelRow.allowChatAttachments}
-						limiter={limiter}
 						onSlicesChange={setChatSlices}
 					/>
 				</section>

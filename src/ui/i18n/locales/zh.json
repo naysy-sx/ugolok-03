@@ -937,9 +937,11 @@
 	},
 	"channelChat": {
 		"messageLabel": "频道聊天消息",
-		"noMessages": "频道聊天中暂无消息。",
 		"readOnlyNotice": "只读——订阅后才能在聊天中发言。",
-		"attachFromStorageAria": "Attach file from storage"
+		"attachFromStorageAria": "Attach file from storage",
+		"placeholder": "Write in the chat…",
+		"emptyTitle": "It's quiet here",
+		"emptyHint": "Write the first message in the channel's chat."
 	},
 	"filePicker": {
 		"dialogAria": "选择文件",

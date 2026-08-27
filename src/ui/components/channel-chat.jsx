@@ -1,140 +1,54 @@
 import { useState, useEffect, useRef } from "preact/hooks";
-import { sendChannelMessage } from "../../domain/content/channel-chat.js";
 import { loadChannelChatWindow } from "../../core/sync/lazy-channel.js";
 import { publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
 import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { ensureProfilesFresh, watchProfiles } from "../signals/contacts.js";
-import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
-import AttachmentTray from "./media/attachment-tray.jsx";
-import MessageBubble from "./message-bubble.jsx";
+import { groupByDay } from "../group-by-day.js";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
-import { getManifest } from "../../domain/files/content.js";
-import { getFileKeyFor, projected } from "../signals/files.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import FilePicker from "./file-picker.jsx";
-import IconPaperclip from "../icons/paperclip.jsx";
-import IconFolder from "../icons/folder.jsx";
-import { ContactIdentity } from "../screens/contacts.jsx";
-import ModerationActions from "./moderation-actions.jsx";
-import { formatDateTime } from "./post-card.jsx";
+import ChannelMessage from "./channel-message.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
-import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
 
-const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+// CHANNEL-V2 часть E2 — подряд идущие сообщения ОДНОГО автора, у которых
+// разрыв по createdAt меньше CHAT_GROUP_GAP_SECONDS, схлопываются в одну
+// группу (один аватар/имя на группу, не на каждое сообщение).
+const CHAT_GROUP_GAP_SECONDS = 300;
 
-function ChatComposer({ ownerPubkey, privKey, dbKey, channelId, allowAttachments, limiter, onSent }) {
-	const [text, setText] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
-	const fileInputRef = useRef(null);
-	const textareaRef = useRef(null);
-	// Редизайн интерфейса, этап 9 (CONTRACTS.md) — вставка файла из хранилища,
-	// 1:1 перенесено из chat.jsx (handleAttachmentFromStorage).
-	const [filePickerOpen, setFilePickerOpen] = useState(false);
-
-	async function handleSubmit(e) {
-		e.preventDefault();
-		if (busy || text.length === 0) return;
-		if (tray.items.some((item) => item.error)) return;
-		if (!limiter.tryAction("chat")) {
-			setError(t("common.rateLimitError"));
-			return;
-		}
-		setBusy(true);
-		setError("");
-		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
-			await sendChannelMessage(ownerPubkey, privKey, dbKey, channelId, text, attachments, publish);
-			setText("");
-			tray.reset();
-			onSent();
-		} catch (err) {
-			setError(errorMessage(err));
-		} finally {
-			setBusy(false);
+function groupMessagesByAuthor(messages) {
+	const groups = [];
+	let current = null;
+	for (const m of messages) {
+		if (current && current.authorPubkey === m.authorPubkey && m.createdAt - current.lastCreatedAt < CHAT_GROUP_GAP_SECONDS) {
+			current.messages.push(m);
+			current.lastCreatedAt = m.createdAt;
+		} else {
+			current = { id: m.id, authorPubkey: m.authorPubkey, lastCreatedAt: m.createdAt, messages: [m] };
+			groups.push(current);
 		}
 	}
-
-	async function handleAttachmentFromStorage(ids) {
-		setFilePickerOpen(false);
-		if (!ids || ids.length === 0) return;
-		if (!window.confirm(t("chat.window.sendAttachmentConfirm"))) return;
-		const refs = [];
-		let lastError = "";
-		for (const id of ids) {
-			const node = projected.value.nodes.get(id);
-			if (!node || node.kind !== "file") continue;
-			try {
-				const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
-				const fileKey = await getFileKeyFor(node.blob);
-				if (!fileKey) {
-					lastError = t("chat.window.fileKeyNotFoundError");
-					continue;
-				}
-				refs.push({ manifestDigest: node.blob, fileKey, manifest });
-			} catch (err) {
-				lastError = errorMessage(err);
-			}
-		}
-		if (lastError) setError(lastError);
-		if (refs.length === 0) return;
-		tray.addFromStorage(refs);
-	}
-
-	return (
-		<>
-		<form class="stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-3xs)" }}>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			<label class="visually-hidden" for="channel-chat-text">
-				{t("channelChat.messageLabel")}
-			</label>
-			<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
-			<textarea id="channel-chat-text" ref={textareaRef} value={text} maxLength={MESSAGE_MAX_LENGTH} onInput={(e) => setText(e.currentTarget.value)} rows={2} />
-			{(tray.items.length > 0 || tray.errors.length > 0) && (
-				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
-			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				{allowAttachments && (
-					<>
-						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-						<button type="button" class="message-compose-tool-btn row" onClick={() => fileInputRef.current?.click()} aria-label={t("chat.window.attachFileAria")}>
-							<IconPaperclip />
-						</button>
-						<button type="button" class="message-compose-tool-btn row" onClick={() => setFilePickerOpen(true)} aria-label={t("channelChat.attachFromStorageAria")}>
-							<IconFolder />
-						</button>
-					</>
-				)}
-				<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
-					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
-				</button>
-			</div>
-		</form>
-		{filePickerOpen && <FilePicker predicate={() => true} multiple={true} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}
-		</>
-	);
+	return groups;
 }
 
 // Общий чат канала (этап 32) — плоская лента, свежие внизу (тот же принцип отображения,
 // что личные чаты, chat.jsx), не дерево (в отличие от комментариев).
-export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, canWrite, allowAttachments, limiter, onSlicesChange }) {
+// CHANNEL-V2 часть E1 — композитор (ChatComposer) переехал в отдельный файл
+// (channel-composer.jsx), собирается в подвале Screen. Этот компонент —
+// только лента: приём/группировка/подгрузка/срезы.
+export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, onSlicesChange }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
 	const bottomRef = useRef(null);
 	const pendingScrollRef = useRef(false);
+	// CHANNEL-V2 часть E4.2 — "Показать более ранние" не должен выбрасывать
+	// пользователя наверх: перед setMessages запоминаем scrollHeight
+	// прокручиваемого предка, после перерисовки возвращаем scrollTop на то
+	// же визуальное место (разница высот = высота вставленных сообщений).
+	const pendingRestoreRef = useRef(null);
 	// CHANNEL-V2 часть A2 — ТЗ просил отдельный useEffect на [ownerPubkey, channelId]
 	// с force:true. Буквально это гонка: на смену канала messages ещё держит СТАРОЕ
 	// окно (loadChannelChatWindow асинхронна), второй эффект форсировал бы профили
@@ -176,6 +90,12 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	}, [ownerPubkey, channelId, messagingActivity.value]);
 
 	useEffect(() => {
+		if (pendingRestoreRef.current) {
+			const { scroller, oldHeight } = pendingRestoreRef.current;
+			pendingRestoreRef.current = null;
+			if (scroller) scroller.scrollTop += scroller.scrollHeight - oldHeight;
+			return;
+		}
 		if (pendingScrollRef.current && messages.length > 0) {
 			bottomRef.current?.scrollIntoView({ block: "end" });
 			pendingScrollRef.current = false;
@@ -184,7 +104,10 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 
 	async function handleLoadMore() {
 		if (messages.length === 0) return;
+		const scroller = bottomRef.current?.closest(".content-wrapper") ?? null;
+		const oldHeight = scroller?.scrollHeight ?? 0;
 		const { messages: older, hasMore: more } = await loadChannelChatWindow(ownerPubkey, dbKey, channelId, { limit: 15, beforeCreatedAt: messages[0].createdAt });
+		pendingRestoreRef.current = { scroller, oldHeight };
 		setMessages((prev) => [...older, ...prev]);
 		setHasMore(more);
 	}
@@ -225,6 +148,8 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		onSlicesChange?.({ counts: classesInMessages(), onOpen: openChannelChatMediaClass });
 	}, [messages]);
 
+	const dayGroups = groupByDay(messages);
+
 	return (
 		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
 			{error && (
@@ -233,51 +158,49 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 				</p>
 			)}
 			{hasMore && (
-				<button type="button" onClick={handleLoadMore}>
-					{t("chat.window.loadOlderButton")}
-				</button>
+				<div class="row" style={{ "--align": "center", justifyContent: "center" }}>
+					<button type="button" class="btn--ghost" onClick={handleLoadMore}>
+						{t("chat.window.loadOlderButton")}
+					</button>
+				</div>
 			)}
 			{messages.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("channelChat.noMessages")}</p>
+				<div class="empty stack" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+					<h2>{t("channelChat.emptyTitle")}</h2>
+					<p>{t("channelChat.emptyHint")}</p>
+				</div>
 			) : (
-				<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
-					{messages.map((m) => (
-						<li key={m.id} class="channel-message-row stack" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-								<ContactIdentity pubkey={m.authorPubkey} />
-								<small style={{ color: "var(--muted)" }}>{formatDateTime(m.createdAt)}</small>
-								{m.authorPubkey !== ownerPubkey && (
-									<ModerationActions
-										compact
-										viewerPubkey={ownerPubkey}
-										viewerPrivKey={privKey}
-										channelOwnerPubkey={channelOwnerPubkey}
-										channelId={channelId}
-										targetPubkey={m.authorPubkey}
-										contentType="chat_message"
-										contentId={m.id}
-										contentText={m.text}
-									/>
-								)}
-							</div>
-							{/* Этап 11 "Хвост" (REDESIGN-SPEC.md) — общий MessageBubble вместо
-							    собственной <li>-разметки: правка/удаление/статусы доставки
-							    отключены (не переданы onEdit/onDeleteForMe/onDeleteForBoth —
-							    в чате канала их нет), модерация остаётся в шапке выше, не в
-							    самом бабле. originKind="channelMessage" — иначе "Сохранить к
-							    себе" пометило бы вложение как origin.kind:"message" (личный
-							    чат), не отличить источник (FILES-DOCS/TASK.md). */}
-							<MessageBubble message={m} isOwn={m.authorPubkey === ownerPubkey} maxLength={MESSAGE_MAX_LENGTH} onOpenAttachment={openAttachment} originKind="channelMessage" />
-						</li>
+				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+					{dayGroups.map(({ key, dayLabel, items }) => (
+						<section key={key} class="stack" style={{ "--gap": "var(--space-s)" }}>
+							<h2 class="day-sep bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+								{dayLabel}
+							</h2>
+							<ul class="chat-log stack" role="list" style={{ "--gap": "var(--space-s)" }}>
+								{groupMessagesByAuthor(items).map((group) => (
+									<li key={group.id} class="chat-group stack" style={{ "--gap": "var(--space-3xs)" }}>
+										{group.messages.map((m, i) => (
+											<ChannelMessage
+												key={m.id}
+												message={m}
+												showAuthor={i === 0}
+												isOwn={m.authorPubkey === ownerPubkey}
+												isChannelOwner={m.authorPubkey === channelOwnerPubkey}
+												ownerPubkey={ownerPubkey}
+												privKey={privKey}
+												channelOwnerPubkey={channelOwnerPubkey}
+												channelId={channelId}
+												onOpenAttachment={openAttachment}
+											/>
+										))}
+									</li>
+								))}
+							</ul>
+						</section>
 					))}
-				</ul>
+				</div>
 			)}
 			<div ref={bottomRef} />
-			{canWrite ? (
-				<ChatComposer ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} allowAttachments={allowAttachments} limiter={limiter} onSent={refresh} />
-			) : (
-				<p style={{ color: "var(--muted)" }}>{t("channelChat.readOnlyNotice")}</p>
-			)}
 		</div>
 	);
 }
