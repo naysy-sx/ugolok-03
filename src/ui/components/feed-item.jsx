@@ -9,6 +9,7 @@ import { CHANNEL_REACTION_SET } from "../../domain/content/reactions.js";
 import { t } from "../signals/i18n.js";
 import { DueChip, formatDateTime } from "./post-card.jsx";
 import { videoPosterUrl } from "./video-poster-style.js";
+import IconChatBubbleFill from "../icons/chat-bubble-fill.jsx";
 
 const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
@@ -22,15 +23,31 @@ function firstVisual(attachments) {
 // настоящий заголовок (автор так и написал), обрубок посреди фразы —
 // НЕ заголовок: synthetic:true рисуется обычным текстом (feed-title--synthetic),
 // обрезает .truncate (--lines:3), не slice (не режет слово посреди).
+//
+// Живой фидбег — найден баг в этой же правке: перенос строки искался в
+// РЕЗУЛЬТАТЕ toPreviewText (переменная plain), а toPlainText (to-plain.js)
+// схлопывает все блоки через join(' ') — переносов там никогда не бывает,
+// title/excerpt не разделялись НИ РАЗУ, вся запись рисовалась одним
+// synthetic-блоком. Перенос ищем в ИСХОДНОМ post.text (до парсинга), title/
+// excerpt превью считаем раздельно по уже разрезанным кускам исходника.
 function feedText(post) {
 	const kind = kindOf(post);
 	const bodyPreview = toPreviewText(post.text, { profile: "rich", maxLength: 180 });
 	if (kind === "article" && post.title) return { title: post.title, excerpt: bodyPreview, synthetic: false };
 	if (kind === "link") return { title: post.title || post.linkUrl || "", excerpt: bodyPreview, synthetic: false };
+	if (!post.text) return { title: t(`recordKind.${kind}`), excerpt: "", synthetic: true };
+	const rawNl = post.text.indexOf("\n");
+	const firstLineRaw = (rawNl === -1 ? post.text : post.text.slice(0, rawNl)).trim();
+	if (rawNl > 0 && firstLineRaw.length > 0 && firstLineRaw.length <= 90) {
+		const restRaw = post.text.slice(rawNl + 1).trim();
+		return {
+			title: toPreviewText(firstLineRaw, { profile: "rich", maxLength: 90 }),
+			excerpt: restRaw ? toPreviewText(restRaw, { profile: "rich", maxLength: 180 }) : "",
+			synthetic: false,
+		};
+	}
 	const plain = toPreviewText(post.text, { profile: "rich", maxLength: 400 });
 	if (!plain) return { title: t(`recordKind.${kind}`), excerpt: "", synthetic: true };
-	const nl = plain.indexOf("\n");
-	if (nl > 0 && nl <= 90) return { title: plain.slice(0, nl), excerpt: plain.slice(nl + 1).trim(), synthetic: false };
 	return { title: plain, excerpt: "", synthetic: true };
 }
 
@@ -88,7 +105,9 @@ export default function FeedItem({ post, commentCount, reactionCounts, unread, o
 
 	return (
 		<button type="button" class="feed-item" onClick={onOpen}>
-			<span class="feed-meta row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
+			{/* Живой фидбег (тот же баг, что .cmt__head/.chat-msg__head): baseline
+		    сажал .feed-unread (кружок) заметно ниже текстовых соседей. */}
+		<span class="feed-meta row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 				{unread && <span class="feed-unread" aria-label={t("channel.feedUnreadAria")} />}
 				<span class="feed-kind">{t(`recordKind.${kind}`)}</span>
 				<time class="feed-time" dateTime={isoOf(post.createdAt)}>{formatDateTime(post.createdAt)}</time>
@@ -112,7 +131,12 @@ export default function FeedItem({ post, commentCount, reactionCounts, unread, o
 			)}
 
 			<span class="feed-foot row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<span class="feed-count">{t("channel.feedCommentCount", { count: commentCount ?? 0 })}</span>
+				{/* Живой фидбег: было буквальным emoji "💬" внутри строки перевода —
+				    заменено на заливную Phosphor-иконку (chat-bubble-fill), тот же
+				    язык, что остальные иконки интерфейса. */}
+				<span class="feed-count row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+					<IconChatBubbleFill aria-hidden="true" /> {t("channel.feedCommentCount", { count: commentCount ?? 0 })}
+				</span>
 				{reacts ? <span class="feed-reacts">{reacts}</span> : null}
 			</span>
 

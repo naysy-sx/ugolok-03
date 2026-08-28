@@ -5075,6 +5075,17 @@ button[type="button"].media-mini-bar-btn {
 	pointer-events: none;
 }
 
+/* Живой фидбег — .media-overlay-viewport несёт большой АСИММЕТРИЧНЫЙ
+   padding (--space-2xl сверху, --space-2xl+--space-l снизу — место под
+   хром управления в полноэкранном режиме). applyMiniViewportGeometry()
+   (media-overlay.jsx) переключает position/width/height на размер слота
+   мини-бара (48×84px), но padding не трогает — на таком крошечном блоке
+   он крупнее самого блока и, будучи асимметричным, поджимал центрированное
+   видео вверх (верх виден, низ обрезан overflow:hidden). */
+.media-overlay[data-display="mini"] .media-overlay-viewport {
+	padding: 0;
+}
+
 .media-overlay[data-display="mini"] .media-overlay-inner {
 	width: 100%;
 	height: 100%;
@@ -6045,7 +6056,16 @@ button[type="button"].media-mini-bar-btn {
 	inset-inline-end: 0;
 	inset-block-start: calc(100% + var(--space-3xs));
 	z-index: 20;
+	/* Живой фидбег — было 11rem, затем 13rem, подобранные под конкретный самый
+	   длинный пункт на тот момент ("Профиль и аватар", потом "Очистить
+	   переписку") — хрупко, следующий длинный пункт снова переносился бы на
+	   вторую строку. width:max-content + nowrap на кнопках (ниже) решает это
+	   раз и навсегда: меню всегда ровно по содержимому, min-width — просто
+	   пол для коротких пунктов ("Показать фразу" и т.п.), max-width — потолок
+	   на случай аномально длинного пункта (тогда усечётся троеточием). */
 	min-width: 11rem;
+	width: max-content;
+	max-width: 20rem;
 	background-color: var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
@@ -6078,6 +6098,11 @@ button[type="button"].media-mini-bar-btn {
 	cursor: pointer;
 	padding: var(--space-2xs) var(--space-s);
 	border-radius: var(--radius);
+	/* Живой фидбег — с .menu-pop's width:max-content выше это то, что реально
+	   не даёт подписи переноситься: max-content меряет "естественную" ширину
+	   контента, а она у текста БЕЗ nowrap — ширина самого узкого слова, не
+	   всей строки. */
+	white-space: nowrap;
 }
 /* ЛОВУШКА ФАЙЛА — тот же класс бага, что у .account-key выше: пункты
    меню содержат <svg class="icon"> прямым child'ом кнопки → срабатывает
@@ -6086,6 +6111,12 @@ button[type="button"].media-mini-bar-btn {
    при узкой .menu-pop это и добавляло лишнюю ширину/перенос текста. */
 .menu-pop button:has(> .icon) {
 	padding-inline: var(--space-s);
+}
+/* Живой фидбег — иконка внутри пункта меню "ужималась" на узкой .menu-pop:
+   .icon-btn .icon (flex:none) не покрывает пункты меню (там не .icon-btn, а
+   обычная <button>) — тот же контракт, распространён и на .menu-pop. */
+.menu-pop .icon {
+	flex: none;
 }
 .menu-pop button:hover,
 .menu-pop .menu-check:hover {
@@ -6661,8 +6692,13 @@ button[type="button"].media-mini-bar-btn {
 /* .composer — этап 69: .bar (раскладка) уже в JSX (аватар+колонка текста,
    не переносится), был .stack (только колонка, без аватара). Собственных
    декоративных свойств не осталось. */
-/* .composer__row — .row (раскладка) уже в JSX, собственных декоративных
-   свойств не осталось. */
+/* Живой фидбег — тулбар форматирования переехал под textarea, на одну
+   строку с .composer__row (вложения/отправить/отмена): margin-inline-start:
+   auto толкает саму группу кнопок вправо, тот же приём, что .action-buttons
+   (REGLAMENT.md §6 — третий механизм распределения остатка). */
+.composer__row {
+	margin-inline-start: auto;
+}
 /* Поле комментария — крупнее (пользователь: "чё так мелко"). Этап 69: фон
    "блокнот в точечку" убран — та же причина, что .post-text-field выше. */
 .comment-text-field {
@@ -7183,6 +7219,15 @@ button[type="button"].media-mini-bar-btn {
 	   без pre-wrap браузер схлопнёт его в пробел при отображении — та же
 	   регрессия, что уже закрыта точечно для .message-bubble p. */
 	white-space: pre-wrap;
+}
+/* Живой фидбег — markdown-рендер оборачивает текст пункта списка в <p>
+   (markdown-view.jsx's listItem -> renderBlock), глобальный p{margin-block:
+   var(--space-m)} (minimal.css) раздувал список "конскими" отступами между
+   пунктами. Не трогаем margin параграфов ВНЕ списка — там обычные отступы
+   прозы уместны, схлопывается только p ВНУТРИ li. Общее правило, не только
+   для .message-bubble (пост/комментарий/общий чат канала — та же болезнь). */
+.md-view li > p {
+	margin-block: 0;
 }
 /* Markdown-этап D — панель форматирования (жирный/курсив/цитата/список/
    ссылка) над textarea в трёх композерах (chat.jsx, channel-chat.jsx,
@@ -7831,6 +7876,12 @@ button[type="button"].media-mini-bar-btn {
 .feed-item:active {
 	transform: none;
 }
+/* Живой фидбег — последняя карточка дня не тянет черту в никуда (следующий
+   элемент — либо конец ленты, либо разделитель следующего дня со своей
+   верхней границей контекста). */
+.feed-item:last-child {
+	border-block-end: none;
+}
 .feed-meta    { grid-area: meta; }
 .feed-title   { grid-area: title; }
 .feed-excerpt { grid-area: excerpt; }
@@ -7870,7 +7921,6 @@ button[type="button"].media-mini-bar-btn {
 }
 .feed-excerpt {
 	color: var(--muted);
-	font-size: var(--step--1);
 	margin-block: 0;
 }
 .feed-count,
@@ -7902,12 +7952,8 @@ button[type="button"].media-mini-bar-btn {
 .post-page {
 	max-width: 46rem;
 }
-.post-page__title {
-	font-family: var(--font-display);
-	font-size: clamp(1.3rem, 1rem + 1.3vw, 1.8rem);
-	letter-spacing: var(--heading-letter-spacing);
-	margin: 0 0 var(--space-xs);
-}
+/* .post-page__title удалён (живой фидбек) — заголовок статьи теперь в
+   шапке экрана (Screen's title), не дублируется в теле. */
 .post-page__meta {
 	color: var(--muted);
 	font-size: var(--step--1);
@@ -7991,25 +8037,42 @@ button[type="button"].media-mini-bar-btn {
 		pointer-events: auto;
 	}
 }
+/* Живой фидбег — были голые числа не из токенов (REGLAMENT.md §4) и
+   физические свойства (width/height/margin-top вместо inline-size/
+   block-size/margin-block-start). Значения этой системы вложенности
+   собраны в переменные ОДИН раз здесь, не разбросаны по правилам —
+   --cmt-reply-indent увеличен по живому фидбеку (было 1.05rem, ветку
+   ответов просили сдвинуть заметно правее). */
 .cmt-list--replies {
-	margin: 0.7rem 0 0 1.05rem;
-	padding: 0 0 0 0.85rem;
+	--cmt-reply-gap: 0.7rem;
+	--cmt-reply-indent: 3.05rem;
+	--cmt-reply-rule-inset: 0.85rem;
+	--cmt-reply-ava-size: 1.7rem;
+	--cmt-reply-ava-font: 0.72rem;
+	--cmt-reply-box-gap: 0.5rem;
+	margin-block-start: var(--cmt-reply-gap);
+	margin-inline-start: var(--cmt-reply-indent);
+	padding-inline-start: var(--cmt-reply-rule-inset);
 	border-inline-start: 2px solid color-mix(in oklch, var(--accent) 38%, var(--border));
 }
 .cmt-list--replies .cmt + .cmt {
-	margin-top: 0.7rem;
+	margin-block-start: var(--cmt-reply-gap);
 }
 .cmt-list--replies .cmt__ava {
-	width: 1.7rem;
-	height: 1.7rem;
-	font-size: 0.72rem;
+	inline-size: var(--cmt-reply-ava-size);
+	block-size: var(--cmt-reply-ava-size);
+	font-size: var(--cmt-reply-ava-font);
 }
 .cmt-list--replies .cmt__box {
-	grid-template-columns: 1.7rem minmax(0, 1fr);
-	gap: 0.5rem;
+	grid-template-columns: var(--cmt-reply-ava-size) minmax(0, 1fr);
+	gap: var(--cmt-reply-box-gap);
 }
+/* Своя переменная, не --cmt-reply-gap: .cmt-reply-form стоит и у ответов
+   ВНУТРИ .cmt-list--replies, и у формы ответа корневого комментария (вне
+   этого блока) — унаследовать чужую scoped-переменную там неоткуда. */
 .cmt-reply-form {
-	margin-top: 0.45rem;
+	--cmt-reply-form-gap: 0.45rem;
+	margin-block-start: var(--cmt-reply-form-gap);
 }
 .cmt__media {
 	max-width: 20.5rem;
@@ -8197,7 +8260,9 @@ button[type="button"].media-mini-bar-btn {
 	font-family: var(--font-body);
 	font-weight: 400;
 	margin-block: 0;
-	padding-block: var(--space-s);
+	/* Живой фидбег — нижний padding убран: разделитель и первую карточку под
+	   ним разделял двойной зазор (этот padding + --gap родительского .stack). */
+	padding-block-start: var(--space-s);
 	position: sticky;
 	inset-block-start: 0;
 	background-color: var(--bg);

@@ -471,7 +471,7 @@
 		"postUnavailable": "Эта запись недоступна.",
 		"sortNewestFirst": "новые сверху",
 		"moreComments": "Ещё комментарии",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "К ленте канала",
 		"updatedLabel": "обновлён {{date}}",
 		"aboutToggle": "О канале",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Ключ файла не найден — возможно, файл ещё не полностью синхронизирован.",
 			"sendAttachmentConfirm": "Файл будет отправлен как вложение — после отправки ключ уйдёт получателю, отменить нельзя. Продолжить?",
 			"chatMenuAria": "Действия чата",
+			"searchChatMenu": "Поиск по чату",
+			"searchChatSoon": "Скоро",
 			"clearHistoryMenu": "Очистить переписку"
 		},
 		"voiceMessageName": "Голосовое сообщение"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Изменить профиль",
 		"photoAlt": "Фото профиля",
 		"accountMenuAria": "Меню аккаунта",
-		"storageMenuItem": "Хранилище",
+		"storageMenuItem": "Файлы",
 		"menuProfile": "Профиль и аватар",
 		"menuSettings": "Настройки",
 		"menuTheme": "Тема",

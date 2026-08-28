@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Dateischlüssel nicht gefunden — die Datei ist möglicherweise noch nicht vollständig synchronisiert.",
 			"sendAttachmentConfirm": "Die Datei wird als Anhang gesendet — nach dem Senden geht der Schlüssel an den Empfänger und kann nicht rückgängig gemacht werden. Fortfahren?",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Sprachnachricht"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Profil bearbeiten",
 		"photoAlt": "Profilfoto",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "Dateien",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

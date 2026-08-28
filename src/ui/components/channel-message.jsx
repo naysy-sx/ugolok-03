@@ -38,8 +38,10 @@ export default function ChannelMessage({ message, showAuthor, isOwn, isChannelOw
 			)}
 
 			<div class="chat-msg__body stack" style={{ "--gap": "var(--space-3xs)" }}>
+				{/* Живой фидбег (тот же баг, что .cmt__head): --align:baseline сажал
+				    бейдж владельца канала заметно ниже имени/времени. */}
 				{showAuthor && (
-					<header class="chat-msg__head row" style={{ "--gap": "var(--space-2xs)", "--align": "baseline" }}>
+					<header class="chat-msg__head row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 						<span class={author.isNpub ? "chat-msg__name chat-msg__name--npub" : "chat-msg__name"}>{author.name}</span>
 						{isChannelOwner && <span class="chat-msg__badge">{t("channel.kicker.owner")}</span>}
 						<time class="chat-msg__time">{formatTime(message.createdAt)}</time>

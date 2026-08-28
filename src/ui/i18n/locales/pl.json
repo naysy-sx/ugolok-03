@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Nie znaleziono klucza pliku — plik mógł jeszcze nie zostać w pełni zsynchronizowany.",
 			"sendAttachmentConfirm": "Plik zostanie wysłany jako załącznik — po wysłaniu klucz trafi do odbiorcy i nie da się tego cofnąć. Kontynuować?",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Wiadomość głosowa"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Edytuj profil",
 		"photoAlt": "Zdjęcie profilowe",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "Pliki",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

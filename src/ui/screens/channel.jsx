@@ -393,11 +393,15 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		return posts.flatMap((p) => (p.attachments ?? []).map((a) => refFromAttachment(a, { postId: p.id })));
 	}
 
+	// Живой фидбег: считало true/false ("есть хоть одно") — фильтр в шапке
+	// всегда показывал "1", сколько бы изображений ни было на самом деле
+	// (MediaButtons поддерживает число, но с booleans typeof-проверка
+	// подставляла 1). Теперь настоящий счётчик.
 	function postsSlicesCounts() {
-		const present = { audio: false, video: false, image: false, other: false };
+		const present = { audio: 0, video: 0, image: 0, other: 0 };
 		for (const ref of collectChannelPostsScope()) {
 			const c = classOf(ref.mime);
-			if (c in present) present[c] = true;
+			if (c in present) present[c]++;
 		}
 		return present;
 	}

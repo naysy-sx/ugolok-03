@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Dosya anahtarı bulunamadı — dosya henüz tam olarak senkronize edilmemiş olabilir.",
 			"sendAttachmentConfirm": "Dosya ek olarak gönderilecek — gönderildikten sonra anahtar alıcıya gider ve geri alınamaz. Devam edilsin mi?",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Sesli mesaj"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Profili düzenle",
 		"photoAlt": "Profil fotoğrafı",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "Dosyalar",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

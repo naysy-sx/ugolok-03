@@ -233,13 +233,15 @@ export default function ChannelPostPage({
 		}
 	}
 
+	// Живой фидбег: считало true/false — фильтр в шапке всегда показывал "1"
+	// независимо от реального числа изображений/файлов записи.
 	function slicesCounts() {
-		if (!post) return { audio: false, video: false, image: false, other: false };
+		if (!post) return { audio: 0, video: 0, image: 0, other: 0 };
 		const refs = collectPostScope({ post, commentsTree: tree, compareSiblings: compareComments });
-		const present = { audio: false, video: false, image: false, other: false };
+		const present = { audio: 0, video: 0, image: 0, other: 0 };
 		for (const ref of refs) {
 			const c = classOf(ref.mime);
-			if (c in present) present[c] = true;
+			if (c in present) present[c]++;
 		}
 		return present;
 	}
@@ -292,7 +294,10 @@ export default function ChannelPostPage({
 	return (
 		<Screen
 			breadcrumb={breadcrumb}
-			title={t("channel.postPageTitle")}
+			// Живой фидбег: заголовок статьи уже есть у поста — логичнее показать
+			// его прямо в шапке экрана, чем везде писать общую "Запись". Дублирующий
+			// <h2 class="post-page__title"> в теле статьи убран (см. ниже).
+			title={kind === "article" && post.title ? post.title : t("channel.postPageTitle")}
 			slices={<MediaButtons counts={slicesCounts()} onOpen={handleOpenMediaClass} />}
 		>
 			<article class="post-page stack" style={{ "--gap": "var(--space-s)" }}>
@@ -379,7 +384,6 @@ export default function ChannelPostPage({
 					/>
 				) : (
 					<>
-				{kind === "article" && post.title && <h2 class="post-page__title">{post.title}</h2>}
 				<ChannelBubbleAttachments attachments={post.attachments} onOpen={(a) => openAttachment(a, { postId: post.id })} />
 				{kind === "task" ? (
 					<label class="task">
@@ -428,20 +432,6 @@ export default function ChannelPostPage({
 						<h2>{t("channel.commentsTitle")}</h2>
 						<span class="ch-stats">{countNodes(tree)}</span>
 					</div>
-					{canComment ? (
-						<CommentComposer
-							ownerPubkey={ownerPubkey}
-							privKey={privKey}
-							dbKey={dbKey}
-							channelId={channelId}
-							postId={post.id}
-							parentId={post.id}
-							limiter={limiter}
-							onSubmitted={refreshComments}
-						/>
-					) : (
-						<p style={{ color: "var(--muted)" }}>{t("channel.readOnlyNotice")}</p>
-					)}
 					{tree.length === 0 ? (
 						<p style={{ color: "var(--muted)" }}>{t("channel.noComments")}</p>
 					) : (
@@ -473,6 +463,22 @@ export default function ChannelPostPage({
 						<button type="button" class="load-more btn--ghost" onClick={() => setShownRoots((n) => n + ROOT_PAGE)}>
 							{t("channel.moreComments")}
 						</button>
+					)}
+					{/* Живой фидбег: композитор был НАД деревом комментариев — теперь
+					    под уже существующими, как и обычно устроены обсуждения. */}
+					{canComment ? (
+						<CommentComposer
+							ownerPubkey={ownerPubkey}
+							privKey={privKey}
+							dbKey={dbKey}
+							channelId={channelId}
+							postId={post.id}
+							parentId={post.id}
+							limiter={limiter}
+							onSubmitted={refreshComments}
+						/>
+					) : (
+						<p style={{ color: "var(--muted)" }}>{t("channel.readOnlyNotice")}</p>
 					)}
 				</section>
 			</article>

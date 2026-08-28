@@ -106,7 +106,7 @@ const MAP = {
 
 // Залитое начертание — только там, где есть состояние "включено".
 // Даёт дополнительный файл <имя>-fill.jsx рядом с обычным.
-const FILLED = ["star", "bell"];
+const FILLED = ["star", "bell", "chat-bubble"];
 
 function componentName(stem) {
 	return "Icon" + stem.split(/[-_]/).map((p) => p[0].toUpperCase() + p.slice(1)).join("");

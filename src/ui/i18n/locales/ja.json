@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "ファイルキーが見つかりません — ファイルがまだ完全に同期されていない可能性があります。",
 			"sendAttachmentConfirm": "ファイルは添付として送信されます — 送信後、鍵は相手に渡り、取り消せません。続けますか？",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "音声メッセージ"
@@ -799,7 +801,7 @@
 		"editProfileButton": "プロフィールを編集",
 		"photoAlt": "プロフィール写真",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "ファイル",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

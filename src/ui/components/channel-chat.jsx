@@ -127,11 +127,13 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	// messages — состояние ЭТОГО компонента, наружу (channel.jsx, слот
 	// Screen's slices) не поднимается — сообщается через onSlicesChange
 	// (тот же приём, что onCountChange у PostWithComments).
+	// Живой фидбег: считало true/false — фильтр "Изображения" в шапке всегда
+	// показывал "1" независимо от реального числа картинок в сообщениях.
 	function classesInMessages() {
-		const present = { audio: false, video: false, image: false, other: false };
+		const present = { audio: 0, video: 0, image: 0, other: 0 };
 		for (const ref of collectChatScope(messages)) {
 			const c = classOf(ref.mime);
-			if (c in present) present[c] = true;
+			if (c in present) present[c]++;
 		}
 		return present;
 	}

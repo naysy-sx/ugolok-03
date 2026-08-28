@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Chave do arquivo não encontrada — o arquivo pode ainda não estar totalmente sincronizado.",
 			"sendAttachmentConfirm": "O arquivo será enviado como anexo — após o envio, a chave irá para o destinatário e não poderá ser desfeita. Continuar?",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Mensagem de voz"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Editar perfil",
 		"photoAlt": "Foto do perfil",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "Arquivos",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

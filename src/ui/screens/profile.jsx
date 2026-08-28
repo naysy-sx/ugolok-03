@@ -336,7 +336,12 @@ export default function Profile() {
 	const bioIsDirty = bio !== savedBio;
 
 	return (
-		<Screen title={login || t("profile.noNameFallback")}>
+		// Живой фидбек: в шапке было только имя — на экране, где меняют
+		// аватар/био/ключ/видимость, непонятно, что именно сейчас открыто
+		// (в приложении несколько таких личных экранов). {{имя}}: {{раздел}}
+		// — тот же приём просят применить и на "Ключ и восстановление"
+		// (security.jsx), и на "Файлы" (files.jsx).
+		<Screen title={`${login || t("profile.noNameFallback")}: ${t("sidebarCard.menuProfile")}`}>
 			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
 				<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
 					<div class="ident row" style={{ "--gap": "var(--space-m)" }}>
@@ -386,7 +391,11 @@ export default function Profile() {
 						)}
 
 						<form class="ident__body stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleBioSubmit}>
-							<h2 class="ident__name">{login || t("profile.noNameFallback")}</h2>
+							{/* Живой фидбек: имя пользователя над ключом дублировало заголовок
+							    экрана (Screen title теперь тоже содержит имя) — читалось как
+							    "имя, потом непонятно что за строка ниже". identifierHeading —
+							    уже существовавший, но ни разу не подключённый ключ перевода. */}
+							<h2 class="ident__name">{t("profile.identifierHeading")}</h2>
 
 							<div class="keybox row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 								<code>{npubEncode(id)}</code>

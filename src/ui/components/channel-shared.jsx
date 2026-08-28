@@ -279,6 +279,11 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 		try {
 			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
 			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, text, attachments, publish);
+			// Живой фидбег: найден попутно — текст не очищался после успешной
+			// отправки (setText("") не звалось нигде), в отличие от остальных
+			// композиторов (PostComposer/ChatComposer/ChannelComposer).
+			setText("");
+			tray.reset();
 			onSubmitted();
 		} catch (err) {
 			setError(errorMessage(err));
@@ -288,44 +293,39 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 	}
 
 	return (
-		<form class="composer bar" style={{ "--gap": "var(--space-s)", "--align": "flex-start" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
-			{author.avatar ? (
-				<img src={author.avatar} alt="" class="cmt__ava rigid" />
-			) : (
-				<div aria-hidden="true" class="cmt__ava cmt__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
-					{(author.name || "?").trim().charAt(0).toUpperCase()}
-				</div>
+		// Живой фидбег: аватар отправителя убран (это всегда сам автор — свой
+		// аватар в форме ввода избыточен), тулбар форматирования переехал ПОД
+		// textarea, на одну строку с composer__row (тот сам уезжает вправо).
+		<form class="composer stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</p>
 			)}
-			<div class="stack grow" style={{ "--gap": "var(--space-2xs)" }}>
-				{error && (
-					<p role="alert" style={{ color: "var(--bad)" }}>
-						{error}
-					</p>
-				)}
-				<label class="visually-hidden" for={`comment-text-${parentId}`}>
-					{t("channel.commentComposer.label")}
-				</label>
+			<label class="visually-hidden" for={`comment-text-${parentId}`}>
+				{t("channel.commentComposer.label")}
+			</label>
+			<textarea
+				class="comment-text-field"
+				id={`comment-text-${parentId}`}
+				ref={textareaRef}
+				value={text}
+				maxLength={COMMENT_MAX_LENGTH}
+				onInput={(e) => setText(e.currentTarget.value)}
+				rows={2}
+				placeholder={t("channel.commentComposer.placeholder")}
+				autoFocus={autoFocus}
+			/>
+			{(tray.items.length > 0 || tray.errors.length > 0) && (
+				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
+			)}
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
-				<textarea
-					class="comment-text-field"
-					id={`comment-text-${parentId}`}
-					ref={textareaRef}
-					value={text}
-					maxLength={COMMENT_MAX_LENGTH}
-					onInput={(e) => setText(e.currentTarget.value)}
-					rows={2}
-					placeholder={t("channel.commentComposer.placeholder")}
-					autoFocus={autoFocus}
-				/>
-				{(tray.items.length > 0 || tray.errors.length > 0) && (
-					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
-				)}
 				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
 					<button type="button" class="icon-btn" onClick={() => fileInputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
 						<IconPaperclip />
 					</button>
-					<span class="grow" />
 					<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
 						{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
 					</button>

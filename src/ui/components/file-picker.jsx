@@ -147,7 +147,12 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 				{entries.map((entry) => {
 					const selectable = entry.kind === "dir" || predicate(entry);
 					return (
-						<li key={entry.id} class="file-row">
+						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+							{/* Живой фидбег: тут не было .row + --gap/--align, хотя custom.css
+							    (.file-row-icon{flex:none} и комментарий "раскладка уже в JSX")
+							    предполагает их — чекбокс/иконка/имя стояли друг под другом
+							    вместо одной строки. Тот же приём, что в files.jsx (основной
+							    список), которая эту строку не потеряла. */}
 							{multiple && entry.kind === "file" && (
 								<input
 									type="checkbox"

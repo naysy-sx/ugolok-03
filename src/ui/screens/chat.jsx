@@ -58,6 +58,8 @@ import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { buildPlaylist } from "../../domain/media/playlist.js";
 import { classOf, refFromAttachment } from "../../domain/media/media-ref.js";
 import MediaButtons from "../components/media/media-buttons.jsx";
+import AccountAvatar from "../components/account-avatar.jsx";
+import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
@@ -631,11 +633,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) добавлен,
 	// ключ ИМЕННО "other" (не "file" — media-buttons.jsx адресует класс по
 	// этому имени, разъехавшийся ключ молча ломает кнопку).
+	// Живой фидбег (найдено в channel-chat.jsx, тот же баг тут): считало
+	// true/false — фильтр "Изображения" в шапке всегда показывал "1"
+	// независимо от реального числа картинок в переписке.
 	function classesInMessages() {
-		const present = { audio: false, video: false, image: false, other: false };
+		const present = { audio: 0, video: 0, image: 0, other: 0 };
 		for (const ref of collectChatScope(messages)) {
 			const c = classOf(ref.mime);
-			if (c in present) present[c] = true;
+			if (c in present) present[c]++;
 		}
 		return present;
 	}
@@ -697,6 +702,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	return (
 		<Screen
 			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
+			lead={<AccountAvatar small avatar={profile?.picture} login={displayName} />}
 			title={displayName}
 			actions={
 				<>
@@ -704,6 +710,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<IconPhoneCall /> {t("common.call")}
 					</button>
 					<ActionsMenu label={t("chat.window.chatMenuAria")}>
+						{/* Живой фидбег — пункт добавлен заранее (вид меню важнее самой
+						    функции на этом этапе), сама функциональность (поиск по
+						    сообщениям чата) — отдельная задача, disabled до её реализации. */}
+						<button type="button" disabled title={t("chat.window.searchChatSoon")}>
+							<IconMagnifyingGlass /> {t("chat.window.searchChatMenu")}
+						</button>
 						<button type="button" class="danger" onClick={handleClearHistory}>
 							<IconEraser /> {t("chat.window.clearHistoryMenu")}
 						</button>

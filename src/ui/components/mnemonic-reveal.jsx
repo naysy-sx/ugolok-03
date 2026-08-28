@@ -40,7 +40,11 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
   return (
     <>
       {showForm ? (
-        <form onSubmit={handleSubmit}>
+        // Живой фидбек: форма была голыми детьми <form> без композиционных
+        // классов — input/button рядом друг с другом без зазора (не .stack/
+        // .row, REGLAMENT.md §1). Поле ввода — отдельной строкой, кнопки —
+        // рядом под ним.
+        <form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleSubmit}>
           <input
             type="password"
             value={password}
@@ -48,8 +52,10 @@ export default function MnemonicReveal({ ownerPubkey, hasMnemonic }) {
             placeholder={t("settings.enterPasswordPlaceholder")}
             required
           />
-          <button type="submit">{t("common.confirm")}</button>
-          <button type="button" onClick={handleCancel}>{t("common.cancel")}</button>
+          <div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+            <button type="submit">{t("common.confirm")}</button>
+            <button type="button" class="btn--ghost" onClick={handleCancel}>{t("common.cancel")}</button>
+          </div>
           {error && (
             <p role="alert" style={{ color: "var(--bad)" }}>
               {error}

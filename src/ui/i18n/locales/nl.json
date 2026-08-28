@@ -471,7 +471,7 @@
 		"postUnavailable": "This post is unavailable.",
 		"sortNewestFirst": "newest first",
 		"moreComments": "More comments",
-		"feedCommentCount": "💬 {{count}}",
+		"feedCommentCount": "{{count}}",
 		"backToFeed": "Back to channel",
 		"updatedLabel": "updated {{date}}",
 		"aboutToggle": "About channel",
@@ -553,6 +553,8 @@
 			"fileKeyNotFoundError": "Bestandssleutel niet gevonden — het bestand is mogelijk nog niet volledig gesynchroniseerd.",
 			"sendAttachmentConfirm": "Het bestand wordt als bijlage verzonden — na verzending gaat de sleutel naar de ontvanger en kan dit niet ongedaan worden gemaakt. Doorgaan?",
 			"chatMenuAria": "Chat actions",
+			"searchChatMenu": "Search in chat",
+			"searchChatSoon": "Coming soon",
 			"clearHistoryMenu": "Clear history"
 		},
 		"voiceMessageName": "Spraakbericht"
@@ -799,7 +801,7 @@
 		"editProfileButton": "Profiel bewerken",
 		"photoAlt": "Profielfoto",
 		"accountMenuAria": "Account menu",
-		"storageMenuItem": "Storage",
+		"storageMenuItem": "Bestanden",
 		"menuProfile": "Profile and avatar",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",

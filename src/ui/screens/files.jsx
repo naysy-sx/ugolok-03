@@ -701,7 +701,12 @@ export default function Files() {
 	return (
 		<>
 		<Screen
-			title={path[path.length - 1]?.name || t("nav.files")}
+			// Живой фидбег: пункт меню назывался "Хранилище", а сюда попадали на
+			// экран "Файлы" — разнобой в названии одного и того же места.
+			// sidebarCard.storageMenuItem переименован в "Файлы" (account-card.jsx),
+			// плюс имя пользователя — тот же приём, что "Профиль и аватар"/
+			// "Секретная фраза".
+			title={`${currentUser.value.login || t("profile.noNameFallback")}: ${path[path.length - 1]?.name || t("nav.files")}`}
 			actions={
 				<>
 					{view === "own" && (

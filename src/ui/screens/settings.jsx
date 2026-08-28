@@ -563,7 +563,13 @@ function Panel({ title, hint, icon: Icon, danger, children }) {
 function SetRow({ label, hint, children }) {
 	return (
 		<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-			<div class="set-row__text stack" style={{ "--gap": "2px" }}>
+			{/* Живой фидбег: --align — CSS custom property, наследуется. .set-row
+			    ставит --align:center для СЕБЯ (вертикальное центрирование строки),
+			    но .set-row__text — тоже .stack (читает тот же var(--align)) и
+			    наследовал center от родителя, из-за чего подпись центрировалась
+			    по горизонтали внутри своего блока вместо обычного выравнивания
+			    по левому краю. Обрываем наследование явным normal. */}
+			<div class="set-row__text stack" style={{ "--gap": "2px", "--align": "normal" }}>
 				<span>{label}</span>
 				{hint && <span class="set-row__hint">{hint}</span>}
 			</div>

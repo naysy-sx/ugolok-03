@@ -42,13 +42,21 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 						</button>
 					)}
 					{lead}
-					{/* Обёртка нужна только чтобы подзаголовок встал ПОД заголовком, а
-					    не рядом с ним в общем ряду. .grow — чтобы .action-buttons
-					    (margin-inline-start:auto) по-прежнему уезжала вправо. */}
-					<div class="screen-title grow stack" style={{ "--gap": "0" }}>
+					{/* Живой фидбек: обёртка рисовалась ВСЕГДА, даже без subtitle — h1
+					    становился flex-item нового флекс-контейнера вместо обычного
+					    блочного потомка .header-actions на КАЖДОМ экране (регрессия
+					    шрифта/выключки на Профиле/Файлах/Диагностике/Справке/Чате/
+					    Контактах). Обёртка нужна ТОЛЬКО чтобы подзаголовок встал ПОД
+					    заголовком — рисуем её только когда subtitle реально передан;
+					    без него h1 — голый потомок .header-actions, как было. */}
+					{subtitle ? (
+						<div class="screen-title grow stack" style={{ "--gap": "0" }}>
+							<h1 id={titleId}>{title}</h1>
+							{subtitle}
+						</div>
+					) : (
 						<h1 id={titleId}>{title}</h1>
-						{subtitle}
-					</div>
+					)}
 					{actions && (
 						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
 							{actions}
