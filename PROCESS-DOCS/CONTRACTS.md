@@ -22160,3 +22160,85 @@ posts+comments+chat) НЕ меняется, покрыто существующ�
 композиционно (REGLAMENT.md `.reel`: прокрутка ТОЛЬКО при нехватке
 места; с двумя короткими вкладками вместо четырёх прокрутка попросту
 не понадобится, кода не требует).
+
+## DISCOVERY (PROCESS-DOCS/REDESIGN/DISCOVERY/DISCOVERY-TASK.md) — часть A: починка
+
+### T0 — закрыт, четвёртой причины нет
+
+Живая проверка (`run-ugolok`, dev-сервер И продакшн-сборка `vite
+build`+`vite preview`) не воспроизвела падение рендера ни на пустом,
+ни на заполненном (карточка вставлена напрямую в `discoveryProfiles`)
+состоянии — три гипотезы ТЗ (несовпадение `place.value.kind`,
+`currentUser.value === null`, схлопнутая CSS-высота) не подтвердились.
+Пользователь подтвердил на своей машине: DOM корректен
+(`<h2>Хотят познакомиться</h2><p>Пока никого не видно.</p>` — штатное
+пустое состояние), консоль с фильтром "Errors" чиста от
+`Uncaught`-исключений. "Белый экран" в его описании — это пустой
+список карточек ПОСЛЕ включения видимости у тестовых аккаунтов, т.е.
+буквально T2 (событие не доходит до реле). Подробности —
+`PROCESS-DOCS/log.md`, раздел "DISCOVERY T0". Отдельного исправления
+не требует.
+
+### T1 — профили в карточках
+
+`discovery.jsx`: заменить `ensureProfilesFetched(discoveryPubkeys,
+fetchProfiles).catch(() => {})` на `ensureProfilesFresh(discoveryPubkeys,
+fetchProfiles, { force: true })` БЕЗ `.catch` — отличие от всех
+остальных вызывающих `ensureProfilesFresh` мест в проекте
+(`moderation-panel.jsx`/`channel-post-page.jsx`/`channel-chat.jsx` все
+глотают ошибку) сознательное: это единственный экран, где сбой
+резолва профилей обязан долететь до уже существующего в
+`discovery.jsx` `.catch((e) => setConnectionError(errorMessage(e)))` —
+ловится ТЕМ ЖЕ обработчиком, что и сбой `ensureConnected`, отдельного
+UI не заводится.
+
+### T2 — публикация видимости
+
+**Домен** (`src/domain/discovery/discovery.js`):
+- `publishDiscoverySettings` — убрать `try { await publish(...) }
+  catch {}`. Заменить прямой вызов `publish(event)` на
+  `requirePublishOk(publish, event)` (тот же хелпер, что
+  `src/domain/messaging/chat.js:70`, конвертирует и брошенное
+  исключение, и `{ok:false}`-ответ реле в единообразный `throw`) —
+  **экспортировать** `requirePublishOk` из `chat.js` (сейчас приватная
+  функция файла), импортировать в `discovery.js`, не дублировать.
+- При провале — `enqueue(event, dbKey)` (тот же `core/store/outbox.js`,
+  что использует `chat.js:346`) ДО повторного throw — событие уходит в
+  outbox для `drainOutboxSafely` на следующее подключение, ошибка всё
+  равно пробрасывается наверх (в отличие от `chat.js`, где enqueue
+  заменяет throw статусом "failed" у сообщения — здесь нет локальной
+  сущности со статусом, поэтому кладём В ОБА: и в outbox, и наверх).
+  Порядок: `db.table("discoverySettings").put(...)` (локально, как
+  сейчас) → build event → `requirePublishOk` → при провале `enqueue` +
+  `throw`. Тест "сбой publish не мешает локальному сохранению" (уже
+  существующий) продолжает проходить — put случается до publish.
+
+**`src/ui/screens/profile.jsx`'s `VisibilitySection.persist`**: перед
+`publishDiscoverySettings(...)` — `await ensureConnected(ownerPubkey,
+privKey, dbKey)` (тот же вызов, что уже делает `discovery.jsx`).
+Ошибка (от `ensureConnected` или от `publishDiscoverySettings`) уже
+ловится существующим `catch (err) { setError(errorMessage(err)) }` —
+новый UI не нужен, только сама попытка соединения перед публикацией.
+
+**`connect()` (`transport.js`, рядом со строками ~427-433, backfill
+kind:10002/10050)**: добавить третий backfill-блок по тому же
+паттерну (`publisher.publish(...).catch(() => {})` — best-effort, не
+блокирует остальной `connect()`): прочитать `loadDiscoverySettings(
+pubkeyHex)`; если `visible === true` — собрать `channels` (та же
+логика, что внутри `publishDiscoverySettings`: `showChannels ?
+listOwnedChannels(...).filter(...).map(...) : []`) и переиздать
+`buildDiscoveryEvent`. **Без проверки TTL** — `visibleUntil` появится
+только в T4 (часть B); пока в схеме нет срока, единственное условие —
+`visible === true`, ровно как сейчас интерпретируется флаг. T4 добавит
+`&& visibleUntil > nowSec()` в это же условие, отдельным точечным
+изменением.
+
+### T3 — гонка EOSE
+
+**Вариант 1** (рекомендация ТЗ, принято): в `fetchDiscoveryProfiles`
+(`transport.js:994`) убрать `bulkDelete`-реконсиляцию, оставить только
+`put` по пришедшим событиям. Инвариант П4 `relay-pool.js` не трогается.
+Причина выбора — ровно та, что в ТЗ: полезность реконсиляции ("автор
+перестал публиковать") закрывается сроком годности после T4, отдельно
+трогать транспорт всех остальных подписок ради неё избыточно для этой
+итерации.

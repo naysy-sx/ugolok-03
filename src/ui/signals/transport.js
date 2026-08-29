@@ -16,7 +16,7 @@ import { accumulateProfileVersions } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { db } from "../../core/store/database.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
-import { DISCOVERY_KIND, parseDiscoveryEvent } from "../../domain/discovery/discovery.js";
+import { DISCOVERY_KIND, parseDiscoveryEvent, loadDiscoverySettings, buildDiscoveryEvent } from "../../domain/discovery/discovery.js";
 import {
 	acceptWelcome,
 	ensureOwnKeyPackagePublished,
@@ -36,7 +36,7 @@ import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, han
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
-import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion, backfillOwnChannelGrants } from "../../domain/content/channel.js";
+import { receiveChannelKeyGrant, receiveChannelMetadata, receiveAllowlistUpdate, receiveChannelDeletion, backfillOwnChannelGrants, listOwnedChannels } from "../../domain/content/channel.js";
 import { applyChannelUnviewRumor, rebuildChannelVisibilityGroups } from "../../domain/content/channel-visibility.js";
 import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
@@ -431,6 +431,19 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	publisher
 		.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
 		.catch(() => {});
+	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2) — тот же backfill-принцип, что
+	// kind:10002/10050 выше: без этого события 30073 переставало доходить до
+	// реле насовсем после первого же connect() без соединения в момент
+	// публикации (VisibilitySection не проверяла ensureConnected). Republish
+	// на каждый connect() безопасен — событие replaceable и дешёвое. Без
+	// проверки срока — visibleUntil появится в T4, пока условие только visible.
+	const discoverySettings = await loadDiscoverySettings(pubkeyHex);
+	if (discoverySettings.visible) {
+		const discoveryChannels = discoverySettings.showChannels
+			? (await listOwnedChannels(pubkeyHex, dbKey)).filter((c) => discoverySettings.channelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))
+			: [];
+		publisher.publish(buildDiscoveryEvent(privKey, { visible: true, showChannels: discoverySettings.showChannels, channels: discoveryChannels })).catch(() => {});
+	}
 	logSync(t("syncLog.readMarks"));
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;
 	// до этого вызова foldReadStatus срабатывала ТОЛЬКО на устройстве, опубликовавшем
@@ -996,8 +1009,16 @@ export async function fetchDiscoveryProfiles() {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDiscoveryProfiles()");
 	}
 	const subId = "discovery-" + Math.random().toString(36).slice(2);
-	const seenPubkeys = new Set();
 
+	// CONTRACTS.md §DISCOVERY, T3, вариант 1 — раньше здесь была реконсиляция
+	// bulkDelete по отсутствию в снимке: инвариант П4 (relay-pool.js) считает
+	// финальным ПЕРВЫЙ пришедший EOSE, поэтому при двух read-реле события
+	// медленного реле, прибывшие ПОСЛЕ CLOSE от быстрого пустого реле, стирали
+	// весь локальный кэш целиком (воспроизведено на стенде). Только put — срок
+	// годности записи теперь обеспечивает visibleUntil (T4), не факт отсутствия
+	// в очередном REQ. Инвариант П4 не тронут (вариант 2 — дороже, требует
+	// собирать EOSE со всех read-реле пула — отложен, не нужен для этой
+	// итерации).
 	await new Promise((resolve) => {
 		const subscriber = createSubscriber(connection, {
 			verifyBatch: verifyBatchFn,
@@ -1005,7 +1026,6 @@ export async function fetchDiscoveryProfiles() {
 				for (const event of events) {
 					try {
 						const parsed = parseDiscoveryEvent(event);
-						seenPubkeys.add(event.pubkey);
 						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
 					} catch {
 						// повреждённый/не-JSON discovery-broadcast чужого клиента — пропустить
@@ -1020,12 +1040,6 @@ export async function fetchDiscoveryProfiles() {
 		connection.addMessageHandler(subscriber.handleMessage);
 		subscriber.subscribe(subId, [{ kinds: [DISCOVERY_KIND] }]);
 	});
-
-	const cachedPubkeys = await db.table("discoveryProfiles").toCollection().primaryKeys();
-	const stalePubkeys = cachedPubkeys.filter((pk) => !seenPubkeys.has(pk));
-	if (stalePubkeys.length > 0) {
-		await db.table("discoveryProfiles").bulkDelete(stalePubkeys);
-	}
 }
 
 let profileSubscriber = null;

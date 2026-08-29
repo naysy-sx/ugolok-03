@@ -1,6 +1,8 @@
 import { sign } from '../../core/crypto/sign.js';
 import { db } from '../../core/store/database.js';
 import { listOwnedChannels } from '../content/channel.js';
+import { requirePublishOk } from "../messaging/chat.js";
+import { enqueue } from "../../core/store/outbox.js";
 
 export const DISCOVERY_KIND = 30073;
 
@@ -49,7 +51,12 @@ export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { vi
             .map((c) => ({ id: c.id, name: c.name, description: c.description }))
     ) : [];
     
+    const event = buildDiscoveryEvent(privKey, { visible, showChannels, channels });
+
     try {
-        await publish(buildDiscoveryEvent(privKey, { visible, showChannels, channels }));
-    } catch {}
+        await requirePublishOk(publish, event);
+    } catch (e) {
+        await enqueue(event, dbKey);
+        throw e;
+    }
 }

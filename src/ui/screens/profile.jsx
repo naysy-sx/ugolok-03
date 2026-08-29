@@ -50,6 +50,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 	async function persist(next) {
 		setSettings(next);
 		try {
+			await ensureConnected(ownerPubkey, privKey, dbKey);
 			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
 		} catch (err) {
 			setError(errorMessage(err));

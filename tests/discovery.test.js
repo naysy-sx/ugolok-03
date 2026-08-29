@@ -13,6 +13,7 @@ import {
 	loadDiscoverySettings,
 	publishDiscoverySettings,
 } from "../src/domain/discovery/discovery.js";
+import { listPending } from "../src/core/store/outbox.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(7);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -32,6 +33,7 @@ beforeEach(async () => {
 	await db.table("channels").clear();
 	await db.table("channelKeys").clear();
 	await db.table("channelKeyMeta").clear();
+	await db.table("outbox").clear();
 });
 
 after(() => {
@@ -111,11 +113,27 @@ test("publishDiscoverySettings: showChannels=true — публикует ТОЛ�
 	assert.ok(!parsed.channels.some((c) => c.id === idB), "неотмеченный канал не должен утечь в публичный broadcast");
 });
 
-test("publishDiscoverySettings: сбой publish не мешает локальному сохранению (best-effort, тот же принцип, что saveUiSettings)", async () => {
+test("publishDiscoverySettings: сбой publish (исключение) БРОСАЕТ наверх, но локальная запись всё равно сохранена, событие уходит в outbox", async () => {
 	const failingPublish = async () => {
 		throw new Error("нет соединения");
 	};
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, failingPublish);
+	await assert.rejects(
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, failingPublish),
+	);
+
 	const local = await loadDiscoverySettings(ALICE_PUB);
-	assert.equal(local.visible, true);
+	assert.equal(local.visible, true, "put() случается до publish — локальное сохранение не зависит от сети");
+
+	const pending = await listPending(DB_KEY);
+	assert.equal(pending.length, 1, "событие, не долетевшее до реле, обязано остаться в outbox для drainOutboxSafely");
+	assert.equal(parseDiscoveryEvent(pending[0].event).visible, true);
+});
+
+test("publishDiscoverySettings: реле вернуло {ok:false} (не исключение) — тоже бросает и тоже уходит в outbox", async () => {
+	const rejectingPublish = async () => ({ ok: false, reason: "relay отклонил" });
+	await assert.rejects(
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, rejectingPublish),
+	);
+	const pending = await listPending(DB_KEY);
+	assert.equal(pending.length, 1);
 });

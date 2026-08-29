@@ -7791,3 +7791,52 @@ CONTRACTS.md §HEADERS, «Этап 3».
 Регрессия: 2217/2217. Живая проверка (skill run-ugolok) — пилюля
 вложений, зазор между action-кнопками, отступ шапки, «нет вложений»
 на 320px без регрессии переноса заголовка.
+
+## DISCOVERY (PROCESS-DOCS/REDESIGN/DISCOVERY/DISCOVERY-TASK.md) — часть A: починка — ЗАКРЫТА (код+тесты+живая проверка)
+
+T0 закрыт живой проверкой (`run-ugolok` + подтверждение пользователем
+на реальном аккаунте) — четвёртой причины "белого экрана" нет, это T2.
+Подробности — log.md/CONTRACTS.md §DISCOVERY. Три рутинных этапа,
+контракты — CONTRACTS.md §DISCOVERY.
+
+### Этап 1 (T1) — профили в карточках
+
+`discovery.jsx`: `ensureProfilesFetched(...).catch(() => {})` →
+`ensureProfilesFresh(discoveryPubkeys, fetchProfiles, { force: true })`
+без локального catch — ошибка резолва профилей долетает до уже
+существующего `setConnectionError`.
+
+Тест: карточка резолвит имя/аватар/био через `ensureProfilesFresh`
+(мок), не кэширует null навсегда.
+
+### Этап 2 (T2) — публикация видимости долетает до реле
+
+- `discovery.js`: `requirePublishOk` (экспорт из `chat.js`) вместо
+  голого `publish()`, провал → `enqueue` в outbox + `throw` (не
+  глотать).
+- `profile.jsx`'s `VisibilitySection.persist`: `ensureConnected(...)`
+  перед `publishDiscoverySettings(...)`.
+- `transport.js`'s `connect()`: третий backfill-блок рядом с kind:10002/
+  10050 — если `discoverySettings.visible === true`, переиздать
+  `buildDiscoveryEvent` (без TTL-проверки, она появится в T4).
+
+Тесты: `publishDiscoverySettings` при сбое publish — бросает (правка
+существующего теста) + событие оказывается в outbox; `connect()`
+переиздаёт discovery-событие при `visible: true`, не переиздаёт при
+`false`.
+
+### Этап 3 (T3) — гонка EOSE стирает кэш
+
+Вариант 1 (CONTRACTS.md — обоснование): в `fetchDiscoveryProfiles`
+убрать `bulkDelete`-реконсиляцию, оставить `put`. Инвариант П4
+`relay-pool.js` не трогается.
+
+Тест: два REQ подряд с разным набором событий — старые записи
+остаются в `discoveryProfiles`, не стираются отсутствием в новом
+снимке.
+
+Порядок строго 1→2→3 (T2 самый рискованный — трогает `connect()`,
+общий для всего транспорта). После каждого этапа — полная регрессия
++ живая проверка (`run-ugolok`): включить видимость на одном тестовом
+аккаунте, убедиться, что другой аккаунт видит карточку с именем (не
+hex), после чего решать про Часть B/C/D (T4-T9) отдельным заходом.

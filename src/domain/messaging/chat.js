@@ -67,7 +67,7 @@ export function isCommitter(pubkeyHexA, pubkeyHexB) {
 	return pubkeyHexA < pubkeyHexB;
 }
 
-async function requirePublishOk(publish, event) {
+export async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
 		if (result.reason) throw new Error(result.reason);

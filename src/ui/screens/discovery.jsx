@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, fetchProfiles, fetchDiscoveryProfiles } from "../signals/transport.js";
-import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFetched, sendContactRequestAction, cancelContactRequestAction } from "../signals/contacts.js";
+import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction } from "../signals/contacts.js";
 import { ContactIdentity } from "./contacts.jsx";
 import Screen from "../components/screen.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
@@ -30,7 +30,7 @@ export default function Discovery() {
 				await fetchDiscoveryProfiles();
 				await refreshDiscoveryProfiles(ownerPubkey);
 				const discoveryPubkeys = discoveryProfiles.value.map((p) => p.pubkey);
-				await ensureProfilesFetched(discoveryPubkeys, fetchProfiles).catch(() => {});
+				await ensureProfilesFresh(discoveryPubkeys, fetchProfiles, { force: true });
 			})
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
