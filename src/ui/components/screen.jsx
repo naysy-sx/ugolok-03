@@ -31,39 +31,43 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 
 	return (
 		<section class="content-section stack">
-			<header class="section-header rigid stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-m)" }}>
-				<div class="header-actions row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
-					    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
-					    кнопки, видимого текста больше нет. */}
-					{breadcrumb && (
-						<button type="button" class="back-button row" style={{ "--align": "center", justifyContent: "center" }} onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
-							<IconCornerBack />
-						</button>
-					)}
-					{lead}
-					{/* Живой фидбек: обёртка рисовалась ВСЕГДА, даже без subtitle — h1
-					    становился flex-item нового флекс-контейнера вместо обычного
-					    блочного потомка .header-actions на КАЖДОМ экране (регрессия
-					    шрифта/выключки на Профиле/Файлах/Диагностике/Справке/Чате/
-					    Контактах). Обёртка нужна ТОЛЬКО чтобы подзаголовок встал ПОД
-					    заголовком — рисуем её только когда subtitle реально передан;
-					    без него h1 — голый потомок .header-actions, как было. */}
-					{subtitle ? (
-						<div class="screen-title grow stack" style={{ "--gap": "0" }}>
-							<h1 id={titleId}>{title}</h1>
-							{subtitle}
-						</div>
-					) : (
-						<h1 id={titleId}>{title}</h1>
-					)}
-					{actions && (
-						<div class="action-buttons row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} role="group" aria-label={t("screen.sectionActionsAria")}>
-							{actions}
-						</div>
-					)}
+			{/* HEADERS (CONTRACTS.md §HEADERS), этап 2 — grid вместо flex-ряда:
+			    четыре именованные зоны (back/lead/ident/actions), КАЖДАЯ —
+			    прямой ребёнок .section-header (grid-area не работает через
+			    обёртку). Раньше вся строка была ОДНИМ .row-контейнером
+			    (.header-actions, имя вводило в заблуждение — держал не только
+			    действия) — grid берёт на себя то, что раньше решал flex-ряд +
+			    margin-inline-start:auto, обёртка-ряд убрана целиком, не
+			    переименована. .screen-title рендерится ВСЕГДА (не только при
+			    subtitle, как раньше) — иначе заголовок жил бы в двух разных
+			    структурах и grid-area пришлось бы описывать дважды. */}
+			<header class="section-header rigid">
+				{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
+				    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
+				    кнопки, видимого текста больше нет. */}
+				{breadcrumb && (
+					<button type="button" class="header-back" onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
+						<IconCornerBack />
+					</button>
+				)}
+				{lead && <div class="header-lead">{lead}</div>}
+				<div class="screen-title">
+					<h1 id={titleId} class="screen-title__text">{title}</h1>
+					{subtitle && <div class="screen-title__sub">{subtitle}</div>}
 				</div>
-				{headerExtra}
+				{actions && (
+					<div class="header-actions" role="group" aria-label={t("screen.sectionActionsAria")}>
+						{actions}
+					</div>
+				)}
+				{/* headerExtra — раскрывающийся блок ПОД строкой заголовка (канал
+				    §B4), обёртка .header-extra живёт ЗДЕСЬ (не в самом
+				    ChannelAbout — тот рендерит .stack, общую композиционную
+				    обёртку REGLAMENT.md, вешать grid-специфику на неё испортила
+				    бы .stack в любом другом месте проекта). grid-column:1/-1
+				    (CSS) — под именованными зонами, во всю ширину, в обеих
+				    ширинах контейнера без дублирования правила. */}
+				{headerExtra && <div class="header-extra">{headerExtra}</div>}
 			</header>
 
 			{/* HEADERS (CONTRACTS.md §HEADERS), этап 1 — слот сужен: ТОЛЬКО

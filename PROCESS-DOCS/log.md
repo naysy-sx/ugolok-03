@@ -8514,3 +8514,39 @@ media-overlay на верной позиции → крестик возвращ
 
 Регрессия: 2210/2211 (room-session.test.js — независимая race-
 флуктуация). Подробный отчёт — PLAN.md §HEADERS, этап 1.
+
+## HEADERS — этап 2 (шапка на grid) ЗАКРЫТ
+
+Реализовано Claude напрямую (screen.jsx + custom.css) — весь код был
+дословно специфицирован в CONTRACTS.md заранее, воркер добавил бы
+только транспортный риск.
+
+Живой проверкой (skill run-ugolok) найдены и исправлены ДО коммита
+ДВА серьёзных бага переукладки на узком контейнере:
+1. `container-type:inline-size` был на `.section-header` САМОМ — том
+   же элементе, чьи grid-свойства меняет `@container`. Self-
+   referencing query для layout самого контейнера Chromium молча
+   игнорирует (grid-template-areas никогда не переключался, хотя
+   white-space потомка — переключался, что маскировало проблему).
+   Диагностировано через прямой обход `document.styleSheets`/
+   `getComputedStyle`, не на глаз. Фикс — контейнер на родителя
+   (`.content-section`), тот же приём, что уже есть в проекте
+   у `.contacts-layout`.
+2. `.screen-title__text`'s ellipsis (overflow/text-overflow) не
+   выключался одним white-space:normal — длинное слово на 320px
+   ellipsis-илось построчно. Плюс порядок каскада (@container блок
+   стоял до базовых правил) и забытая зависимость `.action-buttons
+   .mark-txt` (Journal) от переименованного класса.
+
+Добавлена команда `resize <w> <h>` в `.claude/skills/run-ugolok/
+driver.mjs` (отсутствовала, нужна для проверки container query).
+
+Live-проверка: 13 экранов чеклиста + канал с длинным именем «Уголок:
+разработка и планы» на 320/420/480/700/1280px — перенос без
+многоточия под 30rem, ellipsis над порогом, кнопки не выталкиваются.
+Табуляция реальными Tab-нажатиями (не programmatic focus — тот не
+всегда включает :focus-visible) — видимый фокус на back/actions
+подтверждён.
+
+Регрессия: 2211/2211. Подробности — PLAN.md/CONTRACTS.md §HEADERS,
+этап 2.

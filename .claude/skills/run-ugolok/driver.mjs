@@ -206,6 +206,17 @@ const COMMANDS = {
 		}
 	},
 
+	// HEADERS этап 2 (container-query проверка) — page.setViewportSize,
+	// не window.resizeTo (тот не работает вне попапа window.open). Пример:
+	// resize 420 800
+	async resize(args) {
+		if (!page) return console.log("ERROR: launch first");
+		const [w, h] = args.split(/\s+/).map(Number);
+		if (!w || !h) return console.log("ERROR: resize <width> <height>");
+		await page.setViewportSize({ width: w, height: h });
+		console.log("resized:", w, "x", h);
+	},
+
 	async quit() {
 		if (browser) await browser.close().catch(() => {});
 		browser = null;

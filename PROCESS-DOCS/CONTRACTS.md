@@ -21875,3 +21875,209 @@ TASK.md (там говорилось «вынести», не «переписа
   состояния, требуемое самим ТЗ (шапка и лента — разные слои).
 - отступы зон (`padding-inline: 4px` / первый-последний `6px`
   прототипа) → `var(--space-3xs)` / `var(--space-2xs)` соответственно.
+
+### Этап 2 — шапка на grid: контракт `screen.jsx`
+
+Область правки — СТРОГО `screen.jsx` + его стили (`custom.css`).
+13 экранов из чеклиста — только ПРОВЕРКА (живой запуск), их JSX не
+трогается: контракт пропсов `Screen` не меняется (`breadcrumb, title,
+subtitle, lead, headerExtra, actions, slices, footer, feed, anchored,
+children` — те же имена, что сейчас; ТЗ псевдокод называет пропс
+`onBack`, в проекте это `breadcrumb.onBack`/`breadcrumb.label` —
+сохраняется буквально, это не расхождение, а адаптация примера ТЗ под
+уже существующий контракт).
+
+**Целевая разметка (`screen.jsx`, header):**
+
+```jsx
+<header class="section-header">
+  {breadcrumb && (
+    <button type="button" class="header-back" onClick={breadcrumb.onBack}
+      aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
+      <IconCornerBack />
+    </button>
+  )}
+  {lead && <div class="header-lead">{lead}</div>}
+  <div class="screen-title">
+    <h1 id={titleId} class="screen-title__text">{title}</h1>
+    {subtitle && <div class="screen-title__sub">{subtitle}</div>}
+  </div>
+  {actions && (
+    <div class="header-actions" role="group" aria-label={t("screen.sectionActionsAria")}>
+      {actions}
+    </div>
+  )}
+  {headerExtra && <div class="header-extra">{headerExtra}</div>}
+</header>
+```
+
+Разница с буквой ТЗ, оба решения зафиксированы здесь заранее (не
+угадываются воркером):
+
+1. **Нет элемента `.section-header__row`.** ТЗ предлагает переименовать
+   в него текущий `.header-actions` (весь верхний ряд), но собственный
+   же псевдокод ТЗ показывает четыре зоны ПРЯМЫМИ детьми `<header>`,
+   без обёртки-ряда — grid не умеет назначать `grid-area` на обёртку
+   и ожидать, что дети обёртки попадут в разные ячейки. Разночтение
+   ТЗ разрешено в пользу показанной разметки: обёртка-ряд убирается
+   ПОЛНОСТЬЮ (не переименовывается), зоны — прямые дети `.section-
+   header`, сама grid-раскладка решает то, что раньше решал flex-ряд.
+2. **`headerExtra` — без grid-area в `grid-template-areas`.**
+   `grid-column: 1 / -1` (span всех колонок), авто-строка ПОД
+   именованными зонами — работает одинаково в обеих ширинах контейнера
+   (3 и 4 колонки) без дублирования правила под `@container`. Пусто/
+   undefined → авто-строка нулевой высоты, ничего не рендерится (как
+   было).
+
+**CSS (`custom.css`, заменяет текущий блок `.section-header`/
+`.action-buttons`/`.back-button`/`.app-layout .header-actions h1`):**
+
+```css
+.section-header {
+  display: grid;
+  grid-template-areas: "back lead ident actions";
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  background: var(--surface);
+  /* container-type: inline-size уже объявлен выше (Журнал/.mark-txt) */
+}
+.section-header > * { padding-inline: var(--space-3xs) }
+.section-header > :first-child { padding-inline-start: var(--space-2xs) }
+.section-header > :last-child { padding-inline-end: var(--space-2xs) }
+
+.header-back    { grid-area: back }
+.header-lead    { grid-area: lead; display: flex; align-items: center }
+.screen-title   { grid-area: ident; min-width: 0; padding-block: var(--space-2xs) }
+.header-actions { grid-area: actions; display: flex; align-items: center; justify-self: end;
+                   flex-wrap: wrap; justify-content: flex-end; row-gap: var(--space-2xs) }
+.header-extra { grid-column: 1 / -1 }
+
+.screen-title__text {
+  font-size: var(--step-2); color: var(--accent); margin-block: 0; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.screen-title__sub {
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+@container (width < 30rem) {
+  .section-header {
+    grid-template-areas: "back lead actions" "ident ident ident";
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .screen-title { padding-block: 0 var(--space-xs); padding-inline-start: var(--space-s) }
+  .screen-title__text { white-space: normal }
+  .header-actions .btn-label { display: none }
+}
+
+.header-back,
+.header-actions button,
+.header-actions :where([type="button"]) {
+  min-height: 2.75rem; min-width: 2.75rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.header-back .icon,
+.header-actions .icon { width: 1.25rem; height: 1.25rem }
+
+.header-back { background: none; border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-sm); color: var(--fg) }
+.header-back:hover, .header-back:focus-visible,
+.header-actions button:focus-visible,
+.header-actions :where([type="button"]):focus-visible {
+  color: var(--accent); border-color: var(--accent); background-color: transparent;
+}
+```
+
+(Псевдо-CSS выше — руководство для воркера, не копировать `[class]
+[style*=…] {}`-заглушку буквально; `headerExtra` получает класс
+`.header-extra{grid-column:1/-1}` — см. правило ниже, заглушка
+понадобилась только чтобы не потерять место в блоке при копировании
+фрагментами воркеру.)
+
+Уточнение по `headerExtra`: JSX ОБОРАЧИВАЕТ `{headerExtra}` в `<div
+class="header-extra">` (первая версия этого контракта предполагала
+повесить `grid-column:1/-1` на класс корневого элемента самого
+потребителя — неверно: единственный текущий потребитель,
+`channel-feed.jsx`'s `ChannelAbout`, рендерит `<div class="stack">`,
+ОБЩУЮ композиционную обёртку REGLAMENT.md, а не свой уникальный класс;
+вешать grid-специфику на `.stack` испортило бы её в любом другом месте
+проекта). Обёртка `.header-extra` — целиком внутри `screen.jsx`, не
+трогает `channel-feed.jsx` и не меняет то, что рендерит `ChannelAbout`
+изнутри себя; рендерится, только когда `headerExtra` передан (тот же
+принцип «зона рисуется только при наличии содержимого»).
+
+**Резолюция `.action-buttons`→`.header-actions` (коллизия имён):**
+`unlock.jsx:542` уже использует ГОЛОЕ `class="header-actions"` для
+несвязанной цели (ссылка «Помощь» в шапке экрана входа) — файл
+явно исключён из этого этапа. Коллизия разрешена уже существующим в
+проекте приёмом: CSS-правила для нового `.header-actions` (Screen)
+пишутся под селектором `.app-layout .header-actions...` (тот же
+префикс, что уже используется для `h1` внутри старого
+`.header-actions`), `unlock.jsx` живёт под `.auth-layout` — пересечения
+нет ни сейчас, ни после переименования.
+
+**44px/20px — единообразно, включая `.header-back`:** старый
+`.back-button` был 30×30px (визуальный размер = зона нажатия,
+решение, подтверждённое живой сверкой на более раннем этапе) — этап 2
+явно требует зону нажатия 44px по всей шапке, это ЕДИНСТВЕННОЕ
+намеренное визуальное отличие кнопки «Назад» от предыдущего
+согласованного варианта, того требует сам чеклист этапа («Табуляцией
+проходится вся шапка, фокус виден» — тесная 30px-цель не проходит
+современный WCAG-ориентир 44px, и это именно то, что «главный этап»
+переделывает). Иконка отвязана от `font-size` кнопки — задан явный
+`width/height:1.25rem` на `.icon`, а не через `1em`, потому что
+`.header-actions button` держит `font-size` текста (не менялся), а
+иконка обязана остаться 20px независимо от размера подписи.
+
+**`.header-actions .btn-label{display:none}` — CSS добавлен, разметка
+13 экранов НЕ трогается.** Список файлов этапа 2 — только `screen.jsx`
+и стили; сами 13 экранов передают `actions` как голый текст рядом с
+иконкой (`<IconX/> {t(...)}`), не оборачивая его в `<span
+class="btn-label">`. Оборачивание — правка каждого из 13 файлов,
+вне заявленного объёма этого этапа; правило остаётся неактивным
+(inert) до тех пор, пока какой-то экран не начнёт использовать
+`.btn-label` явно. Отмечено как открытый пункт отчёта, не тихая
+недоделка.
+
+**КРИТИЧЕСКИЙ баг, найден и исправлен живой проверкой: self-
+referencing container query.** `container-type: inline-size` стоял
+на `.section-header` — том же элементе, чьи `grid-template-areas`/
+`grid-template-columns` меняются через `@container (width < 30rem)`.
+Браузер (Chromium 149, headless) молча ИГНОРИРУЕТ переключение
+layout-задающих свойств САМОГО query-контейнера через query на его же
+размер — при этом свойства ПОТОМКОВ (`.screen-title__text`'s
+`white-space`, `.header-actions .btn-label`) переключались нормально,
+что маскировало проблему при поверхностной проверке (могло выглядеть
+как «частично работает»). Обнаружено, потому что `grid-template-
+areas` НЕ переключался вообще ни на одной ширине — заголовок
+«Уголок: разработка и планы» на 320-420px обрезался многоточием в
+ОДНУ строку вместо переноса на несколько (первая версия отчёта по
+этой находке). Диагностировано через прямой обход `document.
+styleSheets`/`getComputedStyle` в live-сессии (skill run-ugolok),
+не на глаз.
+
+Фикс — тот же приём, что уже в проекте (`.contacts-layout`'s
+комментарий «контейнер — .content-wrapper», НЕ сам `.contacts-
+layout`): `container-type: inline-size` перенесён на
+`.content-section` (прямой родитель `.section-header`, тот же по
+факту inline-size), `.section-header` меняет СВОИ grid-свойства по
+чужому размеру, не по своему. `.mark-txt`'s `@container (max-width:
+32em)` (Journal, «Mark as read») — тот же перенесённый контейнер,
+перепроверен живьём отдельно (32em — СВОЙ порог, не унифицирован с
+30rem, см. этап 1 ревью того же участка).
+
+Второй, более мелкий баг той же диагностической сессии: `.screen-
+title__text`'s `overflow:hidden;text-overflow:ellipsis` (базовое
+правило) не выключался одним `white-space:normal` в узкой раскладке
+— на очень узком контейнере (320px) отдельное длинное слово
+(«разработка»), не помещающееся в колонку, продолжало ellipsis-иться
+ПОСТРОЧНО (каждая перенесённая строка обрезалась отдельно). Фикс —
+явный сброс `overflow:visible;text-overflow:clip` вместе с
+`white-space:normal` в `@container`.
+
+Оба бага исправлены ДО коммита этапа 2, регрессия/live-проверка
+повторены после фикса на 320/420/480/700/1280px — заголовок
+переносится полностью без многоточия под 30rem, обрезается ellipsis
+в одну строку на/над 30rem, кнопки не выталкиваются ни на одной
+ширине.

@@ -27,13 +27,13 @@
 
 /* Найдено живой проверкой этапа с компактными иконками модерации
    (channel-chat.jsx): SVG внутри inline-flex кнопки (.icon-btn/
-   .back-button) иногда схлопывается по ширине почти до нуля — классический
+   .header-back) иногда схлопывается по ширине почти до нуля — классический
    баг flex-автоминимума (min-width:auto у flex-item с replaced-содержимым
    вычисляется неверно для SVG с шириной в em). flex:none — та же гигиена,
    что уже применена к .nav-item-btn, но САМ фикс — явный min-width/
    min-height, перебивающий автоминимум. */
 .icon-btn .icon,
-.back-button .icon {
+.header-back .icon {
 	flex: none;
 	min-width: 1em;
 	min-height: 1em;
@@ -1536,10 +1536,20 @@ html[data-media-full] .top-corner-actions {
 
 /* Экран (screen.jsx) — закреплённая шапка/подвал вокруг единственной
    прокручиваемой зоны. content-section заполняет .main-content целиком. */
-/* .stack (раскладка) уже в JSX — здесь только собственный размер/скролл. */
+/* .stack (раскладка) уже в JSX — здесь только собственный размер/скролл.
+   HEADERS этап 2 — container-type ЗДЕСЬ, не на .section-header (том же
+   элементе, чьи grid-template-areas/columns меняются query'ом ниже):
+   self-referencing @container для layout-свойств САМОГО query-контейнера
+   браузер молча игнорирует (found живой проверкой — grid-template-areas
+   не переключался на узком контейнере, хотя простые свойства потомков,
+   white-space и т.п., переключались нормально). Тот же приём, что уже
+   в проекте у .contacts-layout ("контейнер — .content-wrapper", не сам
+   .contacts-layout) — контейнер объявляется на РОДИТЕЛЕ, элемент меняет
+   СВОИ свойства по чужому размеру. */
 .content-section {
 	height: 100%;
 	overflow: hidden;
+	container-type: inline-size;
 }
 
 /* .rigid/.stack/.box (раскладка) уже в JSX — здесь только граница. */
@@ -1555,12 +1565,34 @@ html[data-media-full] .top-corner-actions {
 	border-block-end: none;
 }
 
-/* @container для .mark-txt ниже (секция "Журнал") меряет шапку — контекст
-   объявляется здесь, один раз, как .content-wrapper для области контента. */
-.section-header {
-	container-type: inline-size;
-}
+/* @container для .mark-txt ниже (секция "Журнал") и для grid-раскладки
+   самой .section-header (ниже) — контекст объявлен на .content-section
+   (родитель, см. комментарий там), не здесь. */
 
+/* HEADERS (CONTRACTS.md §HEADERS), этап 2 — grid вместо flex-ряда: четыре
+   именованные зоны, каждая — независимый grid-item (не через margin/flex-
+   трюки, как раньше). background — шапка впервые получает явный фон
+   (раньше наследовала прозрачность родителя) — теперь это отдельный от
+   ленты слой, как в макете. */
+.section-header {
+	display: grid;
+	grid-template-areas: "back lead ident actions";
+	grid-template-columns: auto auto minmax(0, 1fr) auto;
+	align-items: center;
+	background: var(--surface);
+}
+/* Зазоры — padding зон, НЕ gap: gap ставится между дорожками грида и
+   остаётся, даже когда дорожка схлопнулась в ноль (экран без кнопки
+   "назад" — профиль/настройки — иначе уехал бы вправо на пустой зазор). */
+.section-header > * {
+	padding-inline: var(--space-3xs);
+}
+.section-header > :first-child {
+	padding-inline-start: var(--space-2xs);
+}
+.section-header > :last-child {
+	padding-inline-end: var(--space-2xs);
+}
 /* Этап E медиа-подсистемы — зона под шапкой (screen.jsx's слот, этап 3
    редизайна переименовал mediaButtons -> slices, тот же класс расширен на
    4 экрана вместо 2). Разметка по макету (область контента, довесок) —
@@ -1644,56 +1676,90 @@ html[data-media-full] .top-corner-actions {
 	color: var(--muted);
 	font-variant-numeric: tabular-nums;
 }
-/* .header-actions — теперь просто .row в JSX (align-items:center инлайн,
-   раскладка не задаёт justify-content: initial-значение и так flex-start,
-   этого достаточно — БЕЗ space-between: на экранах с breadcrumb, но без
-   actions (channel.jsx), в строке два ребёнка — back-button и <h1> —
-   и space-between прижал бы <h1> к правому краю целиком. Правый край
-   держит сама .action-buttons через margin-inline-start:auto ниже — так
-   заголовок остаётся сразу после стрелки "Назад" независимо от числа
-   "средних" элементов в строке). */
-/* Разметка по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html, .scr-title —
-   17px, обычный цвет текста) — было --step-5 акцентным цветом (решение
-   пользователя с более раннего этапа: "заголовок акцентным цветом...
-   максимальный размер"), пользователь явно подтвердил смену под макет при
-   визуальной сверке. var(--step-0) — ближайший токен к 17px. */
-/* Пользователь пересмотрел решение (было --step-0/var(--fg), под макет) —
-   заголовок раздела крупнее (--step-2) и акцентным цветом: макет тут не
-   довод, "прикольный цвет" — вкусовое решение пользователя поверх макета,
-   не расхождение с ним, которое нужно чинить. Контраст accent/bg отдельно
-   проверен (tests/palette-generator.test.js, порог 3.0 — WCAG для
-   крупного текста, тот же расчёт, что был у прежнего --step-5-варианта). */
-.app-layout .header-actions h1 {
+/* HEADERS (CONTRACTS.md §HEADERS), этап 2 — четыре зоны шапки,
+   grid-area на прямых детях .section-header (обёртка-ряд .header-actions
+   старого образца убрана целиком — см. screen.jsx). */
+.header-back {
+	grid-area: back;
+}
+.header-lead {
+	grid-area: lead;
+	display: flex;
+	align-items: center;
+}
+.screen-title {
+	grid-area: ident;
+	min-width: 0;
+	padding-block: var(--space-2xs);
+}
+.header-actions {
+	grid-area: actions;
+	display: flex;
+	align-items: center;
+	justify-self: end;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	row-gap: var(--space-2xs);
+}
+.header-extra {
+	grid-column: 1 / -1;
+}
+
+/* Разметка по макету (.scr-title — 17px)/пользователь пересмотрел решение
+   (крупнее, --step-2, акцентным цветом) — тот же выбор, что раньше жил на
+   контекстном ".header-actions h1" (той обёртки-ряда больше нет, класс —
+   на самом <h1>). Ellipsis — ТЗ этапа 2, узкий контейнер переносит на
+   вторую строку через @container выше (white-space:normal). */
+.screen-title__text {
 	font-size: var(--step-2);
 	margin-block: 0;
 	color: var(--accent);
 	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
-/* .row (раскладка) уже в JSX — margin-inline-start:auto здесь НЕ
-   раскладка (REGLAMENT.md её не покрывает, см. §6): это третий механизм
-   распределения остатка, наравне с flex-grow/fr, просто выраженный через
-   margin — толкает .action-buttons к правому краю .row независимо от
-   числа элементов слева. Проектная поправка, не композиционный класс. */
-.action-buttons {
-	margin-inline-start: auto;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	row-gap: var(--space-2xs);
+.screen-title__sub {
+	color: var(--muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Зона нажатия 44px по обеим сторонам на ЛЮБОЙ кнопке шапки (назад +
+   действия раздела), видимый размер иконки — 20px независимо от размера
+   текста подписи (свойства ниже). Кнопки действий приходят готовыми
+   <button> из 13 экранов без общего класса — тот же приём, что раньше
+   ".action-buttons button" (дочерний селектор, без правок разметки
+   экранов). */
+.header-back,
+.header-actions button,
+.header-actions :where([type="button"]) {
+	min-height: 2.75rem;
+	min-width: 2.75rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.header-back .icon,
+.header-actions .icon {
+	width: 1.25rem;
+	height: 1.25rem;
 }
 /* Вторичные действия раздела рядом с крупным <h1> — тише, чем сплошная
    заливка --accent (та зарезервирована за первичным CTA конкретного
    экрана, см. VISUAL.md .btn-ghost): обводка + прозрачный фон, заливается
    на hover. */
 /* :where([type="button"]) — НЕ голый [type="button"]: атрибутный селектор
-   весит как класс (0,1,0), а не как тег (0,0,1) — ".action-buttons
+   весит как класс (0,1,0), а не как тег (0,0,1) — ".header-actions
    [type=button]" случайно оказывался РАВЕН по специфичности составным
    модификаторам вида .btn--ghost.btn--danger (оба 0,2,0), и побеждал как
    последний по файлу, молча гася семейство danger/warn/good у "Позвонить"/
    "Очистить историю" и т.п. в шапке экрана (найдено пользователем живьём).
    :where() обнуляет вклад атрибута в специфичность — правило продолжает
    работать по умолчанию, но больше не спорит по весу с модификаторами. */
-.action-buttons button,
-.action-buttons :where([type="button"]) {
+.header-actions button,
+.header-actions :where([type="button"]) {
 	background-color: transparent;
 	color: var(--fg);
 	border-color: var(--border);
@@ -1703,15 +1769,56 @@ html[data-media-full] .top-corner-actions {
 	   --radius-full, разные скругления в одной строке читались как
 	   недосмотр. */
 	border-radius: var(--radius-full);
-	/* Разметка по макету (.pill/.ghost — padding ~5-6px 11px, font-size 13px) —
-	   было крупнее (наследовало элементный button из minimal.css). */
-	padding: var(--space-3xs) var(--space-s);
+	padding-inline: var(--space-s);
 	font-size: var(--step--1);
 }
-.action-buttons button:hover,
-.action-buttons :where([type="button"]):hover {
+.header-actions button:hover,
+.header-actions :where([type="button"]):hover {
 	background-color: var(--surface-raised);
 }
+/* Видимый фокус — этап 2 ТЗ прямо требует ("сейчас его нет"). */
+.header-actions button:focus-visible,
+.header-actions :where([type="button"]):focus-visible {
+	color: var(--accent);
+	border-color: var(--accent);
+	background-color: transparent;
+}
+
+/* Переукладка на узкий контейнер — ПОСЛЕ базовых правил зон намеренно:
+   .screen-title__text{white-space:normal} здесь и .screen-title__text{
+   white-space:nowrap} выше имеют РАВНУЮ специфичность (0,1,0) — при
+   такой ничьей побеждает правило, идущее ПОЗЖЕ в файле, вне зависимости
+   от того, активен ли @container. Раньше этот блок стоял ДО базовых
+   правил и оттого никогда не срабатывал (найдено живой проверкой:
+   заголовок обрезался многоточием на 420px вместо переноса). */
+@container (width < 30rem) {
+	.section-header {
+		grid-template-areas:
+			"back lead actions"
+			"ident ident ident";
+		grid-template-columns: auto auto minmax(0, 1fr);
+	}
+	.screen-title {
+		padding-block: 0 var(--space-xs);
+		padding-inline-start: var(--space-s);
+	}
+	/* white-space:normal САМ ПО СЕБЕ не убирает многоточие — overflow:hidden
+	   + text-overflow:ellipsis (базовое правило) продолжают ellipsis-ить
+	   ЛЮБУЮ строку, которая не помещается по ширине (не только последнюю):
+	   на очень узком контейнере (320px) отдельное длинное слово ("разработка")
+	   не помещается ни в одну из трёх строк переноса — каждая обрезалась
+	   многоточием отдельно (найдено живой проверкой). Сбрасываем оба
+	   свойства явно — на переносе строк обрезать уже нечего. */
+	.screen-title__text {
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
+	}
+	.header-actions .btn-label {
+		display: none;
+	}
+}
+
 /* Кнопка "Сегодня" (journal.jsx) — разметка по макету (.pill--due): рамка+
    текст семантического тона "срок" — тот же --warn, что .rec-chip--due
    (этап 2, уже принятое решение "due" = предупреждающий тон, не общий
@@ -1739,30 +1846,23 @@ html[data-media-full] .top-corner-actions {
 }
 
 /* Кнопка "Назад" перед заголовком (пользователь: "большая красивая
-   стрелка Назад") — крупная стрелка + подпись, тихий ghost-стиль (как
-   .action-buttons выше), чтобы не спорить с самим заголовком по весу. */
-/* Иконка-уголок без подписи (пользователь) — круглая тихая кнопка, размер
-   завязан на width/height, не на padding вокруг текста (текста больше нет). */
-/* Разметка по макету (.back — 30px, --radius-sm, рамка var(--line)) — было
-   крупнее (2.5rem=40px) и совсем без рамки/фона (решение с более раннего
-   этапа — "не визуальная таблетка"); пользователь подтвердил смену под
-   макет при визуальной сверке. Рамка + чуть меньший размер компактнее, но
-   акцентная подсветка по ховеру/фокусу (найдено пользователем — тонкий
-   шеврон на голом фоне был плохо виден) сохранена. */
-.back-button {
-	/* .row (раскладка) уже в JSX. */
-	flex: none;
-	width: 1.875rem;
-	height: 1.875rem;
-	padding: 0;
+   стрелка Назад") — тихий ghost-стиль (как .header-actions выше), чтобы
+   не спорить с самим заголовком по весу. Иконка-уголок без подписи —
+   круглая тихая кнопка. HEADERS этап 2 — было 30px (визуальный размер =
+   зона нажатия, решение подтверждено визуальной сверкой на более раннем
+   этапе); ТЗ этапа 2 явно требует зону нажатия 44px по всей шапке
+   единообразно (чеклист: "табуляцией проходится вся шапка, фокус виден")
+   — единственное намеренное визуальное отличие от того решения, сама
+   суть "главного этапа". Размер/tap-зона — в общем правиле выше
+   (.header-back{min-height/min-width:2.75rem}), здесь только оформление. */
+.header-back {
 	background-color: transparent;
 	color: var(--fg);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-sm);
-	font-size: var(--step-0);
 }
-.back-button:hover,
-.back-button:focus-visible {
+.header-back:hover,
+.header-back:focus-visible {
 	background-color: transparent;
 	color: var(--accent);
 	border-color: var(--accent);
@@ -5839,7 +5939,7 @@ button[type="button"].media-mini-bar-btn {
    экране ни разу с момента написания. Контейнер теперь .section-header
    (объявлен выше), селектор — по фактическому месту кнопки. */
 @container (max-width: 32em) {
-	.action-buttons .mark-txt {
+	.header-actions .mark-txt {
 		display: none;
 	}
 }
