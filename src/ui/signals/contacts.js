@@ -463,5 +463,8 @@ export async function refreshDiscoveryProfiles(ownerPubkey) {
 	// меня в обзоре") мог попасть в собственную ленту "Знакомств"; защита в
 	// дополнение к гейту в contact-runtime.js (тот ловит уже на отправке
 	// заявки, этот — чтобы карточка самого себя вообще не появлялась).
-	discoveryProfiles.value = rows.filter((r) => r.visible && r.pubkey !== ownerPubkey && !contacts.value.includes(r.pubkey));
+	// CONTRACTS.md §DISCOVERY, T4 — visibleUntil: реле может не поддерживать
+	// NIP-40 (expiration), читатель обязан отсеивать протухшие карточки сам.
+	const nowSec = Math.floor(Date.now() / 1000);
+	discoveryProfiles.value = rows.filter((r) => r.visible && r.visibleUntil > nowSec && r.pubkey !== ownerPubkey && !contacts.value.includes(r.pubkey));
 }

@@ -34,6 +34,7 @@ beforeEach(async () => {
 	await db.table("channelKeys").clear();
 	await db.table("channelKeyMeta").clear();
 	await db.table("outbox").clear();
+	await db.table("keystore").clear();
 });
 
 after(() => {
@@ -44,8 +45,10 @@ test("DISCOVERY_KIND: 30073", () => {
 	assert.equal(DISCOVERY_KIND, 30073);
 });
 
+const FAR_FUTURE = Math.floor(Date.now() / 1000) + 86400;
+
 test("buildDiscoveryEvent: kind 30073, d-tag='discovery', content — ОТКРЫТЫЙ JSON (не шифруется)", () => {
-	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: true, channels: [{ id: "c1", name: "Кулинария", description: "рецепты" }] });
+	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: true, channels: [{ id: "c1", name: "Кулинария", description: "рецепты" }], visibleUntil: FAR_FUTURE, bio: "привет" });
 	assert.equal(event.kind, DISCOVERY_KIND);
 	assert.deepEqual(event.tags.find((t) => t[0] === "d"), ["d", "discovery"]);
 	assert.ok(verify(event), "событие должно быть валидно подписано");
@@ -55,14 +58,41 @@ test("buildDiscoveryEvent: kind 30073, d-tag='discovery', content — ОТКРЫ
 	assert.deepEqual(parsed.channels, [{ id: "c1", name: "Кулинария", description: "рецепты" }]);
 });
 
+// CONTRACTS.md §DISCOVERY, T4 — обязателен при visible:true.
+test("buildDiscoveryEvent: visible:true без валидного visibleUntil -> throw", () => {
+	assert.throws(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [] }));
+	assert.throws(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: 0 }));
+	assert.throws(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: -5 }));
+});
+
+test("buildDiscoveryEvent: visible:false не требует visibleUntil", () => {
+	assert.doesNotThrow(() => buildDiscoveryEvent(ALICE_PRIV, { visible: false, showChannels: false, channels: [] }));
+});
+
+// NIP-40 (шаблон тега — blossom-client.js:13) — рядом с d-тегом, только когда visible.
+test("buildDiscoveryEvent: тег expiration равен visibleUntil, есть только при visible:true", () => {
+	const visibleEvent = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE });
+	assert.deepEqual(visibleEvent.tags.find((t) => t[0] === "expiration"), ["expiration", String(FAR_FUTURE)]);
+
+	const hiddenEvent = buildDiscoveryEvent(ALICE_PRIV, { visible: false, showChannels: false, channels: [] });
+	assert.equal(hiddenEvent.tags.find((t) => t[0] === "expiration"), undefined);
+});
+
+test("buildDiscoveryEvent: bio обрезается до лимита при сборке", () => {
+	const longBio = "а".repeat(400);
+	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: false, showChannels: false, channels: [], bio: longBio });
+	const parsed = JSON.parse(event.content);
+	assert.equal(parsed.bio.length, 300);
+});
+
 test("parseDiscoveryEvent: обычный round-trip", () => {
-	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [] });
+	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "обо мне" });
 	const parsed = parseDiscoveryEvent(event);
-	assert.deepEqual(parsed, { visible: true, showChannels: false, channels: [] });
+	assert.deepEqual(parsed, { visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "обо мне" });
 });
 
 test("parseDiscoveryEvent: защита от мусора чужого клиента — не бросает, коэрсит к безопасным значениям", () => {
-	const malicious = { content: JSON.stringify({ visible: "yes", showChannels: 1, channels: "не массив" }) };
+	const malicious = { content: JSON.stringify({ visible: "yes", showChannels: 1, channels: "не массив", visibleUntil: FAR_FUTURE }) };
 	const parsed = parseDiscoveryEvent(malicious);
 	assert.equal(parsed.visible, true);
 	assert.equal(parsed.showChannels, true);
@@ -73,23 +103,46 @@ test("parseDiscoveryEvent: невалидный JSON -> throw (вызывающ�
 	assert.throws(() => parseDiscoveryEvent({ content: "{не json" }));
 });
 
+// CONTRACTS.md §DISCOVERY, T4 — событие невалидно, если заявляет visible:true без срока
+// (чужой клиент соврал или устарел) — тот же класс ошибки, что "невалидный JSON".
+test("parseDiscoveryEvent: visible:true без валидного visibleUntil -> throw", () => {
+	assert.throws(() => parseDiscoveryEvent({ content: JSON.stringify({ visible: true, showChannels: false, channels: [] }) }));
+	assert.throws(() => parseDiscoveryEvent({ content: JSON.stringify({ visible: true, showChannels: false, channels: [], visibleUntil: "не число" }) }));
+});
+
+test("parseDiscoveryEvent: visible:false с мусорным/отсутствующим visibleUntil -> коэрсится в 0, не бросает", () => {
+	const parsed = parseDiscoveryEvent({ content: JSON.stringify({ visible: false, showChannels: false, channels: [] }) });
+	assert.equal(parsed.visibleUntil, 0);
+});
+
+test("parseDiscoveryEvent: bio длиннее лимита — обрезается, не бросает; отсутствие bio -> ''", () => {
+	const longBioEvent = { content: JSON.stringify({ visible: false, showChannels: false, channels: [], bio: "б".repeat(500) }) };
+	assert.equal(parseDiscoveryEvent(longBioEvent).bio.length, 300);
+
+	const noBioEvent = { content: JSON.stringify({ visible: false, showChannels: false, channels: [] }) };
+	assert.equal(parseDiscoveryEvent(noBioEvent).bio, "");
+
+	const junkBioEvent = { content: JSON.stringify({ visible: false, showChannels: false, channels: [], bio: 12345 }) };
+	assert.equal(parseDiscoveryEvent(junkBioEvent).bio, "");
+});
+
 test("parseDiscoveryEvent: элементы channels фильтруются — только валидные {id,name,description}, мусорные записи отбрасываются", () => {
-	const malicious = { content: JSON.stringify({ visible: true, showChannels: true, channels: [{ id: "c1", name: "ok", description: "d" }, "мусор", { id: 123 }, null] }) };
+	const malicious = { content: JSON.stringify({ visible: true, showChannels: true, channels: [{ id: "c1", name: "ok", description: "d" }, "мусор", { id: 123 }, null], visibleUntil: FAR_FUTURE }) };
 	const parsed = parseDiscoveryEvent(malicious);
 	assert.deepEqual(parsed.channels, [{ id: "c1", name: "ok", description: "d" }]);
 });
 
 test("loadDiscoverySettings: без локальной записи -> дефолт (invisible, каналы не показаны)", async () => {
 	const settings = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(settings, { visible: false, showChannels: false, channelIds: [] });
+	assert.deepEqual(settings, { visible: false, showChannels: false, channelIds: [], visibleUntil: 0 });
 });
 
 test("publishDiscoverySettings: сохраняет локально СРАЗУ и публикует showChannels=false -> channels: []", async () => {
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(local, { visible: true, showChannels: false, channelIds: [] });
+	assert.deepEqual(local, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE });
 
 	assert.equal(published.length, 1);
 	const parsed = parseDiscoveryEvent(published[0]);
@@ -103,7 +156,7 @@ test("publishDiscoverySettings: showChannels=true — публикует ТОЛ�
 	const { channelId: idB } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Приватный черновик", description: "не для рекламы", rules: "" }, [], capturingPublish([]));
 
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [idA] }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [idA], visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.channels.length, 1, "только отмеченный канал, не оба");
@@ -118,7 +171,7 @@ test("publishDiscoverySettings: сбой publish (исключение) БРОС
 		throw new Error("нет соединения");
 	};
 	await assert.rejects(
-		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, failingPublish),
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, failingPublish),
 	);
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
@@ -132,8 +185,26 @@ test("publishDiscoverySettings: сбой publish (исключение) БРОС
 test("publishDiscoverySettings: реле вернуло {ok:false} (не исключение) — тоже бросает и тоже уходит в outbox", async () => {
 	const rejectingPublish = async () => ({ ok: false, reason: "relay отклонил" });
 	await assert.rejects(
-		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [] }, rejectingPublish),
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, rejectingPublish),
 	);
 	const pending = await listPending(DB_KEY);
 	assert.equal(pending.length, 1);
+});
+
+// CONTRACTS.md §DISCOVERY, T4 — publishDiscoverySettings сам читает bio из
+// keystore (тот же приём, что уже применяется к listOwnedChannels), а не
+// принимает его параметром из UI.
+test("publishDiscoverySettings: bio берётся из keystore (getProfile), не из параметров вызова, и обрезается до лимита", async () => {
+	await db.table("keystore").put({ id: ALICE_PUB, bio: "б".repeat(500) });
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.bio.length, 300);
+});
+
+test("publishDiscoverySettings: нет записи в keystore (не должно происходить в реальности, но не обязано ронять публикацию) -> bio ''", async () => {
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.bio, "");
 });

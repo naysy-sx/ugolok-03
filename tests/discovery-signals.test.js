@@ -38,11 +38,13 @@ after(() => {
 // логики (kind 30073, не связано с contact-relationship FSM); физически теперь в
 // signals/contacts.js (этап 7, CONTRACTS.md — грид переехал на экран "Люди").
 
+const FAR_FUTURE = Math.floor(Date.now() / 1000) + 86400;
+
 test("refreshDiscoveryProfiles: показывает только visible=true И НЕ уже существующих контактов", async () => {
 	await db.table("discoveryProfiles").bulkPut([
-		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], updatedAt: 1 },
-		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], updatedAt: 1 },
-		{ pubkey: "invisible-pub", visible: false, showChannels: false, channels: [], updatedAt: 1 },
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, updatedAt: 1 },
+		{ pubkey: "invisible-pub", visible: false, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, updatedAt: 1 },
 	]);
 	await db.table("contacts").put({ owner: ALICE_PUB, pubkey: CAROL_PUB });
 	contacts.value = [CAROL_PUB];
@@ -51,4 +53,19 @@ test("refreshDiscoveryProfiles: показывает только visible=true �
 
 	const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
 	assert.deepEqual(pubkeys, [BOB_PUB], "Кэрол уже контакт — скрыта; invisible-pub — не visible, тоже скрыт");
+});
+
+// CONTRACTS.md §DISCOVERY, T4 — читатель обязан отсеивать протухшие карточки
+// сам (реле может не поддерживать NIP-40 expiration).
+test("refreshDiscoveryProfiles: отсеивает записи с истёкшим visibleUntil", async () => {
+	const past = Math.floor(Date.now() / 1000) - 10;
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], visibleUntil: past, updatedAt: 1 },
+	]);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
+	assert.deepEqual(pubkeys, [BOB_PUB], "у Кэрол visibleUntil в прошлом — протухла, скрыта");
 });

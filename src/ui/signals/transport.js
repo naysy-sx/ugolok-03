@@ -14,6 +14,7 @@ import { createLamportClock, computeInitialLamportValue, persistLamportValue } f
 import { createSubscriber } from "../../core/transport/subscriber.js";
 import { accumulateProfileVersions } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
+import { getProfile } from "../../core/crypto/keystore.js";
 import { db } from "../../core/store/database.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
 import { DISCOVERY_KIND, parseDiscoveryEvent, loadDiscoverySettings, buildDiscoveryEvent } from "../../domain/discovery/discovery.js";
@@ -431,18 +432,29 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	publisher
 		.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
 		.catch(() => {});
-	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2) — тот же backfill-принцип, что
+	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2+T4) — тот же backfill-принцип, что
 	// kind:10002/10050 выше: без этого события 30073 переставало доходить до
 	// реле насовсем после первого же connect() без соединения в момент
 	// публикации (VisibilitySection не проверяла ensureConnected). Republish
-	// на каждый connect() безопасен — событие replaceable и дешёвое. Без
-	// проверки срока — visibleUntil появится в T4, пока условие только visible.
+	// на каждый connect() безопасен — событие replaceable и дешёвое. T4 —
+	// добавлена проверка срока (visibleUntil): переиздавать протухшую
+	// трансляцию бессмысленно и невозможно (buildDiscoveryEvent бросит на
+	// visibleUntil в прошлом при visible:true). bio читается тем же способом,
+	// что publishDiscoverySettings (getProfile), не кэшируется отдельно.
 	const discoverySettings = await loadDiscoverySettings(pubkeyHex);
-	if (discoverySettings.visible) {
+	if (discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000)) {
 		const discoveryChannels = discoverySettings.showChannels
 			? (await listOwnedChannels(pubkeyHex, dbKey)).filter((c) => discoverySettings.channelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))
 			: [];
-		publisher.publish(buildDiscoveryEvent(privKey, { visible: true, showChannels: discoverySettings.showChannels, channels: discoveryChannels })).catch(() => {});
+		let discoveryBio = "";
+		try {
+			discoveryBio = (await getProfile(pubkeyHex)).bio;
+		} catch {
+			// не должно происходить для залогиненного пользователя — best-effort
+		}
+		publisher
+			.publish(buildDiscoveryEvent(privKey, { visible: true, showChannels: discoverySettings.showChannels, channels: discoveryChannels, visibleUntil: discoverySettings.visibleUntil, bio: discoveryBio }))
+			.catch(() => {});
 	}
 	logSync(t("syncLog.readMarks"));
 	// AC-06 (TECH.md §15) — read-status обязан синхронизироваться между устройствами;

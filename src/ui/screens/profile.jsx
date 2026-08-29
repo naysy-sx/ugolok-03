@@ -7,7 +7,7 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish } from "../signals/transport.js";
 import { projected, getFileKeyFor } from "../signals/files.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
-import { loadDiscoverySettings, publishDiscoverySettings } from "../../domain/discovery/discovery.js";
+import { loadDiscoverySettings, publishDiscoverySettings, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
@@ -64,7 +64,12 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 			persist({ ...settings, visible: false });
 		} else {
 			// Показать — только раскрывает панель настроек ниже, публикация — по "OK".
-			setSettings({ ...settings, visible: true });
+			// CONTRACTS.md §DISCOVERY, T4 — временный шов до T5: эта секция ещё не
+			// умеет выбирать длительность (переедет в discovery.jsx с настоящим
+			// выбором из DISCOVERY_DURATIONS), поэтому здесь — самый долгий вариант
+			// по умолчанию, иначе publishDiscoverySettings бросит без visibleUntil.
+			const visibleUntil = Math.floor(Date.now() / 1000) + DISCOVERY_DURATIONS[DISCOVERY_DURATIONS.length - 1];
+			setSettings({ ...settings, visible: true, visibleUntil });
 		}
 	}
 

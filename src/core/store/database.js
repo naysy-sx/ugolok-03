@@ -353,6 +353,14 @@ db.version(29).stores({
   await tx.table("contactProfiles").toCollection().modify({ watched: 0, seenAt: 0 });
 });
 
+// CONTRACTS.md §DISCOVERY, T4 — visibleUntil (TTL трансляции), не индексируется
+// (фильтр по сроку — в JS, refreshDiscoveryProfiles), поэтому индексы
+// discoverySettings не меняются, .stores({}) пуст. Апгрейд существующих строк —
+// visible:false/visibleUntil:0 (никого не оставляем "видимым бессрочно" молча).
+db.version(30).stores({}).upgrade(async (tx) => {
+  await tx.table("discoverySettings").toCollection().modify({ visible: false, visibleUntil: 0 });
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });
