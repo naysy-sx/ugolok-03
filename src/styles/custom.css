@@ -1580,6 +1580,7 @@ html[data-media-full] .top-corner-actions {
 	grid-template-columns: auto auto minmax(0, 1fr) auto;
 	align-items: center;
 	background: var(--surface);
+	padding: var(--space-2xs);
 }
 /* Зазоры — padding зон, НЕ gap: gap ставится между дорожками грида и
    остаётся, даже когда дорожка схлопнулась в ноль (экран без кнопки
@@ -1636,20 +1637,23 @@ html[data-media-full] .top-corner-actions {
 	flex-wrap: wrap;
 }
 
-/* HEADERS (CONTRACTS.md §HEADERS), этап 1 — обёртка полосы TypeFilterBar
-   внутри attachment-slices.jsx, sticky к верху ленты (была в шапке,
-   слот Screen's slices, теперь в feed/children конкретного экрана).
-   Full-bleed НЕ реализован (обёртка внутри .content-wrapper's .box-
-   padding) — margin-inline на компоненте запрещён REGLAMENT.md §3 п.1,
-   полоса остаётся в пределах текущей ширины контента, до самого края
-   не доходит. */
+/* HEADERS (CONTRACTS.md §HEADERS), этап 1 (живой фидбек) — обёртка полосы
+   TypeFilterBar внутри attachment-slices.jsx, sticky к верху ленты (была в
+   шапке, слот Screen's slices, теперь в feed/children конкретного экрана).
+   Пилюля (border-radius:full + width:fit-content), не полноширинная
+   панель — border-block-end (разделительная линия) снят: прямая линия под
+   скруглённой формой смотрелась бы как визуальный дефект. Full-bleed НЕ
+   реализован (обёртка внутри .content-wrapper's .box-padding) —
+   margin-inline на компоненте запрещён REGLAMENT.md §3 п.1, вопрос снят
+   пилюлей: она и не должна тянуться на всю ширину. */
 .attachment-slices-bar {
 	position: sticky;
 	inset-block-start: 0;
 	z-index: 2;
 	background: var(--bg);
-	border-block-end: var(--border-width) solid var(--border);
-	padding-block: var(--space-2xs);
+	padding: var(--space-2xs);
+	border-radius: var(--radius-full);
+	width: fit-content;
 }
 /* Ловушка файла (см. комментарий вверху custom.css) — background:none
    явно, иначе элементный button{background-color:var(--accent)} молча
@@ -1699,7 +1703,7 @@ html[data-media-full] .top-corner-actions {
 	justify-self: end;
 	flex-wrap: wrap;
 	justify-content: flex-end;
-	row-gap: var(--space-2xs);
+	gap: var(--space-2xs);
 }
 .header-extra {
 	grid-column: 1 / -1;

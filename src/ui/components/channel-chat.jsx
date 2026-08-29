@@ -131,10 +131,16 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 	// ЭТОГО компонента; раньше поднималось наружу через onSlicesChange
 	// (channel.jsx рендерил кнопки в шапке), теперь браузер вложений
 	// рендерится ЗДЕСЬ же, наверх поднимать больше нечего.
+	// Голосовые вложения исключены — тот же принцип, что уже применяет
+	// collectChatScope (scope.js: "a.voice ? null : ..."): голосовое не
+	// входит в playlist openMedia, показать его плиткой/строкой, а потом
+	// не суметь открыть по клику (findRefPosition не найдёт его в refs) —
+	// хуже, чем не показать вовсе. Живой фидбек пользователя.
 	function allAttachmentItems() {
 		const result = [];
 		for (const message of messages) {
 			for (const attachment of message.attachments || []) {
+				if (attachment.voice) continue;
 				result.push({ message, attachment });
 			}
 		}
