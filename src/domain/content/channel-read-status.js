@@ -91,6 +91,24 @@ export async function rebuildChannelReadStatus(ownerPubkey, privKey) {
 	}
 }
 
+// HEADERS (CONTRACTS.md §HEADERS), этап 3 — вынесена из getChannelUnreadCount
+// ниже, переиспользуется бейджем вкладки "Чат" (getChannelChatUnreadCount) без
+// дублирования логики фильтра.
+function countUnreadChatMessages(rows, lastReadAt, ownerPubkey) {
+	return rows.filter((r) => !r.deleted && r.createdAt > lastReadAt && r.authorPubkey !== ownerPubkey).length;
+}
+
+// HEADERS этап 3 — та же chat-часть курсора, что использует
+// getChannelUnreadCount ниже, но БЕЗ posts/comments (бейдж вкладки "Чат" в
+// channel.jsx, не общий "Каналы [N]"). БЕЗ dbKey — channelMessages целиком
+// plaintext по нужным полям, расшифровка не нужна.
+export async function getChannelChatUnreadCount(ownerPubkey, channelId) {
+	const cursor = await db.table("channelSyncState").get([ownerPubkey, channelId]);
+	const lastReadAt = cursor?.lastReadAt ?? 0;
+	const chatRows = await db.table("channelMessages").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
+	return countUnreadChatMessages(chatRows, lastReadAt, ownerPubkey);
+}
+
 // Один общий курсор на канал (posts+comments+chat вместе, DESIGN.md этап 47) —
 // три таблицы с РАЗНОЙ доступностью полей без расшифровки (CONTRACTS.md, Tier 0-1).
 export async function getChannelUnreadCount(ownerPubkey, channelId, dbKey) {
@@ -100,7 +118,7 @@ export async function getChannelUnreadCount(ownerPubkey, channelId, dbKey) {
 
 	// channelMessages: ownerPubkey/channelId/authorPubkey/createdAt/deleted все plaintext.
 	const chatRows = await db.table("channelMessages").where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).toArray();
-	count += chatRows.filter((r) => !r.deleted && r.createdAt > lastReadAt && r.authorPubkey !== ownerPubkey).length;
+	count += countUnreadChatMessages(chatRows, lastReadAt, ownerPubkey);
 
 	// posts: channelId/createdAt/deleted plaintext, authorPubkey sensitive — расшифровка
 	// ТОЛЬКО кандидатов, уже прошедших фильтр по каналу+времени.

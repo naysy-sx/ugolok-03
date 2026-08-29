@@ -6519,6 +6519,22 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--fg);
 	border-block-end-color: var(--accent);
 }
+/* HEADERS (CONTRACTS.md §HEADERS), этап 3 — счётчик непрочитанного на
+   вкладке "Чат". var(--accent) — тот же токен, что уже несёт "непрочитано/
+   новое" по всему проекту (.unread-dot, сайдбар) — НЕ .pill__n (var(--warn),
+   семантика "срок", другой смысл). */
+.tab__badge {
+	display: inline-block;
+	min-width: 1.125rem;
+	margin-inline-start: var(--space-3xs);
+	padding-inline: var(--space-3xs);
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	text-align: center;
+}
 
 /* Карточка поста — этап 69: собственная рамка убрана, поверхность (фон/
    рамка/тень) теперь несёт общий .card на обёртке PostWithComments

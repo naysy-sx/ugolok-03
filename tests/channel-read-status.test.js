@@ -14,6 +14,7 @@ import {
 	markChannelAsRead,
 	rebuildChannelReadStatus,
 	getChannelUnreadCount,
+	getChannelChatUnreadCount,
 	isChannelContentRead,
 } from "../src/domain/content/channel-read-status.js";
 
@@ -181,6 +182,57 @@ test("getChannelUnreadCount: обычный достижимый ответ (р�
 		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "reply-1", postId: "p1", parentId: "root-1", deleted: false, channelId: CHAN_A, authorPubkey: BOB_PUB, createdAt: 150, text: "ответ", attachments: [], keyVersion: 1 }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
 	]);
 	assert.equal(await getChannelUnreadCount(ALICE_PUB, CHAN_A, DB_KEY), 2, "оба комментария достижимы через цепочку parentId -> postId");
+});
+
+// --- getChannelChatUnreadCount: HEADERS этап 3 — бейдж вкладки "Чат",
+// та же логика, что chat-часть getChannelUnreadCount, но БЕЗ posts/comments
+// (dbKey не нужен — channelMessages целиком plaintext по нужным полям). ---
+
+test("getChannelChatUnreadCount: без read-status — чужие channelMessages непрочитаны, свои не считаются", async () => {
+	await db.table("channelMessages").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m1", channelId: CHAN_A, createdAt: 100, deleted: false, authorPubkey: BOB_PUB, text: "чужое", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m2", channelId: CHAN_A, createdAt: 200, deleted: false, authorPubkey: ALICE_PUB, text: "своё", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 1, "только m1 (чужое), m2 (своё) не считается");
+});
+
+test("getChannelChatUnreadCount: после markChannelAsRead — только сообщения новее курсора", async () => {
+	await db.table("channelMessages").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m1", channelId: CHAN_A, createdAt: 100, deleted: false, authorPubkey: BOB_PUB, text: "старое", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m2", channelId: CHAN_A, createdAt: 300, deleted: false, authorPubkey: BOB_PUB, text: "новое", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	await foldChannelReadStatus(buildChannelReadStatusEvent(ALICE_PRIV, { channelId: CHAN_A, lastReadAt: 200 }), ALICE_PRIV);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 1, "только m2 (createdAt=300 > курсора 200)");
+});
+
+test("getChannelChatUnreadCount: не путает каналы", async () => {
+	await db.table("channelMessages").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m1", channelId: CHAN_A, createdAt: 100, deleted: false, authorPubkey: BOB_PUB, text: "a", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m2", channelId: CHAN_B, createdAt: 100, deleted: false, authorPubkey: BOB_PUB, text: "b", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 1);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_B), 1);
+});
+
+test("getChannelChatUnreadCount: удалённые (deleted=true) не считаются", async () => {
+	await db.table("channelMessages").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "m1", channelId: CHAN_A, createdAt: 100, deleted: true, authorPubkey: BOB_PUB, text: "z", attachments: [], keyVersion: 1 }, CHANNEL_MESSAGES_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 0);
+});
+
+test("getChannelChatUnreadCount: НЕ считает posts/comments (изолирован от getChannelUnreadCount's остальных двух таблиц)", async () => {
+	await db.table("posts").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "p1", channelId: CHAN_A, createdAt: 100, deleted: false, status: "published", keyVersion: 1, authorPubkey: BOB_PUB, text: "пост", attachments: [] }, POSTS_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	await db.table("comments").bulkAdd([
+		toEncryptedRow({ ownerPubkey: ALICE_PUB, id: "c1", postId: "p1", parentId: "p1", deleted: false, channelId: CHAN_A, authorPubkey: BOB_PUB, createdAt: 150, text: "коммент", attachments: [], keyVersion: 1 }, COMMENTS_PLAINTEXT_FIELDS, DB_KEY),
+	]);
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 0, "posts/comments не относятся к счётчику чата, только channelMessages");
+});
+
+test("getChannelChatUnreadCount: пустой канал -> 0, не бросает", async () => {
+	assert.equal(await getChannelChatUnreadCount(ALICE_PUB, CHAN_A), 0);
 });
 
 // Этап 50 — инвариант N1 (CONTACTS-FSM.md §6, приложение А).

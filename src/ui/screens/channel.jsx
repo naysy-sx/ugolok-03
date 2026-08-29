@@ -2,7 +2,7 @@ import { useState, useEffect, useId, useRef } from "preact/hooks";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { publish } from "../signals/transport.js";
-import { markChannelAsRead } from "../../domain/content/channel-read-status.js";
+import { markChannelAsRead, getChannelChatUnreadCount } from "../../domain/content/channel-read-status.js";
 import { refreshUnreadChannelsCount } from "../signals/notifications.js";
 import { messagingActivity } from "../signals/chats.js";
 import { groups, refreshGroups } from "../signals/contacts.js";
@@ -28,6 +28,7 @@ import ActionsMenu from "../components/actions-menu.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconGear from "../icons/gear.jsx";
+import IconShield from "../icons/shield.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import { ChannelLead, ChannelSubtitle, ChannelAbout, ChannelPostsTab } from "../components/channel-feed.jsx";
 import ChannelPostPage from "../components/channel-post-page.jsx";
@@ -324,6 +325,12 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// ChannelSettingsForm), dirty/busy/formId сообщаются наверх колбэком
 	// (onBarChange), а не пробрасываются пропом вниз.
 	const [settingsBar, setSettingsBar] = useState({ dirty: false, busy: false, formId: "", canSave: false, onCancel: () => {} });
+	// HEADERS (CONTRACTS.md §HEADERS), этап 3 — бейдж непрочитанного на
+	// вкладке "Чат". Заполняется в refresh() ниже, тот же useEffect,
+	// который уже перезапускается на messagingActivity.value (тот же
+	// сигнал, на который реагируют chat.jsx/channel-chat.jsx при любой
+	// read/write активности, включая markChannelAsRead внутри ChannelChat).
+	const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
@@ -374,6 +381,20 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	useEffect(() => {
 		refresh().catch((e) => setError(errorMessage(e)));
 	}, [ownerPubkey, channelId, messagingActivity.value]);
+
+	// HEADERS (CONTRACTS.md §HEADERS), этап 3 — бейдж «Чат» ОТДЕЛЬНЫМ эффектом,
+	// не внутри refresh(): markChannelAsRead (вызывается ВНУТРИ ChannelChat при
+	// открытии вкладки) — чисто локальное обновление курсора, НЕ бампает
+	// messagingActivity (тот сигнализирует о новых сообщениях/синке, не о факте
+	// прочтения — найдено живой проверкой, бейдж не пропадал после прочтения).
+	// [tab] в зависимостях перечитывает счётчик при КАЖДОМ переключении вкладки
+	// — в частности, при уходе С «Чата», когда прочтение уже произошло.
+	useEffect(() => {
+		if (!channelRow) return;
+		getChannelChatUnreadCount(ownerPubkey, channelId)
+			.then(setChatUnreadCount)
+			.catch(() => {});
+	}, [ownerPubkey, channelId, tab, messagingActivity.value, channelRow]);
 
 	async function handleLoadMore() {
 		if (posts.length === 0) return;
@@ -459,6 +480,10 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// Постов/Чата) убран: срезы по типу вложения теперь рендерятся внутри
 	// ленты каждой вкладки (AttachmentSlices), не в шапке рядом с табами.
 	// Slot Screen's slices несёт ТОЛЬКО навигацию по разделам экрана.
+	// HEADERS этап 3 — «Модерация»/«Настройки» ушли из полосы в меню под
+	// шестернёй (actions ниже): владельцу/модератору они и так не место в
+	// разделе, который открывают ежедневно. Права доступа — тот же isOwner,
+	// не изменились. Счётчик непрочитанного — бейджем внутри вкладки «Чат».
 	const tabsBar = (
 		<nav class="tabs reel" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
@@ -466,17 +491,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			</button>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
 				{t("channel.tabs.chat")}
+				{chatUnreadCount > 0 && <span class="tab__badge">{chatUnreadCount}</span>}
 			</button>
-			{isOwner && (
-				<button type="button" class="tab" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
-					{t("channel.tabs.moderation")}
-				</button>
-			)}
-			{isOwner && (
-				<button type="button" class="tab" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
-					{t("channel.tabs.settings")}
-				</button>
-			)}
 		</nav>
 	);
 
@@ -497,11 +513,15 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 					{/* CHANNEL-V2 часть B5 — «Скопировать ссылку» пропущен: готового
 					    формата внутренней ссылки на канал в проекте нет (ТЗ явно
 					    разрешает пропустить пункт в этом случае, не выдумывая формат).
-					    Меню остаётся только владельцу — без ссылки единственный
-					    пункт в нём — «Настройки», гостю показывать пустое меню
-					    незачем. */}
+					    Меню остаётся только владельцу.
+					    HEADERS этап 3 — «Модерация» переехала сюда из полосы вкладок,
+					    тот же порядок слева направо, что был у вкладок (Модерация
+					    перед Настройками). */}
 					{isOwner && (
 						<ActionsMenu label={t("channel.channelActionsAria", { name: channelRow.name })}>
+							<button type="button" onClick={() => setTab("moderation")}>
+								<IconShield /> {t("channel.tabs.moderation")}
+							</button>
 							<button type="button" onClick={() => setTab("settings")}>
 								<IconGear /> {t("channel.tabs.settings")}
 							</button>
