@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "Осталось: {{time}}",
 		"hideNowButton": "Скрыть сейчас",
 		"previewTitle": "Как вас увидят другие",
-		"durationPickerAria": "Срок трансляции"
+		"durationPickerAria": "Срок трансляции",
+		"moderationWarning": "Это не пройдёт фильтр реле: {{fields}}",
+		"fieldBio": "био",
+		"reportButtonAria": "Пожаловаться на этот профиль"
 	},
 	"channels": {
 		"createChannelButton": "Создать канал",

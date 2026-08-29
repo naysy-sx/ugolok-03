@@ -22424,3 +22424,152 @@ settings.channelIds.includes(c.id))` при `settings.showChannels`.
 пределах секунды); `connect()`-backfill (T2/T4) не тронут — гонка
 между переподключением и ручным кликом в ту же секунду многократно
 маловероятнее, и там publish уже best-effort/проглочен.
+
+## DISCOVERY, часть D: T7 (где фильтр НЕ должен стоять), T8 (словарь), T9 (жалобы), T10 (развилка)
+
+### T7 — записано прямо, дословно из ТЗ, ничего не решает заново
+
+Фильтр в клиенте ПУБЛИКУЮЩЕГО — декоративный. kind 30073 — открытое
+нешифрованное событие, его отправит на реле любой сторонний
+Nostr-клиент; скрипт, который крутится в приложении нарушителя, —
+единственный, который нарушитель не запустит. Работают два места:
+write-policy плагин своего strfry (сервер, контент открытый — читает
+и отклоняет) и клиент читателя (работает даже для событий с чужих
+реле). Оба реализованы (ниже). В клиенте отправителя — только
+предупреждение, не блокировка.
+
+Словарный фильтр обходится пробелами, гомоглифами, заменой букв на
+цифры. Ловит ленивых, упорных — нет (см. T8, тест "известный предел").
+
+### T8 — словарный фильтр
+
+**`src/domain/discovery/wordfilter.js`** — без браузерных API (нужен
+и в клиенте, и в Node-плагине strfry, тот же файл, не копия):
+
+```
+normalize(text): lowercase → NFKD → снять combining-марки (U+0300-
+036F, стандартный парный приём с NFKD) → цифры-гомоглифы (0→о, 1→і,
+3→е — буквально три примера ТЗ, не расширяется третьими руками:
+шире список — ложные срабатывания, admin расширяет stopwords.json
+под свою аудиторию, не код) → убрать ВСЕ пробелы целиком (не
+"схлопнуть повторы" — иначе разрядка "п и д о р" не сведётся к
+"пидор", а тест ТЗ №7 требует именно этого).
+findMatches(text, dictionary): normalize(text) ищет normalize(term)
+как подстроку для каждого term словаря → [{term, index}] (index — по
+нормализованной строке, не по исходной, это внутренний диагностический
+формат, не для показа пользователю посимвольно).
+isClean(text, dictionary): findMatches(...).length === 0.
+```
+
+**Известный предел** (T8, тест-документация ТЗ, не баг): межскриптовые
+confusable-омографы (кириллическая "а" U+0430 вместо латинской "a" и
+т.п.) НЕ ловятся — NFKD их не связывает (это разные, не декомпозируемые
+друг в друга кодпоинты), полная таблица confusables (Unicode TR39) —
+несоразмерная сложность для "ловит ленивых". Тест фиксирует это прямо.
+
+**`src/domain/discovery/stopwords.json`** — плоский JSON-массив строк,
+стартовый набор из нескольких общеизвестных корней русского мата (не
+исчерпывающий словарь — admin расширяет под свою аудиторию правкой
+файла, без пересборки сервера, ровно как задумано ТЗ).
+
+**Реле** — `server/strfry/whitelist-plugin.mjs` расширяется НА МЕСТЕ
+(strfry поддерживает ровно один write-policy плагин — второй не
+заводится, чтобы не тянуть цепочку плагинов ради одной проверки):
+после вычисления whitelist-вердикта, если `action === "accept"` И
+`event.kind === 30073` — распарсить `content`, прогнать `bio` и
+`channels[].name/description` через `isClean` (словарь читается из
+`stopwords.json` тем же `readFileSync`, что уже читает
+`whitelist.json` — не import-assertion, тот же стиль файла); при
+попадании — `reject` с `msg`. Импорт `wordfilter.js` — относительным
+путём из `server/strfry/` в `src/domain/discovery/` (один файл, не
+копия под сервер).
+
+**Читатель** (`refreshDiscoveryProfiles`, `contacts.js`): карточки, не
+прошедшие `isClean` (bio ИЛИ любое название/описание канала) —
+отсеиваются молча, тем же способом, что истёкшие/уже-контакты (single
+source of truth фильтра — один `.filter()` со всеми условиями, не
+плодить проходы по массиву).
+
+**Отправитель** (`VisibilitySection`, `discovery.jsx`, T5): перед
+`persist()` — если `bio` ИЛИ выбранные каналы не проходят `isClean`,
+показать `callout` с указанием, какое поле не проходит (bio /
+конкретное имя канала), НЕ блокировать кнопку/тумблер — предупреждение
+информационное, реальная защита — реле+читатель (T7).
+
+### T9 — жалобы
+
+Копия `src/domain/content/moderation.js`'s `CHANNEL_REPORT_KIND`/
+`buildReportRumor`/`reportContent` 1-в-1, отличия — адресат (константа
+`BUILD_ADMIN_PUBKEY`, не владелец канала) и отсутствие `channelId`.
+
+**Новый модуль `src/domain/discovery/reports.js`**:
+- `DISCOVERY_REPORT_KIND = 3010` (3001-3009 заняты — проверено `grep -
+  rn "_KIND = 300" src/domain/`).
+- `buildDiscoveryReportRumor({ targetPubkey, reason, snapshot })` —
+  `snapshot` кладётся В `content` (`JSON.stringify`), теги —
+  `[["target", targetPubkey], ["reason", reason]]` (без `channel_id` —
+  ТЗ прямо говорит "отличия... в том, что канала здесь нет").
+- `reportDiscoveryProfile(reporterPrivKey, adminPubkey, params,
+  publish)` — `nip59Wrap(buildDiscoveryReportRumor(params),
+  reporterPrivKey, adminPubkey)` → `requirePublishOk`.
+- `hideDiscoveryProfileLocally(ownerPubkey, targetPubkey)` —
+  `db.table("discoveryHidden").put({ownerPubkey, targetPubkey})`,
+  синхронно с кликом "Пожаловаться", НЕ зависит от исхода publish
+  (ТЗ: "немедленно и навсегда, независимо от сети").
+- `receiveDiscoveryReport(ownerPubkey, dbKey, {reporterPubkey, target
+  Pubkey, reason, snapshot, createdAt})` — запись в
+  `discoveryReports` (та же форма, что `receiveReport`
+  /`channelReports`: структурные поля plaintext, `snapshot`
+  зашифрован — это чужой текст, потенциально чувствительный).
+  Ревью-панель для админа НЕ строится в этом заходе (ТЗ T9 просит
+  только приём+запись; экран для чтения — вне текущего скоупа,
+  задел на будущее).
+
+**Приём** (`transport.js`, существующий `giftWrapSubscriber`, тот же
+блок `else if`, что `CHANNEL_REPORT_KIND`): `reporterPubkey` — ИЗ
+`rumor.pubkey` (аутентичный unwrap), не из тега — тег легко подделать.
+
+**`BUILD_ADMIN_PUBKEY`** — build-константа по образцу `BUILD_HASH`/
+`BUILD_DEFAULT_RELAYS` (`vite.config.js`'s `define` +
+`process.env.BUILD_ADMIN_PUBKEY`, `src/config.js`'s
+`typeof __BUILD_ADMIN_PUBKEY__ !== "undefined" ? ... : ""`). Пустая
+строка по умолчанию.
+
+**Кнопка "Пожаловаться"** — на карточке `discovery.jsx` (список), флаг-
+иконка рядом с существующей кнопкой запроса знакомства (не
+`ActionsMenu` — ЕДИНСТВЕННОЕ действие, оборачивать в меню ради одной
+кнопки — лишняя структура; `ModerationActions` оборачивает МЕНЮ ради
+ДВУХ действий, report+ignore, здесь только report). Рендерится ТОЛЬКО
+если `BUILD_ADMIN_PUBKEY` непусто. Переиспользует ТЕ ЖЕ i18n-ключи,
+что `ModerationActions` (`moderation.reportButton`/`reportPromptMessage`
+/`reportSentToast`/`reportFailedToast`) — то же действие по смыслу,
+заводить `discovery.*`-дубликаты не нужно. По клику: `window.prompt`
+(как `ModerationActions`) → `snapshot` из уже загруженной карточки
+(`{bio, showChannels, channels}`) → `reportDiscoveryProfile(...)` +
+`hideDiscoveryProfileLocally(...)` СРАЗУ (не дожидаясь ответа сети,
+не в `finally` — по ТЗ локальное скрытие не должно зависеть от publish)
+→ карточка убирается из `discoveryProfiles.value` немедленно (тот же
+эффект, что `refreshDiscoveryProfiles`, без похода в БД повторно) →
+toast об исходе publish.
+
+**Схема**: `db.version(31)` (30 занята T4) — `discoveryHidden:
+"[ownerPubkey+targetPubkey]"`, `discoveryReports: "[ownerPubkey+id],
+ownerPubkey"`.
+
+**`refreshDiscoveryProfiles`** — та же строка фильтра, что T4/T8,
+добавляется условие "не в `discoveryHidden` для этого владельца"
+(один запрос `discoveryHidden` за вызов, не по одному на карточку).
+
+### T10 — только развилка, дословно из ТЗ, НЕ реализуется
+
+- Публичные жалобы (NIP-56, kind 1984): значок сам, считает кто
+  угодно — цена — готовый инструмент травли с первого дня.
+- Приватные жалобы админу + значок после его действия — медленнее,
+  без травли с порога, но требует канала "админ → все" (подписанный
+  список помеченных, замещаемое событие с админского ключа).
+- Реле считает и переиздаёт — середина, привязывает модерацию к
+  конкретному реле.
+
+Для первой итерации (эта, T9) взят второй вариант — но только приём
+жалоб. Публикация списка помеченных (значок для остальных) — отдельный
+этап, не начинается сейчас.

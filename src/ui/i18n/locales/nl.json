@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "Nog {{time}} zichtbaar",
 		"hideNowButton": "Nu verbergen",
 		"previewTitle": "Zo zien anderen u",
-		"durationPickerAria": "Zichtbaarheidsduur"
+		"durationPickerAria": "Zichtbaarheidsduur",
+		"moderationWarning": "Dit komt niet door het relay-filter: {{fields}}",
+		"fieldBio": "bio",
+		"reportButtonAria": "Dit profiel melden"
 	},
 	"channels": {
 		"createChannelButton": "Kanaal aanmaken",

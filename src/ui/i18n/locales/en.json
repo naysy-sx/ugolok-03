@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "Visible for {{time}} more",
 		"hideNowButton": "Hide now",
 		"previewTitle": "How others will see you",
-		"durationPickerAria": "Visibility duration"
+		"durationPickerAria": "Visibility duration",
+		"moderationWarning": "This won't pass the relay filter: {{fields}}",
+		"fieldBio": "bio",
+		"reportButtonAria": "Report this profile"
 	},
 	"channels": {
 		"createChannelButton": "Create channel",

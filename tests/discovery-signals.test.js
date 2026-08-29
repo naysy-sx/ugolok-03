@@ -5,6 +5,7 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { contacts, discoveryProfiles, refreshDiscoveryProfiles } from "../src/ui/signals/contacts.js";
+import { hideDiscoveryProfileLocally } from "../src/domain/discovery/reports.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(9);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -22,6 +23,7 @@ beforeEach(async () => {
 	discoveryProfiles.value = [];
 	await db.table("discoveryProfiles").clear();
 	await db.table("contacts").clear();
+	await db.table("discoveryHidden").clear();
 });
 
 after(() => {
@@ -68,4 +70,61 @@ test("refreshDiscoveryProfiles: отсеивает записи с истёкш�
 
 	const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
 	assert.deepEqual(pubkeys, [BOB_PUB], "у Кэрол visibleUntil в прошлом — протухла, скрыта");
+});
+
+// CONTRACTS.md §DISCOVERY, T9 — жалоба скрывает карточку у пожаловавшегося
+// немедленно и навсегда, независимо от исхода публикации.
+test("refreshDiscoveryProfiles: отсеивает записи, скрытые через discoveryHidden (для ЭТОГО владельца)", async () => {
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+	]);
+	await hideDiscoveryProfileLocally(ALICE_PUB, CAROL_PUB);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	const pubkeys = discoveryProfiles.value.map((p) => p.pubkey);
+	assert.deepEqual(pubkeys, [BOB_PUB], "Кэрол скрыта локально этим владельцем");
+});
+
+test("refreshDiscoveryProfiles: скрытие ДРУГИМ владельцем не влияет — не общий бан-лист", async () => {
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+	]);
+	await hideDiscoveryProfileLocally("someone-else-owner", BOB_PUB);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
+});
+
+// CONTRACTS.md §DISCOVERY, T8 — не прошедшие словарь отсеиваются тихо, тем же
+// фильтром. Синтетический словарь через мок в самом discoveryProfiles не
+// нужен — refreshDiscoveryProfiles читает реальный stopwords.json, поэтому
+// тест использует РЕАЛЬНОЕ слово из него, не подставное (иначе тест ничего
+// не проверил бы про интеграцию с настоящим словарём).
+test("refreshDiscoveryProfiles: отсеивает карточки, чьё bio не проходит словарный фильтр", async () => {
+	const stopwordsModule = await import("../src/domain/discovery/stopwords.json", { with: { type: "json" } });
+	const badWord = stopwordsModule.default[0];
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "нормальное био", updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: `текст с ${badWord} внутри`, updatedAt: 1 },
+	]);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
+});
+
+test("refreshDiscoveryProfiles: отсеивает карточки, чьё название/описание канала не проходит словарь", async () => {
+	const stopwordsModule = await import("../src/domain/discovery/stopwords.json", { with: { type: "json" } });
+	const badWord = stopwordsModule.default[0];
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: true, channels: [{ id: "c1", name: "Обычный канал", description: "норм" }], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: true, channels: [{ id: "c2", name: badWord, description: "" }], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+	]);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
 });

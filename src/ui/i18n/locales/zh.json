@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "还剩{{time}}可见",
 		"hideNowButton": "立即隐藏",
 		"previewTitle": "其他人将看到",
-		"durationPickerAria": "可见时长"
+		"durationPickerAria": "可见时长",
+		"moderationWarning": "这不会通过中继过滤器: {{fields}}",
+		"fieldBio": "简介",
+		"reportButtonAria": "举报此资料"
 	},
 	"channels": {
 		"createChannelButton": "创建频道",

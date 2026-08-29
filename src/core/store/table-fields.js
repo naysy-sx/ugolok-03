@@ -72,6 +72,10 @@ export const INBOX_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey", "create
 
 export const CHANNEL_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "viewed", "reporterPubkey", "targetPubkey", "contentType", "contentId", "reason"];
 
+// CONTRACTS.md §DISCOVERY, T9 — snapshot (чужой bio/названия каналов на момент
+// жалобы) зашифрован, тот же принцип, что contentText у CHANNEL_REPORTS выше.
+export const DISCOVERY_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "reporterPubkey", "targetPubkey", "reason", "createdAt"];
+
 // Этап 45 (Tier 4 — низкий приоритет/спорная ценность, CONTRACTS.md). Ценность
 // шифрования здесь спорная (метаданные/счётчик/событие и так скоро публичное) —
 // реализовано ради полноты AC-16 по явному выбору пользователя.

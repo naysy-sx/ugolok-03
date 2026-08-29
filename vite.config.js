@@ -207,6 +207,13 @@ function buildDefaultIceServers() {
     ];
 }
 
+// CONTRACTS.md §DISCOVERY, T9 — пустая строка по умолчанию: self-hosted
+// инстанс без назначенного админа не должен показывать нерабочую кнопку
+// "Пожаловаться" (VisibilitySection/discovery.jsx проверяет непустоту).
+function buildAdminPubkey() {
+    return process.env.BUILD_ADMIN_PUBKEY ?? "";
+}
+
 // Этап E, найдено живой проверкой пользователя — в dev SW вообще не
 // регистрировался (main.jsx: `if (!import.meta.env.DEV)`), поэтому
 // /files-content/* улетал в SPA-фолбэк index.html (text/html), и mp3/mp4
@@ -298,6 +305,7 @@ export default defineConfig(({ command }) => ({
             buildDefaultBlossomServers(),
         ),
         __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
+        __BUILD_ADMIN_PUBKEY__: JSON.stringify(buildAdminPubkey()),
     },
     build: {
         target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры

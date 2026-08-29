@@ -7911,3 +7911,55 @@ lastCreatedAt`.
 экрана «Профиль» стал "My profile".
 
 Регрессия: 2230/2230.
+
+## DISCOVERY, часть D (T7-T10) — модерация — ЗАКРЫТА (код+тесты+живая проверка)
+
+Решения — CONTRACTS.md §DISCOVERY (часть D). T7 — записано дословно
+(фильтр отправителя декоративен, работают реле+читатель). T8 —
+`src/domain/discovery/wordfilter.js` (`normalize`/`findMatches`/
+`isClean`, без браузерных API — используется и клиентом, и серверным
+Node-плагином) + `stopwords.json` (стартовый список, admin расширяет
+без пересборки). `server/strfry/whitelist-plugin.mjs` расширен НА
+МЕСТЕ (strfry — один write-policy плагин): kind 30073 после
+whitelist-вердикта дополнительно проходит словарь. `refreshDiscoveryProfiles`
+отсеивает нечистые карточки тихо. `VisibilitySection` показывает
+предупреждение (не блокировку) с указанием поля.
+
+T9 — `src/domain/discovery/reports.js` (1-в-1 с
+`content/moderation.js`'s `CHANNEL_REPORT_KIND`): `DISCOVERY_REPORT_KIND
+= 3010`, gift-wrap admin'у (`BUILD_ADMIN_PUBKEY`, build-константа по
+образцу `BUILD_HASH`, пусто по умолчанию — кнопка "Пожаловаться"
+скрыта), локальное скрытие (`discoveryHidden`, `db.version(31)`)
+немедленно и независимо от сети. Приём — `transport.js`'s
+`giftWrapSubscriber`, тот же блок, что `CHANNEL_REPORT_KIND`,
+`reporterPubkey` из `rumor.pubkey`. T10 — только развилка в
+CONTRACTS.md, публичный значок НЕ реализован (по ТЗ).
+
+Тесты: новые `discovery-wordfilter.test.js` (11, включая честную
+"известный предел" — межскриптовый confusable проходит фильтр) и
+`discovery-reports.test.js` (6, включая реальный gift-wrap round-trip
+nip59Wrap/Unwrap), +4 в `discovery-signals.test.js` (isClean/
+discoveryHidden фильтры). strfry-плагин и `connect()`-подобные пути —
+без юнит-теста (нет прецедента/инфраструктуры в проекте — тот же
+класс причины, что T1/T4/T5), проверены живьём напрямую по протоколу
+плагина (stdin/stdout) и через браузер.
+
+Живая проверка: strfry-плагин через прямой JSON-пайп (accept/reject
+для kind 30073 с/без мата, kind 1 не тронут словарём); предупреждение
+"This won't pass the relay filter: bio" появляется вживую при грязном
+био; кнопка "Пожаловаться" скрыта без `BUILD_ADMIN_PUBKEY`
+(`npm run dev`) и появляется в продакшн-сборке с заданным
+`BUILD_ADMIN_PUBKEY` (`vite build`+`vite preview` — только там
+build-константы реально подставляются, `vite dev` их не применяет,
+существующее поведение проекта, не баг этого захода). Полный приём
+жалобы админом на своей идентичности живьём не гонялся (потребовал бы
+восстановления одного и того же аккаунта в двух отдельных браузерных
+профилях) — механизм покрыт юнит-тестом с настоящим nip59
+шифрованием/расшифровкой.
+
+Регрессия: 2251/2251 (два теста флейкали по разу в отдельных прогонах
+— `editPost`/rooms' И9, оба не в файлах этого этапа, воспроизводится
+независимо от изменений — не регрессия).
+
+**ТЗ DISCOVERY-TASK.md выполнено целиком, кроме T11 (мост на почту —
+явно не начинать без согласия пользователя).**

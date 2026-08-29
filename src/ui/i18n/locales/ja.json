@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "残り{{time}}公開",
 		"hideNowButton": "今すぐ非表示にする",
 		"previewTitle": "他の人にはこう見えます",
-		"durationPickerAria": "公開期間"
+		"durationPickerAria": "公開期間",
+		"moderationWarning": "これはリレーのフィルターを通過しません: {{fields}}",
+		"fieldBio": "自己紹介",
+		"reportButtonAria": "このプロフィールを報告"
 	},
 	"channels": {
 		"createChannelButton": "チャンネルを作成",

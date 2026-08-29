@@ -18,6 +18,7 @@ import { getProfile } from "../../core/crypto/keystore.js";
 import { db } from "../../core/store/database.js";
 import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
 import { DISCOVERY_KIND, parseDiscoveryEvent, loadDiscoverySettings, buildDiscoveryEvent } from "../../domain/discovery/discovery.js";
+import { DISCOVERY_REPORT_KIND, receiveDiscoveryReport } from "../../domain/discovery/reports.js";
 import {
 	acceptWelcome,
 	ensureOwnKeyPackagePublished,
@@ -679,6 +680,25 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							});
 						}
 						activityChanged = true; // ModerationPanel узнаёт о новой жалобе
+					} else if (rumor.kind === DISCOVERY_REPORT_KIND) {
+						// CONTRACTS.md §DISCOVERY, T9 — 1-в-1 с CHANNEL_REPORT_KIND выше:
+						// reporterPubkey ИЗ unwrap (rumor.pubkey), не из тега. Приходит сюда
+						// ТОЛЬКО если этот аккаунт === BUILD_ADMIN_PUBKEY (иначе gift-wrap
+						// адресован не ему и не расшифровался бы вовсе) — доп. проверки не
+						// нужны. Ревью-панель — вне скоупа этого этапа, только приём+запись.
+						let discoverySnapshot = null;
+						try {
+							discoverySnapshot = JSON.parse(rumor.content);
+						} catch {
+							discoverySnapshot = null;
+						}
+						await receiveDiscoveryReport(pubkeyHex, dbKey, {
+							reporterPubkey: rumor.pubkey,
+							targetPubkey: rumor.tags.find((t) => t[0] === "target")?.[1],
+							reason: rumor.tags.find((t) => t[0] === "reason")?.[1],
+							snapshot: discoverySnapshot,
+							createdAt: rumor.created_at,
+						});
 					}
 					// иначе — будущий kind, discard
 				} catch {

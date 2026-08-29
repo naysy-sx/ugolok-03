@@ -13,6 +13,9 @@ import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { t } from "./i18n.js";
+import { isClean } from "../../domain/discovery/wordfilter.js";
+import stopwords from "../../domain/discovery/stopwords.json" with { type: "json" };
+import { listHiddenDiscoveryPubkeys } from "../../domain/discovery/reports.js";
 
 // Этап 49 — contacts/blockedContacts остаются pubkey[] (форма, на которую уже
 // завязан остальной UI — discovery.jsx/settings.jsx/call.js), outgoingRequests/
@@ -457,6 +460,19 @@ export const discoveryProfiles = signal([]); // [{pubkey, visible, showChannels,
 
 // Отфильтровано: только visible===true И НЕ уже в contacts (DESIGN.md, этап 46 —
 // человек, уже добавленный в контакты, не нуждается в повторном "знакомстве").
+// CONTRACTS.md §DISCOVERY, T8 — карточка "чистая", если И bio, И название/
+// описание КАЖДОГО показанного канала проходят словарь. Тихо (без объяснений
+// пользователю) — тот же принцип, что остальные фильтры этой функции.
+function isDiscoveryCardClean(row) {
+	if (!isClean(row.bio, stopwords)) return false;
+	if (Array.isArray(row.channels)) {
+		for (const c of row.channels) {
+			if (!isClean(c.name, stopwords) || !isClean(c.description, stopwords)) return false;
+		}
+	}
+	return true;
+}
+
 export async function refreshDiscoveryProfiles(ownerPubkey) {
 	const rows = await db.table("discoveryProfiles").toArray();
 	// Живой фидбек пользователя — свой же профиль (если сам включил "показывать
@@ -465,6 +481,17 @@ export async function refreshDiscoveryProfiles(ownerPubkey) {
 	// заявки, этот — чтобы карточка самого себя вообще не появлялась).
 	// CONTRACTS.md §DISCOVERY, T4 — visibleUntil: реле может не поддерживать
 	// NIP-40 (expiration), читатель обязан отсеивать протухшие карточки сам.
+	// T9 — discoveryHidden: скрытые ПОСЛЕ жалобы этим владельцем, один запрос
+	// на вызов (не по одному на карточку).
 	const nowSec = Math.floor(Date.now() / 1000);
-	discoveryProfiles.value = rows.filter((r) => r.visible && r.visibleUntil > nowSec && r.pubkey !== ownerPubkey && !contacts.value.includes(r.pubkey));
+	const hiddenPubkeys = new Set(await listHiddenDiscoveryPubkeys(ownerPubkey));
+	discoveryProfiles.value = rows.filter(
+		(r) =>
+			r.visible &&
+			r.visibleUntil > nowSec &&
+			r.pubkey !== ownerPubkey &&
+			!contacts.value.includes(r.pubkey) &&
+			!hiddenPubkeys.has(r.pubkey) &&
+			isDiscoveryCardClean(r),
+	);
 }

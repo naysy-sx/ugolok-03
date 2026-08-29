@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "Noch {{time}} sichtbar",
 		"hideNowButton": "Jetzt verbergen",
 		"previewTitle": "So sehen Sie andere",
-		"durationPickerAria": "Sichtbarkeitsdauer"
+		"durationPickerAria": "Sichtbarkeitsdauer",
+		"moderationWarning": "Das wird den Relay-Filter nicht bestehen: {{fields}}",
+		"fieldBio": "Bio",
+		"reportButtonAria": "Dieses Profil melden"
 	},
 	"channels": {
 		"createChannelButton": "Kanal erstellen",

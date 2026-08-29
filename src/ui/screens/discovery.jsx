@@ -4,10 +4,16 @@ import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles } from 
 import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction } from "../signals/contacts.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { loadDiscoverySettings, publishDiscoverySettings, markDiscoveryExpired, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
+import { isClean } from "../../domain/discovery/wordfilter.js";
+import stopwords from "../../domain/discovery/stopwords.json" with { type: "json" };
+import { reportDiscoveryProfile, hideDiscoveryProfileLocally } from "../../domain/discovery/reports.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
+import { BUILD_ADMIN_PUBKEY } from "../../config.js";
 import { ContactIdentity } from "./contacts.jsx";
 import Screen from "../components/screen.jsx";
 import IconEye from "../icons/eye.jsx";
+import IconFlag from "../icons/flag.jsx";
+import { pushToast } from "../signals/toasts.js";
 import { t, errorMessage } from "../signals/i18n.js";
 
 // CONTRACTS.md §DISCOVERY, T4 — часы:минуты когда осталось больше часа,
@@ -100,6 +106,15 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 	const previewName = currentUser.value.login;
 	const previewChannels = settings.showChannels ? ownedChannels.filter((c) => settings.channelIds.includes(c.id)) : [];
 
+	// CONTRACTS.md §DISCOVERY, T8 — предупреждение, НЕ блокировка: реальная
+	// защита — реле (write-policy плагин) + читатель (refreshDiscoveryProfiles),
+	// это только удобство, "этот текст не пройдёт".
+	const dirtyFields = [];
+	if (previewBio && !isClean(previewBio, stopwords)) dirtyFields.push(t("discovery.fieldBio"));
+	for (const c of previewChannels) {
+		if (!isClean(c.name, stopwords) || !isClean(c.description, stopwords)) dirtyFields.push(c.name);
+	}
+
 	return (
 		<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
 			<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
@@ -150,6 +165,12 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 						{t("discovery.hideNowButton")}
 					</button>
 				</div>
+			)}
+
+			{dirtyFields.length > 0 && (
+				<p role="alert" class="callout callout--bad">
+					{t("discovery.moderationWarning", { fields: dirtyFields.join(", ") })}
+				</p>
 			)}
 
 			<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
@@ -285,6 +306,28 @@ export default function Discovery() {
 		}
 	}
 
+	// CONTRACTS.md §DISCOVERY, T9 — 1-в-1 с ModerationActions.handleReport
+	// (moderation-actions.jsx), отличия — адресат (admin, не владелец канала)
+	// и локальное скрытие СРАЗУ, независимо от исхода publish (ТЗ: "немедленно
+	// и навсегда, независимо от того, ушла ли жалоба в сеть").
+	async function handleReportCard(card) {
+		const reason = window.prompt(t("moderation.reportPromptMessage"), "");
+		if (reason === null) return; // отмена
+		await hideDiscoveryProfileLocally(ownerPubkey, card.pubkey);
+		discoveryProfiles.value = discoveryProfiles.value.filter((p) => p.pubkey !== card.pubkey);
+		try {
+			await reportDiscoveryProfile(
+				privKey,
+				BUILD_ADMIN_PUBKEY,
+				{ targetPubkey: card.pubkey, reason: reason || "report", snapshot: { bio: card.bio, showChannels: card.showChannels, channels: card.channels } },
+				publish,
+			);
+			pushToast({ title: t("moderation.reportSentToast") });
+		} catch (err) {
+			pushToast({ title: t("moderation.reportFailedToast"), body: errorMessage(err) });
+		}
+	}
+
 	return (
 		<Screen title={t("shell.discoverHeading")}>
 			{connectionError && (
@@ -317,26 +360,36 @@ export default function Discovery() {
 										borderRadius: "var(--radius)",
 									}}
 								>
-									<button
-										type="button"
-										disabled={busy}
-										onClick={() => handleToggleDiscoveryCard(card.pubkey)}
-										aria-pressed={sent}
-										aria-label={sent ? t("discovery.cancelRequestAria") : t("discovery.sendRequestAria")}
-										style={{
-											position: "absolute",
-											top: "var(--space-2xs)",
-											right: "var(--space-2xs)",
-											border: "none",
-											background: "none",
-											padding: 0,
-											cursor: "pointer",
-											fontSize: "var(--step-2)",
-											color: sent ? "var(--good)" : "var(--muted)",
-										}}
-									>
-										{sent ? "✓" : "○"}
-									</button>
+									<div class="row" style={{ position: "absolute", top: "var(--space-2xs)", right: "var(--space-2xs)", "--gap": "var(--space-2xs)", "--align": "center" }}>
+										{BUILD_ADMIN_PUBKEY && (
+											<button
+												type="button"
+												onClick={() => handleReportCard(card)}
+												aria-label={t("discovery.reportButtonAria")}
+												title={t("moderation.reportButton")}
+												style={{ border: "none", background: "none", padding: 0, cursor: "pointer", fontSize: "var(--step-1)", color: "var(--muted)" }}
+											>
+												<IconFlag />
+											</button>
+										)}
+										<button
+											type="button"
+											disabled={busy}
+											onClick={() => handleToggleDiscoveryCard(card.pubkey)}
+											aria-pressed={sent}
+											aria-label={sent ? t("discovery.cancelRequestAria") : t("discovery.sendRequestAria")}
+											style={{
+												border: "none",
+												background: "none",
+												padding: 0,
+												cursor: "pointer",
+												fontSize: "var(--step-2)",
+												color: sent ? "var(--good)" : "var(--muted)",
+											}}
+										>
+											{sent ? "✓" : "○"}
+										</button>
+									</div>
 									<ContactIdentity pubkey={card.pubkey} />
 									{card.showChannels && card.channels.length > 0 && (
 										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">

@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "{{time}} daha görünür",
 		"hideNowButton": "Şimdi gizle",
 		"previewTitle": "Başkaları sizi böyle görecek",
-		"durationPickerAria": "Görünürlük süresi"
+		"durationPickerAria": "Görünürlük süresi",
+		"moderationWarning": "Bu, röle filtresinden geçmeyecek: {{fields}}",
+		"fieldBio": "biyografi",
+		"reportButtonAria": "Bu profili bildir"
 	},
 	"channels": {
 		"createChannelButton": "Kanal oluştur",

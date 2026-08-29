@@ -381,7 +381,10 @@
 		"timeRemainingLabel": "Visible {{time}} más",
 		"hideNowButton": "Ocultar ahora",
 		"previewTitle": "Así te verán los demás",
-		"durationPickerAria": "Duración de la visibilidad"
+		"durationPickerAria": "Duración de la visibilidad",
+		"moderationWarning": "Esto no pasará el filtro del relay: {{fields}}",
+		"fieldBio": "bio",
+		"reportButtonAria": "Denunciar este perfil"
 	},
 	"channels": {
 		"createChannelButton": "Crear canal",

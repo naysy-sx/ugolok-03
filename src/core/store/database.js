@@ -361,6 +361,14 @@ db.version(30).stores({}).upgrade(async (tx) => {
   await tx.table("discoverySettings").toCollection().modify({ visible: false, visibleUntil: 0 });
 });
 
+// CONTRACTS.md §DISCOVERY, T9 — discoveryHidden: локальное скрытие карточки
+// после жалобы (по владельцу — не общий бан-лист). discoveryReports: приём
+// жалоб на СТОРОНЕ АДМИНА (snapshot зашифрован, table-fields.js).
+db.version(31).stores({
+  discoveryHidden: "[ownerPubkey+targetPubkey], ownerPubkey",
+  discoveryReports: "[ownerPubkey+id], ownerPubkey"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });
