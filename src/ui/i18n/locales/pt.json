@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Querem conhecer você",
 		"noOneVisible": "Ainda ninguém visível.",
 		"cancelRequestAria": "Cancelar solicitação de contato",
-		"sendRequestAria": "Enviar solicitação de contato"
+		"sendRequestAria": "Enviar solicitação de contato",
+		"visibilityTitle": "Visibilidade",
+		"visibilityHint": "Enquanto estiver desativado, ninguém verá você, exceto quem você mesmo deu a chave.",
+		"durationLegend": "Por quanto tempo",
+		"duration10m": "10 minutos",
+		"duration1h": "1 hora",
+		"duration1d": "1 dia",
+		"timeRemainingLabel": "Visível por mais {{time}}",
+		"hideNowButton": "Ocultar agora",
+		"previewTitle": "Como os outros vão te ver",
+		"durationPickerAria": "Duração da visibilidade"
 	},
 	"channels": {
 		"createChannelButton": "Criar canal",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Substituir",
 		"chooseFromStorageButton": "Escolher do armazenamento",
 		"aboutMeLegend": "Sobre mim",
-		"bioLabel": "Bio",
-		"visibilityTitle": "Conhecer pessoas",
-		"visibilityHint": "Enquanto estiver desativado, ninguém verá você, exceto quem você mesmo deu a chave."
+		"bioLabel": "Bio"
 	},
 	"screen": {
 		"backToSectionAria": "Voltar para «{{label}}»",
 		"sectionActionsAria": "Ações da seção"
 	},
 	"account": {
-		"portraitAria": "Perfil e avatar",
+		"portraitAria": "Meu perfil",
 		"portraitHint": "Alterar foto",
 		"copyKeyAria": "Copiar minha chave",
 		"menuAria": "Menu da conta",
@@ -802,7 +810,7 @@
 		"photoAlt": "Foto do perfil",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Arquivos",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "Meu perfil",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Chave e recuperação",

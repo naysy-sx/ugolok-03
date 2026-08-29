@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useId } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
@@ -7,8 +7,6 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish } from "../signals/transport.js";
 import { projected, getFileKeyFor } from "../signals/files.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
-import { loadDiscoverySettings, publishDiscoverySettings, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
-import { listOwnedChannels } from "../../domain/content/channel.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
 import FilePicker from "../components/file-picker.jsx";
@@ -16,7 +14,6 @@ import DeleteAccountPanel from "../components/delete-account-panel.jsx";
 import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
-import IconEye from "../icons/eye.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
@@ -30,136 +27,6 @@ function readFileAsDataUrl(file) {
 		reader.onerror = () => reject(reader.error);
 		reader.readAsDataURL(file);
 	});
-}
-
-// Редизайн интерфейса, этап 8 (CONTRACTS.md) — перенесено 1:1 из
-// discovery.jsx (файл удалён этим же этапом), тот же паттерн, что
-// RelayBlossomSection/SelfHostedSection выше в этом файле. Домен не
-// тронут — loadDiscoverySettings/publishDiscoverySettings те же самые.
-function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
-	const instanceId = useId();
-	const [settings, setSettings] = useState(null); // {visible, showChannels, channelIds}
-	const [ownedChannels, setOwnedChannels] = useState([]);
-	const [error, setError] = useState("");
-
-	useEffect(() => {
-		loadDiscoverySettings(ownerPubkey).then(setSettings);
-		listOwnedChannels(ownerPubkey, dbKey).then(setOwnedChannels);
-	}, [ownerPubkey]);
-
-	async function persist(next) {
-		setSettings(next);
-		try {
-			await ensureConnected(ownerPubkey, privKey, dbKey);
-			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	function handleVisibleToggle(checked) {
-		if (!checked) {
-			// Скрыть — сразу, без промежуточного "OK" (симметрично тому, что показ
-			// каналов/выбор каналов подтверждаются явно, а спрятаться можно немедленно).
-			persist({ ...settings, visible: false });
-		} else {
-			// Показать — только раскрывает панель настроек ниже, публикация — по "OK".
-			// CONTRACTS.md §DISCOVERY, T4 — временный шов до T5: эта секция ещё не
-			// умеет выбирать длительность (переедет в discovery.jsx с настоящим
-			// выбором из DISCOVERY_DURATIONS), поэтому здесь — самый долгий вариант
-			// по умолчанию, иначе publishDiscoverySettings бросит без visibleUntil.
-			const visibleUntil = Math.floor(Date.now() / 1000) + DISCOVERY_DURATIONS[DISCOVERY_DURATIONS.length - 1];
-			setSettings({ ...settings, visible: true, visibleUntil });
-		}
-	}
-
-	function toggleChannelId(channelId) {
-		setSettings((prev) => {
-			const has = prev.channelIds.includes(channelId);
-			return { ...prev, channelIds: has ? prev.channelIds.filter((id) => id !== channelId) : [...prev.channelIds, channelId] };
-		});
-	}
-
-	if (!settings) return null;
-
-	return (
-		<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
-			<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					<IconEye />
-					{t("profile.visibilityTitle")}
-				</h2>
-				<p class="panel__hint">{t("profile.visibilityHint")}</p>
-			</div>
-
-			{error && (
-				<p role="alert" class="callout callout--bad">
-					{error}
-				</p>
-			)}
-
-			<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-				<span class="set-row__text">{t("discovery.showMeToggle")}</span>
-				<input type="checkbox" class="set-row__switch" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
-			</label>
-
-			{/* Вложенность больше НЕ передаётся отступом слева (был инлайновый
-			    marginInlineStart — margin на компоненте, REGLAMENT.md §3 п.1).
-			    Зависимые настройки просто идут следом: включённый верхний
-			    переключатель и так их показывает, а выключенный — скрывает. */}
-			{settings.visible && (
-				<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
-					<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-						<span class="set-row__text">{t("discovery.showChannelsToggle")}</span>
-						<input
-							type="checkbox"
-							class="set-row__switch"
-							checked={settings.showChannels}
-							onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
-						/>
-					</label>
-
-					{settings.showChannels && (
-						<fieldset
-							class="stack"
-							style={{ "--gap": "var(--space-s)", borderInlineStart: "none", borderInlineEnd: "none", borderBlockEnd: "none", paddingInline: 0, paddingBlockEnd: 0 }}
-						>
-							{/* border-block-start/padding-block-start НЕ обнуляем (в отличие от
-							    остальных сторон) — это тот самый разделитель, который рисует
-							    .set-list > * + * родителя (fieldset — второй ребёнок .set-list
-							    выше). Обнулить их инлайном значило бы молча погасить чужой
-							    разделитель, найдено при живой проверке пользователем. */}
-							<legend class="sect-title">{t("discovery.whichChannelsLegend")}</legend>
-							{ownedChannels.length === 0 ? (
-								<p class="panel__hint">{t("discovery.noOwnChannels")}</p>
-							) : (
-								<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
-									{ownedChannels.map((c) => (
-										<label key={c.id} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-											<span class="set-row__text">{c.name}</span>
-											<input
-												id={`${instanceId}-ch-${c.id}`}
-												type="checkbox"
-												class="set-row__switch"
-												checked={settings.channelIds.includes(c.id)}
-												onChange={() => toggleChannelId(c.id)}
-											/>
-										</label>
-									))}
-								</div>
-							)}
-						</fieldset>
-					)}
-
-					<div class="row" style={{ "--gap": "var(--space-s)" }}>
-						<button type="button" class="rigid" onClick={() => persist(settings)}>
-							{t("common.save")}
-						</button>
-					</div>
-				</div>
-			)}
-		</section>
-	);
 }
 
 export default function Profile() {
@@ -439,8 +306,6 @@ export default function Profile() {
 						</form>
 					</div>
 				</section>
-
-				<VisibilitySection ownerPubkey={id} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 
 				{/* Переехало из "Настроек": удаление относится к тому, КТО ты, а
 				    не к тому, как ведёт себя приложение. */}

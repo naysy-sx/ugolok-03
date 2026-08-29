@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Chcą się poznać",
 		"noOneVisible": "Nikogo jeszcze nie widać.",
 		"cancelRequestAria": "Anuluj zaproszenie do kontaktów",
-		"sendRequestAria": "Wyślij zaproszenie do kontaktów"
+		"sendRequestAria": "Wyślij zaproszenie do kontaktów",
+		"visibilityTitle": "Widoczność",
+		"visibilityHint": "Dopóki to wyłączone, nikt Cię nie widzi poza tymi, którym sam podałeś/aś klucz.",
+		"durationLegend": "Na jak długo",
+		"duration10m": "10 minut",
+		"duration1h": "1 godzina",
+		"duration1d": "1 dzień",
+		"timeRemainingLabel": "Widoczne jeszcze {{time}}",
+		"hideNowButton": "Ukryj teraz",
+		"previewTitle": "Tak zobaczą Cię inni",
+		"durationPickerAria": "Czas widoczności"
 	},
 	"channels": {
 		"createChannelButton": "Utwórz kanał",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Zmień",
 		"chooseFromStorageButton": "Wybierz z magazynu",
 		"aboutMeLegend": "O mnie",
-		"bioLabel": "Bio",
-		"visibilityTitle": "Poznawanie",
-		"visibilityHint": "Dopóki to wyłączone, nikt Cię nie widzi poza tymi, którym sam podałeś/aś klucz."
+		"bioLabel": "Bio"
 	},
 	"screen": {
 		"backToSectionAria": "Wróć do „{{label}}”",
 		"sectionActionsAria": "Działania sekcji"
 	},
 	"account": {
-		"portraitAria": "Profil i awatar",
+		"portraitAria": "Mój profil",
 		"portraitHint": "Zmień zdjęcie",
 		"copyKeyAria": "Skopiuj mój klucz",
 		"menuAria": "Menu konta",
@@ -802,7 +810,7 @@
 		"photoAlt": "Zdjęcie profilowe",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Pliki",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "Mój profil",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Klucz i odzyskiwanie",

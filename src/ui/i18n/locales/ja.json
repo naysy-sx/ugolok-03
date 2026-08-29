@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "知り合いたい人たち",
 		"noOneVisible": "まだ誰も表示されていません。",
 		"cancelRequestAria": "つながりリクエストを取り消す",
-		"sendRequestAria": "つながりリクエストを送る"
+		"sendRequestAria": "つながりリクエストを送る",
+		"visibilityTitle": "公開設定",
+		"visibilityHint": "オフの間は、自分から鍵を渡した相手以外には誰にも見えません。",
+		"durationLegend": "公開する期間",
+		"duration10m": "10分",
+		"duration1h": "1時間",
+		"duration1d": "1日",
+		"timeRemainingLabel": "残り{{time}}公開",
+		"hideNowButton": "今すぐ非表示にする",
+		"previewTitle": "他の人にはこう見えます",
+		"durationPickerAria": "公開期間"
 	},
 	"channels": {
 		"createChannelButton": "チャンネルを作成",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "変更",
 		"chooseFromStorageButton": "ストレージから選択",
 		"aboutMeLegend": "自己紹介",
-		"bioLabel": "自己紹介文",
-		"visibilityTitle": "出会い",
-		"visibilityHint": "オフの間は、自分から鍵を渡した相手以外には誰にも見えません。"
+		"bioLabel": "自己紹介文"
 	},
 	"screen": {
 		"backToSectionAria": "「{{label}}」に戻る",
 		"sectionActionsAria": "セクションの操作"
 	},
 	"account": {
-		"portraitAria": "プロフィールとアバター",
+		"portraitAria": "マイプロフィール",
 		"portraitHint": "写真を変更",
 		"copyKeyAria": "自分の鍵をコピー",
 		"menuAria": "アカウントメニュー",
@@ -802,7 +810,7 @@
 		"photoAlt": "プロフィール写真",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "ファイル",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "マイプロフィール",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "鍵と復旧",

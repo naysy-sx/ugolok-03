@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Tanışmak istiyor",
 		"noOneVisible": "Henüz kimse görünmüyor.",
 		"cancelRequestAria": "Bağlantı isteğini iptal et",
-		"sendRequestAria": "Bağlantı isteği gönder"
+		"sendRequestAria": "Bağlantı isteği gönder",
+		"visibilityTitle": "Görünürlük",
+		"visibilityHint": "Bu kapalıyken, kendisine anahtar verdikleriniz dışında sizi kimse göremez.",
+		"durationLegend": "Ne kadar süreyle",
+		"duration10m": "10 dakika",
+		"duration1h": "1 saat",
+		"duration1d": "1 gün",
+		"timeRemainingLabel": "{{time}} daha görünür",
+		"hideNowButton": "Şimdi gizle",
+		"previewTitle": "Başkaları sizi böyle görecek",
+		"durationPickerAria": "Görünürlük süresi"
 	},
 	"channels": {
 		"createChannelButton": "Kanal oluştur",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Değiştir",
 		"chooseFromStorageButton": "Depodan seç",
 		"aboutMeLegend": "Hakkımda",
-		"bioLabel": "Biyografi",
-		"visibilityTitle": "Tanışma",
-		"visibilityHint": "Bu kapalıyken, kendisine anahtar verdikleriniz dışında sizi kimse göremez."
+		"bioLabel": "Biyografi"
 	},
 	"screen": {
 		"backToSectionAria": "«{{label}}» bölümüne dön",
 		"sectionActionsAria": "Bölüm işlemleri"
 	},
 	"account": {
-		"portraitAria": "Profil ve avatar",
+		"portraitAria": "Profilim",
 		"portraitHint": "Fotoğrafı değiştir",
 		"copyKeyAria": "Anahtarımı kopyala",
 		"menuAria": "Hesap menüsü",
@@ -802,7 +810,7 @@
 		"photoAlt": "Profil fotoğrafı",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Dosyalar",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "Profilim",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Anahtar ve kurtarma",

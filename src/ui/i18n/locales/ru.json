@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Хотят познакомиться",
 		"noOneVisible": "Пока никого не видно.",
 		"cancelRequestAria": "Отменить заявку на знакомство",
-		"sendRequestAria": "Отправить заявку на знакомство"
+		"sendRequestAria": "Отправить заявку на знакомство",
+		"visibilityTitle": "Видимость",
+		"visibilityHint": "Пока выключено, вас не видит никто, кроме тех, кому вы сами дали ключ.",
+		"durationLegend": "На какой срок",
+		"duration10m": "10 минут",
+		"duration1h": "1 час",
+		"duration1d": "Сутки",
+		"timeRemainingLabel": "Осталось: {{time}}",
+		"hideNowButton": "Скрыть сейчас",
+		"previewTitle": "Как вас увидят другие",
+		"durationPickerAria": "Срок трансляции"
 	},
 	"channels": {
 		"createChannelButton": "Создать канал",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Заменить",
 		"chooseFromStorageButton": "Выбрать из хранилища",
 		"aboutMeLegend": "О себе",
-		"bioLabel": "Био",
-		"visibilityTitle": "Знакомства",
-		"visibilityHint": "Пока выключено, вас не видит никто, кроме тех, кому вы сами дали ключ."
+		"bioLabel": "Био"
 	},
 	"screen": {
 		"backToSectionAria": "Назад к разделу «{{label}}»",
 		"sectionActionsAria": "Действия раздела"
 	},
 	"account": {
-		"portraitAria": "Профиль и аватар",
+		"portraitAria": "Мой профиль",
 		"portraitHint": "Сменить фото",
 		"copyKeyAria": "Скопировать мой ключ",
 		"menuAria": "Меню учётной записи",
@@ -802,7 +810,7 @@
 		"photoAlt": "Фото профиля",
 		"accountMenuAria": "Меню аккаунта",
 		"storageMenuItem": "Файлы",
-		"menuProfile": "Профиль и аватар",
+		"menuProfile": "Мой профиль",
 		"menuSettings": "Настройки",
 		"menuTheme": "Тема",
 		"menuMnemonic": "Ключ и восстановление",

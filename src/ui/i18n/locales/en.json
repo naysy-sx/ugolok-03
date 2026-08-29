@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Want to connect",
 		"noOneVisible": "No one visible yet.",
 		"cancelRequestAria": "Cancel connection request",
-		"sendRequestAria": "Send connection request"
+		"sendRequestAria": "Send connection request",
+		"visibilityTitle": "Visibility",
+		"visibilityHint": "While this is off, no one sees you except those you've given the key to yourself.",
+		"durationLegend": "For how long",
+		"duration10m": "10 minutes",
+		"duration1h": "1 hour",
+		"duration1d": "1 day",
+		"timeRemainingLabel": "Visible for {{time}} more",
+		"hideNowButton": "Hide now",
+		"previewTitle": "How others will see you",
+		"durationPickerAria": "Visibility duration"
 	},
 	"channels": {
 		"createChannelButton": "Create channel",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Replace",
 		"chooseFromStorageButton": "Choose from storage",
 		"aboutMeLegend": "About me",
-		"bioLabel": "Bio",
-		"visibilityTitle": "Discovery",
-		"visibilityHint": "While this is off, no one sees you except those you've given the key to yourself."
+		"bioLabel": "Bio"
 	},
 	"screen": {
 		"backToSectionAria": "Back to «{{label}}»",
 		"sectionActionsAria": "Section actions"
 	},
 	"account": {
-		"portraitAria": "Profile and avatar",
+		"portraitAria": "My profile",
 		"portraitHint": "Change photo",
 		"copyKeyAria": "Copy my key",
 		"menuAria": "Account menu",
@@ -802,7 +810,7 @@
 		"photoAlt": "Profile photo",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Files",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "My profile",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Key and recovery",

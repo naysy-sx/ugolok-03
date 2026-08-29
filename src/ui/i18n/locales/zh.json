@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "想要认识你",
 		"noOneVisible": "暂时还没有人可见。",
 		"cancelRequestAria": "取消联系人请求",
-		"sendRequestAria": "发送联系人请求"
+		"sendRequestAria": "发送联系人请求",
+		"visibilityTitle": "可见性",
+		"visibilityHint": "关闭时，除了您亲自给过密钥的人之外，没有人能看到您。",
+		"durationLegend": "持续时长",
+		"duration10m": "10分钟",
+		"duration1h": "1小时",
+		"duration1d": "1天",
+		"timeRemainingLabel": "还剩{{time}}可见",
+		"hideNowButton": "立即隐藏",
+		"previewTitle": "其他人将看到",
+		"durationPickerAria": "可见时长"
 	},
 	"channels": {
 		"createChannelButton": "创建频道",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "更换",
 		"chooseFromStorageButton": "从存储中选择",
 		"aboutMeLegend": "关于我",
-		"bioLabel": "简介",
-		"visibilityTitle": "结识",
-		"visibilityHint": "关闭时，除了您亲自给过密钥的人之外，没有人能看到您。"
+		"bioLabel": "简介"
 	},
 	"screen": {
 		"backToSectionAria": "返回“{{label}}”",
 		"sectionActionsAria": "版块操作"
 	},
 	"account": {
-		"portraitAria": "个人资料和头像",
+		"portraitAria": "我的资料",
 		"portraitHint": "更换照片",
 		"copyKeyAria": "复制我的密钥",
 		"menuAria": "账户菜单",
@@ -802,7 +810,7 @@
 		"photoAlt": "头像照片",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "文件",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "我的资料",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "密钥与恢复",

@@ -12,6 +12,7 @@ import {
 	parseDiscoveryEvent,
 	loadDiscoverySettings,
 	publishDiscoverySettings,
+	markDiscoveryExpired,
 } from "../src/domain/discovery/discovery.js";
 import { listPending } from "../src/core/store/outbox.js";
 
@@ -207,4 +208,31 @@ test("publishDiscoverySettings: нет записи в keystore (не должн
 	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.bio, "");
+});
+
+// CONTRACTS.md §DISCOVERY, T5 — автоистечение в UI: локальный флаг гасится
+// БЕЗ публикации (expiration+фильтр читателя уже делают своё дело сами).
+test("markDiscoveryExpired: гасит visible локально, не трогает остальные поля, не публикует", async () => {
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: ["c1"], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+
+	await markDiscoveryExpired(ALICE_PUB);
+
+	const local = await loadDiscoverySettings(ALICE_PUB);
+	assert.deepEqual(local, { visible: false, showChannels: true, channelIds: ["c1"], visibleUntil: FAR_FUTURE });
+});
+
+// Найдено адверсарной живой проверкой (T5, skill run-ugolok): быстрое
+// "включить" -> "Скрыть сейчас" в пределах ОДНОЙ секунды wall-clock давало
+// ДВА kind:30073 с ОДИНАКОВЫМ created_at (Math.floor(Date.now()/1000)) —
+// strfry как параметризованно-заменяемое событие (NIP-01, kind 30000-39999)
+// отклоняет второе с "replaced: have newer event" (не строго больше), UI
+// показывал ошибку хотя пользователь просто выключил тумблер. created_at
+// обязан быть строго монотонным ПОВЕРХ wall-clock секунд для этого потока.
+test("publishDiscoverySettings: два вызова подряд (в пределах одной секунды) -> строго возрастающий created_at", async () => {
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+
+	assert.equal(published.length, 2);
+	assert.ok(published[1].created_at > published[0].created_at, "второе событие обязано иметь строго больший created_at, даже если публикации попали в одну и ту же секунду");
 });

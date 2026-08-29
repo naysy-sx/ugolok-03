@@ -371,7 +371,17 @@
 		"wantToMeetTitle": "Möchten sich kennenlernen",
 		"noOneVisible": "Noch niemand sichtbar.",
 		"cancelRequestAria": "Kontaktanfrage zurückziehen",
-		"sendRequestAria": "Kontaktanfrage senden"
+		"sendRequestAria": "Kontaktanfrage senden",
+		"visibilityTitle": "Sichtbarkeit",
+		"visibilityHint": "Solange dies deaktiviert ist, sieht Sie niemand außer denjenigen, denen Sie selbst den Schlüssel gegeben haben.",
+		"durationLegend": "Für wie lange",
+		"duration10m": "10 Minuten",
+		"duration1h": "1 Stunde",
+		"duration1d": "1 Tag",
+		"timeRemainingLabel": "Noch {{time}} sichtbar",
+		"hideNowButton": "Jetzt verbergen",
+		"previewTitle": "So sehen Sie andere",
+		"durationPickerAria": "Sichtbarkeitsdauer"
 	},
 	"channels": {
 		"createChannelButton": "Kanal erstellen",
@@ -777,16 +787,14 @@
 		"replaceAvatarLabel": "Ersetzen",
 		"chooseFromStorageButton": "Aus dem Speicher wählen",
 		"aboutMeLegend": "Über mich",
-		"bioLabel": "Bio",
-		"visibilityTitle": "Kennenlernen",
-		"visibilityHint": "Solange dies deaktiviert ist, sieht Sie niemand außer denjenigen, denen Sie selbst den Schlüssel gegeben haben."
+		"bioLabel": "Bio"
 	},
 	"screen": {
 		"backToSectionAria": "Zurück zu „{{label}}“",
 		"sectionActionsAria": "Bereichsaktionen"
 	},
 	"account": {
-		"portraitAria": "Profil und Avatar",
+		"portraitAria": "Mein Profil",
 		"portraitHint": "Foto ändern",
 		"copyKeyAria": "Meinen Schlüssel kopieren",
 		"menuAria": "Kontomenü",
@@ -802,7 +810,7 @@
 		"photoAlt": "Profilfoto",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Dateien",
-		"menuProfile": "Profile and avatar",
+		"menuProfile": "Mein Profil",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Schlüssel und Wiederherstellung",

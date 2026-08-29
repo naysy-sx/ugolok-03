@@ -69,7 +69,15 @@ export async function loadDiscoverySettings(ownerPubkey) {
 }
 
 export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { visible, showChannels, channelIds, visibleUntil }, publish) {
-    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds, visibleUntil });
+    // Найдено адверсарной живой проверкой (T5) — быстрое "включить" ->
+    // "Скрыть сейчас" в пределах ОДНОЙ секунды даёт два kind:30073 с
+    // одинаковым Math.floor(Date.now()/1000): strfry (параметризованно-
+    // заменяемое событие, NIP-01) отклоняет второе как "не строго новее".
+    // lastCreatedAt — служебное поле, НЕ часть контракта loadDiscoverySettings.
+    const previous = await db.table("discoverySettings").get(ownerPubkey);
+    const createdAt = Math.max(Math.floor(Date.now() / 1000), (previous?.lastCreatedAt ?? 0) + 1);
+
+    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds, visibleUntil, lastCreatedAt: createdAt });
 
     const channels = showChannels ? (
         (await listOwnedChannels(ownerPubkey, dbKey))
@@ -84,7 +92,7 @@ export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { vi
         // аккаунта в keystore нет (не должно происходить в реальности) — bio остаётся ''
     }
 
-    const event = buildDiscoveryEvent(privKey, { visible, showChannels, channels, visibleUntil, bio });
+    const event = buildDiscoveryEvent(privKey, { visible, showChannels, channels, visibleUntil, bio }, createdAt);
 
     try {
         await requirePublishOk(publish, event);
@@ -92,4 +100,12 @@ export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { vi
         await enqueue(event, dbKey);
         throw e;
     }
+}
+
+// CONTRACTS.md §DISCOVERY, T5 — автоистечение в UI: событие с visible:false
+// публиковать не нужно (expiration + фильтр читателя уже прячут карточку),
+// локальный флаг только чтобы переключатель у ВЛАДЕЛЬЦА не показывал
+// "включено" с истёкшим сроком до следующего явного действия.
+export async function markDiscoveryExpired(ownerPubkey) {
+    await db.table("discoverySettings").update(ownerPubkey, { visible: false });
 }
