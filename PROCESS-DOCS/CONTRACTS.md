@@ -21556,3 +21556,106 @@ contactProfiles: "[ownerPubkey+contactPubkey], ownerPubkey, [ownerPubkey+watched
 `watched: 1` сверх `keep` самых свежих по `seenAt` (сортировка убыв.,
 хвост — на удаление). `watched: 0` не трогает никогда. Вызывается один раз
 из `connect()` после `hydrateProfilesFromCache`.
+
+### `.compose-tools` — блок прикрепление/форматирование/смайлы под полем ввода
+
+Живой фидбег (визуальная правка). Единая раскладка `<div class="compose-
+tools row">` с тремя детьми: `.compose-tools__attach` (rigid, кнопки
+`.message-compose-tool-btn` — файл/хранилище/голос, набор зависит от
+композитора), `<MarkdownFormatToolbar>`, `<div class="compose-
+tools__emoji">` с `<EmojiQuickSend>` внутри (CSS: `margin-inline-start:
+auto`, прижимает смайлик к правому краю). Используется в трёх местах:
+`chat.jsx` (ChatWindow), `channel-composer.jsx` (ChannelComposer),
+`channel-shared.jsx` (CommentComposer) — набор доступных attach-кнопок
+разный (в чате есть голос/хранилище, в комментарии — только файл), но
+структура блока и классы одинаковые.
+
+### `:sticker:<ключ>:` — сообщение-стикер (`domain/content/sticker.js`)
+
+**Пересмотрено** (живой фидбег): первая версия слала юникод-эмоджи текстом
+— пользователь явно отверг это ("надо прям большое svg... а не эмодзи").
+Текущий контракт: `content`, ЦЕЛИКОМ равный `:sticker:<ключ>:` (пример:
+`:sticker:smiley:`), — зарезервированный формат внутри ОБЫЧНОГО текстового
+канала сообщения (никакой миграции схемы БД, никакого нового kind/поля).
+`STICKER_KEYS` (18 ключей) + `stickerMarker(key)`/`parseStickerKey(text)` —
+в `domain/content/sticker.js`, без UI-зависимостей. Рендер — `StickerView`
+(`ui/components/sticker-view.jsx`, `STICKER_ICONS: key -> Icon`, тот же
+список ключей) — крупная (`.sticker-view`, `font-size: 4rem`) SVG-иконка
+ВМЕСТО `MarkdownView`. Подключено в трёх местах рендера сообщений:
+`message-bubble.jsx` (личный чат), `channel-message.jsx` (общий чат
+канала), `comment-node.jsx` (комментарий) — везде один и тот же паттерн:
+`parseStickerKey(text) ? <StickerView text={text} /> : <MarkdownView .../>`.
+
+### `EmojiQuickSend` (`src/ui/components/emoji-quick-send.jsx`)
+
+`{ onSend(marker: string), disabled?: boolean }`. Кнопка-переключатель
+(иконка `IconSmiley`, `summaryClass="message-compose-tool-btn"`) поверх
+обобщённого `ActionsMenu` (см. ниже) — перебирает `STICKER_KEYS`, при
+клике вызывает `onSend(stickerMarker(key))` СИНХРОННО с закрытием попапа.
+`onSend` — ответственность вызывающего композитора: отправить `marker`
+КАК ОБЫЧНОЕ текстовое сообщение (тем же путём, что и обычная отправка), НЕ
+трогая черновик (`text`/`tray`/голосовую запись) — стикер уходит отдельным
+сообщением сразу, минуя то, что пользователь уже печатает. Иконки —
+`STICKER_ICONS` из `sticker-view.jsx` (один источник для пикера и для
+рендера полученного сообщения). aria-label каждой кнопки — читаемая форма
+ключа (`"hand fist"`, не переводимый ключ ×18×12 локалей); у кнопки-
+переключателя один ключ `emojiPicker.toggleAria` (12 локалей).
+
+### `ActionsMenu` — обобщение под `icon`/`summaryClass`
+
+`src/ui/components/actions-menu.jsx`. Пропсы `icon` (компонент-иконка,
+по умолчанию `IconDotsVertical`) и `summaryClass` (класс `<summary>`, по
+умолчанию `icon-btn`) — добавлены ради `EmojiQuickSend` (иконка `smiley`,
+класс `message-compose-tool-btn` для визуального единства с соседними
+кнопками прикрепления). Остальное поведение (`<details>`+
+`useDetailsMenu`, парковка попапа на `document.body`, флип вверх у
+нижнего края вьюпорта, закрытие по клику вне/Escape/клику по пункту) не
+менялось — переиспользуется как есть, включая существующие вызовы без
+этих двух пропсов (дефолты сохраняют прежнее поведение).
+
+### `.menu-pop.emoji-picker-pop` — CSS-вариант `.menu-pop` под сетку
+
+`display: grid; grid-template-columns: repeat(6, 2.75rem)` вместо
+`.stack` (список пунктов), иконка — `font-size: var(--icon-size-lg)`.
+Составной селектор `.menu-pop.emoji-picker-pop button` — специфичность
+(0,2,1), выше голого `.menu-pop button` (0,1,1). ОТДЕЛЬНО —
+`.menu-pop.emoji-picker-pop button:has(> .icon) { padding-inline: 0 }`
+(специфичность (0,3,1)) обязателен: без него `.menu-pop button:has(>
+.icon) { padding-inline: var(--space-s) }` (та же специфичность (0,2,1),
+что и голое правило выше, и идёт ПОЗЖЕ в файле) сжимает content-box
+кнопки почти до нуля — иконка визуально ужимается.
+
+### `--icon-size-lg` (`minimal.css`, `@layer tokens`)
+
+`1.75rem` (28px) — единый размер SVG-иконки для ВСЕЙ нижней панели
+композитора (`.compose-tools`): `.message-compose-tool-btn .icon`,
+`.menu-pop.emoji-picker-pop button` (font-size), `.markdown-toolbar-btn
+.icon`. Точечный размер вне модульной `--step-N` шкалы — тот же паттерн,
+что `--font-size-bio`/`--font-size-menu` (тоже: место, где нужен
+конкретный px-размер, не связанный с типографикой заголовков).
+
+### `use-voice-recording.js` / `compose-attach-tools.jsx`
+
+Живой фидбег — три композитора (личный чат, комментарий, общий чат
+канала) обязаны быть визуально и функционально ОДИНАКОВЫМИ (были: у
+CommentComposer не было ни хранилища, ни голоса; у ChannelComposer не
+было голоса). Вынесено в общие примитивы:
+- `ui/hooks/use-voice-recording.js`'s `useVoiceRecording()` — state-
+  машина idle→recording→recorded (была только в chat.jsx). Возвращает
+  `{ recordingState, recordedVoiceUrl, error, isIdle, hasRecording,
+  start, stop, cancel, discard, reset, buildAttachment(privKey) }`.
+  `buildAttachment` — то же ветвление inline(≤32КБ)/Blossom, что раньше
+  было `buildOutgoingAttachments` в chat.jsx.
+- `ui/components/compose-attach-tools.jsx`'s `ComposeAttachButtons({
+  tray, voice, disabled, onError })` — 3 кнопки (файл/хранилище/голос,
+  класс `.message-compose-tool-btn` у всех), hidden file input,
+  FilePicker-модалка с `window.confirm` (необратимость fileKey) перед
+  добавлением из хранилища. `voice` опционален — без него кнопка
+  микрофона не рендерится.
+- `VoiceRecordingStatus({ voice })` — recording/recorded UI (кнопка
+  стоп/отмена, аудио-превью+удалить). Рендерится ОТДЕЛЬНО от кнопок, НАД
+  полем ввода (не внутри `.compose-tools`).
+- Все три композитора (`chat.jsx`, `channel-shared.jsx`'s
+  CommentComposer, `channel-composer.jsx`) используют оба примитива;
+  guard "нечего отправлять" везде одинаковый: `text.length === 0 &&
+  tray.items.length === 0 && !voice.hasRecording`.

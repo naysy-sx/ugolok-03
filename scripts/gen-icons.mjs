@@ -29,6 +29,7 @@ const MAP = {
 	"chevron-left": "caret-left",
 	"chevron-right": "caret-right",
 	compass: "compass",
+	confetti: "confetti",
 	copy: "copy",
 	"corner-back": "arrow-u-up-left",
 	cross: "x",
@@ -39,6 +40,7 @@ const MAP = {
 	exit: "sign-out",
 	eye: "eye",
 	"eye-slash": "eye-slash",
+	eyes: "eyes",
 	"file-audio": "file-audio",
 	"file-doc": "file-doc",
 	"file-image": "file-image",
@@ -46,6 +48,7 @@ const MAP = {
 	"file-text": "file-text",
 	"file-video": "file-video",
 	"file-xls": "file-xls",
+	fire: "fire",
 	flag: "flag",
 	folder: "folder",
 	"folder-plus": "folder-plus",
@@ -59,6 +62,13 @@ const MAP = {
 	funnel: "funnel",
 	gear: "gear",
 	globe: "globe",
+	"hand-fist": "hand-fist",
+	"hand-heart": "hand-heart",
+	"hand-peace": "hand-peace",
+	"hands-clapping": "hands-clapping",
+	"hands-praying": "hands-praying",
+	handshake: "handshake",
+	heart: "heart",
 	"help-circle": "question",
 	"image-icon": "image",
 	"info-circle": "info",
@@ -90,12 +100,22 @@ const MAP = {
 	send: "paper-plane-tilt",
 	server: "hard-drives",
 	shield: "shield-check",
+	smiley: "smiley",
+	"smiley-angry": "smiley-angry",
+	"smiley-meh": "smiley-meh",
+	"smiley-melting": "smiley-melting",
+	"smiley-nervous": "smiley-nervous",
+	"smiley-sad": "smiley-sad",
+	"smiley-wink": "smiley-wink",
+	"smiley-x-eyes": "smiley-x-eyes",
 	"speaker-loud": "speaker-high",
 	square: "square",
 	star: "star",
 	stop: "stop",
 	"squares-four": "squares-four",
 	sun: "sun",
+	"thumbs-down": "thumbs-down",
+	"thumbs-up": "thumbs-up",
 	trash: "trash",
 	upload: "upload-simple",
 	"view-list": "list-bullets",
@@ -106,7 +126,7 @@ const MAP = {
 
 // Залитое начертание — только там, где есть состояние "включено".
 // Даёт дополнительный файл <имя>-fill.jsx рядом с обычным.
-const FILLED = ["star", "bell", "chat-bubble"];
+const FILLED = ["star", "bell", "chat-bubble", "smiley", "heart", "thumbs-up", "fire", "eyes"];
 
 function componentName(stem) {
 	return "Icon" + stem.split(/[-_]/).map((p) => p[0].toUpperCase() + p.slice(1)).join("");

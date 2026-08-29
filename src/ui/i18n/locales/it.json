@@ -942,6 +942,9 @@
 		"listAria": "Elenco",
 		"linkAria": "Link"
 	},
+	"emojiPicker": {
+		"toggleAria": "Emoji"
+	},
 	"postEditor": {
 		"syntaxHint": "Supporta la formattazione Markdown: **grassetto**, *corsivo*, > citazione, - elenco, [link](url)",
 		"headingAria": "Titolo",

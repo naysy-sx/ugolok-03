@@ -2759,10 +2759,27 @@ html[data-media-full] .top-corner-actions {
 	background: none;
 	border: none;
 	color: var(--muted);
+	/* Живой фидбег — иконка внутри сидела не по центру: глобальное
+	   button:has(> .icon) (custom.css, начало файла) даёт inline-flex+
+	   align-items:center, но не justify-content — единственный flex-child
+	   без него прижимался к flex-start, свободное место от фикс. ширины
+	   кнопки уходило целиком справа. */
+	display: flex;
+	justify-content: center;
 }
 .message-compose-tool-btn:hover {
 	background-color: var(--surface);
 	color: var(--fg);
+}
+/* Живой фидбег — иконка была мелкой (1em от font-size:1.1rem кнопки).
+   inset:auto — явный сброс на случай смещения позиционированием (defensive,
+   класс .icon сам position не задаёт). Размер — --icon-size-lg (28px),
+   не число россыпью (см. токен, minimal.css). */
+.message-compose-tool-btn .icon {
+	inset: auto;
+	margin: auto;
+	width: var(--icon-size-lg);
+	height: var(--icon-size-lg);
 }
 .message-compose-send-btn {
 	background-color: var(--accent);
@@ -2772,6 +2789,69 @@ html[data-media-full] .top-corner-actions {
 }
 .message-compose-send-btn:hover {
 	filter: brightness(1.06);
+}
+
+/* Живой фидбег — новый блок ПОД полем ввода (.compose-tools): прикрепление
+   слева, форматирование рядом, смайлы (EmojiQuickSend) прижаты к правому
+   краю через margin-inline-start:auto — тот же приём, что .recording-status
+   ниже. Единая раскладка для личного чата (chat.jsx), общего чата канала
+   (channel-composer.jsx) и комментария к посту (channel-shared.jsx). */
+.compose-tools__emoji {
+	margin-inline-start: auto;
+}
+/* .emoji-picker-pop — вариант .menu-pop (EmojiQuickSend) под сетку
+   квадратных кнопок-иконок вместо списка текстовых пунктов: 18 смайликов
+   не помещаются в одну строку, отсюда многоуровневая сетка 6×3. Составной
+   селектор .menu-pop.emoji-picker-pop перевешивает и .menu-pop (min-
+   width/width), и .menu-pop button (width:100%/text-align:left) по
+   специфичности независимо от порядка в файле — тот же приём, что
+   .message-compose-tool-btn:has(> .icon) выше. */
+.menu-pop.emoji-picker-pop {
+	display: grid;
+	grid-template-columns: repeat(6, 2.75rem);
+	gap: var(--space-3xs);
+	width: max-content;
+	min-width: 0;
+	max-width: none;
+	padding: var(--space-2xs);
+}
+/* Живой фидбег — иконки были микроскопическими: .menu-pop button{font:
+   inherit} наследует --font-size-menu (мелкий шрифт текстовых пунктов
+   меню), а сама иконка внутри — <svg width="1em">, то есть следует этому
+   же мелкому размеру. font-size здесь переопределён явно, отдельно от
+   размера самой кнопки. */
+.menu-pop.emoji-picker-pop button {
+	width: 2.75rem;
+	height: 2.75rem;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-sm);
+	font-size: var(--icon-size-lg);
+	line-height: 1;
+}
+.menu-pop.emoji-picker-pop button:hover {
+	background-color: var(--surface);
+}
+/* Живой фидбег — иконки в сетке визуально сжимались: .menu-pop button:has(>
+   .icon) { padding-inline: var(--space-s) } (см. ниже по файлу) — та же
+   специфичность (0,2,1), что и .menu-pop.emoji-picker-pop button выше, и
+   идёт ПОЗЖЕ в файле, поэтому побеждала при равной специфичности несмотря
+   на padding:0 там. :has(> .icon) в ЭТОМ селекторе поднимает специфичность
+   до (0,3,1) — гарантированно выше, независимо от порядка в файле (тот же
+   приём, что .message-compose-tool-btn:has(> .icon) выше). */
+.menu-pop.emoji-picker-pop button:has(> .icon) {
+	padding-inline: 0;
+}
+
+/* Живой фидбег — стикер-сообщение (StickerView, sticker-view.jsx): крупная
+   SVG-иконка вместо markdown-текста внутри пузыря/строки сообщения —
+   пользователь явно попросил "прям большое", не юникод-эмодзи мелким
+   текстом. Размер — через font-size (Icon's <svg width="1em">), не
+   width/height напрямую: масштабируется вместе с --step-шкалой. */
+.sticker-view {
+	font-size: 4rem;
 }
 
 /* Статус записи/загрузки голосового (пользователь, item 13) — верхний
@@ -6692,10 +6772,12 @@ button[type="button"].media-mini-bar-btn {
 /* .composer — этап 69: .bar (раскладка) уже в JSX (аватар+колонка текста,
    не переносится), был .stack (только колонка, без аватара). Собственных
    декоративных свойств не осталось. */
-/* Живой фидбег — тулбар форматирования переехал под textarea, на одну
-   строку с .composer__row (вложения/отправить/отмена): margin-inline-start:
-   auto толкает саму группу кнопок вправо, тот же приём, что .action-buttons
-   (REGLAMENT.md §6 — третий механизм распределения остатка). */
+/* Живой фидбег — прикрепление/форматирование/смайлы ушли в общий блок
+   .compose-tools (выше по DOM, тот же приём, что ChatWindow/
+   ChannelComposer); .composer__row несёт только отправить/отменить, своей
+   строкой под ним. margin-inline-start:auto толкает саму группу кнопок
+   вправо — тот же приём, что .action-buttons (REGLAMENT.md §6 — третий
+   механизм распределения остатка). */
 .composer__row {
 	margin-inline-start: auto;
 }
@@ -7213,6 +7295,20 @@ button[type="button"].media-mini-bar-btn {
 }
 .app-layout .md-view p,
 .auth-layout .md-view p {
+	/* Живой фидбег — margin:0 у голого p (первый абзац — вообще без
+	   отступа) + отдельный margin-block-start ТОЛЬКО у p+p (ниже) вместо
+	   глобального p{margin-block:var(--space-m)} (minimal.css) с обеих
+	   сторон каждого p: раньше зазор между соседними абзацами держался на
+	   browser'ном margin-collapse (соседние margin-block схлопываются в
+	   один в normal flow) — работало, но неявно и хрупко (сломалось бы от
+	   любого будущего overflow/display на .md-view или её родителе,
+	   создающего block formatting context). Явный p+p — не завязан на
+	   collapse. 0.5em (не токен шкалы отступов) — межабзацный зазор
+	   пропорционален размеру ШРИФТА конкретного места встраивания
+	   (.md-view используется с разным font-size — .cmt__text/.chat-msg__text/
+	   post-page__body все разные), в отличие от --space-m (фиксирован
+	   относительно --font-size-base). */
+	margin: 0;
 	line-height: 1.6;
 	/* Markdown-этап D — soft break CommonMark (одиночный \n внутри абзаца)
 	   остаётся частью значения ОДНОГО text-узла (проверено тестами Этапа A);
@@ -7220,23 +7316,39 @@ button[type="button"].media-mini-bar-btn {
 	   регрессия, что уже закрыта точечно для .message-bubble p. */
 	white-space: pre-wrap;
 }
+.app-layout .md-view p + p,
+.auth-layout .md-view p + p {
+	margin-block-start: 0.5em;
+}
 /* Живой фидбег — markdown-рендер оборачивает текст пункта списка в <p>
-   (markdown-view.jsx's listItem -> renderBlock), глобальный p{margin-block:
-   var(--space-m)} (minimal.css) раздувал список "конскими" отступами между
-   пунктами. Не трогаем margin параграфов ВНЕ списка — там обычные отступы
-   прозы уместны, схлопывается только p ВНУТРИ li. Общее правило, не только
-   для .message-bubble (пост/комментарий/общий чат канала — та же болезнь). */
+   (markdown-view.jsx's listItem -> renderBlock) — список, не проза,
+   отступ между пунктами не нужен вовсе (ни от .md-view p, тот уже 0, ни
+   от p+p выше — второе правило перебивает специфичностью, см. ниже). */
 .md-view li > p {
 	margin-block: 0;
+}
+.app-layout .md-view li > p + p,
+.auth-layout .md-view li > p + p {
+	margin-block-start: 0;
 }
 /* Markdown-этап D — панель форматирования (жирный/курсив/цитата/список/
    ссылка) над textarea в трёх композерах (chat.jsx, channel-chat.jsx,
    channel.jsx-комментарии). .markdown-toolbar несёт только .row (раскладка
    уже в JSX) — здесь только сама кнопка. */
+/* Живой фидбег — .compose-tools: .markdown-toolbar теперь СРЕДНИЙ из трёх
+   элементов ряда (прикрепление/форматирование/смайлы), margin-inline:auto —
+   самоцентрирование внутри свободного места родителя, легитимное
+   исключение из "нет margin на компонентах" (REGLAMENT.md §3.1: .center). */
+.markdown-toolbar {
+	margin-inline: auto;
+}
+/* Живой фидбег — единый размер иконки для ВСЕЙ нижней панели (.compose-
+   tools__attach/.compose-tools__emoji/.markdown-toolbar): кнопка сама
+   уравнена с .message-compose-tool-btn (2.25rem), не 2rem. */
 .markdown-toolbar-btn {
 	flex: none;
-	width: 2rem;
-	height: 2rem;
+	width: 2.25rem;
+	height: 2.25rem;
 	padding: 0;
 	display: flex;
 	align-items: center;
@@ -7245,16 +7357,17 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius-sm);
 	background: none;
 	color: var(--muted);
-	font-size: 1rem;
 }
 /* Глобальный ресет minimal.css (svg{height:auto}) переопределяет HTML-атрибуты
    width/height="1em" на самом SVG — в обычном block-контексте это резолвится
    через viewBox-пропорцию нормально, но внутри flex-контейнера (display:flex
    на самой кнопке) резолвится в 0×0 (найдено живой проверкой, иконка не была
-   видна). Явные width/height здесь побеждают auto-резолюцию. */
+   видна). Явные width/height здесь побеждают auto-резолюцию — теперь через
+   --icon-size-lg (тот же токен, что .message-compose-tool-btn/.emoji-
+   picker-pop button — единый размер иконки на всю нижнюю панель), не em. */
 .markdown-toolbar-btn .icon {
-	width: 1em;
-	height: 1em;
+	width: var(--icon-size-lg);
+	height: var(--icon-size-lg);
 	max-width: none;
 	flex-shrink: 0;
 }
@@ -7926,7 +8039,15 @@ button[type="button"].media-mini-bar-btn {
 .feed-count,
 .feed-reacts {
 	color: var(--muted);
-	font-size: var(--step--2);
+	font-size: var(--step--1);
+}
+/* Живой фидбег — иконка комментариев (IconChatBubbleFill) в ленте была
+   "крошечной" (унаследованный мелкий font-size .feed-count) — явный
+   размер, тот же приём, что .react-chip .icon выше. */
+.feed-count .icon {
+	width: 1.05rem;
+	height: 1.05rem;
+	flex-shrink: 0;
 }
 .feed-thumb {
 	inline-size: 4rem;
@@ -8090,17 +8211,25 @@ button[type="button"].media-mini-bar-btn {
 .react-add {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.22rem;
-	height: 1.55rem;
-	padding: 0 0.42rem;
+	gap: 0.3rem;
+	height: 2rem;
+	padding: 0 0.55rem;
 	border-radius: var(--radius-full);
 	border: var(--border-width) solid var(--border);
 	background: var(--surface);
 	color: var(--fg);
-	font-size: var(--step--2);
+	font-size: var(--step--1);
 	line-height: 1;
 	box-shadow: none;
 	width: auto;
+}
+/* Живой фидбег — эмодзи-иконки реакций были "крошечными" (унаследованный
+   мелкий font-size чипа). Явный размер, не завязанный на font-size — тот
+   же приём, что .message-compose-tool-btn .icon (chat.jsx). */
+.react-chip .icon {
+	width: 1.15rem;
+	height: 1.15rem;
+	flex-shrink: 0;
 }
 .react-chip:hover,
 .react-add:hover {
@@ -8125,7 +8254,7 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--muted);
 	opacity: 0;
 	pointer-events: none;
-	width: 1.55rem;
+	width: 2rem;
 	justify-content: center;
 	padding: 0;
 }
@@ -8157,14 +8286,23 @@ button[type="button"].media-mini-bar-btn {
 	box-shadow: var(--shadow);
 }
 .react-picker button {
-	width: 1.85rem;
-	height: 1.85rem;
+	width: 2.25rem;
+	height: 2.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	border: 0;
 	background: transparent;
 	border-radius: var(--radius-full);
-	font-size: 1rem;
 	box-shadow: none;
 	padding: 0;
+}
+/* Живой фидбег — тот же фикс размера, что .react-chip .icon выше (крупнее,
+   не завязано на font-size). */
+.react-picker button .icon {
+	width: 1.3rem;
+	height: 1.3rem;
+	flex-shrink: 0;
 }
 .react-picker button:hover {
 	background: var(--surface);
@@ -8338,13 +8476,13 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius-sm);
 }
 
-/* E1 — композитор общего чата в подвале Screen. .composer__field/
-   .composer__tools скопом сильнее bare .comment-text-field (CommentComposer
-   тоже несёт класс .composer, историческая случайность) — textarea, не
-   растущий выше трети экрана, не должен был задеть высоту комментария.
-   .message-compose-tool-btn НЕ переопределяется здесь: класс общий с
-   личным чатом (chat.jsx, не трогать), его текущий стиль (2.25rem,
-   круглая, приглушённый цвет) и так подходит без изменений. */
+/* E1 — композитор общего чата в подвале Screen. .composer__field скопом
+   сильнее bare .comment-text-field (CommentComposer тоже несёт класс
+   .composer, историческая случайность) — textarea, не растущий выше трети
+   экрана, не должен был задеть высоту комментария. .message-compose-tool-btn
+   НЕ переопределяется здесь: класс общий с личным чатом (chat.jsx, не
+   трогать), его текущий стиль (2.25rem, круглая, приглушённый цвет) и так
+   подходит без изменений. */
 .composer__field textarea {
 	min-block-size: 2.6rem;
 	max-block-size: 9rem;

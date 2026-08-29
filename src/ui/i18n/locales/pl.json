@@ -942,6 +942,9 @@
 		"listAria": "Lista",
 		"linkAria": "Link"
 	},
+	"emojiPicker": {
+		"toggleAria": "Emotikony"
+	},
 	"postEditor": {
 		"syntaxHint": "Obsługuje formatowanie Markdown: **pogrubienie**, *kursywa*, > cytat, - lista, [link](url)",
 		"headingAria": "Nagłówek",

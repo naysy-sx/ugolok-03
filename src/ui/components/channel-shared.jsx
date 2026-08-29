@@ -5,17 +5,20 @@ import { shortPubkey } from "../format.js";
 import { createDraftPost, publishPost, editPost } from "../../domain/content/post.js";
 import { addComment } from "../../domain/content/comments.js";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
+import { useVoiceRecording } from "../hooks/use-voice-recording.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import { getManifest } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
 import FilePicker from "./file-picker.jsx";
 import AttachmentTray from "./media/attachment-tray.jsx";
+import { ComposeAttachButtons, VoiceRecordingStatus } from "./compose-attach-tools.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import IconFolder from "../icons/folder.jsx";
 import IconSend from "../icons/send.jsx";
 import IconCross from "../icons/cross.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
+import EmojiQuickSend from "./emoji-quick-send.jsx";
 import PostEditor from "../editor/editor.jsx";
 import { parseRich } from "../../core/markdown/parse.js";
 import { toPlainText } from "../../core/markdown/to-plain.js";
@@ -259,7 +262,7 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
-	const fileInputRef = useRef(null);
+	const voice = useVoiceRecording();
 	const textareaRef = useRef(null);
 	const author = commentAuthorInfo(ownerPubkey);
 	useEffect(() => {
@@ -268,7 +271,7 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 
 	async function handleSubmit(e) {
 		e.preventDefault();
-		if (busy || text.length === 0) return;
+		if (busy || (text.length === 0 && tray.items.length === 0 && !voice.hasRecording)) return;
 		if (tray.items.some((item) => item.error)) return;
 		if (!limiter.tryAction("comment")) {
 			setError(t("common.rateLimitError"));
@@ -277,13 +280,38 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 		setBusy(true);
 		setError("");
 		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
+			let attachments = [];
+			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey);
+			else if (voice.hasRecording) {
+				const descriptor = await voice.buildAttachment(privKey);
+				if (descriptor) attachments = [descriptor];
+			}
 			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, text, attachments, publish);
 			// Живой фидбег: найден попутно — текст не очищался после успешной
 			// отправки (setText("") не звалось нигде), в отличие от остальных
 			// композиторов (PostComposer/ChatComposer/ChannelComposer).
 			setText("");
 			tray.reset();
+			voice.reset();
+			onSubmitted();
+		} catch (err) {
+			setError(errorMessage(err));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	// Смайл (EmojiQuickSend) — комментарий сразу, минуя черновик text/tray.
+	async function handleSendEmoji(char) {
+		if (busy) return;
+		if (!limiter.tryAction("comment")) {
+			setError(t("common.rateLimitError"));
+			return;
+		}
+		setBusy(true);
+		setError("");
+		try {
+			await addComment(ownerPubkey, privKey, dbKey, channelId, postId, parentId, char, [], publish);
 			onSubmitted();
 		} catch (err) {
 			setError(errorMessage(err));
@@ -294,8 +322,10 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 
 	return (
 		// Живой фидбег: аватар отправителя убран (это всегда сам автор — свой
-		// аватар в форме ввода избыточен), тулбар форматирования переехал ПОД
-		// textarea, на одну строку с composer__row (тот сам уезжает вправо).
+		// аватар в форме ввода избыточен). Правка "новый блок под полем ввода":
+		// прикрепление+форматирование+смайлы переехали в общий .compose-tools
+		// (тот же блок, что ChatWindow/ChannelComposer), composer__row теперь
+		// несёт только отправить/отменить.
 		<form class="composer stack" style={{ "--gap": "var(--space-2xs)" }} onSubmit={handleSubmit} aria-label={t("channel.commentComposer.ariaLabel")}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -319,22 +349,25 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 			{(tray.items.length > 0 || tray.errors.length > 0) && (
 				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 			)}
-			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
-				<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-					<button type="button" class="icon-btn" onClick={() => fileInputRef.current?.click()} aria-label={t("channel.commentComposer.attachAria")}>
-						<IconPaperclip />
-					</button>
-					<button type="submit" disabled={busy || text.length === 0 || tray.items.some((item) => item.error)}>
-						{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
-					</button>
-					{onCancel && (
-						<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
-							{t("common.cancel")}
-						</button>
-					)}
+			<VoiceRecordingStatus voice={voice} />
+			<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+				<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
+					<ComposeAttachButtons tray={tray} voice={voice} disabled={busy} onError={setError} />
 				</div>
+				<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
+				<div class="compose-tools__emoji">
+					<EmojiQuickSend onSend={handleSendEmoji} disabled={busy} />
+				</div>
+			</div>
+			<div class="composer__row row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+				<button type="submit" disabled={busy || (text.length === 0 && tray.items.length === 0 && !voice.hasRecording) || tray.items.some((item) => item.error)}>
+					{busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
+				</button>
+				{onCancel && (
+					<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
+						{t("common.cancel")}
+					</button>
+				)}
 			</div>
 		</form>
 	);

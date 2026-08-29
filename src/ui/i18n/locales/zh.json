@@ -942,6 +942,9 @@
 		"listAria": "列表",
 		"linkAria": "链接"
 	},
+	"emojiPicker": {
+		"toggleAria": "表情符号"
+	},
 	"postEditor": {
 		"syntaxHint": "支持 Markdown 格式：**粗体**、*斜体*、> 引用、- 列表、[链接](url)",
 		"headingAria": "标题",

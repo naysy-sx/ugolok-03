@@ -942,6 +942,9 @@
 		"listAria": "Lista",
 		"linkAria": "Enlace"
 	},
+	"emojiPicker": {
+		"toggleAria": "Emojis"
+	},
 	"postEditor": {
 		"syntaxHint": "Admite formato Markdown: **negrita**, *cursiva*, > cita, - lista, [enlace](url)",
 		"headingAria": "Encabezado",

@@ -942,6 +942,9 @@
 		"listAria": "Список",
 		"linkAria": "Ссылка"
 	},
+	"emojiPicker": {
+		"toggleAria": "Смайлы"
+	},
 	"postEditor": {
 		"syntaxHint": "Поддерживается разметка Markdown: **жирный**, *курсив*, > цитата, - список, [ссылка](адрес)",
 		"headingAria": "Заголовок",

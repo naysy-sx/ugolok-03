@@ -942,6 +942,9 @@
 		"listAria": "リスト",
 		"linkAria": "リンク"
 	},
+	"emojiPicker": {
+		"toggleAria": "絵文字"
+	},
 	"postEditor": {
 		"syntaxHint": "Markdown記法に対応: **太字**、*斜体*、> 引用、- リスト、[リンク](url)",
 		"headingAria": "見出し",

@@ -942,6 +942,9 @@
 		"listAria": "Lijst",
 		"linkAria": "Link"
 	},
+	"emojiPicker": {
+		"toggleAria": "Emoji's"
+	},
 	"postEditor": {
 		"syntaxHint": "Ondersteunt Markdown-opmaak: **vet**, *cursief*, > citaat, - lijst, [link](url)",
 		"headingAria": "Kop",

@@ -3,6 +3,8 @@ import { t } from "../signals/i18n.js";
 import ActionsMenu from "./actions-menu.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 import MarkdownView from "./markdown-view.jsx";
+import StickerView from "./sticker-view.jsx";
+import { parseStickerKey } from "../../domain/content/sticker.js";
 import ReactionRow from "./reaction-row.jsx";
 import ChannelBubbleAttachments from "./channel-bubble-attachments.jsx";
 import { commentAuthorInfo, CommentComposer } from "./channel-shared.jsx";
@@ -73,7 +75,7 @@ export default function CommentNode({
 						)}
 					</header>
 					<div class="cmt__text">
-						<MarkdownView source={comment.text} profile="lite" />
+						{parseStickerKey(comment.text) ? <StickerView text={comment.text} /> : <MarkdownView source={comment.text} profile="lite" />}
 					</div>
 					{(comment.attachments?.length > 0) && (
 						<div class="cmt__media">

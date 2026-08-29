@@ -942,6 +942,9 @@
 		"listAria": "Liste",
 		"linkAria": "Bağlantı"
 	},
+	"emojiPicker": {
+		"toggleAria": "Emojiler"
+	},
 	"postEditor": {
 		"syntaxHint": "Markdown biçimlendirmesini destekler: **kalın**, *italik*, > alıntı, - liste, [bağlantı](url)",
 		"headingAria": "Başlık",

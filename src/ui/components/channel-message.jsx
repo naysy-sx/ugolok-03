@@ -4,6 +4,8 @@ import { planBubbleAttachments } from "./bubble-attachment-plan.js";
 import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cluster.jsx";
 import AttachmentView from "./attachment-view.jsx";
 import MarkdownView from "./markdown-view.jsx";
+import StickerView from "./sticker-view.jsx";
+import { parseStickerKey } from "../../domain/content/sticker.js";
 import ActionsMenu from "./actions-menu.jsx";
 import ModerationActions from "./moderation-actions.jsx";
 
@@ -66,7 +68,7 @@ export default function ChannelMessage({ message, showAuthor, isOwn, isChannelOw
 				<BubbleAttachmentCluster plan={plan} onOpen={open} />
 				{message.text && (
 					<div class="chat-msg__text">
-						<MarkdownView source={message.text} profile="lite" />
+						{parseStickerKey(message.text) ? <StickerView text={message.text} /> : <MarkdownView source={message.text} profile="lite" />}
 					</div>
 				)}
 				<BubbleFileChips plan={plan} onOpen={open} />

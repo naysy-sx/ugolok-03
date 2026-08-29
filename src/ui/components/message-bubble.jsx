@@ -2,6 +2,8 @@ import { useState } from "preact/hooks";
 import AttachmentView, { AttachmentDownloadLink, AttachmentSaveButton } from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
+import StickerView from "./sticker-view.jsx";
+import { parseStickerKey } from "../../domain/content/sticker.js";
 import { planBubbleAttachments } from "./bubble-attachment-plan.js";
 import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cluster.jsx";
 import ActionsMenu from "./actions-menu.jsx";
@@ -79,7 +81,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 		<div class={bubbleClass} style={bubbleStyle}>
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
 			<BubbleAttachmentCluster plan={plan} onOpen={open} />
-			{message.text && <MarkdownView source={message.text} profile="lite" />}
+			{message.text && (parseStickerKey(message.text) ? <StickerView text={message.text} /> : <MarkdownView source={message.text} profile="lite" />)}
 			<BubbleFileChips plan={plan} onOpen={open} />
 			{plan.voices.map((a, i) => (
 				<AttachmentView key={`voice-${i}`} attachment={a} />

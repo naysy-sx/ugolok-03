@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "preact/hooks";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import {
@@ -18,11 +17,6 @@ import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconSend from "../icons/send.jsx";
 import IconEraser from "../icons/eraser.jsx";
-import IconPaperclip from "../icons/paperclip.jsx";
-import IconMicrophone from "../icons/microphone.jsx";
-import IconStop from "../icons/stop.jsx";
-import IconCross from "../icons/cross.jsx";
-import IconFolder from "../icons/folder.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconArrowLeft from "../icons/arrow-left.jsx";
 import { ContactIdentity } from "./contacts.jsx";
@@ -43,14 +37,11 @@ import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
 import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
-import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { createVoiceRecorder, shouldInlineVoice } from "../../domain/messaging/voice.js";
-import { getManifest } from "../../domain/files/content.js";
-import { getFileKeyFor, projected } from "../signals/files.js";
 import MessageBubble from "../components/message-bubble.jsx";
 import AttachmentTray from "../components/media/attachment-tray.jsx";
 import { useAttachmentTray } from "../hooks/use-attachment-tray.js";
-import FilePicker from "../components/file-picker.jsx";
+import { useVoiceRecording } from "../hooks/use-voice-recording.js";
+import { ComposeAttachButtons, VoiceRecordingStatus } from "../components/compose-attach-tools.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import Screen from "../components/screen.jsx";
 import { openMedia } from "../signals/media.js";
@@ -62,14 +53,10 @@ import AccountAvatar from "../components/account-avatar.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
+import EmojiQuickSend from "../components/emoji-quick-send.jsx";
 import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0]; // F-AT-09 (список в settings) — этап 32
-
-function base64FromBytes(bytes) {
-	return btoa(String.fromCharCode.apply(null, bytes));
-}
 
 // contacts.jsx уже вызывает ensureConnected при заходе на вкладку "Контакты" — но
 // пользователь может открыть "Сообщения" напрямую, минуя её. ensureConnected идемпотентна
@@ -304,35 +291,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const userEditedRef = useRef(false);
 
 	// Этап 29 — вложения; этап B4 — лоток мультивыбора (useAttachmentTray, B3).
-	// Лоток и recordedVoiceBlob (голосовая запись) ВЗАИМОИСКЛЮЧАЮЩИЕ — сообщение
+	// Лоток и voice (запись, useVoiceRecording) ВЗАИМОИСКЛЮЧАЮЩИЕ — сообщение
 	// несёт либо вложения, либо голосовое, не оба сразу (тот же принцип, что
-	// большинство мессенджеров). fileInputRef — скрытый <input type=file multiple>,
-	// кнопка "Прикрепить" триггерит его клик программно.
+	// большинство мессенджеров). Кнопки/UI записи — ComposeAttachButtons/
+	// VoiceRecordingStatus (compose-attach-tools.jsx), общие с CommentComposer/
+	// ChannelComposer (живой фидбег — три композитора должны выглядеть и уметь
+	// одно и то же).
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
-	const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
-	const fileInputRef = useRef(null);
-
-	// recordingState: "idle" | "recording" | "recorded". voiceRecorderRef держит
-	// createVoiceRecorder()-экземпляр между start()/stop()/cancel() одного захода записи.
-	const [recordingState, setRecordingState] = useState("idle");
-	const [recordedVoiceBlob, setRecordedVoiceBlob] = useState(null);
-	const voiceRecorderRef = useRef(null);
+	const voice = useVoiceRecording();
 	const [uploadingAttachment, setUploadingAttachment] = useState(false);
-
-	// Object URL для прослушивания ЗАПИСАННОГО (ещё не отправленного) голоса —
-	// создать один раз на смену blob, освободить на очистке/размонтировании,
-	// не пересоздавать на каждый рендер (тот же принцип, что objectUrl в
-	// components/media/attachment-tray.jsx для превью картинок).
-	const [recordedVoiceUrl, setRecordedVoiceUrl] = useState(null);
-	useEffect(() => {
-		if (!recordedVoiceBlob) {
-			setRecordedVoiceUrl(null);
-			return;
-		}
-		const url = URL.createObjectURL(recordedVoiceBlob);
-		setRecordedVoiceUrl(url);
-		return () => URL.revokeObjectURL(url);
-	}, [recordedVoiceBlob]);
 
 	useEffect(() => {
 		// Найденный баг (пользователь): при входе в чат подтягиваем СВЕЖИЙ профиль
@@ -418,96 +385,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		applyTextChange(e.currentTarget.value);
 	}
 
-	// Прикрепление/голосовое взаимоисключающие — начало одного сбрасывает другое.
-	function handleFilesSelected(e) {
-		// FileList из e.currentTarget.files — ЖИВАЯ ссылка на список инпута:
-		// обнуление e.currentTarget.value ДО addFiles() опустошило бы её же
-		// (тот же объект, не копия) — addFiles() должен уйти первым.
-		const files = e.currentTarget.files;
-		if (!files || files.length === 0) return;
-		setRecordingState("idle");
-		setRecordedVoiceBlob(null);
-		tray.addFiles(files);
-		e.currentTarget.value = ""; // иначе повторный выбор ТЕХ ЖЕ файлов не даёт onChange
-	}
-
-	// И7 7.3/7.4 — вложение ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). Дедупликация
-	// (MATH.md §7: "передают Digest блоба, а не копию байтов") — файл НЕ
-	// перезаливается заново под новым ключом, дескриптор вложения ссылается на
-	// ТОТ ЖЕ manifestDigest/fileKey узла. Этап B4: расшифровка байтов больше НЕ
-	// нужна здесь — AttachmentTray (B3) для storage-item превью показывает
-	// только иконку, не картинку, поэтому `getRange` снят (не тянем в память
-	// файл целиком ради того, что не рендерится). С момента отправки получатель
-	// держит fileKey НАВСЕГДА — отозвать нельзя (решение №9 TASK.md),
-	// предупреждение — ДО обращения к хранилищу, простой window.confirm() (тот
-	// же приём, что аватар 7.2/необратимые действия files.jsx).
-	async function handleAttachmentFromStorage(ids) {
-		setAttachmentPickerOpen(false);
-		if (!ids || ids.length === 0) return;
-		if (!window.confirm(t("chat.window.sendAttachmentConfirm"))) return;
-		const refs = [];
-		let lastError = "";
-		for (const id of ids) {
-			const node = projected.value.nodes.get(id);
-			if (!node || node.kind !== "file") continue;
-			try {
-				const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
-				const fileKey = await getFileKeyFor(node.blob);
-				if (!fileKey) {
-					lastError = t("chat.window.fileKeyNotFoundError");
-					continue;
-				}
-				refs.push({ manifestDigest: node.blob, fileKey, manifest });
-			} catch (err) {
-				lastError = errorMessage(err);
-			}
-		}
-		if (lastError) setError(lastError);
-		if (refs.length === 0) return;
-		setRecordingState("idle");
-		setRecordedVoiceBlob(null);
-		tray.addFromStorage(refs);
-	}
-
-	async function handleStartRecording() {
-		setError("");
-		tray.reset(); // взаимоисключение — начатая запись отменяет выбранные вложения
-		const recorder = createVoiceRecorder();
-		try {
-			await recorder.start();
-			voiceRecorderRef.current = recorder;
-			setRecordingState("recording");
-		} catch (err) {
-			setError(errorMessage(err));
-		}
-	}
-
-	async function handleStopRecording() {
-		if (!voiceRecorderRef.current) return;
-		try {
-			const blob = await voiceRecorderRef.current.stop();
-			setRecordedVoiceBlob(blob);
-			setRecordingState("recorded");
-		} catch (err) {
-			setError(errorMessage(err));
-			setRecordingState("idle");
-		} finally {
-			voiceRecorderRef.current = null;
-		}
-	}
-
-	function handleCancelRecording() {
-		voiceRecorderRef.current?.cancel();
-		voiceRecorderRef.current = null;
-		setRecordingState("idle");
-		setRecordedVoiceBlob(null);
-	}
-
-	function handleDiscardRecordedVoice() {
-		setRecordedVoiceBlob(null);
-		setRecordingState("idle");
-	}
-
 	// Известное упрощение MVP: перезагружает ПОСЛЕДНИЕ 100, не сохраняя ранее
 	// подгруженную (через "Загрузить более старые") историю выше — если пользователь
 	// проскроллил вверх, отправка/удаление сообщения молча возвращает его к низу.
@@ -530,21 +407,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 	// Строит дескриптор вложения (F-AT-02) из выбранного файла или записанного голоса.
 	// Возвращает undefined, если нечего прикреплять (обычное текстовое сообщение).
-	// Голосовое ≤32КБ (F-AT-08/AC-AT-03b) НИКОГДА не грузится на Blossom — inline
-	// base64 прямо в сообщении; иначе — тот же uploadAttachment, что обычный файл.
 	// Этап B4 медиа-подсистемы — лоток и голос взаимоисключающие (гарантировано
 	// UI: старт записи вызывает tray.reset(), выбор файла сбрасывает запись),
 	// поэтому здесь простое ветвление, не слияние.
 	async function buildOutgoingAttachments() {
 		if (tray.items.length > 0) return tray.uploadAll(privKey);
-		if (recordedVoiceBlob) {
-			const bytes = new Uint8Array(await recordedVoiceBlob.arrayBuffer());
-			if (shouldInlineVoice(bytes.length)) {
-				return [{ type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) }];
-			}
-			const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey);
-			descriptor.voice = true;
-			return [descriptor];
+		if (voice.hasRecording) {
+			const descriptor = await voice.buildAttachment(privKey);
+			return descriptor ? [descriptor] : undefined;
 		}
 		return undefined;
 	}
@@ -552,7 +422,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	async function handleSend(e) {
 		e.preventDefault();
 		if (busyRef.current) return;
-		if (text.length === 0 && tray.items.length === 0 && !recordedVoiceBlob) return; // нечего отправлять
+		if (text.length === 0 && tray.items.length === 0 && !voice.hasRecording) return; // нечего отправлять
 		if (tray.items.some((item) => item.error)) return; // невалидное вложение — сначала убрать/заменить
 		if (text.length > MAX_MESSAGE_LENGTH) {
 			setComposeError(t("chat.window.messageTooLong", { max: MAX_MESSAGE_LENGTH }));
@@ -586,14 +456,33 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
 			setText("");
 			tray.reset();
-			setRecordedVoiceBlob(null);
-			setRecordingState("idle");
+			voice.reset();
 			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
 			await reloadWindow();
 		} catch (err) {
 			setComposeError(errorMessage(err));
 		} finally {
 			setUploadingAttachment(false);
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}
+
+	// Смайл (EmojiQuickSend) отправляется СРАЗУ отдельным сообщением, минуя
+	// черновик text/tray/recordedVoiceBlob — клик не должен трогать то, что
+	// пользователь уже набирает в поле ввода.
+	async function sendQuickMessage(value) {
+		if (busyRef.current) return;
+		busyRef.current = true;
+		setComposeError("");
+		setBusy(true);
+		try {
+			const lamportTs = await nextLamportTick(ownerPubkey);
+			await sendChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, value, lamportTs, publishToChatPartner, fetchDeviceKeyPackages, refreshGroupMessageSubscription, undefined);
+			await reloadWindow();
+		} catch (err) {
+			setComposeError(errorMessage(err));
+		} finally {
 			busyRef.current = false;
 			setBusy(false);
 		}
@@ -736,28 +625,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
 					)}
 
-					{recordingState === "recording" && (
-						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
-							<span class="recording-dot" aria-hidden="true" /> {t("chat.window.recordingStatus")}
-							<button type="button" onClick={handleStopRecording}>
-								<IconStop /> {t("common.stop")}
-							</button>
-							<button type="button" onClick={handleCancelRecording}>
-								<IconCross /> {t("contacts.cancelRequestButton")}
-							</button>
-						</p>
-					)}
-
-					{recordingState === "recorded" && recordedVoiceUrl && (
-						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							<div class="audio-shell">
-								<audio controls src={recordedVoiceUrl} />
-							</div>
-							<button type="button" onClick={handleDiscardRecordedVoice}>
-								<IconCross /> {t("chat.window.deleteRecordingButton")}
-							</button>
-						</p>
-					)}
+					<VoiceRecordingStatus voice={voice} />
 
 					{uploadingAttachment && (
 						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
@@ -765,39 +633,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
 					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
-						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFilesSelected} aria-hidden="true" tabIndex={-1} />
-						<button
-							type="button"
-							class="message-compose-tool-btn row"
-							style={{ "--align": "center", justifyContent: "center" }}
-							onClick={() => fileInputRef.current?.click()}
-							disabled={recordingState !== "idle"}
-							aria-label={t("chat.window.attachFileAria")}
-						>
-							<IconPaperclip />
-						</button>
-						<button
-							type="button"
-							class="message-compose-tool-btn row"
-							style={{ "--align": "center", justifyContent: "center" }}
-							onClick={() => setAttachmentPickerOpen(true)}
-							disabled={recordingState !== "idle"}
-							aria-label={t("chat.window.attachFromStorageAria")}
-						>
-							<IconFolder />
-						</button>
-						<button
-							type="button"
-							class="message-compose-tool-btn row"
-							style={{ "--align": "center", justifyContent: "center" }}
-							onClick={handleStartRecording}
-							disabled={recordingState !== "idle" || tray.items.length > 0}
-							aria-label={t("chat.window.recordVoiceAria")}
-						>
-							<IconMicrophone />
-						</button>
 						<label class="visually-hidden" for="chat-message-input">
 							{t("chat.window.messageLabel")}
 						</label>
@@ -819,12 +655,21 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							type="submit"
 							class="message-compose-send-btn row"
 							style={{ "--align": "center", justifyContent: "center" }}
-							disabled={busy || (text.length === 0 && tray.items.length === 0 && !recordedVoiceBlob) || tray.items.some((item) => item.error)}
+							disabled={busy || (text.length === 0 && tray.items.length === 0 && !voice.hasRecording) || tray.items.some((item) => item.error)}
 							aria-label={t("common.send")}
 						>
 							<IconSend />
 						</button>
 					</form>
+					<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+						<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
+							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
+						</div>
+						<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
+						<div class="compose-tools__emoji">
+							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
+						</div>
+					</div>
 				</div>
 			}
 		>
@@ -857,7 +702,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				})}
 				<div ref={bottomRef} />
 			</div>
-			{attachmentPickerOpen && <FilePicker predicate={() => true} multiple={true} onSelect={handleAttachmentFromStorage} onCancel={() => setAttachmentPickerOpen(false)} />}
 		</Screen>
 	);
 }
