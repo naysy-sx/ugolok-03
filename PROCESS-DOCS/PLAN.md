@@ -7515,3 +7515,124 @@ relay. `refreshProfiles` получал пустой Map и через
       `useVoiceRecording()`/`ComposeAttachButtons`: у CommentComposer
       теперь есть хранилище+голос, у ChannelComposer — голос. См.
       log.md "единый .compose-tools".
+
+## HEADERS (PROCESS-DOCS/REDESIGN/HEADERS/HEADER-TASK.md) — единый компонент шапки экрана
+
+Три этапа, останов после каждого (задание — от «старшего брата»,
+прототип `ugolok-header.html` приложен). Продуктовые/архитектурные
+решения по местам, оставленным открытыми в ТЗ, — CONTRACTS.md,
+раздел «HEADERS».
+
+### Этап 1 — вынести медиа-срезы из шапки в ленту (расширено: срез = плитка/список вложений, как «Файлы»)
+
+Пользователь 2026-08-29 уточнил объём после первого ответа: клик по
+классу ВЕЗДЕ переключает ленту на плиточный/списочный вид вложений
+этого класса (переиспользуя `TypeFilterBar`/`.mode-bar`/`.file-grid`/
+`AttachmentView` из `files.jsx`), а не мгновенно открывает оверлей.
+Подробности и точный контракт — CONTRACTS.md §HEADERS.
+
+Микрозадачи (по одной на файл, воркеру — только затронутый фрагмент
++ контракт из CONTRACTS.md §HEADERS через `--ctx`):
+1. `screen.jsx` — сузить комментарий слота `slices` (только разделы
+   экрана).
+2. `chat.jsx` — убрать `slices={<MediaButtons .../>}`; добавить
+   `typeFilter`/`layout` state; первым потомком `children` —
+   `TypeFilterBar` (sticky-обёртка) + условно `.mode-bar` + grid/list
+   вложений вместо `message-list`, переименовать/адаптировать
+   `classesInMessages`/`openChatMediaClass` под новый контракт
+   (`openFilteredMedia`).
+3. `channel.jsx` — убрать `.ch-bar__slices` из `tabsBar` (остаётся
+   только `<nav class="tabs">`); та же связка для вкладки «Посты»
+   (`postsSlicesCounts`/`handleOpenPostsSlice` → тот же паттерн);
+   удалить `chatSlices`/`setChatSlices`/`onSlicesChange`.
+4. `channel-chat.jsx` — та же связка внутри собственного `.stack`;
+   удалить проп `onSlicesChange` и связанный `useEffect`.
+5. `custom.css` — sticky-обёртка полосы `TypeFilterBar` (токены —
+   CONTRACTS.md); переиспользовать существующие `.mode-bar`/
+   `.file-grid`/`.file-tile`/`.view-toggle` без изменений.
+6. ~~Удалить `media-buttons.jsx`/`.media-buttons-bar`~~ — ОТМЕНЕНО:
+   `grep` перед удалением нашёл ДВА места вне списка ТЗ, всё ещё
+   легитимно использующих `MediaButtons`: `post-card.jsx:146` (карточка
+   поста в ленте — компактный виджет, не Screen, плитка/список туда не
+   влезают физически, оставлено как есть намеренно) и
+   `channel-post-page.jsx:301` (`slices={<MediaButtons .../>}` — ТОТ ЖЕ
+   архитектурный паттерн, что был у chat.jsx/channel.jsx до правки,
+   scope шире — `collectPostScope` включает вложения комментариев, не
+   только поста). Второй файл — та же проблема, но НЕ в списке файлов
+   ТЗ и не прочитан в этом заходе; сознательно отложен, не мигрирован
+   молча. Открытый пункт отчёта по этапу 1 — см. ниже.
+
+Проверка: регрессия node --test, затем живая проверка (skill
+run-ugolok) — чат и оба таба канала: чипы, счётчик, переключатель
+вид, крестик сброса, клик по плитке открывает оверлей на правильной
+позиции, повторный вход в экран сбрасывает срез на «Все».
+
+**Этап 1 — ЗАКРЫТ.**
+
+Фактическая реализация (отличия от первоначальной микрозадачной
+разбивки выше — расширение по ходу работы, задокументировано в
+CONTRACTS.md §HEADERS):
+- Новый общий компонент `src/ui/components/media/attachment-
+  slices.jsx` (`AttachmentSlices`) — переиспользуется в
+  chat.jsx/channel.jsx(«Посты»)/channel-chat.jsx ОДИН РАЗ, не
+  скопирован трижды (сам считает `counts` из `items`, сам решает
+  «Все» vs mode-bar+grid/list). Внутри — `TypeFilterBar` (files-
+  type-filter.jsx, без изменений) + `.mode-bar`/`.view-toggle` (файл
+  files.jsx, паттерн перенесён) + `CollectionTile`/`.mgrid` (сетка) +
+  `AttachmentView` (список) — оба уже существовали в attachment-
+  view.jsx, `CollectionTile` довеском экспортирован.
+- `chat.jsx`: `allAttachmentItems()`/`openFilteredMedia()` заменили
+  `classesInMessages()`/`openChatMediaClass()`. `openAttachment`
+  (клик по вложению внутри пузыря) не менялся.
+- `channel.jsx`: `allPostsAttachmentItems()`/`openFilteredPostsMedia()`
+  заменили `postsSlicesCounts()`/`handleOpenPostsSlice()`.
+  `chatSlices`/`setChatSlices`/`onSlicesChange` убраны целиком —
+  `ChannelChat` теперь сам рендерит свой браузер вложений, поднимать
+  наверх больше нечего. `tabsBar` — только `<nav class="tabs">`.
+- `channel-chat.jsx`: тот же паттерн, что chat.jsx, локально.
+- Найдено и исправлено ЖИВОЙ проверкой: `AttachmentSlices`'s `counts`
+  не включал ключ `all` (`TypeFilterBar` читает `counts["all"]` для
+  числа на чипе «Все») — чип показывал 0 вместо реального числа
+  вложений. Второе найдено на этапе дизайна, до кода: без явной
+  отсечки `items.length === 0 → return children` пустой чат/пост без
+  единого вложения получил бы постоянную sticky-полосу ради
+  неактивного чипа «Все» — не было в старом поведении, не запрошено.
+- Живая проверка (skill run-ugolok, канал → вкладка «Посты»,
+  синтетическое PNG-вложение через DataTransfer-трюк, т.к. `page.
+  setInputFiles` недоступен driver.mjs'ю): создание канала → пост с
+  вложением → чип «Images 1» → sticky-полоса → mode-bar «Images · 1
+  file» → сетка (`CollectionTile`) → список (`AttachmentView`) → клик
+  по вложению открывает `media-overlay` НА ПРАВИЛЬНОЙ позиции
+  («pixel.png · 1 of 1 · images · 68 B») → крестик сброса возвращает
+  обычную ленту постов, счётчик «Все» верный. `chat.jsx`/`channel-
+  chat.jsx` НЕ проверены живьём тем же сценарием (нужен второй
+  контакт/собеседник для 1:1 чата — не поднят в этом заходе); код
+  идентичен по паттерну уже проверенному в channel.jsx, риск
+  оценивается как низкий, но это открытый пункт.
+- Регрессия: 2210/2211 (room-session.test.js — известная race-
+  флуктуация, не связана с правкой, воспроизводится и на main).
+- Не мигрировано (сознательно, см. пункт 6 выше):
+  `channel-post-page.jsx:301` всё ещё держит `MediaButtons` в
+  `Screen`'s `slices` — тот же архитектурный долг, что был у chat.jsx/
+  channel.jsx, но файл не входил в список ТЗ и не тронут. `post-
+  card.jsx:146` — намеренно оставлен (виджет карточки в ленте, не
+  Screen, плитка/список физически не помещаются).
+- `docs`-ТЗ пункты про буквальный CSS-блок `.media-cuts`/`.media-cut`
+  из HEADER-TASK.md не реализованы буквально числами/классами —
+  реализованы ЧЕРЕЗ переиспользование готового паттерна files.jsx
+  (тот же функциональный результат, другие имена классов). Отступление
+  зафиксировано и обосновано в CONTRACTS.md §HEADERS.
+
+### Этап 2 — шапка на grid (главный этап)
+
+`screen.jsx` + стили: четыре зоны (`back`/`lead`/`ident`/`actions`)
+рендерятся только при наличии контента, `grid-template-areas` с
+переукладкой по `@container (width < 30rem)`, `.screen-title`
+рендерится всегда. 13 экранов из списка ТЗ — живая проверка каждого
+(skill run-ugolok), включая табуляцию/`:focus-visible`.
+
+### Этап 3 — разделы канала
+
+`channel.jsx`: в полосе разделов остаются «Посты»/«Чат» (со счётчиком
+непрочитанного бейджем), «Модерация»/«Настройки» — в меню под
+шестернёй. `role="tab"`+`aria-selected`, не `<a>`.

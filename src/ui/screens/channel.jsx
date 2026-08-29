@@ -13,9 +13,9 @@ import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
 import { countCommentsByPost } from "../../domain/content/comments.js";
 import { listReactionsForTargets, aggregateReactions } from "../../domain/content/reactions.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
-import { buildPlaylist } from "../../domain/media/playlist.js";
+import { findRefPosition } from "../../domain/media/scope.js";
 import { openMedia } from "../signals/media.js";
-import MediaButtons from "../components/media/media-buttons.jsx";
+import AttachmentSlices from "../components/media/attachment-slices.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
@@ -52,9 +52,9 @@ function sameSet(a, b) {
 // разъехались, связаны нативным HTML-атрибутом), опасная зона — отдельным
 // блоком с двухшаговым подтверждением вместо window.confirm.
 //
-// onBarChange — тот же приём, что onSlicesChange у ChannelChat: подвал
-// рисует channel.jsx (слот Screen, вне этого компонента), поэтому dirty/
-// busy/formId сообщаются наверх колбэком, а не пробрасываются пропом вниз.
+// onBarChange — подвал рисует channel.jsx (слот Screen, вне этого
+// компонента), поэтому dirty/busy/formId сообщаются наверх колбэком, а не
+// пробрасываются пропом вниз.
 function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRow, onSaved, onDeleted, onBarChange }) {
 	const instanceId = useId();
 	const formId = useId();
@@ -311,13 +311,18 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const [commentCounts, setCommentCounts] = useState({});
 	const [reactionCountsByPost, setReactionCountsByPost] = useState({});
 	const [limiter] = useState(() => createRateLimiter());
-	const [chatSlices, setChatSlices] = useState({ counts: {}, onOpen: () => {} });
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — срез по типу вложения для
+	// вкладки "Посты", "all" по умолчанию сбрасывается при каждом входе.
+	// Вкладка "Чат" — своя пара typeFilter/layout ВНУТРИ ChannelChat (её
+	// messages туда наружу не поднимаются, поднимать нечего).
+	const [typeFilter, setTypeFilter] = useState("all");
+	const [attachmentLayout, setAttachmentLayout] = useState("grid");
 	// CHANNEL-V2 часть B5 — кнопка «Новая запись» переехала в шапку экрана
 	// (Screen's actions), composerOpen поднят сюда из ChannelPostsTab.
 	const [composerOpen, setComposerOpen] = useState(false);
 	// CHANNEL-V2 часть G4 — save-bar настроек рисуется в footer Screen'а (вне
-	// ChannelSettingsForm), dirty/busy/formId сообщаются наверх тем же
-	// приёмом, что onSlicesChange у ChannelChat.
+	// ChannelSettingsForm), dirty/busy/formId сообщаются наверх колбэком
+	// (onBarChange), а не пробрасываются пропом вниз.
 	const [settingsBar, setSettingsBar] = useState({ dirty: false, busy: false, formId: "", canSave: false, onCancel: () => {} });
 
 	const target = place.value;
@@ -393,24 +398,24 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		return posts.flatMap((p) => (p.attachments ?? []).map((a) => refFromAttachment(a, { postId: p.id })));
 	}
 
-	// Живой фидбег: считало true/false ("есть хоть одно") — фильтр в шапке
-	// всегда показывал "1", сколько бы изображений ни было на самом деле
-	// (MediaButtons поддерживает число, но с booleans typeof-проверка
-	// подставляла 1). Теперь настоящий счётчик.
-	function postsSlicesCounts() {
-		const present = { audio: 0, video: 0, image: 0, other: 0 };
-		for (const ref of collectChannelPostsScope()) {
-			const c = classOf(ref.mime);
-			if (c in present) present[c]++;
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — заменяет postsSlicesCounts +
+	// handleOpenPostsSlice: тот же паттерн, что chat.jsx's allAttachmentItems/
+	// openFilteredMedia. counts теперь считает сам AttachmentSlices из items.
+	function allPostsAttachmentItems() {
+		const result = [];
+		for (const post of posts) {
+			for (const attachment of post.attachments || []) {
+				result.push({ post, attachment });
+			}
 		}
-		return present;
+		return result;
 	}
 
-	function handleOpenPostsSlice(cls) {
-		const refs = collectChannelPostsScope();
-		const playlist = buildPlaylist(refs);
-		const position = playlist.idx[cls]?.[0];
-		if (position === undefined) return;
+	function openFilteredPostsMedia(typeFilter, post, attachment) {
+		const refs = collectChannelPostsScope().filter((r) => classOf(r.mime) === typeFilter);
+		const target = refFromAttachment(attachment, { postId: post.id });
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
 		openMedia({ refs, position });
 	}
 
@@ -450,39 +455,29 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		);
 	}
 
-	// CHANNEL-V2 часть B3 — вкладки и срезы в ОДНОЙ закреплённой полосе (были
-	// две: <nav class="tabs"> внутри прокручиваемого children уезжала вверх
-	// при прокрутке, MediaButtons жили в slices отдельно). .reel — вкладок
-	// максимум четыре, у владельца на узком экране не переносятся, а
-	// прокручиваются.
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — .ch-bar__slices (MediaButtons
+	// Постов/Чата) убран: срезы по типу вложения теперь рендерятся внутри
+	// ленты каждой вкладки (AttachmentSlices), не в шапке рядом с табами.
+	// Slot Screen's slices несёт ТОЛЬКО навигацию по разделам экрана.
 	const tabsBar = (
-		<div class="ch-bar bar" style={{ "--gap": "var(--space-s)", "--align": "stretch" }}>
-			<nav class="tabs reel grow" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
-				<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
-					{t("channel.tabs.posts")}
+		<nav class="tabs reel" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
+			<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
+				{t("channel.tabs.posts")}
+			</button>
+			<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
+				{t("channel.tabs.chat")}
+			</button>
+			{isOwner && (
+				<button type="button" class="tab" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
+					{t("channel.tabs.moderation")}
 				</button>
-				<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
-					{t("channel.tabs.chat")}
+			)}
+			{isOwner && (
+				<button type="button" class="tab" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
+					{t("channel.tabs.settings")}
 				</button>
-				{isOwner && (
-					<button type="button" class="tab" role="tab" aria-selected={tab === "moderation"} onClick={() => setTab("moderation")}>
-						{t("channel.tabs.moderation")}
-					</button>
-				)}
-				{isOwner && (
-					<button type="button" class="tab" role="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
-						{t("channel.tabs.settings")}
-					</button>
-				)}
-			</nav>
-			<div class="ch-bar__slices bar rigid" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
-				{tab === "posts" ? (
-					<MediaButtons counts={postsSlicesCounts()} onOpen={handleOpenPostsSlice} />
-				) : tab === "chat" ? (
-					<MediaButtons counts={chatSlices.counts} onOpen={chatSlices.onOpen} />
-				) : null}
-			</div>
-		</div>
+			)}
+		</nav>
 	);
 
 	return (
@@ -568,35 +563,37 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			)}
 
 			{tab === "posts" && (
-				<ChannelPostsTab
-					ownerPubkey={ownerPubkey}
-					privKey={privKey}
-					dbKey={dbKey}
-					channelId={channelId}
-					isOwner={isOwner}
-					limiter={limiter}
-					posts={posts}
-					hasMore={hasMore}
-					commentCounts={commentCounts}
-					reactionCountsByPost={reactionCountsByPost}
-					onLoadMore={handleLoadMore}
-					onPublished={refresh}
-					composerOpen={composerOpen}
-					onComposerClose={() => setComposerOpen(false)}
-					onOpenComposer={() => setComposerOpen(true)}
-				/>
-			)}
-
-			{tab === "chat" && (
-				<section role="tabpanel">
-					<ChannelChat
+				<AttachmentSlices
+					items={allPostsAttachmentItems()}
+					typeFilter={typeFilter}
+					onSelectType={setTypeFilter}
+					layout={attachmentLayout}
+					onLayoutChange={setAttachmentLayout}
+					onOpenItem={(item) => openFilteredPostsMedia(typeFilter, item.post, item.attachment)}
+				>
+					<ChannelPostsTab
 						ownerPubkey={ownerPubkey}
 						privKey={privKey}
 						dbKey={dbKey}
 						channelId={channelId}
-						channelOwnerPubkey={channelRow.creatorPubkey}
-						onSlicesChange={setChatSlices}
+						isOwner={isOwner}
+						limiter={limiter}
+						posts={posts}
+						hasMore={hasMore}
+						commentCounts={commentCounts}
+						reactionCountsByPost={reactionCountsByPost}
+						onLoadMore={handleLoadMore}
+						onPublished={refresh}
+						composerOpen={composerOpen}
+						onComposerClose={() => setComposerOpen(false)}
+						onOpenComposer={() => setComposerOpen(true)}
 					/>
+				</AttachmentSlices>
+			)}
+
+			{tab === "chat" && (
+				<section role="tabpanel">
+					<ChannelChat ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} channelId={channelId} channelOwnerPubkey={channelRow.creatorPubkey} />
 				</section>
 			)}
 

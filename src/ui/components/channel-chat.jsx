@@ -9,8 +9,8 @@ import { groupByDay } from "../group-by-day.js";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
-import { buildPlaylist } from "../../domain/media/playlist.js";
 import ChannelMessage from "./channel-message.jsx";
+import AttachmentSlices from "./media/attachment-slices.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 // CHANNEL-V2 часть E2 — подряд идущие сообщения ОДНОГО автора, у которых
@@ -38,10 +38,14 @@ function groupMessagesByAuthor(messages) {
 // CHANNEL-V2 часть E1 — композитор (ChatComposer) переехал в отдельный файл
 // (channel-composer.jsx), собирается в подвале Screen. Этот компонент —
 // только лента: приём/группировка/подгрузка/срезы.
-export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey, onSlicesChange }) {
+export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, channelOwnerPubkey }) {
 	const [messages, setMessages] = useState([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [error, setError] = useState("");
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — срез по типу вложения, "all"
+	// по умолчанию сбрасывается при каждом новом входе (state локален).
+	const [typeFilter, setTypeFilter] = useState("all");
+	const [attachmentLayout, setAttachmentLayout] = useState("grid");
 	const bottomRef = useRef(null);
 	const pendingScrollRef = useRef(false);
 	// CHANNEL-V2 часть E4.2 — "Показать более ранние" не должен выбрасывать
@@ -122,87 +126,91 @@ export default function ChannelChat({ ownerPubkey, privKey, dbKey, channelId, ch
 		openMedia({ refs, position });
 	}
 
-	// Редизайн интерфейса, этап 3 (CONTRACTS.md) — тот же паттерн, что
-	// chat.jsx's classesInMessages/openChatMediaClass, включая класс "other".
-	// messages — состояние ЭТОГО компонента, наружу (channel.jsx, слот
-	// Screen's slices) не поднимается — сообщается через onSlicesChange
-	// (тот же приём, что onCountChange у PostWithComments).
-	// Живой фидбег: считало true/false — фильтр "Изображения" в шапке всегда
-	// показывал "1" независимо от реального числа картинок в сообщениях.
-	function classesInMessages() {
-		const present = { audio: 0, video: 0, image: 0, other: 0 };
-		for (const ref of collectChatScope(messages)) {
-			const c = classOf(ref.mime);
-			if (c in present) present[c]++;
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — тот же паттерн, что
+	// chat.jsx's allAttachmentItems/openFilteredMedia. messages — состояние
+	// ЭТОГО компонента; раньше поднималось наружу через onSlicesChange
+	// (channel.jsx рендерил кнопки в шапке), теперь браузер вложений
+	// рендерится ЗДЕСЬ же, наверх поднимать больше нечего.
+	function allAttachmentItems() {
+		const result = [];
+		for (const message of messages) {
+			for (const attachment of message.attachments || []) {
+				result.push({ message, attachment });
+			}
 		}
-		return present;
+		return result;
 	}
 
-	function openChannelChatMediaClass(cls) {
-		const refs = collectChatScope(messages);
-		const playlist = buildPlaylist(refs);
-		const position = playlist.idx[cls]?.[0];
-		if (position === undefined) return;
+	function openFilteredMedia(typeFilter, message, attachment) {
+		const refs = collectChatScope(messages).filter((r) => classOf(r.mime) === typeFilter);
+		const target = refFromAttachment(attachment, { msgId: message.id });
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
 		openMedia({ refs, position });
 	}
-
-	useEffect(() => {
-		onSlicesChange?.({ counts: classesInMessages(), onOpen: openChannelChatMediaClass });
-	}, [messages]);
 
 	const dayGroups = groupByDay(messages);
 
 	return (
-		<div class="stack" style={{ "--gap": "var(--space-s)" }}>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			{hasMore && (
-				<div class="row" style={{ "--align": "center", justifyContent: "center" }}>
-					<button type="button" class="btn--ghost" onClick={handleLoadMore}>
-						{t("chat.window.loadOlderButton")}
-					</button>
-				</div>
-			)}
-			{messages.length === 0 ? (
-				<div class="empty stack" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					<h2>{t("channelChat.emptyTitle")}</h2>
-					<p>{t("channelChat.emptyHint")}</p>
-				</div>
-			) : (
-				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
-					{dayGroups.map(({ key, dayLabel, items }) => (
-						<section key={key} class="stack" style={{ "--gap": "var(--space-s)" }}>
-							<h2 class="day-sep bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-								{dayLabel}
-							</h2>
-							<ul class="chat-log stack" role="list" style={{ "--gap": "var(--space-s)" }}>
-								{groupMessagesByAuthor(items).map((group) => (
-									<li key={group.id} class="chat-group stack" style={{ "--gap": "var(--space-3xs)" }}>
-										{group.messages.map((m, i) => (
-											<ChannelMessage
-												key={m.id}
-												message={m}
-												showAuthor={i === 0}
-												isOwn={m.authorPubkey === ownerPubkey}
-												isChannelOwner={m.authorPubkey === channelOwnerPubkey}
-												ownerPubkey={ownerPubkey}
-												privKey={privKey}
-												channelOwnerPubkey={channelOwnerPubkey}
-												channelId={channelId}
-												onOpenAttachment={openAttachment}
-											/>
-										))}
-									</li>
-								))}
-							</ul>
-						</section>
-					))}
-				</div>
-			)}
-			<div ref={bottomRef} />
-		</div>
+		<AttachmentSlices
+			items={allAttachmentItems()}
+			typeFilter={typeFilter}
+			onSelectType={setTypeFilter}
+			layout={attachmentLayout}
+			onLayoutChange={setAttachmentLayout}
+			onOpenItem={(item) => openFilteredMedia(typeFilter, item.message, item.attachment)}
+		>
+			<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+				{error && (
+					<p role="alert" style={{ color: "var(--bad)" }}>
+						{error}
+					</p>
+				)}
+				{hasMore && (
+					<div class="row" style={{ "--align": "center", justifyContent: "center" }}>
+						<button type="button" class="btn--ghost" onClick={handleLoadMore}>
+							{t("chat.window.loadOlderButton")}
+						</button>
+					</div>
+				)}
+				{messages.length === 0 ? (
+					<div class="empty stack" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+						<h2>{t("channelChat.emptyTitle")}</h2>
+						<p>{t("channelChat.emptyHint")}</p>
+					</div>
+				) : (
+					<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+						{dayGroups.map(({ key, dayLabel, items }) => (
+							<section key={key} class="stack" style={{ "--gap": "var(--space-s)" }}>
+								<h2 class="day-sep bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+									{dayLabel}
+								</h2>
+								<ul class="chat-log stack" role="list" style={{ "--gap": "var(--space-s)" }}>
+									{groupMessagesByAuthor(items).map((group) => (
+										<li key={group.id} class="chat-group stack" style={{ "--gap": "var(--space-3xs)" }}>
+											{group.messages.map((m, i) => (
+												<ChannelMessage
+													key={m.id}
+													message={m}
+													showAuthor={i === 0}
+													isOwn={m.authorPubkey === ownerPubkey}
+													isChannelOwner={m.authorPubkey === channelOwnerPubkey}
+													ownerPubkey={ownerPubkey}
+													privKey={privKey}
+													channelOwnerPubkey={channelOwnerPubkey}
+													channelId={channelId}
+													onOpenAttachment={openAttachment}
+												/>
+											))}
+										</li>
+									))}
+								</ul>
+							</section>
+						))}
+					</div>
+				)}
+				<div ref={bottomRef} />
+			</div>
+		</AttachmentSlices>
 	);
 }

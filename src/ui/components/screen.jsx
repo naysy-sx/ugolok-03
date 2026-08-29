@@ -66,13 +66,13 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 				{headerExtra}
 			</header>
 
-			{/* Этап E медиа-подсистемы — тонкая зона СРАЗУ ПОД шапкой, до
-			    content-area (пользователь этой сессии: "у медиа-кнопок должно
-			    быть одно и то же положение"). Редизайн интерфейса, этап 3
-			    (CONTRACTS.md) — слот переименован mediaButtons -> slices и
-			    расширен на 4 экрана (было — chat.jsx/files.jsx, стало — плюс
-			    channel.jsx, channel-chat.jsx через него же): это ряд срезов
-			    текущего места, не только медиа-кнопки. Пусто/undefined ->
+			{/* HEADERS (CONTRACTS.md §HEADERS), этап 1 — слот сужен: ТОЛЬКО
+			    навигация по разделам ЭКРАНА (табы channel.jsx). Срезы по
+			    типу вложения (были здесь через MediaButtons) переехали
+			    внутрь конкретной ленты (chat.jsx/channel.jsx/channel-
+			    chat.jsx рендерят их сами, первым элементом children) — в
+			    канале на вкладке "Чат" разделы и срез по вложениям нужны
+			    ОДНОВРЕМЕННО, один слот их не вмещал. Пусто/undefined ->
 			    ничего не рендерится, ноль верстки для остальных экранов. */}
 			{slices && <div class="slices-zone">{slices}</div>}
 

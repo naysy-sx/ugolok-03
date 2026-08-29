@@ -46,9 +46,8 @@ import ActionsMenu from "../components/actions-menu.jsx";
 import Screen from "../components/screen.jsx";
 import { openMedia } from "../signals/media.js";
 import { collectChatScope, findRefPosition } from "../../domain/media/scope.js";
-import { buildPlaylist } from "../../domain/media/playlist.js";
 import { classOf, refFromAttachment } from "../../domain/media/media-ref.js";
-import MediaButtons from "../components/media/media-buttons.jsx";
+import AttachmentSlices from "../components/media/attachment-slices.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
@@ -263,6 +262,11 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const [hasMore, setHasMore] = useState(false);
 	const [text, setText] = useState("");
 	const [error, setError] = useState("");
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — срез по типу вложения; "all" по
+	// умолчанию сбрасывает его при каждом новом входе в чат (state локален
+	// компоненту, не персистируется), продуктовое решение пользователя.
+	const [typeFilter, setTypeFilter] = useState("all");
+	const [attachmentLayout, setAttachmentLayout] = useState("grid");
 	// Ошибки самой отправки (текст/вложение/голос) — отдельно от error (тот уходит в
 	// ленту сообщений через Screen's children и не виден пользователю при длинной
 	// истории). Рендерится в footer, рядом с кнопкой "Отправить" — там, где
@@ -515,30 +519,33 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		}
 	}
 
-	// Этап E, E3 (CONTRACTS.md/DESIGN.md "Этап E") — scope на ВЕСЬ загруженный
-	// чат (messages уже в состоянии, collectChatScope — Этап A). Ключи/размер
-	// уже внутри дескриптора вложения (refFromAttachment) — БЕЗ сети, в
-	// отличие от files.jsx's openFolderMediaClass.
-	// Редизайн интерфейса, этап 3 (DESIGN.md) — "other" (файлы) добавлен,
-	// ключ ИМЕННО "other" (не "file" — media-buttons.jsx адресует класс по
-	// этому имени, разъехавшийся ключ молча ломает кнопку).
-	// Живой фидбег (найдено в channel-chat.jsx, тот же баг тут): считало
-	// true/false — фильтр "Изображения" в шапке всегда показывал "1"
-	// независимо от реального числа картинок в переписке.
-	function classesInMessages() {
-		const present = { audio: 0, video: 0, image: 0, other: 0 };
-		for (const ref of collectChatScope(messages)) {
-			const c = classOf(ref.mime);
-			if (c in present) present[c]++;
+	// HEADERS (CONTRACTS.md §HEADERS), этап 1 — заменяет classesInMessages +
+	// openChatMediaClass:
+	// клик по срезу больше не открывает оверлей мгновенно, а переключает
+	// ленту на плитку/список вложений класса (как экран "Файлы"), через
+	// общий <AttachmentSlices>. ВЕСЬ scope, БЕЗ фильтра по классу —
+	// AttachmentSlices сам считает counts и сам фильтрует (единственный
+	// источник правды на оба действия). Пары {message, attachment} — не
+	// MediaRef (collectChatScope отдаёт уже resolved ref без исходного
+	// attachment-объекта, а CollectionTile/AttachmentView нужен именно
+	// attachment).
+	function allAttachmentItems() {
+		const result = [];
+		for (const message of messages) {
+			for (const attachment of message.attachments || []) {
+				result.push({ message, attachment });
+			}
 		}
-		return present;
+		return result;
 	}
 
-	function openChatMediaClass(cls) {
-		const refs = collectChatScope(messages);
-		const playlist = buildPlaylist(refs);
-		const position = playlist.idx[cls]?.[0];
-		if (position === undefined) return;
+	// Плейлист СТРОГО из отфильтрованной (видимой) выборки, не всего чата —
+	// тот же принцип, что files.jsx's openVisibleMedia.
+	function openFilteredMedia(typeFilter, message, attachment) {
+		const refs = collectChatScope(messages).filter((r) => classOf(r.mime) === typeFilter);
+		const target = refFromAttachment(attachment, { msgId: message.id });
+		const position = findRefPosition(refs, target.digest, target.sourceMeta);
+		if (position === -1) return;
 		openMedia({ refs, position });
 	}
 
@@ -611,7 +618,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					</ActionsMenu>
 				</>
 			}
-			slices={<MediaButtons counts={classesInMessages()} onOpen={openChatMediaClass} />}
 			feed
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
@@ -673,35 +679,44 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				</div>
 			}
 		>
-			{error && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{error}
-				</p>
-			)}
-			{hasMore && (
-				<button type="button" onClick={handleLoadMore}>
-					{t("chat.window.loadOlderButton")}
-				</button>
-			)}
-			{messages.length === 0 && <p style={{ color: "var(--muted)" }}>{t("chat.window.noMessagesYet")}</p>}
-			<div class="message-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-				{messages.map((message) => {
-					const isOwn = message.senderPubkey === ownerPubkey;
-					return (
-						<MessageBubble
-							key={message.msgId}
-							message={message}
-							isOwn={isOwn}
-							onDeleteForMe={handleDeleteForMe}
-							onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
-							onEdit={isOwn ? handleEdit : undefined}
-							maxLength={MAX_MESSAGE_LENGTH}
-							onOpenAttachment={openAttachment}
-						/>
-					);
-				})}
-				<div ref={bottomRef} />
-			</div>
+			<AttachmentSlices
+				items={allAttachmentItems()}
+				typeFilter={typeFilter}
+				onSelectType={setTypeFilter}
+				layout={attachmentLayout}
+				onLayoutChange={setAttachmentLayout}
+				onOpenItem={(item) => openFilteredMedia(typeFilter, item.message, item.attachment)}
+			>
+				{error && (
+					<p role="alert" style={{ color: "var(--bad)" }}>
+						{error}
+					</p>
+				)}
+				{hasMore && (
+					<button type="button" onClick={handleLoadMore}>
+						{t("chat.window.loadOlderButton")}
+					</button>
+				)}
+				{messages.length === 0 && <p style={{ color: "var(--muted)" }}>{t("chat.window.noMessagesYet")}</p>}
+				<div class="message-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+					{messages.map((message) => {
+						const isOwn = message.senderPubkey === ownerPubkey;
+						return (
+							<MessageBubble
+								key={message.msgId}
+								message={message}
+								isOwn={isOwn}
+								onDeleteForMe={handleDeleteForMe}
+								onDeleteForBoth={isOwn ? handleDeleteForBoth : undefined}
+								onEdit={isOwn ? handleEdit : undefined}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onOpenAttachment={openAttachment}
+							/>
+						);
+					})}
+					<div ref={bottomRef} />
+				</div>
+			</AttachmentSlices>
 		</Screen>
 	);
 }

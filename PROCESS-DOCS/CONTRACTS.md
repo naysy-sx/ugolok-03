@@ -21659,3 +21659,219 @@ CommentComposer не было ни хранилища, ни голоса; у Cha
   CommentComposer, `channel-composer.jsx`) используют оба примитива;
   guard "нечего отправлять" везде одинаковый: `text.length === 0 &&
   tray.items.length === 0 && !voice.hasRecording`.
+
+## HEADERS (PROCESS-DOCS/REDESIGN/HEADERS/HEADER-TASK.md) — единый компонент шапки экрана
+
+Референс поведения — `PROCESS-DOCS/REDESIGN/HEADERS/ugolok-header.html`
+(рабочий прототип, свой CSS/цвета, раскладка переносится буквально).
+Три этапа, останов после каждого. Ниже — решения, которые ТЗ оставляло
+открытыми и которые закрыты ДО вызова воркера (правило 9a).
+
+### Продуктовое решение: срез = переключение в плитку/список вложений (как «Файлы»)
+
+Спрошено у пользователя 2026-08-29, ответ уточнён в тот же день (см.
+log.md): ВЕЗДЕ (личный чат, посты канала, чат канала) клик по классу
+вложения ведёт себя как на экране «Файлы» — НЕ мгновенный переход в
+оверлей, а переключение содержимого ленты на плиточный/списочный вид
+вложений выбранного класса. Клик по конкретной плитке уже открывает
+медиа-оверлей. Фильтрация постов/комментариев канала «по смыслу текста»
+(а не по наличию вложения нужного класса) по-прежнему признана вредной
+и не реализуется — здесь речь только о вложениях, тот же механизм, что
+и в чате.
+
+Это делает буквальным (не отступлением) весь блок HEADER-TASK.md про
+`.media-cuts`: одиночный выбор (`aria-pressed`), строка состояния
+«Изображения · 42», кнопка «Показать все» (= сброс фильтра), сброс
+среза при каждом новом входе в экран (state локален компоненту —
+получается сам собой при перемонтировании).
+
+**В проекте уже есть готовый паттерн — переиспользуется, не
+копируется:**
+- `src/ui/components/files-type-filter.jsx`'s `TypeFilterBar({counts,
+  active, onSelect})` — ОТДЕЛЬНЫЙ от `MediaButtons` компонент (его
+  собственный комментарий: «Не MediaButtons: клик НЕ открывает
+  оверлей»). Одиночный выбор через `active`/`aria-pressed`, чип «Все»
+  включён в список чипов. Тот же компонент, без форка, во всех трёх
+  местах вместо `MediaButtons`.
+- `files.jsx`'s `.mode-bar` (строки ~798-847) — строка состояния под
+  полосой чипов, видна только при `typeFilter !== "all"`: иконка +
+  название типа + счётчик, переключатель список/сетка
+  (`.view-toggle`/`.slice--on`), крестик `IconCross` = сброс на «Все».
+  Тот же визуальный паттерн переносится в чат/канал (иконка +
+  лейбл + счётчик + переключатель вид + крестик), не переизобретается.
+- `src/ui/components/attachment-view.jsx`'s `AttachmentView({
+  attachment, onOpen, origin})` (список-вид) и `CollectionTile`
+  (сетка-вид, экспорт добавляется) — уже умеют рендерить превью
+  вложения сообщения (аудио/видео/изображение/файл) и используются
+  внутри `MessageBubble`/`ChannelMessage`/`post-card.jsx`. Точный
+  маппинг на `layout` — ниже, в разделе CSS.
+
+**Новый общий компонент — НЕ тройное копирование JSX:**
+
+Три места (chat.jsx/channel.jsx-посты/channel-chat.jsx) вставляют
+ОДИН И ТОТ ЖЕ блок разметки (полоса чипов + `.mode-bar` + grid/list) —
+дублировать его в трёх файлах противоречит уже сложившейся практике
+проекта («три композитора обязаны быть визуально и функционально
+ОДИНАКОВЫМИ» → `useVoiceRecording`/`ComposeAttachButtons`). Заводится
+`src/ui/components/media/attachment-slices.jsx`:
+
+```
+AttachmentSlices({ items, typeFilter, onSelectType, layout,
+  onLayoutChange, onOpenItem, children })
+```
+
+- `items` — массив `{message, attachment}` (или `{post, attachment}`
+  — имя первого поля неважно компоненту, он трогает только
+  `.attachment`) — ВЕСЬ scope экрана (не предфильтрованный), тот же
+  формат, что уже возвращает `collectFilteredAttachments`-подобная
+  функция каждого экрана, но БЕЗ фильтра (компонент считает `counts`
+  и фильтрует сам — единственный источник правды на оба действия,
+  чтобы счётчик чипа и фактический список никогда не разошлись).
+- `typeFilter`/`onSelectType` — проброс в `TypeFilterBar` (само
+  состояние остаётся у экрана-вызывающего, компонент stateless).
+- `layout`/`onLayoutChange` — `"grid"`/`"list"`, тот же принцип.
+- `onOpenItem(item)` — вызывается при клике на плитку/строку.
+- `children` — существующая разметка ленты (`message-list`/список
+  постов), рендерится КАК ЕСТЬ, если `typeFilter === "all"`.
+
+Тело компонента:
+0. `items.length === 0` → вернуть `children` БЕЗ полосы вообще (не
+   рендерить даже одинокий чип «Все») — тот же принцип, что у зон
+   `Screen` («зона рисуется тогда и только тогда, когда в неё передано
+   содержимое»), и то же поведение старого `MediaButtons` (`if
+   (visible.length === 0) return null`). Найдено на этапе живой
+   проверки: `TypeFilterBar`'s `visible` ВСЕГДА включает чип «Все»
+   (`c.id === "all"` не зависит от `counts`) — без этой отсечки
+   текстовый чат без единого вложения получил бы постоянную sticky-
+   полосу ради одного неактивного чипа, чего не было раньше и не
+   было запрошено.
+1. `counts = {audio,video,image,other}` — `classOf(item.attachment.mime)`
+   по всем `items`.
+2. Sticky-обёртка (см. CSS ниже) с `<TypeFilterBar counts={counts}
+   active={typeFilter} onSelect={onSelectType} />`.
+3. Если `typeFilter === "all"` → рендерит `children`.
+4. Иначе → `.mode-bar` (иконка+лейбл класса — переиспользовать
+   `t("files.typeImages")` и т.п., те же 12-локальные ключи, НЕ
+   заводить новые; счётчик; `.view-toggle` список/сетка; крестик
+   `IconCross` → `onSelectType("all")`) + `filtered = items.filter(i
+   => classOf(i.attachment.mime) === typeFilter)` + при `layout ===
+   "grid"`: `<div class="mgrid">{filtered.map((i,idx) =>
+   <CollectionTile key={idx} attachment={i.attachment} onOpen={() =>
+   onOpenItem(i)} />)}</div>`; при `"list"`: `<div class="stack"
+   style="--gap: var(--space-2xs)">{filtered.map((i,idx) =>
+   <AttachmentView key={idx} attachment={i.attachment} onOpen={() =>
+   onOpenItem(i)} />)}</div>`.
+
+Три вызывающих места передают `onOpenItem={(item) =>
+openFilteredMedia(typeFilter, item.message, item.attachment)}` (имя
+функции per-экран — `openFilteredMedia`/аналог в `channel.jsx`/
+`channel-chat.jsx`, контракт самой функции — выше, без изменений).
+
+Локальное состояние `typeFilter` (`"all"` по умолчанию — сброс при
+входе получается автоматически, state не персистится) и `layout`
+(`"grid"` по умолчанию) — в КАЖДОМ из трёх экранов, не в компоненте.
+
+Это расширяет объём этапа 1 против первоначального текста HEADER-
+TASK.md (там говорилось «вынести», не «переписать логику клика») —
+осознанное расширение по прямому запросу пользователя, не
+самодеятельность; зафиксировано в отчёте по этапу 1.
+
+### Слот `Screen`'s `slices` — сужение назначения
+
+Остаётся именем `slices`, но с этапа 1 несёт ТОЛЬКО навигацию по
+разделам экрана (табы: `channel.jsx`'s Посты/Чат/Модерация/Настройки).
+Комментарий в сигнатуре `screen.jsx` обновляется явно. `MediaButtons`
+слот `slices` больше не использует нигде.
+
+### Перенос из шапки в ленту: три точки
+
+- `chat.jsx` (`ChatWindow`) — `slices={<MediaButtons .../>}` убирается
+  из `<Screen>`. Первым потомком `children` (перед блоком
+  `{error && …}`) рендерится связка: `<TypeFilterBar counts=
+  {classesInMessages()} active={typeFilter} onSelect={setTypeFilter} />`
+  + (при `typeFilter !== "all"`) `.mode-bar` + `.file-grid`/список
+  вложений ВМЕСТО `message-list`; при `typeFilter === "all"` —
+  `message-list` как сейчас.
+- `channel.jsx` (`ChannelDetail`) — `tabsBar`'s `.ch-bar__slices` (обе
+  `MediaButtons`, вкладки «Посты»/«Чат») убирается целиком, `tabsBar`
+  остаётся только `<nav class="tabs">`. Для «Посты» — та же связка
+  (`TypeFilterBar`+`.mode-bar`+grid/list) рендерится в `{tab ===
+  "posts" && (…)}`, ПЕРЕД/ВМЕСТО `<ChannelPostsTab>` по `typeFilter`.
+  Состояние `chatSlices`/`setChatSlices` (строка 314) и проп
+  `onSlicesChange` у `<ChannelChat>` удаляются целиком — тот же приём
+  теперь не нужен, `ChannelChat` рендерит свою связку сама (ниже).
+- `channel-chat.jsx` (`ChannelChat`) — та же связка первым элементом
+  внутри собственного `.stack` (перед `{error && …}`), `typeFilter`/
+  `layout` — локальный state компонента. Проп `onSlicesChange` и
+  `useEffect`, который его вызывает (строки 149-151), удаляются вместе
+  с вызовом `onSlicesChange?.(…)`.
+- `MediaButtons`/`media-buttons.jsx` после переноса больше нигде не
+  импортируется — файл становится мёртвым кодом, удалить вместе с
+  `.media-buttons-bar` в custom.css (grep подтвердить перед удалением).
+
+### CSS — переиспользование `files.jsx`'а, не копирование прототипа
+
+Прототип (`ugolok-header.html`) не копируется числами — практическая
+раскладка уже есть в проекте (`files.jsx`/`custom.css`), она и
+переносится:
+
+- `TypeFilterBar` — уже стилизован (`.reel`+`.slice`), НЕ добавлять
+  собственный CSS-файл под него.
+- `.mode-bar`/`.mode-bar__title`/`.mode-bar__n`/`.view-toggle` — те же
+  классы, тот же визуальный паттерн (иконка+лейбл+счётчик+переключатель
+  вид+крестик сброса), переносятся как есть из `files.jsx` (строки
+  ~798-847) в `chat.jsx`/`channel.jsx`/`channel-chat.jsx`. «Играть
+  все» (`TYPE_MODE[x].playKey`) — НЕ переносится в этом этапе, не
+  запрошено, не путать с обязательным составом `.mode-bar`.
+- **Сетка (`layout==="grid"`) — НЕ `.file-grid`/`.file-tile`/
+  `FileThumbnail`** (те привязаны к files-domain: `entry.blob`,
+  `getFileKeyFor`, Blossom-манифест файлового хранилища — вложения
+  сообщений устроены иначе). Вместо этого — уже существующий, уже
+  message-attachment-aware паттерн `attachment-view.jsx`'s
+  `CollectionTile`/`.mgrid`/`.tile` (сейчас используется `post-
+  card.jsx`'s `CollectionGrid` для поста-подборки, лимит 5 + плитка
+  «ещё N»). `CollectionTile` сейчас НЕ экспортирован — добавить
+  `export` (микроправка, не меняет `CollectionGrid`). Новый грид рендерит
+  `CollectionTile` на ВЕСЬ отфильтрованный список, БЕЗ лимита/плитки
+  «ещё N» (тот лимит — специфика витрины поста, не подходит браузеру
+  вложений): `<div class="mgrid">{filtered.map(({message, attachment},
+  i) => <CollectionTile key={i} attachment={attachment} onOpen={(a) =>
+  openFilteredMedia(message, a)} />)}</div>`.
+- **Список (`layout==="list"`) — полноразмерный `AttachmentView`**
+  (тот же компонент, что уже рендерит вложение ВНУТРИ пузыря
+  сообщения/поста — `ImageAttachment`/`VideoAttachment`/
+  `AudioPreview`/`FileAttachment` по `attachment.type`), НЕ `.file-
+  row`: `<div class="stack" style="--gap: var(--space-2xs)">
+  {filtered.map(({message, attachment}, i) => <AttachmentView key={i}
+  attachment={attachment} onOpen={(a) => openFilteredMedia(message,
+  a)} />)}</div>`.
+- Оба принимают `onOpen(attachment)` (не `onOpen()`) — тот же контракт,
+  что уже использует `message-bubble.jsx`: `const open = (a) =>
+  onOpenAttachment?.(message, a)`, тот же приём переносится сюда как
+  `openFilteredMedia`.
+- **Полоса `TypeFilterBar` — sticky, full-bleed НЕ реализуется** (та же
+  причина, что и раньше: `.content-wrapper`'s `.box`-padding + запрет
+  REGLAMENT.md §3 п.1 на `margin` компонента). `position: sticky; top:
+  0; z-index: 2; background: var(--bg); border-block-end: var(--
+  border-width) solid var(--border); padding-block: var(--space-2xs);`
+  — новый модификатор-класс на обёртке (не трогает сам `TypeFilterBar`
+  и его `.reel`/`.slice` — обёртка вокруг). `.mode-bar` и grid/list —
+  обычный контент потока, НЕ sticky.
+
+### Токены этапа 2 (используются со старта, не только когда дойдёт очередь)
+
+- `--tap` (44px) — в проекте уже есть буквальный литерал `2.75rem` в
+  пяти местах (`custom.css`, emoji-грид/аватары), отдельного токена
+  нет. Для точки нажатия `.section-header .btn` используется тот же
+  литерал `2.75rem`, без нового токена — паттерн уже устоялся в
+  проекте, заводить `--tap` ради одного места избыточно.
+- Брейкпоинт `@container (width < 30rem)` — `30rem` СОВПАДАЕТ с
+  дефолтом `--threshold` у `.switch` (`minimal.css`, «Порог по
+  умолчанию 30rem»). Используется тот же литерал, без нового токена —
+  это уже принятый проектный порог перелома.
+- `--surface-header` прототипа → `var(--surface)` (проект). Фон шапки
+  сейчас НЕ задан явно (наследует фон родителя) — этап 2 вводит его
+  явно, это единственное намеренное визуальное отличие от текущего
+  состояния, требуемое самим ТЗ (шапка и лента — разные слои).
+- отступы зон (`padding-inline: 4px` / первый-последний `6px`
+  прототипа) → `var(--space-3xs)` / `var(--space-2xs)` соответственно.

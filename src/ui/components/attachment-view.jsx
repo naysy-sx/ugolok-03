@@ -332,7 +332,10 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 // getMemoryCachedUrl, undefined -> без миниатюры, без спиннера, без
 // сетевого запроса). Остальные типы (и картинка без готовой миниатюры) —
 // иконка+размер, та же причина отсутствия "длительности", что у AudioPreview.
-function CollectionTile({ attachment, onOpen }) {
+// HEADERS (CONTRACTS.md §HEADERS), этап 1 — экспортирован: тот же
+// компонент рендерит плитку в браузере вложений (chat.jsx/channel.jsx/
+// channel-chat.jsx), не только CollectionGrid поста.
+export function CollectionTile({ attachment, onOpen }) {
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
 	const thumbUrl = attachment.type === "image" ? getMemoryCachedUrl(attachment.manifestDigest) : null;
 	return (
