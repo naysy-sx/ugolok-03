@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles, refreshLiveDiscoverySubscription } from "../signals/transport.js";
 import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction, ownDiscoveryVisible } from "../signals/contacts.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { loadDiscoverySettings, publishDiscoverySettings, markDiscoveryExpired, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
@@ -320,6 +320,10 @@ export default function Discovery() {
 				await refreshDiscoveryProfiles(ownerPubkey);
 				const discoveryPubkeys = discoveryProfiles.value.map((p) => p.pubkey);
 				await ensureProfilesFresh(discoveryPubkeys, fetchProfiles, { force: true });
+				// CONTRACTS.md §DISCOVERY — живая лента: снимок выше (одноразовый
+				// REQ+EOSE) + постоянный хвост, чтобы новые трансляции появлялись без
+				// ухода с экрана и возврата.
+				await refreshLiveDiscoverySubscription(ownerPubkey);
 			})
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);

@@ -34,7 +34,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles, ownDiscoveryVisible } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles, ownDiscoveryVisible, refreshDiscoveryProfiles } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -1073,6 +1073,47 @@ export async function fetchDiscoveryProfiles() {
 		connection.addMessageHandler(subscriber.handleMessage);
 		subscriber.subscribe(subId, [{ kinds: [DISCOVERY_KIND] }]);
 	});
+}
+
+let discoveryLiveSubscriber = null;
+
+// CONTRACTS.md §DISCOVERY — живой фидбек пользователя: fetchDiscoveryProfiles
+// выше — ОДНОРАЗОВЫЙ REQ+EOSE, новые трансляции, начавшиеся, пока экран уже
+// открыт, не попадали в список без ухода и возврата (ре-монтирование). Тот
+// же принцип, что refreshLiveProfileSubscription/refreshLiveContactListSubscription
+// — постоянная подписка ДЁШЕВА (kind 30073 меняется редко, тумблер видимости
+// не крутят помногу раз в секунду), не нагружает ни реле, ни клиента. В
+// отличие от тех подписок (стартуют в connect(), нужны ВСЮ сессию — бейджи,
+// чат), discoveryProfiles читает ТОЛЬКО экран "Знакомства" — "экрано-
+// триггерное" состояние, стартует из discovery.jsx на монтировании, СРАЗУ
+// после fetchDiscoveryProfiles (снимок + живой хвост). НЕ закрывается явно
+// при уходе с экрана — в проекте нет прецедента teardown живой подписки
+// transport.js из cleanup UI-компонента, вводить его ради одного редкого
+// kind до конца сессии избыточно.
+export async function refreshLiveDiscoverySubscription(ownerPubkey) {
+	if (!connection) return;
+	if (!discoveryLiveSubscriber) {
+		discoveryLiveSubscriber = createSubscriber(connection, {
+			verifyBatch: verifyBatchFn,
+			onBatch: async (events) => {
+				let changed = false;
+				for (const event of events) {
+					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe
+					try {
+						const parsed = parseDiscoveryEvent(event);
+						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
+						changed = true;
+					} catch {
+						// повреждённый/невалидный (напр. visible:true без visibleUntil, T4)
+						// discovery-broadcast чужого клиента — пропустить, не ронять батч
+					}
+				}
+				if (changed) await refreshDiscoveryProfiles(ownerPubkey);
+			},
+		});
+		connection.addMessageHandler(discoveryLiveSubscriber.handleMessage);
+	}
+	discoveryLiveSubscriber.subscribe("live-discovery", [{ kinds: [DISCOVERY_KIND] }]);
 }
 
 let profileSubscriber = null;
