@@ -256,7 +256,18 @@ export default function NavGroups({ unreadJournalCount }) {
 					</div>
 				)}
 
-				{isEmpty ? (
+				{/* Живой фидбек пользователя — isEmpty раньше ПОДМЕНЯЛ собой весь
+				    список групп (тернарник): на свежем аккаунте (нет ни переписок,
+				    ни контактов, ни каналов, ни заявок) заголовки "Люди"/"Мои
+				    каналы"/"Подписки" не рендерились вовсе — а именно заголовок
+				    "Мои каналы" ведёт на экран Channels, где живёт кнопка "Создать
+				    канал" (channels.jsx). Единственным выходом оставались
+				    "Знакомства" (искать ЧУЖИЕ каналы/людей) — создать СВОЙ канал
+				    было решительно негде. Приветственная панель теперь ДОПОЛНЯЕТ
+				    группы, а не заменяет их — группы рендерятся всегда (пустой
+				    список под заголовком — уже штатное поведение, тот же паттерн,
+				    что "Мои каналы" с owned=0 при непустых остальных категориях). */}
+				{isEmpty && (
 					<div class="empty">
 						<h3>{t("shell.emptyTitle")}</h3>
 						<p>{t("shell.emptyBody")}</p>
@@ -264,7 +275,7 @@ export default function NavGroups({ unreadJournalCount }) {
 							<IconCompass /> {t("shell.emptyAction")}
 						</button>
 					</div>
-				) : (
+				)}
 				<>
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
@@ -341,7 +352,6 @@ export default function NavGroups({ unreadJournalCount }) {
 					</ul>
 				</div>
 				</>
-				)}
 			</div>
 		</>
 	);
