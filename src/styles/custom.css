@@ -7833,6 +7833,55 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--good);
 }
 
+/* CONTRACTS.md §DISCOVERY-REDESIGN — метка-пилюля. MOLECULES.md проверен:
+   .badge-on (выше в файле) — другого назначения (статус сервера), не
+   переиспользуется. Единственный модификатор пока — --warn (канал без
+   читателей, "только вы"); нейтральный .badge без модификатора не
+   применяется нигде сегодня, но заведён сразу как базовый уровень
+   молекулы, а не только частный случай. */
+.badge {
+	flex: none;
+	font-size: var(--step--2);
+	padding: 0.1em var(--space-2xs);
+	border-radius: calc(infinity * 1px);
+	border: var(--border-width) solid var(--border);
+	color: var(--muted);
+}
+.badge--warn {
+	color: var(--warn);
+	border-color: var(--warn-edge);
+	background-color: color-mix(in oklch, var(--warn), transparent 92%);
+}
+
+/* CONTRACTS.md §DISCOVERY-REDESIGN — кольцо остатка трансляции (замена
+   текстового "осталось: X"). SVG circle с --circ (2πr, геометрическая
+   константа контура, не токен) и --p (доля оставшегося времени, 0..1)
+   заданными инлайн на элементе — тот же приём параметризации, что --gap/
+   --min у композиционных классов (REGLAMENT.md §2). */
+.ring {
+	display: block;
+	flex: none;
+}
+.ring circle {
+	fill: none;
+	stroke-width: 3;
+}
+.ring .track {
+	stroke: var(--border);
+}
+.ring .live {
+	stroke: var(--good);
+	stroke-linecap: round;
+	transform: rotate(-90deg);
+	transform-origin: 50% 50%;
+	stroke-dasharray: var(--circ);
+	stroke-dashoffset: calc(var(--circ) * (1 - var(--p)));
+	transition: stroke-dashoffset 600ms var(--ease);
+}
+.ring.is-low .live {
+	stroke: var(--warn);
+}
+
 /* ---- 7. Раскрывающиеся исключения --------------------------------- *
  * Таблицы "уровень уведомления на каждый контакт / канал" висели на
  * экране развёрнутыми всегда: у человека с сорока контактами это
