@@ -475,7 +475,7 @@ function isDiscoveryCardClean(row) {
 	if (!isClean(row.bio, stopwords)) return false;
 	if (Array.isArray(row.channels)) {
 		for (const c of row.channels) {
-			if (!isClean(c.name, stopwords) || !isClean(c.description, stopwords)) return false;
+			if (!isClean(c.name, stopwords) || !isClean(c.description, stopwords) || !isClean(c.rules, stopwords)) return false;
 		}
 	}
 	return true;

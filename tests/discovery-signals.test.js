@@ -128,3 +128,18 @@ test("refreshDiscoveryProfiles: отсеивает карточки, чьё на
 
 	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
 });
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, §2 — rules добавлено в тот же словарный
+// фильтр, что name/description канала (isDiscoveryCardClean, D9).
+test("refreshDiscoveryProfiles: отсеивает карточки, чьи ПРАВИЛА канала не проходят словарь", async () => {
+	const stopwordsModule = await import("../src/domain/discovery/stopwords.json", { with: { type: "json" } });
+	const badWord = stopwordsModule.default[0];
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: true, showRules: true, channels: [{ id: "c1", name: "Обычный канал", description: "норм", rules: "без рекламы" }], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: true, showRules: true, channels: [{ id: "c2", name: "Канал", description: "норм", rules: badWord }], visibleUntil: FAR_FUTURE, bio: "", updatedAt: 1 },
+	]);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
+});

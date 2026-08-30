@@ -8,12 +8,21 @@ import { getProfile } from "../../core/crypto/keystore.js";
 export const DISCOVERY_KIND = 30073;
 export const DISCOVERY_DURATIONS = [600, 3600, 86400];
 export const DISCOVERY_BIO_MAX_LENGTH = 300;
+export const DISCOVERY_NAME_MAX_LENGTH = 100;
+export const DISCOVERY_DESCRIPTION_MAX_LENGTH = 300;
+export const DISCOVERY_RULES_MAX_LENGTH = 600;
 
-export function buildDiscoveryEvent(privKey, { visible, showChannels, channels, visibleUntil, bio }, createdAt = Math.floor(Date.now() / 1000)) {
+export function buildDiscoveryEvent(privKey, { visible, showChannels, channels, showRules, visibleUntil, bio }, createdAt = Math.floor(Date.now() / 1000)) {
     if (visible && (!Number.isFinite(visibleUntil) || visibleUntil <= createdAt)) {
         throw new Error('visibleUntil обязателен и должен быть в будущем относительно createdAt при visible: true');
     }
     const truncatedBio = (typeof bio === 'string' ? bio : '').slice(0, DISCOVERY_BIO_MAX_LENGTH);
+    const cleanChannels = (Array.isArray(channels) ? channels : []).map((c) => ({
+        id: c.id,
+        name: (typeof c.name === 'string' ? c.name : '').slice(0, DISCOVERY_NAME_MAX_LENGTH),
+        description: (typeof c.description === 'string' ? c.description : '').slice(0, DISCOVERY_DESCRIPTION_MAX_LENGTH),
+        rules: showRules ? (typeof c.rules === 'string' ? c.rules : '').slice(0, DISCOVERY_RULES_MAX_LENGTH) : '',
+    }));
     const tags = [['d', 'discovery']];
     if (visible) {
         tags.push(['expiration', String(visibleUntil)]);
@@ -22,7 +31,7 @@ export function buildDiscoveryEvent(privKey, { visible, showChannels, channels, 
         kind: DISCOVERY_KIND,
         tags,
         created_at: createdAt,
-        content: JSON.stringify({ visible, visibleUntil, showChannels, channels, bio: truncatedBio })
+        content: JSON.stringify({ visible, visibleUntil, showChannels: !!showChannels, showRules: !!showRules, channels: cleanChannels, bio: truncatedBio })
     }, privKey);
 }
 
@@ -42,11 +51,17 @@ export function parseDiscoveryEvent(event) {
     return {
         visible,
         showChannels: !!parsed.showChannels,
+        showRules: !!parsed.showRules,
         channels: Array.isArray(parsed.channels) ?
             parsed.channels
-                .filter(c => c && typeof c === "object" && typeof c.id === "string"
-                    && typeof c.name === "string" && typeof c.description === "string")
-                .map(c => ({ id: c.id, name: c.name, description: c.description }))
+                .filter(c => c && typeof c === 'object' && typeof c.id === 'string'
+                    && typeof c.name === 'string' && typeof c.description === 'string')
+                .map(c => ({
+                    id: c.id,
+                    name: c.name.slice(0, DISCOVERY_NAME_MAX_LENGTH),
+                    description: c.description.slice(0, DISCOVERY_DESCRIPTION_MAX_LENGTH),
+                    rules: typeof c.rules === 'string' ? c.rules.slice(0, DISCOVERY_RULES_MAX_LENGTH) : '',
+                }))
             : [],
         visibleUntil,
         bio

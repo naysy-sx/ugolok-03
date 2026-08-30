@@ -8982,3 +8982,30 @@ condition, затем полная замена publishDiscoverySettings по г
 (первый прогон поймал уже известный флейк room-session, не в файлах
 этого захода — повтор чист).
 
+
+## §DISCOVERY-REDESIGN, Э2 — формат события (rules/showRules, лимиты длин)
+
+buildDiscoveryEvent/parseDiscoveryEvent — новые константы
+DISCOVERY_NAME/DESCRIPTION/RULES_MAX_LENGTH (100/300/600), showRules
+на верхнем уровне content, rules у канала гейтится showRules (пусто
+при false, не просто "не рисуем"). isDiscoveryCardClean (contacts.js)
+— добавлена проверка c.rules словарём.
+
+Воркер: 2 вызова. Первый (discovery.js, буквальный код на замену для
+обеих функций) — потерял import-блок в начале файла целиком, сломал
+скобки в parseDiscoveryEvent (лишняя `}));` перед `: []`), молча вырезал
+комментарии у publishDiscoverySettings/markDiscoveryExpired вне зоны
+правки — теми же тремя классами брака, что в Э1. Всё поправлено точечно
+(Edit), без повторного вызова воркера. Второй вызов (contacts.js, одна
+строка) — чисто с первого раза.
+
+Тесты: discovery.test.js — 30/30 (+7 новых), discovery-signals.test.js
+— 7/7 (+1 новый), вся discovery-семья (discovery/discovery-signals/
+discovery-wordfilter/discovery-reports) — 54/54.
+
+Полная регрессия шумная НЕЗАВИСИМО от этого захода: npm test на всём
+наборе (2260 тестов) ловит 1-2 флейка за прогон в РАЗНЫХ файлах
+(post.test.js, room-session.test.js) — оба зелёные при изолированном
+запуске файла. Не новая проблема (log.md уже фиксировал флейк
+room-session ранее), затронутые файлы не пересекаются с этим заходом.
+

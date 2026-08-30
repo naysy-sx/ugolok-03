@@ -8042,10 +8042,13 @@ CONTRACTS.md. `nav-groups.jsx`'s `isEmpty` не учитывал
       тронут — не публикует надгробий (только активную трансляцию,
       `visible && visibleUntil > now`), D2 действует автоматически через
       тот же `buildDiscoveryEvent`. Регрессия 2255/2255.
-- [ ] **Э2. Формат события** — `rules`/`showRules`, лимиты длин
+- [x] **Э2. Формат события** — `rules`/`showRules`, лимиты длин
       (`DISCOVERY_NAME/DESCRIPTION/RULES_MAX_LENGTH`), парсинг старых
       событий без `rules`. Файлы: `discovery.js`, `contacts.js`
-      (`isDiscoveryCardClean`).
+      (`isDiscoveryCardClean`). `publishDiscoverySettings` пока не
+      передаёt `showRules`/`rules` явно (это Э5) — `buildDiscoveryEvent`
+      без параметра трактует `showRules` как `false`, канал получает
+      `rules:''` — поведение не регрессирует, просто ещё не задействовано.
 - [ ] **Э3. Серверный фильтр** — `rules` в `texts` whitelist-плагина.
 - [ ] **Э4. Схема хранилища** — `db.version(32)`: `showBio`(true)/
       `showRules`(false) в `discoverySettings`; чистка протухших строк

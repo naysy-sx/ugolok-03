@@ -56,7 +56,7 @@ test("buildDiscoveryEvent: kind 30073, d-tag='discovery', content — ОТКРЫ
 	const parsed = JSON.parse(event.content);
 	assert.equal(parsed.visible, true);
 	assert.equal(parsed.showChannels, true);
-	assert.deepEqual(parsed.channels, [{ id: "c1", name: "Кулинария", description: "рецепты" }]);
+	assert.deepEqual(parsed.channels, [{ id: "c1", name: "Кулинария", description: "рецепты", rules: "" }]);
 });
 
 // CONTRACTS.md §DISCOVERY, T4 — обязателен при visible:true.
@@ -89,7 +89,49 @@ test("buildDiscoveryEvent: bio обрезается до лимита при с�
 test("parseDiscoveryEvent: обычный round-trip", () => {
 	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "обо мне" });
 	const parsed = parseDiscoveryEvent(event);
-	assert.deepEqual(parsed, { visible: true, showChannels: false, channels: [], visibleUntil: FAR_FUTURE, bio: "обо мне" });
+	assert.deepEqual(parsed, { visible: true, showChannels: false, showRules: false, channels: [], visibleUntil: FAR_FUTURE, bio: "обо мне" });
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, Э2/§2 — rules попадает в событие ТОЛЬКО
+// при showRules:true; при false поле пустое ("не показываем — значит не
+// публикуем"), не просто скрыто в UI.
+test("buildDiscoveryEvent: showRules:true — rules канала уходит в событие; showRules:false — rules всегда '' даже если передан", () => {
+	const channels = [{ id: "c1", name: "Канал", description: "d", rules: "без рекламы" }];
+
+	const withRules = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: true, channels, showRules: true, visibleUntil: FAR_FUTURE });
+	const parsedWith = JSON.parse(withRules.content);
+	assert.equal(parsedWith.showRules, true);
+	assert.equal(parsedWith.channels[0].rules, "без рекламы");
+
+	const withoutRules = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: true, channels, showRules: false, visibleUntil: FAR_FUTURE });
+	const parsedWithout = JSON.parse(withoutRules.content);
+	assert.equal(parsedWithout.showRules, false);
+	assert.equal(parsedWithout.channels[0].rules, "", "showRules:false — rules не публикуется, не просто не рисуется");
+});
+
+test("buildDiscoveryEvent: name/description/rules канала обрезаются до 100/300/600 символов", () => {
+	const channels = [{ id: "c1", name: "н".repeat(150), description: "о".repeat(400), rules: "п".repeat(700) }];
+	const event = buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: true, channels, showRules: true, visibleUntil: FAR_FUTURE });
+	const parsed = JSON.parse(event.content);
+	assert.equal(parsed.channels[0].name.length, 100);
+	assert.equal(parsed.channels[0].description.length, 300);
+	assert.equal(parsed.channels[0].rules.length, 600);
+});
+
+test("parseDiscoveryEvent: showRules парсится, rules парсится и обрезается до 600", () => {
+	const event = { content: JSON.stringify({ visible: true, showChannels: true, showRules: true, visibleUntil: FAR_FUTURE, channels: [{ id: "c1", name: "n", description: "d", rules: "п".repeat(700) }] }) };
+	const parsed = parseDiscoveryEvent(event);
+	assert.equal(parsed.showRules, true);
+	assert.equal(parsed.channels[0].rules.length, 600);
+});
+
+// §2 — "rules — необязательное: событие старого клиента без поля валидно,
+// rules становится ''". Валидация элемента channels НЕ должна требовать rules.
+test("parseDiscoveryEvent: событие СТАРОГО формата без rules/showRules — валидно, rules становится '', showRules — false", () => {
+	const event = { content: JSON.stringify({ visible: true, showChannels: true, visibleUntil: FAR_FUTURE, channels: [{ id: "c1", name: "n", description: "d" }] }) };
+	const parsed = parseDiscoveryEvent(event);
+	assert.equal(parsed.showRules, false);
+	assert.equal(parsed.channels[0].rules, "");
 });
 
 test("parseDiscoveryEvent: защита от мусора чужого клиента — не бросает, коэрсит к безопасным значениям", () => {
@@ -130,7 +172,7 @@ test("parseDiscoveryEvent: bio длиннее лимита — обрезает�
 test("parseDiscoveryEvent: элементы channels фильтруются — только валидные {id,name,description}, мусорные записи отбрасываются", () => {
 	const malicious = { content: JSON.stringify({ visible: true, showChannels: true, channels: [{ id: "c1", name: "ok", description: "d" }, "мусор", { id: 123 }, null], visibleUntil: FAR_FUTURE }) };
 	const parsed = parseDiscoveryEvent(malicious);
-	assert.deepEqual(parsed.channels, [{ id: "c1", name: "ok", description: "d" }]);
+	assert.deepEqual(parsed.channels, [{ id: "c1", name: "ok", description: "d", rules: "" }]);
 });
 
 test("loadDiscoverySettings: без локальной записи -> дефолт (invisible, каналы не показаны)", async () => {
