@@ -120,6 +120,17 @@ export async function listOwnedChannels(ownerPubkey, dbKey) {
 	return rows.filter((r) => r.role === "owner").map((r) => fromEncryptedRow(r, dbKey));
 }
 
+// CONTRACTS.md §DISCOVERY-REDESIGN, D9 — число ЧУЖИХ читателей канала для
+// экрана "Знакомства": минус self-грант владельца (createChannel добавляет
+// его ВСЕГДА, независимо от groupIds, см. выше "Этап 55"). Составной индекс
+// [ownerPubkey+channelId] уже существует (database.js, этап 33) — миграция
+// не нужна.
+export async function countChannelReaders(ownerPubkey, channelId) {
+	const count = await db.table("channelReaders")
+		.where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).count();
+	return Math.max(0, count - 1);
+}
+
 export async function listSubscribedChannels(ownerPubkey, dbKey) {
 	const rows = await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray();
 	return rows.filter((r) => r.role === "subscriber").map((r) => fromEncryptedRow(r, dbKey));

@@ -20,6 +20,7 @@ import {
 	deleteChannel,
 	receiveChannelDeletion,
 	backfillOwnChannelGrants,
+	countChannelReaders,
 } from "../src/domain/content/channel.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, handleIncomingSubscribeRequest } from "../src/domain/content/channel-access.js";
 import { fromEncryptedRow } from "../src/core/store/encrypted-table.js";
@@ -609,4 +610,28 @@ test("АДВЕРСАРНЫЙ: backfillOwnChannelGrants — публикация 
 	assert.ok(goodReader, "'Целый' канал — self добавлен несмотря на сбой соседнего канала");
 	const badReader = await db.table("channelReaders").get([ALICE_PUB, badId, ALICE_PUB]);
 	assert.equal(badReader, undefined, "'Сломанный' канал — self НЕ добавлен, публикация не прошла");
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, D9 — countChannelReaders: число ЧУЖИХ
+// читателей, минус self-грант владельца (createChannel добавляет его ВСЕГДА,
+// независимо от groupIds — см. createChannel выше, "Этап 55").
+test("countChannelReaders: заметочник (пустой groupIds) — только self-грант -> 0", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Заметки", description: "d", rules: "" }, [], capturingPublish([]));
+	const count = await countChannelReaders(ALICE_PUB, channelId);
+	assert.equal(count, 0);
+});
+
+test("countChannelReaders: канал с группой из двух читателей -> 2 (self не считается)", async () => {
+	await db.table("groups").add({ owner: ALICE_PUB, id: "friends", name: "Друзья" });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: BOB_PUB });
+	await db.table("groupMembers").add({ groupId: "friends", pubkey: MALLORY_PUB });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "К", description: "d", rules: "" }, ["friends"], capturingPublish([]));
+
+	const count = await countChannelReaders(ALICE_PUB, channelId);
+	assert.equal(count, 2);
+});
+
+test("countChannelReaders: несуществующий канал -> 0, не отрицательное число", async () => {
+	const count = await countChannelReaders(ALICE_PUB, "нет-такого-канала");
+	assert.equal(count, 0);
 });
