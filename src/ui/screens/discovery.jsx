@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles } from "../signals/transport.js";
-import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction } from "../signals/contacts.js";
+import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction, ownDiscoveryVisible } from "../signals/contacts.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { loadDiscoverySettings, publishDiscoverySettings, markDiscoveryExpired, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
 import { isClean } from "../../domain/discovery/wordfilter.js";
 import stopwords from "../../domain/discovery/stopwords.json" with { type: "json" };
 import { reportDiscoveryProfile, hideDiscoveryProfileLocally } from "../../domain/discovery/reports.js";
+import { writeJournalEntry } from "../../domain/notifications/journal.js";
 import { listOwnedChannels } from "../../domain/content/channel.js";
 import { BUILD_ADMIN_PUBKEY } from "../../config.js";
 import { ContactIdentity } from "./contacts.jsx";
@@ -64,21 +65,42 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 		return () => clearInterval(id);
 	}, []);
 
+	// CONTRACTS.md §DISCOVERY — живой фидбек пользователя: тихая настройка
+	// незаметно оставалась включённой. Глобальный сигнал держится в
+	// contacts.js (читает nav-groups.jsx на любом экране), синхронизируется
+	// с КАЖДЫМ изменением settings, а не только с явными действиями ниже —
+	// один источник истины, а не дублирование в каждом обработчике.
+	useEffect(() => {
+		if (settings) ownDiscoveryVisible.value = settings.visible;
+	}, [settings]);
+
 	// Автоистечение: и на монтировании (если visibleUntil уже в прошлом), и на
 	// каждый тик. Публикация НЕ нужна (expiration+фильтр читателя уже прячут
 	// карточку) — только локальный флаг, чтобы переключатель у владельца не
-	// показывал "включено" после срока.
+	// показывал "включено" после срока. Живой фидбек пользователя — истечение
+	// обязано быть заметным (тост) и оставлять след (запись в журнале), не
+	// просто тихо гаснуть.
 	useEffect(() => {
 		if (settings && settings.visible && settings.visibleUntil <= Math.floor(Date.now() / 1000)) {
-			markDiscoveryExpired(ownerPubkey).then(() => setSettings((prev) => (prev ? { ...prev, visible: false } : prev)));
+			markDiscoveryExpired(ownerPubkey).then(() => {
+				setSettings((prev) => (prev ? { ...prev, visible: false } : prev));
+				pushToast({ title: t("discovery.expiredToastTitle") });
+				writeJournalEntry(ownerPubkey, dbKey, {
+					category: "discovery",
+					titleKey: "discovery.expiredToastTitle",
+					navTarget: { screen: "discovery" },
+					occurredAt: Date.now(),
+				}).catch(() => {});
+			});
 		}
-	}, [settings, tick, ownerPubkey]);
+	}, [settings, tick, ownerPubkey, dbKey]);
 
 	async function persist(next) {
 		setSettings(next);
 		try {
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			await publishDiscoverySettings(ownerPubkey, privKey, dbKey, next, publish);
+			pushToast({ title: t("profile.savedStatus") });
 		} catch (err) {
 			setError(errorMessage(err));
 		}
@@ -116,7 +138,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 	}
 
 	return (
-		<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
+		<section class={"panel stack" + (settings.visible ? " panel--good" : "")} style={{ "--gap": "var(--space-m)" }}>
 			<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconEye />
@@ -125,6 +147,17 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 				<p class="panel__hint">{t("discovery.visibilityHint")}</p>
 			</div>
 
+			{/* Живой фидбек пользователя — статус видимости должен быть первым, что
+			    видно после заголовка, не погребён ниже переключателя каналов. */}
+			{settings.visible && (
+				<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<span>{t("discovery.timeRemainingLabel", { time: formatCountdown(remainingSeconds) })}</span>
+					<button type="button" class="rigid" onClick={() => persist({ ...settings, visible: false })}>
+						{t("discovery.hideNowButton")}
+					</button>
+				</div>
+			)}
+
 			{error && (
 				<p role="alert" class="callout callout--bad">
 					{error}
@@ -132,8 +165,14 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 			)}
 
 			<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+				<input
+					type="checkbox"
+					class="set-row__switch"
+					checked={settings.visible}
+					onChange={(e) => handleVisibleToggle(e.currentTarget.checked)}
+					style={{ inlineSize: "1.7rem", blockSize: "1.7rem" }}
+				/>
 				<span class="set-row__text">{t("discovery.showMeToggle")}</span>
-				<input type="checkbox" class="set-row__switch" checked={settings.visible} onChange={(e) => handleVisibleToggle(e.currentTarget.checked)} />
 			</label>
 
 			{!settings.visible && (
@@ -155,15 +194,6 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 							);
 						})}
 					</div>
-				</div>
-			)}
-
-			{settings.visible && (
-				<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<span>{t("discovery.timeRemainingLabel", { time: formatCountdown(remainingSeconds) })}</span>
-					<button type="button" class="rigid" onClick={() => persist({ ...settings, visible: false })}>
-						{t("discovery.hideNowButton")}
-					</button>
 				</div>
 			)}
 
@@ -212,13 +242,14 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 			{settings.visible && (
 				<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
 					<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-						<span class="set-row__text">{t("discovery.showChannelsToggle")}</span>
 						<input
 							type="checkbox"
 							class="set-row__switch"
 							checked={settings.showChannels}
 							onChange={(e) => setSettings({ ...settings, showChannels: e.currentTarget.checked })}
+							style={{ inlineSize: "1.7rem", blockSize: "1.7rem" }}
 						/>
+						<span class="set-row__text">{t("discovery.showChannelsToggle")}</span>
 					</label>
 
 					{settings.showChannels && (
@@ -293,6 +324,9 @@ export default function Discovery() {
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
 
+	// Живой фидбек пользователя — было ○/✓ без подписи ("непонятная галочка"),
+	// теперь настоящая кнопка с текстом состояния + тост на исход (успех/
+	// отмена/провал), не молчаливое переключение символа.
 	async function handleToggleDiscoveryCard(pubkey) {
 		if (busyRef.current) return;
 		busyRef.current = true;
@@ -300,6 +334,9 @@ export default function Discovery() {
 		try {
 			const alreadySent = outgoingRequests.value.some((r) => r.peerPubkey === pubkey);
 			await (alreadySent ? cancelContactRequestAction(pubkey) : sendContactRequestAction(pubkey));
+			pushToast({ title: alreadySent ? t("discovery.requestCancelledToast") : t("discovery.requestSentButton") });
+		} catch (err) {
+			pushToast({ title: t("discovery.requestFailedToast"), body: errorMessage(err) });
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
@@ -360,36 +397,27 @@ export default function Discovery() {
 										borderRadius: "var(--radius)",
 									}}
 								>
-									<div class="row" style={{ position: "absolute", top: "var(--space-2xs)", right: "var(--space-2xs)", "--gap": "var(--space-2xs)", "--align": "center" }}>
-										{BUILD_ADMIN_PUBKEY && (
-											<button
-												type="button"
-												onClick={() => handleReportCard(card)}
-												aria-label={t("discovery.reportButtonAria")}
-												title={t("moderation.reportButton")}
-												style={{ border: "none", background: "none", padding: 0, cursor: "pointer", fontSize: "var(--step-1)", color: "var(--muted)" }}
-											>
-												<IconFlag />
-											</button>
-										)}
+									{BUILD_ADMIN_PUBKEY && (
 										<button
 											type="button"
-											disabled={busy}
-											onClick={() => handleToggleDiscoveryCard(card.pubkey)}
-											aria-pressed={sent}
-											aria-label={sent ? t("discovery.cancelRequestAria") : t("discovery.sendRequestAria")}
+											onClick={() => handleReportCard(card)}
+											aria-label={t("discovery.reportButtonAria")}
+											title={t("moderation.reportButton")}
 											style={{
+												position: "absolute",
+												top: "var(--space-2xs)",
+												right: "var(--space-2xs)",
 												border: "none",
 												background: "none",
 												padding: 0,
 												cursor: "pointer",
-												fontSize: "var(--step-2)",
-												color: sent ? "var(--good)" : "var(--muted)",
+												fontSize: "var(--step-1)",
+												color: "var(--muted)",
 											}}
 										>
-											{sent ? "✓" : "○"}
+											<IconFlag />
 										</button>
-									</div>
+									)}
 									<ContactIdentity pubkey={card.pubkey} />
 									{card.showChannels && card.channels.length > 0 && (
 										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
@@ -401,6 +429,13 @@ export default function Discovery() {
 											))}
 										</ul>
 									)}
+									{/* Живой фидбек пользователя — было ○/✓ без подписи, никто не понимал,
+									    что это значит. Настоящая кнопка с текстом состояния. */}
+									<div class="row">
+										<button type="button" class="rigid" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>
+											{sent ? t("discovery.requestSentButton") : t("discovery.sendRequestButton")}
+										</button>
+									</div>
 								</article>
 							);
 						})}

@@ -331,7 +331,8 @@
 			"contacts": "Contacten",
 			"calls": "Oproepen",
 			"moderation": "Moderatie",
-			"inbox": "Verzoeken"
+			"inbox": "Verzoeken",
+			"discovery": "Ontdekken"
 		},
 		"category": {
 			"messages": "Bericht",
@@ -340,7 +341,8 @@
 			"contacts": "Contacten",
 			"calls": "Oproep",
 			"moderation": "Moderatie",
-			"inbox": "Onbekende"
+			"inbox": "Onbekende",
+			"discovery": "Ontdekken"
 		},
 		"strangerRequestTitle": "Nieuw verzoek van een onbekende",
 		"strangerRequestBody": "{{username}} wil u schrijven",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Je hebt nog geen eigen kanalen.",
 		"wantToMeetTitle": "Willen kennismaken",
 		"noOneVisible": "Nog niemand zichtbaar.",
-		"cancelRequestAria": "Contactverzoek annuleren",
-		"sendRequestAria": "Contactverzoek versturen",
 		"visibilityTitle": "Zichtbaarheid",
 		"visibilityHint": "Zolang dit is uitgeschakeld, ziet niemand u, behalve degenen aan wie u zelf de sleutel heeft gegeven.",
 		"durationLegend": "Voor hoelang",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Zichtbaarheidsduur",
 		"moderationWarning": "Dit komt niet door het relay-filter: {{fields}}",
 		"fieldBio": "bio",
-		"reportButtonAria": "Dit profiel melden"
+		"reportButtonAria": "Dit profiel melden",
+		"sendRequestButton": "Verzoek versturen",
+		"requestSentButton": "Verzoek verstuurd",
+		"requestCancelledToast": "Verzoek geannuleerd",
+		"requestFailedToast": "Verzoek versturen mislukt",
+		"expiredToastTitle": "Uw zichtbaarheid in Ontdekken is verlopen"
 	},
 	"channels": {
 		"createChannelButton": "Kanaal aanmaken",

@@ -331,7 +331,8 @@
 			"contacts": "Kontakty",
 			"calls": "Połączenia",
 			"moderation": "Moderacja",
-			"inbox": "Prośby"
+			"inbox": "Prośby",
+			"discovery": "Odkrywanie"
 		},
 		"category": {
 			"messages": "Wiadomość",
@@ -340,7 +341,8 @@
 			"contacts": "Kontakty",
 			"calls": "Połączenie",
 			"moderation": "Moderacja",
-			"inbox": "Nieznajomy"
+			"inbox": "Nieznajomy",
+			"discovery": "Odkrywanie"
 		},
 		"strangerRequestTitle": "Nowa prośba od nieznajomego",
 		"strangerRequestBody": "{{username}} chce do Ciebie napisać",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Nie masz jeszcze własnych kanałów.",
 		"wantToMeetTitle": "Chcą się poznać",
 		"noOneVisible": "Nikogo jeszcze nie widać.",
-		"cancelRequestAria": "Anuluj zaproszenie do kontaktów",
-		"sendRequestAria": "Wyślij zaproszenie do kontaktów",
 		"visibilityTitle": "Widoczność",
 		"visibilityHint": "Dopóki to wyłączone, nikt Cię nie widzi poza tymi, którym sam podałeś/aś klucz.",
 		"durationLegend": "Na jak długo",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Czas widoczności",
 		"moderationWarning": "To nie przejdzie przez filtr przekaźnika: {{fields}}",
 		"fieldBio": "bio",
-		"reportButtonAria": "Zgłoś ten profil"
+		"reportButtonAria": "Zgłoś ten profil",
+		"sendRequestButton": "Wyślij prośbę",
+		"requestSentButton": "Prośba wysłana",
+		"requestCancelledToast": "Prośba anulowana",
+		"requestFailedToast": "Nie udało się wysłać prośby",
+		"expiredToastTitle": "Twoja widoczność w Odkrywaniu wygasła"
 	},
 	"channels": {
 		"createChannelButton": "Utwórz kanał",

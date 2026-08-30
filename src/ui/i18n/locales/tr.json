@@ -331,7 +331,8 @@
 			"contacts": "Kişiler",
 			"calls": "Aramalar",
 			"moderation": "Moderasyon",
-			"inbox": "İstekler"
+			"inbox": "İstekler",
+			"discovery": "Keşfet"
 		},
 		"category": {
 			"messages": "Mesaj",
@@ -340,7 +341,8 @@
 			"contacts": "Kişiler",
 			"calls": "Arama",
 			"moderation": "Moderasyon",
-			"inbox": "Yabancı"
+			"inbox": "Yabancı",
+			"discovery": "Keşfet"
 		},
 		"strangerRequestTitle": "Bir yabancıdan yeni istek",
 		"strangerRequestBody": "{{username}} size yazmak istiyor",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Henüz kendi kanalınız yok.",
 		"wantToMeetTitle": "Tanışmak istiyor",
 		"noOneVisible": "Henüz kimse görünmüyor.",
-		"cancelRequestAria": "Bağlantı isteğini iptal et",
-		"sendRequestAria": "Bağlantı isteği gönder",
 		"visibilityTitle": "Görünürlük",
 		"visibilityHint": "Bu kapalıyken, kendisine anahtar verdikleriniz dışında sizi kimse göremez.",
 		"durationLegend": "Ne kadar süreyle",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Görünürlük süresi",
 		"moderationWarning": "Bu, röle filtresinden geçmeyecek: {{fields}}",
 		"fieldBio": "biyografi",
-		"reportButtonAria": "Bu profili bildir"
+		"reportButtonAria": "Bu profili bildir",
+		"sendRequestButton": "İstek gönder",
+		"requestSentButton": "İstek gönderildi",
+		"requestCancelledToast": "İstek iptal edildi",
+		"requestFailedToast": "İstek gönderilemedi",
+		"expiredToastTitle": "Keşfet görünürlüğünüzün süresi doldu"
 	},
 	"channels": {
 		"createChannelButton": "Kanal oluştur",

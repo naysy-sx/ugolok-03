@@ -331,7 +331,8 @@
 			"contacts": "Kontakte",
 			"calls": "Anrufe",
 			"moderation": "Moderation",
-			"inbox": "Anfragen"
+			"inbox": "Anfragen",
+			"discovery": "Kennenlernen"
 		},
 		"category": {
 			"messages": "Nachricht",
@@ -340,7 +341,8 @@
 			"contacts": "Kontakte",
 			"calls": "Anruf",
 			"moderation": "Moderation",
-			"inbox": "Unbekannt"
+			"inbox": "Unbekannt",
+			"discovery": "Kennenlernen"
 		},
 		"strangerRequestTitle": "Neue Anfrage von einem Fremden",
 		"strangerRequestBody": "{{username}} möchte Ihnen schreiben",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Sie haben noch keine eigenen Kanäle.",
 		"wantToMeetTitle": "Möchten sich kennenlernen",
 		"noOneVisible": "Noch niemand sichtbar.",
-		"cancelRequestAria": "Kontaktanfrage zurückziehen",
-		"sendRequestAria": "Kontaktanfrage senden",
 		"visibilityTitle": "Sichtbarkeit",
 		"visibilityHint": "Solange dies deaktiviert ist, sieht Sie niemand außer denjenigen, denen Sie selbst den Schlüssel gegeben haben.",
 		"durationLegend": "Für wie lange",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Sichtbarkeitsdauer",
 		"moderationWarning": "Das wird den Relay-Filter nicht bestehen: {{fields}}",
 		"fieldBio": "Bio",
-		"reportButtonAria": "Dieses Profil melden"
+		"reportButtonAria": "Dieses Profil melden",
+		"sendRequestButton": "Anfrage senden",
+		"requestSentButton": "Anfrage gesendet",
+		"requestCancelledToast": "Anfrage storniert",
+		"requestFailedToast": "Anfrage konnte nicht gesendet werden",
+		"expiredToastTitle": "Ihre Sichtbarkeit in der Entdeckung ist abgelaufen"
 	},
 	"channels": {
 		"createChannelButton": "Kanal erstellen",

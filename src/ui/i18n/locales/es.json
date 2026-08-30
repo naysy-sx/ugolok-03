@@ -331,7 +331,8 @@
 			"contacts": "Contactos",
 			"calls": "Llamadas",
 			"moderation": "Moderación",
-			"inbox": "Solicitudes"
+			"inbox": "Solicitudes",
+			"discovery": "Descubrir"
 		},
 		"category": {
 			"messages": "Mensaje",
@@ -340,7 +341,8 @@
 			"contacts": "Contactos",
 			"calls": "Llamada",
 			"moderation": "Moderación",
-			"inbox": "Desconocido"
+			"inbox": "Desconocido",
+			"discovery": "Descubrir"
 		},
 		"strangerRequestTitle": "Nueva solicitud de un desconocido",
 		"strangerRequestBody": "{{username}} quiere escribirte",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Todavía no tienes canales propios.",
 		"wantToMeetTitle": "Quieren conocerte",
 		"noOneVisible": "Todavía no se ve a nadie.",
-		"cancelRequestAria": "Cancelar solicitud de contacto",
-		"sendRequestAria": "Enviar solicitud de contacto",
 		"visibilityTitle": "Visibilidad",
 		"visibilityHint": "Mientras esté desactivado, nadie le verá excepto quienes usted haya dado la clave.",
 		"durationLegend": "Por cuánto tiempo",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Duración de la visibilidad",
 		"moderationWarning": "Esto no pasará el filtro del relay: {{fields}}",
 		"fieldBio": "bio",
-		"reportButtonAria": "Denunciar este perfil"
+		"reportButtonAria": "Denunciar este perfil",
+		"sendRequestButton": "Enviar solicitud",
+		"requestSentButton": "Solicitud enviada",
+		"requestCancelledToast": "Solicitud cancelada",
+		"requestFailedToast": "No se pudo enviar la solicitud",
+		"expiredToastTitle": "Tu visibilidad en Descubrir ha caducado"
 	},
 	"channels": {
 		"createChannelButton": "Crear canal",

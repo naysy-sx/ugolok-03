@@ -458,6 +458,14 @@ export async function deleteGroupAction(ownerPubkey, privKey, dbKey, groupId, pu
 // отдельного импорта не требует (был cross-file импорт в старом discovery.js).
 export const discoveryProfiles = signal([]); // [{pubkey, visible, showChannels, channels, updatedAt}]
 
+// CONTRACTS.md §DISCOVERY — глобальный индикатор "моя карточка сейчас видна
+// другим": держится ЗДЕСЬ (не в discovery.jsx), т.к. читается nav-groups.jsx
+// на любом экране, не только на самом "Знакомствах". Пишут: connect()
+// (transport.js, при каждом подключении) и VisibilitySection (discovery.jsx,
+// сразу на любое локальное изменение — включение/выключение/истечение),
+// оба — по своему уже загруженному discoverySettings, не дублируют запрос.
+export const ownDiscoveryVisible = signal(false);
+
 // Отфильтровано: только visible===true И НЕ уже в contacts (DESIGN.md, этап 46 —
 // человек, уже добавленный в контакты, не нуждается в повторном "знакомстве").
 // CONTRACTS.md §DISCOVERY, T8 — карточка "чистая", если И bio, И название/

@@ -331,7 +331,8 @@
 			"contacts": "联系人",
 			"calls": "通话",
 			"moderation": "管理",
-			"inbox": "请求"
+			"inbox": "请求",
+			"discovery": "发现"
 		},
 		"category": {
 			"messages": "消息",
@@ -340,7 +341,8 @@
 			"contacts": "联系人",
 			"calls": "通话",
 			"moderation": "管理",
-			"inbox": "陌生人"
+			"inbox": "陌生人",
+			"discovery": "发现"
 		},
 		"strangerRequestTitle": "陌生人发来新请求",
 		"strangerRequestBody": "{{username}} 想给您发消息",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "您还没有自己的频道。",
 		"wantToMeetTitle": "想要认识你",
 		"noOneVisible": "暂时还没有人可见。",
-		"cancelRequestAria": "取消联系人请求",
-		"sendRequestAria": "发送联系人请求",
 		"visibilityTitle": "可见性",
 		"visibilityHint": "关闭时，除了您亲自给过密钥的人之外，没有人能看到您。",
 		"durationLegend": "持续时长",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "可见时长",
 		"moderationWarning": "这不会通过中继过滤器: {{fields}}",
 		"fieldBio": "简介",
-		"reportButtonAria": "举报此资料"
+		"reportButtonAria": "举报此资料",
+		"sendRequestButton": "发送请求",
+		"requestSentButton": "请求已发送",
+		"requestCancelledToast": "请求已取消",
+		"requestFailedToast": "发送请求失败",
+		"expiredToastTitle": "您在“发现”中的可见状态已过期"
 	},
 	"channels": {
 		"createChannelButton": "创建频道",

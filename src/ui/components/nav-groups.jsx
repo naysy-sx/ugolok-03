@@ -2,7 +2,7 @@ import { useState, useEffect, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
-import { contacts, profiles, ensureProfilesFetched } from "../signals/contacts.js";
+import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible } from "../signals/contacts.js";
 import { place, openChat, openChannel, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
@@ -23,6 +23,7 @@ import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconStar from "../icons/star.jsx";
 import IconStarFill from "../icons/star-fill.jsx";
 import IconCompass from "../icons/compass.jsx";
+import IconEye from "../icons/eye.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -206,10 +207,10 @@ export default function NavGroups({ unreadJournalCount }) {
 				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
 				    компас, не лупа (та уже занята полем поиска строкой выше). */}
 				<ul class="streams stack" style={{ "--gap": "1px" }}>
-					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}`}>
+					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}${ownDiscoveryVisible.value ? " discover-row--visible" : ""}`}>
 						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
 							<span class="discover-mark">
-								<IconCompass />
+								{ownDiscoveryVisible.value ? <IconEye /> : <IconCompass />}
 							</span>
 							<span class="stream__name">{t("shell.discoverHeading")}</span>
 						</button>

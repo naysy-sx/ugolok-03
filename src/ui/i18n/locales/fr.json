@@ -331,7 +331,8 @@
 			"contacts": "Contacts",
 			"calls": "Appels",
 			"moderation": "Modération",
-			"inbox": "Demandes"
+			"inbox": "Demandes",
+			"discovery": "Découverte"
 		},
 		"category": {
 			"messages": "Message",
@@ -340,7 +341,8 @@
 			"contacts": "Contacts",
 			"calls": "Appel",
 			"moderation": "Modération",
-			"inbox": "Inconnu"
+			"inbox": "Inconnu",
+			"discovery": "Découverte"
 		},
 		"strangerRequestTitle": "Nouvelle demande d'un inconnu",
 		"strangerRequestBody": "{{username}} souhaite vous écrire",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "Vous n'avez pas encore de chaîne à vous.",
 		"wantToMeetTitle": "Souhaitent faire connaissance",
 		"noOneVisible": "Personne n'est visible pour l'instant.",
-		"cancelRequestAria": "Annuler la demande de contact",
-		"sendRequestAria": "Envoyer une demande de contact",
 		"visibilityTitle": "Visibilité",
 		"visibilityHint": "Tant que c'est désactivé, personne ne vous voit, sauf ceux à qui vous avez vous-même donné la clé.",
 		"durationLegend": "Pendant combien de temps",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Durée de visibilité",
 		"moderationWarning": "Ceci ne passera pas le filtre du relais : {{fields}}",
 		"fieldBio": "bio",
-		"reportButtonAria": "Signaler ce profil"
+		"reportButtonAria": "Signaler ce profil",
+		"sendRequestButton": "Envoyer une demande",
+		"requestSentButton": "Demande envoyée",
+		"requestCancelledToast": "Demande annulée",
+		"requestFailedToast": "Échec de l'envoi de la demande",
+		"expiredToastTitle": "Votre visibilité dans Découverte a expiré"
 	},
 	"channels": {
 		"createChannelButton": "Créer une chaîne",

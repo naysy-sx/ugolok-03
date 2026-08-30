@@ -331,7 +331,8 @@
 			"contacts": "Contacts",
 			"calls": "Calls",
 			"moderation": "Moderation",
-			"inbox": "Requests"
+			"inbox": "Requests",
+			"discovery": "Discovery"
 		},
 		"category": {
 			"messages": "Message",
@@ -340,7 +341,8 @@
 			"contacts": "Contacts",
 			"calls": "Call",
 			"moderation": "Moderation",
-			"inbox": "Stranger"
+			"inbox": "Stranger",
+			"discovery": "Discovery"
 		},
 		"strangerRequestTitle": "New request from a stranger",
 		"strangerRequestBody": "{{username}} wants to message you",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "You don't have any channels of your own yet.",
 		"wantToMeetTitle": "Want to connect",
 		"noOneVisible": "No one visible yet.",
-		"cancelRequestAria": "Cancel connection request",
-		"sendRequestAria": "Send connection request",
 		"visibilityTitle": "Visibility",
 		"visibilityHint": "While this is off, no one sees you except those you've given the key to yourself.",
 		"durationLegend": "For how long",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Visibility duration",
 		"moderationWarning": "This won't pass the relay filter: {{fields}}",
 		"fieldBio": "bio",
-		"reportButtonAria": "Report this profile"
+		"reportButtonAria": "Report this profile",
+		"sendRequestButton": "Send request",
+		"requestSentButton": "Request sent",
+		"requestCancelledToast": "Request cancelled",
+		"requestFailedToast": "Failed to send request",
+		"expiredToastTitle": "Your discovery visibility has expired"
 	},
 	"channels": {
 		"createChannelButton": "Create channel",

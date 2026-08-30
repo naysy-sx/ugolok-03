@@ -331,7 +331,8 @@
 			"contacts": "Контакты",
 			"calls": "Звонки",
 			"moderation": "Модерация",
-			"inbox": "Заявки"
+			"inbox": "Заявки",
+			"discovery": "Знакомства"
 		},
 		"category": {
 			"messages": "Сообщение",
@@ -340,7 +341,8 @@
 			"contacts": "Контакты",
 			"calls": "Звонок",
 			"moderation": "Модерация",
-			"inbox": "Незнакомец"
+			"inbox": "Незнакомец",
+			"discovery": "Знакомства"
 		},
 		"strangerRequestTitle": "Новый запрос от незнакомца",
 		"strangerRequestBody": "{{username}} хочет написать вам",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "У вас пока нет своих каналов.",
 		"wantToMeetTitle": "Хотят познакомиться",
 		"noOneVisible": "Пока никого не видно.",
-		"cancelRequestAria": "Отменить заявку на знакомство",
-		"sendRequestAria": "Отправить заявку на знакомство",
 		"visibilityTitle": "Видимость",
 		"visibilityHint": "Пока выключено, вас не видит никто, кроме тех, кому вы сами дали ключ.",
 		"durationLegend": "На какой срок",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "Срок трансляции",
 		"moderationWarning": "Это не пройдёт фильтр реле: {{fields}}",
 		"fieldBio": "био",
-		"reportButtonAria": "Пожаловаться на этот профиль"
+		"reportButtonAria": "Пожаловаться на этот профиль",
+		"sendRequestButton": "Отправить запрос",
+		"requestSentButton": "Запрос отправлен",
+		"requestCancelledToast": "Заявка отменена",
+		"requestFailedToast": "Не удалось отправить запрос",
+		"expiredToastTitle": "Показ в «Знакомствах» завершён"
 	},
 	"channels": {
 		"createChannelButton": "Создать канал",

@@ -331,7 +331,8 @@
 			"contacts": "連絡先",
 			"calls": "通話",
 			"moderation": "モデレーション",
-			"inbox": "リクエスト"
+			"inbox": "リクエスト",
+			"discovery": "出会い"
 		},
 		"category": {
 			"messages": "メッセージ",
@@ -340,7 +341,8 @@
 			"contacts": "連絡先",
 			"calls": "通話",
 			"moderation": "モデレーション",
-			"inbox": "未知のユーザー"
+			"inbox": "未知のユーザー",
+			"discovery": "出会い"
 		},
 		"strangerRequestTitle": "見知らぬ相手からの新しいリクエスト",
 		"strangerRequestBody": "{{username}}さんがあなたにメッセージを送りたがっています",
@@ -370,8 +372,6 @@
 		"noOwnChannels": "まだ自分のチャンネルがありません。",
 		"wantToMeetTitle": "知り合いたい人たち",
 		"noOneVisible": "まだ誰も表示されていません。",
-		"cancelRequestAria": "つながりリクエストを取り消す",
-		"sendRequestAria": "つながりリクエストを送る",
 		"visibilityTitle": "公開設定",
 		"visibilityHint": "オフの間は、自分から鍵を渡した相手以外には誰にも見えません。",
 		"durationLegend": "公開する期間",
@@ -384,7 +384,12 @@
 		"durationPickerAria": "公開期間",
 		"moderationWarning": "これはリレーのフィルターを通過しません: {{fields}}",
 		"fieldBio": "自己紹介",
-		"reportButtonAria": "このプロフィールを報告"
+		"reportButtonAria": "このプロフィールを報告",
+		"sendRequestButton": "リクエストを送る",
+		"requestSentButton": "リクエスト送信済み",
+		"requestCancelledToast": "リクエストを取り消しました",
+		"requestFailedToast": "リクエストの送信に失敗しました",
+		"expiredToastTitle": "「出会い」への公開が終了しました"
 	},
 	"channels": {
 		"createChannelButton": "チャンネルを作成",

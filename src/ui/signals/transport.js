@@ -34,7 +34,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles, ownDiscoveryVisible } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -443,6 +443,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// visibleUntil в прошлом при visible:true). bio читается тем же способом,
 	// что publishDiscoverySettings (getProfile), не кэшируется отдельно.
 	const discoverySettings = await loadDiscoverySettings(pubkeyHex);
+	ownDiscoveryVisible.value = discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000);
 	if (discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000)) {
 		const discoveryChannels = discoverySettings.showChannels
 			? (await listOwnedChannels(pubkeyHex, dbKey)).filter((c) => discoverySettings.channelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))

@@ -1267,6 +1267,17 @@ html[data-media-full] .top-corner-actions {
 	background-color: color-mix(in oklch, var(--accent), transparent 88%);
 }
 
+/* CONTRACTS.md §DISCOVERY — глобальный индикатор "мой профиль сейчас
+   открыт для знакомств", виден на любом экране, не только на самом
+   "Знакомствах" (живой фидбек пользователя: тихая настройка забывалась). */
+.discover-row--visible {
+	background-color: color-mix(in oklch, var(--good), transparent 88%);
+}
+.discover-row--visible .discover-mark {
+	color: var(--good);
+	background-color: color-mix(in oklch, var(--good), transparent 80%);
+}
+
 /* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — подписанная строка-действие
    (иконка+текст, на всю ширину): "Добавить контакт" (низ панели, app.jsx)
    и кнопка внутри .empty ниже. .act--primary — то же самое, но с рамкой
@@ -7809,6 +7820,17 @@ button[type="button"].media-mini-bar-btn {
 .panel--danger .panel__title,
 .panel--danger .panel__title > .icon {
 	color: var(--bad);
+}
+
+/* CONTRACTS.md §DISCOVERY — та же пара, что panel--danger выше, но
+   положительный смысл: видимость в "Знакомствах" сейчас активна. */
+.panel--good {
+	border-color: color-mix(in oklch, var(--good), transparent 55%);
+	background-color: color-mix(in oklch, var(--good), transparent 94%);
+}
+.panel--good .panel__title,
+.panel--good .panel__title > .icon {
+	color: var(--good);
 }
 
 /* ---- 7. Раскрывающиеся исключения --------------------------------- *

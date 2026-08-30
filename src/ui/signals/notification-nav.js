@@ -28,5 +28,7 @@ export function applyNavTarget(target) {
 		openChannel(target.channelId ?? null, { postId: target.postId, commentId: target.commentId, subTab: target.subTab });
 	} else if (target.screen === "contacts") {
 		goTo({ kind: "people" });
+	} else if (target.screen === "discovery") {
+		goTo({ kind: "discovery" });
 	}
 }

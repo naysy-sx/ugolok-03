@@ -14,6 +14,7 @@ import IconPeople from "../icons/people.jsx";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconPerson from "../icons/person.jsx";
+import IconEye from "../icons/eye.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconFunnel from "../icons/funnel.jsx";
 import IconChevronDown from "../icons/chevron-down.jsx";
@@ -39,6 +40,9 @@ const CATEGORY_META = {
 	calls: { labelKey: "journal.category.calls", filterLabelKey: "journal.filter.calls", Icon: IconPhoneCall, tone: "lamp" },
 	moderation: { labelKey: "journal.category.moderation", filterLabelKey: "journal.filter.moderation", Icon: IconLockClosed, tone: "bad" },
 	inbox: { labelKey: "journal.category.inbox", filterLabelKey: "journal.filter.inbox", Icon: IconPerson, tone: "muted" },
+	// CONTRACTS.md §DISCOVERY — истечение собственной трансляции видимости
+	// (обнаруживается локально таймером discovery.jsx, не приходит с реле).
+	discovery: { labelKey: "journal.category.discovery", filterLabelKey: "journal.filter.discovery", Icon: IconEye, tone: "muted" },
 };
 
 // Порядок категорий в фильтре — фиксированный, от самого частого и личного
