@@ -301,35 +301,50 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 			<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<span class="panel__hint">{t("discovery.previewTitle")}</span>
 				<article
-					class="stack box"
+					class="stack box contact-info--decorated"
 					style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
 				>
-					<div class="contact-identity row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-						{previewAvatarUrl ? (
-							<img src={previewAvatarUrl} alt="" width="40" height="40" class="contact-avatar" />
-						) : (
-							<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ "--align": "center", justifyContent: "center" }}>
-								{(previewName || "?").trim().charAt(0).toUpperCase()}
-							</div>
-						)}
-						<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+					{/* --align: flex-start, не center — эта колонка, в отличие от
+					    9 остальных мест ContactIdentity, реально растёт (био +
+					    список каналов может стать заметно выше аватара), центр
+					    заставил бы аватар "плавать" посреди высокого блока
+					    (CONTRACTS.md §DISCOVERY-REDESIGN, довесок). Фигура +
+					    decorated-панель — тот же словарь классов, что
+					    ContactIdentity (contacts.jsx), источники данных
+					    сознательно раздельные (§DISCOVERY часть C — компонент
+					    не переиспользуется, чтобы не трогать profiles.value).
+					    contact-info--decorated — на самой карточке (<article>),
+					    не на текстовой подколонке: акцент — свойство всей
+					    карточки целиком (с аватаром), не отдельного под-блока
+					    (живой фидбек пользователя). */}
+					<div class="contact-identity contact-identity--card row" style={{ "--gap": "var(--space-s)", "--align": "flex-start" }}>
+						<figure class="contact-avatar-figure rigid">
+							{previewAvatarUrl ? (
+								<img src={previewAvatarUrl} alt="" width="40" height="40" class="contact-avatar contact-avatar--lg" />
+							) : (
+								<div aria-hidden="true" class="contact-avatar contact-avatar-fallback contact-avatar--lg row" style={{ "--align": "center", justifyContent: "center" }}>
+									{(previewName || "?").trim().charAt(0).toUpperCase()}
+								</div>
+							)}
+						</figure>
+						<div class="contact-info stack grow box" style={{ "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" }}>
 							<span>{previewName}</span>
 							{draft.showBio && previewBio && <small>{previewBio}</small>}
-						</span>
+							{draftChannels.length > 0 ? (
+								<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-2xs)" }} class="stack">
+									{draftChannels.map((c) => (
+										<li key={c.id}>
+											<strong>{c.name}</strong>
+											{c.description && <>: {c.description}</>}
+											{draft.showRules && c.rules && <p class="panel__hint">{c.rules}</p>}
+										</li>
+									))}
+								</ul>
+							) : (
+								<p class="panel__hint">{t("discovery.summaryNoChannelsPart")}</p>
+							)}
+						</div>
 					</div>
-					{draftChannels.length > 0 ? (
-						<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-2xs)" }} class="stack">
-							{draftChannels.map((c) => (
-								<li key={c.id}>
-									<strong>{c.name}</strong>
-									{c.description && <>: {c.description}</>}
-									{draft.showRules && c.rules && <p class="panel__hint">{c.rules}</p>}
-								</li>
-							))}
-						</ul>
-					) : (
-						<p class="panel__hint">{t("discovery.summaryNoChannelsPart")}</p>
-					)}
 				</article>
 			</div>
 
@@ -569,7 +584,10 @@ export default function Discovery() {
 							return (
 								<li key={card.pubkey} class="contact-row stack" style={{ "--gap": "var(--space-s)" }}>
 									<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-										<ContactIdentity pubkey={card.pubkey} />
+										{/* decorated — тот же тёплый акцентный отсвет, что предпросмотр
+										    "Как вас увидят другие" выше на экране, единая карточная
+										    визуальная зона (CONTRACTS.md §DISCOVERY-REDESIGN, довесок). */}
+										<ContactIdentity pubkey={card.pubkey} decorated />
 										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 											<span class="panel__hint">{t("discovery.timeRemainingBadge", { time: formatCountdown(remainingSeconds) })}</span>
 											<button type="button" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>

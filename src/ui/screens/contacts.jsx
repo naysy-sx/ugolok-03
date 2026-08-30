@@ -47,20 +47,45 @@ import { t, errorMessage } from "../signals/i18n.js";
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
 // передан, делает аватар+имя ссылкой на чат (contacts.jsx, реальные контакты);
 // в списке заблокированных onClick не передаётся — просто отображение.
-export function ContactIdentity({ pubkey, onClick, unreadCount }) {
+export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
 	const profile = profiles.value[pubkey];
 	const displayName = profile?.name || shortPubkey(pubkey);
 
-	const avatar = profile?.picture ? (
-		<img src={profile.picture} alt="" width="40" height="40" class="contact-avatar" />
-	) : (
-		<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ "--align": "center", justifyContent: "center" }}>
-			{(displayName || "?").trim().charAt(0).toUpperCase()}
-		</div>
+	// Аватар — в <figure> (самостоятельная медиа-единица: фото ЛИБО
+	// буква-заглушка, оба варианта — форма представления личности, не
+	// обязательно растровое изображение), не голый <img>. .contact-avatar
+	// (размер/рамка/радиус) не тронут — он же отдельно держит аватар
+	// канала в .ch-card (discovery.jsx), эта дорожка не задета.
+	// decorated — тот же карточный контекст, что и акцентный фон
+	// .contact-info--decorated: там аватар крупнее (.contact-avatar--lg,
+	// токен --space-3xl — живой фидбек пользователя после первой версии
+	// довеска, см. CONTRACTS.md §DISCOVERY-REDESIGN), в плотных списках
+	// (Контакты/Чаты/Настройки) остаётся прежний 2.5rem.
+	const avatarSizeClass = decorated ? " contact-avatar--lg" : "";
+	const avatar = (
+		<figure class="contact-avatar-figure rigid">
+			{profile?.picture ? (
+				<img src={profile.picture} alt="" width="40" height="40" class={"contact-avatar" + avatarSizeClass} />
+			) : (
+				<div aria-hidden="true" class={"contact-avatar contact-avatar-fallback row" + avatarSizeClass} style={{ "--align": "center", justifyContent: "center" }}>
+					{(displayName || "?").trim().charAt(0).toUpperCase()}
+				</div>
+			)}
+		</figure>
 	);
 
+	// <div>, не <span> — блочный контейнер под .stack-раскладку (span
+	// как контейнер многострочной flex-колонки был багом разметки, не
+	// стилистикой). .grow — ест остаток строки (аватар рядом — .rigid),
+	// decorated — необязательный акцентный фон под карточным контекстом
+	// (CONTRACTS.md §DISCOVERY-REDESIGN, довесок): предпросмотр Знакомств
+	// и строки ленты передают его явно, остальные 6 мест использования
+	// ContactIdentity — нет, там плотные списки строк, не карточки.
 	const text = (
-		<span class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+		<div
+			class={"contact-info stack grow" + (decorated ? " box contact-info--decorated" : "")}
+			style={decorated ? { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" } : { "--gap": "var(--space-3xs)" }}
+		>
 			<span class={profile?.name ? undefined : "contact-identity-npub"}>
 				{displayName}
 				{/* Список чатов (chat.jsx) — непрочитанные этого собеседника в квадратных
@@ -68,12 +93,17 @@ export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 				{unreadCount > 0 && <span aria-label={t("chat.list.unreadAria", { count: unreadCount })}> [{unreadCount}]</span>}
 			</span>
 			{profile?.about && <small>{profile.about}</small>}
-		</span>
+		</div>
 	);
+
+	// contact-identity--card — узкий контейнер складывает крупный
+	// decorated-аватар и инфо-колонку в столбик (см. @container в
+	// custom.css); в плотных списках не подключается, там всё как раньше.
+	const cardClass = decorated ? " contact-identity--card" : "";
 
 	if (!onClick) {
 		return (
-			<div class="contact-identity row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+			<div class={"contact-identity row" + cardClass} style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{avatar}
 				{text}
 			</div>
@@ -85,7 +115,7 @@ export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 			type="button"
 			onClick={onClick}
 			aria-label={t("contacts.openChatAria", { name: displayName })}
-			class="contact-identity contact-identity-btn row"
+			class={"contact-identity contact-identity-btn row" + cardClass}
 			style={{ "--gap": "var(--space-s)", "--align": "center" }}
 		>
 			{avatar}
