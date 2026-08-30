@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles, refreshLiveDiscoverySubscription } from "../signals/transport.js";
-import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction, ownDiscoveryVisible } from "../signals/contacts.js";
+import { discoveryProfiles, refreshDiscoveryProfiles, outgoingRequests, ensureProfilesFresh, sendContactRequestAction, cancelContactRequestAction, ownDiscoveryVisible, profiles } from "../signals/contacts.js";
+import { shortPubkey } from "../format.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { loadDiscoverySettings, publishDiscoverySettings, markDiscoveryExpired, DISCOVERY_DURATIONS } from "../../domain/discovery/discovery.js";
 import { isClean } from "../../domain/discovery/wordfilter.js";
@@ -12,8 +13,8 @@ import { listOwnedChannels, countChannelReaders } from "../../domain/content/cha
 import { BUILD_ADMIN_PUBKEY } from "../../config.js";
 import { ContactIdentity } from "./contacts.jsx";
 import Screen from "../components/screen.jsx";
+import ActionsMenu from "../components/actions-menu.jsx";
 import IconEye from "../icons/eye.jsx";
-import IconFlag from "../icons/flag.jsx";
 import { pushToast } from "../signals/toasts.js";
 import { t, errorMessage } from "../signals/i18n.js";
 
@@ -186,7 +187,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 		if (!settings.visible) {
 			// Состояние 1 — выключено, свёрнуто.
 			return (
-				<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
+				<section id="discovery-visibility" class="panel stack" style={{ "--gap": "var(--space-m)" }}>
 					<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
 							<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
@@ -215,7 +216,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 		const p = Math.max(0, Math.min(1, selectedDuration > 0 ? remainingSeconds / selectedDuration : 0));
 
 		return (
-			<section class="panel panel--good stack" style={{ "--gap": "var(--space-m)" }}>
+			<section id="discovery-visibility" class="panel panel--good stack" style={{ "--gap": "var(--space-m)" }}>
 				<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 					<svg class="ring rigid" width="44" height="44" viewBox="0 0 44 44" style={{ "--circ": RING_CIRCUMFERENCE, "--p": p }} aria-hidden="true">
 						<circle class="track" cx="22" cy="22" r="19" />
@@ -272,7 +273,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 	const durationLabelKey = DURATION_LABEL_KEYS[durationIndex] ?? DURATION_LABEL_KEYS[0];
 
 	return (
-		<section class={"panel stack" + (settings.visible ? " panel--good" : "")} style={{ "--gap": "var(--space-m)" }}>
+		<section id="discovery-visibility" class={"panel stack" + (settings.visible ? " panel--good" : "")} style={{ "--gap": "var(--space-m)" }}>
 			<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<h2 class="panel__title grow">{t("discovery.composeTitle")}</h2>
 				<button type="button" class="rigid" onClick={closeCompose} aria-label={t("common.cancel")}>
@@ -438,6 +439,11 @@ export default function Discovery() {
 	// busyRef — та же синхронная защита от повторного входа, что в contacts.jsx
 	// (busy-state коммитится асинхронно, второй клик до коммита не увидел бы его).
 	const busyRef = useRef(false);
+	// CONTRACTS.md §DISCOVERY-REDESIGN, D8 — inline-форма причины жалобы
+	// вместо window.prompt (в проекте нет ни одного модального <dialog>,
+	// заводить первый прецедент ради формы из одного поля непропорционально).
+	const [reportingPubkey, setReportingPubkey] = useState(null);
+	const [reportReason, setReportReason] = useState("");
 
 	useEffect(() => {
 		ensureConnected(ownerPubkey, privKey, dbKey)
@@ -483,15 +489,34 @@ export default function Discovery() {
 		}
 	}
 
+	// CONTRACTS.md §DISCOVERY-REDESIGN, D7 — доступно ВСЕГДА (не только при
+	// заданном BUILD_ADMIN_PUBKEY, как раньше была устроена жалоба).
+	async function handleHideLocally(pubkey) {
+		await hideDiscoveryProfileLocally(ownerPubkey, pubkey);
+		discoveryProfiles.value = discoveryProfiles.value.filter((p) => p.pubkey !== pubkey);
+	}
+
+	function openReportForm(pubkey) {
+		setReportingPubkey(pubkey);
+		setReportReason("");
+	}
+
+	function closeReportForm() {
+		setReportingPubkey(null);
+		setReportReason("");
+	}
+
 	// CONTRACTS.md §DISCOVERY, T9 — 1-в-1 с ModerationActions.handleReport
 	// (moderation-actions.jsx), отличия — адресат (admin, не владелец канала)
 	// и локальное скрытие СРАЗУ, независимо от исхода publish (ТЗ: "немедленно
-	// и навсегда, независимо от того, ушла ли жалоба в сеть").
-	async function handleReportCard(card) {
-		const reason = window.prompt(t("moderation.reportPromptMessage"), "");
-		if (reason === null) return; // отмена
+	// и навсегда, независимо от того, ушла ли жалоба в сеть"). Обрезка причины
+	// до 200 — на стороне buildDiscoveryReportRumor (reports.js), симметрично
+	// maxlength поля.
+	async function submitReport(card) {
 		await hideDiscoveryProfileLocally(ownerPubkey, card.pubkey);
 		discoveryProfiles.value = discoveryProfiles.value.filter((p) => p.pubkey !== card.pubkey);
+		const reason = reportReason;
+		closeReportForm();
 		try {
 			await reportDiscoveryProfile(
 				privKey,
@@ -520,66 +545,91 @@ export default function Discovery() {
 					{t("discovery.wantToMeetTitle")}
 				</h2>
 				{discoveryProfiles.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{t("discovery.noOneVisible")}</p>
+					// CONTRACTS.md §DISCOVERY-REDESIGN, Э7 — пустое состояние (самое частое
+					// на старте) обязано быть спроектировано, не серый абзац. "Действие" —
+					// не новая кнопка публикации (та уже есть в VisibilitySection), а
+					// прокрутка к ней: два места управления одним и тем же действием —
+					// лишняя сложность межкомпонентного состояния ради малой пользы.
+					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("discovery.emptyTitle")}</h3>
+						<p class="panel__hint">{t("discovery.emptyBody")}</p>
+						<button
+							type="button"
+							class="rigid"
+							onClick={() => document.getElementById("discovery-visibility")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+						>
+							{t("discovery.showSelfButton")}
+						</button>
+					</div>
 				) : (
-					<div class="grid" style={{ "--gap": "var(--space-s)" }}>
+					<ul role="list" class="contact-row-list">
 						{discoveryProfiles.value.map((card) => {
 							const sent = outgoingRequests.value.some((r) => r.peerPubkey === card.pubkey);
+							const remainingSeconds = card.visibleUntil - nowSec();
 							return (
-								<article
-									key={card.pubkey}
-									class="stack box"
-									style={{
-										"--gap": "var(--space-2xs)",
-										"--pad": "var(--space-s)",
-										position: "relative",
-										border: "var(--border-width) solid var(--border)",
-										borderRadius: "var(--radius)",
-									}}
-								>
-									{BUILD_ADMIN_PUBKEY && (
-										<button
-											type="button"
-											onClick={() => handleReportCard(card)}
-											aria-label={t("discovery.reportButtonAria")}
-											title={t("moderation.reportButton")}
-											style={{
-												position: "absolute",
-												top: "var(--space-2xs)",
-												right: "var(--space-2xs)",
-												border: "none",
-												background: "none",
-												padding: 0,
-												cursor: "pointer",
-												fontSize: "var(--step-1)",
-												color: "var(--muted)",
-											}}
-										>
-											<IconFlag />
-										</button>
-									)}
-									<ContactIdentity pubkey={card.pubkey} />
-									{card.channels.length > 0 && (
-										<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-m)" }} class="stack">
-											{card.channels.map((c) => (
-												<li key={c.id}>
-													<strong>{c.name}</strong>
-													{c.description && <>: {c.description}</>}
-												</li>
-											))}
-										</ul>
-									)}
-									{/* Живой фидбек пользователя — было ○/✓ без подписи, никто не понимал,
-									    что это значит. Настоящая кнопка с текстом состояния. */}
-									<div class="row">
-										<button type="button" class="rigid" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>
-											{sent ? t("discovery.requestSentButton") : t("discovery.sendRequestButton")}
-										</button>
+								<li key={card.pubkey} class="contact-row stack" style={{ "--gap": "var(--space-s)" }}>
+									<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
+										<ContactIdentity pubkey={card.pubkey} />
+										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+											<span class="panel__hint">{t("discovery.timeRemainingBadge", { time: formatCountdown(remainingSeconds) })}</span>
+											<button type="button" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>
+												{sent ? t("discovery.requestSentButton") : t("discovery.sendRequestButton")}
+											</button>
+											<ActionsMenu label={t("channel.comment.moreActionsAria", { name: profiles.value[card.pubkey]?.name || shortPubkey(card.pubkey) })}>
+												<button type="button" onClick={() => handleHideLocally(card.pubkey)}>
+													{t("discovery.hideLocallyAction")}
+												</button>
+												{BUILD_ADMIN_PUBKEY && (
+													<button type="button" onClick={() => openReportForm(card.pubkey)}>
+														{t("moderation.reportButton")}
+													</button>
+												)}
+											</ActionsMenu>
+										</div>
 									</div>
-								</article>
+
+									{card.channels.length > 0 && (
+										<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+											{card.channels.map((c) => (
+												<div key={c.id} class="ch-card box bar" style={{ "--gap": "var(--space-xs)", "--pad": "var(--space-2xs)", "--align": "center" }}>
+													<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row rigid" style={{ "--align": "center", justifyContent: "center" }}>
+														{c.name.trim().charAt(0).toUpperCase()}
+													</div>
+													<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
+														<strong>{c.name}</strong>
+														{c.description && <p class="panel__hint">{c.description}</p>}
+														{c.rules && (
+															<details>
+																<summary>{t("discovery.channelRulesSummary")}</summary>
+																<p class="panel__hint">{c.rules}</p>
+															</details>
+														)}
+													</div>
+												</div>
+											))}
+										</div>
+									)}
+
+									{reportingPubkey === card.pubkey && (
+										<div class="stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
+											<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+												<span class="panel__hint">{t("discovery.reportReasonLabel")}</span>
+												<textarea maxLength={200} rows={2} value={reportReason} onInput={(e) => setReportReason(e.currentTarget.value)} />
+											</label>
+											<div class="bar" style={{ "--gap": "var(--space-s)" }}>
+												<button type="button" class="rigid" onClick={closeReportForm}>
+													{t("common.cancel")}
+												</button>
+												<button type="button" class="rigid" onClick={() => submitReport(card)}>
+													{t("common.send")}
+												</button>
+											</div>
+										</div>
+									)}
+								</li>
 							);
 						})}
-					</div>
+					</ul>
 				)}
 			</section>
 		</Screen>

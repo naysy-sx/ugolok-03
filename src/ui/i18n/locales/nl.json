@@ -412,7 +412,13 @@
 		"summaryAvatar": "avatar",
 		"summaryBioPart": "bio",
 		"summaryChannelsPart": "{{count}} kan.",
-		"summaryNoChannelsPart": "geen kanalen getoond"
+		"summaryNoChannelsPart": "geen kanalen getoond",
+		"hideLocallyAction": "Alleen voor mij verbergen",
+		"emptyTitle": "Nu niemand in Ontdekken",
+		"emptyBody": "Mensen verschijnen hier alleen voor de tijd die ze zelf kiezen.",
+		"reportReasonLabel": "Reden voor de melding",
+		"channelRulesSummary": "Kanaalregels",
+		"timeRemainingBadge": "nog {{time}}"
 	},
 	"channels": {
 		"createChannelButton": "Kanaal aanmaken",

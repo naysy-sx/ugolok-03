@@ -412,7 +412,13 @@
 		"summaryAvatar": "アバター",
 		"summaryBioPart": "自己紹介",
 		"summaryChannelsPart": "チャンネル{{count}}件",
-		"summaryNoChannelsPart": "チャンネルは表示されません"
+		"summaryNoChannelsPart": "チャンネルは表示されません",
+		"hideLocallyAction": "自分だけ非表示にする",
+		"emptyTitle": "今は誰もいません",
+		"emptyBody": "人はここに、自分で選んだ期間だけ表示されます。",
+		"reportReasonLabel": "通報理由",
+		"channelRulesSummary": "チャンネルのルール",
+		"timeRemainingBadge": "残り{{time}}"
 	},
 	"channels": {
 		"createChannelButton": "チャンネルを作成",

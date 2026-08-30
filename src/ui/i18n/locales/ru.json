@@ -412,7 +412,13 @@
 		"summaryAvatar": "аватар",
 		"summaryBioPart": "био",
 		"summaryChannelsPart": "{{count}} кан.",
-		"summaryNoChannelsPart": "каналы не показываются"
+		"summaryNoChannelsPart": "каналы не показываются",
+		"hideLocallyAction": "Скрыть у себя",
+		"emptyTitle": "Сейчас в обзоре никого",
+		"emptyBody": "Люди появляются здесь только на выбранный ими срок.",
+		"reportReasonLabel": "Причина жалобы",
+		"channelRulesSummary": "Правила канала",
+		"timeRemainingBadge": "ещё {{time}}"
 	},
 	"channels": {
 		"createChannelButton": "Создать канал",

@@ -412,7 +412,13 @@
 		"summaryAvatar": "头像",
 		"summaryBioPart": "简介",
 		"summaryChannelsPart": "{{count}} 个频道",
-		"summaryNoChannelsPart": "不显示频道"
+		"summaryNoChannelsPart": "不显示频道",
+		"hideLocallyAction": "仅对我隐藏",
+		"emptyTitle": "现在“发现”里没有人",
+		"emptyBody": "只有在他们自己选择的时间内,人们才会出现在这里。",
+		"reportReasonLabel": "举报原因",
+		"channelRulesSummary": "频道规则",
+		"timeRemainingBadge": "剩余{{time}}"
 	},
 	"channels": {
 		"createChannelButton": "创建频道",

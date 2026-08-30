@@ -412,7 +412,13 @@
 		"summaryAvatar": "awatar",
 		"summaryBioPart": "bio",
 		"summaryChannelsPart": "{{count}} kan.",
-		"summaryNoChannelsPart": "kanały nie są pokazywane"
+		"summaryNoChannelsPart": "kanały nie są pokazywane",
+		"hideLocallyAction": "Ukryj tylko u mnie",
+		"emptyTitle": "Teraz nikogo nie ma w Odkrywaniu",
+		"emptyBody": "Ludzie pojawiają się tu tylko na wybrany przez siebie czas.",
+		"reportReasonLabel": "Powód zgłoszenia",
+		"channelRulesSummary": "Zasady kanału",
+		"timeRemainingBadge": "pozostało {{time}}"
 	},
 	"channels": {
 		"createChannelButton": "Utwórz kanał",

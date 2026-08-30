@@ -412,7 +412,13 @@
 		"summaryAvatar": "avatar",
 		"summaryBioPart": "biyografi",
 		"summaryChannelsPart": "{{count}} kanal",
-		"summaryNoChannelsPart": "kanal gösterilmiyor"
+		"summaryNoChannelsPart": "kanal gösterilmiyor",
+		"hideLocallyAction": "Sadece bende gizle",
+		"emptyTitle": "Şu anda Keşfet'te kimse yok",
+		"emptyBody": "İnsanlar burada yalnızca seçtikleri süre boyunca görünür.",
+		"reportReasonLabel": "Şikayet nedeni",
+		"channelRulesSummary": "Kanal kuralları",
+		"timeRemainingBadge": "{{time}} kaldı"
 	},
 	"channels": {
 		"createChannelButton": "Kanal oluştur",

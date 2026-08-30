@@ -412,7 +412,13 @@
 		"summaryAvatar": "avatar",
 		"summaryBioPart": "bio",
 		"summaryChannelsPart": "{{count}} ch.",
-		"summaryNoChannelsPart": "no channels shown"
+		"summaryNoChannelsPart": "no channels shown",
+		"hideLocallyAction": "Hide for me",
+		"emptyTitle": "No one in discovery right now",
+		"emptyBody": "People appear here only for the time they choose.",
+		"reportReasonLabel": "Reason for the report",
+		"channelRulesSummary": "Channel rules",
+		"timeRemainingBadge": "{{time}} left"
 	},
 	"channels": {
 		"createChannelButton": "Create channel",

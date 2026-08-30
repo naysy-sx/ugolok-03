@@ -412,7 +412,13 @@
 		"summaryAvatar": "avatar",
 		"summaryBioPart": "biografía",
 		"summaryChannelsPart": "{{count}} can.",
-		"summaryNoChannelsPart": "no se muestran canales"
+		"summaryNoChannelsPart": "no se muestran canales",
+		"hideLocallyAction": "Ocultar solo para mí",
+		"emptyTitle": "Ahora mismo no hay nadie en Descubrir",
+		"emptyBody": "Aquí solo aparecen personas durante el tiempo que ellas eligen.",
+		"reportReasonLabel": "Motivo de la denuncia",
+		"channelRulesSummary": "Reglas del canal",
+		"timeRemainingBadge": "quedan {{time}}"
 	},
 	"channels": {
 		"createChannelButton": "Crear canal",

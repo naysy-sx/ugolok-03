@@ -412,7 +412,13 @@
 		"summaryAvatar": "avatar",
 		"summaryBioPart": "bio",
 		"summaryChannelsPart": "{{count}} canaux",
-		"summaryNoChannelsPart": "aucun canal affiché"
+		"summaryNoChannelsPart": "aucun canal affiché",
+		"hideLocallyAction": "Masquer pour moi",
+		"emptyTitle": "Personne dans Découverte pour l'instant",
+		"emptyBody": "Les gens n'apparaissent ici que pendant la durée qu'ils ont choisie.",
+		"reportReasonLabel": "Motif du signalement",
+		"channelRulesSummary": "Règles du canal",
+		"timeRemainingBadge": "{{time}} restant"
 	},
 	"channels": {
 		"createChannelButton": "Créer une chaîne",
