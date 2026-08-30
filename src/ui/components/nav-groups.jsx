@@ -2,7 +2,7 @@ import { useState, useEffect, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
-import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible } from "../signals/contacts.js";
+import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, incomingRequests } from "../signals/contacts.js";
 import { place, openChat, openChannel, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
@@ -174,7 +174,12 @@ export default function NavGroups({ unreadJournalCount }) {
 	// visibleSubscribed — иначе пустой поисковый запрос без совпадений
 	// показывал бы приглашение "начни знакомиться" вместо честного "ничего
 	// не найдено" (тот список НЕ пуст, просто фильтр ничего не оставил).
-	const isEmpty = conversations.length + contactsWithoutConversation.length === 0 && owned.length === 0 && subscribed.length === 0;
+	// Живой фидбек пользователя — входящая заявка от НЕ-контакта (обычный
+	// путь через "Знакомства") не создаёт ни conversation, ни contact, ни
+	// канал: без этого условия пустое состояние пряталО единственный путь
+	// в "Контакты" ровно тогда, когда там лежит заявка, которую нужно
+	// принять/отклонить — ни постоянного пункта меню, ни бейджа не было.
+	const isEmpty = conversations.length + contactsWithoutConversation.length === 0 && owned.length === 0 && subscribed.length === 0 && incomingRequests.value.length === 0;
 
 	// Активная строка (этап 4) — сравнение с ЕДИНЫМ источником "где я
 	// нахожусь" (place.js), не отдельным локальным состоянием: то же
@@ -264,7 +269,13 @@ export default function NavGroups({ unreadJournalCount }) {
 				<div class="stack" style={{ "--gap": "1px" }}>
 					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
 						{t("shell.peopleGroupHeading")}
-						{unreadMessagesCount.value > 0 && <span class="group-count">{unreadMessagesCount.value}</span>}
+						{/* Живой фидбек пользователя — входящая заявка от НЕ-контакта не
+						    считается unreadMessagesCount (та — только непрочитанные
+						    СООБЩЕНИЯ уже существующих контактов). Без этого числа заявка
+						    от незнакомца не давала НИКАКОГО визуального сигнала здесь. */}
+						{unreadMessagesCount.value + incomingRequests.value.length > 0 && (
+							<span class="group-count">{unreadMessagesCount.value + incomingRequests.value.length}</span>
+						)}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
 					</button>
 					<ul class="streams stack" style={{ "--gap": "1px" }}>
