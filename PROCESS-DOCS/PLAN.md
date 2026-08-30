@@ -8026,3 +8026,46 @@ CONTRACTS.md. `nav-groups.jsx`'s `isEmpty` не учитывал
 навигации прочь и обратно.
 
 Регрессия: 2251/2251.
+
+## §DISCOVERY-REDESIGN — редизайн экрана + починка домена (D1–D10) — В РАБОТЕ
+
+Источник — `PROCESS-DOCS/REDESIGN/DISCOVERY/DISCOVERY-REDESIGN-TZ.md`,
+опорный макет `discovery-a-v2.html` (композиция/поведение, не разметка).
+Решения по открытым местам ТЗ — CONTRACTS.md §DISCOVERY-REDESIGN.
+Порядок обязателен (ТЗ §4): домен → схема события → сервер → сигналы →
+интерфейс.
+
+- [x] **Э1. Домен, приватность** — D1 (надгробие вместо надолго висящей
+      публичной записи при `visible:false`), D2 (`buildDiscoveryEvent`
+      требует `visibleUntil > createdAt`, не `> 0`), D5 (чистка мусора
+      `channelIds`). Файлы: `discovery.js`. `transport.js`'s backfill не
+      тронут — не публикует надгробий (только активную трансляцию,
+      `visible && visibleUntil > now`), D2 действует автоматически через
+      тот же `buildDiscoveryEvent`. Регрессия 2255/2255.
+- [ ] **Э2. Формат события** — `rules`/`showRules`, лимиты длин
+      (`DISCOVERY_NAME/DESCRIPTION/RULES_MAX_LENGTH`), парсинг старых
+      событий без `rules`. Файлы: `discovery.js`, `contacts.js`
+      (`isDiscoveryCardClean`).
+- [ ] **Э3. Серверный фильтр** — `rules` в `texts` whitelist-плагина.
+- [ ] **Э4. Схема хранилища** — `db.version(32)`: `showBio`(true)/
+      `showRules`(false) в `discoverySettings`; чистка протухших строк
+      `discoveryProfiles` (D6, обязательная часть — вилка с
+      разделением по `ownerPubkey` НЕ делается).
+- [ ] **Э5. Сигналы** — D4 (`ensureProfilesFresh` в живой подписке),
+      `loadDiscoverySettings`/`publishDiscoverySettings` — `showBio`/
+      `showRules`.
+- [ ] **Э6. Интерфейс, верхний блок** — `VisibilitySection` под §3
+      (состояния 1–3, один `.panel`/`.panel--good`), `countChannelReaders`
+      (новый экспорт `channel.js`), D3 (тик ленты), D10 (`showChannels`
+      производный).
+- [ ] **Э7. Интерфейс, лента** — строки (`.contact-row-list`) вместо
+      сетки, карточки каналов с `<details>` правил, D7 (`ActionsMenu`,
+      два пункта), D8 (inline-форма причины вместо `window.prompt`),
+      пустое состояние.
+- [ ] **Э8. Локали** — новые/переиспользуемые ключи `discovery.*` во
+      все 12 `src/ui/i18n/locales/*.json`, сироты — удалить из всех 12.
+
+Приёмка каждого этапа — тесты + `npm test` полный прогон зелёный (это
+и есть регрессия по правилу 18). Финал — живая проверка `run-ugolok`
+всех трёх состояний блока + ленты + формы жалобы, `npm run build`
+без предупреждений, отчёт по D1–D10 в PR (правило ТЗ §6).

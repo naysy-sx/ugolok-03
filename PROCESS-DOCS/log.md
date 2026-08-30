@@ -8964,3 +8964,21 @@ mount-эффекта сразу после одноразового `fetchDiscov
 ПОСЛЕ — 4 карточки с новым pubkey, без единого действия зрителя.
 
 Регрессия: 2251/2251.
+
+## §DISCOVERY-REDESIGN, Э1 — домен/приватность
+
+D1 (надгробие при visible:false), D2 (visibleUntil > createdAt, не > 0),
+D5 (чистка мусора channelIds) — все три в publishDiscoverySettings/
+buildDiscoveryEvent (discovery.js). Воркер: 2 микрозадачи (buildDiscoveryEvent
+condition, затем полная замена publishDiscoverySettings по готовому коду).
+Первый вызов чист. Второй — воркер продублировал служебный заголовок --ctx
+первой строкой файла и молча вырезал комментарий у markDiscoveryExpired,
+хотя тот был вне зоны правки — оба поправлены точечно (Edit), не пере-
+вызовом воркера.
+
+Тесты: tests/discovery.test.js — 5 новых + 1 исправленный (markDiscoveryExpired
+использовал несуществующий channelId "c1", D5 стал бы его чистить — заменён
+на реальный createChannel). 26/26 в файле, 2255/2255 полная регрессия
+(первый прогон поймал уже известный флейк room-session, не в файлах
+этого захода — повтор чист).
+

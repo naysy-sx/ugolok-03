@@ -22712,3 +22712,239 @@ tropsik — новый пользователь (0 контактов/чатов
 `refreshDiscoveryProfiles(ownerPubkey)` (тот же фильтр — контакты/
 истечение/скрытые/словарь), сигнал реактивно перерисовывает список,
 пока пользователь смотрит на экран.
+
+## §DISCOVERY-REDESIGN — редизайн экрана + починка домена (PROCESS-DOCS/REDESIGN/DISCOVERY/DISCOVERY-REDESIGN-TZ.md)
+
+Источник — ТЗ владельца, дефекты D1–D10, целевой интерфейс §3, формат
+события §2, этапы Э1–Э8. Ниже — решения по местам, оставленным ТЗ
+открытыми (правило 9a), закрытые ДО первого вызова воркера.
+
+### Формат данных — сквозной контракт для Э1/Э2/Э5/Э6
+
+Новые константы рядом с `DISCOVERY_BIO_MAX_LENGTH`
+(`src/domain/discovery/discovery.js`): `DISCOVERY_NAME_MAX_LENGTH = 100`,
+`DISCOVERY_DESCRIPTION_MAX_LENGTH = 300`, `DISCOVERY_RULES_MAX_LENGTH = 600`.
+Сейчас `name`/`description` канала в событии НЕ обрезаются вовсе (баг,
+молчаливо допущенный до этого захода) — обрезка добавляется симметрично
+`bio`, и на сборке, и на разборе.
+
+**`buildDiscoveryEvent(privKey, { visible, showChannels, channels, showRules,
+visibleUntil, bio }, createdAt)`** — три правки:
+1. D2: бросает при `visible:true` и `!(visibleUntil > createdAt)` (было
+   `> 0` — не ловило `visibleUntil` в прошлом относительно ТЕКУЩЕГО
+   события, только отрицательные/NaN). Комментарий-бэкфилл в
+   `transport.js` уже утверждает это поведение как факт — он не врёт,
+   врал только код; после фикса правка комментария не нужна.
+2. `channels` — каждый элемент обрезается до трёх длин выше; `rules`
+   кладётся ТОЛЬКО при `showRules === true`, иначе `''` — гейт внутри
+   `buildDiscoveryEvent`, вызывающий код (`publishDiscoverySettings`,
+   `transport.js`'s backfill) передаёт «сырые» `rules` из
+   `listOwnedChannels`, не заботясь об обрезке/гейте сам (тот же принцип,
+   что уже есть у `bio`).
+3. `content.showRules: !!showRules` — новое поле верхнего уровня.
+
+**`parseDiscoveryEvent`** — валидация элемента `channels` НЕ требует
+`rules` (событие без поля — валидно, `rules` становится `''`); `name`/
+`description`/`rules` обрезаются при разборе теми же тремя константами
+(защита от чужого клиента, слающего событие мимо `buildDiscoveryEvent`).
+`showRules: !!parsed.showRules`.
+
+**`loadDiscoverySettings`/`publishDiscoverySettings`** — сигнатура
+настроек расширена `showBio`/`showRules` (Э5, оба читаются/пишутся
+локально, `showBio` по умолчанию `true` — существующее поведение не
+меняется, `showRules` по умолчанию `false`). `showBio` гейтит ЧТЕНИЕ
+`getProfile(...).bio` внутри `publishDiscoverySettings` (при `false` —
+`bio` не читается вовсе, остаётся `''`), не постфактум-обрезка.
+
+**D1 (надгробие) + D5 (чистка мусора `channelIds`) — одна правка
+`publishDiscoverySettings`:**
+
+```js
+export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey,
+  { visible, showChannels, channelIds, showBio, showRules, visibleUntil }, publish) {
+  const previous = await db.table("discoverySettings").get(ownerPubkey);
+  const createdAt = Math.max(nowSec(), (previous?.lastCreatedAt ?? 0) + 1);
+
+  const owned = await listOwnedChannels(ownerPubkey, dbKey);
+  const ownedIds = new Set(owned.map(c => c.id));
+  const cleanChannelIds = channelIds.filter(id => ownedIds.has(id)); // D5
+
+  await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels,
+    channelIds: cleanChannelIds, showBio, showRules, visibleUntil, lastCreatedAt: createdAt });
+
+  let channels = [];
+  let bio = '';
+  if (visible) {
+    channels = showChannels
+      ? owned.filter(c => cleanChannelIds.includes(c.id))
+             .map(c => ({ id: c.id, name: c.name, description: c.description, rules: c.rules }))
+      : [];
+    if (showBio) { try { bio = (await getProfile(ownerPubkey)).bio; } catch {} }
+  }
+
+  // D1 — при visible:false в СОБЫТИЕ уходит надгробие (bio/channels/showChannels/
+  // showRules пустые, visibleUntil:0), а ЛОКАЛЬНАЯ строка выше уже сохранила то,
+  // что реально передал вызывающий код — настройки пользователя (какие каналы
+  // отмечены, showBio/showRules) не сбрасываются от выключения.
+  const event = buildDiscoveryEvent(privKey, {
+    visible, showChannels: visible && showChannels, channels,
+    showRules: visible && showRules, visibleUntil: visible ? visibleUntil : 0, bio,
+  }, createdAt);
+
+  try { await requirePublishOk(publish, event); }
+  catch (e) { await enqueue(event, dbKey); throw e; }
+}
+```
+
+Локальный put сохраняет `cleanChannelIds`, НЕ сырой `channelIds` —
+закрывает D5 и для локального состояния, не только для события.
+
+**`transport.js`'s `connect()`-backfill** (T2/T4 blok, ~строка 436) —
+тот же принцип переносится: читает `showBio`/`showRules` из
+`loadDiscoverySettings`, каналы собираются с `rules: c.rules` (сырой,
+без обрезки — гейт внутри `buildDiscoveryEvent`), `bio` читается только
+при `showBio`. Backfill остаётся best-effort (`.catch(() => {})`),
+республикует только АКТИВНУЮ трансляцию (`visible && visibleUntil >
+now`) — никогда надгробие, ветка D1 его не касается.
+
+### D3 — тик ленты
+
+`discovery.jsx`'s `Discovery()` (не `VisibilitySection` — это отдельный,
+более редкий тик автоистечения СВОЕЙ трансляции): `setInterval(() =>
+refreshDiscoveryProfiles(ownerPubkey), 30000)` в момент монтирования,
+`clearInterval` в cleanup. Тот же интервал, что уже тикает автоистечение
+в `VisibilitySection` — не унифицируется в один таймер (разные
+компоненты, разная жизнь — `VisibilitySection` часть общего блока,
+тик ленты не должен зависеть от того, смонтирован ли он).
+
+### D4 — `ensureProfilesFresh` в живой подписке
+
+`refreshLiveDiscoverySubscription`'s `onBatch` (`transport.js`) —
+после `refreshDiscoveryProfiles(ownerPubkey)`, если `changed`: собрать
+pubkey'и пришедших событий, которых ЕЩЁ нет в `profiles.value`
+(объект, не массив — `Object.prototype.hasOwnProperty` или `in`), и
+вызвать `ensureProfilesFresh(newPubkeys, fetchProfiles)` БЕЗ
+`{force:true}` — это не первичная загрузка экрана (та уже делает
+`{force:true}` в `discovery.jsx`'s mount-эффекте), обычное
+"подтянуть, если не знаем". `ensureProfilesFresh`/`profiles` — уже
+импортируются в `transport.js` из `contacts.js` в другом контексте
+(профили контактов); тот же импорт расширяется этими двумя именами.
+
+### D6 — обязательная часть (чистка), вилка — НЕ делается
+
+`refreshDiscoveryProfiles` (`contacts.js`) — перед фильтром:
+`bulkDelete` строк `discoveryProfiles`, у которых `visibleUntil > 0 &&
+visibleUntil < nowSec - 86400` (сутки). Guard `> 0` — не трогает
+надгробия/строки без срока, это не входит в объём "протухла трансляция",
+и не расширяет удаление сверх буквального текста ТЗ. Разделение ключа
+по `ownerPubkey` (миграция схемы) — по умолчанию НЕ делается (решение
+владельца зафиксировано в ТЗ самим текстом), фиксируется здесь как
+открытый вопрос на будущее, не заводится отдельным этапом без явного
+запроса.
+
+### D7/D8 — меню карточки и форма жалобы
+
+Домен не меняется (`hideDiscoveryProfileLocally`/`reportDiscoveryProfile`
+уже существуют, T9). Только UI (Э7): `ActionsMenu` (готовый компонент,
+`components/actions-menu.jsx`, уже используется в `contacts.jsx`/
+`channel.jsx`) с двумя пунктами — «Скрыть у себя» (всегда) и
+«Пожаловаться» (только при `BUILD_ADMIN_PUBKEY`).
+
+**Форма причины (D8) — INLINE, не модальное окно.** В проекте НЕТ ни
+одного `<dialog>`/модального оверлея (проверено: `contacts.jsx`,
+комментарий у `place.focus==="add"` — "без модального `<dialog>` (в
+проекте его нет нигде, ради одной кнопки вводить фокус-ловушку не
+стоит)"). Заводить первый прецедент модалки ради формы из одного поля —
+непропорционально; вместо этого — тот же приём, что
+`contact-row-expandable` (`contacts.jsx`): локальный state экрана
+`reportingPubkey`, клик «Пожаловаться» разворачивает под строкой
+человека небольшой блок (`textarea maxlength=200` + «Отправить»/
+«Отмена», ключи `discovery.reportReasonLabel`/`common.send`/
+`common.cancel` — два последних уже существуют, не заводятся заново).
+Отправка — `reportDiscoveryProfile(...)` + `hideDiscoveryProfileLocally
+(...)` тем же порядком, что сейчас (локальное скрытие СРАЗУ, не в
+`finally`). Обрезка причины до 200 — на стороне
+`buildDiscoveryReportRumor` (`reports.js`), симметрично `maxlength` поля
+(тот же принцип, что `DISCOVERY_BIO_MAX_LENGTH` в `discovery.js`):
+`reason: (typeof reason === 'string' ? reason : '').slice(0, 200)`.
+
+### D9 — число читателей канала
+
+Новый экспорт **домена** (Э6, `src/domain/content/channel.js`, НЕ UI):
+
+```js
+export async function countChannelReaders(ownerPubkey, channelId) {
+  const count = await db.table("channelReaders")
+    .where("[ownerPubkey+channelId]").equals([ownerPubkey, channelId]).count();
+  return Math.max(0, count - 1); // минус self-грант владельца (createChannel добавляет его всегда)
+}
+```
+
+Индекс `[ownerPubkey+channelId+readerPubkey], [ownerPubkey+channelId]`
+уже существует (`database.js:117`, этап 33) — составной индекс для
+подсчёта уже есть, миграция не нужна.
+
+### D10 — `showChannels` больше не отдельный UI-тумблер
+
+Новый интерфейс (§3, состояние 2) не имеет общего переключателя
+«Показывать каналы» — только тумблер на КАЖДОЙ строке канала. Локальное
+поле `showChannels` схемы остаётся (обратная совместимость события), но
+вычисляется ПРОИЗВОДНО в UI: `showChannels = channelIds.length > 0` в
+момент вызова `publishDiscoverySettings` — отдельного React state для
+него в `VisibilitySection` больше нет. Все проверки рендера (лента,
+предпросмотр) переходят на `card.channels.length > 0`, без
+`card.showChannels &&`.
+
+### Э6 — состав, которого нет в схеме: длительность для «Продлить»
+
+§3, состояние 3: «Продлить» переиздаёт «срок... берётся последний
+выбранный» — ТЗ не говорит, где хранить длительность (секунды), не
+абсолютный `visibleUntil`. Решение: НЕ новое поле схемы — обычный
+локальный React state `selectedDuration` компонента (уже существует),
+по умолчанию `DISCOVERY_DURATIONS[0]`, обновляется при каждом выборе в
+раскрытой сборке (состояние 2), переживает свёртку в состояние 3 (тот
+же compose-стейт компонента, не пересоздаётся). Компромисс,
+зафиксированный явно: если пользователь перезагрузил страницу ВО ВРЕМЯ
+активной трансляции, «Продлить» до первого явного открытия «Изменить»
+использует дефолт (10 минут), не обязательно тот же срок, что был
+выбран до перезагрузки — расширять приватный `lastCreatedAt` до
+публичного поля ради этого узкого случая избыточно.
+
+### Э6/Э7 — переиспользуемые молекулы (MOLECULES.md), новые — по минимуму
+
+Три состояния верхнего блока — ОДИН `.panel` (+`.panel--good` когда
+`settings.visible`, готовый паттерн, уже используется), не новый класс
+`.lamp` из макета-референса (макет — описание композиции/поведения, не
+разметки, ТЗ §0 п.2). Срок — `.seg`/`.slice`/`.slice--on` (уже есть).
+Предупреждения — `.callout callout--warn`/`callout--bad` (уже есть).
+Строки каналов и переключатели — `.set-row`/`.set-row__switch`/
+`.set-list` (уже есть; кастомный pill-тумблер `.sw` из макета НЕ
+заводится — проект уже решил визуал чекбоксов через укрупнённый
+нативный `input[type=checkbox]`, живой фидбег после T9). Лента людей —
+`.contact-row-list`/`.contact-row`/`.contact-row-main`/
+`.contact-row-actions` (готовый паттерн, `contacts.jsx`; для discovery
+строка всегда многострочная — `.stack` на `<li>` напрямую вместо
+`.row`+`.contact-row-expandable`, `.contact-row` не завязан на
+направление, см. `custom.css:5750`). Заглушка-аватар канала — тот же
+приём, что `.contact-avatar-fallback` (первая буква названия).
+
+Genuinely новое (ни один существующий класс не подходит даже с
+модификатором — MOLECULES.md правило): кольцо остатка (`.ring`, SVG
+`stroke-dasharray`/`stroke-dashoffset`, тона `--good`/`--warn` при
+остатке < 20%) и маленькая карточка канала внутри строки ленты
+(`.ch-card` — аватар+название+описание+`<details>` правил). Обе
+заводятся в `custom.css`, документируются в MOLECULES.md по
+завершении Э7 (правило MOLECULES.md — новая молекула описывается ДО
+того, как ТЗ следующего захода сможет её найти).
+
+### Порядок этапов и приёмка
+
+Э1–Э5 — домен/схема/сервер/сигналы, воркер работает по TDD-микрозадачам
+(правила 14–15), тесты — Claude, ДО вызова. Э6–Э7 — интерфейс: тоже
+воркер, но микрозадачи размером «один блок JSX + указанные классы»,
+не «экран целиком» (правило 6 — слабая модель деградирует на пухлой
+задаче); приёмка — REGLAMENT.md чеклист (раздел 7) вручную Claude по
+диффу, живая проверка `run-ugolok` для обоих состояний. Э8 — 12
+локалей, микрозадача на язык или на пачку ключей, приёмка — `grep`
+на отсутствие "сирот" (ключи, использованные в JSX, но не найденные
+хотя бы в одном из 12 файлов) плюс `npm run build` без предупреждений.

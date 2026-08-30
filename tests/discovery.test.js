@@ -213,12 +213,73 @@ test("publishDiscoverySettings: нет записи в keystore (не должн
 // CONTRACTS.md §DISCOVERY, T5 — автоистечение в UI: локальный флаг гасится
 // БЕЗ публикации (expiration+фильтр читателя уже делают своё дело сами).
 test("markDiscoveryExpired: гасит visible локально, не трогает остальные поля, не публикует", async () => {
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: ["c1"], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+	// Реальный канал — начиная с §DISCOVERY-REDESIGN (D5) publishDiscoverySettings
+	// отбрасывает channelIds, которых нет среди listOwnedChannels; "c1" не был бы каналом.
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "d", rules: "" }, [], capturingPublish([]));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
 
 	await markDiscoveryExpired(ALICE_PUB);
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(local, { visible: false, showChannels: true, channelIds: ["c1"], visibleUntil: FAR_FUTURE });
+	assert.deepEqual(local, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE });
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, D1 — "Скрыть сейчас" раньше публиковало
+// visible:false С ПОЛНЫМ содержимым (bio, каналы) и БЕЗ expiration — такое
+// событие оставалось на реле навсегда, доступное кому угодно по REQ. Читающий
+// клиент прятал карточку по фильтру visible, но данные утекали публично.
+test("publishDiscoverySettings: visible:false публикует НАДГРОБИЕ (bio='', channels=[], showChannels=false, visibleUntil=0), не текущее содержимое (D1)", async () => {
+	await db.table("keystore").put({ id: ALICE_PUB, bio: "личное био" });
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "описание", rules: "" }, [], capturingPublish([]));
+
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.visible, false);
+	assert.equal(parsed.bio, "", "надгробие не должно нести старое bio");
+	assert.deepEqual(parsed.channels, [], "надгробие не должно нести список каналов");
+	assert.equal(parsed.showChannels, false);
+	assert.equal(parsed.visibleUntil, 0);
+});
+
+test("publishDiscoverySettings: выключение НЕ сбрасывает локальные showChannels/channelIds — это настройки пользователя, не часть надгробия (D1)", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "описание", rules: "" }, [], capturingPublish([]));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+
+	const local = await loadDiscoverySettings(ALICE_PUB);
+	assert.equal(local.showChannels, true);
+	assert.deepEqual(local.channelIds, [channelId]);
+	assert.equal(local.visible, false);
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, D2 — раньше buildDiscoveryEvent проверял
+// только visibleUntil > 0, событие с истёкшим сроком относительно СВОЕГО ЖЕ
+// created_at уходило на реле, где отвергалось/мгновенно истекало молча.
+test("buildDiscoveryEvent: visible:true и visibleUntil <= createdAt -> throw, не только <= 0 (D2)", () => {
+	const createdAt = Math.floor(Date.now() / 1000);
+	assert.throws(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: createdAt }, createdAt));
+	assert.throws(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: createdAt - 10 }, createdAt));
+	assert.doesNotThrow(() => buildDiscoveryEvent(ALICE_PRIV, { visible: true, showChannels: false, channels: [], visibleUntil: createdAt + 10 }, createdAt));
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, D5 — снимок канала протухает: если канал
+// удалён, его id продолжал мусорить в локальном channelIds (событие уже
+// фильтровало через listOwnedChannels, локальная копия — нет).
+test("publishDiscoverySettings: отбрасывает channelIds несуществующих каналов — и локально, и в событии (D5)", async () => {
+	const { channelId: realId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Настоящий", description: "d", rules: "" }, [], capturingPublish([]));
+	const GHOST_ID = "уже-удалённый-канал";
+
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [realId, GHOST_ID], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+
+	const local = await loadDiscoverySettings(ALICE_PUB);
+	assert.deepEqual(local.channelIds, [realId], "несуществующий id не должен остаться в локальном наборе");
+
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.deepEqual(parsed.channels.map((c) => c.id), [realId]);
 });
 
 // Найдено адверсарной живой проверкой (T5, skill run-ugolok): быстрое

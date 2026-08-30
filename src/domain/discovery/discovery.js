@@ -10,8 +10,8 @@ export const DISCOVERY_DURATIONS = [600, 3600, 86400];
 export const DISCOVERY_BIO_MAX_LENGTH = 300;
 
 export function buildDiscoveryEvent(privKey, { visible, showChannels, channels, visibleUntil, bio }, createdAt = Math.floor(Date.now() / 1000)) {
-    if (visible && (!Number.isFinite(visibleUntil) || visibleUntil <= 0)) {
-        throw new Error('visibleUntil обязателен при visible: true');
+    if (visible && (!Number.isFinite(visibleUntil) || visibleUntil <= createdAt)) {
+        throw new Error('visibleUntil обязателен и должен быть в будущем относительно createdAt при visible: true');
     }
     const truncatedBio = (typeof bio === 'string' ? bio : '').slice(0, DISCOVERY_BIO_MAX_LENGTH);
     const tags = [['d', 'discovery']];
@@ -77,22 +77,45 @@ export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { vi
     const previous = await db.table("discoverySettings").get(ownerPubkey);
     const createdAt = Math.max(Math.floor(Date.now() / 1000), (previous?.lastCreatedAt ?? 0) + 1);
 
-    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds, visibleUntil, lastCreatedAt: createdAt });
+    // CONTRACTS.md §DISCOVERY-REDESIGN, D5 — снимок каналов протухает: если
+    // канал удалён владельцем, его id не должен продолжать мусорить в
+    // локальном channelIds (раньше фильтровался только состав события, не
+    // локальная копия).
+    const owned = await listOwnedChannels(ownerPubkey, dbKey);
+    const ownedIds = new Set(owned.map((c) => c.id));
+    const cleanChannelIds = channelIds.filter((id) => ownedIds.has(id));
 
-    const channels = showChannels ? (
-        (await listOwnedChannels(ownerPubkey, dbKey))
-            .filter((c) => channelIds.includes(c.id))
-            .map((c) => ({ id: c.id, name: c.name, description: c.description }))
-    ) : [];
+    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds: cleanChannelIds, visibleUntil, lastCreatedAt: createdAt });
 
+    let channels = [];
     let bio = '';
-    try {
-        bio = (await getProfile(ownerPubkey)).bio;
-    } catch {
-        // аккаунта в keystore нет (не должно происходить в реальности) — bio остаётся ''
+    if (visible) {
+        channels = showChannels
+            ? owned.filter((c) => cleanChannelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))
+            : [];
+        try {
+            bio = (await getProfile(ownerPubkey)).bio;
+        } catch {
+            // аккаунта в keystore нет (не должно происходить в реальности) — bio остаётся ''
+        }
     }
 
-    const event = buildDiscoveryEvent(privKey, { visible, showChannels, channels, visibleUntil, bio }, createdAt);
+    // CONTRACTS.md §DISCOVERY-REDESIGN, D1 — при visible:false в СОБЫТИЕ уходит
+    // надгробие (bio/channels/showChannels пустые, visibleUntil:0), а ЛОКАЛЬНАЯ
+    // строка выше уже сохранила то, что реально передал вызывающий код —
+    // настройки пользователя (какие каналы отмечены) не сбрасываются от
+    // выключения, сбрасывается только то, что уходит наружу на реле.
+    const event = buildDiscoveryEvent(
+        privKey,
+        {
+            visible,
+            showChannels: visible && showChannels,
+            channels,
+            visibleUntil: visible ? visibleUntil : 0,
+            bio,
+        },
+        createdAt,
+    );
 
     try {
         await requirePublishOk(publish, event);
