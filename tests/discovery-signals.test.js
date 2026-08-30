@@ -129,6 +129,26 @@ test("refreshDiscoveryProfiles: отсеивает карточки, чьё на
 	assert.deepEqual(discoveryProfiles.value.map((p) => p.pubkey), [BOB_PUB]);
 });
 
+// CONTRACTS.md §DISCOVERY-REDESIGN, D6 (обязательная часть) — строки с
+// visibleUntil, истёкшим БОЛЕЕ СУТОК назад, физически удаляются из
+// discoveryProfiles (кэш чужих карточек иначе растёт бесконечно). Guard
+// > 0 — недавно истёкшая (в пределах суток) строка НЕ удаляется этим
+// проходом, только перестаёт попадать в сигнал (уже покрыто отдельным тестом
+// "отсеивает записи с истёкшим visibleUntil" выше).
+test("refreshDiscoveryProfiles: физически удаляет из discoveryProfiles строки, протухшие БОЛЕЕ СУТОК назад (D6)", async () => {
+	const longExpired = Math.floor(Date.now() / 1000) - 86400 - 10;
+	const recentlyExpired = Math.floor(Date.now() / 1000) - 10;
+	await db.table("discoveryProfiles").bulkPut([
+		{ pubkey: BOB_PUB, visible: true, showChannels: false, channels: [], visibleUntil: longExpired, updatedAt: 1 },
+		{ pubkey: CAROL_PUB, visible: true, showChannels: false, channels: [], visibleUntil: recentlyExpired, updatedAt: 1 },
+	]);
+
+	await refreshDiscoveryProfiles(ALICE_PUB);
+
+	assert.equal(await db.table("discoveryProfiles").get(BOB_PUB), undefined, "протухшая больше суток назад строка должна быть физически удалена");
+	assert.notEqual(await db.table("discoveryProfiles").get(CAROL_PUB), undefined, "недавно истёкшая строка остаётся в кэше — просто не показывается");
+});
+
 // CONTRACTS.md §DISCOVERY-REDESIGN, §2 — rules добавлено в тот же словарный
 // фильтр, что name/description канала (isDiscoveryCardClean, D9).
 test("refreshDiscoveryProfiles: отсеивает карточки, чьи ПРАВИЛА канала не проходят словарь", async () => {

@@ -369,6 +369,14 @@ db.version(31).stores({
   discoveryReports: "[ownerPubkey+id], ownerPubkey"
 });
 
+// CONTRACTS.md §DISCOVERY-REDESIGN, Э4 — discoverySettings получает
+// showBio/showRules. .stores({}) — индексы не меняются (ни одно из новых
+// полей не участвует в индексе), апгрейд — только .modify() существующих
+// строк, тот же приём, что version(30).
+db.version(32).stores({}).upgrade(async (tx) => {
+  await tx.table("discoverySettings").toCollection().modify({ showBio: true, showRules: false });
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

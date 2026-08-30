@@ -8053,10 +8053,12 @@ CONTRACTS.md. `nav-groups.jsx`'s `isEmpty` не учитывал
       Первый тест server/strfry/*: `discoveryContentIsClean` приватна —
       тест спавнит плагин процессом (stdin/stdout, реальный протокол
       strfry), не экспортирует функцию ради тестируемости.
-- [ ] **Э4. Схема хранилища** — `db.version(32)`: `showBio`(true)/
+- [x] **Э4. Схема хранилища** — `db.version(32)`: `showBio`(true)/
       `showRules`(false) в `discoverySettings`; чистка протухших строк
       `discoveryProfiles` (D6, обязательная часть — вилка с
-      разделением по `ownerPubkey` НЕ делается).
+      разделением по `ownerPubkey` НЕ делается). Первый тест
+      двухфазной Dexie-миграции в проекте (scratch-инстанс v31 +
+      настоящий `db` v32, свой файл — процессная изоляция node:test).
 - [ ] **Э5. Сигналы** — D4 (`ensureProfilesFresh` в живой подписке),
       `loadDiscoverySettings`/`publishDiscoverySettings` — `showBio`/
       `showRules`.

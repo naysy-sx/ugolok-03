@@ -492,6 +492,17 @@ export async function refreshDiscoveryProfiles(ownerPubkey) {
 	// T9 — discoveryHidden: скрытые ПОСЛЕ жалобы этим владельцем, один запрос
 	// на вызов (не по одному на карточку).
 	const nowSec = Math.floor(Date.now() / 1000);
+
+	// CONTRACTS.md §DISCOVERY-REDESIGN, D6 (обязательная часть) — строки, чей
+	// visibleUntil истёк БОЛЕЕ СУТОК назад, физически удаляются: кэш чужих
+	// карточек иначе растёт бесконечно. Guard visibleUntil > 0 — недавно
+	// истёкшие/надгробия (visibleUntil:0) не задеты этим проходом.
+	const staleThreshold = nowSec - 86400;
+	const stalePubkeys = rows.filter((r) => r.visibleUntil > 0 && r.visibleUntil < staleThreshold).map((r) => r.pubkey);
+	if (stalePubkeys.length > 0) {
+		await db.table("discoveryProfiles").bulkDelete(stalePubkeys);
+	}
+
 	const hiddenPubkeys = new Set(await listHiddenDiscoveryPubkeys(ownerPubkey));
 	discoveryProfiles.value = rows.filter(
 		(r) =>
