@@ -47,7 +47,7 @@ function discoveryContentIsClean(event) {
 	const texts = [content?.bio];
 	if (Array.isArray(content?.channels)) {
 		for (const c of content.channels) {
-			texts.push(c?.name, c?.description);
+			texts.push(c?.name, c?.description, c?.rules);
 		}
 	}
 	return texts.every((text) => typeof text !== "string" || isClean(text, stopwords));

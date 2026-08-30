@@ -9009,3 +9009,22 @@ discovery-wordfilter/discovery-reports) — 54/54.
 запуске файла. Не новая проблема (log.md уже фиксировал флейк
 room-session ранее), затронутые файлы не пересекаются с этим заходом.
 
+
+## §DISCOVERY-REDESIGN, Э3 — серверный фильтр (rules в discoveryContentIsClean)
+
+Одна строка в server/strfry/whitelist-plugin.mjs — texts.push теперь
+берёт и c?.rules. Воркер справился с первого раза (микрозадача —
+одна строка внутри уже показанной функции).
+
+Новый тестовый файл tests/discovery-server-filter.test.js — первый
+прецедент теста для server/strfry/* в проекте. discoveryContentIsClean
+приватна (не экспортируется файлом) — тест спавнит сам плагин
+дочерним процессом и говорит с ним по реальному протоколу strfry
+(построчный JSON на stdin/stdout, server/strfry/strfry-src/docs/
+plugins.md), не требует менять код плагина ради тестируемости.
+whitelist.json в репозитории — dev-default "*" (allow-all), поэтому
+whitelist-этап не мешает добраться до discovery-фильтра.
+
+2/2 новых, полная регрессия 2262/2262 (чисто, без флейков в этом
+прогоне).
+

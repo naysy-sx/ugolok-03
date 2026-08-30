@@ -8049,7 +8049,10 @@ CONTRACTS.md. `nav-groups.jsx`'s `isEmpty` не учитывал
       передаёt `showRules`/`rules` явно (это Э5) — `buildDiscoveryEvent`
       без параметра трактует `showRules` как `false`, канал получает
       `rules:''` — поведение не регрессирует, просто ещё не задействовано.
-- [ ] **Э3. Серверный фильтр** — `rules` в `texts` whitelist-плагина.
+- [x] **Э3. Серверный фильтр** — `rules` в `texts` whitelist-плагина.
+      Первый тест server/strfry/*: `discoveryContentIsClean` приватна —
+      тест спавнит плагин процессом (stdin/stdout, реальный протокол
+      strfry), не экспортирует функцию ради тестируемости.
 - [ ] **Э4. Схема хранилища** — `db.version(32)`: `showBio`(true)/
       `showRules`(false) в `discoverySettings`; чистка протухших строк
       `discoveryProfiles` (D6, обязательная часть — вилка с
