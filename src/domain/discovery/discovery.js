@@ -74,16 +74,20 @@ export async function loadDiscoverySettings(ownerPubkey) {
         visible: row.visible,
         showChannels: row.showChannels,
         channelIds: row.channelIds,
+        showBio: row.showBio ?? true,
+        showRules: row.showRules ?? false,
         visibleUntil: row.visibleUntil
     } : {
         visible: false,
         showChannels: false,
         channelIds: [],
+        showBio: true,
+        showRules: false,
         visibleUntil: 0
     };
 }
 
-export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { visible, showChannels, channelIds, visibleUntil }, publish) {
+export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { visible, showChannels, channelIds, showBio, showRules, visibleUntil }, publish) {
     // Найдено адверсарной живой проверкой (T5) — быстрое "включить" ->
     // "Скрыть сейчас" в пределах ОДНОЙ секунды даёт два kind:30073 с
     // одинаковым Math.floor(Date.now()/1000): strfry (параметризованно-
@@ -100,32 +104,35 @@ export async function publishDiscoverySettings(ownerPubkey, privKey, dbKey, { vi
     const ownedIds = new Set(owned.map((c) => c.id));
     const cleanChannelIds = channelIds.filter((id) => ownedIds.has(id));
 
-    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds: cleanChannelIds, visibleUntil, lastCreatedAt: createdAt });
+    await db.table("discoverySettings").put({ ownerPubkey, visible, showChannels, channelIds: cleanChannelIds, showBio, showRules, visibleUntil, lastCreatedAt: createdAt });
 
     let channels = [];
     let bio = '';
     if (visible) {
         channels = showChannels
-            ? owned.filter((c) => cleanChannelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))
+            ? owned.filter((c) => cleanChannelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description, rules: c.rules }))
             : [];
-        try {
-            bio = (await getProfile(ownerPubkey)).bio;
-        } catch {
-            // аккаунта в keystore нет (не должно происходить в реальности) — bio остаётся ''
+        if (showBio) {
+            try {
+                bio = (await getProfile(ownerPubkey)).bio;
+            } catch {
+                // аккаунта в keystore нет (не должно происходить в реальности) — bio остаётся ''
+            }
         }
     }
 
     // CONTRACTS.md §DISCOVERY-REDESIGN, D1 — при visible:false в СОБЫТИЕ уходит
-    // надгробие (bio/channels/showChannels пустые, visibleUntil:0), а ЛОКАЛЬНАЯ
-    // строка выше уже сохранила то, что реально передал вызывающий код —
-    // настройки пользователя (какие каналы отмечены) не сбрасываются от
-    // выключения, сбрасывается только то, что уходит наружу на реле.
+    // надгробие (bio/channels/showChannels/showRules пустые, visibleUntil:0), а
+    // ЛОКАЛЬНАЯ строка выше уже сохранила то, что реально передал вызывающий код —
+    // настройки пользователя (какие каналы отмечены, showBio/showRules) не
+    // сбрасываются от выключения, сбрасывается только то, что уходит наружу на реле.
     const event = buildDiscoveryEvent(
         privKey,
         {
             visible,
             showChannels: visible && showChannels,
             channels,
+            showRules: visible && showRules,
             visibleUntil: visible ? visibleUntil : 0,
             bio,
         },

@@ -8059,9 +8059,11 @@ CONTRACTS.md. `nav-groups.jsx`'s `isEmpty` не учитывал
       разделением по `ownerPubkey` НЕ делается). Первый тест
       двухфазной Dexie-миграции в проекте (scratch-инстанс v31 +
       настоящий `db` v32, свой файл — процессная изоляция node:test).
-- [ ] **Э5. Сигналы** — D4 (`ensureProfilesFresh` в живой подписке),
+- [x] **Э5. Сигналы** — D4 (`ensureProfilesFresh` в живой подписке),
       `loadDiscoverySettings`/`publishDiscoverySettings` — `showBio`/
-      `showRules`.
+      `showRules`. D4 без юнит-теста — `transport.js` не имеет тестовой
+      инфраструктуры (module-scoped `connection`), приёмка живой
+      проверкой в Э6/Э7 (тот же класс решения, что T5/T6).
 - [ ] **Э6. Интерфейс, верхний блок** — `VisibilitySection` под §3
       (состояния 1–3, один `.panel`/`.panel--good`), `countChannelReaders`
       (новый экспорт `channel.js`), D3 (тик ленты), D10 (`showChannels`

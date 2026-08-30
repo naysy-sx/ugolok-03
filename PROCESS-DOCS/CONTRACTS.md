@@ -22817,6 +22817,19 @@ refreshDiscoveryProfiles(ownerPubkey), 30000)` в момент монтиров�
 компоненты, разная жизнь — `VisibilitySection` часть общего блока,
 тик ленты не должен зависеть от того, смонтирован ли он).
 
+### D4 — приёмка живой проверкой, не юнит-тестом
+
+`transport.js` целиком не имеет юнит-тестов (module-scoped `connection`
+устанавливается ТОЛЬКО внутри `connect()`, без test-only сеттера;
+`connect()` тянет за собой полную цепочку side-effects — rebuild
+настроек, backfill kind:10002/10050/discovery, hydrate профиля —
+мокать ради одной строки `ensureProfilesFresh` внутри `onBatch`
+непропорционально). Прецедент того же класса уже принят в CONTRACTS.md,
+T5/T6: "Экран/JSX — без юнит-тестов… приёмка живой проверкой". D4 —
+туда же: приёмка `run-ugolok` (второй аккаунт включает видимость, пока
+экран "Знакомства" уже открыт — карточка обязана прийти С ИМЕНЕМ и
+аватаром сразу, не `shortPubkey` до перемонтирования).
+
 ### D4 — `ensureProfilesFresh` в живой подписке
 
 `refreshLiveDiscoverySubscription`'s `onBatch` (`transport.js`) —

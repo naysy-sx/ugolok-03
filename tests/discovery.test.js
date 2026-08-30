@@ -177,15 +177,33 @@ test("parseDiscoveryEvent: элементы channels фильтруются — 
 
 test("loadDiscoverySettings: без локальной записи -> дефолт (invisible, каналы не показаны)", async () => {
 	const settings = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(settings, { visible: false, showChannels: false, channelIds: [], visibleUntil: 0 });
+	assert.deepEqual(settings, { visible: false, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: 0 });
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, Э5 — строка, созданная ДО db.version(32)
+// (защита на случай гонки открытия/миграции, не только штатный путь —
+// сама миграция уже проставляет оба поля, см. discovery-schema-migration.test.js)
+// не должна давать undefined наружу.
+test("loadDiscoverySettings: строка без showBio/showRules (защита от undefined) -> коэрсится в дефолт (true/false)", async () => {
+	await db.table("discoverySettings").put({ ownerPubkey: ALICE_PUB, visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE });
+	const settings = await loadDiscoverySettings(ALICE_PUB);
+	assert.equal(settings.showBio, true);
+	assert.equal(settings.showRules, false);
+});
+
+test("loadDiscoverySettings: сохранённые showBio:false/showRules:true читаются как есть, не как дефолт", async () => {
+	await db.table("discoverySettings").put({ ownerPubkey: ALICE_PUB, visible: true, showChannels: false, channelIds: [], showBio: false, showRules: true, visibleUntil: FAR_FUTURE });
+	const settings = await loadDiscoverySettings(ALICE_PUB);
+	assert.equal(settings.showBio, false);
+	assert.equal(settings.showRules, true);
 });
 
 test("publishDiscoverySettings: сохраняет локально СРАЗУ и публикует showChannels=false -> channels: []", async () => {
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(local, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE });
+	assert.deepEqual(local, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE });
 
 	assert.equal(published.length, 1);
 	const parsed = parseDiscoveryEvent(published[0]);
@@ -199,7 +217,7 @@ test("publishDiscoverySettings: showChannels=true — публикует ТОЛ�
 	const { channelId: idB } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Приватный черновик", description: "не для рекламы", rules: "" }, [], capturingPublish([]));
 
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [idA], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [idA], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.channels.length, 1, "только отмеченный канал, не оба");
@@ -214,7 +232,7 @@ test("publishDiscoverySettings: сбой publish (исключение) БРОС
 		throw new Error("нет соединения");
 	};
 	await assert.rejects(
-		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, failingPublish),
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, failingPublish),
 	);
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
@@ -228,7 +246,7 @@ test("publishDiscoverySettings: сбой publish (исключение) БРОС
 test("publishDiscoverySettings: реле вернуло {ok:false} (не исключение) — тоже бросает и тоже уходит в outbox", async () => {
 	const rejectingPublish = async () => ({ ok: false, reason: "relay отклонил" });
 	await assert.rejects(
-		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, rejectingPublish),
+		() => publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, rejectingPublish),
 	);
 	const pending = await listPending(DB_KEY);
 	assert.equal(pending.length, 1);
@@ -240,14 +258,14 @@ test("publishDiscoverySettings: реле вернуло {ok:false} (не иск�
 test("publishDiscoverySettings: bio берётся из keystore (getProfile), не из параметров вызова, и обрезается до лимита", async () => {
 	await db.table("keystore").put({ id: ALICE_PUB, bio: "б".repeat(500) });
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.bio.length, 300);
 });
 
 test("publishDiscoverySettings: нет записи в keystore (не должно происходить в реальности, но не обязано ронять публикацию) -> bio ''", async () => {
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.bio, "");
 });
@@ -258,12 +276,12 @@ test("markDiscoveryExpired: гасит visible локально, не трога
 	// Реальный канал — начиная с §DISCOVERY-REDESIGN (D5) publishDiscoverySettings
 	// отбрасывает channelIds, которых нет среди listOwnedChannels; "c1" не был бы каналом.
 	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "d", rules: "" }, [], capturingPublish([]));
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish([]));
 
 	await markDiscoveryExpired(ALICE_PUB);
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
-	assert.deepEqual(local, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE });
+	assert.deepEqual(local, { visible: false, showChannels: true, channelIds: [channelId], showBio: true, showRules: false, visibleUntil: FAR_FUTURE });
 });
 
 // CONTRACTS.md §DISCOVERY-REDESIGN, D1 — "Скрыть сейчас" раньше публиковало
@@ -274,10 +292,10 @@ test("publishDiscoverySettings: visible:false публикует НАДГРОБ�
 	await db.table("keystore").put({ id: ALICE_PUB, bio: "личное био" });
 	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "описание", rules: "" }, [], capturingPublish([]));
 
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish([]));
 
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const parsed = parseDiscoveryEvent(published[0]);
 	assert.equal(parsed.visible, false);
@@ -289,7 +307,7 @@ test("publishDiscoverySettings: visible:false публикует НАДГРОБ�
 
 test("publishDiscoverySettings: выключение НЕ сбрасывает локальные showChannels/channelIds — это настройки пользователя, не часть надгробия (D1)", async () => {
 	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "описание", rules: "" }, [], capturingPublish([]));
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], visibleUntil: FAR_FUTURE }, capturingPublish([]));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: true, channelIds: [channelId], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish([]));
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
 	assert.equal(local.showChannels, true);
@@ -315,7 +333,7 @@ test("publishDiscoverySettings: отбрасывает channelIds несущес
 	const GHOST_ID = "уже-удалённый-канал";
 
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [realId, GHOST_ID], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [realId, GHOST_ID], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	const local = await loadDiscoverySettings(ALICE_PUB);
 	assert.deepEqual(local.channelIds, [realId], "несуществующий id не должен остаться в локальном наборе");
@@ -333,9 +351,55 @@ test("publishDiscoverySettings: отбрасывает channelIds несущес
 // обязан быть строго монотонным ПОВЕРХ wall-clock секунд для этого потока.
 test("publishDiscoverySettings: два вызова подряд (в пределах одной секунды) -> строго возрастающий created_at", async () => {
 	const published = [];
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
-	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: false, channelIds: [], visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: false, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
 
 	assert.equal(published.length, 2);
 	assert.ok(published[1].created_at > published[0].created_at, "второе событие обязано иметь строго больший created_at, даже если публикации попали в одну и ту же секунду");
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, Э5 — showBio гейтит ЧТЕНИЕ getProfile(...).bio,
+// не постфактум-обрезку: при showBio:false bio не читается вовсе.
+test("publishDiscoverySettings: showBio:false — bio не читается из keystore, остаётся '' даже если там есть значение", async () => {
+	await db.table("keystore").put({ id: ALICE_PUB, bio: "личное био" });
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: false, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.bio, "");
+});
+
+test("publishDiscoverySettings: showBio:true — bio читается как раньше", async () => {
+	await db.table("keystore").put({ id: ALICE_PUB, bio: "личное био" });
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: true, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.bio, "личное био");
+});
+
+// CONTRACTS.md §DISCOVERY-REDESIGN, Э5 — showRules прокидывается насквозь до
+// buildDiscoveryEvent (который уже гейтит rules каждого канала, Э2); канал
+// несёт СВОИ сырые rules из listOwnedChannels, обрезка/гейт — внутри buildDiscoveryEvent.
+test("publishDiscoverySettings: showRules:true — rules отмеченных каналов уходят в событие", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "d", rules: "без рекламы" }, [], capturingPublish([]));
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], showBio: false, showRules: true, visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.showRules, true);
+	assert.equal(parsed.channels[0].rules, "без рекламы");
+});
+
+test("publishDiscoverySettings: showRules:false — rules отмеченных каналов НЕ уходят в событие, даже если у канала есть rules", async () => {
+	const { channelId } = await createChannel(ALICE_PUB, ALICE_PRIV, DB_KEY, { name: "Канал", description: "d", rules: "без рекламы" }, [], capturingPublish([]));
+	const published = [];
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: true, channelIds: [channelId], showBio: false, showRules: false, visibleUntil: FAR_FUTURE }, capturingPublish(published));
+	const parsed = parseDiscoveryEvent(published[0]);
+	assert.equal(parsed.showRules, false);
+	assert.equal(parsed.channels[0].rules, "");
+});
+
+test("publishDiscoverySettings: showBio/showRules сохраняются локально как переданы", async () => {
+	await publishDiscoverySettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { visible: true, showChannels: false, channelIds: [], showBio: false, showRules: true, visibleUntil: FAR_FUTURE }, capturingPublish([]));
+	const local = await loadDiscoverySettings(ALICE_PUB);
+	assert.equal(local.showBio, false);
+	assert.equal(local.showRules, true);
 });

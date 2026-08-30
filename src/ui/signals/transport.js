@@ -34,7 +34,7 @@ import { isKnownContact, storeInboxRequest } from "../../domain/messaging/inbox-
 import { applyIncomingDeletionIfMarker } from "../../domain/messaging/deletions.js";
 import { applyIncomingEditIfMarker } from "../../domain/messaging/edits.js";
 import { bumpMessagingActivity } from "./chats.js";
-import { contacts, profiles, ensureProfilesFetched, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles, ownDiscoveryVisible, refreshDiscoveryProfiles } from "./contacts.js";
+import { contacts, profiles, ensureProfilesFetched, ensureProfilesFresh, configureContactRuntime, handleIncomingContactRumor, reconcileContactsFromEventLog, applyProfileUpdates, hydrateProfilesFromCache, applyContactListEvent, applyMuteListEvent, refreshGroups, resetProfileRetryState, trimWatchedProfiles, listWatchedProfiles, ownDiscoveryVisible, refreshDiscoveryProfiles } from "./contacts.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { configureCallRuntime, handleIncomingCallSignal } from "./call.js";
 import { CALL_SIGNAL_KIND } from "../../domain/calls/signaling-adapter.js";
@@ -1097,18 +1097,31 @@ export async function refreshLiveDiscoverySubscription(ownerPubkey) {
 			verifyBatch: verifyBatchFn,
 			onBatch: async (events) => {
 				let changed = false;
+				const newPubkeys = [];
 				for (const event of events) {
 					if (!isNewEvent(event.id)) continue; // redelivery при resubscribe
 					try {
 						const parsed = parseDiscoveryEvent(event);
 						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
 						changed = true;
+						if (!(event.pubkey in profiles.value)) {
+							newPubkeys.push(event.pubkey);
+						}
 					} catch {
 						// повреждённый/невалидный (напр. visible:true без visibleUntil, T4)
 						// discovery-broadcast чужого клиента — пропустить, не ронять батч
 					}
 				}
 				if (changed) await refreshDiscoveryProfiles(ownerPubkey);
+				// CONTRACTS.md §DISCOVERY-REDESIGN, D4 — карточка, пришедшая живой
+				// подпиской, оставалась безымянной (ContactIdentity рисует shortPubkey)
+				// до перемонтирования экрана: refreshDiscoveryProfiles кладёт профиль в
+				// discoveryProfiles, но не тянет САМ профиль (kind:0) нового pubkey.
+				// Без {force:true} — это не первичная загрузка (та уже была в mount-
+				// эффекте discovery.jsx с force:true), обычное "подтянуть, если не знаем".
+				if (newPubkeys.length > 0) {
+					await ensureProfilesFresh(newPubkeys, fetchProfiles);
+				}
 			},
 		});
 		connection.addMessageHandler(discoveryLiveSubscriber.handleMessage);
