@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Nur für mich ausblenden",
 		"emptyTitle": "Gerade niemand in der Entdeckung",
 		"emptyBody": "Personen erscheinen hier nur für die von ihnen gewählte Zeit.",
+		"emptyTitleSelfVisible": "Bisher sind nur Sie hier",
+		"emptyConfigureButton": "Sichtbarkeit einrichten",
 		"reportReasonLabel": "Grund der Meldung",
-		"channelRulesSummary": "Kanalregeln",
-		"timeRemainingBadge": "noch {{time}}"
+		"timeRemainingBadge": "noch {{time}}",
+		"channelsHeading": "Kanäle",
+		"rulesLabel": "Regeln"
 	},
 	"channels": {
 		"createChannelButton": "Kanal erstellen",

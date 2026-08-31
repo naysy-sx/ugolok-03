@@ -25,9 +25,11 @@ const MAP = {
 	"chat-bubble": "chat-circle",
 	check: "check",
 	"check-square": "check-square",
+	"check-circle": "check-circle",
 	"chevron-down": "caret-down",
 	"chevron-left": "caret-left",
 	"chevron-right": "caret-right",
+	circle: "circle",
 	compass: "compass",
 	confetti: "confetti",
 	copy: "copy",
@@ -126,7 +128,7 @@ const MAP = {
 
 // Залитое начертание — только там, где есть состояние "включено".
 // Даёт дополнительный файл <имя>-fill.jsx рядом с обычным.
-const FILLED = ["star", "bell", "chat-bubble", "smiley", "heart", "thumbs-up", "fire", "eyes"];
+const FILLED = ["star", "bell", "chat-bubble", "smiley", "heart", "thumbs-up", "fire", "eyes", "check-circle"];
 
 function componentName(stem) {
 	return "Icon" + stem.split(/[-_]/).map((p) => p[0].toUpperCase() + p.slice(1)).join("");

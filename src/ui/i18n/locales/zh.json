@@ -408,9 +408,12 @@
 		"hideLocallyAction": "仅对我隐藏",
 		"emptyTitle": "现在“发现”里没有人",
 		"emptyBody": "只有在他们自己选择的时间内,人们才会出现在这里。",
+		"emptyTitleSelfVisible": "目前这里只有你",
+		"emptyConfigureButton": "设置可见性",
 		"reportReasonLabel": "举报原因",
-		"channelRulesSummary": "频道规则",
-		"timeRemainingBadge": "剩余{{time}}"
+		"timeRemainingBadge": "剩余{{time}}",
+		"channelsHeading": "频道",
+		"rulesLabel": "规则"
 	},
 	"channels": {
 		"createChannelButton": "创建频道",

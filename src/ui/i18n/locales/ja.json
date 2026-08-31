@@ -408,9 +408,12 @@
 		"hideLocallyAction": "自分だけ非表示にする",
 		"emptyTitle": "今は誰もいません",
 		"emptyBody": "人はここに、自分で選んだ期間だけ表示されます。",
+		"emptyTitleSelfVisible": "今はあなただけです",
+		"emptyConfigureButton": "公開設定を開く",
 		"reportReasonLabel": "通報理由",
-		"channelRulesSummary": "チャンネルのルール",
-		"timeRemainingBadge": "残り{{time}}"
+		"timeRemainingBadge": "残り{{time}}",
+		"channelsHeading": "チャンネル",
+		"rulesLabel": "ルール"
 	},
 	"channels": {
 		"createChannelButton": "チャンネルを作成",

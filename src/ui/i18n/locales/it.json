@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Nascondi solo per me",
 		"emptyTitle": "Nessuno in Scopri al momento",
 		"emptyBody": "Le persone appaiono qui solo per il tempo che scelgono.",
+		"emptyTitleSelfVisible": "Per ora ci sei solo tu qui",
+		"emptyConfigureButton": "Configura visibilità",
 		"reportReasonLabel": "Motivo della segnalazione",
-		"channelRulesSummary": "Regole del canale",
-		"timeRemainingBadge": "resta {{time}}"
+		"timeRemainingBadge": "resta {{time}}",
+		"channelsHeading": "Canali",
+		"rulesLabel": "Regole"
 	},
 	"channels": {
 		"createChannelButton": "Crea canale",

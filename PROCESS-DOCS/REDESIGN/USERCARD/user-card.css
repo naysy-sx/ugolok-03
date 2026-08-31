@@ -1,0 +1,288 @@
+/* ================================================================== *
+ *  .ucard — универсальная карточка человека                          *
+ *  Одна разметка на 7 мест: лента "Знакомств" + предпросмотр "Как    *
+ *  вас увидят другие", 5 списков "Контактов" (контакты, входящие,    *
+ *  отправленные, отклонённые, заблокированные).                      *
+ *                                                                    *
+ *  Раскладка ВНУТРИ карточки — grid-template-areas, а не             *
+ *  композиционные классы: REGLAMENT.md §6 честно не покрывает        *
+ *  именованные зоны конкретной молекулы, а §1 разрешает оформитель-  *
+ *  скому слою держать собственную сетку (тот же приём уже живёт в    *
+ *  .section-header и .contacts-layout). Композиционные классы        *
+ *  остаются на СОДЕРЖИМОМ зон (.row/.bar/.stack в JSX).              *
+ * ================================================================== */
+
+/* Обёртка-контейнер. Карточка меряет СЕБЯ, а не экран, поэтому
+   container-type объявлен на родителе: self-referencing @container для
+   layout-свойств самого контейнера браузер молча игнорирует (найдено
+   живьём на .section-header, см. комментарий у .content-section).
+   Обёртку рисует сам компонент (проп as="li"/"div") — забыть её нельзя. */
+.ucard-shell {
+	container: ucard / inline-size;
+}
+
+/* Список карточек. Разделители — забота списка, не строки. */
+.ucard-list {
+	list-style: none;
+	padding-inline-start: 0;
+	/* Глобальное ul { margin-block: var(--space-m) } — типографика для
+	   прозы, к списку карточек отношения не имеет. */
+	margin-block: 0;
+}
+.ucard-list--divided > * + * {
+	border-block-start: var(--border-width) solid var(--border);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Сетка                                                             *
+ * ------------------------------------------------------------------ */
+/*  Широко:                    Узко (@container ниже):
+ *  ┌──────┬────────┬────────┐ ┌──────┬───────────────┐
+ *  │ who (аватар+  │        │ │ who (аватар+имя+био) │
+ *  │  имя+био)     │ actions│ ├──────┴───────────────┤
+ *  ├──────┼────────┤        │ │ extra                │
+ *  │      │ extra  │        │ ├──────────────────────┤
+ *  ├──────┴────────┴────────┤ │ meta                 │
+ *  │ meta                   │ ├──────────────────────┤
+ *  └────────────────────────┘ │ actions              │
+ *                             └──────────────────────┘
+ *  Первая дорожка — ширина аватара, вторая ест остаток, третья —
+ *  по содержимому действий. extra (каналы/что угодно) стоит во
+ *  второй дорожке и поэтому выровнен ровно под имя и био, без
+ *  единого повторения ширины аватара где-либо ещё. */
+.ucard {
+	/* Размер аватара — параметр карточки, не число внутри правил:
+	   меняется одной строкой на модификаторе (см. --panel/--row). */
+	--ucard-avatar: var(--space-2xl);
+
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas:
+		"who  who   actions"
+		".    extra actions"
+		"meta meta  meta";
+	column-gap: var(--space-s);
+	row-gap: var(--space-xs);
+	align-items: start;
+}
+
+/* Аватар + имя + био — один прямоугольник: он же кликабельная зона,
+   когда карточка ведёт в чат. subgrid, а не своя сетка: колонка
+   аватара и колонка текста обязаны совпадать с дорожками карточки,
+   иначе список каналов (зона extra, дорожка 2) разъедется с био —
+   именно этим ломались прежние две отдельные вёрстки. */
+.ucard__who {
+	grid-area: who;
+	display: grid;
+	grid-template-columns: subgrid;
+	column-gap: var(--space-s);
+	row-gap: var(--space-3xs);
+	align-items: start;
+	/* Сброс кнопки: когда .ucard__who — <button>, он не должен ничем
+	   отличаться от <div> до наведения/фокуса. */
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	text-align: start;
+}
+@supports not (grid-template-columns: subgrid) {
+	/* Safari < 16: дорожки задаются вручную, каналы теряют точное
+	   выравнивание под био — но карточка не рассыпается. */
+	.ucard__who {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+}
+.ucard__who:is(button) {
+	cursor: pointer;
+}
+
+.ucard__avatar {
+	grid-column: 1;
+	/* Аватар держит обе строки блока (имя сверху, био снизу) и не
+	   тянется вслед за длинным био — align-self: start вместо
+	   подсчёта строк в JavaScript. */
+	grid-row: 1 / -1;
+	align-self: start;
+	/* Гасит UA/прозовый margin-block у <figure>. */
+	margin: 0;
+}
+.ucard__photo {
+	inline-size: var(--ucard-avatar);
+	block-size: var(--ucard-avatar);
+	aspect-ratio: 1;
+	object-fit: cover;
+	border-radius: var(--radius);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+}
+/* Заглушка — буква вместо фото. .row (раскладка) уже в JSX. */
+.ucard__photo--empty {
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+	font-size: var(--step-1);
+}
+
+.ucard__name {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: center;
+	font-weight: var(--weight-bold);
+	/* Чеклист REGLAMENT.md: длинное слово без пробелов не выдавливает
+	   колонку действий — переносится внутри своей дорожки. */
+	overflow-wrap: anywhere;
+}
+/* Имя = усечённый npub (профиль ещё не подтянулся) — моноширинный. */
+.ucard__name--npub {
+	font-family: var(--font-mono);
+	font-weight: var(--weight-normal);
+}
+.ucard__badge {
+	color: var(--accent);
+}
+
+.ucard__bio {
+	grid-column: 2;
+	grid-row: 2;
+	display: block;
+	color: var(--muted);
+	font-size: var(--font-size-bio);
+	overflow-wrap: anywhere;
+	/* Био внутри кнопки всё равно должно выделяться мышью: протяжка
+	   мышью не порождает click (mousedown и mouseup в разных точках),
+	   так что выделение не конфликтует с открытием чата. */
+	user-select: text;
+}
+
+/* Зона под био: список каналов, теги — что угодно. Сама зона только
+   занимает место; вид содержимого — забота вызывающего экрана (для
+   голого <ul> есть .ucard-list выше, тот же сброс маркеров). */
+.ucard__extra {
+	grid-area: extra;
+}
+.ucard__actions {
+	grid-area: actions;
+	justify-self: end;
+}
+.ucard__meta {
+	grid-area: meta;
+}
+
+/* Действия тише сплошной заливки — они не спорят по весу с самой
+   карточкой (тот же приём, что .contact-row-actions до переезда). */
+.ucard__actions button {
+	background-color: transparent;
+	color: var(--fg);
+	border-color: var(--border);
+	font-weight: var(--weight-normal);
+}
+.ucard__actions button:hover {
+	background-color: var(--surface-raised);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Состояния                                                         *
+ * ------------------------------------------------------------------ */
+.ucard__who:hover .ucard__name {
+	text-decoration: underline;
+}
+/* Обводка фокуса приходит из глобального :focus-visible (minimal.css) —
+   здесь только зазор и радиус под крупную зону. */
+.ucard__who:focus-visible {
+	outline-offset: var(--space-3xs);
+	border-radius: var(--radius-sm);
+}
+/* Подсветка всей строки при наведении на кликабельную зону — :has
+   разрешён (селектор состояния, REGLAMENT.md §3.4). */
+.ucard--row:has(.ucard__who:hover) {
+	background-color: color-mix(in oklch, var(--surface), transparent 55%);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Модификаторы вида                                                 *
+ * ------------------------------------------------------------------ */
+/* Строка плотного списка ("Контакты" и четыре свёрнутых раздела):
+   аватар мельче, фона нет, разделитель рисует список. */
+.ucard--row {
+	--ucard-avatar: var(--space-xl);
+	padding-block: var(--space-s);
+	padding-inline: var(--space-2xs);
+	border-radius: var(--radius);
+	row-gap: var(--space-2xs);
+}
+
+/* Самостоятельная карточка ("Знакомства": лента и предпросмотр). */
+.ucard--panel {
+	--ucard-avatar: var(--space-2xl);
+	padding: var(--space-s);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-lg);
+	background-color: var(--surface);
+}
+
+/* Тёплый угловой свет (VISUAL.md, "лампа") + едва заметная штриховка
+   у правого края — карточка человека перестаёт быть бетонной плитой.
+   Свет идёт из левого верхнего угла, оттуда же, где аватар. */
+.ucard--accent {
+	background-image:
+		radial-gradient(120% 100% at 0% 0%, color-mix(in oklch, var(--accent), transparent 88%), transparent 62%),
+		repeating-linear-gradient(
+			-45deg,
+			color-mix(in oklch, var(--accent-2), transparent 93%) 0 var(--border-width),
+			transparent var(--border-width) var(--space-2xs)
+		);
+	background-repeat: no-repeat;
+	background-size:
+		100% 100%,
+		var(--space-2xl) 100%;
+	background-position:
+		0 0,
+		100% 0;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Узкий контейнер                                                   *
+ * ------------------------------------------------------------------ */
+/* Порог 26rem — ширина, ниже которой колонка действий отъедает у
+   имени больше, чем стоит сама. Меряется контейнер (.ucard-shell),
+   не экран: карточка в узком сайдбаре складывается так же, как на
+   телефоне, и об экране ничего не знает. */
+@container ucard (max-width: 26rem) {
+	.ucard {
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			"who     who"
+			"extra   extra"
+			"meta    meta"
+			"actions actions";
+	}
+	/* Каналы больше не подпираются колонкой аватара — на узком экране
+	   отступ слева дороже, чем выравнивание. */
+	.ucard__extra {
+		grid-column: 1 / -1;
+	}
+	.ucard__actions {
+		justify-self: stretch;
+	}
+}
+
+/* Совсем узко (телефон в один столбец, ~360 CSS-px и меньше): имя и
+   био уходят под аватар — 6rem аватара рядом с текстом в 8 символов
+   читаются хуже, чем тот же текст под ним. */
+@container ucard (max-width: 17rem) {
+	.ucard__who {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.ucard__avatar {
+		grid-row: 1;
+	}
+	.ucard__name {
+		grid-column: 1;
+		grid-row: 2;
+	}
+	.ucard__bio {
+		grid-column: 1;
+		grid-row: 3;
+	}
+}

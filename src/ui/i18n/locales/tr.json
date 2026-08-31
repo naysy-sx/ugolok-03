@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Sadece bende gizle",
 		"emptyTitle": "Şu anda Keşfet'te kimse yok",
 		"emptyBody": "İnsanlar burada yalnızca seçtikleri süre boyunca görünür.",
+		"emptyTitleSelfVisible": "Şimdilik burada sadece sen varsın",
+		"emptyConfigureButton": "Görünürlüğü ayarla",
 		"reportReasonLabel": "Şikayet nedeni",
-		"channelRulesSummary": "Kanal kuralları",
-		"timeRemainingBadge": "{{time}} kaldı"
+		"timeRemainingBadge": "{{time}} kaldı",
+		"channelsHeading": "Kanallar",
+		"rulesLabel": "Kurallar"
 	},
 	"channels": {
 		"createChannelButton": "Kanal oluştur",

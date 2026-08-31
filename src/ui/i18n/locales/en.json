@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Hide for me",
 		"emptyTitle": "No one in discovery right now",
 		"emptyBody": "People appear here only for the time they choose.",
+		"emptyTitleSelfVisible": "For now, it's just you here",
+		"emptyConfigureButton": "Set up visibility",
 		"reportReasonLabel": "Reason for the report",
-		"channelRulesSummary": "Channel rules",
-		"timeRemainingBadge": "{{time}} left"
+		"timeRemainingBadge": "{{time}} left",
+		"channelsHeading": "Channels",
+		"rulesLabel": "Rules"
 	},
 	"channels": {
 		"createChannelButton": "Create channel",

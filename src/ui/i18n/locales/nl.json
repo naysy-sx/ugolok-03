@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Alleen voor mij verbergen",
 		"emptyTitle": "Nu niemand in Ontdekken",
 		"emptyBody": "Mensen verschijnen hier alleen voor de tijd die ze zelf kiezen.",
+		"emptyTitleSelfVisible": "Voorlopig ben jij hier de enige",
+		"emptyConfigureButton": "Zichtbaarheid instellen",
 		"reportReasonLabel": "Reden voor de melding",
-		"channelRulesSummary": "Kanaalregels",
-		"timeRemainingBadge": "nog {{time}}"
+		"timeRemainingBadge": "nog {{time}}",
+		"channelsHeading": "Kanalen",
+		"rulesLabel": "Regels"
 	},
 	"channels": {
 		"createChannelButton": "Kanaal aanmaken",

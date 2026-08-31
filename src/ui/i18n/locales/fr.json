@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Masquer pour moi",
 		"emptyTitle": "Personne dans Découverte pour l'instant",
 		"emptyBody": "Les gens n'apparaissent ici que pendant la durée qu'ils ont choisie.",
+		"emptyTitleSelfVisible": "Pour l'instant, il n'y a que vous ici",
+		"emptyConfigureButton": "Configurer la visibilité",
 		"reportReasonLabel": "Motif du signalement",
-		"channelRulesSummary": "Règles du canal",
-		"timeRemainingBadge": "{{time}} restant"
+		"timeRemainingBadge": "{{time}} restant",
+		"channelsHeading": "Canaux",
+		"rulesLabel": "Règles"
 	},
 	"channels": {
 		"createChannelButton": "Créer une chaîne",

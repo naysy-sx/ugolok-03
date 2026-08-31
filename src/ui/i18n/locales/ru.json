@@ -408,9 +408,12 @@
 		"hideLocallyAction": "Скрыть у себя",
 		"emptyTitle": "Сейчас в обзоре никого",
 		"emptyBody": "Люди появляются здесь только на выбранный ими срок.",
+		"emptyTitleSelfVisible": "Пока здесь только вы",
+		"emptyConfigureButton": "Настроить видимость",
 		"reportReasonLabel": "Причина жалобы",
-		"channelRulesSummary": "Правила канала",
-		"timeRemainingBadge": "ещё {{time}}"
+		"timeRemainingBadge": "ещё {{time}}",
+		"channelsHeading": "Каналы",
+		"rulesLabel": "Правила"
 	},
 	"channels": {
 		"createChannelButton": "Создать канал",

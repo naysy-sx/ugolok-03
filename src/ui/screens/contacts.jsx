@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
@@ -40,14 +41,23 @@ import {
 	cancelContactRequestAction,
 } from "../signals/contacts.js";
 import PermissionEditor from "../components/permission-editor.jsx";
+import UserCard from "../components/user-card.jsx";
 import Screen from "../components/screen.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 
 // F-CT-04: показывает никнейм/аватар/био контакта, если профиль уже подтянут
 // (см. ensureProfilesFetched), иначе — усечённый npub как раньше. onClick, если
-// передан, делает аватар+имя ссылкой на чат (contacts.jsx, реальные контакты);
-// в списке заблокированных onClick не передаётся — просто отображение.
-export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
+// передан, делает аватар+имя ссылкой на чат (chat.jsx); в списке заблокированных
+// onClick не передаётся — просто отображение.
+//
+// PROCESS-DOCS/REDESIGN/USERCARD/USER-CARD.md — карточные места (лента
+// "Знакомств"/предпросмотр, все списки этого экрана) переехали на
+// UserCard (user-card.jsx); этот компонент остаётся ТОЛЬКО для мест,
+// где личность живёт внутри чужой кнопки (chat.jsx, два места) или
+// внутри SetRow (settings.jsx) — там UserCard дал бы вложенную кнопку
+// в кнопке. Проп decorated (тёплый фон для карточного контекста) ушёл
+// вместе с этим — здесь он больше никогда не был true.
+export function ContactIdentity({ pubkey, onClick, unreadCount }) {
 	const profile = profiles.value[pubkey];
 	const displayName = profile?.name || shortPubkey(pubkey);
 
@@ -56,18 +66,12 @@ export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
 	// обязательно растровое изображение), не голый <img>. .contact-avatar
 	// (размер/рамка/радиус) не тронут — он же отдельно держит аватар
 	// канала в .ch-card (discovery.jsx), эта дорожка не задета.
-	// decorated — тот же карточный контекст, что и акцентный фон
-	// .contact-info--decorated: там аватар крупнее (.contact-avatar--lg,
-	// токен --space-3xl — живой фидбек пользователя после первой версии
-	// довеска, см. CONTRACTS.md §DISCOVERY-REDESIGN), в плотных списках
-	// (Контакты/Чаты/Настройки) остаётся прежний 2.5rem.
-	const avatarSizeClass = decorated ? " contact-avatar--lg" : "";
 	const avatar = (
 		<figure class="contact-avatar-figure rigid">
 			{profile?.picture ? (
-				<img src={profile.picture} alt="" width="40" height="40" class={"contact-avatar" + avatarSizeClass} />
+				<img src={profile.picture} alt="" width="40" height="40" class="contact-avatar" />
 			) : (
-				<div aria-hidden="true" class={"contact-avatar contact-avatar-fallback row" + avatarSizeClass} style={{ "--align": "center", justifyContent: "center" }}>
+				<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row" style={{ "--align": "center", justifyContent: "center" }}>
 					{(displayName || "?").trim().charAt(0).toUpperCase()}
 				</div>
 			)}
@@ -76,16 +80,9 @@ export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
 
 	// <div>, не <span> — блочный контейнер под .stack-раскладку (span
 	// как контейнер многострочной flex-колонки был багом разметки, не
-	// стилистикой). .grow — ест остаток строки (аватар рядом — .rigid),
-	// decorated — необязательный акцентный фон под карточным контекстом
-	// (CONTRACTS.md §DISCOVERY-REDESIGN, довесок): предпросмотр Знакомств
-	// и строки ленты передают его явно, остальные 6 мест использования
-	// ContactIdentity — нет, там плотные списки строк, не карточки.
+	// стилистикой). .grow — ест остаток строки (аватар рядом — .rigid).
 	const text = (
-		<div
-			class={"contact-info stack grow" + (decorated ? " box contact-info--decorated" : "")}
-			style={decorated ? { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" } : { "--gap": "var(--space-3xs)" }}
-		>
+		<div class="contact-info stack grow" style={{ "--gap": "var(--space-3xs)" }}>
 			<span class={profile?.name ? undefined : "contact-identity-npub"}>
 				{displayName}
 				{/* Список чатов (chat.jsx) — непрочитанные этого собеседника в квадратных
@@ -96,14 +93,9 @@ export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
 		</div>
 	);
 
-	// contact-identity--card — узкий контейнер складывает крупный
-	// decorated-аватар и инфо-колонку в столбик (см. @container в
-	// custom.css); в плотных списках не подключается, там всё как раньше.
-	const cardClass = decorated ? " contact-identity--card" : "";
-
 	if (!onClick) {
 		return (
-			<div class={"contact-identity row" + cardClass} style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+			<div class="contact-identity row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				{avatar}
 				{text}
 			</div>
@@ -115,7 +107,7 @@ export function ContactIdentity({ pubkey, onClick, unreadCount, decorated }) {
 			type="button"
 			onClick={onClick}
 			aria-label={t("contacts.openChatAria", { name: displayName })}
-			class={"contact-identity contact-identity-btn row" + cardClass}
+			class="contact-identity contact-identity-btn row"
 			style={{ "--gap": "var(--space-s)", "--align": "center" }}
 		>
 			{avatar}
@@ -465,78 +457,94 @@ export default function Contacts() {
 								{rowError}
 							</p>
 						)}
-						<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+						<ul role="list" class="ucard-list ucard-list--divided stack">
 							{visibleContacts.map((pubkey) => {
 								const memberOfGroups = groupsForContact(pubkey);
 								const isExpanded = expandedPubkey === pubkey;
+								const profile = profiles.value[pubkey];
+								const displayName = profile?.name || shortPubkey(pubkey);
 								return (
-									<li key={pubkey} class="contact-row contact-row-expandable row" style={{ "--gap": "var(--space-2xs)" }}>
-										<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-											<ContactIdentity pubkey={pubkey} onClick={() => openChat(pubkey)} />
-											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-												<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
-													<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
-												</button>
-												<ActionsMenu label={t("channel.comment.moreActionsAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}>
-													<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
-														<IconGear /> {isExpanded ? t("contacts.hidePermissions") : t("contacts.showPermissions")}
+									<Fragment key={pubkey}>
+										<UserCard
+											as="li"
+											variant="row"
+											avatarUrl={profile?.picture}
+											name={displayName}
+											nameIsNpub={!profile?.name}
+											bio={profile?.about}
+											bioLines={2}
+											onOpen={() => openChat(pubkey)}
+											openLabel={t("contacts.openChatAria", { name: displayName })}
+											actions={
+												<>
+													<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
+														<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
 													</button>
-													<button
-														type="button"
-														class="warn"
-														disabled={busy}
-														onClick={() => runRowAction(() => blockContactAction(pubkey))}
-													>
-														<IconLockClosed /> {t("contacts.blockAction")}
-													</button>
-													<button
-														type="button"
-														class="danger"
-														disabled={busy}
-														onClick={() => runRowAction(() => removeContactAction(pubkey))}
-													>
-														<IconTrash /> {t("common.delete")}
-													</button>
-												</ActionsMenu>
-											</div>
-										</div>
-
-										<div class="contact-row-groups row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-											{memberOfGroups.map((g) => (
-												<span key={g.id} class="group-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
-													{g.name}
-													<button
-														type="button"
-														disabled={busy}
-														aria-label={t("contacts.removeFromGroupAria", { name: g.name })}
-														onClick={() =>
-															runRowAction(() =>
-																removeGroupMemberAction(ownerPubkey, privKey, dbKey, g.id, pubkey, publish),
-															)
-														}
-													>
-														×
-													</button>
-												</span>
-											))}
-											{groups.value.length > 0 && (
-												<AddToGroupControl
-													groups={groups.value}
-													excludeGroupIds={memberOfGroups.map((g) => g.id)}
-													disabled={busy}
-													onAdd={(groupId) =>
-														runRowAction(() =>
-															addGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish),
-														)
-													}
-												/>
-											)}
-										</div>
-
+													<ActionsMenu label={t("channel.comment.moreActionsAria", { name: displayName })}>
+														<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
+															<IconGear /> {isExpanded ? t("contacts.hidePermissions") : t("contacts.showPermissions")}
+														</button>
+														<button
+															type="button"
+															class="warn"
+															disabled={busy}
+															onClick={() => runRowAction(() => blockContactAction(pubkey))}
+														>
+															<IconLockClosed /> {t("contacts.blockAction")}
+														</button>
+														<button
+															type="button"
+															class="danger"
+															disabled={busy}
+															onClick={() => runRowAction(() => removeContactAction(pubkey))}
+														>
+															<IconTrash /> {t("common.delete")}
+														</button>
+													</ActionsMenu>
+												</>
+											}
+											meta={
+												<>
+													{memberOfGroups.map((g) => (
+														<span key={g.id} class="group-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+															{g.name}
+															<button
+																type="button"
+																disabled={busy}
+																aria-label={t("contacts.removeFromGroupAria", { name: g.name })}
+																onClick={() =>
+																	runRowAction(() =>
+																		removeGroupMemberAction(ownerPubkey, privKey, dbKey, g.id, pubkey, publish),
+																	)
+																}
+															>
+																×
+															</button>
+														</span>
+													))}
+													{groups.value.length > 0 && (
+														<AddToGroupControl
+															groups={groups.value}
+															excludeGroupIds={memberOfGroups.map((g) => g.id)}
+															disabled={busy}
+															onAdd={(groupId) =>
+																runRowAction(() =>
+																	addGroupMemberAction(ownerPubkey, privKey, dbKey, groupId, pubkey, publish),
+																)
+															}
+														/>
+													)}
+												</>
+											}
+										/>
+										{/* PermissionEditor — отдельным <li> следом, не частью карточки:
+										    редактор прав шире карточки (USER-CARD.md, раздел 3). */}
 										{isExpanded && (
-											<PermissionEditor ownerPubkey={ownerPubkey} privKey={privKey} subject={pubkey} />
+											<li>
+												<PermissionEditor ownerPubkey={ownerPubkey} privKey={privKey} subject={pubkey} />
+											</li>
 										)}
-									</li>
+									</Fragment>
 								);
 							})}
 						</ul>
@@ -552,20 +560,33 @@ export default function Contacts() {
 						{incomingRequests.value.length === 0 ? (
 							<p style={{ color: "var(--muted)" }}>{t("contacts.noIncoming")}</p>
 						) : (
-							<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-								{incomingRequests.value.map((req) => (
-									<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-										<ContactIdentity pubkey={req.peerPubkey} />
-										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-											<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
-												{t("contacts.acceptButton")}
-											</button>
-											<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
-												{t("contacts.rejectButton")}
-											</button>
-										</div>
-									</li>
-								))}
+							<ul role="list" class="ucard-list ucard-list--divided stack">
+								{incomingRequests.value.map((req) => {
+									const profile = profiles.value[req.peerPubkey];
+									const displayName = profile?.name || shortPubkey(req.peerPubkey);
+									return (
+										<UserCard
+											as="li"
+											key={req.peerPubkey}
+											variant="row"
+											avatarUrl={profile?.picture}
+											name={displayName}
+											nameIsNpub={!profile?.name}
+											bio={profile?.about}
+											bioLines={2}
+											actions={
+												<>
+													<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAcceptContactRequest(req.peerPubkey)}>
+														{t("contacts.acceptButton")}
+													</button>
+													<button type="button" disabled={busy} onClick={() => handleRejectContactRequest(req.peerPubkey)}>
+														{t("contacts.rejectButton")}
+													</button>
+												</>
+											}
+										/>
+									);
+								})}
 							</ul>
 						)}
 					</section>
@@ -584,17 +605,28 @@ export default function Contacts() {
 								{outgoingRequests.value.length === 0 ? (
 									<p style={{ color: "var(--muted)" }}>{t("contacts.noOutgoing")}</p>
 								) : (
-									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-										{outgoingRequests.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-												<ContactIdentity pubkey={req.peerPubkey} />
-												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-													<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
-														{t("contacts.cancelRequestButton")}
-													</button>
-												</div>
-											</li>
-										))}
+									<ul role="list" class="ucard-list ucard-list--divided stack">
+										{outgoingRequests.value.map((req) => {
+											const profile = profiles.value[req.peerPubkey];
+											const displayName = profile?.name || shortPubkey(req.peerPubkey);
+											return (
+												<UserCard
+													as="li"
+													key={req.peerPubkey}
+													variant="row"
+													avatarUrl={profile?.picture}
+													name={displayName}
+													nameIsNpub={!profile?.name}
+													bio={profile?.about}
+													bioLines={2}
+													actions={
+														<button type="button" disabled={busy} onClick={() => runRowAction(() => cancelContactRequestAction(req.peerPubkey))}>
+															{t("contacts.cancelRequestButton")}
+														</button>
+													}
+												/>
+											);
+										})}
 									</ul>
 								)}
 							</div>
@@ -609,23 +641,34 @@ export default function Contacts() {
 								{rejectedByMe.value.length === 0 ? (
 									<p style={{ color: "var(--muted)" }}>{t("contacts.noRejected")}</p>
 								) : (
-									<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-										{rejectedByMe.value.map((req) => (
-											<li key={req.peerPubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-												<ContactIdentity pubkey={req.peerPubkey} />
-												{/* Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
-												написать самому тому, чью заявку отклонил(а) раньше. */}
-												<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-													<button
-														type="button"
-														disabled={busy}
-														onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
-													>
-														{t("contacts.addAnywayButton")}
-													</button>
-												</div>
-											</li>
-										))}
+									<ul role="list" class="ucard-list ucard-list--divided stack">
+										{rejectedByMe.value.map((req) => {
+											const profile = profiles.value[req.peerPubkey];
+											const displayName = profile?.name || shortPubkey(req.peerPubkey);
+											return (
+												<UserCard
+													as="li"
+													key={req.peerPubkey}
+													variant="row"
+													avatarUrl={profile?.picture}
+													name={displayName}
+													nameIsNpub={!profile?.name}
+													bio={profile?.about}
+													bioLines={2}
+													// Отказ — не блокировка (CONTACTS-FSM.md, I6): можно передумать и
+													// написать самому тому, чью заявку отклонил(а) раньше.
+													actions={
+														<button
+															type="button"
+															disabled={busy}
+															onClick={() => runRowAction(() => sendContactRequestAction(req.peerPubkey, ""))}
+														>
+															{t("contacts.addAnywayButton")}
+														</button>
+													}
+												/>
+											);
+										})}
 									</ul>
 								)}
 							</div>
@@ -639,17 +682,28 @@ export default function Contacts() {
 								<IconChevronRight class="icon req__chev" aria-hidden="true" />
 							</summary>
 							<div class="req__body">
-								<ul role="list" class="contact-row-list stack" style={{ "--gap": "var(--space-2xs)" }}>
-									{blockedContacts.value.map((pubkey) => (
-										<li key={pubkey} class="contact-row row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-											<ContactIdentity pubkey={pubkey} />
-											<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-												<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
-													{t("contacts.unblockButton")}
-												</button>
-											</div>
-										</li>
-									))}
+								<ul role="list" class="ucard-list ucard-list--divided stack">
+									{blockedContacts.value.map((pubkey) => {
+										const profile = profiles.value[pubkey];
+										const displayName = profile?.name || shortPubkey(pubkey);
+										return (
+											<UserCard
+												as="li"
+												key={pubkey}
+												variant="row"
+												avatarUrl={profile?.picture}
+												name={displayName}
+												nameIsNpub={!profile?.name}
+												bio={profile?.about}
+												bioLines={2}
+												actions={
+													<button type="button" disabled={busy} onClick={() => runRowAction(() => unblockContactAction(pubkey))}>
+														{t("contacts.unblockButton")}
+													</button>
+												}
+											/>
+										);
+									})}
 								</ul>
 								{blockedContacts.value.length === 0 && (
 									<p style={{ color: "var(--muted)" }}>{t("contacts.noBlocked")}</p>

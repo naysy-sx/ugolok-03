@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useState, useEffect, useRef, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, fetchDiscoveryProfiles, refreshLiveDiscoverySubscription } from "../signals/transport.js";
@@ -11,10 +12,11 @@ import { reportDiscoveryProfile, hideDiscoveryProfileLocally } from "../../domai
 import { writeJournalEntry } from "../../domain/notifications/journal.js";
 import { listOwnedChannels, countChannelReaders } from "../../domain/content/channel.js";
 import { BUILD_ADMIN_PUBKEY } from "../../config.js";
-import { ContactIdentity } from "./contacts.jsx";
+import UserCard from "../components/user-card.jsx";
 import Screen from "../components/screen.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
-import IconEye from "../icons/eye.jsx";
+import IconCircle from "../icons/circle.jsx";
+import IconCheckCircleFill from "../icons/check-circle-fill.jsx";
 import { pushToast } from "../signals/toasts.js";
 import { t, errorMessage } from "../signals/i18n.js";
 
@@ -38,7 +40,6 @@ function formatCountdown(remainingSeconds) {
 }
 
 const DURATION_LABEL_KEYS = ["discovery.duration10m", "discovery.duration1h", "discovery.duration1d"];
-const RING_CIRCUMFERENCE = 2 * Math.PI * 19;
 
 // CONTRACTS.md §DISCOVERY-REDESIGN, §3 — переписан целиком под три состояния
 // (выключено/сборка/трансляция) вместо тумблера+раскрывающихся блоков T5/T9.
@@ -185,15 +186,20 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 
 	if (!isComposing) {
 		if (!settings.visible) {
-			// Состояние 1 — выключено, свёрнуто.
+			// Состояние 1 — выключено, свёрнуто. IconCircle (контур) — тот же
+			// статусный язык, что IconCheckCircleFill (заливка) в состоянии 3
+			// ниже: живой фидбек пользователя — прежнее progress-кольцо не
+			// читалось как индикатор состояния "виден/не виден", теперь два
+			// начертания одной иконки прямо говорят "да/нет". dv-head —
+			// адаптивная шапка (иконка+текст+действие), складывается в
+			// столбик на узком контейнере секции (custom.css, живой фидбек
+			// пользователя — .bar тут не переносился и разваливался).
 			return (
 				<section id="discovery-visibility" class="panel stack" style={{ "--gap": "var(--space-m)" }}>
-					<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<div class="bar dv-head" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<IconCircle class="icon rigid dv-status-icon" aria-hidden="true" />
 						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-							<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								<IconEye />
-								{t("discovery.hiddenTitle")}
-							</h2>
+							<h2 class="panel__title">{t("discovery.hiddenTitle")}</h2>
 							<p class="panel__hint">{t("discovery.hiddenHint")}</p>
 						</div>
 						<button type="button" class="rigid" onClick={openCompose}>
@@ -213,15 +219,11 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 		const liveChannels = ownedChannels.filter((c) => settings.channelIds.includes(c.id));
 		const summaryParts = [t("discovery.summaryNick"), t("discovery.summaryAvatar")];
 		if (settings.showBio) summaryParts.push(t("discovery.summaryBioPart"));
-		const p = Math.max(0, Math.min(1, selectedDuration > 0 ? remainingSeconds / selectedDuration : 0));
 
 		return (
 			<section id="discovery-visibility" class="panel panel--good stack" style={{ "--gap": "var(--space-m)" }}>
-				<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<svg class="ring rigid" width="44" height="44" viewBox="0 0 44 44" style={{ "--circ": RING_CIRCUMFERENCE, "--p": p }} aria-hidden="true">
-						<circle class="track" cx="22" cy="22" r="19" />
-						<circle class="live" cx="22" cy="22" r="19" />
-					</svg>
+				<div class="bar dv-head" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<IconCheckCircleFill class="icon rigid dv-status-icon" aria-hidden="true" />
 					<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
 						<h2 class="panel__title">{t("discovery.visibleTitle", { time: formatCountdown(remainingSeconds) })}</h2>
 						<p class="panel__hint">
@@ -230,7 +232,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 								: t("discovery.visibleHintNoChannels", { parts: summaryParts.join(", ") })}
 						</p>
 					</div>
-					<div class="bar rigid" style={{ "--gap": "var(--space-2xs)" }}>
+					<div class="bar rigid dv-actions" style={{ "--gap": "var(--space-2xs)" }}>
 						<button type="button" onClick={handleExtend}>
 							{t("discovery.extendButton")}
 						</button>
@@ -300,52 +302,39 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 
 			<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 				<span class="panel__hint">{t("discovery.previewTitle")}</span>
-				<article
-					class="stack box contact-info--decorated"
-					style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}
-				>
-					{/* --align: flex-start, не center — эта колонка, в отличие от
-					    9 остальных мест ContactIdentity, реально растёт (био +
-					    список каналов может стать заметно выше аватара), центр
-					    заставил бы аватар "плавать" посреди высокого блока
-					    (CONTRACTS.md §DISCOVERY-REDESIGN, довесок). Фигура +
-					    decorated-панель — тот же словарь классов, что
-					    ContactIdentity (contacts.jsx), источники данных
-					    сознательно раздельные (§DISCOVERY часть C — компонент
-					    не переиспользуется, чтобы не трогать profiles.value).
-					    contact-info--decorated — на самой карточке (<article>),
-					    не на текстовой подколонке: акцент — свойство всей
-					    карточки целиком (с аватаром), не отдельного под-блока
-					    (живой фидбек пользователя). */}
-					<div class="contact-identity contact-identity--card row" style={{ "--gap": "var(--space-s)", "--align": "flex-start" }}>
-						<figure class="contact-avatar-figure rigid">
-							{previewAvatarUrl ? (
-								<img src={previewAvatarUrl} alt="" width="40" height="40" class="contact-avatar contact-avatar--lg" />
-							) : (
-								<div aria-hidden="true" class="contact-avatar contact-avatar-fallback contact-avatar--lg row" style={{ "--align": "center", justifyContent: "center" }}>
-									{(previewName || "?").trim().charAt(0).toUpperCase()}
-								</div>
-							)}
-						</figure>
-						<div class="contact-info stack grow box" style={{ "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" }}>
-							<span>{previewName}</span>
-							{draft.showBio && previewBio && <small>{previewBio}</small>}
-							{draftChannels.length > 0 ? (
-								<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0, "--gap": "var(--space-2xs)" }} class="stack">
+				{/* UserCard (PROCESS-DOCS/REDESIGN/USERCARD/USER-CARD.md) — источники
+				    данных сознательно раздельные (§DISCOVERY часть C — этот предпросмотр
+				    не переиспользует ContactIdentity/profiles.value, компонент здесь
+				    чисто презентационный, принимает всё пропсами). */}
+				<UserCard
+					variant="panel"
+					accent
+					avatarUrl={previewAvatarUrl}
+					name={previewName}
+					bio={draft.showBio ? previewBio : undefined}
+					extra={
+						draftChannels.length > 0 ? (
+							<>
+								<p class="eyebrow">{t("discovery.channelsHeading")}</p>
+								<ul class="ucard-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 									{draftChannels.map((c) => (
 										<li key={c.id}>
 											<strong>{c.name}</strong>
 											{c.description && <>: {c.description}</>}
-											{draft.showRules && c.rules && <p class="panel__hint">{c.rules}</p>}
+											{draft.showRules && c.rules && (
+												<p class="panel__hint">
+													<strong>{t("discovery.rulesLabel")}:</strong> {c.rules}
+												</p>
+											)}
 										</li>
 									))}
 								</ul>
-							) : (
-								<p class="panel__hint">{t("discovery.summaryNoChannelsPart")}</p>
-							)}
-						</div>
-					</div>
-				</article>
+							</>
+						) : (
+							<p class="panel__hint">{t("discovery.summaryNoChannelsPart")}</p>
+						)
+					}
+				/>
 			</div>
 
 			<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
@@ -424,14 +413,16 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 				</p>
 			)}
 
-			<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+			<div class="bar dv-head" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<span class="panel__hint grow">{t("discovery.willSendSummary", { parts: summaryParts.join(", ") })}</span>
-				<button type="button" class="rigid" onClick={closeCompose}>
-					{t("common.cancel")}
-				</button>
-				<button type="button" class="rigid" onClick={handlePublish}>
-					{t("discovery.publishButton", { duration: t(durationLabelKey) })}
-				</button>
+				<div class="bar rigid dv-actions" style={{ "--gap": "var(--space-2xs)" }}>
+					<button type="button" class="rigid" onClick={closeCompose}>
+						{t("common.cancel")}
+					</button>
+					<button type="button" class="rigid" onClick={handlePublish}>
+						{t("discovery.publishButton", { duration: t(durationLabelKey) })}
+					</button>
+				</div>
 			</div>
 		</section>
 	);
@@ -547,89 +538,112 @@ export default function Discovery() {
 
 	return (
 		<Screen title={t("shell.discoverHeading")}>
-			{connectionError && (
-				<p role="alert" style={{ color: "var(--bad)" }}>
-					{connectionError}
-				</p>
-			)}
+			{/* Живой фидбек пользователя — секции экрана (панель видимости,
+			    лента "Хотят познакомиться") прилипали друг к другу без
+			    зазора: children Screen льются прямо в .content-wrapper
+			    (тот сам не .stack), обёртка ниже — единственный источник
+			    межсекционного отступа, REGLAMENT.md §1 (--gap, не margin). */}
+			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
+				{connectionError && (
+					<p role="alert" style={{ color: "var(--bad)" }}>
+						{connectionError}
+					</p>
+				)}
 
-			<VisibilitySection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
+				<VisibilitySection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
 
-			<section class="stack" aria-labelledby="discovery-heading" style={{ "--gap": "var(--space-s)" }}>
-				<h2 id="discovery-heading" style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>
-					{t("discovery.wantToMeetTitle")}
-				</h2>
-				{discoveryProfiles.value.length === 0 ? (
-					// CONTRACTS.md §DISCOVERY-REDESIGN, Э7 — пустое состояние (самое частое
-					// на старте) обязано быть спроектировано, не серый абзац. "Действие" —
-					// не новая кнопка публикации (та уже есть в VisibilitySection), а
-					// прокрутка к ней: два места управления одним и тем же действием —
-					// лишняя сложность межкомпонентного состояния ради малой пользы.
-					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-						<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>{t("discovery.emptyTitle")}</h3>
-						<p class="panel__hint">{t("discovery.emptyBody")}</p>
-						<button
-							type="button"
-							class="rigid"
-							onClick={() => document.getElementById("discovery-visibility")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-						>
-							{t("discovery.showSelfButton")}
-						</button>
-					</div>
-				) : (
-					<ul role="list" class="contact-row-list">
+				<section class="stack" aria-labelledby="discovery-heading" style={{ "--gap": "var(--space-s)" }}>
+					<h2 id="discovery-heading" style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>
+						{t("discovery.wantToMeetTitle")}
+					</h2>
+					{discoveryProfiles.value.length === 0 ? (
+						// CONTRACTS.md §DISCOVERY-REDESIGN, Э7 — пустое состояние (самое частое
+						// на старте) обязано быть спроектировано, не серый абзац.
+						// Живой фидбек пользователя: заголовок/кнопка теперь учитывают
+						// ownDiscoveryVisible — если владелец САМ уже включил видимость,
+						// "Сейчас в обзоре никого" была неправдой (он-то есть), и кнопка
+						// "Показать себя…" дублировала верхний блок без всякого смысла
+						// (он уже показан). Кнопка остаётся только когда есть реальное
+						// действие — прокрутка к панели включения, не к уже включённой.
+						<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+							<h3 style={{ font: "inherit", fontWeight: "var(--weight-bold)" }}>
+								{t(ownDiscoveryVisible.value ? "discovery.emptyTitleSelfVisible" : "discovery.emptyTitle")}
+							</h3>
+							<p class="panel__hint">{t("discovery.emptyBody")}</p>
+							{!ownDiscoveryVisible.value && (
+								<button
+									type="button"
+									class="rigid"
+									onClick={() => document.getElementById("discovery-visibility")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+								>
+									{t("discovery.emptyConfigureButton")}
+								</button>
+							)}
+						</div>
+					) : (
+					<ul role="list" class="ucard-list stack" style={{ "--gap": "var(--space-s)" }}>
 						{discoveryProfiles.value.map((card) => {
 							const sent = outgoingRequests.value.some((r) => r.peerPubkey === card.pubkey);
 							const remainingSeconds = card.visibleUntil - nowSec();
+							const profile = profiles.value[card.pubkey];
+							const displayName = profile?.name || shortPubkey(card.pubkey);
 							return (
-								<li key={card.pubkey} class="contact-row stack" style={{ "--gap": "var(--space-s)" }}>
-									<div class="contact-row-main row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-										{/* decorated — тот же тёплый акцентный отсвет, что предпросмотр
-										    "Как вас увидят другие" выше на экране, единая карточная
-										    визуальная зона (CONTRACTS.md §DISCOVERY-REDESIGN, довесок). */}
-										<ContactIdentity pubkey={card.pubkey} decorated />
-										<div class="contact-row-actions row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-											<span class="panel__hint">{t("discovery.timeRemainingBadge", { time: formatCountdown(remainingSeconds) })}</span>
-											<button type="button" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>
-												{sent ? t("discovery.requestSentButton") : t("discovery.sendRequestButton")}
-											</button>
-											<ActionsMenu label={t("channel.comment.moreActionsAria", { name: profiles.value[card.pubkey]?.name || shortPubkey(card.pubkey) })}>
-												<button type="button" onClick={() => handleHideLocally(card.pubkey)}>
-													{t("discovery.hideLocallyAction")}
+								<Fragment key={card.pubkey}>
+									<UserCard
+										as="li"
+										variant="panel"
+										accent
+										avatarUrl={profile?.picture}
+										name={displayName}
+										nameIsNpub={!profile?.name}
+										bio={profile?.about}
+										// Тот же текстовый ul>li, что extra предпросмотра выше (живой
+										// фидбек пользователя: .ch-card-карточки с буквой-аватаром
+										// канала визуально расходились с предпросмотром — один и тот
+										// же компонент UserCard должен выглядеть одинаково везде).
+										extra={
+											card.channels.length > 0 && (
+												<>
+													<p class="eyebrow">{t("discovery.channelsHeading")}</p>
+													<ul class="ucard-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+														{card.channels.map((c) => (
+															<li key={c.id}>
+																<strong>{c.name}</strong>
+																{c.description && <>: {c.description}</>}
+																{c.rules && (
+																	<p class="panel__hint">
+																		<strong>{t("discovery.rulesLabel")}:</strong> {c.rules}
+																	</p>
+																)}
+															</li>
+														))}
+													</ul>
+												</>
+											)
+										}
+										actions={
+											<>
+												<span class="panel__hint">{t("discovery.timeRemainingBadge", { time: formatCountdown(remainingSeconds) })}</span>
+												<button type="button" disabled={busy} onClick={() => handleToggleDiscoveryCard(card.pubkey)} aria-pressed={sent}>
+													{sent ? t("discovery.requestSentButton") : t("discovery.sendRequestButton")}
 												</button>
-												{BUILD_ADMIN_PUBKEY && (
-													<button type="button" onClick={() => openReportForm(card.pubkey)}>
-														{t("moderation.reportButton")}
+												<ActionsMenu label={t("channel.comment.moreActionsAria", { name: displayName })}>
+													<button type="button" onClick={() => handleHideLocally(card.pubkey)}>
+														{t("discovery.hideLocallyAction")}
 													</button>
-												)}
-											</ActionsMenu>
-										</div>
-									</div>
-
-									{card.channels.length > 0 && (
-										<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-											{card.channels.map((c) => (
-												<div key={c.id} class="ch-card box bar" style={{ "--gap": "var(--space-xs)", "--pad": "var(--space-2xs)", "--align": "center" }}>
-													<div aria-hidden="true" class="contact-avatar contact-avatar-fallback row rigid" style={{ "--align": "center", justifyContent: "center" }}>
-														{c.name.trim().charAt(0).toUpperCase()}
-													</div>
-													<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-														<strong>{c.name}</strong>
-														{c.description && <p class="panel__hint">{c.description}</p>}
-														{c.rules && (
-															<details>
-																<summary>{t("discovery.channelRulesSummary")}</summary>
-																<p class="panel__hint">{c.rules}</p>
-															</details>
-														)}
-													</div>
-												</div>
-											))}
-										</div>
-									)}
-
+													{BUILD_ADMIN_PUBKEY && (
+														<button type="button" onClick={() => openReportForm(card.pubkey)}>
+															{t("moderation.reportButton")}
+														</button>
+													)}
+												</ActionsMenu>
+											</>
+										}
+									/>
+									{/* Форма жалобы — отдельным <li> под карточкой, не в actions:
+									    в узкой колонке действий ей тесно (USER-CARD.md, раздел 2). */}
 									{reportingPubkey === card.pubkey && (
-										<div class="stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
+										<li class="stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
 											<label class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 												<span class="panel__hint">{t("discovery.reportReasonLabel")}</span>
 												<textarea maxLength={200} rows={2} value={reportReason} onInput={(e) => setReportReason(e.currentTarget.value)} />
@@ -642,14 +656,15 @@ export default function Discovery() {
 													{t("common.send")}
 												</button>
 											</div>
-										</div>
+										</li>
 									)}
-								</li>
+								</Fragment>
 							);
 						})}
 					</ul>
 				)}
 			</section>
+			</div>
 		</Screen>
 	);
 }
