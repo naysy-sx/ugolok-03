@@ -7380,3 +7380,72 @@ existing ← PK (owner, channelId, targetType, targetId, reactor=event.pubkey)
 put строка (emoji может быть null)
 return true
 ```
+
+## §SEARCH — глобальный поиск, engine.js (И2)
+
+Формализация и обоснование уже сделаны архитектором в `SEARCH-MATH.md`
+(модель: `M(q) = {d ∈ D : ∀p ∈ P(q), p ⊑ H(d)}`, инварианты
+I-ANTITONE/I-MONOTONE-EXTEND/I-ORDER-FREE) и `SEARCH-ALGO.md` (структуры
+данных, стоимость, обоснование досрочного прекращения). Здесь — не
+пересказ, а то немногое, что нужно ДОБАВИТЬ поверх готового
+рассуждения: инвариант, которого архитектор не формализовал явно, плюс
+псевдокод `engine.js`, ЕДИНСТВЕННОЙ функции модуля с нетривиальным
+пространством состояний (обрыв × отмена × очередь источников).
+
+### Инвариант, добавленный при разборе (не в SEARCH-MATH.md/SEARCH-ALGO.md)
+
+**I-SCAN-SHOWS-ORDER.** Для источника `order:"recent"` порядок, в
+котором `scan()` выдаёт записи, ОБЯЗАН совпадать с порядком, в котором
+экран их показывает. Это не следствие, а ПРЕДПОСЫЛКА корректности
+`I-EARLY-EXIT` (SEARCH-SPEC.md §7): доказательство "первые k записей
+обрыва = первые k записей полного прохода" использует, что "первые k"
+в обоих случаях считается по ОДНОМУ И ТОМУ ЖЕ отношению порядка.
+Нарушение — тихая потеря записей (SEARCH-SPEC.md §0, "правдоподобно
+неверная выдача"): экран по-прежнему полон, ошибки нет, просто "первые
+k" обрыва — не те k, что были бы первыми при полном проходе.
+Практическое следствие для 2.3: сортировка результата `scan()` внутри
+самого генератора запрещена — источник обязан отдавать записи В ТОМ
+порядке, в котором их читает курсор БД (obratный `seq`/`createdAt`),
+без буферизации-и-пересортировки, иначе I-SCAN-SHOWS-ORDER рвётся
+незаметно для property-теста 3 (он ловит только рассинхрон
+"обрыв vs полный проход одного и того же scan()", не рассинхрон
+"scan() vs то, что видит человек").
+
+### Псевдокод `engine.js` (2.4)
+
+```
+async function* search(ctx, rawQuery, { signal, limitPerType }):
+    parsed ← parseQuery(rawQuery)
+    если parsed.isEmpty: return                          # I-EMPTY-NOOP
+
+    для source в ФИКСИРОВАННОМ порядке [contacts, channels, comments,
+                                          posts, channelMessages, messages]:
+        если signal.aborted: return                       # I-CANCEL-CLEAN
+        count ← 0
+        для await { key, sortKey, fields } из source.scan(ctx, { signal }):
+            если signal.aborted: return
+            haystack ← buildHaystack(fields)
+            если !matches(haystack, parsed.parts): continue
+            yield { type: source.type, key, sortKey }
+            count += 1
+            если source.order === "recent" и count ≥ limitPerType:
+                break                                      # I-EARLY-EXIT,
+                                                             # требует I-SCAN-SHOWS-ORDER
+            # order === "unordered": count никогда не прерывает обход
+```
+
+`source.scan()` сам уступает управление на границе порции в 200 (по
+контракту §3.2 SEARCH-SPEC.md) — `engine.js` эту границу не знает и не
+обязан знать, `AbortSignal` протаскивается насквозь без опроса внутри
+цикла `matches` (I-CANCEL-CLEAN проверяется на границе итерации
+генератора, не чаще — опрос `signal.aborted` внутри `matches` не даст
+выигрыша: единичный проход по строке в памяти короче кванта, на
+котором вообще имеет смысл проверять отмену).
+
+Счётчик запусков (2.6, I-CANCEL-CLEAN) — вне `engine.js`, в потребителе
+(`search.js`): каждый вызов `openSearch`/повторный Enter увеличивает
+`runId`, `AbortController` предыдущего запуска отменяется ДО старта
+следующего, а обработчик `for await` проверяет свой захваченный `runId`
+перед записью в `searchState` — устаревший генератор может доработать
+до конца (утечки ресурсов нет, `AbortSignal` его всё равно тормозит),
+но его выдача просто не долетает до экрана.
