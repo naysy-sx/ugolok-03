@@ -23619,3 +23619,25 @@ db.version(33).stores({
   channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], [ownerPubkey+createdAt]"
 });
 ```
+
+Внесено в `database.js` на этапе И2 (не дожидаясь И3) — источники 2.3
+нечем было тестировать без индекса, причина в PLAN.md/log.md, содержание
+не изменилось.
+
+### И2 — реализовано (файлы, актуально после этапа И2)
+
+- `src/domain/search/sources/paginate-reverse.js` — `paginateReverseByPrimaryKey(table, ownerScopeField, ownerPubkey, {signal, pageSize})`
+  (messages: курсор по `:id`, owner фильтруется в памяти, И0 П-1) и
+  `paginateReverseByCompoundIndex(table, indexName, ownerPubkey, sortField, {signal, pageSize})`
+  (posts/channelMessages: owner в диапазоне индекса). Постраничная выборка
+  ПО ИНДЕКСУ (не offset), с прицельным добором хвоста при совпадающем
+  `sortField` на границе страницы (найдено при тестировании, см. log.md).
+- `src/domain/search/sources/{contacts,channels,comments,messages,posts,channel-messages}.js` —
+  по одному объекту `{type, order, scan}` каждый, контракт §3.2 буквально.
+  `contacts` — доп. фильтр по `contactRelationships` (П-3). `posts` — доп.
+  фильтр `status !== "draft"` (П-3).
+- `src/domain/search/engine.js` — `SOURCES_IN_ORDER` (порядок §3.3),
+  `searchOverSources(sources, ctx, rawQuery, {signal, limitPerType})`
+  (тестируемое ядро, явный список источников — НЕ часть замороженного
+  контракта), `search(ctx, rawQuery, opts)` (сам контракт §3.3, тонкая
+  обёртка над `searchOverSources` + `SOURCES_IN_ORDER`).

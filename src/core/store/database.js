@@ -377,6 +377,23 @@ db.version(32).stores({}).upgrade(async (tx) => {
   await tx.table("discoverySettings").toCollection().modify({ showBio: true, showRules: false });
 });
 
+// Поиск, И2 (CONTRACTS.md §SEARCH) — глобальный обход по времени.
+// Существующие индексы [ownerPubkey+channelId+createdAt] дают порядок
+// ТОЛЬКО внутри канала, а источникам поиска нужен обход всех
+// постов/сообщений канала владельца от свежих к старым (SEARCH-ALGO.md
+// §5.3). Аддитивно: обе таблицы переопределяются целиком (Dexie требует
+// полный список индексов при изменении хотя бы одного) — у posts СОХРАНЁН
+// [ownerPubkey+dueAt] (редизайн интерфейса, этап 1, "Сегодня") — черновик
+// SEARCH-SPEC.md §4 был написан раньше этого индекса и его не учитывал
+// (найдено проверкой П-6, CONTRACTS.md §SEARCH). Задача 3.1 (схема, часть
+// плана И3) выполнена здесь заранее, потому что источники 2.3 не могут
+// быть протестированы без неё — генеральный порядок этапов не нарушен,
+// нарушена только механическая привязка "какой номер задачи в каком файле".
+db.version(33).stores({
+  posts: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt], [ownerPubkey+createdAt]",
+  channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], [ownerPubkey+createdAt]"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });
