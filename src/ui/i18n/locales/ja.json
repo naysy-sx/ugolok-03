@@ -445,6 +445,41 @@
 			"availableEmpty": "利用可能なチャンネルはありません。"
 		}
 	},
+	"search": {
+		"you": "あなた",
+		"titleLong": "検索結果:",
+		"titleShort": "検索:",
+		"and": "と",
+		"shown": "{{n}}件表示",
+		"more": "もっと見る",
+		"cancel": "キャンセル",
+		"reading": "読み込み中: {{source}}…",
+		"cue": "「{{query}}」をメッセージから検索",
+		"group": {
+			"contact": "連絡先",
+			"channel": "チャンネル",
+			"message": "メッセージ",
+			"post": "投稿",
+			"comment": "コメント",
+			"channelMessage": "チャンネルチャット"
+		},
+		"nothing": {
+			"title": "見つかりませんでした",
+			"lead": "検索語のすべての部分を含む記録はありません。",
+			"tip1": "一部を削除してください — 単語一つの検索の方が簡単です",
+			"tip2": "語根を短くしてください: 「work」は「working」も見つけます",
+			"tip3": "検索は部分文字列一致のため、「work」は「worker」を見つけません",
+			"tip4": "この端末に既にダウンロード済みのものだけが検索対象です"
+		},
+		"cancelled": {
+			"title": "検索が中断されました",
+			"lead": "これまでに見つかったものを表示しています。全体の走査は完了していません。",
+			"resume": "検索を続ける"
+		},
+		"keysHint": "移動 · Enterで開く · Escで閉じる",
+		"closeAria": "検索を消して戻る",
+		"jumpAria": "結果グループ"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "公開範囲（グループ）",

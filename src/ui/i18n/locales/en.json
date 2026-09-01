@@ -445,6 +445,41 @@
 			"availableEmpty": "No available channels."
 		}
 	},
+	"search": {
+		"you": "You",
+		"titleLong": "Search results:",
+		"titleShort": "Search:",
+		"and": "and",
+		"shown": "{{n}} shown",
+		"more": "Show more",
+		"cancel": "Cancel",
+		"reading": "Reading: {{source}}…",
+		"cue": "Search “{{query}}” in messages",
+		"group": {
+			"contact": "Contacts",
+			"channel": "Channels",
+			"message": "Messages",
+			"post": "Posts",
+			"comment": "Comments",
+			"channelMessage": "Channel chat"
+		},
+		"nothing": {
+			"title": "Nothing found",
+			"lead": "No record contains every part of the query at once.",
+			"tip1": "Drop one part — searching for one word is easier than several",
+			"tip2": "Shorten the root: “work” also finds “working”",
+			"tip3": "Search matches substrings, so “work” won't find “worker”",
+			"tip4": "Only what's already downloaded to this device is searched"
+		},
+		"cancelled": {
+			"title": "Search interrupted",
+			"lead": "Showing what was found so far. The full pass wasn't completed.",
+			"resume": "Continue search"
+		},
+		"keysHint": "move · Enter open · Esc close",
+		"closeAria": "Clear search and go back",
+		"jumpAria": "Result groups"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Visibility (groups)",

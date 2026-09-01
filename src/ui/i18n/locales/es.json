@@ -445,6 +445,41 @@
 			"availableEmpty": "No hay canales disponibles."
 		}
 	},
+	"search": {
+		"you": "Tú",
+		"titleLong": "Resultados de búsqueda:",
+		"titleShort": "Búsqueda:",
+		"and": "y",
+		"shown": "{{n}} mostrados",
+		"more": "Mostrar más",
+		"cancel": "Cancelar",
+		"reading": "Leyendo: {{source}}…",
+		"cue": "Buscar «{{query}}» en los mensajes",
+		"group": {
+			"contact": "Contactos",
+			"channel": "Canales",
+			"message": "Mensajes",
+			"post": "Publicaciones",
+			"comment": "Comentarios",
+			"channelMessage": "Chat del canal"
+		},
+		"nothing": {
+			"title": "No se encontró nada",
+			"lead": "Ningún registro contiene todas las partes de la búsqueda a la vez.",
+			"tip1": "Quita una parte — buscar una palabra es más fácil que varias",
+			"tip2": "Acorta la raíz: «trabaj» también encuentra «trabajando»",
+			"tip3": "La búsqueda es por subcadena, así que «trabaj» no encuentra «obrero»",
+			"tip4": "Solo se busca lo que ya está descargado en este dispositivo"
+		},
+		"cancelled": {
+			"title": "Búsqueda interrumpida",
+			"lead": "Se muestra lo encontrado hasta ahora. El recorrido no terminó.",
+			"resume": "Continuar búsqueda"
+		},
+		"keysHint": "mover · Enter abrir · Esc cerrar",
+		"closeAria": "Borrar búsqueda y volver",
+		"jumpAria": "Grupos de resultados"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Visibilidad (grupos)",

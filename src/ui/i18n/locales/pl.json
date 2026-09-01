@@ -445,6 +445,41 @@
 			"availableEmpty": "Brak dostępnych kanałów."
 		}
 	},
+	"search": {
+		"you": "Ty",
+		"titleLong": "Wyniki wyszukiwania:",
+		"titleShort": "Szukaj:",
+		"and": "i",
+		"shown": "pokazano {{n}}",
+		"more": "Pokaż więcej",
+		"cancel": "Anuluj",
+		"reading": "Wczytywanie: {{source}}…",
+		"cue": "Szukaj «{{query}}» w wiadomościach",
+		"group": {
+			"contact": "Kontakty",
+			"channel": "Kanały",
+			"message": "Wiadomości",
+			"post": "Posty",
+			"comment": "Komentarze",
+			"channelMessage": "Czat kanału"
+		},
+		"nothing": {
+			"title": "Nic nie znaleziono",
+			"lead": "Żaden wpis nie zawiera jednocześnie wszystkich części zapytania.",
+			"tip1": "Usuń jedną część — szukanie jednego słowa jest łatwiejsze niż kilku",
+			"tip2": "Skróć rdzeń: „prac” znajdzie też „pracował”",
+			"tip3": "Wyszukiwanie działa po podciągu, więc „prac” nie znajdzie „pracownik”",
+			"tip4": "Przeszukiwane jest tylko to, co już pobrano na to urządzenie"
+		},
+		"cancelled": {
+			"title": "Wyszukiwanie przerwane",
+			"lead": "Pokazano to, co udało się znaleźć. Pełne przejście nie zostało ukończone.",
+			"resume": "Kontynuuj wyszukiwanie"
+		},
+		"keysHint": "przesuń · Enter otwórz · Esc zamknij",
+		"closeAria": "Wyczyść wyszukiwanie i wróć",
+		"jumpAria": "Grupy wyników"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Widoczność (grupy)",

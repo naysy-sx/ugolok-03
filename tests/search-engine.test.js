@@ -215,5 +215,11 @@ test("search(): интеграция — реальные источники, о
 	const wordRootHits = await collect(search({ ownerPubkey: OWNER, dbKey }, "работ деньг", { signal: new AbortController().signal, limitPerType: 100 }));
 	assert.deepEqual(wordRootHits.map((h) => h.type), ["message"]);
 
+	// Закрытие пробела контракта (И3, CONTRACTS.md §SEARCH): search() обязан
+	// прокидывать data источника, а не только {type,key,sortKey} — иначе
+	// потребителю (экрану) нечем ни показать запись, ни перейти по ней.
+	assert.deepEqual(rulesHits[0].data, { channelId: "ch1", name: "Кухня", description: "", rules: "мясо не должно быть протухшим" });
+	assert.deepEqual(wordRootHits[0].data.text, "нужны деньги на работу");
+
 	await db.delete();
 });

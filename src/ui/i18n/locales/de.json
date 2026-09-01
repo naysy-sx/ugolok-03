@@ -445,6 +445,41 @@
 			"availableEmpty": "Keine verfügbaren Kanäle."
 		}
 	},
+	"search": {
+		"you": "Du",
+		"titleLong": "Suchergebnisse:",
+		"titleShort": "Suche:",
+		"and": "und",
+		"shown": "{{n}} angezeigt",
+		"more": "Mehr anzeigen",
+		"cancel": "Abbrechen",
+		"reading": "Lese: {{source}}…",
+		"cue": "„{{query}}“ in Nachrichten suchen",
+		"group": {
+			"contact": "Kontakte",
+			"channel": "Kanäle",
+			"message": "Nachrichten",
+			"post": "Beiträge",
+			"comment": "Kommentare",
+			"channelMessage": "Kanal-Chat"
+		},
+		"nothing": {
+			"title": "Nichts gefunden",
+			"lead": "Kein Eintrag enthält alle Teile der Suche zugleich.",
+			"tip1": "Entferne einen Teil — ein Wort zu suchen ist einfacher als mehrere",
+			"tip2": "Kürze den Wortstamm: „arbeit“ findet auch „arbeiten“",
+			"tip3": "Die Suche prüft Teilzeichenketten, „arbeit“ findet daher nicht „Arbeiter“",
+			"tip4": "Durchsucht wird nur, was bereits auf dieses Gerät geladen wurde"
+		},
+		"cancelled": {
+			"title": "Suche abgebrochen",
+			"lead": "Angezeigt wird, was bisher gefunden wurde. Der Durchlauf ist nicht abgeschlossen.",
+			"resume": "Suche fortsetzen"
+		},
+		"keysHint": "bewegen · Enter öffnen · Esc schließen",
+		"closeAria": "Suche löschen und zurückgehen",
+		"jumpAria": "Ergebnisgruppen"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Sichtbarkeit (Gruppen)",

@@ -10,7 +10,12 @@ export const postsSource = {
       if (signal.aborted) return;
       if (row.deleted || row.status === 'draft') continue;
       const post = await fromEncryptedRow(row, ctx.dbKey);
-      yield { key: row.id, sortKey: row.createdAt, fields: [post.title ?? '', post.text ?? ''] };
+      yield {
+        key: row.id,
+        sortKey: row.createdAt,
+        fields: [post.title ?? '', post.text ?? ''],
+        data: { postId: row.id, channelId: row.channelId, createdAt: row.createdAt, title: post.title ?? '', text: post.text ?? '' }
+      };
     }
   }
 };

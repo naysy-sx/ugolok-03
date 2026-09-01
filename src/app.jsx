@@ -15,6 +15,7 @@ import Journal from "./ui/screens/journal.jsx";
 import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
 import Help from "./ui/screens/help.jsx";
+import Search from "./ui/screens/search.jsx";
 import { currentUser, dbKeySig, privKeySig } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
@@ -330,8 +331,9 @@ function MainShell() {
 				{place.value.kind === "journal" && <Journal />}
 				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
 				{place.value.kind === "storage" && <Files />}
+				{place.value.kind === "search" && <Search />}
 				{(() => {
-					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage"];
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage", "search"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
 					return <Placeholder title={place.value.kind} />;
 				})()}

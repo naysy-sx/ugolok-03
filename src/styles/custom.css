@@ -990,6 +990,26 @@ html[data-media-full] .top-corner-actions {
 .sidebar-row .file-search-field input {
 	font-size: var(--step--1);
 }
+/* Строка-подсказка "Искать «текст» в сообщениях" (SEARCH-UI-TASK.md,
+   мокап — там в демо-обвязке, комментарий в мокапе прямо указывает: "в
+   проекте это часть nav-groups"). Второй, видимый путь к Enter — контрол
+   выглядит как обычный фильтр списка, без подсказки про Enter никто бы
+   не догадался, что тут вообще есть полноценный поиск (SEARCH-SPEC.md §3.7). */
+.sr-cue {
+	inline-size: 100%;
+	text-align: start;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: var(--space-2xs);
+	border-radius: var(--radius-sm);
+	color: var(--accent);
+	font-size: var(--step--1);
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+.sr-cue:hover { background-color: var(--surface-raised); }
 /* Компактные icon-only кнопки панели (колокольчик/"＋", карточка учётной
    записи) — макет использует заметно меньшую (28px), квадратную с рамкой
    форму, не общий 36px круглый .icon-btn (тот остаётся стандартом для
@@ -1560,7 +1580,7 @@ html[data-media-full] .top-corner-actions {
 .content-section {
 	height: 100%;
 	overflow: hidden;
-	container-type: inline-size;
+	container: screen / inline-size;   /* было: container-type: inline-size — SEARCH-UI-TASK.md §5/П-2 */
 }
 
 /* .rigid/.stack/.box (раскладка) уже в JSX — здесь только граница. */
@@ -9389,5 +9409,291 @@ button[type="button"].media-mini-bar-btn {
 @container (max-inline-size: 30rem) {
 	.danger-zone {
 		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* ================================================================== *
+ *  SEARCH — экран «Результаты поиска». ТЗ: SEARCH-UI-TASK.md.        *
+ *  Макет: search-results-mockup.html.                                *
+ * ================================================================== */
+
+/* Заголовок и разобранный запрос в одну строку. Переключение через
+   :has() — правки общего screen.jsx не требуется, тот же приём, что
+   .section-header:has(+ .slices-zone) выше. */
+.screen-title__text:has(.sr-title-line) {
+	overflow: visible;
+	white-space: normal;
+}
+.sr-title-line {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	min-inline-size: 0;
+}
+.sr-title-label { flex: none; }
+.sr-title-short { display: none; }
+
+/* Фишки частей запроса: подпись не сжимается, фишки уезжают в прокрутку.
+   При семи частях строка не разваливается и не отъедает вторую полосу
+   высоты закреплённой шапки. */
+.sr-parts {
+	--gap: var(--space-2xs);
+	--align: center;
+	min-inline-size: 0;
+	padding-block: var(--space-3xs);
+	scrollbar-width: none; /* полоса прокрутки съела бы ритм шапки */
+}
+.sr-parts::-webkit-scrollbar { display: none; }
+.sr-part {
+	flex: none;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border-radius: var(--radius-full);
+	padding: 2px var(--space-xs);
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	white-space: nowrap;
+}
+.sr-parts-and {
+	flex: none;
+	color: var(--muted);
+	font-size: var(--step--2);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+/* Полоса хода поиска. Живёт в .slices-zone, поэтому без своего фона и
+   границы — зона уже даёт и то, и другое. Исчезает по готовности. */
+.sr-status {
+	font-size: var(--step--1);
+	color: var(--muted);
+	padding-block-end: var(--space-2xs);
+}
+
+/* Перемычка групп. Липкость не нужна: .slices-zone стоит вне области
+   прокрутки. flex:none на кнопках — иначе .reel сжимает их, и счётчик
+   налезает на подпись. */
+.sr-jump-btn {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	background-color: var(--surface);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-full);
+	padding: var(--space-3xs) var(--space-2xs) var(--space-3xs) var(--space-s);
+	font-size: var(--step--1);
+	color: var(--muted);
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background-color var(--transition-speed) var(--transition-ease),
+		color var(--transition-speed) var(--transition-ease);
+}
+.sr-jump-btn:hover { background-color: var(--surface-raised); color: var(--fg); }
+.sr-jump-btn[aria-current="true"] {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+	border-color: var(--border);
+}
+.sr-jump-btn .icon { font-size: 1.1em; flex: none; }
+.sr-jump-label { flex: none; }
+/* Счётчик отделён от подписи формой, а не только зазором — при любом
+   числе знаков ширина держится, цифры табличные. */
+.sr-jump-n {
+	flex: none;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--step--2);
+	line-height: 1.4;
+	color: var(--muted);
+	background-color: var(--bg);
+	border-radius: var(--radius-full);
+	padding-inline: var(--space-2xs);
+	min-inline-size: 1.75em;
+	text-align: center;
+}
+
+/* Тело выдачи. Своего padding нет — .content-wrapper уже даёт --pad. */
+.sr-body {
+	--gap: var(--space-xl);
+	max-inline-size: var(--measure);
+	margin-inline: auto;
+}
+
+.sr-group { --gap: var(--space-s); scroll-margin-block-start: var(--space-m); }
+.sr-group-head {
+	--gap: var(--space-2xs);
+	--align: baseline;
+	padding-block-end: var(--space-2xs);
+	border-block-end: var(--border-width) solid var(--border);
+}
+.sr-group-head .icon { font-size: var(--step-1); color: var(--muted); align-self: center; }
+.sr-group-count { color: var(--muted); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+
+/* Строка попадания: сообщение, комментарий, чат канала. */
+.sr-hit {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	column-gap: var(--space-s);
+	row-gap: var(--space-3xs);
+	inline-size: 100%;
+	text-align: start;
+	background: none;
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius);
+	padding: var(--space-xs) var(--space-2xs);
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.sr-hit:hover,
+.sr-hit:focus-visible { background-color: var(--surface); }
+.sr-hit-ava {
+	grid-column: 1;
+	grid-row: 1 / -1;
+	align-self: start;
+	inline-size: var(--avatar-s);
+	block-size: var(--avatar-s);
+	border-radius: var(--radius-sm);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface);
+	display: grid;
+	place-items: center;
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+	color: var(--muted);
+}
+/* Кто -> где -> когда. «Где» раньше времени: в глобальной выдаче
+   одинаковые снипеты из разных чатов иначе неразличимы. */
+.sr-hit-head { grid-column: 2; --gap: var(--space-2xs); --align: baseline; font-size: var(--step--1); }
+.sr-hit-who { font-weight: var(--weight-bold); color: var(--fg); }
+.sr-hit-where { color: var(--muted); display: inline-flex; align-items: center; gap: var(--space-3xs); }
+.sr-hit-where .icon { font-size: 0.9em; }
+.sr-hit-time {
+	color: var(--muted);
+	margin-inline-start: auto;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.sr-hit-text { grid-column: 2; overflow-wrap: anywhere; }
+
+/* Подсветка. <mark> в проекте больше нигде не используется. Фон
+   приглушённый: при трёх частях запроса в одной строке ярких пятен
+   становится слишком много. */
+.sr-hit mark,
+.feed-excerpt mark,
+.ucard__bio mark,
+.ucard__name mark,
+.sr-quote mark {
+	background-color: color-mix(in oklch, var(--gold) 35%, transparent);
+	color: inherit;
+	border-radius: var(--radius-sm);
+	padding-inline: 0.15em;
+	font-weight: var(--weight-bold);
+}
+.sr-ellipsis { color: var(--muted); }
+
+/* Цитата родителя у комментария — без неё непонятно, к чему он. */
+.sr-quote {
+	border-inline-start: 2px solid var(--border);
+	padding-inline-start: var(--space-2xs);
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block-end: var(--space-3xs);
+}
+
+/* Пустая выдача: не констатация, а разбор — что не сработало и что
+   попробовать. */
+.sr-nothing { max-inline-size: 44ch; margin-inline: auto; }
+.sr-nothing-title { font-size: var(--step-1); font-weight: var(--weight-bold); margin-block-end: var(--space-2xs); }
+.sr-nothing-list {
+	--gap: var(--space-3xs);
+	text-align: start;
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block-start: var(--space-s);
+}
+.sr-nothing-list li { padding-inline-start: var(--space-s); position: relative; }
+.sr-nothing-list li::before { content: "→"; position: absolute; inset-inline-start: 0; color: var(--muted); }
+
+/* Курсор клавиатуры отделён от :hover — мышь и клавиатура не спорят за
+   одну подсветку. */
+.sr-hit[data-cursor="true"],
+.ucard[data-cursor="true"],
+.feed-item[data-cursor="true"] {
+	background-color: var(--surface);
+	border-color: var(--accent);
+	border-radius: var(--radius);
+}
+
+.sr-kbd {
+	display: inline-block;
+	font-size: var(--step--2);
+	font-family: var(--font-mono);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+	padding: 0 0.35em;
+	color: var(--muted);
+	background-color: var(--surface);
+}
+
+/* ---- Адаптивность: контейнер экрана, не окно ---------------------- *
+ *  Карточки контактов и каналов адаптируются САМИ — у .ucard-shell
+ *  свой контейнер и свои пороги, уже написанные выше в этом файле.
+ * ------------------------------------------------------------------ */
+
+/* 46rem — ниже него --measure уже не достигается, и поля вокруг ленты
+   становятся дороже самого текста. */
+@container screen (max-width: 46rem) {
+	.sr-body { --gap: var(--space-l); }
+	.sr-hit { padding-inline: var(--space-3xs); }
+}
+
+/* 34rem — колонка времени начинает драться за место с «где». Время
+   уходит на свою строку: оно нужно для опознания, но последним. */
+@container screen (max-width: 34rem) {
+	.sr-hit {
+		grid-template-areas: "ava head" "ava text" ".  time";
+		row-gap: var(--space-3xs);
+	}
+	.sr-hit-ava { grid-area: ava; }
+	.sr-hit-head { grid-area: head; flex-wrap: wrap; }
+	.sr-hit-text { grid-area: text; }
+	.sr-hit-time { grid-area: time; margin-inline-start: 0; font-size: var(--step--2); }
+	.sr-hit-where { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.feed-item {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: "meta" "title" "excerpt" "foot" "thumb";
+	}
+	.feed-thumb { justify-self: start; }
+}
+
+/* 26rem — телефон в один столбец. Шесть подписей в перемычку не влезают
+   ни при какой вёрстке; значок с числом опознаётся с одного взгляда.
+   Подпись остаётся у текущей группы — иначе неясно, где ты. */
+@container screen (max-width: 26rem) {
+	.sr-title-long { display: none; }
+	.sr-title-short { display: inline; }
+	.sr-jump-btn { padding-inline: var(--space-2xs); }
+	.sr-jump-label {
+		/* Не display:none — подпись нужна вспомогательным технологиям. */
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.sr-jump-btn[aria-current="true"] .sr-jump-label {
+		position: static;
+		inline-size: auto;
+		block-size: auto;
+		clip-path: none;
+	}
+	.sr-hit-ava { display: none; }
+	.sr-hit {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: "head" "text" "time";
 	}
 }

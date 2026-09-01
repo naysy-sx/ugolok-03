@@ -11,7 +11,12 @@ export const commentsSource = {
       if (row.deleted) continue;
 
       const comment = fromEncryptedRow(row, ctx.dbKey);
-      yield { key: row.id, sortKey: null, fields: [comment.text ?? ''] };
+      yield {
+        key: row.id,
+        sortKey: null,
+        fields: [comment.text ?? ''],
+        data: { commentId: row.id, postId: comment.postId, parentId: comment.parentId, channelId: comment.channelId, authorPubkey: comment.authorPubkey, createdAt: comment.createdAt, text: comment.text ?? '' }
+      };
     }
   }
 };

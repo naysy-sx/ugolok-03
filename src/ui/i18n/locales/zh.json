@@ -445,6 +445,41 @@
 			"availableEmpty": "没有可用的频道。"
 		}
 	},
+	"search": {
+		"you": "你",
+		"titleLong": "搜索结果：",
+		"titleShort": "搜索：",
+		"and": "和",
+		"shown": "已显示 {{n}} 条",
+		"more": "显示更多",
+		"cancel": "取消",
+		"reading": "正在读取：{{source}}…",
+		"cue": "在消息中搜索“{{query}}”",
+		"group": {
+			"contact": "联系人",
+			"channel": "频道",
+			"message": "消息",
+			"post": "帖子",
+			"comment": "评论",
+			"channelMessage": "频道聊天"
+		},
+		"nothing": {
+			"title": "未找到任何内容",
+			"lead": "没有一条记录同时包含搜索的所有部分。",
+			"tip1": "去掉一个词 — 搜索单个词比搜索多个词更容易匹配",
+			"tip2": "缩短词根：“工作”也能找到“工作中”",
+			"tip3": "搜索按子字符串匹配，因此“工作”不会匹配“工人”",
+			"tip4": "只搜索此设备上已下载的内容"
+		},
+		"cancelled": {
+			"title": "搜索已中断",
+			"lead": "显示的是目前为止已找到的内容，完整扫描尚未完成。",
+			"resume": "继续搜索"
+		},
+		"keysHint": "移动 · Enter 打开 · Esc 关闭",
+		"closeAria": "清除搜索并返回",
+		"jumpAria": "结果分组"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "可见性（群组）",

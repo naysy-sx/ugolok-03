@@ -445,6 +445,41 @@
 			"availableEmpty": "Aucune chaîne disponible."
 		}
 	},
+	"search": {
+		"you": "Toi",
+		"titleLong": "Résultats de recherche :",
+		"titleShort": "Recherche :",
+		"and": "et",
+		"shown": "{{n}} affichés",
+		"more": "Afficher plus",
+		"cancel": "Annuler",
+		"reading": "Lecture : {{source}}…",
+		"cue": "Rechercher « {{query}} » dans les messages",
+		"group": {
+			"contact": "Contacts",
+			"channel": "Canaux",
+			"message": "Messages",
+			"post": "Publications",
+			"comment": "Commentaires",
+			"channelMessage": "Chat du canal"
+		},
+		"nothing": {
+			"title": "Rien trouvé",
+			"lead": "Aucun élément ne contient toutes les parties de la recherche à la fois.",
+			"tip1": "Retirez une partie — chercher un seul mot est plus simple que plusieurs",
+			"tip2": "Raccourcissez la racine : « travail » trouve aussi « travaillait »",
+			"tip3": "La recherche se fait par sous-chaîne, donc « travail » ne trouve pas « travailleur »",
+			"tip4": "Seul ce qui est déjà téléchargé sur cet appareil est recherché"
+		},
+		"cancelled": {
+			"title": "Recherche interrompue",
+			"lead": "Ce qui a été trouvé jusqu'ici est affiché. Le parcours complet n'est pas terminé.",
+			"resume": "Continuer la recherche"
+		},
+		"keysHint": "déplacer · Enter ouvrir · Esc fermer",
+		"closeAria": "Effacer la recherche et revenir",
+		"jumpAria": "Groupes de résultats"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Visibilité (groupes)",

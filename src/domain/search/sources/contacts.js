@@ -20,7 +20,8 @@ export const contactsSource = {
       yield {
         key: row.contactPubkey,
         sortKey: null,
-        fields: [profile.name ?? '', profile.about ?? '']
+        fields: [profile.name ?? '', profile.about ?? ''],
+        data: { contactPubkey: row.contactPubkey, name: profile.name ?? '', about: profile.about ?? '' }
       };
     }
   }

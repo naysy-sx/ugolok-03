@@ -11,7 +11,12 @@ export const channelsSource = {
         return;
       }
       const channel = fromEncryptedRow(row, ctx.dbKey);
-      yield { key: row.id, sortKey: null, fields: [channel.name ?? '', channel.description ?? '', channel.rules ?? ''] };
+      yield {
+        key: row.id,
+        sortKey: null,
+        fields: [channel.name ?? '', channel.description ?? '', channel.rules ?? ''],
+        data: { channelId: row.id, name: channel.name ?? '', description: channel.description ?? '', rules: channel.rules ?? '' }
+      };
     }
   }
 };

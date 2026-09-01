@@ -10,7 +10,12 @@ export const messagesSource = {
       if (signal.aborted) return;
       if (row.deleted) continue;
       const message = fromEncryptedRow(row, ctx.dbKey);
-      yield { key: row.id, sortKey: row.seq, fields: [message.text ?? ''] };
+      yield {
+        key: row.id,
+        sortKey: row.seq,
+        fields: [message.text ?? ''],
+        data: { messageId: row.id, chatId: row.chatId, senderPubkey: row.senderPubkey, sentAt: message.sentAt, text: message.text ?? '' }
+      };
     }
   }
 };

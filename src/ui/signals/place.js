@@ -36,3 +36,10 @@ export function openChannel(channelId, target = {}) {
 export function openChannelPost(channelId, postId, commentId) {
 	place.value = { kind: "channel", id: channelId, postId, commentId };
 }
+
+// Глобальный поиск (SEARCH-SPEC.md §3.7). query — непустая строка,
+// зафиксированная по Enter (вызывающий код гарантирует I-EMPTY-NOOP —
+// на пустом поле openSearch не вызывается вовсе, не сюда).
+export function openSearch(query) {
+	place.value = { kind: "search", query };
+}

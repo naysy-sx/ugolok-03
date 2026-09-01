@@ -445,6 +445,41 @@
 			"availableEmpty": "Kullanılabilir kanal yok."
 		}
 	},
+	"search": {
+		"you": "Sen",
+		"titleLong": "Arama sonuçları:",
+		"titleShort": "Arama:",
+		"and": "ve",
+		"shown": "{{n}} gösteriliyor",
+		"more": "Daha fazla göster",
+		"cancel": "İptal",
+		"reading": "Okunuyor: {{source}}…",
+		"cue": "Mesajlarda «{{query}}» ara",
+		"group": {
+			"contact": "Kişiler",
+			"channel": "Kanallar",
+			"message": "Mesajlar",
+			"post": "Gönderiler",
+			"comment": "Yorumlar",
+			"channelMessage": "Kanal sohbeti"
+		},
+		"nothing": {
+			"title": "Hiçbir şey bulunamadı",
+			"lead": "Hiçbir kayıt, sorgunun tüm parçalarını aynı anda içermiyor.",
+			"tip1": "Bir parçayı kaldırın — tek kelime aramak birkaçından kolaydır",
+			"tip2": "Kökü kısaltın: «çalış» hem «çalışıyor» hem de diğerlerini bulur",
+			"tip3": "Arama alt dize ile çalışır, bu yüzden «çalış» «çalışan»ı bulmaz",
+			"tip4": "Yalnızca bu cihaza zaten indirilmiş olanlar aranır"
+		},
+		"cancelled": {
+			"title": "Arama durduruldu",
+			"lead": "Şimdiye kadar bulunanlar gösteriliyor. Tam tarama tamamlanmadı.",
+			"resume": "Aramaya devam et"
+		},
+		"keysHint": "taşı · Enter aç · Esc kapat",
+		"closeAria": "Aramayı temizle ve geri dön",
+		"jumpAria": "Sonuç grupları"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Görünürlük (gruplar)",

@@ -445,6 +445,41 @@
 			"availableEmpty": "Geen beschikbare kanalen."
 		}
 	},
+	"search": {
+		"you": "Jij",
+		"titleLong": "Zoekresultaten:",
+		"titleShort": "Zoeken:",
+		"and": "en",
+		"shown": "{{n}} getoond",
+		"more": "Meer tonen",
+		"cancel": "Annuleren",
+		"reading": "Bezig met lezen: {{source}}…",
+		"cue": "Zoek naar „{{query}}” in berichten",
+		"group": {
+			"contact": "Contacten",
+			"channel": "Kanalen",
+			"message": "Berichten",
+			"post": "Berichten (post)",
+			"comment": "Reacties",
+			"channelMessage": "Kanaalchat"
+		},
+		"nothing": {
+			"title": "Niets gevonden",
+			"lead": "Geen enkel item bevat alle delen van de zoekopdracht tegelijk.",
+			"tip1": "Verwijder een deel — één woord zoeken is eenvoudiger dan meerdere",
+			"tip2": "Verkort de stam: „werk” vindt ook „werkend”",
+			"tip3": "Zoeken gebeurt op substring, dus „werk” vindt geen „werker”",
+			"tip4": "Er wordt alleen gezocht in wat al op dit apparaat is gedownload"
+		},
+		"cancelled": {
+			"title": "Zoekopdracht onderbroken",
+			"lead": "Getoond wordt wat tot nu toe is gevonden. De volledige doorloop is niet voltooid.",
+			"resume": "Zoeken hervatten"
+		},
+		"keysHint": "verplaatsen · Enter openen · Esc sluiten",
+		"closeAria": "Zoekopdracht wissen en teruggaan",
+		"jumpAria": "Resultaatgroepen"
+	},
 	"channel": {
 		"settings": {
 			"visibilityLabel": "Zichtbaarheid (groepen)",

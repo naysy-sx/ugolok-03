@@ -75,6 +75,9 @@ test("contacts: находит только peer'ов в state=CONTACT, поля
 	assert.equal(got.length, 1, "источник обязан вернуть ровно одного активного контакта");
 	assert.equal(got[0].key, "1".repeat(64));
 	assert.deepEqual(got[0].fields, ["kukusya", "обожает питона"]);
+	// data — гидратация для навигации/отображения (И3, закрытие пробела
+	// контракта §3.3: engine.js раньше отдавал только {type,key,sortKey}).
+	assert.deepEqual(got[0].data, { contactPubkey: "1".repeat(64), name: "kukusya", about: "обожает питона" });
 });
 
 test("contacts: profile-строка без contactRelationships вовсе — не найден (переживший removeContact, И0 П-3)", async () => {
@@ -105,29 +108,32 @@ test("channels: поля [name, description, rules], owner-скоуп", async ()
 	assert.equal(got.length, 1);
 	assert.equal(got[0].key, "ch1");
 	assert.deepEqual(got[0].fields, ["Тестовый канал", "описание", "протухшее мясо нельзя обсуждать"]);
+	assert.deepEqual(got[0].data, { channelId: "ch1", name: "Тестовый канал", description: "описание", rules: "протухшее мясо нельзя обсуждать" });
 });
 
 // --- comments: unordered, поле [text], !deleted ---
 test("comments: исключает deleted, поле [text]", async () => {
 	await db.table("comments").bulkAdd([
-		toEncryptedRow({ ownerPubkey: OWNER, id: "c1", postId: "p1", parentId: null, deleted: false, text: "живой комментарий" }, COMMENTS_PLAINTEXT_FIELDS, dbKey),
-		toEncryptedRow({ ownerPubkey: OWNER, id: "c2", postId: "p1", parentId: null, deleted: true, text: "удалённый комментарий" }, COMMENTS_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c1", postId: "p1", parentId: "p1", channelId: "ch1", deleted: false, authorPubkey: "a".repeat(64), createdAt: 100, text: "живой комментарий" }, COMMENTS_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow({ ownerPubkey: OWNER, id: "c2", postId: "p1", parentId: null, channelId: "ch1", deleted: true, authorPubkey: "a".repeat(64), createdAt: 200, text: "удалённый комментарий" }, COMMENTS_PLAINTEXT_FIELDS, dbKey),
 	]);
 	const got = await collect(commentsSource, { ownerPubkey: OWNER, dbKey });
 	assert.equal(got.length, 1);
 	assert.deepEqual(got[0].fields, ["живой комментарий"]);
+	assert.deepEqual(got[0].data, { commentId: "c1", postId: "p1", parentId: "p1", channelId: "ch1", authorPubkey: "a".repeat(64), createdAt: 100, text: "живой комментарий" });
 });
 
 // --- messages: recent (paginateReverseByPrimaryKey), !deleted, поле [text] ---
 test("messages: свежие первыми, исключает deleted, поле [text]", async () => {
 	const rows = [];
 	for (let i = 0; i < 5; i++) {
-		rows.push(toEncryptedRow({ ownerPubkey: OWNER, chatId: "chat1", msgId: `m${i}`, lamportTs: i, senderPubkey: OWNER, id: `id${i}`, status: "sent", deleted: i === 2, text: `сообщение ${i}` }, MESSAGES_PLAINTEXT_FIELDS, dbKey));
+		rows.push(toEncryptedRow({ ownerPubkey: OWNER, chatId: "chat1", msgId: `m${i}`, lamportTs: i, senderPubkey: OWNER, id: `id${i}`, status: "sent", deleted: i === 2, sentAt: 1000 + i, text: `сообщение ${i}` }, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	}
 	await db.table("messages").bulkAdd(rows);
 	const got = await collect(messagesSource, { ownerPubkey: OWNER, dbKey });
 	assert.equal(got.length, 4, "удалённое сообщение попало в выдачу");
 	assert.deepEqual(got.map((g) => g.fields[0]), ["сообщение 4", "сообщение 3", "сообщение 1", "сообщение 0"], "не в порядке от свежих к старым");
+	assert.deepEqual(got[0].data, { messageId: "id4", chatId: "chat1", senderPubkey: OWNER, sentAt: 1004, text: "сообщение 4" });
 });
 
 // --- posts: recent, !deleted && status!=="draft" (правка И0), поля [title, text] ---
@@ -142,6 +148,7 @@ test("posts: исключает deleted И draft, свежие первыми, �
 	assert.equal(got.length, 2, "черновик или удалённый пост попал в выдачу");
 	assert.deepEqual(got.map((g) => g.key), ["p1", "p4"], "не в порядке от свежих к старым");
 	assert.deepEqual(got[0].fields, ["Заголовок 1", "текст 1"]);
+	assert.deepEqual(got[0].data, { postId: "p1", channelId: "ch1", createdAt: 10, title: "Заголовок 1", text: "текст 1" });
 });
 
 // --- channelMessages: recent, !deleted, поле [text] ---
@@ -153,6 +160,7 @@ test("channelMessages: исключает deleted, свежие первыми, 
 	const got = await collect(channelMessagesSource, { ownerPubkey: OWNER, dbKey });
 	assert.equal(got.length, 1);
 	assert.deepEqual(got[0].fields, ["привет"]);
+	assert.deepEqual(got[0].data, { messageId: "cm1", channelId: "ch1", authorPubkey: OWNER, createdAt: 10, text: "привет" });
 });
 
 // --- AbortSignal: recent-источники обязаны остановиться, unordered — тоже

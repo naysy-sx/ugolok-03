@@ -3,7 +3,7 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
 import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, incomingRequests } from "../signals/contacts.js";
-import { place, openChat, openChannel, goTo } from "../signals/place.js";
+import { place, openChat, openChannel, openSearch, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
@@ -105,6 +105,22 @@ export default function NavGroups({ unreadJournalCount }) {
 	const searchId = useId();
 
 	const [query, setQuery] = useState("");
+
+	// Вход на экран поиска — поле показывает зафиксированный запрос
+	// (SEARCH-SPEC.md §3.7). Дальше это снова обычное локальное поле:
+	// правка на экране результатов НЕ трогает выдачу до следующего Enter —
+	// эффект синхронизирует состояние ТОЛЬКО в момент фиксации нового
+	// запроса (смена place.query на экране поиска), не постоянно.
+	useEffect(() => {
+		if (place.value.kind === "search") setQuery(place.value.query);
+	}, [place.value.kind, place.value.kind === "search" ? place.value.query : null]);
+
+	function handleSearchKeyDown(e) {
+		if (e.key !== "Enter") return;
+		const trimmed = query.trim();
+		if (trimmed) openSearch(trimmed); // I-EMPTY-NOOP: пустой запрос — не сюда вовсе
+	}
+
 	const [conversations, setConversations] = useState([]);
 	const [owned, setOwned] = useState([]);
 	const [subscribed, setSubscribed] = useState([]);
@@ -199,8 +215,20 @@ export default function NavGroups({ unreadJournalCount }) {
 				</label>
 				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
-					<input id={searchId} type="search" placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+					<input id={searchId} type="search" placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} onKeyDown={handleSearchKeyDown} />
 				</div>
+				{/* Второй, видимый путь к Enter (SEARCH-SPEC.md §3.7) — контрол
+				    выглядит как обычный фильтр, без этой строки никто не
+				    догадался бы, что здесь есть полноценный поиск по содержимому. */}
+				{query.trim() && (
+					<button type="button" class="sr-cue" onClick={() => openSearch(query.trim())}>
+						<IconMagnifyingGlass aria-hidden="true" />
+						<span class="grow">{t("search.cue", { query: query.trim() })}</span>
+						{/* "Enter" — имя клавиши, не переводится ни в одной локали (тот же
+						    приём, что "Enter"/"Esc" literal в самом мокапе). */}
+						<span class="sr-kbd" aria-hidden="true">Enter</span>
+					</button>
+				)}
 			</div>
 
 			{/* .pane__body — единственный .scroller сайдбара (REGLAMENT.md §1 —
