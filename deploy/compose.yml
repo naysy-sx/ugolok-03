@@ -1,0 +1,54 @@
+# Каркас стека поставки. Не замена server/*/setup.sh и не замена agent/compose/.
+# Честный минимум: `docker compose up` поднимает только web (статика dist/).
+# relay/blossom/turn — profile `full`, образы strfry/blossom на darwin/arm64
+# могут не собраться (см. README.md). proxy — profile `vps` (80/443).
+#
+# Не запускать параллельно с живым server/coturn (порт 3478) или agent/compose
+# без смены портов.
+
+services:
+  web:
+    image: caddy:2
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    volumes:
+      - ../dist:/usr/share/caddy:ro
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - ./config.example.json:/usr/share/caddy/config.json:ro
+    restart: unless-stopped
+
+  relay:
+    image: FIXME
+    ports:
+      - "${RELAY_PORT:-7777}:7777"
+    profiles: ["full"]
+    restart: unless-stopped
+
+  blossom:
+    image: FIXME
+    ports:
+      - "${BLOSSOM_PORT:-8080}:8080"
+    profiles: ["full"]
+    restart: unless-stopped
+
+  turn:
+    image: coturn/coturn:latest
+    ports:
+      - "${TURN_PORT:-3478}:3478"
+      - "${TURN_PORT:-3478}:3478/udp"
+    profiles: ["full"]
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2
+    environment:
+      - UGOLK_DOMAIN=${UGOLK_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+    profiles: ["vps"]
+    depends_on:
+      - web
+    restart: unless-stopped

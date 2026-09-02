@@ -1,0 +1,14 @@
+{
+  "instanceName": "local",
+  "relays": ["ws://127.0.0.1:7777"],
+  "bootstrapRelays": [],
+  "blossomServers": ["http://127.0.0.1:8080"],
+  "iceServers": [
+    { "urls": "stun:127.0.0.1:3478" },
+    {
+      "urls": "turn:127.0.0.1:3478",
+      "username": "ugolok",
+      "credential": "ugolok-dev"
+    }
+  ]
+}
