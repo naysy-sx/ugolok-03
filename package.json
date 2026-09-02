@@ -13,6 +13,12 @@
 	"license": "ISC",
 	"author": "",
 	"type": "module",
+	"engines": {
+		"node": ">=22"
+	},
+	"allowScripts": {
+		"fsevents": false
+	},
 	"main": "index.html",
 	"scripts": {
 		"dev": "vite",

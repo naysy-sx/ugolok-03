@@ -8557,3 +8557,15 @@ ALGO.md §6) на n=1000/10000/100000:
 - [ ] 4.2 Property-тест согласия кэша на частичном заполнении
 - [ ] 4.3 Перенос обхода в воркер
 - [ ] 4.4 НЕ ОТКРЫВАТЬ без отдельного замера — П-2 её не оправдал (см. И0)
+
+## Этап CICD-local (ТЗ 1.3) — каркас поставки без VPS
+
+Триаж: рутина. Не этап мессенджера; каркас CI/релизов/docs на Mini до покупки VPS.
+Канон: `PROCESS-DOCS/CICD/TZ-CICD-LOCAL-SUPERGROK-v1.3.md`.
+`src/` и Vite-плагины не трогаем. `agent/` (этап 63) не переписываем.
+
+- [x] docs поставки (`docs/delivery.md` и спутники)
+- [x] скрипты `ci-check` / `release-hash` / `release-pack`
+- [x] GitHub + Forgejo Actions
+- [x] скелет `deploy/`
+- [x] приёмка: `npm test` 2338/2338, `npm run build` gzip ~957–988 KB (лимит 1304), pack пишет `dist-updates/`, `shasum -c` OK. Полный `ci-check.sh` один раз поймал предсуществующий флак `tests/room-session.test.js` И9 (повтор изолированно 24/24). `src/` не тронут. Без пуша.

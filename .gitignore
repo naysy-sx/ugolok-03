@@ -4,6 +4,8 @@ dist/
 *.log
 .env
 .env.*
+dist-updates/
+deploy/.env
 
 # server/strfry — тестовый relay, поднимается локально по docs в server/README.md.
 # Исходники/сборка/БД не версионируются (бинарь платформозависим, БД — локальные

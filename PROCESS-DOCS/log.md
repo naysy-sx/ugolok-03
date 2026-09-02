@@ -9729,3 +9729,16 @@ Uint8Array, got type=object` в `schnorrGetPublicKey`) — лечится
 
 Полная регрессия: 2312/2312.
 
+## Этап CICD-local (ТЗ 1.3)
+
+Старт: дерево с untracked `.idea/`, `PROCESS-DOCS/CICD/`, `PROCESS-DOCS/REDESIGN/DISCOVERY/` — в коммиты этапа не входят `.idea` и DISCOVERY.
+Триаж: рутина. DESIGN-записка не пишется.
+Тесты `tests/cicd-scripts.test.js` написаны до кода скриптов.
+
+1. `scripts/ci-check.sh` — зелёный с первого раза (inspection).
+2. `scripts/release-hash.sh` — inspection/SKIP-путь зелёный; адверсарно: `set -u` без SKIP_* и `grep secret` вместо `sec:` — ручная правка (журнал, п.9).
+3. `scripts/release-pack.sh` — брак 1: `CI` unbound; брак 2: безусловный `cp SHA256SUMS.asc`. После двух падений — ручная перепись по контракту.
+4. `scripts/serve-updates.sh` — зелёный с первого раза.
+Адверсарные тесты добавлены в `tests/cicd-scripts.test.js` (13/13).
+Регрессия: 2338/2338. Сборка зелёная. `src/` не менялся.
+

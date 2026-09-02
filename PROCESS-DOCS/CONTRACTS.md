@@ -23802,3 +23802,52 @@ SEARCH-SPEC.md §5/§6 в части деталей разметки/CSS/кла�
 - Раздел "Открытые вопросы" SEARCH-SPEC.md §12 (Escape-поведение, кэш при
   смене аккаунта, виртуализация выдачи, поиск по файлам) — не пересмотрен
   заново в свете реализации, статус тот же, что был на момент И0.
+
+## Этап CICD-local (ТЗ 1.3) — каркас поставки без VPS
+
+Триаж: рутина (склейка скриптов, YAML вызывает скрипты, docs).
+Клиент `src/` не читает `config.json`/`version.json` в этом этапе.
+Загрузчик обновлений в UI не добавлять. Vite-плагины `apply:"serve"` не трогать.
+`agent/` (этап 63) не трогать: это self-host инсталлятор, не канал поставки клиента.
+`package.json` `"version"` не бампать (канон версии — git-тег `vX.Y.Z`).
+
+Полный контракт скриптов: `PROCESS-DOCS/CICD/SCRIPTS-CONTRACT.md`.
+
+### Скрипты
+
+| Файл | Роль |
+|---|---|
+| `scripts/ci-check.sh` | `npm ci --ignore-scripts` + `npm test` + `npm run build` + артефакты + gzip ≤ 1304 KB |
+| `scripts/release-hash.sh` | SHA256 `index.html` и `service-worker.js`; GPG опционален (`SKIP_GPG` / нет ключа) |
+| `scripts/release-pack.sh` | дерево `dist-updates/` (`version.json`, `latest/`, `vX.Y.Z/`) |
+| `scripts/serve-updates.sh` | локально `:8787`, не из CI |
+
+`SKIP_INSTALL=1` / `SKIP_BUILD=1` / `SKIP_GPG=1`. Ручной вызов `release-hash.sh` и `release-hash.sh <key-id>` сохраняется.
+
+### Runtime-конфиг (документы + примеры, не загрузчик)
+
+Приоритет эндпоинтов (факт кода + будущий слой):
+
+1. UI / `ugolok.bootstrapEndpoints.v1` в localStorage
+2. Опциональный `config.json` с origin (слоя в `src/` ещё нет)
+3. Build-time `__BUILD_DEFAULT_*`
+
+Примеры: `deploy/config.example.json`, `deploy/version.example.json`.
+`buildHash` в `version.json` — из `SHA256SUMS` для `index.html` (NF-18), не `__BUILD_HASH__`.
+
+### Ветки и окружения
+
+Ветки: `feature/*`, `hotfix/*`, короткие `phase-*`/`spike-*`/`fix/*`/`chore/*` как в RUNBOOK.
+Релиз = annotated tag `vX.Y.Z` на `main`. Не создавать ветки `test`/`prod`/`develop`.
+Окружения: `local` / `test` / `prod` — не ветки. Solo-коммит в `main` допустим.
+
+### CI
+
+`.github/workflows/ci.yml` — PR и push в `main`, Node 22, `bash scripts/ci-check.sh`.
+`.github/workflows/release.yml` — тег `vX.Y.Z` (три числа, без `-phase1`), pack, GitHub Release.
+`.forgejo/workflows/*` — копия смысла. `pull_request_target` запрещён. `npx serve` в CI запрещён.
+
+### Имена
+
+Каталог канала: `dist-updates/`. Прокси: Caddy, не Traefik.
+`deploy/compose.yml` — скелет рядом с `server/*/setup.sh` и `agent/compose/`, не вместо.

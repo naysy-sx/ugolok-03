@@ -128,7 +128,7 @@ npm run preview    # поднимает собранный артефакт ло
 
 В `preview` (не в `dev`!) проверяется SW-ветка: регистрация, `ugolok-cache-v<hash>` в DevTools → Application → Cache Storage, офлайн. **В dev Service Worker’а нет** — `emitServiceWorker` стоит на `apply:'build'`, это by design.
 
-Релиз (NF-18): `git checkout <tag> && npm ci && npm run build`, затем `scripts/release-hash.sh` считает и подписывает хеш `index.html`, инструкция сверки — `docs/verify.md`.
+Релиз (NF-18): `git checkout <tag> && npm ci && npm run build`, затем `scripts/release-hash.sh` считает SHA-256 `index.html` и `service-worker.js` и подписывает суммы, если есть GPG-ключ. Канон поставки — `docs/delivery.md`, сверка — `docs/verify.md`. Каркас CI: `./scripts/ci-check.sh` (то же, что GitHub Actions).
 
 ---
 
@@ -182,8 +182,10 @@ npm run preview    # поднимает собранный артефакт ло
 
 ### 6.4 Теги и релизы (завязано на NF-18)
 
-- Тег на завершении фазы: `git tag v0.1.0-phase1` — якорь, к которому можно вернуться и воспроизвести.
-- Реальный релиз: тег → `git checkout <tag>` → `npm ci` → `npm run build` → `scripts/release-hash.sh`. Тег + лок = воспроизводимость; хеш `index.html` публикуется и подписывается (`docs/verify.md`).
+- Тег на завершении фазы: `git tag v0.1.0-phase1` — якорь плана, к которому можно вернуться. Это **не** релиз клиента.
+- Релиз клиента = annotated tag **`vX.Y.Z`** (три числа, semver) на зелёном `main`. Пока продукт нестабилен — `0.Y.Z`. Подробности: `docs/delivery.md`, `docs/versioning.md`.
+- Сборка релиза: тег → `git checkout <tag>` → `./scripts/ci-check.sh` → `./scripts/release-pack.sh`. Ручная подпись на Mini: `scripts/release-hash.sh` (GPG, если ключ есть). Хеши `index.html` и `service-worker.js` публикуются (`docs/verify.md`).
+- Окружения `local` / `test` / `prod` — не git-ветки. Веток `test`/`prod`/`develop` нет.
 
 ### 6.5 Гигиена коммитов
 
@@ -202,6 +204,8 @@ dist/
 
 **Коммитить обязательно** (не игнорировать): `package-lock.json` (NF-18, без него `npm ci` бессмысленен) и поле `allowScripts` в `package.json` (supply-chain политика, §5). **Никогда не коммитить**: nsec/приватные ключи, `.env` с секретами, реальные relay-эндпоинты если они чувствительны.
 
-### 6.7 На будущее (когда появится CI)
+### 6.7 CI
 
-`main` защищается прогоном: `npm run build` + вектора ts-mls (AC-MLS-VEC) + `strict-allow-scripts=true` (любой неодобренный install-скрипт роняет сборку). Тогда «зелёный main» из дисциплины превращается в гарантию.
+Каркас есть: `.github/workflows/ci.yml` на PR и push в `main` гоняет `scripts/ci-check.sh` (Node 22). Релиз по тегу `vX.Y.Z` — `.github/workflows/release.yml`. Заготовки Forgejo — `.forgejo/workflows/`. Как гонять руками на Mini — `docs/local-cicd.md`.
+
+`npm ci` в CI вызывается с `--ignore-scripts`; в `package.json` зафиксировано `"allowScripts": { "fsevents": false }`. Solo-исключение мелких зелёных коммитов прямо в `main` сохраняется (§6.1).
