@@ -1,0 +1,38 @@
+# Копия смысла .github/workflows/release.yml.
+# softprops/action-gh-release — GitHub-only; на Forgejo заменить на
+# https://code.forgejo.org/actions/forgejo-release (или загрузку файлов в Release).
+# runs-on сменить на лейбл своего runner-а.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: ci-check
+        run: bash scripts/ci-check.sh
+      - name: pack
+        env:
+          SKIP_INSTALL: "1"
+          SKIP_BUILD: "1"
+          SKIP_GPG: "1"
+        run: bash scripts/release-pack.sh "${GITHUB_REF_NAME}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-updates
+          path: dist-updates/

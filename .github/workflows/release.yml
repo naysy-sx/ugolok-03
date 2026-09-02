@@ -1,0 +1,45 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: ci-check
+        run: bash scripts/ci-check.sh
+      - name: pack
+        env:
+          SKIP_INSTALL: "1"
+          SKIP_BUILD: "1"
+          SKIP_GPG: "1"
+        run: bash scripts/release-pack.sh "${GITHUB_REF_NAME}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-updates
+          path: dist-updates/
+      # GitHub-only. На Forgejo заменить на forgejo-release / загрузку файлов в Release.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-updates/version.json
+            dist-updates/changelog.md
+            dist-updates/latest/index.html
+            dist-updates/latest/service-worker.js
+            dist-updates/latest/SHA256SUMS
+            dist-updates/latest/version.json
+            dist-updates/latest/config.example.json
