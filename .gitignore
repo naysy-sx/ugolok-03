@@ -1,3 +1,10 @@
+# Служебные заметки разработки живут в ветке process.
+# .gitignore не защищает от merge process → main: при слиянии файлы вернутся.
+CLAUDE.md
+worker.sh
+.claude/
+PROCESS-DOCS/
+
 node_modules/
 dist/
 .DS_Store
