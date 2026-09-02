@@ -2,12 +2,8 @@
 set -euo pipefail
 
 npm ci --ignore-scripts
-# Один повтор: на ubuntu-latest всплывал флак tests/room-session.test.js И9
-# (оба участника гонки openMode «проигрывают»). Повтор тот же контракт npm test.
-if ! npm test; then
-  echo "npm test упал, один повтор" >&2
-  npm test
-fi
+# И9 стабилизирован правкой теста (первые указатели, без десятка tick).
+npm test
 npm run build
 
 if [ ! -f dist/index.html ] || [ ! -f dist/service-worker.js ]; then
