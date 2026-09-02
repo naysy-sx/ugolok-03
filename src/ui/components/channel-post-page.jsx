@@ -42,6 +42,7 @@ import IconArchive from "../icons/archive.jsx";
 import IconEyeSlash from "../icons/eye-slash.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
+import { scrollToAndFlashMatch } from "../scroll-to-highlight.js";
 import { DueChip, formatDateTime } from "./post-card.jsx";
 import ReactionRow from "./reaction-row.jsx";
 import CommentNode from "./comment-node.jsx";
@@ -177,9 +178,27 @@ export default function ChannelPostPage({
 		el.scrollIntoView({ block: "center" });
 		const target = place.value;
 		if (target.kind === "channel" && target.id === channelId && target.commentId) {
-			place.value = { ...target, commentId: undefined };
+			// Переход из поиска (search.jsx) несёт ещё и highlightParts — сам
+			// комментарий уже точно найден по id, повторный поиск текста внутри
+			// не нужен: подсвечиваем ЦЕЛИКОМ элемент, который и так открыли.
+			if (target.highlightParts?.length) {
+				el.classList.add("search-flash");
+				setTimeout(() => el.classList.remove("search-flash"), 4000);
+			}
+			place.value = { ...target, commentId: undefined, highlightParts: undefined };
 		}
 	}, [commentId, visibleTree]);
+
+	// Тот же переход из поиска, но БЕЗ commentId (совпадение было в самом
+	// посте, не в комментарии) — ищем нужный абзац внутри тела поста.
+	useEffect(() => {
+		if (commentId || !post) return;
+		const target = place.value;
+		if (!(target.kind === "channel" && target.id === channelId && target.postId === postId && target.highlightParts?.length)) return;
+		const body = document.querySelector(".post-page__body");
+		scrollToAndFlashMatch(body, target.highlightParts);
+		place.value = { ...target, highlightParts: undefined };
+	}, [commentId, post]);
 
 	async function runAction(fn) {
 		try {
@@ -314,7 +333,12 @@ export default function ChannelPostPage({
 							{(author.name || "?").trim().charAt(0).toUpperCase()}
 						</div>
 					)}
-					<div class="stack grow" style={{ "--gap": "0" }}>
+					{/* Живой фидбек: --align:center у родителя .post-byline (.bar)
+					    наследуется сюда через CSS custom property и переиспользуется
+					    .stack для СВОЕЙ (перпендикулярной, горизонтальной) оси —
+					    имя/мета оказывались центрированы, а не прижаты к левому
+					    краю. Явный сброс --align на этом уровне обрывает наследование. */}
+					<div class="stack grow" style={{ "--gap": "0", "--align": "normal" }}>
 						<span class={author.isNpub ? "post__author post__author--npub" : "post__author"}>{author.name}</span>
 						<span class="post-page__meta">
 							{t(`recordKind.${kind}`)} · {formatDateTime(post.createdAt)}

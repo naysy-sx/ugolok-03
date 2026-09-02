@@ -454,7 +454,7 @@
 		"more": "Mostrar mais",
 		"cancel": "Cancelar",
 		"reading": "Lendo: {{source}}…",
-		"cue": "Buscar «{{query}}» nas mensagens",
+		"cue": "Buscar «{{query}}» em tudo",
 		"group": {
 			"contact": "Contatos",
 			"channel": "Canais",

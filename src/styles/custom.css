@@ -7846,6 +7846,10 @@ button[type="button"].media-mini-bar-btn {
 	flex-direction: column;
 	gap: var(--space-2xs);
 }
+/* Живой фидбег — "сделать кнопочки белыми": буквально white, не --surface
+   (это и на светлой, и на тёмной теме — маленькие лёгкие "клавиши",
+   отдельные от фона карточки/паттерна под ними; тень вместо рамки держит
+   их отдельными от белого текста/фона, если тема светлая). */
 .post-editor-toolbar-btn {
 	flex: none;
 	width: 2rem;
@@ -7854,11 +7858,13 @@ button[type="button"].media-mini-bar-btn {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border: var(--border-width) solid var(--border);
+	border: none;
 	border-radius: var(--radius-sm);
-	background: none;
+	background: white;
+	box-shadow: 0 1px 2px oklch(0.2 0.03 var(--hue) / 0.16);
 	color: var(--muted);
 	font-size: 1rem;
+	transition: transform var(--transition-speed) var(--transition-ease), box-shadow var(--transition-speed) var(--transition-ease), color var(--transition-speed) var(--transition-ease);
 }
 .post-editor-toolbar-btn .icon {
 	width: 1em;
@@ -7867,13 +7873,15 @@ button[type="button"].media-mini-bar-btn {
 	flex-shrink: 0;
 }
 .post-editor-toolbar-btn:hover {
-	background-color: var(--surface);
-	color: var(--fg);
+	color: var(--accent);
+	transform: translateY(-1px);
+	box-shadow: 0 3px 8px oklch(0.2 0.03 var(--hue) / 0.22);
 }
 .post-editor-toolbar-btn.is-active {
 	background-color: var(--accent);
 	color: var(--accent-contrast);
-	border-color: var(--accent);
+	box-shadow: none;
+	transform: none;
 }
 .post-editor {
 	border: var(--border-width) solid var(--border);
@@ -7881,11 +7889,23 @@ button[type="button"].media-mini-bar-btn {
 	padding: var(--space-s);
 	background-color: var(--surface);
 	min-height: 12rem;
+	transition: border-color var(--transition-speed) var(--transition-ease), box-shadow var(--transition-speed) var(--transition-ease);
+}
+/* Живой фидбег: лёгкая подсветка рамки в фокусе — было незаметно, где
+   именно печатаешь, когда вокруг ещё и паттерн на карточке. */
+.post-editor:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent);
 }
 .post-editor .ProseMirror {
 	outline: none;
 	min-height: 10rem;
 }
+/* Живой фидбег: у первого/последнего абзаца были свои верхний/нижний
+   отступы поверх padding самого .post-editor — визуально "лишний воздух"
+   сверху и снизу текста. */
+.post-editor .ProseMirror > *:first-child { margin-block-start: 0; }
+.post-editor .ProseMirror > *:last-child { margin-block-end: 0; }
 .post-editor-hint {
 	font-size: var(--step--2);
 	color: var(--muted);
@@ -8491,11 +8511,22 @@ button[type="button"].media-mini-bar-btn {
 	gap: var(--space-s);
 }
 
+/* Живой фидбег: форма написания поста была тесной (44rem, происхождение
+   ограничения не объяснено ни в одном комментарии — снято) и выглядела
+   казённо. Точечный паттерн — чистый CSS radial-gradient, не SVG-ассет:
+   единственный способ, которым фон САМ подстраивается под выбранный
+   пользователем акцентный цвет (этап 70, генератор палитры) и под
+   светлую/тёмную тему одновременно, без отдельных картинок на каждый
+   случай. Плотность и прозрачность подобраны так, чтобы не спорить с
+   текстом внутри редактора (там свой сплошной --surface поверх). */
 .composer-card {
-	background: var(--surface-raised);
+	position: relative;
+	background:
+		radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--accent) 16%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+		var(--surface-raised);
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius-lg);
-	max-width: 44rem;
+	box-shadow: var(--shadow);
 }
 .post-cta--compact {
 	width: auto;
@@ -9521,13 +9552,17 @@ button[type="button"].media-mini-bar-btn {
 }
 
 .sr-group { --gap: var(--space-s); scroll-margin-block-start: var(--space-m); }
+/* Живой фидбег: было --align:baseline с align-self:center только на
+   иконке — смешение двух режимов выравнивания в одном flex-ряду (текст
+   baseline, иконка center) и давало "пляшущий" заголовок. Один режим на
+   весь ряд — никто не плавает. */
 .sr-group-head {
 	--gap: var(--space-2xs);
-	--align: baseline;
+	--align: center;
 	padding-block-end: var(--space-2xs);
 	border-block-end: var(--border-width) solid var(--border);
 }
-.sr-group-head .icon { font-size: var(--step-1); color: var(--muted); align-self: center; }
+.sr-group-head .icon { font-size: var(--step-1); color: var(--muted); }
 .sr-group-count { color: var(--muted); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
 
 /* Строка попадания: сообщение, комментарий, чат канала. */
@@ -9558,12 +9593,14 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius-sm);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
+	overflow: hidden; /* обрезает фото по скруглению рамки */
 	display: grid;
 	place-items: center;
 	font-size: var(--step--1);
 	font-weight: var(--weight-bold);
 	color: var(--muted);
 }
+.sr-hit-ava-img { inline-size: 100%; block-size: 100%; object-fit: cover; }
 /* Кто -> где -> когда. «Где» раньше времени: в глобальной выдаче
    одинаковые снипеты из разных чатов иначе неразличимы. */
 .sr-hit-head { grid-column: 2; --gap: var(--space-2xs); --align: baseline; font-size: var(--step--1); }
@@ -9593,6 +9630,25 @@ button[type="button"].media-mini-bar-btn {
 	font-weight: var(--weight-bold);
 }
 .sr-ellipsis { color: var(--muted); }
+
+/* Живой фидбек: переход из поиска в длинный пост/комментарий теперь
+   прокручивает к найденному абзацу и на 4 секунды подсвечивает его целиком
+   маркерным (не приглушённым, в отличие от .sr-hit mark выше) цветом —
+   лаймовым, чтобы точно бросалось в глаза независимо от темы. Один
+   keyframes на обе темы: lime достаточно яркий и на светлом, и на тёмном
+   фоне без раздельных значений. scroll-to-highlight.js навешивает и
+   снимает класс сам, transition здесь — только на СНЯТИЕ (плавное
+   угасание), а не на постановку (постановка — мгновенная, чтобы взгляд
+   сразу зацепился). */
+.search-flash {
+	animation: search-flash-fade 4s ease-out;
+	border-radius: var(--radius-sm);
+	outline: 2px solid transparent;
+}
+@keyframes search-flash-fade {
+	0%, 25% { background-color: oklch(0.87 0.23 128 / 0.65); outline-color: oklch(0.7 0.23 128); }
+	100% { background-color: transparent; outline-color: transparent; }
+}
 
 /* Цитата родителя у комментария — без неё непонятно, к чему он. */
 .sr-quote {
@@ -9629,6 +9685,10 @@ button[type="button"].media-mini-bar-btn {
 
 .sr-kbd {
 	display: inline-block;
+	flex: none; /* живой фидбек: без этого flex-родитель (.sr-cue) сжимал
+	               подпись "Enter" уже её собственной ширины — текст вылезал
+	               за рамку. */
+	white-space: nowrap;
 	font-size: var(--step--2);
 	font-family: var(--font-mono);
 	border: var(--border-width) solid var(--border);

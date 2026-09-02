@@ -454,7 +454,7 @@
 		"more": "Meer tonen",
 		"cancel": "Annuleren",
 		"reading": "Bezig met lezen: {{source}}…",
-		"cue": "Zoek naar „{{query}}” in berichten",
+		"cue": "Zoek naar „{{query}}” overal",
 		"group": {
 			"contact": "Contacten",
 			"channel": "Kanalen",

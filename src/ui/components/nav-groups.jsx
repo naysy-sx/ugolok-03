@@ -3,7 +3,7 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
 import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, incomingRequests } from "../signals/contacts.js";
-import { place, openChat, openChannel, openSearch, goTo } from "../signals/place.js";
+import { place, openChat, openChannel, openSearch, closeSearch, goTo } from "../signals/place.js";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
@@ -20,6 +20,7 @@ import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
+import IconCross from "../icons/cross.jsx";
 import IconStar from "../icons/star.jsx";
 import IconStarFill from "../icons/star-fill.jsx";
 import IconCompass from "../icons/compass.jsx";
@@ -216,13 +217,25 @@ export default function NavGroups({ unreadJournalCount }) {
 				<div class="file-search-field row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconMagnifyingGlass aria-hidden="true" />
 					<input id={searchId} type="search" placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} onKeyDown={handleSearchKeyDown} />
+					{/* Живой фидбек: после запуска поиска это поле молча "висит" с
+					    зафиксированным запросом, и не каждый догадается про Escape
+					    или кнопку "Назад" на самом экране результатов. Явная кнопка
+					    отмены прямо в поле — там, где человек только что нажал Enter,
+					    самое заметное место. Возвращает на экран, с которого искали
+					    (closeSearch, place.js), не жёстко в Журнал. */}
+					{place.value.kind === "search" && (
+						<button type="button" class="icon-btn" aria-label={t("search.closeAria")} onClick={closeSearch}>
+							<IconCross aria-hidden="true" />
+						</button>
+					)}
 				</div>
 				{/* Второй, видимый путь к Enter (SEARCH-SPEC.md §3.7) — контрол
 				    выглядит как обычный фильтр, без этой строки никто не
-				    догадался бы, что здесь есть полноценный поиск по содержимому. */}
+				    догадался бы, что здесь есть полноценный поиск по содержимому.
+				    Без своей лупы — она уже есть в поле выше, дублировать не нужно
+				    (живой фидбек). */}
 				{query.trim() && (
 					<button type="button" class="sr-cue" onClick={() => openSearch(query.trim())}>
-						<IconMagnifyingGlass aria-hidden="true" />
 						<span class="grow">{t("search.cue", { query: query.trim() })}</span>
 						{/* "Enter" — имя клавиши, не переводится ни в одной локали (тот же
 						    приём, что "Enter"/"Esc" literal в самом мокапе). */}

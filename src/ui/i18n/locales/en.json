@@ -454,7 +454,7 @@
 		"more": "Show more",
 		"cancel": "Cancel",
 		"reading": "Reading: {{source}}…",
-		"cue": "Search “{{query}}” in messages",
+		"cue": "Search “{{query}}” everywhere",
 		"group": {
 			"contact": "Contacts",
 			"channel": "Channels",

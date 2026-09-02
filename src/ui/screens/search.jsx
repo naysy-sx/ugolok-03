@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { searchState, sortByDisplayOrder } from "../signals/search.js";
-import { place, goTo, openChat, openChannel, openChannelPost } from "../signals/place.js";
+import { place, closeSearch, openChat, openChannel, openChannelPost } from "../signals/place.js";
 import { runSearch, cancelSearch, loadMore } from "./search-live.js";
 import { buildSnippet } from "../search-highlight.js";
 import Screen from "../components/screen.jsx";
@@ -42,10 +42,10 @@ function openHit(type, item) {
 			openChannel(item.channelId);
 			return;
 		case "post":
-			openChannelPost(item.channelId, item.key);
+			openChannelPost(item.channelId, item.key, undefined, searchState.value.parts);
 			return;
 		case "comment":
-			openChannelPost(item.channelId, item.postId, item.key);
+			openChannelPost(item.channelId, item.postId, item.key, searchState.value.parts);
 			return;
 		case "channelMessage":
 			openChannel(item.channelId, { subTab: "chat" });
@@ -69,9 +69,13 @@ function ContactChannelHit({ item, parts, cursor, cursorKeyValue, onOpen }) {
 			<div class="ucard ucard--row" tabindex={cursor ? 0 : -1} data-hit data-cursor-key={cursorKeyValue} data-cursor={cursor ? "true" : undefined}>
 				<button class="ucard__who" type="button" tabindex={-1} onClick={onOpen}>
 					<figure class="ucard__avatar">
-						<div aria-hidden="true" class="ucard__photo ucard__photo--empty row" style={{ "--align": "center", justifyContent: "center" }}>
-							{item.avatarInitial}
-						</div>
+						{item.avatarUrl ? (
+							<img src={item.avatarUrl} alt="" class="ucard__photo" />
+						) : (
+							<div aria-hidden="true" class="ucard__photo ucard__photo--empty row" style={{ "--align": "center", justifyContent: "center" }}>
+								{item.avatarInitial}
+							</div>
+						)}
 					</figure>
 					<span class="ucard__name"><Snippet text={item.name} parts={parts} /></span>
 					<span class="ucard__bio"><Snippet text={item.bio} parts={parts} /></span>
@@ -86,7 +90,9 @@ function TextHit({ type, item, parts, cursor, cursorKeyValue, onOpen }) {
 	return (
 		<li>
 			<button class="sr-hit" type="button" tabindex={cursor ? 0 : -1} data-hit data-cursor-key={cursorKeyValue} data-cursor={cursor ? "true" : undefined} onClick={onOpen}>
-				<span class="sr-hit-ava" aria-hidden="true">{item.avatarInitial}</span>
+				<span class="sr-hit-ava" aria-hidden="true">
+					{item.avatarUrl ? <img src={item.avatarUrl} alt="" class="sr-hit-ava-img" /> : item.avatarInitial}
+				</span>
 				<span class="sr-hit-head bar">
 					<span class="sr-hit-who">{item.who}</span>
 					<span class="sr-hit-where"><Icon aria-hidden="true" />{item.where}</span>
@@ -210,8 +216,10 @@ export default function Search() {
 	const flatKeys = useMemo(() => orderedGroups.flatMap((g) => g.hits.map((h) => `${g.type}:${h.key}`)), [orderedGroups]);
 	const flatItems = useMemo(() => orderedGroups.flatMap((g) => g.hits.map((h) => ({ type: g.type, item: h }))), [orderedGroups]);
 
+	// closeSearch (place.js) возвращает на экран, с которого искали, а не
+	// жёстко в Журнал (живой фидбек — раньше уводило не туда, откуда пришли).
 	function close() {
-		goTo({ kind: "journal" });
+		closeSearch();
 	}
 
 	function moveCursor(delta) {

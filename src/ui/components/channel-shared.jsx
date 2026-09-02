@@ -45,10 +45,6 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const fileInputRef = useRef(null);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
-	const author = commentAuthorInfo(ownerPubkey);
-	useEffect(() => {
-		ensureProfilesFetched([ownerPubkey], fetchProfiles).catch(() => {});
-	}, [ownerPubkey]);
 
 	const plainLength = text ? toPlainText(parseRich(text)).length : 0;
 	const plainTooLong = plainLength > POST_MAX_LENGTH;
@@ -96,49 +92,42 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 
 	return (
 		<>
-		<form class="composer-card box stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-s)" }}>
+		{/* Живой фидбек: аватар автора здесь не нёс информации (единственный
+		    автор — сам пишущий, и так ясно) и отнимал место у поля ввода —
+		    убран, форма растянута на всю ширину (composer-card больше не
+		    ограничена 44rem, см. custom.css). */}
+		<form class="composer-card box stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{error}
 				</p>
 			)}
-			<div class="bar" style={{ "--gap": "var(--space-m)", "--align": "flex-start" }}>
-				{author.avatar ? (
-					<img src={author.avatar} alt="" class="post__ava rigid" />
-				) : (
-					<div aria-hidden="true" class="post__ava post__ava-fallback rigid row" style={{ "--align": "center", justifyContent: "center" }}>
-						{(author.name || "?").trim().charAt(0).toUpperCase()}
-					</div>
-				)}
-				<div class="stack grow" style={{ "--gap": "var(--space-s)" }}>
-					<label class="visually-hidden" for="post-text">
-						{t("channel.composer.postTextLabel")}
-					</label>
-					<PostEditor initialSource={text} onChange={setText} />
-					{(plainTooLong || sourceTooLong) && (
-						<p role="alert" style={{ color: "var(--bad)" }}>
-							{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
-						</p>
-					)}
-					{(tray.items.length > 0 || tray.errors.length > 0) && (
-						<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
-					)}
-					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-						<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-						<button type="button" onClick={() => fileInputRef.current?.click()}>
-							<IconPaperclip /> {t("channel.composer.attachButton")}
-						</button>
-						<button type="button" onClick={() => setFilePickerOpen(true)}>
-							<IconFolder /> {t("channel.composer.attachFromStorageButton")}
-						</button>
-						<button type="submit" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
-							<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
-						</button>
-						<button type="button" onClick={onCancel} disabled={busy}>
-							<IconCross /> {t("common.cancel")}
-						</button>
-					</div>
-				</div>
+			<label class="visually-hidden" for="post-text">
+				{t("channel.composer.postTextLabel")}
+			</label>
+			<PostEditor initialSource={text} onChange={setText} />
+			{(plainTooLong || sourceTooLong) && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
+				</p>
+			)}
+			{(tray.items.length > 0 || tray.errors.length > 0) && (
+				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
+			)}
+			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+				<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
+				<button type="button" onClick={() => fileInputRef.current?.click()}>
+					<IconPaperclip /> {t("channel.composer.attachButton")}
+				</button>
+				<button type="button" onClick={() => setFilePickerOpen(true)}>
+					<IconFolder /> {t("channel.composer.attachFromStorageButton")}
+				</button>
+				<button type="submit" class="post-cta--compact" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
+					<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
+				</button>
+				<button type="button" onClick={onCancel} disabled={busy}>
+					<IconCross /> {t("common.cancel")}
+				</button>
 			</div>
 		</form>
 		{filePickerOpen && <FilePicker predicate={() => true} multiple={false} onSelect={handleAttachmentFromStorage} onCancel={() => setFilePickerOpen(false)} />}

@@ -19,6 +19,7 @@ import { parseQuery } from "../../domain/search/matching.js";
 import { searchOverSources, SOURCES_IN_ORDER } from "../../domain/search/engine.js";
 import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { getProfile } from "../../core/crypto/keystore.js";
 
 const LIMIT_PER_TYPE = 100; // SEARCH-SPEC.md §6.3: 50-100 на группу
 
@@ -60,6 +61,17 @@ function who(pubkey, ownerPubkey) {
 	return profiles.value[pubkey]?.name || shortPubkey(pubkey);
 }
 
+// Живой фидбек: аватары (включая свой собственный) в выдаче не
+// показывались — были только инициалы. Свой аватар живёт в keystore
+// (account-card.jsx's паттерн — avatar/локальный превью первым, потом
+// avatarUrl/Blossom), чужой — в уже загруженном сигнале profiles
+// (nav-groups.jsx's PersonAvatar тем же путём). ownAvatarUrl вычисляется
+// один раз на прогон (см. runSearch), не на каждое попадание.
+function avatarUrlFor(pubkey, ownerPubkey, ownAvatarUrl) {
+	if (pubkey === ownerPubkey) return ownAvatarUrl;
+	return profiles.value[pubkey]?.picture || null;
+}
+
 async function loadChannelNames(ownerPubkey, dbKey) {
 	const rows = await db.table("channels").where("ownerPubkey").equals(ownerPubkey).toArray();
 	const map = new Map();
@@ -71,12 +83,19 @@ async function loadChannelNames(ownerPubkey, dbKey) {
 // data} движка. channelNames — Map, догружена один раз на весь прогон
 // (не на каждое попадание) — каналов десятки-сотни (SEARCH-ALGO.md §2),
 // отдельное чтение на попадание было бы Θ(результатов) лишних запросов.
-function toHit(type, data, ownerPubkey, channelNames) {
+function toHit(type, data, ownerPubkey, channelNames, ownAvatarUrl) {
 	switch (type) {
 		case "contact":
-			return { key: data.contactPubkey, contactPubkey: data.contactPubkey, name: data.name, bio: data.about };
+			// avatarInitial отсутствовал здесь вовсе (найдено при разборе живого
+			// фидбека про аватары) — карточка контакта показывала ПУСТОЙ кружок,
+			// не букву, пока не найден avatarUrl.
+			return { key: data.contactPubkey, contactPubkey: data.contactPubkey, name: data.name, bio: data.about, avatarInitial: initial(data.name), avatarUrl: data.picture || null };
 		case "channel":
-			return { key: data.channelId, channelId: data.channelId, name: data.name, bio: [data.description, data.rules].filter(Boolean).join(" ") };
+			// Аватар канала сознательно не гидратируется здесь — требует
+			// того же async-декрипта+фетча через Blossom, что ChannelAvatarThumb
+			// (полный объект канала, не просто id/name) — вне минимального
+			// решения этой правки, инициалы остаются как есть.
+			return { key: data.channelId, channelId: data.channelId, name: data.name, bio: [data.description, data.rules].filter(Boolean).join(" "), avatarInitial: initial(data.name) };
 		case "post":
 			return { key: data.postId, channelId: data.channelId, title: data.title, excerpt: data.text, channelName: channelNames.get(data.channelId) ?? "", time: formatTime(data.createdAt) };
 		case "comment":
@@ -88,6 +107,7 @@ function toHit(type, data, ownerPubkey, channelNames) {
 				where: channelNames.get(data.channelId) ?? "",
 				time: formatTime(data.createdAt),
 				avatarInitial: initial(who(data.authorPubkey, ownerPubkey)),
+				avatarUrl: avatarUrlFor(data.authorPubkey, ownerPubkey, ownAvatarUrl),
 				text: data.text,
 				// quote (цитата родителя) сознательно не гидратируется здесь —
 				// требует отдельного чтения родительского поста/комментария,
@@ -101,6 +121,7 @@ function toHit(type, data, ownerPubkey, channelNames) {
 				where: channelNames.get(data.channelId) ?? "",
 				time: formatTime(data.createdAt),
 				avatarInitial: initial(who(data.authorPubkey, ownerPubkey)),
+				avatarUrl: avatarUrlFor(data.authorPubkey, ownerPubkey, ownAvatarUrl),
 				text: data.text,
 			};
 		case "message": {
@@ -112,6 +133,7 @@ function toHit(type, data, ownerPubkey, channelNames) {
 				where: t("search.group.message"),
 				time: formatTime(data.sentAt),
 				avatarInitial: initial(label),
+				avatarUrl: avatarUrlFor(data.senderPubkey, ownerPubkey, ownAvatarUrl),
 				text: data.text,
 			};
 		}
@@ -119,11 +141,11 @@ function toHit(type, data, ownerPubkey, channelNames) {
 }
 
 async function runOneSource(source, limit, signal) {
-	const { ownerPubkey, dbKey, ctx, channelNames, query } = runContext;
+	const { ownerPubkey, dbKey, ctx, channelNames, query, ownAvatarUrl } = runContext;
 	const hits = [];
 	for await (const { data } of searchOverSources([source], ctx, query, { signal, limitPerType: limit })) {
 		if (signal.aborted) return null;
-		hits.push(toHit(source.type, data, ownerPubkey, channelNames));
+		hits.push(toHit(source.type, data, ownerPubkey, channelNames, ownAvatarUrl));
 	}
 	return signal.aborted ? null : hits;
 }
@@ -155,8 +177,10 @@ export async function runSearch(query) {
 	}
 
 	const channelNames = await loadChannelNames(ownerPubkey, dbKey);
+	const ownProfile = await getProfile(ownerPubkey).catch(() => null);
+	const ownAvatarUrl = ownProfile?.avatar || ownProfile?.avatarUrl || null;
 	if (isStale(myRunId)) return;
-	runContext = { myRunId, ownerPubkey, dbKey, ctx, channelNames, query };
+	runContext = { myRunId, ownerPubkey, dbKey, ctx, channelNames, query, ownAvatarUrl };
 
 	for (const source of SOURCES_IN_ORDER) {
 		if (isStale(myRunId) || controller.signal.aborted) return;

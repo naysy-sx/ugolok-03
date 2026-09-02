@@ -454,7 +454,7 @@
 		"more": "もっと見る",
 		"cancel": "キャンセル",
 		"reading": "読み込み中: {{source}}…",
-		"cue": "「{{query}}」をメッセージから検索",
+		"cue": "「{{query}}」をすべてから検索",
 		"group": {
 			"contact": "連絡先",
 			"channel": "チャンネル",

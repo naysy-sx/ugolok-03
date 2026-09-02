@@ -33,13 +33,37 @@ export function openChannel(channelId, target = {}) {
 
 // ТЗ редизайн канала A — явный вход на страницу записи. postId живёт,
 // пока пользователь не вернётся в ленту (openChannel(channelId)).
-export function openChannelPost(channelId, postId, commentId) {
-	place.value = { kind: "channel", id: channelId, postId, commentId };
+//
+// highlightParts — необязательные части поискового запроса (живой фидбек,
+// переход из поиска): channel-post-page.jsx прокручивает к первому
+// абзацу/пункту, содержащему любую из частей, и на время подсвечивает
+// его целиком, а после использования сам стирает поле из place (тот же
+// приём, что уже применён для commentId чуть ниже по файлу).
+export function openChannelPost(channelId, postId, commentId, highlightParts) {
+	// Ключ добавляется, только если реально передан — иначе место "channel"
+	// без поиска получало бы лишнее highlightParts:undefined и расходилось
+	// бы с точной формой, которую уже проверяют существующие тесты/код
+	// (deepStrictEqual различает "ключа нет" и "ключ есть, значение undefined").
+	place.value = { kind: "channel", id: channelId, postId, commentId, ...(highlightParts ? { highlightParts } : {}) };
 }
 
 // Глобальный поиск (SEARCH-SPEC.md §3.7). query — непустая строка,
 // зафиксированная по Enter (вызывающий код гарантирует I-EMPTY-NOOP —
 // на пустом поле openSearch не вызывается вовсе, не сюда).
+//
+// placeBeforeSearch — куда вернуться по closeSearch (живой фидбек:
+// экран результатов не даёт очевидного способа уйти, кнопка отмены
+// обязана вернуть на ТО МЕСТО, откуда искали, не жёстко в Журнал).
+// Запоминается только при ВХОДЕ в поиск (kind ещё не "search") — повторный
+// openSearch С ЭКРАНА РЕЗУЛЬТАТОВ (уточнение запроса) не должен
+// перезаписывать точку возврата на сам экран поиска.
+let placeBeforeSearch = DEFAULT_PLACE;
+
 export function openSearch(query) {
+	if (place.value.kind !== "search") placeBeforeSearch = place.value;
 	place.value = { kind: "search", query };
+}
+
+export function closeSearch() {
+	place.value = placeBeforeSearch;
 }

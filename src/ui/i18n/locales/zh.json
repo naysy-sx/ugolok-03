@@ -454,7 +454,7 @@
 		"more": "显示更多",
 		"cancel": "取消",
 		"reading": "正在读取：{{source}}…",
-		"cue": "在消息中搜索“{{query}}”",
+		"cue": "在所有内容中搜索“{{query}}”",
 		"group": {
 			"contact": "联系人",
 			"channel": "频道",

@@ -66,7 +66,7 @@ test("contacts: находит только peer'ов в state=CONTACT, поля
 		toEncryptedRow({ owner: OWNER, peer: "3".repeat(64), state: "OUTGOING_PENDING" }, CONTACT_RELATIONSHIPS_PLAINTEXT_FIELDS, dbKey),
 	]);
 	await db.table("contactProfiles").bulkAdd([
-		toEncryptedRow({ ownerPubkey: OWNER, contactPubkey: "1".repeat(64), name: "kukusya", about: "обожает питона", watched: 0, seenAt: 1 }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow({ ownerPubkey: OWNER, contactPubkey: "1".repeat(64), name: "kukusya", about: "обожает питона", picture: "https://example.com/kukusya.jpg", watched: 0, seenAt: 1 }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKey),
 		toEncryptedRow({ ownerPubkey: OWNER, contactPubkey: "2".repeat(64), name: "заблокированный", about: "", watched: 0, seenAt: 1 }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKey),
 		toEncryptedRow({ ownerPubkey: OWNER, contactPubkey: "3".repeat(64), name: "ещё не принят", about: "", watched: 0, seenAt: 1 }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKey),
 	]);
@@ -77,7 +77,7 @@ test("contacts: находит только peer'ов в state=CONTACT, поля
 	assert.deepEqual(got[0].fields, ["kukusya", "обожает питона"]);
 	// data — гидратация для навигации/отображения (И3, закрытие пробела
 	// контракта §3.3: engine.js раньше отдавал только {type,key,sortKey}).
-	assert.deepEqual(got[0].data, { contactPubkey: "1".repeat(64), name: "kukusya", about: "обожает питона" });
+	assert.deepEqual(got[0].data, { contactPubkey: "1".repeat(64), name: "kukusya", about: "обожает питона", picture: "https://example.com/kukusya.jpg" });
 });
 
 test("contacts: profile-строка без contactRelationships вовсе — не найден (переживший removeContact, И0 П-3)", async () => {
