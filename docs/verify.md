@@ -8,6 +8,10 @@
 - `SHA256SUMS` — SHA-256 хеши собранных `index.html` и `service-worker.js`;
 - `SHA256SUMS.asc` — GPG-подпись этого файла ключом владельца проекта (если ключа нет, релиз может выйти без `.asc`).
 
+Текущий GitHub Release собирается с `SKIP_GPG=1`: файла `SHA256SUMS.asc`
+в релизе может не быть. Проверка подписи (шаг 4) нужна **только когда
+`.asc` приложен**. Не каждый тег уже подписан.
+
 Критичный файл по-прежнему `index.html` (весь клиент). `service-worker.js` проверяется той же командой `sha256sum -c` / `shasum -a 256 -c`.
 
 Ниже — как самостоятельно убедиться, что конкретная сборка
@@ -36,7 +40,7 @@ gpg --keyserver hkps://keys.openpgp.org --recv-keys <KEY_ID>
 
 ```sh
 git clone <URL репозитория>
-cd ugolok-2-project
+cd ugolok-03
 git checkout <тег или коммит релиза>
 npm ci                      # строго по package-lock.json — версии зависимостей зафиксированы
 npm run build                # создаёт dist/index.html + dist/service-worker.js

@@ -12,6 +12,11 @@ npm ci --ignore-scripts
 ./scripts/serve-updates.sh   # опционально, http://127.0.0.1:8787/
 ```
 
+`npm test` — команда из `package.json`: `node --test tests/*.test.js tests/harness/*.test.js`. В сюите harness: `fake-relay.test.js` и `ws-bridge.test.js`. Хелперы без суффикса `.test.js` не подхватываются. На Node 22/24 каталог `node --test tests` не рекурсирует.
+
+Тяжёлые repro (реальные процессы/MLS) вручную:
+`node --test tests/harness/m1-repro.mjs tests/harness/m3-repro.mjs tests/harness/device.repro.mjs`
+
 `ci-check.sh` сам делает `npm ci --ignore-scripts`, тесты, сборку и проверку размера. Отдельный `npm ci` нужен, если хотите зависимости до скрипта.
 
 Compose — отдельно, только если Docker уже стоит: `docs/environments.md`, `deploy/README.md`. Не из CI.
@@ -30,7 +35,7 @@ Compose — отдельно, только если Docker уже стоит: `d
 
 1. PR и push в `main` → `.github/workflows/ci.yml` (проектный Node **22**, `bash scripts/ci-check.sh`). Сами экшены — `actions/checkout@v5` и `actions/setup-node@v6` (рантайм Node 24; `@v4` даёт предупреждение GitHub про deprecated Node 20).
 2. Annotated тег `vX.Y.Z` (три числа, без суффикса) → `.github/workflows/release.yml`: проверка, pack, GitHub Release с деревом канала.
-3. Секрет `GPG_PRIVATE_KEY` опционален. Нет секрета — релиз без `SHA256SUMS.asc`. Подпись как раньше делается руками на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
+3. Workflow релиза **всегда** вызывает pack с `SKIP_GPG=1`. Секрета `GPG_PRIVATE_KEY` в Actions нет. Подпись — ручной путь на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
 
 Вкладки: репозиторий → Actions. Локально YAML не запускает runner.
 
@@ -42,4 +47,4 @@ A. Как сейчас: `server/*/setup.sh` + `run.sh` + `npm run dev` (Vite-п�
 
 B. `deploy/compose.yml` — каркас, на VPS станет основным. На darwin/arm64 образы relay/blossom могут не собраться — это ожидаемо, см. `deploy/README.md`.
 
-`agent/` — отдельный инсталлятор своего инстанса (этап 63), не замена этому каркасу.
+`agent/` — отдельный инсталлятор своего инстанса, не замена этому каркасу.

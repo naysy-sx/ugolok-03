@@ -10,13 +10,17 @@ SSOT по поднятию проекта с нуля и по работе с gi
 Это и есть «5 минут». Работает ровно потому, что `package-lock.json` закоммичен.
 
 ```bash
-git clone <repo> ugolok-2-project
-cd ugolok-2-project
+git clone <repo> ugolok-03
+cd ugolok-03
 npm ci          # строго по локу — воспроизводимо (NF-18), не npm install
 npm run dev     # http://localhost:5173
 ```
 
-`npm ci`, а не `npm install`: `ci` ставит ровно то, что в локе, не трогает `package.json`, не плывут версии. Это и есть «воспроизводимая сборка» из задачи 1.10.
+`npm ci`, а не `npm install`: `ci` ставит ровно то, что в локе, не трогает `package.json`, не плывут версии.
+
+Проверки: `npm test` (`node --test tests/*.test.js tests/harness/*.test.js`), `npm run build`, либо `./scripts/ci-check.sh`.
+
+Служебные заметки разработки живут в ветке `process` того же репозитория — это не вход для контрибьютора. Ветка публичная, не обещать секретность. `.gitignore` на `main` не блокирует merge `process` → `main`: при слиянии файлы вернутся.
 
 Если `npm ci` ругнётся на `allow-scripts` (fsevents) — это норма, не ошибка, см. §5.
 
@@ -49,7 +53,7 @@ Dev: `vite` + `@preact/preset-vite` + `vite-plugin-singlefile`.
 ### 3.1 Каркас
 
 ```bash
-mkdir ugolok-2-project && cd ugolok-2-project
+mkdir ugolok-03 && cd ugolok-03
 npm init -y
 
 mkdir -p scripts docs bench public \
@@ -209,3 +213,5 @@ dist/
 Каркас есть: `.github/workflows/ci.yml` на PR и push в `main` гоняет `scripts/ci-check.sh` (Node 22). Релиз по тегу `vX.Y.Z` — `.github/workflows/release.yml`. Заготовки Forgejo — `.forgejo/workflows/`. Как гонять руками на Mini — `docs/local-cicd.md`.
 
 `npm ci` в CI вызывается с `--ignore-scripts`; в `package.json` зафиксировано `"allowScripts": { "fsevents": false }`. Solo-исключение мелких зелёных коммитов прямо в `main` сохраняется (§6.1).
+
+`npm test` в `package.json` — `node --test tests/*.test.js tests/harness/*.test.js`. То же, что гоняет `ci-check.sh`. На этой версии Node `node --test tests` (каталог) не рекурсирует, а пытается загрузить модуль `tests`.
