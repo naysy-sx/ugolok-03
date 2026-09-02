@@ -171,8 +171,8 @@ test("GitHub Actions release.yml на semver-тег, pack, contents write", () =
 	assert.match(src, /scripts\/ci-check\.sh/);
 	assert.match(src, /scripts\/release-pack\.sh/);
 	assert.match(src, /contents:\s*write/);
-	assert.match(src, /actions\/checkout@v4/);
-	assert.match(src, /actions\/setup-node@v4/);
+	assert.match(src, /actions\/checkout@v5/);
+	assert.match(src, /actions\/setup-node@v6/);
 	assert.equal(src.includes("npx serve"), false);
 	assert.equal(src.includes("pull_request_target"), false);
 });

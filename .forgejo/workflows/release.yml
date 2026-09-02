@@ -17,10 +17,10 @@ jobs:
     if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -32,7 +32,7 @@ jobs:
           SKIP_BUILD: "1"
           SKIP_GPG: "1"
         run: bash scripts/release-pack.sh "${GITHUB_REF_NAME}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: ugolok-updates
           path: dist-updates/

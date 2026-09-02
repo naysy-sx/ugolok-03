@@ -28,7 +28,7 @@ Compose — отдельно, только если Docker уже стоит: `d
 
 Пока origin GitHub:
 
-1. PR и push в `main` → `.github/workflows/ci.yml` (Node 22, `bash scripts/ci-check.sh`).
+1. PR и push в `main` → `.github/workflows/ci.yml` (проектный Node **22**, `bash scripts/ci-check.sh`). Сами экшены — `actions/checkout@v5` и `actions/setup-node@v6` (рантайм Node 24; `@v4` даёт предупреждение GitHub про deprecated Node 20).
 2. Annotated тег `vX.Y.Z` (три числа, без суффикса) → `.github/workflows/release.yml`: проверка, pack, GitHub Release с деревом канала.
 3. Секрет `GPG_PRIVATE_KEY` опционален. Нет секрета — релиз без `SHA256SUMS.asc`. Подпись как раньше делается руками на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
 
