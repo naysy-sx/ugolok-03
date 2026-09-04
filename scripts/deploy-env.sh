@@ -58,15 +58,19 @@ PY
 
 echo "deploy-env: env=$ENV www=$WWW"
 
+ICE_FILE="$(mktemp)"
+printf '%s' "$ICE_JSON" >"$ICE_FILE"
+trap 'rm -f "$ICE_FILE"' EXIT
+
 docker run --rm \
 	-v "$ROOT":/src \
+	-v "$ICE_FILE":/ice.json:ro \
 	-w /src \
 	-e BUILD_DEFAULT_RELAYS="$RELAY_JSON" \
 	-e BUILD_BOOTSTRAP_RELAYS="$RELAY_JSON" \
 	-e BUILD_DEFAULT_BLOSSOM_SERVERS="$BLOSSOM_JSON" \
-	-e BUILD_DEFAULT_ICE_SERVERS="$ICE_JSON" \
 	node:22-bookworm \
-	bash -lc 'npm ci --ignore-scripts && npm run build'
+	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"; npm ci --ignore-scripts && npm run build'
 
 if [[ ! -f dist/index.html || ! -f dist/service-worker.js ]]; then
 	echo "deploy-env: нет dist/index.html или dist/service-worker.js" >&2
