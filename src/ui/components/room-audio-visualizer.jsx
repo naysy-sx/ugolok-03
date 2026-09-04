@@ -66,6 +66,28 @@ function buildHeatPalette(accentColor) {
 	return palette;
 }
 
+// Тот же приём, что call-overlay.jsx RemoteAudio: удалённый MediaStream в
+// Chrome/Safari не звучит из AudioContext.destination, только из <audio srcObject>.
+// Граф (спектрограмма/уровни) остаётся; громкость комнаты — volume у этих элементов,
+// masterGain графа держим на 0, чтобы не словить удвоенный звук там, где destination всё же играет.
+function RemoteRoomAudio({ stream, volume }) {
+	const audioRef = useRef(null);
+	useEffect(() => {
+		const el = audioRef.current;
+		if (!el || !stream) return;
+		el.srcObject = stream;
+		el.volume = volume;
+		el.play().catch(() => {});
+		return () => {
+			el.srcObject = null;
+		};
+	}, [stream]);
+	useEffect(() => {
+		if (audioRef.current) audioRef.current.volume = volume;
+	}, [volume]);
+	return <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />;
+}
+
 export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPubkey, participantNicks }) {
 	const canvasRef = useRef(null);
 	const bufferCanvasRef = useRef(null);
@@ -79,6 +101,8 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 	useEffect(() => {
 		if (!localStream) return;
 		const graph = createAudioGraph();
+		graph.setMasterGain(0);
+		void graph.resume();
 		graph.addStream(selfPubkey, localStream, { isSelf: true });
 		audioGraphRef.current = graph;
 		return () => {
@@ -104,7 +128,7 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 	}, [remoteStreams, localStream]);
 
 	useEffect(() => {
-		audioGraphRef.current?.setMasterGain(gain);
+		audioGraphRef.current?.setMasterGain(0);
 	}, [gain]);
 
 	useEffect(() => {
@@ -168,6 +192,9 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 
 	return (
 		<div class="room-audio-visualizer stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
+			{[...remoteStreams.entries()].map(([peer, stream]) => (
+				<RemoteRoomAudio key={peer} stream={stream} volume={gain} />
+			))}
 			<canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} class="room-spectrogram" aria-hidden="true" />
 			<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 				{t("quick.room.volumeLabel")}

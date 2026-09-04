@@ -73,6 +73,28 @@ test("['OK', <id auth-события>, true, ...] -> AUTH_OK, обратно в 
 	assert.equal(conn.getState(), "connected");
 });
 
+test("createRelayConnection({ privKey }) сам отвечает на AUTH challenge (прод-путь)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection(RELAY_URL, { WebSocketImpl: WS, privKey: PRIV_KEY });
+	conn.connect();
+	WS.instances[0]._open();
+	WS.instances[0].onmessage({ data: JSON.stringify(["AUTH", "chal-wired"]) });
+	assert.equal(conn.getState(), "authenticating");
+	assert.equal(WS.instances[0].sent[0][0], "AUTH");
+});
+
+test("AUTH_OK повторяет активные REQ (strfry CLOSED auth-required до NIP-42)", () => {
+	const { conn, ws } = setupConnected();
+	const handleMessage = createAuthHandler(conn, RELAY_URL, PRIV_KEY);
+	conn.send(["REQ", "incoming-giftwrap", { "#p": ["abc"], kinds: [1059] }]);
+	handleMessage(["AUTH", "chal-replay"]);
+	const authEventId = ws.sent.find((m) => m[0] === "AUTH")[1].id;
+	const sentBeforeOk = ws.sent.length;
+	handleMessage(["OK", authEventId, true, "successfully authenticated"]);
+	const replayed = ws.sent.slice(sentBeforeOk);
+	assert.equal(replayed.some((m) => m[0] === "REQ" && m[1] === "incoming-giftwrap"), true);
+});
+
 test("['OK', <id auth-события>, false, ...] -> AUTH_FAIL, тоже обратно в connected (не disconnected)", () => {
 	const { conn, ws } = setupConnected();
 	const handleMessage = createAuthHandler(conn, RELAY_URL, PRIV_KEY);

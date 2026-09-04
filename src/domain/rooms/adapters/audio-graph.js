@@ -76,5 +76,12 @@ export function createAudioGraph({ AudioContextImpl = globalThis.AudioContext ||
 		ctx.close();
 	}
 
-	return { addStream, removeStream, setMasterGain, getSpectrum, getLevels, close };
+	// Chrome/Safari: AudioContext часто создаётся в state=suspended; анализатор
+	// при этом ещё может получать данные со стрима, а destination молчит.
+	function resume() {
+		if (typeof ctx.resume === "function" && ctx.state === "suspended") return ctx.resume();
+		return Promise.resolve();
+	}
+
+	return { addStream, removeStream, setMasterGain, getSpectrum, getLevels, resume, close };
 }

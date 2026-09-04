@@ -11,6 +11,8 @@ import {
 	parseBlossomUrl,
 	parseIceUrl,
 	iceUrlFromServers,
+	turnHostFromServers,
+	resolveIceServers,
 	readBootstrapEndpoints,
 	writeBootstrapEndpoints,
 	resetBootstrapEndpoints,
@@ -129,4 +131,35 @@ test("parseIceUrl: localhost получает dev-кредлы, чужой URL �
 test("битый JSON в storage → как отсутствие записи, не бросает", () => {
 	const storage = memoryStorage({ [BOOTSTRAP_ENDPOINTS_KEY]: "{not-json" });
 	assert.deepEqual(readBootstrapEndpoints(storage), buildTimeDefaults());
+});
+
+test("turnHostFromServers: первый turn/turns host, stun пропускается", () => {
+	assert.equal(turnHostFromServers([]), "");
+	assert.equal(turnHostFromServers([{ urls: "stun:stun.l.google.com:19302" }]), "");
+	assert.equal(
+		turnHostFromServers([
+			{ urls: "stun:ugolok.tech:3478" },
+			{ urls: "turn:ugolok.tech:3478?transport=udp", username: "u", credential: "p" },
+		]),
+		"ugolok.tech",
+	);
+	assert.equal(turnHostFromServers([{ urls: ["turns:turn.example:5349?transport=tcp"] }]), "turn.example");
+});
+
+test("resolveIceServers: тот же TURN-хост / localhost / пусто → build-time ICE (udp+tcp+креды)", () => {
+	const defaults = [
+		{ urls: "stun:ugolok.tech:3478" },
+		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "ugolok", credential: "secret" },
+		{ urls: "turn:ugolok.tech:3478?transport=tcp", username: "ugolok", credential: "secret" },
+	];
+	assert.deepEqual(
+		resolveIceServers([{ urls: "turn:ugolok.tech:3478" }], defaults),
+		defaults,
+	);
+	assert.deepEqual(resolveIceServers([{ urls: "turn:127.0.0.1:3478" }], defaults), defaults);
+	assert.deepEqual(resolveIceServers([], defaults), defaults);
+	assert.deepEqual(
+		resolveIceServers([{ urls: "turn:other.example:3478", username: "x", credential: "y" }], defaults),
+		[{ urls: "turn:other.example:3478", username: "x", credential: "y" }],
+	);
 });

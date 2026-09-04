@@ -1,5 +1,6 @@
 import { transition } from "../fsm/machine.js";
 import { createPublisher } from "./publisher.js";
+import { createAuthHandler } from "./relay-auth.js";
 
 const TRANSITIONS = {
   disconnected: { CONNECT: "connecting" },
@@ -45,6 +46,9 @@ export function createRelayConnection(url, options = {}) {
   let intentionalClose = false;
   let reconnectAttempt = 0;
   let reconnectTimer = null;
+  // NIP-42/strfry: REQ с gift-wrap (kind 1059 и др. restricted) до AUTH
+  // закрывается CLOSED auth-required. Повторяем активные REQ после AUTH_OK.
+  const activeReqs = new Map();
 
   const messageHandlers = [];
 
@@ -79,6 +83,7 @@ export function createRelayConnection(url, options = {}) {
     ws.onopen = () => {
       reconnectAttempt = 0;
       apply("OPEN");
+      replayActiveReqs();
     };
     ws.onclose = () => {
       apply("CLOSE");
@@ -100,11 +105,20 @@ export function createRelayConnection(url, options = {}) {
     if (state !== "connected" && state !== "subscribed" && state !== "authenticating") {
       throw new Error(`relay-pool: send() недоступен в состоянии "${state}"`);
     }
+    if (msgArray[0] === "REQ") activeReqs.set(msgArray[1], msgArray);
+    else if (msgArray[0] === "CLOSE") activeReqs.delete(msgArray[1]);
     ws.send(JSON.stringify(msgArray));
+  }
+
+  function replayActiveReqs() {
+    for (const req of activeReqs.values()) {
+      ws.send(JSON.stringify(req));
+    }
   }
 
   function close() {
     intentionalClose = true;
+    activeReqs.clear();
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -112,19 +126,26 @@ export function createRelayConnection(url, options = {}) {
     ws?.close();
   }
 
-  return {
+  const api = {
     getState: () => state,
     getUrl: () => url,
     addMessageHandler,
     connect,
     send,
     reportAuthChallenge: () => apply("AUTH_CHALLENGE"),
-    reportAuthOk: () => apply("AUTH_OK"),
+    reportAuthOk: () => {
+      apply("AUTH_OK");
+      replayActiveReqs();
+    },
     reportAuthFail: () => apply("AUTH_FAIL"),
     reportAuthTimeout: () => apply("TIMEOUT"),
     reportSubscribed: () => apply("SUBSCRIBE_OK"),
     close,
   };
+  if (options.privKey) {
+    addMessageHandler(createAuthHandler(api, url, options.privKey));
+  }
+  return api;
 }
 
 // createRelayPool — DESIGN.md, раздел "Этап 58". Реализует РОВНО ТОТ ЖЕ
@@ -172,6 +193,7 @@ export function createRelayPool(entries, options = {}) {
       WebSocketImpl,
       backoff,
       autoReconnect,
+      privKey: options.privKey,
       onStateChange: handleMemberStateChange,
     }),
   );

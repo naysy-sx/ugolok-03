@@ -368,6 +368,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		relayEntries = [{ url: boot.relayUrl || DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777", read: true, write: true }];
 	}
 	connection = createRelayPool(relayEntries, {
+		privKey,
 		onStateChange: (s) => {
 			connState.value = s;
 			// Обработчик получает только агрегированное состояние пула, а не url

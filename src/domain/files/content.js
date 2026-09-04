@@ -6,6 +6,23 @@ import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } 
 import { DomainError } from "../errors.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
+const GET_RANGE_CONCURRENCY = 6;
+
+async function mapPool(items, limit, fn) {
+	const result = new Array(items.length);
+	let next = 0;
+	async function worker() {
+		while (true) {
+			const idx = next++;
+			if (idx >= items.length) return;
+			result[idx] = await fn(items[idx], idx);
+		}
+	}
+	const n = Math.min(limit, items.length);
+	if (n === 0) return result;
+	await Promise.all(Array.from({ length: n }, () => worker()));
+	return result;
+}
 
 // bytes — Uint8Array целиком в памяти. Потоковое чтение File/ReadableStream —
 // следующий проход (замечено ALGO.MD §9.3: "файл целиком в память не читается
@@ -27,17 +44,19 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 	const size = bytes.length;
 	const { count, lastChunkSize } = planChunks(size, chunkSize);
 
-	const chunkDigests = [];
-	const cipherParts = [];
-	for (let i = 0; i < count; i++) {
+	const chunkDigests = new Array(count);
+	const cipherParts = new Array(count);
+	let encrypted = 0;
+	await mapPool([...Array(count).keys()], GET_RANGE_CONCURRENCY, (i) => {
 		if (signal?.aborted) throw new DOMException("Загрузка отменена", "AbortError");
 		const start = i * chunkSize;
 		const end = i === count - 1 ? start + lastChunkSize : start + chunkSize;
 		const cipherChunk = encryptChunk(bytes.subarray(start, end), fileKey, i);
-		chunkDigests.push(bytesToHex(sha256(cipherChunk)));
-		cipherParts.push(cipherChunk);
-		onProgress?.({ chunksDone: i + 1, chunksTotal: count });
-	}
+		chunkDigests[i] = bytesToHex(sha256(cipherChunk));
+		cipherParts[i] = cipherChunk;
+		encrypted += 1;
+		onProgress?.({ chunksDone: encrypted, chunksTotal: count });
+	});
 	const fullCiphertext = concatBytes(...cipherParts);
 	const blobSha256Local = bytesToHex(sha256(fullCiphertext));
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal };
@@ -123,10 +142,9 @@ export async function getRange(manifest, fileKey, start, end, opts = {}) {
 		lastChunkSize,
 	});
 
-	const decryptedChunks = [];
-	for (let i = firstIdx; i <= lastIdx; i++) {
-		decryptedChunks.push(await getChunk(manifest, fileKey, i, opts));
-	}
+	const indices = [];
+	for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
+	const decryptedChunks = await mapPool(indices, GET_RANGE_CONCURRENCY, (i) => getChunk(manifest, fileKey, i, opts));
 
 	const joined = concatBytes(...decryptedChunks);
 	const tailCut = skipTail > 0 ? joined.length - skipTail : joined.length;

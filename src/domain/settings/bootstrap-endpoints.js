@@ -36,6 +36,62 @@ export function parseBlossomUrl(raw) {
 	}
 }
 
+function iceHostFromRest(rest) {
+	let host = (rest || '').split(/[:/?]/)[0] || '';
+	return host.replace(/^\[|\]$/g, '').toLowerCase();
+}
+
+function isLoopbackIceHost(host) {
+	return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
+
+export function turnHostFromServers(iceServers) {
+	for (const server of iceServers || []) {
+		const u = server && server.urls;
+		const list = Array.isArray(u) ? u : u ? [u] : [];
+		for (const url of list) {
+			if (typeof url !== 'string') continue;
+			const match = /^(turns?):(.+)$/i.exec(url);
+			if (!match || !match[2].trim()) continue;
+			const host = iceHostFromRest(match[2].trim());
+			if (host) return host;
+		}
+	}
+	return '';
+}
+
+function credentialsFromDefaults(host) {
+	if (!host || isLoopbackIceHost(host)) return null;
+	for (const server of BUILD_DEFAULT_ICE_SERVERS || []) {
+		if (typeof server?.username !== 'string' || typeof server?.credential !== 'string') continue;
+		const u = server.urls;
+		const list = Array.isArray(u) ? u : u ? [u] : [];
+		for (const url of list) {
+			if (typeof url !== 'string') continue;
+			const match = /^(turns?):(.+)$/i.exec(url);
+			if (!match || !match[2].trim()) continue;
+			if (iceHostFromRest(match[2].trim()) === host) {
+				return { username: server.username, credential: server.credential };
+			}
+		}
+	}
+	return null;
+}
+
+// Stored ICE for the same island TURN (or leftover localhost) yields to
+// build-time servers so UDP+TCP URLs and credentials stay current.
+export function resolveIceServers(stored, defaults) {
+	const defaultList = Array.isArray(defaults) ? defaults : [];
+	const storedList = Array.isArray(stored) ? stored : [];
+	const defaultHost = turnHostFromServers(defaultList);
+	if (!defaultHost || isLoopbackIceHost(defaultHost)) return storedList;
+	const storedHost = turnHostFromServers(storedList);
+	if (!storedHost || isLoopbackIceHost(storedHost) || storedHost === defaultHost) {
+		return defaultList.map((s) => ({ ...s }));
+	}
+	return storedList;
+}
+
 export function parseIceUrl(raw) {
 	if (typeof raw !== 'string') return null;
 	const trimmed = raw.trim();
@@ -44,11 +100,12 @@ export function parseIceUrl(raw) {
 	const scheme = match[1].toLowerCase();
 	const rest = match[2].trim();
 	const urls = scheme + ':' + rest;
-	let host = rest.split(/[:/?]/)[0] || '';
-	host = host.replace(/^\[|\]$/g, '');
-	if (host === '127.0.0.1' || host === 'localhost' || host === '::1') {
+	const host = iceHostFromRest(rest);
+	if (isLoopbackIceHost(host)) {
 		return { urls, username: 'ugolok', credential: 'ugolok-dev' };
 	}
+	const creds = credentialsFromDefaults(host);
+	if (creds) return { urls, ...creds };
 	return { urls };
 }
 
@@ -92,6 +149,16 @@ function isValidStored(obj) {
 	);
 }
 
+function isLoopbackHost(urlStr) {
+	if (!urlStr || typeof urlStr !== 'string') return false;
+	try {
+		const host = new URL(urlStr).hostname;
+		return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+	} catch {
+		return false;
+	}
+}
+
 export function readBootstrapEndpoints(storage) {
 	const store = getStorage(storage);
 	if (!store) return buildTimeDefaults();
@@ -105,10 +172,13 @@ export function readBootstrapEndpoints(storage) {
 	try {
 		const parsed = JSON.parse(raw);
 		if (!isValidStored(parsed)) return buildTimeDefaults();
+		const defaults = buildTimeDefaults();
+		const storedLoopback = isLoopbackHost(parsed.relayUrl) || isLoopbackHost(parsed.blossomUrl);
+		if (storedLoopback && defaults.relayUrl && !isLoopbackHost(defaults.relayUrl)) return defaults;
 		return {
 			relayUrl: parsed.relayUrl,
 			blossomUrl: parsed.blossomUrl,
-			iceServers: parsed.iceServers,
+			iceServers: resolveIceServers(parsed.iceServers, defaults.iceServers),
 		};
 	} catch {
 		return buildTimeDefaults();
