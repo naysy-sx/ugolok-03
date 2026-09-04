@@ -8,7 +8,7 @@
 |---|---|---|---|
 | local | эта машина, localhost / LAN | `npm run dev` + `server/*/run.sh` | рабочая копия |
 | test | ещё нет | — | будет `main` |
-| prod | ещё нет | — | будет тег `vX.Y.Z` |
+| prod | VPS `ugolok.tech` | Caddy + Forgejo + `deploy/island/` | `main`, статика в `/var/www/ugolok` |
 
 Порты, которые нельзя пересекать:
 
@@ -37,7 +37,7 @@
 
 ## Чеклист дня покупки VPS
 
-Это список «потом», не утверждение что он исполнен.
+Остров `ugolok.tech` уже поднят. Канон конфигов — `deploy/island/` в этом репозитории; рантайм на VPS — `/opt/ugolok/island` и хостовый `/etc/caddy/Caddyfile`. Правки только через git, не руками на сервере.
 
 1. Docker + Caddy на VPS.
 2. Forgejo на `git.ugolok.tech` (только git/CI, не раздача клиента).

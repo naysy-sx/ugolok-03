@@ -1,0 +1,13 @@
+db_path: "./data/database.sqlite3"
+log_level: "INFO"
+api_addr: "0.0.0.0:8000"
+cdn_url: "https://blossom.ugolok.tech"
+admin_pubkey: "0000000000000000000000000000000000000000000000000000000000000000"
+max_upload_size_bytes: 314572800
+access_control_rules:
+  - action: "ALLOW"
+    pubkey: "ALL"
+    resource: "UPLOAD"
+  - action: "ALLOW"
+    pubkey: "ALL"
+    resource: "GET"

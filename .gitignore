@@ -13,6 +13,8 @@ dist/
 .env.*
 dist-updates/
 deploy/.env
+# Боевой coturn.conf с паролем живёт только на VPS / в ~/.config/ugolok-ops.
+deploy/island/coturn.conf
 
 # server/strfry — тестовый relay, поднимается локально по docs в server/README.md.
 # Исходники/сборка/БД не версионируются (бинарь платформозависим, БД — локальные

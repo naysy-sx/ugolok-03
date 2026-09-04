@@ -1,0 +1,45 @@
+# Боевой остров ugolok.tech. Канон — эта папка в git (deploy/island/).
+# Не deploy/compose.yml и не agent/compose as-is.
+# Caddy остаётся на хосте. Relay/Blossom только localhost. TURN — host network.
+
+services:
+  relay:
+    build:
+      context: ./relay-src
+      dockerfile: ../relay.Dockerfile
+    image: ugolok-strfry:local
+    container_name: ugolok-relay
+    restart: unless-stopped
+    volumes:
+      - ./strfry.conf:/app/strfry.conf:ro
+      - /var/lib/ugolok/relay:/app/strfry-db
+    ports:
+      - "127.0.0.1:7777:7777"
+    mem_limit: 512m
+
+  blossom:
+    build:
+      context: ./blossom-src
+      dockerfile: ../blossom.Dockerfile
+    image: ugolok-blossom:local
+    container_name: ugolok-blossom
+    restart: unless-stopped
+    volumes:
+      - ./blossom-config.yml:/app/config.yml:ro
+      - /var/lib/ugolok/blossom:/app/db
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 256m
+
+  coturn:
+    image: coturn/coturn:4.6.3
+    container_name: ugolok-coturn
+    restart: unless-stopped
+    network_mode: host
+    # Образ USER=nobody:nogroup — coturn.conf на хосте chmod 644, иначе
+    # turnserver не читает -c и стартует с no-auth / дефолтным диапазоном портов.
+    user: "nobody:nogroup"
+    volumes:
+      - ./coturn.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    mem_limit: 128m

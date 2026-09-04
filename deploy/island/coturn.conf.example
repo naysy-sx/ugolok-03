@@ -1,0 +1,24 @@
+# prod coturn for ugolok.tech — host network, small UDP range.
+# Скопировать в coturn.conf и подставить пароль. chmod 644:
+# образ coturn/coturn запускается не от root, иначе -c молча падает в no-auth
+# и default 49152-65535 (UFW режет, Chromium: "TURN appears to be broken").
+listening-ip=130.17.31.118
+relay-ip=130.17.31.118
+external-ip=130.17.31.118
+listening-port=3478
+min-port=49160
+max-port=49200
+fingerprint
+lt-cred-mech
+user=ugolok:CHANGE_ME
+realm=ugolok.tech
+no-cli
+no-tls
+no-dtls
+no-tlsv1
+no-tlsv1_1
+no-multicast-peers
+no-loopback-peers
+verbose
+log-file=stdout
+simple-log

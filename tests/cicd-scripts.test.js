@@ -248,6 +248,25 @@ test("docs и скелет: dist-updates, Caddy, нет веток prod/test к�
 	const gi = read(join(ROOT, ".gitignore"));
 	assert.match(gi, /dist-updates\//);
 	assert.match(gi, /deploy\/\.env/);
+	assert.match(gi, /deploy\/island\/coturn\.conf/);
+});
+
+test("deploy/island — боевой стек ugolok.tech без секрета TURN", () => {
+	const example = read(join(ROOT, "deploy/island/coturn.conf.example"));
+	assert.match(example, /user=ugolok:CHANGE_ME/);
+	assert.match(example, /lt-cred-mech/);
+	assert.match(example, /min-port=49160/);
+	assert.equal(existsSync(join(ROOT, "deploy/island/coturn.conf")), false);
+	const caddy = read(join(ROOT, "deploy/island/Caddyfile"));
+	assert.match(caddy, /relay\.ugolok\.tech/);
+	assert.match(caddy, /alpn http\/1\.1/);
+	assert.match(caddy, /header -Alt-Svc/);
+	const compose = read(join(ROOT, "deploy/island/docker-compose.yml"));
+	assert.match(compose, /ugolok-coturn/);
+	assert.match(compose, /nobody:nogroup/);
+	assert.match(read(join(ROOT, "deploy/island/blossom-config.yml")), /database\.sqlite3/);
+	assert.ok(existsSync(join(ROOT, "deploy/island/relay.Dockerfile")));
+	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
 });
 
 test("package.json — engines node>=22, allowScripts зафиксирован, version не источник релиза", () => {

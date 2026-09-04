@@ -37,4 +37,6 @@
 
 ## Перенос на VPS
 
-Чеклист: `docs/environments.md`. Этот каталог тогда наполняется реальными `image:` / `build:`, Caddyfile под домены и секретами из env.
+Чеклист: `docs/environments.md`.
+
+Боевой остров **ugolok.tech** — `deploy/island/`: Caddy на хосте, relay/Blossom/TURN в Docker. Это снимок того, что крутится на VPS, без секрета TURN (`coturn.conf.example`, не `coturn.conf`).
