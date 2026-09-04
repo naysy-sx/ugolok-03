@@ -1,14 +1,14 @@
 # Окружения и будущие хосты
 
-Окружения — не git-ветки. Ветки `test` / `prod` / `develop` не заводить.
+Окружения завязаны на долгоживущие ветки `dev` / `main` / `prod`. Подробности: `docs/delivery.md`.
 
-## Сейчас (Mini, без VPS)
+## Сейчас
 
 | Имя | Где | Что запущено | Какой код |
 |---|---|---|---|
 | local | эта машина, localhost / LAN | `npm run dev` + `server/*/run.sh` | рабочая копия |
-| test | ещё нет | — | будет `main` |
-| prod | VPS `ugolok.tech` | Caddy + Forgejo + `deploy/island/` | `main`, статика в `/var/www/ugolok` |
+| test | `test.ugolok.tech` | Caddy + `deploy/island-test/` | ветка `dev`, статика в `/var/www/ugolok-test` |
+| prod | `ugolok.tech` | Caddy + Forgejo + `deploy/island/` | ветка `prod`, статика в `/var/www/ugolok` |
 
 Порты, которые нельзя пересекать:
 
@@ -37,7 +37,7 @@
 
 ## Чеклист дня покупки VPS
 
-Остров `ugolok.tech` уже поднят. Канон конфигов — `deploy/island/` в этом репозитории; рантайм на VPS — `/opt/ugolok/island` и хостовый `/etc/caddy/Caddyfile`. Правки только через git, не руками на сервере.
+Остров `ugolok.tech` уже поднят. Канон конфигов — `deploy/island/` и `deploy/caddy/` в этом репозитории. Правки: локально → `dev` (тест) → `main` → вручную `prod` (живой сайт). Не руками на сервере в обход git.
 
 1. Docker + Caddy на VPS.
 2. Forgejo на `git.ugolok.tech` (только git/CI, не раздача клиента).

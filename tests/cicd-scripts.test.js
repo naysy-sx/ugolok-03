@@ -232,10 +232,11 @@ test("release-pack.sh нормализует версию без префикс�
 	assert.ok(existsSync(join(ROOT, "dist-updates/v1.2.3/index.html")));
 });
 
-test("docs и скелет: dist-updates, Caddy, нет веток prod/test как модели, нет Traefik", () => {
+test("docs и скелет: dist-updates, ветки dev/main/prod, нет Traefik", () => {
 	const delivery = read(join(ROOT, "docs/delivery.md"));
 	assert.match(delivery, /dist-updates/);
-	assert.match(delivery, /не заводить: долгоживущие `test`, `prod`/);
+	assert.match(delivery, /dev` → `test\.ugolok\.tech/);
+	assert.match(delivery, /prod` → `ugolok\.tech/);
 	assert.equal(delivery.includes("Traefik"), false);
 	const compose = read(join(ROOT, "deploy/compose.yml"));
 	assert.match(compose, /^\s+web:/m);
@@ -257,7 +258,7 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	assert.match(example, /lt-cred-mech/);
 	assert.match(example, /min-port=49160/);
 	assert.equal(existsSync(join(ROOT, "deploy/island/coturn.conf")), false);
-	const caddy = read(join(ROOT, "deploy/island/Caddyfile"));
+	const caddy = read(join(ROOT, "deploy/caddy/prod.caddy"));
 	assert.match(caddy, /relay\.ugolok\.tech/);
 	assert.match(caddy, /alpn http\/1\.1/);
 	assert.match(caddy, /header -Alt-Svc/);
@@ -267,6 +268,32 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	assert.match(read(join(ROOT, "deploy/island/blossom-config.yml")), /database\.sqlite3/);
 	assert.ok(existsSync(join(ROOT, "deploy/island/relay.Dockerfile")));
 	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
+});
+
+test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workflows", () => {
+	const deploy = read(join(ROOT, "scripts/deploy-env.sh"));
+	assert.match(deploy, /usage: \$0 test\|prod/);
+	assert.match(deploy, /relay\.test\.ugolok\.tech/);
+	const st = spawnSync("test", ["-x", join(ROOT, "scripts/deploy-env.sh")]);
+	assert.equal(st.status, 0, "deploy-env.sh должен быть исполняемым");
+	const syntax = spawnSync("bash", ["-n", join(ROOT, "scripts/deploy-env.sh")]);
+	assert.equal(syntax.status, 0, syntax.stderr);
+	assert.equal(spawnSync("test", ["-x", join(ROOT, "scripts/apply-caddy.sh")]).status, 0);
+	assert.equal(spawnSync("bash", ["-n", join(ROOT, "scripts/apply-caddy.sh")]).status, 0);
+	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
+	assert.match(testCaddy, /test\.ugolok\.tech/);
+	assert.match(testCaddy, /127\.0\.0\.1:7778/);
+	const testCompose = read(join(ROOT, "deploy/island-test/docker-compose.yml"));
+	assert.match(testCompose, /ugolok-test-relay/);
+	assert.match(testCompose, /127\.0\.0\.1:7778:7777/);
+	assert.equal(/^\s+coturn:/m.test(testCompose), false);
+	const dt = read(join(ROOT, ".forgejo/workflows/deploy-test.yml"));
+	assert.match(dt, /branches:\s*\[dev\]/);
+	assert.match(dt, /deploy-env\.sh test/);
+	assert.match(dt, /runs-on:\s*ugolok/);
+	const dp = read(join(ROOT, ".forgejo/workflows/deploy-prod.yml"));
+	assert.match(dp, /branches:\s*\[prod\]/);
+	assert.match(dp, /deploy-env\.sh prod/);
 });
 
 test("package.json — engines node>=22, allowScripts зафиксирован, version не источник релиза", () => {

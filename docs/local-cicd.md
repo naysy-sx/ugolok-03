@@ -5,7 +5,7 @@
 ## Пять команд
 
 ```bash
-git checkout main
+git checkout dev
 npm ci --ignore-scripts
 ./scripts/ci-check.sh
 ./scripts/release-pack.sh
@@ -33,7 +33,7 @@ Compose — отдельно, только если Docker уже стоит: `d
 
 Пока origin GitHub:
 
-1. PR и push в `main` → `.github/workflows/ci.yml` (проектный Node **22**, `bash scripts/ci-check.sh`). Сами экшены — `actions/checkout@v5` и `actions/setup-node@v6` (рантайм Node 24; `@v4` даёт предупреждение GitHub про deprecated Node 20).
+1. PR и push в `dev` / `main` / `prod` → `.github/workflows/ci.yml` и `.forgejo/workflows/ci.yml` (проектный Node **22**, `bash scripts/ci-check.sh`). Сами экшены — `actions/checkout@v5` и `actions/setup-node@v6` (рантайм Node 24; `@v4` даёт предупреждение GitHub про deprecated Node 20). Push в `dev` на Forgejo ещё запускает `deploy-test.yml` (`test.ugolok.tech`); push в `prod` — `deploy-prod.yml` (`ugolok.tech`).
 2. Annotated тег `vX.Y.Z` (три числа, без суффикса) → `.github/workflows/release.yml`: проверка, pack, GitHub Release с деревом канала.
 3. Workflow релиза **всегда** вызывает pack с `SKIP_GPG=1`. Секрета `GPG_PRIVATE_KEY` в Actions нет. Подпись — ручной путь на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
 

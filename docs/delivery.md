@@ -51,24 +51,20 @@ updates root/
 
 Есть:
 
-- `main` — всегда должна собираться;
-- `feature/<коротко>` — PR в `main`;
-- `hotfix/<коротко>` — PR в `main`;
-- короткие `phase-*` / `spike-*` / `fix/*` / `chore/*` — как в `docs/RUNBOOK.md`.
+- `dev` — повседневная работа; каждый push выкладывает `test.ugolok.tech`;
+- `main` — проверенное из `dev`; всегда должна собираться; на живой сайт сама не едет;
+- `prod` — ручной merge `main` → `prod`; push выкладывает `ugolok.tech`;
+- короткие `feature/*` / `fix/*` — в `dev`.
 
-Нет и не заводить: долгоживущие `test`, `prod`, `develop`.
-
-Solo на Mini: одношаговый зелёный коммит прямо в `main` по-прежнему допустим (RUNBOOK §6). Каркас CI это не запрещает. PR желательны для многокоммитных работ.
+`dev` → `test.ugolok.tech`. `prod` → `ugolok.tech`. `main` — интеграция, без автовыкладки.
 
 ## 4. Окружения
 
-Окружения — **не ветки**.
-
-| Имя | Сейчас | Код |
+| Имя | Где | Ветка |
 |---|---|---|
 | local | Mini, localhost | рабочая копия |
-| test | позже VPS или другой порт/profile на Mini | `main` |
-| prod | позже `ugolok.tech` | тег `vX.Y.Z` |
+| test | `test.ugolok.tech` | `dev` |
+| prod | `ugolok.tech` | `prod` |
 
 Подробности: `docs/environments.md`.
 

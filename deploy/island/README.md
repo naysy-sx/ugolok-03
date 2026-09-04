@@ -25,3 +25,13 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 5. Клиент: `BUILD_DEFAULT_*` → `npm run build` → rsync `dist/` в `/var/www/ugolok`.
 
 Не править конфиги «на живую» на сервере в обход git.
+
+## Ветки и выкладка
+
+| Ветка | Когда | Куда |
+|---|---|---|
+| `dev` | каждый push | `test.ugolok.tech` (`scripts/deploy-env.sh test`) |
+| `main` | merge из `dev` после проверки | никуда само |
+| `prod` | ручной merge `main` → `prod` | `ugolok.tech` (`scripts/deploy-env.sh prod`) |
+
+Caddy: `deploy/caddy/`. Тестовый остров (отдельные relay/Blossom): `deploy/island-test/`. TURN общий.

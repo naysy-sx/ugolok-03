@@ -1,0 +1,28 @@
+# Тестовый остров test.ugolok.tech. Образы те же, что прод (ugolok-strfry:local /
+# ugolok-blossom:local). Данные отдельно. TURN общий (хостовый coturn).
+# Caddy — deploy/caddy/test.caddy, порты только localhost.
+
+name: ugolok-test
+
+services:
+  relay:
+    image: ugolok-strfry:local
+    container_name: ugolok-test-relay
+    restart: unless-stopped
+    volumes:
+      - ./strfry.conf:/app/strfry.conf:ro
+      - /var/lib/ugolok/test/relay:/app/strfry-db
+    ports:
+      - "127.0.0.1:7778:7777"
+    mem_limit: 256m
+
+  blossom:
+    image: ugolok-blossom:local
+    container_name: ugolok-test-blossom
+    restart: unless-stopped
+    volumes:
+      - ./blossom-config.yml:/app/config.yml:ro
+      - /var/lib/ugolok/test/blossom:/app/db
+    ports:
+      - "127.0.0.1:8001:8000"
+    mem_limit: 128m

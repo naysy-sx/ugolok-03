@@ -1,0 +1,25 @@
+# Push в prod (ручной merge main → prod) → живой ugolok.tech.
+name: deploy-prod
+
+on:
+  push:
+    branches: [prod]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ugolok
+    steps:
+      - name: clone and deploy ugolok.tech
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d /tmp/ugolok-deploy-prod.XXXXXX)"
+          git clone --depth 1 --branch "${GITHUB_REF_NAME}" \
+            "https://x-access-token:${TOKEN}@git.ugolok.tech/naysy/ugolok.git" "$WORK"
+          cd "$WORK"
+          bash scripts/deploy-env.sh prod
+          rm -rf "$WORK"

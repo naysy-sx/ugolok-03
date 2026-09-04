@@ -40,3 +40,5 @@
 Чеклист: `docs/environments.md`.
 
 Боевой остров **ugolok.tech** — `deploy/island/`: Caddy на хосте, relay/Blossom/TURN в Docker. Это снимок того, что крутится на VPS, без секрета TURN (`coturn.conf.example`, не `coturn.conf`).
+
+Выкладка: push в `dev` → `test.ugolok.tech`; ручной merge в `prod` → `ugolok.tech`. Caddy-сайты в `deploy/caddy/`, тестовый остров в `deploy/island-test/`, скрипт `scripts/deploy-env.sh`.

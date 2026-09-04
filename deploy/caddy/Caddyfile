@@ -1,0 +1,5 @@
+{
+	email naxymails@gmail.com
+}
+
+import /etc/caddy/sites/*.caddy
