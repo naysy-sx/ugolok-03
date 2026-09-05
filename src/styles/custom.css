@@ -3124,10 +3124,11 @@ body:has(.auth-layout) {
 .unlock-logo-mark {
 	width: 1.75rem;
 	height: 1.75rem;
-	border-radius: 0.5rem;
-	background: linear-gradient(145deg, var(--accent), color-mix(in oklch, var(--accent), black 22%));
-	box-shadow: 0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent);
+	border-radius: 0.45rem;
+	object-fit: cover;
+	display: block;
 	flex: none;
+	box-shadow: 0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent);
 }
 
 .unlock-card {

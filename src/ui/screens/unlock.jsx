@@ -536,7 +536,14 @@ export default function Unlock() {
 		<div class="screen auth-layout">
 			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					<span class="unlock-logo-mark" aria-hidden="true" />
+					<img
+						class="unlock-logo-mark"
+						src={`${import.meta.env.BASE_URL}logo-source.png`}
+						width="28"
+						height="28"
+						alt=""
+						aria-hidden="true"
+					/>
 					<span class="logo-name">{t("app.name")}</span>
 				</div>
 				<div class="header-actions">
