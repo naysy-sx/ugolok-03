@@ -42,7 +42,7 @@ test("ci-check.sh — источник истины проверки, без р�
 	assert.match(src, /npm run build/);
 	assert.match(src, /dist\/index\.html/);
 	assert.match(src, /dist\/service-worker\.js/);
-	assert.match(src, /1304/);
+	assert.match(src, /check-dist-size\.sh/);
 	assert.equal(src.includes("npx serve"), false);
 	assert.equal(src.includes("playwright"), false);
 	assert.equal(src.includes("pull_request_target"), false);
@@ -54,6 +54,18 @@ test("ci-check.sh исполняемый и не содержит лимит 280
 	const st = spawnSync("test", ["-x", CI_CHECK]);
 	assert.equal(st.status, 0, "ci-check.sh должен быть исполняемым");
 	assert.ok(LIMIT_BYTES === 1335296);
+});
+
+test("check-dist-size.sh — единственное место лимита 1304 КБ, исполняемый", () => {
+	const CHECK_DIST_SIZE = join(ROOT, "scripts/check-dist-size.sh");
+	const src = read(CHECK_DIST_SIZE);
+	assert.match(src, /set -euo pipefail/);
+	assert.match(src, /dist\/index\.html/);
+	assert.match(src, /1335296/);
+	assert.match(src, /1304/);
+	assert.equal(src.includes("280"), false);
+	const st = spawnSync("test", ["-x", CHECK_DIST_SIZE]);
+	assert.equal(st.status, 0, "check-dist-size.sh должен быть исполняемым");
 });
 
 test("release-hash.sh — SKIP_BUILD+SKIP_GPG пишет SHA256SUMS на оба файла и не требует gpg", () => {
@@ -294,6 +306,10 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(applyCaddy, /MODE="\$\{1:\?site or full\}"/);
 	assert.match(applyCaddy, /grep -qE '\^\[\[:space:\]\]\*import\[\[:space:\]\]\+\/etc\/caddy\/sites\/\\\*\\\.caddy'/);
 	assert.match(applyCaddy, /сначала full/);
+
+	// Этап 2: тесты внутри деплоя (контейнер) + проверка размера на хосте (post-контейнер).
+	assert.match(deploy, /npm ci --ignore-scripts && npm test && npm run build/);
+	assert.match(deploy, /bash "\$ROOT\/scripts\/check-dist-size\.sh"/);
 	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
 	assert.match(testCaddy, /test\.ugolok\.tech/);
 	assert.match(testCaddy, /127\.0\.0\.1:7778/);
@@ -308,6 +324,26 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	const dp = read(join(ROOT, ".forgejo/workflows/deploy-prod.yml"));
 	assert.match(dp, /branches:\s*\[prod\]/);
 	assert.match(dp, /deploy-env\.sh prod/);
+});
+
+test("Forgejo ci.yml: раннер ugolok, без dev/prod, ci-check.sh внутри контейнера", () => {
+	const fCi = read(join(ROOT, ".forgejo/workflows/ci.yml"));
+	assert.match(fCi, /runs-on:\s*ugolok/);
+	assert.match(fCi, /pull_request/);
+	assert.match(fCi, /branches:\s*\[main\]/);
+	assert.equal(/branches:\s*\[[^\]]*\bdev\b/.test(fCi), false, "push в dev не должен триггерить ci.yml — проверка уже в деплое");
+	assert.equal(/branches:\s*\[[^\]]*\bprod\b/.test(fCi), false, "push в prod не должен триггерить ci.yml — проверка уже в деплое");
+	assert.equal(fCi.includes("actions/checkout"), false);
+	assert.equal(fCi.includes("actions/setup-node"), false);
+	assert.match(fCi, /git\.ugolok\.tech/);
+	assert.match(fCi, /node:22-bookworm/);
+	assert.match(fCi, /bash scripts\/ci-check\.sh/);
+});
+
+test("Forgejo release.yml: помечен нерабочим (см. этап 5), не удалён", () => {
+	const fRel = read(join(ROOT, ".forgejo/workflows/release.yml"));
+	assert.match(fRel, /не запускается на Forgejo/i);
+	assert.match(fRel, /этап 5/);
 });
 
 test("package.json — engines node>=22, allowScripts зафиксирован, version не источник релиза", () => {

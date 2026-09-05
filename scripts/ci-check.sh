@@ -11,10 +11,4 @@ if [ ! -f dist/index.html ] || [ ! -f dist/service-worker.js ]; then
   exit 1
 fi
 
-SIZE=$(gzip -c dist/index.html | wc -c | tr -d ' ')
-echo "gzip index.html: $SIZE bytes"
-
-if [ "$SIZE" -gt 1335296 ]; then
-  echo "Размер файла index.html превышает 1304 KB" >&2
-  exit 1
-fi
+bash "$(dirname "${BASH_SOURCE[0]}")/check-dist-size.sh"

@@ -1,24 +1,35 @@
-# Копия смысла .github/workflows/ci.yml.
-# Когда появится git.ugolok.tech: включить Actions, поставить runner,
-# сменить runs-on на лейбл своего runner-а, перенести секреты.
+# На VPS нет Node — ci-check.sh гоняем внутри node:22-bookworm, тем же
+# приёмом клонирования по токену, что deploy-test.yml/deploy-prod.yml.
+# push в dev/prod здесь не гоняем: проверка уже встроена в deploy-env.sh
+# (TZ-cicd-hardening, этап 2) — двойной прогон на 2 ГБ RAM не нужен.
 name: ci
 
 on:
   pull_request:
   push:
-    branches: [main, dev, prod]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ugolok
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-      - name: ci-check
-        run: bash scripts/ci-check.sh
+      - name: clone and ci-check
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d /tmp/ugolok-ci.XXXXXX)"
+          git clone --depth 1 --branch "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" \
+            "https://x-access-token:${TOKEN}@git.ugolok.tech/naysy/ugolok.git" "$WORK"
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e npm_config_cache=/tmp/npm \
+            -v "$WORK":/src \
+            -w /src \
+            node:22-bookworm \
+            bash scripts/ci-check.sh
+          rm -rf "$WORK"

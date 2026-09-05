@@ -78,7 +78,7 @@ docker run --rm \
 	-e UGOLK_INSTANCE="$ENV" \
 	node:22-bookworm \
 	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"
-npm ci --ignore-scripts && npm run build
+npm ci --ignore-scripts && npm test && npm run build
 node -e "
 const fs=require(\"fs\");
 const ice=JSON.parse(fs.readFileSync(\"/ice.json\",\"utf8\"));
@@ -94,6 +94,8 @@ if [[ ! -f dist/index.html || ! -f dist/service-worker.js || ! -f dist/config.js
 	echo "deploy-env: нет dist/index.html, service-worker.js или config.json" >&2
 	exit 1
 fi
+
+bash "$ROOT/scripts/check-dist-size.sh"
 
 mkdir -p "$WWW"
 # без owner/group: каталог www принадлежит caddy, runner — ugolok; -a иначе падает на chgrp.

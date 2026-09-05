@@ -1,4 +1,6 @@
 # Копия смысла .github/workflows/release.yml.
+# Не запускается на Forgejo (runs-on: ubuntu-latest — такого раннера тут
+# нет; см. TZ-cicd-hardening этап 5, там решается канал релиза целиком).
 # softprops/action-gh-release — GitHub-only; на Forgejo заменить на
 # https://code.forgejo.org/actions/forgejo-release (или загрузку файлов в Release).
 # runs-on сменить на лейбл своего runner-а.
