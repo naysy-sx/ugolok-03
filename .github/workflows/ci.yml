@@ -1,3 +1,6 @@
+# Зеркало для GitHub (naysy-sx/ugolok-03) — гоняется только если код туда
+# тоже запушен. origin — Forgejo (git.ugolok.tech), см. .forgejo/workflows/
+# и docs/local-cicd.md. На Forgejo НЕ используется.
 name: ci
 
 on:

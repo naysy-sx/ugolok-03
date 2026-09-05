@@ -1,12 +1,16 @@
 # deploy/island — боевой остров ugolok.tech
 
+_Актуально на 2026-09-05, описывает выкладку через `scripts/deploy-env.sh` (ветки dev/prod)._
+
 Снимок стека, который крутится на VPS. Не `deploy/compose.yml` (скелет) и не `agent/compose/` (инсталлятор своего инстанса).
 
 | Где в git | Где на VPS |
 |---|---|
-| `deploy/island/Caddyfile` | `/etc/caddy/Caddyfile` (Caddy на хосте) |
-| остальные файлы этой папки | `/opt/ugolok/island/` |
+| `deploy/caddy/{Caddyfile,test.caddy,prod.caddy}` | `/etc/caddy/Caddyfile` + `/etc/caddy/sites/*.caddy` (Caddy на хосте, `scripts/apply-caddy.sh`) |
+| остальные файлы этой папки (`deploy/island/`) | `/opt/ugolok/island/` |
 | `coturn.conf.example` | `/opt/ugolok/island/coturn.conf` — пароль **не** в git |
+
+`deploy/island/Caddyfile` — не используется, оставлен как указатель на `deploy/caddy/` (переехало ещё до этого README).
 
 Caddy на хосте. Relay и Blossom слушают только localhost. coturn — `network_mode: host`.
 
@@ -18,13 +22,17 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 
 ## Как выкатывать правку
 
-1. Менять файлы здесь, в репозитории.
-2. Коммит в `main`, push на `origin` (`git.ugolok.tech`).
-3. На VPS скопировать из checkout в `/opt/ugolok/island/` (и Caddyfile в `/etc/caddy/Caddyfile`). Не перетирать боевой `coturn.conf`.
-4. `docker compose up -d` в `/opt/ugolok/island`; для Caddy — `systemctl reload caddy`.
-5. Клиент: `BUILD_DEFAULT_*` → `npm run build` → rsync `dist/` в `/var/www/ugolok`.
+1. Менять файлы здесь, в репозитории (`deploy/island/`, `deploy/caddy/`).
+2. Коммит в `dev`, push на `origin` (`git.ugolok.tech`) — сразу выкладка на `test.ugolok.tech` (`deploy-test.yml` → `scripts/deploy-env.sh test`), проверить там.
+3. Если ок: `main` (ff-only merge из `dev`), затем ручной `prod` (ff-only merge из `main`), push — `deploy-prod.yml` → `scripts/deploy-env.sh prod` на живой `ugolok.tech`.
 
-Не править конфиги «на живую» на сервере в обход git.
+Всё остальное делает `deploy-env.sh` сам, без ручных шагов на VPS:
+
+- собирает клиент (контейнер `node:22-bookworm`, `BUILD_DEFAULT_*` из окружения джобы) и кладёт `dist/` в `/var/www/ugolok` (или `/var/www/ugolok-test`) через rsync;
+- копирует `deploy/island/` (или `deploy/island-test/`) в `/opt/ugolok/island` (`/opt/ugolok/island-test`) — кроме `coturn.conf` (боевой секрет не трогается) — и делает `docker compose up -d`;
+- накатывает `deploy/caddy/{test,prod}.caddy` через `scripts/apply-caddy.sh` (режим `site` для test — трогает только один site-файл, `full` только для prod) и `systemctl reload caddy`.
+
+Не править конфиги «на живую» на сервере в обход git — `deploy-env.sh` перезапишет ручную правку следующим же деплоем.
 
 ## Ветки и выкладка
 

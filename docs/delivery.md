@@ -1,5 +1,7 @@
 # Поставка клиента «Уголок»
 
+_Актуально на 2026-09-05, описывает origin Forgejo (`git.ugolok.tech`), ветки `dev`/`main`/`prod`._
+
 Канон поставки. Если этот файл противоречит черновику или переписке — верить ему.
 
 ## 1. Что такое релиз
@@ -18,8 +20,8 @@
 
 Источник для людей и аудита:
 
-- сейчас GitHub Release репозитория;
-- позже Release на `git.ugolok.tech` (Forgejo).
+- `git.ugolok.tech` (Forgejo) — origin с 2026-09-05; Release там по тегу пока **не собирается** (`.forgejo/workflows/release.yml` не запускается — `runs-on: ubuntu-latest`, такого раннера на Forgejo нет);
+- GitHub (`naysy-sx/ugolok-03`) остаётся вторым remote — Release там собирается, если туда тоже пушат тег.
 
 Источник для клиентов:
 
@@ -68,14 +70,26 @@ updates root/
 
 Подробности: `docs/environments.md`.
 
-## 5. Как клиент будет получать обновление
+## 5. Как клиент получает обновления СЕЙЧАС
+
+Реально работающий путь, без тега и без `updates.ugolok.tech`:
+
+1. `deploy-env.sh` при каждом push в `dev`/`prod` пишет свежий `dist/index.html` и `dist/service-worker.js` в `/var/www/ugolok-test` или `/var/www/ugolok`.
+2. Caddy отдаёт оба файла с `Cache-Control: no-cache` (`deploy/caddy/{test,prod}.caddy`) — браузер каждый раз перепроверяет с сервером, не берёт слепо из своего HTTP-кэша.
+3. `service-worker.js`: `self.skipWaiting()` на `install` + `self.clients.claim()` на `activate` — новый Service Worker подхватывает управление без ожидания закрытия всех вкладок. Имя кэша `ugolok-cache-v{BUILD_HASH}` — старые версии кэша чистятся на `activate`.
+4. Итог: открыть/обновить страницу — почти всегда означает получить свежую сборку. Отдельного экрана «доступно обновление» и загрузчика в UI нет.
+
+### План, не реализовано
+
+Ниже — контракт канала `updates.ugolok.tech`, тег `vX.Y.Z`, `version.json`/`SHA256SUMS`. Описание оставлено (дерево канала пригодится), но по факту:
+
+- клиент `version.json` **не читает** — ни на `updates.ugolok.tech`, ни где-либо ещё;
+- `.forgejo/workflows/release.yml` **не запускается** на Forgejo (`runs-on: ubuntu-latest` — такого раннера там нет; см. `PROCESS-DOCS/VPS/TZ-cicd-hardening.md`, этап 5).
 
 1. Манифест: `https://updates.ugolok.tech/version.json` (latest) и `https://updates.ugolok.tech/vX.Y.Z/version.json`.
 2. Артефакты (`index.html`, `service-worker.js`, суммы) — с того же хоста.
 3. PWA на рабочем origin (`ugolok.tech`) дополнительно через Service Worker.
 4. Натив/OTA — позже; URL канала уже этот.
-
-В этом этапе клиент **не обязан** читать `version.json`. Загрузчика обновлений в UI нет. Контракт и пример достаточны.
 
 Локальный стенд канала: `http://127.0.0.1:8787/version.json` (см. `docs/local-cicd.md`).
 
@@ -89,11 +103,11 @@ updates root/
 
 Env `BUILD_DEFAULT_*` остаётся запасным путём оффлайн-сборки. Подробности: `docs/config.md`.
 
-## 7. GitHub сейчас, Forgejo потом
+## 7. Forgejo — origin, GitHub — второй remote
 
-- Исходники и Actions сейчас на GitHub (`naysy-sx/ugolok-03`).
-- Позже origin переедет на `git.ugolok.tech`. Каркас workflow уже лежит в `.forgejo/workflows/` — смена URL и runner-а, не переписывание проекта.
-- Клиенты как ходили, так и будут ходить на `updates.ugolok.tech`, не на git-хост.
+- `origin` = `git.ugolok.tech` (Forgejo) — повседневная работа, PR, `dev`/`main`/`prod`, деплой-раннер (лейбл `ugolok`).
+- `github` remote (`naysy-sx/ugolok-03`) остаётся — GitHub Actions (`.github/workflows/`) реально гоняются, только если код туда тоже запушен.
+- Клиенты как ходили, так и ходят на `updates.ugolok.tech`, не на git-хост — но см. §5, этот канал сейчас не реализован.
 
 ## 8. Self-hosted инстанс
 

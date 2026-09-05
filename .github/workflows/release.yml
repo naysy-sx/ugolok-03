@@ -1,3 +1,7 @@
+# Зеркало для GitHub (naysy-sx/ugolok-03) — гоняется только если тег туда
+# тоже запушен. origin — Forgejo (git.ugolok.tech). На Forgejo не
+# используется (.forgejo/workflows/release.yml — не запускается вовсе,
+# см. docs/delivery.md §5, PROCESS-DOCS/VPS/TZ-cicd-hardening.md этап 5).
 name: release
 
 on:
