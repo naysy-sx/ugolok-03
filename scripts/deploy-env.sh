@@ -94,7 +94,8 @@ if [[ ! -f dist/index.html || ! -f dist/service-worker.js || ! -f dist/config.js
 fi
 
 mkdir -p "$WWW"
-rsync -a --delete --delay-updates \
+# без owner/group: каталог www принадлежит caddy, runner — ugolok; -a иначе падает на chgrp.
+rsync -rltD --delete --delay-updates \
 	--exclude '.git' \
 	dist/ "$WWW/"
 
