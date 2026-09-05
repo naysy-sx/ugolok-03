@@ -2,6 +2,7 @@
 // kind-событие НЕ кладётся — этого слоя достаточно для стартового экрана
 // и звонков с этого устройства.
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS, BUILD_DEFAULT_ICE_SERVERS } from '../../config.js';
+import { getRuntimeConfig } from './runtime-config.js';
 
 export const BOOTSTRAP_ENDPOINTS_KEY = 'ugolok.bootstrapEndpoints.v1';
 
@@ -131,11 +132,16 @@ function getStorage(explicit) {
 	return null;
 }
 
+// Приоритет (docs/config.md): localStorage (readBootstrapEndpoints, вызывающая
+// сторона) > config.json (getRuntimeConfig — этап 4A) > BUILD_DEFAULT_* — этот
+// уровень подмешивается здесь, единственном месте, где строятся дефолты.
 function buildTimeDefaults() {
+	const runtime = getRuntimeConfig();
+	const runtimeIce = Array.isArray(runtime.iceServers) && runtime.iceServers.length > 0 ? runtime.iceServers : null;
 	return {
-		relayUrl: BUILD_DEFAULT_RELAYS[0] ?? '',
-		blossomUrl: BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? '',
-		iceServers: Array.isArray(BUILD_DEFAULT_ICE_SERVERS) ? BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ ...s })) : [],
+		relayUrl: runtime.relays?.[0] ?? BUILD_DEFAULT_RELAYS[0] ?? '',
+		blossomUrl: runtime.blossomServers?.[0] ?? BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? '',
+		iceServers: (runtimeIce ?? (Array.isArray(BUILD_DEFAULT_ICE_SERVERS) ? BUILD_DEFAULT_ICE_SERVERS : [])).map((s) => ({ ...s })),
 	};
 }
 

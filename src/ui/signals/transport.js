@@ -3,6 +3,7 @@ import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
+import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { createPublisher } from "../../core/transport/publisher.js";
@@ -307,9 +308,12 @@ function assertValidPubkeyHex(pubkeyHex) {
 // createRelayPool, этап 58). pickLatest — kind:10002 replaceable, берём
 // ОДНУ самую свежую версию, не мёрджим теги нескольких копий.
 async function discoverOwnRelaysViaBootstrap(pubkeyHex) {
-	if (BUILD_BOOTSTRAP_RELAYS.length === 0) return [];
+	// config.json.bootstrapRelays (этап 4A) приоритетнее build-time дефолта —
+	// тот же порядок слоёв, что и остальные эндпоинты (docs/config.md).
+	const bootstrapRelays = getRuntimeConfig().bootstrapRelays ?? BUILD_BOOTSTRAP_RELAYS;
+	if (bootstrapRelays.length === 0) return [];
 	const results = await Promise.allSettled(
-		BUILD_BOOTSTRAP_RELAYS.map((url) => fetchFromRelay(url, [{ authors: [pubkeyHex], kinds: [10002] }])),
+		bootstrapRelays.map((url) => fetchFromRelay(url, [{ authors: [pubkeyHex], kinds: [10002] }])),
 	);
 	const events = results.filter((r) => r.status === "fulfilled").flatMap((r) => r.value);
 	if (events.length === 0) return [];
@@ -319,6 +323,12 @@ async function discoverOwnRelaysViaBootstrap(pubkeyHex) {
 async function connect(pubkeyHex, privKey, dbKey) {
 	assertValidPubkeyHex(pubkeyHex);
 	resetSyncLog();
+	// Этап 4A (TZ-cicd-hardening) — config.json дожидается ЗДЕСЬ, до первого
+	// обращения к readBootstrapEndpoints() ниже (её build-time дефолт теперь
+	// приоритетно берёт значения из config.json, см. bootstrap-endpoints.js).
+	// Провал/таймаут loadRuntimeConfig -> {} — откат на build-time дефолт,
+	// connect() не блокируется дольше 3с сверху.
+	await loadRuntimeConfig();
 	// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-2): гидратация
 	// profiles.value из персиста ДО любых сетевых запросов — критерий приёмки
 	// "холодный старт офлайн показывает закэшированные профили контактов, не

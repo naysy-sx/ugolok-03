@@ -17,6 +17,7 @@ import {
 	writeBootstrapEndpoints,
 	resetBootstrapEndpoints,
 } from "../src/domain/settings/bootstrap-endpoints.js";
+import { loadRuntimeConfig, resetRuntimeConfig } from "../src/domain/settings/runtime-config.js";
 
 function memoryStorage(initial = {}) {
 	const map = new Map(Object.entries(initial));
@@ -43,11 +44,46 @@ function buildTimeDefaults() {
 
 beforeEach(() => {
 	// тесты передают storage явно — глобальный localStorage не трогаем
+	resetRuntimeConfig();
 });
 
 test("readBootstrapEndpoints: нет записи → значения из BUILD_DEFAULT_*", () => {
 	const storage = memoryStorage();
 	assert.deepEqual(readBootstrapEndpoints(storage), buildTimeDefaults());
+});
+
+// Этап 4A (TZ-cicd-hardening) — приоритет трёх источников: localStorage >
+// config.json > BUILD_DEFAULT_*. Предыдущий тест покрывает "нет localStorage,
+// нет config.json → BUILD_DEFAULT_*"; эти два — остальные две ступени.
+test("readBootstrapEndpoints: нет localStorage, ЕСТЬ config.json → значения из config.json, не BUILD_DEFAULT_*", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({
+				relays: ["wss://relay.runtime-config.example"],
+				blossomServers: ["https://blossom.runtime-config.example"],
+				iceServers: [{ urls: "turn:runtime-config.example:3478", username: "ru", credential: "rp" }],
+			}),
+		}),
+	});
+	const storage = memoryStorage();
+	assert.deepEqual(readBootstrapEndpoints(storage), {
+		relayUrl: "wss://relay.runtime-config.example",
+		blossomUrl: "https://blossom.runtime-config.example",
+		iceServers: [{ urls: "turn:runtime-config.example:3478", username: "ru", credential: "rp" }],
+	});
+});
+
+test("readBootstrapEndpoints: ЕСТЬ и localStorage, и config.json → localStorage побеждает", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({ relays: ["wss://relay.runtime-config.example"] }),
+		}),
+	});
+	const storage = memoryStorage();
+	writeBootstrapEndpoints({ relayUrl: "wss://relay.from-user.example" }, storage);
+	assert.equal(readBootstrapEndpoints(storage).relayUrl, "wss://relay.from-user.example");
 });
 
 test("writeBootstrapEndpoints + повторный read → round-trip", () => {
