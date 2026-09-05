@@ -239,6 +239,10 @@ test("editPost: старое событие после правки не отк�
 	await publishPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, capturingPublish(first));
 	const firstEvent = first.find((e) => e.kind === 30061);
 	await receivePost(BOB_PUB, DB_KEY, firstEvent);
+	// created_at — целые секунды (Math.floor(Date.now()/1000)); без сдвига
+	// firstEvent и edited почти всегда попадают в одну и ту же секунду, и
+	// LWW-тайбрейк (isNewerVersion) решает по event.id — тест на монетке.
+	await new Promise((resolve) => setTimeout(resolve, 1100));
 	const edited = [];
 	await editPost(ALICE_PUB, ALICE_PRIV, DB_KEY, postId, { text: "v2", attachments: [] }, capturingPublish(edited));
 	await receivePost(BOB_PUB, DB_KEY, edited.find((e) => e.kind === 30061));

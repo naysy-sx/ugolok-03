@@ -82,8 +82,13 @@ export function createRelayConnection(url, options = {}) {
     ws = new WebSocketImpl(url);
     ws.onopen = () => {
       reconnectAttempt = 0;
+      // Снимок ДО apply("OPEN"): сам переход синхронно уведомляет подписчика
+      // (onStateChange -> send(REQ)), и он уже кладёт новый REQ в activeReqs.
+      // Реплеим только то, что было активно ДО этого коннекта (переподключение
+      // после обрыва/AUTH), иначе только что отправленный REQ уходит дважды.
+      const reqsBeforeOpen = new Map(activeReqs);
       apply("OPEN");
-      replayActiveReqs();
+      replayActiveReqs(reqsBeforeOpen);
     };
     ws.onclose = () => {
       apply("CLOSE");
@@ -110,8 +115,8 @@ export function createRelayConnection(url, options = {}) {
     ws.send(JSON.stringify(msgArray));
   }
 
-  function replayActiveReqs() {
-    for (const req of activeReqs.values()) {
+  function replayActiveReqs(snapshot = activeReqs) {
+    for (const req of snapshot.values()) {
       ws.send(JSON.stringify(req));
     }
   }
