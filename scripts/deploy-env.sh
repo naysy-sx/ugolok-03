@@ -62,37 +62,36 @@ ICE_FILE="$(mktemp)"
 printf '%s' "$ICE_JSON" >"$ICE_FILE"
 trap 'rm -f "$ICE_FILE"' EXIT
 
+# Сборка от uid runner-а: иначе dist/ принадлежит root и запись config.json падает.
 docker run --rm \
+	-u "$(id -u):$(id -g)" \
+	-e HOME=/tmp \
+	-e npm_config_cache=/tmp/npm \
 	-v "$ROOT":/src \
 	-v "$ICE_FILE":/ice.json:ro \
 	-w /src \
 	-e BUILD_DEFAULT_RELAYS="$RELAY_JSON" \
 	-e BUILD_BOOTSTRAP_RELAYS="$RELAY_JSON" \
 	-e BUILD_DEFAULT_BLOSSOM_SERVERS="$BLOSSOM_JSON" \
+	-e UGOLK_INSTANCE="$ENV" \
 	node:22-bookworm \
-	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"; npm ci --ignore-scripts && npm run build'
+	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"
+npm ci --ignore-scripts && npm run build
+node -e "
+const fs=require(\"fs\");
+const ice=JSON.parse(fs.readFileSync(\"/ice.json\",\"utf8\"));
+const relays=JSON.parse(process.env.BUILD_DEFAULT_RELAYS);
+const blossom=JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
+const name=process.env.UGOLK_INSTANCE===\"prod\"?\"ugolok.tech\":\"test.ugolok.tech\";
+fs.writeFileSync(\"dist/config.json\", JSON.stringify({
+  instanceName:name, relays, bootstrapRelays:relays, blossomServers:blossom, iceServers:ice
+}, null, 2)+\"\\n\");
+"'
 
-if [[ ! -f dist/index.html || ! -f dist/service-worker.js ]]; then
-	echo "deploy-env: нет dist/index.html или dist/service-worker.js" >&2
+if [[ ! -f dist/index.html || ! -f dist/service-worker.js || ! -f dist/config.json ]]; then
+	echo "deploy-env: нет dist/index.html, service-worker.js или config.json" >&2
 	exit 1
 fi
-
-python3 - "$RELAY_JSON" "$BLOSSOM_JSON" "$ICE_JSON" "$ENV" <<'PY'
-import json, sys, pathlib
-relays = json.loads(sys.argv[1])
-blossom = json.loads(sys.argv[2])
-ice = json.loads(sys.argv[3])
-env = sys.argv[4]
-name = "ugolok.tech" if env == "prod" else "test.ugolok.tech"
-cfg = {
-	"instanceName": name,
-	"relays": relays,
-	"bootstrapRelays": relays,
-	"blossomServers": blossom,
-	"iceServers": ice,
-}
-pathlib.Path("dist/config.json").write_text(json.dumps(cfg, indent=2) + "\n")
-PY
 
 mkdir -p "$WWW"
 rsync -a --delete --delay-updates \
