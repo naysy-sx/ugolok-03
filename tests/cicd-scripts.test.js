@@ -280,6 +280,20 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.equal(syntax.status, 0, syntax.stderr);
 	assert.equal(spawnSync("test", ["-x", join(ROOT, "scripts/apply-caddy.sh")]).status, 0);
 	assert.equal(spawnSync("bash", ["-n", join(ROOT, "scripts/apply-caddy.sh")]).status, 0);
+
+	// Этап 1: test-ветка деплоя вызывает apply-caddy только режимом site, prod — full.
+	const testBranch = deploy.slice(deploy.indexOf('if [[ "$ENV" == "test" ]]'), deploy.indexOf("else"));
+	const prodBranch = deploy.slice(deploy.indexOf("else"), deploy.indexOf('ICE_JSON="$('));
+	assert.match(testBranch, /CADDY_MODE=site/);
+	assert.equal(/CADDY_MODE=full/.test(testBranch), false, "test-ветка не должна вызывать full");
+	assert.match(prodBranch, /CADDY_MODE=full/);
+	assert.match(deploy, /"\$APPLY_CADDY" "\$CADDY_MODE" "\$ROOT" "\$CADDY_SITE"/);
+	assert.match(deploy, /sudo -n "\$APPLY_CADDY" "\$CADDY_MODE" "\$ROOT" "\$CADDY_SITE"/);
+
+	const applyCaddy = read(join(ROOT, "scripts/apply-caddy.sh"));
+	assert.match(applyCaddy, /MODE="\$\{1:\?site or full\}"/);
+	assert.match(applyCaddy, /grep -qE '\^\[\[:space:\]\]\*import\[\[:space:\]\]\+\/etc\/caddy\/sites\/\\\*\\\.caddy'/);
+	assert.match(applyCaddy, /сначала full/);
 	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
 	assert.match(testCaddy, /test\.ugolok\.tech/);
 	assert.match(testCaddy, /127\.0\.0\.1:7778/);

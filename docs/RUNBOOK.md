@@ -215,3 +215,19 @@ dist/
 `npm ci` в CI вызывается с `--ignore-scripts`; в `package.json` зафиксировано `"allowScripts": { "fsevents": false }`. Solo-исключение мелких зелёных коммитов прямо в `main` сохраняется (§6.1).
 
 `npm test` в `package.json` — `node --test tests/*.test.js tests/harness/*.test.js`. То же, что гоняет `ci-check.sh`. На этой версии Node `node --test tests` (каталог) не рекурсирует, а пытается загрузить модуль `tests`.
+
+### 6.8 Модель доверия деплоя
+
+`push` в `dev` — это исполнение кода на боевой VPS, не просто «залить статику».
+
+Forgejo-раннер (лейбл `ugolok`) стоит на той же машине, что и живой `ugolok.tech`. У джобы `deploy-test`/`deploy-prod` (`scripts/deploy-env.sh`) есть:
+
+- запись в `/var/www/ugolok-test` и `/var/www/ugolok` (rsync `--delete`);
+- доступ к docker-сокету (`docker run`, `docker compose up -d` для `deploy/island*/`);
+- `sudo -n /opt/ugolok/bin/apply-caddy.sh` — с этапа 1 ограничен режимом `site` для test-выкладки (трогает только один site-файл в `/etc/caddy/sites/`, не общий `Caddyfile`); режим `full` (перезапись общего `Caddyfile`) доступен только из prod-выкладки.
+
+Из этого следует:
+
+- 2FA на аккаунте `git.ugolok.tech`, из-под которого пушат в `dev`/`main`/`prod`, обязательна — компрометация аккаунта = RCE на проде.
+- PR из форков через Forgejo Actions не должны запускать джобы с доступом к секретам/раннеру `ugolok` без ручного approve (Forgejo: «Require approval for fork pull request workflows» — проверить в админке, см. `docs/environments.md`).
+- Любая правка `scripts/deploy-env.sh`/`scripts/apply-caddy.sh` — это правка того, что выполняется с правами раннера на проде; ревьюить как прод-код, не как «просто скрипт сборки».

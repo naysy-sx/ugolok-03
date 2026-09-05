@@ -31,6 +31,7 @@ if [[ "$ENV" == "test" ]]; then
 	ISLAND_SRC="$ROOT/deploy/island-test"
 	ISLAND_DST="${UGOLK_ISLAND_TEST:-/opt/ugolok/island-test}"
 	CADDY_SITE=test.caddy
+	CADDY_MODE=site
 	APPLY_PROD_ISLAND=0
 else
 	WWW="${UGOLK_WWW_PROD:-/var/www/ugolok}"
@@ -39,6 +40,7 @@ else
 	ISLAND_SRC="$ROOT/deploy/island"
 	ISLAND_DST="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
 	CADDY_SITE=prod.caddy
+	CADDY_MODE=full
 	APPLY_PROD_ISLAND=1
 fi
 
@@ -117,9 +119,9 @@ fi
 APPLY_CADDY="${UGOLK_APPLY_CADDY:-/opt/ugolok/bin/apply-caddy.sh}"
 if [[ -x "$APPLY_CADDY" ]]; then
 	if [[ "${EUID}" -eq 0 ]]; then
-		"$APPLY_CADDY" "$ROOT" "$CADDY_SITE"
+		"$APPLY_CADDY" "$CADDY_MODE" "$ROOT" "$CADDY_SITE"
 	else
-		sudo -n "$APPLY_CADDY" "$ROOT" "$CADDY_SITE"
+		sudo -n "$APPLY_CADDY" "$CADDY_MODE" "$ROOT" "$CADDY_SITE"
 	fi
 else
 	echo "deploy-env: нет $APPLY_CADDY — Caddy не трогаем (первый bootstrap на VPS)" >&2
