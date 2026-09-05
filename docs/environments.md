@@ -8,7 +8,13 @@
 |---|---|---|---|
 | local | эта машина, localhost / LAN | `npm run dev` + `server/*/run.sh` | рабочая копия |
 | test | `test.ugolok.tech` | Caddy + `deploy/island-test/` | ветка `dev`, статика в `/var/www/ugolok-test` |
-| prod | `ugolok.tech` | Caddy + Forgejo + `deploy/island/` | ветка `prod`, статика в `/var/www/ugolok` |
+| prod | `ugolok.tech` | Caddy + Forgejo + `deploy/island/` + Forgejo Actions runner (лейбл `ugolok`) | ветка `prod`, статика в `/var/www/ugolok`; сборка клиента — контейнер `node:22-bookworm` на этом же хосте |
+
+### Осознанное отступление от ТЗ VPS
+
+ТЗ на настройку VPS (`PROCESS-DOCS/VPS/TZ-ugolok-vps-grok-terminal.md`) явно запрещало ставить Node/CI-раннер на хост — машина на 2 ГБ RAM, swap заводили только под Docker+Caddy. Раннер (лейбл `ugolok`) и сборка в `node:22-bookworm` внутри Docker всё равно поставлены на этот хост — выбрано ради простоты (нет второй машины с сетевым доступом к `/var/www` и docker-сокету).
+
+Условие пересмотра: если после встраивания тестов в деплой (`scripts/deploy-env.sh`, `npm test` внутри контейнера) зелёный прогон стабильно дольше нескольких минут, или в `dmesg`/логах контейнера видны OOM-килы — переходить на вариант «сборка на Mini, выкладка готового `dist/` на VPS по rsync/SSH». Этот вариант в этом ТЗ не реализован, только зафиксирован как запасной путь. Пока — контейнер сборки ограничен памятью (`--memory`/`--memory-swap` в `deploy-env.sh`), чтобы падать по OOM внутри себя, а не ронять Caddy/relay на хосте.
 
 Порты, которые нельзя пересекать:
 

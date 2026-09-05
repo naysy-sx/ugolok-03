@@ -64,12 +64,21 @@ ICE_FILE="$(mktemp)"
 printf '%s' "$ICE_JSON" >"$ICE_FILE"
 trap 'rm -f "$ICE_FILE"' EXIT
 
+NPM_CACHE="${UGOLK_NPM_CACHE:-/var/cache/ugolok-npm}"
+mkdir -p "$NPM_CACHE"
+
 # Сборка от uid runner-а: иначе dist/ принадлежит root и запись config.json падает.
+# --memory/--memory-swap: сборка падает по OOM внутри контейнера, а не роняет
+# Caddy/relay на хосте (2 ГБ RAM, см. docs/environments.md "Осознанное
+# отступление от ТЗ VPS"). Значения ориентировочные — подобрать по free -m.
 docker run --rm \
 	-u "$(id -u):$(id -g)" \
 	-e HOME=/tmp \
 	-e npm_config_cache=/tmp/npm \
+	--memory="${UGOLK_BUILD_MEMORY:-1200m}" \
+	--memory-swap="${UGOLK_BUILD_MEMORY_SWAP:-1700m}" \
 	-v "$ROOT":/src \
+	-v "$NPM_CACHE":/tmp/npm \
 	-v "$ICE_FILE":/ice.json:ro \
 	-w /src \
 	-e BUILD_DEFAULT_RELAYS="$RELAY_JSON" \

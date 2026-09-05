@@ -310,6 +310,12 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	// Этап 2: тесты внутри деплоя (контейнер) + проверка размера на хосте (post-контейнер).
 	assert.match(deploy, /npm ci --ignore-scripts && npm test && npm run build/);
 	assert.match(deploy, /bash "\$ROOT\/scripts\/check-dist-size\.sh"/);
+
+	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
+	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
+	assert.match(deploy, /-v "\$NPM_CACHE":\/tmp\/npm/);
+	assert.match(deploy, /--memory="\$\{UGOLK_BUILD_MEMORY:-1200m\}"/);
+	assert.match(deploy, /--memory-swap="\$\{UGOLK_BUILD_MEMORY_SWAP:-1700m\}"/);
 	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
 	assert.match(testCaddy, /test\.ugolok\.tech/);
 	assert.match(testCaddy, /127\.0\.0\.1:7778/);
