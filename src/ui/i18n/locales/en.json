@@ -234,8 +234,8 @@
 				"importKey": "Sign in with a key (nsec)"
 			},
 			"hero": {
-				"title": "Your private messenger",
-				"lead": "A warm corner for your people. Chat and calls — without someone else's servers."
+				"title": "A messenger for your circle",
+				"lead": "Chats and calls that no outsider can read."
 			},
 			"footer": {
 				"tagline": "{{appName}} — a private messenger.",

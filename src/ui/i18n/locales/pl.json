@@ -233,8 +233,8 @@
 				"importKey": "Zaloguj się kluczem (nsec)"
 			},
 			"hero": {
-				"title": "Twój prywatny komunikator",
-				"lead": "Ciepły kąt dla swoich. Czat i rozmowy — bez cudzych serwerów."
+				"title": "Komunikator dla swoich",
+				"lead": "Czat i rozmowy, których nie odczyta nikt obcy."
 			},
 			"footer": {
 				"tagline": "{{appName}} — prywatny komunikator.",

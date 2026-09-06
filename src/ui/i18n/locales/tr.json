@@ -233,8 +233,8 @@
 				"importKey": "Anahtarla giriş yap (nsec)"
 			},
 			"hero": {
-				"title": "Kendi özel mesajlaşmanız",
-				"lead": "Sizinkiler için sıcak bir köşe. Sohbet ve aramalar — başkalarının sunucuları olmadan."
+				"title": "Yakınlarınız için bir mesajlaşma uygulaması",
+				"lead": "Hiçbir yabancının okuyamayacağı sohbetler ve aramalar."
 			},
 			"footer": {
 				"tagline": "{{appName}} — özel bir mesajlaşma uygulaması.",

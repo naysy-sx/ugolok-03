@@ -233,8 +233,8 @@
 				"importKey": "Mit Schlüssel anmelden (nsec)"
 			},
 			"hero": {
-				"title": "Dein privater Messenger",
-				"lead": "Eine warme Ecke für deine Leute. Chat und Anrufe — ohne fremde Server."
+				"title": "Ein Messenger für die Deinen",
+				"lead": "Chats und Anrufe, die niemand Fremdes mitlesen kann."
 			},
 			"footer": {
 				"tagline": "{{appName}} — ein privater Messenger.",

@@ -233,8 +233,8 @@
 				"importKey": "Acceder con una clave (nsec)"
 			},
 			"hero": {
-				"title": "Tu mensajero privado",
-				"lead": "Un rincón cálido para los tuyos. Chat y llamadas — sin servidores ajenos."
+				"title": "Un mensajero para los tuyos",
+				"lead": "Chats y llamadas que ningún extraño puede leer."
 			},
 			"footer": {
 				"tagline": "{{appName}} — un mensajero privado.",
