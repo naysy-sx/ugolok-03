@@ -121,13 +121,19 @@ bash "$ROOT/scripts/check-dist-size.sh"
 
 mkdir -p "$WWW"
 # без owner/group: каталог www принадлежит caddy, runner — ugolok; -a иначе падает на chgrp.
-rsync -rltD --delete --delay-updates \
+# --omit-dir-times: живая проверка (прод, run #30) — "$WWW" (уже существующий,
+# не создан этим же скриптом) принадлежит не ugolok, а utimensat() на чужую
+# ДИРЕКТОРИЮ (не файл) требует владения даже при наличии права записи внутрь —
+# без этого флага rsync доходил до конца успешно, но падал (exit 23) именно
+# на попытке проставить время самому каталогу назначения, роняя весь деплой
+# ПОСЛЕ того, как все файлы уже скопировались.
+rsync -rltD --omit-dir-times --delete --delay-updates \
 	--exclude '.git' \
 	dist/ "$WWW/"
 
 if [[ -d "$ISLAND_SRC" ]]; then
 	mkdir -p "$ISLAND_DST"
-	rsync -a --delete \
+	rsync -a --omit-dir-times --delete \
 		--exclude 'relay-src' \
 		--exclude 'blossom-src' \
 		--exclude 'coturn.conf' \

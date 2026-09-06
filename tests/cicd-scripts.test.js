@@ -320,6 +320,15 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.equal(/npm (ci|test|run build) &&/.test(deploy), false, "npm-команды сборки не должны быть в одном && -списке — errexit их не ловит");
 	assert.match(deploy, /bash "\$ROOT\/scripts\/check-dist-size\.sh"/);
 
+	// Живая проверка (прод, run #30): $WWW уже существовал до этого скрипта и
+	// принадлежит не ugolok — utimensat() на чужую директорию (не файл) падает
+	// даже при праве записи внутрь. Без --omit-dir-times rsync копирует все
+	// файлы успешно, но получает exit 23 на попытке проставить время самому
+	// каталогу назначения — set -e роняет деплой ПОСЛЕ transfer, до
+	// docker compose/apply-caddy.
+	assert.match(deploy, /rsync -rltD --omit-dir-times --delete/);
+	assert.match(deploy, /rsync -a --omit-dir-times --delete/);
+
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
 	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
 	assert.match(deploy, /NPM_CACHE_MOUNT=\(-v "\$NPM_CACHE:\/tmp\/npm"\)/);
