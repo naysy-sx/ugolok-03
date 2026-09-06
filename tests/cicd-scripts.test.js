@@ -283,6 +283,37 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
 });
 
+test("security: TURN без релея во внутренние сети, Caddy admin API за сокетом, HSTS", () => {
+	const coturn = read(join(ROOT, "deploy/island/coturn.conf.example"));
+	// TURN раздаёт публичные креды без проверки личности (этап 6) — без явного
+	// denied-peer-ip держатель кредов может попросить coturn соединить его с
+	// облачной metadata (169.254/16), приватными сетями или localhost.
+	assert.match(coturn, /denied-peer-ip=169\.254\.0\.0-169\.254\.255\.255/);
+	assert.match(coturn, /denied-peer-ip=127\.0\.0\.0-127\.255\.255\.255/);
+	assert.match(coturn, /denied-peer-ip=10\.0\.0\.0-10\.255\.255\.255/);
+	assert.match(coturn, /denied-peer-ip=172\.16\.0\.0-172\.31\.255\.255/);
+	assert.match(coturn, /denied-peer-ip=192\.168\.0\.0-192\.168\.255\.255/);
+	assert.match(coturn, /denied-peer-ip=::1/);
+	assert.match(coturn, /total-quota=\d+/);
+	assert.match(coturn, /user-quota=\d+/);
+	assert.match(coturn, /max-bps=\d+/);
+
+	// 127.0.0.1:2019 (дефолт Caddy admin API) не требует аутентификации и
+	// доступен любому локальному процессу/контейнеру с network_mode: host
+	// (coturn — именно такой) — POST /load туда подменяет всю конфигурацию.
+	const globalCaddyfile = read(join(ROOT, "deploy/caddy/Caddyfile"));
+	assert.match(globalCaddyfile, /admin unix\/\/run\/caddy\/admin\.sock/);
+
+	const prodCaddyForHsts = read(join(ROOT, "deploy/caddy/prod.caddy"));
+	const testCaddyForHsts = read(join(ROOT, "deploy/caddy/test.caddy"));
+	for (const site of [prodCaddyForHsts, testCaddyForHsts]) {
+		const headerBlocks = site.match(/X-Content-Type-Options nosniff/g) || [];
+		const hstsBlocks = site.match(/Strict-Transport-Security "max-age=31536000"/g) || [];
+		assert.ok(headerBlocks.length > 0);
+		assert.equal(hstsBlocks.length, headerBlocks.length, "HSTS должен стоять в каждом header {} блоке сайта");
+	}
+});
+
 test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workflows", () => {
 	const deploy = read(join(ROOT, "scripts/deploy-env.sh"));
 	assert.match(deploy, /usage: \$0 test\|prod/);
@@ -342,8 +373,8 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /NPM_CACHE_MOUNT=\(-v "\$NPM_CACHE:\/tmp\/npm"\)/);
 	assert.match(deploy, /NPM_CACHE_MOUNT=\(\)/);
 	assert.match(deploy, /"\$\{NPM_CACHE_MOUNT\[@\]\+"\$\{NPM_CACHE_MOUNT\[@\]\}"\}"/);
-	assert.match(deploy, /--memory="\$\{UGOLK_BUILD_MEMORY:-1200m\}"/);
-	assert.match(deploy, /--memory-swap="\$\{UGOLK_BUILD_MEMORY_SWAP:-1700m\}"/);
+	assert.match(deploy, /--memory="\$\{UGOLK_BUILD_MEMORY:-2g\}"/);
+	assert.match(deploy, /--memory-swap="\$\{UGOLK_BUILD_MEMORY_SWAP:-3g\}"/);
 	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
 	assert.match(testCaddy, /test\.ugolok\.tech/);
 	assert.match(testCaddy, /127\.0\.0\.1:7778/);

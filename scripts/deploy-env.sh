@@ -73,14 +73,14 @@ BUILD_HASH="$(git -C "$ROOT" rev-parse --short HEAD)"
 
 # Сборка от uid runner-а: иначе dist/ принадлежит root и запись config.json падает.
 # --memory/--memory-swap: сборка падает по OOM внутри контейнера, а не роняет
-# Caddy/relay на хосте (2 ГБ RAM, см. docs/environments.md "Осознанное
+# Caddy/relay на хосте (4 ГБ RAM по факту, см. docs/environments.md "Осознанное
 # отступление от ТЗ VPS"). Значения ориентировочные — подобрать по free -m.
 docker run --rm \
 	-u "$(id -u):$(id -g)" \
 	-e HOME=/tmp \
 	-e npm_config_cache=/tmp/npm \
-	--memory="${UGOLK_BUILD_MEMORY:-1200m}" \
-	--memory-swap="${UGOLK_BUILD_MEMORY_SWAP:-1700m}" \
+	--memory="${UGOLK_BUILD_MEMORY:-2g}" \
+	--memory-swap="${UGOLK_BUILD_MEMORY_SWAP:-3g}" \
 	-v "$ROOT":/src \
 	"${NPM_CACHE_MOUNT[@]+"${NPM_CACHE_MOUNT[@]}"}" \
 	-v "$ICE_FILE":/ice.json:ro \

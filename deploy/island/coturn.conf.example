@@ -19,6 +19,25 @@ no-tlsv1
 no-tlsv1_1
 no-multicast-peers
 no-loopback-peers
+# TURN — это релей: любой держатель кредов (креды публичные — раздаёт
+# turncreds-server без проверки личности, этап 6) может попросить coturn
+# соединить его с чем угодно внутренним. no-loopback-peers покрывает не все
+# формы адреса (например IPv4-mapped ::ffff:127.0.0.1) — явные диапазоны
+# закрывают дыру целиком: облачная metadata (169.254.0.0/16), приватные сети,
+# сам loopback и собственный публичный IP этой машины (чтобы релей не мог
+# развернуть трафик обратно на другой локальный сервис, слушающий 0.0.0.0).
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=130.17.31.118
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+# Стартовые значения — подобрать по факту использования (docs/environments.md).
+total-quota=100
+user-quota=10
+max-bps=1000000
 verbose
 log-file=stdout
 simple-log

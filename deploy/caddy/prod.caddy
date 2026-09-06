@@ -17,6 +17,7 @@ ugolok.tech, www.ugolok.tech {
 	}
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}
@@ -39,6 +40,7 @@ git.ugolok.tech {
 	}
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}
@@ -62,6 +64,7 @@ relay.ugolok.tech {
 	header -Alt-Svc
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 }
@@ -76,6 +79,7 @@ blossom.ugolok.tech {
 	}
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}

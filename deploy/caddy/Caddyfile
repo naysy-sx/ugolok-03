@@ -1,5 +1,12 @@
 {
 	email naxymails@gmail.com
+	# 127.0.0.1:2019 (дефолт) — без аутентификации, доступен ЛЮБОМУ локальному
+	# процессу и контейнеру с network_mode: host (coturn — именно такой), а
+	# POST /load на этот эндпоинт заменяет всю конфигурацию Caddy целиком.
+	# Unix-сокет с правами caddy:caddy сужает доступ до самого процесса Caddy;
+	# `admin off` не годится — тогда ExecReload (systemctl reload caddy) не
+	# сможет достучаться до админки и сломается, останется только restart.
+	admin unix//run/caddy/admin.sock
 }
 
 import /etc/caddy/sites/*.caddy

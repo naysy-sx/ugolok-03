@@ -16,6 +16,7 @@ test.ugolok.tech {
 	}
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}
@@ -42,6 +43,7 @@ relay.test.ugolok.tech {
 	header -Alt-Svc
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 }
@@ -56,6 +58,7 @@ blossom.test.ugolok.tech {
 	}
 	header {
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}
