@@ -51,8 +51,18 @@ ICE_FILE="$(mktemp)"
 printf '%s' "$ICE_JSON" >"$ICE_FILE"
 trap 'rm -f "$ICE_FILE"' EXIT
 
+# Кэш — оптимизация, не обязательное условие деплоя: если каталог ещё не
+# создан оператором ([VPS], docs/environments.md) или /var/cache недоступен
+# для записи uid раннера, просто не монтируем его — контейнер использует
+# свой внутренний /tmp/npm (без переиспользования между прогонами), но
+# деплой не падает целиком из-за отсутствующей оптимизации.
 NPM_CACHE="${UGOLK_NPM_CACHE:-/var/cache/ugolok-npm}"
-mkdir -p "$NPM_CACHE"
+NPM_CACHE_MOUNT=()
+if mkdir -p "$NPM_CACHE" 2>/dev/null; then
+	NPM_CACHE_MOUNT=(-v "$NPM_CACHE:/tmp/npm")
+else
+	echo "deploy-env: нет доступа к $NPM_CACHE — npm-кэш этого прогона не переживёт контейнер" >&2
+fi
 
 # Этап 7 — хеш сборки с ХОСТА, не полагаясь на git внутри --rm-контейнера:
 # node:22-bookworm его несёт (buildpack-deps), но это неявная зависимость от
@@ -72,7 +82,7 @@ docker run --rm \
 	--memory="${UGOLK_BUILD_MEMORY:-1200m}" \
 	--memory-swap="${UGOLK_BUILD_MEMORY_SWAP:-1700m}" \
 	-v "$ROOT":/src \
-	-v "$NPM_CACHE":/tmp/npm \
+	"${NPM_CACHE_MOUNT[@]+"${NPM_CACHE_MOUNT[@]}"}" \
 	-v "$ICE_FILE":/ice.json:ro \
 	-w /src \
 	-e BUILD_DEFAULT_RELAYS="$RELAY_JSON" \

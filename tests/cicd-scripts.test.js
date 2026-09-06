@@ -314,7 +314,9 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
 	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
-	assert.match(deploy, /-v "\$NPM_CACHE":\/tmp\/npm/);
+	assert.match(deploy, /NPM_CACHE_MOUNT=\(-v "\$NPM_CACHE:\/tmp\/npm"\)/);
+	assert.match(deploy, /NPM_CACHE_MOUNT=\(\)/);
+	assert.match(deploy, /"\$\{NPM_CACHE_MOUNT\[@\]\+"\$\{NPM_CACHE_MOUNT\[@\]\}"\}"/);
 	assert.match(deploy, /--memory="\$\{UGOLK_BUILD_MEMORY:-1200m\}"/);
 	assert.match(deploy, /--memory-swap="\$\{UGOLK_BUILD_MEMORY_SWAP:-1700m\}"/);
 	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
