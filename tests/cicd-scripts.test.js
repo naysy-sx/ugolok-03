@@ -340,6 +340,15 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /ICE_JSON='\[.*\]'/);
 	assert.equal(/username|credential/.test(deploy.match(/ICE_JSON='(\[.*\])'/)[1]), false, "ICE_JSON не должен нести username/credential");
 	assert.match(deploy, /turnCredentialsUrl:\\"\/api\/turn-credentials\\"/);
+
+	// Этап 7: flock (два быстрых push не гонят rsync --delete параллельно),
+	// BUILD_HASH с хоста, схлопнутые if/elif (было — два одинаковых блока).
+	assert.match(deploy, /exec 9>"\/tmp\/ugolok-deploy-\$ENV\.lock"/);
+	assert.match(deploy, /^flock 9$/m);
+	assert.match(deploy, /BUILD_HASH="\$\(git -C "\$ROOT" rev-parse --short HEAD\)"/);
+	assert.match(deploy, /-e BUILD_HASH="\$BUILD_HASH"/);
+	assert.equal(deploy.includes("APPLY_PROD_ISLAND"), false);
+	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 1, "docker compose up -d — один раз, не в двух одинаковых ветках");
 });
 
 test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, coturn use-auth-secret", () => {

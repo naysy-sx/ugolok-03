@@ -16,6 +16,13 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Этап 7 (TZ-cicd-hardening) — два быстрых push подряд не должны выполнять
+# rsync --delete/docker compose one over the other; блокирующий flock (не -n)
+# — второй прогон ЖДЁТ первого, не падает. Отдельный лок на test/prod: они
+# пишут в разные $WWW и не конфликтуют друг с другом.
+exec 9>"/tmp/ugolok-deploy-$ENV.lock"
+flock 9
+
 if [[ "$ENV" == "test" ]]; then
 	WWW="${UGOLK_WWW_TEST:-/var/www/ugolok-test}"
 	RELAY_JSON='["wss://relay.test.ugolok.tech"]'
@@ -24,7 +31,6 @@ if [[ "$ENV" == "test" ]]; then
 	ISLAND_DST="${UGOLK_ISLAND_TEST:-/opt/ugolok/island-test}"
 	CADDY_SITE=test.caddy
 	CADDY_MODE=site
-	APPLY_PROD_ISLAND=0
 else
 	WWW="${UGOLK_WWW_PROD:-/var/www/ugolok}"
 	RELAY_JSON='["wss://relay.ugolok.tech"]'
@@ -33,7 +39,6 @@ else
 	ISLAND_DST="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
 	CADDY_SITE=prod.caddy
 	CADDY_MODE=full
-	APPLY_PROD_ISLAND=1
 fi
 
 # Только urls — ни username, ни credential (этап 6): временные TURN-креды
@@ -48,6 +53,13 @@ trap 'rm -f "$ICE_FILE"' EXIT
 
 NPM_CACHE="${UGOLK_NPM_CACHE:-/var/cache/ugolok-npm}"
 mkdir -p "$NPM_CACHE"
+
+# Этап 7 — хеш сборки с ХОСТА, не полагаясь на git внутри --rm-контейнера:
+# node:22-bookworm его несёт (buildpack-deps), но это неявная зависимость от
+# конкретного базового образа; на хосте git точно есть (сюда же клонировал
+# Forgejo Actions). vite.config.js's BUILD_HASH берёт process.env.BUILD_HASH
+# первым приоритетом — если он задан, git внутри контейнера не вызывается вовсе.
+BUILD_HASH="$(git -C "$ROOT" rev-parse --short HEAD)"
 
 # Сборка от uid runner-а: иначе dist/ принадлежит root и запись config.json падает.
 # --memory/--memory-swap: сборка падает по OOM внутри контейнера, а не роняет
@@ -67,6 +79,7 @@ docker run --rm \
 	-e BUILD_BOOTSTRAP_RELAYS="$RELAY_JSON" \
 	-e BUILD_DEFAULT_BLOSSOM_SERVERS="$BLOSSOM_JSON" \
 	-e UGOLK_INSTANCE="$ENV" \
+	-e BUILD_HASH="$BUILD_HASH" \
 	node:22-bookworm \
 	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"
 npm ci --ignore-scripts && npm test && npm run build
@@ -103,9 +116,7 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		--exclude 'coturn.conf' \
 		--exclude '.git' \
 		"$ISLAND_SRC/" "$ISLAND_DST/"
-	if [[ "$APPLY_PROD_ISLAND" -eq 1 && -f "$ISLAND_DST/docker-compose.yml" ]]; then
-		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d
-	elif [[ "$APPLY_PROD_ISLAND" -eq 0 && -f "$ISLAND_DST/docker-compose.yml" ]]; then
+	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d
 	fi
 fi
