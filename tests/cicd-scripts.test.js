@@ -309,7 +309,15 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(applyCaddy, /сначала full/);
 
 	// Этап 2: тесты внутри деплоя (контейнер) + проверка размера на хосте (post-контейнер).
-	assert.match(deploy, /npm ci --ignore-scripts && npm test && npm run build/);
+	// ОТДЕЛЬНЫМИ строками — под set -e команда внутри "A && B && C", кроме
+	// последней, не триггерит errexit (задокументированное исключение bash):
+	// живая проверка (Forgejo Actions run #26) поймала именно это — npm test
+	// упал, но npm run build/config.json всё равно "прошли", docker run вернул 0.
+	assert.match(deploy, /set -euo pipefail\nexport BUILD_DEFAULT_ICE_SERVERS/);
+	assert.match(deploy, /^npm ci --ignore-scripts$/m);
+	assert.match(deploy, /^npm test$/m);
+	assert.match(deploy, /^npm run build$/m);
+	assert.equal(/npm (ci|test|run build) &&/.test(deploy), false, "npm-команды сборки не должны быть в одном && -списке — errexit их не ловит");
 	assert.match(deploy, /bash "\$ROOT\/scripts\/check-dist-size\.sh"/);
 
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.

@@ -91,8 +91,15 @@ docker run --rm \
 	-e UGOLK_INSTANCE="$ENV" \
 	-e BUILD_HASH="$BUILD_HASH" \
 	node:22-bookworm \
-	bash -lc 'export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"
-npm ci --ignore-scripts && npm test && npm run build
+	bash -lc 'set -euo pipefail
+export BUILD_DEFAULT_ICE_SERVERS="$(cat /ice.json)"
+# ОТДЕЛЬНЫМИ строками, не через && — под set -e команда внутри A && B && C,
+# кроме последней, НЕ триггерит errexit (задокументированное исключение bash),
+# то есть провал npm test здесь молча проглатывался бы, node -e ниже всё
+# равно писал бы config.json, и весь docker run вернул бы 0.
+npm ci --ignore-scripts
+npm test
+npm run build
 node -e "
 const fs=require(\"fs\");
 const ice=JSON.parse(fs.readFileSync(\"/ice.json\",\"utf8\"));

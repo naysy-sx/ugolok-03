@@ -59,12 +59,38 @@ function assertLocalIslandDefines(cfg) {
 	assert.deepEqual(parseDefine(cfg, "__BUILD_DEFAULT_ICE_SERVERS__"), LOCAL_ICE);
 }
 
+const BUILD_DEFAULT_ENV_KEYS = [
+	"BUILD_DEFAULT_RELAYS",
+	"BUILD_BOOTSTRAP_RELAYS",
+	"BUILD_DEFAULT_BLOSSOM_SERVERS",
+	"BUILD_DEFAULT_ICE_SERVERS",
+];
+
+// Живая проверка (deploy-env.sh, TZ-cicd-hardening этап 2) — npm test теперь
+// гоняется ВНУТРИ контейнера сборки, где эти четыре переменные УЖЕ выставлены
+// (реальный relay/blossom/ICE для test/prod) — без явной очистки эти два теста
+// падали бы на каждом деплое, не только здесь: "локальные дефолты" — гарантия
+// buildDefaultRelays()/etc внутри vite.config.js на ОТСУТСТВИЕ переменной, а не
+// свойство самого процесса.
+async function withClearedBuildDefaultEnv(fn) {
+	const prev = Object.fromEntries(BUILD_DEFAULT_ENV_KEYS.map((k) => [k, process.env[k]]));
+	for (const k of BUILD_DEFAULT_ENV_KEYS) delete process.env[k];
+	try {
+		return await fn();
+	} finally {
+		for (const k of BUILD_DEFAULT_ENV_KEYS) {
+			if (prev[k] === undefined) delete process.env[k];
+			else process.env[k] = prev[k];
+		}
+	}
+}
+
 test("serve define указывает на локальные relay/blossom/coturn", async () => {
-	assertLocalIslandDefines(await resolveConfig("serve"));
+	await withClearedBuildDefaultEnv(async () => assertLocalIslandDefines(await resolveConfig("serve")));
 });
 
 test("build define — те же localhost-дефолты, что serve", async () => {
-	assertLocalIslandDefines(await resolveConfig("build"));
+	await withClearedBuildDefaultEnv(async () => assertLocalIslandDefines(await resolveConfig("build")));
 });
 
 test("env BUILD_DEFAULT_* переопределяет дефолт и в build, и в serve", async () => {
