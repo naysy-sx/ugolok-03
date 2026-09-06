@@ -44,6 +44,16 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 
 Не править конфиги «на живую» на сервере в обход git — `deploy-env.sh` перезапишет ручную правку следующим же деплоем.
 
+## Обслуживание
+
+Build-кэш и неиспользуемые образы Docker растут с каждым `docker compose up -d --build` (сборка `turncreds-server`/relay/blossom на каждый деплой) — раз в месяц освобождать место. Разовая команда: `docker system prune -f && docker builder prune -f`. Или таймер (`deploy/island/systemd/docker-prune.{service,timer}`) — установить один раз:
+
+```
+sudo cp deploy/island/systemd/docker-prune.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now docker-prune.timer
+```
+
 ## Ветки и выкладка
 
 | Ветка | Когда | Куда |

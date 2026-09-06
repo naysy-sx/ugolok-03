@@ -1,0 +1,10 @@
+[Unit]
+Description=Ежемесячный docker system/builder prune
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

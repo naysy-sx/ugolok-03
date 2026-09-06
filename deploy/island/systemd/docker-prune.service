@@ -1,0 +1,14 @@
+# Устанавливается вручную (см. deploy/island/README.md "Обслуживание"):
+#   sudo cp deploy/island/systemd/docker-prune.* /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now docker-prune.timer
+[Unit]
+Description=docker system prune (build cache + unused images)
+
+[Service]
+Type=oneshot
+# -f: без интерактивного подтверждения (таймер запускается не в TTY).
+# Не -a — не трогает остановленные, но ещё нужные контейнеры/образы,
+# только action-cache и то, что уже не привязано ни к одному образу/контейнеру.
+ExecStart=/usr/bin/docker system prune -f
+ExecStart=/usr/bin/docker builder prune -f
