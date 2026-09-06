@@ -5,7 +5,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { verify } from "../src/core/crypto/sign.js";
-import { uploadBlob, downloadBlob, deleteBlob, checkBlossomReachable, checkUploadRequirements } from "../src/core/transport/blossom-client.js";
+import { uploadBlob, downloadBlob, deleteBlob, checkBlossomReachable, checkUploadRequirements, resolveUploadTimeoutMs, UPLOAD_TIMEOUT_FLOOR_MS, UPLOAD_TIMEOUT_CEIL_MS } from "../src/core/transport/blossom-client.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const ALICE_PUB = bytesToHex(getPublicKey(ALICE_PRIV));
@@ -231,6 +231,155 @@ test("checkUploadRequirements: serverUrl с завершающим '/' не да
 	};
 	await checkUploadRequirements("https://blossom.test/", { sha256Hex: "x", mime: "image/png", size: 1 }, ALICE_PRIV, { fetchImpl });
 	assert.equal(calls[0], "https://blossom.test/upload");
+});
+
+// FILES-FIX-SPEC.md §7.1 / TZ-FIX-FILES-MEDIA-STATIC.md 5.1 — retry на
+// транзиентных сетевых отказах (S3: "крупные файлы не долетают вовсе").
+test("uploadBlob: первая попытка 503, вторая 200 -> успех, 2 вызова fetch, backoff соблюдён", async () => {
+	const calls = [];
+	let n = 0;
+	const fetchImpl = async (url, opts) => {
+		calls.push({ url, opts, t: Date.now() });
+		n += 1;
+		if (n === 1) return fakeResponse({ ok: false, status: 503, textBody: "busy" });
+		return fakeResponse({ jsonBody: { sha256: "abc", size: 3 } });
+	};
+	const result = await uploadBlob("https://blossom.test", new Uint8Array([1, 2, 3]), "deadbeef", ALICE_PRIV, { fetchImpl, backoffMs: 5 });
+	assert.equal(calls.length, 2);
+	assert.deepEqual(result, { sha256: "abc", size: 3 });
+});
+
+test("uploadBlob: retries исчерпаны на постоянном 503 -> throw после ровно retries+1 попыток", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push({ url, opts });
+		return fakeResponse({ ok: false, status: 503, textBody: "busy" });
+	};
+	await assert.rejects(() => uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, retries: 2, backoffMs: 1 }), /503/);
+	assert.equal(calls.length, 3, "1 исходная попытка + 2 ретрая");
+});
+
+test("uploadBlob: 400 (клиентская ошибка) -> НЕ повторяется, throw сразу после первой попытки", async () => {
+	const calls = [];
+	const fetchImpl = async () => {
+		calls.push(1);
+		return fakeResponse({ ok: false, status: 400, textBody: "bad request" });
+	};
+	await assert.rejects(() => uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, backoffMs: 1 }), /400/);
+	assert.equal(calls.length, 1);
+});
+
+test("uploadBlob: сетевой TypeError на первой попытке, второй попытке успех -> retry сработал", async () => {
+	const calls = [];
+	let n = 0;
+	const fetchImpl = async () => {
+		n += 1;
+		calls.push(n);
+		if (n === 1) throw new TypeError("network down");
+		return fakeResponse({ jsonBody: { sha256: "abc", size: 1 } });
+	};
+	const result = await uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, backoffMs: 1 });
+	assert.equal(calls.length, 2);
+	assert.deepEqual(result, { sha256: "abc", size: 1 });
+});
+
+test("uploadBlob: AbortError пользователя -> throw без единого повтора", async () => {
+	const calls = [];
+	const controller = new AbortController();
+	const fetchImpl = async () => {
+		calls.push(1);
+		controller.abort();
+		const err = new DOMException("aborted", "AbortError");
+		throw err;
+	};
+	await assert.rejects(
+		() => uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, signal: controller.signal, backoffMs: 1 }),
+		(err) => err.name === "AbortError",
+	);
+	assert.equal(calls.length, 1, "AbortError не должен ретраиться");
+});
+
+test("uploadBlob: expiration tag учитывает expirationSec — expiration - created_at >= expirationSec", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push(opts);
+		return fakeResponse({ jsonBody: { sha256: "abc", size: 1 } });
+	};
+	await uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, expirationSec: 900 });
+	const authHeader = calls[0].headers.Authorization;
+	const event = JSON.parse(Buffer.from(authHeader.slice("Nostr ".length), "base64").toString("utf8"));
+	const expirationTag = event.tags.find((t) => t[0] === "expiration");
+	assert.ok(Number(expirationTag[1]) - event.created_at >= 900);
+});
+
+test("resolveUploadTimeoutMs: мелкое тело -> пол 120с (не 8мс/КиБ из TZ, который рвал 10МБ @ 30КБ/с)", () => {
+	assert.equal(resolveUploadTimeoutMs(0), UPLOAD_TIMEOUT_FLOOR_MS);
+	assert.equal(resolveUploadTimeoutMs(1024), UPLOAD_TIMEOUT_FLOOR_MS);
+});
+
+test("resolveUploadTimeoutMs: 10 МиБ переживает канал 30 КБ/с (≈6 мин) с запасом", () => {
+	const tenMib = 10 * 1024 * 1024;
+	const ms = resolveUploadTimeoutMs(tenMib);
+	assert.ok(ms >= 6 * 60 * 1000, `${ms}мс должно покрывать 6 мин @ 30КБ/с`);
+	assert.ok(ms < UPLOAD_TIMEOUT_CEIL_MS);
+});
+
+test("resolveUploadTimeoutMs: потолок час, даже на лимите upload 300МБ", () => {
+	assert.equal(resolveUploadTimeoutMs(300 * 1024 * 1024), UPLOAD_TIMEOUT_CEIL_MS);
+});
+
+test("uploadBlob: без expirationSec явного — дефолт растёт вместе с timeoutMs (крупный файл не протухает раньше PUT)", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push(opts);
+		return fakeResponse({ jsonBody: { sha256: "abc", size: 1 } });
+	};
+	// timeoutMs достаточно большой, чтобы дефолт expirationSec (>= timeoutMs/1000+60) превысил 300
+	await uploadBlob("https://blossom.test", new Uint8Array([1]), "x", ALICE_PRIV, { fetchImpl, timeoutMs: 400_000 });
+	const authHeader = calls[0].headers.Authorization;
+	const event = JSON.parse(Buffer.from(authHeader.slice("Nostr ".length), "base64").toString("utf8"));
+	const expirationTag = event.tags.find((t) => t[0] === "expiration");
+	assert.ok(Number(expirationTag[1]) - event.created_at > 300, "expiration обязан быть длиннее старого жёсткого 300с");
+});
+
+test("uploadBlob: 10 МиБ без явного timeoutMs — expiration покрывает PUT на 30 КБ/с + запас", async () => {
+	const calls = [];
+	const fetchImpl = async (url, opts) => {
+		calls.push(opts);
+		return fakeResponse({ jsonBody: { sha256: "abc", size: 1 } });
+	};
+	await uploadBlob("https://blossom.test", new Uint8Array(10 * 1024 * 1024), "x", ALICE_PRIV, { fetchImpl });
+	const authHeader = calls[0].headers.Authorization;
+	const event = JSON.parse(Buffer.from(authHeader.slice("Nostr ".length), "base64").toString("utf8"));
+	const expirationTag = event.tags.find((t) => t[0] === "expiration");
+	const ttl = Number(expirationTag[1]) - event.created_at;
+	assert.ok(ttl >= 6 * 60 + 60, `ttl=${ttl}с, нужно ≥7 мин (6 мин передачи + 60с запаса)`);
+});
+
+test("uploadBlob: fetchImpl подставлен (Node/тест) -> onUploadProgress зовётся один раз со всеми байтами, не ломает контракт", async () => {
+	const progressEvents = [];
+	const fetchImpl = async () => fakeResponse({ jsonBody: { sha256: "abc", size: 5 } });
+	await uploadBlob("https://blossom.test", new Uint8Array([1, 2, 3, 4, 5]), "x", ALICE_PRIV, {
+		fetchImpl,
+		onUploadProgress: (p) => progressEvents.push(p),
+	});
+	assert.equal(progressEvents.length, 1);
+	assert.equal(progressEvents[0].loaded, 5);
+	assert.equal(progressEvents[0].total, 5);
+});
+
+test("checkUploadRequirements: первая попытка 502, вторая ok -> retry сработал на предпроверке", async () => {
+	const calls = [];
+	let n = 0;
+	const fetchImpl = async (url, opts) => {
+		calls.push(opts);
+		n += 1;
+		if (n === 1) return { ok: false, status: 502, headers: { get: () => null } };
+		return { ok: true, status: 200, headers: { get: () => null } };
+	};
+	const result = await checkUploadRequirements("https://blossom.test", { sha256Hex: "x", mime: "video/mp4", size: 1 }, ALICE_PRIV, { fetchImpl, backoffMs: 1 });
+	assert.equal(calls.length, 2);
+	assert.deepEqual(result, { ok: true });
 });
 
 // Интеграционный тест на РЕАЛЬНОМ локальном HTTP-сервере (node:http, не мок функции) —

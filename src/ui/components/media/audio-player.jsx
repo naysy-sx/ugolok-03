@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
+import { mediaErrorReasonKey } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -62,6 +63,13 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						controls={!compact}
 						src={src ?? undefined}
 						onEnded={onEnded}
+						// см. video-player.jsx — тот же приём: acquireMediaUrl резолвится
+						// ДО сети, отказ (504 от SW, 404, битый файл) виден только через
+						// onError самого элемента (FILES-FIX-SPEC.md §5.1/§6.1).
+						onError={(e) => {
+							const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
+							if (reasonKey) setError(t(reasonKey));
+						}}
 						onLoadedMetadata={(e) => {
 							onMeta?.({ duration: e.currentTarget.duration });
 						}}

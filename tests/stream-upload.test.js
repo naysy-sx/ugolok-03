@@ -298,3 +298,43 @@ test("putFilesStreaming: signal абортится посреди — Promise.al
 	await assert.rejects(() => putFilesStreaming(jobs, { concurrency: 1, signal: controller.signal }), /AbortError|отменена/);
 	assert.equal(fetchCallsAfterAbort, 0, "ни один запрос не должен был уйти в сеть после отмены");
 });
+
+// Регрессия найдена при подключении putFilesStreaming в files.jsx (FILES-FIX-
+// SPEC.md §7.3): вызывающая сторона, которой нужна сводка по КАЖДОМУ файлу,
+// не может полагаться на резолв Promise.all целиком (падает на первой
+// ошибке) — она ждёт onJobDone/onJobError по счётчику "все job'ы отчитались".
+// Если бы ЕЩЁ НЕ стартовавший при отмене job молча вис (как было в первой
+// версии через handle.cancel()), счётчик никогда не дошёл бы до jobs.length,
+// и вызывающая сторона зависла бы навсегда. Здесь concurrency=1, 3 job'а —
+// job1/job2 гарантированно ещё pending в момент отмены.
+test("putFilesStreaming: onJobDone/onJobError вызываются РОВНО по разу на каждый job, даже для job'ов, ещё не стартовавших на момент отмены (регрессия зависания)", async () => {
+	const controller = new AbortController();
+	const settled = [];
+	const jobs = Array.from({ length: 3 }, (_, i) => ({
+		file: fakeFile(new Uint8Array([i])),
+		options: {
+			name: `j${i}`,
+			mime: "application/octet-stream",
+			chunkSize: 4,
+			serverUrl: "https://blossom.test",
+			privateKey: ALICE_PRIV,
+			encryptChunk: async (chunkBytes, fileKey, chunkIndex) => {
+				if (i === 0) controller.abort();
+				return encryptChunk(chunkBytes, fileKey, chunkIndex);
+			},
+			fetchImpl: makeFakeBlossom().fetchImpl,
+		},
+	}));
+
+	await Promise.race([
+		putFilesStreaming(jobs, {
+			concurrency: 1,
+			signal: controller.signal,
+			onJobDone: (i) => settled.push(i),
+			onJobError: (i) => settled.push(i),
+		}).catch(() => {}),
+		new Promise((_, reject) => setTimeout(() => reject(new Error("зависло — не все job'ы settle'ились")), 1000)),
+	]);
+
+	assert.deepEqual(settled.sort(), [0, 1, 2], "каждый job обязан settle'иться ровно один раз, включая ещё не стартовавшие на момент отмены");
+});

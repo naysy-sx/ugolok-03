@@ -56,7 +56,7 @@ import { buildVisibleMediaPlaylist } from "../../domain/files/visible-media.js";
 import { classOf } from "../../domain/media/media-ref.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
-import { putFileStreaming } from "../../domain/files/stream-upload.js";
+import { putFilesStreaming } from "../../domain/files/stream-upload.js";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
 import FileKindIcon from "../components/file-kind-icon.jsx";
@@ -222,6 +222,32 @@ function errorMessage(result) {
 	return result instanceof PreconditionError ? translateErrorMessage(result) : null;
 }
 
+// FILES-FIX-SPEC.md §5.1.2, TZ-FIX-FILES-MEDIA-STATIC.md решение №2 — прогресс
+// обязан отражать СЕТЬ, не только шифрование (аудит: "100% за секунды, потом
+// минуты тишины на единственном PUT" читалось пользователем как зависание).
+// index — порядковый номер ТЕКУЩЕГО в работе файла (concurrency=2 — несколько
+// job'ов идут одновременно, index=filesDone+1 — тот же смысл, что раньше
+// имел однопоточный for, "который по счёту").
+function uploadProgressText(state) {
+	const index = state.filesDone + 1;
+	const total = state.filesTotal;
+	const name = state.fileName ?? "";
+	if (state.phase === "upload") {
+		return t("files.uploadingProgressUpload", {
+			name,
+			index,
+			total,
+			sent: formatFileSize(state.bytesSent ?? 0),
+			size: formatFileSize(state.bytesTotal ?? 0),
+		});
+	}
+	if (state.phase === "manifest") {
+		return t("files.uploadingProgressManifest", { name, index, total });
+	}
+	const percent = state.chunksTotal ? Math.round((state.chunksDone / state.chunksTotal) * 100) : 0;
+	return t("files.uploadingProgress", { name, index, total, percent });
+}
+
 // Пока БЕЗ виртуализации (задача 3.2) и миниатюр (3.8) — вторая волна
 // добавила фильтр (3.7). Файлы (в отличие от папок) показывают общую
 // иконку — размер/mime живут в манифесте (content.js), не в самом узле
@@ -262,7 +288,7 @@ export default function Files() {
 	// понятным как "файл N из M"). uploadAbortRef — ОДИН AbortController на
 	// ТЕКУЩИЙ файл; отмена останавливает и его, и всю оставшуюся очередь
 	// (не переходит к следующему файлу молча).
-	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, chunksDone, chunksTotal} | null
+	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, phase, chunksDone, chunksTotal, bytesSent, bytesTotal} | null
 	const [uploadError, setUploadError] = useState("");
 	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
 	const [typeFilter, setTypeFilter] = useState("all");
@@ -289,38 +315,90 @@ export default function Files() {
 		fileInputRef.current?.click();
 	}
 
+	// Очередь БЕЗ break (FILES-FIX-SPEC.md §7.3, TZ-FIX-FILES-MEDIA-STATIC.md
+	// решение №4) — ошибка/отмена ОДНОГО файла раньше обрывала весь список
+	// (`break` останавливал for). Теперь putFilesStreaming(concurrency:2) сам
+	// шифрует+грузит несколько файлов параллельно (стадия шифрования job(i+1)
+	// перекрывается с сетью job(i)); putFilesStreaming НЕ переписан (его
+	// Promise.all по-прежнему падает на первой ошибке — см. комментарий в
+	// stream-upload.js), поэтому успех/неуспех КАЖДОГО файла собирается через
+	// onJobDone/onJobError, а не через резолв целиком (outer try/catch —
+	// только чтобы не уронить остаток функции, реальная сводка ниже).
 	async function handleFilesSelected(e) {
 		const files = [...e.target.files];
 		e.target.value = ""; // тот же файл повторно — иначе повторный выбор того же файла не даст onChange
 		if (files.length === 0) return;
 		setUploadError("");
-		for (let i = 0; i < files.length; i++) {
-			const file = files[i];
-			const controller = new AbortController();
-			uploadAbortRef.current = controller;
-			setUploadState({ fileName: file.name, fileIndex: i + 1, filesTotal: files.length, chunksDone: 0, chunksTotal: 1 });
-			try {
-				const { manifest, manifestDigest, fileKey } = await putFileStreaming(file, {
-					name: file.name,
-					mime: file.type || "application/octet-stream",
-					serverUrl: BLOSSOM_URL,
-					privateKey: privKeySig.value,
-					signal: controller.signal,
-					onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, ...p } : prev)),
-				});
-				if (manifest) await putCachedManifest(ownerPubkey, manifestDigest, manifest);
-				const result = await createFileEntry(file.name, manifestDigest, fileKey, null, file.type || "application/octet-stream");
-				const message = errorMessage(result);
-				if (message) {
-					setUploadError(t("files.uploadEntryError", { name: file.name, message }));
-					break;
-				}
-			} catch (err) {
-				if (err.name === "AbortError") break;
-				setUploadError(t("files.uploadFailedError", { name: file.name }));
-				break;
+		const controller = new AbortController();
+		uploadAbortRef.current = controller;
+
+		const succeeded = []; // {i, result}
+		const failed = []; // {i, err}
+		setUploadState({ filesTotal: files.length, filesDone: 0 });
+
+		const jobs = files.map((file) => ({
+			file,
+			options: {
+				name: file.name,
+				mime: file.type || "application/octet-stream",
+				serverUrl: BLOSSOM_URL,
+				privateKey: privKeySig.value,
+				onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, fileName: file.name, ...p } : prev)),
+			},
+		}));
+
+		// Promise.all внутри putFilesStreaming отклоняется на ПЕРВОЙ ошибке,
+		// не дожидаясь остальных job'ов (стандартная семантика Promise.all) —
+		// поэтому дожидаемся здесь не его, а собственного счётчика "все job'ы
+		// СОБСТВЕННО отчитались" через onJobDone/onJobError. Иначе job B мог бы
+		// всё ещё грузиться в фоне в момент, когда job A уже провалился и код
+		// ниже начал бы обрабатывать succeeded/failed преждевременно — файл B
+		// либо потерял бы свою запись в дереве, либо его ошибка осталась бы
+		// незамеченной.
+		let settledCount = 0;
+		const allSettled = new Promise((resolve) => {
+			function noteSettled() {
+				settledCount += 1;
+				if (settledCount === jobs.length) resolve();
 			}
+			putFilesStreaming(jobs, {
+				concurrency: 2,
+				signal: controller.signal,
+				onJobDone: (i, result) => {
+					succeeded.push({ i, result });
+					noteSettled();
+					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+				},
+				onJobError: (i, err) => {
+					failed.push({ i, err });
+					noteSettled();
+					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+				},
+			}).catch(() => {}); // ошибки уже собраны per-job через onJobError выше
+		});
+		await allSettled;
+
+		succeeded.sort((a, b) => a.i - b.i);
+		const entryErrors = []; // {i, message} — createFileEntry отклонил уже загруженный файл
+		for (const { i, result } of succeeded) {
+			const { manifest, manifestDigest, fileKey } = result;
+			if (manifest) await putCachedManifest(ownerPubkey, manifestDigest, manifest);
+			const entryResult = await createFileEntry(files[i].name, manifestDigest, fileKey, null, files[i].type || "application/octet-stream");
+			const message = errorMessage(entryResult);
+			if (message) entryErrors.push({ i, message });
 		}
+
+		const uploadFailures = failed.filter(({ err }) => err.name !== "AbortError");
+		if (uploadFailures.length > 0 || entryErrors.length > 0) {
+			uploadFailures.sort((a, b) => a.i - b.i);
+			entryErrors.sort((a, b) => a.i - b.i);
+			const messages = [
+				...uploadFailures.map(({ i }) => t("files.uploadFailedError", { name: files[i].name })),
+				...entryErrors.map(({ i, message }) => t("files.uploadEntryError", { name: files[i].name, message })),
+			];
+			setUploadError(messages.join(" "));
+		}
+
 		uploadAbortRef.current = null;
 		setUploadState(null);
 	}
@@ -896,14 +974,7 @@ export default function Files() {
 				)}
 				{uploadState && (
 					<div class="row file-upload-progress" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
-						<span>
-							{t("files.uploadingProgress", {
-								name: uploadState.fileName,
-								index: uploadState.fileIndex,
-								total: uploadState.filesTotal,
-								percent: Math.round((uploadState.chunksDone / uploadState.chunksTotal) * 100),
-							})}
-						</span>
+						<span>{uploadProgressText(uploadState)}</span>
 						<button type="button" class="btn--ghost" onClick={cancelUpload}>
 							{t("common.undo")}
 						</button>

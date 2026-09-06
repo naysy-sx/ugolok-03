@@ -13,12 +13,26 @@ import { createChunkCache } from "./chunk-cache.js";
 // (player-session.js), общий бюджет просто означает, что холодные файлы
 // вытесняются раньше при нехватке места, а не то, что они конфликтуют.
 // Этап F, F3 (DESIGN.md/CONTRACTS.md "Этап F, F3", ALGO.md §3.4) — было 32 МБ
-// (LRU без понятия "окно"). При C=512КиБ, k=2: (k+3)·C = 2 621 440 байт
-// (=2.5 МиБ) — не оптимизация скорости, освобождение памяти на телефоне;
-// чанк 0 закреплён отдельно (player-session.js's loadChunk), переживает
-// вытеснение независимо от бюджета.
-const DEFAULT_CACHE_BUDGET_BYTES = 2_621_440; // 2.5 МиБ = (k+3)·C, C=512КиБ, k=2
+// (LRU без понятия "окно"). Число 2 621 440 (=2.5 МиБ) исторически считалось
+// как (k+3)·C при C=512КиБ, k=2 — НО реальный размер чанка манифеста (Files UI)
+// — результат chunkSizeFor (upload-plan.js), обычно 64 КиБ, не 512 КиБ.
+// Итог: бюджет вмещает не 5 чанков, как задумывалось, а ~40 при C=64КиБ —
+// не баг (освобождение памяти на телефоне всё ещё работает), но комментарий
+// врал про арифметику. Оставляем абсолютный байтовый бюджет как есть
+// (FILES-FIX-SPEC.md §2, §6.2.5) — переход на formulу от РЕАЛЬНОГО chunkSize
+// потребовал бы читать manifest здесь, а кэш общий на все файлы разом.
+const DEFAULT_CACHE_BUDGET_BYTES = 2_621_440; // 2.5 МиБ, абсолютный потолок (не (k+3)·C)
 const sharedCache = createChunkCache(DEFAULT_CACHE_BUDGET_BYTES);
+
+// FILES-FIX-SPEC.md §6.1 / TZ-FIX-FILES-MEDIA-STATIC.md решение №6 — открытый
+// диапазон (браузер ещё не знает Accept-Ranges, либо явный "bytes=X-") НЕ
+// разворачивается в весь файл: 15-секундный бюджет SW × один гигантский GET
+// на файл в единицы-десятки МБ — и есть механизм S4/S5 ("потолок ~1.5 МБ",
+// молчащее видео). HTTP разрешает 206 короче запрошенного — браузер поймёт
+// по Content-Range, что получил часть, и запросит следующее окно сам.
+// Дублируется в service-worker.js (тот файл не проходит сборку Vite, импорт
+// невозможен) — править оба места разом, см. комментарий там.
+export const PLAYER_FIRST_WINDOW_BYTES = 512 * 1024;
 
 const registry = new Map(); // manifestDigest -> { manifest, session }
 
@@ -47,7 +61,13 @@ export async function handleRangeRequest({ manifestDigest, start, end }) {
 	if (!entry) return { ok: false, bytes: null, mime: null, size: null, error: "unknown-digest" };
 
 	const { manifest, session } = entry;
-	const resolvedEnd = end === null || end === undefined ? manifest.size - 1 : end;
+	// Явные диапазоны с большим end НЕ ограничиваются здесь (решение №6
+	// TZ-FIX-FILES-MEDIA-STATIC.md — "если запрошенный диапазон валиден, как
+	// сейчас") — на практике браузер запрашивает их редко, открытый диапазон
+	// (или отсутствие Range, нормализованное в service-worker.js) — основной
+	// путь S4/S5.
+	const resolvedEnd =
+		end === null || end === undefined ? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1) : end;
 	if (start < 0 || resolvedEnd >= manifest.size || start > resolvedEnd) {
 		return { ok: false, bytes: null, mime: null, size: null, error: "range-out-of-bounds" };
 	}

@@ -1,0 +1,86 @@
+diff --git a/db/main.go b/db/main.go
+index 9d7e28b..08777e5 100644
+--- a/db/main.go
++++ b/db/main.go
+@@ -2,6 +2,7 @@ package db
+ 
+ import (
+ 	"database/sql"
++	"strings"
+ 
+ 	migrate "github.com/rubenv/sql-migrate"
+ )
+@@ -10,7 +11,11 @@ func NewDB(
+ 	path string,
+ 	migrationsPath string,
+ ) (*sql.DB, error) {
+-	dbi, err := sql.Open("sqlite3", path)
++	dsn := path
++	if !strings.Contains(path, "?") {
++		dsn = path + "?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000"
++	}
++	dbi, err := sql.Open("sqlite3", dsn)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/internal/httpapi/routes.go b/internal/httpapi/routes.go
+index 40a3585..c773c33 100644
+--- a/internal/httpapi/routes.go
++++ b/internal/httpapi/routes.go
+@@ -25,15 +25,17 @@ func SetupRoutes(
+ 
+ 	r.Use(cors.New(cors.Config{
+ 		AllowAllOrigins: true,
+-		AllowMethods:    []string{"GET", "PUT", "HEAD", "DELETE"},
++		AllowMethods:    []string{"GET", "PUT", "HEAD", "DELETE", "OPTIONS"},
+ 		AllowHeaders: []string{
+ 			HeaderAuthorization,
+ 			HeaderContentType,
+ 			HeaderXSHA256,
+ 			HeaderXContentType,
+ 			HeaderXContentLength,
++			"Range",
+ 		},
+-		ExposeHeaders: []string{"Content-Length", HeaderXReason},
++		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges", HeaderXReason, HeaderXSHA256},
++		MaxAge:        600 * time.Second,
+ 	}))
+ 
+ 	api := r.Group("/api")
+diff --git a/internal/service/mime_type.go b/internal/service/mime_type.go
+index 9103e20..3be7919 100644
+--- a/internal/service/mime_type.go
++++ b/internal/service/mime_type.go
+@@ -3,6 +3,8 @@ package service
+ import (
+ 	"context"
+ 	"fmt"
++	"mime"
++	"strings"
+ 
+ 	"github.com/sebdeveloper6952/blossom-server/v2/db"
+ 	"github.com/sebdeveloper6952/blossom-server/v2/internal/core"
+@@ -61,11 +63,22 @@ func (s *mimeTypeService) Get(
+ 	return s.dbMimeTypeIntoCore(dbMimeType), err
+ }
+ 
++func normalizeMimeType(mimeType string) string {
++	media, _, err := mime.ParseMediaType(mimeType)
++	if err != nil {
++		if i := strings.IndexByte(mimeType, ';'); i >= 0 {
++			mimeType = mimeType[:i]
++		}
++		return strings.TrimSpace(mimeType)
++	}
++	return media
++}
++
+ func (s *mimeTypeService) IsAllowed(
+ 	ctx context.Context,
+ 	mimeType string,
+ ) error {
+-	_, ok := s.allowed[mimeType]
++	_, ok := s.allowed[normalizeMimeType(mimeType)]
+ 	if !ok {
+ 		return core.ErrMimeTypeNotAllowed
+ 	}

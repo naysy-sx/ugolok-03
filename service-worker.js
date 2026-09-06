@@ -44,7 +44,23 @@ self.addEventListener("activate", (e) => {
 // event.clientId — не broadcast, разные вкладки могут иметь разные
 // разблокированные аккаунты) через postMessage, ключи/сеть остаются на ней.
 const FILES_CONTENT_PREFIX = "/files-content/";
-const FILES_CONTENT_TIMEOUT_MS = 15000;
+// Держит паритет с src/domain/files/player-bridge.js::PLAYER_FIRST_WINDOW_BYTES —
+// этот файл не проходит сборку Vite (emitServiceWorker копирует текст как есть),
+// импорт из src сюда не резолвится, значение дублируется вручную. Править
+// оба места разом (FILES-FIX-SPEC.md §6.1, TZ-FIX-FILES-MEDIA-STATIC.md 5.5).
+const PLAYER_FIRST_WINDOW_BYTES = 512 * 1024;
+// Фиксированные 15 с были неверной единицей: маленький диапазон должен
+// падать быстро, большой (открытое окно) имеет право ждать дольше при
+// медленном TTFB. Бюджет = пол 15 с + 1 с на каждые 32 КиБ ожидаемых байт,
+// потолок 60 с (TZ-FIX-FILES-MEDIA-STATIC.md 5.5). Дублируется в
+// src/domain/files/sw-timeout.js для юнит-теста чистой функции — держать
+// формулу синхронной в обоих местах.
+const FILES_CONTENT_TIMEOUT_FLOOR_MS = 15000;
+const FILES_CONTENT_TIMEOUT_CEIL_MS = 60000;
+function resolveFilesContentTimeoutMs(expectedBytes) {
+	const ms = FILES_CONTENT_TIMEOUT_FLOOR_MS + (expectedBytes / 32768) * 1000;
+	return Math.min(FILES_CONTENT_TIMEOUT_CEIL_MS, Math.max(FILES_CONTENT_TIMEOUT_FLOOR_MS, ms));
+}
 const pendingRangeRequests = new Map(); // requestId -> {resolve, reject}
 
 self.addEventListener("message", (e) => {
@@ -59,13 +75,13 @@ self.addEventListener("message", (e) => {
 // requestId — корреляция КОНКУРЕНТНЫХ запросов одного видео (буферизация +
 // перемотка одновременно, DESIGN.md "гонка 1"): каждый Range-fetch — свой
 // requestId, свой ожидающий Promise, ответы не должны перепутаться местами.
-function requestRangeFromClient(client, manifestDigest, start, end) {
+function requestRangeFromClient(client, manifestDigest, start, end, expectedBytes) {
 	const requestId = crypto.randomUUID();
 	return new Promise((resolve, reject) => {
 		const timer = setTimeout(() => {
 			pendingRangeRequests.delete(requestId);
 			reject(new Error("files-content: таймаут ожидания ответа вкладки"));
-		}, FILES_CONTENT_TIMEOUT_MS);
+		}, resolveFilesContentTimeoutMs(expectedBytes));
 		pendingRangeRequests.set(requestId, {
 			resolve: (msg) => {
 				clearTimeout(timer);
@@ -107,9 +123,10 @@ async function handleFilesContentFetch(e) {
 		return new Response("files-content: нет активной вкладки для этого запроса", { status: 404 });
 	}
 
+	const expectedBytes = end !== null ? end - start + 1 : PLAYER_FIRST_WINDOW_BYTES;
 	let res;
 	try {
-		res = await requestRangeFromClient(client, manifestDigest, start, end);
+		res = await requestRangeFromClient(client, manifestDigest, start, end, expectedBytes);
 	} catch {
 		return new Response("files-content: таймаут", { status: 504 });
 	}

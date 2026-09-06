@@ -29,7 +29,20 @@ services:
       - /var/lib/ugolok/blossom:/app/data
     ports:
       - "127.0.0.1:8000:8000"
-    mem_limit: 256m
+    # 256m при max_upload_size_bytes 300МБ (blossom-config.yml) было
+    # несогласовано (FILES-FIX-SPEC.md §8.1, TZ-FIX-FILES-MEDIA-STATIC.md
+    # §5.11) — форк грузит блоб целиком в память на каждый Range-запрос,
+    # а не только на upload; 256m рядом с файлом, приближающимся к лимиту,
+    # реальный риск OOM. Хост 4ГБ — поднято до 512m, не выше остальных
+    # сервисов вместе (relay 512m + coturn 128m + turncreds 32m).
+    mem_limit: 512m
+    # /.well-known/health в форке есть, но через Caddy часто 404 (ACME
+    # перехватывает .well-known). /stats — живой BUD-эндпоинт без auth.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   coturn:
     image: coturn/coturn:4.6.3

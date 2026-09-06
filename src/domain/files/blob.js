@@ -18,7 +18,11 @@ function stripTrailingSlash(url) {
 export async function downloadBlobRange(serverUrl, sha256Hex, start, end, options = {}) {
 	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 	const url = `${stripTrailingSlash(serverUrl)}/${sha256Hex}`;
-	const response = await fetchImpl(url, { headers: { Range: `bytes=${start}-${end}` } });
+	// signal — необязательный (FILES-FIX-SPEC.md §6.3: "зависший Range-GET
+	// съедает весь бюджет SW молча") — проброс есть, реальный AbortController
+	// на путь плеера подключается вызывающей стороной по мере необходимости,
+	// не всеми путями сразу (картинки/getRange не отменяются никогда).
+	const response = await fetchImpl(url, { headers: { Range: `bytes=${start}-${end}` }, signal: options.signal });
 	if (response.status !== 206) {
 		// П-4 (CONTRACTS.md): сервер, вернувший 200 вместо 206, отдаёт ВЕСЬ блоб —
 		// молча подставить его вместо запрошенного диапазона значило бы тихо

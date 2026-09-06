@@ -49,17 +49,27 @@ relay.test.ugolok.tech {
 }
 
 blossom.test.ugolok.tech {
-	encode gzip
+	# зеркало blossom.ugolok.tech из prod.caddy — держать в синхроне
+	# (FILES-FIX-SPEC.md §8.2/8.4, TZ-FIX-FILES-MEDIA-STATIC.md §5.11).
 	reverse_proxy 127.0.0.1:8001 {
 		flush_interval -1
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
 	}
 	request_body {
 		max_size 512MB
 	}
+	@blob path_regexp ^/[0-9a-f]{64}$
+	header @blob Cache-Control "public, max-age=31536000, immutable"
 	header {
 		X-Content-Type-Options nosniff
 		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
+	}
+	log {
+		output file /var/log/caddy/blossom-test-access.log
 	}
 }

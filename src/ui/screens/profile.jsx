@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
+import { resizeAvatarBlob } from "../../domain/identity/avatar-resize.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish } from "../signals/transport.js";
@@ -117,13 +118,24 @@ export default function Profile() {
 			return;
 		}
 		setAvatarError("");
-		const dataUrl = await readFileAsDataUrl(file);
+		input.value = "";
+		// Ресайз ДО превью/публикации (FILES-FIX-SPEC.md §9.1) — то, что видит
+		// пользователь локально, обязано совпадать с тем, что уйдёт на сервер.
+		// Отказ ресайза (например, createImageBitmap недоступен) — best-effort:
+		// публикуем оригинал, не блокируем пользователя жёсткой ошибкой ради
+		// оптимизации размера.
+		let avatarBlob = file;
+		try {
+			avatarBlob = await resizeAvatarBlob(file);
+		} catch {
+			// оставляем оригинал
+		}
+		const dataUrl = await readFileAsDataUrl(avatarBlob);
 		setAvatar(dataUrl);
 		await updateProfile(id, { avatar: dataUrl });
 		bumpProfileActivity();
-		input.value = "";
-		const fileBytes = new Uint8Array(await file.arrayBuffer());
-		await publishAvatarBytes(fileBytes, file.type);
+		const fileBytes = new Uint8Array(await avatarBlob.arrayBuffer());
+		await publishAvatarBytes(fileBytes, avatarBlob.type || file.type);
 	}
 
 	// И7 7.2 — аватар ИЗ ХРАНИЛИЩА (FilePicker, §5.7 TASK.md). В отличие от
@@ -155,16 +167,23 @@ export default function Profile() {
 			}
 			if (!window.confirm(t("profile.avatarPublicConfirm"))) return;
 			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
+			let avatarBlob = new Blob([bytes], { type: manifest.mime });
+			try {
+				avatarBlob = await resizeAvatarBlob(avatarBlob);
+			} catch {
+				// оставляем оригинал
+			}
 			const dataUrl = await new Promise((resolve, reject) => {
 				const reader = new FileReader();
 				reader.onload = () => resolve(reader.result);
 				reader.onerror = () => reject(reader.error);
-				reader.readAsDataURL(new Blob([bytes], { type: manifest.mime }));
+				reader.readAsDataURL(avatarBlob);
 			});
 			setAvatar(dataUrl);
 			await updateProfile(id, { avatar: dataUrl });
 			bumpProfileActivity();
-			await publishAvatarBytes(bytes, manifest.mime);
+			const avatarBytes = new Uint8Array(await avatarBlob.arrayBuffer());
+			await publishAvatarBytes(avatarBytes, avatarBlob.type || manifest.mime);
 		} catch (err) {
 			setAvatarError(errorMessage(err));
 		}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
+import { mediaErrorReasonKey } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -84,6 +85,17 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					controls={!compact}
 					src={src ?? undefined}
 					onEnded={onEnded}
+					// FILES-FIX-SPEC.md §5.1/§6.1, TZ-FIX-FILES-MEDIA-STATIC.md 5.7 —
+					// acquireMediaUrl резолвится ДО сети (просто регистрирует digest
+					// в player-bridge.js), поэтому 504 от SW, 404, битый кодек —
+					// всё, что ломается ПОЗЖЕ — раньше не долетало до React вовсе:
+					// пустой прямоугольник без единого признака отказа. onError на
+					// самом элементе — единственное место, где браузер сообщает об
+					// этом классе сетевых/декодных ошибок.
+					onError={(e) => {
+						const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
+						if (reasonKey) setError(t(reasonKey));
+					}}
 					onLoadedMetadata={(e) => {
 						onMeta?.({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight, duration: e.currentTarget.duration });
 					}}

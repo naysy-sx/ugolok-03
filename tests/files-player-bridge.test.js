@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { putStream } from "../src/domain/files/content.js";
-import { registerPlayerFile, unregisterPlayerFile, handleRangeRequest } from "../src/domain/files/player-bridge.js";
+import { registerPlayerFile, unregisterPlayerFile, handleRangeRequest, PLAYER_FIRST_WINDOW_BYTES } from "../src/domain/files/player-bridge.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -35,13 +35,20 @@ function makeFakeBlossom() {
 	return { fetchImpl };
 }
 
-async function setupFile(fetchImpl, size, mime = "video/mp4") {
+function fillRandom(bytes) {
+	const MAX_PER_CALL = 65536;
+	for (let offset = 0; offset < bytes.length; offset += MAX_PER_CALL) {
+		crypto.getRandomValues(bytes.subarray(offset, Math.min(offset + MAX_PER_CALL, bytes.length)));
+	}
+}
+
+async function setupFile(fetchImpl, size, mime = "video/mp4", chunkSize = 256) {
 	const original = new Uint8Array(size);
-	crypto.getRandomValues(original);
+	fillRandom(original);
 	const { manifest, manifestDigest, fileKey } = await putStream(original, {
 		name: "clip.bin",
 		mime,
-		chunkSize: 256,
+		chunkSize,
 		serverUrl: "https://blossom.test",
 		privateKey: ALICE_PRIV,
 		fetchImpl,
@@ -108,6 +115,21 @@ test("handleRangeRequest: открытый диапазон (end=null, 'bytes=X-
 	assert.equal(res.ok, true);
 	assert.deepEqual(res.bytes, original.subarray(450, 500));
 	assert.equal(res.size, 500);
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+test("handleRangeRequest: открытый диапазон на большом файле НЕ разворачивается в весь файл — окно PLAYER_FIRST_WINDOW_BYTES (регрессия S4/S5)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const size = PLAYER_FIRST_WINDOW_BYTES * 4; // заведомо больше окна
+	const { original, manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, size, "video/mp4", 65536);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const res = await handleRangeRequest({ manifestDigest, start: 0, end: null });
+	assert.equal(res.ok, true);
+	assert.equal(res.bytes.length, PLAYER_FIRST_WINDOW_BYTES, "открытый диапазон обязан вернуть РОВНО окно, не весь файл");
+	assert.deepEqual(res.bytes, original.subarray(0, PLAYER_FIRST_WINDOW_BYTES));
+	assert.equal(res.size, size, "Content-Range обязан отражать ПОЛНЫЙ размер файла, даже если вернули только окно");
 
 	unregisterPlayerFile(manifestDigest);
 });

@@ -39,7 +39,10 @@ async function mapPool(items, limit, fn) {
 // посреди одного чанка) и пробрасывается в fetch (uploadBlob) — отмена
 // во время самой сетевой передачи тоже срабатывает, тем же AbortError,
 // что и стандартный fetch.
-export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl, fileKey: overrideFileKey, signal } = {}) {
+export async function putStream(
+	bytes,
+	{ name, mime, chunkSize = DEFAULT_CHUNK_SIZE, onProgress, serverUrl, privateKey, fetchImpl, fileKey: overrideFileKey, signal, timeoutMs, retries, backoffMs, expirationSec } = {},
+) {
 	const fileKey = overrideFileKey ?? generateFileKey();
 	const size = bytes.length;
 	const { count, lastChunkSize } = planChunks(size, chunkSize);
@@ -55,17 +58,21 @@ export async function putStream(bytes, { name, mime, chunkSize = DEFAULT_CHUNK_S
 		chunkDigests[i] = bytesToHex(sha256(cipherChunk));
 		cipherParts[i] = cipherChunk;
 		encrypted += 1;
-		onProgress?.({ chunksDone: encrypted, chunksTotal: count });
+		onProgress?.({ phase: "encrypt", chunksDone: encrypted, chunksTotal: count });
 	});
 	const fullCiphertext = concatBytes(...cipherParts);
 	const blobSha256Local = bytesToHex(sha256(fullCiphertext));
-	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal };
+	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal, timeoutMs, retries, backoffMs, expirationSec };
 	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }, privateKey, uploadOptions);
 	if (!requirements.ok) {
 		const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
 		throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
 	}
-	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, uploadOptions);
+	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, {
+		...uploadOptions,
+		onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? fullCiphertext.length }) : undefined,
+	});
+	onProgress?.({ phase: "manifest" });
 
 	// keyId — непрозрачная ССЫЛКА (§4.1 MATH.md: "Manifest.keyId : KeyId"), не
 	// сырой ключ — сырой fileKey возвращается ОТДЕЛЬНЫМ полем, персистентность/

@@ -70,17 +70,34 @@ relay.ugolok.tech {
 }
 
 blossom.ugolok.tech {
-	encode gzip
+	# FILES-FIX-SPEC.md §8.2/8.4, TZ-FIX-FILES-MEDIA-STATIC.md §5.11 —
+	# gzip убран: тело — шифротекст (AEAD), несжимаемо по построению, gzip
+	# на каждый ответ тратит CPU впустую и мешает диагностике Range (не
+	# путать с git.ugolok.tech ниже — там реальный git-трафик, gzip уместен).
 	reverse_proxy 127.0.0.1:8000 {
 		flush_interval -1
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
 	}
 	request_body {
 		max_size 512MB
 	}
+	# Блобы адресуются sha256 — содержимое неизменно по определению,
+	# идеальный кандидат на вечный кэш (снимает повторные Range при
+	# перемотке/переоткрытии, повторные аватары). Манифесты (не 64-hex путь)
+	# под этот matcher не попадают — они переиспользуют digest только пока
+	# файл не заменён, но живут в том же неймспейсе путей "/{sha256}".
+	@blob path_regexp ^/[0-9a-f]{64}$
+	header @blob Cache-Control "public, max-age=31536000, immutable"
 	header {
 		X-Content-Type-Options nosniff
 		Strict-Transport-Security "max-age=31536000"
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
+	}
+	log {
+		output file /var/log/caddy/blossom-access.log
 	}
 }

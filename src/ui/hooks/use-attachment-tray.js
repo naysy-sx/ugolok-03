@@ -34,27 +34,55 @@ export function useAttachmentTray({ maxItems }) {
 	const remove = useCallback((id) => setState((s) => core.removeItem(s, id)), []);
 	const reset = useCallback(() => setState(core.emptyTrayState()), []);
 
+	// FILES-FIX-SPEC.md §7.4, TZ-FIX-FILES-MEDIA-STATIC.md 5.6 — раньше первая
+	// же неудача (одна фотка не долетела) выбрасывала исключение НЕМЕДЛЕННО,
+	// не пытаясь залить остальные вложения пачки. Теперь цикл ПРОДОЛЖАЕТСЯ по
+	// всем job'ам; если хоть один провалился — агрегатная ошибка бросается В
+	// КОНЦЕ (существующие вызывающие стороны chat.jsx/channel-composer.jsx уже
+	// оборачивают uploadAll в try/catch и НЕ отправляют сообщение при throw —
+	// то самое "не слать с дырой"), но partialResults/failures на ошибке
+	// сохраняют то, что реально успело залиться — задел под будущее "повторить
+	// только неудавшиеся" без переисполнения уже готовых вложений.
+	// options.signal — отмена (BUD-02 идемпотентен по хешу, повторный PUT того
+	// же содержимого не страшен, но недогруженный PUT должен прерываться).
 	const uploadAll = useCallback(
-		async (privKey, onProgress) => {
+		async (privKey, onProgress, options = {}) => {
+			const { signal } = options;
 			const jobs = core.planUpload(state);
 			const results = [];
+			const failures = [];
 			for (let i = 0; i < jobs.length; i++) {
 				const job = jobs[i];
-				let descriptor;
-				if (job.kind === "reference") {
-					descriptor = referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest);
-				} else {
-					descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey);
+				if (signal?.aborted) {
+					failures.push({ index: i, error: new DOMException("Отменено", "AbortError") });
+					continue;
 				}
-				if (job.isImage) descriptor.position = job.position;
-				if (job.layout) descriptor.layout = job.layout;
-				let poster = job.poster;
-				if (!poster && job.kind === "upload" && job.file && typeof job.file.type === "string" && job.file.type.startsWith("video/")) {
-					poster = await extractVideoPoster(job.file);
+				try {
+					let descriptor;
+					if (job.kind === "reference") {
+						descriptor = referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest);
+					} else {
+						descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey, { signal });
+					}
+					if (job.isImage) descriptor.position = job.position;
+					if (job.layout) descriptor.layout = job.layout;
+					let poster = job.poster;
+					if (!poster && job.kind === "upload" && job.file && typeof job.file.type === "string" && job.file.type.startsWith("video/")) {
+						poster = await extractVideoPoster(job.file);
+					}
+					if (poster) descriptor.poster = poster;
+					results.push(descriptor);
+				} catch (err) {
+					failures.push({ index: i, error: err });
 				}
-				if (poster) descriptor.poster = poster;
-				results.push(descriptor);
 				onProgress?.(i + 1, jobs.length);
+			}
+			if (failures.length > 0) {
+				const first = failures[0].error;
+				const aggregate = first instanceof Error ? first : new Error(String(first));
+				aggregate.partialResults = results;
+				aggregate.failures = failures;
+				throw aggregate;
 			}
 			return results;
 		},
