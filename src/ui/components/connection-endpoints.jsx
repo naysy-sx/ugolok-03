@@ -11,6 +11,7 @@ import {
 	iceUrlFromServers,
 	resolveCallIceServers,
 } from "../../domain/settings/bootstrap-endpoints.js";
+import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
 import { probeRelay, probeBlossom, probeIce } from "../../core/transport/endpoint-health.js";
 
 const DEBOUNCE_MS = 350;
@@ -102,6 +103,15 @@ export default function ConnectionEndpoints() {
 				writeBootstrapEndpoints({ iceServers: [parsed] });
 			}
 			if (!cancelled) patch("turn", { state: "checking", ms: null });
+			// Живая проверка (прод, 2026-09-06) — этот виджет виден ДО входа, а
+			// loadRuntimeConfig() до этого момента вызывает только connect() (после
+			// разблокировки). getRuntimeConfig().turnCredentialsUrl на этом экране
+			// был бы всегда пуст (кэш ещё не заполнен), и resolveCallIceServers()
+			// молча уходил бы в ветку "нет turnCredentialsUrl" — тот же голый
+			// список без кредов, что и раньше. Дожидаемся здесь явно.
+			if (!getRuntimeConfig().turnCredentialsUrl) {
+				await loadRuntimeConfig();
+			}
 			// Проверяем тем же путём, что и реальный звонок (resolveCallIceServers,
 			// media-controller.js) — не голым parsed/current.iceServers: этап 6
 			// (TZ-cicd-hardening) не кладёт TURN-креды в config.json намеренно,
