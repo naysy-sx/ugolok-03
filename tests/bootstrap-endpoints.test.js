@@ -308,3 +308,58 @@ test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт не�
 		assert.equal("credential" in s, false);
 	}
 });
+
+// Живая проверка (прод, 2026-09-06) — config.json (этап 6) несёт turn: БЕЗ
+// username/credential нарочно (креды не в бандле). RTCPeerConnection бросает
+// InvalidAccessError СИНХРОННО, если хоть одна запись со схемой turn:/turns:
+// в переданном массиве не несёт оба поля разом — падает КОНСТРУКТОР целиком,
+// не только эта запись. Старая stripIceCredentials оставляла схему turn: как
+// есть, просто без credential — combined-массив (эти "голые" turn: + свежие
+// с кредами рядом) ронял ensurePc()/RTCPeerConnection на КАЖДОМ звонке.
+// BUILD_DEFAULT_ICE_SERVERS в тестовом окружении пуст (нет __BUILD_*__ define
+// вне vite-сборки) — предыдущие 3 теста этот сценарий не ловят вообще.
+test("resolveCallIceServers: config.json несёт turn: без кредов рядом со stun: -> голые turn: не остаются в результате (иначе RTCPeerConnection бросает InvalidAccessError)", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({
+				iceServers: [{ urls: "stun:ugolok.tech:3478" }, { urls: "turn:ugolok.tech:3478?transport=udp" }],
+				turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials",
+			}),
+		}),
+	});
+	const fetchImpl = async () => ({
+		ok: true,
+		json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:ugolok.tech:3478?transport=udp"] }),
+	});
+	const result = await resolveCallIceServers({ fetchImpl });
+	assert.deepEqual(result, [
+		{ urls: "stun:ugolok.tech:3478" },
+		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "u", credential: "c" },
+	]);
+	for (const s of result) {
+		const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+		const isTurn = urls.some((u) => /^turns?:/i.test(u));
+		if (isTurn) {
+			assert.equal(typeof s.username, "string", "turn: запись без username бы уронила RTCPeerConnection целиком");
+			assert.equal(typeof s.credential, "string", "turn: запись без credential бы уронила RTCPeerConnection целиком");
+		}
+	}
+});
+
+test("resolveCallIceServers: config.json несёт turn: без кредов, эндпоинт недоступен -> фолбэк без turn: вообще (не голый turn:)", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({
+				iceServers: [{ urls: "stun:ugolok.tech:3478" }, { urls: "turn:ugolok.tech:3478?transport=udp" }],
+				turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials",
+			}),
+		}),
+	});
+	const fetchImpl = async () => {
+		throw new Error("network down");
+	};
+	const result = await resolveCallIceServers({ fetchImpl });
+	assert.deepEqual(result, [{ urls: "stun:ugolok.tech:3478" }]);
+});

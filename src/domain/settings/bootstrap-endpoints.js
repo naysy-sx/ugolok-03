@@ -287,8 +287,23 @@ export async function fetchTurnCredentials(url, options = {}) {
 	}
 }
 
+// Живая проверка (прод, 2026-09-06) — RTCPeerConnection синхронно бросает
+// InvalidAccessError, если ХОТЬ ОДНА запись со схемой turn:/turns: не несёт
+// username+credential (спека WebRTC, не баг браузера) — падает КОНСТРУКТОР,
+// весь массив целиком, не только эта запись. baseIce (config.json, этап 6)
+// содержит turn: без кредов НАРОЧНО — креды не в бандле. Раньше эта функция
+// только стирала credential-поля, оставляя схему turn: как есть, и ронять
+// каждый ensurePc()/RTCPeerConnection — по факту ВСЕ звонки на проде.
+// Фикс — выкидывать turn:/turns: целиком (не просто снимать креды): свежие
+// с кредами добавляются отдельно (resolveCallIceServers), а без них корректный
+// STUN-only фолбэк — это то, что uris в TURN-схеме вообще отсутствуют.
 function stripIceCredentials(list) {
-	return list.map((s) => ({ urls: s.urls }));
+	return list
+		.filter((s) => {
+			const urls = Array.isArray(s.urls) ? s.urls : s.urls ? [s.urls] : [];
+			return !urls.some((u) => typeof u === 'string' && /^turns?:/i.test(u));
+		})
+		.map((s) => ({ urls: s.urls }));
 }
 
 // Общая точка для call.js и quick.jsx (Rooms/mesh) — единственное место,
