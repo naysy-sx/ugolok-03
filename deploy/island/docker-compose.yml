@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./blossom-config.yml:/app/config.yml:ro
-      - /var/lib/ugolok/blossom:/app/db
+      - /var/lib/ugolok/blossom:/app/data
     ports:
       - "127.0.0.1:8000:8000"
     mem_limit: 256m

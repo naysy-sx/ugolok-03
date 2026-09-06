@@ -278,6 +278,9 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	const compose = read(join(ROOT, "deploy/island/docker-compose.yml"));
 	assert.match(compose, /ugolok-coturn/);
 	assert.match(compose, /nobody:nogroup/);
+	// db_path в blossom-config.yml — ./data/…; volume должен быть /app/data,
+	// не /app/db (в образе /app/db — SQL-миграции upstream, не sqlite).
+	assert.match(compose, /\/var\/lib\/ugolok\/blossom:\/app\/data/);
 	assert.match(read(join(ROOT, "deploy/island/blossom-config.yml")), /database\.sqlite3/);
 	assert.ok(existsSync(join(ROOT, "deploy/island/relay.Dockerfile")));
 	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
