@@ -26,8 +26,15 @@ import (
 	"ugolok.tech/agent/internal/turncreds"
 )
 
+// defaultListenAddr — внутри контейнера, НЕ 127.0.0.1: изоляция на localhost
+// хоста уже даёт docker-compose.yml (порты "127.0.0.1:8090:8090") — трафик
+// снаружи VPS так и не попадёт. Если слушать буквально 127.0.0.1 ЗДЕСЬ, это
+// loopback ВНУТРИ контейнера — проброс портов Docker подключается к общему
+// сетевому интерфейсу контейнера, не к его собственному loopback, и не
+// достучится вовсе. Живая проверка (прод): контейнер запускался и слушал,
+// Caddy получал 502 с пустым телом — connection refused до самого процесса.
 const (
-	defaultListenAddr = "127.0.0.1:8090"
+	defaultListenAddr = "0.0.0.0:8090"
 	defaultTTLSeconds = 3600
 	rateLimitPerHour  = 30
 )
