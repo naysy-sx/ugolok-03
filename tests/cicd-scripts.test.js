@@ -368,6 +368,15 @@ test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, co
 		assert.match(caddy, /handle \/api\/turn-credentials \{/);
 		assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8090/);
 		assert.match(caddy, /header \/api\/turn-credentials Cache-Control "no-store"/);
+		// Живая проверка (test.ugolok.tech): голый try_files ВНЕ handle выполняется
+		// раньше по встроенному порядку директив Caddy и переписывает путь на
+		// /index.html до того, как handle /api/turn-credentials успевает
+		// сработать — /api/turn-credentials отдавал SPA, не проксировался.
+		// file_server/try_files обязаны быть внутри СВОЕГО handle {} (несколько
+		// handle-блоков в одном сервере — единственный взаимоисключающий,
+		// по-файлу-порядок в Caddy).
+		assert.match(caddy, /handle \{\n\t\troot \*/);
+		assert.equal(/^\troot \*/m.test(caddy), false, "root вне handle {} — try_files сработает раньше handle /api/...");
 	}
 	const compose = read(join(ROOT, "deploy/island/docker-compose.yml"));
 	assert.match(compose, /turncreds-server:/);
