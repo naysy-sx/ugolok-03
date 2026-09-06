@@ -1,5 +1,10 @@
 test.ugolok.tech {
 	encode gzip
+	# Этап 6 (TZ-cicd-hardening) — тот же turncreds-server, что и на проде
+	# (общий coturn — см. deploy/island/README.md "Ветки и выкладка", "TURN общий").
+	handle /api/turn-credentials {
+		reverse_proxy 127.0.0.1:8090
+	}
 	root * /var/www/ugolok-test
 	file_server
 	try_files {path} /index.html
@@ -11,6 +16,7 @@ test.ugolok.tech {
 	header /service-worker.js Cache-Control "no-cache"
 	header /index.html Cache-Control "no-cache"
 	header /config.json Cache-Control "no-cache"
+	header /api/turn-credentials Cache-Control "no-store"
 }
 
 relay.test.ugolok.tech {

@@ -16,9 +16,19 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 
 ## Секрет TURN
 
-`coturn.conf.example` копируется в `coturn.conf`, в `user=ugolok:…` ставится пароль из окружения оператора. Файл **chmod 644**: образ `coturn/coturn` запускается как `nobody` и иначе молча стартует без конфига (no-auth, порты вне UFW).
+`coturn.conf.example` копируется в `coturn.conf`; вместо статического пароля одного пользователя (`lt-cred-mech`) — `use-auth-secret` + `static-auth-secret=…` (TURN REST API, RFC-style временные креды). Файл **chmod 644**: образ `coturn/coturn` запускается как `nobody` и иначе молча стартует без конфига (no-auth, порты вне UFW).
+
+Тот же секрет — в `TURN_STATIC_AUTH_SECRET` у `turncreds-server` (см. ниже): один статический секрет на стороне сервера, клиент никогда его не видит — получает только временные HMAC-креды с TTL.
+
+**Порядок переключения** (см. `PROCESS-DOCS/VPS/TZ-cicd-hardening.md`, этап 6.7) — менять `coturn.conf` на боевом только ПОСЛЕ того, как клиент уже умеет запрашивать временные креды, иначе звонки на проде ломаются между шагами.
 
 `deploy/island/coturn.conf` в `.gitignore`.
+
+## turncreds-server
+
+Публичный (без токена) HTTP-сервис выдачи временных TURN-кредов — `agent/cmd/turncreds-server/` (Go, переиспользует `agent/internal/turncreds.Mint`). Слушает `127.0.0.1:8090`, наружу не торчит — Caddy проксирует `/api/turn-credentials` (`deploy/caddy/{test,prod}.caddy`).
+
+Секрет — `TURN_STATIC_AUTH_SECRET`, тот же, что `static-auth-secret` в `coturn.conf`, через `env_file` (в `.gitignore`, не в git). Контракт и CORS/rate-limit — в самом `agent/cmd/turncreds-server/main.go`.
 
 ## Как выкатывать правку
 

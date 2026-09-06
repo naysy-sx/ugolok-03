@@ -3,6 +3,7 @@
 // и звонков с этого устройства.
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS, BUILD_DEFAULT_ICE_SERVERS } from '../../config.js';
 import { getRuntimeConfig } from './runtime-config.js';
+import { logWarn } from '../../core/diag/boot-log.js';
 
 export const BOOTSTRAP_ENDPOINTS_KEY = 'ugolok.bootstrapEndpoints.v1';
 
@@ -238,4 +239,73 @@ export function resetBootstrapEndpoints(storage) {
 			// ignore
 		}
 	}
+}
+
+// Этап 6 (TZ-cicd-hardening) — временные TURN-креды с officiального
+// эндпоинта (agent/cmd/turncreds-server), НЕ статический пароль из сборки.
+// Кэш в памяти до expiry-60с — вкладка живёт часами, повторный fetch на
+// КАЖДЫЙ звонок не нужен, пока креды ещё не протухли.
+let cachedTurnCreds = null; // { iceServers, expiryMs } | null
+
+export function resetTurnCredentialsCache() {
+	cachedTurnCreds = null;
+}
+
+// Возвращает массив RTCIceServer (только TURN-записи, по одной на uri) или
+// null при любой ошибке (сеть/таймаут/битый ответ/эндпоинт не настроен) —
+// вызывающая сторона (resolveCallIceServers) отвечает за откат на STUN-only.
+export async function fetchTurnCredentials(url, options = {}) {
+	const now = options.now ?? Date.now();
+	if (cachedTurnCreds && now < cachedTurnCreds.expiryMs) {
+		return cachedTurnCreds.iceServers;
+	}
+	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+	if (!url || typeof fetchImpl !== 'function') return null;
+	const timeoutMs = options.timeoutMs ?? 3000;
+	let timer;
+	const timeout = new Promise((_, reject) => {
+		timer = setTimeout(() => reject(new Error('fetchTurnCredentials: таймаут')), timeoutMs);
+	});
+	try {
+		const res = await Promise.race([fetchImpl(url, { cache: 'no-store' }), timeout]);
+		if (!res || !res.ok) return null;
+		const data = await res.json();
+		if (!data || typeof data.username !== 'string' || typeof data.credential !== 'string' || !Array.isArray(data.uris)) {
+			return null;
+		}
+		const iceServers = data.uris
+			.filter((u) => typeof u === 'string' && u)
+			.map((urls) => ({ urls, username: data.username, credential: data.credential }));
+		if (iceServers.length === 0) return null;
+		const ttlSeconds = typeof data.ttl === 'number' && data.ttl > 60 ? data.ttl : 3600;
+		cachedTurnCreds = { iceServers, expiryMs: now + (ttlSeconds - 60) * 1000 };
+		return iceServers;
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function stripIceCredentials(list) {
+	return list.map((s) => ({ urls: s.urls }));
+}
+
+// Общая точка для call.js и quick.jsx (Rooms/mesh) — единственное место,
+// где собирается iceServers для НОВОГО RTCPeerConnection (не кэшируется на
+// уровне сессии/звонка выше media-controller.js — там уже дожидается свежих
+// кредов перед КАЖДЫМ pc, см. media-controller.js/resolveIceServers).
+// turnCredentialsUrl отсутствует (self-host/LAN, config.json без него) —
+// прежнее поведение: iceServers из bootstrap/build-time дефолта как есть.
+export async function resolveCallIceServers(options = {}) {
+	const boot = readBootstrapEndpoints();
+	const baseIce = boot.iceServers.length ? boot.iceServers : BUILD_DEFAULT_ICE_SERVERS;
+	const turnCredentialsUrl = getRuntimeConfig().turnCredentialsUrl;
+	if (!turnCredentialsUrl) return baseIce;
+	const turnServers = await fetchTurnCredentials(turnCredentialsUrl, options);
+	if (!turnServers) {
+		logWarn('TURN: креды недоступны, только STUN');
+		return stripIceCredentials(baseIce);
+	}
+	return [...stripIceCredentials(baseIce), ...turnServers];
 }

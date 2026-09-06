@@ -21,11 +21,19 @@ _Актуально на 2026-09-05, описывает config.json и прио�
 - `BUILD_DEFAULT_ICE_SERVERS`
 - `BUILD_BOOTSTRAP_RELAYS`
 
+## TURN-креды (этап 6, TZ-cicd-hardening)
+
+Официальный сайт (`ugolok.tech`/`test.ugolok.tech`) **не** зашивает пароль TURN в сборку. `config.json.turnCredentialsUrl` (сейчас `/api/turn-credentials`, тот же origin) — эндпоинт временных кредов, `agent/cmd/turncreds-server` на VPS. Клиент: `src/domain/settings/bootstrap-endpoints.js`'s `fetchTurnCredentials(url)` + `resolveCallIceServers()` — вызывается перед КАЖДЫМ новым `RTCPeerConnection` (`media-controller.js`), креды кэшируются в памяти до `expiry-60с`.
+
+Если `turnCredentialsUrl` не задан (self-host/LAN, `deploy/config.example.json`) — прежнее поведение, статические креды из `config.json`/build-time дефолта, без изменений.
+
+Если эндпоинт недоступен (сеть, таймаут 3с, сервис лежит) — фолбэк на STUN-only (TURN-записи остаются в списке ICE-серверов, но без `username`/`credential` — браузер их просто не сможет использовать для релея). Запись в диагностику: «TURN: креды недоступны, только STUN». Звонок в одной сети (host/srflx-кандидаты) при этом всё ещё пройдёт; через симметричный NAT — нет, это ожидаемая деградация, не баг.
+
 ## Секреты
 
-TURN credential в `deploy/config.example.json` — **только dev** (`ugolok` / `ugolok-dev`).
-Боевой пароль TURN в git не класть: плейсхолдер в `deploy/env.example`, в проде — секрет окружения.
+TURN credential в `deploy/config.example.json` — **только dev** (`ugolok` / `ugolok-dev`), это self-host/LAN путь, не официальный сайт (см. выше).
+Боевой секрет TURN (`TURN_STATIC_AUTH_SECRET` у `turncreds-server`, `static-auth-secret` у coturn) в git не класть: `deploy/island/turncreds.env` и `deploy/island/coturn.conf` — оба в `.gitignore`, только на VPS.
 
 Не коммитить: `deploy/.env`, приватные ключи, `*.asc` с секретом.
 
-Пример: `deploy/config.example.json`.
+Пример: `deploy/config.example.json`, `deploy/island/turncreds.env.example`.

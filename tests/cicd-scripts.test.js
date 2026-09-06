@@ -266,8 +266,9 @@ test("docs и скелет: dist-updates, ветки dev/main/prod, нет Traef
 
 test("deploy/island — боевой стек ugolok.tech без секрета TURN", () => {
 	const example = read(join(ROOT, "deploy/island/coturn.conf.example"));
-	assert.match(example, /user=ugolok:CHANGE_ME/);
-	assert.match(example, /lt-cred-mech/);
+	assert.match(example, /static-auth-secret=CHANGE_ME/);
+	assert.match(example, /use-auth-secret/);
+	assert.equal(example.includes("lt-cred-mech"), false);
 	assert.match(example, /min-port=49160/);
 	assert.equal(existsSync(join(ROOT, "deploy/island/coturn.conf")), false);
 	const caddy = read(join(ROOT, "deploy/caddy/prod.caddy"));
@@ -295,7 +296,7 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 
 	// Этап 1: test-ветка деплоя вызывает apply-caddy только режимом site, prod — full.
 	const testBranch = deploy.slice(deploy.indexOf('if [[ "$ENV" == "test" ]]'), deploy.indexOf("else"));
-	const prodBranch = deploy.slice(deploy.indexOf("else"), deploy.indexOf('ICE_JSON="$('));
+	const prodBranch = deploy.slice(deploy.indexOf("else"), deploy.indexOf("ICE_JSON="));
 	assert.match(testBranch, /CADDY_MODE=site/);
 	assert.equal(/CADDY_MODE=full/.test(testBranch), false, "test-ветка не должна вызывать full");
 	assert.match(prodBranch, /CADDY_MODE=full/);
@@ -330,6 +331,35 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	const dp = read(join(ROOT, ".forgejo/workflows/deploy-prod.yml"));
 	assert.match(dp, /branches:\s*\[prod\]/);
 	assert.match(dp, /deploy-env\.sh prod/);
+
+	// Этап 6: пароль TURN больше не в сборке — ни секретного файла, ни username/credential в ICE_JSON.
+	assert.equal(deploy.includes("TURN_USERNAME"), false);
+	assert.equal(deploy.includes("TURN_PASSWORD"), false);
+	assert.equal(deploy.includes("UGOLK_BUILD_ENV"), false);
+	assert.equal(deploy.includes('source "$SECRETS"'), false);
+	assert.match(deploy, /ICE_JSON='\[.*\]'/);
+	assert.equal(/username|credential/.test(deploy.match(/ICE_JSON='(\[.*\])'/)[1]), false, "ICE_JSON не должен нести username/credential");
+	assert.match(deploy, /turnCredentialsUrl:\\"\/api\/turn-credentials\\"/);
+});
+
+test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, coturn use-auth-secret", () => {
+	const prodCaddy = read(join(ROOT, "deploy/caddy/prod.caddy"));
+	const testCaddy = read(join(ROOT, "deploy/caddy/test.caddy"));
+	for (const caddy of [prodCaddy, testCaddy]) {
+		assert.match(caddy, /handle \/api\/turn-credentials \{/);
+		assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8090/);
+		assert.match(caddy, /header \/api\/turn-credentials Cache-Control "no-store"/);
+	}
+	const compose = read(join(ROOT, "deploy/island/docker-compose.yml"));
+	assert.match(compose, /turncreds-server:/);
+	assert.match(compose, /127\.0\.0\.1:8090:8090/);
+	assert.match(compose, /mem_limit: 32m/);
+	assert.match(compose, /turncreds\.env/);
+	assert.ok(existsSync(join(ROOT, "deploy/island/turncreds-server.Dockerfile")));
+	assert.ok(existsSync(join(ROOT, "agent/cmd/turncreds-server/main.go")));
+	const gi = read(join(ROOT, ".gitignore"));
+	assert.match(gi, /deploy\/island\/turncreds\.env/);
+	assert.equal(existsSync(join(ROOT, "deploy/island/turncreds.env")), false);
 });
 
 test("Forgejo ci.yml: раннер ugolok, без dev/prod, ci-check.sh внутри контейнера", () => {

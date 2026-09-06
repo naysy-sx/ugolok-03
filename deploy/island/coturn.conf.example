@@ -9,8 +9,8 @@ listening-port=3478
 min-port=49160
 max-port=49200
 fingerprint
-lt-cred-mech
-user=ugolok:CHANGE_ME
+use-auth-secret
+static-auth-secret=CHANGE_ME
 realm=ugolok.tech
 no-cli
 no-tls

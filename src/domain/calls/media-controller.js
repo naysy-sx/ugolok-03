@@ -11,7 +11,11 @@
 export function createMediaController(options = {}) {
 	const RTCPeerConnectionImpl = options.RTCPeerConnectionImpl ?? globalThis.RTCPeerConnection;
 	const getUserMediaImpl = options.getUserMediaImpl ?? ((constraints) => navigator.mediaDevices.getUserMedia(constraints));
-	const iceServers = options.iceServers ?? [];
+	// options.iceServers — статический массив (обратная совместимость, тесты) ИЛИ
+	// async-функция () => iceServers[] — этап 6 (TZ-cicd-hardening): TURN-креды
+	// дожидаются здесь, ПЕРЕД созданием RTCPeerConnection (не один раз при старте
+	// сессии в call.js — иначе креды протухают к середине долгой сессии).
+	const resolveIceServers = typeof options.iceServers === "function" ? options.iceServers : async () => options.iceServers ?? [];
 	// onEvent — обратный канал в call-runtime.js: события Σ_in (§1.3-C VOICE.md),
 	// те же, что call-runtime дальше кормит в reduce(). Контроллер НЕ знает про FSM.
 	const onEvent = options.onEvent ?? (() => {});
@@ -21,47 +25,58 @@ export function createMediaController(options = {}) {
 	const onRemoteStream = options.onRemoteStream ?? (() => {});
 
 	let pc = null;
+	let pcPromise = null;
 	let localStream = null;
 	// Буфер ICE-кандидатов, пришедших ДО setRemoteDescription (§1.4 VOICE.md:
 	// "ADD_ICE безопасен всегда: буферизацию инкапсулирует MediaController").
 	let pendingRemoteIce = [];
 
+	// pcPromise — защита от гонки: resolveIceServers() асинхронна, и без общего
+	// in-flight promise два "одновременных" (per-microtask) первых вызова
+	// ensurePc() (например ACQUIRE_MIC и уже прилетевший ADD_ICE) оба прошли бы
+	// проверку "pc ещё нет" и создали бы ДВА RTCPeerConnection.
 	function ensurePc() {
-		if (pc) return pc;
-		pc = new RTCPeerConnectionImpl({ iceServers });
-		pc.onicecandidate = (e) => {
-			if (e.candidate) onEvent({ type: "LOCAL_ICE", candidate: e.candidate });
-		};
-		pc.oniceconnectionstatechange = () => {
-			const iceState = pc.iceConnectionState;
-			if (iceState === "connected" || iceState === "completed") onEvent({ type: "ICE_CONNECTED" });
-			else if (iceState === "disconnected") onEvent({ type: "ICE_DISCONNECTED" });
-			else if (iceState === "failed") onEvent({ type: "ICE_FAILED" });
-		};
-		pc.ontrack = (e) => {
-			onRemoteStream(e.streams[0]);
-		};
-		return pc;
+		if (pc) return Promise.resolve(pc);
+		if (!pcPromise) {
+			pcPromise = (async () => {
+				const iceServers = await resolveIceServers();
+				pc = new RTCPeerConnectionImpl({ iceServers });
+				pc.onicecandidate = (e) => {
+					if (e.candidate) onEvent({ type: "LOCAL_ICE", candidate: e.candidate });
+				};
+				pc.oniceconnectionstatechange = () => {
+					const iceState = pc.iceConnectionState;
+					if (iceState === "connected" || iceState === "completed") onEvent({ type: "ICE_CONNECTED" });
+					else if (iceState === "disconnected") onEvent({ type: "ICE_DISCONNECTED" });
+					else if (iceState === "failed") onEvent({ type: "ICE_FAILED" });
+				};
+				pc.ontrack = (e) => {
+					onRemoteStream(e.streams[0]);
+				};
+				return pc;
+			})();
+		}
+		return pcPromise;
 	}
 
 	async function acquireMic() {
 		localStream = await getUserMediaImpl({ audio: true });
 		onLocalStream(localStream);
-		const peerConnection = ensurePc();
+		const peerConnection = await ensurePc();
 		for (const track of localStream.getTracks()) {
 			peerConnection.addTrack(track, localStream);
 		}
 	}
 
 	async function createOffer(iceRestart) {
-		const peerConnection = ensurePc();
+		const peerConnection = await ensurePc();
 		const offer = await peerConnection.createOffer(iceRestart ? { iceRestart: true } : undefined);
 		await peerConnection.setLocalDescription(offer);
 		onEvent({ type: "LOCAL_OFFER_READY", sdp: peerConnection.localDescription });
 	}
 
 	async function createAnswer() {
-		const peerConnection = ensurePc();
+		const peerConnection = await ensurePc();
 		const answer = await peerConnection.createAnswer();
 		await peerConnection.setLocalDescription(answer);
 		onEvent({ type: "LOCAL_ANSWER_READY", sdp: peerConnection.localDescription });
@@ -75,7 +90,7 @@ export function createMediaController(options = {}) {
 	// чистое ядро call-fsm.js — call-fsm сам не знает про rollback вообще,
 	// SET_REMOTE — одна команда что для обычного ответа, что для glare.
 	async function setRemote(sdp) {
-		const peerConnection = ensurePc();
+		const peerConnection = await ensurePc();
 		if (sdp.type === "offer" && peerConnection.signalingState === "have-local-offer") {
 			await peerConnection.setLocalDescription({ type: "rollback" });
 		}
@@ -90,7 +105,7 @@ export function createMediaController(options = {}) {
 	}
 
 	async function addIce(candidate) {
-		const peerConnection = ensurePc();
+		const peerConnection = await ensurePc();
 		if (peerConnection.remoteDescription) {
 			await peerConnection.addIceCandidate(candidate);
 		} else {
@@ -107,6 +122,7 @@ export function createMediaController(options = {}) {
 			pc.close();
 			pc = null;
 		}
+		pcPromise = null;
 		pendingRemoteIce = [];
 	}
 

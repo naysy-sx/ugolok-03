@@ -242,6 +242,32 @@ test("ontrack: зовёт onRemoteStream с первым потоком из eve
 	assert.deepEqual(remoteStreams, [remoteStream]);
 });
 
+// Этап 6 (TZ-cicd-hardening) — options.iceServers может быть async-функцией
+// (свежие TURN-креды перед КАЖДЫМ новым pc, не один раз при старте сессии).
+test("iceServers как async-функция: дожидается ПЕРЕД созданием RTCPeerConnection", async () => {
+	const { controller } = makeOptions({
+		iceServers: async () => {
+			await new Promise((r) => setTimeout(r, 1));
+			return [{ urls: "turn:fresh.example", username: "u", credential: "p" }];
+		},
+	});
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const pc = FakeRTCPeerConnection.instances[0];
+	assert.deepEqual(pc.config.iceServers, [{ urls: "turn:fresh.example", username: "u", credential: "p" }]);
+});
+
+test("iceServers как async-функция: гонка ACQUIRE_MIC + ADD_ICE до готовности pc создаёт РОВНО один RTCPeerConnection", async () => {
+	let resolveIce;
+	const { controller } = makeOptions({
+		iceServers: () => new Promise((r) => (resolveIce = r)),
+	});
+	const micPromise = controller.execute({ type: "ACQUIRE_MIC" });
+	const icePromise = controller.execute({ type: "ADD_ICE", candidate: "c1" });
+	resolveIce([{ urls: "stun:race.example" }]);
+	await Promise.all([micPromise, icePromise]);
+	assert.equal(FakeRTCPeerConnection.instances.length, 1, "оба вызова ensurePc() до готовности pc не должны создать два pc");
+});
+
 test("неизвестная команда — execute не бросает, просто ничего не делает", async () => {
 	const { controller } = makeOptions();
 	await assert.doesNotReject(() => controller.execute({ type: "SEND_OFFER", sdp: "irrelevant" }));

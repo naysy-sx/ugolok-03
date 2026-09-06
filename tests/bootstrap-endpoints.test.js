@@ -16,6 +16,9 @@ import {
 	readBootstrapEndpoints,
 	writeBootstrapEndpoints,
 	resetBootstrapEndpoints,
+	fetchTurnCredentials,
+	resetTurnCredentialsCache,
+	resolveCallIceServers,
 } from "../src/domain/settings/bootstrap-endpoints.js";
 import { loadRuntimeConfig, resetRuntimeConfig } from "../src/domain/settings/runtime-config.js";
 
@@ -45,6 +48,7 @@ function buildTimeDefaults() {
 beforeEach(() => {
 	// тесты передают storage явно — глобальный localStorage не трогаем
 	resetRuntimeConfig();
+	resetTurnCredentialsCache();
 });
 
 test("readBootstrapEndpoints: нет записи → значения из BUILD_DEFAULT_*", () => {
@@ -198,4 +202,109 @@ test("resolveIceServers: тот же TURN-хост / localhost / пусто → 
 		resolveIceServers([{ urls: "turn:other.example:3478", username: "x", credential: "y" }], defaults),
 		[{ urls: "turn:other.example:3478", username: "x", credential: "y" }],
 	);
+});
+
+// Этап 6 (TZ-cicd-hardening) — fetchTurnCredentials/resolveCallIceServers.
+
+test("fetchTurnCredentials: успех — по одной ICE-записи на uri, одни и те же username/credential", async () => {
+	const fetchImpl = async () => ({
+		ok: true,
+		json: async () => ({
+			username: "1234567890",
+			credential: "base64hmac==",
+			ttl: 3600,
+			uris: ["turn:ugolok.tech:3478?transport=udp", "turn:ugolok.tech:3478?transport=tcp"],
+		}),
+	});
+	const result = await fetchTurnCredentials("https://ugolok.tech/api/turn-credentials", { fetchImpl });
+	assert.deepEqual(result, [
+		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "1234567890", credential: "base64hmac==" },
+		{ urls: "turn:ugolok.tech:3478?transport=tcp", username: "1234567890", credential: "base64hmac==" },
+	]);
+});
+
+test("fetchTurnCredentials: таймаут (fetch зависает) -> null, не висит дольше timeoutMs", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const fetchImpl = async () => new Promise(() => {});
+	const resultPromise = fetchTurnCredentials("https://ugolok.tech/api/turn-credentials", { fetchImpl, timeoutMs: 3000 });
+	t.mock.timers.tick(3000);
+	assert.equal(await resultPromise, null);
+	t.mock.timers.reset();
+});
+
+test("fetchTurnCredentials: битый ответ (нет credential) -> null", async () => {
+	const fetchImpl = async () => ({ ok: true, json: async () => ({ username: "x", ttl: 3600, uris: ["turn:x:3478"] }) });
+	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl }), null);
+});
+
+test("fetchTurnCredentials: ответ не ok -> null", async () => {
+	const fetchImpl = async () => ({ ok: false, json: async () => ({}) });
+	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl }), null);
+});
+
+test("fetchTurnCredentials: кэш — второй вызов ДО expiry-60с не бьёт сеть заново", async () => {
+	let calls = 0;
+	const fetchImpl = async () => {
+		calls++;
+		return { ok: true, json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) };
+	};
+	const now = 1_000_000;
+	const first = await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now });
+	const second = await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now: now + 1000 });
+	assert.equal(calls, 1, "второй вызов внутри TTL-60с обязан взять кэш, не бить сеть");
+	assert.deepEqual(first, second);
+});
+
+test("fetchTurnCredentials: кэш истёк (now >= expiry-60с) -> бьёт сеть заново", async () => {
+	let calls = 0;
+	const fetchImpl = async () => {
+		calls++;
+		return { ok: true, json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) };
+	};
+	const now = 1_000_000;
+	await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now });
+	await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now: now + 3600_000 });
+	assert.equal(calls, 2);
+});
+
+test("resolveCallIceServers: нет turnCredentialsUrl в config.json -> прежнее поведение (bootstrap/build-time ICE как есть)", async () => {
+	resetRuntimeConfig();
+	const result = await resolveCallIceServers();
+	assert.deepEqual(result, BUILD_DEFAULT_ICE_SERVERS);
+});
+
+test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт отвечает -> STUN (без кредов) + свежий TURN", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({ turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials" }),
+		}),
+	});
+	const fetchImpl = async () => ({
+		ok: true,
+		json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:ugolok.tech:3478?transport=udp"] }),
+	});
+	const result = await resolveCallIceServers({ fetchImpl });
+	assert.deepEqual(result, [
+		...BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ urls: s.urls })),
+		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "u", credential: "c" },
+	]);
+});
+
+test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт недоступен -> фолбэк STUN-only (без username/credential)", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({
+			ok: true,
+			json: async () => ({ turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials" }),
+		}),
+	});
+	const fetchImpl = async () => {
+		throw new Error("network down");
+	};
+	const result = await resolveCallIceServers({ fetchImpl });
+	assert.deepEqual(result, BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ urls: s.urls })));
+	for (const s of result) {
+		assert.equal("username" in s, false);
+		assert.equal("credential" in s, false);
+	}
 });

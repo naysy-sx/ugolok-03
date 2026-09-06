@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Сборка PWA и выкладка на VPS: test.ugolok.tech (ветка dev) или ugolok.tech (ветка prod).
 # Запускается Forgejo Actions на хосте (runs-on: ugolok) из корня репозитория.
-# Секреты TURN: /opt/ugolok/secrets/build.env (не в git).
+# TURN больше не несёт статического пароля в сборке (этап 6, TZ-cicd-hardening) —
+# клиент получает временные креды с /api/turn-credentials (turncreds-server,
+# TURN_STATIC_AUTH_SECRET там же, не здесь). /opt/ugolok/secrets/build.env для
+# сборки больше не нужен.
 set -euo pipefail
 
 ENV="${1:-}"
@@ -12,17 +15,6 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-
-SECRETS="${UGOLK_BUILD_ENV:-/opt/ugolok/secrets/build.env}"
-if [[ -f "$SECRETS" ]]; then
-	# shellcheck disable=SC1090
-	set -a
-	# shellcheck disable=SC1091
-	source "$SECRETS"
-	set +a
-fi
-: "${TURN_USERNAME:?TURN_USERNAME пуст — нужен $SECRETS}"
-: "${TURN_PASSWORD:?TURN_PASSWORD пуст — нужен $SECRETS}"
 
 if [[ "$ENV" == "test" ]]; then
 	WWW="${UGOLK_WWW_TEST:-/var/www/ugolok-test}"
@@ -44,19 +36,9 @@ else
 	APPLY_PROD_ISLAND=1
 fi
 
-ICE_JSON="$(
-	TURN_USERNAME="$TURN_USERNAME" TURN_PASSWORD="$TURN_PASSWORD" python3 - <<'PY'
-import json, os
-u = os.environ["TURN_USERNAME"]
-p = os.environ["TURN_PASSWORD"]
-print(json.dumps([
-	{"urls": "stun:ugolok.tech:3478"},
-	{"urls": "turn:ugolok.tech:3478?transport=udp", "username": u, "credential": p},
-	{"urls": "turn:ugolok.tech:3478?transport=tcp", "username": u, "credential": p},
-	{"urls": "stun:stun.l.google.com:19302"},
-], separators=(",", ":")))
-PY
-)"
+# Только urls — ни username, ни credential (этап 6): временные TURN-креды
+# клиент запрашивает у /api/turn-credentials в рантайме, не из сборки.
+ICE_JSON='[{"urls":"stun:ugolok.tech:3478"},{"urls":"turn:ugolok.tech:3478?transport=udp"},{"urls":"turn:ugolok.tech:3478?transport=tcp"},{"urls":"stun:stun.l.google.com:19302"}]'
 
 echo "deploy-env: env=$ENV www=$WWW"
 
@@ -95,7 +77,8 @@ const relays=JSON.parse(process.env.BUILD_DEFAULT_RELAYS);
 const blossom=JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
 const name=process.env.UGOLK_INSTANCE===\"prod\"?\"ugolok.tech\":\"test.ugolok.tech\";
 fs.writeFileSync(\"dist/config.json\", JSON.stringify({
-  instanceName:name, relays, bootstrapRelays:relays, blossomServers:blossom, iceServers:ice
+  instanceName:name, relays, bootstrapRelays:relays, blossomServers:blossom, iceServers:ice,
+  turnCredentialsUrl:\"/api/turn-credentials\"
 }, null, 2)+\"\\n\");
 "'
 

@@ -9,8 +9,8 @@ import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconCopy from "../icons/copy.jsx";
 import { t, tPlural } from "../signals/i18n.js";
-import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
-import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
+import { BUILD_DEFAULT_RELAYS } from "../../config.js";
+import { readBootstrapEndpoints, resolveCallIceServers } from "../../domain/settings/bootstrap-endpoints.js";
 
 // ROOMS-SPEC.md §1.4 — отдельная ветка ВНЕ MainShell, переиспользует
 // message-bubble.jsx через пропсы (форма сообщения совпадает), НЕ chat.jsx
@@ -20,11 +20,6 @@ import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoint
 function bootstrapRelayUrl() {
 	return readBootstrapEndpoints().relayUrl || BUILD_DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777";
 }
-function bootstrapIceServers() {
-	const ice = readBootstrapEndpoints().iceServers;
-	return ice.length ? ice : BUILD_DEFAULT_ICE_SERVERS;
-}
-
 // Редизайн интерфейса, "область контента" — сворачивание в панель сайдбара
 // (app.jsx's ActiveRoomSummary), тот же принцип, что mediaSession (media.js):
 // лёгкое зеркало самого нужного (название+число участников) в сигнал
@@ -245,7 +240,7 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
 				openMode,
-				iceServers: bootstrapIceServers(),
+				iceServers: resolveCallIceServers,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -274,7 +269,7 @@ export default function Quick({ onExit }) {
 				suffix: decoded.suffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: bootstrapIceServers(),
+				iceServers: resolveCallIceServers,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -297,7 +292,7 @@ export default function Quick({ onExit }) {
 				password: joinPwPassword,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: bootstrapIceServers(),
+				iceServers: resolveCallIceServers,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -327,7 +322,7 @@ export default function Quick({ onExit }) {
 				suffix: raceOutcome.winningSuffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: bootstrapIceServers(),
+				iceServers: resolveCallIceServers,
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,

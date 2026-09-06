@@ -43,3 +43,19 @@ services:
       - ./coturn.conf:/etc/coturn/turnserver.conf:ro
     command: ["-c", "/etc/coturn/turnserver.conf"]
     mem_limit: 128m
+
+  # Этап 6 (TZ-cicd-hardening) — выдача временных TURN-кредов (agent/cmd/
+  # turncreds-server), TURN_STATIC_AUTH_SECRET — тот же секрет, что
+  # static-auth-secret в coturn.conf. turncreds.env в .gitignore, не в git.
+  turncreds-server:
+    build:
+      context: ../../agent
+      dockerfile: ../deploy/island/turncreds-server.Dockerfile
+    image: ugolok-turncreds-server:local
+    container_name: ugolok-turncreds-server
+    restart: unless-stopped
+    env_file:
+      - ./turncreds.env
+    ports:
+      - "127.0.0.1:8090:8090"
+    mem_limit: 32m

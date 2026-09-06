@@ -1,7 +1,6 @@
 import { signal } from "@preact/signals";
 import { createCallRuntime } from "../../domain/calls/call-runtime.js";
-import { BUILD_DEFAULT_ICE_SERVERS } from "../../config.js";
-import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
+import { resolveCallIceServers } from "../../domain/settings/bootstrap-endpoints.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
@@ -57,10 +56,10 @@ export function configureCallRuntime({ myPubkey, privKey, publish, dbKey }) {
 		myPubkey,
 		privKey,
 		publish,
-		iceServers: (() => {
-			const ice = readBootstrapEndpoints().iceServers;
-			return ice.length ? ice : BUILD_DEFAULT_ICE_SERVERS;
-		})(),
+		// Этап 6 (TZ-cicd-hardening) — функция, не массив: media-controller.js
+		// дожидается её ПЕРЕД каждым новым RTCPeerConnection (свежие TURN-креды
+		// на весь звонок, не заморожены на момент configureCallRuntime()).
+		iceServers: resolveCallIceServers,
 		onStateChange: (stateName) => {
 			const snapshot = runtime.getState();
 			callState.value = snapshot;
