@@ -133,10 +133,16 @@ rsync -rltD --omit-dir-times --delete --delay-updates \
 
 if [[ -d "$ISLAND_SRC" ]]; then
 	mkdir -p "$ISLAND_DST"
+	# turncreds.env — секрет оператора (этап 6), как и coturn.conf: не в git,
+	# живёт только в $ISLAND_DST. Живая проверка (прод, run #33) — без этого
+	# исключения --delete стирал его же в ЭТОМ прогоне, до docker compose up,
+	# который его тут же требует (env_file) — деплой ронял то, что сам создал
+	# оператор минуту назад.
 	rsync -a --omit-dir-times --delete \
 		--exclude 'relay-src' \
 		--exclude 'blossom-src' \
 		--exclude 'coturn.conf' \
+		--exclude 'turncreds.env' \
 		--exclude '.git' \
 		"$ISLAND_SRC/" "$ISLAND_DST/"
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then

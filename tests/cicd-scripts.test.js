@@ -329,6 +329,14 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /rsync -rltD --omit-dir-times --delete/);
 	assert.match(deploy, /rsync -a --omit-dir-times --delete/);
 
+	// Живая проверка (прод, run #33): --delete на island-rsync без исключения
+	// turncreds.env стирал секрет оператора (не в git, живёт только на VPS,
+	// как coturn.conf) в ЭТОМ ЖЕ прогоне, до docker compose up, который его
+	// тут же требует через env_file.
+	const islandRsyncBlock = deploy.slice(deploy.indexOf("rsync -a --omit-dir-times"), deploy.indexOf('"$ISLAND_SRC/"'));
+	assert.match(islandRsyncBlock, /--exclude 'coturn\.conf'/);
+	assert.match(islandRsyncBlock, /--exclude 'turncreds\.env'/);
+
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
 	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
 	assert.match(deploy, /NPM_CACHE_MOUNT=\(-v "\$NPM_CACHE:\/tmp\/npm"\)/);
