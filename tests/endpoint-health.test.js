@@ -121,6 +121,37 @@ test("probeIce: мок RTCPeerConnection, кандидат пришёл → { ok
 	assert.ok(result.ms >= 0);
 });
 
+// Живая проверка (прод, 2026-09-06) — без iceTransportPolicy: "relay" первый
+// пришедший ICE-кандидат почти всегда "typ host" (локальный интерфейс, ни
+// STUN, ни TURN не нужны) — probeIce считался бы "TURN работает" мгновенно,
+// даже если TURN-сервер вообще недоступен. Проверяем, что RTCPeerConnection
+// действительно строится с этим полем, а не полагаемся на то, что мок его
+// не читает.
+test("probeIce: строит RTCPeerConnection с iceTransportPolicy: relay (иначе host-кандидат маскирует нерабочий TURN)", async () => {
+	let capturedConfig = null;
+	globalThis.RTCPeerConnection = class {
+		constructor(config) {
+			capturedConfig = config;
+			this.iceGatheringState = "gathering";
+			this.onicecandidate = null;
+		}
+		createDataChannel() {
+			return {};
+		}
+		async createOffer() {
+			return { type: "offer", sdp: "" };
+		}
+		async setLocalDescription() {
+			setTimeout(() => {
+				this.onicecandidate?.({ candidate: { candidate: "candidate:1 1 UDP 1 1.2.3.4 9 typ relay" } });
+			}, 8);
+		}
+		close() {}
+	};
+	await probeIce([{ urls: "turn:127.0.0.1:3478", username: "u", credential: "c" }]);
+	assert.equal(capturedConfig.iceTransportPolicy, "relay");
+});
+
 test("probeIce: timeout без кандидатов → { ok: false }", async () => {
 	globalThis.RTCPeerConnection = class {
 		constructor() {

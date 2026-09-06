@@ -53,7 +53,14 @@ export async function probeIce(iceServers, { timeoutMs = 3000 } = {}) {
 	const started = Date.now();
 	let pc;
 	try {
-		pc = new globalThis.RTCPeerConnection({ iceServers });
+		// iceTransportPolicy: "relay" — без него первый пришедший кандидат почти
+		// всегда host (локальный интерфейс, не требует ни STUN, ни TURN) и
+		// finish(true) сработает мгновенно ДО того, как TURN-сервер вообще
+		// ответит — проверка называется "проба TURN", но по факту не проверяла
+		// бы TURN вообще, только что RTCPeerConnection способен собирать
+		// кандидаты. Живая проверка (прод, 2026-09-06): без relay первый
+		// кандидат — typ host; с relay — именно typ relay от coturn.
+		pc = new globalThis.RTCPeerConnection({ iceServers, iceTransportPolicy: "relay" });
 	} catch (e) {
 		return { ok: false, ms: null, error: String(e) };
 	}

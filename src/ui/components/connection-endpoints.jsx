@@ -9,6 +9,7 @@ import {
 	parseBlossomUrl,
 	parseIceUrl,
 	iceUrlFromServers,
+	resolveCallIceServers,
 } from "../../domain/settings/bootstrap-endpoints.js";
 import { probeRelay, probeBlossom, probeIce } from "../../core/transport/endpoint-health.js";
 
@@ -97,12 +98,16 @@ export default function ConnectionEndpoints() {
 			}
 			const current = readBootstrapEndpoints();
 			const displayed = iceUrlFromServers(current.iceServers);
-			const iceForProbe =
-				displayed === parsed.urls && current.iceServers.length > 0 ? current.iceServers : [parsed];
 			if (displayed !== parsed.urls) {
 				writeBootstrapEndpoints({ iceServers: [parsed] });
 			}
 			if (!cancelled) patch("turn", { state: "checking", ms: null });
+			// Проверяем тем же путём, что и реальный звонок (resolveCallIceServers,
+			// media-controller.js) — не голым parsed/current.iceServers: этап 6
+			// (TZ-cicd-hardening) не кладёт TURN-креды в config.json намеренно,
+			// RTCPeerConnection с turn: без username/credential бросает
+			// InvalidAccessError синхронно (живая проверка, прод, 2026-09-06).
+			const iceForProbe = await resolveCallIceServers();
 			const result = await probeIce(iceForProbe);
 			if (!cancelled) patch("turn", { state: result.ok ? "ok" : "bad", ms: result.ok ? result.ms : null });
 		}, DEBOUNCE_MS);
