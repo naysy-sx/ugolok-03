@@ -400,8 +400,17 @@ test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, co
 	assert.match(compose, /127\.0\.0\.1:8090:8090/);
 	assert.match(compose, /mem_limit: 32m/);
 	assert.match(compose, /turncreds\.env/);
+	// Живая проверка (прод, run #36): context: ../../agent (относительно
+	// $ISLAND_DST — постоянной папки острова, НЕ временного git-клона) не
+	// существует — "unable to prepare context: path /opt/agent not found".
+	// agent-src — локальная подпапка $ISLAND_DST, которую deploy-env.sh сам
+	// синхронизирует из клона на каждый деплой (см. ниже).
+	assert.match(compose, /context:\s*\.\/agent-src/);
+	assert.match(compose, /dockerfile:\s*\.\.\/turncreds-server\.Dockerfile/);
 	assert.ok(existsSync(join(ROOT, "deploy/island/turncreds-server.Dockerfile")));
 	assert.ok(existsSync(join(ROOT, "agent/cmd/turncreds-server/main.go")));
+	const deployForAgentSrc = read(join(ROOT, "scripts/deploy-env.sh"));
+	assert.match(deployForAgentSrc, /rsync -a --omit-dir-times --delete --exclude '\.git' "\$ROOT\/agent\/" "\$ISLAND_DST\/agent-src\/"/);
 	const gi = read(join(ROOT, ".gitignore"));
 	assert.match(gi, /deploy\/island\/turncreds\.env/);
 	assert.equal(existsSync(join(ROOT, "deploy/island/turncreds.env")), false);

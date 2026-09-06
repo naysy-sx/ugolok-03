@@ -141,10 +141,20 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	rsync -a --omit-dir-times --delete \
 		--exclude 'relay-src' \
 		--exclude 'blossom-src' \
+		--exclude 'agent-src' \
 		--exclude 'coturn.conf' \
 		--exclude 'turncreds.env' \
 		--exclude '.git' \
 		"$ISLAND_SRC/" "$ISLAND_DST/"
+	# turncreds-server (этап 6) собирается из agent/ этого же клона — в отличие
+	# от relay-src/blossom-src (сторонний upstream, забутстрапленный один раз
+	# оператором), agent/ — наш код и обязан обновляться на КАЖДЫЙ деплой.
+	# Живая проверка (прод, run #36) — без этого шага docker compose падал:
+	# "unable to prepare context: path /opt/agent not found" (context в
+	# docker-compose.yml относительный, от $ISLAND_DST, а не от репозитория).
+	if [[ -d "$ROOT/agent" ]]; then
+		rsync -a --omit-dir-times --delete --exclude '.git' "$ROOT/agent/" "$ISLAND_DST/agent-src/"
+	fi
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d
 	fi

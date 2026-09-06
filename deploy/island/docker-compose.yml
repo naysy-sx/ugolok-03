@@ -47,10 +47,14 @@ services:
   # Этап 6 (TZ-cicd-hardening) — выдача временных TURN-кредов (agent/cmd/
   # turncreds-server), TURN_STATIC_AUTH_SECRET — тот же секрет, что
   # static-auth-secret в coturn.conf. turncreds.env в .gitignore, не в git.
+  # agent-src — не в git (как relay-src/blossom-src): deploy-env.sh
+  # синхронизирует его из своего временного клона перед docker compose up
+  # (в отличие от relay-src/blossom-src, освежается на КАЖДЫЙ деплой — это
+  # наш код, не сторонний upstream, забутстрапленный один раз).
   turncreds-server:
     build:
-      context: ../../agent
-      dockerfile: ../deploy/island/turncreds-server.Dockerfile
+      context: ./agent-src
+      dockerfile: ../turncreds-server.Dockerfile
     image: ugolok-turncreds-server:local
     container_name: ugolok-turncreds-server
     restart: unless-stopped
