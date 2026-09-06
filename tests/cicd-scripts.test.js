@@ -376,6 +376,10 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /-e BUILD_HASH="\$BUILD_HASH"/);
 	assert.equal(deploy.includes("APPLY_PROD_ISLAND"), false);
 	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 1, "docker compose up -d — один раз, не в двух одинаковых ветках");
+	// Живая проверка (прод, run #42): без --build compose переиспользует уже
+	// существующий образ ugolok-turncreds-server:local как есть — тег
+	// статический, свежий agent-src сам по себе рекомпиляцию не триггерит.
+	assert.match(deploy, /docker compose -f "\$ISLAND_DST\/docker-compose\.yml" --project-directory "\$ISLAND_DST" up -d --build/);
 });
 
 test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, coturn use-auth-secret", () => {

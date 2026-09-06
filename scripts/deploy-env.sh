@@ -156,7 +156,13 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		rsync -a --omit-dir-times --delete --exclude '.git' "$ROOT/agent/" "$ISLAND_DST/agent-src/"
 	fi
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
-		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d
+		# --build: без него compose переиспользует уже существующий образ
+		# ugolok-turncreds-server:local как есть, даже если agent-src только что
+		# обновился — тег статический, compose не видит, что исходники изменились.
+		# Живая проверка (прод, run #42) — /api/turn-credentials оставался 502
+		# ПОСЛЕ фикса 127.0.0.1->0.0.0.0 в коде: контейнер не пересобрался,
+		# работал старый образ со старой привязкой.
+		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --build
 	fi
 fi
 
