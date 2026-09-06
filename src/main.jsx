@@ -12,19 +12,39 @@ logInfo(`запуск, сборка ${BUILD_HASH}`);
 
 startIdleWatcher();
 
+const SW_RELOAD_ONCE_KEY = "ugolok.swReloadOnce";
 let refreshing = false;
+// Живая проверка (прод, 2026-09-06) — только что загруженный видео-файл
+// открывался, но не играл: /files-content/<хэш> (плеер, И4) уходил мимо SW
+// прямо в сеть и получал SPA-фолбэк index.html вместо расшифрованных байт
+// (Caddy try_files отдаёт его на любой неизвестный путь) — <video> получает
+// HTML вместо видео. Причина — navigator.serviceWorker.controller оставался
+// null сколько угодно долго ПОСЛЕ activate+clients.claim() (проверено —
+// не гонка на миллисекунды, а стабильно null у уже загруженной страницы,
+// пока её не перезагрузили вручную). Условие "hadControllerAtLoad" ниже
+// как раз и исключало reload ИМЕННО в этом случае (самая первая регистрация,
+// controller ещё не было) — считая, что "обновлять нечего", хотя обновить
+// нужно было саму способность SW перехватывать запросы этой вкладки.
+function reloadForFreshServiceWorker() {
+	if (refreshing) return;
+	let alreadyTried = false;
+	try {
+		alreadyTried = sessionStorage.getItem(SW_RELOAD_ONCE_KEY) === "1";
+	} catch {
+		// приватный режим/квота — считаем, что не пробовали, максимум лишний reload
+	}
+	if (alreadyTried) return; // не зацикливаться, если controller так и не появится
+	try {
+		sessionStorage.setItem(SW_RELOAD_ONCE_KEY, "1");
+	} catch {
+		// не критично — хуже случай: один лишний reload
+	}
+	refreshing = true;
+	location.reload();
+}
+
 if ("serviceWorker" in navigator) {
-	// Если controller уже был на момент загрузки страницы — это обновление уже
-	// работающего SW, перезагрузка нужна (подтянуть свежий код). Если controller
-	// не было (самая первая регистрация ниже в этой же загрузке) — clients.claim()
-	// тоже вызовет controllerchange, но обновлять нечего: reload() в этот момент
-	// только сбросил бы сессию пользователя без причины.
-	const hadControllerAtLoad = navigator.serviceWorker.controller !== null;
-	navigator.serviceWorker.addEventListener("controllerchange", () => {
-		if (refreshing || !hadControllerAtLoad) return;
-		refreshing = true;
-		location.reload();
-	});
+	navigator.serviceWorker.addEventListener("controllerchange", reloadForFreshServiceWorker);
 
 	// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (этап 53-довесок, тот же класс пробела, что
 	// ensureConnected до этого): регистрация раньше жила ТОЛЬКО в
@@ -44,7 +64,14 @@ if ("serviceWorker" in navigator) {
 	// выключены, чтобы не сломать HMR), поэтому регистрация безусловна.
 	navigator.serviceWorker
 		.register(`${import.meta.env.BASE_URL}service-worker.js`)
-		.then(() => logInfo("service worker зарегистрирован"))
+		.then(async () => {
+			logInfo("service worker зарегистрирован");
+			// controllerchange мог не успеть сработать до этой проверки (или не
+			// сработать вовсе, если clients.claim() уже отработал до подписки на
+			// событие) — прямой чек после готовности как подстраховка.
+			await navigator.serviceWorker.ready;
+			if (!navigator.serviceWorker.controller) reloadForFreshServiceWorker();
+		})
 		.catch(() => {});
 }
 
