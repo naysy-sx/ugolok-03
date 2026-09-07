@@ -43,9 +43,11 @@ function hasTag(event, name, value) {
 // комнаты мог показать "переподключение"/"офлайн" (ROOMS-SPEC §7, "Релей
 // отвалился"). autoReconnect у relay-pool.js включён по умолчанию — этот
 // колбэк только НАБЛЮДАЕТ состояние, ничего не меняет в поведении реконнекта.
-export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent, onConnectionStateChange = () => {} }) {
+// onTrace (TZ-diag-trace.md §0.3/§2.5) — необязательный, DI: этот файл не
+// импортирует трассировщик, только пробрасывает колбэк дальше в relay-pool.js.
+export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent, onConnectionStateChange = () => {}, onTrace }) {
 	if (!hTopic && !hDisc) throw new Error("room-transport: нужен хотя бы один из hTopic/hDisc");
-	const conn = createRelayConnection(relayUrl, { onStateChange: onConnectionStateChange });
+	const conn = createRelayConnection(relayUrl, { onStateChange: onConnectionStateChange, onTrace });
 	conn.connect();
 	await waitForConnState(conn, (s) => s === "connected", 8000);
 

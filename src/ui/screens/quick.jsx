@@ -10,7 +10,15 @@ import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconCopy from "../icons/copy.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
-import { readBootstrapEndpoints, resolveCallIceServers } from "../../domain/settings/bootstrap-endpoints.js";
+import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry } from "../../domain/settings/bootstrap-endpoints.js";
+import { isTraceEnabled, record as traceRecord } from "../../core/diag/call-trace.js";
+
+// TZ-diag-trace.md §1 — то же решение "писать или нет", что call.js делает
+// для 1:1 (см. configureCallRuntime): один раз на сессию комнаты, здесь.
+function roomTraceOptions() {
+	if (!isTraceEnabled()) return {};
+	return { onTrace: traceRecord, getIceCredsExpiryMs: getCachedTurnCredsExpiry };
+}
 
 // ROOMS-SPEC.md §1.4 — отдельная ветка ВНЕ MainShell, переиспользует
 // message-bubble.jsx через пропсы (форма сообщения совпадает), НЕ chat.jsx
@@ -241,6 +249,7 @@ export default function Quick({ onExit }) {
 				relayUrl: bootstrapRelayUrl(),
 				openMode,
 				iceServers: resolveCallIceServers,
+				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -270,6 +279,7 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
 				iceServers: resolveCallIceServers,
+				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -293,6 +303,7 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
 				iceServers: resolveCallIceServers,
+				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,
@@ -323,6 +334,7 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
 				iceServers: resolveCallIceServers,
+				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
 				onLocalStream: handleLocalStream,

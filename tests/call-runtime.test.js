@@ -321,3 +321,67 @@ test("createCallRuntime без hTopic (обычный 1:1-звонок) — оп
 
 	assert.deepEqual(published[0].tags, [["p", BOB_PUB]]);
 });
+
+// TZ-diag-trace.md §6 — трассировка не должна долетать до звонка ни при каких
+// условиях, даже если сам колбэк сломан (тест намеренно подсовывает бросающий
+// onTrace, а не реальный call-trace.js).
+test("onTrace, который бросает исключение, не долетает до логики звонка — FSM продолжает работать как обычно", async () => {
+	const { runtime, media, published, stateChanges } = makeRuntime(ALICE_PRIV, ALICE_PUB, {
+		onTrace: () => {
+			throw new Error("трассировщик сломан");
+		},
+	});
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+
+	assert.equal(runtime.getState().name, "OUTGOING_RINGING");
+	assert.equal(published.length, 1, "публикация всё равно случилась несмотря на бросающий onTrace");
+	assert.ok(stateChanges.some((s) => s.stateName === "OUTGOING_RINGING"));
+});
+
+// TZ §0.1 — прямая проверка того, что задание запрещало чинить: сбой
+// публикации по-прежнему теряется молча (никакого retry), но теперь ВИДЕН в
+// трассировке как phase:"error" с errorMessage — этого раньше нельзя было
+// различить снаружи никак, кроме console.warn.
+test("onTrace видит phase:'error' на сигнальной команде, когда publish() бросает — команда всё равно теряется (retry НЕ добавлен)", async () => {
+	const traced = [];
+	const { runtime, media } = makeRuntime(ALICE_PRIV, ALICE_PUB, {
+		publish: async () => {
+			throw new Error('relay-pool: send() недоступен в состоянии "disconnected"');
+		},
+		onTrace: (ev, payload) => traced.push({ ev, payload }),
+	});
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+
+	const commandTraces = traced.filter((t) => t.ev === "command" && t.payload.name === "SEND_OFFER");
+	assert.equal(commandTraces.some((t) => t.payload.phase === "start"), true);
+	const errorTrace = commandTraces.find((t) => t.payload.phase === "error");
+	assert.ok(errorTrace, "ожидалась запись phase:'error'");
+	assert.match(errorTrace.payload.errorMessage, /disconnected/);
+	// Всё ещё не сделано никакого повторного вызова publish — команда потеряна,
+	// как и до этой задачи (TZ-diag-trace.md §0.1: "не чинить").
+	assert.equal(runtime.getState().name, "OUTGOING_RINGING");
+});
+
+// TZ §2.4, второй капкан — реальное подтверждение OK от релея (не просто
+// "publish() не бросил") доходит до записи как relayOk/eventId.
+test("onTrace видит relayOk/eventId на успешной сигнальной команде (реальное подтверждение relay, не 'не бросило')", async () => {
+	const traced = [];
+	const { runtime, media } = makeRuntime(ALICE_PRIV, ALICE_PUB, {
+		publish: async (event) => ({ ok: true, eventId: event.id }),
+		onTrace: (ev, payload) => traced.push({ ev, payload }),
+	});
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "v=0\r\na=ice-ufrag:abc123\r\na=candidate:1 1 UDP 1 1.2.3.4 1 typ host\r\n" } });
+
+	const ok = traced.find((t) => t.ev === "command" && t.payload.name === "SEND_OFFER" && t.payload.phase === "ok");
+	assert.ok(ok);
+	assert.equal(ok.payload.relayOk, true);
+	assert.equal(typeof ok.payload.eventId, "string");
+	assert.equal(ok.payload.iceUfrag, "abc123");
+	assert.equal(ok.payload.candidateCount, 1);
+});

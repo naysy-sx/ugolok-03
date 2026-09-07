@@ -23,6 +23,15 @@ import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { buildProfileEvent } from "../../domain/identity/profile.js";
 import { buildRelayListEvent } from "../../domain/identity/relay-list.js";
 import { useRelayStatus, useDeviceStorage, useBootLog, formatBytes } from "../signals/diagnostics.js";
+import {
+	isTraceEnabled,
+	setTraceEnabled,
+	getTraceStats,
+	downloadTraceFile,
+	copyTraceToClipboard,
+	shareTraceIfAvailable,
+	clearTrace,
+} from "../../core/diag/call-trace.js";
 import Screen from "../components/screen.jsx";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { profiles } from "../signals/contacts.js";
@@ -229,6 +238,40 @@ function useOutboxStatus() {
 		})();
 	}, []);
 	return state;
+}
+
+// TZ-diag-trace.md §1/§5 — тумблер живёт в sessionStorage (call-trace.js),
+// не в этом хуке; recount по клику, не по таймеру (тот же принцип, что
+// useRelayStatus выше: "автообновление раз в N секунд — чистый вред").
+function useCallTrace() {
+	const [enabled, setEnabled] = useState(isTraceEnabled());
+	const [stats, setStats] = useState(getTraceStats());
+	const [copyState, setCopyState] = useState(null); // null | "copied" | "unavailable"
+
+	function refresh() {
+		setStats(getTraceStats());
+	}
+
+	useEffect(refresh, []);
+
+	function toggle() {
+		const next = !enabled;
+		setTraceEnabled(next);
+		setEnabled(next);
+	}
+
+	async function copy() {
+		const ok = await copyTraceToClipboard();
+		setCopyState(ok ? "copied" : "unavailable");
+		setTimeout(() => setCopyState(null), 2000);
+	}
+
+	function clear() {
+		clearTrace();
+		refresh();
+	}
+
+	return { enabled, stats, toggle, download: downloadTraceFile, copy, copyState, share: shareTraceIfAvailable, clear, canShare: typeof navigator !== "undefined" && typeof navigator.share === "function" };
 }
 
 function releaseHashTone(state) {
@@ -639,6 +682,7 @@ export default function Diagnostics() {
 	const signCryptoStatus = useSignCryptoStatus();
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
 	const transportSync = useTransportSyncCheck();
+	const trace = useCallTrace();
 
 	const onlineRelays = relays.members.filter((m) => m.state === "connected");
 	const latencies = Object.values(relays.latency).filter((v) => v != null);
@@ -739,6 +783,39 @@ export default function Diagnostics() {
 						    "занятое на сервере", и расхождение молча вводило бы в
 						    заблуждение. См. §10 п.1. */}
 						<p class="panel__hint">{t("diagnostics.serverStorageUnavailable")}</p>
+					</div>
+				</Panel>
+
+				<Panel title={t("diagnostics.trace.title")} hint={t("diagnostics.trace.hint")}>
+					<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+						<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							<span class={`dot dot--${trace.enabled ? "bad" : "muted"}`} aria-hidden="true" />
+							<span>{trace.enabled ? t("diagnostics.trace.recording") : t("diagnostics.trace.notRecording")}</span>
+						</div>
+						<button type="button" class="btn--ghost rigid" onClick={trace.toggle}>
+							{t("diagnostics.trace.enable")}
+						</button>
+					</div>
+					<p class="panel__hint">
+						{trace.stats.count > 0
+							? `${t("diagnostics.trace.recordsCount", { count: trace.stats.count })} · ${t("diagnostics.trace.period", { from: trace.stats.fromT, to: trace.stats.toT })}`
+							: t("diagnostics.trace.recordsEmpty")}
+					</p>
+					<div class="row" style={{ "--gap": "var(--space-s)" }}>
+						<button type="button" class="btn--ghost rigid" disabled={trace.stats.count === 0} onClick={trace.download}>
+							{t("diagnostics.trace.download")}
+						</button>
+						<button type="button" class="btn--ghost rigid" disabled={trace.stats.count === 0} onClick={trace.copy}>
+							{trace.copyState === "copied" ? t("diagnostics.trace.copied") : t("diagnostics.trace.copy")}
+						</button>
+						{trace.canShare && (
+							<button type="button" class="btn--ghost rigid" disabled={trace.stats.count === 0} onClick={trace.share}>
+								{t("diagnostics.trace.share")}
+							</button>
+						)}
+						<button type="button" class="btn--ghost rigid" disabled={trace.stats.count === 0} onClick={trace.clear}>
+							{t("diagnostics.trace.clear")}
+						</button>
 					</div>
 				</Panel>
 

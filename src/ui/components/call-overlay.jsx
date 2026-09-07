@@ -4,6 +4,7 @@ import { profiles } from "../signals/contacts.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import { RINGTONE_DATA_URI } from "../../domain/calls/ringtone-asset.js";
 import { t } from "../signals/i18n.js";
+import { isTraceEnabled, record as traceRecord } from "../../core/diag/call-trace.js";
 
 // Этап 48, п.6 — persistent-компонент уровня app.jsx (тот же архитектурный
 // принцип, что ToastHost, этап 47): входящий звонок обязан быть виден с ЛЮБОГО
@@ -49,8 +50,19 @@ function Waveform({ stream }) {
 		}
 		draw();
 
+		// TZ-diag-trace.md §2.6 — состояние AudioContext раз в 10с. Это контекст
+		// АНАЛИЗАТОРА волны (визуализация), не путь воспроизведения (RemoteAudio
+		// ниже — обычный <audio>) — тем не менее тот же движок, тот же браузерный
+		// suspend/resume, и единственный AudioContext, до которого дотягивается
+		// звонковый UI. Подписка создаётся, только если флаг уже включён.
+		let audioStateInterval = null;
+		if (isTraceEnabled()) {
+			audioStateInterval = setInterval(() => traceRecord("audio-context", { state: audioCtx.state }), 10000);
+		}
+
 		return () => {
 			cancelAnimationFrame(raf);
+			if (audioStateInterval) clearInterval(audioStateInterval);
 			source.disconnect();
 			audioCtx.close().catch(() => {});
 		};

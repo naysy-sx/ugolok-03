@@ -40,6 +40,19 @@ export function createRelayConnection(url, options = {}) {
   const autoReconnect = options.autoReconnect ?? true;
   const onMessage = options.onMessage;
   const onStateChange = options.onStateChange;
+  // TZ-diag-trace.md §2.5/§0.3 — необязательный, DI (не импорт трассировщика
+  // сюда: relay-pool.js обслуживает и звонки, и весь остальной трафик
+  // аккаунта, и не должен ничего знать про диагностический экран). Не меняет
+  // ни backoff, ни порядок операций ниже — только добавляет запись рядом.
+  const onTrace = options.onTrace;
+  function trace(ev, payload) {
+    if (!onTrace) return;
+    try {
+      onTrace(ev, { url, ...payload });
+    } catch {
+      // сбой трассировки не должен ронять транспорт
+    }
+  }
 
   let state = "disconnected";
   let ws = null;
@@ -70,6 +83,7 @@ export function createRelayConnection(url, options = {}) {
     if (!autoReconnect || intentionalClose) return;
     const delay = computeBackoffDelay(reconnectAttempt, backoff);
     reconnectAttempt += 1;
+    trace("reconnect-scheduled", { attempt: reconnectAttempt, delayMs: Math.round(delay) });
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connect();
@@ -78,9 +92,11 @@ export function createRelayConnection(url, options = {}) {
 
   function connect() {
     intentionalClose = false;
+    trace("connect-attempt", {});
     apply("CONNECT");
     ws = new WebSocketImpl(url);
     ws.onopen = () => {
+      trace("open", {});
       reconnectAttempt = 0;
       // Снимок ДО apply("OPEN"): сам переход синхронно уведомляет подписчика
       // (onStateChange -> send(REQ)), и он уже кладёт новый REQ в activeReqs.
@@ -89,12 +105,15 @@ export function createRelayConnection(url, options = {}) {
       const reqsBeforeOpen = new Map(activeReqs);
       apply("OPEN");
       replayActiveReqs(reqsBeforeOpen);
+      if (onTrace && reqsBeforeOpen.size > 0) trace("resubscribe", { subIds: [...reqsBeforeOpen.keys()] });
     };
-    ws.onclose = () => {
+    ws.onclose = (evt) => {
+      trace("close", { code: evt?.code, reason: evt?.reason });
       apply("CLOSE");
       scheduleReconnect();
     };
-    ws.onerror = () => {
+    ws.onerror = (evt) => {
+      trace("error", { message: evt?.message });
       apply("ERROR");
     };
     ws.onmessage = (evt) => {
@@ -200,6 +219,7 @@ export function createRelayPool(entries, options = {}) {
       autoReconnect,
       privKey: options.privKey,
       onStateChange: handleMemberStateChange,
+      onTrace: options.onTrace,
     }),
   );
 

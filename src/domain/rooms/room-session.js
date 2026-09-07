@@ -76,6 +76,12 @@ async function openSession({
 	createMeshSupervisor: createMeshSupervisorImpl = createMeshSupervisor,
 	onRemoteStream = () => {},
 	onLocalStream = () => {},
+	// TZ-diag-trace.md §0.3/§2.5/§2.7 — необязательные, DI: этот оркестратор
+	// (не "чистое ядро" — см. tests/rooms-no-browser-api.test.js) по-прежнему
+	// не импортирует src/core/diag/call-trace.js, только пробрасывает то, что
+	// пришло сверху (quick.jsx), в room-transport.js и mesh-supervisor.js.
+	onTrace,
+	getIceCredsExpiryMs,
 }) {
 	const identity = createEphemeralIdentity();
 	const kBase = precomputedKBase ?? (await deriveKBase(name, password, argon2));
@@ -233,6 +239,7 @@ async function openSession({
 			connectionState = state;
 			onChange();
 		},
+		onTrace,
 	});
 
 	if (isCreator) {
@@ -262,6 +269,13 @@ async function openSession({
 				iceServers,
 				onRemoteStream,
 				onLocalStream,
+				onTrace,
+				// Единственный транспорт комнаты (openRoomTransport выше) — то же
+				// connectionState, что уже используется для баннера "Релей
+				// отвалился" (ROOMS-SPEC §7); TZ §2.4 читает его как relayState
+				// в момент исполнения каждой SEND_*-команды голосового ребра.
+				getRelayState: () => connectionState,
+				getIceCredsExpiryMs,
 			});
 		}
 		// Этап 6 — meshSupervisor.joinVoice() возвращает false, если конкурентный
@@ -416,6 +430,8 @@ export function createRoom({
 	createMeshSupervisor,
 	onRemoteStream,
 	onLocalStream,
+	onTrace,
+	getIceCredsExpiryMs,
 }) {
 	return openSession({
 		name,
@@ -437,6 +453,8 @@ export function createRoom({
 		createMeshSupervisor,
 		onRemoteStream,
 		onLocalStream,
+		onTrace,
+		getIceCredsExpiryMs,
 	});
 }
 
@@ -458,6 +476,8 @@ export function joinRoom({
 	createMeshSupervisor,
 	onRemoteStream,
 	onLocalStream,
+	onTrace,
+	getIceCredsExpiryMs,
 }) {
 	return openSession({
 		name,
@@ -478,6 +498,8 @@ export function joinRoom({
 		createMeshSupervisor,
 		onRemoteStream,
 		onLocalStream,
+		onTrace,
+		getIceCredsExpiryMs,
 	});
 }
 
@@ -499,6 +521,8 @@ export async function joinRoomByPassword({
 	createMeshSupervisor,
 	onRemoteStream,
 	onLocalStream,
+	onTrace,
+	getIceCredsExpiryMs,
 }) {
 	const kBase = await deriveKBase(name, password, argon2);
 	const { hDisc, kPointer } = derivePairKeys(kBase);
@@ -526,5 +550,7 @@ export async function joinRoomByPassword({
 		createMeshSupervisor,
 		onRemoteStream,
 		onLocalStream,
+		onTrace,
+		getIceCredsExpiryMs,
 	});
 }

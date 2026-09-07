@@ -45,8 +45,25 @@ export function createCallRuntime(options = {}) {
 		signalingAdapter = defaultSignalingAdapter,
 		setTimeoutImpl = (...args) => setTimeout(...args),
 		clearTimeoutImpl = (...args) => clearTimeout(...args),
+		// TZ-diag-trace.md §0.1/§0.3 — DI, не импорт трассировщика; ни один из
+		// перехватов ниже НЕ меняет то, что уже было (в частности — не чинит
+		// call-runtime.js:118-124: сбой публикации по-прежнему только
+		// console.warn, команда по-прежнему теряется, если релей её отверг).
+		// getRelayState — необязательный снимок состояния сокета к релею
+		// (relay-pool.js's getState()) в момент исполнения SEND_*-команды.
+		onTrace,
+		getRelayState,
 		...mediaOptions
 	} = options;
+
+	function trace(ev, payload) {
+		if (!onTrace) return;
+		try {
+			onTrace(ev, payload);
+		} catch {
+			// TZ §0.5 — сбой трассировки не должен долетать до звонка
+		}
+	}
 
 	let state = idleState();
 	const timers = new Map(); // name -> timer id
@@ -70,8 +87,22 @@ export function createCallRuntime(options = {}) {
 	// успевал создать offer РАНЬШЕ, чем ACQUIRE_MIC's addTrack — SDP без media-
 	// секций, ICE вообще не собирался (звонок молча "тикал" 15с до CONNECT_TIMEOUT).
 	async function dispatch(event) {
+		const prevState = state;
 		const result = reduce(state, event);
 		state = result.state;
+		// TZ §2.3 — переход целиком: откуда/куда/по какому событию/причина/
+		// restartCount на этот момент. call-fsm.js сам не тронут ни строкой —
+		// reduce() вызывается ровно как раньше, трассировка читает уже готовый
+		// result, ничего в нём не меняя.
+		trace("fsm-transition", {
+			sessionId: state.sessionId ?? prevState.sessionId,
+			peerPubkey: state.peerPubkey ?? prevState.peerPubkey,
+			from: prevState.name,
+			to: state.name,
+			event: event.type,
+			reason: state.reason ?? null,
+			restartCount: state.restartCount,
+		});
 		for (const command of result.commands) {
 			await executeCommand(command);
 		}
@@ -80,7 +111,10 @@ export function createCallRuntime(options = {}) {
 	// media-controller.js создаётся ЗДЕСЬ (не снаружи) — его onEvent обязан звать
 	// dispatch, а dispatch определён в этой же функции; порядок объявлений в JS не
 	// мешает (function-объявление уже доступно на момент вызова createMediaController).
-	const mediaController = createMediaController({ ...mediaOptions, onEvent: (event) => dispatch(event) });
+	// onTrace явно докидывается сюда отдельно от ...mediaOptions — он уже
+	// вынут из options деструктуризацией выше (нужен и здесь, для fsm/command-
+	// трассировки, и в media-controller.js, для pc-уровневой).
+	const mediaController = createMediaController({ ...mediaOptions, onEvent: (event) => dispatch(event), onTrace });
 
 	function clearNamedTimer(name) {
 		const id = timers.get(name);
@@ -98,27 +132,69 @@ export function createCallRuntime(options = {}) {
 	function startTimer(name, ms) {
 		clearNamedTimer(name); // на случай повторного START_TIMER тем же именем
 		const sessionIdAtStart = state.sessionId;
+		trace("timer", { name, ms, phase: "armed", sessionId: sessionIdAtStart });
 		const id = setTimeoutImpl(() => {
 			timers.delete(name);
+			trace("timer", { name, ms, phase: "fired", sessionId: sessionIdAtStart });
 			dispatch({ type: TIMER_EVENT_BY_NAME[name], sessionId: sessionIdAtStart });
 		}, ms);
 		timers.set(name, id);
 	}
 
+	// TZ §4 — из SDP в трассировку идут только строки a=ice-ufrag (видно, был
+	// ли реальный ICE-рестарт) и a=candidate; полный текст SDP сюда не передаётся
+	// вообще, даже временно — вырезка происходит здесь, до записи.
+	function extractSdpTraceFields(sdp) {
+		const text = sdp?.sdp;
+		if (typeof text !== "string") return {};
+		const ufrag = /^a=ice-ufrag:(.+)$/m.exec(text)?.[1] ?? null;
+		const candidateLines = text.match(/^a=candidate:.+$/gm) ?? [];
+		return { iceUfrag: ufrag, candidateCount: candidateLines.length };
+	}
+
 	async function executeCommand(command) {
 		if (MEDIA_COMMAND_TYPES.has(command.type)) {
 			if (command.type === "CLOSE_PC") clearAllTimers(); // защита от осиротевших grace/backoff таймеров
+			trace("command", { name: command.type, phase: "start", sessionId: state.sessionId });
 			try {
 				await mediaController.execute(command);
+				trace("command", { name: command.type, phase: "ok", sessionId: state.sessionId });
 			} catch (e) {
+				// НЕ ЧИНИТЬ (TZ §0.1) — по-прежнему только console.warn, команда
+				// по-прежнему теряется. Трассировка только НАБЛЮДАЕТ этот путь.
+				trace("command", { name: command.type, phase: "error", sessionId: state.sessionId, errorMessage: String(e?.message ?? e) });
 				console.warn(`call-runtime: медиа-команда ${command.type} упала`, e);
 			}
 			return;
 		}
 		if (SIGNAL_COMMAND_TYPES.has(command.type)) {
+			// TZ §2.4, второй капкан (явно назван в задании) — "publish() не
+			// бросил исключение" НИЧЕГО не значит на полуживом сокете: send()
+			// может не бросить, а событие не дойти. Единственное надёжное
+			// подтверждение — OK от релея ПО ИДЕНТИФИКАТОРУ СОБЫТИЯ, которое
+			// publisher.js уже возвращает через signalingAdapter.execute()
+			// (см. signaling-adapter.js — result теперь содержит {ok, reason,
+			// eventId}). Раньше это значение НИКЕМ не читалось (await без
+			// присваивания) — здесь оно читается ТОЛЬКО для записи, ни одна
+			// ветка catch/console.warn ниже не изменена и не зависит от result.ok.
+			const relayStateBefore = getRelayState ? getRelayState() : undefined;
+			trace("command", { name: command.type, phase: "start", sessionId: state.sessionId, relayState: relayStateBefore });
 			try {
-				await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish, hTopic });
+				const result = await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish, hTopic });
+				const sdpFields = command.sdp ? extractSdpTraceFields(command.sdp) : {};
+				trace("command", {
+					name: command.type,
+					phase: "ok",
+					sessionId: state.sessionId,
+					relayOk: result?.ok,
+					relayReason: result?.reason,
+					eventId: result?.eventId,
+					...sdpFields,
+				});
 			} catch (e) {
+				// НЕ ЧИНИТЬ (TZ §0.1) — по-прежнему только console.warn, команда
+				// по-прежнему теряется навсегда, retry не добавляется.
+				trace("command", { name: command.type, phase: "error", sessionId: state.sessionId, errorMessage: String(e?.message ?? e) });
 				console.warn(`call-runtime: сигнальная команда ${command.type} упала`, e);
 			}
 			return;

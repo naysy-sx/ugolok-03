@@ -24,9 +24,32 @@ export function createMediaController(options = {}) {
 	const onLocalStream = options.onLocalStream ?? (() => {});
 	const onRemoteStream = options.onRemoteStream ?? (() => {});
 
+	// TZ-diag-trace.md §0.3 — DI, не импорт: этот файл не знает про
+	// src/core/diag/call-trace.js вообще, только про необязательный колбэк.
+	// onTrace отсутствует (undefined) => каждая точка ниже, включая опрос
+	// getStats(), буквально не выполняется — это и есть "нулевая стоимость
+	// при выключенном флаге" (TZ §0.4), а не отдельная проверка флага.
+	const onTrace = options.onTrace;
+	// Тот же кэш, что resolveIceServers уже читает изнутри (bootstrap-endpoints.js) —
+	// НЕ повторный запрос кредов, просто чтение того, что уже там лежит (TZ §2.1).
+	const getIceCredsExpiryMs = options.getIceCredsExpiryMs ?? (() => null);
+	const setIntervalImpl = options.setIntervalImpl ?? ((...args) => setInterval(...args));
+	const clearIntervalImpl = options.clearIntervalImpl ?? ((...args) => clearInterval(...args));
+	const pcId = onTrace ? Math.random().toString(36).slice(2, 8) : null;
+
+	function trace(ev, payload) {
+		if (!onTrace) return;
+		try {
+			onTrace(ev, { pc: pcId, ...payload });
+		} catch {
+			// TZ §0.5 — сбой трассировки не должен долетать до звонка
+		}
+	}
+
 	let pc = null;
 	let pcPromise = null;
 	let localStream = null;
+	let statsIntervalId = null;
 	// Буфер ICE-кандидатов, пришедших ДО setRemoteDescription (§1.4 VOICE.md:
 	// "ADD_ICE безопасен всегда: буферизацию инкапсулирует MediaController").
 	let pendingRemoteIce = [];
@@ -41,22 +64,114 @@ export function createMediaController(options = {}) {
 			pcPromise = (async () => {
 				const iceServers = await resolveIceServers();
 				pc = new RTCPeerConnectionImpl({ iceServers });
+				trace("created", {
+					uris: iceServers.flatMap((s) => (Array.isArray(s.urls) ? s.urls : s.urls ? [s.urls] : [])),
+					hasCredentials: iceServers.some((s) => !!s.username),
+					ttlRemainingSec: (() => {
+						const expiryMs = getIceCredsExpiryMs();
+						return typeof expiryMs === "number" ? Math.round((expiryMs - Date.now()) / 1000) : null;
+					})(),
+				});
 				pc.onicecandidate = (e) => {
+					trace("icecandidate", e.candidate
+						? { candidateType: e.candidate.type, protocol: e.candidate.protocol, address: e.candidate.address, port: e.candidate.port, gatheringDone: false }
+						: { gatheringDone: true });
 					if (e.candidate) onEvent({ type: "LOCAL_ICE", candidate: e.candidate });
 				};
 				pc.oniceconnectionstatechange = () => {
 					const iceState = pc.iceConnectionState;
+					trace("statechange", { iceConnectionState: iceState, connectionState: pc.connectionState, signalingState: pc.signalingState, iceGatheringState: pc.iceGatheringState });
 					if (iceState === "connected" || iceState === "completed") onEvent({ type: "ICE_CONNECTED" });
 					else if (iceState === "disconnected") onEvent({ type: "ICE_DISCONNECTED" });
 					else if (iceState === "failed") onEvent({ type: "ICE_FAILED" });
 				};
+				// TZ §2.1 — существующие подписки (onicecandidate/oniceconnectionstatechange/
+				// ontrack) не тронуты выше ни строкой логики, добавлена только трассировка.
+				// Эти четыре — НОВЫЕ подписки: их не было в коде до TZ-diag-trace.md, домен
+				// (call-fsm.js/call-runtime.js) их не потребляет, они существуют только ради
+				// записи (05-tests-media-lifecycle.md, раздел B — этих обработчиков не было
+				// нигде, "связь формально жива, звука нет" нечем было поймать). TZ §0.4 —
+				// "нулевая стоимость при выключенном флаге" читается буквально: раз эти
+				// подписки не нужны никому, кроме трассировки, при onTrace=undefined их
+				// не должно существовать вообще, не просто "существуют, но no-op".
+				if (onTrace) {
+					pc.onconnectionstatechange = () => {
+						trace("statechange", { iceConnectionState: pc.iceConnectionState, connectionState: pc.connectionState, signalingState: pc.signalingState, iceGatheringState: pc.iceGatheringState });
+					};
+					pc.onsignalingstatechange = () => {
+						trace("statechange", { iceConnectionState: pc.iceConnectionState, connectionState: pc.connectionState, signalingState: pc.signalingState, iceGatheringState: pc.iceGatheringState });
+					};
+					pc.onicegatheringstatechange = () => {
+						trace("statechange", { iceConnectionState: pc.iceConnectionState, connectionState: pc.connectionState, signalingState: pc.signalingState, iceGatheringState: pc.iceGatheringState });
+					};
+					pc.onnegotiationneeded = () => {
+						trace("negotiationneeded", {});
+					};
+				}
 				pc.ontrack = (e) => {
+					trace("track", { kind: e.track?.kind, added: true });
+					if (onTrace) {
+						e.track.onmute = () => trace("track", { kind: e.track.kind, muteEvent: "mute" });
+						e.track.onunmute = () => trace("track", { kind: e.track.kind, muteEvent: "unmute" });
+						e.track.onended = () => trace("track", { kind: e.track.kind, muteEvent: "ended" });
+					}
 					onRemoteStream(e.streams[0]);
 				};
+				if (onTrace) startStatsPolling();
 				return pc;
 			})();
 		}
 		return pcPromise;
+	}
+
+	// TZ §2.2 — getStats() нигде в коде звонка не вызывался (04-ice-turn-infra.md,
+	// 05-tests-media-lifecycle.md). Опрос существует ТОЛЬКО когда onTrace передан
+	// (см. вызов выше) — при выключенном флаге эта функция не создаётся вовсе.
+	function summarizeStats(report) {
+		let transportStats = null;
+		for (const s of report.values()) if (s.type === "transport") transportStats = s;
+		const summary = { dtlsState: transportStats?.dtlsState ?? null, iceState: transportStats?.iceState ?? null };
+		const pairId = transportStats?.selectedCandidatePairId;
+		const pair = pairId ? report.get(pairId) : [...report.values()].find((s) => s.type === "candidate-pair" && s.nominated);
+		if (pair) {
+			const local = report.get(pair.localCandidateId);
+			const remote = report.get(pair.remoteCandidateId);
+			summary.pairPath = `${local?.candidateType ?? "?"}/${local?.protocol ?? "?"} -> ${remote?.candidateType ?? "?"}/${remote?.protocol ?? "?"}`;
+			summary.currentRoundTripTime = pair.currentRoundTripTime ?? null;
+			summary.bytesSent = pair.bytesSent ?? null;
+			summary.bytesReceived = pair.bytesReceived ?? null;
+			summary.requestsSent = pair.requestsSent ?? null;
+			summary.responsesReceived = pair.responsesReceived ?? null;
+			summary.consentRequestsSent = pair.consentRequestsSent ?? null;
+		}
+		for (const s of report.values()) {
+			if (s.type === "inbound-rtp" && s.kind === "audio") {
+				summary.inboundPacketsReceived = s.packetsReceived ?? null;
+				summary.inboundPacketsLost = s.packetsLost ?? null;
+				summary.inboundJitter = s.jitter ?? null;
+			}
+			if (s.type === "outbound-rtp" && s.kind === "audio") {
+				summary.outboundPacketsSent = s.packetsSent ?? null;
+			}
+		}
+		return summary;
+	}
+
+	function startStatsPolling() {
+		statsIntervalId = setIntervalImpl(async () => {
+			if (!pc || typeof pc.getStats !== "function") return;
+			if (pc.connectionState === "closed") {
+				clearIntervalImpl(statsIntervalId);
+				statsIntervalId = null;
+				return;
+			}
+			try {
+				const report = await pc.getStats();
+				trace("stats", summarizeStats(report));
+			} catch {
+				// TZ §0.5
+			}
+		}, 1000);
 	}
 
 	async function acquireMic() {
@@ -114,6 +229,10 @@ export function createMediaController(options = {}) {
 	}
 
 	function closePc() {
+		if (statsIntervalId !== null) {
+			clearIntervalImpl(statsIntervalId);
+			statsIntervalId = null;
+		}
 		if (localStream) {
 			for (const track of localStream.getTracks()) track.stop();
 			localStream = null;

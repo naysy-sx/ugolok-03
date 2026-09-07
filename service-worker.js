@@ -10,8 +10,23 @@ const IS_DEV = BUILD_HASH === "dev";
 const CACHE = `ugolok-cache-v${BUILD_HASH}`; // F-OF-06
 const PRECACHE = ["./", "./index.html"]; // singlefile → весь клиент в одном файле
 
+// TZ-diag-trace.md §7 — этот файл не проходит сборку Vite (см. комментарий
+// выше), импортировать src/core/diag/call-trace.js сюда нельзя технически, не
+// только по правилу DI. Вместо этого — best-effort broadcast двух редких
+// (раз в деплой) фактов страницам; страница сама решает, писать их в
+// трассировку или нет (isTraceEnabled() там же). НЕ меняет ни skipWaiting(),
+// ни clients.claim(), ни порядок caches-операций ниже ни на строку (TZ §0.1) —
+// только добавляет уведомление рядом.
+function notifyClients(type) {
+	self.clients
+		.matchAll()
+		.then((clients) => clients.forEach((c) => c.postMessage({ type })))
+		.catch(() => {});
+}
+
 self.addEventListener("install", (e) => {
 	self.skipWaiting(); // F-OF-05
+	notifyClients("sw-trace:install");
 	if (IS_DEV) return;
 	e.waitUntil(
 		caches
@@ -31,6 +46,7 @@ self.addEventListener("activate", (e) => {
 					.map((k) => caches.delete(k)),
 			); // F-OF-06: чистим старые версии
 			await self.clients.claim(); // F-OF-05
+			notifyClients("sw-trace:activate");
 		})(),
 	);
 });

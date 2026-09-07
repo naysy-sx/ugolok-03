@@ -17,6 +17,9 @@ import { edges, diffEdges } from "../mesh.js";
 // ребро получает onRemoteStream, супервизор форвардит (peer, stream) наверх
 // через ТОТ ЖЕ инъецируемый колбэк вызывающему коду (room-session.js -> UI),
 // который и рисует по одному скрытому <audio> на пира.
+// onTrace/getRelayState/getIceCredsExpiryMs — TZ-diag-trace.md §0.3/§2.7:
+// необязательные, инъецируются вызывающим кодом (room-session.js), этот файл
+// по-прежнему не импортирует ни трассировщик, ни relay-pool.js напрямую.
 export function createMeshSupervisor({
 	selfPubkey,
 	selfPrivKey,
@@ -28,7 +31,18 @@ export function createMeshSupervisor({
 	createCallRuntime = defaultCreateCallRuntime,
 	onRemoteStream = () => {},
 	onLocalStream = () => {},
+	onTrace,
+	getRelayState,
+	getIceCredsExpiryMs,
 }) {
+	function trace(ev, payload) {
+		if (!onTrace) return;
+		try {
+			onTrace(ev, payload);
+		} catch {
+			// TZ §0.5
+		}
+	}
 	let sharedStream = null;
 	let joinGeneration = 0; // Этап 6 — отмена гонки joinVoice()/leaveVoice(), см. joinVoice ниже
 	const edgesByPeer = new Map(); // peerPubkey -> {runtime, role}
@@ -42,7 +56,16 @@ export function createMeshSupervisor({
 			hTopic,
 			iceServers,
 			getUserMediaImpl: () => Promise.resolve(sharedStream.clone()),
+			onTrace,
+			getRelayState,
+			getIceCredsExpiryMs,
 			onStateChange: (stateName) => {
+				// TZ §2.7 — переход ребра в ENDED сейчас не наблюдается никем,
+				// кроме пассивного снимка getEdgeStates() для UI (05-tests-media-
+				// lifecycle.md/09-FINAL-AUDIT.md §2, Opus H6). Запись НИЧЕГО в
+				// этом наблюдении не меняет — mesh-supervisor.js как и раньше не
+				// переоткрывает мёртвое ребро сам, updateRoster() ниже не тронут.
+				trace("edge-state", { peer, role, state: stateName });
 				if (stateName === "INCOMING_RINGING") runtime.accept();
 			},
 			onRemoteStream: (stream) => onRemoteStream(peer, stream),
@@ -98,6 +121,9 @@ export function createMeshSupervisor({
 		const myNewEdges = allEdges.filter(([a, b]) => a === selfPubkey || b === selfPubkey);
 		const { toOpen, toClose } = diffEdges(currentMyEdges, myNewEdges);
 		currentMyEdges = myNewEdges;
+		if (toOpen.length > 0 || toClose.length > 0) {
+			trace("roster", { rosterSize: capped.length, edgesOpened: toOpen.length, edgesClosed: toClose.length });
+		}
 
 		for (const edge of toClose) {
 			const peer = edge[0] === selfPubkey ? edge[1] : edge[0];

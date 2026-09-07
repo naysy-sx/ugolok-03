@@ -251,6 +251,12 @@ export function resetTurnCredentialsCache() {
 	cachedTurnCreds = null;
 }
 
+// TZ-diag-trace.md §2.1 — чистый геттер поверх уже существующего кэша, НЕ
+// повторный запрос кредов. Возвращает null, если кредов ещё/уже нет в кэше.
+export function getCachedTurnCredsExpiry() {
+	return cachedTurnCreds?.expiryMs ?? null;
+}
+
 // Возвращает массив RTCIceServer (только TURN-записи, по одной на uri) или
 // null при любой ошибке (сеть/таймаут/битый ответ/эндпоинт не настроен) —
 // вызывающая сторона (resolveCallIceServers) отвечает за откат на STUN-only.

@@ -9758,3 +9758,22 @@ button[type="button"].media-mini-bar-btn {
 		grid-template-areas: "head" "text" "time";
 	}
 }
+
+/* TZ-diag-trace.md §1 — постоянный ненавязчивый признак идущей записи,
+   виден с любого экрана. Низ экрана, подальше от .top-corner-actions (верх,
+   z-index 300) и .call-overlay (200) — не должен с ними спорить визуально;
+   z-index ниже toast-host (1000), чтобы уведомления не перекрывались. */
+.diag-trace-badge {
+	position: fixed;
+	inset-block-end: var(--space-s);
+	inset-inline-start: var(--space-s);
+	z-index: 400;
+	padding: var(--space-3xs) var(--space-xs);
+	border-radius: var(--radius-full);
+	background: var(--bad);
+	color: #fff;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	pointer-events: none;
+	opacity: 0.85;
+}

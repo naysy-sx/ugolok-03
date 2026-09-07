@@ -1250,6 +1250,21 @@
 			"serviceWorker": "Offline-modus en cache",
 			"release": "Build-integriteit",
 			"transport": "Relays en synchronisatie"
+		},
+		"trace": {
+			"title": "Call tracing",
+			"hint": "Detailed record of call events (ICE, TURN, signaling) — for diagnosing dropped calls. No message content or private keys are recorded.",
+			"enable": "Start recording",
+			"recording": "Recording",
+			"notRecording": "Not recording",
+			"recordsCount": "Records: {{count}}",
+			"recordsEmpty": "No records yet",
+			"period": "{{from}} — {{to}}",
+			"download": "Download file",
+			"copy": "Copy to clipboard",
+			"copied": "Copied",
+			"share": "Share",
+			"clear": "Clear recording"
 		}
 	}
 }

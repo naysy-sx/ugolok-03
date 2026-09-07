@@ -52,7 +52,17 @@ export async function execute(command, ctx) {
 			return undefined;
 	}
 	const event = buildCallSignalEvent(privKey, peerPubkey, payload, undefined, hTopic);
-	return publish(event);
+	// TZ-diag-trace.md §2.4 — eventId примешивается к результату publish() ниже
+	// ТОЛЬКО ради трассировки (call-runtime.js её читает и пишет в запись, если
+	// onTrace передан); ни само условие, ни обработка ошибки не меняются —
+	// publish(event) исполняется и await'ится ровно как раньше, отказ (throw)
+	// пробрасывается наружу без изменений. Раньше здесь возвращался сам
+	// publish(event) без ожидания — теперь функция await'ит его и возвращает
+	// { ...результат publish(), eventId } — call-runtime.js этот результат
+	// прежде НЕ читал (return publish(command...) отбрасывался), так что для
+	// логики звонка это не наблюдаемое изменение.
+	const result = await publish(event);
+	return { ...result, eventId: event.id };
 }
 
 // toFsmEvent(payload, senderPubkey, myPubkey) — расшифрованный payload (после

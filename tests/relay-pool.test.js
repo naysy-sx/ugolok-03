@@ -149,6 +149,46 @@ test("неожиданный обрыв (remote close) -> disconnected -> авт
 	t.mock.timers.reset();
 });
 
+// TZ-diag-trace.md §2.5 — открытие/закрытие(код)/ошибка/каждая попытка
+// переподключения и её задержка. onTrace — необязательный, DI (§0.3): без
+// него ничего из этого не меняется (см. остальные тесты файла, ни один из
+// них его не передаёт и продолжает проходить).
+test("onTrace: connect-attempt/open/close(code)/reconnect-scheduled(delay) — все события видны, без изменения поведения самого автомата", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const traced = [];
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", {
+		WebSocketImpl: WS,
+		backoff: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0 },
+		onTrace: (ev, payload) => traced.push({ ev, payload }),
+	});
+	conn.connect();
+	assert.ok(traced.some((t2) => t2.ev === "connect-attempt"));
+	WS.instances[0]._open();
+	assert.ok(traced.some((t2) => t2.ev === "open"));
+	WS.instances[0].onclose({ code: 1006, reason: "" });
+	assert.ok(traced.some((t2) => t2.ev === "close" && t2.payload.code === 1006));
+	const scheduled = traced.find((t2) => t2.ev === "reconnect-scheduled");
+	assert.ok(scheduled);
+	assert.equal(scheduled.payload.delayMs, 1000);
+	assert.equal(conn.getState(), "disconnected", "поведение автомата не изменилось");
+	t.mock.timers.reset();
+});
+
+test("onTrace, который бросает исключение, не долетает до relay-pool.js (соединение продолжает работать)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", {
+		WebSocketImpl: WS,
+		autoReconnect: false,
+		onTrace: () => {
+			throw new Error("трассировщик сломан");
+		},
+	});
+	assert.doesNotThrow(() => conn.connect());
+	assert.doesNotThrow(() => WS.instances[0]._open());
+	assert.equal(conn.getState(), "connected");
+});
+
 test("ERROR из subscribed -> connected (не полный реконнект — сохранено из TECH.md)", () => {
 	const WS = freshWS();
 	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS });

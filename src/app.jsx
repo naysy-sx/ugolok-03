@@ -33,6 +33,7 @@ import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { pushToast } from "./ui/signals/toasts.js";
 import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
+import DiagTraceBadge from "./ui/components/diag-trace-badge.jsx";
 import MediaOverlay from "./ui/components/media/media-overlay.jsx";
 import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
@@ -191,6 +192,7 @@ function MainShell() {
 	return (
 		<div class="shell stack">
 			<ToastHost />
+			<DiagTraceBadge />
 			<SyncProgressBar />
 			{/* Этап 48 — CallOverlay ВНЕ .app-layout: полноэкранные состояния
 			    (входящий/исходящий звонок) — намеренно фиксированный modal поверх

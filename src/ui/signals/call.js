@@ -1,11 +1,15 @@
 import { signal } from "@preact/signals";
 import { createCallRuntime } from "../../domain/calls/call-runtime.js";
-import { resolveCallIceServers } from "../../domain/settings/bootstrap-endpoints.js";
+import { resolveCallIceServers, getCachedTurnCredsExpiry } from "../../domain/settings/bootstrap-endpoints.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
 import { profiles } from "./contacts.js";
 import { t } from "./i18n.js";
+// TZ-diag-trace.md — только UI-слой имеет право импортировать трассировщик
+// напрямую (§0.3). call.js — не домен, здесь это разрешено и уместно: именно
+// здесь единственное место, где 1:1-звонок конфигурируется на весь сеанс.
+import { isTraceEnabled, record as traceRecord } from "../../core/diag/call-trace.js";
 
 // Этап 48, п.6 — реактивный мост между call-runtime.js (UI-агностичный imperative
 // shell) и Preact-компонентами. callState — ПОЛНЫЙ снимок FSM-состояния (не только
@@ -49,9 +53,16 @@ async function notifyIncomingCall(peerPubkey) {
 // Вызывается ОДИН раз из transport.js's connect() — тот же принцип, что
 // configureDefaultBackend в app.jsx (этап 47): доменный/оркестрационный слой не
 // знает о конкретном моменте входа в аккаунт, UI-обвязка подключает его сама.
-export function configureCallRuntime({ myPubkey, privKey, publish, dbKey }) {
+export function configureCallRuntime({ myPubkey, privKey, publish, dbKey, getRelayState }) {
 	myPubkeyRef = myPubkey;
 	dbKeyRef = dbKey;
+	// TZ-diag-trace.md §1 — решение "писать или нет" принимается ОДИН раз,
+	// здесь, на весь сеанс (configureCallRuntime вызывается один раз при входе
+	// в аккаунт, transport.js's connect()). Включение тумблера в diagnostics.jsx
+	// подхватится со следующего входа/переподключения, не мгновенно — этого
+	// достаточно: ?diag=1 в адресе (основной способ) уже действует с самого
+	// начала сеанса.
+	const diagOn = isTraceEnabled();
 	runtime = createCallRuntime({
 		myPubkey,
 		privKey,
@@ -60,6 +71,9 @@ export function configureCallRuntime({ myPubkey, privKey, publish, dbKey }) {
 		// дожидается её ПЕРЕД каждым новым RTCPeerConnection (свежие TURN-креды
 		// на весь звонок, не заморожены на момент configureCallRuntime()).
 		iceServers: resolveCallIceServers,
+		onTrace: diagOn ? traceRecord : undefined,
+		getRelayState,
+		getIceCredsExpiryMs: diagOn ? getCachedTurnCredsExpiry : undefined,
 		onStateChange: (stateName) => {
 			const snapshot = runtime.getState();
 			callState.value = snapshot;

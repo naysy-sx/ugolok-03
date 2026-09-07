@@ -6,6 +6,7 @@ import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoint
 import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
+import { record as traceRecord } from "../../core/diag/call-trace.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { runBootstrap } from "../../core/sync/bootstrap.js";
@@ -379,6 +380,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	}
 	connection = createRelayPool(relayEntries, {
 		privKey,
+		// TZ-diag-trace.md §2.5 — общий сокет аккаунта (звонок 1:1 сигналит
+		// через него же, см. configureCallRuntime ниже); record() сам решает,
+		// писать ли что-то, по флагу — здесь можно передавать его всегда.
+		onTrace: traceRecord,
 		onStateChange: (s) => {
 			connState.value = s;
 			// Обработчик получает только агрегированное состояние пула, а не url
@@ -408,7 +413,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 
 	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
 	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
-	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish, dbKey });
+	configureCallRuntime({ myPubkey: pubkeyHex, privKey, publish, dbKey, getRelayState: () => connection.getState() });
 	// Этап 49 — контакты: один contact-runtime на подключение, тот же принцип.
 	// load() внутри себя мигрирует legacy-таблицы (contacts/blockedContacts/
 	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).

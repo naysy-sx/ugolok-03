@@ -69,7 +69,7 @@ function fakeCallRuntimeFactory() {
 	return { createFakeCallRuntime, instances };
 }
 
-function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream, onLocalStream } = {}) {
+function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream, onLocalStream, onTrace, getRelayState, getIceCredsExpiryMs } = {}) {
 	const { createFakeCallRuntime, instances } = fakeCallRuntimeFactory();
 	const stream = fakeStream("shared");
 	const published = [];
@@ -86,6 +86,9 @@ function setup({ selfPubkey = ALICE, maxVoice = 5, onRemoteStream, onLocalStream
 		createCallRuntime: createFakeCallRuntime,
 		...(onRemoteStream ? { onRemoteStream } : {}),
 		...(onLocalStream ? { onLocalStream } : {}),
+		...(onTrace ? { onTrace } : {}),
+		...(getRelayState ? { getRelayState } : {}),
+		...(getIceCredsExpiryMs ? { getIceCredsExpiryMs } : {}),
 	});
 	return { supervisor, instances, stream, published };
 }
@@ -462,4 +465,41 @@ test("живая находка: onSignal от неизвестного пира
 	const offerEvent = { pubkey: ALICE, kind: 20075, content: "x", tags: [], id: "e1" };
 	assert.doesNotThrow(() => supervisor.onSignal(offerEvent));
 	assert.equal(instances.length, 0);
+});
+
+// TZ-diag-trace.md §2.7/§0.3 — onTrace/getRelayState/getIceCredsExpiryMs
+// пробрасываются в КАЖДЫЙ дочерний createCallRuntime (одно ребро — один
+// createCallRuntime, mesh-supervisor.js:37-52), не только hTopic/publish/iceServers.
+test("onTrace/getRelayState/getIceCredsExpiryMs пробрасываются в каждый дочерний createCallRuntime", async () => {
+	const onTrace = () => {};
+	const getRelayState = () => "connected";
+	const getIceCredsExpiryMs = () => 12345;
+	const { supervisor, instances } = setup({ onTrace, getRelayState, getIceCredsExpiryMs });
+	await supervisor.joinVoice();
+	supervisor.updateRoster([ALICE, BOB]);
+
+	assert.equal(instances[0].options.onTrace, onTrace);
+	assert.equal(instances[0].options.getRelayState, getRelayState);
+	assert.equal(instances[0].options.getIceCredsExpiryMs, getIceCredsExpiryMs);
+});
+
+// TZ §2.7 — переход ребра в ENDED сейчас не наблюдается никем (09-FINAL-AUDIT.md
+// §2, Opus H6) — трассировка это ТОЛЬКО фиксирует, updateRoster ниже по-прежнему
+// не переоткрывает ребро автоматически (проверено соседними тестами выше).
+test("onTrace видит 'edge-state' на каждом onStateChange дочернего runtime и 'roster' на каждом реальном изменении состава", async () => {
+	const traced = [];
+	const { supervisor, instances } = setup({ onTrace: (ev, payload) => traced.push({ ev, payload }) });
+	await supervisor.joinVoice();
+	supervisor.updateRoster([ALICE, BOB]);
+
+	assert.ok(traced.some((t) => t.ev === "roster" && t.payload.edgesOpened === 1 && t.payload.edgesClosed === 0));
+
+	instances[0].runtime.placeCall(BOB); // фейковый runtime сам не эмитит onStateChange — вызываем то, что реально вызывает supervisor:
+	// onStateChange передан В КОНСТРУКТОР фейка (instance.options.onStateChange) — дёргаем его напрямую, как это сделал бы реальный call-runtime.js.
+	instances[0].options.onStateChange("INCOMING_RINGING");
+	assert.ok(traced.some((t) => t.ev === "edge-state" && t.payload.peer === BOB && t.payload.state === "INCOMING_RINGING"));
+
+	traced.length = 0;
+	supervisor.updateRoster([ALICE, BOB]); // тот же состав — НЕ должно быть нового 'roster'
+	assert.equal(traced.filter((t) => t.ev === "roster").length, 0, "идемпотентный updateRoster не должен шуметь в трассировке");
 });

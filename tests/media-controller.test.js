@@ -272,3 +272,75 @@ test("неизвестная команда — execute не бросает, п�
 	const { controller } = makeOptions();
 	await assert.doesNotReject(() => controller.execute({ type: "SEND_OFFER", sdp: "irrelevant" }));
 });
+
+// TZ-diag-trace.md §0.4/§6 — без onTrace ни один опрос getStats() не должен
+// стартовать: подменяем глобальный setInterval и убеждаемся, что его не
+// вызвали ни разу за весь жизненный цикл ACQUIRE_MIC (единственное место,
+// где startStatsPolling() мог бы сработать).
+test("без onTrace: не появляются НОВЫЕ подписки (onconnectionstatechange/onsignalingstatechange/onicegatheringstatechange/onnegotiationneeded) — их не было в коде до TZ-diag-trace.md", async () => {
+	const { controller } = makeOptions(); // без onTrace
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const pc = FakeRTCPeerConnection.instances[0];
+	assert.equal(pc.onconnectionstatechange, undefined);
+	assert.equal(pc.onsignalingstatechange, undefined);
+	assert.equal(pc.onicegatheringstatechange, undefined);
+	assert.equal(pc.onnegotiationneeded, undefined);
+});
+
+test("без onTrace: getStats() не опрашивается вообще — глобальный setInterval не вызывается", async () => {
+	const originalSetInterval = globalThis.setInterval;
+	let calls = 0;
+	globalThis.setInterval = (...args) => {
+		calls++;
+		return originalSetInterval(...args);
+	};
+	try {
+		const { controller } = makeOptions(); // без onTrace
+		await controller.execute({ type: "ACQUIRE_MIC" });
+		assert.equal(calls, 0, "setInterval не должен вызываться, когда onTrace не передан");
+	} finally {
+		globalThis.setInterval = originalSetInterval;
+	}
+});
+
+test("onTrace: 'created' содержит uris/hasCredentials, 'icecandidate' и 'statechange' приходят при штатных событиях pc", async () => {
+	const traced = [];
+	const { controller } = makeOptions({
+		onTrace: (ev, payload) => traced.push({ ev, payload }),
+		setIntervalImpl: () => "fake-interval-id", // не полагаемся на реальный таймер в этом тесте
+		clearIntervalImpl: () => {},
+	});
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const pc = FakeRTCPeerConnection.instances[0];
+
+	const created = traced.find((t) => t.ev === "created");
+	assert.ok(created);
+	assert.deepEqual(created.payload.uris, ["stun:example"]);
+	assert.equal(created.payload.hasCredentials, false);
+
+	pc.iceConnectionState = "checking";
+	pc.oniceconnectionstatechange();
+	assert.ok(traced.some((t) => t.ev === "statechange" && t.payload.iceConnectionState === "checking"));
+
+	pc.onicecandidate({ candidate: { type: "srflx", protocol: "udp", address: "203.0.113.9", port: 5555 } });
+	const candidateTrace = traced.find((t) => t.ev === "icecandidate" && t.payload.candidateType === "srflx");
+	assert.ok(candidateTrace);
+	// Маскировка — забота call-trace.js (record()), не media-controller.js:
+	// здесь передаётся адрес КАК ЕСТЬ, что и проверяем (сырое значение).
+	assert.equal(candidateTrace.payload.address, "203.0.113.9");
+
+	await controller.execute({ type: "CLOSE_PC" });
+});
+
+test("onTrace, который бросает исключение, не долетает до media-controller.js (ACQUIRE_MIC всё равно отрабатывает)", async () => {
+	const { controller, localStreams } = makeOptions({
+		onTrace: () => {
+			throw new Error("трассировщик сломан");
+		},
+		setIntervalImpl: () => "fake-interval-id",
+		clearIntervalImpl: () => {},
+	});
+	await assert.doesNotReject(() => controller.execute({ type: "ACQUIRE_MIC" }));
+	assert.equal(localStreams.length, 1);
+	await controller.execute({ type: "CLOSE_PC" });
+});
