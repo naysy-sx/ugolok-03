@@ -5,6 +5,7 @@ import IconPhoneCall from "../icons/phone-call.jsx";
 import { RINGTONE_DATA_URI } from "../../domain/calls/ringtone-asset.js";
 import { t } from "../signals/i18n.js";
 import { isTraceEnabled, record as traceRecord } from "../../core/diag/call-trace.js";
+import { RESTART_PHASE1_END_MS } from "../../domain/calls/call-fsm.js";
 
 // Этап 48, п.6 — persistent-компонент уровня app.jsx (тот же архитектурный
 // принцип, что ToastHost, этап 47): входящий звонок обязан быть виден с ЛЮБОГО
@@ -76,7 +77,13 @@ function Waveform({ stream }) {
 // remoteMediaStream, но нигде реально НЕ проигрывался — Waveform выше только
 // АНАЛИЗИРУЕТ поток (AnalyserNode), не воспроизводит его. Без явного <audio>
 // с srcObject звук так и не звучит, сколько разрешений браузеру ни давай.
-function RemoteAudio({ stream }) {
+// muted — TZ-recovery-policy.md §6: во время RECONNECTING собственный микрофон
+// НЕ трогаем (см. media-controller.js doIceRestart — трек живёт между
+// попытками), а вот воспроизведение собеседника глушим здесь, в UI: пока ICE
+// разорван, remoteMediaStream всё ещё держит СТАРЫЙ MediaStream (иногда с
+// последним, уже неактуальным кадром/остатком буфера) — явный mute убирает
+// любой шанс призрачного звука до реального восстановления медиапотока.
+function RemoteAudio({ stream, muted = false }) {
 	const audioRef = useRef(null);
 	useEffect(() => {
 		const el = audioRef.current;
@@ -87,7 +94,7 @@ function RemoteAudio({ stream }) {
 			el.srcObject = null;
 		};
 	}, [stream]);
-	return <audio ref={audioRef} autoPlay style={{ display: "none" }} />;
+	return <audio ref={audioRef} autoPlay muted={muted} style={{ display: "none" }} />;
 }
 
 // НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живое использование) — во время дозвона не звучало
@@ -131,6 +138,38 @@ function CallDuration({ startedAt }) {
 	);
 }
 
+// TZ-recovery-policy.md §1/§6 — две под-фазы RECONNECTING для UI: "короткая"
+// (секундомер, часто напоминает — сбой ещё выглядит как обычный обрыв) и
+// "длинная" (после RESTART_PHASE1_END_MS — та же граница, что call-fsm.js
+// использует для роста интервала попыток, §2.2 — переиспользуем её же, не
+// заводим отдельную). НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (10-LIVE-INCIDENT §... "звонок
+// компьютера самому себе"): реконнект визуально путался с исходящим вызовом —
+// здесь отдельная, узнаваемая плашка (не переиспользует call-overlay-ringing).
+function ReconnectPanel({ since }) {
+	const [, forceTick] = useState(0);
+	useEffect(() => {
+		const id = setInterval(() => forceTick((n) => n + 1), 1000);
+		return () => clearInterval(id);
+	}, []);
+	const elapsedMs = Math.max(0, Date.now() - since);
+	const isLong = elapsedMs >= RESTART_PHASE1_END_MS;
+	// Заголовок ("Переподключение…", строка ниже в CallOverlay) уже называет
+	// происходящее — короткая фаза добавляет только секундомер (не дублирует
+	// текст словами), длинная фаза заменяет секундомер спокойным пояснением
+	// (§6 — тикающий счётчик в длинной фазе создавал бы ложное ощущение спешки).
+	if (isLong) {
+		return <span class="call-bar-reconnect-note">{t("call.reconnectingLong")}</span>;
+	}
+	const seconds = Math.floor(elapsedMs / 1000);
+	const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
+	const ss = String(seconds % 60).padStart(2, "0");
+	return (
+		<span class="call-bar-reconnect-stopwatch">
+			{mm}:{ss}
+		</span>
+	);
+}
+
 export default function CallOverlay() {
 	const call = callState.value;
 	const connectedAtRef = useRef(null);
@@ -139,6 +178,21 @@ export default function CallOverlay() {
 	}
 	if (call.name === "IDLE" || call.name === "ENDED") {
 		connectedAtRef.current = null;
+	}
+
+	// TZ-recovery-policy.md §6 — метка "с какого момента идёт восстановление"
+	// нужна ТОЛЬКО для секундомера в UI; FSM (call-fsm.js) её не хранит по той
+	// же причине, что и connectedAtRef выше — временные метки живут в UI, не в
+	// автомате (VOICE.md §1.2, "заморожено"). call-runtime.js считает свой
+	// собственный reconnectingStartedAt для логики (RESTART_TICK), это
+	// НЕЗАВИСИМАЯ копия для отображения — раздельные конкретные требования
+	// (§2 логика восстановления vs §6 отображение), совпадение по смыслу, не по коду.
+	const reconnectingSinceRef = useRef(null);
+	if (call.name === "RECONNECTING" && reconnectingSinceRef.current === null) {
+		reconnectingSinceRef.current = Date.now();
+	}
+	if (call.name !== "RECONNECTING") {
+		reconnectingSinceRef.current = null;
 	}
 
 	// ENDED — краткая справка; call-runtime.js сам возвращает FSM в IDLE спустя
@@ -212,7 +266,8 @@ export default function CallOverlay() {
 				{(displayName(call.peerPubkey) || "?").trim().charAt(0).toUpperCase()}
 			</div>
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<strong>{reconnecting ? t("call.reconnecting") : t("call.connectedWith", { name: displayName(call.peerPubkey) })}</strong>
+				<strong>{reconnecting ? t("call.reconnectingTitle") : t("call.connectedWith", { name: displayName(call.peerPubkey) })}</strong>
+				{reconnecting && reconnectingSinceRef.current && <ReconnectPanel since={reconnectingSinceRef.current} />}
 				{!reconnecting && connectedAtRef.current && (
 					<span class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 						<CallDuration startedAt={connectedAtRef.current} />
@@ -220,7 +275,7 @@ export default function CallOverlay() {
 					</span>
 				)}
 			</div>
-			<RemoteAudio stream={remoteMediaStream.value} />
+			<RemoteAudio stream={remoteMediaStream.value} muted={reconnecting} />
 			<button
 				type="button"
 				class="call-btn-reject call-bar-hangup row"
@@ -243,7 +298,14 @@ const CALL_END_REASON_KEYS = {
 	connect_failed: "call.reason.connectFailed",
 	hangup: "call.reason.hangup",
 	remote_hangup: "call.reason.remoteHangup",
+	// TZ-recovery-policy.md §1 — "connection_lost" как причина завершения
+	// убрана из call-fsm.js: потеря сети сама по себе больше никогда не
+	// завершает звонок (только §2.4 safety_cap или §3 peer_gone). Ключ/перевод
+	// оставлены — старые записи трассы/логов ссылаются на него, и это чистая
+	// текстовая таблица, а не код: удалять нечего исправлять.
 	connection_lost: "call.reason.connectionLost",
+	peer_gone: "call.reason.peerGone",
+	safety_cap: "call.reason.safetyCap",
 };
 
 function callEndReasonLabel(reason) {

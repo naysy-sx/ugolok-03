@@ -19,6 +19,7 @@ import {
 	fetchTurnCredentials,
 	resetTurnCredentialsCache,
 	resolveCallIceServers,
+	isTurnCredsStale,
 } from "../src/domain/settings/bootstrap-endpoints.js";
 import { loadRuntimeConfig, resetRuntimeConfig } from "../src/domain/settings/runtime-config.js";
 
@@ -265,6 +266,69 @@ test("fetchTurnCredentials: кэш истёк (now >= expiry-60с) -> бьёт �
 	await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now });
 	await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now: now + 3600_000 });
 	assert.equal(calls, 2);
+});
+
+// --- TZ-recovery-policy.md §2.3: обновление TURN-кредов при протухании ---
+
+test("isTurnCredsStale: нет кредов в кэше вообще -> false (не 'протухли', а 'не запрашивались')", () => {
+	assert.equal(isTurnCredsStale(), false);
+});
+
+test("isTurnCredsStale: больше половины TTL ещё впереди -> false", async () => {
+	const now = 1_000_000;
+	await fetchTurnCredentials("https://x/api/turn-credentials", {
+		fetchImpl: async () => ({ ok: true, json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) }),
+		now,
+	});
+	// TTL кэшируется как (3600-60)=3540с от now. Четверть срока прошла — не протухло.
+	assert.equal(isTurnCredsStale(now + 800_000), false);
+});
+
+test("isTurnCredsStale: осталось меньше половины TTL -> true", async () => {
+	const now = 1_000_000;
+	await fetchTurnCredentials("https://x/api/turn-credentials", {
+		fetchImpl: async () => ({ ok: true, json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) }),
+		now,
+	});
+	// Кэш живёт 3540с; на отметке +2600с (больше половины) должно считаться протухшим.
+	assert.equal(isTurnCredsStale(now + 2_600_000), true);
+});
+
+test("resolveCallIceServers({refreshIfStale:true}): протухшие больше половины креды сбрасываются и запрашиваются заново", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({ ok: true, json: async () => ({ turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials" }) }),
+	});
+	let calls = 0;
+	const now = 1_000_000;
+	const fetchImpl = async () => {
+		calls++;
+		return { ok: true, json: async () => ({ username: `u${calls}`, credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) };
+	};
+	const first = await resolveCallIceServers({ fetchImpl, now });
+	assert.equal(calls, 1);
+	// Внутри половины TTL — refreshIfStale не должен бить сеть повторно.
+	const second = await resolveCallIceServers({ fetchImpl, now: now + 800_000, refreshIfStale: true });
+	assert.equal(calls, 1, "ещё не протухло — кэш используется как есть");
+	assert.deepEqual(second, first);
+	// За половиной TTL — обязан сбросить кэш и запросить заново.
+	const third = await resolveCallIceServers({ fetchImpl, now: now + 2_600_000, refreshIfStale: true });
+	assert.equal(calls, 2, "протухло больше половины — повторный запрос");
+	assert.notDeepEqual(third, first, "новые креды (другой username) — не тот же кэш");
+});
+
+test("resolveCallIceServers без refreshIfStale (обычный путь) НЕ форсирует обновление даже при протухании больше половины", async () => {
+	await loadRuntimeConfig({
+		fetchImpl: async () => ({ ok: true, json: async () => ({ turnCredentialsUrl: "https://ugolok.tech/api/turn-credentials" }) }),
+	});
+	let calls = 0;
+	const now = 1_000_000;
+	const fetchImpl = async () => {
+		calls++;
+		return { ok: true, json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:x:3478"] }) };
+	};
+	await resolveCallIceServers({ fetchImpl, now });
+	await resolveCallIceServers({ fetchImpl, now: now + 2_600_000 }); // без refreshIfStale
+	assert.equal(calls, 1, "старое поведение (ensurePc() при обычном звонке) не меняется этой задачей");
 });
 
 test("resolveCallIceServers: нет turnCredentialsUrl в config.json -> прежнее поведение (bootstrap/build-time ICE как есть)", async () => {

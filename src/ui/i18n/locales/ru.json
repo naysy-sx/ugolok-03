@@ -918,7 +918,8 @@
 		"incomingFrom": "Входящий звонок от {{name}}",
 		"callingTo": "Звоним {{name}}…",
 		"connectingTo": "Соединение с {{name}}…",
-		"reconnecting": "Переподключение…",
+		"reconnectingTitle": "Переподключение…",
+		"reconnectingLong": "Звонок удерживается, скоро возобновится автоматически.",
 		"connectedWith": "Связь с {{name}}",
 		"hangupAria": "Завершить звонок",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "не удалось соединиться",
 			"hangup": "завершён вами",
 			"remoteHangup": "завершён собеседником",
-			"connectionLost": "связь потеряна"
+			"connectionLost": "связь потеряна",
+			"peerGone": "собеседник вышел",
+			"safetyCap": "не удалось восстановить связь"
 		}
 	},
 	"moderation": {

@@ -33,9 +33,20 @@ export function createMediaController(options = {}) {
 	// Тот же кэш, что resolveIceServers уже читает изнутри (bootstrap-endpoints.js) —
 	// НЕ повторный запрос кредов, просто чтение того, что уже там лежит (TZ §2.1).
 	const getIceCredsExpiryMs = options.getIceCredsExpiryMs ?? (() => null);
+
+	function ttlRemainingSecNow() {
+		const expiryMs = getIceCredsExpiryMs();
+		return typeof expiryMs === "number" ? Math.round((expiryMs - Date.now()) / 1000) : null;
+	}
 	const setIntervalImpl = options.setIntervalImpl ?? ((...args) => setInterval(...args));
 	const clearIntervalImpl = options.clearIntervalImpl ?? ((...args) => clearInterval(...args));
-	const pcId = onTrace ? Math.random().toString(36).slice(2, 8) : null;
+	// TZ-recovery-policy.md §7/incident §8 — раньше pcId генерировался один раз на
+	// весь createMediaController() (одно значение на всю жизнь mesh-грани), из-за
+	// чего трасса не отличала звонок ДО пересоздания RTCPeerConnection (DO_ICE_RESTART
+	// recreate:true, см. doIceRestart ниже) от звонка ПОСЛЕ — оба писались одним pcId.
+	// Теперь id живёт на сам RTCPeerConnection и переприсваивается в ensurePc() при
+	// каждом `new RTCPeerConnectionImpl(...)`.
+	let pcId = null;
 
 	function trace(ev, payload) {
 		if (!onTrace) return;
@@ -58,19 +69,24 @@ export function createMediaController(options = {}) {
 	// in-flight promise два "одновременных" (per-microtask) первых вызова
 	// ensurePc() (например ACQUIRE_MIC и уже прилетевший ADD_ICE) оба прошли бы
 	// проверку "pc ещё нет" и создали бы ДВА RTCPeerConnection.
-	function ensurePc() {
+	// TZ-recovery-policy.md §2.3 — overrides позволяет DO_ICE_RESTART's
+	// пересозданию (см. recreatePcForRestart ниже) передать УЖЕ разрешённые
+	// свежие iceServers (не резолвить их дважды) и форсировать iceTransportPolicy
+	// "relay" с 3-й попытки, не трогая обычный путь ACQUIRE_MIC/первого коннекта.
+	function ensurePc(overrides) {
 		if (pc) return Promise.resolve(pc);
 		if (!pcPromise) {
 			pcPromise = (async () => {
-				const iceServers = await resolveIceServers();
-				pc = new RTCPeerConnectionImpl({ iceServers });
+				const iceServers = overrides?.iceServers ?? (await resolveIceServers());
+				const config = { iceServers };
+				if (overrides?.iceTransportPolicy) config.iceTransportPolicy = overrides.iceTransportPolicy;
+				pc = new RTCPeerConnectionImpl(config);
+				if (onTrace) pcId = Math.random().toString(36).slice(2, 8);
 				trace("created", {
 					uris: iceServers.flatMap((s) => (Array.isArray(s.urls) ? s.urls : s.urls ? [s.urls] : [])),
 					hasCredentials: iceServers.some((s) => !!s.username),
-					ttlRemainingSec: (() => {
-						const expiryMs = getIceCredsExpiryMs();
-						return typeof expiryMs === "number" ? Math.round((expiryMs - Date.now()) / 1000) : null;
-					})(),
+					ttlRemainingSec: ttlRemainingSecNow(),
+					iceTransportPolicy: config.iceTransportPolicy ?? "all",
 				});
 				pc.onicecandidate = (e) => {
 					trace("icecandidate", e.candidate
@@ -190,6 +206,54 @@ export function createMediaController(options = {}) {
 		onEvent({ type: "LOCAL_OFFER_READY", sdp: peerConnection.localDescription });
 	}
 
+	// TZ-recovery-policy.md §2.3 — исполняет DO_ICE_RESTART{recreate,forceRelay}
+	// (call-fsm.js решает КОГДА и с какими флагами, эта функция — КАК):
+	//
+	// 1. Перед КАЖДОЙ попыткой — свежие TURN-креды, если протухло больше
+	//    половины TTL (иначе при сбое на десятки минут креды гарантированно
+	//    протухнут, восстановление станет невозможно в принципе).
+	// 2. Без recreate (попытки 1-2) — тот же pc, только setConfiguration()
+	//    с обновлёнными iceServers.
+	// 3. С recreate (с 3-й попытки) — СНАЧАЛА явно pc.close() (освободить
+	//    TURN-аллокации предыдущей попытки — найдено 10-LIVE-INCIDENT.md §5:
+	//    именно так был исчерпан user-quota=10 за один шторм рестартов), ЗАТЕМ
+	//    новый RTCPeerConnection, микрофонный трек НЕ останавливается —
+	//    localStream переживает пересоздание, добавляется в НОВЫЙ pc заново
+	//    (повторный запрос разрешения микрофона на мобильном может не пройти
+	//    без явного жеста пользователя — задание §2.3, буквально).
+	async function doIceRestart(command) {
+		const recreate = !!command?.recreate;
+		const forceRelay = !!command?.forceRelay;
+
+		const iceServers = await resolveIceServers({ refreshIfStale: true });
+		trace("ice-cred-refresh", { hasCredentials: iceServers.some((s) => !!s.username), ttlRemainingSec: ttlRemainingSecNow() });
+
+		if (!recreate) {
+			const peerConnection = await ensurePc();
+			if (typeof peerConnection.setConfiguration === "function") {
+				const config = { iceServers };
+				if (forceRelay) config.iceTransportPolicy = "relay";
+				peerConnection.setConfiguration(config);
+			}
+			return createOffer(true);
+		}
+
+		trace("pc-recreate", { forceRelay, hadPreviousPc: !!pc });
+		if (pc) pc.close(); // §2.3 — явно освободить TURN-аллокации ДО пересоздания
+		if (statsIntervalId !== null) {
+			clearIntervalImpl(statsIntervalId);
+			statsIntervalId = null;
+		}
+		pc = null;
+		pcPromise = null;
+		pendingRemoteIce = [];
+		const peerConnection = await ensurePc({ iceServers, iceTransportPolicy: forceRelay ? "relay" : undefined });
+		if (localStream) {
+			for (const track of localStream.getTracks()) peerConnection.addTrack(track, localStream);
+		}
+		return createOffer(true);
+	}
+
 	async function createAnswer() {
 		const peerConnection = await ensurePc();
 		const answer = await peerConnection.createAnswer();
@@ -261,7 +325,7 @@ export function createMediaController(options = {}) {
 			case "ADD_ICE":
 				return addIce(command.candidate);
 			case "DO_ICE_RESTART":
-				return createOffer(true);
+				return doIceRestart(command);
 			case "CLOSE_PC":
 				return closePc();
 			default:

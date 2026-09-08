@@ -25,7 +25,15 @@ const TRANSITIONS = {
   },
 };
 
-const DEFAULT_BACKOFF = { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0.2 };
+// TZ-recovery-policy.md §5 — множитель 1.7 (был 2) и разброс ±30% (был 0.2):
+// найдено в 10-LIVE-INCIDENT-2026-09-07.md §11.5 живьём — 11 циклов
+// "подключение-отключение" за 14с, потому что onopen (даже для соединения,
+// прожившего доли секунды) сбрасывал reconnectAttempt в 0 и следующая
+// попытка снова стартовала с baseMs — экспонента фактически не росла ни
+// разу. RECONNECT_STABLE_MS (§5) — сброс происходит ТОЛЬКО после того, как
+// соединение продержалось успешным дольше этого времени.
+const DEFAULT_BACKOFF = { baseMs: 1000, maxMs: 30000, multiplier: 1.7, jitter: 0.3 };
+const RECONNECT_STABLE_MS = 5000;
 
 export function computeBackoffDelay(attempt, config = DEFAULT_BACKOFF) {
   const raw = Math.min(config.baseMs * config.multiplier ** attempt, config.maxMs);
@@ -59,9 +67,15 @@ export function createRelayConnection(url, options = {}) {
   let intentionalClose = false;
   let reconnectAttempt = 0;
   let reconnectTimer = null;
+  let stableTimer = null; // TZ-recovery-policy.md §5 — см. RECONNECT_STABLE_MS выше
   // NIP-42/strfry: REQ с gift-wrap (kind 1059 и др. restricted) до AUTH
   // закрывается CLOSED auth-required. Повторяем активные REQ после AUTH_OK.
   const activeReqs = new Map();
+  // TZ-recovery-policy.md §5 — "после восстановления подписки возобновлять
+  // от метки времени последнего полученного события, а не с начала". Ключ —
+  // subId (тот же, что activeReqs), значение — created_at последнего EVENT,
+  // виденного по этой подписке НА ЭТОМ соединении.
+  const lastEventCreatedAtBySubId = new Map();
 
   const messageHandlers = [];
 
@@ -97,7 +111,20 @@ export function createRelayConnection(url, options = {}) {
     ws = new WebSocketImpl(url);
     ws.onopen = () => {
       trace("open", {});
-      reconnectAttempt = 0;
+      // TZ-recovery-policy.md §5 — НЕ сбрасываем reconnectAttempt сразу здесь
+      // (это и была причина 11 циклов за 14с в 10-LIVE-INCIDENT §11.5: onopen
+      // срабатывал даже для соединения, прожившего доли секунды, экспонента
+      // ни разу не успевала вырасти). Сброс — только после RECONNECT_STABLE_MS
+      // непрерывной жизни; onclose ниже эту отложенную задачу отменяет.
+      stableTimer = setTimeout(() => {
+        stableTimer = null;
+        reconnectAttempt = 0;
+      }, RECONNECT_STABLE_MS);
+      // Node (тесты, которые не доводят соединение до close()) — не держать
+      // процесс живым диагностическим/бухгалтерским таймером; в браузере
+      // setTimeout возвращает число без .unref, ветка просто не выполняется
+      // (тот же приём, что уже применён в src/core/diag/call-trace.js).
+      if (typeof stableTimer?.unref === "function") stableTimer.unref();
       // Снимок ДО apply("OPEN"): сам переход синхронно уведомляет подписчика
       // (onStateChange -> send(REQ)), и он уже кладёт новый REQ в activeReqs.
       // Реплеим только то, что было активно ДО этого коннекта (переподключение
@@ -109,6 +136,10 @@ export function createRelayConnection(url, options = {}) {
     };
     ws.onclose = (evt) => {
       trace("close", { code: evt?.code, reason: evt?.reason });
+      if (stableTimer) {
+        clearTimeout(stableTimer);
+        stableTimer = null;
+      }
       apply("CLOSE");
       scheduleReconnect();
     };
@@ -118,6 +149,13 @@ export function createRelayConnection(url, options = {}) {
     };
     ws.onmessage = (evt) => {
       const msg = JSON.parse(evt.data);
+      // TZ-recovery-policy.md §5 — запоминаем created_at последнего EVENT по
+      // каждой подписке, ДО раздачи обработчикам: нужно только для
+      // replayActiveReqs() после следующего реконнекта этого же соединения.
+      if (msg[0] === "EVENT" && typeof msg[2]?.created_at === "number") {
+        const prev = lastEventCreatedAtBySubId.get(msg[1]);
+        if (prev === undefined || msg[2].created_at > prev) lastEventCreatedAtBySubId.set(msg[1], msg[2].created_at);
+      }
       onMessage?.(msg);
       for (const handler of messageHandlers) {
         if (handler(msg)) break;
@@ -134,18 +172,39 @@ export function createRelayConnection(url, options = {}) {
     ws.send(JSON.stringify(msgArray));
   }
 
+  // TZ-recovery-policy.md §5 — "возобновлять от метки времени последнего
+  // полученного события, а не с начала". Если для subId уже видели EVENT на
+  // этом соединении, каждому объекту-фильтру в REQ подставляется/поднимается
+  // since на (последний created_at + 1) — не пересылать уже виденное. Без
+  // истории (первая подписка в жизни соединения) REQ уходит как есть,
+  // поведение не меняется.
+  function withResumedSince(req) {
+    const subId = req[1];
+    const lastSeen = lastEventCreatedAtBySubId.get(subId);
+    if (lastSeen === undefined) return req;
+    const resumeSince = lastSeen + 1;
+    const [type, id, ...filters] = req;
+    const patchedFilters = filters.map((f) => (typeof f?.since === "number" && f.since >= resumeSince ? f : { ...f, since: resumeSince }));
+    return [type, id, ...patchedFilters];
+  }
+
   function replayActiveReqs(snapshot = activeReqs) {
     for (const req of snapshot.values()) {
-      ws.send(JSON.stringify(req));
+      ws.send(JSON.stringify(withResumedSince(req)));
     }
   }
 
   function close() {
     intentionalClose = true;
     activeReqs.clear();
+    lastEventCreatedAtBySubId.clear();
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+    if (stableTimer) {
+      clearTimeout(stableTimer);
+      stableTimer = null;
     }
     ws?.close();
   }

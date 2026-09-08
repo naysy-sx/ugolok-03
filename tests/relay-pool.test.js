@@ -149,6 +149,88 @@ test("неожиданный обрыв (remote close) -> disconnected -> авт
 	t.mock.timers.reset();
 });
 
+// --- TZ-recovery-policy.md §5 — сброс счётчика реконнекта ТОЛЬКО после
+// RECONNECT_STABLE_MS стабильной работы (найдено живьём, 10-LIVE-INCIDENT
+// §11.5: 11 циклов connect/disconnect за 14с — экспонента не росла, потому
+// что onopen сбрасывал счётчик даже для соединений, прожинувших доли секунды). ---
+
+test("мелькание (connect/disconnect короче RECONNECT_STABLE_MS) — задержка переподключения РАСТЁТ, не сбрасывается", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, backoff: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0 } });
+
+	conn.connect();
+	WS.instances[0]._open(); // "открылось", но стабильным не пробыло
+	WS.instances[0]._remoteClose(); // мелькнуло сразу же — RECONNECT_STABLE_MS не прошло
+	t.mock.timers.tick(1000); // первая попытка реконнекта, задержка baseMs=1000
+	assert.equal(WS.instances.length, 2);
+
+	WS.instances[1]._open();
+	WS.instances[1]._remoteClose(); // снова мелькнуло, снова короче RECONNECT_STABLE_MS
+	t.mock.timers.tick(1999); // ещё не 2000 (baseMs*multiplier^1) — попытки не должно быть
+	assert.equal(WS.instances.length, 2, "задержка выросла (не сброс к baseMs), 1999мс ещё недостаточно");
+	t.mock.timers.tick(1);
+	assert.equal(WS.instances.length, 3, "а вот на 2000мс — да, экспонента реально сработала");
+	t.mock.timers.reset();
+});
+
+test("после RECONNECT_STABLE_MS стабильной работы задержка реконнекта СБРАСЫВАЕТСЯ к baseMs", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, backoff: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0 } });
+
+	conn.connect();
+	WS.instances[0]._open();
+	WS.instances[0]._remoteClose(); // попытка 1, задержка вырастет до 2000 на следующей
+	t.mock.timers.tick(1000);
+	assert.equal(WS.instances.length, 2);
+
+	WS.instances[1]._open();
+	t.mock.timers.tick(5000); // дожили до RECONNECT_STABLE_MS=5000 — стабильно
+	WS.instances[1]._remoteClose();
+	t.mock.timers.tick(999);
+	assert.equal(WS.instances.length, 2, "999мс ещё рано, если бы счётчик НЕ сбросился — потребовалось бы 2000мс");
+	t.mock.timers.tick(1);
+	assert.equal(WS.instances.length, 3, "1000мс (baseMs) хватило — счётчик реально сброшен стабильностью");
+	t.mock.timers.reset();
+});
+
+// --- TZ-recovery-policy.md §5 — возобновление подписки от метки времени
+// последнего полученного события, не с начала. ---
+
+test("после реконнекта REQ реплеится с since = (created_at последнего виденного EVENT по этому subId) + 1", () => {
+	const WS = freshWS();
+	// autoReconnect:false — реконнект вызывается вручную, без реальных
+	// таймеров backoff (не предмет этого теста, только резюмирование since).
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "sub1", { kinds: [1] }]);
+
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", { id: "e1", created_at: 1000 }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", { id: "e2", created_at: 1500 }]) });
+
+	WS.instances[0]._remoteClose();
+	conn.connect(); // ручной реконнект (activeReqs пережил close по remote-обрыву, не намеренный close())
+	WS.instances[1]._open(); // реплей activeReqs
+
+	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
+	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1], since: 1501 }]]);
+});
+
+test("без единого полученного EVENT по subId — REQ реплеится КАК ЕСТЬ, since не подставляется (не меняет поведение для новой/нетронутой подписки)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "sub1", { kinds: [1] }]);
+	WS.instances[0]._remoteClose();
+	conn.connect();
+	WS.instances[1]._open();
+	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
+	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1] }]]);
+});
+
 // TZ-diag-trace.md §2.5 — открытие/закрытие(код)/ошибка/каждая попытка
 // переподключения и её задержка. onTrace — необязательный, DI (§0.3): без
 // него ничего из этого не меняется (см. остальные тесты файла, ни один из

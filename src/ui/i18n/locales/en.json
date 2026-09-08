@@ -918,7 +918,8 @@
 		"incomingFrom": "Incoming call from {{name}}",
 		"callingTo": "Calling {{name}}…",
 		"connectingTo": "Connecting to {{name}}…",
-		"reconnecting": "Reconnecting…",
+		"reconnectingTitle": "Reconnecting…",
+		"reconnectingLong": "The call is on hold and will resume automatically.",
 		"connectedWith": "In call with {{name}}",
 		"hangupAria": "End call",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "connection failed",
 			"hangup": "ended by you",
 			"remoteHangup": "ended by the other party",
-			"connectionLost": "connection lost"
+			"connectionLost": "connection lost",
+			"peerGone": "the other person left",
+			"safetyCap": "could not restore the connection"
 		}
 	},
 	"moderation": {

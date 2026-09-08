@@ -918,7 +918,8 @@
 		"incomingFrom": "Chamada recebida de {{name}}",
 		"callingTo": "Chamando {{name}}…",
 		"connectingTo": "Conectando com {{name}}…",
-		"reconnecting": "Reconectando…",
+		"reconnectingTitle": "Reconectando…",
+		"reconnectingLong": "A chamada está em espera e será retomada automaticamente.",
 		"connectedWith": "Em chamada com {{name}}",
 		"hangupAria": "Encerrar chamada",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "falha na conexão",
 			"hangup": "encerrada por você",
 			"remoteHangup": "encerrada pelo outro contato",
-			"connectionLost": "conexão perdida"
+			"connectionLost": "conexão perdida",
+			"peerGone": "o interlocutor saiu",
+			"safetyCap": "não foi possível restabelecer a conexão"
 		}
 	},
 	"moderation": {

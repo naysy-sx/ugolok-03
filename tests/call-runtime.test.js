@@ -248,7 +248,7 @@ test("hangup во время CONNECTED: ENDED(hangup), CLOSE_PC исполнен
 	assert.ok(media.calls.some((c) => c.type === "CLOSE_PC"));
 });
 
-test("ICE restart (impolite): ICE_DISCONNECTED -> grace-таймер -> GRACE_EXPIRED -> DO_ICE_RESTART -> ICE_CONNECTED -> CONNECTED, restartCount сброшен", async () => {
+test("ICE restart (impolite): ICE_DISCONNECTED -> restartTick-таймер -> RESTART_TICK -> DO_ICE_RESTART -> ICE_CONNECTED -> CONNECTED, restartCount сброшен", async () => {
 	// ALICE_PUB > BOB_PUB лексикографически (проверено фактическими secp256k1-ключами,
 	// не предположением) -> ALICE impolite относительно BOB.
 	const { runtime, media, timers } = makeRuntime(ALICE_PRIV, ALICE_PUB);
@@ -264,12 +264,23 @@ test("ICE restart (impolite): ICE_DISCONNECTED -> grace-таймер -> GRACE_EX
 
 	await media.fire({ type: "ICE_DISCONNECTED" });
 	assert.equal(runtime.getState().name, "RECONNECTING");
-	assert.equal(timers.pendingCount, 1, "grace-таймер запущен");
+	// TZ-recovery-policy.md §3 — heartbeat (взведён на ICE_CONNECTED выше) и
+	// restartTick (взведён на ICE_DISCONNECTED) — теперь ОБА таймера тикают
+	// параллельно, не один.
+	assert.equal(timers.pendingCount, 2, "heartbeat + restartTick запущены одновременно");
 
-	await timers.fireOldest(); // GRACE_EXPIRED
+	// heartbeat взведён РАНЬШЕ (при ICE_CONNECTED) — в моке fireOldest() по
+	// порядку вставки, поэтому именно он "старше"; первый вызов его и
+	// сработает (безобидно — SEND_HEARTBEAT + перевзвод), второй — restartTick.
+	await timers.fireOldest(); // HEARTBEAT_TICK
+	assert.equal(runtime.getState().name, "RECONNECTING", "heartbeat не влияет на восстановление");
+	await timers.fireOldest(); // RESTART_TICK
 	assert.equal(runtime.getState().name, "RECONNECTING");
 	assert.equal(runtime.getState().restartCount, 1);
-	assert.ok(media.calls.some((c) => c.type === "DO_ICE_RESTART"), "impolite сам инициирует рестарт");
+	assert.ok(
+		media.calls.some((c) => c.type === "DO_ICE_RESTART" && c.recreate === false && c.forceRelay === false),
+		"impolite сам инициирует рестарт, попытка №1 — без пересоздания pc и без форс-relay",
+	);
 
 	await media.fire({ type: "ICE_CONNECTED" });
 	assert.equal(runtime.getState().name, "CONNECTED");

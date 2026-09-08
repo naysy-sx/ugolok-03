@@ -48,6 +48,13 @@ export async function execute(command, ctx) {
 		case "SEND_HANGUP":
 			payload = { type: "hangup", sessionId };
 			break;
+		// TZ-recovery-policy.md §3 — признак жизни звонка, раз в CALL_HEARTBEAT_MS
+		// пока CONNECTED/RECONNECTING. Тот же kind 20075, обычный payload.type —
+		// ничего нового в контракте relay/шифровании (задание §0.2: не менять
+		// транспорт Nostr).
+		case "SEND_HEARTBEAT":
+			payload = { type: "heartbeat", sessionId };
+			break;
 		default:
 			return undefined;
 	}
@@ -80,6 +87,8 @@ export function toFsmEvent(payload, senderPubkey, myPubkey) {
 			return { type: "REMOTE_ICE", candidate: payload.candidate, sessionId: payload.sessionId };
 		case "hangup":
 			return { type: "REMOTE_HANGUP", sessionId: payload.sessionId };
+		case "heartbeat":
+			return { type: "REMOTE_HEARTBEAT", sessionId: payload.sessionId };
 		default:
 			return null;
 	}

@@ -918,7 +918,8 @@
 		"incomingFrom": "{{name}} kişisinden gelen arama",
 		"callingTo": "{{name}} aranıyor…",
 		"connectingTo": "{{name}} ile bağlanılıyor…",
-		"reconnecting": "Yeniden bağlanıyor…",
+		"reconnectingTitle": "Yeniden bağlanıyor…",
+		"reconnectingLong": "Arama beklemede, otomatik olarak devam edecek.",
 		"connectedWith": "{{name}} ile görüşmede",
 		"hangupAria": "Aramayı sonlandır",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "bağlantı kurulamadı",
 			"hangup": "sizin tarafınızdan sonlandırıldı",
 			"remoteHangup": "karşı taraf tarafından sonlandırıldı",
-			"connectionLost": "bağlantı koptu"
+			"connectionLost": "bağlantı koptu",
+			"peerGone": "karşı taraf ayrıldı",
+			"safetyCap": "bağlantı yeniden kurulamadı"
 		}
 	},
 	"moderation": {

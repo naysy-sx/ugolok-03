@@ -918,7 +918,8 @@
 		"incomingFrom": "Połączenie przychodzące od {{name}}",
 		"callingTo": "Dzwonię do {{name}}…",
 		"connectingTo": "Łączenie z {{name}}…",
-		"reconnecting": "Ponowne łączenie…",
+		"reconnectingTitle": "Ponowne łączenie…",
+		"reconnectingLong": "Połączenie jest wstrzymane i zostanie wznowione automatycznie.",
 		"connectedWith": "Połączenie z {{name}}",
 		"hangupAria": "Zakończ połączenie",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "nie udało się połączyć",
 			"hangup": "zakończone przez Ciebie",
 			"remoteHangup": "zakończone przez rozmówcę",
-			"connectionLost": "utracono połączenie"
+			"connectionLost": "utracono połączenie",
+			"peerGone": "rozmówca opuścił połączenie",
+			"safetyCap": "nie udało się przywrócić połączenia"
 		}
 	},
 	"moderation": {

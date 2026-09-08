@@ -3,19 +3,44 @@
 // media-controller.js/signaling-adapter.js, сам держит таймеры и EMIT-колбэк для UI).
 // Написан Claude напрямую (оркестрация, интеграция, порядок эффектов — §5 VOICE.md).
 
-import { reduce } from "./call-fsm.js";
+import { reduce, RESTART_JITTER_RATIO, DEFAULT_RECOVERY_SAFETY_CAP_MS } from "./call-fsm.js";
 import { createMediaController as defaultCreateMediaController } from "./media-controller.js";
 import * as defaultSignalingAdapter from "./signaling-adapter.js";
 
 const TIMER_EVENT_BY_NAME = {
 	ring: "RING_TIMEOUT",
 	connect: "CONNECT_TIMEOUT",
-	grace: "GRACE_EXPIRED",
-	backoff: "BACKOFF_EXPIRED",
+	restartTick: "RESTART_TICK",
+	heartbeat: "HEARTBEAT_TICK",
 };
 
+// TZ-recovery-policy.md §4 — SEND_HANGUP выделен из общего
+// SIGNAL_COMMAND_TYPES: это единственная сигнальная команда, которой нужен
+// retry-с-дедлайном (см. sendHangupReliably ниже), остальные (SEND_OFFER/
+// SEND_ANSWER/SEND_ICE/SEND_HEARTBEAT) по-прежнему at-most-once — рестарт
+// ICE и так повторяется по расписанию §2, а heartbeat самой своей частотой
+// (раз в CALL_HEARTBEAT_MS) переживает единичную потерю без отдельного retry.
 const MEDIA_COMMAND_TYPES = new Set(["ACQUIRE_MIC", "CREATE_OFFER", "CREATE_ANSWER", "SET_REMOTE", "ADD_ICE", "DO_ICE_RESTART", "CLOSE_PC"]);
-const SIGNAL_COMMAND_TYPES = new Set(["SEND_OFFER", "SEND_ANSWER", "SEND_ICE", "SEND_HANGUP"]);
+const SIGNAL_COMMAND_TYPES = new Set(["SEND_OFFER", "SEND_ANSWER", "SEND_ICE", "SEND_HEARTBEAT"]);
+
+// TZ-recovery-policy.md §2.2 — разброс ±30% на реальном таймере (не в чистом
+// FSM, которое обязано быть детерминированным — см. call-fsm.js). Применяется
+// только к каденции попыток восстановления, не к ring/connect/heartbeat.
+// random — DI (тот же приём, что уже применяется в room-session.js): без
+// него — настоящий Math.random, с ним — тесты фиксируют расписание попыток
+// и проверяют его на точные секунды, а не "где-то в пределах ±30%".
+function applyJitter(ms, ratio, random) {
+	const spread = ms * ratio;
+	return ms - spread + random() * spread * 2;
+}
+
+// §4 — единственное ограничение relay, которое касается ретрая: strfry
+// отклоняет эфемерные события старше 60с от created_at (rejectEphemeralEventsOlderThanSeconds,
+// server/strfry/strfry.conf) — SEND_HANGUP пересобирается (новый created_at)
+// на каждую попытку, поэтому это не дедлайн relay, а именно дедлайн ТЗ
+// ("не позже 60 секунд"), число совпадает не случайно.
+const HANGUP_DELIVERY_DEADLINE_MS = 60000;
+const HANGUP_RETRY_INTERVAL_MS = 3000;
 
 // НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (живое использование) — ENDED терминален в чистом
 // call-fsm.js (игнорирует вообще все события, I5), но VOICE.md §1.1 буквально:
@@ -53,6 +78,13 @@ export function createCallRuntime(options = {}) {
 		// (relay-pool.js's getState()) в момент исполнения SEND_*-команды.
 		onTrace,
 		getRelayState,
+		// TZ-recovery-policy.md §2.4 — предохранитель, настраиваемый: значение
+		// по умолчанию соответствует call-fsm.js's DEFAULT_RECOVERY_SAFETY_CAP_MS,
+		// но вызывающая сторона (UI-настройка) может передать null/Infinity —
+		// "без предела, пока вкладка открыта", как и просило задание вторым
+		// вариантом.
+		safetyCapMs = DEFAULT_RECOVERY_SAFETY_CAP_MS,
+		random = Math.random,
 		...mediaOptions
 	} = options;
 
@@ -68,6 +100,16 @@ export function createCallRuntime(options = {}) {
 	let state = idleState();
 	const timers = new Map(); // name -> timer id
 	let endedResetTimerId = null;
+	// TZ-recovery-policy.md §3 — бухгалтерия "жив ли собеседник" ЦЕЛИКОМ здесь
+	// (call-fsm.js чистое ядро, часов не имеет). reconnectingStartedAt — момент
+	// входа в текущий эпизод RECONNECTING (null вне его), нужен для §2.2's фаз
+	// каденции и §2.4's предохранителя. lastPeerAliveAt — момент последнего
+	// доказательства, что собеседник жив (любое REMOTE_*-событие); засеивается
+	// оптимистично в момент входа в RECONNECTING (мы только что были CONNECTED
+	// — собеседник заведомо был жив секунду назад), см. §3: "либо мы ещё ни
+	// разу его не теряли в этом эпизоде".
+	let reconnectingStartedAt = null;
+	let lastPeerAliveAt = null;
 
 	function resetToIdle() {
 		if (endedResetTimerId !== null) {
@@ -88,8 +130,65 @@ export function createCallRuntime(options = {}) {
 	// секций, ICE вообще не собирался (звонок молча "тикал" 15с до CONNECT_TIMEOUT).
 	async function dispatch(event) {
 		const prevState = state;
+
+		// TZ-recovery-policy.md §4 — REMOTE_HANGUP, пришедший когда FSM уже в
+		// IDLE (запоздавшее завершение — ровно тот случай из 10-LIVE-INCIDENT
+		// §11.5, где REMOTE_HANGUP пришёл на 68с позже: человек на дальнем
+		// конце вручную положил трубку, дозвониться до уже сброшенного здесь
+		// состояния не может ничего изменить, но и молча теряться не должен).
+		if (event.type === "REMOTE_HANGUP" && prevState.name === "IDLE") {
+			trace("late-remote-hangup", { sessionId: event.sessionId ?? null });
+		}
+
+		// §3 — любое событие с признаками "от собеседника" продлевает окно
+		// его жизни. Список — все Σ_in-B (входящий сигналинг), не только
+		// heartbeat: обычный ICE-кандидат или offer доказывает жизнь ничуть не
+		// хуже отдельного heartbeat-сигнала.
+		if (event.type === "REMOTE_ICE" || event.type === "REMOTE_OFFER" || event.type === "REMOTE_ANSWER" || event.type === "REMOTE_HEARTBEAT") {
+			lastPeerAliveAt = Date.now();
+		}
+
+		// §1/§3 — вход в RECONNECTING: засеваем оба таймера бухгалтерии ЗДЕСЬ,
+		// а не в call-fsm.js (у чистого ядра нет часов). Проверяем ПЕРЕХОД, а
+		// не итоговое состояние — событие ICE_DISCONNECTED/ICE_FAILED, пришедшее
+		// НЕ из CONNECTED (например уже в RECONNECTING — второй ICE_FAILED
+		// подряд), не должно пересеивать окно заново.
+		if (prevState.name === "CONNECTED" && (event.type === "ICE_DISCONNECTED" || event.type === "ICE_FAILED")) {
+			reconnectingStartedAt = Date.now();
+			lastPeerAliveAt = Date.now();
+		}
+
+		const relayStateNow = getRelayState ? getRelayState() : "connected"; // без getRelayState (старые тесты) — считаем транспорт всегда живым, как было раньше
+		const transportConnected = relayStateNow === "connected" || relayStateNow === "subscribed" || relayStateNow === "authenticating";
+
+		// RESTART_TICK — единственное событие, которому нужны вычисленные
+		// снаружи числа (§2.1/§2.2/§2.3/§2.4/§3): call-fsm.js сравнивает их с
+		// именованными порогами, но само не вычисляет.
+		if (event.type === "RESTART_TICK") {
+			event = {
+				...event,
+				transportConnected,
+				peerSilentMs: lastPeerAliveAt !== null ? Date.now() - lastPeerAliveAt : null,
+				elapsedReconnectingMs: reconnectingStartedAt !== null ? Date.now() - reconnectingStartedAt : 0,
+			};
+			trace("restart-decision", {
+				sessionId: event.sessionId,
+				transportConnected,
+				peerSilentMs: event.peerSilentMs,
+				elapsedReconnectingMs: event.elapsedReconnectingMs,
+			});
+		}
+
 		const result = reduce(state, event);
 		state = result.state;
+
+		// Выход из эпизода RECONNECTING (восстановились или завершились) —
+		// обнулить бухгалтерию, чтобы следующий эпизод (новый обрыв того же
+		// звонка) считал фазы §2.2 заново, с нуля.
+		if (prevState.name === "RECONNECTING" && state.name !== "RECONNECTING") {
+			reconnectingStartedAt = null;
+		}
+
 		// TZ §2.3 — переход целиком: откуда/куда/по какому событию/причина/
 		// restartCount на этот момент. call-fsm.js сам не тронут ни строкой —
 		// reduce() вызывается ровно как раньше, трассировка читает уже готовый
@@ -132,12 +231,17 @@ export function createCallRuntime(options = {}) {
 	function startTimer(name, ms) {
 		clearNamedTimer(name); // на случай повторного START_TIMER тем же именем
 		const sessionIdAtStart = state.sessionId;
-		trace("timer", { name, ms, phase: "armed", sessionId: sessionIdAtStart });
+		// §2.2 — разброс ±30% ТОЛЬКО на каденцию попыток восстановления: обе
+		// стороны звонка иначе били бы рестарт синхронно (задание явно этого
+		// требует — "чтобы две стороны не били синхронно"). ring/connect/
+		// heartbeat — точные, джиттер им не нужен и не запрошен.
+		const armedMs = name === "restartTick" ? Math.max(0, Math.round(applyJitter(ms, RESTART_JITTER_RATIO, random))) : ms;
+		trace("timer", { name, ms: armedMs, phase: "armed", sessionId: sessionIdAtStart });
 		const id = setTimeoutImpl(() => {
 			timers.delete(name);
-			trace("timer", { name, ms, phase: "fired", sessionId: sessionIdAtStart });
+			trace("timer", { name, ms: armedMs, phase: "fired", sessionId: sessionIdAtStart });
 			dispatch({ type: TIMER_EVENT_BY_NAME[name], sessionId: sessionIdAtStart });
-		}, ms);
+		}, armedMs);
 		timers.set(name, id);
 	}
 
@@ -152,17 +256,55 @@ export function createCallRuntime(options = {}) {
 		return { iceUfrag: ufrag, candidateCount: candidateLines.length };
 	}
 
+	// TZ-recovery-policy.md §4 — SEND_HANGUP отдельно от остальных сигнальных
+	// команд: если публикация не удалась, ставим в очередь и повторяем, пока
+	// не доставим или не истечёт HANGUP_DELIVERY_DEADLINE_MS (60с — предел
+	// strfry на возраст эфемерного события, см. константу выше). ctx
+	// захватывается ДО первого await — state.peerPubkey/sessionId к моменту
+	// повтора (секунды спустя) уже могут быть стёрты автосбросом ENDED->IDLE
+	// (ENDED_AUTO_RESET_MS=3000, ниже) — реальный сетевой сбой длиннее.
+	async function sendHangupReliably(ctx) {
+		const deadline = Date.now() + HANGUP_DELIVERY_DEADLINE_MS;
+		let attempt = 0;
+		for (;;) {
+			attempt += 1;
+			const relayStateBefore = getRelayState ? getRelayState() : undefined;
+			trace("command", { name: "SEND_HANGUP", phase: "start", sessionId: ctx.sessionId, attempt, relayState: relayStateBefore });
+			try {
+				const result = await signalingAdapter.execute({ type: "SEND_HANGUP" }, { privKey, peerPubkey: ctx.peerPubkey, sessionId: ctx.sessionId, publish, hTopic });
+				trace("command", { name: "SEND_HANGUP", phase: "ok", sessionId: ctx.sessionId, attempt, relayOk: result?.ok, relayReason: result?.reason, eventId: result?.eventId });
+				return;
+			} catch (e) {
+				const remaining = deadline - Date.now();
+				if (remaining <= 0) {
+					trace("command", { name: "SEND_HANGUP", phase: "dropped", sessionId: ctx.sessionId, attempt, errorMessage: String(e?.message ?? e) });
+					console.warn("call-runtime: SEND_HANGUP не доставлен за отведённое время, отброшен", e);
+					return;
+				}
+				trace("command", { name: "SEND_HANGUP", phase: "error", sessionId: ctx.sessionId, attempt, errorMessage: String(e?.message ?? e) });
+				await new Promise((resolve) => setTimeoutImpl(resolve, Math.min(HANGUP_RETRY_INTERVAL_MS, remaining)));
+			}
+		}
+	}
+
 	async function executeCommand(command) {
+		if (command.type === "SEND_HANGUP") {
+			// Захват контекста ДО await — см. комментарий sendHangupReliably.
+			return sendHangupReliably({ peerPubkey: state.peerPubkey, sessionId: state.sessionId });
+		}
 		if (MEDIA_COMMAND_TYPES.has(command.type)) {
-			if (command.type === "CLOSE_PC") clearAllTimers(); // защита от осиротевших grace/backoff таймеров
-			trace("command", { name: command.type, phase: "start", sessionId: state.sessionId });
+			if (command.type === "CLOSE_PC") clearAllTimers(); // защита от осиротевших grace/backoff/restartTick таймеров
+			// §2.3 — recreate/forceRelay относятся только к DO_ICE_RESTART, но
+			// безобидно спредить их всегда (undefined для остальных команд).
+			const extraFields = command.type === "DO_ICE_RESTART" ? { recreate: command.recreate, forceRelay: command.forceRelay } : {};
+			trace("command", { name: command.type, phase: "start", sessionId: state.sessionId, ...extraFields });
 			try {
 				await mediaController.execute(command);
-				trace("command", { name: command.type, phase: "ok", sessionId: state.sessionId });
+				trace("command", { name: command.type, phase: "ok", sessionId: state.sessionId, ...extraFields });
 			} catch (e) {
 				// НЕ ЧИНИТЬ (TZ §0.1) — по-прежнему только console.warn, команда
 				// по-прежнему теряется. Трассировка только НАБЛЮДАЕТ этот путь.
-				trace("command", { name: command.type, phase: "error", sessionId: state.sessionId, errorMessage: String(e?.message ?? e) });
+				trace("command", { name: command.type, phase: "error", sessionId: state.sessionId, ...extraFields, errorMessage: String(e?.message ?? e) });
 				console.warn(`call-runtime: медиа-команда ${command.type} упала`, e);
 			}
 			return;
@@ -217,7 +359,7 @@ export function createCallRuntime(options = {}) {
 
 	// --- Публичный API: пользовательские действия (Σ_in-A, §1.3 VOICE.md) ---
 	function placeCall(peerPubkey) {
-		dispatch({ type: "USER_PLACE_CALL", peerPubkey, myPubkey });
+		dispatch({ type: "USER_PLACE_CALL", peerPubkey, myPubkey, safetyCapMs });
 	}
 	function accept() {
 		dispatch({ type: "USER_ACCEPT", sessionId: state.sessionId });
@@ -239,7 +381,9 @@ export function createCallRuntime(options = {}) {
 			return; // не наш сигнал / повреждён / чужим ключом — молча пропустить
 		}
 		const fsmEvent = signalingAdapter.toFsmEvent(payload, event.pubkey, myPubkey);
-		if (fsmEvent) dispatch(fsmEvent);
+		// safetyCapMs нужен только REMOTE_OFFER (создаёт сессию с нуля, §2.4) —
+		// безобидно приклеивать всегда, reduceIdle читает поле только там.
+		if (fsmEvent) dispatch({ ...fsmEvent, safetyCapMs });
 	}
 
 	function getState() {

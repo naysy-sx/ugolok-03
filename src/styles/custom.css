@@ -4367,6 +4367,24 @@ body:has(.auth-layout) {
 	border-color: var(--warn);
 }
 
+/* TZ-recovery-policy.md §6 — короткая фаза (первая минута, RESTART_PHASE1_END_MS
+   в call-fsm.js): секундомер тем же акцентным цветом, что рамка аватара выше —
+   видно, что идёт активное восстановление, не спутать с обычным "идёт звонок". */
+.call-bar-reconnect-stopwatch {
+	font-variant-numeric: tabular-nums;
+	color: var(--warn);
+	font-weight: 600;
+}
+
+/* Длинная фаза — намеренно БЕЗ секундомера и БЕЗ тревожного цвета: частые
+   попытки уже прекратились (§2.2, фаза 2/3), тикающий счётчик только бы
+   создавал ложное ощущение, что что-то идёт не так быстрее, чем есть на самом
+   деле. Спокойный текст вместо этого (§6, буквально — "успокаивающее сообщение"). */
+.call-bar-reconnect-note {
+	color: var(--muted);
+	font-style: italic;
+}
+
 .call-bar-hangup {
 	/* .row (раскладка) уже в JSX. */
 	margin-inline-start: auto;

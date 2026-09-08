@@ -918,7 +918,8 @@
 		"incomingFrom": "Inkomend gesprek van {{name}}",
 		"callingTo": "Bellen naar {{name}}…",
 		"connectingTo": "Verbinden met {{name}}…",
-		"reconnecting": "Opnieuw verbinden…",
+		"reconnectingTitle": "Opnieuw verbinden…",
+		"reconnectingLong": "Het gesprek staat in de wacht en wordt automatisch hervat.",
 		"connectedWith": "In gesprek met {{name}}",
 		"hangupAria": "Gesprek beëindigen",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "verbinding mislukt",
 			"hangup": "door jou beëindigd",
 			"remoteHangup": "door de ander beëindigd",
-			"connectionLost": "verbinding verloren"
+			"connectionLost": "verbinding verloren",
+			"peerGone": "de ander heeft het gesprek verlaten",
+			"safetyCap": "verbinding kon niet worden hersteld"
 		}
 	},
 	"moderation": {

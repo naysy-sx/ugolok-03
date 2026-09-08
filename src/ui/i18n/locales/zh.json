@@ -918,7 +918,8 @@
 		"incomingFrom": "来自 {{name}} 的来电",
 		"callingTo": "正在呼叫 {{name}}…",
 		"connectingTo": "正在连接 {{name}}…",
-		"reconnecting": "正在重新连接…",
+		"reconnectingTitle": "正在重新连接…",
+		"reconnectingLong": "通话保持中，将自动恢复。",
 		"connectedWith": "正在与 {{name}} 通话",
 		"hangupAria": "结束通话",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "连接失败",
 			"hangup": "已被您结束",
 			"remoteHangup": "已被对方结束",
-			"connectionLost": "连接已断开"
+			"connectionLost": "连接已断开",
+			"peerGone": "对方已离开",
+			"safetyCap": "无法恢复连接"
 		}
 	},
 	"moderation": {

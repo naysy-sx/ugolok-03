@@ -51,6 +51,10 @@ class FakeRTCPeerConnection {
 	async addIceCandidate(candidate) {
 		this.addedIceCandidates.push(candidate);
 	}
+	setConfiguration(config) {
+		this.setConfigurationCalls = this.setConfigurationCalls ?? [];
+		this.setConfigurationCalls.push(config);
+	}
 	close() {
 		this.closed = true;
 	}
@@ -105,6 +109,86 @@ test("DO_ICE_RESTART: createOffer({iceRestart:true}) -> эмитит LOCAL_OFFER
 	const pc = FakeRTCPeerConnection.instances[0];
 	assert.deepEqual(pc.lastCreateOfferOpts, { iceRestart: true });
 	assert.deepEqual(events, [{ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "restart-offer-sdp" } }]);
+});
+
+// --- TZ-recovery-policy.md §2.3 — DO_ICE_RESTART{recreate,forceRelay} ---
+
+test("DO_ICE_RESTART без recreate (попытки 1-2): setConfiguration() на СУЩЕСТВУЮЩЕМ pc, НЕ пересоздаёт его", async () => {
+	const { controller } = makeOptions();
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const pcBefore = FakeRTCPeerConnection.instances[0];
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: false, forceRelay: false });
+	assert.equal(FakeRTCPeerConnection.instances.length, 1, "recreate:false — новый pc не создаётся");
+	assert.deepEqual(pcBefore.setConfigurationCalls, [{ iceServers: [{ urls: "stun:example" }] }]);
+});
+
+test("DO_ICE_RESTART {recreate:true}: явно закрывает старый pc (освобождает TURN-аллокации), создаёт новый, микрофон НЕ останавливается и переносится на новый pc", async () => {
+	const { controller, tracks, stream } = makeOptions();
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const oldPc = FakeRTCPeerConnection.instances[0];
+	assert.equal(oldPc.addedTracks.length, tracks.length);
+
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: true, forceRelay: false });
+
+	assert.ok(oldPc.closed, "старый pc должен быть явно закрыт ПЕРЕД пересозданием (10-LIVE-INCIDENT §5 — иначе TURN-аллокации висят до серверного таймаута)");
+	assert.equal(FakeRTCPeerConnection.instances.length, 2, "создан НОВЫЙ RTCPeerConnection");
+	const newPc = FakeRTCPeerConnection.instances[1];
+	assert.notEqual(newPc, oldPc);
+	assert.ok(tracks.every((t) => !t.stopped), "микрофонный трек НЕ останавливается между попытками (§2.3, буквально)");
+	assert.deepEqual(
+		newPc.addedTracks.map((a) => a.track),
+		tracks,
+		"те же самые (живые) треки того же stream переносятся на новый pc",
+	);
+	assert.equal(newPc.addedTracks[0].stream, stream);
+});
+
+test("DO_ICE_RESTART {recreate:true}: трасса получает НОВЫЙ pcId для нового RTCPeerConnection (TZ-recovery-policy.md §7/10-LIVE-INCIDENT §8 — раньше id был один на весь controller, трасса не отличала звонок до/после пересоздания)", async () => {
+	const traced = [];
+	const { controller } = makeOptions({
+		onTrace: (ev, payload) => traced.push({ ev, payload }),
+		setIntervalImpl: () => "fake-interval-id", // не полагаемся на реальный таймер в этом тесте
+		clearIntervalImpl: () => {},
+	});
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	const pcIdBefore = traced.find((t) => t.ev === "created").payload.pc;
+	assert.ok(pcIdBefore);
+
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: true, forceRelay: false });
+
+	const createdEvents = traced.filter((t) => t.ev === "created");
+	assert.equal(createdEvents.length, 2, "'created' пишется для каждого RTCPeerConnection");
+	const pcIdAfter = createdEvents[1].payload.pc;
+	assert.ok(pcIdAfter);
+	assert.notEqual(pcIdAfter, pcIdBefore, "id второго pc должен отличаться от первого");
+
+	const pcRecreateEvent = traced.find((t) => t.ev === "pc-recreate");
+	assert.ok(pcRecreateEvent, "явное закрытие/пересоздание тоже трассируется");
+	assert.equal(pcRecreateEvent.payload.pc, pcIdBefore, "'pc-recreate' пишется ДО пересоздания — ещё со старым id (описывает закрытие старого pc)");
+});
+
+test("DO_ICE_RESTART {recreate:true, forceRelay:true}: новый pc создаётся с iceTransportPolicy:'relay'", async () => {
+	const { controller } = makeOptions();
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: true, forceRelay: true });
+	const newPc = FakeRTCPeerConnection.instances[1];
+	assert.equal(newPc.config.iceTransportPolicy, "relay");
+});
+
+test("DO_ICE_RESTART: iceServers-резолвер вызывается с {refreshIfStale:true} перед КАЖДОЙ попыткой (§2.3 — свежесть TURN-кредов)", async () => {
+	const calls = [];
+	const { controller } = makeOptions({
+		iceServers: async (opts) => {
+			calls.push(opts);
+			return [{ urls: "turn:fresh.example", username: "u", credential: "p" }];
+		},
+	});
+	await controller.execute({ type: "ACQUIRE_MIC" }); // первый резолв — без опций (обычный ensurePc())
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: false });
+	await controller.execute({ type: "DO_ICE_RESTART", recreate: true });
+	assert.deepEqual(calls[0], undefined, "первый вызов, из ensurePc() при ACQUIRE_MIC — без аргументов");
+	assert.deepEqual(calls[1], { refreshIfStale: true });
+	assert.deepEqual(calls[2], { refreshIfStale: true });
 });
 
 test("CREATE_ANSWER: createAnswer -> setLocalDescription -> эмитит LOCAL_ANSWER_READY", async () => {

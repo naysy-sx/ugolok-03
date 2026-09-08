@@ -257,6 +257,19 @@ export function getCachedTurnCredsExpiry() {
 	return cachedTurnCreds?.expiryMs ?? null;
 }
 
+// TZ-recovery-policy.md §2.3 — "если до истечения осталось меньше половины
+// TTL — запросить новые": доля, не абсолютное время, чтобы работать
+// одинаково для дефолтного TTL (3600с) и для тестового/настроенного любой
+// длины. false, если кредов ещё нет в кэше вообще — это не "протухли", а
+// "не запрашивались", вызывающая сторона (fetchTurnCredentials) сама решит.
+export function isTurnCredsStale(now = Date.now(), thresholdFraction = 0.5) {
+	if (!cachedTurnCreds) return false;
+	const totalMs = cachedTurnCreds.expiryMs - cachedTurnCreds.issuedAtMs;
+	if (totalMs <= 0) return false;
+	const remainingMs = cachedTurnCreds.expiryMs - now;
+	return remainingMs <= totalMs * thresholdFraction;
+}
+
 // Возвращает массив RTCIceServer (только TURN-записи, по одной на uri) или
 // null при любой ошибке (сеть/таймаут/битый ответ/эндпоинт не настроен) —
 // вызывающая сторона (resolveCallIceServers) отвечает за откат на STUN-only.
@@ -284,7 +297,7 @@ export async function fetchTurnCredentials(url, options = {}) {
 			.map((urls) => ({ urls, username: data.username, credential: data.credential }));
 		if (iceServers.length === 0) return null;
 		const ttlSeconds = typeof data.ttl === 'number' && data.ttl > 60 ? data.ttl : 3600;
-		cachedTurnCreds = { iceServers, expiryMs: now + (ttlSeconds - 60) * 1000 };
+		cachedTurnCreds = { iceServers, expiryMs: now + (ttlSeconds - 60) * 1000, issuedAtMs: now };
 		return iceServers;
 	} catch {
 		return null;
@@ -323,6 +336,12 @@ export async function resolveCallIceServers(options = {}) {
 	const baseIce = boot.iceServers.length ? boot.iceServers : BUILD_DEFAULT_ICE_SERVERS;
 	const turnCredentialsUrl = getRuntimeConfig().turnCredentialsUrl;
 	if (!turnCredentialsUrl) return baseIce;
+	// TZ-recovery-policy.md §2.3 — вызывается media-controller.js's doIceRestart
+	// перед КАЖДОЙ попыткой рестарта: если больше половины TTL уже прошло,
+	// сбросить кэш и запросить свежие креды, а не ждать полного истечения.
+	if (options.refreshIfStale && isTurnCredsStale(options.now)) {
+		resetTurnCredentialsCache();
+	}
 	const turnServers = await fetchTurnCredentials(turnCredentialsUrl, options);
 	if (!turnServers) {
 		logWarn('TURN: креды недоступны, только STUN');

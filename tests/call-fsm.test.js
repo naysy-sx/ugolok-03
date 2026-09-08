@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { reduce } from "../src/domain/calls/call-fsm.js";
+import { reduce, restartIntervalForElapsed, DEFAULT_RECOVERY_SAFETY_CAP_MS, PEER_ALIVE_FRESH_MS } from "../src/domain/calls/call-fsm.js";
+
+// TZ-recovery-policy.md — RESTART_TICK несёт уже вычисленные снаружи числа
+// (call-runtime.js в реальности), здесь собираем вручную. tickEvent()
+// по умолчанию описывает "всё в порядке, пора попробовать": транспорт жив,
+// собеседник не потерян, эпизод только начался.
+function tickEvent(overrides = {}) {
+	return { type: "RESTART_TICK", sessionId: SID, transportConnected: true, peerSilentMs: 0, elapsedReconnectingMs: 0, ...overrides };
+}
 
 // Этап 48 — VOICE.md, §4 (тест-спека). Табличные тесты: строка =
 // (state_in, event) ⇒ (state_out, commands). Две identity фиксированы так,
@@ -52,7 +60,9 @@ test("happy caller: IDLE -> OUTGOING_RINGING -> CONNECTING -> CONNECTED", () => 
 	r = reduce(s, { type: "ICE_CONNECTED", sessionId: sid });
 	assert.equal(r.state.name, "CONNECTED");
 	assert.equal(r.state.restartCount, 0);
-	assert.deepEqual(names(r.commands), ["CANCEL_TIMER", "EMIT"]);
+	// TZ-recovery-policy.md §3 — первое успешное соединение взводит heartbeat.
+	assert.deepEqual(names(r.commands), ["CANCEL_TIMER", "START_TIMER", "EMIT"]);
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "heartbeat", ms: 3000 });
 });
 
 // --- 2. Happy callee: IDLE→(offer)→INCOMING→(accept)→CONNECTING→(answer, ice_connected)→CONNECTED ---
@@ -159,29 +169,47 @@ test("glare, impolite-ветка: BOB (impolite) игнорирует встре
 
 // --- 7. Самолечение: CONNECTED->ICE_DISCONNECTED->RECONNECTING->ICE_CONNECTED->CONNECTED (restartCount=0) ---
 test("самолечение ICE: CONNECTED -> RECONNECTING -> CONNECTED, restartCount остаётся 0", () => {
-	let s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null };
+	let s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
 
 	let r = reduce(s, { type: "ICE_DISCONNECTED", sessionId: SID });
 	assert.equal(r.state.name, "RECONNECTING");
 	assert.deepEqual(names(r.commands), ["START_TIMER", "EMIT"]);
-	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "grace", ms: 4000 });
+	// TZ-recovery-policy.md §2.2 — пауза перед первой попыткой сократилась с
+	// 4000 (DISCONNECT_GRACE) до RESTART_GRACE_MS=2000 (попытки больше не
+	// "дорогие" — не тратят один из четырёх шансов, которых больше нет).
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "restartTick", ms: 2000 });
 	s = r.state;
 
 	r = reduce(s, { type: "ICE_CONNECTED", sessionId: SID });
 	assert.equal(r.state.name, "CONNECTED");
 	assert.equal(r.state.restartCount, 0);
-	assert.deepEqual(names(r.commands), ["CANCEL_TIMER", "CANCEL_TIMER", "EMIT"]);
+	// Один таймер восстановления (restartTick) вместо старых двух (grace+backoff).
+	assert.deepEqual(names(r.commands), ["CANCEL_TIMER", "EMIT"]);
 });
 
-// --- 8. Рестарт с восстановлением: GRACE_EXPIRED -> (impolite: DO_ICE_RESTART) -> ICE_CONNECTED -> CONNECTED ---
-test("рестарт (impolite): GRACE_EXPIRED -> DO_ICE_RESTART -> ICE_CONNECTED -> CONNECTED", () => {
-	let s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 0, reason: null };
+// TZ-recovery-policy.md §1 — тот же бонус-фикс, что был найден аудитом
+// (09-FINAL-AUDIT.md, Opus H4-семья): ICE_FAILED в CONNECTED раньше вообще
+// не имел кейса (default:ignore) — звонок тихо зависал. Теперь ICE_FAILED
+// в CONNECTED ведёт в RECONNECTING ТОЧНО ТАК ЖЕ, как ICE_DISCONNECTED.
+test("ICE_FAILED в CONNECTED (не только ICE_DISCONNECTED) тоже ведёт в RECONNECTING — старый тихий баг закрыт", () => {
+	const s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, { type: "ICE_FAILED", sessionId: SID });
+	assert.equal(r.state.name, "RECONNECTING");
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "restartTick", ms: 2000 });
+});
 
-	let r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
+// --- 8. Рестарт с восстановлением: RESTART_TICK -> (impolite: DO_ICE_RESTART) -> ICE_CONNECTED -> CONNECTED ---
+test("рестарт (impolite): RESTART_TICK -> DO_ICE_RESTART -> ICE_CONNECTED -> CONNECTED", () => {
+	let s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+
+	let r = reduce(s, tickEvent());
 	assert.equal(r.state.name, "RECONNECTING");
 	assert.equal(r.state.restartCount, 1);
 	assert.deepEqual(names(r.commands), ["DO_ICE_RESTART", "START_TIMER"]);
-	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "backoff", ms: 1000 });
+	// §2.3 — попытка №1: не пересоздаём pc, не форсируем relay (порог — 3-я).
+	assert.deepEqual(findCmd(r.commands, "DO_ICE_RESTART"), { type: "DO_ICE_RESTART", recreate: false, forceRelay: false });
+	// §2.2 — фаза 1 (первая минута, elapsedReconnectingMs=0): интервал 5000.
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "restartTick", ms: 5000 });
 	s = r.state;
 
 	r = reduce(s, { type: "ICE_CONNECTED", sessionId: SID });
@@ -189,12 +217,12 @@ test("рестарт (impolite): GRACE_EXPIRED -> DO_ICE_RESTART -> ICE_CONNECTE
 	assert.equal(r.state.restartCount, 0, "восстановление сбрасывает счётчик");
 });
 
-test("рестарт (polite): GRACE_EXPIRED -> ждёт (без DO_ICE_RESTART), REMOTE_OFFER -> CREATE_ANSWER", () => {
-	let s = { name: "RECONNECTING", role: "callee", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null };
+test("рестарт (polite): RESTART_TICK -> ждёт (без DO_ICE_RESTART), REMOTE_OFFER -> CREATE_ANSWER", () => {
+	let s = { name: "RECONNECTING", role: "callee", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
 
-	let r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
+	let r = reduce(s, tickEvent());
 	assert.equal(r.state.name, "RECONNECTING");
-	assert.equal(r.state.restartCount, 1);
+	assert.equal(r.state.restartCount, 1, "счётчик растёт у ОБЕИХ сторон — это диагностика (§2.2), не только у инициатора");
 	assert.deepEqual(names(r.commands), ["START_TIMER"], "polite НЕ инициирует рестарт сам");
 	s = r.state;
 
@@ -203,26 +231,74 @@ test("рестарт (polite): GRACE_EXPIRED -> ждёт (без DO_ICE_RESTART)
 	assert.deepEqual(names(r.commands), ["SET_REMOTE", "CREATE_ANSWER"]);
 });
 
-// --- 9. Исчерпание рестартов: MAX_RESTARTS попыток -> ENDED(connection_lost) (I4) ---
-test("исчерпание рестартов: restartCount достигает MAX_RESTARTS -> ENDED(connection_lost)", () => {
-	let s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 4, reason: null };
+// --- 9. Новая модель восстановления (TZ-recovery-policy.md §1/§2/§3/§2.4):
+// потеря сети САМА ПО СЕБЕ больше не завершает звонок. Автоматических
+// выходов из RECONNECTING остаётся ровно два: peer_gone и safety_cap. ---
 
-	const r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
-	assert.equal(r.state.name, "ENDED");
-	assert.equal(r.state.reason, "connection_lost");
-	assert.deepEqual(names(r.commands), ["CLOSE_PC", "EMIT"]);
-});
-
-test("исчерпание рестартов доходит за 4 цикла ровно (MAX_RESTARTS=4), завершаемость (I4)", () => {
-	let s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 0, reason: null };
-	for (let i = 0; i < 4; i++) {
-		const r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
-		assert.equal(r.state.name, "RECONNECTING", `итерация ${i}: ещё не сдались`);
+test("RECONNECTING переживает ЛЮБОЕ число попыток без завершения, пока транспорт жив и собеседник не потерян", () => {
+	let s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	// 20 тиков — намного больше старого MAX_RESTARTS=4 — и всё ещё RECONNECTING.
+	for (let i = 0; i < 20; i++) {
+		const r = reduce(s, tickEvent({ peerSilentMs: 100, elapsedReconnectingMs: i * 5000 }));
+		assert.equal(r.state.name, "RECONNECTING", `тик ${i}: старая модель завершила бы звонок на 4-м`);
 		s = r.state;
 	}
-	const r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
+	assert.equal(s.restartCount, 20, "счётчик продолжает расти — используется для диагностики и §2.3, не для завершения");
+});
+
+test("§3: собеседник объективно ушёл — свой транспорт жив, признаков жизни нет дольше PEER_ALIVE_FRESH_MS -> ENDED(peer_gone), с SEND_HANGUP (§4)", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 3, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, tickEvent({ transportConnected: true, peerSilentMs: PEER_ALIVE_FRESH_MS, elapsedReconnectingMs: 50000 }));
 	assert.equal(r.state.name, "ENDED");
-	assert.equal(r.state.reason, "connection_lost");
+	assert.equal(r.state.reason, "peer_gone");
+	assert.deepEqual(names(r.commands), ["SEND_HANGUP", "CLOSE_PC", "EMIT"]);
+});
+
+test("§3: собеседник молчит дольше PEER_ALIVE_FRESH_MS, НО свой транспорт не подключён — НЕ завершается (своя проблема, не считается уходом собеседника)", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 3, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, tickEvent({ transportConnected: false, peerSilentMs: PEER_ALIVE_FRESH_MS * 3, elapsedReconnectingMs: 50000 }));
+	assert.equal(r.state.name, "RECONNECTING", "отсчёт §3 приостановлен, пока свой транспорт лежит");
+	assert.equal(r.state.restartCount, 3, "попытка не потрачена — предусловие §2.1 не выполнено");
+	assert.deepEqual(names(r.commands), ["START_TIMER"], "ждём следующей проверки тем же интервалом, не растим его");
+});
+
+test("§2.1: собственный транспорт не подключён — попытка не делается (restartCount не растёт), просто следующая проверка", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 1, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, tickEvent({ transportConnected: false, peerSilentMs: 1000, elapsedReconnectingMs: 10000 }));
+	assert.equal(r.state.name, "RECONNECTING");
+	assert.equal(r.state.restartCount, 1, "не потрачена");
+	assert.deepEqual(r.commands, [{ type: "START_TIMER", name: "restartTick", ms: restartIntervalForElapsed(10000) }]);
+});
+
+test("§2.4: предохранитель — elapsedReconnectingMs достиг safetyCapMs -> ENDED(safety_cap), с SEND_HANGUP", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 40, reason: null, safetyCapMs: 600000 };
+	const r = reduce(s, tickEvent({ transportConnected: true, peerSilentMs: 500, elapsedReconnectingMs: 600000 }));
+	assert.equal(r.state.name, "ENDED");
+	assert.equal(r.state.reason, "safety_cap");
+	assert.deepEqual(names(r.commands), ["SEND_HANGUP", "CLOSE_PC", "EMIT"]);
+});
+
+test("§2.4: предохранитель проверяется ДО предусловия транспорта — даже с лежащим транспортом предохранитель всё равно сработает", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 40, reason: null, safetyCapMs: 600000 };
+	const r = reduce(s, tickEvent({ transportConnected: false, peerSilentMs: null, elapsedReconnectingMs: 600000 }));
+	assert.equal(r.state.name, "ENDED");
+	assert.equal(r.state.reason, "safety_cap");
+});
+
+test("§2.3: с 3-й попытки — recreate и forceRelay включаются в DO_ICE_RESTART", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: ALICE, polite: false, restartCount: 2, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, tickEvent({ elapsedReconnectingMs: 20000 }));
+	assert.equal(r.state.restartCount, 3);
+	assert.deepEqual(findCmd(r.commands, "DO_ICE_RESTART"), { type: "DO_ICE_RESTART", recreate: true, forceRelay: true });
+});
+
+test("restartIntervalForElapsed: три фазы каденции (§2.2)", () => {
+	assert.equal(restartIntervalForElapsed(0), 5000);
+	assert.equal(restartIntervalForElapsed(59999), 5000);
+	assert.equal(restartIntervalForElapsed(60000), 15000);
+	assert.equal(restartIntervalForElapsed(299999), 15000);
+	assert.equal(restartIntervalForElapsed(300000), 30000);
+	assert.equal(restartIntervalForElapsed(10 * 60000), 30000, "верхний предел, не растёт дальше");
 });
 
 // --- 10. Устаревшая сессия: событие с чужим sessionId -> игнор, состояние не меняется (I1) ---
@@ -310,12 +386,18 @@ test("CONNECTED: REMOTE_OFFER (пир инициировал ICE restart) -> о�
 	assert.deepEqual(names(r.commands), ["SET_REMOTE", "CREATE_ANSWER"]);
 });
 
-test("RECONNECTING: ICE_FAILED считается как повод для рестарта (не сразу ENDED)", () => {
-	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null };
+// TZ-recovery-policy.md §2 — попытки теперь driven исключительно расписанием
+// (RESTART_TICK), не реактивно каждым ICE_FAILED: "не тратить попытку" (§2.1)
+// значит в том числе не устраивать лишнюю попытку ПОВЕРХ уже запланированной
+// только потому, что браузер прислал ещё один ICE_FAILED, пока мы и так ждём
+// свой restartTick. ICE_FAILED, пока УЖЕ в RECONNECTING — молча игнорируется,
+// restartCount не растёт, ничего не планируется заново.
+test("RECONNECTING: повторный ICE_FAILED, пока УЖЕ в RECONNECTING, не тратит попытку — ждём запланированный RESTART_TICK", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
 	const r = reduce(s, { type: "ICE_FAILED", sessionId: SID });
 	assert.equal(r.state.name, "RECONNECTING");
-	assert.equal(r.state.restartCount, 1);
-	assert.deepEqual(names(r.commands), ["DO_ICE_RESTART", "START_TIMER"]);
+	assert.equal(r.state.restartCount, 0);
+	assert.deepEqual(r.commands, []);
 });
 
 test("RECONNECTING: USER_HANGUP -> ENDED(hangup) в любой момент восстановления", () => {
@@ -366,9 +448,9 @@ test("форма команд: ACQUIRE_MIC/CREATE_OFFER/CREATE_ANSWER/DO_ICE_RES
 	r = reduce(s, { type: "USER_ACCEPT", sessionId: SID });
 	assert.deepEqual(findCmd(r.commands, "CREATE_ANSWER"), { type: "CREATE_ANSWER" });
 
-	s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null };
-	r = reduce(s, { type: "GRACE_EXPIRED", sessionId: SID });
-	assert.deepEqual(findCmd(r.commands, "DO_ICE_RESTART"), { type: "DO_ICE_RESTART" });
+	s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	r = reduce(s, tickEvent());
+	assert.deepEqual(findCmd(r.commands, "DO_ICE_RESTART"), { type: "DO_ICE_RESTART", recreate: false, forceRelay: false });
 
 	s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null };
 	r = reduce(s, { type: "USER_HANGUP", sessionId: SID });
@@ -399,8 +481,8 @@ test("адверсарно: reduce НЕ мутирует замороженны�
 			{ type: "ICE_DISCONNECTED", sessionId: SID },
 		],
 		[
-			Object.freeze({ name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null }),
-			{ type: "GRACE_EXPIRED", sessionId: SID },
+			Object.freeze({ name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: false, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS }),
+			tickEvent(),
 		],
 		// заведомо неописанное в δ событие — тоже не должно бросить и не должно мутировать
 		[Object.freeze(idle()), { type: "СОВЕРШЕННО_СЛУЧАЙНОЕ_СОБЫТИЕ_ГАРБАЖ" }],
@@ -413,6 +495,44 @@ test("адверсарно: reduce НЕ мутирует замороженны�
 test("адверсарно: событие без sessionId в состоянии, ожидающем сессию, не роняет reduce", () => {
 	const s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null };
 	assert.doesNotThrow(() => reduce(s, { type: "ICE_DISCONNECTED" }));
+});
+
+// --- TZ-recovery-policy.md §3: heartbeat в CONNECTED и RECONNECTING ---
+
+test("HEARTBEAT_TICK в CONNECTED -> SEND_HEARTBEAT + перевзвод таймера", () => {
+	const s = { name: "CONNECTED", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, { type: "HEARTBEAT_TICK", sessionId: SID });
+	assert.equal(r.state.name, "CONNECTED");
+	assert.deepEqual(names(r.commands), ["SEND_HEARTBEAT", "START_TIMER"]);
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "heartbeat", ms: 3000 });
+});
+
+test("HEARTBEAT_TICK в RECONNECTING -> тоже SEND_HEARTBEAT (собеседник может услышать нас, даже пока ICE не встал)", () => {
+	const s = { name: "RECONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 1, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, { type: "HEARTBEAT_TICK", sessionId: SID });
+	assert.equal(r.state.name, "RECONNECTING");
+	assert.deepEqual(names(r.commands), ["SEND_HEARTBEAT", "START_TIMER"]);
+});
+
+test("ICE_CONNECTED (первое соединение, из CONNECTING) взводит heartbeat-таймер", () => {
+	const s = { name: "CONNECTING", role: "caller", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 0, reason: null };
+	const r = reduce(s, { type: "ICE_CONNECTED", sessionId: SID });
+	assert.deepEqual(findCmd(r.commands, "START_TIMER"), { type: "START_TIMER", name: "heartbeat", ms: 3000 });
+});
+
+// --- TZ-recovery-policy.md §2.4: safetyCapMs передаётся снаружи или берёт значение по умолчанию ---
+
+test("USER_PLACE_CALL: safetyCapMs берётся из события, по умолчанию — DEFAULT_RECOVERY_SAFETY_CAP_MS", () => {
+	let r = reduce(idle(), { type: "USER_PLACE_CALL", peerPubkey: BOB, myPubkey: ALICE });
+	assert.equal(r.state.safetyCapMs, DEFAULT_RECOVERY_SAFETY_CAP_MS);
+
+	r = reduce(idle(), { type: "USER_PLACE_CALL", peerPubkey: BOB, myPubkey: ALICE, safetyCapMs: 120000 });
+	assert.equal(r.state.safetyCapMs, 120000, "настройка пользователя (§2.4, второй вариант) переопределяет умолчание");
+});
+
+test("REMOTE_OFFER: safetyCapMs тоже принимается (входящий звонок настраивается так же)", () => {
+	const r = reduce(idle(), { type: "REMOTE_OFFER", sdp: "x", sessionId: SID, fromPubkey: ALICE, myPubkey: BOB, safetyCapMs: 999 });
+	assert.equal(r.state.safetyCapMs, 999);
 });
 
 test("trickle ICE: LOCAL_ICE/REMOTE_ICE в OUTGOING_RINGING остаются в том же состоянии", () => {

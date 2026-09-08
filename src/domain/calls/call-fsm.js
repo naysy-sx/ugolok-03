@@ -1,5 +1,15 @@
 // Этап 48 — VOICE.md, §1-2. Чистое ядро FSM звонка: reduce(state, event) -> {state, commands}.
-// Ноль I/O, ноль async — вся грязь (WebRTC, Nostr, таймеры) снаружи, в call-runtime.js.
+// Ноль I/O, ноль async — вся грязь (WebRTC, Nostr, таймеры, Date.now()) снаружи, в call-runtime.js.
+//
+// TZ-recovery-policy.md — модель восстановления переписана целиком (§1-§4 задания).
+// Главный сдвиг: потеря сети БОЛЬШЕ НЕ ведёт к завершению звонка. RECONNECTING не
+// ограничен по времени попытками (MAX_RESTARTS удалён как условие завершения) —
+// единственные автоматические выходы: собеседник объективно пропал (`peer_gone`,
+// §3) и общий предохранитель (`safety_cap`, §2.4). Обе причины определяются ЗДЕСЬ
+// не по настенным часам (их у чистого ядра нет), а по уже вычисленным снаружи
+// числам (`elapsedReconnectingMs`, `peerSilentMs`, `transportConnected`) —
+// вычисление "сколько прошло времени" остаётся обязанностью call-runtime.js,
+// ядро только СРАВНИВАЕТ готовые числа с именованными порогами.
 //
 // НАЙДЕНО ПРИ РЕАЛИЗАЦИИ (воркер дважды не справился — undefined restartCount,
 // отсутствующий I1, сломанный glare, синтаксис) — переписано Claude напрямую,
@@ -7,11 +17,61 @@
 
 const RING_TIMEOUT = 30000;
 const CONNECT_TIMEOUT = 15000;
-const DISCONNECT_GRACE = 4000;
-const MAX_RESTARTS = 4;
 
-function backoff(n) {
-	return Math.min(1000 * 2 ** (n - 1), 8000);
+// TZ-recovery-policy.md §2.2 — пауза после ICE_DISCONNECTED/ICE_FAILED перед
+// ПЕРВОЙ попыткой восстановления. Раньше 4000 (DISCONNECT_GRACE) — короче,
+// потому что попытки больше не "дорогие" (не тратят последний из четырёх
+// шансов) и не ведут к завершению звонка, если промахнутся.
+const RESTART_GRACE_MS = 2000;
+
+// §2.2 — дальнейшая каденция ЗАВИСИТ ОТ ТОГО, сколько времени УЖЕ прошло с
+// начала текущего эпизода RECONNECTING (не от номера попытки, не от времени
+// с предыдущей попытки — интервал сам себя гарантирует самопланированием
+// таймера). Три фазы по предложенным в задании границам.
+const RESTART_INTERVAL_PHASE1_MS = 5000; // первая минута
+const RESTART_INTERVAL_PHASE2_MS = 15000; // с 1-й по 5-ю минуту
+const RESTART_INTERVAL_PHASE3_MS = 30000; // после 5-й минуты — верхний предел
+// Экспортирован — TZ-recovery-policy.md §6/1: UI использует ту же границу для
+// short/long фаз плашки "восстановление связи" (секундомер vs спокойный текст),
+// чтобы не заводить отдельную копию этого числа в call-overlay.jsx.
+export const RESTART_PHASE1_END_MS = 60000;
+const RESTART_PHASE2_END_MS = 300000;
+
+// §2.2 — разброс ±30% применяется в call-runtime.js при АРМИРОВАНИИ реального
+// таймера (setTimeout), не здесь: reduce() обязан быть детерминированным,
+// Math.random() внутри чистого ядра сделал бы его непредсказуемым для тестов.
+// Значение экспортируется, чтобы call-runtime.js не заводило собственное.
+export const RESTART_JITTER_RATIO = 0.3;
+
+// §2.3 — с какой попытки пересоздавать RTCPeerConnection (не просто
+// pc.createOffer({iceRestart:true}) на старом) и с какой форсировать relay.
+// Именованы раздельно (задание упоминает их раздельно), хотя сейчас равны.
+const RESTART_RECREATE_PC_AFTER = 3;
+const RESTART_FORCE_RELAY_AFTER = 3;
+
+// §2.4 — предохранитель. Единственный оставшийся автоматический выход из
+// RECONNECTING по времени. Значение по умолчанию — 10 минут (обоснование
+// в самом ТЗ: "покрывает почти любой реальный сбой... не жжёт батарею").
+// Настраивается: call-runtime.js передаёт event.safetyCapMs, взятый из
+// настроек пользователя; при его отсутствии используется это значение.
+export const DEFAULT_RECOVERY_SAFETY_CAP_MS = 600000;
+
+// §3 — признак жизни звонка. CALL_HEARTBEAT_MS — как часто СВОЯ сторона
+// шлёт сигнал "я ещё здесь". PEER_ALIVE_FRESH_MS — сколько можно молчать
+// собеседнику (при том что НАШ транспорт всё это время подключён), прежде
+// чем считать его ушедшим. Разница на порядок (45с окно / 3с период) даёт
+// 10+ шансов на успешную доставку одного сигнала до истечения окна даже
+// при частичной потере.
+export const CALL_HEARTBEAT_MS = 3000;
+export const PEER_ALIVE_FRESH_MS = 45000;
+
+// §2.2 — чистая функция расписания: сколько ждать до СЛЕДУЮЩЕЙ проверки,
+// в зависимости от того, сколько мы уже в RECONNECTING (считает вызывающая
+// сторона, здесь только сравнение с именованными границами).
+export function restartIntervalForElapsed(elapsedMs) {
+	if (elapsedMs < RESTART_PHASE1_END_MS) return RESTART_INTERVAL_PHASE1_MS;
+	if (elapsedMs < RESTART_PHASE2_END_MS) return RESTART_INTERVAL_PHASE2_MS;
+	return RESTART_INTERVAL_PHASE3_MS;
 }
 
 function emit(stateName, reason) {
@@ -22,10 +82,20 @@ function ignore(state) {
 	return { state, commands: [] };
 }
 
-function ended(state, reason, commandTypes) {
-	const commands = commandTypes.map((type) => ({ type }));
-	commands.push(emit("ENDED", reason));
+// §4 — любой переход в ENDED, КРОМЕ remote_hangup, обязан слать SEND_HANGUP
+// (найдено в 10-LIVE-INCIDENT-2026-09-07.md §11.5: переход по connection_lost
+// делал только CLOSE_PC, собеседник висел без единого сигнала). ended() ниже
+// — новая ЕДИНАЯ точка для всех «непримиримых» причин (user_hangup решается
+// отдельно, там SEND_HANGUP и так уже был всегда); endedByRemote — для
+// remote_hangup, единственного случая без SEND_HANGUP (отвечать хангапом на
+// хангап — эхо, не нужно).
+function ended(state, reason, extraCommands = []) {
+	const commands = [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, ...extraCommands, emit("ENDED", reason)];
 	return { state: { ...state, name: "ENDED", reason }, commands };
+}
+
+function endedByRemote(state, reason) {
+	return { state: { ...state, name: "ENDED", reason }, commands: [{ type: "CLOSE_PC" }, emit("ENDED", reason)] };
 }
 
 // I1 (§1.5) — событие с чужим sessionId игнорируется. Исключения: USER_PLACE_CALL
@@ -68,14 +138,32 @@ function reduceIdle(state, event) {
 		const sessionId = crypto.randomUUID();
 		const polite = event.myPubkey < event.peerPubkey;
 		return {
-			state: { name: "OUTGOING_RINGING", role: "caller", sessionId, peerPubkey: event.peerPubkey, polite, restartCount: 0, reason: null },
+			state: {
+				name: "OUTGOING_RINGING",
+				role: "caller",
+				sessionId,
+				peerPubkey: event.peerPubkey,
+				polite,
+				restartCount: 0,
+				reason: null,
+				safetyCapMs: event.safetyCapMs ?? DEFAULT_RECOVERY_SAFETY_CAP_MS,
+			},
 			commands: [{ type: "ACQUIRE_MIC" }, { type: "CREATE_OFFER" }, { type: "START_TIMER", name: "ring", ms: RING_TIMEOUT }, emit("OUTGOING_RINGING")],
 		};
 	}
 	if (event.type === "REMOTE_OFFER") {
 		const polite = event.myPubkey < event.fromPubkey;
 		return {
-			state: { name: "INCOMING_RINGING", role: "callee", sessionId: event.sessionId, peerPubkey: event.fromPubkey, polite, restartCount: 0, reason: null },
+			state: {
+				name: "INCOMING_RINGING",
+				role: "callee",
+				sessionId: event.sessionId,
+				peerPubkey: event.fromPubkey,
+				polite,
+				restartCount: 0,
+				reason: null,
+				safetyCapMs: event.safetyCapMs ?? DEFAULT_RECOVERY_SAFETY_CAP_MS,
+			},
 			commands: [{ type: "SET_REMOTE", sdp: event.sdp }, { type: "START_TIMER", name: "ring", ms: RING_TIMEOUT }, emit("INCOMING_RINGING")],
 		};
 	}
@@ -121,7 +209,10 @@ function reduceOutgoingRinging(state, event) {
 		case "REMOTE_ICE":
 			return { state, commands: [{ type: "ADD_ICE", candidate: event.candidate }] };
 		case "RING_TIMEOUT":
-			return ended(state, "no_answer", ["SEND_HANGUP", "CLOSE_PC"]);
+			return {
+				state: { ...state, name: "ENDED", reason: "no_answer" },
+				commands: [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, emit("ENDED", "no_answer")],
+			};
 		case "USER_HANGUP":
 			return {
 				state: { ...state, name: "ENDED", reason: "cancelled" },
@@ -160,7 +251,10 @@ function reduceIncomingRinging(state, event) {
 				commands: [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, { type: "CANCEL_TIMER", name: "ring" }, emit("ENDED", "rejected")],
 			};
 		case "RING_TIMEOUT":
-			return ended(state, "missed", ["SEND_HANGUP", "CLOSE_PC"]);
+			return {
+				state: { ...state, name: "ENDED", reason: "missed" },
+				commands: [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, emit("ENDED", "missed")],
+			};
 		case "REMOTE_HANGUP":
 			return {
 				state: { ...state, name: "ENDED", reason: "cancelled_by_caller" },
@@ -182,12 +276,18 @@ function reduceConnecting(state, event) {
 		case "ICE_CONNECTED":
 			return {
 				state: { ...state, name: "CONNECTED", restartCount: 0 },
-				commands: [{ type: "CANCEL_TIMER", name: "connect" }, emit("CONNECTED")],
+				commands: [{ type: "CANCEL_TIMER", name: "connect" }, { type: "START_TIMER", name: "heartbeat", ms: CALL_HEARTBEAT_MS }, emit("CONNECTED")],
 			};
 		case "ICE_FAILED":
-			return ended(state, "connect_failed", ["SEND_HANGUP", "CLOSE_PC"]);
+			return {
+				state: { ...state, name: "ENDED", reason: "connect_failed" },
+				commands: [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, emit("ENDED", "connect_failed")],
+			};
 		case "CONNECT_TIMEOUT":
-			return ended(state, "connect_failed", ["SEND_HANGUP", "CLOSE_PC"]);
+			return {
+				state: { ...state, name: "ENDED", reason: "connect_failed" },
+				commands: [{ type: "SEND_HANGUP" }, { type: "CLOSE_PC" }, emit("ENDED", "connect_failed")],
+			};
 		case "USER_HANGUP":
 			return {
 				state: { ...state, name: "ENDED", reason: "hangup" },
@@ -203,6 +303,19 @@ function reduceConnecting(state, event) {
 	}
 }
 
+// §1 — вход в RECONNECTING. ОБЩИЙ для ICE_DISCONNECTED и ICE_FAILED: раньше
+// ICE_FAILED в CONNECTED не имел кейса вовсе (default: ignore) — найдено
+// аудитом (09-FINAL-AUDIT.md §2, Opus H4-семья) как "тихий баг: FSM думает
+// звонок жив, пока пользователь не положит трубку вручную". Если браузер
+// скачет connected→failed в обход disconnected, теперь это тоже вход в
+// восстановление, а не зависание.
+function enterReconnecting(state) {
+	return {
+		state: { ...state, name: "RECONNECTING" },
+		commands: [{ type: "START_TIMER", name: "restartTick", ms: RESTART_GRACE_MS }, emit("RECONNECTING")],
+	};
+}
+
 function reduceConnected(state, event) {
 	switch (event.type) {
 		case "LOCAL_ICE":
@@ -210,20 +323,70 @@ function reduceConnected(state, event) {
 		case "REMOTE_ICE":
 			return { state, commands: [{ type: "ADD_ICE", candidate: event.candidate }] };
 		case "ICE_DISCONNECTED":
-			return {
-				state: { ...state, name: "RECONNECTING" },
-				commands: [{ type: "START_TIMER", name: "grace", ms: DISCONNECT_GRACE }, emit("RECONNECTING")],
-			};
+		case "ICE_FAILED":
+			return enterReconnecting(state);
 		case "REMOTE_OFFER":
 			// Пир инициировал ICE restart (§2.2) — отвечаем, оставаясь CONNECTED.
 			return { state, commands: [{ type: "SET_REMOTE", sdp: event.sdp }, { type: "CREATE_ANSWER" }] };
+		case "HEARTBEAT_TICK":
+			return { state, commands: [{ type: "SEND_HEARTBEAT" }, { type: "START_TIMER", name: "heartbeat", ms: CALL_HEARTBEAT_MS }] };
 		case "USER_HANGUP":
-			return ended(state, "hangup", ["SEND_HANGUP", "CLOSE_PC"]);
+			return ended(state, "hangup");
 		case "REMOTE_HANGUP":
-			return ended(state, "remote_hangup", ["CLOSE_PC"]);
+			return endedByRemote(state, "remote_hangup");
 		default:
 			return ignore(state);
 	}
+}
+
+// §2.1/§2.2/§2.3/§2.4/§3 — единственная точка входа для «время проверить,
+// можно ли (нужно ли) попробовать восстановиться ещё раз». event несёт ТРИ
+// уже вычисленных снаружи числа/флага — reduce() сам никогда не трогает
+// часы:
+//   transportConnected — наш сокет к релею сейчас реально подключён;
+//   peerSilentMs        — сколько мс молчит собеседник (null, если ещё
+//                          ни разу не теряли признак жизни в этом эпизоде);
+//   elapsedReconnectingMs — сколько мс мы уже в RECONNECTING.
+function reduceRestartTick(state, event) {
+	// §3 — собеседник ушёл: наш транспорт жив, а собеседника не слышно дольше
+	// PEER_ALIVE_FRESH_MS. Проверяется ПЕРВЫМ и только когда транспорт жив —
+	// "пока свой транспорт не подключён, отсчёт приостановлен" (§3, буквально).
+	if (event.transportConnected && event.peerSilentMs !== null && event.peerSilentMs >= PEER_ALIVE_FRESH_MS) {
+		return ended(state, "peer_gone");
+	}
+	// §2.4 — предохранитель. Проверяется до предусловия попытки: даже если
+	// связи с релеем нет, случайно зависший навсегда звонок всё равно должен
+	// когда-нибудь закрыться (реальный автоматический выход остаётся только
+	// один — не считая peer_gone выше).
+	if (event.elapsedReconnectingMs >= state.safetyCapMs) {
+		return ended(state, "safety_cap");
+	}
+	// §2.1 — предусловие попытки: свой транспорт должен быть подключён.
+	// Если нет — НЕ тратим попытку и не двигаем restartCount, просто ждём
+	// следующей проверки тем же интервалом (не растим его — это ожидание,
+	// не попытка). Причина ожидания — забота вызывающей стороны (трассировка,
+	// §7), reduce() её не описывает, только не выполняет DO_ICE_RESTART.
+	if (!event.transportConnected) {
+		return {
+			state,
+			commands: [{ type: "START_TIMER", name: "restartTick", ms: restartIntervalForElapsed(event.elapsedReconnectingMs) }],
+		};
+	}
+	// Предусловие выполнено — реальная попытка. restartCount растёт ТОЛЬКО
+	// здесь (используется для диагностики и порогов §2.3, не для завершения —
+	// TZ-recovery-policy.md §2.2: "MAX_RESTARTS удаляется как условие
+	// завершения. Счётчик остаётся только для диагностики и для §2.3").
+	const restartCount = state.restartCount + 1;
+	const commands = [];
+	if (!state.polite) {
+		commands.push({
+			type: "DO_ICE_RESTART",
+			recreate: restartCount >= RESTART_RECREATE_PC_AFTER,
+			forceRelay: restartCount >= RESTART_FORCE_RELAY_AFTER,
+		});
+	}
+	commands.push({ type: "START_TIMER", name: "restartTick", ms: restartIntervalForElapsed(event.elapsedReconnectingMs) });
+	return { state: { ...state, restartCount }, commands };
 }
 
 function reduceReconnecting(state, event) {
@@ -231,12 +394,12 @@ function reduceReconnecting(state, event) {
 		case "ICE_CONNECTED":
 			return {
 				state: { ...state, name: "CONNECTED", restartCount: 0 },
-				commands: [{ type: "CANCEL_TIMER", name: "grace" }, { type: "CANCEL_TIMER", name: "backoff" }, emit("CONNECTED")],
+				commands: [{ type: "CANCEL_TIMER", name: "restartTick" }, emit("CONNECTED")],
 			};
-		case "GRACE_EXPIRED":
-		case "BACKOFF_EXPIRED":
-		case "ICE_FAILED":
-			return handleRestartAttempt(state);
+		case "RESTART_TICK":
+			return reduceRestartTick(state, event);
+		case "HEARTBEAT_TICK":
+			return { state, commands: [{ type: "SEND_HEARTBEAT" }, { type: "START_TIMER", name: "heartbeat", ms: CALL_HEARTBEAT_MS }] };
 		case "LOCAL_OFFER_READY":
 			return { state, commands: [{ type: "SEND_OFFER", sdp: event.sdp }] };
 		case "REMOTE_OFFER":
@@ -250,25 +413,10 @@ function reduceReconnecting(state, event) {
 		case "REMOTE_ICE":
 			return { state, commands: [{ type: "ADD_ICE", candidate: event.candidate }] };
 		case "USER_HANGUP":
-			return ended(state, "hangup", ["SEND_HANGUP", "CLOSE_PC"]);
+			return ended(state, "hangup");
 		case "REMOTE_HANGUP":
-			return ended(state, "remote_hangup", ["CLOSE_PC"]);
+			return endedByRemote(state, "remote_hangup");
 		default:
 			return ignore(state);
 	}
-}
-
-// §2.2 — ICE restart. Тайбрейкер — тот же state.polite, что и в glare (§2.1):
-// impolite инициирует DO_ICE_RESTART, polite ждёт restart-оффер от него.
-function handleRestartAttempt(state) {
-	if (state.restartCount >= MAX_RESTARTS) {
-		return ended(state, "connection_lost", ["CLOSE_PC"]);
-	}
-	const restartCount = state.restartCount + 1;
-	const commands = [];
-	if (!state.polite) {
-		commands.push({ type: "DO_ICE_RESTART" });
-	}
-	commands.push({ type: "START_TIMER", name: "backoff", ms: backoff(restartCount) });
-	return { state: { ...state, restartCount }, commands };
 }

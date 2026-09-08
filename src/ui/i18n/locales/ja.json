@@ -918,7 +918,8 @@
 		"incomingFrom": "{{name}} から着信",
 		"callingTo": "{{name}} に発信中…",
 		"connectingTo": "{{name}} に接続中…",
-		"reconnecting": "再接続中…",
+		"reconnectingTitle": "再接続中…",
+		"reconnectingLong": "通話は保留中です。自動的に再開されます。",
 		"connectedWith": "{{name}} と通話中",
 		"hangupAria": "通話を終了",
 		"reason": {
@@ -930,7 +931,9 @@
 			"connectFailed": "接続できませんでした",
 			"hangup": "あなたが終了しました",
 			"remoteHangup": "相手が終了しました",
-			"connectionLost": "接続が失われました"
+			"connectionLost": "接続が失われました",
+			"peerGone": "相手が退出しました",
+			"safetyCap": "接続を復旧できませんでした"
 		}
 	},
 	"moderation": {

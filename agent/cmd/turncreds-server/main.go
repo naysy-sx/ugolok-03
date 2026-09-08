@@ -97,6 +97,13 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// TZ-recovery-policy.md §8 — turns:443 (TURN поверх TLS, порт 443) НЕ входит
+// в список по умолчанию: coturn.conf.example задел под него держит
+// закомментированным — реальный VPS пока не демультиплексирует 443 между
+// Caddy (HTTPS) и coturn (TURNS), выдать этот URI сейчас значило бы
+// разослать клиентам заведомо неработающий кандидат. Когда VPS-сторона
+// будет готова (см. коммент в coturn.conf.example), добавить URI можно БЕЗ
+// пересборки — через TURN_URIS (переопределяет этот список целиком, см. main()).
 func defaultURIs() []string {
 	return []string{
 		"turn:ugolok.tech:3478?transport=udp",
