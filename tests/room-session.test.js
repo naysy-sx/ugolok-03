@@ -8,7 +8,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { utf8ToBytes } from "@noble/hashes/utils.js";
 import { createFakeRelay } from "./harness/fake-relay.js";
 import { createWsBridge } from "./harness/ws-bridge.js";
-import { createRoom, joinRoom, joinRoomByPassword } from "../src/domain/rooms/room-session.js";
+import { createRoom, joinRoom, joinRoomByPassword, MAX_VOICE_PARTICIPANTS } from "../src/domain/rooms/room-session.js";
 import { generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import { sign } from "../src/core/crypto/sign.js";
 import { deriveKBase, derivePairKeys, deriveLinkKeys } from "../src/domain/rooms/room-keys.js";
@@ -876,14 +876,17 @@ test("CALL_SIGNAL_KIND: после joinVoice() — событие маршрут
 	assert.equal(instances[0].onSignalCalls[0].id, signalEvent.id);
 });
 
-test("И10: голосовая часть заполнена (5 участников) -> 6-й получает отказ на joinVoice()", async (t) => {
+test("И10: голосовая часть заполнена (MAX_VOICE_PARTICIPANTS участников) -> следующий получает отказ на joinVoice()", async (t) => {
 	const { relay, bridge, relayUrl } = await setup();
 	t.after(() => bridge.stop());
 	const clock = makeClock(1000);
 	const roomName = "переполненная";
 	const password = "333";
 
-	const fillerCount = 5;
+	// Не хардкодим число — тест обязан оставаться верным при любом значении
+	// MAX_VOICE_PARTICIPANTS (было 5, поднято до 7 после живой проверки
+	// 2026-09-08 — мешь упирается в канал/CPU участника, не в сервер).
+	const fillerCount = MAX_VOICE_PARTICIPANTS;
 	const timers = [];
 	const sessions = [];
 	const creatorTimer = makeFakeTimer();
@@ -931,30 +934,30 @@ test("И10: голосовая часть заполнена (5 участник
 	for (const s of sessions) await s.joinVoice();
 	await pump(relay, clock, timers, { rounds: 10 });
 
-	assert.equal(sessions[0].getVoicePresent().length, fillerCount, "все 5 заполнителей видны в голосе друг у друга");
+	assert.equal(sessions[0].getVoicePresent().length, fillerCount, "все заполнители видны в голосе друг у друга");
 
-	const sixthTimer = makeFakeTimer();
-	timers.push(sixthTimer);
-	const sixth = await joinRoom({
+	const extraTimer = makeFakeTimer();
+	timers.push(extraTimer);
+	const extra = await joinRoom({
 		name: roomName,
 		password,
 		suffix: creator.getSuffix(),
-		nick: "F5-lishniy",
+		nick: "lishniy",
 		relayUrl,
 		argon2: fakeArgon2,
 		now: clock.now,
 		random: () => 0.5,
-		setIntervalImpl: sixthTimer.setIntervalImpl,
-		clearIntervalImpl: sixthTimer.clearIntervalImpl,
+		setIntervalImpl: extraTimer.setIntervalImpl,
+		clearIntervalImpl: extraTimer.clearIntervalImpl,
 		onChange: () => {},
 		getUserMedia: fakeStream,
 		createMeshSupervisor: fakeMeshSupervisorFactory().factory,
 	});
-	t.after(() => sixth.close());
+	t.after(() => extra.close());
 	await pump(relay, clock, timers, { rounds: 10 });
 
-	assert.equal(sixth.getVoicePresent().length, fillerCount, "6-й видит все 5 существующих голосовых мест как занятые");
-	await assert.rejects(() => sixth.joinVoice(), /заполнен/);
+	assert.equal(extra.getVoicePresent().length, fillerCount, "лишний видит все существующие голосовые места как занятые");
+	await assert.rejects(() => extra.joinVoice(), /заполнен/);
 });
 
 test("close(): останавливает голос (meshSupervisor.leaveVoice) даже без явного leaveVoice()", async (t) => {

@@ -37,7 +37,14 @@ const TRICKLE_I_MAX_MS = 60000;
 const TRICKLE_K = 1;
 const DISCOVERY_PLACEHOLDER_PUBKEY = "0".repeat(64);
 // Р4 (ROOMS-MATH §4.3) — ОДНА именованная константа в ОДНОМ месте.
-export const MAX_VOICE_PARTICIPANTS = 5;
+// Было 5 — поднято до 7 после живой проверки (2026-09-08): меш-топология
+// упирается не в сервер (coturn просто пересылает байты, не декодирует —
+// нагрузка на VPS при одном реле-ребре осталась в пределах шума CPU/RAM),
+// а в исходящий канал и батарею КАЖДОГО участника — на n=7 это 6 исходящих
+// потоков с устройства (~150-300 кбит/с), ещё комфортно даже на мобильном
+// интернете. Дальше поднимать без реального теста со слабым устройством
+// на плохой сети не стоит — это уже другой источник риска, не проверенный.
+export const MAX_VOICE_PARTICIPANTS = 7;
 const DEFAULT_GET_USER_MEDIA = (constraints) => navigator.mediaDevices.getUserMedia(constraints);
 
 function randomSuffix() {
