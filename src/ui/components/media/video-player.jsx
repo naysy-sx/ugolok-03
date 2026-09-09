@@ -39,12 +39,22 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	const videoRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
+	// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл целиком;
+	// percent !== null ТОЛЬКО в этой ветке (bridge-путь onProgress не зовёт
+	// вовсе — там src готов почти сразу, качает уже сам <video> по Range).
+	const [percent, setPercent] = useState(null);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSrc(null);
 		setError("");
-		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
+		setPercent(null);
+		acquireMediaUrl(mediaRef, {
+			serverUrl: BLOSSOM_URL,
+			onProgress: (p) => {
+				if (!cancelled && p && typeof p === "object" && p.phase === "preparing") setPercent(p.percent);
+			},
+		})
 			.then((handle) => {
 				if (!cancelled) setSrc(handle.src);
 			})
@@ -75,7 +85,9 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					{t("attachment.videoLoadError", { error })}
 				</p>
 			)}
-			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
+			{!error && !src && !compact && (
+				<p style={{ color: "#fff" }}>{percent != null ? t("attachment.statusDownloading", { percent }) : t("common.loading")}</p>
+			)}
 			{!error && (
 				<video
 					ref={(node) => {

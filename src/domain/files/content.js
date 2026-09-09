@@ -8,7 +8,10 @@ import { DomainError } from "../errors.js";
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
 const GET_RANGE_CONCURRENCY = 6;
 
-async function mapPool(items, limit, fn) {
+// Экспортирован (MEDIA-PERF-TZ.md §5.1) — player-session.js::readRange раньше
+// грузил чанки ОДНОГО Range-окна последовательно (for+await), в отличие от
+// этого файла; теперь переиспользует тот же пул, вместо второй реализации.
+export async function mapPool(items, limit, fn) {
 	const result = new Array(items.length);
 	let next = 0;
 	async function worker() {
@@ -137,25 +140,50 @@ function cipherChunkOffset(i, chunkSize) {
 // getRange (было инлайном в цикле) — та же арифметика cipherChunkOffset,
 // DRY по ALGO.MD §0 ("ошибка на единицу даёт битое видео и не ловится
 // глазами" — не дублировать в двух местах).
-export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl } = {}) {
+// trace — необязательный объект perf-trace.js (MEDIA-PERF-TZ.md §3.2): сеть и
+// расшифровка мерятся ОТДЕЛЬНО (mark("net", ms) / mark("decrypt", ms)), плюс
+// счётчик фактических HTTP-запросов (count("requests")) — на параллельном
+// пуле (getRange/mapPool) несколько чанков меряются одновременно, поэтому
+// накопительная сумма в mark(phase, ms), не последовательная дельта.
+export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl, trace } = {}) {
 	const count = manifest.chunks.length;
 	const lastChunkSize = manifest.size - (count - 1) * manifest.chunkSize;
 	const plainChunkSize = chunkIndex === count - 1 ? lastChunkSize : manifest.chunkSize;
 	const options = fetchImpl ? { fetchImpl } : {};
 	const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
 	const cipherEnd = cipherStart + plainChunkSize + AEAD_TAG_BYTES - 1; // включительно (Range)
+	const netStart = trace ? nowMs() : 0;
 	const cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
+	if (trace) {
+		trace.mark("net", nowMs() - netStart);
+		trace.count("requests");
+	}
 	const actualDigest = bytesToHex(sha256(cipherChunk));
 	if (actualDigest !== manifest.chunks[chunkIndex]) {
 		throw new DomainError(`Blossom-сервер вернул подменённый чанк ${chunkIndex} (digest не совпадает)`, "errors.blossomChunkTampered", { chunkIndex });
 	}
-	return decryptChunk(cipherChunk, fileKey, chunkIndex);
+	const decStart = trace ? nowMs() : 0;
+	const plain = decryptChunk(cipherChunk, fileKey, chunkIndex);
+	if (trace) trace.mark("decrypt", nowMs() - decStart);
+	return plain;
+}
+
+function nowMs() {
+	return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
 }
 
 // start/end — байтовый диапазон В ИСХОДНОМ (расшифрованном) файле,
 // end ИСКЛЮЧАЮЩИЙ (как rangeToChunks). Возвращает ровно запрошенные байты,
 // не чанк(и) целиком.
+// onProgress — MEDIA-PERF-TZ.md §6.3: фолбэк без SW-controller (media-url.js)
+// качает видео/аудио ЦЕЛИКОМ этим путём — раньше единственный статус был
+// неопределённый "Загрузка…"; теперь на каждый завершённый чанк отдаём
+// {chunksDone, chunksTotal, bytesDone, bytesTotal}, UI считает процент сам
+// (порядок завершения чанков в пуле не гарантирован — bytesDone копится по
+// ФАКТУ завершения, не по индексу, поэтому не строго монотонно приближается
+// к 100% по чанку N, но общий процент всё равно растёт корректно).
 export async function getRange(manifest, fileKey, start, end, opts = {}) {
+	const { onProgress, trace } = opts;
 	const count = manifest.chunks.length;
 	const lastChunkSize = manifest.size - (count - 1) * manifest.chunkSize;
 	const { firstIdx, lastIdx, skipHead, skipTail } = rangeToChunks(start, end - start, {
@@ -166,7 +194,18 @@ export async function getRange(manifest, fileKey, start, end, opts = {}) {
 
 	const indices = [];
 	for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
-	const decryptedChunks = await mapPool(indices, GET_RANGE_CONCURRENCY, (i) => getChunk(manifest, fileKey, i, opts));
+	const chunksTotal = indices.length;
+	const bytesTotal = end - start;
+	let chunksDone = 0;
+	let bytesDone = 0;
+	const decryptedChunks = await mapPool(indices, GET_RANGE_CONCURRENCY, async (i) => {
+		const bytes = await getChunk(manifest, fileKey, i, opts);
+		chunksDone += 1;
+		bytesDone += bytes.length;
+		onProgress?.({ phase: "download", chunksDone, chunksTotal, bytesDone: Math.min(bytesDone, bytesTotal), bytesTotal });
+		return bytes;
+	});
+	trace?.count("chunks", chunksTotal);
 
 	const joined = concatBytes(...decryptedChunks);
 	const tailCut = skipTail > 0 ? joined.length - skipTail : joined.length;

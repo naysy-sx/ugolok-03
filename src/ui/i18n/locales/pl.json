@@ -124,7 +124,12 @@
 		"channelExceptions": "Wyjątki dla poszczególnych kanałów · {{count}}",
 		"networkTitle": "Sieć",
 		"networkHint": "Na czym działa aplikacja: skąd pochodzą zdarzenia, dokąd przesyłane są pliki, z jakim własnym serwerem jesteś połączony.",
-		"sessionHint": "Klucze zostaną wyładowane z pamięci, potrzebne będzie hasło."
+		"sessionHint": "Klucze zostaną wyładowane z pamięci, potrzebne będzie hasło.",
+		"perfLogTitle": "Dziennik szybkości",
+		"perfLogHint": "Widoczny tylko przy włączonej fladze pomiaru (?perf=1)",
+		"copyPerfLogButton": "Kopiuj dziennik szybkości",
+		"perfLogCopied": "Skopiowano do schowka",
+		"perfLogManualHint": "Schowek niedostępny — zaznacz i skopiuj ręcznie"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil i menu główne",
@@ -669,6 +674,7 @@
 		"loadingImage": "Wczytywanie obrazu…",
 		"statusDecrypting": "Odszyfrowywanie…",
 		"statusPreparing": "Przygotowanie podglądu…",
+		"statusDownloading": "Pobieranie… {{percent}}%",
 		"retry": "Ponów",
 		"units": {
 			"bytes": "{{count}} B",

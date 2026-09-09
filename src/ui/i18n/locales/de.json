@@ -124,7 +124,12 @@
 		"channelExceptions": "Ausnahmen für einzelne Kanäle · {{count}}",
 		"networkTitle": "Netzwerk",
 		"networkHint": "Womit die App arbeitet: woher Ereignisse kommen, wohin Dateien hochgeladen werden, mit welchem eigenen Server Sie verbunden sind.",
-		"sessionHint": "Die Schlüssel werden aus dem Speicher entladen, das Passwort wird benötigt."
+		"sessionHint": "Die Schlüssel werden aus dem Speicher entladen, das Passwort wird benötigt.",
+		"perfLogTitle": "Geschwindigkeitsprotokoll",
+		"perfLogHint": "Nur sichtbar, wenn das Messflag aktiviert ist (?perf=1)",
+		"copyPerfLogButton": "Geschwindigkeitsprotokoll kopieren",
+		"perfLogCopied": "In die Zwischenablage kopiert",
+		"perfLogManualHint": "Zwischenablage nicht verfügbar — markieren und manuell kopieren"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil und Hauptmenü",
@@ -669,6 +674,7 @@
 		"loadingImage": "Bild wird geladen…",
 		"statusDecrypting": "Entschlüsseln…",
 		"statusPreparing": "Vorschau wird vorbereitet…",
+		"statusDownloading": "Wird heruntergeladen… {{percent}}%",
 		"retry": "Erneut versuchen",
 		"units": {
 			"bytes": "{{count}} B",

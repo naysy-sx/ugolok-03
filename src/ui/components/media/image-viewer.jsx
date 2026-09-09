@@ -37,6 +37,13 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		setPhase("loading");
 		acquireMediaUrl(mediaRef, {
 			serverUrl: BLOSSOM_URL,
+			// MEDIA-PERF-TZ-4.md §4 A.1 — цель растра оверлея = вьюпорт по большей
+			// стороне (image-preview.js::overlayTargetWidth сам умножает на DPR и
+			// применяет потолок 2560px). Читаем window ЗДЕСЬ (на момент открытия/
+			// смены картинки), не в domain-слое — там нет DOM.
+			rasterAdapters: {
+				viewportLargerSidePx: typeof window !== "undefined" ? Math.max(window.innerWidth, window.innerHeight) : undefined,
+			},
 			onProgress: (p) => {
 				if (!cancelled) setPhase(p);
 			},

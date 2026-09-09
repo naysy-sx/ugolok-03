@@ -124,7 +124,12 @@
 		"channelExceptions": "Exceptions pour certains canaux · {{count}}",
 		"networkTitle": "Réseau",
 		"networkHint": "Sur quoi repose l'application : d'où viennent les événements, où sont téléversés les fichiers, à quel serveur personnel vous êtes connecté.",
-		"sessionHint": "Les clés seront déchargées de la mémoire, le mot de passe sera nécessaire."
+		"sessionHint": "Les clés seront déchargées de la mémoire, le mot de passe sera nécessaire.",
+		"perfLogTitle": "Journal de vitesse",
+		"perfLogHint": "Visible uniquement lorsque l'indicateur de mesure est activé (?perf=1)",
+		"copyPerfLogButton": "Copier le journal de vitesse",
+		"perfLogCopied": "Copié dans le presse-papiers",
+		"perfLogManualHint": "Presse-papiers indisponible — sélectionnez et copiez manuellement"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil et menu principal",
@@ -669,6 +674,7 @@
 		"loadingImage": "Chargement de l'image…",
 		"statusDecrypting": "Déchiffrement…",
 		"statusPreparing": "Préparation de l'aperçu…",
+		"statusDownloading": "Téléchargement… {{percent}}%",
 		"retry": "Réessayer",
 		"units": {
 			"bytes": "{{count}} o",

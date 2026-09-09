@@ -76,8 +76,8 @@ function FeedThumb({ attachment }) {
 			return;
 		}
 		let cancelled = false;
-		resolveImagePreviewUrl(attachment.manifestDigest, attachment.mime, () =>
-			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL }),
+		resolveImagePreviewUrl(attachment.manifestDigest, attachment.mime, (trace) =>
+			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL, trace }),
 		)
 			.then((raster) => {
 				if (!cancelled) setUrl(raster.url);

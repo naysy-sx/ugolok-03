@@ -124,7 +124,12 @@
 		"channelExceptions": "Exceções para canais individuais · {{count}}",
 		"networkTitle": "Rede",
 		"networkHint": "Como o aplicativo funciona: de onde vêm os eventos, para onde os arquivos são enviados, a qual servidor próprio você está conectado.",
-		"sessionHint": "As chaves serão descarregadas da memória; a senha será necessária."
+		"sessionHint": "As chaves serão descarregadas da memória; a senha será necessária.",
+		"perfLogTitle": "Registro de velocidade",
+		"perfLogHint": "Visível apenas com o sinalizador de medição ativado (?perf=1)",
+		"copyPerfLogButton": "Copiar registro de velocidade",
+		"perfLogCopied": "Copiado para a área de transferência",
+		"perfLogManualHint": "Área de transferência indisponível — selecione e copie manualmente"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil e menu principal",
@@ -669,6 +674,7 @@
 		"loadingImage": "Carregando imagem…",
 		"statusDecrypting": "Descriptografando…",
 		"statusPreparing": "Preparando a visualização…",
+		"statusDownloading": "Baixando… {{percent}}%",
 		"retry": "Tentar de novo",
 		"units": {
 			"bytes": "{{count}} B",

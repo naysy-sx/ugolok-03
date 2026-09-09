@@ -124,7 +124,12 @@
 		"channelExceptions": "Uitzonderingen voor afzonderlijke kanalen · {{count}}",
 		"networkTitle": "Netwerk",
 		"networkHint": "Waarmee de app werkt: waar gebeurtenissen vandaan komen, waarheen bestanden worden geüpload, met welke eigen server u verbonden bent.",
-		"sessionHint": "De sleutels worden uit het geheugen verwijderd, het wachtwoord is dan nodig."
+		"sessionHint": "De sleutels worden uit het geheugen verwijderd, het wachtwoord is dan nodig.",
+		"perfLogTitle": "Snelheidslogboek",
+		"perfLogHint": "Alleen zichtbaar als de meetvlag aan staat (?perf=1)",
+		"copyPerfLogButton": "Snelheidslogboek kopiëren",
+		"perfLogCopied": "Gekopieerd naar klembord",
+		"perfLogManualHint": "Klembord niet beschikbaar — selecteer en kopieer handmatig"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profiel en hoofdmenu",
@@ -669,6 +674,7 @@
 		"loadingImage": "Afbeelding laden…",
 		"statusDecrypting": "Ontsleutelen…",
 		"statusPreparing": "Voorbeeld voorbereiden…",
+		"statusDownloading": "Downloaden… {{percent}}%",
 		"retry": "Opnieuw",
 		"units": {
 			"bytes": "{{count}} B",

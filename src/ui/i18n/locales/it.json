@@ -124,7 +124,12 @@
 		"channelExceptions": "Eccezioni per singoli canali · {{count}}",
 		"networkTitle": "Rete",
 		"networkHint": "Come funziona l'app: da dove arrivano gli eventi, dove vengono caricati i file, a quale server personale sei connesso.",
-		"sessionHint": "Le chiavi verranno scaricate dalla memoria; sarà richiesta la password."
+		"sessionHint": "Le chiavi verranno scaricate dalla memoria; sarà richiesta la password.",
+		"perfLogTitle": "Registro di velocità",
+		"perfLogHint": "Visibile solo con il flag di misurazione attivo (?perf=1)",
+		"copyPerfLogButton": "Copia registro di velocità",
+		"perfLogCopied": "Copiato negli appunti",
+		"perfLogManualHint": "Appunti non disponibili — seleziona e copia manualmente"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profilo e menu principale",
@@ -669,6 +674,7 @@
 		"loadingImage": "Caricamento immagine…",
 		"statusDecrypting": "Decifratura…",
 		"statusPreparing": "Preparazione anteprima…",
+		"statusDownloading": "Download in corso… {{percent}}%",
 		"retry": "Riprova",
 		"units": {
 			"bytes": "{{count}} B",

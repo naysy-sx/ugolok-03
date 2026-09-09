@@ -24,6 +24,7 @@ import { nudgeHueOutOfForbiddenZones } from "../theme/palette-generator.js";
 import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import { applyThemeMode } from "../theme/theme-mode.js";
 import { SUPPORTED_LOCALES, setLocale, t, errorMessage } from "../signals/i18n.js";
+import { isPerfTraceEnabled, getPerfLog, readControllerCounters } from "../../domain/media/perf-trace.js";
 import Screen from "../components/screen.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
@@ -555,6 +556,68 @@ function Panel({ title, hint, icon: Icon, danger, children }) {
 	);
 }
 
+// MEDIA-PERF-TZ-4.md §7/§8 задача D — виден ТОЛЬКО при включённом флаге
+// (ugolok:perf=1, обычно через ?perf=1 на экран замера, см. perf-trace.js).
+// Отдельный экран диагностики НЕ создан (ТЗ прямо просит не создавать) —
+// панель живёт в "Настройки" → "Сеть", рядом с остальным сетевым/
+// техническим. Копирует журнал (getPerfLog, ≤200 строк) + счётчик
+// controller ok/null (ugolok:perf:sw) — из этих двух чисел (см. §8 ТЗ)
+// автор решает, живёт ли Range-путь у реальных пользователей вообще.
+function PerfLogExport() {
+	const [status, setStatus] = useState("idle"); // idle | copied | manual | empty
+	const [manualText, setManualText] = useState("");
+
+	if (!isPerfTraceEnabled()) return null;
+
+	function buildPayload() {
+		const counters = readControllerCounters();
+		const log = getPerfLog();
+		const header = `ugolok:perf:sw controller ok=${counters.ok} null=${counters.null}`;
+		if (log.length === 0) return `${header}\n(журнал пуст — откройте несколько картинок/видео с этим флагом включённым)`;
+		return [header, ...log].join("\n");
+	}
+
+	async function handleCopy() {
+		const payload = buildPayload();
+		if (navigator.clipboard) {
+			try {
+				await navigator.clipboard.writeText(payload);
+				setStatus("copied");
+				return;
+			} catch {
+				// приватный режим/отказ разрешения — фолбэк на textarea ниже
+			}
+		}
+		setManualText(payload);
+		setStatus("manual");
+	}
+
+	return (
+		<Panel title={t("settings.perfLogTitle")} hint={t("settings.perfLogHint")}>
+			<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+				<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+					<button type="button" class="btn--ghost rigid" onClick={handleCopy}>
+						{t("settings.copyPerfLogButton")}
+					</button>
+					{status === "copied" && <span class="panel__hint">{t("settings.perfLogCopied")}</span>}
+				</div>
+				{status === "manual" && (
+					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+						<p class="panel__hint">{t("settings.perfLogManualHint")}</p>
+						<textarea
+							readOnly
+							rows={8}
+							style={{ width: "100%", fontFamily: "monospace", fontSize: "0.8em" }}
+							value={manualText}
+							onClick={(e) => e.currentTarget.select()}
+						/>
+					</div>
+				)}
+			</div>
+		</Panel>
+	);
+}
+
 // Строка настройки: подпись слева, контрол справа. В проекте эта молекула
 // была написана руками 46 раз через инлайновый justify-content:
 // space-between. Здесь она названа — и вместе с именем получает поведение
@@ -942,6 +1005,7 @@ export default function Settings() {
 						<RelayBlossomSection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
 						<SelfHostedSection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
 					</Panel>
+					<PerfLogExport />
 				</div>
 			)}
 

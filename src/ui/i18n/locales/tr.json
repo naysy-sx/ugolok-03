@@ -124,7 +124,12 @@
 		"channelExceptions": "Belirli kanallar için istisnalar · {{count}}",
 		"networkTitle": "Ağ",
 		"networkHint": "Uygulamanın ne üzerinden çalıştığı: olaylar nereden geliyor, dosyalar nereye yükleniyor, hangi kendi sunucunuza bağlısınız.",
-		"sessionHint": "Anahtarlar bellekten kaldırılacak, şifre gerekecek."
+		"sessionHint": "Anahtarlar bellekten kaldırılacak, şifre gerekecek.",
+		"perfLogTitle": "Hız günlüğü",
+		"perfLogHint": "Yalnızca ölçüm bayrağı açıkken görünür (?perf=1)",
+		"copyPerfLogButton": "Hız günlüğünü kopyala",
+		"perfLogCopied": "Panoya kopyalandı",
+		"perfLogManualHint": "Pano kullanılamıyor — seçip elle kopyalayın"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil ve ana menü",
@@ -669,6 +674,7 @@
 		"loadingImage": "Görsel yükleniyor…",
 		"statusDecrypting": "Şifre çözülüyor…",
 		"statusPreparing": "Önizleme hazırlanıyor…",
+		"statusDownloading": "İndiriliyor… {{percent}}%",
 		"retry": "Yeniden dene",
 		"units": {
 			"bytes": "{{count}} B",

@@ -16,12 +16,21 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	const audioRef = useRef(null);
 	const [src, setSrc] = useState(null);
 	const [error, setError] = useState("");
+	// MEDIA-PERF-TZ.md §6.3 — см. video-player.jsx: percent !== null только на
+	// фолбэке без SW-controller (полное скачивание файла).
+	const [percent, setPercent] = useState(null);
 
 	useEffect(() => {
 		let cancelled = false;
 		setSrc(null);
 		setError("");
-		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
+		setPercent(null);
+		acquireMediaUrl(mediaRef, {
+			serverUrl: BLOSSOM_URL,
+			onProgress: (p) => {
+				if (!cancelled && p && typeof p === "object" && p.phase === "preparing") setPercent(p.percent);
+			},
+		})
 			.then((handle) => {
 				if (!cancelled) setSrc(handle.src);
 			})
@@ -52,7 +61,9 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					{t("attachment.audioLoadError", { error })}
 				</p>
 			)}
-			{!error && !src && !compact && <p style={{ color: "#fff" }}>{t("common.loading")}</p>}
+			{!error && !src && !compact && (
+				<p style={{ color: "#fff" }}>{percent != null ? t("attachment.statusDownloading", { percent }) : t("common.loading")}</p>
+			)}
 			{!error && (
 				<div class="audio-shell" style={{ display: compact || !src ? "none" : undefined }}>
 					<audio

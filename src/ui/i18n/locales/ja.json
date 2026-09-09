@@ -124,7 +124,12 @@
 		"channelExceptions": "個別のチャンネルの例外 · {{count}}",
 		"networkTitle": "ネットワーク",
 		"networkHint": "アプリが何を通じて動作しているか — イベントの取得元、ファイルのアップロード先、接続している自前のサーバー。",
-		"sessionHint": "鍵はメモリから解放され、パスワードが必要になります。"
+		"sessionHint": "鍵はメモリから解放され、パスワードが必要になります。",
+		"perfLogTitle": "速度ログ",
+		"perfLogHint": "計測フラグが有効なときのみ表示されます（?perf=1）",
+		"copyPerfLogButton": "速度ログをコピー",
+		"perfLogCopied": "クリップボードにコピーしました",
+		"perfLogManualHint": "クリップボードが使用できません — 選択して手動でコピーしてください"
 	},
 	"shell": {
 		"sidebarAriaLabel": "プロフィールとメインメニュー",
@@ -669,6 +674,7 @@
 		"loadingImage": "画像を読み込み中…",
 		"statusDecrypting": "復号しています…",
 		"statusPreparing": "表示を準備しています…",
+		"statusDownloading": "ダウンロード中… {{percent}}%",
 		"retry": "再試行",
 		"units": {
 			"bytes": "{{count}} B",

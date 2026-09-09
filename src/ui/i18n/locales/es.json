@@ -124,7 +124,12 @@
 		"channelExceptions": "Excepciones para canales individuales · {{count}}",
 		"networkTitle": "Red",
 		"networkHint": "Cómo funciona la aplicación: de dónde vienen los eventos, dónde se suben los archivos, a qué servidor propio está conectado.",
-		"sessionHint": "Las claves se descargarán de la memoria; se requerirá la contraseña."
+		"sessionHint": "Las claves se descargarán de la memoria; se requerirá la contraseña.",
+		"perfLogTitle": "Registro de velocidad",
+		"perfLogHint": "Visible solo cuando el indicador de medición está activado (?perf=1)",
+		"copyPerfLogButton": "Copiar registro de velocidad",
+		"perfLogCopied": "Copiado al portapapeles",
+		"perfLogManualHint": "Portapapeles no disponible — seleccione y copie manualmente"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil y menú principal",
@@ -669,6 +674,7 @@
 		"loadingImage": "Cargando imagen…",
 		"statusDecrypting": "Descifrando…",
 		"statusPreparing": "Preparando la vista…",
+		"statusDownloading": "Descargando… {{percent}}%",
 		"retry": "Reintentar",
 		"units": {
 			"bytes": "{{count}} B",

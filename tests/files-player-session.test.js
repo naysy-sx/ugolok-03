@@ -141,6 +141,29 @@ test("чанк 0 остаётся в кэше после загрузки мно
 	assert.equal(cache.get(`${namespace}:1`), undefined, "обычный чанк 1 вытеснен — закрепление не распространяется на него");
 });
 
+// MEDIA-PERF-TZ.md §5.4 — было: for+await, максимум ОДИН чанк "в полёте"
+// одновременно внутри readRange. После §5.1 (mapPool, как content.js::getRange)
+// окно из нескольких чанков должно реально пересекаться по времени.
+test("readRange: окно из 8 чанков — максимум одновременных сетевых запросов > 1 (было: строго 1, последовательно)", async () => {
+	const blossom = makeFakeBlossom();
+	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 8 * 256, 256); // ровно 8 чанков
+
+	let inFlight = 0;
+	let maxInFlight = 0;
+	const spyFetch = async (...args) => {
+		inFlight++;
+		maxInFlight = Math.max(maxInFlight, inFlight);
+		await new Promise((r) => setTimeout(r, 3)); // имитация сетевой задержки — без неё гонка не успевает пересечься
+		inFlight--;
+		return blossom.fetchImpl(...args);
+	};
+
+	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: spyFetch });
+	await session.readRange(0, 8 * 256);
+
+	assert.ok(maxInFlight > 1, `максимум одновременных запросов должен быть больше 1, получили ${maxInFlight}`);
+});
+
 test("ошибка prefetch не пробрасывается наружу и не роняет основной readRange", async () => {
 	const blossom = makeFakeBlossom();
 	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 3000, 256);

@@ -124,7 +124,12 @@
 		"channelExceptions": "单个频道的例外 · {{count}}",
 		"networkTitle": "网络",
 		"networkHint": "应用依赖的网络：事件来自哪里，文件上传到哪里，您连接的是哪个自建服务器。",
-		"sessionHint": "密钥将从内存中清除，需要重新输入密码。"
+		"sessionHint": "密钥将从内存中清除，需要重新输入密码。",
+		"perfLogTitle": "速度日志",
+		"perfLogHint": "仅在开启测速标志时可见（?perf=1）",
+		"copyPerfLogButton": "复制速度日志",
+		"perfLogCopied": "已复制到剪贴板",
+		"perfLogManualHint": "剪贴板不可用 — 请选中后手动复制"
 	},
 	"shell": {
 		"sidebarAriaLabel": "个人资料与主菜单",
@@ -669,6 +674,7 @@
 		"loadingImage": "正在加载图片…",
 		"statusDecrypting": "正在解密…",
 		"statusPreparing": "正在准备预览…",
+		"statusDownloading": "下载中… {{percent}}%",
 		"retry": "重试",
 		"units": {
 			"bytes": "{{count}} B",

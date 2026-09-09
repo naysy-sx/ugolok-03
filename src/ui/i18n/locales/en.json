@@ -124,7 +124,12 @@
 		"channelExceptions": "Exceptions for individual channels · {{count}}",
 		"networkTitle": "Network",
 		"networkHint": "What the app runs on: where events come from, where files upload to, which server of your own you're connected to.",
-		"sessionHint": "Keys will be unloaded from memory; the password will be required."
+		"sessionHint": "Keys will be unloaded from memory; the password will be required.",
+		"perfLogTitle": "Speed log",
+		"perfLogHint": "Visible only when the measurement flag is on (?perf=1)",
+		"copyPerfLogButton": "Copy speed log",
+		"perfLogCopied": "Copied to clipboard",
+		"perfLogManualHint": "Clipboard unavailable — select and copy manually"
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",
@@ -669,6 +674,7 @@
 		"loadingImage": "Loading image…",
 		"statusDecrypting": "Decrypting…",
 		"statusPreparing": "Preparing preview…",
+		"statusDownloading": "Downloading… {{percent}}%",
 		"retry": "Retry",
 		"units": {
 			"bytes": "{{count}} B",

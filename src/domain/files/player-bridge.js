@@ -6,23 +6,19 @@
 // serviceWorker, DOM-зависима, проверяется только живьём (тот же принцип
 // разделения, что во всём проекте — см. "Уроки" PLAN.md).
 import { createPlayerSession } from "./player-session.js";
-import { createChunkCache } from "./chunk-cache.js";
+import { createChunkCache, budgetFor } from "./chunk-cache.js";
 
 // Один кэш на ВСЕ одновременно открытые файлы страницы (не по одному на
 // файл) — ключи кэша уже пространственно разделены manifest.blobSha256
 // (player-session.js), общий бюджет просто означает, что холодные файлы
 // вытесняются раньше при нехватке места, а не то, что они конфликтуют.
-// Этап F, F3 (DESIGN.md/CONTRACTS.md "Этап F, F3", ALGO.md §3.4) — было 32 МБ
-// (LRU без понятия "окно"). Число 2 621 440 (=2.5 МиБ) исторически считалось
-// как (k+3)·C при C=512КиБ, k=2 — НО реальный размер чанка манифеста (Files UI)
-// — результат chunkSizeFor (upload-plan.js), обычно 64 КиБ, не 512 КиБ.
-// Итог: бюджет вмещает не 5 чанков, как задумывалось, а ~40 при C=64КиБ —
-// не баг (освобождение памяти на телефоне всё ещё работает), но комментарий
-// врал про арифметику. Оставляем абсолютный байтовый бюджет как есть
-// (FILES-FIX-SPEC.md §2, §6.2.5) — переход на formulу от РЕАЛЬНОГО chunkSize
-// потребовал бы читать manifest здесь, а кэш общий на все файлы разом.
-const DEFAULT_CACHE_BUDGET_BYTES = 2_621_440; // 2.5 МиБ, абсолютный потолок (не (k+3)·C)
-const sharedCache = createChunkCache(DEFAULT_CACHE_BUDGET_BYTES);
+// MEDIA-PERF-TZ.md §5.2 — было: фиксированные 2.5 МиБ НА ВСЕ файлы разом
+// (комментарий сам признавал, что исходная арифметика (k+3)·C была основана
+// на неверном предположении о размере чанка — 512 КиБ вместо реальных
+// 64 КиБ-4 МиБ из chunkSizeFor). Теперь бюджет растёт с числом РЕАЛЬНО
+// открытых файлов (registry.size) — budgetFor()/setBudget() ниже, вызывается
+// на каждый register/unregister.
+const sharedCache = createChunkCache(budgetFor(0));
 
 // FILES-FIX-SPEC.md §6.1 / TZ-FIX-FILES-MEDIA-STATIC.md решение №6 — открытый
 // диапазон (браузер ещё не знает Accept-Ranges, либо явный "bytes=X-") НЕ
@@ -30,8 +26,16 @@ const sharedCache = createChunkCache(DEFAULT_CACHE_BUDGET_BYTES);
 // на файл в единицы-десятки МБ — и есть механизм S4/S5 ("потолок ~1.5 МБ",
 // молчащее видео). HTTP разрешает 206 короче запрошенного — браузер поймёт
 // по Content-Range, что получил часть, и запросит следующее окно сам.
-// Дублируется в service-worker.js (тот файл не проходит сборку Vite, импорт
-// невозможен) — править оба места разом, см. комментарий там.
+//
+// MEDIA-PERF-TZ.md §5.3 — с этапа "адаптивное окно" service-worker.js САМ
+// решает конкретный end для открытого диапазона (растёт 512К->1М->2М->4М при
+// последовательном чтении, sw-timeout.js::nextAdaptiveWindow) и всегда шлёт
+// сюда УЖЕ КОНКРЕТНЫЙ end — в реальном трафике ветка end===null ниже больше
+// не срабатывает. Она остаётся как фолбэк-константа для прямых вызовов в
+// обход SW (тесты, handleRangeRequest вызванный напрямую) — держит старое
+// поведение "не весь файл", если что-то когда-то позовёт эту функцию не
+// через мост. Дублируется в service-worker.js/sw-timeout.js (тот файл не
+// проходит сборку Vite, импорт невозможен) — править все три места разом.
 export const PLAYER_FIRST_WINDOW_BYTES = 512 * 1024;
 
 const registry = new Map(); // manifestDigest -> { manifest, session }
@@ -42,10 +46,12 @@ const registry = new Map(); // manifestDigest -> { manifest, session }
 export function registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl, fetchImpl }) {
 	const session = createPlayerSession({ manifest, fileKey, serverUrl, cache: sharedCache, fetchImpl });
 	registry.set(manifestDigest, { manifest, session });
+	sharedCache.setBudget(budgetFor(registry.size));
 }
 
 export function unregisterPlayerFile(manifestDigest) {
 	registry.delete(manifestDigest);
+	sharedCache.setBudget(budgetFor(registry.size));
 }
 
 // start/end — ОБА включительно (HTTP Range семантика, протокол сообщений
@@ -56,7 +62,12 @@ export function unregisterPlayerFile(manifestDigest) {
 // границы, либо отсутствие Range вовсе — SW нормализует это в start=0)
 // — разрешается в manifest.size-1 ЗДЕСЬ, где manifest уже есть; SW
 // сам размер файла не знает до этого ответа.
-export async function handleRangeRequest({ manifestDigest, start, end }) {
+// onChunkArrived (MEDIA-PERF-TZ-4.md §5, необязательный) — прокинут насквозь
+// в session.readRange; startPlayerBridge ниже использует его, чтобы слать SW
+// промежуточный "range-progress" на каждый реально пришедший чанк — иначе SW
+// видит только ОДИН финальный ответ на всё окно и не может сбрасывать
+// застойный таймер раньше него.
+export async function handleRangeRequest({ manifestDigest, start, end, onChunkArrived }) {
 	const entry = registry.get(manifestDigest);
 	if (!entry) return { ok: false, bytes: null, mime: null, size: null, error: "unknown-digest" };
 
@@ -73,7 +84,7 @@ export async function handleRangeRequest({ manifestDigest, start, end }) {
 	}
 
 	try {
-		const bytes = await session.readRange(start, resolvedEnd + 1);
+		const bytes = await session.readRange(start, resolvedEnd + 1, { onChunkArrived });
 		return { ok: true, bytes, mime: manifest.mime, size: manifest.size, error: null };
 	} catch (e) {
 		return { ok: false, bytes: null, mime: null, size: null, error: "decrypt-failed" };
@@ -85,13 +96,22 @@ export async function handleRangeRequest({ manifestDigest, start, end }) {
 // запрос диапазона postMessage'ом (CONTRACTS.md) — страница отвечает
 // РОВНО туда же (event.source), не broadcast (несколько вкладок с разными
 // аккаунтами не должны получать чужие запросы, DESIGN.md "гонка 4").
+//
+// MEDIA-PERF-TZ-4.md §5 — на каждый реально пришедший чанк ДОПОЛНИТЕЛЬНО (до
+// финального range-response) шлём range-progress с тем же requestId — SW
+// сбрасывает по нему застойный таймер (createStallGuard в sw-timeout.js,
+// продублирован в service-worker.js). Само по себе не меняет содержимое
+// финального ответа, чисто сигнал "мы ещё живы".
 export function startPlayerBridge() {
 	if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return () => {};
 
 	async function onMessage(event) {
 		const msg = event.data;
 		if (!msg || msg.type !== "files-content:range-request") return;
-		const res = await handleRangeRequest(msg);
+		const res = await handleRangeRequest({
+			...msg,
+			onChunkArrived: () => event.source?.postMessage({ type: "files-content:range-progress", requestId: msg.requestId }),
+		});
 		event.source?.postMessage({
 			type: "files-content:range-response",
 			requestId: msg.requestId,

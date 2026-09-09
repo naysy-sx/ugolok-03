@@ -20,20 +20,34 @@
 // не в скоупе этого этапа, при необходимости — отдельное решение.
 import { getManifest, getRange } from "../../files/content.js";
 import { registerPlayerFile, unregisterPlayerFile } from "../../files/player-bridge.js";
-import { resolveImagePreviewUrl } from "../image-preview.js";
+import { resolveImageOverlayUrl } from "../image-preview.js";
 import { putPlaintextBytes } from "../plaintext-cache.js";
+import { recordControllerCheck } from "../perf-trace.js";
 
 const handles = new Map(); // digest -> Promise<{kind, src|url}>
 
+// MEDIA-PERF-TZ.md §3.3 — единственный способ узнать, живёт ли Range-путь
+// (§5) у реальных пользователей или все видео/аудио тихо идут по полному
+// download-фолбэку ниже: копим накопительно в localStorage, ВСЕГДА, вне
+// зависимости от флага ugolok:perf.
 async function canUseFilesContentBridge() {
-	if (typeof navigator === "undefined" || !navigator.serviceWorker) return true;
-	if (navigator.serviceWorker.controller) return true;
+	if (typeof navigator === "undefined" || !navigator.serviceWorker) {
+		recordControllerCheck(true); // окружение без SW вовсе (тесты/старый браузер) — не в счёт "фолбэка живого SW"
+		return true;
+	}
+	if (navigator.serviceWorker.controller) {
+		recordControllerCheck(true);
+		return true;
+	}
 	try {
 		await navigator.serviceWorker.ready;
 	} catch {
+		recordControllerCheck(false);
 		return false;
 	}
-	return !!navigator.serviceWorker.controller;
+	const ok = !!navigator.serviceWorker.controller;
+	recordControllerCheck(ok);
+	return ok;
 }
 
 export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress } = {}) {
@@ -42,13 +56,17 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 
 	const promise = (async () => {
 		if (ref.mime.startsWith("image/")) {
-			const raster = await resolveImagePreviewUrl(
+			// Оверлей (MEDIA-PERF-TZ.md §4.1) — единственный вызывающий этой ветки
+			// сейчас ImageViewer (media-overlay.jsx). Бабл (attachment-view.jsx,
+			// feed-item.jsx) идёт СВОИМ путём напрямую через resolveImagePreviewUrl,
+			// не через acquireMediaUrl.
+			const raster = await resolveImageOverlayUrl(
 				ref.digest,
 				ref.mime,
-				async () => {
+				async (trace) => {
 					onProgress?.("decrypting");
 					const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
-					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl });
+					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl, trace });
 				},
 				rasterAdapters,
 				onProgress,
@@ -58,8 +76,20 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
 		const useBridge = await canUseFilesContentBridge();
 		if (!useBridge) {
-			onProgress?.("preparing");
-			const bytes = await getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl });
+			// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл ЦЕЛИКОМ;
+			// раньше единственный статус был неопределённый "preparing" (в чате —
+			// "Подготовка просмотра…"). Теперь на каждый чанк отдаём процент —
+			// не ускоряет скачивание, но убирает ощущение зависания, которое и
+			// было предметом жалобы (§6.3, "дёшево, делать в этом проходе").
+			onProgress?.({ phase: "preparing", percent: 0 });
+			const bytes = await getRange(manifest, ref.key, 0, manifest.size, {
+				serverUrl,
+				fetchImpl,
+				onProgress: ({ bytesDone, bytesTotal }) => {
+					const percent = bytesTotal > 0 ? Math.round((bytesDone / bytesTotal) * 100) : 0;
+					onProgress?.({ phase: "preparing", percent });
+				},
+			});
 			putPlaintextBytes(ref.digest, bytes, ref.mime);
 			const url = URL.createObjectURL(new Blob([bytes], { type: ref.mime }));
 			return { kind: "object-url", url };

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createChunkCache } from "../src/domain/files/chunk-cache.js";
+import { createChunkCache, budgetFor, CHUNK_CACHE_BYTES_PER_FILE, CHUNK_CACHE_CEILING_BYTES } from "../src/domain/files/chunk-cache.js";
 
 function bytes(n) {
 	return new Uint8Array(n);
@@ -105,4 +105,50 @@ test("pin: put без третьего аргумента — pin=false по у�
 	cache.put("b", bytes(10));
 	cache.put("c", bytes(10));
 	assert.equal(cache.get("a"), undefined, "без pin — обычное LRU-вытеснение, как раньше");
+});
+
+// MEDIA-PERF-TZ.md §5.2/§8 п.2 — budgetFor(openCount): 6 МиБ/файл, потолок 24 МиБ.
+test("budgetFor: 1 открытый файл -> 6 МиБ", () => {
+	assert.equal(budgetFor(1), CHUNK_CACHE_BYTES_PER_FILE);
+});
+
+test("budgetFor: растёт линейно с числом открытых файлов", () => {
+	assert.equal(budgetFor(2), 2 * CHUNK_CACHE_BYTES_PER_FILE);
+	assert.equal(budgetFor(3), 3 * CHUNK_CACHE_BYTES_PER_FILE);
+});
+
+test("budgetFor: потолок 24 МиБ — не растёт бесконечно", () => {
+	assert.equal(budgetFor(10), CHUNK_CACHE_CEILING_BYTES);
+	assert.equal(budgetFor(1000), CHUNK_CACHE_CEILING_BYTES);
+});
+
+test("budgetFor: 0 или отрицательное число открытых файлов -> не ноль (минимум 1 файл)", () => {
+	assert.equal(budgetFor(0), CHUNK_CACHE_BYTES_PER_FILE);
+	assert.equal(budgetFor(-1), CHUNK_CACHE_BYTES_PER_FILE);
+});
+
+test("setBudget: увеличение бюджета не вытесняет существующие записи", () => {
+	const cache = createChunkCache(20);
+	cache.put("a", bytes(10));
+	cache.put("b", bytes(10));
+	cache.setBudget(1000);
+	assert.notEqual(cache.get("a"), undefined);
+	assert.notEqual(cache.get("b"), undefined);
+});
+
+test("setBudget: уменьшение бюджета вытесняет НЕМЕДЛЕННО, не дожидаясь следующего put", () => {
+	const cache = createChunkCache(1000);
+	cache.put("a", bytes(10));
+	cache.put("b", bytes(10));
+	cache.setBudget(15); // меньше суммарных 20 байт
+	assert.equal(cache.get("a"), undefined, "a — LRU-самая старая, вытесняется сразу при setBudget");
+	assert.notEqual(cache.get("b"), undefined);
+});
+
+test("setBudget: уменьшение бюджета уважает pin, как обычное put-вытеснение", () => {
+	const cache = createChunkCache(1000);
+	cache.put("pinned", bytes(10), { pin: true });
+	cache.put("b", bytes(10));
+	cache.setBudget(15);
+	assert.notEqual(cache.get("pinned"), undefined, "закреплённая запись переживает уменьшение бюджета");
 });

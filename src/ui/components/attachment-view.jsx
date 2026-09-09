@@ -87,7 +87,11 @@ export function ImageAttachment({ attachment, onOpen }) {
 		resolveImagePreviewUrl(
 			attachment.manifestDigest,
 			attachment.mime,
-			() => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL }),
+			// trace (MEDIA-PERF-TZ.md §3.2) — пробрасывается ЧЕРЕЗ уже существующий
+			// options-мешок (content-cache.js -> attachments.js -> content.js
+			// форвардят объект без изменений), net/decrypt лягут в ту же строку,
+			// что raster в image-preview.js.
+			(trace) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace }),
 			undefined,
 			(p) => {
 				if (!cancelled) setPhase(p);

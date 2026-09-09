@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateFileKey, encryptChunk, decryptChunk, deriveChunkNonce } from "../src/domain/files/crypto.js";
-import { putStream, getManifest, getRange, getChunk, DEFAULT_CHUNK_SIZE, clearManifestCache } from "../src/domain/files/content.js";
+import { putStream, getManifest, getRange, getChunk, mapPool, DEFAULT_CHUNK_SIZE, clearManifestCache } from "../src/domain/files/content.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -295,6 +295,66 @@ test("getChunk: подменённый чанк на сервере — откл
 	store.set(manifest.blobSha256, corrupted);
 
 	await assert.rejects(() => getChunk(manifest, fileKey, 0, { serverUrl: "https://blossom.test", fetchImpl }), /подмен|digest/i);
+});
+
+test("mapPool: параллелизм ограничен limit, но реально пересекается (не последовательно)", async () => {
+	let inFlight = 0;
+	let maxInFlight = 0;
+	const items = [0, 1, 2, 3, 4, 5, 6, 7];
+	await mapPool(items, 3, async (i) => {
+		inFlight++;
+		maxInFlight = Math.max(maxInFlight, inFlight);
+		await new Promise((r) => setTimeout(r, 5));
+		inFlight--;
+		return i * 2;
+	});
+	assert.ok(maxInFlight > 1, "должно быть больше одной задачи одновременно");
+	assert.ok(maxInFlight <= 3, "не больше заданного лимита");
+});
+
+test("mapPool: результаты по порядку ВХОДА, не по порядку завершения", async () => {
+	const items = [50, 5, 30, 1];
+	const results = await mapPool(items, 4, async (ms) => {
+		await new Promise((r) => setTimeout(r, ms));
+		return ms;
+	});
+	assert.deepEqual(results, [50, 5, 30, 1], "порядок результата совпадает с порядком items, а не с порядком resolve");
+});
+
+test("getRange: onProgress зовётся на каждый завершённый чанк, доходит до bytesTotal", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(2000);
+	crypto.getRandomValues(original);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "video/mp4", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+
+	const calls = [];
+	await getRange(manifest, fileKey, 0, original.length, {
+		serverUrl: "https://blossom.test",
+		fetchImpl,
+		onProgress: (p) => calls.push(p),
+	});
+	assert.ok(calls.length > 0, "onProgress должен вызываться хотя бы раз");
+	const last = calls[calls.length - 1];
+	assert.equal(last.chunksDone, last.chunksTotal, "последний вызов — все чанки завершены");
+	assert.equal(last.bytesDone, last.bytesTotal, "последний вызов — все байты засчитаны");
+});
+
+test("getChunk: с trace — mark(net)/mark(decrypt)/count(requests) реально вызываются", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(600);
+	crypto.getRandomValues(original);
+	const { manifest, fileKey } = await putStream(original, { name: "x", mime: "application/octet-stream", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+
+	const marks = [];
+	const counts = [];
+	const trace = {
+		mark: (phase, ms) => marks.push([phase, ms]),
+		count: (name, n) => counts.push([name, n]),
+	};
+	await getChunk(manifest, fileKey, 0, { serverUrl: "https://blossom.test", fetchImpl, trace });
+	assert.ok(marks.some(([p]) => p === "net"), "должен быть mark(net, ...)");
+	assert.ok(marks.some(([p]) => p === "decrypt"), "должен быть mark(decrypt, ...)");
+	assert.ok(counts.some(([n]) => n === "requests"), "должен быть count(requests)");
 });
 
 test("getRange поверх getChunk: результат ИДЕНТИЧЕН прямой конкатенации getChunk по вычисленным границам (регрессия рефакторинга)", async () => {
