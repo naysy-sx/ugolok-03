@@ -141,12 +141,26 @@ test("nextAdaptiveWindow: перемотка сбрасывает окно в 51
 
 // MEDIA-PERF-TZ-4.md §5 — детектор простоя.
 
-test("createStallGuard: тишина дольше stallMs -> onTimeout('stall')", (t) => {
+test("createStallGuard: тишина до первого progress -> потолок, не stall (мобильный TTFB > 12с не должен 504)", (t) => {
 	t.mock.timers.enable({ apis: ["setTimeout"] });
 	let firedReason = null;
-	createStallGuard({ ceilingMs: 150_000, stallMs: 12_000 }, (reason) => {
+	createStallGuard({ ceilingMs: 30_000, stallMs: 12_000 }, (reason) => {
 		firedReason = reason;
 	});
+	t.mock.timers.tick(12_000);
+	assert.equal(firedReason, null, "до первого чанка застойный таймер ещё не запущен");
+	t.mock.timers.tick(18_000);
+	assert.equal(firedReason, "ceiling");
+	t.mock.timers.reset();
+});
+
+test("createStallGuard: после первого progress тишина дольше stallMs -> onTimeout('stall')", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	let firedReason = null;
+	const guard = createStallGuard({ ceilingMs: 150_000, stallMs: 12_000 }, (reason) => {
+		firedReason = reason;
+	});
+	guard.progress();
 	t.mock.timers.tick(12_000);
 	assert.equal(firedReason, "stall");
 	t.mock.timers.reset();

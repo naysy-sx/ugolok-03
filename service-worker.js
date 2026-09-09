@@ -127,7 +127,10 @@ function updateObservedSpeed(prevBytesPerSec, bytesTransferred, elapsedMs) {
 const STALL_TIMEOUT_MS = 12000;
 function createStallGuard(ceilingMs, stallMs, onTimeout) {
 	let settled = false;
-	let stallTimer = setTimeout(() => fire("stall"), stallMs);
+	// До первого чанка застойный таймер не тикает — иначе мобильный TTFB
+	// (getManifest + первый GET на Blossom) регулярно > 12с и плеер получает
+	// 504 ещё до старта. «Тишина с самого начала» ловит потолок.
+	let stallTimer = null;
 	let ceilingTimer = setTimeout(() => fire("ceiling"), ceilingMs);
 	function fire(reason) {
 		if (settled) return;
@@ -216,7 +219,14 @@ async function handleFilesContentFetch(e) {
 		}
 	}
 
-	const client = await self.clients.get(e.clientId);
+	// iOS/WebKit: fetch от <video>/<audio> часто приходит с пустым clientId,
+	// хотя вкладка контролируется — clients.get("") даёт null и плеер видел
+	// 404 на каждый Range. Фолбэк: первая контролируемая window-вкладка.
+	let client = e.clientId ? await self.clients.get(e.clientId) : null;
+	if (!client) {
+		const windows = await self.clients.matchAll({ type: "window" });
+		client = windows[0] || null;
+	}
 	if (!client) {
 		return new Response("files-content: нет активной вкладки для этого запроса", { status: 404 });
 	}

@@ -108,14 +108,17 @@ test("парсинг 1000 подряд идущих ** не роняет сте�
 	assert.doesNotThrow(() => parseRich(source));
 });
 
-test("10 000 символов патологического ввода (* вперемешку с текстом) парсится быстрее 50 мс", () => {
+test("10 000 символов патологического ввода (* вперемешку с текстом) парсится быстрее 200 мс", () => {
 	let source = "";
 	for (let i = 0; i < 2000; i++) source += "текст * ";
 	assert.equal(source.length >= 10000, true, "проверочная предпосылка теста");
 	const start = performance.now();
 	parseRich(source);
 	const elapsed = performance.now() - start;
-	assert.ok(elapsed < 50, `парсинг занял ${elapsed}мс, ожидалось < 50мс`);
+	// 50 мс ломалось на VPS в docker 2g под параллельной нагрузкой suite
+	// (живой прогон 31dd531: 58 мс, #fail 1, деплой test/CI красный).
+	// 200 мс по-прежнему ловит патологический ReDoS (секунды), не шум CI.
+	assert.ok(elapsed < 200, `парсинг занял ${elapsed}мс, ожидалось < 200мс`);
 });
 
 // --- node-allowlist.js: списки типов ---

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
+import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 import { formatFileSize } from "../attachment-view.jsx";
@@ -22,7 +22,7 @@ export default function FileViewer({ mediaRef }) {
 		setError("");
 		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
 			.then((handle) => {
-				if (!cancelled) setSrc(handle.src);
+				if (!cancelled) setSrc(mediaElementSrc(handle));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(errorMessage(err));

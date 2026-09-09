@@ -24,7 +24,16 @@ import { resolveImageOverlayUrl } from "../image-preview.js";
 import { putPlaintextBytes } from "../plaintext-cache.js";
 import { recordControllerCheck } from "../perf-trace.js";
 
-const handles = new Map(); // digest -> Promise<{kind, src|url}>
+const handles = new Map(); // digest -> Promise<{kind, src, url}>
+
+// video/audio/file-viewer читают handle.src, image-viewer — handle.url.
+// Раньше object-url-фолбэк (нет SW-controller — типичный мобильный Safari)
+// отдавал только `.url`, и <video src={handle.src}> получал undefined:
+// после деплоя 31dd531 видео на телефонах перестало играть совсем.
+export function mediaElementSrc(handle) {
+	if (!handle) return null;
+	return handle.src ?? handle.url ?? null;
+}
 
 // MEDIA-PERF-TZ.md §3.3 — единственный способ узнать, живёт ли Range-путь
 // (§5) у реальных пользователей или все видео/аудио тихо идут по полному
@@ -50,7 +59,7 @@ async function canUseFilesContentBridge() {
 	return ok;
 }
 
-export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress } = {}) {
+export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress, useFilesContentBridge } = {}) {
 	const cached = handles.get(ref.digest);
 	if (cached) return cached;
 
@@ -71,10 +80,10 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 				rasterAdapters,
 				onProgress,
 			);
-			return { kind: "cached-url", url: raster.url, rasterized: raster.rasterized };
+			return { kind: "cached-url", url: raster.url, src: raster.url, rasterized: raster.rasterized };
 		}
 		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
-		const useBridge = await canUseFilesContentBridge();
+		const useBridge = useFilesContentBridge !== undefined ? useFilesContentBridge : await canUseFilesContentBridge();
 		if (!useBridge) {
 			// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл ЦЕЛИКОМ;
 			// раньше единственный статус был неопределённый "preparing" (в чате —
@@ -92,10 +101,11 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 			});
 			putPlaintextBytes(ref.digest, bytes, ref.mime);
 			const url = URL.createObjectURL(new Blob([bytes], { type: ref.mime }));
-			return { kind: "object-url", url };
+			return { kind: "object-url", url, src: url };
 		}
 		registerPlayerFile(ref.digest, { manifest, fileKey: ref.key, serverUrl, fetchImpl });
-		return { kind: "bridge", src: `/files-content/${ref.digest}` };
+		const src = `/files-content/${ref.digest}`;
+		return { kind: "bridge", src, url: src };
 	})();
 
 	handles.set(ref.digest, promise);

@@ -94,4 +94,9 @@ test("service-worker.js::createStallGuard (текст функции) прису
 	assert.match(swSource, /function createStallGuard\(ceilingMs, stallMs, onTimeout\)/);
 	assert.match(swSource, /files-content:range-progress/);
 	assert.match(swSource, /pending\?\.guard\.progress\(\)/);
+	assert.match(swSource, /let stallTimer = null/, "застойный таймер не стартует до первого progress()");
+});
+
+test("service-worker.js: пустой clientId — фолбэк на clients.matchAll, не сразу 404", () => {
+	assert.match(swSource, /clients\.matchAll\(\{\s*type:\s*"window"\s*\}\)/);
 });

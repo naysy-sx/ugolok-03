@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
+import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
 import { mediaErrorReasonKey } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
@@ -56,7 +56,7 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			},
 		})
 			.then((handle) => {
-				if (!cancelled) setSrc(handle.src);
+				if (!cancelled) setSrc(mediaElementSrc(handle));
 			})
 			.catch((err) => {
 				if (!cancelled) setError(errorMessage(err));

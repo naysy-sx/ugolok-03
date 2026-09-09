@@ -85,7 +85,12 @@ export const STALL_TIMEOUT_MS = 12000;
 
 export function createStallGuard({ ceilingMs, stallMs = STALL_TIMEOUT_MS }, onTimeout) {
 	let settled = false;
-	let stallTimer = setTimeout(() => fire("stall"), stallMs);
+	// Застойный таймер НЕ стартует до первого progress(): иначе getManifest +
+	// TTFB первого чанка на мобильной сети регулярно > 12с, SW отдаёт 504, и
+	// <video> так и не получает ни байта. «Вообще ничего не пришло» ловит
+	// потолок (тот же бюджет, что был до детектора простоя). После первого
+	// чанка молчание дольше stallMs — уже простой.
+	let stallTimer = null;
 	let ceilingTimer = setTimeout(() => fire("ceiling"), ceilingMs);
 
 	function fire(reason) {

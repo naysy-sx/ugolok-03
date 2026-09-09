@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { putStream } from "../src/domain/files/content.js";
 import { handleRangeRequest } from "../src/domain/files/player-bridge.js";
-import { acquireMediaUrl, releaseMediaUrlHandle } from "../src/domain/media/adapters/media-url.js";
+import { acquireMediaUrl, releaseMediaUrlHandle, mediaElementSrc } from "../src/domain/media/adapters/media-url.js";
 import { clearPlaintextCache } from "../src/domain/media/plaintext-cache.js";
 import { clearManifestCache } from "../src/domain/files/content.js";
 
@@ -63,6 +63,8 @@ test("acquireMediaUrl: изображение — cached-url, содержимо
 	const handle = await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
 	assert.equal(handle.kind, "cached-url");
 	assert.ok(handle.url.startsWith("blob:") || typeof handle.url === "string");
+	assert.equal(handle.src, handle.url);
+	assert.equal(mediaElementSrc(handle), handle.url);
 	await releaseMediaUrlHandle(ref.digest);
 	clearPlaintextCache();
 });
@@ -72,6 +74,8 @@ test("acquireMediaUrl: видео/аудио — bridge, реально заре
 	const handle = await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
 	assert.equal(handle.kind, "bridge");
 	assert.equal(handle.src, `/files-content/${ref.digest}`);
+	assert.equal(handle.url, handle.src, "url зеркалит src — image-viewer и <video> читают разные поля");
+	assert.equal(mediaElementSrc(handle), handle.src);
 
 	const res = await handleRangeRequest({ manifestDigest: ref.digest, start: 0, end: 99 });
 	assert.equal(res.ok, true);
@@ -144,8 +148,16 @@ test("acquireMediaUrl: rasterAdapters — img.src не исходный progress
 		},
 	});
 	assert.equal(handle.rasterized, true);
+	assert.equal(mediaElementSrc(handle), handle.url);
 	const preview = new Uint8Array(await (await fetch(handle.url)).arrayBuffer());
 	assert.deepEqual(preview, pngLike);
 	await releaseMediaUrlHandle(ref.digest);
 	clearPlaintextCache();
+});
+
+test("mediaElementSrc: object-url без .src (баг мобильного <video>) всё равно даёт URL", () => {
+	assert.equal(mediaElementSrc({ kind: "object-url", url: "blob:abc" }), "blob:abc");
+	assert.equal(mediaElementSrc({ kind: "bridge", src: "/files-content/x" }), "/files-content/x");
+	assert.equal(mediaElementSrc(null), null);
+	assert.equal(mediaElementSrc({}), null);
 });
