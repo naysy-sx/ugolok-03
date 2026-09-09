@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Herstelzin",
 			"instructions": "Schrijf deze 12 woorden op een veilige plek op. Dit is de enige manier om toegang tot je account te herstellen.",
-			"savedButton": "Ik heb de zin opgeslagen"
+			"savedButton": "Ik heb de zin opgeslagen",
+			"copyButton": "Zin kopiëren",
+			"copiedButton": "Gekopieerd"
 		},
 		"createConfirm": {
 			"title": "Zin bevestigen",
@@ -253,6 +255,7 @@
 				"subtitle": "Kamer zonder account · via link of code"
 			},
 			"helpLink": "Help",
+			"logoHomeAria": "Home",
 			"create": {
 				"continue": "Doorgaan"
 			},

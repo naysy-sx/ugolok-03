@@ -1,5 +1,5 @@
 import { useId } from "preact/hooks";
-import IconCornerBack from "../icons/corner-back.jsx";
+import IconNavPrev from "../icons/nav-prev.jsx";
 import { t } from "../signals/i18n.js";
 
 // Общий каркас внутреннего экрана (обсуждён с пользователем) — закреплённая
@@ -42,12 +42,13 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 			    subtitle, как раньше) — иначе заголовок жил бы в двух разных
 			    структурах и grid-area пришлось бы описывать дважды. */}
 			<header class="section-header rigid">
-				{/* Пользователь: не нужна подпись "Назад", и не обычная стрелка,
-				    а "уголок" (поворот на 90°) — aria-label несёт весь смысл
-				    кнопки, видимого текста больше нет. */}
+				{/* Пользователь: не нужна подпись "Назад" — aria-label несёт весь
+				    смысл кнопки, видимого текста нет. Иконка — caret-left
+				    (Phosphor), было "уголок"/arrow-u-up-left, заменено по
+				    прямой просьбе пользователя. */}
 				{breadcrumb && (
 					<button type="button" class="header-back" onClick={breadcrumb.onBack} aria-label={t("screen.backToSectionAria", { label: breadcrumb.label })}>
-						<IconCornerBack />
+						<IconNavPrev />
 					</button>
 				)}
 				{lead && <div class="header-lead">{lead}</div>}

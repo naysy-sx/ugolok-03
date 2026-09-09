@@ -904,6 +904,47 @@ html[data-media-full] .top-corner-actions {
 	color: var(--accent);
 }
 
+/* Найдено пользователем (мобильный, недоработка не баг) — на узком экране
+   .account-portrait во всю ширину колонки (см. правило выше) съедал
+   непропорционально много вертикального места над именем/био. Тот же
+   порог 47.99em, что у выезжающей панели сайдбара (app.jsx/.sidebar-open
+   выше в файле) — сетка: маленький квадратный портрет слева (70px),
+   имя+био справа от него, ключ/статус — отдельными строками во всю ширину
+   под ними. Только мобильный порог: десктопная раскладка (полноширинный
+   портрет сверху) не тронута ни строкой. */
+@media (max-width: 47.99em) {
+	.account {
+		display: grid;
+		grid-template-columns: 4.375rem 1fr;
+		grid-template-areas:
+			"portrait menu"
+			"portrait bio"
+			"key key"
+			"alert alert";
+		column-gap: var(--space-s);
+		align-items: start;
+	}
+	.account-portrait {
+		grid-area: portrait;
+		inline-size: 4.375rem;
+		aspect-ratio: 1;
+	}
+	.account-menu {
+		grid-area: menu;
+		align-self: center;
+	}
+	.account-bio {
+		grid-area: bio;
+		margin-block-start: 0;
+	}
+	.account-key {
+		grid-area: key;
+	}
+	.account-alert {
+		grid-area: alert;
+	}
+}
+
 /* Строка состояния: тишина означает норму. Появляется в DOM только при
    сбое (account-card.jsx: {degraded && ...}) — поэтому её замечают, в
    отличие от вечного "3 реле на связи". */
@@ -1363,13 +1404,22 @@ html[data-media-full] .top-corner-actions {
 	font-size: var(--step-0);
 	font-weight: 500;
 	line-height: 1.3;
-	margin: 0;
+	/* Пользователь — было margin:0, заголовок и абзац под ним слиплись
+	   слишком плотно. */
+	margin: 0 0 var(--space-2xs) 0;
 }
 .empty p {
 	font-size: var(--step--2);
 	color: var(--muted);
 	line-height: 1.4;
-	margin-block-start: var(--space-3xs);
+	/* Найдено пользователем (экран "Журнал") — глобальный p{max-width:
+	   var(--measure)} (minimal.css, ограничение длины строки прозы) даёт
+	   абзацу собственную узкую ширину БЕЗ auto-полей, поэтому блок
+	   прижимался к левому краю .empty, а не центрировался под заголовком,
+	   хотя text-align:center внутри самого абзаца создавал иллюзию, что
+	   "почти так". margin:auto — центрирует сам блок (не только текст) по
+	   обеим осям, по прямой просьбе пользователя.*/
+	margin: auto;
 }
 .empty .act {
 	margin-block-start: var(--space-s);
@@ -1851,6 +1901,20 @@ html[data-media-full] .top-corner-actions {
 	}
 	.header-actions .btn-label {
 		display: none;
+	}
+}
+
+/* Найдено пользователем (мобильный) — .top-corner-actions (бургер адаптива,
+   custom.css выше, position:absolute поверх .app-shell-inner, z-index 300)
+   стоит в правом верхнем углу ВСЕГО приложения — том же углу, где у экрана
+   с действиями (например "Позвонить"+"…" в чате) естественно оказывается
+   .header-actions (.section-header, grid-area "actions", ширина колонки —
+   auto, не сжимается). На той же ширине, на которой бургер появляется
+   (47.99em, тот же порог, что .sidebar-toggle-btn), резервируем под него
+   место — тот же приём, что уже применён у .call-overlay-ended-close. */
+@media (max-width: 47.99em) {
+	.section-header {
+		padding-inline-end: calc(var(--space-s) * 2 + 2.25rem);
 	}
 }
 
@@ -3131,6 +3195,91 @@ body:has(.auth-layout) {
 	box-shadow: 0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent);
 }
 
+/* Пользователь — экран "Фраза восстановления". Рамка+фон отделяют слова от
+   остального текста экрана (раньше список ничем не был обрамлён — терялся
+   среди обычного текста). */
+.mnemonic-display {
+	position: relative;
+	padding: var(--space-m);
+	/* Место под кнопку копирования в углу — слова НЕ должны заезжать под неё. */
+	padding-inline-end: calc(var(--space-m) + 2.5rem);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	background-color: var(--surface);
+}
+/* auto-fit/minmax — тот же принцип, что композиционный .grid (minimal.css),
+   свой --min под мнемонику: колонки убывают сами (4 -> 3 -> 2 -> 1) по мере
+   сужения экрана, без единого @media/@container (пользователь просил явно
+   "изящный способ без media queries"). 9rem — по факту самое длинное слово
+   набора BIP-39 ("responsibility") с нумерацией "12." внутри строки
+   (list-style-position:inside) всё ещё помещается без переноса. */
+.mnemonic-display__list {
+	display: grid;
+	gap: var(--space-s);
+	grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+	list-style-position: inside;
+	/* list-style-position:inside НЕ убирает штатный padding-inline-start
+	   браузера под маркер — тот всё равно висел слева пустым (пользователь). */
+	padding-inline-start: 0;
+	margin: 0;
+	font-family: var(--font-mono);
+}
+.mnemonic-display__copy {
+	position: absolute;
+	inset-block-start: var(--space-s);
+	inset-inline-end: var(--space-s);
+}
+
+/* Экран "Готово" (unlock.jsx) — пользователь: "наконец пользователь дошёл
+   до идентификатора, надо его поздравить оформлением, не текстом". Карточка
+   вместо голой строки моноширинного текста. */
+.unlock-done-key {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	margin: 0;
+	padding: var(--space-s) var(--space-m);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	background-image: linear-gradient(135deg, color-mix(in oklch, var(--accent), transparent 92%), color-mix(in oklch, var(--good), transparent 94%));
+	font-family: var(--font-mono);
+	word-break: break-all;
+	color: var(--fg);
+}
+.unlock-done-key svg {
+	flex: none;
+	color: var(--accent);
+	font-size: 1.3em;
+}
+
+/* Финальная кнопка регистрации — пользователь: "особенная", не растянутая
+   на 100% ширины (.stack выше — flex-column, align-items:stretch по
+   умолчанию, отсюда и была полная ширина), градиент+иконка+анимация. */
+.unlock-cta {
+	align-self: flex-start;
+	padding: var(--space-s) var(--space-l);
+	background-image: linear-gradient(135deg, var(--accent), var(--good));
+	color: var(--accent-contrast);
+	border: none;
+	box-shadow: 0 4px 16px color-mix(in oklch, var(--accent) 35%, transparent);
+	transition: transform var(--transition-speed) var(--transition-ease), box-shadow var(--transition-speed) var(--transition-ease), background-image var(--transition-speed) var(--transition-ease);
+}
+/* Составной селектор (0,2,0) — та же ловушка файла, что у .icon-btn:has(>
+   .icon) выше: глобальное button:has(>.icon) иначе сузило бы padding-inline
+   до var(--step-0), отменяя задуманный крупный CTA-паддинг. */
+.unlock-cta:has(> svg) {
+	padding-inline: var(--space-l);
+}
+.unlock-cta:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 24px color-mix(in oklch, var(--accent) 45%, transparent);
+	background-image: linear-gradient(135deg, var(--accent-hover), var(--good));
+}
+.unlock-cta:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent);
+}
+
 .unlock-card {
 	width: 100%;
 	max-width: 28rem;
@@ -3847,6 +3996,19 @@ body:has(.auth-layout) {
 
 .logo {
 	/* .row (раскладка) уже в JSX. */
+}
+/* Найдено пользователем — на стартовом экране логотип никуда не вёл, из
+   "Справки" можно было "потеряться" (кнопка "Справка" переключает саму
+   себя, но текст на ней не меняется). Логотип теперь <button> -> "домой",
+   сброс нативных стилей кнопки, раскладка/цвет — от .logo/.row/.logo-name. */
+.logo-link {
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	cursor: pointer;
+	color: inherit;
+	text-align: start;
 }
 .logo-name {
 	font-size: var(--step-3);
@@ -7508,6 +7670,12 @@ button[type="button"].media-mini-bar-btn {
 	white-space: nowrap;
 	font-weight: var(--weight-normal);
 	color: var(--fg);
+	/* Найдено пользователем (мобильный) — длинные имена файлов не обрезались,
+	   а вылезали за строку и "съезжали" под иконку. Причина: flex-элемент
+	   (.grow, flex:1) по умолчанию min-width:auto — не может сжаться уже
+	   собственного содержимого, что и не давало overflow/ellipsis выше
+	   вообще сработать. */
+	min-width: 0;
 }
 .file-row-name:hover {
 	background-color: var(--surface-raised);
@@ -7557,6 +7725,14 @@ button[type="button"].media-mini-bar-btn {
 	display: grid;
 	place-items: center;
 	overflow: hidden;
+	/* Теперь <button>, не <div> (клик по самой плитке открывает файл) —
+	   сброс нативных стилей кнопки, инлайновая раскладка не менялась. */
+	border: none;
+	padding: 0;
+	inline-size: 100%;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
 }
 .file-tile__frame img {
 	inline-size: 100%;
@@ -8244,6 +8420,15 @@ button[type="button"].media-mini-bar-btn {
 	.dv-head {
 		flex-direction: column;
 		align-items: stretch;
+	}
+	/* Найдено пользователем — align-items:stretch выше центрирует текст/кнопки
+	   (у них у самих под капотом текстовое/flex-центрирование на полную
+	   ширину), но SVG-иконка — replaced-элемент с собственным фиксированным
+	   1em×1em (icon.jsx) — stretch её не растягивает, и она остаётся у
+	   левого края (стандартный фолбэк stretch для нерастяжимых элементов).
+	   Явный align-self:center возвращает её на одну ось с остальным. */
+	.dv-status-icon {
+		align-self: center;
 	}
 }
 /* dv-actions — группа из нескольких кнопок ("Продлить"/"Изменить"/
@@ -9032,6 +9217,9 @@ button[type="button"].media-mini-bar-btn {
 .empty p {
 	font-size: var(--step--1);
 	margin-block: 0;
+	/* См. комментарий у первого .empty p (выше в файле) — тот же баг с
+	   global p{max-width} без margin-inline:auto. */
+	margin-inline: auto;
 }
 
 /* D1 — строка автора записи (.post__ava/.post__ava-fallback/.post__author

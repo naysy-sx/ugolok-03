@@ -17,6 +17,11 @@ import AccountAvatar from "../components/account-avatar.jsx";
 import HelpContent from "../components/help-content.jsx";
 import ConnectionEndpoints from "../components/connection-endpoints.jsx";
 import IconMicrophone from "../icons/microphone.jsx";
+import IconArrowLeft from "../icons/arrow-left.jsx";
+import IconArrowRight from "../icons/arrow-right.jsx";
+import IconVault from "../icons/vault.jsx";
+import IconCheck from "../icons/check.jsx";
+import IconKey from "../icons/key.jsx";
 import Quick from "./quick.jsx";
 
 
@@ -287,7 +292,14 @@ export default function Unlock() {
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.createGenerate.instructions")}</p>
 					<MnemonicDisplay words={mnemonic.split(" ")} />
+					{/* Пользователь: "Назад" слева (второстепенное, .btn--ghost), кнопка
+					    ПРОДВИГАЮЩАЯ ВПЕРЁД справа (заливка по умолчанию — уже
+					    "первичное" в элементном слое minimal.css) — порядок и заливка
+					    вместе читаются как направление процесса. */}
 					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<button type="button" class="btn--ghost" onClick={() => setStep("main")}>
+							<IconArrowLeft /> {t("common.back")}
+						</button>
 						<button
 							type="button"
 							onClick={() => {
@@ -295,10 +307,7 @@ export default function Unlock() {
 								setStep("create-confirm");
 							}}
 						>
-							{t("unlock.createGenerate.savedButton")}
-						</button>
-						<button type="button" onClick={() => setStep("main")}>
-							{t("common.back")}
+							<IconVault /> {t("unlock.createGenerate.savedButton")}
 						</button>
 					</div>
 				</div>
@@ -315,9 +324,20 @@ export default function Unlock() {
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p>{t("unlock.createConfirm.instructions")}</p>
-					<label for="confirm-mnemonic">{t("unlock.createConfirm.label")}</label>
-					<textarea id="confirm-mnemonic" value={confirmInput} onInput={(e) => setConfirmInput(e.currentTarget.value)} />
+					{/* Найдено пользователем — label и textarea, оба прямые дети .stack
+					    выше, растаскивались его gap'ом (--space-m) как два отдельных
+					    "блока" экрана, хотя семантически это одна пара поле+подпись.
+					    Своя обёртка с малым --gap убирает лишний воздух между ними,
+					    не трогая отступ ДО пары (тот отступ остаётся на совести
+					    внешнего .stack). */}
+					<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+						<label for="confirm-mnemonic">{t("unlock.createConfirm.label")}</label>
+						<textarea id="confirm-mnemonic" value={confirmInput} onInput={(e) => setConfirmInput(e.currentTarget.value)} />
+					</div>
 					<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+						<button type="button" class="btn--ghost" onClick={() => setStep("create-generate")}>
+							<IconArrowLeft /> {t("common.back")}
+						</button>
 						<button
 							type="button"
 							onClick={async () => {
@@ -341,10 +361,7 @@ export default function Unlock() {
 								}
 							}}
 						>
-							{t("common.confirm")}
-						</button>
-						<button type="button" onClick={() => setStep("create-generate")}>
-							{t("common.back")}
+							<IconCheck /> {t("common.confirm")}
 						</button>
 					</div>
 					{error && (
@@ -501,8 +518,22 @@ export default function Unlock() {
 					<h1>{t("unlock.done.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p>{t("unlock.done.message")}</p>
-					<p style={{ fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>{npub}</p>
+					{/* Найдено пользователем — сообщение и сам идентификатор, оба
+					    прямые дети .stack выше, растаскивались его gap'ом
+					    (--space-m) вдобавок к собственным дефолтным margin у <p> —
+					    гигантский пустой зазор рушил связь "объявление -> содержание".
+					    Своя обёртка с нулевым gap держит пару вплотную. */}
+					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+						<p style={{ margin: 0 }}>{t("unlock.done.message")}</p>
+						{/* Идентификатор — то, ради чего пользователь прошёл весь путь
+						    регистрации (Opus писал сам экран, но не оформил "награду"
+						    для глаза) — карточка с иконкой ключа вместо голой строки
+						    моноширинного текста. */}
+						<p class="unlock-done-key">
+							<IconKey aria-hidden="true" />
+							<span>{npub}</span>
+						</p>
+					</div>
 					{isQuickRegister && (
 						<p
 							role="alert"
@@ -511,8 +542,12 @@ export default function Unlock() {
 							{t("unlock.done.quickRegisterWarning")}
 						</p>
 					)}
+					{/* Пользователь: "завершающая кнопка должна быть особенной" — не
+					    растянута на всю ширину .stack (по умолчанию align-items:stretch
+					    флекс-контейнера), градиент+иконка+анимация по наведению/нажатию. */}
 					<button
 						type="button"
+						class="unlock-cta"
 						onClick={() => {
 							const id = bytesToHex(getPublicKey(privKey));
 							login(id, pendingLogin, privKey);
@@ -521,7 +556,7 @@ export default function Unlock() {
 							navigate("/main");
 						}}
 					>
-						{t("unlock.done.continueButton")}
+						{t("unlock.done.continueButton")} <IconArrowRight />
 					</button>
 				</div>
 			</main>
@@ -535,7 +570,13 @@ export default function Unlock() {
 	return (
 		<div class="screen auth-layout">
 			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<div class="logo row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+				<button
+					type="button"
+					class="logo row logo-link"
+					style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+					onClick={() => setMainView("home")}
+					aria-label={t("unlock.main.logoHomeAria")}
+				>
 					<img
 						class="unlock-logo-mark"
 						src={`${import.meta.env.BASE_URL}logo-source.png`}
@@ -545,7 +586,7 @@ export default function Unlock() {
 						aria-hidden="true"
 					/>
 					<span class="logo-name">{t("app.name")}</span>
-				</div>
+				</button>
 				<div class="header-actions">
 					<button
 						type="button"

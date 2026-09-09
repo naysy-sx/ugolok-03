@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Phrase de récupération",
 			"instructions": "Notez ces 12 mots dans un endroit sûr. C'est le seul moyen de récupérer l'accès à votre compte.",
-			"savedButton": "J'ai enregistré la phrase"
+			"savedButton": "J'ai enregistré la phrase",
+			"copyButton": "Copier la phrase",
+			"copiedButton": "Copié"
 		},
 		"createConfirm": {
 			"title": "Confirmer la phrase",
@@ -253,6 +255,7 @@
 				"subtitle": "Salle sans compte · par lien ou code"
 			},
 			"helpLink": "Aide",
+			"logoHomeAria": "Accueil",
 			"create": {
 				"continue": "Continuer"
 			},

@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "恢复助记词",
 			"instructions": "请将这12个单词记录在安全的地方。这是恢复账户访问权限的唯一方法。",
-			"savedButton": "我已保存助记词"
+			"savedButton": "我已保存助记词",
+			"copyButton": "复制助记词",
+			"copiedButton": "已复制"
 		},
 		"createConfirm": {
 			"title": "确认助记词",
@@ -253,6 +255,7 @@
 				"subtitle": "无需账户的房间 · 通过链接或口令"
 			},
 			"helpLink": "帮助",
+			"logoHomeAria": "首页",
 			"create": {
 				"continue": "继续"
 			},

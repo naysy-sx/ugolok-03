@@ -462,6 +462,13 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			tray.reset();
 			voice.reset();
 			await saveChatDraftAction(ownerPubkey, privKey, dbKey, contactPubkey, "", publish).catch(() => {});
+			// Найдено пользователем — собственное только что отправленное сообщение
+			// оставалось скрыто ЗА полем ввода (эффект на [messages] ниже скроллит
+			// только на вход в чат/первую загрузку истории — иначе выдёргивал бы
+			// того, кто листает историю выше, при ЧУЖОМ входящем сообщении). Своя
+			// отправка — другое дело: раз я сам только что напечатал и отправил,
+			// я однозначно у низа переписки, прокрутка ожидаема всегда.
+			pendingScrollRef.current = true;
 			await reloadWindow();
 		} catch (err) {
 			setComposeError(errorMessage(err));
@@ -483,6 +490,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		try {
 			const lamportTs = await nextLamportTick(ownerPubkey);
 			await sendChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, value, lamportTs, publishToChatPartner, fetchDeviceKeyPackages, refreshGroupMessageSubscription, undefined);
+			pendingScrollRef.current = true; // см. комментарий в handleSend — своя отправка всегда скроллит к низу
 			await reloadWindow();
 		} catch (err) {
 			setComposeError(errorMessage(err));
@@ -608,8 +616,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			title={displayName}
 			actions={
 				<>
+					{/* Найдено пользователем (мобильный) — текст кнопки никогда не
+					    сжимался в иконку: готовое правило .header-actions .btn-label
+					    {display:none} (@container width<30rem) существовало, но
+					    текст нигде не был обёрнут в этот класс — "Позвонить" с
+					    полным текстом распирал и без того тесную строку шапки
+					    (шла внахлёст с глобальным бургером в углу). */}
 					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-						<IconPhoneCall /> {t("common.call")}
+						<IconPhoneCall /> <span class="btn-label">{t("common.call")}</span>
 					</button>
 					<ActionsMenu label={t("chat.window.chatMenuAria")}>
 						{/* Живой фидбег — пункт добавлен заранее (вид меню важнее самой

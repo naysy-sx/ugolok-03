@@ -122,6 +122,7 @@ const MAP = {
 	upload: "upload-simple",
 	"view-list": "list-bullets",
 	"user-badge": "identification-badge",
+	vault: "vault",
 	"video-camera": "video-camera",
 	"voice-broadcast": "broadcast",
 };

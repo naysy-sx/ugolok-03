@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Wiederherstellungsphrase",
 			"instructions": "Notieren Sie sich diese 12 Wörter an einem sicheren Ort. Dies ist die einzige Möglichkeit, den Zugriff auf Ihr Konto wiederherzustellen.",
-			"savedButton": "Ich habe die Phrase gespeichert"
+			"savedButton": "Ich habe die Phrase gespeichert",
+			"copyButton": "Phrase kopieren",
+			"copiedButton": "Kopiert"
 		},
 		"createConfirm": {
 			"title": "Phrase bestätigen",
@@ -253,6 +255,7 @@
 				"subtitle": "Raum ohne Konto · per Link oder Code"
 			},
 			"helpLink": "Hilfe",
+			"logoHomeAria": "Startseite",
 			"create": {
 				"continue": "Weiter"
 			},

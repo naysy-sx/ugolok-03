@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Recovery phrase",
 			"instructions": "Write down these 12 words somewhere safe. This is the only way to recover access to your account.",
-			"savedButton": "I've saved the phrase"
+			"savedButton": "I've saved the phrase",
+			"copyButton": "Copy phrase",
+			"copiedButton": "Copied"
 		},
 		"createConfirm": {
 			"title": "Confirm the phrase",
@@ -253,6 +255,7 @@
 				"subtitle": "A room without an account · by link or code"
 			},
 			"helpLink": "Help",
+			"logoHomeAria": "Home",
 			"create": {
 				"continue": "Continue"
 			},

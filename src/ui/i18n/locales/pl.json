@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Fraza odzyskiwania",
 			"instructions": "Zapisz te 12 słów w bezpiecznym miejscu. To jedyny sposób na odzyskanie dostępu do konta.",
-			"savedButton": "Zapisałem frazę"
+			"savedButton": "Zapisałem frazę",
+			"copyButton": "Skopiuj frazę",
+			"copiedButton": "Skopiowano"
 		},
 		"createConfirm": {
 			"title": "Potwierdź frazę",
@@ -253,6 +255,7 @@
 				"subtitle": "Pokój bez konta · przez link lub kod"
 			},
 			"helpLink": "Pomoc",
+			"logoHomeAria": "Strona główna",
 			"create": {
 				"continue": "Kontynuuj"
 			},

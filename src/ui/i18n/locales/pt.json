@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Frase de recuperação",
 			"instructions": "Anote estas 12 palavras em um lugar seguro. Esta é a única forma de recuperar o acesso à sua conta.",
-			"savedButton": "Salvei a frase"
+			"savedButton": "Salvei a frase",
+			"copyButton": "Copiar frase",
+			"copiedButton": "Copiado"
 		},
 		"createConfirm": {
 			"title": "Confirmar a frase",
@@ -253,6 +255,7 @@
 				"subtitle": "Sala sem conta · por ligação ou código"
 			},
 			"helpLink": "Ajuda",
+			"logoHomeAria": "Início",
 			"create": {
 				"continue": "Continuar"
 			},

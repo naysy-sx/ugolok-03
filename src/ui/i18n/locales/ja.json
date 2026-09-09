@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "回復フレーズ",
 			"instructions": "この12個の単語を安全な場所に書き留めてください。アカウントへのアクセスを回復する唯一の方法です。",
-			"savedButton": "フレーズを保存しました"
+			"savedButton": "フレーズを保存しました",
+			"copyButton": "フレーズをコピー",
+			"copiedButton": "コピーしました"
 		},
 		"createConfirm": {
 			"title": "フレーズの確認",
@@ -253,6 +255,7 @@
 				"subtitle": "アカウントなしの部屋 · リンクまたはコード"
 			},
 			"helpLink": "ヘルプ",
+			"logoHomeAria": "ホーム",
 			"create": {
 				"continue": "続ける"
 			},

@@ -164,7 +164,9 @@
 		"createGenerate": {
 			"title": "Kurtarma ifadesi",
 			"instructions": "Bu 12 kelimeyi güvenli bir yere yazın. Hesabınıza erişimi kurtarmanın tek yolu budur.",
-			"savedButton": "İfadeyi kaydettim"
+			"savedButton": "İfadeyi kaydettim",
+			"copyButton": "İfadeyi kopyala",
+			"copiedButton": "Kopyalandı"
 		},
 		"createConfirm": {
 			"title": "İfadeyi onayla",
@@ -253,6 +255,7 @@
 				"subtitle": "Hesapsız oda · bağlantı veya kod ile"
 			},
 			"helpLink": "Yardım",
+			"logoHomeAria": "Ana sayfa",
 			"create": {
 				"continue": "Devam"
 			},

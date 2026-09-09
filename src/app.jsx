@@ -176,6 +176,20 @@ function MainShell() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [sidebarOpen]);
 
+	// Найдено пользователем (мобильный) — переход по большинству ссылок/кнопок
+	// В САЙДБАРЕ (главное — сам список контактов/каналов, nav-groups.jsx) менял
+	// экран за выдвижной панелью, но саму панель не закрывал: setSidebarOpen(false)
+	// был вручную расставлен только в паре мест (selectNavItem/"Добавить контакт"),
+	// а не в nav-groups.jsx, которому sidebarOpen вообще не передавался.
+	// Вместо протаскивания колбэка в ещё один компонент — единая точка: ЛЮБАЯ
+	// смена места (place, единое состояние навигации — см. import выше) значит
+	// "экран сзади сменился", закрываем панель отсюда одним эффектом. На
+	// десктопе (сайдбар не выезжающий, sidebarOpen на раскладку не влияет)
+	// эффект безобиден — просто держит сигнал в false, ничего не дёргает визуально.
+	useEffect(() => {
+		setSidebarOpen(false);
+	}, [place.value]);
+
 	// Редизайн интерфейса, этап 10.1 — раньше здесь был ручной сброс ЧУЖИХ
 	// сигналов (activeChatPubkey/activeChannelId), нужный из-за найденного
 	// пользователем бага (повторный клик по тому же контакту после ухода на
@@ -296,7 +310,12 @@ function MainShell() {
 					    → активная сводка вместо статичной кнопки-входа, тот же принцип,
 					    что .call-bar (CallOverlay). */}
 					{roomsScreenActive.value ? (
-						<ActiveRoomSummary onExpand={() => (roomsMinimized.value = false)} />
+						<ActiveRoomSummary
+							onExpand={() => {
+								roomsMinimized.value = false;
+								setSidebarOpen(false); // "Быстрая связь" вне place — эффект выше её не ловит
+							}}
+						/>
 					) : (
 						<button
 							type="button"
@@ -305,6 +324,7 @@ function MainShell() {
 							onClick={() => {
 								roomsScreenActive.value = true;
 								roomsMinimized.value = false;
+								setSidebarOpen(false); // см. комментарий в onExpand выше
 							}}
 						>
 							<IconGlobe aria-hidden="true" />

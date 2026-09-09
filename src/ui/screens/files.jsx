@@ -1019,13 +1019,24 @@ export default function Files() {
 					<ul role="list" class="file-grid">
 						{entries.map((entry) => (
 							<li key={entry.id} class="file-tile" onContextMenu={openRowActionsMenu}>
-								<div class="file-tile__frame">
+								{/* Найдено пользователем — плитка (сама картинка/иконка) была
+								    некликабельна, открывал файл только текстовый подпись-линк
+								    ПОД ней (легко не заметить) — "кликаешь по ним и ничего".
+								    Тот же обработчик, что у file-tile__name ниже. */}
+								<button
+									type="button"
+									class="file-tile__frame"
+									onClick={(e) => {
+										if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
+										openEntry(entry);
+									}}
+								>
 									{entry.kind === "dir" ? (
 										<IconFolder aria-hidden="true" class="icon" />
 									) : (
 										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" />
 									)}
-								</div>
+								</button>
 								{!inTrash && (
 									<div class="file-tile__menu" onClick={(e) => e.stopPropagation()}>
 										<ActionsMenu label={t("files.rowActionsAria", { name: entry.displayName })}>
