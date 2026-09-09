@@ -8,7 +8,7 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { createInitialState, merge, project, ROOT_ID, TRASH_ID } from "../../domain/files/tree.js";
 import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, copy as opCopy, remove as opRemove, purge as opPurge, setMime as opSetMime, PreconditionError } from "../../domain/files/ops.js";
 import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue, saveFileKey, getFileKey, listUnannouncedFileKeys, markFileKeyAnnounced } from "../../domain/files/store.js";
-import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../../domain/files/sync.js";
+import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP, KIND_FILES_OP_LEGACY } from "../../domain/files/sync.js";
 import { db } from "../../core/store/database.js";
 import { dbKeySig } from "./auth.js";
 import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard, hasClipboardItems } from "../../domain/files/clipboard.js";
@@ -174,7 +174,10 @@ export async function applyAndPersist(ops, ownerPubkeyForInit) {
 export async function rebuildFilesLog(ownerPubkey, privKey) {
 	if (cachedOwnerPubkey !== ownerPubkey) return;
 
-	const rows = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_FILES_OP]).toArray();
+	const rows = [
+		...(await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_FILES_OP]).toArray()),
+		...(await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_FILES_OP_LEGACY]).toArray()),
+	];
 	const allOps = [];
 	let maxCounter = 0;
 	for (const row of rows) {

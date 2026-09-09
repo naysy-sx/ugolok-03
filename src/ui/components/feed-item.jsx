@@ -1,7 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
-import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
+import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
+import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { kindOf } from "../../domain/content/record-kind.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
@@ -59,7 +60,9 @@ function reactionSummary(counts) {
 
 function FeedThumb({ attachment }) {
 	const poster = attachment.type === "video" ? videoPosterUrl(attachment.poster) : null;
-	const [url, setUrl] = useState(() => poster || (attachment.type === "image" && attachment.manifestDigest ? getMemoryCachedUrl(attachment.manifestDigest) : null));
+	const [url, setUrl] = useState(
+		() => poster || (attachment.type === "image" && attachment.manifestDigest ? getPreviewUrl(attachment.manifestDigest) : null),
+	);
 
 	useEffect(() => {
 		if (poster) {
@@ -67,15 +70,17 @@ function FeedThumb({ attachment }) {
 			return;
 		}
 		if (attachment.type !== "image" || !attachment.manifestDigest) return;
-		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
-		if (memUrl) {
-			setUrl(memUrl);
+		const preview = getPreviewUrl(attachment.manifestDigest);
+		if (preview) {
+			setUrl(preview);
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL })
-			.then((bytes) => {
-				if (!cancelled) setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
+		resolveImagePreviewUrl(attachment.manifestDigest, attachment.mime, () =>
+			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL }),
+		)
+			.then((raster) => {
+				if (!cancelled) setUrl(raster.url);
 			})
 			.catch(() => {});
 		return () => {

@@ -11,11 +11,22 @@
 // вовсе. cancel() ПОСЛЕ старта — no-op, задача докручивается (буквально
 // по ALGO.MD: отмена работает для ещё НЕ стартовавших, не для прерывания
 // уже идущих).
+let thumbsPaused = false;
+const liveQueues = new Set();
+
+export function setThumbnailWorkPaused(paused) {
+	thumbsPaused = paused;
+	if (!paused) {
+		for (const kick of liveQueues) kick();
+	}
+}
+
 export function createThumbnailQueue(maxConcurrent = 3) {
 	let running = 0;
 	const pending = [];
 
 	function runNext() {
+		if (thumbsPaused) return;
 		if (running >= maxConcurrent || pending.length === 0) return;
 		const job = pending.shift();
 		if (job.cancelled) {
@@ -32,6 +43,8 @@ export function createThumbnailQueue(maxConcurrent = 3) {
 				runNext();
 			});
 	}
+
+	liveQueues.add(runNext);
 
 	return {
 		enqueue(task) {

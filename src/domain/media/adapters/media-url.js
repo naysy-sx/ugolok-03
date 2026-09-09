@@ -20,17 +20,47 @@
 // не в скоупе этого этапа, при необходимости — отдельное решение.
 import { getManifest, getRange } from "../../files/content.js";
 import { registerPlayerFile, unregisterPlayerFile } from "../../files/player-bridge.js";
+import { resolveImagePreviewUrl } from "../image-preview.js";
+import { putPlaintextBytes } from "../plaintext-cache.js";
 
 const handles = new Map(); // digest -> Promise<{kind, src|url}>
 
-export async function acquireMediaUrl(ref, { serverUrl, fetchImpl } = {}) {
+async function canUseFilesContentBridge() {
+	if (typeof navigator === "undefined" || !navigator.serviceWorker) return true;
+	if (navigator.serviceWorker.controller) return true;
+	try {
+		await navigator.serviceWorker.ready;
+	} catch {
+		return false;
+	}
+	return !!navigator.serviceWorker.controller;
+}
+
+export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress } = {}) {
 	const cached = handles.get(ref.digest);
 	if (cached) return cached;
 
 	const promise = (async () => {
-		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
 		if (ref.mime.startsWith("image/")) {
+			const raster = await resolveImagePreviewUrl(
+				ref.digest,
+				ref.mime,
+				async () => {
+					onProgress?.("decrypting");
+					const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
+					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl });
+				},
+				rasterAdapters,
+				onProgress,
+			);
+			return { kind: "cached-url", url: raster.url, rasterized: raster.rasterized };
+		}
+		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
+		const useBridge = await canUseFilesContentBridge();
+		if (!useBridge) {
+			onProgress?.("preparing");
 			const bytes = await getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl });
+			putPlaintextBytes(ref.digest, bytes, ref.mime);
 			const url = URL.createObjectURL(new Blob([bytes], { type: ref.mime }));
 			return { kind: "object-url", url };
 		}
@@ -56,7 +86,7 @@ export async function releaseMediaUrlHandle(digest) {
 	try {
 		const handle = await pending;
 		if (handle.kind === "bridge") unregisterPlayerFile(digest);
-		else URL.revokeObjectURL(handle.url);
+		else if (handle.kind === "object-url") URL.revokeObjectURL(handle.url);
 	} catch {
 		// acquire упал — нечего освобождать
 	}

@@ -26,13 +26,21 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 	// ВМЕСТЕ со своим digest, рендер сверяет с текущим mediaRef.digest
 	// СИНХРОННО, не дожидаясь эффекта.
 	const [state, setState] = useState(null); // { digest, url } | null
+	const [phase, setPhase] = useState("loading");
 	const [error, setError] = useState("");
+	const [retryTick, setRetryTick] = useState(0);
 	const url = state?.digest === mediaRef.digest ? state.url : null;
 
 	useEffect(() => {
 		let cancelled = false;
 		setError("");
-		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
+		setPhase("loading");
+		acquireMediaUrl(mediaRef, {
+			serverUrl: BLOSSOM_URL,
+			onProgress: (p) => {
+				if (!cancelled) setPhase(p);
+			},
+		})
 			.then((handle) => {
 				if (!cancelled) setState({ digest: mediaRef.digest, url: handle.url });
 			})
@@ -42,17 +50,22 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [mediaRef.digest]);
+	}, [mediaRef.digest, retryTick]);
 
 	if (error) {
 		return (
-			<p role="alert" style={{ color: "#fff" }}>
-				{t("attachment.imageLoadError", { error })}
+			<p role="alert" class="stack" style={{ "--gap": "var(--space-2xs)", color: "#fff" }}>
+				<span>{t("attachment.imageLoadError", { error })}</span>
+				<button type="button" class="btn--ghost" onClick={() => setRetryTick((n) => n + 1)}>
+					{t("attachment.retry")}
+				</button>
 			</p>
 		);
 	}
 	if (!url) {
-		return <p style={{ color: "#fff" }}>{t("common.loading")}</p>;
+		const status =
+			phase === "preparing" ? t("attachment.statusPreparing") : phase === "decrypting" ? t("attachment.statusDecrypting") : t("attachment.loadingImage");
+		return <p style={{ color: "#fff" }}>{status}</p>;
 	}
 	return (
 		<img

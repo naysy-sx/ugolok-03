@@ -16,7 +16,7 @@ import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
 import Help from "./ui/screens/help.jsx";
 import Search from "./ui/screens/search.jsx";
-import { currentUser, dbKeySig, privKeySig } from "./ui/signals/auth.js";
+import { currentUser, dbKeySig, privKeySig, onLock } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
@@ -58,6 +58,11 @@ export const roomsScreenActive = signal(false);
 // MainShell/сайдбар); гостевой вход unlock.jsx's temp-chat — свой независимый
 // Quick, этого сигнала не касается.
 export const roomsMinimized = signal(false);
+
+onLock(() => {
+	roomsScreenActive.value = false;
+	roomsMinimized.value = false;
+});
 
 function MainShell() {
 	const [themeMode, setThemeMode] = useState(null); // null="как в системе" — см. theme-mode.js

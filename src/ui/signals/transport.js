@@ -9,7 +9,8 @@ import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { record as traceRecord } from "../../core/diag/call-trace.js";
 import { createPublisher } from "../../core/transport/publisher.js";
 import { pickLatest } from "../../core/sync/lww.js";
-import { runBootstrap } from "../../core/sync/bootstrap.js";
+import { runBootstrap, getSyncState } from "../../core/sync/bootstrap.js";
+import { shouldSkipColdBootstrap } from "./warm-unlock.js";
 import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { rebuildGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
@@ -62,7 +63,7 @@ import { toPreviewText } from "../../core/markdown/preview.js";
 import { drain } from "../../core/store/outbox.js";
 import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
-import { currentUser } from "./auth.js";
+import { currentUser, onLock } from "./auth.js";
 import { resetSyncLog, logSync } from "./sync-log.js";
 import { t } from "./i18n.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
@@ -109,6 +110,7 @@ let publisher = null;
 let cryptoWorker = null;
 let connectPromise = null;
 let connectedForPubkey = null;
+let lastSessionPubkey = null;
 let verifyBatchFn = null;
 let groupMessageSubscriber = null;
 let deviceAnnounceSubscriber = null; // этап 72 — живая досинхронизация устройств (свои + чужие)
@@ -274,6 +276,10 @@ function teardown() {
 	channelContentSubscriber = null;
 	fileShareGrantSubscriber = null;
 	fileSubtreeOpSubscriber = null;
+	deviceAnnounceSubscriber = null;
+	mirrorSubscriber = null;
+	discoveryLiveSubscriber = null;
+	contactListSubscriber = null;
 	processedEventIds.clear();
 	inboxRelayCache.clear();
 	if (cryptoWorker) {
@@ -284,6 +290,8 @@ function teardown() {
 		connection.close();
 		connection = null;
 	}
+	connectedForPubkey = null;
+	connectPromise = null;
 	connState.value = "disconnected";
 	synced.value = false;
 }
@@ -419,9 +427,16 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// contactRequests, отложено до unlock — dbKey недоступен в Dexie upgrade).
 	await configureContactRuntime({ ownerPubkey: pubkeyHex, privKey, dbKey, publish });
 
+	const lastSeen = await getSyncState(connection.getUrl());
+	const skipCold = shouldSkipColdBootstrap(lastSessionPubkey, pubkeyHex, lastSeen);
+
 	logSync(t("syncLog.loadingHistory"));
-	const bootstrapResult = await runBootstrap(connection, pubkeyHex, { verifyBatch });
-	logSync(t("syncLog.loadingHistoryDone", { count: bootstrapResult.addedCount }));
+	if (!skipCold) {
+		const bootstrapResult = await runBootstrap(connection, pubkeyHex, { verifyBatch });
+		logSync(t("syncLog.loadingHistoryDone", { count: bootstrapResult.addedCount }));
+	} else {
+		logSync(t("syncLog.loadingHistoryDone", { count: 0 }));
+	}
 	logSync(t("syncLog.contacts"));
 	await reconcileContactsFromEventLog(pubkeyHex);
 	// Этап 74 — найдено живой проверкой: живая подписка на СВОИ kind:3/10000 —
@@ -443,12 +458,14 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// этапа 57's file-key backfill) — kind:10002 replaceable (NIP-01) и дешёвый,
 	// republish на каждый вход безопасен и идемпотентен по протокольной природе.
 	const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
-	publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
-	// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
-	// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
-	publisher
-		.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
-		.catch(() => {});
+	if (!skipCold) {
+		publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
+		// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
+		// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
+		publisher
+			.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
+			.catch(() => {});
+	}
 	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2+T4) — тот же backfill-принцип, что
 	// kind:10002/10050 выше: без этого события 30073 переставало доходить до
 	// реле насовсем после первого же connect() без соединения в момент
@@ -460,7 +477,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// что publishDiscoverySettings (getProfile), не кэшируется отдельно.
 	const discoverySettings = await loadDiscoverySettings(pubkeyHex);
 	ownDiscoveryVisible.value = discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000);
-	if (discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000)) {
+	if (!skipCold && discoverySettings.visible && discoverySettings.visibleUntil > Math.floor(Date.now() / 1000)) {
 		const discoveryChannels = discoverySettings.showChannels
 			? (await listOwnedChannels(pubkeyHex, dbKey)).filter((c) => discoverySettings.channelIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, description: c.description }))
 			: [];
@@ -508,18 +525,23 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	logSync(t("syncLog.publishingKeyProfileDone"));
 
 	logSync(t("syncLog.devices"));
-	// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
-	// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
-	// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
-	await syncDeviceMembership(pubkeyHex, privKey, dbKey, publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
-	logSync(t("syncLog.devicesDone"));
-
-	logSync(t("syncLog.chatHistory"));
-	// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
-	// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
-	// переподключившееся устройство получило полный паритет истории чатов.
 	const mirrorKey = deriveMirrorKey(deriveMasterSecret(privKey));
-	await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
+	if (!skipCold) {
+		// DESIGN.md, этап 25, раздел 1 — распознать sibling-устройства этой identity
+		// (уже опубликованные kind 443 с тегом device, включая исторические — тот же
+		// authors:[я] поток, что и остальной bootstrap) и добавить в активные MLS-группы.
+		await syncDeviceMembership(pubkeyHex, privKey, dbKey, publish, () => fetchOwnKeyPackageAnnounces(pubkeyHex));
+		logSync(t("syncLog.devicesDone"));
+
+		logSync(t("syncLog.chatHistory"));
+		// DESIGN.md, этап 25, раздел 2 — зеркало истории: подтянуть всё, что мои другие
+		// устройства (или я сам на предыдущей сессии) уже зеркалировали, чтобы новое/
+		// переподключившееся устройство получило полный паритет истории чатов.
+		await syncMirroredHistory(pubkeyHex, mirrorKey, dbKey);
+	} else {
+		logSync(t("syncLog.devicesDone"));
+		logSync(t("syncLog.chatHistory"));
+	}
 	// Этап 72 — постоянная подписка СРАЗУ после одноразового catch-up выше:
 	// дальнейшие зеркалированные события (от других устройств этой identity,
 	// живьём) больше не ждут следующего connect()/reload.
@@ -820,6 +842,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			}
 		},
 	});
+	lastSessionPubkey = pubkeyHex;
 }
 
 // Идемпотентно — singleton-соединение на вкладку. Смена identity (logout/login
@@ -2071,3 +2094,5 @@ export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKe
 	}
 	mirrorSubscriber.subscribe("live-mirror", [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }]);
 }
+
+onLock(() => teardown());

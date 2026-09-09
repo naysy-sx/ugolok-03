@@ -667,6 +667,9 @@
 		"savedToStorage": "Saved to storage",
 		"imageLoadError": "画像を読み込めませんでした: {{error}}",
 		"loadingImage": "画像を読み込み中…",
+		"statusDecrypting": "復号しています…",
+		"statusPreparing": "表示を準備しています…",
+		"retry": "再試行",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",

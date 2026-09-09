@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createThumbnailQueue } from "../src/domain/files/thumbnail-queue.js";
+import { createThumbnailQueue, setThumbnailWorkPaused } from "../src/domain/files/thumbnail-queue.js";
+
+setThumbnailWorkPaused(false);
 
 function deferred() {
 	let resolve;
@@ -10,7 +12,28 @@ function deferred() {
 	return { promise, resolve };
 }
 
+test("pause останавливает старт новых задач, resume продолжает", async () => {
+	setThumbnailWorkPaused(false);
+	const queue = createThumbnailQueue(1);
+	let started = 0;
+	const gate = deferred();
+	setThumbnailWorkPaused(true);
+	const handle = queue.enqueue(async () => {
+		started += 1;
+		await gate.promise;
+	});
+	await new Promise((r) => setTimeout(r, 20));
+	assert.equal(started, 0);
+	setThumbnailWorkPaused(false);
+	await new Promise((r) => setTimeout(r, 20));
+	assert.equal(started, 1);
+	gate.resolve();
+	await handle.promise;
+	setThumbnailWorkPaused(false);
+});
+
 test("не превышает maxConcurrent одновременно работающих задач", async () => {
+	setThumbnailWorkPaused(false);
 	const queue = createThumbnailQueue(2);
 	const gates = [deferred(), deferred(), deferred(), deferred()];
 	const maxObserved = { value: 0 };

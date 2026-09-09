@@ -8,6 +8,7 @@ import { buildPlaylist } from "../../domain/media/playlist.js";
 import { classOf } from "../../domain/media/media-ref.js";
 import { createResourceOwner } from "../../domain/media/adapters/resource-owner.js";
 import { acquireMediaUrl, releaseMediaUrlHandle } from "../../domain/media/adapters/media-url.js";
+import { setThumbnailWorkPaused } from "../../domain/files/thumbnail-queue.js";
 import { callState } from "./call.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 
@@ -74,6 +75,7 @@ function dispatch(event, payload) {
 	// же playlistRef — лишний strip перед вызовом не нужен.
 	const next = transition(mediaSession.value, event, payload, playlistRef);
 	mediaSession.value = next && { ...next, playlist: playlistRef };
+	setThumbnailWorkPaused(next !== null);
 
 	const desiredDigests = next ? allocWindow(next, playlistRef, MEDIA_WINDOW_BUDGET_BYTES) : [];
 	resourceOwner.sync(desiredDigests, playlistRef ?? { items: [] });

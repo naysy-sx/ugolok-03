@@ -667,6 +667,9 @@
 		"savedToStorage": "Сохранено в хранилище",
 		"imageLoadError": "Не удалось загрузить картинку: {{error}}",
 		"loadingImage": "Загрузка картинки…",
+		"statusDecrypting": "Расшифровка…",
+		"statusPreparing": "Подготовка просмотра…",
+		"retry": "Повторить",
 		"units": {
 			"bytes": "{{count}} Б",
 			"kb": "{{count}} КБ",

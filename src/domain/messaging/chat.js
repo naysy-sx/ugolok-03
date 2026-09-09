@@ -57,14 +57,14 @@ function decodeBase64(str) {
 // DESIGN.md, этап 24, п.2: детерминирован для ОБЕИХ сторон — не хранится
 // отдельно как "chatId -> groupId" маппинг, пересчитывается на лету.
 export function computeGroupId(pubkeyHexA, pubkeyHexB) {
-	const sorted = [pubkeyHexA, pubkeyHexB].sort();
+	const sorted = [String(pubkeyHexA).toLowerCase(), String(pubkeyHexB).toLowerCase()].sort();
 	return sha256(utf8ToBytes(sorted.join(":")));
 }
 
 // Этап 73.3 — И3: для пары (A,B) ровно одна сторона вправе впервые создать
 // G(A,B) — тот же приём, что glare resolution в call-FSM (FEATURE-SPECS/VOICE.md).
 export function isCommitter(pubkeyHexA, pubkeyHexB) {
-	return pubkeyHexA < pubkeyHexB;
+	return String(pubkeyHexA).toLowerCase() < String(pubkeyHexB).toLowerCase();
 }
 
 export async function requirePublishOk(publish, event) {

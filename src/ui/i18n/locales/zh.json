@@ -667,6 +667,9 @@
 		"savedToStorage": "Saved to storage",
 		"imageLoadError": "图片加载失败：{{error}}",
 		"loadingImage": "正在加载图片…",
+		"statusDecrypting": "正在解密…",
+		"statusPreparing": "正在准备预览…",
+		"retry": "重试",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",

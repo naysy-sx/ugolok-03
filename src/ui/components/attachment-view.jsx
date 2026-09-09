@@ -1,6 +1,8 @@
 import { useState, useEffect } from "preact/hooks";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
+import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
+import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { currentUser, dbKeySig, privKeySig } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
 import { initFiles, createFileEntry } from "../signals/files.js";
@@ -66,47 +68,58 @@ export function openWithOrigin(e, attachment, onOpen) {
 // вид — через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша
 // одной и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
 export function ImageAttachment({ attachment, onOpen }) {
-	// Ленивая инициализация из общего слоя памяти (attachment-memory-cache.js) —
-	// если картинку уже показывали в этой вкладке, url есть СРАЗУ на первом рендере,
-	// без вспышки спиннера (найдено ревью: URL.revokeObjectURL на каждом unmount
-	// раньше заставлял пере-качивать и пере-расшифровывать уже виденное).
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(attachment.manifestDigest) ?? null);
+	const [url, setUrl] = useState(() => getPreviewUrl(attachment.manifestDigest) ?? null);
+	const [phase, setPhase] = useState("loading");
 	const [error, setError] = useState("");
+	const [retryTick, setRetryTick] = useState(0);
 
 	useEffect(() => {
-		const memUrl = getMemoryCachedUrl(attachment.manifestDigest);
-		if (memUrl) {
-			setUrl(memUrl);
+		const cached = getPreviewUrl(attachment.manifestDigest);
+		if (cached) {
+			setUrl(cached);
+			setError("");
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
-			.then((bytes) => {
-				if (cancelled) return;
-				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
+		setUrl(null);
+		setError("");
+		setPhase("loading");
+		resolveImagePreviewUrl(
+			attachment.manifestDigest,
+			attachment.mime,
+			() => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL }),
+			undefined,
+			(p) => {
+				if (!cancelled) setPhase(p);
+			},
+		)
+			.then((raster) => {
+				if (!cancelled) setUrl(raster.url);
 			})
 			.catch((err) => {
 				if (!cancelled) setError(errorMessage(err));
 			});
-		// URL НЕ отзывается здесь — им теперь владеет attachment-memory-cache.js
-		// (вытесняется по LRU/бюджету или полностью в lock()), не жизненный цикл
-		// этого конкретного компонента.
 		return () => {
 			cancelled = true;
 		};
-	}, [attachment]);
+	}, [attachment, retryTick]);
 
 	if (error) {
 		return (
-			<p role="alert" style={{ color: "var(--bad)" }}>
-				{t("attachment.imageLoadError", { error })}
+			<p role="alert" class="stack" style={{ "--gap": "var(--space-2xs)", color: "var(--bad)" }}>
+				<span>{t("attachment.imageLoadError", { error })}</span>
+				<button type="button" class="btn--ghost" onClick={() => setRetryTick((n) => n + 1)}>
+					{t("attachment.retry")}
+				</button>
 			</p>
 		);
 	}
 	if (!url) {
+		const status =
+			phase === "preparing" ? t("attachment.statusPreparing") : phase === "decrypting" ? t("attachment.statusDecrypting") : t("attachment.loadingImage");
 		return (
 			<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> {t("attachment.loadingImage")}
+				<span class="spinner" aria-hidden="true" /> {status}
 			</p>
 		);
 	}

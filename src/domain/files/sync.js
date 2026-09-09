@@ -9,9 +9,12 @@ import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/cry
 import { bytesToHex } from "@noble/hashes/utils.js";
 
 // regular kind (не replaceable/ephemeral) — журнал операций накапливается,
-// а не заменяется последней версией; 3007 — первый свободный в блоке,
-// проверенном И0 (CONTRACTS.md, этап 53).
-export const KIND_FILES_OP = 3007;
+// а не заменяется последней версией.
+// 3007 раньше был files-op, но совпал с CHANNEL_UNVIEW_KIND (gift-wrap rumor).
+// Пишем только 3011; 3007 читаем переходным периодом, чтобы не потерять дерево
+// на устройствах со старым журналом. Unview канала остаётся rumor 3007 внутри 1059.
+export const KIND_FILES_OP_LEGACY = 3007;
+export const KIND_FILES_OP = 3011;
 
 export function buildFilesLogEvent(privKey, ops, createdAt = Math.floor(Date.now() / 1000)) {
 	const ownPubHex = bytesToHex(getPublicKey(privKey));

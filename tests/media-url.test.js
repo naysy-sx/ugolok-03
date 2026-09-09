@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { putStream } from "../src/domain/files/content.js";
 import { handleRangeRequest } from "../src/domain/files/player-bridge.js";
 import { acquireMediaUrl, releaseMediaUrlHandle } from "../src/domain/media/adapters/media-url.js";
+import { clearPlaintextCache } from "../src/domain/media/plaintext-cache.js";
+import { clearManifestCache } from "../src/domain/files/content.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const SERVER_URL = "https://blossom.test";
@@ -54,12 +56,15 @@ async function uploadFixture(mime, size = 2000) {
 // глобальный URL.createObjectURL в Node 20+ существует (веб-платформенное API),
 // используется как есть, без stub'а.
 
-test("acquireMediaUrl: изображение — object-url, содержимое читается GET'ом (eager, целиком)", async () => {
+test("acquireMediaUrl: изображение — cached-url, содержимое читается GET'ом (eager, целиком)", async () => {
+	clearPlaintextCache();
+	clearManifestCache();
 	const { ref, fetchImpl } = await uploadFixture("image/png");
 	const handle = await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
-	assert.equal(handle.kind, "object-url");
+	assert.equal(handle.kind, "cached-url");
 	assert.ok(handle.url.startsWith("blob:") || typeof handle.url === "string");
 	await releaseMediaUrlHandle(ref.digest);
+	clearPlaintextCache();
 });
 
 test("acquireMediaUrl: видео/аудио — bridge, реально зарегистрировано в player-bridge (handleRangeRequest отвечает)", async () => {
@@ -107,7 +112,9 @@ test("acquireMediaUrl: два конкурентных вызова на тот 
 	await releaseMediaUrlHandle(ref.digest);
 });
 
-test("releaseMediaUrlHandle: после release новый acquireMediaUrl на тот же digest реально идёт в сеть заново", async () => {
+test("releaseMediaUrlHandle: картинка после release берётся из plaintext-кэша, без сети", async () => {
+	clearPlaintextCache();
+	clearManifestCache();
 	const { ref, fetchImpl } = await uploadFixture("image/gif");
 	const fetchSpy = { calls: 0 };
 	const countingFetch = async (...args) => {
@@ -118,6 +125,27 @@ test("releaseMediaUrlHandle: после release новый acquireMediaUrl на 
 	const callsAfterFirst = fetchSpy.calls;
 	await releaseMediaUrlHandle(ref.digest);
 	await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl: countingFetch });
-	assert.ok(fetchSpy.calls > callsAfterFirst, "после release новый acquire обязан снова обратиться в сеть");
+	assert.equal(fetchSpy.calls, callsAfterFirst, "повторное открытие в сессии не должно качать блоб заново");
 	await releaseMediaUrlHandle(ref.digest);
+	clearPlaintextCache();
+});
+
+test("acquireMediaUrl: rasterAdapters — img.src не исходный progressive-поток", async () => {
+	clearPlaintextCache();
+	clearManifestCache();
+	const { ref, fetchImpl } = await uploadFixture("image/jpeg");
+	const pngLike = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7, 7, 7]);
+	const handle = await acquireMediaUrl(ref, {
+		serverUrl: SERVER_URL,
+		fetchImpl,
+		rasterAdapters: {
+			createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
+			convertBitmap: async () => new Blob([pngLike], { type: "image/png" }),
+		},
+	});
+	assert.equal(handle.rasterized, true);
+	const preview = new Uint8Array(await (await fetch(handle.url)).arrayBuffer());
+	assert.deepEqual(preview, pngLike);
+	await releaseMediaUrlHandle(ref.digest);
+	clearPlaintextCache();
 });

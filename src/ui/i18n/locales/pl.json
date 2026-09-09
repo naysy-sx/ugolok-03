@@ -667,6 +667,9 @@
 		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Nie udało się wczytać obrazu: {{error}}",
 		"loadingImage": "Wczytywanie obrazu…",
+		"statusDecrypting": "Odszyfrowywanie…",
+		"statusPreparing": "Przygotowanie podglądu…",
+		"retry": "Ponów",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",

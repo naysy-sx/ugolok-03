@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateFileKey, encryptChunk, decryptChunk, deriveChunkNonce } from "../src/domain/files/crypto.js";
-import { putStream, getManifest, getRange, getChunk, DEFAULT_CHUNK_SIZE } from "../src/domain/files/content.js";
+import { putStream, getManifest, getRange, getChunk, DEFAULT_CHUNK_SIZE, clearManifestCache } from "../src/domain/files/content.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 
@@ -206,7 +206,26 @@ test("getManifest: подменённый манифест на сервере �
 	const { manifestDigest } = await putStream(original, { name: "x", mime: "text/plain", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
 
 	store.set(manifestDigest, new TextEncoder().encode('{"подменено":true}'));
+	clearManifestCache();
 	await assert.rejects(() => getManifest(manifestDigest, { serverUrl: "https://blossom.test", fetchImpl }), /подмен|digest/i);
+});
+
+test("getManifest: повторный вызов того же digest не ходит в сеть", async () => {
+	clearManifestCache();
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new Uint8Array(400);
+	const { manifestDigest } = await putStream(original, { name: "x", mime: "text/plain", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+	let gets = 0;
+	const countingFetch = async (url, opts = {}) => {
+		if (!opts.method || opts.method === "GET") gets += 1;
+		return fetchImpl(url, opts);
+	};
+	const m1 = await getManifest(manifestDigest, { serverUrl: "https://blossom.test", fetchImpl: countingFetch });
+	const afterFirst = gets;
+	const m2 = await getManifest(manifestDigest, { serverUrl: "https://blossom.test", fetchImpl: countingFetch });
+	assert.equal(gets, afterFirst);
+	assert.deepEqual(m1, m2);
+	clearManifestCache();
 });
 
 test("getRange: подменённый чанк на сервере — отклонён по digest, не расшифровывается молча", async () => {

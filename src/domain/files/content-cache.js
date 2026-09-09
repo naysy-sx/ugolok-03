@@ -11,6 +11,7 @@
 import { db } from "../../core/store/database.js";
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { downloadMessageAttachment } from "../messaging/attachments.js";
+import { putPlaintextBytes } from "../media/plaintext-cache.js";
 
 export const CACHE_BUDGET_BYTES = 200 * 1024 * 1024;
 export const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -63,9 +64,13 @@ export async function evictIfNeeded(ownerPubkey, { budgetBytes = CACHE_BUDGET_BY
 
 export async function getOrDownloadMessageAttachment(ownerPubkey, dbKey, attachment, options = {}) {
 	const cached = await getCachedMessageAttachment(ownerPubkey, dbKey, attachment.manifestDigest);
-	if (cached !== undefined) return cached;
+	if (cached !== undefined) {
+		putPlaintextBytes(attachment.manifestDigest, cached, attachment.mime);
+		return cached;
+	}
 
 	const bytes = await downloadMessageAttachment(attachment, options);
 	await putCachedMessageAttachment(ownerPubkey, dbKey, attachment.manifestDigest, attachment.mime, bytes, options);
+	putPlaintextBytes(attachment.manifestDigest, bytes, attachment.mime);
 	return bytes;
 }

@@ -667,6 +667,9 @@
 		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Görsel yüklenemedi: {{error}}",
 		"loadingImage": "Görsel yükleniyor…",
+		"statusDecrypting": "Şifre çözülüyor…",
+		"statusPreparing": "Önizleme hazırlanıyor…",
+		"retry": "Yeniden dene",
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",

@@ -93,7 +93,16 @@ export async function putStream(
 	return { manifest, manifestDigest, fileKey, size };
 }
 
+const MANIFEST_CACHE_MAX = 64;
+const manifestCache = new Map();
+
+export function clearManifestCache() {
+	manifestCache.clear();
+}
+
 export async function getManifest(manifestDigest, { serverUrl, fetchImpl } = {}) {
+	const cached = manifestCache.get(manifestDigest);
+	if (cached) return cached;
 	const options = fetchImpl ? { fetchImpl } : {};
 	// Манифест — маленький (единицы-десятки КБ даже на гигабайтный файл,
 	// ALGO.MD §9.4), полный GET оправдан, Range здесь не нужен.
@@ -102,7 +111,13 @@ export async function getManifest(manifestDigest, { serverUrl, fetchImpl } = {})
 	if (actualDigest !== manifestDigest) {
 		throw new DomainError("Blossom-сервер вернул подменённый манифест (digest не совпадает)", "errors.blossomManifestTampered");
 	}
-	return JSON.parse(new TextDecoder().decode(bytes));
+	const manifest = JSON.parse(new TextDecoder().decode(bytes));
+	if (manifestCache.size >= MANIFEST_CACHE_MAX) {
+		const oldest = manifestCache.keys().next().value;
+		manifestCache.delete(oldest);
+	}
+	manifestCache.set(manifestDigest, manifest);
+	return manifest;
 }
 
 const AEAD_TAG_BYTES = 16; // ChaCha20-Poly1305 — тег фиксированной длины на чанк

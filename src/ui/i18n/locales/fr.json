@@ -667,6 +667,9 @@
 		"savedToStorage": "Saved to storage",
 		"imageLoadError": "Impossible de charger l'image : {{error}}",
 		"loadingImage": "Chargement de l'image…",
+		"statusDecrypting": "Déchiffrement…",
+		"statusPreparing": "Préparation de l'aperçu…",
+		"retry": "Réessayer",
 		"units": {
 			"bytes": "{{count}} o",
 			"kb": "{{count}} Ko",

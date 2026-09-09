@@ -2,6 +2,8 @@ import { signal } from "@preact/signals";
 import { deriveMasterSecret, deriveDbKey } from "../../core/crypto/derivation.js";
 import { clearMemoryCache } from "../attachment-memory-cache.js";
 import { closeMedia } from "./media.js";
+import { clearManifestCache } from "../../domain/files/content.js";
+import { clearPlaintextCache } from "../../domain/media/plaintext-cache.js";
 import { logInfo } from "../../core/diag/boot-log.js";
 
 export const currentUser = signal(null);
@@ -10,6 +12,13 @@ export const masterSecretSig = signal(null);
 export const dbKeySig = signal(null);
 
 let lastActivity = Date.now();
+
+const lockHooks = new Set();
+
+export function onLock(fn) {
+  lockHooks.add(fn);
+  return () => lockHooks.delete(fn);
+}
 
 export function login(id, loginName, privKeyBytes, now = Date.now()) {
   currentUser.value = { id, login: loginName };
@@ -23,6 +32,15 @@ export function login(id, loginName, privKeyBytes, now = Date.now()) {
 export function lock() {
   closeMedia(); // SPEC §3.5 — ДО очистки кэшей: плейлист держит ключи файлов в памяти
   clearMemoryCache();
+  clearManifestCache();
+  clearPlaintextCache();
+  for (const fn of lockHooks) {
+    try {
+      fn();
+    } catch {
+      // хук не должен блокировать сброс сигналов
+    }
+  }
   currentUser.value = null;
   privKeySig.value = null;
   masterSecretSig.value = null;

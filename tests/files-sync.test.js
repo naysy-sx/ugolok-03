@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
 import { createFolder as opCreateFolder, createFile as opCreateFile, rename as opRename, move as opMove, purge as opPurge } from "../src/domain/files/ops.js";
 import { createInitialState, ROOT_ID } from "../src/domain/files/tree.js";
-import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP } from "../src/domain/files/sync.js";
+import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP, KIND_FILES_OP_LEGACY } from "../src/domain/files/sync.js";
 import { getFileKey, listUnannouncedFileKeys } from "../src/domain/files/store.js";
 import { privKeySig, dbKeySig } from "../src/ui/signals/auth.js";
 import { initFiles, treeState, projected, createFolder, createFileEntry, rebuildFilesLog, backfillOwnFileKeys } from "../src/ui/signals/files.js";
@@ -45,8 +45,22 @@ test("buildFilesLogEvent/parseFilesLogEvent: round-trip для create-опера
 	const ops = [{ type: "create", id: "n-1", kind: "dir", blob: null, parentId: ROOT_ID, name: "Заметки", origin: null, label: label(1) }];
 	const event = buildFilesLogEvent(OWNER_PRIV, ops);
 	assert.equal(event.kind, KIND_FILES_OP);
+	assert.equal(KIND_FILES_OP, 3011);
 	const parsed = parseFilesLogEvent(event, OWNER_PRIV);
 	assert.deepEqual(parsed, ops);
+});
+
+test("rebuildFilesLog: читает legacy kind 3007 (старый журнал до перенумерации)", async () => {
+	await initFiles(OWNER, OWNER_PRIV, noopPublish);
+	const op = opCreateFolder(treeState.value, ROOT_ID, "Со старого kind", "n-legacy-1", label(1));
+	const event = buildFilesLogEvent(OWNER_PRIV, [op]);
+	await db.table("events").add({ ...event, kind: KIND_FILES_OP_LEGACY, flatTags: [] });
+
+	await rebuildFilesLog(OWNER, OWNER_PRIV);
+
+	const R = projected.value;
+	const names = (R.children.get(ROOT_ID) ?? []).map((id) => R.nodes.get(id).displayName);
+	assert.ok(names.includes("Со старого kind"));
 });
 
 test("buildFilesLogEvent/parseFilesLogEvent: round-trip для purge (БЕЗ label)", () => {
