@@ -57,6 +57,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      - blossom-data:/blossom-data:ro
     ports:
       - "443:443"
       - "80:80"
