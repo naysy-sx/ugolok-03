@@ -206,6 +206,18 @@ function requestRangeStreamFromClient(client, manifestDigest, start, end, expect
 	return new Promise((resolveOpen, rejectOpen) => {
 		let controller = null;
 		let opened = false;
+		// MEDIA-PERF-TZ-5.md §4 (найдено живой проверкой пользователя) — обвязка
+		// моста (player-bridge.js/app.jsx) в редких случаях доставляет протокол
+		// ДВАЖДЫ на один и тот же requestId (наблюдалось: два независимых
+		// набора open/chunk×N/end для одного окна). Старый однократный
+		// range-response был к этому НЕЧУВСТВИТЕЛЕН (второй ответ находил
+		// pending уже удалённым и тихо игнорировался) — у ReadableStreamController
+		// такой роскоши нет: enqueue() после close()/error() и close() после
+		// error() бросают исключение НАРУЖУ (Uncaught TypeError в контексте SW).
+		// finished — гейт "первый end()/error() выигрывает, всё после — no-op",
+		// без него живой ролик у пользователя молчал (readyState=0) именно
+		// из-за такого краша посреди первого же окна.
+		let finished = false;
 		let bytesReceived = 0;
 
 		function finalizeWindowState() {
@@ -219,16 +231,23 @@ function requestRangeStreamFromClient(client, manifestDigest, start, end, expect
 		}
 
 		const guard = createStallGuard(resolveFilesContentTimeoutMs(expectedBytes), STALL_TIMEOUT_MS, (reason) => {
+			if (finished) return;
+			finished = true;
 			pendingRangeRequests.delete(requestId);
 			windowState.delete(manifestDigest); // таймаут/простой — не наследовать раздутое окно следующему запросу
 			const err = new Error(`files-content: ${reason === "stall" ? "простой" : "таймаут"} ожидания ответа вкладки`);
 			if (!opened) rejectOpen(err);
-			else controller?.error(err);
+			else {
+				try {
+					controller?.error(err);
+				} catch {}
+			}
 		});
 
 		pendingRangeRequests.set(requestId, {
 			guard,
 			onOpen(msg) {
+				if (opened) return; // дубль open() — тот же ReadableStream уже отдан браузеру, второй создавать нельзя
 				opened = true;
 				const stream = new ReadableStream({
 					start(c) {
@@ -238,24 +257,37 @@ function requestRangeStreamFromClient(client, manifestDigest, start, end, expect
 				resolveOpen({ stream, mime: msg.mime, size: msg.size, totalBytes: msg.totalBytes });
 			},
 			onChunk(msg) {
+				if (finished) return;
 				guard.progress(); // MEDIA-PERF-TZ-5.md §4 — сам чанк теперь И ЕСТЬ сигнал прогресса, отдельного пинга больше нет
 				bytesReceived += msg.bytes.length;
-				controller?.enqueue(msg.bytes);
+				try {
+					controller?.enqueue(msg.bytes);
+				} catch {}
 			},
 			onEnd() {
+				if (finished) return;
+				finished = true;
 				guard.settle();
 				pendingRangeRequests.delete(requestId);
 				finalizeWindowState();
-				controller?.close();
+				try {
+					controller?.close();
+				} catch {}
 			},
 			onError(msg) {
+				if (finished) return;
+				finished = true;
 				guard.settle();
 				pendingRangeRequests.delete(requestId);
 				windowState.delete(manifestDigest);
 				const err = new Error(msg.error || "files-content: ошибка");
 				err.code = msg.error;
 				if (!opened) rejectOpen(err);
-				else controller?.error(err);
+				else {
+					try {
+						controller?.error(err);
+					} catch {}
+				}
 			},
 		});
 
