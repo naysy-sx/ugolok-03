@@ -25,4 +25,13 @@ services:
       - /var/lib/ugolok/test/blossom:/app/data
     ports:
       - "127.0.0.1:8001:8000"
-    mem_limit: 128m
+    # Живая проверка 2026-09-10: 128m + sqlite 330 МиБ (database.sqlite3)
+    # дали RestartCount=20, Range-GET 502/404, видео рвалось. Форк грузит
+    # блоб целиком в память на каждый Range (тот же комментарий, что у
+    # prod island). Память как на проде — 512m.
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
