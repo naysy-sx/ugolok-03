@@ -90,11 +90,24 @@ test("service-worker.js::STALL_TIMEOUT_MS совпадает с sw-timeout.js", 
 	assert.equal(extractConst("STALL_TIMEOUT_MS"), STALL_TIMEOUT_MS);
 });
 
-test("service-worker.js::createStallGuard (текст функции) присутствует, слушает files-content:range-progress", () => {
+// MEDIA-PERF-TZ-5.md §4 — отдельный "range-progress"-пинг убран: потоковый
+// протокол (range-open/range-chunk/range-end/range-error) сам по себе даёт
+// прогресс — каждый range-chunk сбрасывает застойный таймер (onChunk ->
+// guard.progress()), ждать отдельного сигнала незачем.
+test("service-worker.js::createStallGuard (текст функции) присутствует, застойный таймер сбрасывается на каждый range-chunk", () => {
 	assert.match(swSource, /function createStallGuard\(ceilingMs, stallMs, onTimeout\)/);
-	assert.match(swSource, /files-content:range-progress/);
-	assert.match(swSource, /pending\?\.guard\.progress\(\)/);
+	assert.match(swSource, /files-content:range-chunk/);
+	assert.match(swSource, /guard\.progress\(\)/);
 	assert.match(swSource, /let stallTimer = null/, "застойный таймер не стартует до первого progress()");
+});
+
+test("service-worker.js: потоковый протокол — range-open/range-chunk/range-end/range-error присутствуют", () => {
+	assert.match(swSource, /files-content:range-open/);
+	assert.match(swSource, /files-content:range-chunk/);
+	assert.match(swSource, /files-content:range-end/);
+	assert.match(swSource, /files-content:range-error/);
+	assert.match(swSource, /new ReadableStream/);
+	assert.doesNotMatch(swSource, /files-content:range-response/, "старый однократный response-протокол заменён потоковым, не сосуществует");
 });
 
 test("service-worker.js: пустой clientId — фолбэк на clients.matchAll, не сразу 404", () => {

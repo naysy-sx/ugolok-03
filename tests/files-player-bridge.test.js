@@ -1,7 +1,14 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { concatBytes } from "@noble/hashes/utils.js";
 import { putStream } from "../src/domain/files/content.js";
-import { registerPlayerFile, unregisterPlayerFile, handleRangeRequest, PLAYER_FIRST_WINDOW_BYTES } from "../src/domain/files/player-bridge.js";
+import {
+	registerPlayerFile,
+	unregisterPlayerFile,
+	handleRangeRequest,
+	handleRangeStreamRequest,
+	PLAYER_FIRST_WINDOW_BYTES,
+} from "../src/domain/files/player-bridge.js";
 import { nextAdaptiveWindow, PLAYER_MAX_WINDOW_BYTES } from "../src/domain/files/sw-timeout.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
@@ -296,6 +303,94 @@ test("handleRangeRequest: сбой расшифровки/сети -> ok:false, 
 	const res = await handleRangeRequest({ manifestDigest, start: 0, end: 10 });
 	assert.equal(res.ok, false);
 	assert.equal(res.error, "decrypt-failed");
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+// MEDIA-PERF-TZ-5.md §4 — handleRangeStreamRequest: та же валидация, что
+// handleRangeRequest, но результат — вызовы sink (open/chunk/end/error), не
+// объект. recordingSink собирает их в массив для проверки формы и порядка.
+function recordingSink() {
+	const calls = [];
+	return {
+		calls,
+		open: (info) => calls.push({ type: "open", ...info }),
+		chunk: (seq, bytes) => calls.push({ type: "chunk", seq, bytes }),
+		end: () => calls.push({ type: "end" }),
+		error: (code) => calls.push({ type: "error", code }),
+	};
+}
+
+test("handleRangeStreamRequest: незарегистрированный digest -> сразу sink.error('unknown-digest'), open() НЕ вызывается", async () => {
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest: "нет-такого-файла", start: 0, end: 10 }, sink);
+	assert.deepEqual(sink.calls, [{ type: "error", code: "unknown-digest" }]);
+});
+
+test("handleRangeStreamRequest: диапазон вне границ -> sink.error('range-out-of-bounds'), open() НЕ вызывается", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest, start: 0, end: 1000 }, sink); // size=1000, индексы 0..999
+	assert.deepEqual(sink.calls, [{ type: "error", code: "range-out-of-bounds" }]);
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+test("handleRangeStreamRequest: успешный путь — open() ДО первого chunk(), геометрия верна, chunk'и по порядку дают исходные байты, затем end()", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { original, manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 2000, "video/mp4", 256);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest, start: 100, end: 199 }, sink);
+
+	assert.equal(sink.calls[0].type, "open", "open() обязан прийти ПЕРВЫМ, до любого chunk()");
+	assert.equal(sink.calls[0].mime, "video/mp4");
+	assert.equal(sink.calls[0].size, 2000);
+	assert.equal(sink.calls[0].totalBytes, 100, "totalBytes = запрошенный диапазон (100..199 включительно = 100 байт)");
+
+	const chunkCalls = sink.calls.filter((c) => c.type === "chunk");
+	assert.ok(chunkCalls.length > 0);
+	assert.deepEqual(chunkCalls.map((c) => c.seq), chunkCalls.map((_, i) => i), "seq строго по порядку 0..N-1");
+	assert.deepEqual(concatBytes(...chunkCalls.map((c) => c.bytes)), original.subarray(100, 200));
+
+	assert.equal(sink.calls[sink.calls.length - 1].type, "end", "end() — последний вызов");
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+test("handleRangeStreamRequest: открытый диапазон (end=null) — open().totalBytes = PLAYER_FIRST_WINDOW_BYTES, не весь файл (регрессия S4/S5)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const size = PLAYER_FIRST_WINDOW_BYTES * 4;
+	const { manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, size, "video/mp4", 65536);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest, start: 0, end: null }, sink);
+
+	assert.equal(sink.calls[0].type, "open");
+	assert.equal(sink.calls[0].totalBytes, PLAYER_FIRST_WINDOW_BYTES);
+	assert.equal(sink.calls[0].size, size, "size — ПОЛНЫЙ размер файла, даже если totalBytes — только окно");
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+test("handleRangeStreamRequest: сбой расшифровки (неверный fileKey) — open() уже был вызван, error() приходит БЕЗ end()", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { manifest, manifestDigest } = await setupFile(fetchImpl, 500);
+	const wrongKey = new Uint8Array(32).fill(9);
+	registerPlayerFile(manifestDigest, { manifest, fileKey: wrongKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest, start: 0, end: 10 }, sink);
+
+	assert.equal(sink.calls[0].type, "open", "цена §4: отказ ПОСЛЕ open() — статус 206 браузеру уже не откатить на 500");
+	assert.equal(sink.calls[sink.calls.length - 1].type, "error");
+	assert.equal(sink.calls[sink.calls.length - 1].code, "decrypt-failed");
+	assert.equal(sink.calls.some((c) => c.type === "end"), false, "end() не звучит после error()");
 
 	unregisterPlayerFile(manifestDigest);
 });

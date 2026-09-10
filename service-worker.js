@@ -107,9 +107,10 @@ function nextAdaptiveWindow(state, start) {
 	const windowBytes = Math.min(Math.max(Math.min(targetBytes, doubled), PLAYER_FIRST_WINDOW_BYTES), PLAYER_MAX_WINDOW_BYTES);
 	return { windowBytes, sequential: true };
 }
-// MEDIA-PERF-TZ-5.md §2 — ВРЕМЕННО 1 (было 3), см. src/domain/files/sw-timeout.js
-// для полного обоснования (держать паритет — files-sw-parity.test.js).
-const WINDOW_TARGET_SECONDS = 1;
+// MEDIA-PERF-TZ-5.md §4 — вернули 3 (было временно 1 в задаче 1), см.
+// src/domain/files/sw-timeout.js для полного обоснования (паритет —
+// files-sw-parity.test.js).
+const WINDOW_TARGET_SECONDS = 3;
 const SPEED_SMOOTHING_ALPHA = 0.3;
 function updateObservedSpeed(prevBytesPerSec, bytesTransferred, elapsedMs) {
 	if (!(elapsedMs > 0)) return prevBytesPerSec ?? 0;
@@ -156,50 +157,111 @@ function createStallGuard(ceilingMs, stallMs, onTimeout) {
 	};
 }
 
-const pendingRangeRequests = new Map(); // requestId -> {resolve, reject, guard}
+const pendingRangeRequests = new Map(); // requestId -> {guard, onOpen, onChunk, onEnd, onError}
 
+// MEDIA-PERF-TZ-5.md §4 — потоковый протокол моста: range-request (SW->страница,
+// как раньше) -> range-open (геометрия, ОДИН раз, до первого чанка) ->
+// range-chunk×N (по мере готовности) -> range-end | range-error. Заменяет
+// старый единственный range-response — ждать полное окно целиком значило
+// молчать перед <video> всё это время (живой замер §0 п.3: ровно это и
+// вызывало бесконечный цикл переоткрытия Range).
 self.addEventListener("message", (e) => {
 	const msg = e.data;
 	if (!msg) return;
-	if (msg.type === "files-content:range-response") {
-		const pending = pendingRangeRequests.get(msg.requestId);
-		if (!pending) return; // ответ на уже протухший (таймаут) или чужой запрос — игнор
-		pendingRangeRequests.delete(msg.requestId);
-		pending.guard.settle();
-		pending.resolve(msg);
-		return;
-	}
-	// MEDIA-PERF-TZ-4.md §5 — промежуточный пинг "чанк пришёл", раньше
-	// финального range-response: сбрасывает ТОЛЬКО застойный таймер, не потолок.
-	if (msg.type === "files-content:range-progress") {
-		const pending = pendingRangeRequests.get(msg.requestId);
-		pending?.guard.progress();
+	const pending = pendingRangeRequests.get(msg.requestId);
+	if (!pending) return; // ответ на уже протухший (таймаут) или чужой запрос — игнор
+	if (msg.type === "files-content:range-open") {
+		pending.onOpen(msg);
+	} else if (msg.type === "files-content:range-chunk") {
+		pending.onChunk(msg);
+	} else if (msg.type === "files-content:range-end") {
+		pending.onEnd();
+	} else if (msg.type === "files-content:range-error") {
+		pending.onError(msg);
 	}
 });
-
-// requestId — корреляция КОНКУРЕНТНЫХ запросов одного видео (буферизация +
-// перемотка одновременно, DESIGN.md "гонка 1"): каждый Range-fetch — свой
-// requestId, свой ожидающий Promise, ответы не должны перепутаться местами.
-function requestRangeFromClient(client, manifestDigest, start, end, expectedBytes) {
-	const requestId = crypto.randomUUID();
-	return new Promise((resolve, reject) => {
-		const guard = createStallGuard(resolveFilesContentTimeoutMs(expectedBytes), STALL_TIMEOUT_MS, (reason) => {
-			pendingRangeRequests.delete(requestId);
-			reject(new Error(`files-content: ${reason === "stall" ? "простой" : "таймаут"} ожидания ответа вкладки`));
-		});
-		pendingRangeRequests.set(requestId, {
-			resolve,
-			guard,
-		});
-		client.postMessage({ type: "files-content:range-request", requestId, manifestDigest, start, end });
-	});
-}
 
 const FILES_CONTENT_ERROR_STATUS = {
 	"unknown-digest": 404,
 	"range-out-of-bounds": 416,
 	"decrypt-failed": 500,
 };
+
+// requestId — корреляция КОНКУРЕНТНЫХ запросов одного видео (буферизация +
+// перемотка одновременно, DESIGN.md "гонка 1"). Промис разрешается на
+// range-open (геометрия известна ДО первого байта — SW может открыть
+// ReadableStream/206 сразу, не дожидаясь конца передачи); дальнейшие чанки
+// уходят в controller.enqueue() уже ПОСЛЕ того, как Response с этим потоком
+// возвращён браузеру — сам fetch-обработчик к этому моменту уже не ждёт.
+//
+// "Цена, которую принимаем" (§4): отказ ДО open() (unknown-digest/range-out-
+// of-bounds) — обычный reject, handleFilesContentFetch вернёт правильный
+// статус. Отказ ПОСЛЕ open() (сбой расшифровки чанка посреди окна) —
+// controller.error(), статус 206 уже ушёл браузеру, откатить на 500
+// невозможно физически (HTTP так не умеет) — поток просто обрывается,
+// браузер видит недокачанный Range и переспрашивает сам.
+function requestRangeStreamFromClient(client, manifestDigest, start, end, expectedBytes, prevBytesPerSec) {
+	const requestId = crypto.randomUUID();
+	const requestStartedAt = Date.now();
+	return new Promise((resolveOpen, rejectOpen) => {
+		let controller = null;
+		let opened = false;
+		let bytesReceived = 0;
+
+		function finalizeWindowState() {
+			const elapsedMs = Date.now() - requestStartedAt;
+			const bytesPerSec = updateObservedSpeed(prevBytesPerSec, bytesReceived, elapsedMs);
+			windowState.set(manifestDigest, {
+				lastEnd: start + bytesReceived - 1,
+				windowBytes: Math.max(PLAYER_FIRST_WINDOW_BYTES, bytesReceived),
+				bytesPerSec,
+			});
+		}
+
+		const guard = createStallGuard(resolveFilesContentTimeoutMs(expectedBytes), STALL_TIMEOUT_MS, (reason) => {
+			pendingRangeRequests.delete(requestId);
+			windowState.delete(manifestDigest); // таймаут/простой — не наследовать раздутое окно следующему запросу
+			const err = new Error(`files-content: ${reason === "stall" ? "простой" : "таймаут"} ожидания ответа вкладки`);
+			if (!opened) rejectOpen(err);
+			else controller?.error(err);
+		});
+
+		pendingRangeRequests.set(requestId, {
+			guard,
+			onOpen(msg) {
+				opened = true;
+				const stream = new ReadableStream({
+					start(c) {
+						controller = c;
+					},
+				});
+				resolveOpen({ stream, mime: msg.mime, size: msg.size, totalBytes: msg.totalBytes });
+			},
+			onChunk(msg) {
+				guard.progress(); // MEDIA-PERF-TZ-5.md §4 — сам чанк теперь И ЕСТЬ сигнал прогресса, отдельного пинга больше нет
+				bytesReceived += msg.bytes.length;
+				controller?.enqueue(msg.bytes);
+			},
+			onEnd() {
+				guard.settle();
+				pendingRangeRequests.delete(requestId);
+				finalizeWindowState();
+				controller?.close();
+			},
+			onError(msg) {
+				guard.settle();
+				pendingRangeRequests.delete(requestId);
+				windowState.delete(manifestDigest);
+				const err = new Error(msg.error || "files-content: ошибка");
+				err.code = msg.error;
+				if (!opened) rejectOpen(err);
+				else controller?.error(err);
+			},
+		});
+
+		client.postMessage({ type: "files-content:range-request", requestId, manifestDigest, start, end });
+	});
+}
 
 async function handleFilesContentFetch(e) {
 	const url = new URL(e.request.url);
@@ -247,32 +309,21 @@ async function handleFilesContentFetch(e) {
 	const resolvedRequestEnd = end !== null ? end : start + windowBytes - 1;
 	const expectedBytes = resolvedRequestEnd - start + 1;
 
-	const requestStartedAt = Date.now();
-	let res;
+	let opened;
 	try {
-		res = await requestRangeFromClient(client, manifestDigest, start, resolvedRequestEnd, expectedBytes);
-	} catch {
-		windowState.delete(manifestDigest); // таймаут/простой — не наследовать раздутое окно следующему запросу
-		return new Response("files-content: таймаут", { status: 504 });
+		opened = await requestRangeStreamFromClient(client, manifestDigest, start, resolvedRequestEnd, expectedBytes, prevWindow?.bytesPerSec);
+	} catch (err) {
+		const status = err.code ? FILES_CONTENT_ERROR_STATUS[err.code] || 500 : 504;
+		return new Response(err.message || "files-content: ошибка", { status });
 	}
 
-	if (!res.ok) {
-		windowState.delete(manifestDigest);
-		return new Response(res.error || "files-content: ошибка", { status: FILES_CONTENT_ERROR_STATUS[res.error] || 500 });
-	}
-
-	// resolvedEnd — из ФАКТИЧЕСКИ вернувшихся байт, не из запрошенного end
-	// (может быть короче у конца файла) — корректно в обоих случаях.
-	const resolvedEnd = start + res.bytes.length - 1;
-	const elapsedMs = Date.now() - requestStartedAt;
-	const bytesPerSec = updateObservedSpeed(prevWindow?.bytesPerSec, res.bytes.length, elapsedMs);
-	windowState.set(manifestDigest, { lastEnd: resolvedEnd, windowBytes: Math.max(PLAYER_FIRST_WINDOW_BYTES, res.bytes.length), bytesPerSec });
-	return new Response(res.bytes, {
+	const resolvedEnd = start + opened.totalBytes - 1;
+	return new Response(opened.stream, {
 		status: 206,
 		headers: {
-			"Content-Type": res.mime || "application/octet-stream",
-			"Content-Range": `bytes ${start}-${resolvedEnd}/${res.size}`,
-			"Content-Length": String(res.bytes.length),
+			"Content-Type": opened.mime || "application/octet-stream",
+			"Content-Range": `bytes ${start}-${resolvedEnd}/${opened.size}`,
+			"Content-Length": String(opened.totalBytes),
 			"Accept-Ranges": "bytes",
 		},
 	});

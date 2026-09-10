@@ -91,31 +91,79 @@ export async function handleRangeRequest({ manifestDigest, start, end, onChunkAr
 	}
 }
 
+// MEDIA-PERF-TZ-5.md §4 — потоковый путь: та же валидация digest/bounds, что
+// handleRangeRequest выше (осознанно продублирована, не вынесена в общий
+// helper — обе функции короткие, а разное поведение при отказе (return
+// объекта vs sink.error()) делает общий helper менее читаемым, чем две явные
+// версии), но байты уходят в sink ПО МЕРЕ готовности через
+// session.streamRange, не одним финальным объектом.
+//
+// sink: { open({mime,size,totalBytes}), chunk(seq,bytes), end(), error(code) }.
+// open() зовётся СРАЗУ после валидации, ДО первого байта — geometрия
+// (mime/size/totalBytes) известна из манифеста уже сейчас, ждать реальных
+// чанков незачем (SW должен открыть ReadableStream/206-заголовки как можно
+// раньше). Отказ ПОСЛЕ open() (сбой расшифровки чанка) — НЕ смена кода
+// ошибки, sink.error() вызывается с тем же "decrypt-failed", что и раньше;
+// то, что HTTP-статус уже не откатить на 500 — забота SW-стороны (§4 "Цена,
+// которую принимаем"), не этой функции.
+export async function handleRangeStreamRequest({ manifestDigest, start, end }, sink) {
+	const entry = registry.get(manifestDigest);
+	if (!entry) {
+		sink.error("unknown-digest");
+		return;
+	}
+
+	const { manifest, session } = entry;
+	const resolvedEnd =
+		end === null || end === undefined ? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1) : end;
+	if (start < 0 || resolvedEnd >= manifest.size || start > resolvedEnd) {
+		sink.error("range-out-of-bounds");
+		return;
+	}
+
+	sink.open({ mime: manifest.mime, size: manifest.size, totalBytes: resolvedEnd - start + 1 });
+	await session.streamRange(start, resolvedEnd + 1, {
+		chunk: (seq, bytes) => sink.chunk(seq, bytes),
+		end: () => sink.end(),
+		// streamRange сама не различает причины отказа (сеть/подмена digest/
+		// расшифровка) — до потоковой версии (handleRangeRequest выше) это тоже
+		// был единственный код на любую ошибку readRange, здесь то же самое.
+		error: () => sink.error("decrypt-failed"),
+	});
+}
+
 // Обвязка над navigator.serviceWorker — вызывается ОДИН раз (app.jsx's
 // MainShell, по прецеденту ensureConnected/темы) после логина. SW шлёт
 // запрос диапазона postMessage'ом (CONTRACTS.md) — страница отвечает
 // РОВНО туда же (event.source), не broadcast (несколько вкладок с разными
 // аккаунтами не должны получать чужие запросы, DESIGN.md "гонка 4").
 //
-// MEDIA-PERF-TZ-4.md §5 — на каждый реально пришедший чанк ДОПОЛНИТЕЛЬНО (до
-// финального range-response) шлём range-progress с тем же requestId — SW
-// сбрасывает по нему застойный таймер (createStallGuard в sw-timeout.js,
-// продублирован в service-worker.js). Само по себе не меняет содержимое
-// финального ответа, чисто сигнал "мы ещё живы".
+// MEDIA-PERF-TZ-5.md §4 — потоковый протокол (range-open/range-chunk/
+// range-end/range-error) заменяет старый единственный range-response;
+// отдельный "range-progress"-пинг (MEDIA-PERF-TZ-4.md §5) больше не нужен —
+// САМ факт получения range-chunk на стороне SW уже сбрасывает застойный
+// таймер (service-worker.js), ждать отдельного сигнала незачем.
 export function startPlayerBridge() {
 	if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return () => {};
 
 	async function onMessage(event) {
 		const msg = event.data;
 		if (!msg || msg.type !== "files-content:range-request") return;
-		const res = await handleRangeRequest({
-			...msg,
-			onChunkArrived: () => event.source?.postMessage({ type: "files-content:range-progress", requestId: msg.requestId }),
-		});
-		event.source?.postMessage({
-			type: "files-content:range-response",
-			requestId: msg.requestId,
-			...res,
+		const requestId = msg.requestId;
+		const post = (m, transfer) => event.source?.postMessage(m, transfer);
+		await handleRangeStreamRequest(msg, {
+			open: ({ mime, size, totalBytes }) => post({ type: "files-content:range-open", requestId, mime, size, totalBytes }),
+			// bytes может быть subarray() ВНУТРИ большего ArrayBuffer'а
+			// расшифрованного чанка, который лежит в chunk-cache.js (в т.ч.
+			// закреплённый чанк 0) — переносить (transfer) МОЖНО только буфер,
+			// которым страница больше не владеет. slice() — независимая копия
+			// СВОЕГО буфера, перенос её не портит кэш (контракт §4).
+			chunk: (seq, bytes) => {
+				const copy = bytes.slice();
+				post({ type: "files-content:range-chunk", requestId, seq, bytes: copy }, [copy.buffer]);
+			},
+			end: () => post({ type: "files-content:range-end", requestId }),
+			error: (error) => post({ type: "files-content:range-error", requestId, error }),
 		});
 	}
 

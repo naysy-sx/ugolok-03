@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { concatBytes } from "@noble/hashes/utils.js";
 import { putStream, getRange } from "../src/domain/files/content.js";
 import { createChunkCache } from "../src/domain/files/chunk-cache.js";
 import { createPlayerSession } from "../src/domain/files/player-session.js";
@@ -162,6 +163,115 @@ test("readRange: окно из 8 чанков — максимум одновр�
 	await session.readRange(0, 8 * 256);
 
 	assert.ok(maxInFlight > 1, `максимум одновременных запросов должен быть больше 1, получили ${maxInFlight}`);
+});
+
+// MEDIA-PERF-TZ-5.md §4 — streamRange: тот же диапазон/геометрия, что readRange,
+// но байты уходят в sink по мере готовности, строго по порядку (seq 0..N-1
+// В ОКНЕ, не индекс чанка манифеста).
+
+function chunkIndexFromRange(rangeHeader, chunkSize) {
+	const m = /bytes=(\d+)-/.exec(rangeHeader);
+	return Math.round(Number(m[1]) / (chunkSize + 16)); // +16 — AEAD_TAG_BYTES, cipherChunkOffset
+}
+
+test("streamRange: чанки разрешились ВРАЗНОБОЙ (2 раньше 0 и 1) — sink.chunk всё равно получает их СТРОГО по порядку 0,1,2", async () => {
+	const blossom = makeFakeBlossom();
+	const chunkSize = 256;
+	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 3 * chunkSize, chunkSize); // ровно 3 чанка
+
+	const delays = { 0: 30, 1: 15, 2: 0 }; // чанк 2 приходит первым, 0 — последним
+	const delayedFetch = async (url, opts = {}) => {
+		if (opts.headers?.Range) {
+			await new Promise((r) => setTimeout(r, delays[chunkIndexFromRange(opts.headers.Range, chunkSize)] ?? 0));
+		}
+		return blossom.fetchImpl(url, opts);
+	};
+
+	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: delayedFetch });
+
+	const receivedSeq = [];
+	let ended = false;
+	await session.streamRange(0, 3 * chunkSize, {
+		chunk: (seq) => receivedSeq.push(seq),
+		end: () => {
+			ended = true;
+		},
+		error: (err) => {
+			throw err;
+		},
+	});
+
+	assert.deepEqual(receivedSeq, [0, 1, 2], "порядок доставки в sink — по seq, независимо от порядка сетевого разрешения");
+	assert.equal(ended, true);
+});
+
+test("streamRange: байты (после skipHead/skipTail per-чанк) побитово совпадают с original на разных диапазонах, включая границы", async () => {
+	const blossom = makeFakeBlossom();
+	const chunkSize = 300;
+	// size НЕ кратен chunkSize — последний чанк частичный (50 байт), проверяет
+	// "последнее окно файла" в том же проходе.
+	const { original, manifest, fileKey } = await setupFile(blossom.fetchImpl, 3050, chunkSize);
+	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: blossom.fetchImpl });
+
+	const cases = [
+		[500, 900, "посреди чанков с обеих сторон"],
+		[0, 50, "окно из ОДНОГО чанка, целиком внутри него (весь диапазон < одного chunkSize)"],
+		[100, chunkSize, "окно, кончающееся РОВНО на границе чанка (skipTail===0)"],
+		[3000, 3050, "последнее окно файла — частичный последний чанк"],
+		[0, 3050, "весь файл целиком, через несколько чанков"],
+	];
+
+	for (const [start, end, label] of cases) {
+		const parts = [];
+		let errored = null;
+		await session.streamRange(start, end, {
+			chunk: (seq, bytes) => parts.push(bytes),
+			end: () => {},
+			error: (err) => {
+				errored = err;
+			},
+		});
+		assert.equal(errored, null, `${label}: не должно быть ошибки`);
+		assert.deepEqual(concatBytes(...parts), original.subarray(start, end), label);
+	}
+});
+
+test("streamRange: отказ на СРЕДНЕМ чанке — sink получает chunk() для уже готовых чанков, error() ПОСЛЕ них, поздние (случайно успешные) чанки после error НЕ доставляются", async () => {
+	const blossom = makeFakeBlossom();
+	const chunkSize = 256;
+	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 5 * chunkSize, chunkSize); // 5 чанков: 0,1,2,3,4
+
+	// 0,1 — быстро и успешно (успевают дойти до sink ДО отказа). 2 — отказывает
+	// быстро (раньше 3,4). 3,4 — успешны, но ПОЗЖЕ отказа — не должны дойти.
+	const delays = { 0: 1, 1: 2, 2: 3, 3: 50, 4: 55 };
+	const flakyFetch = async (url, opts = {}) => {
+		const idx = opts.headers?.Range ? chunkIndexFromRange(opts.headers.Range, chunkSize) : null;
+		if (idx !== null) await new Promise((r) => setTimeout(r, delays[idx] ?? 0));
+		if (idx === 2) throw new Error("сбой сети на чанке 2 (симуляция)");
+		return blossom.fetchImpl(url, opts);
+	};
+
+	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: flakyFetch });
+
+	const receivedSeq = [];
+	let errorCalls = 0;
+	let ended = false;
+	await session.streamRange(0, 5 * chunkSize, {
+		chunk: (seq) => receivedSeq.push(seq),
+		end: () => {
+			ended = true;
+		},
+		error: () => {
+			errorCalls++;
+		},
+	});
+
+	assert.deepEqual(receivedSeq, [0, 1], "чанки, успевшие прийти ДО отказа, доставлены sink'у по порядку");
+	assert.equal(errorCalls, 1, "error() вызван ровно один раз");
+	assert.equal(ended, false, "end() не должен звучать после error()");
+
+	await new Promise((r) => setTimeout(r, 60)); // дать чанкам 3/4 (заведомо успешным) доразрешиться — не должны ничего добавить
+	assert.deepEqual(receivedSeq, [0, 1], "поздние чанки ПОСЛЕ error() не доставляются, даже если их сеть в итоге отвечает успехом");
 });
 
 test("ошибка prefetch не пробрасывается наружу и не роняет основной readRange", async () => {

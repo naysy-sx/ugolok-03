@@ -98,5 +98,79 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 		return result;
 	}
 
-	return { readRange };
+	// MEDIA-PERF-TZ-5.md §4 — потоковый вариант readRange: та же геометрия
+	// (rangeToChunks/mapPool), но байты уходят в sink ПО МЕРЕ готовности, а не
+	// одним финальным куском. sink: { chunk(seq, bytes), end(), error(err) }.
+	// seq — позиция ЧАНКА В ЭТОМ ОКНЕ (0..indices.length-1), НЕ индекс чанка
+	// манифеста — player-bridge.js/service-worker.js используют его только для
+	// восстановления порядка на своей стороне, реальный номер чанка им не нужен.
+	//
+	// Буфер переупорядочивания ОБЯЗАТЕЛЕН: mapPool разрешает чанки вразнобой
+	// (параллельная загрузка), sink обязан получать их строго по возрастанию
+	// seq — переставленные местами байты дали бы битое видео молча, тот же
+	// класс ошибки, что manifest.js предупреждает в шапке файла.
+	async function streamRange(start, end, sink) {
+		const { firstIdx, lastIdx, skipHead, skipTail } = rangeToChunks(start, end - start, {
+			chunkSize: manifest.chunkSize,
+			count,
+			lastChunkSize,
+		});
+
+		const indices = [];
+		for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
+		const lastSeq = indices.length - 1;
+
+		const trace = startTrace("player-window", namespace, end - start);
+		trace.count("chunksInWindow", indices.length);
+
+		const ready = new Map(); // seq -> Uint8Array (уже обрезанный skipHead/skipTail)
+		let nextSeq = 0;
+		let stopped = false; // взведён на error() — поздние успехи параллельных чанков не должны звать sink после него
+
+		function flush() {
+			if (stopped) return;
+			while (ready.has(nextSeq)) {
+				const bytes = ready.get(nextSeq);
+				ready.delete(nextSeq);
+				sink.chunk(nextSeq, bytes);
+				nextSeq++;
+			}
+		}
+
+		let inFlight = 0;
+		let maxInFlight = 0;
+		try {
+			await mapPool(indices, WINDOW_CONCURRENCY, async (chunkIdx, seq) => {
+				inFlight++;
+				maxInFlight = Math.max(maxInFlight, inFlight);
+				try {
+					const bytes = await loadChunk(chunkIdx, trace);
+					// skipHead режет НАЧАЛО самого первого чанка окна (seq===0),
+					// skipTail — КОНЕЦ самого последнего (seq===lastSeq). Единственный
+					// чанк окна (lastSeq===0) получает ОБА среза последовательно —
+					// то же самое, что старый joined.subarray(skipHead, len-skipTail)
+					// на конкатенации целиком, применённое поштучно (порядок cut'ов
+					// не важен, они трогают разные концы).
+					let outBytes = bytes;
+					if (seq === 0 && skipHead > 0) outBytes = outBytes.subarray(skipHead);
+					if (seq === lastSeq && skipTail > 0) outBytes = outBytes.subarray(0, outBytes.length - skipTail);
+					ready.set(seq, outBytes);
+					flush();
+				} finally {
+					inFlight--;
+				}
+			});
+		} catch (err) {
+			stopped = true;
+			trace.end({ maxInFlight, error: true });
+			sink.error(err);
+			return;
+		}
+
+		trace.end({ maxInFlight });
+		prefetch(lastIdx + 1);
+		sink.end();
+	}
+
+	return { readRange, streamRange };
 }
