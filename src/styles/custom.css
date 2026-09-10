@@ -2458,24 +2458,35 @@ html[data-media-full] .top-corner-actions {
 	color: var(--muted);
 	gap: 0;
 }
-.attach-tray-thumb-remove {
+/* button[type="button"].attach-tray-thumb-remove — тот же запас, что
+   у .media-mini-bar-btn: глобальное `button:has(> .icon)` даёт
+   padding-inline: var(--step-0) и растягивает 16px-круг в эллипс,
+   SVG сжимается паддингом до точки (живой фидбек 2026-09-10). */
+button[type="button"].attach-tray-thumb-remove {
 	position: absolute;
 	top: 2px;
 	right: 2px;
-	width: 16px;
-	height: 16px;
+	width: 1.25rem;
+	height: 1.25rem;
+	min-width: 1.25rem;
+	min-height: 1.25rem;
 	border: 0;
 	border-radius: 50%;
 	background: rgba(0, 0, 0, 0.75);
 	color: #fff;
 	padding: 0;
+	gap: 0;
 	display: grid;
 	place-items: center;
 	line-height: 1;
+	flex: none;
 }
 .attach-tray-thumb-remove .icon {
+	flex: none;
 	width: 10px;
 	height: 10px;
+	min-width: 10px;
+	min-height: 10px;
 }
 .attach-tray-thumb-error {
 	position: absolute;
@@ -5501,6 +5512,30 @@ button[type="button"].media-mini-bar-btn {
 .media-overlay[data-display="mini"] .media-overlay-inner {
 	width: 100%;
 	height: 100%;
+	position: relative;
+}
+
+/* Живой фидбек: в мини-баре кадр «задирался» к верху экрана — обёртка
+   VideoPlayer без высоты, height:100% у <video> не к чему было привязать.
+   transform на viewport (FLIP / translateZ) делает его containing block
+   для position:fixed — inset:0 сажает кадр в слот, не на весь экран. */
+.media-overlay[data-display="mini"][data-cls="video"] .media-overlay-viewport {
+	transform: translateZ(0);
+}
+.media-overlay[data-display="mini"][data-cls="video"] .media-overlay-inner > div {
+	width: 100%;
+	height: 100%;
+}
+.media-overlay[data-display="mini"][data-cls="video"] video {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	max-height: none;
+	object-fit: cover;
+	display: block;
+	margin: 0;
 }
 
 .media-overlay[data-display="mini"] .media-overlay-inner video {

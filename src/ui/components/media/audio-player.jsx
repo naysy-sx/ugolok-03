@@ -20,6 +20,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	// фолбэке без SW-controller (полное скачивание файла).
 	const [percent, setPercent] = useState(null);
 	const networkErrorTimer = useRef(null);
+	const suppressPauseToggleRef = useRef(false);
 
 	function clearNetworkErrorTimer() {
 		if (networkErrorTimer.current) {
@@ -30,6 +31,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 
 	useEffect(() => {
 		let cancelled = false;
+		suppressPauseToggleRef.current = true;
 		setSrc(null);
 		setError("");
 		setPercent(null);
@@ -55,11 +57,16 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 		const el = audioRef.current;
 		if (!el || !src) return;
 		if (playing) {
-			el.play().catch(() => {
-				if (playing) onToggle();
-			});
+			el.play()
+				.then(() => {
+					suppressPauseToggleRef.current = false;
+				})
+				.catch(() => {
+					suppressPauseToggleRef.current = false;
+				});
 		} else {
 			el.pause();
+			suppressPauseToggleRef.current = false;
 		}
 	}, [playing, src]);
 
@@ -103,10 +110,24 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						onCanPlay={() => {
 							clearNetworkErrorTimer();
 							setError("");
+							const el = audioRef.current;
+							if (playing && el?.paused) el.play().catch(() => {});
 						}}
 						onPlaying={() => {
 							clearNetworkErrorTimer();
 							setError("");
+							suppressPauseToggleRef.current = false;
+						}}
+						onWaiting={() => {
+							suppressPauseToggleRef.current = true;
+						}}
+						onSeeking={() => {
+							suppressPauseToggleRef.current = true;
+						}}
+						onSeeked={() => {
+							suppressPauseToggleRef.current = false;
+							const el = audioRef.current;
+							if (playing && el?.paused) el.play().catch(() => {});
 						}}
 						onLoadedMetadata={(e) => {
 							onMeta?.({ duration: e.currentTarget.duration });
@@ -116,11 +137,13 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 							if (!playing) onToggle();
 						}}
 						onPause={() => {
-							// см. video-player.jsx — тот же баг ("повтор превращается в
-							// хаос"), тот же фикс: по спеке HTML5 естественное завершение
-							// трека шлёт "pause" ДО "ended", el.ended отличает его от
-							// ручной паузы пользователя.
-							if (playing && !audioRef.current?.ended) onToggle();
+							const el = audioRef.current;
+							if (suppressPauseToggleRef.current) return;
+							if (!playing || !el || el.ended) return;
+							if (el.seeking) return;
+							if (el.networkState === 2) return;
+							if (!el.getAttribute("src")) return;
+							if (playing && !el.ended) onToggle();
 						}}
 						// compact (свёрнутый вид) — звук продолжает играть, нативные controls
 						// скрыты (у mini-бара свои кнопки); display:none НЕ останавливает

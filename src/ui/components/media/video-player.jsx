@@ -44,6 +44,9 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	// вовсе — там src готов почти сразу, качает уже сам <video> по Range).
 	const [percent, setPercent] = useState(null);
 	const networkErrorTimer = useRef(null);
+	// pause от смены src / буфера / перемотки — не пауза пользователя.
+	// Иначе листание слайдов и открытие ролика сами жали «пауза».
+	const suppressPauseToggleRef = useRef(false);
 
 	function clearNetworkErrorTimer() {
 		if (networkErrorTimer.current) {
@@ -54,6 +57,7 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 
 	useEffect(() => {
 		let cancelled = false;
+		suppressPauseToggleRef.current = true;
 		setSrc(null);
 		setError("");
 		setPercent(null);
@@ -79,11 +83,17 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 		const el = videoRef.current;
 		if (!el || !src) return;
 		if (playing) {
-			el.play().catch(() => {
-				if (playing) onToggle();
-			});
+			el.play()
+				.then(() => {
+					suppressPauseToggleRef.current = false;
+				})
+				.catch(() => {
+					// буфер/автоплей — не пауза пользователя; canplay попробует снова
+					suppressPauseToggleRef.current = false;
+				});
 		} else {
 			el.pause();
+			suppressPauseToggleRef.current = false;
 		}
 	}, [playing, src]);
 
@@ -143,10 +153,24 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					onCanPlay={() => {
 						clearNetworkErrorTimer();
 						setError("");
+						const el = videoRef.current;
+						if (playing && el?.paused) el.play().catch(() => {});
 					}}
 					onPlaying={() => {
 						clearNetworkErrorTimer();
 						setError("");
+						suppressPauseToggleRef.current = false;
+					}}
+					onWaiting={() => {
+						suppressPauseToggleRef.current = true;
+					}}
+					onSeeking={() => {
+						suppressPauseToggleRef.current = true;
+					}}
+					onSeeked={() => {
+						suppressPauseToggleRef.current = false;
+						const el = videoRef.current;
+						if (playing && el?.paused) el.play().catch(() => {});
 					}}
 					onLoadedMetadata={(e) => {
 						onMeta?.({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight, duration: e.currentTarget.duration });
@@ -156,18 +180,13 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						if (!playing) onToggle();
 					}}
 					onPause={() => {
-						// Найдено пользователем живьём ("повтор превращается в хаос"):
-						// по HTML5 "reaches the end of the media resource" алгоритму
-						// браузер СНАЧАЛА ставит paused=true и шлёт "pause", и ТОЛЬКО
-						// ПОТОМ шлёт "ended" — естественное завершение трека тоже
-						// проходит через ЭТОТ обработчик. Без проверки el.ended этот
-						// "pause" ошибочно трактовался как ручная пауза пользователя,
-						// onToggle() успевал переключить session.play на "paused" ДО
-						// того, как repeat="one" (handleEnded в media-overlay.jsx)
-						// перезапускал трек — гонка между двумя источниками play/pause
-						// на одном и том же цикле, видимая как "мигающая иконка,
-						// дёрганый звук".
-						if (playing && !videoRef.current?.ended) onToggle();
+						const el = videoRef.current;
+						if (suppressPauseToggleRef.current) return;
+						if (!playing || !el || el.ended) return;
+						if (el.seeking) return;
+						if (el.networkState === 2) return; // NETWORK_LOADING — буфер, не пауза
+						if (!el.getAttribute("src")) return;
+						if (playing && !el.ended) onToggle();
 					}}
 					style={
 						compact
