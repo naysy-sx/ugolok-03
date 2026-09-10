@@ -129,17 +129,18 @@ test("serverUrl с завершающим '/' не даёт двойной сл�
 });
 
 // checkBlossomReachable (пользователь, item 4 — статус соединения в наве) —
-// HEAD /stats (BUD, на нашем форке 200). Любой ОТВЕТ = сервер жив, даже 404/405.
-test("checkBlossomReachable: HEAD {serverUrl}/stats, ответ (даже не ok) -> true", async () => {
+// GET /stats (BUD). Любой ОТВЕТ = сервер жив, даже 404/405. HEAD на этом
+// форке даёт 404 и красил консоль (живой лог 2026-09-10).
+test("checkBlossomReachable: GET {serverUrl}/stats, ответ (даже не ok) -> true", async () => {
 	const calls = [];
 	const fetchImpl = async (url, opts) => {
 		calls.push({ url, opts });
-		return { ok: false, status: 405 }; // HEAD не поддержан сервером — всё равно означает "жив"
+		return { ok: false, status: 405 };
 	};
 	const result = await checkBlossomReachable("https://blossom.test", { fetchImpl });
 	assert.equal(result, true);
 	assert.equal(calls[0].url, "https://blossom.test/stats");
-	assert.equal(calls[0].opts.method, "HEAD");
+	assert.equal(calls[0].opts.method, "GET");
 });
 
 test("checkBlossomReachable: fetch бросает (сеть недоступна) -> false, не проброс исключения", async () => {

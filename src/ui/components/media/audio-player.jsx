@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
-import { mediaErrorReasonKey } from "../../../domain/media/media-error.js";
+import { mediaErrorReasonKey, MEDIA_ERR_NETWORK } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -19,6 +19,14 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	// MEDIA-PERF-TZ.md §6.3 — см. video-player.jsx: percent !== null только на
 	// фолбэке без SW-controller (полное скачивание файла).
 	const [percent, setPercent] = useState(null);
+	const networkErrorTimer = useRef(null);
+
+	function clearNetworkErrorTimer() {
+		if (networkErrorTimer.current) {
+			clearTimeout(networkErrorTimer.current);
+			networkErrorTimer.current = null;
+		}
+	}
 
 	useEffect(() => {
 		let cancelled = false;
@@ -39,6 +47,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			});
 		return () => {
 			cancelled = true;
+			clearNetworkErrorTimer();
 		};
 	}, [mediaRef.digest]);
 
@@ -76,11 +85,29 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						// см. video-player.jsx — элемент не размонтируется на error,
 						// Chrome может докачать Range сам.
 						onError={(e) => {
-							const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
-							if (reasonKey) setError(t(reasonKey));
+							const code = e.currentTarget.error?.code;
+							const reasonKey = mediaErrorReasonKey(code);
+							if (!reasonKey) return;
+							if (code === MEDIA_ERR_NETWORK) {
+								if (!networkErrorTimer.current) {
+									networkErrorTimer.current = setTimeout(() => {
+										setError(t(reasonKey));
+										networkErrorTimer.current = null;
+									}, 12_000);
+								}
+								return;
+							}
+							clearNetworkErrorTimer();
+							setError(t(reasonKey));
 						}}
-						onCanPlay={() => setError("")}
-						onPlaying={() => setError("")}
+						onCanPlay={() => {
+							clearNetworkErrorTimer();
+							setError("");
+						}}
+						onPlaying={() => {
+							clearNetworkErrorTimer();
+							setError("");
+						}}
 						onLoadedMetadata={(e) => {
 							onMeta?.({ duration: e.currentTarget.duration });
 						}}

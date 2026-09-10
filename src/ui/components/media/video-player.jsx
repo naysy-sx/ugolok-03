@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
-import { mediaErrorReasonKey } from "../../../domain/media/media-error.js";
+import { mediaErrorReasonKey, MEDIA_ERR_NETWORK } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -43,6 +43,14 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 	// percent !== null ТОЛЬКО в этой ветке (bridge-путь onProgress не зовёт
 	// вовсе — там src готов почти сразу, качает уже сам <video> по Range).
 	const [percent, setPercent] = useState(null);
+	const networkErrorTimer = useRef(null);
+
+	function clearNetworkErrorTimer() {
+		if (networkErrorTimer.current) {
+			clearTimeout(networkErrorTimer.current);
+			networkErrorTimer.current = null;
+		}
+	}
 
 	useEffect(() => {
 		let cancelled = false;
@@ -63,6 +71,7 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			});
 		return () => {
 			cancelled = true;
+			clearNetworkErrorTimer();
 		};
 	}, [mediaRef.digest]);
 
@@ -111,11 +120,34 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					// плашка (живой лог 2026-09-10, «сетевая ошибка» при успешных
 					// player-window).
 					onError={(e) => {
-						const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
-						if (reasonKey) setError(t(reasonKey));
+						const code = e.currentTarget.error?.code;
+						const reasonKey = mediaErrorReasonKey(code);
+						if (!reasonKey) return;
+						// MEDIA_ERR_NETWORK — штатный сбой Range: Chrome сам
+						// переспрашивает (TZ-5 §4). Плашка «не удалось загрузить»
+						// на каждый такой тик была ложью: player-window при этом
+						// доезжал. Показываем отказ только если за 12с так и не
+						// было canplay (совпадает со stall SW).
+						if (code === MEDIA_ERR_NETWORK) {
+							if (!networkErrorTimer.current) {
+								networkErrorTimer.current = setTimeout(() => {
+									setError(t(reasonKey));
+									networkErrorTimer.current = null;
+								}, 12_000);
+							}
+							return;
+						}
+						clearNetworkErrorTimer();
+						setError(t(reasonKey));
 					}}
-					onCanPlay={() => setError("")}
-					onPlaying={() => setError("")}
+					onCanPlay={() => {
+						clearNetworkErrorTimer();
+						setError("");
+					}}
+					onPlaying={() => {
+						clearNetworkErrorTimer();
+						setError("");
+					}}
 					onLoadedMetadata={(e) => {
 						onMeta?.({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight, duration: e.currentTarget.duration });
 					}}

@@ -226,10 +226,10 @@ export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privateKe
 export async function checkBlossomReachable(serverUrl, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   try {
-    // /stats — BUD без auth, на нашем форке 200. HEAD / даёт 404 (пустой
-    // корень): любой ответ всё равно = «жив», но опрос раз в 30с красил
-    // Network красным и путался с отказом плеера (живой лог 2026-09-10).
-    await fetchImpl(stripTrailingSlash(serverUrl) + '/stats', { method: 'HEAD' });
+    // GET /stats: BUD без auth, через Caddy 200. HEAD /stats на этом форке
+    // отвечает 404 (HEAD не реализован) — опрос раз в 30с красил Network и
+    // путался с отказом плеера. Любой HTTP-ответ (включая 404) = «жив».
+    await fetchImpl(stripTrailingSlash(serverUrl) + '/stats', { method: 'GET' });
     return true;
   } catch {
     return false;
