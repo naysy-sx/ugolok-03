@@ -2,6 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
+import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { currentUser, dbKeySig, privKeySig } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
@@ -84,25 +85,44 @@ export function ImageAttachment({ attachment, onOpen }) {
 		setUrl(null);
 		setError("");
 		setPhase("loading");
-		resolveImagePreviewUrl(
-			attachment.manifestDigest,
-			attachment.mime,
-			// trace (MEDIA-PERF-TZ.md §3.2) — пробрасывается ЧЕРЕЗ уже существующий
-			// options-мешок (content-cache.js -> attachments.js -> content.js
-			// форвардят объект без изменений), net/decrypt лягут в ту же строку,
-			// что raster в image-preview.js.
-			(trace) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace }),
-			undefined,
-			(p) => {
-				if (!cancelled) setPhase(p);
-			},
-		)
-			.then((raster) => {
+
+		// MEDIA-PERF-TZ-5.md §3 — previewDigest, если есть, резолвится ОТДЕЛЬНЫМ
+		// маленьким blob'ом, оригинал (manifestDigest) в этой ветке не трогаем
+		// вовсе (resolveAttachmentPreviewUrl не знает о нём по построению). Отказ
+		// (сеть/сервер) — молча падаем на путь оригинала ниже, не показываем
+		// ошибку сразу: превью необязательно, оригинал остаётся источником истины.
+		// Вложение БЕЗ previewDigest (старые сообщения) идёт СРАЗУ на путь
+		// оригинала — ровно как до этой задачи, ни строки поведения не меняется.
+		async function load() {
+			if (attachment.previewDigest) {
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				if (cancelled) return;
+				if (previewUrl) {
+					setUrl(previewUrl);
+					return;
+				}
+			}
+			try {
+				const raster = await resolveImagePreviewUrl(
+					attachment.manifestDigest,
+					attachment.mime,
+					// trace (MEDIA-PERF-TZ.md §3.2) — пробрасывается ЧЕРЕЗ уже
+					// существующий options-мешок (content-cache.js -> attachments.js
+					// -> content.js форвардят объект без изменений), net/decrypt
+					// лягут в ту же строку, что raster в image-preview.js.
+					(trace) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace }),
+					undefined,
+					(p) => {
+						if (!cancelled) setPhase(p);
+					},
+				);
 				if (!cancelled) setUrl(raster.url);
-			})
-			.catch((err) => {
+			} catch (err) {
 				if (!cancelled) setError(errorMessage(err));
-			});
+			}
+		}
+		load();
+
 		return () => {
 			cancelled = true;
 		};

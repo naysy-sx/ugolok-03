@@ -11,6 +11,7 @@ import { putStream, getManifest, getRange } from "../files/content.js";
 import { putFileStreaming } from "../files/stream-upload.js";
 import { validateAttachment } from "../files/attachment-validation.js";
 import { classOf } from "../media/media-ref.js";
+import { generateAttachmentPreview } from "../media/attachment-preview.js";
 
 function base64FromBytes(bytes) {
 	return btoa(String.fromCharCode(...bytes));
@@ -28,6 +29,44 @@ function attachmentTypeFromMime(mime) {
 	return c === "other" ? "file" : c;
 }
 
+// MEDIA-PERF-TZ-5.md §3 — превью/постер, отдельный маленький putStream ТЕМ ЖЕ
+// serverUrl/privateKey/options (тот же сервер, тот же signal — отмена заливки
+// оригинала отменяет и превью). ВЕСЬ блок (генерация И заливка) — под одним
+// try/catch: generateAttachmentPreview сама гасит свои ошибки (возвращает
+// null), но options.generatePreview — открытая DI-точка (тесты, будущие
+// вызывающие) и НЕ обязана быть настолько же осторожной — контракт "отказ
+// превью не должен срывать оригинал" должен держаться независимо от того,
+// насколько defensively написан конкретный generate().
+async function withPreview(descriptor, input, serverUrl, privateKey, options) {
+	const generate = options.generatePreview ?? generateAttachmentPreview;
+	// fileKey/generatePreview НЕ пробрасываются в putStream превью: fileKey —
+	// оверрайд оригинала (share.js-подобные сценарии), превью ОБЯЗАНО получить
+	// СВОЙ случайный ключ, не унаследованный (иначе превью и оригинал делили бы
+	// пару ключ/nonce на чанк 0 — та же дыра, что проверялась в §9.1).
+	const { fileKey: _origFileKeyOverride, generatePreview: _unused, ...putOptions } = options;
+	try {
+		const preview = await generate(input);
+		if (!preview) return descriptor;
+		const { manifestDigest: previewDigest, fileKey: previewFileKey } = await putStream(preview.bytes, {
+			name: "preview.jpg",
+			mime: preview.mime,
+			serverUrl,
+			privateKey,
+			...putOptions,
+		});
+		return {
+			...descriptor,
+			previewDigest,
+			previewKey: base64FromBytes(previewFileKey),
+			...(preview.width ? { width: preview.width } : {}),
+			...(preview.height ? { height: preview.height } : {}),
+			...(preview.duration ? { duration: preview.duration } : {}),
+		};
+	} catch {
+		return descriptor;
+	}
+}
+
 // Путь "с диска" (chat.jsx/channel.jsx/channel-chat.jsx через use-attachment-tray.js) — реальная
 // загрузка. putStream шифрует ЧАНКОВАНО (не целиком, как старый encryptFile) —
 // побочный эффект: видео/аудио-вложения теперь МОГЛИ БЫ читаться через тот же
@@ -36,7 +75,8 @@ function attachmentTypeFromMime(mime) {
 export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: fileBytes.length });
 	const { manifestDigest, fileKey, size } = await putStream(fileBytes, { name, mime, serverUrl, privateKey, ...options });
-	return { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	return withPreview(descriptor, { bytes: fileBytes, mime }, serverUrl, privateKey, options);
 }
 
 // Этап C медиа-подсистемы — тот же путь "с диска", но file — File|Blob, не
@@ -46,10 +86,19 @@ export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name
 // File (из <input type="file">), а не уже готовые байты (аватары чата/канала/
 // профиля продолжают idти через uploadMessageAttachment — там bytes уже в
 // руках вызывающей стороны, streaming для них не даёт выигрыша).
+//
+// MEDIA-PERF-TZ-5.md §3 — превью картинки требует ПОЛНЫЕ байты в памяти (canvas
+// не умеет по частям); для картинок это file.arrayBuffer() ВТОРЫМ чтением
+// (putFileStreaming уже читал файл срезами для шифрования, не держит целиком) —
+// осознанная цена (контракт §3 "Стоимость... принимаем осознанно"), картинки
+// малы. Видео превью НЕ требует чтения файла целиком — extractVideoPosterCapture
+// сам семплит один кадр через <video>+object-URL.
 export async function uploadMessageAttachmentStreaming(serverUrl, file, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: file.size });
 	const { manifestDigest, fileKey, size } = await putFileStreaming(file, { name, mime, serverUrl, privateKey, ...options });
-	return { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const bytes = typeof mime === "string" && mime.startsWith("image/") ? new Uint8Array(await file.arrayBuffer()) : undefined;
+	return withPreview(descriptor, { bytes, file, mime }, serverUrl, privateKey, options);
 }
 
 // Путь "из хранилища" (chat.jsx, 7.3, переделка этого прохода) — БЕЗ СЕТИ.

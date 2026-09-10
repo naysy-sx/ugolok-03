@@ -66,11 +66,15 @@ export function useAttachmentTray({ maxItems }) {
 					}
 					if (job.isImage) descriptor.position = job.position;
 					if (job.layout) descriptor.layout = job.layout;
-					let poster = job.poster;
-					if (!poster && job.kind === "upload" && job.file && typeof job.file.type === "string" && job.file.type.startsWith("video/")) {
-						poster = await extractVideoPoster(job.file);
-					}
-					if (poster) descriptor.poster = poster;
+					// MEDIA-PERF-TZ-5.md §3 — постер видео больше НЕ кладётся сюда
+					// (data:URL внутри самого сообщения раздувал NIP-44-полезную
+					// нагрузку, при нескольких видео в одном сообщении реально
+					// пробивал лимит 65535 байт). uploadMessageAttachmentStreaming
+					// (attachments.js) сам генерирует и заливает превью/постер
+					// ОТДЕЛЬНЫМ blob'ом, дескриптор получает previewDigest/previewKey.
+					// job.poster (item.poster из schedulePosters ниже) остаётся ТОЛЬКО
+					// локальным превью в лотке композера ДО отправки — в исходящее
+					// сообщение не попадает.
 					results.push(descriptor);
 				} catch (err) {
 					failures.push({ index: i, error: err });

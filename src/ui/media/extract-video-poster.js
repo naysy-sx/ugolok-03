@@ -17,23 +17,19 @@ function once(target, event) {
 	});
 }
 
-export async function extractVideoPoster(file, options = {}) {
+// Общий шаг "открыть видео -> перемотать на кадр -> нарисовать в canvas ->
+// закодировать JPEG" — извлечён из extractVideoPoster (MEDIA-PERF-TZ-5.md §3),
+// чтобы новый extractVideoPosterCapture (сырые байты + duration/width/height
+// для аплоада превью) не дублировал ~40 строк работы с <video>/<canvas>.
+// Возвращает { blob, width, height, duration } исходного (не даунскейленного)
+// videoWidth/videoHeight — вызывающая сторона решает, что с этим делать
+// (extractVideoPoster игнорирует width/height/duration, оставляет только blob).
+async function captureVideoFrame(file, options = {}) {
 	if (!file || typeof file.type !== "string" || !file.type.startsWith("video/")) return null;
 
-	const maxBlobSize = options.maxBlobSize ?? 32768;
 	const timeoutMs = options.timeoutMs ?? 4000;
 	const maxWidth = options.maxWidth ?? 480;
 	const jpegQuality = options.jpegQuality ?? 0.62;
-
-	if (Object.prototype.hasOwnProperty.call(options, "readyBlob")) {
-		const readyBlob = options.readyBlob;
-		if (!readyBlob || readyBlob.size > maxBlobSize) return null;
-		try {
-			return await blobToDataUrl(readyBlob);
-		} catch {
-			return null;
-		}
-	}
 
 	const makeVideo = options.makeVideo === undefined
 		? (typeof document !== "undefined" ? () => document.createElement("video") : null)
@@ -82,12 +78,54 @@ export async function extractVideoPoster(file, options = {}) {
 			}
 			canvas.toBlob(resolve, "image/jpeg", jpegQuality);
 		});
-		if (!blob || blob.size > maxBlobSize) return null;
-		return await blobToDataUrl(blob);
+		if (!blob) return null;
+		return { blob, width: video.videoWidth || width, height: video.videoHeight || height, duration };
 	} catch {
 		return null;
 	} finally {
 		if (video) video.src = "";
 		if (objectUrl && revokeObjectURL) revokeObjectURL(objectUrl);
 	}
+}
+
+export async function extractVideoPoster(file, options = {}) {
+	if (!file || typeof file.type !== "string" || !file.type.startsWith("video/")) return null;
+
+	const maxBlobSize = options.maxBlobSize ?? 32768;
+
+	if (Object.prototype.hasOwnProperty.call(options, "readyBlob")) {
+		const readyBlob = options.readyBlob;
+		if (!readyBlob || readyBlob.size > maxBlobSize) return null;
+		try {
+			return await blobToDataUrl(readyBlob);
+		} catch {
+			return null;
+		}
+	}
+
+	const captured = await captureVideoFrame(file, options);
+	if (!captured || captured.blob.size > maxBlobSize) return null;
+	try {
+		return await blobToDataUrl(captured.blob);
+	} catch {
+		return null;
+	}
+}
+
+// MEDIA-PERF-TZ-5.md §3 — для дескриптора вложения (previewDigest/previewKey,
+// putStream того же blob'а на Blossom, НЕ inline data:URL как у старого
+// extractVideoPoster — тот больше не используется для НОВЫХ отправляемых
+// сообщений, см. use-attachment-tray.js). Возвращает сырые JPEG-байты
+// (для putStream) + метаданные видео, снятые БЕСПЛАТНО с того же
+// loadedmetadata, что уже используется для кадра-постера.
+export async function extractVideoPosterCapture(file, options = {}) {
+	const captured = await captureVideoFrame(file, options);
+	if (!captured) return null;
+	return {
+		bytes: new Uint8Array(await captured.blob.arrayBuffer()),
+		mime: "image/jpeg",
+		width: captured.width,
+		height: captured.height,
+		duration: captured.duration,
+	};
 }

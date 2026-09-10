@@ -7,6 +7,21 @@ import { truncateFileName } from "./bubble-attachment-plan.js";
 import { videoPosterStyle, videoPosterUrl } from "./video-poster-style.js";
 import { getMemoryCachedUrl } from "../attachment-memory-cache.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
+import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+
+// M:SS — attachment.duration (секунды, MEDIA-PERF-TZ-5.md §3) снят с
+// <video>.duration при заливке, дробный. Часы не нужны: видео-вложения чата
+// не рассчитаны на часовые ролики, тот же потолок разумности, что у других
+// плиток этого файла.
+function formatDuration(seconds) {
+	const total = Math.max(0, Math.round(seconds));
+	const m = Math.floor(total / 60);
+	const s = total % 60;
+	return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 function visibleCap(layout) {
 	if (layout === "single") return 1;
@@ -17,10 +32,27 @@ function visibleCap(layout) {
 }
 
 function VideoTile({ attachment, onOpen, moreCount = 0 }) {
+	const [previewUrl, setPreviewUrl] = useState(null);
 	const [cachedPoster, setCachedPoster] = useState(null);
-	const poster = videoPosterUrl(attachment.poster) || cachedPoster;
+	// Порядок: previewDigest (MEDIA-PERF-TZ-5.md §3, новые сообщения) — старый
+	// inline attachment.poster (сообщения до этой задачи, синхронно, без сети) —
+	// ленивая вырезка кадра из полного видео (см. ниже, только если НЕТ ни того,
+	// ни другого — крайний случай, старое сообщение вообще без постера).
+	const poster = videoPosterUrl(attachment.poster) || previewUrl || cachedPoster;
+
 	useEffect(() => {
-		if (videoPosterUrl(attachment.poster) || cachedPoster) return;
+		if (!attachment.previewDigest || videoPosterUrl(attachment.poster)) return;
+		let cancelled = false;
+		resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL }).then((url) => {
+			if (!cancelled && url) setPreviewUrl(url);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [attachment.previewDigest, attachment.previewKey, attachment.poster]);
+
+	useEffect(() => {
+		if (attachment.previewDigest || videoPosterUrl(attachment.poster) || previewUrl || cachedPoster) return;
 		const memUrl = attachment.manifestDigest ? getMemoryCachedUrl(attachment.manifestDigest) : null;
 		if (!memUrl) return;
 		let cancelled = false;
@@ -34,8 +66,8 @@ function VideoTile({ attachment, onOpen, moreCount = 0 }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [attachment.manifestDigest, attachment.poster, attachment.mime, attachment.name, cachedPoster]);
-	const meta = attachment.duration ? String(attachment.duration) : formatFileSize(attachment.size);
+	}, [attachment.manifestDigest, attachment.previewDigest, attachment.poster, attachment.mime, attachment.name, previewUrl, cachedPoster]);
+	const meta = attachment.duration ? formatDuration(attachment.duration) : formatFileSize(attachment.size);
 	return (
 		<button
 			type="button"

@@ -167,6 +167,125 @@ test("referenceStoredFile: БЕЗ сети — собирает дескрипт
 	assert.deepEqual(downloaded, original);
 });
 
+// MEDIA-PERF-TZ-5.md §3 — превью/постер, отдельный putStream. Тесты ниже
+// используют options.generatePreview (DI-точка в attachments.js::withPreview) —
+// не настоящий createImageBitmap/OffscreenCanvas (их нет в node --test, тот
+// же класс ограничения, что thumbnails.js/raster-image.js, живая проверка
+// вместо unit на сам рендеринг превью).
+
+test("uploadMessageAttachment: без previewDigest в результате generatePreview — дескриптор БЕЗ previewDigest (старый путь)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new TextEncoder().encode("документ без превью");
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		original,
+		{ mime: "application/pdf", name: "doc.pdf" },
+		ALICE_PRIV,
+		{ fetchImpl, generatePreview: async () => null },
+	);
+	assert.equal(descriptor.previewDigest, undefined);
+	assert.equal(descriptor.previewKey, undefined);
+});
+
+test("uploadMessageAttachment: с превью — дескриптор получает previewDigest/previewKey, ОТДЕЛЬНЫЙ blob (не совпадает с manifestDigest)", async () => {
+	const { fetchImpl, store } = makeFakeBlossom();
+	const original = new TextEncoder().encode("картинка (условно) с превью");
+	const previewBytes = new Uint8Array([1, 2, 3, 4, 5]);
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		original,
+		{ mime: "image/jpeg", name: "photo.jpg" },
+		ALICE_PRIV,
+		{ fetchImpl, generatePreview: async () => ({ bytes: previewBytes, mime: "image/jpeg", width: 200, height: 150 }) },
+	);
+	assert.equal(typeof descriptor.previewDigest, "string");
+	assert.notEqual(descriptor.previewDigest, descriptor.manifestDigest, "превью — отдельный blob, не оригинал");
+	assert.doesNotThrow(() => atob(descriptor.previewKey));
+	assert.equal(descriptor.width, 200);
+	assert.equal(descriptor.height, 150);
+
+	// Превью реально расшифровывается СВОИМ ключом — не переиспользует fileKey оригинала.
+	const { getManifest: gm, getRange } = await import("../src/domain/files/content.js");
+	const previewManifest = await gm(descriptor.previewDigest, { serverUrl: "https://blossom.test", fetchImpl });
+	const previewKeyBytes = Uint8Array.from(atob(descriptor.previewKey), (c) => c.charCodeAt(0));
+	const decrypted = await getRange(previewManifest, previewKeyBytes, 0, previewManifest.size, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(decrypted, previewBytes);
+	assert.ok(store.size >= 4, "оригинал(2 блоба: манифест+данные) + превью(2 блоба) — минимум 4 записи в хранилище");
+});
+
+test("uploadMessageAttachment: video — duration из generatePreview попадает в дескриптор", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const bytes = new Uint8Array([9, 9, 9]);
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		bytes,
+		{ mime: "video/mp4", name: "clip.mp4" },
+		ALICE_PRIV,
+		{ fetchImpl, generatePreview: async () => ({ bytes: new Uint8Array([1]), mime: "image/jpeg", width: 480, height: 270, duration: 12.7 }) },
+	);
+	assert.equal(descriptor.type, "video");
+	assert.equal(descriptor.duration, 12.7);
+	assert.equal(descriptor.width, 480);
+	assert.equal(descriptor.height, 270);
+});
+
+test("uploadMessageAttachment: отказ ГЕНЕРАЦИИ превью (generatePreview бросает) — заливка оригинала всё равно успешна, без previewDigest", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const original = new TextEncoder().encode("оригинал должен выжить при сбое превью");
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		original,
+		{ mime: "image/jpeg", name: "photo.jpg" },
+		ALICE_PRIV,
+		{ fetchImpl, generatePreview: async () => { throw new Error("canvas отказал"); } },
+	);
+	assert.equal(typeof descriptor.manifestDigest, "string");
+	assert.equal(descriptor.previewDigest, undefined);
+	const downloaded = await downloadMessageAttachment(descriptor, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.deepEqual(downloaded, original);
+});
+
+test("uploadMessageAttachment: отказ ЗАЛИВКИ превью (сеть/сервер отклонил PUT превью) — оригинал всё равно успешен, без previewDigest", async () => {
+	const { fetchImpl: baseFetch } = makeFakeBlossom();
+	let putCount = 0;
+	// Заливка оригинала: putStream делает 2 PUT (данные + манифест). Всё, что
+	// идёт ПОСЛЕ — заливка превью (тоже 2 PUT) — роняем именно её, имитируя
+	// "сеть отвалилась"/"Blossom отклонил файл превью".
+	const flakyFetch = async (url, opts = {}) => {
+		if (opts.method === "PUT") {
+			putCount++;
+			if (putCount > 2) throw new Error("сеть отвалилась на заливке превью");
+		}
+		return baseFetch(url, opts);
+	};
+	const original = new TextEncoder().encode("оригинал переживает сбой сети на превью");
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		original,
+		{ mime: "image/jpeg", name: "photo.jpg" },
+		ALICE_PRIV,
+		{ fetchImpl: flakyFetch, generatePreview: async () => ({ bytes: new Uint8Array([1, 2, 3]), mime: "image/jpeg" }) },
+	);
+	assert.equal(typeof descriptor.manifestDigest, "string");
+	assert.equal(descriptor.previewDigest, undefined, "заливка превью провалилась — дескриптор остаётся без previewDigest, не бросает наружу");
+});
+
+test("uploadMessageAttachment: options.fileKey (оверрайд оригинала) НЕ наследуется превью — свой случайный ключ (иначе пара ключ/nonce на чанк 0 повторилась бы, §9.1)", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { generateFileKey } = await import("../src/domain/files/crypto.js");
+	const overrideKey = generateFileKey();
+	const original = new TextEncoder().encode("оригинал под явным fileKey-оверрайдом");
+	const descriptor = await uploadMessageAttachment(
+		"https://blossom.test",
+		original,
+		{ mime: "image/jpeg", name: "photo.jpg" },
+		ALICE_PRIV,
+		{ fetchImpl, fileKey: overrideKey, generatePreview: async () => ({ bytes: new Uint8Array([1, 2, 3]), mime: "image/jpeg" }) },
+	);
+	assert.equal(descriptor.fileKey, btoa(String.fromCharCode(...overrideKey)), "оригинал реально получил оверрайд");
+	assert.notEqual(descriptor.previewKey, descriptor.fileKey, "превью НЕ унаследовало оверрайд-ключ оригинала");
+});
+
 test("referenceStoredFile: адверсарная мутация — если бы функция генерировала НОВЫЙ digest вместо переиспользования переданного, это должно быть поймано", async () => {
 	const { fetchImpl } = makeFakeBlossom();
 	const { putStream } = await import("../src/domain/files/content.js");

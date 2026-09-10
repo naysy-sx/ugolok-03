@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
+import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { kindOf } from "../../domain/content/record-kind.js";
@@ -59,14 +60,25 @@ function reactionSummary(counts) {
 }
 
 function FeedThumb({ attachment }) {
-	const poster = attachment.type === "video" ? videoPosterUrl(attachment.poster) : null;
+	// MEDIA-PERF-TZ-5.md §3 — previewDigest (новые вложения, оба типа) обходит
+	// и старый inline poster (видео), и полную загрузку оригинала (картинки).
+	const inlinePoster = attachment.type === "video" ? videoPosterUrl(attachment.poster) : null;
 	const [url, setUrl] = useState(
-		() => poster || (attachment.type === "image" && attachment.manifestDigest ? getPreviewUrl(attachment.manifestDigest) : null),
+		() => inlinePoster || (attachment.type === "image" && attachment.manifestDigest ? getPreviewUrl(attachment.manifestDigest) : null),
 	);
 
 	useEffect(() => {
-		if (poster) {
-			setUrl(poster);
+		if (attachment.previewDigest) {
+			let cancelled = false;
+			resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_SERVER_URL }).then((previewUrl) => {
+				if (!cancelled && previewUrl) setUrl(previewUrl);
+			});
+			return () => {
+				cancelled = true;
+			};
+		}
+		if (inlinePoster) {
+			setUrl(inlinePoster);
 			return;
 		}
 		if (attachment.type !== "image" || !attachment.manifestDigest) return;
@@ -86,7 +98,7 @@ function FeedThumb({ attachment }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [attachment.manifestDigest, attachment.poster, attachment.mime]);
+	}, [attachment.manifestDigest, attachment.previewDigest, attachment.poster, attachment.mime]);
 
 	if (!url) return <div class="feed-thumb" aria-hidden="true" />;
 	return <img class="feed-thumb" src={url} alt="" />;
