@@ -1,0 +1,1477 @@
+diff --git a/cmd/migrate-blobs/main.go b/cmd/migrate-blobs/main.go
+new file mode 100644
+index 0000000..9c63750
+--- /dev/null
++++ b/cmd/migrate-blobs/main.go
+@@ -0,0 +1,62 @@
++package main
++
++import (
++	"context"
++	"flag"
++	"fmt"
++	"log"
++	"os"
++
++	_ "github.com/mattn/go-sqlite3"
++
++	"github.com/sebdeveloper6952/blossom-server/v2/db"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/pkg/config"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/pkg/logging"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/service"
++)
++
++func main() {
++	configPath := flag.String("config", "config.yml", "path to blossom config.yml")
++	dropColumn := flag.Bool("drop-blob-column", false, "after a successful full migrate, DROP COLUMN blob + VACUUM")
++	flag.Parse()
++
++	conf, err := config.NewConfig(*configPath)
++	if err != nil {
++		log.Fatalf("config: %v", err)
++	}
++	logger, err := logging.NewLog(conf.LogLevel)
++	if err != nil {
++		log.Fatalf("log: %v", err)
++	}
++
++	database, err := db.NewDB(conf.DbPath, "db/migrations")
++	if err != nil {
++		logger.Fatal(err.Error())
++	}
++	defer database.Close()
++	queries := db.New(database)
++	blobsDir := conf.ResolveBlobsDir()
++
++	ctx := context.Background()
++	result, err := service.MigrateBlobsToFS(ctx, queries, blobsDir, logger)
++	if err != nil {
++		logger.Fatal(err.Error())
++	}
++	fmt.Printf("blobs_dir=%s total=%d migrated=%d skipped=%d failed=%d orphan_sql=%d bytes=%d\n",
++		blobsDir, result.Total, result.Migrated, result.Skipped, result.Failed, result.OrphanSQL, result.Bytes)
++
++	if *dropColumn {
++		if result.Failed > 0 || result.OrphanSQL > 0 {
++			fmt.Fprintln(os.Stderr, "refusing --drop-blob-column: migrate had failures/orphans")
++			os.Exit(1)
++		}
++		if err := service.DropBlobColumn(ctx, database); err != nil {
++			logger.Fatal(err.Error())
++		}
++		fmt.Println("dropped blobs.blob + VACUUM")
++	}
++
++	if result.Failed > 0 {
++		os.Exit(1)
++	}
++}
+diff --git a/db/blobs.sql.go b/db/blobs.sql.go
+index bca1fd3..80769d3 100644
+--- a/db/blobs.sql.go
++++ b/db/blobs.sql.go
+@@ -20,8 +20,16 @@ func (q *Queries) DeleteBlobFromHash(ctx context.Context, hash string) error {
+ 	return err
+ }
+ 
++type BlobMeta struct {
++	Pubkey  string
++	Hash    string
++	Type    string
++	Size    int64
++	Created int64
++}
++
+ const getAllBlobsPaginated = `-- name: GetAllBlobsPaginated :many
+-select pubkey, hash, type, size, blob, created
++select pubkey, hash, type, size, created
+ from blobs
+ where created > ?
+   and created < ?
+@@ -33,21 +41,20 @@ type GetAllBlobsPaginatedParams struct {
+ 	Created_2 int64
+ }
+ 
+-func (q *Queries) GetAllBlobsPaginated(ctx context.Context, arg GetAllBlobsPaginatedParams) ([]Blob, error) {
++func (q *Queries) GetAllBlobsPaginated(ctx context.Context, arg GetAllBlobsPaginatedParams) ([]BlobMeta, error) {
+ 	rows, err := q.db.QueryContext(ctx, getAllBlobsPaginated, arg.Created, arg.Created_2)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	defer rows.Close()
+-	var items []Blob
++	var items []BlobMeta
+ 	for rows.Next() {
+-		var i Blob
++		var i BlobMeta
+ 		if err := rows.Scan(
+ 			&i.Pubkey,
+ 			&i.Hash,
+ 			&i.Type,
+ 			&i.Size,
+-			&i.Blob,
+ 			&i.Created,
+ 		); err != nil {
+ 			return nil, err
+@@ -64,47 +71,59 @@ func (q *Queries) GetAllBlobsPaginated(ctx context.Context, arg GetAllBlobsPagin
+ }
+ 
+ const getBlobFromHash = `-- name: GetBlobFromHash :one
+-select pubkey, hash, type, size, blob, created
++select pubkey, hash, type, size, created
+ from blobs
+ where hash = ?
+ limit 1
+ `
+ 
+-func (q *Queries) GetBlobFromHash(ctx context.Context, hash string) (Blob, error) {
++func (q *Queries) GetBlobFromHash(ctx context.Context, hash string) (BlobMeta, error) {
+ 	row := q.db.QueryRowContext(ctx, getBlobFromHash, hash)
+-	var i Blob
++	var i BlobMeta
+ 	err := row.Scan(
+ 		&i.Pubkey,
+ 		&i.Hash,
+ 		&i.Type,
+ 		&i.Size,
+-		&i.Blob,
+ 		&i.Created,
+ 	)
+ 	return i, err
+ }
+ 
++const getBlobBytesFromHash = `-- name: GetBlobBytesFromHash :one
++select blob
++from blobs
++where hash = ?
++limit 1
++`
++
++func (q *Queries) GetBlobBytesFromHash(ctx context.Context, hash string) ([]byte, error) {
++	row := q.db.QueryRowContext(ctx, getBlobBytesFromHash, hash)
++	var blob []byte
++	err := row.Scan(&blob)
++	return blob, err
++}
++
+ const getBlobsFromPubkey = `-- name: GetBlobsFromPubkey :many
+-select pubkey, hash, type, size, blob, created
++select pubkey, hash, type, size, created
+ from blobs
+ where pubkey = ?
+ `
+ 
+-func (q *Queries) GetBlobsFromPubkey(ctx context.Context, pubkey string) ([]Blob, error) {
++func (q *Queries) GetBlobsFromPubkey(ctx context.Context, pubkey string) ([]BlobMeta, error) {
+ 	rows, err := q.db.QueryContext(ctx, getBlobsFromPubkey, pubkey)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	defer rows.Close()
+-	var items []Blob
++	var items []BlobMeta
+ 	for rows.Next() {
+-		var i Blob
++		var i BlobMeta
+ 		if err := rows.Scan(
+ 			&i.Pubkey,
+ 			&i.Hash,
+ 			&i.Type,
+ 			&i.Size,
+-			&i.Blob,
+ 			&i.Created,
+ 		); err != nil {
+ 			return nil, err
+@@ -121,7 +140,7 @@ func (q *Queries) GetBlobsFromPubkey(ctx context.Context, pubkey string) ([]Blob
+ }
+ 
+ const getBlobsFromPubkeyPaginated = `-- name: GetBlobsFromPubkeyPaginated :many
+-select pubkey, hash, type, size, blob, created
++select pubkey, hash, type, size, created
+ from blobs
+ where pubkey = ?
+   and created > ?
+@@ -135,21 +154,20 @@ type GetBlobsFromPubkeyPaginatedParams struct {
+ 	Created_2 int64
+ }
+ 
+-func (q *Queries) GetBlobsFromPubkeyPaginated(ctx context.Context, arg GetBlobsFromPubkeyPaginatedParams) ([]Blob, error) {
++func (q *Queries) GetBlobsFromPubkeyPaginated(ctx context.Context, arg GetBlobsFromPubkeyPaginatedParams) ([]BlobMeta, error) {
+ 	rows, err := q.db.QueryContext(ctx, getBlobsFromPubkeyPaginated, arg.Pubkey, arg.Created, arg.Created_2)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	defer rows.Close()
+-	var items []Blob
++	var items []BlobMeta
+ 	for rows.Next() {
+-		var i Blob
++		var i BlobMeta
+ 		if err := rows.Scan(
+ 			&i.Pubkey,
+ 			&i.Hash,
+ 			&i.Type,
+ 			&i.Size,
+-			&i.Blob,
+ 			&i.Created,
+ 		); err != nil {
+ 			return nil, err
+@@ -174,7 +192,7 @@ insert into blobs(
+   blob,
+   created
+ ) values (?,?,?,?,?,?)
+-returning pubkey, hash, type, size, blob, created
++returning pubkey, hash, type, size, created
+ `
+ 
+ type InsertBlobParams struct {
+@@ -186,7 +204,7 @@ type InsertBlobParams struct {
+ 	Created int64
+ }
+ 
+-func (q *Queries) InsertBlob(ctx context.Context, arg InsertBlobParams) (Blob, error) {
++func (q *Queries) InsertBlob(ctx context.Context, arg InsertBlobParams) (BlobMeta, error) {
+ 	row := q.db.QueryRowContext(ctx, insertBlob,
+ 		arg.Pubkey,
+ 		arg.Hash,
+@@ -195,14 +213,47 @@ func (q *Queries) InsertBlob(ctx context.Context, arg InsertBlobParams) (Blob, e
+ 		arg.Blob,
+ 		arg.Created,
+ 	)
+-	var i Blob
++	var i BlobMeta
+ 	err := row.Scan(
+ 		&i.Pubkey,
+ 		&i.Hash,
+ 		&i.Type,
+ 		&i.Size,
+-		&i.Blob,
+ 		&i.Created,
+ 	)
+ 	return i, err
+ }
++
++const listBlobHashes = `-- name: ListBlobHashes :many
++select hash, size
++from blobs
++order by created asc
++`
++
++type ListBlobHashesRow struct {
++	Hash string
++	Size int64
++}
++
++func (q *Queries) ListBlobHashes(ctx context.Context) ([]ListBlobHashesRow, error) {
++	rows, err := q.db.QueryContext(ctx, listBlobHashes)
++	if err != nil {
++		return nil, err
++	}
++	defer rows.Close()
++	var items []ListBlobHashesRow
++	for rows.Next() {
++		var i ListBlobHashesRow
++		if err := rows.Scan(&i.Hash, &i.Size); err != nil {
++			return nil, err
++		}
++		items = append(items, i)
++	}
++	if err := rows.Close(); err != nil {
++		return nil, err
++	}
++	if err := rows.Err(); err != nil {
++		return nil, err
++	}
++	return items, nil
++}
+diff --git a/db/migrations/5_blobs_to_fs.sql b/db/migrations/5_blobs_to_fs.sql
+new file mode 100644
+index 0000000..4bdc3a0
+--- /dev/null
++++ b/db/migrations/5_blobs_to_fs.sql
+@@ -0,0 +1,7 @@
++-- +migrate Up
++-- Байты блобов переезжают на диск (blobs/{hh}/{hash}). Колонку blob
++-- не дропаем в этом релизе: dual-read читает её, пока файла ещё нет.
++-- Drop + VACUUM — отдельная команда migrate-blobs --drop-blob-column.
++
++-- +migrate Down
++-- no-op: колонка blob остаётся.
+diff --git a/db/queries/blobs.sql b/db/queries/blobs.sql
+index 86e80af..52a603c 100644
+--- a/db/queries/blobs.sql
++++ b/db/queries/blobs.sql
+@@ -1,10 +1,10 @@
+ -- name: GetBlobsFromPubkey :many
+-select *
++select pubkey, hash, type, size, created
+ from blobs
+ where pubkey = ?;
+ 
+ -- name: GetBlobsFromPubkeyPaginated :many
+-select *
++select pubkey, hash, type, size, created
+ from blobs
+ where pubkey = ?
+   and created > ?
+@@ -12,14 +12,20 @@ where pubkey = ?
+ order by created asc;
+ 
+ -- name: GetAllBlobsPaginated :many
+-select *
++select pubkey, hash, type, size, created
+ from blobs
+ where created > ?
+   and created < ?
+ order by created desc;
+ 
+ -- name: GetBlobFromHash :one
+-select *
++select pubkey, hash, type, size, created
++from blobs
++where hash = ?
++limit 1;
++
++-- name: GetBlobBytesFromHash :one
++select blob
+ from blobs
+ where hash = ?
+ limit 1;
+@@ -33,9 +39,14 @@ insert into blobs(
+   blob,
+   created
+ ) values (?,?,?,?,?,?)
+-returning *;
++returning pubkey, hash, type, size, created;
+ 
+ -- name: DeleteBlobFromHash :exec
+ delete
+ from blobs
+ where hash = ?;
++
++-- name: ListBlobHashes :many
++select hash, size
++from blobs
++order by created asc;
+diff --git a/internal/bud02/delete_test.go b/internal/bud02/delete_test.go
+index 51aa15b..3de1454 100644
+--- a/internal/bud02/delete_test.go
++++ b/internal/bud02/delete_test.go
+@@ -1,6 +1,7 @@
+ package bud02
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"log"
+ 	"os"
+@@ -31,6 +32,7 @@ func TestDeleteBlob(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+@@ -64,7 +66,7 @@ func TestDeleteBlob(t *testing.T) {
+ 		conf.CdnUrl,
+ 		authHash,
+ 		pk,
+-		blobBytes,
++		bytes.NewReader(blobBytes),
+ 	)
+ 	assert.NoError(t, err, "upload should succeed")
+ 
+@@ -97,6 +99,7 @@ func TestDeleteBlobNotOwner(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+@@ -130,7 +133,7 @@ func TestDeleteBlobNotOwner(t *testing.T) {
+ 		conf.CdnUrl,
+ 		authHash,
+ 		pk,
+-		blobBytes,
++		bytes.NewReader(blobBytes),
+ 	)
+ 	assert.NoError(t, err, "upload should succeed")
+ 
+@@ -158,6 +161,7 @@ func TestDeleteBlobNotFound(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+diff --git a/internal/bud02/upload.go b/internal/bud02/upload.go
+index f493443..40287c7 100644
+--- a/internal/bud02/upload.go
++++ b/internal/bud02/upload.go
+@@ -1,14 +1,14 @@
+ package bud02
+ 
+ import (
++	"bytes"
+ 	"context"
+-	"errors"
+ 	"fmt"
++	"io"
+ 	"time"
+ 
+ 	"github.com/gabriel-vasile/mimetype"
+ 	"github.com/sebdeveloper6952/blossom-server/v2/internal/core"
+-	"github.com/sebdeveloper6952/blossom-server/v2/internal/pkg/hashing"
+ )
+ 
+ func UploadBlob(
+@@ -17,7 +17,7 @@ func UploadBlob(
+ 	cdnBaseUrl string,
+ 	authHash string,
+ 	pubkey string,
+-	blobBytes []byte,
++	body io.Reader,
+ ) (*core.Blob, error) {
+ 	var (
+ 		blobs    = services.Blob()
+@@ -33,47 +33,28 @@ func UploadBlob(
+ 		return nil, err
+ 	}
+ 
+-	mimeType := mimetype.Detect(blobBytes)
++	peek := make([]byte, 3072)
++	n, err := io.ReadFull(body, peek)
++	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
++		return nil, fmt.Errorf("read upload: %w", err)
++	}
++	peek = peek[:n]
++	mimeType := mimetype.Detect(peek)
+ 	if err := mimes.IsAllowed(ctx, mimeType.String()); err != nil {
+ 		return nil, fmt.Errorf("mime type %s not allowed", mimeType.String())
+ 	}
+ 
+-	if err := settings.ValidateFileSizeMaxBytes(ctx, len(blobBytes)); err != nil {
+-		return nil, fmt.Errorf("file size: %w", err)
+-	}
+-
+-	hash, err := hashing.Hash(blobBytes)
+-	if err != nil {
+-		return nil, fmt.Errorf("hash blob: %w", err)
+-	}
+-
+-	// calculated hash MUST match hash set in auth event
+-	if hash != authHash {
+-		return nil, errors.New("blob hash doesn't match auth event 'x' tag")
+-	}
+-
+-	// if blob already exists, return BlobDescriptor from database
+-	if blob, err := blobs.GetFromHash(ctx, hash); err == nil {
+-		return blob, nil
+-	}
+-
+-	// for now the URL of the file is the URL where the CDN is being hosted
+-	// plus the file hash
+-	url := cdnBaseUrl + "/" + hash
+-
+-	blobDescriptor, err := blobs.Save(
++	maxBytes := int64(settings.MaxUploadSizeBytes())
++	rest := io.MultiReader(bytes.NewReader(peek), body)
++	url := cdnBaseUrl + "/" + authHash
++	return blobs.SaveFromReader(
+ 		ctx,
+ 		pubkey,
+-		hash,
++		authHash,
+ 		url,
+-		int64(len(blobBytes)),
+ 		mimeType.String(),
+-		blobBytes,
++		rest,
++		maxBytes,
+ 		time.Now().Unix(),
+ 	)
+-	if err != nil {
+-		return nil, fmt.Errorf("save blob: %w", err)
+-	}
+-
+-	return blobDescriptor, nil
+ }
+diff --git a/internal/bud02/upload_test.go b/internal/bud02/upload_test.go
+index 0c0dfb6..f21943c 100644
+--- a/internal/bud02/upload_test.go
++++ b/internal/bud02/upload_test.go
+@@ -1,6 +1,7 @@
+ package bud02
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"log"
+ 	"os"
+@@ -29,6 +30,7 @@ func TestUpload(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+@@ -64,7 +66,7 @@ func TestUpload(t *testing.T) {
+ 		conf.CdnUrl,
+ 		authHash,
+ 		pk,
+-		blobBytes,
++		bytes.NewReader(blobBytes),
+ 	)
+ 
+ 	assert.NoError(t, err, "no error expected")
+@@ -82,6 +84,7 @@ func TestUnauthUpload(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+@@ -112,7 +115,7 @@ func TestUnauthUpload(t *testing.T) {
+ 		conf.CdnUrl,
+ 		authHash,
+ 		pk,
+-		blobBytes,
++		bytes.NewReader(blobBytes),
+ 	)
+ 
+ 	assert.Error(t, err, "expected unauthorized error")
+diff --git a/internal/bud04/mirror_test.go b/internal/bud04/mirror_test.go
+index 5245200..05ff2cb 100644
+--- a/internal/bud04/mirror_test.go
++++ b/internal/bud04/mirror_test.go
+@@ -29,6 +29,7 @@ func TestMirrorUnauth(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+diff --git a/internal/bud06/upload_requirements_test.go b/internal/bud06/upload_requirements_test.go
+index 513e9f4..3b56df3 100644
+--- a/internal/bud06/upload_requirements_test.go
++++ b/internal/bud06/upload_requirements_test.go
+@@ -27,6 +27,7 @@ func TestUploadRequirementsUnauth(t *testing.T) {
+ 
+ 	conf := &config.Config{
+ 		DbPath:      dbFile,
++		BlobsDir:    t.TempDir(),
+ 		LogLevel:    "DEBUG",
+ 		CdnUrl:      "http://localhost:8000",
+ 		AdminPubkey: pk,
+diff --git a/internal/core/blob_descriptor.go b/internal/core/blob_descriptor.go
+index 36a72bd..8dd5e43 100644
+--- a/internal/core/blob_descriptor.go
++++ b/internal/core/blob_descriptor.go
+@@ -3,6 +3,8 @@ package core
+ import (
+ 	"context"
+ 	"errors"
++	"io"
++	"os"
+ )
+ 
+ var (
+@@ -15,7 +17,7 @@ type Blob struct {
+ 	Sha256   string
+ 	Size     int64
+ 	Type     string
+-	Blob     []byte
++	Blob     []byte // не заполняется на GET/HEAD/list; байты на диске
+ 	Uploaded int64
+ 	NIP94    *NIP94FileMetadata
+ }
+@@ -55,4 +57,17 @@ type BlobStorage interface {
+ 	GetFromPubkeyPaginated(ctx context.Context, pubkey string, since int64, until int64) ([]*Blob, error)
+ 	GetAllPaginated(ctx context.Context, since int64, until int64) ([]*Blob, error)
+ 	DeleteFromHash(ctx context.Context, sha256 string) error
++	// Open — файл на диске для ServeContent (Range/Seek). Dual-read: нет файла,
++	// но колонка blob ещё жива — выгрузить на диск и открыть.
++	Open(ctx context.Context, sha256 string) (*os.File, *Blob, error)
++	SaveFromReader(
++		ctx context.Context,
++		pubkey string,
++		sha256 string,
++		url string,
++		mimeType string,
++		body io.Reader,
++		maxBytes int64,
++		created int64,
++	) (*Blob, error)
+ }
+diff --git a/internal/core/setting.go b/internal/core/setting.go
+index 6df471d..9693577 100644
+--- a/internal/core/setting.go
++++ b/internal/core/setting.go
+@@ -19,4 +19,5 @@ type SettingService interface {
+ 		ctx context.Context,
+ 		sizeBytes int,
+ 	) error
++	MaxUploadSizeBytes() int
+ }
+diff --git a/internal/httpapi/blob_fs_test.go b/internal/httpapi/blob_fs_test.go
+new file mode 100644
+index 0000000..eade43a
+--- /dev/null
++++ b/internal/httpapi/blob_fs_test.go
+@@ -0,0 +1,204 @@
++package httpapi
++
++import (
++	"bytes"
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"testing"
++
++	_ "github.com/mattn/go-sqlite3"
++
++	"github.com/sebdeveloper6952/blossom-server/v2/db"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/pkg/config"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/pkg/logging"
++	"github.com/sebdeveloper6952/blossom-server/v2/internal/service"
++)
++
++func setupBlobServer(t *testing.T) (*httptest.Server, *config.Config, []byte, string) {
++	t.Helper()
++	dir := t.TempDir()
++	dbPath := filepath.Join(dir, "database.sqlite3")
++	blobsDir := filepath.Join(dir, "blobs")
++	conf := &config.Config{
++		DbPath:             dbPath,
++		BlobsDir:           blobsDir,
++		LogLevel:           "ERROR",
++		CdnUrl:             "http://localhost",
++		MaxUploadSizeBytes: 64 << 20,
++		AllowedMimeTypes:   []string{"*"},
++	}
++	logger, err := logging.NewLog(conf.LogLevel)
++	if err != nil {
++		t.Fatal(err)
++	}
++	database, err := db.NewDB(dbPath, "../../db/migrations")
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { database.Close() })
++	queries := db.New(database)
++	svcs := service.New(context.Background(), database, queries, conf, logger)
++	payload := bytes.Repeat([]byte("ugolok-range-fixture-"), 1024*1024) // ~21 MiB
++	sum := sha256.Sum256(payload)
++	hash := hex.EncodeToString(sum[:])
++	_, err = svcs.Blob().Save(context.Background(), "pk", hash, conf.CdnUrl+"/"+hash, int64(len(payload)), "application/octet-stream", payload, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	engine := SetupRoutes(svcs, conf.CdnUrl, "admin", logger)
++	srv := httptest.NewServer(engine)
++	t.Cleanup(srv.Close)
++	return srv, conf, payload, hash
++}
++
++func TestGetRangeDoesNotRequireFullBodyInSQL(t *testing.T) {
++	srv, conf, payload, hash := setupBlobServer(t)
++
++	req, err := http.NewRequest(http.MethodGet, srv.URL+"/"+hash, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	req.Header.Set("Range", "bytes=0-65535")
++	res, err := http.DefaultClient.Do(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer res.Body.Close()
++	if res.StatusCode != http.StatusPartialContent {
++		t.Fatalf("status %d", res.StatusCode)
++	}
++	if res.Header.Get("Accept-Ranges") != "bytes" {
++		t.Fatalf("Accept-Ranges=%q", res.Header.Get("Accept-Ranges"))
++	}
++	body, err := io.ReadAll(res.Body)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(body) != 65536 {
++		t.Fatalf("got %d bytes", len(body))
++	}
++	if !bytes.Equal(body, payload[:65536]) {
++		t.Fatal("range bytes mismatch")
++	}
++	if res.Header.Get("Content-Length") != "65536" {
++		t.Fatalf("Content-Length=%q", res.Header.Get("Content-Length"))
++	}
++
++	onDisk, err := os.ReadFile(service.BlobFilePath(conf.BlobsDir, hash))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(onDisk) != len(payload) {
++		t.Fatalf("disk size %d want %d", len(onDisk), len(payload))
++	}
++}
++
++func TestHeadBlobHasLengthNoBody(t *testing.T) {
++	srv, _, payload, hash := setupBlobServer(t)
++	res, err := http.Head(srv.URL + "/" + hash)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer res.Body.Close()
++	if res.StatusCode != http.StatusOK {
++		t.Fatalf("status %d", res.StatusCode)
++	}
++	if res.Header.Get("Accept-Ranges") != "bytes" {
++		t.Fatalf("Accept-Ranges=%q", res.Header.Get("Accept-Ranges"))
++	}
++	if res.ContentLength != int64(len(payload)) {
++		t.Fatalf("Content-Length %d want %d", res.ContentLength, len(payload))
++	}
++	rest, _ := io.ReadAll(res.Body)
++	if len(rest) != 0 {
++		t.Fatalf("HEAD body %d bytes", len(rest))
++	}
++}
++
++func TestOrphanMetaIs404(t *testing.T) {
++	srv, conf, _, hash := setupBlobServer(t)
++	if err := os.Remove(service.BlobFilePath(conf.BlobsDir, hash)); err != nil {
++		t.Fatal(err)
++	}
++	// empty the sqlite blob column so dual-read cannot recover
++	database, err := db.NewDB(conf.DbPath, "../../db/migrations")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer database.Close()
++	if _, err := database.Exec(`UPDATE blobs SET blob = x'' WHERE hash = ?`, hash); err != nil {
++		t.Fatal(err)
++	}
++	res, err := http.Get(srv.URL + "/" + hash)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer res.Body.Close()
++	if res.StatusCode != http.StatusNotFound {
++		t.Fatalf("status %d want 404", res.StatusCode)
++	}
++}
++
++func TestDualReadWritesFile(t *testing.T) {
++	dir := t.TempDir()
++	dbPath := filepath.Join(dir, "database.sqlite3")
++	blobsDir := filepath.Join(dir, "blobs")
++	conf := &config.Config{
++		DbPath:             dbPath,
++		BlobsDir:           blobsDir,
++		LogLevel:           "ERROR",
++		CdnUrl:             "http://localhost",
++		MaxUploadSizeBytes: 64 << 20,
++		AllowedMimeTypes:   []string{"*"},
++	}
++	logger, err := logging.NewLog(conf.LogLevel)
++	if err != nil {
++		t.Fatal(err)
++	}
++	database, err := db.NewDB(dbPath, "../../db/migrations")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer database.Close()
++	payload := []byte("legacy-sqlite-blob-bytes")
++	sum := sha256.Sum256(payload)
++	hash := hex.EncodeToString(sum[:])
++	_, err = database.Exec(
++		`INSERT INTO blobs(pubkey, hash, type, size, blob, created) VALUES (?,?,?,?,?,?)`,
++		"pk", hash, "text/plain", int64(len(payload)), payload, int64(1),
++	)
++	if err != nil {
++		t.Fatal(err)
++	}
++	queries := db.New(database)
++	svcs := service.New(context.Background(), database, queries, conf, logger)
++	engine := SetupRoutes(svcs, conf.CdnUrl, "admin", logger)
++	srv := httptest.NewServer(engine)
++	defer srv.Close()
++
++	res, err := http.Get(srv.URL + "/" + hash)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer res.Body.Close()
++	if res.StatusCode != http.StatusOK {
++		t.Fatalf("status %d", res.StatusCode)
++	}
++	got, _ := io.ReadAll(res.Body)
++	if !bytes.Equal(got, payload) {
++		t.Fatalf("body mismatch")
++	}
++	onDisk, err := os.ReadFile(service.BlobFilePath(blobsDir, hash))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.Equal(onDisk, payload) {
++		t.Fatal("dual-read did not persist file")
++	}
++}
+diff --git a/internal/httpapi/bud01_controller.go b/internal/httpapi/bud01_controller.go
+index 3569b62..1311b06 100644
+--- a/internal/httpapi/bud01_controller.go
++++ b/internal/httpapi/bud01_controller.go
+@@ -1,13 +1,12 @@
+ package httpapi
+ 
+ import (
+-	"bytes"
+ 	"net/http"
++	"strconv"
+ 	"strings"
+ 	"time"
+ 
+ 	"github.com/gin-gonic/gin"
+-	bud01 "github.com/sebdeveloper6952/blossom-server/v2/internal/bud01"
+ 	"github.com/sebdeveloper6952/blossom-server/v2/internal/core"
+ )
+ 
+@@ -18,11 +17,7 @@ func getBlob(
+ 		pathParts := strings.Split(ctx.Param("path"), ".")
+ 		hash := pathParts[0]
+ 
+-		blob, err := bud01.GetBlob(
+-			ctx.Request.Context(),
+-			services,
+-			hash,
+-		)
++		file, blob, err := services.Blob().Open(ctx.Request.Context(), hash)
+ 		if err != nil {
+ 			ctx.AbortWithStatusJSON(
+ 				http.StatusNotFound,
+@@ -32,6 +27,7 @@ func getBlob(
+ 			)
+ 			return
+ 		}
++		defer file.Close()
+ 
+ 		name := hash
+ 		if len(pathParts) > 1 {
+@@ -44,7 +40,7 @@ func getBlob(
+ 			ctx.Request,
+ 			name,
+ 			time.Unix(blob.Uploaded, 0),
+-			bytes.NewReader(blob.Blob),
++			file,
+ 		)
+ 	}
+ }
+@@ -54,16 +50,25 @@ func hasBlob(
+ ) gin.HandlerFunc {
+ 	return func(ctx *gin.Context) {
+ 		pathParts := strings.Split(ctx.Param("path"), ".")
+-		_, err := bud01.HasBlob(
+-			ctx.Request.Context(),
+-			services,
+-			pathParts[0],
+-		)
++		hash := pathParts[0]
++
++		file, blob, err := services.Blob().Open(ctx.Request.Context(), hash)
+ 		if err != nil {
+ 			ctx.AbortWithStatus(http.StatusNotFound)
+ 			return
+ 		}
++		stat, _ := file.Stat()
++		file.Close()
+ 
++		size := blob.Size
++		if stat != nil {
++			size = stat.Size()
++		}
++
++		ctx.Header("Content-Type", blob.Type)
++		ctx.Header("Accept-Ranges", "bytes")
++		ctx.Header("Content-Length", strconv.FormatInt(size, 10))
++		ctx.Header("Last-Modified", time.Unix(blob.Uploaded, 0).UTC().Format(http.TimeFormat))
+ 		ctx.Status(http.StatusOK)
+ 	}
+ }
+diff --git a/internal/httpapi/bud02_controller.go b/internal/httpapi/bud02_controller.go
+index 214a0ed..f7e5389 100644
+--- a/internal/httpapi/bud02_controller.go
++++ b/internal/httpapi/bud02_controller.go
+@@ -2,7 +2,6 @@ package httpapi
+ 
+ import (
+ 	"fmt"
+-	"io"
+ 	"math"
+ 	"net/http"
+ 	"strconv"
+@@ -19,22 +18,7 @@ func uploadBlob(
+ 	cdnBaseUrl string,
+ ) gin.HandlerFunc {
+ 	return func(ctx *gin.Context) {
+-		bodyBytes, err := io.ReadAll(ctx.Request.Body)
+-		defer func(body io.ReadCloser) {
+-			err := body.Close()
+-			if err != nil {
+-
+-			}
+-		}(ctx.Request.Body)
+-		if err != nil {
+-			ctx.AbortWithStatusJSON(
+-				http.StatusBadRequest,
+-				apiError{
+-					Message: fmt.Sprintf("failed to read request body: %s", err.Error()),
+-				},
+-			)
+-			return
+-		}
++		defer ctx.Request.Body.Close()
+ 
+ 		blobDescriptor, err := bud02.UploadBlob(
+ 			ctx.Request.Context(),
+@@ -42,7 +26,7 @@ func uploadBlob(
+ 			cdnBaseUrl,
+ 			ctx.GetString("x"),
+ 			ctx.GetString("pk"),
+-			bodyBytes,
++			ctx.Request.Body,
+ 		)
+ 		if err != nil {
+ 			ctx.AbortWithStatusJSON(
+diff --git a/internal/pkg/config/config.go b/internal/pkg/config/config.go
+index 8a0426d..4d44abe 100644
+--- a/internal/pkg/config/config.go
++++ b/internal/pkg/config/config.go
+@@ -2,6 +2,7 @@ package config
+ 
+ import (
+ 	"os"
++	"path/filepath"
+ 
+ 	"gopkg.in/yaml.v3"
+ )
+@@ -14,6 +15,7 @@ type AccessControlRule struct {
+ 
+ type Config struct {
+ 	DbPath             string              `yaml:"db_path"`
++	BlobsDir           string              `yaml:"blobs_dir"`
+ 	LogLevel           string              `yaml:"log_level"`
+ 	ApiAddr            string              `yaml:"api_addr"`
+ 	CdnUrl             string              `yaml:"cdn_url"`
+@@ -41,3 +43,16 @@ func NewConfig(path string) (*Config, error) {
+ 
+ 	return config, err
+ }
++
++// ResolveBlobsDir — каталог файлов блобов. Явный blobs_dir в yaml, иначе
++// рядом с sqlite: {dir(db_path)}/blobs. Не хардкодит /app/data.
++func (c *Config) ResolveBlobsDir() string {
++	if c != nil && c.BlobsDir != "" {
++		return c.BlobsDir
++	}
++	dbPath := "db/database.sqlite3"
++	if c != nil && c.DbPath != "" {
++		dbPath = c.DbPath
++	}
++	return filepath.Join(filepath.Dir(dbPath), "blobs")
++}
+diff --git a/internal/service/blob_service.go b/internal/service/blob_service.go
+index e13aa7a..b0c0fc1 100644
+--- a/internal/service/blob_service.go
++++ b/internal/service/blob_service.go
+@@ -2,7 +2,14 @@ package service
+ 
+ import (
+ 	"context"
++	"crypto/sha256"
+ 	"database/sql"
++	"encoding/hex"
++	"fmt"
++	"io"
++	"os"
++	"path/filepath"
++	"strings"
+ 
+ 	"go.uber.org/zap"
+ 
+@@ -14,92 +21,205 @@ type blobService struct {
+ 	db         *sql.DB
+ 	queries    *db.Queries
+ 	cdnBaseUrl string
++	blobsDir   string
+ 	log        *zap.Logger
+ }
+ 
+ func NewBlobService(
+-	db *sql.DB,
++	dbConn *sql.DB,
+ 	queries *db.Queries,
+ 	cdnBaseUrl string,
++	blobsDir string,
+ 	log *zap.Logger,
+ ) (core.BlobStorage, error) {
++	if err := os.MkdirAll(blobsDir, 0o755); err != nil {
++		return nil, fmt.Errorf("blobs dir: %w", err)
++	}
++	if err := os.MkdirAll(filepath.Join(blobsDir, ".tmp"), 0o755); err != nil {
++		return nil, fmt.Errorf("blobs tmp dir: %w", err)
++	}
+ 	return &blobService{
+-		db:         db,
++		db:         dbConn,
+ 		queries:    queries,
+ 		cdnBaseUrl: cdnBaseUrl,
++		blobsDir:   blobsDir,
+ 		log:        log,
+ 	}, nil
+ }
+ 
++func BlobFilePath(blobsDir, hash string) string {
++	h := strings.ToLower(hash)
++	if len(h) < 2 {
++		return filepath.Join(blobsDir, h)
++	}
++	return filepath.Join(blobsDir, h[0:2], h)
++}
++
++func (r *blobService) pathFor(hash string) string {
++	return BlobFilePath(r.blobsDir, hash)
++}
++
++func (r *blobService) writeFileAtomic(hash string, data []byte) error {
++	dest := r.pathFor(hash)
++	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
++		return err
++	}
++	tmp, err := os.CreateTemp(filepath.Join(r.blobsDir, ".tmp"), "blob-*.tmp")
++	if err != nil {
++		return err
++	}
++	tmpName := tmp.Name()
++	if _, err := tmp.Write(data); err != nil {
++		tmp.Close()
++		os.Remove(tmpName)
++		return err
++	}
++	if err := tmp.Close(); err != nil {
++		os.Remove(tmpName)
++		return err
++	}
++	return os.Rename(tmpName, dest)
++}
++
+ func (r *blobService) Save(
+ 	ctx context.Context,
+ 	pubkey string,
+-	sha256 string,
++	sha256hex string,
+ 	url string,
+ 	size int64,
+ 	mimeType string,
+ 	blob []byte,
+ 	created int64,
+ ) (*core.Blob, error) {
+-	_, err := r.queries.InsertBlob(
++	if existing, err := r.GetFromHash(ctx, sha256hex); err == nil {
++		return existing, nil
++	}
++	if err := r.writeFileAtomic(sha256hex, blob); err != nil {
++		return nil, fmt.Errorf("write blob file: %w", err)
++	}
++	return r.insertMeta(ctx, pubkey, sha256hex, mimeType, size, created)
++}
++
++func (r *blobService) SaveFromReader(
++	ctx context.Context,
++	pubkey string,
++	expectedHash string,
++	url string,
++	mimeType string,
++	body io.Reader,
++	maxBytes int64,
++	created int64,
++) (*core.Blob, error) {
++	if existing, err := r.GetFromHash(ctx, expectedHash); err == nil {
++		_, _ = io.Copy(io.Discard, io.LimitReader(body, maxBytes+1))
++		return existing, nil
++	}
++
++	tmp, err := os.CreateTemp(filepath.Join(r.blobsDir, ".tmp"), "up-*.tmp")
++	if err != nil {
++		return nil, fmt.Errorf("tmp file: %w", err)
++	}
++	tmpName := tmp.Name()
++	cleanup := func() {
++		tmp.Close()
++		os.Remove(tmpName)
++	}
++
++	hasher := sha256.New()
++	mw := io.MultiWriter(tmp, hasher)
++	written, err := io.Copy(mw, io.LimitReader(body, maxBytes+1))
++	if err != nil {
++		cleanup()
++		return nil, fmt.Errorf("write upload: %w", err)
++	}
++	if written > maxBytes {
++		cleanup()
++		return nil, core.ErrFileSizeLimit
++	}
++	if err := tmp.Close(); err != nil {
++		os.Remove(tmpName)
++		return nil, err
++	}
++
++	gotHash := hex.EncodeToString(hasher.Sum(nil))
++	if gotHash != expectedHash {
++		os.Remove(tmpName)
++		return nil, fmt.Errorf("blob hash doesn't match auth event 'x' tag")
++	}
++
++	dest := r.pathFor(gotHash)
++	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
++		os.Remove(tmpName)
++		return nil, err
++	}
++	if err := os.Rename(tmpName, dest); err != nil {
++		os.Remove(tmpName)
++		return nil, fmt.Errorf("rename blob: %w", err)
++	}
++
++	meta, err := r.insertMeta(ctx, pubkey, gotHash, mimeType, written, created)
++	if err != nil {
++		os.Remove(dest)
++		return nil, err
++	}
++	return meta, nil
++}
++
++func (r *blobService) insertMeta(
++	ctx context.Context,
++	pubkey string,
++	sha256hex string,
++	mimeType string,
++	size int64,
++	created int64,
++) (*core.Blob, error) {
++	row, err := r.queries.InsertBlob(
+ 		ctx,
+ 		db.InsertBlobParams{
+ 			Pubkey:  pubkey,
+-			Hash:    sha256,
++			Hash:    sha256hex,
+ 			Type:    mimeType,
+ 			Size:    size,
+-			Blob:    blob,
++			Blob:    []byte{},
+ 			Created: created,
+ 		},
+ 	)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-
+-	return &core.Blob{
+-		Pubkey:   pubkey,
+-		Url:      url,
+-		Sha256:   sha256,
+-		Size:     size,
+-		Type:     mimeType,
+-		Uploaded: created,
+-		NIP94: &core.NIP94FileMetadata{
+-			Url:            url,
+-			MimeType:       mimeType,
+-			OriginalSha256: sha256,
+-			Sha256:         sha256,
+-		},
+-	}, nil
++	return r.metaIntoBlob(row), nil
+ }
+ 
+-func (r *blobService) Exists(ctx context.Context, sha256 string) (bool, error) {
+-	_, err := r.queries.GetBlobFromHash(ctx, sha256)
+-
++func (r *blobService) Exists(ctx context.Context, sha256hex string) (bool, error) {
++	_, err := r.queries.GetBlobFromHash(ctx, sha256hex)
++	if err == sql.ErrNoRows {
++		return false, err
++	}
+ 	return err == nil, err
+ }
+ 
+-func (r *blobService) GetFromHash(ctx context.Context, sha256 string) (*core.Blob, error) {
+-	blob, err := r.queries.GetBlobFromHash(ctx, sha256)
+-
+-	return r.dbBlobIntoBlobDescriptor(blob), err
++func (r *blobService) GetFromHash(ctx context.Context, sha256hex string) (*core.Blob, error) {
++	row, err := r.queries.GetBlobFromHash(ctx, sha256hex)
++	if err != nil {
++		return nil, err
++	}
++	return r.metaIntoBlob(row), nil
+ }
+ 
+ func (r *blobService) GetFromPubkey(ctx context.Context, pubkey string) ([]*core.Blob, error) {
+-	dbBlobs, err := r.queries.GetBlobsFromPubkey(ctx, pubkey)
++	rows, err := r.queries.GetBlobsFromPubkey(ctx, pubkey)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-
+-	blobs := make([]*core.Blob, len(dbBlobs))
+-	for i := range dbBlobs {
+-		blobs[i] = r.dbBlobIntoBlobDescriptor(dbBlobs[i])
++	blobs := make([]*core.Blob, len(rows))
++	for i := range rows {
++		blobs[i] = r.metaIntoBlob(rows[i])
+ 	}
+-
+ 	return blobs, nil
+ }
+ 
+ func (r *blobService) GetFromPubkeyPaginated(ctx context.Context, pubkey string, since int64, until int64) ([]*core.Blob, error) {
+-	dbBlobs, err := r.queries.GetBlobsFromPubkeyPaginated(ctx, db.GetBlobsFromPubkeyPaginatedParams{
++	rows, err := r.queries.GetBlobsFromPubkeyPaginated(ctx, db.GetBlobsFromPubkeyPaginatedParams{
+ 		Pubkey:    pubkey,
+ 		Created:   since,
+ 		Created_2: until,
+@@ -107,51 +227,80 @@ func (r *blobService) GetFromPubkeyPaginated(ctx context.Context, pubkey string,
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-
+-	blobs := make([]*core.Blob, len(dbBlobs))
+-	for i := range dbBlobs {
+-		blobs[i] = r.dbBlobIntoBlobDescriptor(dbBlobs[i])
++	blobs := make([]*core.Blob, len(rows))
++	for i := range rows {
++		blobs[i] = r.metaIntoBlob(rows[i])
+ 	}
+-
+ 	return blobs, nil
+ }
+ 
+ func (r *blobService) GetAllPaginated(ctx context.Context, since int64, until int64) ([]*core.Blob, error) {
+-	dbBlobs, err := r.queries.GetAllBlobsPaginated(ctx, db.GetAllBlobsPaginatedParams{
++	rows, err := r.queries.GetAllBlobsPaginated(ctx, db.GetAllBlobsPaginatedParams{
+ 		Created:   since,
+ 		Created_2: until,
+ 	})
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-
+-	blobs := make([]*core.Blob, len(dbBlobs))
+-	for i := range dbBlobs {
+-		blobs[i] = r.dbBlobIntoBlobDescriptor(dbBlobs[i])
++	blobs := make([]*core.Blob, len(rows))
++	for i := range rows {
++		blobs[i] = r.metaIntoBlob(rows[i])
+ 	}
+-
+ 	return blobs, nil
+ }
+ 
+-func (r *blobService) DeleteFromHash(ctx context.Context, sha256 string) error {
+-	return r.queries.DeleteBlobFromHash(ctx, sha256)
++func (r *blobService) DeleteFromHash(ctx context.Context, sha256hex string) error {
++	path := r.pathFor(sha256hex)
++	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
++		r.log.Warn("remove blob file", zap.String("hash", sha256hex), zap.Error(err))
++	}
++	return r.queries.DeleteBlobFromHash(ctx, sha256hex)
++}
++
++func (r *blobService) Open(ctx context.Context, sha256hex string) (*os.File, *core.Blob, error) {
++	meta, err := r.GetFromHash(ctx, sha256hex)
++	if err != nil {
++		return nil, nil, err
++	}
++	path := r.pathFor(sha256hex)
++	f, err := os.Open(path)
++	if err == nil {
++		return f, meta, nil
++	}
++	if !os.IsNotExist(err) {
++		return nil, nil, err
++	}
++
++	legacy, lerr := r.queries.GetBlobBytesFromHash(ctx, sha256hex)
++	if lerr != nil || len(legacy) == 0 {
++		r.log.Warn("orphan meta: no file and no sqlite blob", zap.String("hash", sha256hex))
++		return nil, nil, core.ErrBlobNotFound
++	}
++	r.log.Warn("dual-read fallback: writing blob column to disk", zap.String("hash", sha256hex), zap.Int("bytes", len(legacy)))
++	if werr := r.writeFileAtomic(sha256hex, legacy); werr != nil {
++		return nil, nil, werr
++	}
++	f, err = os.Open(path)
++	if err != nil {
++		return nil, nil, err
++	}
++	return f, meta, nil
+ }
+ 
+-func (r *blobService) dbBlobIntoBlobDescriptor(blob db.Blob) *core.Blob {
+-	url := r.cdnBaseUrl + "/" + blob.Hash
++func (r *blobService) metaIntoBlob(row db.BlobMeta) *core.Blob {
++	url := r.cdnBaseUrl + "/" + row.Hash
+ 	return &core.Blob{
+-		Pubkey:   blob.Pubkey,
++		Pubkey:   row.Pubkey,
+ 		Url:      url,
+-		Sha256:   blob.Hash,
+-		Size:     blob.Size,
+-		Type:     blob.Type,
+-		Blob:     blob.Blob,
+-		Uploaded: blob.Created,
++		Sha256:   row.Hash,
++		Size:     row.Size,
++		Type:     row.Type,
++		Uploaded: row.Created,
+ 		NIP94: &core.NIP94FileMetadata{
+ 			Url:            url,
+-			MimeType:       blob.Type,
+-			OriginalSha256: blob.Hash,
+-			Sha256:         blob.Hash,
++			MimeType:       row.Type,
++			OriginalSha256: row.Hash,
++			Sha256:         row.Hash,
+ 		},
+ 	}
+ }
+diff --git a/internal/service/migrate_blobs.go b/internal/service/migrate_blobs.go
+new file mode 100644
+index 0000000..a749ad2
+--- /dev/null
++++ b/internal/service/migrate_blobs.go
+@@ -0,0 +1,89 @@
++package service
++
++import (
++	"context"
++	"crypto/sha256"
++	"database/sql"
++	"encoding/hex"
++	"fmt"
++	"os"
++
++	"go.uber.org/zap"
++
++	"github.com/sebdeveloper6952/blossom-server/v2/db"
++)
++
++type MigrateBlobsResult struct {
++	Total     int
++	Migrated  int
++	Skipped   int
++	Failed    int
++	Bytes     int64
++	OrphanSQL int
++}
++
++func MigrateBlobsToFS(ctx context.Context, queries *db.Queries, blobsDir string, log *zap.Logger) (MigrateBlobsResult, error) {
++	var out MigrateBlobsResult
++	rows, err := queries.ListBlobHashes(ctx)
++	if err != nil {
++		return out, err
++	}
++	out.Total = len(rows)
++	svc := &blobService{queries: queries, blobsDir: blobsDir, log: log}
++	if err := os.MkdirAll(blobsDir, 0o755); err != nil {
++		return out, err
++	}
++	if err := os.MkdirAll(joinTmp(blobsDir), 0o755); err != nil {
++		return out, err
++	}
++
++	for _, row := range rows {
++		path := BlobFilePath(blobsDir, row.Hash)
++		if st, err := os.Stat(path); err == nil && st.Size() == row.Size {
++			out.Skipped++
++			continue
++		}
++		legacy, err := queries.GetBlobBytesFromHash(ctx, row.Hash)
++		if err != nil || len(legacy) == 0 {
++			out.OrphanSQL++
++			out.Failed++
++			if log != nil {
++				log.Warn("migrate: no sqlite blob for hash", zap.String("hash", row.Hash))
++			}
++			continue
++		}
++		sum := sha256.Sum256(legacy)
++		got := hex.EncodeToString(sum[:])
++		if got != row.Hash {
++			out.Failed++
++			if log != nil {
++				log.Error("migrate: sha256 mismatch", zap.String("hash", row.Hash), zap.String("got", got))
++			}
++			continue
++		}
++		if err := svc.writeFileAtomic(row.Hash, legacy); err != nil {
++			out.Failed++
++			if log != nil {
++				log.Error("migrate: write file", zap.String("hash", row.Hash), zap.Error(err))
++			}
++			continue
++		}
++		out.Migrated++
++		out.Bytes += int64(len(legacy))
++	}
++	return out, nil
++}
++
++func DropBlobColumn(ctx context.Context, database *sql.DB) error {
++	if _, err := database.ExecContext(ctx, `ALTER TABLE blobs DROP COLUMN blob`); err != nil {
++		return fmt.Errorf("drop blob column: %w", err)
++	}
++	if _, err := database.ExecContext(ctx, `VACUUM`); err != nil {
++		return fmt.Errorf("vacuum: %w", err)
++	}
++	return nil
++}
++
++func joinTmp(blobsDir string) string {
++	return blobsDir + "/.tmp"
++}
+diff --git a/internal/service/services.go b/internal/service/services.go
+index 58bb672..b788b76 100644
+--- a/internal/service/services.go
++++ b/internal/service/services.go
+@@ -30,6 +30,7 @@ func New(
+ 		database,
+ 		queries,
+ 		conf.CdnUrl,
++		conf.ResolveBlobsDir(),
+ 		log,
+ 	)
+ 	if err != nil {
+diff --git a/internal/service/setting_service.go b/internal/service/setting_service.go
+index 1eb9195..30546a1 100644
+--- a/internal/service/setting_service.go
++++ b/internal/service/setting_service.go
+@@ -33,3 +33,7 @@ func (s *settingService) ValidateFileSizeMaxBytes(
+ 
+ 	return nil
+ }
++
++func (s *settingService) MaxUploadSizeBytes() int {
++	return s.maxUploadSizeBytes
++}

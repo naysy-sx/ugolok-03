@@ -4,6 +4,7 @@
 # blossom.Dockerfile), флага --config нет (тот же факт, что server/blossom/).
 
 db_path: "./db/database.sqlite3"
+blobs_dir: "./db/blobs"
 log_level: "INFO"
 
 # 0.0.0.0, НЕ 127.0.0.1 — этот процесс живёт ВНУТРИ docker-сети, Caddy

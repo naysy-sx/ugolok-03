@@ -44,6 +44,28 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 
 Не править конфиги «на живую» на сервере в обход git — `deploy-env.sh` перезапишет ручную правку следующим же деплоем.
 
+## Blossom: байты на диск
+
+С TZ-ORIGIN-MEDIA блобы лежат в `/var/lib/ugolok/blossom/blobs/{hh}/{hash}`
+(тот же volume, что sqlite). GET/HEAD больше не поднимают колонку `blob` в RAM.
+
+Миграция старых баз (колонка ещё заполнена): dual-read в том же бинаре
+(нет файла → прочитать колонку одного ряда, записать файл, отдать). Полный
+проход:
+
+```
+# в контейнере / на хосте с тем же db_path и blobs_dir
+cd /opt/ugolok/island/blossom-src   # или server/blossom
+go run ./cmd/migrate-blobs -config /opt/ugolok/island/blossom-config.yml
+```
+
+Стоп контейнера не обязателен при dual-read. `--drop-blob-column` + VACUUM —
+только после нуля failed/orphan, окно обслуживания. `mem_limit: 512m` не снижать
+в этом проходе.
+
+Caddy (`deploy/caddy/{prod,test}.caddy`) отдаёт существующий `/{64hex}` через
+`file_server` с хоста; нет файла — fallback `reverse_proxy` на Go.
+
 ## Обслуживание
 
 Build-кэш и неиспользуемые образы Docker растут с каждым `docker compose up -d --build` (сборка `turncreds-server`/relay/blossom на каждый деплой) — раз в месяц освобождать место. Разовая команда: `docker system prune -f && docker builder prune -f`. Или таймер (`deploy/island/systemd/docker-prune.{service,timer}`) — установить один раз:

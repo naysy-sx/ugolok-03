@@ -16,6 +16,17 @@ if [ ! -d "./blossom-src" ]; then
 	fi
 
 	git clone https://github.com/sebdeveloper6952/blossom-server.git blossom-src
+	# Тот же пин, что deploy/island/bootstrap.sh — иначе следующий setup
+	# молча подтянет другой HEAD апстрима.
+	BLOSSOM_REF="${BLOSSOM_REF:-ba1444c31d517de9fcb512f7fff92bfed421aaa7}"
+	git -C blossom-src checkout -f "$BLOSSOM_REF"
+	PATCH_DIR="$(cd ../../deploy/island/patches && pwd)"
+	if [ -d "$PATCH_DIR" ]; then
+		for p in "$PATCH_DIR"/*.patch; do
+			[ -f "$p" ] || continue
+			git -C blossom-src apply "$p"
+		done
+	fi
 
 	# Патч поверх вендорного сида: апстримная 3_seed_mime_types.sql содержит
 	# video/webm, но не audio/webm — голосовые сообщения (voice.js пишет Blob как

@@ -26,6 +26,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./blossom-config.yml:/app/config.yml:ro
+      # blobs/{hh}/{hash} живёт внутри этого же volume, отдельный том не нужен.
       - /var/lib/ugolok/blossom:/app/data
     ports:
       - "127.0.0.1:8000:8000"

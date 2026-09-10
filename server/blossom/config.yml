@@ -6,6 +6,8 @@
 # Хранилище — SQLite, вне blossom-src/ (переживает переустановку/пересборку сервера),
 # путь относительно рабочей директории процесса (blossom-src/, см. run.sh).
 db_path: "../blossom-db/database.sqlite3"
+# Рядом с sqlite: blossom-db/blobs/{hh}/{hash}. Пустое значение = dir(db_path)/blobs.
+blobs_dir: "../blossom-db/blobs"
 
 log_level: "INFO"
 

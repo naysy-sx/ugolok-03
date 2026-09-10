@@ -1,4 +1,5 @@
 db_path: "./data/database.sqlite3"
+blobs_dir: "./data/blobs"
 log_level: "INFO"
 api_addr: "0.0.0.0:8000"
 cdn_url: "https://blossom.test.ugolok.tech"
