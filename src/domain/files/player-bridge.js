@@ -62,6 +62,20 @@ export function unregisterPlayerFile(manifestDigest) {
 // границы, либо отсутствие Range вовсе — SW нормализует это в start=0)
 // — разрешается в manifest.size-1 ЗДЕСЬ, где manifest уже есть; SW
 // сам размер файла не знает до этого ответа.
+//
+// MEDIA-PERF-TZ-5.md §4 (найдено живой проверкой пользователя — видео
+// переставало играть у конца файла) — end ВСЕГДА зажимается в manifest.size-1,
+// даже когда пришёл уже конкретным числом. Раньше (решение №6
+// TZ-FIX-FILES-MEDIA-STATIC.md) конкретный end уважался как есть без
+// ограничения — рассуждение было про ЯВНО присланный браузером большой
+// диапазон. На практике конкретный end сюда чаще всего приходит НЕ от
+// браузера, а от service-worker.js::nextAdaptiveWindow — SW считает окно для
+// ОТКРЫТОГО диапазона ("bytes=X-") вслепую (сам размер файла не знает),
+// выросшее окно у ХВОСТА файла легко даёт start+windowBytes-1 ЗА пределами
+// manifest.size. RFC 7233: конец диапазона за EOF — не ошибка, сервер должен
+// отдать короче (тот же приём "206 короче запрошенного", что уже применяется
+// для открытого диапазона несколькими строками выше) — ошибка ТОЛЬКО когда
+// НАЧАЛО диапазона невалидно.
 // onChunkArrived (MEDIA-PERF-TZ-4.md §5, необязательный) — прокинут насквозь
 // в session.readRange; startPlayerBridge ниже использует его, чтобы слать SW
 // промежуточный "range-progress" на каждый реально пришедший чанк — иначе SW
@@ -72,14 +86,11 @@ export async function handleRangeRequest({ manifestDigest, start, end, onChunkAr
 	if (!entry) return { ok: false, bytes: null, mime: null, size: null, error: "unknown-digest" };
 
 	const { manifest, session } = entry;
-	// Явные диапазоны с большим end НЕ ограничиваются здесь (решение №6
-	// TZ-FIX-FILES-MEDIA-STATIC.md — "если запрошенный диапазон валиден, как
-	// сейчас") — на практике браузер запрашивает их редко, открытый диапазон
-	// (или отсутствие Range, нормализованное в service-worker.js) — основной
-	// путь S4/S5.
 	const resolvedEnd =
-		end === null || end === undefined ? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1) : end;
-	if (start < 0 || resolvedEnd >= manifest.size || start > resolvedEnd) {
+		end === null || end === undefined
+			? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1)
+			: Math.min(end, manifest.size - 1);
+	if (start < 0 || start > resolvedEnd) {
 		return { ok: false, bytes: null, mime: null, size: null, error: "range-out-of-bounds" };
 	}
 
@@ -114,9 +125,13 @@ export async function handleRangeStreamRequest({ manifestDigest, start, end }, s
 	}
 
 	const { manifest, session } = entry;
+	// end зажимается в manifest.size-1 (см. развёрнутый комментарий у
+	// handleRangeRequest выше — тот же случай, та же причина).
 	const resolvedEnd =
-		end === null || end === undefined ? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1) : end;
-	if (start < 0 || resolvedEnd >= manifest.size || start > resolvedEnd) {
+		end === null || end === undefined
+			? Math.min(manifest.size - 1, start + PLAYER_FIRST_WINDOW_BYTES - 1)
+			: Math.min(end, manifest.size - 1);
+	if (start < 0 || start > resolvedEnd) {
 		sink.error("range-out-of-bounds");
 		return;
 	}

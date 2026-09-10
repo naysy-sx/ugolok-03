@@ -102,14 +102,45 @@ test("unregisterPlayerFile: после снятия регистрации за�
 	assert.equal(res.error, "unknown-digest");
 });
 
-test("handleRangeRequest: границы диапазона — отрицательный start, end за пределами size, start>end -> range-out-of-bounds", async () => {
+test("handleRangeRequest: границы диапазона — отрицательный start, start>end -> range-out-of-bounds", async () => {
 	const { fetchImpl } = makeFakeBlossom();
 	const { manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
 	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
 
 	assert.equal((await handleRangeRequest({ manifestDigest, start: -5, end: 10 })).error, "range-out-of-bounds");
-	assert.equal((await handleRangeRequest({ manifestDigest, start: 0, end: 1000 })).error, "range-out-of-bounds"); // size=1000, индексы 0..999
 	assert.equal((await handleRangeRequest({ manifestDigest, start: 50, end: 10 })).error, "range-out-of-bounds");
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+// MEDIA-PERF-TZ-5.md §4 (найдено живой проверкой — видео у конца файла
+// переставало играть) — end, зашедший ЗА manifest.size, больше не ошибка:
+// SW считает окно для открытого диапазона вслепую (размера файла не знает),
+// у хвоста файла оно легко перехлёстывает EOF. RFC 7233: конец диапазона
+// за EOF — отдать короче, не отказ; отказ — только когда НАЧАЛО невалидно.
+test("handleRangeRequest: end ЗА пределами size (но start валиден) -> НЕ ошибка, зажимается в manifest.size-1", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { original, manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const res = await handleRangeRequest({ manifestDigest, start: 0, end: 1000 }); // size=1000, индексы 0..999
+	assert.equal(res.ok, true);
+	assert.deepEqual(res.bytes, original.subarray(0, 1000), "отдано РОВНО до конца файла, не по запрошенному (за EOF) диапазону");
+
+	const nearEnd = await handleRangeRequest({ manifestDigest, start: 900, end: 999999 }); // грубое перехлёстывание, как выросшее адаптивное окно у хвоста файла
+	assert.equal(nearEnd.ok, true);
+	assert.deepEqual(nearEnd.bytes, original.subarray(900, 1000));
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+test("handleRangeRequest: start РОВНО за пределами size (даже с валидным по себе end) -> range-out-of-bounds", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const res = await handleRangeRequest({ manifestDigest, start: 1000, end: 1010 }); // start == size — ни одного валидного байта
+	assert.equal(res.error, "range-out-of-bounds");
 
 	unregisterPlayerFile(manifestDigest);
 });
@@ -327,14 +358,34 @@ test("handleRangeStreamRequest: незарегистрированный digest 
 	assert.deepEqual(sink.calls, [{ type: "error", code: "unknown-digest" }]);
 });
 
-test("handleRangeStreamRequest: диапазон вне границ -> sink.error('range-out-of-bounds'), open() НЕ вызывается", async () => {
+test("handleRangeStreamRequest: start вне границ -> sink.error('range-out-of-bounds'), open() НЕ вызывается", async () => {
 	const { fetchImpl } = makeFakeBlossom();
 	const { manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
 	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
 
 	const sink = recordingSink();
-	await handleRangeStreamRequest({ manifestDigest, start: 0, end: 1000 }, sink); // size=1000, индексы 0..999
+	await handleRangeStreamRequest({ manifestDigest, start: 1000, end: 1010 }, sink); // start == size
 	assert.deepEqual(sink.calls, [{ type: "error", code: "range-out-of-bounds" }]);
+
+	unregisterPlayerFile(manifestDigest);
+});
+
+// MEDIA-PERF-TZ-5.md §4 (найдено живой проверкой — видео у конца файла
+// переставало играть, окно у хвоста файла легко перехлёстывает EOF) —
+// end ЗА manifest.size (start валиден) больше не ошибка, отдаётся короче.
+test("handleRangeStreamRequest: end ЗА пределами size (start валиден) -> НЕ ошибка, open().totalBytes зажат в EOF", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { original, manifest, manifestDigest, fileKey } = await setupFile(fetchImpl, 1000);
+	registerPlayerFile(manifestDigest, { manifest, fileKey, serverUrl: "https://blossom.test", fetchImpl });
+
+	const sink = recordingSink();
+	await handleRangeStreamRequest({ manifestDigest, start: 0, end: 1000 }, sink); // size=1000, индексы 0..999
+
+	assert.equal(sink.calls[0].type, "open");
+	assert.equal(sink.calls[0].totalBytes, 1000, "зажато в manifest.size, не запрошенные 1001 байт");
+	const chunkBytes = sink.calls.filter((c) => c.type === "chunk").map((c) => c.bytes);
+	assert.deepEqual(concatBytes(...chunkBytes), original);
+	assert.equal(sink.calls[sink.calls.length - 1].type, "end");
 
 	unregisterPlayerFile(manifestDigest);
 });
