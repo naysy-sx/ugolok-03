@@ -98,8 +98,18 @@ export async function handleRangeRequest({ manifestDigest, start, end, onChunkAr
 		const bytes = await session.readRange(start, resolvedEnd + 1, { onChunkArrived });
 		return { ok: true, bytes, mime: manifest.mime, size: manifest.size, error: null };
 	} catch (e) {
-		return { ok: false, bytes: null, mime: null, size: null, error: "decrypt-failed" };
+		return { ok: false, bytes: null, mime: null, size: null, error: rangeFailureCode(e) };
 	}
+}
+
+// MEDIA-PERF-TZ-5.md §5 — раньше любое исключение readRange становилось
+// decrypt-failed → HTTP 500, и оборванный TCP доезжал как «ошибка
+// расшифровки». Коды совпадают с FILES_CONTENT_ERROR_STATUS в SW.
+function rangeFailureCode(err) {
+	if (!err) return "decrypt-failed";
+	if (err.code === "network-failed" || err.code === "tamper") return err.code;
+	if (err.key === "errors.blossomChunkTampered") return "tamper";
+	return "decrypt-failed";
 }
 
 // MEDIA-PERF-TZ-5.md §4 — потоковый путь: та же валидация digest/bounds, что
@@ -140,10 +150,7 @@ export async function handleRangeStreamRequest({ manifestDigest, start, end }, s
 	await session.streamRange(start, resolvedEnd + 1, {
 		chunk: (seq, bytes) => sink.chunk(seq, bytes),
 		end: () => sink.end(),
-		// streamRange сама не различает причины отказа (сеть/подмена digest/
-		// расшифровка) — до потоковой версии (handleRangeRequest выше) это тоже
-		// был единственный код на любую ошибку readRange, здесь то же самое.
-		error: () => sink.error("decrypt-failed"),
+		error: (err) => sink.error(rangeFailureCode(err)),
 	});
 }
 

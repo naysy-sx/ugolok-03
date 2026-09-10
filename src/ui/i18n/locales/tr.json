@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "Ses yüklenemedi: {{error}}",
+		"videoLoadError": "Video yüklenemedi: {{error}}",
 		"mediaErrorUnsupported": "dosya bozuk veya format desteklenmiyor",
 		"mediaErrorDecode": "kod çözme hatası",
 		"mediaErrorNetwork": "ağ hatası — veriler alınamadı",

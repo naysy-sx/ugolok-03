@@ -32,7 +32,7 @@ function sleep(ms) {
 // ответил); всё остальное (4xx, 500/501) — сервер осмысленно отказал,
 // повторять бессмысленно (FILES-FIX-SPEC.md §7.1, TZ-FIX-FILES-MEDIA-STATIC.md
 // 5.1: "повторять ТОЛЬКО сетевые отказы... не 4xx").
-function isRetryableStatus(status) {
+export function isRetryableStatus(status) {
   return status === 0 || status === 502 || status === 503 || status === 504;
 }
 
@@ -41,7 +41,7 @@ function isRetryableStatus(status) {
 // собственный timeoutMs) — намеренно НЕ входит сюда, повторять его нельзя
 // никогда (см. combineSignals ниже и Приложение Б FILES-FIX-SPEC.md: слепой
 // retry на уже перегруженном ресурсе удваивает нагрузку, а не помогает).
-function isNetworkError(err) {
+export function isNetworkError(err) {
   return err instanceof TypeError;
 }
 
@@ -50,7 +50,7 @@ function isNetworkError(err) {
 // иначе ручная связка тем же контроллером. Оба даю ОДИНАКОВОЕ имя ошибки
 // "AbortError" — вызывающая сторона (putWithRetry) не должна и не может их
 // различать для решения "повторять или нет" (решение: не повторять НИ ОДИН).
-function combineSignals(signal, timeoutMs) {
+export function combineSignals(signal, timeoutMs) {
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   if (!signal) return timeoutSignal;
   if (typeof AbortSignal.any === 'function') return AbortSignal.any([signal, timeoutSignal]);
@@ -62,6 +62,32 @@ function combineSignals(signal, timeoutMs) {
   forward(signal);
   forward(timeoutSignal);
   return controller.signal;
+}
+
+function defaultIsRetryable(err) {
+  return isNetworkError(err) || isRetryableStatus(err?.status);
+}
+
+// MEDIA-PERF-TZ-5.md §5 — общий помощник для чтения (downloadBlobRange/
+// downloadBlob). PUT уже имеет putWithRetry ниже; дублировать цикл в blob.js
+// нельзя — isRetryableStatus/backoff обязаны совпадать. retries=2 → 3 попытки
+// всего (первая + два повтора). AbortError (пользователь и собственный
+// таймаут) не повторяется никогда.
+export async function withRetry(fn, { retries = 2, backoffMs = 500, isRetryable = defaultIsRetryable } = {}) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err;
+      if (attempt < retries && isRetryable(err)) {
+        attempt += 1;
+        await sleep(backoffMs * 2 ** (attempt - 1));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 function byteLength(body) {
@@ -209,9 +235,11 @@ export async function checkBlossomReachable(serverUrl, options = {}) {
 
 export async function downloadBlob(serverUrl, sha256Hex, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/' + sha256Hex);
+  const response = await fetchImpl(stripTrailingSlash(serverUrl) + '/' + sha256Hex, { signal: options.signal });
   if (!response.ok) {
-    throw new Error('Blossom download failed: ' + response.status);
+    const err = new Error('Blossom download failed: ' + response.status);
+    err.status = response.status;
+    throw err;
   }
   const arrayBuffer = await response.arrayBuffer();
   return new Uint8Array(arrayBuffer);

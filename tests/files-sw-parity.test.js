@@ -113,3 +113,12 @@ test("service-worker.js: потоковый протокол — range-open/rang
 test("service-worker.js: пустой clientId — фолбэк на clients.matchAll, не сразу 404", () => {
 	assert.match(swSource, /clients\.matchAll\(\{\s*type:\s*"window"\s*\}\)/);
 });
+
+// MEDIA-PERF-TZ-5.md §5 / §10 — таблица кодов ошибок продублирована в SW.
+test("service-worker.js::FILES_CONTENT_ERROR_STATUS различает сеть/подмену/расшифровку", () => {
+	assert.match(swSource, /"network-failed":\s*503/);
+	assert.match(swSource, /tamper:\s*502/);
+	assert.match(swSource, /"decrypt-failed":\s*500/);
+	assert.match(swSource, /"range-out-of-bounds":\s*416/);
+	assert.match(swSource, /"unknown-digest":\s*404/);
+});

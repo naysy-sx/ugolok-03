@@ -184,6 +184,8 @@ self.addEventListener("message", (e) => {
 const FILES_CONTENT_ERROR_STATUS = {
 	"unknown-digest": 404,
 	"range-out-of-bounds": 416,
+	"network-failed": 503,
+	tamper: 502,
 	"decrypt-failed": 500,
 };
 

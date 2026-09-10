@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "No se pudo cargar el audio: {{error}}",
+		"videoLoadError": "No se pudo cargar el vídeo: {{error}}",
 		"mediaErrorUnsupported": "el archivo está dañado o el formato no es compatible",
 		"mediaErrorDecode": "error de decodificación",
 		"mediaErrorNetwork": "error de red: no se pudieron obtener los datos",

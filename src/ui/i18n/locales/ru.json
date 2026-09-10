@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "Не удалось загрузить аудио: {{error}}",
+		"videoLoadError": "Не удалось загрузить видео: {{error}}",
 		"mediaErrorUnsupported": "файл повреждён или формат не поддерживается",
 		"mediaErrorDecode": "ошибка декодирования",
 		"mediaErrorNetwork": "сетевая ошибка — не удалось получить данные",

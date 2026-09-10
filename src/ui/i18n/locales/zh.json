@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "无法加载音频：{{error}}",
+		"videoLoadError": "无法加载视频：{{error}}",
 		"mediaErrorUnsupported": "文件已损坏或格式不受支持",
 		"mediaErrorDecode": "解码错误",
 		"mediaErrorNetwork": "网络错误 — 无法获取数据",

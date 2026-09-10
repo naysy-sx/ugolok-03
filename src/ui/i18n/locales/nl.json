@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "Kon audio niet laden: {{error}}",
+		"videoLoadError": "Kon video niet laden: {{error}}",
 		"mediaErrorUnsupported": "bestand is beschadigd of indeling wordt niet ondersteund",
 		"mediaErrorDecode": "decoderingsfout",
 		"mediaErrorNetwork": "netwerkfout — gegevens konden niet worden opgehaald",

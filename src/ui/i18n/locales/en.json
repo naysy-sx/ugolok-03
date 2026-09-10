@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "Failed to load audio: {{error}}",
+		"videoLoadError": "Failed to load video: {{error}}",
 		"mediaErrorUnsupported": "file is corrupted or the format is not supported",
 		"mediaErrorDecode": "decoding error",
 		"mediaErrorNetwork": "network error — failed to fetch data",

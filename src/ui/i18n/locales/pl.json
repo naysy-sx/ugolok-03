@@ -661,6 +661,7 @@
 	},
 	"attachment": {
 		"audioLoadError": "Nie udało się wczytać dźwięku: {{error}}",
+		"videoLoadError": "Nie udało się wczytać wideo: {{error}}",
 		"mediaErrorUnsupported": "plik jest uszkodzony lub format nie jest obsługiwany",
 		"mediaErrorDecode": "błąd dekodowania",
 		"mediaErrorNetwork": "błąd sieci — nie udało się pobrać danych",
