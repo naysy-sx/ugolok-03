@@ -4,6 +4,8 @@ import { clearMemoryCache } from "../attachment-memory-cache.js";
 import { closeMedia } from "./media.js";
 import { clearManifestCache } from "../../domain/files/content.js";
 import { clearPlaintextCache } from "../../domain/media/plaintext-cache.js";
+import { clearPlayerCaches } from "../../domain/files/player-bridge.js";
+import { setFilesBlobsOwner } from "../../domain/files/blob-cache.js";
 import { logInfo } from "../../core/diag/boot-log.js";
 
 export const currentUser = signal(null);
@@ -25,15 +27,18 @@ export function login(id, loginName, privKeyBytes, now = Date.now()) {
   privKeySig.value = privKeyBytes;
   masterSecretSig.value = deriveMasterSecret(privKeyBytes);
   dbKeySig.value = deriveDbKey(masterSecretSig.value);
+  setFilesBlobsOwner(id);
   logInfo("ключи расшифрованы");
   touch(now);
 }
 
 export function lock() {
   closeMedia(); // SPEC §3.5 — ДО очистки кэшей: плейлист держит ключи файлов в памяти
+  clearPlayerCaches();
   clearMemoryCache();
   clearManifestCache();
   clearPlaintextCache();
+  setFilesBlobsOwner(null);
   for (const fn of lockHooks) {
     try {
       fn();

@@ -54,6 +54,12 @@ export function unregisterPlayerFile(manifestDigest) {
 	sharedCache.setBudget(budgetFor(registry.size));
 }
 
+export function clearPlayerCaches() {
+	registry.clear();
+	sharedCache.clear();
+	sharedCache.setBudget(budgetFor(0));
+}
+
 // start/end — ОБА включительно (HTTP Range семантика, протокол сообщений
 // CONTRACTS.md), в отличие от player-session.readRange (end исключающий,
 // тот же стиль, что content.js/manifest.js И2) — конвертация здесь, на

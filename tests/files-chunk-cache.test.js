@@ -12,6 +12,13 @@ test("put/get: round-trip", () => {
 	assert.deepEqual(cache.get("a"), bytes(10));
 });
 
+test("clear: опустошает кэш включая pin", () => {
+	const cache = createChunkCache(1000);
+	cache.put("a", bytes(10), { pin: true });
+	cache.clear();
+	assert.equal(cache.get("a"), undefined);
+});
+
 test("get: промах -> undefined", () => {
 	const cache = createChunkCache(1000);
 	assert.equal(cache.get("нет-такого"), undefined);

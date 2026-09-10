@@ -66,7 +66,12 @@ export function createChunkCache(budgetBytes) {
 		evictToBudget();
 	}
 
-	return { get, put, setBudget, get budget() { return budget; } };
+	function clear() {
+		cache.clear();
+		pinned.clear();
+	}
+
+	return { get, put, setBudget, clear, get budget() { return budget; } };
 }
 
 // MEDIA-PERF-TZ.md §5.2/§8 п.2 — было: фиксированные 2.5 МиБ НА ВСЕ

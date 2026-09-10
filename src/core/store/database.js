@@ -394,6 +394,12 @@ db.version(33).stores({
   channelMessages: "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], [ownerPubkey+createdAt]"
 });
 
+// TZ-ORIGIN-MEDIA слой C — ciphertext крипто-чанков. lastAccess для LRU,
+// byteLength в строке (не индекс). Пустую таблицу не пересоздаём.
+db.version(34).stores({
+  files_blobs: "[ownerPubkey+digest+chunkIndex], ownerPubkey, digest, [ownerPubkey+lastAccess]"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });
