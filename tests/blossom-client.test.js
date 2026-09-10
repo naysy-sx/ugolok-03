@@ -129,8 +129,8 @@ test("serverUrl с завершающим '/' не даёт двойной сл�
 });
 
 // checkBlossomReachable (пользователь, item 4 — статус соединения в наве) —
-// HEAD-запрос, любой ОТВЕТ = сервер жив, даже если сам HEAD не поддержан.
-test("checkBlossomReachable: HEAD {serverUrl}/, ответ (даже не ok) -> true", async () => {
+// HEAD /stats (BUD, на нашем форке 200). Любой ОТВЕТ = сервер жив, даже 404/405.
+test("checkBlossomReachable: HEAD {serverUrl}/stats, ответ (даже не ok) -> true", async () => {
 	const calls = [];
 	const fetchImpl = async (url, opts) => {
 		calls.push({ url, opts });
@@ -138,7 +138,7 @@ test("checkBlossomReachable: HEAD {serverUrl}/, ответ (даже не ok) ->
 	};
 	const result = await checkBlossomReachable("https://blossom.test", { fetchImpl });
 	assert.equal(result, true);
-	assert.equal(calls[0].url, "https://blossom.test/");
+	assert.equal(calls[0].url, "https://blossom.test/stats");
 	assert.equal(calls[0].opts.method, "HEAD");
 });
 
@@ -157,7 +157,7 @@ test("checkBlossomReachable: завершающий '/' у serverUrl не даё
 		return { ok: true, status: 200 };
 	};
 	await checkBlossomReachable("https://blossom.test/", { fetchImpl });
-	assert.equal(calls[0], "https://blossom.test/");
+	assert.equal(calls[0], "https://blossom.test/stats");
 });
 
 // checkUploadRequirements (этап 62, BUD-06 upload-requirements) — HEAD-предпроверка

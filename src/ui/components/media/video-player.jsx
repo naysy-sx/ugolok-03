@@ -88,8 +88,7 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			{!error && !src && !compact && (
 				<p style={{ color: "#fff" }}>{percent != null ? t("attachment.statusDownloading", { percent }) : t("common.loading")}</p>
 			)}
-			{!error && (
-				<video
+			<video
 					ref={(node) => {
 						videoRef.current = node;
 						if (elRef) elRef.current = node;
@@ -104,10 +103,19 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 					// пустой прямоугольник без единого признака отказа. onError на
 					// самом элементе — единственное место, где браузер сообщает об
 					// этом классе сетевых/декодных ошибок.
+					//
+					// <video> остаётся смонтированным и при error: Chrome шлёт
+					// MEDIA_ERR_NETWORK на сорвавшийся Range, потом сам
+					// переспрашивает. Раньше `{!error && <video>}` снимал элемент
+					// с дерева — докачка обрывалась, на экране оставалась только
+					// плашка (живой лог 2026-09-10, «сетевая ошибка» при успешных
+					// player-window).
 					onError={(e) => {
 						const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
 						if (reasonKey) setError(t(reasonKey));
 					}}
+					onCanPlay={() => setError("")}
+					onPlaying={() => setError("")}
 					onLoadedMetadata={(e) => {
 						onMeta?.({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight, duration: e.currentTarget.duration });
 					}}
@@ -135,7 +143,6 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 							: { maxWidth: "100%", maxHeight: "80vh", borderRadius: "var(--radius)", display: src ? "block" : "none" }
 					}
 				/>
-			)}
 		</div>
 	);
 }

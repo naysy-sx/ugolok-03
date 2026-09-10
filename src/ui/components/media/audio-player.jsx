@@ -64,8 +64,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 			{!error && !src && !compact && (
 				<p style={{ color: "#fff" }}>{percent != null ? t("attachment.statusDownloading", { percent }) : t("common.loading")}</p>
 			)}
-			{!error && (
-				<div class="audio-shell" style={{ display: compact || !src ? "none" : undefined }}>
+			<div class="audio-shell" style={{ display: compact || !src ? "none" : undefined }}>
 					<audio
 						ref={(node) => {
 							audioRef.current = node;
@@ -74,13 +73,14 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						controls={!compact}
 						src={src ?? undefined}
 						onEnded={onEnded}
-						// см. video-player.jsx — тот же приём: acquireMediaUrl резолвится
-						// ДО сети, отказ (504 от SW, 404, битый файл) виден только через
-						// onError самого элемента (FILES-FIX-SPEC.md §5.1/§6.1).
+						// см. video-player.jsx — элемент не размонтируется на error,
+						// Chrome может докачать Range сам.
 						onError={(e) => {
 							const reasonKey = mediaErrorReasonKey(e.currentTarget.error?.code);
 							if (reasonKey) setError(t(reasonKey));
 						}}
+						onCanPlay={() => setError("")}
+						onPlaying={() => setError("")}
 						onLoadedMetadata={(e) => {
 							onMeta?.({ duration: e.currentTarget.duration });
 						}}
@@ -102,7 +102,6 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						style={{ display: compact ? "none" : src ? undefined : "none" }}
 					/>
 				</div>
-			)}
 		</div>
 	);
 }
