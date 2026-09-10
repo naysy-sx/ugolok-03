@@ -411,7 +411,19 @@ export default function MediaOverlay() {
 		if (!canMinimize || session.display !== "full") return;
 		cancelFold();
 		pendingFoldFromRectRef.current = measureRect(viewportRef);
+		// Chrome 152: «Blocked aria-hidden… descendant retained focus» —
+		// кнопка «свернуть» остаётся focused, а full-оверлей в том же тике
+		// получает aria-hidden (isMini). Снять фокус ДО смены display.
+		blurOverlayChrome();
 		mediaMinimize();
+	}
+
+	function blurOverlayChrome() {
+		const active = document.activeElement;
+		if (!active || !overlayRef.current?.contains(active)) return;
+		if (active.closest("button, .media-overlay-top, .media-overlay-bottom, .media-overlay-nav") && typeof active.blur === "function") {
+			active.blur();
+		}
 	}
 
 	function handleRestore() {
@@ -482,7 +494,10 @@ export default function MediaOverlay() {
 		function scheduleHide() {
 			clearTimeout(hideTimerRef.current);
 			hideTimerRef.current = setTimeout(() => {
-				if (!infoPinnedRef.current) setChromeVisible(false);
+				if (!infoPinnedRef.current) {
+					blurOverlayChrome();
+					setChromeVisible(false);
+				}
 			}, 2800);
 		}
 	}, [session?.display]);
@@ -491,7 +506,10 @@ export default function MediaOverlay() {
 		setChromeVisible(true);
 		clearTimeout(hideTimerRef.current);
 		hideTimerRef.current = setTimeout(() => {
-			if (!infoPinnedRef.current) setChromeVisible(false);
+			if (!infoPinnedRef.current) {
+				blurOverlayChrome();
+				setChromeVisible(false);
+			}
 		}, 2800);
 	}
 
@@ -866,6 +884,7 @@ export default function MediaOverlay() {
 				role="dialog"
 				aria-modal="true"
 				aria-hidden={isMini ? "true" : undefined}
+				inert={isMini ? true : undefined}
 				data-chrome={chromeVisible ? "on" : "off"}
 				data-info={infoPinned ? "on" : "off"}
 				onClick={withDragGuard(handleClose)}
