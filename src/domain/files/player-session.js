@@ -6,6 +6,7 @@ import { concatBytes } from "@noble/hashes/utils.js";
 import { getChunk, mapPool } from "./content.js";
 import { rangeToChunks } from "./manifest.js";
 import { startTrace } from "../media/perf-trace.js";
+import { PRIORITY } from "../../core/transport/blossom-queue.js";
 
 // MEDIA-PERF-TZ.md §8 п.4 — Blossom за Caddy без явного `tls alpn http/1.1`
 // на blossom.<host> (в отличие от relay.<host>, где HTTP/1.1 форсирован из-за
@@ -29,7 +30,11 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 		const key = `${namespace}:${index}`;
 		const cached = cache.get(key);
 		if (cached) return cached;
-		const bytes = await getChunk(manifest, fileKey, index, { serverUrl, fetchImpl, trace });
+		// MEDIA-PERF-TZ-5.md §2 — активное воспроизведение всегда PRIORITY.PLAYER,
+		// в т.ч. fire-and-forget prefetch(index) ниже (вызывает loadChunk без
+		// trace) — упреждающая подкачка следующего чанка ТОГО ЖЕ файла не менее
+		// приоритетна, чем текущий, иначе она сама встанет за превью в очереди.
+		const bytes = await getChunk(manifest, fileKey, index, { serverUrl, fetchImpl, trace, priority: PRIORITY.PLAYER });
 		// Этап F, F3 (DESIGN.md) — чанк 0 закреплён: любое повторное открытие
 		// файла (переоткрытие, переход к началу) попадает в кэш за Θ(1),
 		// независимо от того, сколько чанков было загружено после.

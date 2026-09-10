@@ -23,6 +23,7 @@ import { registerPlayerFile, unregisterPlayerFile } from "../../files/player-bri
 import { resolveImageOverlayUrl } from "../image-preview.js";
 import { putPlaintextBytes } from "../plaintext-cache.js";
 import { recordControllerCheck } from "../perf-trace.js";
+import { PRIORITY } from "../../../core/transport/blossom-queue.js";
 
 const handles = new Map(); // digest -> Promise<{kind, src, url}>
 
@@ -74,15 +75,21 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 				ref.mime,
 				async (trace) => {
 					onProgress?.("decrypting");
-					const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
-					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl, trace });
+					// MEDIA-PERF-TZ-5.md §2 — оверлей: пользователь смотрит ПРЯМО
+					// СЕЙЧАС, приоритет выше фоновых превью, но ниже активного
+					// плеера видео/аудио.
+					const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl, priority: PRIORITY.OVERLAY });
+					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl, trace, priority: PRIORITY.OVERLAY });
 				},
 				rasterAdapters,
 				onProgress,
 			);
 			return { kind: "cached-url", url: raster.url, src: raster.url, rasterized: raster.rasterized };
 		}
-		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl });
+		// MEDIA-PERF-TZ-5.md §2 — маленький, но блокирует всё дальнейшее (и
+		// мостовой путь, и фолбэк-скачивание целиком) — PRIORITY.OVERLAY, не
+		// PREVIEW, независимо от того, куда пойдёт дальше.
+		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl, priority: PRIORITY.OVERLAY });
 		const useBridge = useFilesContentBridge !== undefined ? useFilesContentBridge : await canUseFilesContentBridge();
 		if (!useBridge) {
 			// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл ЦЕЛИКОМ;
@@ -91,9 +98,13 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 			// не ускоряет скачивание, но убирает ощущение зависания, которое и
 			// было предметом жалобы (§6.3, "дёшево, делать в этом проходе").
 			onProgress?.({ phase: "preparing", percent: 0 });
+			// MEDIA-PERF-TZ-5.md §2 — фолбэк без SW-контроллера не может быть
+			// выше плеера, иначе одно видео на старом Safari забьёт весь пул;
+			// PREVIEW и так значение по умолчанию, указано явно для честности.
 			const bytes = await getRange(manifest, ref.key, 0, manifest.size, {
 				serverUrl,
 				fetchImpl,
+				priority: PRIORITY.PREVIEW,
 				onProgress: ({ bytesDone, bytesTotal }) => {
 					const percent = bytesTotal > 0 ? Math.round((bytesDone / bytesTotal) * 100) : 0;
 					onProgress?.({ phase: "preparing", percent });

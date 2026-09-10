@@ -107,7 +107,9 @@ function nextAdaptiveWindow(state, start) {
 	const windowBytes = Math.min(Math.max(Math.min(targetBytes, doubled), PLAYER_FIRST_WINDOW_BYTES), PLAYER_MAX_WINDOW_BYTES);
 	return { windowBytes, sequential: true };
 }
-const WINDOW_TARGET_SECONDS = 3;
+// MEDIA-PERF-TZ-5.md §2 — ВРЕМЕННО 1 (было 3), см. src/domain/files/sw-timeout.js
+// для полного обоснования (держать паритет — files-sw-parity.test.js).
+const WINDOW_TARGET_SECONDS = 1;
 const SPEED_SMOOTHING_ALPHA = 0.3;
 function updateObservedSpeed(prevBytesPerSec, bytesTransferred, elapsedMs) {
 	if (!(elapsedMs > 0)) return prevBytesPerSec ?? 0;

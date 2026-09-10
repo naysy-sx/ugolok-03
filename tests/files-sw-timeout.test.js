@@ -94,11 +94,20 @@ test("updateObservedSpeed: elapsedMs<=0 (мгновенный ответ, нап
 	assert.equal(updateObservedSpeed(undefined, 500_000, 0), 0);
 });
 
-test("nextAdaptiveWindow: скорость 200 КБ/с (медленно) -> окно НЕ растёт до потолка, целится в 3с передачи", () => {
+test("nextAdaptiveWindow: медленный канал -> окно НЕ растёт до потолка, целится в WINDOW_TARGET_SECONDS передачи", () => {
 	// Разгон: несколько шагов с обновлением bytesPerSec после каждого, как это
 	// будет делать service-worker.js (нет доступа к нему напрямую — воспроизводим
 	// его цикл здесь тем же кодом, что sw-timeout.js экспортирует).
-	const bytesPerSec = 200_000; // 200 КБ/с
+	//
+	// bytesPerSec подобран ОТНОСИТЕЛЬНО WINDOW_TARGET_SECONDS (не жёстко "200
+	// КБ/с"), чтобы targetBytes = bytesPerSec * WINDOW_TARGET_SECONDS оставался
+	// заметно ВЫШЕ пола PLAYER_FIRST_WINDOW_BYTES независимо от текущего
+	// значения константы (MEDIA-PERF-TZ-5.md §2 — временно 1, до задачи 3
+	// вернётся к 3). При маленьком WINDOW_TARGET_SECONDS фиксированная скорость
+	// "200 КБ/с" давала бы targetBytes НИЖЕ пола — формула тогда всегда упирается
+	// в пол, и тест перестаёт проверять целевую логику EMA, а не поведение
+	// сломано.
+	const bytesPerSec = Math.ceil((PLAYER_FIRST_WINDOW_BYTES * 2) / WINDOW_TARGET_SECONDS);
 	let state = undefined;
 	let start = 0;
 	let windowBytes;
@@ -107,8 +116,8 @@ test("nextAdaptiveWindow: скорость 200 КБ/с (медленно) -> о�
 		state = { lastEnd: start + windowBytes - 1, windowBytes, bytesPerSec };
 		start = state.lastEnd + 1;
 	}
-	const targetBytes = bytesPerSec * WINDOW_TARGET_SECONDS; // 600 КБ
-	assert.ok(windowBytes <= targetBytes * 1.05, `окно (${windowBytes}) не должно заметно превышать целевые ${targetBytes} байт на 3с передачи`);
+	const targetBytes = bytesPerSec * WINDOW_TARGET_SECONDS; // ~2×PLAYER_FIRST_WINDOW_BYTES, см. комментарий выше
+	assert.ok(windowBytes <= targetBytes * 1.05, `окно (${windowBytes}) не должно заметно превышать целевые ${targetBytes} байт на ${WINDOW_TARGET_SECONDS}с передачи`);
 	assert.ok(windowBytes < PLAYER_MAX_WINDOW_BYTES, "на медленном канале окно НЕ должно доходить до потолка 4 МиБ");
 });
 

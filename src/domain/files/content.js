@@ -103,10 +103,10 @@ export function clearManifestCache() {
 	manifestCache.clear();
 }
 
-export async function getManifest(manifestDigest, { serverUrl, fetchImpl } = {}) {
+export async function getManifest(manifestDigest, { serverUrl, fetchImpl, priority } = {}) {
 	const cached = manifestCache.get(manifestDigest);
 	if (cached) return cached;
-	const options = fetchImpl ? { fetchImpl } : {};
+	const options = { ...(fetchImpl ? { fetchImpl } : {}), ...(priority !== undefined ? { priority } : {}) };
 	// Манифест — маленький (единицы-десятки КБ даже на гигабайтный файл,
 	// ALGO.MD §9.4), полный GET оправдан, Range здесь не нужен.
 	const bytes = await downloadBlob(serverUrl, manifestDigest, options);
@@ -145,11 +145,11 @@ function cipherChunkOffset(i, chunkSize) {
 // счётчик фактических HTTP-запросов (count("requests")) — на параллельном
 // пуле (getRange/mapPool) несколько чанков меряются одновременно, поэтому
 // накопительная сумма в mark(phase, ms), не последовательная дельта.
-export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl, trace } = {}) {
+export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl, trace, priority } = {}) {
 	const count = manifest.chunks.length;
 	const lastChunkSize = manifest.size - (count - 1) * manifest.chunkSize;
 	const plainChunkSize = chunkIndex === count - 1 ? lastChunkSize : manifest.chunkSize;
-	const options = fetchImpl ? { fetchImpl } : {};
+	const options = { ...(fetchImpl ? { fetchImpl } : {}), ...(priority !== undefined ? { priority } : {}) };
 	const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
 	const cipherEnd = cipherStart + plainChunkSize + AEAD_TAG_BYTES - 1; // включительно (Range)
 	const netStart = trace ? nowMs() : 0;
