@@ -1,0 +1,42 @@
+diff --git a/db/migrations/4_add_audio_webm.sql b/db/migrations/4_add_audio_webm.sql
+new file mode 100644
+index 0000000..18053da
+--- /dev/null
++++ b/db/migrations/4_add_audio_webm.sql
+@@ -0,0 +1,7 @@
++-- +migrate Up
++INSERT INTO mime_types(extension, mime_type)
++VALUES
++(".weba","audio/webm");
++
++-- +migrate Down
++DELETE FROM mime_types WHERE mime_type = "audio/webm";
+diff --git a/internal/service/mime_type.go b/internal/service/mime_type.go
+index 3be7919..72fee86 100644
+--- a/internal/service/mime_type.go
++++ b/internal/service/mime_type.go
+@@ -78,12 +78,19 @@ func (s *mimeTypeService) IsAllowed(
+ 	ctx context.Context,
+ 	mimeType string,
+ ) error {
+-	_, ok := s.allowed[normalizeMimeType(mimeType)]
+-	if !ok {
+-		return core.ErrMimeTypeNotAllowed
++	m := normalizeMimeType(mimeType)
++	if _, ok := s.allowed[m]; ok {
++		return nil
+ 	}
+-
+-	return nil
++	// Сид BUD содержит video/webm, не audio/webm. Голосовые (voice.js) шлют
++	// audio/webm — тот же контейнер. HEAD /upload сверяет X-Content-Type
++	// буквально и иначе отвечает 415.
++	if m == "audio/webm" {
++		if _, ok := s.allowed["video/webm"]; ok {
++			return nil
++		}
++	}
++	return core.ErrMimeTypeNotAllowed
+ }
+ 
+ func (s *mimeTypeService) dbMimeTypeIntoCore(m db.MimeType) *core.MimeType {
