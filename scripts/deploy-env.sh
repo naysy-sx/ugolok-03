@@ -155,6 +155,32 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	if [[ -d "$ROOT/agent" ]]; then
 		rsync -a --omit-dir-times --delete --exclude '.git' "$ROOT/agent/" "$ISLAND_DST/agent-src/"
 	fi
+	# blossom-src исключён из rsync (сторонний форк, клон один раз). Патчи
+	# живут в deploy/island/patches — без этого шага test-деплой обновляет
+	# только PWA, а ugolok-test-blossom крутит старый образ (415 audio/webm).
+	# Образ общий (ugolok-blossom:local), собираем из /opt/ugolok/island.
+	BLOSSOM_SRC="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/blossom-src"
+	BLOSSOM_PATCHES="$ROOT/deploy/island/patches"
+	BLOSSOM_REF="${BLOSSOM_REF:-ba1444c31d517de9fcb512f7fff92bfed421aaa7}"
+	BLOSSOM_STAMP_FILE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/.blossom-patches.sha"
+	BLOSSOM_REBUILT=0
+	if [[ -d "$BLOSSOM_SRC/.git" && -d "$BLOSSOM_PATCHES" ]]; then
+		BLOSSOM_STAMP="$(ls -1 "$BLOSSOM_PATCHES"/*.patch 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+		if [[ ! -f "$BLOSSOM_STAMP_FILE" || "$(cat "$BLOSSOM_STAMP_FILE")" != "$BLOSSOM_STAMP" ]]; then
+			echo "deploy-env: blossom patches changed — checkout $BLOSSOM_REF + apply + build"
+			git -C "$BLOSSOM_SRC" fetch --tags origin || true
+			git -C "$BLOSSOM_SRC" checkout -f "$BLOSSOM_REF"
+			for p in "$BLOSSOM_PATCHES"/*.patch; do
+				[[ -f "$p" ]] || continue
+				git -C "$BLOSSOM_SRC" apply "$p"
+			done
+			PROD_COMPOSE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/docker-compose.yml"
+			PROD_DIR="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
+			docker compose -f "$PROD_COMPOSE" --project-directory "$PROD_DIR" build blossom
+			echo "$BLOSSOM_STAMP" > "$BLOSSOM_STAMP_FILE"
+			BLOSSOM_REBUILT=1
+		fi
+	fi
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
 		# --build: без него compose переиспользует уже существующий образ
 		# ugolok-turncreds-server:local как есть, даже если agent-src только что
@@ -163,6 +189,11 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# ПОСЛЕ фикса 127.0.0.1->0.0.0.0 в коде: контейнер не пересобрался,
 		# работал старый образ со старой привязкой.
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --build
+		# test-compose берёт готовый ugolok-blossom:local без build: — без
+		# recreate контейнер останется на старом sha даже после build выше.
+		if [[ "$BLOSSOM_REBUILT" == 1 ]]; then
+			docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --force-recreate --no-deps blossom
+		fi
 	fi
 fi
 
