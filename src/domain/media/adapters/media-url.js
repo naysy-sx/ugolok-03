@@ -62,7 +62,18 @@ async function canUseFilesContentBridge() {
 
 export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress, useFilesContentBridge } = {}) {
 	const cached = handles.get(ref.digest);
-	if (cached) return cached;
+	if (cached) {
+		const handle = await cached;
+		if (handle?.kind === "bridge" && handle.manifest) {
+			registerPlayerFile(ref.digest, {
+				manifest: handle.manifest,
+				fileKey: handle.fileKey ?? ref.key,
+				serverUrl: handle.serverUrl ?? serverUrl,
+				fetchImpl: handle.fetchImpl ?? fetchImpl,
+			});
+		}
+		return handle;
+	}
 
 	const promise = (async () => {
 		if (ref.mime.startsWith("image/")) {
@@ -116,7 +127,7 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 		}
 		registerPlayerFile(ref.digest, { manifest, fileKey: ref.key, serverUrl, fetchImpl });
 		const src = `/files-content/${ref.digest}`;
-		return { kind: "bridge", src, url: src };
+		return { kind: "bridge", src, url: src, manifest, fileKey: ref.key, serverUrl, fetchImpl };
 	})();
 
 	handles.set(ref.digest, promise);

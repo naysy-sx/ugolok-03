@@ -17,3 +17,10 @@ export function mediaErrorReasonKey(code) {
 	if (code === MEDIA_ERR_DECODE) return "attachment.mediaErrorDecode";
 	return "attachment.mediaErrorNetwork"; // MEDIA_ERR_NETWORK и любой нераспознанный код
 }
+
+// 404 от SW (unknown-digest, гонка next/prev) Chrome часто отдаёт как
+// SRC_NOT_SUPPORTED: тело — текст, не медиа. Следом идёт повтор и canplay.
+// Плашку сразу не рисуем — та же отложенная логика, что у MEDIA_ERR_NETWORK.
+export function isTransientMediaError(code) {
+	return code === MEDIA_ERR_NETWORK || code === MEDIA_ERR_SRC_NOT_SUPPORTED;
+}

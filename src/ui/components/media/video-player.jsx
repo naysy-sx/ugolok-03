@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
-import { mediaErrorReasonKey, MEDIA_ERR_NETWORK } from "../../../domain/media/media-error.js";
+import { mediaErrorReasonKey, isTransientMediaError } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -133,12 +133,10 @@ export default function VideoPlayer({ mediaRef, playing, onToggle, onEnded, comp
 						const code = e.currentTarget.error?.code;
 						const reasonKey = mediaErrorReasonKey(code);
 						if (!reasonKey) return;
-						// MEDIA_ERR_NETWORK — штатный сбой Range: Chrome сам
-						// переспрашивает (TZ-5 §4). Плашка «не удалось загрузить»
-						// на каждый такой тик была ложью: player-window при этом
-						// доезжал. Показываем отказ только если за 12с так и не
-						// было canplay (совпадает со stall SW).
-						if (code === MEDIA_ERR_NETWORK) {
+						// MEDIA_ERR_NETWORK и SRC_NOT_SUPPORTED на 404 SW — Chrome
+						// сам переспрашивает. Плашка на тик <1с была ложью.
+						// Показываем отказ только если за 12с не было canplay.
+						if (isTransientMediaError(code)) {
 							if (!networkErrorTimer.current) {
 								networkErrorTimer.current = setTimeout(() => {
 									setError(t(reasonKey));

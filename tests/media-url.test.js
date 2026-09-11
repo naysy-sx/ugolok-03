@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { putStream } from "../src/domain/files/content.js";
-import { handleRangeRequest } from "../src/domain/files/player-bridge.js";
+import { handleRangeRequest, unregisterPlayerFile } from "../src/domain/files/player-bridge.js";
 import { acquireMediaUrl, releaseMediaUrlHandle, mediaElementSrc } from "../src/domain/media/adapters/media-url.js";
 import { clearPlaintextCache } from "../src/domain/media/plaintext-cache.js";
 import { clearManifestCache } from "../src/domain/files/content.js";
@@ -92,6 +92,19 @@ test("acquireMediaUrl: releaseMediaUrlHandle снимает регистраци
 	const res = await handleRangeRequest({ manifestDigest: ref.digest, start: 0, end: 9 });
 	assert.equal(res.ok, false);
 	assert.equal(res.error, "unknown-digest");
+});
+
+test("acquireMediaUrl: повторный acquire после unregister снова регистрирует мост (не 404 на /files-content)", async () => {
+	const { ref, fetchImpl } = await uploadFixture("video/mp4");
+	await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
+	unregisterPlayerFile(ref.digest);
+	const dead = await handleRangeRequest({ manifestDigest: ref.digest, start: 0, end: 9 });
+	assert.equal(dead.ok, false);
+	assert.equal(dead.error, "unknown-digest");
+	await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
+	const again = await handleRangeRequest({ manifestDigest: ref.digest, start: 0, end: 9 });
+	assert.equal(again.ok, true);
+	await releaseMediaUrlHandle(ref.digest);
 });
 
 test("acquireMediaUrl: мемоизация — повторный вызов на тот же digest НЕ повторяет сеть", async () => {

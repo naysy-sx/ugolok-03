@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
-import { mediaErrorReasonKey, MEDIA_ERR_NETWORK } from "../../../domain/media/media-error.js";
+import { mediaErrorReasonKey, isTransientMediaError } from "../../../domain/media/media-error.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 
@@ -95,7 +95,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 							const code = e.currentTarget.error?.code;
 							const reasonKey = mediaErrorReasonKey(code);
 							if (!reasonKey) return;
-							if (code === MEDIA_ERR_NETWORK) {
+							if (isTransientMediaError(code)) {
 								if (!networkErrorTimer.current) {
 									networkErrorTimer.current = setTimeout(() => {
 										setError(t(reasonKey));
