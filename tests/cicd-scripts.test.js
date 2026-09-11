@@ -409,11 +409,19 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /BUILD_HASH="\$\(git -C "\$ROOT" rev-parse --short HEAD\)"/);
 	assert.match(deploy, /-e BUILD_HASH="\$BUILD_HASH"/);
 	assert.equal(deploy.includes("APPLY_PROD_ISLAND"), false);
-	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 1, "docker compose up -d — один раз, не в двух одинаковых ветках");
+	assert.equal((deploy.match(/up -d --build/g) || []).length, 1, "docker compose up -d --build — один раз, не в двух одинаковых ветках");
 	// Живая проверка (прод, run #42): без --build compose переиспользует уже
 	// существующий образ ugolok-turncreds-server:local как есть — тег
 	// статический, свежий agent-src сам по себе рекомпиляцию не триггерит.
 	assert.match(deploy, /docker compose -f "\$ISLAND_DST\/docker-compose\.yml" --project-directory "\$ISLAND_DST" up -d --build/);
+	// Живая проверка (test, 415 audio/webm): патчи Blossom не подхватывались —
+	// rsync исключает blossom-src, test-compose берёт готовый образ без build:.
+	// При смене набора патчей — checkout pin + apply + build, затем recreate
+	// контейнера blossom этого env (второй compose, не дубль up --build).
+	assert.match(deploy, /\.blossom-patches\.sha/);
+	assert.match(deploy, /docker compose -f "\$PROD_COMPOSE" --project-directory "\$PROD_DIR" build blossom/);
+	assert.match(deploy, /up -d --force-recreate --no-deps blossom/);
+	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + force-recreate blossom, не больше");
 });
 
 test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, coturn use-auth-secret", () => {
