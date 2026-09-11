@@ -23,6 +23,8 @@ export function refFromAttachment(attachment, sourceMeta) {
     mime: attachment.mime,
     name: attachment.name,
     size: attachment.size,
+    previewDigest: attachment.previewDigest || null,
+    previewKey: attachment.previewKey || null,
     sourceKind: "attachment",
     sourceMeta: sourceMeta
   };

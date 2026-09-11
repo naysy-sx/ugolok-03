@@ -612,7 +612,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	return (
 		<Screen
 			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
-			lead={<AccountAvatar small avatar={profile?.picture} login={displayName} />}
+			lead={<AccountAvatar avatar={profile?.picture} login={displayName} />}
 			title={displayName}
 			actions={
 				<>

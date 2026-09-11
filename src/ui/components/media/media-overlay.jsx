@@ -5,6 +5,9 @@ import { elasticDx, verticalCommit } from "../../../domain/media/swipe-gesture.j
 import { IDLE_STATE, gestureTransition, gestureOutput } from "../../../domain/media/gesture-machine.js";
 import { consumeMediaOrigin } from "../../signals/media-origin.js";
 import { getMemoryCachedUrl } from "../../attachment-memory-cache.js";
+import { getPreviewUrl } from "../../../domain/media/plaintext-cache.js";
+import { resolveAttachmentPreviewUrl } from "../../../domain/media/attachment-preview-resolver.js";
+import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import VideoPlayer from "./video-player.jsx";
 import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
@@ -43,6 +46,39 @@ function prefersReducedMotion() {
 }
 
 const VIEWS = { video: VideoPlayer, audio: AudioPlayer, image: ImageViewer, other: FileViewer };
+
+const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
+
+function OverlayThumb({ thumbRef, isActive, onGo, ariaLabel, buttonRef }) {
+	const [url, setUrl] = useState(
+		() => getPreviewUrl(thumbRef.digest) || getMemoryCachedUrl(thumbRef.digest) || getMemoryCachedUrl(thumbRef.previewDigest) || null,
+	);
+	useEffect(() => {
+		if (url || !thumbRef.previewDigest) return;
+		let cancelled = false;
+		resolveAttachmentPreviewUrl(
+			{ previewDigest: thumbRef.previewDigest, previewKey: thumbRef.previewKey },
+			{ serverUrl: BLOSSOM_URL },
+		).then((previewUrl) => {
+			if (!cancelled && previewUrl) setUrl(previewUrl);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [thumbRef, url]);
+	return (
+		<button
+			type="button"
+			class="media-overlay-thumb"
+			ref={buttonRef}
+			aria-current={isActive}
+			aria-label={ariaLabel}
+			onClick={onGo}
+		>
+			{url && <img src={url} alt="" draggable={false} />}
+		</button>
+	);
+}
 
 function formatDuration(seconds) {
 	const total = Math.round(seconds);
@@ -972,22 +1008,26 @@ export default function MediaOverlay() {
 				</header>
 				{total > 1 && (
 					<>
-						<button
-							type="button"
-							class="media-overlay-nav is-prev"
-							onClick={withDragGuard((e) => { e.stopPropagation(); mediaPrev(); })}
-							aria-label={t("media.player.prev")}
-						>
-							<IconNavPrev />
-						</button>
-						<button
-							type="button"
-							class="media-overlay-nav is-next"
-							onClick={withDragGuard((e) => { e.stopPropagation(); mediaNext(); })}
-							aria-label={t("media.player.next")}
-						>
-							<IconNavNext />
-						</button>
+						{canGoPrev && (
+							<button
+								type="button"
+								class="media-overlay-nav is-prev"
+								onClick={withDragGuard((e) => { e.stopPropagation(); mediaPrev(); })}
+								aria-label={t("media.player.prev")}
+							>
+								<IconNavPrev />
+							</button>
+						)}
+						{canGoNext && (
+							<button
+								type="button"
+								class="media-overlay-nav is-next"
+								onClick={withDragGuard((e) => { e.stopPropagation(); mediaNext(); })}
+								aria-label={t("media.player.next")}
+							>
+								<IconNavNext />
+							</button>
+						)}
 					</>
 				)}
 				<footer class="media-overlay-bottom" onClick={(e) => e.stopPropagation()}>
@@ -1020,20 +1060,16 @@ export default function MediaOverlay() {
 						<div class="media-overlay-strip reel">
 							{[...session.playlist.idx.image].map((pos) => {
 								const thumbRef = session.playlist.items[pos];
-								const thumbUrl = getMemoryCachedUrl(thumbRef.digest);
 								const isActive = pos === session.position;
 								return (
-									<button
+									<OverlayThumb
 										key={pos}
-										type="button"
-										class="media-overlay-thumb"
-										ref={isActive ? activeThumbRef : undefined}
-										aria-current={isActive}
-										aria-label={t("media.player.trackOf", { current: session.playlist.rank[pos] + 1, total })}
-										onClick={withDragGuard(() => mediaGoTo(pos))}
-									>
-										{thumbUrl && <img src={thumbUrl} alt="" draggable={false} />}
-									</button>
+										thumbRef={thumbRef}
+										isActive={isActive}
+										buttonRef={isActive ? activeThumbRef : undefined}
+										ariaLabel={t("media.player.trackOf", { current: session.playlist.rank[pos] + 1, total })}
+										onGo={withDragGuard(() => mediaGoTo(pos))}
+									/>
 								);
 							})}
 						</div>

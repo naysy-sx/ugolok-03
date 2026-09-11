@@ -374,7 +374,47 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 // channel-chat.jsx), не только CollectionGrid поста.
 export function CollectionTile({ attachment, onOpen }) {
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
-	const thumbUrl = attachment.type === "image" ? getMemoryCachedUrl(attachment.manifestDigest) : null;
+	const [thumbUrl, setThumbUrl] = useState(
+		() =>
+			getPreviewUrl(attachment.manifestDigest) ||
+			getMemoryCachedUrl(attachment.manifestDigest) ||
+			(attachment.previewDigest ? getMemoryCachedUrl(attachment.previewDigest) : null) ||
+			null,
+	);
+
+	useEffect(() => {
+		if (thumbUrl) return;
+		if (attachment.type !== "image" && attachment.type !== "video") return;
+		let cancelled = false;
+		(async () => {
+			if (attachment.previewDigest) {
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				if (!cancelled && previewUrl) {
+					setThumbUrl(previewUrl);
+					return;
+				}
+			}
+			if (attachment.type !== "image") return;
+			try {
+				const raster = await resolveImagePreviewUrl(
+					attachment.manifestDigest,
+					attachment.mime,
+					(trace) =>
+						getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, {
+							serverUrl: BLOSSOM_URL,
+							trace,
+						}),
+				);
+				if (!cancelled && raster?.url) setThumbUrl(raster.url);
+			} catch {
+				// плитка остаётся иконкой+размером
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [attachment, thumbUrl]);
+
 	return (
 		<button
 			type="button"

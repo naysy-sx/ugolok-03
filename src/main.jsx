@@ -72,6 +72,10 @@ function doReload() {
 	refreshing = true;
 	location.reload();
 }
+function isAuthScreenVisible() {
+	return !!document.querySelector(".auth-layout, .unlock-home");
+}
+
 function reloadForFreshServiceWorker() {
 	if (refreshing) return;
 	// TZ §2.6 — записать ДО перезагрузки (иначе факт теряется вместе с
@@ -91,6 +95,17 @@ function reloadForFreshServiceWorker() {
 		sessionStorage.setItem(SW_RELOAD_ONCE_KEY, "1");
 	} catch {
 		// не критично — хуже случай: один лишний reload
+	}
+	if (isAuthScreenVisible()) {
+		const root = document.getElementById("app") || document.body;
+		const obs = new MutationObserver(() => {
+			if (!isAuthScreenVisible()) {
+				obs.disconnect();
+				doReload();
+			}
+		});
+		obs.observe(root, { childList: true, subtree: true });
+		return;
 	}
 	const active = document.activeElement;
 	const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
