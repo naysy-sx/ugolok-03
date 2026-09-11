@@ -116,6 +116,7 @@ test("getRange: ciphertext оседает в files_blobs", async () => {
 		fetchImpl: blossom.fetchImpl,
 	});
 	await getRange(manifest, fileKey, 0, original.length, { serverUrl: "https://blossom.test", fetchImpl: blossom.fetchImpl });
+	await new Promise((r) => setTimeout(r, 30));
 	assert.ok(await getCachedCipherChunk(manifest.blobSha256, 0));
 	assert.ok(await getCachedCipherChunk(manifest.blobSha256, 1));
 });

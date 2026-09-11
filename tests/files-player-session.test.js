@@ -142,24 +142,24 @@ test("чанк 0 остаётся в кэше после загрузки мно
 	assert.equal(cache.get(`${namespace}:1`), undefined, "обычный чанк 1 вытеснен — закрепление не распространяется на него");
 });
 
-// TZ-ORIGIN-MEDIA слой C: непрерывное окно — один Range на промах, не N×256КиБ.
-test("readRange: окно из 8 чанков — один Range на окно (не 8 отдельных)", async () => {
+test("readRange: окно из 8 чанков — максимум одновременных сетевых запросов > 1", async () => {
 	const blossom = makeFakeBlossom();
 	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 8 * 256, 256);
 
-	const ranges = [];
-	const spyFetch = async (url, opts = {}) => {
-		if (opts.headers?.Range) ranges.push(opts.headers.Range);
-		return blossom.fetchImpl(url, opts);
+	let inFlight = 0;
+	let maxInFlight = 0;
+	const spyFetch = async (...args) => {
+		inFlight++;
+		maxInFlight = Math.max(maxInFlight, inFlight);
+		await new Promise((r) => setTimeout(r, 3));
+		inFlight--;
+		return blossom.fetchImpl(...args);
 	};
 
 	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: spyFetch });
 	await session.readRange(0, 8 * 256);
 
-	assert.ok(ranges.length >= 1, "должен быть хотя бы один Range");
-	assert.match(ranges[0], /^bytes=0-/);
-	const windowRanges = ranges.filter((r) => r.startsWith("bytes=0-"));
-	assert.equal(windowRanges.length, 1, `окно файла — один Range, получили ${ranges.join(", ")}`);
+	assert.ok(maxInFlight > 1, `максимум одновременных запросов должен быть больше 1, получили ${maxInFlight}`);
 });
 
 // MEDIA-PERF-TZ-5.md §4 — streamRange: тот же диапазон/геометрия, что readRange,
@@ -233,13 +233,17 @@ test("streamRange: байты (после skipHead/skipTail per-чанк) поб
 	}
 });
 
-test("streamRange: отказ окна Range — sink.error, chunk не было (окно одним GET)", async () => {
+test("streamRange: отказ на СРЕДНЕМ чанке — sink получает chunk() для уже готовых чанков, error() ПОСЛЕ них, поздние чанки после error НЕ доставляются", async () => {
 	const blossom = makeFakeBlossom();
 	const chunkSize = 256;
 	const { manifest, fileKey } = await setupFile(blossom.fetchImpl, 5 * chunkSize, chunkSize);
 
-	const flakyFetch = async () => {
-		throw new Error("сбой сети на окне (симуляция)");
+	const delays = { 0: 1, 1: 2, 2: 3, 3: 50, 4: 55 };
+	const flakyFetch = async (url, opts = {}) => {
+		const idx = opts.headers?.Range ? chunkIndexFromRange(opts.headers.Range, chunkSize) : null;
+		if (idx !== null) await new Promise((r) => setTimeout(r, delays[idx] ?? 0));
+		if (idx === 2) throw new Error("сбой сети на чанке 2 (симуляция)");
+		return blossom.fetchImpl(url, opts);
 	};
 
 	const session = createPlayerSession({ manifest, fileKey, serverUrl: "https://blossom.test", cache: createChunkCache(10_000_000), fetchImpl: flakyFetch });
@@ -257,9 +261,12 @@ test("streamRange: отказ окна Range — sink.error, chunk не было
 		},
 	});
 
-	assert.deepEqual(receivedSeq, [], "при отказе окна чанки не доставляются");
+	assert.deepEqual(receivedSeq, [0, 1], "чанки, успевшие прийти ДО отказа, доставлены sink'у по порядку");
 	assert.equal(errorCalls, 1, "error() вызван ровно один раз");
 	assert.equal(ended, false, "end() не должен звучать после error()");
+
+	await new Promise((r) => setTimeout(r, 60));
+	assert.deepEqual(receivedSeq, [0, 1], "поздние чанки ПОСЛЕ error() не доставляются");
 });
 
 test("ошибка prefetch не пробрасывается наружу и не роняет основной readRange", async () => {

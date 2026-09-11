@@ -143,25 +143,7 @@ function cipherChunkLength(manifest, chunkIndex) {
 	return plainChunkSize + AEAD_TAG_BYTES;
 }
 
-function contiguousSpans(indices) {
-	if (indices.length === 0) return [];
-	const sorted = [...indices].sort((a, b) => a - b);
-	const spans = [];
-	let start = sorted[0];
-	let prev = sorted[0];
-	for (let k = 1; k < sorted.length; k++) {
-		if (sorted[k] === prev + 1) {
-			prev = sorted[k];
-			continue;
-		}
-		spans.push([start, prev]);
-		start = prev = sorted[k];
-	}
-	spans.push([start, prev]);
-	return spans;
-}
-
-const cipherRam = new Map(); // `${blobSha256}:${chunkIndex}` -> ciphertext (staging)
+const cipherRam = new Map(); // `${blobSha256}:${chunkIndex}` -> ciphertext
 
 function cipherRamKey(digest, chunkIndex) {
 	return `${digest}:${chunkIndex}`;
@@ -179,70 +161,18 @@ function evictCipherRam() {
 	}
 }
 
-async function takeCipherChunk(digest, chunkIndex) {
-	const key = cipherRamKey(digest, chunkIndex);
-	const ram = cipherRam.get(key);
-	if (ram) {
-		cipherRam.delete(key);
-		cipherRam.set(key, ram);
-		return ram;
-	}
-	return getCachedCipherChunk(digest, chunkIndex);
-}
-
-async function storeCipherChunk(digest, chunkIndex, ciphertext) {
+function rememberCipherChunk(digest, chunkIndex, ciphertext) {
 	const key = cipherRamKey(digest, chunkIndex);
 	if (cipherRam.has(key)) cipherRam.delete(key);
 	cipherRam.set(key, ciphertext);
 	evictCipherRam();
-	await putCachedCipherChunk(digest, chunkIndex, ciphertext);
+	putCachedCipherChunk(digest, chunkIndex, ciphertext);
 }
 
 function assertChunkDigest(manifest, chunkIndex, cipherChunk) {
 	const actualDigest = bytesToHex(sha256(cipherChunk));
 	if (actualDigest !== manifest.chunks[chunkIndex]) {
 		throw new DomainError(`Blossom-сервер вернул подменённый чанк ${chunkIndex} (digest не совпадает)`, "errors.blossomChunkTampered", { chunkIndex });
-	}
-}
-
-// Одно HTTP Range на непрерывный промах крипто-чанков (окно плеера 512КиБ–4МиБ),
-// нарезка по границам чанков, put в files_blobs. Без owner — только staging RAM.
-export async function ensureCipherChunks(manifest, indices, opts = {}) {
-	const { serverUrl, fetchImpl, trace, priority } = opts;
-	const options = { ...(fetchImpl ? { fetchImpl } : {}), ...(priority !== undefined ? { priority } : {}) };
-	const missing = [];
-	for (const i of indices) {
-		const key = cipherRamKey(manifest.blobSha256, i);
-		if (cipherRam.has(key)) continue;
-		const cached = await getCachedCipherChunk(manifest.blobSha256, i);
-		if (cached) {
-			cipherRam.set(key, cached);
-			continue;
-		}
-		missing.push(i);
-	}
-	for (const [spanStart, spanEnd] of contiguousSpans(missing)) {
-		const cipherStart = cipherChunkOffset(spanStart, manifest.chunkSize);
-		let spanLen = 0;
-		for (let i = spanStart; i <= spanEnd; i++) spanLen += cipherChunkLength(manifest, i);
-		const cipherEnd = cipherStart + spanLen - 1;
-		const netStart = trace ? nowMs() : 0;
-		const blob = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
-		if (trace) {
-			trace.mark("net", nowMs() - netStart);
-			trace.count("requests");
-		}
-		if (blob.length !== spanLen) {
-			throw new DomainError("Blossom Range вернул неверную длину окна", "errors.blossomChunkTampered");
-		}
-		let offset = 0;
-		for (let i = spanStart; i <= spanEnd; i++) {
-			const len = cipherChunkLength(manifest, i);
-			const cipherChunk = blob.subarray(offset, offset + len);
-			offset += len;
-			assertChunkDigest(manifest, i, cipherChunk);
-			await storeCipherChunk(manifest.blobSha256, i, cipherChunk);
-		}
 	}
 }
 
@@ -259,7 +189,19 @@ export async function ensureCipherChunks(manifest, indices, opts = {}) {
 // накопительная сумма в mark(phase, ms), не последовательная дельта.
 export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl, trace, priority } = {}) {
 	const options = { ...(fetchImpl ? { fetchImpl } : {}), ...(priority !== undefined ? { priority } : {}) };
-	let cipherChunk = await takeCipherChunk(manifest.blobSha256, chunkIndex);
+	const ramKey = cipherRamKey(manifest.blobSha256, chunkIndex);
+	let cipherChunk = cipherRam.get(ramKey);
+	if (cipherChunk) {
+		cipherRam.delete(ramKey);
+		cipherRam.set(ramKey, cipherChunk);
+	} else {
+		cipherChunk = await getCachedCipherChunk(manifest.blobSha256, chunkIndex);
+		if (cipherChunk) {
+			if (cipherRam.has(ramKey)) cipherRam.delete(ramKey);
+			cipherRam.set(ramKey, cipherChunk);
+			evictCipherRam();
+		}
+	}
 	if (!cipherChunk) {
 		const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
 		const cipherEnd = cipherStart + cipherChunkLength(manifest, chunkIndex) - 1;
@@ -270,7 +212,7 @@ export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetch
 			trace.count("requests");
 		}
 		assertChunkDigest(manifest, chunkIndex, cipherChunk);
-		await storeCipherChunk(manifest.blobSha256, chunkIndex, cipherChunk);
+		rememberCipherChunk(manifest.blobSha256, chunkIndex, cipherChunk);
 	} else {
 		assertChunkDigest(manifest, chunkIndex, cipherChunk);
 	}
@@ -306,7 +248,6 @@ export async function getRange(manifest, fileKey, start, end, opts = {}) {
 
 	const indices = [];
 	for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
-	await ensureCipherChunks(manifest, indices, opts);
 	const chunksTotal = indices.length;
 	const bytesTotal = end - start;
 	let chunksDone = 0;

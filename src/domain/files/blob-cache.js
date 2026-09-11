@@ -18,37 +18,39 @@ export async function getCachedCipherChunk(digest, chunkIndex) {
 	if (!ownerPubkey) return undefined;
 	const row = await db.table("files_blobs").get([ownerPubkey, digest, chunkIndex]);
 	if (!row) return undefined;
-	await db.table("files_blobs").update([ownerPubkey, digest, chunkIndex], { lastAccess: Date.now() });
+	db.table("files_blobs").update([ownerPubkey, digest, chunkIndex], { lastAccess: Date.now() }).catch(() => {});
 	return row.ciphertext instanceof Uint8Array ? row.ciphertext : new Uint8Array(row.ciphertext);
 }
 
-export async function putCachedCipherChunk(digest, chunkIndex, ciphertext) {
+// Плеер не ждёт IDB: запись в фоне. Вытеснение — с задержкой, не на каждый чанк.
+let evictTimer = null;
+
+export function putCachedCipherChunk(digest, chunkIndex, ciphertext) {
 	if (!ownerPubkey) return;
 	const byteLength = ciphertext.length;
 	if (byteLength > FILES_BLOBS_BUDGET_BYTES) return;
-	const existing = await db.table("files_blobs").get([ownerPubkey, digest, chunkIndex]);
-	if (existing) {
-		await db.table("files_blobs").put({
-			ownerPubkey,
-			digest,
-			chunkIndex,
-			ciphertext,
-			byteLength,
-			lastAccess: Date.now(),
-		});
-		return;
-	}
-	await evictFilesBlobsIfNeeded(ownerPubkey, byteLength);
-	const total = await sumOwnerBytes(ownerPubkey);
-	if (total + byteLength > FILES_BLOBS_BUDGET_BYTES) return;
-	await db.table("files_blobs").put({
-		ownerPubkey,
+	const owner = ownerPubkey;
+	const row = {
+		ownerPubkey: owner,
 		digest,
 		chunkIndex,
 		ciphertext,
 		byteLength,
 		lastAccess: Date.now(),
-	});
+	};
+	return db
+		.table("files_blobs")
+		.put(row)
+		.then(() => scheduleEvict(owner))
+		.catch(() => {});
+}
+
+function scheduleEvict(owner) {
+	if (evictTimer) return;
+	evictTimer = setTimeout(() => {
+		evictTimer = null;
+		evictFilesBlobsIfNeeded(owner, 0).catch(() => {});
+	}, 500);
 }
 
 export async function evictFilesBlobsIfNeeded(owner, incomingBytes = 0, budgetBytes = FILES_BLOBS_BUDGET_BYTES) {
@@ -63,9 +65,4 @@ export async function evictFilesBlobsIfNeeded(owner, incomingBytes = 0, budgetBy
 		total -= r.byteLength || 0;
 	}
 	if (toDelete.length > 0) await db.table("files_blobs").bulkDelete(toDelete);
-}
-
-async function sumOwnerBytes(owner) {
-	const rows = await db.table("files_blobs").where("ownerPubkey").equals(owner).toArray();
-	return rows.reduce((sum, r) => sum + (r.byteLength || 0), 0);
 }

@@ -3,7 +3,7 @@
 // Пространство имён кэша — manifest.blobSha256 (уникален на файл, уже есть
 // в манифесте — не нужен отдельный manifestDigest-параметр).
 import { concatBytes } from "@noble/hashes/utils.js";
-import { getChunk, mapPool, ensureCipherChunks } from "./content.js";
+import { getChunk, mapPool } from "./content.js";
 import { rangeToChunks } from "./manifest.js";
 import { startTrace } from "../media/perf-trace.js";
 import { PRIORITY } from "../../core/transport/blossom-queue.js";
@@ -52,22 +52,6 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 		loadChunk(index).catch(() => {});
 	}
 
-	function prefetchWindow(afterIdx, width) {
-		const first = afterIdx + 1;
-		if (first >= count || width < 1) return;
-		const last = Math.min(count - 1, first + width - 1);
-		const indices = [];
-		for (let i = first; i <= last; i++) {
-			if (!cache.get(`${namespace}:${i}`)) indices.push(i);
-		}
-		if (indices.length === 0) return;
-		ensureCipherChunks(manifest, indices, {
-			serverUrl,
-			fetchImpl,
-			priority: PRIORITY.PREVIEW,
-		}).catch(() => {});
-	}
-
 	// MEDIA-PERF-TZ.md §3.2 — trace создаётся ЗДЕСЬ, на каждый вызов readRange
 	// (= каждый Range-запрос браузера к <video>/<audio> через SW-мост), не
 	// снаружи: у "открытия видео" нет одной чёткой границы начала/конца с
@@ -88,8 +72,6 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 
 		const indices = [];
 		for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
-		const needNet = indices.filter((i) => !cache.get(`${namespace}:${i}`));
-		if (needNet.length > 0) await ensureCipherChunks(manifest, needNet, { serverUrl, fetchImpl, priority: PRIORITY.PLAYER });
 
 		const trace = startTrace("player-window", namespace, end - start);
 		trace.count("chunksInWindow", indices.length);
@@ -113,7 +95,6 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 		const result = joined.subarray(skipHead, tailCut);
 
 		prefetch(lastIdx + 1);
-		prefetchWindow(lastIdx, indices.length);
 		return result;
 	}
 
@@ -137,13 +118,6 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 
 		const indices = [];
 		for (let i = firstIdx; i <= lastIdx; i++) indices.push(i);
-		const needNet = indices.filter((i) => !cache.get(`${namespace}:${i}`));
-		try {
-			if (needNet.length > 0) await ensureCipherChunks(manifest, needNet, { serverUrl, fetchImpl, priority: PRIORITY.PLAYER });
-		} catch (err) {
-			sink.error(err);
-			return;
-		}
 		const lastSeq = indices.length - 1;
 
 		const trace = startTrace("player-window", namespace, end - start);
@@ -195,7 +169,6 @@ export function createPlayerSession({ manifest, fileKey, serverUrl, cache, fetch
 
 		trace.end({ maxInFlight });
 		prefetch(lastIdx + 1);
-		prefetchWindow(lastIdx, indices.length);
 		sink.end();
 	}
 
