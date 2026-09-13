@@ -168,17 +168,31 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		BLOSSOM_STAMP="$(ls -1 "$BLOSSOM_PATCHES"/*.patch 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
 		if [[ ! -f "$BLOSSOM_STAMP_FILE" || "$(cat "$BLOSSOM_STAMP_FILE")" != "$BLOSSOM_STAMP" ]]; then
 			echo "deploy-env: blossom patches changed — checkout $BLOSSOM_REF + apply + build"
-			git -C "$BLOSSOM_SRC" fetch --tags origin || true
-			git -C "$BLOSSOM_SRC" checkout -f "$BLOSSOM_REF"
-			for p in "$BLOSSOM_PATCHES"/*.patch; do
-				[[ -f "$p" ]] || continue
-				git -C "$BLOSSOM_SRC" apply "$p"
-			done
+			# blossom-src на VPS принадлежит root, раннер — ugolok: без
+			# safe.directory git 2.35+ орёт "dubious ownership" и set -e
+			# роняет ВЕСЬ деплой уже после rsync PWA (живая проверка:
+			# test 15af37c / prod 945fc42 — Action красный, сайт обновлён).
+			git_blossom() { git -c safe.directory="$BLOSSOM_SRC" -C "$BLOSSOM_SRC" "$@"; }
+			blossom_ok=0
+			git_blossom fetch --tags origin || true
+			if git_blossom checkout -f "$BLOSSOM_REF"; then
+				blossom_ok=1
+				for p in "$BLOSSOM_PATCHES"/*.patch; do
+					[[ -f "$p" ]] || continue
+					if ! git_blossom apply "$p"; then
+						blossom_ok=0
+						break
+					fi
+				done
+			fi
 			PROD_COMPOSE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/docker-compose.yml"
 			PROD_DIR="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
-			docker compose -f "$PROD_COMPOSE" --project-directory "$PROD_DIR" build blossom
-			echo "$BLOSSOM_STAMP" > "$BLOSSOM_STAMP_FILE"
-			BLOSSOM_REBUILT=1
+			if [[ "$blossom_ok" == 1 ]] && docker compose -f "$PROD_COMPOSE" --project-directory "$PROD_DIR" build blossom; then
+				echo "$BLOSSOM_STAMP" > "$BLOSSOM_STAMP_FILE" || true
+				BLOSSOM_REBUILT=1
+			else
+				echo "deploy-env: blossom rebuild не удался — PWA уже выложена, образ не трогаем" >&2
+			fi
 		fi
 	fi
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
@@ -201,8 +215,8 @@ APPLY_CADDY="${UGOLK_APPLY_CADDY:-/opt/ugolok/bin/apply-caddy.sh}"
 if [[ -x "$APPLY_CADDY" ]]; then
 	if [[ "${EUID}" -eq 0 ]]; then
 		"$APPLY_CADDY" "$CADDY_MODE" "$ROOT" "$CADDY_SITE"
-	else
-		sudo -n "$APPLY_CADDY" "$CADDY_MODE" "$ROOT" "$CADDY_SITE"
+	elif ! sudo -n "$APPLY_CADDY" "$CADDY_MODE" "$ROOT" "$CADDY_SITE"; then
+		echo "deploy-env: apply-caddy не применился (sudo -n) — Caddy не трогаем" >&2
 	fi
 else
 	echo "deploy-env: нет $APPLY_CADDY — Caddy не трогаем (первый bootstrap на VPS)" >&2

@@ -419,9 +419,12 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	// При смене набора патчей — checkout pin + apply + build, затем recreate
 	// контейнера blossom этого env (второй compose, не дубль up --build).
 	assert.match(deploy, /\.blossom-patches\.sha/);
+	assert.match(deploy, /safe\.directory=/);
 	assert.match(deploy, /docker compose -f "\$PROD_COMPOSE" --project-directory "\$PROD_DIR" build blossom/);
 	assert.match(deploy, /up -d --force-recreate --no-deps blossom/);
 	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + force-recreate blossom, не больше");
+	assert.match(deploy, /blossom rebuild не удался/);
+	assert.match(deploy, /apply-caddy не применился/);
 });
 
 test("этап 6: turncreds-server — Caddy-роуты, compose, Dockerfile, coturn use-auth-secret", () => {
