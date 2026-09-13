@@ -181,19 +181,18 @@ function MainShell() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [sidebarOpen]);
 
-	// Найдено пользователем (мобильный) — переход по большинству ссылок/кнопок
-	// В САЙДБАРЕ (главное — сам список контактов/каналов, nav-groups.jsx) менял
-	// экран за выдвижной панелью, но саму панель не закрывал: setSidebarOpen(false)
-	// был вручную расставлен только в паре мест (selectNavItem/"Добавить контакт"),
-	// а не в nav-groups.jsx, которому sidebarOpen вообще не передавался.
-	// Вместо протаскивания колбэка в ещё один компонент — единая точка: ЛЮБАЯ
-	// смена места (place, единое состояние навигации — см. import выше) значит
-	// "экран сзади сменился", закрываем панель отсюда одним эффектом. На
-	// десктопе (сайдбар не выезжающий, sidebarOpen на раскладку не влияет)
-	// эффект безобиден — просто держит сигнал в false, ничего не дёргает визуально.
-	useEffect(() => {
+	// Мобильная панель: закрывать при ЛЮБОЙ смене места, в том числе когда
+	// goTo кладёт новый объект с тем же kind (повторный клик по текущему
+	// пункту). useEffect([place.value]) этого не ловил, если компаратор
+	// хука видел тот же снимок; subscribe срабатывает на каждое присвоение.
+	useEffect(() => place.subscribe(() => setSidebarOpen(false)), []);
+
+	function handleSidebarClick(e) {
+		const el = e.target.closest("button, a");
+		if (!el) return;
+		if (el.closest(".fav-toggle, .account-key, summary")) return;
 		setSidebarOpen(false);
-	}, [place.value]);
+	}
 
 	// Редизайн интерфейса, этап 10.1 — раньше здесь был ручной сброс ЧУЖИХ
 	// сигналов (activeChatPubkey/activeChannelId), нужный из-за найденного
@@ -258,6 +257,7 @@ function MainShell() {
 				id="app-sidebar"
 				class={`sidebar rigid stack${sidebarOpen ? " sidebar-open" : ""}`}
 				aria-label={t("shell.sidebarAriaLabel")}
+				onClick={handleSidebarClick}
 			>
 				{/* Разметка по макету (PROCESS-DOCS/REDESIGN/ugolok-final.html) —
 				    .pane__top/.pane__body/.pane__bottom вместо одного box/scroller
