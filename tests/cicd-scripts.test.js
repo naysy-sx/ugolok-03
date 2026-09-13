@@ -297,6 +297,10 @@ test("security: TURN без релея во внутренние сети, Caddy
 	assert.match(coturn, /denied-peer-ip=172\.16\.0\.0-172\.31\.255\.255/);
 	assert.match(coturn, /denied-peer-ip=192\.168\.0\.0-192\.168\.255\.255/);
 	assert.match(coturn, /denied-peer-ip=::1/);
+	// deny собственного IP + allowed-peer-ip на него: иначе TURN↔TURN
+	// (оба за CGNAT) ловит 403 Forbidden IP на CREATE_PERMISSION.
+	assert.match(coturn, /denied-peer-ip=130\.17\.31\.118/);
+	assert.match(coturn, /allowed-peer-ip=130\.17\.31\.118/);
 	assert.match(coturn, /total-quota=\d+/);
 	assert.match(coturn, /user-quota=\d+/);
 	assert.match(coturn, /max-bps=\d+/);

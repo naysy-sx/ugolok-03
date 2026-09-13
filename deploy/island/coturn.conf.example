@@ -24,14 +24,22 @@ no-loopback-peers
 # соединить его с чем угодно внутренним. no-loopback-peers покрывает не все
 # формы адреса (например IPv4-mapped ::ffff:127.0.0.1) — явные диапазоны
 # закрывают дыру целиком: облачная metadata (169.254.0.0/16), приватные сети,
-# сам loopback и собственный публичный IP этой машины (чтобы релей не мог
-# развернуть трафик обратно на другой локальный сервис, слушающий 0.0.0.0).
+# loopback.
+#
+# Собственный публичный IP в deny + allowed-peer-ip на тот же адрес:
+# без allow CREATE_PERMISSION на relay-адрес собеседника (тот же
+# 130.17.31.118:49xxx) даёт 403 Forbidden IP и TURN↔TURN мёртв — живой
+# звонок Питер↔МО 2026-09-11, три минуты STUN, потом «Переподключение».
+# allowed-peer-ip в coturn перекрывает deny (тот же приём, что у Synapse:
+# client→TURN→TURN→client). Приватные сети/loopback/metadata по-прежнему
+# закрыты. Сервисы на этом IP и так публичны; admin Caddy — unix-сокет.
 denied-peer-ip=10.0.0.0-10.255.255.255
 denied-peer-ip=172.16.0.0-172.31.255.255
 denied-peer-ip=192.168.0.0-192.168.255.255
 denied-peer-ip=169.254.0.0-169.254.255.255
 denied-peer-ip=127.0.0.0-127.255.255.255
 denied-peer-ip=130.17.31.118
+allowed-peer-ip=130.17.31.118
 denied-peer-ip=::1
 denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 # Стартовые значения — подобрать по факту использования (docs/environments.md).
