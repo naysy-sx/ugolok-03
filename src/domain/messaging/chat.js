@@ -27,6 +27,7 @@ import { DomainError } from "../errors.js";
 import { isKnownContact } from "./inbox-requests.js";
 import { withGroupLock } from "../../core/store/mls-lock.js";
 import { touchChatActivity } from "./chat-activity.js";
+import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 
 // Этап 74 — T2.3 (CONTRACTS.md/DESIGN.md "Этап 74"): по прецеденту
 // pendingUndecryptedByGroup/UNDECRYPTED_RETRY_TTL_MS (transport.js) — 5 минут,
@@ -177,6 +178,7 @@ export async function ensureChatEstablished(ownerPubkey, privKey, dbKey, contact
 }
 
 async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex) {
+	traceDelivery("establish.enter", { groupIdHex, contactPubkey, isCommitter: isCommitter(ownerPubkey, contactPubkey) });
 	const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (existing) return;
 
@@ -189,6 +191,7 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	// кода: существующий sibling-sync (devices.js, ветка announcerPubkey===
 	// ownerPubkey) уже добавляет новое устройство в СУЩЕСТВУЮЩУЮ группу.
 	if (await hasAnyMessagesFor(ownerPubkey, contactPubkey)) {
+		traceDelivery("establish.throw", { groupIdHex, key: "errors.awaitingSiblingSync" });
 		throw new DomainError("другое моё устройство уже разговаривало с этим контактом — жду синхронизации", "errors.awaitingSiblingSync", { contactPubkey });
 	}
 
@@ -201,10 +204,14 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	// восстановления, ветка Г devices.js, существует ТОЛЬКО для подтверждённых
 	// контактов, см. CONTRACTS.md/DESIGN.md "Этап 73.3").
 	if ((await isKnownContact(ownerPubkey, contactPubkey)) && !isCommitter(ownerPubkey, contactPubkey)) {
+		traceDelivery("establish.throw", { groupIdHex, key: "errors.awaitingCommitter" });
 		throw new DomainError("ожидание установления переписки — коммиттер этой пары не я", "errors.awaitingCommitter", { contactPubkey });
 	}
 
+	traceDelivery("keypackages.req", { peer: contactPubkey });
+	const t0 = Date.now();
 	const theirDevices = await fetchDeviceKeyPackages(contactPubkey);
+	traceDelivery("keypackages.eose", { count: theirDevices.size, elapsed: Date.now() - t0 });
 
 	// Свежий KeyPackage — для СОЗДАНИЯ именно этой группы, не переиспользует
 	// опубликованный "приглашающий" ownKeyPackage (тот — для входящих Welcome от других).
@@ -247,6 +254,7 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, welcomeWireBytes) {
 	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
 	const groupIdHex = bytesToHex(groupId);
+	traceDelivery("recv.welcome", { contact: welcomeSenderPubkey, groupIdHex });
 
 	// Этап 74 — T2.2 (RC-3): гонка "две вкладки одновременно принимают один
 	// Welcome" — существует (DESIGN.md "Этап 74"), лок ЦЕЛИКОМ вокруг get→put.
@@ -307,6 +315,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 	if (attachments !== undefined && attachments.length > 0) messagePayload.attachments = attachments;
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
+	traceDelivery("encrypt.done", { msgId, groupIdHex, epoch: newSessionState.groupContext?.epoch?.toString?.() });
 
 	// Этап 73.5 — М6: переносим (НЕ сбрасываем) consecutiveDecryptFailures/desynced —
 	// успешная ОТПРАВКА не доказывает, что ПРИЁМ работает (в M1/M2-сценарии
@@ -326,6 +335,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 			dbKey,
 		),
 	);
+	traceDelivery("state.persisted", { msgId, groupIdHex });
 
 	const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
 	const content = nip44Encrypt(encodeBase64(wireBytes), privateKey, bytesToHex(publicKey));
@@ -337,9 +347,13 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		{ kind: 445, tags: [["h", groupIdHex]], content, created_at: Math.floor(Date.now() / 1000) },
 		ephemeralPriv,
 	);
+	traceDelivery("event.signed", { msgId, eventId: event.id, groupIdHex });
+	const publishStartedAt = Date.now();
 	try {
 		await requirePublishOk(publish, event);
+		traceDelivery("publish.ok", { msgId, eventId: event.id, elapsed: Date.now() - publishStartedAt });
 	} catch (e) {
+		traceDelivery("publish.reject", { msgId, eventId: event.id, reason: String(e?.message ?? e), elapsed: Date.now() - publishStartedAt });
 		// AC-09: сбой publish — event уже подписан (MLS-ратчет уже продвинут
 		// строкой выше, эфемерный ключ уже одноразово использован), поэтому
 		// нельзя просто повторно вызвать sendMessage с тем же текстом позже —
@@ -347,6 +361,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		// ТОТ ЖЕ event для повторной попытки, не бросаем исключение — сообщение
 		// остаётся видимым локально со статусом "failed", не теряется молча.
 		await enqueue(event, dbKey);
+		traceDelivery("outbox.enqueued", { msgId, eventId: event.id });
 		await upsertMessage({
 			ownerPubkey,
 			chatId: contactPubkey,
@@ -359,6 +374,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 			sentAt,
 			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 		}, dbKey);
+		traceDelivery("message.upsert", { msgId, status: "failed" });
 		// Редизайн интерфейса, этап 5 (CONTRACTS.md) — даже неотправленное
 		// сообщение — реальное локальное действие пользователя в ЭТОМ чате
 		// прямо сейчас, поднимает переписку по свежести, не оставляет её
@@ -379,6 +395,7 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		sentAt,
 		...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
 	}, dbKey);
+	traceDelivery("message.upsert", { msgId, status: "sent" });
 	// Редизайн интерфейса, этап 5 (CONTRACTS.md) — свежесть переписки.
 	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
 
@@ -421,11 +438,13 @@ export async function drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, 
 
 	const promise = (async () => {
 		const raw = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).sortBy("lamportTs");
+		traceDelivery("drain.start", { contactPubkey, count: raw.length });
 		for (const encryptedRow of raw) {
 			const row = fromEncryptedRow(encryptedRow, dbKey);
 			await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachments);
 			await db.table("pendingOutgoingMessages").delete([ownerPubkey, contactPubkey, row.lamportTs]);
 		}
+		traceDelivery("drain.done", { contactPubkey, count: raw.length });
 	})().finally(() => drainInFlight.delete(key));
 
 	drainInFlight.set(key, promise);
@@ -448,6 +467,7 @@ export async function receiveGroupMessageEvent(ownerPubkey, privKey, dbKey, even
 }
 
 async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, publish, groupIdHex) {
+	traceDelivery("recv.445", { eventId: event.id, groupIdHex, createdAt: event.created_at });
 	// Этап 74 — T2.3: журнал обработанных событий — лок делает конкурентную
 	// обработку БЕЗОПАСНОЙ, но без этого гейта второй processMessage того же
 	// wire-события упал бы на replay-защите MLS и засчитался бы decrypt failure
@@ -457,7 +477,10 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	if (alreadyProcessed) return null;
 
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-	if (!raw) return null; // чужая/неизвестная группа — не наш разговор
+	if (!raw) {
+		traceDelivery("recv.445.nogroup", { eventId: event.id, groupIdHex });
+		return null; // чужая/неизвестная группа — не наш разговор
+	}
 	const row = fromEncryptedRow(raw, dbKey);
 	const contactPubkey = row.contactPubkey;
 

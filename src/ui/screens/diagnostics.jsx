@@ -32,6 +32,15 @@ import {
 	shareTraceIfAvailable,
 	clearTrace,
 } from "../../core/diag/call-trace.js";
+import {
+	isDeliveryTraceEnabled,
+	setDeliveryTraceEnabled,
+	getDeliveryTraceStats,
+	downloadDeliveryTraceFile,
+	copyDeliveryTraceToClipboard,
+	clearDeliveryTrace,
+} from "../../core/diag/delivery-trace.js";
+import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import Screen from "../components/screen.jsx";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { profiles } from "../signals/contacts.js";
@@ -272,6 +281,115 @@ function useCallTrace() {
 	}
 
 	return { enabled, stats, toggle, download: downloadTraceFile, copy, copyState, share: shareTraceIfAvailable, clear, canShare: typeof navigator !== "undefined" && typeof navigator.share === "function" };
+}
+
+// Этап 0 (PROCESS-DOCS/AUDIT/MESSAGE-DELIVERY-TZ.md, З0.1) — тот же приём,
+// что useCallTrace выше, для журнала доставки 1:1 сообщений (delivery-trace.js).
+function useDeliveryTrace() {
+	const [enabled, setEnabled] = useState(isDeliveryTraceEnabled());
+	const [stats, setStats] = useState(getDeliveryTraceStats());
+	const [copyState, setCopyState] = useState(null);
+
+	function refresh() {
+		setStats(getDeliveryTraceStats());
+	}
+
+	useEffect(refresh, []);
+
+	function toggle() {
+		const next = !enabled;
+		setDeliveryTraceEnabled(next);
+		setEnabled(next);
+	}
+
+	async function copy() {
+		const ok = await copyDeliveryTraceToClipboard();
+		setCopyState(ok ? "copied" : "unavailable");
+		setTimeout(() => setCopyState(null), 2000);
+	}
+
+	function clear() {
+		clearDeliveryTrace();
+		refresh();
+	}
+
+	return { enabled, stats, toggle, download: downloadDeliveryTraceFile, copy, copyState, clear };
+}
+
+// Этап 0, З0.2 — снимок состояния доставки: messages/pendingOutgoingMessages/
+// outbox/mlsGroups/processedGroupEvents + navigator.locks.query(). Текст
+// сообщений и MLS-состояние (сериализованный ClientState) НИКОГДА не входят
+// в снимок — только мета, нужная для диагностики "где застряло", не содержимое
+// переписки (см. З0.2 явно: "без текста", "без state").
+async function buildDeliverySnapshot(ownerPubkey, dbKey) {
+	const stripFields = (row, fields) => {
+		const copy = { ...row };
+		for (const f of fields) delete copy[f];
+		return copy;
+	};
+
+	const messages = (await db.table("messages").where("ownerPubkey").equals(ownerPubkey).toArray())
+		.map((r) => fromEncryptedRow(r, dbKey))
+		.map((r) => stripFields(r, ["text", "attachments"]));
+
+	// Таблица не индексирована по голому ownerPubkey (только составные ключи) —
+	// диагностический снимок, не горячий путь, полный toCollection().filter() приемлем.
+	const pendingOutgoingMessages = (await db.table("pendingOutgoingMessages").toCollection().filter((r) => r.ownerPubkey === ownerPubkey).toArray())
+		.map((r) => fromEncryptedRow(r, dbKey))
+		.map((r) => stripFields(r, ["text", "attachments"]));
+
+	const outbox = (await db.table("outbox").toArray()).map((r) => stripFields(r, ["event"]));
+
+	const mlsGroups = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray())
+		.map((r) => fromEncryptedRow(r, dbKey))
+		.map((r) => stripFields(r, ["state"]));
+
+	const processedGroupEventsCount = await db.table("processedGroupEvents").where("ownerPubkey").equals(ownerPubkey).count();
+
+	let locks = null;
+	try {
+		if (typeof navigator !== "undefined" && navigator.locks?.query) locks = await navigator.locks.query();
+	} catch {
+		locks = null;
+	}
+
+	return {
+		exportedAt: new Date().toISOString(),
+		ownerPubkey,
+		messages,
+		pendingOutgoingMessages,
+		outbox,
+		mlsGroups,
+		processedGroupEventsCount,
+		locks,
+	};
+}
+
+function useDeliverySnapshot() {
+	const [busy, setBusy] = useState(false);
+
+	async function download() {
+		const user = currentUser.value;
+		const dbKey = dbKeySig.value;
+		if (!user || !dbKey) return;
+		setBusy(true);
+		try {
+			const snapshot = await buildDeliverySnapshot(user.id, dbKey);
+			const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `delivery-snapshot_${Date.now()}.json`;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return { download, busy };
 }
 
 function releaseHashTone(state) {
@@ -683,6 +801,8 @@ export default function Diagnostics() {
 	const cryptoWorkerStatus = useCryptoWorkerStatus();
 	const transportSync = useTransportSyncCheck();
 	const trace = useCallTrace();
+	const deliveryTrace = useDeliveryTrace();
+	const deliverySnapshot = useDeliverySnapshot();
 
 	const onlineRelays = relays.members.filter((m) => m.state === "connected");
 	const latencies = Object.values(relays.latency).filter((v) => v != null);
@@ -815,6 +935,40 @@ export default function Diagnostics() {
 						)}
 						<button type="button" class="btn--ghost rigid" disabled={trace.stats.count === 0} onClick={trace.clear}>
 							{t("diagnostics.trace.clear")}
+						</button>
+					</div>
+				</Panel>
+
+				{/* Этап 0 (PROCESS-DOCS/AUDIT/MESSAGE-DELIVERY-TZ.md, З0.1/З0.2) — журнал
+				    доставки 1:1 сообщений и снимок состояния. Внутренний диагностический
+				    инструмент (для расследования конкретной жалобы на зависания при
+				    отправке) — намеренно без i18n-ключей, как и остальная содержательная
+				    диагностика этого экрана не обязана быть локализована построчно. */}
+				<Panel title="Доставка сообщений — диагностика" hint="Журнал шагов отправки/приёма 1:1 сообщений и снимок текущего состояния очередей — для расследования зависаний при отправке.">
+					<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+						<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+							<span class={`dot dot--${deliveryTrace.enabled ? "bad" : "muted"}`} aria-hidden="true" />
+							<span>{deliveryTrace.enabled ? "запись идёт" : "запись выключена"}</span>
+						</div>
+						<button type="button" class="btn--ghost rigid" onClick={deliveryTrace.toggle}>
+							Включить/выключить
+						</button>
+					</div>
+					<p class="panel__hint">{deliveryTrace.stats.count > 0 ? `${deliveryTrace.stats.count} записей · с ${deliveryTrace.stats.fromT} по ${deliveryTrace.stats.toT}` : "записей пока нет"}</p>
+					<div class="row" style={{ "--gap": "var(--space-s)" }}>
+						<button type="button" class="btn--ghost rigid" disabled={deliveryTrace.stats.count === 0} onClick={deliveryTrace.download}>
+							Скачать журнал
+						</button>
+						<button type="button" class="btn--ghost rigid" disabled={deliveryTrace.stats.count === 0} onClick={deliveryTrace.copy}>
+							{deliveryTrace.copyState === "copied" ? "Скопировано" : "Копировать"}
+						</button>
+						<button type="button" class="btn--ghost rigid" disabled={deliveryTrace.stats.count === 0} onClick={deliveryTrace.clear}>
+							Очистить
+						</button>
+					</div>
+					<div class="row" style={{ "--gap": "var(--space-s)" }}>
+						<button type="button" class="btn--ghost rigid" disabled={deliverySnapshot.busy} onClick={deliverySnapshot.download}>
+							Снимок состояния (messages/outbox/mlsGroups/pendingOutgoing/locks)
 						</button>
 					</div>
 				</Panel>

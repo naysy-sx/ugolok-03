@@ -61,6 +61,7 @@ import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/con
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import { drain } from "../../core/store/outbox.js";
+import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
 import { currentUser, onLock } from "./auth.js";
@@ -138,6 +139,7 @@ function waitForConnState(conn, predicate, timeoutMs) {
 // Fire-and-forget — не должен блокировать остальной connect()/reconnect-flow; сбой
 // (relay снова недоступен посреди попытки) проглатывается, не валит вызывающий код.
 async function drainOutboxSafely(publish, dbKey) {
+	traceDelivery("drain.start", { source: "outbox" });
 	try {
 		const { sentCount } = await drain(async (record) => {
 			const result = await publish(record.event);
@@ -146,8 +148,10 @@ async function drainOutboxSafely(publish, dbKey) {
 			}
 			return result;
 		}, dbKey);
+		traceDelivery("drain.done", { source: "outbox", sentCount });
 		if (sentCount > 0) bumpMessagingActivity();
 	} catch (e) {
+		traceDelivery("drain.done", { source: "outbox", error: String(e?.message ?? e) });
 		console.warn("drainOutboxSafely: не удалось опустошить outbox", e);
 	}
 }
@@ -394,6 +398,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		onTrace: traceRecord,
 		onStateChange: (s) => {
 			connState.value = s;
+			traceDelivery("relay.state", { state: s });
 			// Обработчик получает только агрегированное состояние пула, а не url
 			// конкретного реле (см. relay-pool.js) — поимённое состояние экран
 			// диагностики берёт из getRelayMembers(), здесь достаточно агрегата.
@@ -972,6 +977,7 @@ export async function publishToContact(event, contactPubkeyHex) {
 	if (!publisher) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед publishToContact()");
 	}
+	traceDelivery("publish.sent", { eventId: event.id, kind: event.kind });
 	const result = await publisher.publish(event);
 	deliverToInboxRelays(contactPubkeyHex, event);
 	return result;
@@ -1932,6 +1938,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						// зависеть от commit'а, который ещё не пришёл (relay не гарантирует
 						// порядок) — буферим для повторной попытки, TTL избавится от неисправимых.
 						bufferUndecryptedEvent(event);
+						traceDelivery("recv.445.decryptfail", { eventId: event.id, groupIdHex: groupIdOf(event) });
 						console.warn("refreshGroupMessageSubscription: не удалось обработать входящее сообщение группы", event.id, e);
 					}
 				}

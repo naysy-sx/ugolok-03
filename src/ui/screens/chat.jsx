@@ -20,6 +20,7 @@ import IconEraser from "../icons/eraser.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconArrowLeft from "../icons/arrow-left.jsx";
 import { ContactIdentity } from "./contacts.jsx";
+import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 import {
 	messagingActivity,
 	listChatPartners,
@@ -435,6 +436,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		busyRef.current = true;
 		setComposeError("");
 		setBusy(true);
+		traceDelivery("ui.send.click", { contactPubkey });
 		try {
 			// Загрузка на Blossom (если есть вложение) — ДО тика Lamport-часов и
 			// отправки: сбой загрузки не должен продвигать часы/создавать пустой tick
