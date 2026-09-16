@@ -76,6 +76,16 @@ export function createRelayConnection(url, options = {}) {
   // subId (тот же, что activeReqs), значение — created_at последнего EVENT,
   // виденного по этой подписке НА ЭТОМ соединении.
   const lastEventCreatedAtBySubId = new Map();
+  // Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.5) — водяной знак ОБРАБОТКИ, отдельно
+  // от водяного знака "видел" выше. lastEventCreatedAtBySubId растёт на КАЖДЫЙ
+  // EVENT независимо от исхода (нужен по историческим причинам — TZ-recovery-
+  // policy.md §5 — как безопасный дефолт "не пересылать уже виденное" для
+  // подписчиков, которым конкретно ЭТА гарантия не нужна). Для подписок,
+  // которым важно "не потерять необработанное" (kind:445 — 445 может прийти,
+  // провалиться на no-group/decrypt fail и уйти в буфер, см. transport.js) —
+  // reportProcessed() ниже даёt МЕНЬШИЙ, безопасный водяной знак, который
+  // withResumedSince предпочитает, если он есть для этого subId.
+  const processedWatermarkBySubId = new Map();
 
   const messageHandlers = [];
 
@@ -190,7 +200,11 @@ export function createRelayConnection(url, options = {}) {
   // поведение не меняется.
   function withResumedSince(req) {
     const subId = req[1];
-    const lastSeen = lastEventCreatedAtBySubId.get(subId);
+    // Этап 3 (З3.5) — предпочитаем явно подтверждённый водяной знак ОБРАБОТКИ
+    // (reportProcessed), если вызывающий код его вообще репортит для этого
+    // subId; иначе — прежнее поведение (водяной знак "видел", без изменений
+    // для всех подписчиков, которые reportProcessed не зовут).
+    const lastSeen = processedWatermarkBySubId.get(subId) ?? lastEventCreatedAtBySubId.get(subId);
     if (lastSeen === undefined) return req;
     const resumeSince = lastSeen + 1;
     const [type, id, ...filters] = req;
@@ -204,10 +218,22 @@ export function createRelayConnection(url, options = {}) {
     }
   }
 
+  // Этап 3 (З3.5) — вызывающий код (transport.js) репортит created_at
+  // события, которое он ДЕЙСТВИТЕЛЬНО обработал (успех, дедуп по
+  // processedGroupEvents — не "прочитал из сокета"). Монотонно: меньший/
+  // равный уже известному watermark'у не откатывает его назад (defensive —
+  // redelivery/переупорядоченный батч не должен двигать знак в прошлое).
+  function reportProcessed(subId, createdAt) {
+    if (typeof createdAt !== "number") return;
+    const prev = processedWatermarkBySubId.get(subId);
+    if (prev === undefined || createdAt > prev) processedWatermarkBySubId.set(subId, createdAt);
+  }
+
   function close() {
     intentionalClose = true;
     activeReqs.clear();
     lastEventCreatedAtBySubId.clear();
+    processedWatermarkBySubId.clear();
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -226,6 +252,7 @@ export function createRelayConnection(url, options = {}) {
     removeMessageHandler,
     connect,
     send,
+    reportProcessed,
     reportAuthChallenge: () => apply("AUTH_CHALLENGE"),
     reportAuthOk: () => {
       apply("AUTH_OK");
@@ -385,6 +412,14 @@ export function createRelayPool(entries, options = {}) {
     for (const connection of connections) connection.close();
   }
 
+  // Этап 3 (З3.5) — водяной знак ОБРАБОТКИ per-subId, разослать всем членам
+  // пула: событие этого subId могло прийти через ЛЮБОЕ read-соединение, каждое
+  // ведёт свой независимый lastEventCreatedAtBySubId/processedWatermarkBySubId
+  // (per-connection, как и раньше — П-инварианты relay-pool.js не про это).
+  function reportProcessed(subId, createdAt) {
+    for (const connection of connections) connection.reportProcessed(subId, createdAt);
+  }
+
   function getUrl() {
     return entries
       .filter((e) => e.write)
@@ -410,6 +445,7 @@ export function createRelayPool(entries, options = {}) {
     removeMessageHandler,
     connect,
     send,
+    reportProcessed,
     close,
   };
 }

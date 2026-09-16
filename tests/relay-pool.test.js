@@ -241,6 +241,53 @@ test("после реконнекта REQ реплеится с since = (created
 	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1], since: 1501 }]]);
 });
 
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.5) — водяной знак ОБРАБОТКИ (reportProcessed)
+// отдельно от водяного знака "видел" (обновляется на каждый сырой EVENT). Без
+// этого разделения kind:445, дошедший до сокета, но не обработанный (буфер
+// no-group/decrypt fail, transport.js), поднимал бы since ВЫШЕ себя — после
+// реконнекта relay решил бы "уже видел", событие не переехало бы никогда.
+test("reportProcessed(): withResumedSince использует МЕНЬШИЙ водяной знак обработки, не 'видел', если он репортился для этого subId", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "sub1", { kinds: [445] }]);
+
+	// Три EVENT "видены" (сокет их доставил), но вызывающий код успешно
+	// ОБРАБОТАЛ только первое (e1) — e2/e3 условно ушли в буфер (no-group/decrypt fail).
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", { id: "e1", created_at: 1000 }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", { id: "e2", created_at: 1500 }]) });
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub1", { id: "e3", created_at: 2000 }]) });
+	conn.reportProcessed("sub1", 1000);
+
+	WS.instances[0]._remoteClose();
+	conn.connect();
+	WS.instances[1]._open();
+
+	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
+	assert.deepEqual(
+		replayed,
+		[["REQ", "sub1", { kinds: [445], since: 1001 }]],
+		"since обязан начинаться СРАЗУ ПОСЛЕ последнего ОБРАБОТАННОГО, не последнего просто увиденного — иначе e2/e3 не переприехали бы после реконнекта",
+	);
+});
+
+test("reportProcessed(): без единого вызова для subId — поведение не меняется (водяной знак 'видел' как раньше)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "sub-other", { kinds: [1] }]);
+	WS.instances[0].onmessage({ data: JSON.stringify(["EVENT", "sub-other", { id: "e1", created_at: 42 }]) });
+
+	WS.instances[0]._remoteClose();
+	conn.connect();
+	WS.instances[1]._open();
+
+	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
+	assert.deepEqual(replayed, [["REQ", "sub-other", { kinds: [1], since: 43 }]]);
+});
+
 test("без единого полученного EVENT по subId — REQ реплеится КАК ЕСТЬ, since не подставляется (не меняет поведение для новой/нетронутой подписки)", () => {
 	const WS = freshWS();
 	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });

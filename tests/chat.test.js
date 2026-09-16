@@ -467,7 +467,12 @@ test("AC-FS-02 (уровень приложения): receiveGroupMessageEvent �
 	assert.equal(step.result.text, "первое", "пропущенное первое сообщение всё равно расшифровывается корректно после персистенции состояния между приёмами");
 });
 
-test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ бросает, ставит event в outbox целиком, сохраняет сообщение локально со статусом 'failed', возвращает {eventId, queued:true}", async () => {
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.1/З3.2) — правка контракта: раньше ОДИН
+// провал publish() сразу ставил messages.status="failed" — теперь событие
+// уже в outbox ДО попытки публикации (не только в catch), а локальный статус
+// остаётся "sending", пока outbox не исчерпает MAX_ATTEMPTS (drainOutboxSafely,
+// transport.js) — "failed" означает "больше не пытаемся", не "одна неудача".
+test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ бросает, ставит event в outbox целиком (уже там ДО попытки, не только в catch), статус остаётся 'sending', возвращает {eventId, queued:true}", async () => {
 	await establishAliceToBob();
 	const publish = async () => ({ ok: false, reason: "relay недоступен" });
 
@@ -478,12 +483,13 @@ test("AC-09: sendMessage — publish возвращает {ok:false} — НЕ б
 	const outboxRows = (await db.table("outbox").where("eventId").equals(result.eventId).toArray()).map((r) => fromEncryptedRow(r, DB_KEY));
 	assert.equal(outboxRows.length, 1, "событие должно быть поставлено в outbox");
 	assert.equal(outboxRows[0].status, "pending");
+	assert.equal(outboxRows[0].retryCount, 1, "markFailed уже отработал один раз внутри requirePublishOk-неудачи");
 	assert.equal(outboxRows[0].event.kind, 445, "в outbox должен лежать ВЕСЬ подписанный event (МЛС-ратчет уже продвинут — регенерировать нельзя), не только id");
 	assert.equal(outboxRows[0].event.id, result.eventId);
 
 	const messageRows = (await db.table("messages").where("id").equals(result.eventId).toArray()).map((r) => fromEncryptedRow(r, DB_KEY));
 	assert.equal(messageRows.length, 1, "сообщение должно остаться в локальной истории, не потеряно молча");
-	assert.equal(messageRows[0].status, "failed");
+	assert.equal(messageRows[0].status, "sending", "ОДНА неудача больше не хоронит статус — outbox ещё будет пытаться");
 	assert.equal(messageRows[0].text, "не долетит");
 });
 

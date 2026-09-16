@@ -30,7 +30,10 @@ import {
 	upsertMessage,
 	drainPendingOutgoingMessages,
 	recordGroupDecryptFailure,
+	recordUndeliverableEvent,
+	computeGroupId,
 } from "../../domain/messaging/chat.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
 import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
 import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivation.js";
@@ -62,6 +65,7 @@ import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/con
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import { drain } from "../../core/store/outbox.js";
+import { transitionMessage } from "../../domain/messaging/machine.js";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
 import { bumpProfileActivity } from "./profile.js";
@@ -117,6 +121,8 @@ let verifyBatchFn = null;
 let groupMessageSubscriber = null;
 let deviceAnnounceSubscriber = null; // этап 72 — живая досинхронизация устройств (свои + чужие)
 let mirrorSubscriber = null; // этап 72 — живое зеркало истории (было только one-shot catch-up)
+let outboxDrainTimer = null; // Этап 3 (З3.2) — периодический drain, не только на "connected"
+let bufferRetryTimer = null; // Этап 3 (З3.3) — периодический ретрай буфера 445 (нет группы/decrypt fail)
 
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
@@ -142,15 +148,35 @@ function waitForConnState(conn, predicate, timeoutMs) {
 async function drainOutboxSafely(publish, dbKey) {
 	traceDelivery("drain.start", { source: "outbox" });
 	try {
-		const { sentCount } = await drain(async (record) => {
+		const { sentCount, finallyFailedEventIds } = await drain(async (record) => {
 			const result = await publish(record.event);
 			if (result.ok) {
 				await db.table("messages").where("id").equals(record.eventId).modify({ status: "sent" });
 			}
 			return result;
 		}, dbKey);
-		traceDelivery("drain.done", { source: "outbox", sentCount });
-		if (sentCount > 0) bumpMessagingActivity();
+		// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.2) — messages.status становится
+		// "failed" ТОЛЬКО когда outbox исчерпал MAX_ATTEMPTS для этой записи
+		// (drain() выше решает это, не каждый отдельный неудачный проход) —
+		// раньше ОДНА неудача сразу хоронила статус, теперь "sending" держится,
+		// пока есть шанс на повтор (AUDIT-BRIEFING §4.6).
+		for (const eventId of finallyFailedEventIds) {
+			await db
+				.table("messages")
+				.where("id")
+				.equals(eventId)
+				.modify((row) => {
+					// Защитный guard — строка могла уйти в "sent" по другому пути
+					// (например, зеркало 446 её уже подтвердило) между провалом outbox
+					// и этим проходом, или уже быть удалённой пользователем ("удалить
+					// у себя") — .modify() тогда просто не находит строку. transitionMessage
+					// бросает на недопустимом переходе (machine.js) — не выполнять его
+					// вслепую здесь означало бы уронить весь цикл finallyFailedEventIds.
+					if (row.status === "sending") row.status = transitionMessage(row.status, "FAIL");
+				});
+		}
+		traceDelivery("drain.done", { source: "outbox", sentCount, finalFailures: finallyFailedEventIds.length });
+		if (sentCount > 0 || finallyFailedEventIds.length > 0) bumpMessagingActivity();
 	} catch (e) {
 		traceDelivery("drain.done", { source: "outbox", error: String(e?.message ?? e) });
 		console.warn("drainOutboxSafely: не удалось опустошить outbox", e);
@@ -263,10 +289,26 @@ function serializedPerChannelTopic(channelTopicHex, fn) {
 const INBOX_RELAY_CACHE_TTL_MS = 5 * 60 * 1000;
 const inboxRelayCache = new Map(); // pubkeyHex -> { relays: string[], fetchedAt: number }
 
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.2) — "drain вызывается не только на
+// connected, но и по таймеру": сообщение, чей backoff (outbox.js) созрел
+// между реконнектами, иначе ждало бы следующего обрыва/восстановления связи
+// произвольно долго, даже если соединение всё это время было живо (drain на
+// "connected" срабатывает только на ПЕРЕХОД состояния, не повторно, пока
+// соединение остаётся стабильным).
+const OUTBOX_DRAIN_INTERVAL_MS = 30000;
+
 function teardown() {
 	publisher = null;
 	verifyBatchFn = null;
 	groupMessageSubscriber = null;
+	if (outboxDrainTimer) {
+		clearInterval(outboxDrainTimer);
+		outboxDrainTimer = null;
+	}
+	if (bufferRetryTimer) {
+		clearInterval(bufferRetryTimer);
+		bufferRetryTimer = null;
+	}
 	// Найдено живой проверкой (этап 58 — reconnectWithNewSettings, вызываемый из
 	// новой relay-настроек UI, до этого пути редко доходили с уже установленными
 	// подписками): эти пять singleton-подписчиков, в отличие от groupMessageSubscriber
@@ -286,6 +328,7 @@ function teardown() {
 	discoveryLiveSubscriber = null;
 	contactListSubscriber = null;
 	processedEventIds.clear();
+	pendingUndecryptedByGroup.clear();
 	inboxRelayCache.clear();
 	if (cryptoWorker) {
 		cryptoWorker.terminate();
@@ -431,6 +474,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	publisher = createPublisher(connection);
 	connection.addMessageHandler(publisher.handleMessage);
 	drainOutboxSafely(publish, dbKey);
+	if (outboxDrainTimer) clearInterval(outboxDrainTimer);
+	outboxDrainTimer = setInterval(() => drainOutboxSafely(publish, dbKey), OUTBOX_DRAIN_INTERVAL_MS);
+	if (typeof outboxDrainTimer?.unref === "function") outboxDrainTimer.unref();
+	if (bufferRetryTimer) clearInterval(bufferRetryTimer);
+	bufferRetryTimer = setInterval(() => sweepBufferedGroupMessages(pubkeyHex, privKey, dbKey, publish), OUTBOX_DRAIN_INTERVAL_MS);
+	if (typeof bufferRetryTimer?.unref === "function") bufferRetryTimer.unref();
 
 	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
 	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
@@ -615,6 +664,14 @@ async function connect(pubkeyHex, privKey, dbKey) {
 							// контакта-коммиттера — И3) — отправляем всё, что копилось в очереди,
 							// пока группы не было (CONTRACTS.md/DESIGN.md "Этап 73.3").
 							await drainPendingOutgoingMessages(pubkeyHex, privKey, dbKey, welcomeContactPubkey, publish);
+							// Этап 3 (З3.3) — группа только что появилась: любые 445 этой группы,
+							// пришедшие РАНЬШЕ этого Welcome, уже лежат в буфере (bufferUndecryptedEvent
+							// выше в groupMessageSubscriber) — ретраим сразу, не дожидаясь СЛЕДУЮЩЕГО
+							// живого 445 этой же группы (который может не прийти ещё долго).
+							const welcomeGroupIdHex = bytesToHex(computeGroupId(pubkeyHex, welcomeContactPubkey));
+							if (await retryBufferedGroupMessages(welcomeGroupIdHex, pubkeyHex, privKey, dbKey, publish, settings)) {
+								activityChanged = true;
+							}
 						} else {
 							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
 							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА
@@ -1833,12 +1890,32 @@ async function processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish,
 async function retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKey, publish, settings) {
 	const list = pendingUndecryptedByGroup.get(groupIdHex);
 	if (!list || list.length === 0) return false;
+	// Этап 3 (З3.3) — буфер теперь принимает и "нет группы" (не только сбой
+	// расшифровки, см. groupMessageSubscriber выше). Если группы ВСЁ ЕЩЁ нет,
+	// processOneGroupMessageEvent молча no-op'нется (receiveGroupMessageEvent
+	// возвращает null, не бросает) — без этой проверки ложное anySucceeded=true
+	// удаляло бы запись из буфера НАВСЕГДА при первой же попытке, даже не
+	// доставив её, стоит группе появиться позже.
+	const groupExists = !!(await db.table("mlsGroups").get([ownerPubkey, groupIdHex]));
 	let anySucceeded = false;
 	const stillPending = [];
 	for (const entry of list) {
+		if (!groupExists) {
+			if (Date.now() - entry.firstSeenAt < UNDECRYPTED_RETRY_TTL_MS) {
+				stillPending.push(entry);
+			} else {
+				traceDelivery("undeliverable", { eventId: entry.event.id, groupIdHex, reason: "no-group-ttl" });
+				console.warn("retryBufferedGroupMessages: группа так и не появилась за TTL, событие отброшено", entry.event.id);
+				await recordUndeliverableEvent(ownerPubkey, entry.event.id, groupIdHex, "no-group-ttl", entry.firstSeenAt, dbKey);
+			}
+			continue;
+		}
 		try {
 			await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, entry.event);
 			anySucceeded = true;
+			// Этап 3 (З3.5) — тот же принцип, что в groupMessageSubscriber:
+			// водяной знак двигается только на подтверждённом успехе.
+			connection?.reportProcessed?.("group-messages", entry.event.created_at);
 		} catch (e) {
 			if (Date.now() - entry.firstSeenAt < UNDECRYPTED_RETRY_TTL_MS) {
 				stillPending.push(entry);
@@ -1848,12 +1925,34 @@ async function retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKe
 				// окончательная потеря (не нормальная буферизация М3) — единственный
 				// сигнал, который считается для детекта расхождения группы.
 				await recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey);
+				// Этап 3 (З3.6) — "буфер не должен молча дропать": та же потеря,
+				// но теперь ещё и видима в диагностике, не только в console.warn.
+				traceDelivery("undeliverable", { eventId: entry.event.id, groupIdHex, reason: "decrypt-ttl" });
+				await recordUndeliverableEvent(ownerPubkey, entry.event.id, groupIdHex, "decrypt-ttl", entry.firstSeenAt, dbKey);
 			}
 		}
 	}
 	if (stillPending.length > 0) pendingUndecryptedByGroup.set(groupIdHex, stillPending);
 	else pendingUndecryptedByGroup.delete(groupIdHex);
 	return anySucceeded;
+}
+
+// Этап 3 (З3.3, последний пункт) — "по таймеру, пока не истёк TTL": раньше
+// единственные триггеры ретрая буфера были реактивные (следующий успешный 445
+// той же группы, или теперь acceptWelcome) — если ни одно из этих событий не
+// происходит (коммиттер молчит, sibling не подключается), буферная запись
+// просто ждала бы TTL молча, ни разу не попытавшись снова, хотя группа могла
+// появиться совсем другим путём (например devices.js's реактивная синхронизация).
+async function sweepBufferedGroupMessages(ownerPubkey, privKey, dbKey, publish) {
+	if (pendingUndecryptedByGroup.size === 0) return;
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
+	let activityChanged = false;
+	for (const groupIdHex of [...pendingUndecryptedByGroup.keys()]) {
+		if (await retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKey, publish, settings)) {
+			activityChanged = true;
+		}
+	}
+	if (activityChanged) bumpMessagingActivity();
 }
 
 // могло зеркалировать полученное сообщение best-effort (DESIGN.md, "Этап 25", раздел 2).
@@ -1887,13 +1986,44 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 					// редоставка старого сообщения проходила бы весь конвейер заново и
 					// notify()'ла бы уже виденное сообщение повторно.
 					if (!isNewEvent(event.id)) continue;
+					// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.3) — 445 может прийти РАНЬШЕ
+					// Welcome (relay не гарантирует порядок между gift-wrap 1059 и kind
+					// 445 — тот же класс гонки, что М3 для commit/application внутри
+					// ОДНОЙ уже существующей группы, только здесь группы ещё нет вовсе).
+					// Раньше receiveGroupMessageEvent тихо возвращала null (chat.js
+					// "чужая/неизвестная группа — не наш разговор") — событие терялось
+					// НАВСЕГДА, если Welcome ещё в пути: proверка здесь ДО вызова, чтобы
+					// не путать это с "уже обработано" (тоже null у chat.js, но не
+					// требует буфера) — тот же буфер, что и провал расшифровки (М3).
+					const groupIdHex = groupIdOf(event);
+					if (groupIdHex && !(await db.table("mlsGroups").get([ownerPubkey, groupIdHex]))) {
+						bufferUndecryptedEvent(event);
+						traceDelivery("recv.445.nogroup", { eventId: event.id, groupIdHex });
+						// Этап 3 (З3.4) — снимаем пометку "виден", а не оставляем её
+						// навсегда: группа появится (Welcome ещё в пути) — тот же event.id
+						// должен суметь пройти конвейер повторно, когда relay передоставит
+						// его после resubscribe на новый groupId (refreshGroupMessageSubscription
+						// вызывается заново после acceptWelcome). Раньше isNewEvent держала
+						// его "мёртвым" до перезагрузки вкладки — единственный путь
+						// восстановления был reload, буфер уже даёт восстановление без него,
+						// но снятие пометки на всякий случай не даёт двум механизмам
+						// конфликтовать (буфер решит raньше, чем придёт redelivery).
+						processedEventIds.delete(event.id);
+						continue;
+					}
 					try {
 						await processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish, settings, event);
 						activityChanged = true; // этап 27, находка 2 — открытый chat.jsx перечитывает окно
+						// Этап 3 (З3.5) — водяной знак ОБРАБОТКИ двигаем ТОЛЬКО здесь, после
+						// подтверждённого успеха — не в relay-pool.js на каждый сырой EVENT
+						// (см. relay-pool.js reportProcessed). Событие, ушедшее в буфер чуть
+						// выше (no-group) или в catch ниже (decrypt fail), НЕ должно поднимать
+						// since выше себя — иначе после реконнекта оно не переприехало бы.
+						connection.reportProcessed?.("group-messages", event.created_at);
 						// Этап 73.4 — М3: это событие продвинуло локальную эпоху этой группы —
 						// шанс, что ранее отложенные (из-за переупорядоченной доставки) теперь
 						// расшифруются.
-						if (await retryBufferedGroupMessages(groupIdOf(event), ownerPubkey, privKey, dbKey, publish, settings)) {
+						if (await retryBufferedGroupMessages(groupIdHex, ownerPubkey, privKey, dbKey, publish, settings)) {
 							activityChanged = true;
 						}
 					} catch (e) {
@@ -1907,8 +2037,14 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						// зависеть от commit'а, который ещё не пришёл (relay не гарантирует
 						// порядок) — буферим для повторной попытки, TTL избавится от неисправимых.
 						bufferUndecryptedEvent(event);
-						traceDelivery("recv.445.decryptfail", { eventId: event.id, groupIdHex: groupIdOf(event) });
+						traceDelivery("recv.445.decryptfail", { eventId: event.id, groupIdHex });
 						console.warn("refreshGroupMessageSubscription: не удалось обработать входящее сообщение группы", event.id, e);
+						// Этап 3 (З3.4) — та же логика, что "no group" выше: неуспешная
+						// обработка не должна держать событие "мёртвым" в processedEventIds
+						// до перезагрузки вкладки — буфер (retryBufferedGroupMessages) уже
+						// берёт на себя повтор, снятие пометки лишь избегает конфликта
+						// с возможной redelivery того же event.id по другому пути.
+						processedEventIds.delete(event.id);
 					}
 				}
 				if (activityChanged) bumpMessagingActivity();

@@ -400,6 +400,17 @@ db.version(34).stores({
   files_blobs: "[ownerPubkey+digest+chunkIndex], ownerPubkey, digest, [ownerPubkey+lastAccess]"
 });
 
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — "буфер не должен молча дропать":
+// раньше kind:445, не расшифрованный за UNDECRYPTED_RETRY_TTL_MS (буфер М3,
+// transport.js), просто удалялся из in-memory Map с console.warn — окончательная
+// потеря сообщения была НЕВИДИМА нигде, кроме консоли разработчика. Owner-scoped
+// с рождения (тот же принцип, что все таблицы с этапа 25). Не шифруется —
+// eventId уже публичен на relay (тот же прецедент, что processedGroupEvents,
+// этап 74), groupIdHex не восстанавливает contactPubkey (однонаправленный хэш).
+db.version(35).stores({
+  undeliverable: "[ownerPubkey+eventId], ownerPubkey, [ownerPubkey+droppedAt]"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

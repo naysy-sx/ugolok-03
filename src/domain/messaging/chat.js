@@ -20,9 +20,9 @@ import { deriveMasterSecret, deriveMirrorKey } from "../../core/crypto/derivatio
 import { buildMirrorEvent } from "./mirror.js";
 import { db } from "../../core/store/database.js";
 import { getOrCreateDeviceId } from "../identity/device.js";
-import { enqueue } from "../../core/store/outbox.js";
+import { enqueue, markSent, markFailed } from "../../core/store/outbox.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
-import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { OWN_KEY_PACKAGE_PLAINTEXT_FIELDS, MLS_GROUPS_PLAINTEXT_FIELDS, MESSAGES_PLAINTEXT_FIELDS, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS, UNDELIVERABLE_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { DomainError } from "../errors.js";
 import { isKnownContact } from "./inbox-requests.js";
 import { withGroupLock } from "../../core/store/mls-lock.js";
@@ -293,17 +293,25 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 // не создавала ВТОРОЙ msgId для строки, которая уже существует. Старые прямые
 // вызовы sendMessage() (тесты, АДВЕРСАРНЫЕ вызовы в обход sendChatMessageAction)
 // не передают их — поведение как раньше, генерируются здесь.
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.1) — publish() ушёл ИЗ-ПОД лока: раньше
+// withGroupLock оборачивала ВЕСЬ doSendMessage, включая сетевой publish() —
+// зависшая публикация (H2, ту же группу лочит receiveGroupMessageEvent)
+// блокировала приём/отправку для ЭТОЙ ЖЕ пары на другой вкладке/устройстве
+// на всё время висящего сетевого ожидания (H6, MESSAGE-DELIVERY-AUDIT-
+// BRIEFING.md §5.7). Крипто-критичная часть (deserialize→encrypt→persist
+// state→sign→outbox.enqueue) остаётся ПОД локом целиком (единственный
+// писатель MLS-состояния, DESIGN.md "Этап 74") — publish() выполняется уже
+// СНАРУЖИ, когда лок отпущен.
 export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, msgId, sentAt) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
-	// Этап 74 — T2.2 (RC-3): единственный писатель на (ownerPubkey, groupIdHex) —
-	// лок ЦЕЛИКОМ, get→крипто→put (DESIGN.md "Этап 74"). drainPendingOutgoingMessages
-	// вызывает sendMessage — лочится только этот, внутренний уровень (правило
-	// нереентерабельности, DESIGN.md).
-	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, msgId, sentAt));
+	const prepared = await withGroupLock(ownerPubkey, groupIdHex, () =>
+		prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, attachments, groupIdHex, msgId, sentAt),
+	);
+	return finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, prepared);
 }
 
-async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, msgIdParam, sentAtParam) {
+async function prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, attachments, groupIdHex, msgIdParam, sentAtParam) {
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
@@ -388,34 +396,64 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 	}
 	traceDelivery("message.upsert", { msgId, status: "sending" });
 
+	// Этап 3 (З3.1) — outbox.enqueue() ДО попытки публикации, не только в catch
+	// после сбоя: если вкладку закрыли между этой строкой и ответом relay,
+	// событие уже лежит в durable-очереди — drainOutboxSafely довезёт его на
+	// следующем подключении. Раньше enqueue происходил ТОЛЬКО из catch — окно
+	// "вкладка закрыта посреди зависшей публикации" теряло событие навсегда,
+	// хотя MLS-ратчет уже был необратимо продвинут (см. AUDIT-BRIEFING §4.2).
+	// ok:true ниже (finishOutgoingMessage) чистит эту запись через markSent —
+	// то, что каждое сообщение теперь проходит через outbox, а не только
+	// провалившиеся, обменивает одну лишнюю запись в Dexie на устранение
+	// потери — тот же компромисс, что sourced из ТЗ, не самостоятельное решение.
+	const seq = await enqueue(event, dbKey);
+	traceDelivery("outbox.enqueued", { msgId, eventId: event.id });
+
+	return { event, seq, msgId, sentAt };
+}
+
+// Этап 3 (З3.1) — вне лока: зависшая публикация (H2, или просто медленная
+// сеть) для ЭТОЙ группы больше не блокирует receiveGroupMessageEvent/другую
+// вкладку, желающую отправить в ТУ ЖЕ группу (withGroupLock уже отпущена к
+// этому моменту). "reject → ничего не удаляем: событие уже в очереди, статус
+// остаётся 'sending'" — по коду ТЗ буквально: локальный статус НЕ становится
+// "failed" здесь, drainOutboxSafely доведёт его до "sent" при следующей
+// удачной попытке или до "failed" только когда outbox исчерпает MAX_ATTEMPTS
+// (З3.2) — тогда же кнопка "повторить" в UI.
+async function finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, prepared) {
+	const { event, seq, msgId, sentAt } = prepared;
 	const publishStartedAt = Date.now();
+	let result;
 	try {
-		await requirePublishOk(publish, event);
+		result = await requirePublishOk(publish, event);
 		traceDelivery("publish.ok", { msgId, eventId: event.id, elapsed: Date.now() - publishStartedAt });
 	} catch (e) {
 		traceDelivery("publish.reject", { msgId, eventId: event.id, reason: String(e?.message ?? e), elapsed: Date.now() - publishStartedAt });
-		// AC-09: сбой publish — event уже подписан (MLS-ратчет уже продвинут
-		// строкой выше, эфемерный ключ уже одноразово использован), поэтому
-		// нельзя просто повторно вызвать sendMessage с тем же текстом позже —
-		// это создало бы ВТОРОЙ, другой шифртекст. Кладём в outbox буквально
-		// ТОТ ЖЕ event для повторной попытки, не бросаем исключение — сообщение
-		// остаётся видимым локально со статусом "failed", не теряется молча.
-		await enqueue(event, dbKey);
-		traceDelivery("outbox.enqueued", { msgId, eventId: event.id });
-		await db
-			.table("messages")
-			.where("[ownerPubkey+chatId+msgId]")
-			.equals([ownerPubkey, contactPubkey, msgId])
-			.modify({ status: transitionMessage("sending", "FAIL") });
-		traceDelivery("message.upsert", { msgId, status: "failed" });
-		// Редизайн интерфейса, этап 5 (CONTRACTS.md) — даже неотправленное
-		// сообщение — реальное локальное действие пользователя в ЭТОМ чате
-		// прямо сейчас, поднимает переписку по свежести, не оставляет её
-		// "протухшей" до успешной доставки.
+		// AC-09: событие уже в outbox (prepareOutgoingMessage, ПОД локом, ДО
+		// этой попытки) — ничего дополнительно ставить в очередь не нужно.
+		// Эта немедленная попытка ЗАСЧИТЫВАЕТСЯ как одна из MAX_ATTEMPTS
+		// (markFailed) — тот же счётчик, что drainOutboxSafely двигает при
+		// последующих попытках, единая бухгалтерия, не два независимых счёта.
+		// Локальный статус ОСТАЁТСЯ "sending", если MAX_ATTEMPTS ещё не
+		// исчерпан — становится "failed" только когда finalFailure (крайне
+		// маловероятно на первой же попытке, но возможно при MAX_ATTEMPTS=1
+		// в тестовой конфигурации) — не здесь безусловно, не после первого же
+		// провала (это и была исходная дыра, AUDIT-BRIEFING §4.6: "одна
+		// неудача = конец").
+		const { finalFailure } = await markFailed(seq);
+		if (finalFailure) {
+			await db
+				.table("messages")
+				.where("[ownerPubkey+chatId+msgId]")
+				.equals([ownerPubkey, contactPubkey, msgId])
+				.modify({ status: transitionMessage("sending", "FAIL") });
+			traceDelivery("message.upsert", { msgId, status: "failed" });
+		}
 		await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
 		return { eventId: event.id, queued: true };
 	}
 
+	await markSent(seq);
 	await db
 		.table("messages")
 		.where("[ownerPubkey+chatId+msgId]")
@@ -678,6 +716,22 @@ export async function recordGroupDecryptFailure(ownerPubkey, groupIdHex, dbKey) 
 export async function listDesyncedChats(ownerPubkey, dbKey) {
 	const rows = (await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => fromEncryptedRow(r, dbKey));
 	return rows.filter((r) => r.desynced).map((r) => ({ contactPubkey: r.contactPubkey, groupId: r.groupId, consecutiveDecryptFailures: r.consecutiveDecryptFailures }));
+}
+
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — "буфер не должен молча дропать":
+// вызывается ТОЛЬКО из retryBufferedGroupMessages (transport.js) в момент
+// окончательного (TTL истёк) отказа от буферной записи — та же точка, что уже
+// вызывает recordGroupDecryptFailure (М6) рядом. Видимая, персистентная
+// запись подтверждённой потери — не только console.warn.
+export async function recordUndeliverableEvent(ownerPubkey, eventId, groupIdHex, reason, firstSeenAt, dbKey) {
+	await db.table("undeliverable").put(
+		toEncryptedRow({ ownerPubkey, eventId, groupIdHex, reason, firstSeenAt, droppedAt: Date.now() }, UNDELIVERABLE_PLAINTEXT_FIELDS, dbKey),
+	);
+}
+
+export async function listUndeliverable(ownerPubkey, dbKey) {
+	const rows = await db.table("undeliverable").where("ownerPubkey").equals(ownerPubkey).toArray();
+	return rows.map((r) => fromEncryptedRow(r, dbKey)).sort((a, b) => b.droppedAt - a.droppedAt);
 }
 
 // Забывает ЛОКАЛЬНОЕ состояние (группу + бухгалтерию известных устройств

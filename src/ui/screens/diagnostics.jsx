@@ -346,6 +346,11 @@ async function buildDeliverySnapshot(ownerPubkey, dbKey) {
 
 	const processedGroupEventsCount = await db.table("processedGroupEvents").where("ownerPubkey").equals(ownerPubkey).count();
 
+	// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — "потеря сообщения должна быть
+	// видимой": окончательно недоставленные (TTL буфера истёк без единого
+	// успеха) события теперь тоже часть снимка, не только console.warn.
+	const undeliverable = (await db.table("undeliverable").where("ownerPubkey").equals(ownerPubkey).toArray()).map((r) => fromEncryptedRow(r, dbKey));
+
 	let locks = null;
 	try {
 		if (typeof navigator !== "undefined" && navigator.locks?.query) locks = await navigator.locks.query();
@@ -361,8 +366,29 @@ async function buildDeliverySnapshot(ownerPubkey, dbKey) {
 		outbox,
 		mlsGroups,
 		processedGroupEventsCount,
+		undeliverable,
 		locks,
 	};
+}
+
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — счётчик виден на экране сразу, не
+// только через выгрузку снимка: "потеря сообщения должна быть видимой", не
+// закопанной в JSON, который ещё нужно догадаться скачать.
+function useUndeliverableCount() {
+	const [count, setCount] = useState(0);
+
+	async function refresh() {
+		const user = currentUser.value;
+		const dbKey = dbKeySig.value;
+		if (!user || !dbKey) return setCount(0);
+		setCount(await db.table("undeliverable").where("ownerPubkey").equals(user.id).count());
+	}
+
+	useEffect(() => {
+		refresh();
+	}, [currentUser.value, dbKeySig.value]);
+
+	return { count, refresh };
 }
 
 function useDeliverySnapshot() {
@@ -803,6 +829,7 @@ export default function Diagnostics() {
 	const trace = useCallTrace();
 	const deliveryTrace = useDeliveryTrace();
 	const deliverySnapshot = useDeliverySnapshot();
+	const undeliverable = useUndeliverableCount();
 
 	const onlineRelays = relays.members.filter((m) => m.state === "connected");
 	const latencies = Object.values(relays.latency).filter((v) => v != null);
@@ -966,9 +993,14 @@ export default function Diagnostics() {
 							Очистить
 						</button>
 					</div>
+					{undeliverable.count > 0 && (
+						<p class="panel__hint" role="alert" style={{ color: "var(--bad)" }}>
+							{undeliverable.count} сообщени{undeliverable.count === 1 ? "е" : "й"} окончательно не доставлено (буфер истёк без единого успеха) — см. в снимке состояния ниже.
+						</p>
+					)}
 					<div class="row" style={{ "--gap": "var(--space-s)" }}>
 						<button type="button" class="btn--ghost rigid" disabled={deliverySnapshot.busy} onClick={deliverySnapshot.download}>
-							Снимок состояния (messages/outbox/mlsGroups/pendingOutgoing/locks)
+							Снимок состояния (messages/outbox/mlsGroups/pendingOutgoing/undeliverable/locks)
 						</button>
 					</div>
 				</Panel>

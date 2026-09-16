@@ -81,7 +81,9 @@ export const DISCOVERY_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "reporte
 // реализовано ради полноты AC-16 по явному выбору пользователя.
 export const UI_SETTINGS_PLAINTEXT_FIELDS = ["ownerPubkey"];
 
-export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"];
+// nextAttemptAt (Этап 3, З3.2) — экспоненциальный backoff между попытками
+// повтора, plaintext (нужен для фильтрации в listPending, не индекс).
+export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount", "nextAttemptAt"];
 
 export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
 
@@ -101,6 +103,12 @@ export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "conta
 // TTL-sweep, шифровать нечего, но toEncryptedRow применяется для
 // единообразия со всеми таблицами проекта.
 export const PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId", "firstSeenAt"];
+
+// Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — все поля plaintext, тот же принцип,
+// что PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS выше: eventId уже публичен на
+// relay, groupIdHex — однонаправленный хэш (не восстанавливает contactPubkey),
+// reason/at — диагностические метаданные, не содержание переписки.
+export const UNDELIVERABLE_PLAINTEXT_FIELDS = ["ownerPubkey", "eventId", "groupIdHex", "reason", "firstSeenAt", "droppedAt"];
 
 // Этап 74 — Часть B, T5.2: персист профилей контактов. Только составной
 // индекс plaintext (нужен для .get/.where-гидратации) — name/about/
