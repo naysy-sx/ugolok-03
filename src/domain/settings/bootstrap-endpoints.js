@@ -280,7 +280,7 @@ export async function fetchTurnCredentials(url, options = {}) {
 	}
 	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 	if (!url || typeof fetchImpl !== 'function') return null;
-	const timeoutMs = options.timeoutMs ?? 3000;
+	const timeoutMs = options.timeoutMs ?? 4000;
 	let timer;
 	const timeout = new Promise((_, reject) => {
 		timer = setTimeout(() => reject(new Error('fetchTurnCredentials: таймаут')), timeoutMs);

@@ -1,4 +1,22 @@
-export async function probeRelay(url, { timeoutMs = 2500 } = {}) {
+// Одна попытка без ретрая на нестабильной сети (Wi-Fi роуминг, спутник,
+// перегруженный relay/coturn под нагрузкой) — это монетка, не проверка: та
+// же сеть за 2.5с то укладывается, то нет от перезагрузки к перезагрузке.
+// withRetry() даёт probe-функциям несколько попыток, прежде чем сдаться —
+// см. connection-endpoints.jsx, где он оборачивает каждую из трёх проверок.
+export async function withRetry(probe, { attempts = 3, delayMs = 700, isCancelled = () => false } = {}) {
+	let result = { ok: false, ms: null };
+	for (let i = 0; i < attempts; i++) {
+		if (isCancelled()) return result;
+		result = await probe();
+		if (result.ok || isCancelled()) return result;
+		if (i < attempts - 1) {
+			await new Promise((resolve) => setTimeout(resolve, delayMs));
+		}
+	}
+	return result;
+}
+
+export async function probeRelay(url, { timeoutMs = 4000 } = {}) {
 	if (typeof globalThis.WebSocket !== "function") {
 		return { ok: false, ms: null, error: "no WebSocket" };
 	}
@@ -28,7 +46,7 @@ export async function probeRelay(url, { timeoutMs = 2500 } = {}) {
 	});
 }
 
-export async function probeBlossom(url, { timeoutMs = 2500 } = {}) {
+export async function probeBlossom(url, { timeoutMs = 4000 } = {}) {
 	if (typeof globalThis.fetch !== "function") {
 		return { ok: false, ms: null, error: "no fetch" };
 	}
@@ -46,7 +64,7 @@ export async function probeBlossom(url, { timeoutMs = 2500 } = {}) {
 	}
 }
 
-export async function probeIce(iceServers, { timeoutMs = 3000 } = {}) {
+export async function probeIce(iceServers, { timeoutMs = 5000 } = {}) {
 	if (typeof globalThis.RTCPeerConnection !== "function") {
 		return { ok: false, ms: null, error: "no RTCPeerConnection" };
 	}

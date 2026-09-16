@@ -9,7 +9,7 @@
 // откатывается на build-time дефолт, приложение не падает и не виснет.
 import { parseRelayUrl, parseBlossomUrl, parseIceUrl } from "./bootstrap-endpoints.js";
 
-const TIMEOUT_MS = 3000;
+const TIMEOUT_MS = 4000;
 
 let cached = {};
 

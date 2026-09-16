@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { probeRelay, probeBlossom, probeIce } from "../src/core/transport/endpoint-health.js";
+import { probeRelay, probeBlossom, probeIce, withRetry } from "../src/core/transport/endpoint-health.js";
 
 const saved = {
 	WebSocket: globalThis.WebSocket,
@@ -150,6 +150,47 @@ test("probeIce: строит RTCPeerConnection с iceTransportPolicy: relay (и�
 	};
 	await probeIce([{ urls: "turn:127.0.0.1:3478", username: "u", credential: "c" }]);
 	assert.equal(capturedConfig.iceTransportPolicy, "relay");
+});
+
+test("withRetry: первая попытка неудачна, вторая успешна → { ok: true }, ровно 2 вызова", async () => {
+	let calls = 0;
+	const result = await withRetry(
+		async () => {
+			calls += 1;
+			return calls === 1 ? { ok: false, ms: null } : { ok: true, ms: 5 };
+		},
+		{ attempts: 3, delayMs: 1 },
+	);
+	assert.equal(result.ok, true);
+	assert.equal(calls, 2);
+});
+
+test("withRetry: все попытки неудачны → { ok: false }, вызовов ровно attempts", async () => {
+	let calls = 0;
+	const result = await withRetry(
+		async () => {
+			calls += 1;
+			return { ok: false, ms: null };
+		},
+		{ attempts: 3, delayMs: 1 },
+	);
+	assert.equal(result.ok, false);
+	assert.equal(calls, 3);
+});
+
+test("withRetry: isCancelled() true между попытками → не делает следующий вызов", async () => {
+	let calls = 0;
+	let cancelled = false;
+	const result = await withRetry(
+		async () => {
+			calls += 1;
+			cancelled = true;
+			return { ok: false, ms: null };
+		},
+		{ attempts: 3, delayMs: 1, isCancelled: () => cancelled },
+	);
+	assert.equal(result.ok, false);
+	assert.equal(calls, 1);
 });
 
 test("probeIce: timeout без кандидатов → { ok: false }", async () => {
