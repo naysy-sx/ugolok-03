@@ -32,9 +32,9 @@ import {
 	applyPeerCursor,
 	extractCursorFromPayload,
 	parseCursorText,
-	buildCursorText,
 	markCursorSent,
 	cursorGrewSinceLastSend,
+	hydrateCursorSession,
 	bindCursorFlush,
 	scheduleCursorFlush,
 	rearmAfterMinInterval,
@@ -588,7 +588,7 @@ async function finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey,
 	}
 
 	await markSent(seq);
-	if (receipts) markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r);
+	if (receipts) await markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r, dbKey);
 	await db
 		.table("messages")
 		.where("[ownerPubkey+chatId+msgId]")
@@ -911,7 +911,7 @@ async function getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey) {
 }
 
 function ensureCursorFlushBound(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
-	bindCursorFlush(ownerPubkey, contactPubkey, () => sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish));
+	bindCursorFlush(ownerPubkey, contactPubkey, (opts) => sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish, opts));
 }
 
 // Этап 5 (З5.5) — та же выборка, но с sentAt (шифрованное поле — нужна
@@ -956,25 +956,21 @@ async function alreadyAckedViaPiggyback(ownerPubkey, dbKey, contactPubkey, recei
 // не на каждое взаимодействие. Best-effort, НЕ через outbox: если публикация
 // не удалась сейчас, условие "давно не подтверждали" на следующем тике
 // sweepPendingAcks всё ещё истинно — отдельный durable-путь не нужен.
-export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish, { force = false } = {}) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 	const receipts = await getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey);
 	if (receipts.d === undefined) return;
+	await hydrateCursorSession(ownerPubkey, contactPubkey);
 	if (!cursorGrewSinceLastSend(ownerPubkey, contactPubkey, receipts.d, receipts.r)) return;
-	if (rearmAfterMinInterval(ownerPubkey, contactPubkey)) return;
+	if (!force && rearmAfterMinInterval(ownerPubkey, contactPubkey)) return;
 
 	const event = await withGroupLock(ownerPubkey, groupIdHex, async () => {
 		const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 		if (!raw) return null; // чат не установлен — нечего подтверждать
 		const row = fromEncryptedRow(raw, dbKey);
 		const state = deserializeState(row.state);
-		const payload = {
-			ackOnly: true,
-			ackUpTo: receipts.d,
-			d: receipts.d,
-			text: buildCursorText({ d: receipts.d, ...(receipts.r !== undefined ? { r: receipts.r } : {}) }),
-		};
+		const payload = { ackOnly: true, ackUpTo: receipts.d, d: receipts.d };
 		if (receipts.r !== undefined) payload.r = receipts.r;
 		const plaintextBytes = utf8ToBytes(JSON.stringify(payload));
 		const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
@@ -1001,7 +997,7 @@ export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey
 
 	try {
 		await requirePublishOk(publish, event);
-		markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r);
+		await markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r, dbKey);
 		traceDelivery("ack.sent", { groupIdHex, ackUpTo: receipts.d });
 	} catch (e) {
 		traceDelivery("ack.publish.reject", { groupIdHex, ackUpTo: receipts.d, reason: String(e?.message ?? e) });

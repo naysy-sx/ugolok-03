@@ -12,6 +12,7 @@ import {
 	extractCursorFromPayload,
 	cursorGrewSinceLastSend,
 	markCursorSent,
+	hydrateCursorSession,
 	scheduleCursorFlush,
 	bindCursorFlush,
 	flushCursorNow,
@@ -30,6 +31,7 @@ before(async () => {
 
 beforeEach(async () => {
 	await db.table("peerCursors").clear();
+	await db.table("chatSyncState").clear();
 	resetCursorRuntime();
 });
 
@@ -121,12 +123,24 @@ test("min interval: повторный flush раньше 10 с переноси
 	assert.equal(cursorGrewSinceLastSend(ALICE_PUB, BOB_PUB, 2, 1), true);
 });
 
-test("flushCursorNow снимает таймер и вызывает flush", async () => {
+test("flushCursorNow снимает таймер и вызывает flush с force", async () => {
 	let flushes = 0;
-	bindCursorFlush(ALICE_PUB, BOB_PUB, async () => {
+	let forced = false;
+	bindCursorFlush(ALICE_PUB, BOB_PUB, async (opts) => {
 		flushes++;
+		forced = opts?.force === true;
 	});
 	scheduleCursorFlush(ALICE_PUB, BOB_PUB);
 	await flushCursorNow(ALICE_PUB, BOB_PUB);
 	assert.equal(flushes, 1);
+	assert.equal(forced, true);
+});
+
+test("hydrateCursorSession: lastSent переживает reset памяти через chatSyncState", async () => {
+	const dbKey = crypto.getRandomValues(new Uint8Array(32));
+	await markCursorSent(ALICE_PUB, BOB_PUB, 4, 2, dbKey);
+	resetCursorRuntime();
+	await hydrateCursorSession(ALICE_PUB, BOB_PUB);
+	assert.equal(cursorGrewSinceLastSend(ALICE_PUB, BOB_PUB, 4, 2), false);
+	assert.equal(cursorGrewSinceLastSend(ALICE_PUB, BOB_PUB, 5, 2), true);
 });

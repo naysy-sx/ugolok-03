@@ -65,7 +65,7 @@ export const GROUPS_PLAINTEXT_FIELDS = ["owner", "id"];
 // Этап 42 (Tier 3 — модерация/черновики, CONTRACTS.md). channelIgnores/
 // bannedMembers/channelVisibilityGroups/channelReaders не шифруются вовсе (голые
 // id/pubkey-списки, тот же принцип, что groupMembers/contacts на этапе 41).
-export const CHAT_SYNC_STATE_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastReadLamportTs", "oldestLoadedSeq"];
+export const CHAT_SYNC_STATE_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastReadLamportTs", "oldestLoadedSeq", "sentCursorD", "sentCursorR"];
 
 export const CONTACT_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey"];
 

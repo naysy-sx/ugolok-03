@@ -67,6 +67,7 @@ beforeEach(async () => {
 	await db.table("chatGeneration").clear();
 	await db.table("peerCursors").clear();
 	await db.table("peerPresence").clear();
+	await db.table("chatSyncState").clear();
 	resetCursorRuntime();
 });
 

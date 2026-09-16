@@ -3,6 +3,8 @@
 // дебаунсится: склейка 3 с, не чаще одного события на пару в 10 с.
 
 import { db } from "../../core/store/database.js";
+import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 
 export const CURSOR_MARKER_PREFIX = "__ugolok_cursor__:";
 export const CURSOR_COALESCE_MS = 3000;
@@ -83,11 +85,28 @@ export async function getPeerCursor(ownerPubkey, contactPubkey) {
 	return row ?? { ownerPubkey, contactPubkey, deliveredUpTo: 0, readUpTo: 0, updatedAt: 0 };
 }
 
-export function markCursorSent(ownerPubkey, contactPubkey, d, r) {
+export async function hydrateCursorSession(ownerPubkey, contactPubkey) {
+	const s = getSession(ownerPubkey, contactPubkey);
+	if (s.hydrated) return s;
+	const raw = await db.table("chatSyncState").get([ownerPubkey, contactPubkey]);
+	s.lastSentD = Math.max(s.lastSentD ?? 0, raw?.sentCursorD ?? 0);
+	s.lastSentR = Math.max(s.lastSentR ?? 0, raw?.sentCursorR ?? 0);
+	s.hydrated = true;
+	return s;
+}
+
+export async function markCursorSent(ownerPubkey, contactPubkey, d, r, dbKey) {
 	const s = getSession(ownerPubkey, contactPubkey);
 	if (typeof d === "number") s.lastSentD = Math.max(s.lastSentD ?? 0, d);
 	if (typeof r === "number") s.lastSentR = Math.max(s.lastSentR ?? 0, r);
 	s.lastSentAt = cursorClock.now();
+	s.hydrated = true;
+	if (!dbKey) return;
+	const raw = await db.table("chatSyncState").get([ownerPubkey, contactPubkey]);
+	const merged = { ...(raw ? fromEncryptedRow(raw, dbKey) : {}), ownerPubkey, chatId: contactPubkey };
+	merged.sentCursorD = Math.max(merged.sentCursorD ?? 0, s.lastSentD ?? 0);
+	merged.sentCursorR = Math.max(merged.sentCursorR ?? 0, s.lastSentR ?? 0);
+	await db.table("chatSyncState").put(toEncryptedRow(merged, CHAT_SYNC_STATE_PLAINTEXT_FIELDS, dbKey));
 }
 
 export function cursorGrewSinceLastSend(ownerPubkey, contactPubkey, d, r) {
@@ -121,7 +140,7 @@ export async function flushCursorNow(ownerPubkey, contactPubkey) {
 		cursorClock.clearTimeout(s.timer);
 		s.timer = null;
 	}
-	await s.flushFn?.();
+	await s.flushFn?.({ force: true });
 }
 
 export function delayUntilMinInterval(ownerPubkey, contactPubkey) {
