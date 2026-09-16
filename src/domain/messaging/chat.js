@@ -789,8 +789,15 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 }
 
 export function armPeerCursorAck(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
-	ensureCursorFlushBound(ownerPubkey, privKey, dbKey, contactPubkey, publish);
-	scheduleCursorFlush(ownerPubkey, contactPubkey);
+	// 2026-09-16 live: testik↔naysy — отдельный kind 445 курсора (после каждого
+	// входящего + при открытии чата) шёл пачкой в ту же MLS-группу, пока
+	// собеседник сам шифровал. Ратчет разъезжался, обычные сообщения на реле
+	// были, на экране — нет. Пиггибэк d/r в обычном сообщении остаётся.
+	void ownerPubkey;
+	void privKey;
+	void dbKey;
+	void contactPubkey;
+	void publish;
 }
 
 // Этап 73.3 — И4 (chat.js, ensureChatEstablished): существование, не данные —
@@ -904,10 +911,14 @@ async function lastReadIncomingLamport(ownerPubkey, contactPubkey) {
 }
 
 async function getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey) {
-	const d = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
-	const settings = await loadUiSettings(ownerPubkey, dbKey);
-	const r = settings.sendReadReceipts === false ? undefined : await lastReadIncomingLamport(ownerPubkey, contactPubkey);
-	return { d, r };
+	try {
+		const d = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
+		const settings = await loadUiSettings(ownerPubkey, dbKey);
+		const r = settings.sendReadReceipts === false ? undefined : await lastReadIncomingLamport(ownerPubkey, contactPubkey);
+		return { d, r };
+	} catch {
+		return { d: undefined, r: undefined };
+	}
 }
 
 function ensureCursorFlushBound(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
