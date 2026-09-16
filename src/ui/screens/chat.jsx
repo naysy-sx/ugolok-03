@@ -31,6 +31,7 @@ import {
 	editChatMessageAction,
 	markChatReadAction,
 	saveChatDraftAction,
+	resendChatOpenRequestAction,
 } from "../signals/chats.js";
 import { refreshInboxRequests, acceptInboxRequestAction, rejectInboxRequestAction } from "../signals/inbox.js";
 import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
@@ -618,7 +619,39 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// и когда нажал "Отправить" — переживает reload и работает даже если
 	// сообщение было отправлено в прошлой сессии. Исчезает сама, как только
 	// messagingActivity перезагрузит окно и статус сменится (drain выполнился).
-	const awaitingCommitter = messages.some((m) => m.senderPubkey === ownerPubkey && m.status === "queued");
+	const ownQueuedMessages = messages.filter((m) => m.senderPubkey === ownerPubkey && m.status === "queued");
+	const awaitingCommitter = ownQueuedMessages.length > 0;
+	const oldestQueuedAt = awaitingCommitter ? Math.min(...ownQueuedMessages.map((m) => m.sentAt)) : null;
+
+	// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант C) — "счётчик времени в очереди":
+	// тикает, только пока реально есть что показывать — не крутить лишний
+	// таймер в фоне для чатов без ожидающих сообщений.
+	const [nowTick, setNowTick] = useState(Date.now());
+	useEffect(() => {
+		if (!awaitingCommitter) return;
+		const id = setInterval(() => setNowTick(Date.now()), 30000);
+		return () => clearInterval(id);
+	}, [awaitingCommitter]);
+
+	function formatQueuedDuration(sinceSeconds, nowMs) {
+		const totalSeconds = Math.max(0, Math.floor(nowMs / 1000) - sinceSeconds);
+		const minutes = Math.floor(totalSeconds / 60);
+		if (minutes < 1) return t("chat.window.awaitingCommitterDurationSeconds");
+		if (minutes < 60) return t("chat.window.awaitingCommitterDurationMinutes", { minutes });
+		return t("chat.window.awaitingCommitterDurationHours", { hours: Math.floor(minutes / 60) });
+	}
+
+	const [resendState, setResendState] = useState(null); // null | "sending" | "sent"
+	async function handleResendChatOpenRequest() {
+		setResendState("sending");
+		try {
+			await resendChatOpenRequestAction(privKey, contactPubkey, publishToChatPartner);
+			setResendState("sent");
+			setTimeout(() => setResendState(null), 4000);
+		} catch {
+			setResendState(null);
+		}
+	}
 
 	return (
 		<Screen
@@ -653,9 +686,14 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 					{awaitingCommitter && (
-						<p class="panel__hint" role="status">
-							{t("chat.window.awaitingCommitter")}
-						</p>
+						<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+							<p class="panel__hint" role="status" style={{ margin: 0 }}>
+								{t("chat.window.awaitingCommitter")} {formatQueuedDuration(oldestQueuedAt, nowTick)}
+							</p>
+							<button type="button" class="btn--ghost rigid" onClick={handleResendChatOpenRequest} disabled={resendState === "sending"}>
+								{resendState === "sent" ? t("chat.window.awaitingCommitterResendDone") : t("chat.window.awaitingCommitterResend")}
+							</button>
+						</div>
 					)}
 
 					{composeError && (

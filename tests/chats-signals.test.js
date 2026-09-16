@@ -202,7 +202,12 @@ test("sendChatMessageAction: И4 (mirror-история уже есть) — Н�
 // ещё нет и я не коммиттер. Именно это устраняет пользовательский симптом
 // "нажал Отправить — ничего не произошло" (MESSAGE-DELIVERY-AUDIT-BRIEFING.md
 // §0/H1): раньше строка не существовала до конца ensureChatEstablished/sendMessage.
-test("sendChatMessageAction: И3 (не-коммиттер, contact уже подтверждён) — строка 'queued' в ленте появляется ДО любого сетевого вызова, publish/fetchDeviceKeyPackages не трогаются", async () => {
+// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант A) — правка контракта: не-коммиттер
+// теперь публикует РОВНО одно событие — gift-wrap "chat-open-request" (kind
+// 3012, chats.js), пингующий коммиттера, чтобы не ждать месяцами, пока тот
+// сам решит написать. fetchDeviceKeyPackages по-прежнему не его забота — это
+// дело коммиттера, получившего сигнал (transport.js giftWrapSubscriber).
+test("sendChatMessageAction: И3 (не-коммиттер, contact уже подтверждён) — строка 'queued' в ленте появляется ДО любого сетевого вызова; публикует РОВНО один gift-wrap 'открой переписку', fetchDeviceKeyPackages не трогает", async () => {
 	// Определяем, кто НЕ коммиттер в паре ALICE/BOB — не жёстко кодируем
 	// порядок ключей (тест не должен зависеть от конкретных fill()-значений).
 	const aliceIsCommitter = isCommitter(ALICE_PUB, BOB_PUB);
@@ -210,10 +215,10 @@ test("sendChatMessageAction: И3 (не-коммиттер, contact уже под
 
 	await db.table("contactRelationships").put({ owner: nonCommitterPub, peer: peerPub, state: "CONTACT" });
 
-	let publishCalled = false;
+	const published = [];
 	let fetchCalled = false;
-	const publish = async () => {
-		publishCalled = true;
+	const publish = async (event) => {
+		published.push(event);
 		return { ok: true };
 	};
 	const fetchDeviceKeyPackages = async () => {
@@ -224,12 +229,34 @@ test("sendChatMessageAction: И3 (не-коммиттер, contact уже под
 	const result = await sendChatMessageAction(nonCommitterPub, nonCommitterPriv, DB_KEY, peerPub, "жду коммиттера", 1, publish, fetchDeviceKeyPackages, async () => {});
 
 	assert.equal(result.status, "awaiting_committer");
-	assert.equal(publishCalled, false, "не-коммиттер не должен пытаться публиковать что-либо (ни Welcome, ни kind 445)");
+	assert.equal(published.length, 1, "не-коммиттер должен опубликовать РОВНО один gift-wrap — сигнал 'открой переписку', не Welcome и не kind 445");
+	assert.equal(published[0].kind, 1059, "это обязан быть gift-wrap (NIP-59), содержимое (kind 3012) скрыто внутри");
+	assert.ok(published[0].tags.some((t) => t[0] === "p" && t[1] === peerPub), "gift-wrap обязан быть адресован коммиттеру (#p)");
 	assert.equal(fetchCalled, false, "не-коммиттер не должен запрашивать KeyPackage контакта — это дело коммиттера");
 
 	const row = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([nonCommitterPub, peerPub, result.msgId]).first(), DB_KEY);
 	assert.equal(row.status, "queued");
 	assert.equal(row.text, "жду коммиттера");
+});
+
+test("sendChatMessageAction: И3 повторно (второе сообщение той же очереди) — НЕ шлёт второй gift-wrap 'открой переписку' (не спамит коммиттера)", async () => {
+	const aliceIsCommitter = isCommitter(ALICE_PUB, BOB_PUB);
+	const [nonCommitterPub, nonCommitterPriv, peerPub] = aliceIsCommitter ? [BOB_PUB, BOB_PRIV, ALICE_PUB] : [ALICE_PUB, ALICE_PRIV, BOB_PUB];
+	await db.table("contactRelationships").put({ owner: nonCommitterPub, peer: peerPub, state: "CONTACT" });
+
+	const published = [];
+	const publish = async (event) => {
+		published.push(event);
+		return { ok: true };
+	};
+	const fetchDeviceKeyPackages = async () => new Map();
+
+	await sendChatMessageAction(nonCommitterPub, nonCommitterPriv, DB_KEY, peerPub, "первое", 1, publish, fetchDeviceKeyPackages, async () => {});
+	assert.equal(published.length, 1);
+
+	const secondResult = await sendChatMessageAction(nonCommitterPub, nonCommitterPriv, DB_KEY, peerPub, "второе", 2, publish, fetchDeviceKeyPackages, async () => {});
+	assert.equal(secondResult.status, "awaiting_committer");
+	assert.equal(published.length, 1, "второе сообщение в ТУ ЖЕ уже непустую очередь не должно слать повторный пинг");
 });
 
 test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делегируют в domain-модули этапов 25-26", async () => {

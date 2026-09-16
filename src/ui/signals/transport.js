@@ -20,7 +20,7 @@ import { accumulateProfileVersions } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { db } from "../../core/store/database.js";
-import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND } from "../../domain/contacts/requests.js";
+import { CONTACT_REQUEST_KIND, CONTACT_ACCEPTED_KIND, CONTACT_REJECTED_KIND, ACQUAINT_CANCELLED_KIND, CHAT_OPEN_REQUEST_KIND } from "../../domain/contacts/requests.js";
 import { DISCOVERY_KIND, parseDiscoveryEvent, loadDiscoverySettings, buildDiscoveryEvent } from "../../domain/discovery/discovery.js";
 import { DISCOVERY_REPORT_KIND, receiveDiscoveryReport } from "../../domain/discovery/reports.js";
 import {
@@ -32,6 +32,7 @@ import {
 	recordGroupDecryptFailure,
 	recordUndeliverableEvent,
 	computeGroupId,
+	ensureChatEstablished,
 } from "../../domain/messaging/chat.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
@@ -710,6 +711,29 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						await ensureProfilesFetched([rumor.pubkey], fetchProfiles).catch(() => {});
 						await handleIncomingContactRumor(rumor);
 						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт об изменении
+					} else if (rumor.kind === CHAT_OPEN_REQUEST_KIND) {
+						// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант A) — не-коммиттер (проигравший
+						// И3, chat.js) попросил начать разговор, потому что сам не имеет права
+						// впервые создать группу. Действуем, ТОЛЬКО если отправитель уже
+						// подтверждённый контакт — тот же гейт, что И3 применяет с его стороны
+						// (холодных незнакомцев этот сигнал вообще не касается: И3-гейт для них
+						// не срабатывает, sendChatMessageAction не шлёт им этот rumor). Если я
+						// уже коммиттер этой пары — ensureChatEstablished создаст группу и
+						// пошлёт Welcome, НИЧЕГО не отправляя как сообщение — драйн ЕГО
+						// собственной очереди (там, откуда пришёл сигнал) произойдёт на его
+						// стороне после acceptWelcome, как обычно. Идемпотентна (withGroupLock +
+						// "группа уже есть — no-op") — повторный сигнал/гонка с уже начавшейся
+						// другим путём группой не создают вторую (приёмка Этапа 4, "два сигнала
+						// подряд создают ровно одну группу").
+						if (await isKnownContact(pubkeyHex, rumor.pubkey)) {
+							try {
+								await ensureChatEstablished(pubkeyHex, privKey, dbKey, rumor.pubkey, publish, fetchDeviceKeyPackages);
+								await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
+							} catch (e) {
+								console.warn("giftWrapSubscriber: не удалось установить чат по chat-open-request", rumor.pubkey, e);
+							}
+						}
+						activityChanged = true;
 					} else if (rumor.kind === CHANNEL_SUBSCRIBE_REQUEST_KIND) {
 						// Этап 30 — владелец канала автоматически подтверждает COMMENT-доступ
 						// (group-видимость уже была его решением при создании канала).

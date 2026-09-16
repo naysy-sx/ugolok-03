@@ -37,3 +37,19 @@ export const CONTACT_REJECTED_KIND = 3006;
 export function buildContactRejectedRumor() {
   return { kind: CONTACT_REJECTED_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
 }
+
+// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант A) — "сигнал открой переписку":
+// не-коммиттер (проигравший И3, chat.js's doEnsureChatEstablished) не имеет
+// способа сообщить об этом на проводе — раньше единственный триггер для
+// коммиттера был "сам напишет" (минуты/часы/никогда, если человек не заходит).
+// Пустой rumor — смысл несёт rumor.pubkey после unwrap (это и есть
+// не-коммиттер, который хочет начать разговор), тот же минимальный приём,
+// что CONTACT_ACCEPTED_KIND/ACQUAINT_CANCELLED_KIND/CONTACT_REJECTED_KIND.
+// 3012, НЕ 3007 (буквальное предложение брифа TZ) — 3007 уже занят ДВАЖДЫ
+// (CHANNEL_UNVIEW_KIND, content/channel-access.js; KIND_FILES_OP_LEGACY,
+// files/sync.js) — автор ТЗ прямо предупреждал, что код не читал.
+export const CHAT_OPEN_REQUEST_KIND = 3012;
+
+export function buildChatOpenRequestRumor() {
+  return { kind: CHAT_OPEN_REQUEST_KIND, content: '', tags: [], created_at: Math.floor(Date.now() / 1000) };
+}

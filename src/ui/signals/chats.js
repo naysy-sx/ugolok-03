@@ -2,6 +2,8 @@ import { signal } from "@preact/signals";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { ensureChatEstablished, sendMessage, enqueuePendingOutgoingMessage, upsertMessage } from "../../domain/messaging/chat.js";
+import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
+import { buildChatOpenRequestRumor } from "../../domain/contacts/requests.js";
 import { touchChatActivity } from "../../domain/messaging/chat-activity.js";
 import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
 import { editMessage } from "../../domain/messaging/edits.js";
@@ -91,11 +93,43 @@ export async function sendChatMessageAction(
 		await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
 	} catch (e) {
 		if (!e.key?.startsWith("errors.awaiting")) throw e;
+		// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант A) — "errors.awaitingCommitter"
+		// (И3, chat.js): коммиттер этой пары — контакт, не я, и молчит. Раньше
+		// единственный триггер для него был "сам напишет" — часы/дни/никогда,
+		// если человек не заходит. Пингуем его gift-wrap'ом (best-effort, не
+		// блокирует постановку в очередь ниже — сигнал может не дойти, drain
+		// после ЛЮБОГО другого пути установления группы всё равно сработает).
+		// НЕ для "errors.awaitingSiblingSync" (И4) — там блокер не контакт, а
+		// МОЁ ЖЕ другое устройство, пинговать контакт бессмысленно.
+		// Только на ПЕРВОЕ сообщение, ушедшее в очередь для этого контакта —
+		// иначе каждое следующее сообщение при офлайн-коммиттере слало бы ещё
+		// один gift-wrap, а он не читает их быстрее от повторов.
+		if (e.key === "errors.awaitingCommitter") {
+			const alreadyQueued = (await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).count()) > 0;
+			if (!alreadyQueued) {
+				try {
+					await publish(nip59Wrap(buildChatOpenRequestRumor(), privKey, contactPubkey));
+					traceDelivery("chat.open.request.sent", { contactPubkey });
+				} catch (pingErr) {
+					traceDelivery("chat.open.request.failed", { contactPubkey, reason: String(pingErr?.message ?? pingErr) });
+				}
+			}
+		}
 		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, lamportTs, msgId });
 		return { status: "awaiting_committer", msgId };
 	}
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
 	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, msgId, sentAt);
+}
+
+// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант C) — "ручная кнопка отправить
+// приглашение ещё раз": автоматический пинг (sendChatMessageAction выше)
+// уходит РОВНО один раз на первое сообщение очереди — если коммиттер всё
+// ещё не в сети/не увидел его, пользователь может явно попросить повторить,
+// не дожидаясь ничего. Та же рассылка (kind 3012), не kind 3004 (ТЗ спутал
+// с CONTACT_ACCEPTED_KIND — не относится к установлению чата вовсе).
+export async function resendChatOpenRequestAction(privKey, contactPubkey, publish) {
+	await publish(nip59Wrap(buildChatOpenRequestRumor(), privKey, contactPubkey));
 }
 
 export async function deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish) {
