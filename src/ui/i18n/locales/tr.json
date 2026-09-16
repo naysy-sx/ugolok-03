@@ -1126,6 +1126,7 @@
 		"channelNotFound": "kanal bulunamadı",
 		"fileTooLarge": "dosya boyut sınırını aşıyor",
 		"invalidFileType": "izin verilmeyen dosya türü: {{mime}}",
+		"keyPackageTimeout": "karşı tarafın anahtarı alınamadı — röle zamanında yanıt vermedi. Lütfen tekrar deneyin.",
 		"lastRelayCannotBeRemoved": "son relay'i kaldıramazsınız — liste boş kalamaz",
 		"nameTakenInFolder": "«{{name}}» adı bu klasörde zaten kullanılıyor",
 		"nameTakenInTargetFolder": "«{{name}}» adı hedef klasörde zaten kullanılıyor",

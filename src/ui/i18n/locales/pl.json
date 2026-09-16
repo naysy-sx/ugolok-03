@@ -1126,6 +1126,7 @@
 		"channelNotFound": "nie znaleziono kanału",
 		"fileTooLarge": "plik przekracza limit rozmiaru",
 		"invalidFileType": "niedozwolony typ pliku: {{mime}}",
+		"keyPackageTimeout": "nie udało się pobrać klucza rozmówcy — serwer przekaźnikowy nie odpowiedział na czas. Spróbuj ponownie.",
 		"lastRelayCannotBeRemoved": "nie możesz usunąć ostatniego relay — lista nie może być pusta",
 		"nameTakenInFolder": "Nazwa „{{name}}” jest już zajęta w tym folderze",
 		"nameTakenInTargetFolder": "Nazwa „{{name}}” jest już zajęta w folderze docelowym",

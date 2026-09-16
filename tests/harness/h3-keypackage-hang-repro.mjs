@@ -7,12 +7,18 @@ import { createWsBridge } from "./ws-bridge.js";
 import { spawnDevice } from "./scenario.js";
 
 // Этап 0 (MESSAGE-DELIVERY-TZ.md, З0.3) — доказательство H3 (MESSAGE-DELIVERY-
-// AUDIT-BRIEFING.md §6, §5.3): fetchDeviceKeyPackages (src/ui/signals/transport.js
-// ~1755) ждёt ТОЛЬКО "EOSE" на REQ {authors:[peer], kinds:[443]} — если EOSE не
-// приходит (реле требует AUTH и закрывает подписку auth-required без REQ replay
-// после AUTH_OK — задокументированная в брифе брешь relay-auth.js, либо просто
+// AUDIT-BRIEFING.md §6, §5.3): fetchDeviceKeyPackages ждал ТОЛЬКО "EOSE" на
+// REQ {authors:[peer], kinds:[443]} — если EOSE не приходит (реле требует AUTH
+// и закрывает подписку auth-required без REQ replay после AUTH_OK, либо просто
 // сеть потеряла кадр), ensureChatEstablished (и вся sendChatMessageAction)
-// висит бесконечно — тот же класс дефекта, что H2, на другом REQ/EOSE-пути.
+// висела бесконечно — тот же класс дефекта, что H2, на другом REQ/EOSE-пути.
+//
+// Этап 2 — дефект закрыт: fetchDeviceKeyPackages теперь идёт через
+// oneShotRequest (core/transport/deadline.js, unit-доказательство —
+// tests/deadline.test.js) со сроком 10с и DomainError("errors.keyPackageTimeout")
+// по истечении. relay-auth.js's reportAuthFail теперь тоже реплеит активные
+// REQ (tests/relay-pool.test.js) — щель AUTH-без-replay больше не единственная
+// причина живого зависания, но сам таймаут закрывает ЛЮБУЮ причину разом.
 
 const ALICE_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(5));
 const BOB_PRIV_HEX = bytesToHex(new Uint8Array(32).fill(6));
@@ -41,7 +47,7 @@ function pumpAllExcept(relay, holdBackFn) {
 }
 
 test(
-	"H3: ensureChatEstablished висит бесконечно, если EOSE на REQ kind:443 (fetchDeviceKeyPackages) не приходит",
+	"H3 (закрыта Этапом 2, oneShotRequest): ensureChatEstablished не settled раньше срока, если EOSE на REQ kind:443 задерживается, и продолжается после",
 	{ timeout: 30000 },
 	async (t) => {
 		let bridge;
@@ -88,7 +94,7 @@ test(
 		assert.equal(
 			settled,
 			false,
-			"H3 CONFIRMED: ensureChatEstablished всё ещё не resolve/reject спустя 2с без EOSE на REQ kind:443 — fetchDeviceKeyPackages ждёт EOSE без таймаута",
+			"ensureChatEstablished не должен settle раньше срока (2с — обычная сетевая задержка, меньше 10с по умолчанию для fetchDeviceKeyPackages)",
 		);
 
 		// Отпускаем EOSE — REQ Алисы наконец получает свой EOSE, fetchDeviceKeyPackages

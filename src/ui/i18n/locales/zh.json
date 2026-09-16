@@ -1126,6 +1126,7 @@
 		"channelNotFound": "未找到频道",
 		"fileTooLarge": "文件超出大小限制",
 		"invalidFileType": "不支持的文件类型：{{mime}}",
+		"keyPackageTimeout": "无法获取对方的密钥——中继未及时响应。请重试。",
 		"lastRelayCannotBeRemoved": "无法删除最后一个 relay——列表不能为空",
 		"nameTakenInFolder": "名称“{{name}}”在此文件夹中已被占用",
 		"nameTakenInTargetFolder": "名称“{{name}}”在目标文件夹中已被占用",

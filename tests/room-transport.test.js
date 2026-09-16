@@ -96,7 +96,13 @@ test("close(): publish() непосредственно перед close() вс�
 	await flushUntilSettled(relay); // дренируем обе начальные подписки
 
 	const event = rawEvent(aliceKey, ROOM_CHAT_KIND, [["h", hTopic]], "leaving-stub");
-	alice.publish(event); // НЕ await — реальный send() внутри батчится на batchWindowMs
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.2) — .catch(): alice.close() ниже
+	// теперь явно отклоняет ещё не подтверждённые publish() (publisher.rejectAll,
+	// room-transport.js) — событие УЖЕ ушло на relay флашем внутри close()
+	// (см. assert ниже, Боб его получает), но локальный promise Алисы больше
+	// не висит молча вечно, а закономерно отклоняется, раз соединение закрыто
+	// раньше, чем мог бы прийти "OK" по нему.
+	alice.publish(event).catch(() => {}); // НЕ await — реальный send() внутри батчится на batchWindowMs
 	alice.close(); // без flush() внутри close() событие осталось бы в очереди навсегда — соединение уже разорвано
 
 	await flushUntilSettled(relay);

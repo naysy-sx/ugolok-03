@@ -1126,6 +1126,7 @@
 		"channelNotFound": "channel not found",
 		"fileTooLarge": "file exceeds the size limit",
 		"invalidFileType": "invalid file type: {{mime}}",
+		"keyPackageTimeout": "couldn't get the other person's key — the relay didn't respond in time. Please try again.",
 		"lastRelayCannotBeRemoved": "you can't remove the last relay — the list can't be empty",
 		"nameTakenInFolder": "The name «{{name}}» is already taken in this folder",
 		"nameTakenInTargetFolder": "The name «{{name}}» is already taken in the target folder",

@@ -131,3 +131,67 @@ test("flush(): одно событие батча бросает при send(), 
 	);
 	t.mock.timers.reset();
 });
+
+// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.2, приёмка) — H2 (MESSAGE-DELIVERY-
+// AUDIT-BRIEFING.md, tests/harness/h2-publish-hang-repro.mjs доказал живьём):
+// EVENT реально уходит на relay (send() не бросает — "зомби"-сокет), "OK" не
+// приходит никогда. До этого этапа promise висел бесконечно без единого
+// таймера — теперь у КАЖДОГО publish() есть срок по умолчанию.
+test("publish(): EVENT отправлен, OK не приходит -> отклоняется по истечении срока (timeoutMs), код 'timeout'", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const { conn, ws } = setupConnected();
+	const pub = createPublisher(conn, { batchWindowMs: 0, batchSize: 1, timeoutMs: 15000 });
+
+	const promise = pub.publish(ev("a"));
+	assert.equal(ws.sent.length, 1, "EVENT реально ушёл на 'relay'");
+
+	t.mock.timers.tick(14999);
+	let settled = false;
+	promise.then(
+		() => (settled = true),
+		() => (settled = true),
+	);
+	await Promise.resolve();
+	assert.equal(settled, false, "1мс до срока — всё ещё не settled");
+
+	t.mock.timers.tick(1);
+	await assert.rejects(promise, (err) => {
+		assert.equal(err.code, "timeout");
+		return true;
+	});
+	// Запоздалый OK после истечения срока не должен ничего сломать (pending уже
+	// очищен) — handleMessage должен вернуть false, не найти запись.
+	assert.equal(pub.handleMessage(["OK", "a", true, ""]), false, "pending уже очищен по таймауту — поздний OK не перехватывается");
+	t.mock.timers.reset();
+});
+
+// Этап 2 (З2.2, приёмка) — "обрыв WS между EVENT и OK -> отклонение с причиной
+// disconnected": rejectAll() — то, чем transport.js/room-transport.js реагируют
+// на переход соединения в "disconnected" (не ждать по 15с каждый зависший
+// publish, если сокет уже точно мёртв).
+test("rejectAll(): все незавершённые publish() отклоняются немедленно с кодом 'disconnected', pending гарантированно очищается", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const { conn } = setupConnected();
+	const pub = createPublisher(conn, { batchWindowMs: 0, batchSize: 1, timeoutMs: 15000 });
+
+	const promiseA = pub.publish(ev("a"));
+	const promiseB = pub.publish(ev("b"));
+
+	pub.rejectAll("disconnected", "связь потеряна");
+
+	await assert.rejects(promiseA, (err) => {
+		assert.equal(err.code, "disconnected");
+		return true;
+	});
+	await assert.rejects(promiseB, (err) => err.code === "disconnected");
+	// Запоздалый OK после rejectAll() не находит запись — pending пуст.
+	assert.equal(pub.handleMessage(["OK", "a", true, ""]), false);
+	assert.equal(pub.handleMessage(["OK", "b", true, ""]), false);
+	t.mock.timers.reset();
+});
+
+test("rejectAll(): вызванный без единого pending publish() — no-op, не бросает", () => {
+	const { conn } = setupConnected();
+	const pub = createPublisher(conn);
+	assert.doesNotThrow(() => pub.rejectAll("disconnected"));
+});

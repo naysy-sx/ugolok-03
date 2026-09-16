@@ -47,11 +47,24 @@ function hasTag(event, name, value) {
 // импортирует трассировщик, только пробрасывает колбэк дальше в relay-pool.js.
 export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null, selfPubkey, onEvent, onConnectionStateChange = () => {}, onTrace }) {
 	if (!hTopic && !hDisc) throw new Error("room-transport: нужен хотя бы один из hTopic/hDisc");
-	const conn = createRelayConnection(relayUrl, { onStateChange: onConnectionStateChange, onTrace });
+	let publisher; // назначается ниже — onStateChange может сработать синхронно до этого
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.2) — тот же класс дефекта, что H2
+	// (publisher.publish() без ответа "OK" висит бесконечно), у второго,
+	// независимого транспортного клиента комнаты (ROOMS-SPEC §0): без этого
+	// отклонение зависших publish() на обрыве связи не происходило бы вовсе —
+	// каждый ждал бы собственные 15с publisher.js даже после явного close()/
+	// обрыва, до которого комната уже могла быть закрыта пользователем.
+	const conn = createRelayConnection(relayUrl, {
+		onStateChange: (state, prev) => {
+			if (state === "disconnected") publisher?.rejectAll("disconnected", "room-transport: связь потеряна");
+			onConnectionStateChange(state, prev);
+		},
+		onTrace,
+	});
 	conn.connect();
 	await waitForConnState(conn, (s) => s === "connected", 8000);
 
-	const publisher = createPublisher(conn);
+	publisher = createPublisher(conn);
 
 	function verifyBatch(events) {
 		return events.map(verify);
@@ -92,6 +105,10 @@ export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null,
 		// рвёт соединение раньше, чем сработает отложенный таймер батча.
 		publisher.flush();
 		conn.close();
+		// Этап 2 (З2.2) — любой publish(), для которого "OK" так и не пришёл до
+		// явного закрытия комнаты, отклоняется здесь и сейчас — не должен ждать
+		// собственные 15с уже после того, как пользователь ушёл из комнаты.
+		publisher.rejectAll("disconnected", "room-transport: комната закрыта");
 	}
 
 	return { publish, close };

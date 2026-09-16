@@ -1126,6 +1126,7 @@
 		"channelNotFound": "チャンネルが見つかりません",
 		"fileTooLarge": "ファイルがサイズ上限を超えています",
 		"invalidFileType": "許可されていないファイル形式です: {{mime}}",
+		"keyPackageTimeout": "相手の鍵を取得できませんでした — リレーが時間内に応答しませんでした。もう一度お試しください。",
 		"lastRelayCannotBeRemoved": "最後のrelayは削除できません — リストを空にはできません",
 		"nameTakenInFolder": "名前「{{name}}」はこのフォルダで既に使用されています",
 		"nameTakenInTargetFolder": "名前「{{name}}」は移動先のフォルダで既に使用されています",

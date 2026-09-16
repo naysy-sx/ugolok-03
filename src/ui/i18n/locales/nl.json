@@ -1126,6 +1126,7 @@
 		"channelNotFound": "kanaal niet gevonden",
 		"fileTooLarge": "bestand overschrijdt de maximale grootte",
 		"invalidFileType": "niet-toegestaan bestandstype: {{mime}}",
+		"keyPackageTimeout": "kon de sleutel van de ander niet ophalen — de relay reageerde niet op tijd. Probeer het opnieuw.",
 		"lastRelayCannotBeRemoved": "u kunt de laatste relay niet verwijderen — de lijst mag niet leeg zijn",
 		"nameTakenInFolder": "De naam ‘{{name}}’ is al in gebruik in deze map",
 		"nameTakenInTargetFolder": "De naam ‘{{name}}’ is al in gebruik in de doelmap",

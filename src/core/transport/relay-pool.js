@@ -83,6 +83,16 @@ export function createRelayConnection(url, options = {}) {
     messageHandlers.push(handler);
   }
 
+  // Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.4) — подтверждённая гипотеза: метода
+  // не было вовсе. Одноразовые запросы (oneShotRequest, core/transport/
+  // deadline.js) регистрируют обработчик на каждый вызов и без этого метода
+  // не могли его снять — навсегда оставался в цепочке до конца сессии
+  // (дёшево по CPU на сообщение, но растёт без ограничения за долгую сессию).
+  function removeMessageHandler(handler) {
+    const idx = messageHandlers.indexOf(handler);
+    if (idx !== -1) messageHandlers.splice(idx, 1);
+  }
+
   function setState(next) {
     const prev = state;
     state = next;
@@ -213,6 +223,7 @@ export function createRelayConnection(url, options = {}) {
     getState: () => state,
     getUrl: () => url,
     addMessageHandler,
+    removeMessageHandler,
     connect,
     send,
     reportAuthChallenge: () => apply("AUTH_CHALLENGE"),
@@ -220,7 +231,18 @@ export function createRelayConnection(url, options = {}) {
       apply("AUTH_OK");
       replayActiveReqs();
     },
-    reportAuthFail: () => apply("AUTH_FAIL"),
+    // Этап 2 (З2.5) — раньше AUTH_FAIL переводил в "connected" БЕЗ повтора
+    // активных подписок: REQ, закрытый relay'ем как auth-required ДО AUTH,
+    // так и оставался закрытым навсегда — ensureChatEstablished/fetchProfiles
+    // и т.п. висели бы до собственного таймаута (oneShotRequest), не получив
+    // ни одного EVENT. AUTH_OK уже реплеил — тот же приём здесь, независимо
+    // от исхода AUTH: реле, скорее всего, всё равно готово обслуживать
+    // НЕ-restricted подписки, отказ AUTH не должен молчаливо хоронить их все.
+    reportAuthFail: () => {
+      apply("AUTH_FAIL");
+      replayActiveReqs();
+      trace("auth-fail-replay", {});
+    },
     reportAuthTimeout: () => apply("TIMEOUT"),
     reportSubscribed: () => apply("SUBSCRIBE_OK"),
     close,
@@ -292,6 +314,14 @@ export function createRelayPool(entries, options = {}) {
   const poolHandlers = [];
   function addMessageHandler(handler) {
     poolHandlers.push(handler);
+  }
+
+  // Этап 2 (З2.4) — симметрично addMessageHandler, тот же приём, что
+  // createRelayConnection выше. publisher.js/subscriber.js/oneShotRequest не
+  // отличают пул от одного соединения (инвариант "fake-connection", DESIGN.md).
+  function removeMessageHandler(handler) {
+    const idx = poolHandlers.indexOf(handler);
+    if (idx !== -1) poolHandlers.splice(idx, 1);
   }
 
   function dispatchToPoolHandlers(msg) {
@@ -377,6 +407,7 @@ export function createRelayPool(entries, options = {}) {
         state: connections[i].getState(),
       })),
     addMessageHandler,
+    removeMessageHandler,
     connect,
     send,
     close,

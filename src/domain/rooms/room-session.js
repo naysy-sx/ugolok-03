@@ -126,19 +126,27 @@ async function openSession({
 		return present(presenceState, now(), PRESENCE_TAU_MS).filter((p) => p.inVoice);
 	}
 
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.2) — все четыре — периодический
+	// gossip-протокол присутствия (trickle/heartbeat), рассчитанный на потерю
+	// отдельных сообщений по своей природе (следующий тик повторит). Ни один
+	// вызывающий код здесь не await'ит и не проверяет исход — .catch() нужен
+	// ЗДЕСЬ теперь, когда publisher.js реально отклоняет промис (таймаут/
+	// disconnected/rejectAll на close, см. room-transport.js), а не просто
+	// висит вечно молча, как раньше (до Этапа 2 отсутствие .catch() было
+	// безвредно именно потому, что зависший promise никогда не settled).
 	function publishHeartbeat(t) {
 		const event = buildRoomPresenceEvent(identity.privKey, kSess, hTopic, { type: "heartbeat", nick, inVoice: voiceActive }, t);
-		return transport.publish(event);
+		return transport.publish(event).catch(() => {});
 	}
 
 	function publishAnnounce(t) {
 		const event = buildRoomAnnounceEvent(identity.privKey, kRv, hTopic, bytesToHex(currentSalt), t);
-		return transport.publish(event);
+		return transport.publish(event).catch(() => {});
 	}
 
 	function publishProbe(t) {
 		const event = buildRoomProbeEvent(identity.privKey, kRv, hTopic, t);
-		return transport.publish(event);
+		return transport.publish(event).catch(() => {});
 	}
 
 	function publishPointer(t) {
@@ -148,7 +156,7 @@ async function openSession({
 			ownPointerPublishedAt = t;
 			bestPointerId = event.id;
 		}
-		return transport.publish(event);
+		return transport.publish(event).catch(() => {});
 	}
 
 	function becomeReady(salt, t) {

@@ -100,6 +100,29 @@ test("AUTH_FAIL и AUTH_TIMEOUT тоже возвращают в connected, НЕ
 	assert.equal(connB.getState(), "connected");
 });
 
+// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.5, приёмка) — раньше AUTH_FAIL переводил
+// в "connected" БЕЗ повтора активных подписок: REQ, закрытый relay'ем как
+// auth-required ДО AUTH, так и оставался закрытым навсегда (реле не видело
+// его снова, пока клиент сам не переподключится) — ensureChatEstablished/
+// fetchProfiles и т.п. висели бы до собственного таймаута (oneShotRequest),
+// не получив ни одного EVENT.
+test("reportAuthFail(): активные REQ реплеятся немедленно (тот же приём, что reportAuthOk)", () => {
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS });
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "sub1", { kinds: [1] }]);
+	const sentBeforeAuth = WS.instances[0].sent.length;
+
+	conn.reportAuthChallenge();
+	conn.reportAuthFail();
+
+	assert.equal(conn.getState(), "connected");
+	assert.equal(WS.instances[0].sent.length, sentBeforeAuth + 1, "REQ должен уйти повторно СРАЗУ после AUTH_FAIL");
+	const replayed = JSON.parse(WS.instances[0].sent[sentBeforeAuth]);
+	assert.deepEqual(replayed, ["REQ", "sub1", { kinds: [1] }]);
+});
+
 test("reportSubscribed из connected -> subscribed; AUTH_CHALLENGE реактивно даже из subscribed", () => {
 	const WS = freshWS();
 	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS });

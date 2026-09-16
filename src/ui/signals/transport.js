@@ -15,6 +15,7 @@ import { startIncrementalSync } from "../../core/sync/incremental-sync.js";
 import { rebuildGroups, rebuildEffectivePermissions } from "../../domain/events/handlers.js";
 import { createLamportClock, computeInitialLamportValue, persistLamportValue } from "../../core/sync/lamport.js";
 import { createSubscriber } from "../../core/transport/subscriber.js";
+import { oneShotRequest } from "../../core/transport/deadline.js";
 import { accumulateProfileVersions } from "../../domain/identity/profile.js";
 import { unwrap as nip59Unwrap } from "../../core/crypto/nip59.js";
 import { getProfile } from "../../core/crypto/keystore.js";
@@ -403,7 +404,14 @@ async function connect(pubkeyHex, privKey, dbKey) {
 			// конкретного реле (см. relay-pool.js) — поимённое состояние экран
 			// диагностики берёт из getRelayMembers(), здесь достаточно агрегата.
 			if (s === "connected") logInfo("реле: соединение установлено");
-			if (s === "disconnected") logWarn("реле: связь потеряна");
+			if (s === "disconnected") {
+				logWarn("реле: связь потеряна");
+				// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.2) — соединение подтверждённо
+				// мертво (WS-уровень, не просто "молчит") — все ещё висящие publish()
+				// отклоняются немедленно, не ждут собственных 15с. publisher может
+				// быть ещё null на самом первом переходе до его создания ниже.
+				publisher?.rejectAll("disconnected", "реле: связь потеряна");
+			}
 			// Повторное подключение после обрыва (relay-pool.js's autoReconnect) —
 			// publisher уже существует на этот момент (пережил обрыв, message-
 			// handler'ы не сбрасываются). На САМОМ первом "connected" publisher
@@ -913,23 +921,11 @@ export async function fetchInboxRelays(pubkeyHex) {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchInboxRelays()");
 	}
-	const subId = "inbox-relays-" + Math.random().toString(36).slice(2);
-	const collected = [];
-
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: (events) => {
-				collected.push(...events);
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ authors: [pubkeyHex], kinds: [10050] }]);
-	});
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3) — oneShotRequest даёт срок (10с) и
+	// гарантированную очистку (removeMessageHandler+CLOSE) на любом исходе —
+	// раньше EOSE, которое не пришло (AUTH-щель, обрыв без резолва подписки),
+	// вешало fetchInboxRelays бесконечно, тот же класс дефекта, что H3.
+	const collected = await oneShotRequest(connection, [{ authors: [pubkeyHex], kinds: [10050] }], { timeoutMs: 10000, verifyBatch: verifyBatchFn });
 
 	const relays = collected.length > 0 ? parseDmRelayListEvent(pickLatest(collected)) : [];
 	inboxRelayCache.set(pubkeyHex, { relays, fetchedAt: Date.now() });
@@ -1031,10 +1027,9 @@ export async function receiveLamportTick(ownerPubkey, remoteLamportTs) {
 // на "UI/orchestration слой, этап 23" (см. CONTRACTS.md). Одноразовый REQ+EOSE (не
 // постоянная подписка) по kind 0 для набора pubkey; kind 0 replaceable — relay сам
 // отдаёт только последнюю версию на каждого автора, клиентский pickLatest не нужен.
-// Известное ограничение MVP: relay-pool.js не даёт removeMessageHandler — обработчик
-// этого одноразового запроса остаётся в цепочке до конца сессии (дёшево — сверяет
-// subId и пропускает дальше); вызывается только для ЕЩЁ не закэшированных контактов,
-// не поллингом, поэтому число вызовов за сессию ограничено количеством новых контактов.
+// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3/З2.4) — oneShotRequest: срок (10с) +
+// гарантированная очистка обработчика на любом исходе (было известное
+// ограничение — обработчик оставался в цепочке навсегда, см. git-историю).
 export async function fetchProfiles(pubkeys) {
 	if (pubkeys.length === 0) return new Map();
 	if (!connection) {
@@ -1043,27 +1038,13 @@ export async function fetchProfiles(pubkeys) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchProfiles()");
 	}
 	const results = new Map();
-	const subId = "profiles-" + Math.random().toString(36).slice(2);
-
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: (events) => {
-				// Этап 74 — Часть B, T5.1 (P-1): несколько версий ОДНОГО pubkey в
-				// ОДНОМ REQ+EOSE (multi-relay pool) — LWW-гейт (не последняя ПРИБЫВШАЯ,
-				// а последняя СОЗДАННАЯ), см. CONTRACTS.md/DESIGN.md "Этап 74".
-				for (const event of events) {
-					accumulateProfileVersions(results, event);
-				}
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ authors: pubkeys, kinds: [0] }]);
-	});
+	const events = await oneShotRequest(connection, [{ authors: pubkeys, kinds: [0] }], { timeoutMs: 10000, verifyBatch: verifyBatchFn });
+	// Этап 74 — Часть B, T5.1 (P-1): несколько версий ОДНОГО pubkey в ОДНОМ
+	// REQ+EOSE (multi-relay pool) — LWW-гейт (не последняя ПРИБЫВШАЯ, а
+	// последняя СОЗДАННАЯ), см. CONTRACTS.md/DESIGN.md "Этап 74".
+	for (const event of events) {
+		accumulateProfileVersions(results, event);
+	}
 
 	return results;
 }
@@ -1082,11 +1063,13 @@ export async function fetchProfiles(pubkeys) {
 // событие удалено вручную и т.п.), навсегда оставалось в локальном кэше и
 // продолжало рисовать карточку. Теперь — реконсиляция: всё, чего НЕ было в
 // ЭТОМ полном снимке, удаляется из локального кэша.
+// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3) — найдена по шаблону "new Promise +
+// onEose", не входила в явный список ТЗ, но тот же класс дефекта (не было ни
+// срока, ни очистки обработчика) — oneShotRequest закрывает оба разом.
 export async function fetchDiscoveryProfiles() {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDiscoveryProfiles()");
 	}
-	const subId = "discovery-" + Math.random().toString(36).slice(2);
 
 	// CONTRACTS.md §DISCOVERY, T3, вариант 1 — раньше здесь была реконсиляция
 	// bulkDelete по отсутствию в снимке: инвариант П4 (relay-pool.js) считает
@@ -1097,27 +1080,15 @@ export async function fetchDiscoveryProfiles() {
 	// в очередном REQ. Инвариант П4 не тронут (вариант 2 — дороже, требует
 	// собирать EOSE со всех read-реле пула — отложен, не нужен для этой
 	// итерации).
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: async (events) => {
-				for (const event of events) {
-					try {
-						const parsed = parseDiscoveryEvent(event);
-						await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
-					} catch {
-						// повреждённый/не-JSON discovery-broadcast чужого клиента — пропустить
-					}
-				}
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ kinds: [DISCOVERY_KIND] }]);
-	});
+	const events = await oneShotRequest(connection, [{ kinds: [DISCOVERY_KIND] }], { timeoutMs: 10000, verifyBatch: verifyBatchFn });
+	for (const event of events) {
+		try {
+			const parsed = parseDiscoveryEvent(event);
+			await db.table("discoveryProfiles").put({ pubkey: event.pubkey, ...parsed, updatedAt: event.created_at });
+		} catch {
+			// повреждённый/не-JSON discovery-broadcast чужого клиента — пропустить
+		}
+	}
 }
 
 let discoveryLiveSubscriber = null;
@@ -1758,38 +1729,36 @@ export async function refreshFileSubtreeOpSubscription(ownerPubkey, dbKey) {
 // возвращаются ВСЕ известные устройства (дедуп по тегу device, при повторной
 // публикации одним и тем же устройством побеждает более свежий created_at) —
 // вызывающий код (ensureChatEstablished) добавляет их ОДНИМ commit'ом.
+// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3) — H3 (MESSAGE-DELIVERY-AUDIT-
+// BRIEFING.md, tests/harness/h3-keypackage-hang-repro.mjs): этот REQ доказанно
+// висел бесконечно без EOSE (AUTH-щель/потерянный кадр) — ensureChatEstablished
+// (и вся sendChatMessageAction) не завершалась НИКОГДА, кнопка "Отправить"
+// оставалась busy без обратной связи. oneShotRequest даёt срок (10с, явно —
+// то же значение, что дефолт, но названо буквально по ТЗ) — по истечении
+// DomainError("errors.keyPackageTimeout") всплывает в UI как понятная ошибка
+// (errorMessage() в ui/signals/i18n.js), а не зависшая форма.
 export async function fetchDeviceKeyPackages(pubkeyHex) {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchDeviceKeyPackages()");
 	}
 	const devices = new Map(); // deviceId -> {wireBytes, createdAt}
-	const subId = "device-keypackages-" + Math.random().toString(36).slice(2);
-
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: (events) => {
-				for (const event of events) {
-					try {
-						const deviceTag = event.tags.find((t) => t[0] === "device");
-						if (!deviceTag) continue; // легаси/чужеродное — не наш протокол, пропустить
-						const deviceId = deviceTag[1];
-						const existing = devices.get(deviceId);
-						if (existing && existing.createdAt >= event.created_at) continue; // не свежее — не перезаписывать
-						devices.set(deviceId, { wireBytes: decodeBase64(event.content), createdAt: event.created_at });
-					} catch {
-						// повреждённый content — пропустить, не ронять весь fetch (тот же принцип, что fetchProfiles)
-					}
-				}
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ authors: [pubkeyHex], kinds: [443] }]);
+	const events = await oneShotRequest(connection, [{ authors: [pubkeyHex], kinds: [443] }], {
+		timeoutMs: 10000,
+		verifyBatch: verifyBatchFn,
+		key: "errors.keyPackageTimeout",
 	});
+	for (const event of events) {
+		try {
+			const deviceTag = event.tags.find((t) => t[0] === "device");
+			if (!deviceTag) continue; // легаси/чужеродное — не наш протокол, пропустить
+			const deviceId = deviceTag[1];
+			const existing = devices.get(deviceId);
+			if (existing && existing.createdAt >= event.created_at) continue; // не свежее — не перезаписывать
+			devices.set(deviceId, { wireBytes: decodeBase64(event.content), createdAt: event.created_at });
+		} catch {
+			// повреждённый content — пропустить, не ронять весь fetch (тот же принцип, что fetchProfiles)
+		}
+	}
 
 	if (devices.size === 0) {
 		throw new Error("у контакта нет опубликованного ключа для сообщений");
@@ -1987,33 +1956,21 @@ export async function fetchOwnKeyPackageAnnounces(ownerPubkey) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchOwnKeyPackageAnnounces()");
 	}
 	const announces = [];
-	const subId = "own-keypackages-" + Math.random().toString(36).slice(2);
-
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: (events) => {
-				for (const event of events) {
-					try {
-						const deviceTag = event.tags.find((t) => t[0] === "device");
-						announces.push({
-							wireBytes: decodeBase64(event.content),
-							deviceId: deviceTag ? deviceTag[1] : undefined,
-							eventPubkey: event.pubkey,
-						});
-					} catch {
-						// повреждённый content — пропустить, не ронять весь fetch
-					}
-				}
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ authors: [ownerPubkey], kinds: [443] }]);
-	});
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3) — oneShotRequest: срок (10с) +
+	// гарантированная очистка обработчика на любом исходе.
+	const events = await oneShotRequest(connection, [{ authors: [ownerPubkey], kinds: [443] }], { timeoutMs: 10000, verifyBatch: verifyBatchFn });
+	for (const event of events) {
+		try {
+			const deviceTag = event.tags.find((t) => t[0] === "device");
+			announces.push({
+				wireBytes: decodeBase64(event.content),
+				deviceId: deviceTag ? deviceTag[1] : undefined,
+				eventPubkey: event.pubkey,
+			});
+		} catch {
+			// повреждённый content — пропустить, не ронять весь fetch
+		}
+	}
 
 	return announces;
 }
@@ -2026,34 +1983,22 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 	if (!connection) {
 		throw new Error("нет активного соединения — вызовите ensureConnected() перед syncMirroredHistory()");
 	}
-	const subId = "mirror-history-" + Math.random().toString(36).slice(2);
-
-	await new Promise((resolve) => {
-		const subscriber = createSubscriber(connection, {
-			verifyBatch: verifyBatchFn,
-			onBatch: async (events) => {
-				for (const event of events) {
-					try {
-						const payload = decryptMirrorPayload(event.content, mirrorKey);
-						// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
-						// отдельно от WebSocket-обвязки, см. mirror.test.js).
-						// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
-					// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
-					await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
-						await receiveLamportTick(ownerPubkey, payload.lamportTs);
-					} catch (e) {
-						console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
-					}
-				}
-			},
-			onEose: () => {
-				subscriber.unsubscribe(subId);
-				resolve();
-			},
-		});
-		connection.addMessageHandler(subscriber.handleMessage);
-		subscriber.subscribe(subId, [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }]);
-	});
+	// Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3) — oneShotRequest: срок (10с) +
+	// гарантированная очистка обработчика на любом исходе.
+	const events = await oneShotRequest(connection, [{ authors: [ownerPubkey], kinds: [KIND_MESSAGE_MIRROR] }], { timeoutMs: 10000, verifyBatch: verifyBatchFn });
+	for (const event of events) {
+		try {
+			const payload = decryptMirrorPayload(event.content, mirrorKey);
+			// AC-AT-06 — вынесено в mirror.js's buildMirroredMessageRow (юнит-тестируемо
+			// отдельно от WebSocket-обвязки, см. mirror.test.js).
+			// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
+			// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
+			await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
+			await receiveLamportTick(ownerPubkey, payload.lamportTs);
+		} catch (e) {
+			console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
+		}
+	}
 }
 
 // Этап 72 — было: зеркало подтягивалось ТОЛЬКО одноразовым REQ выше

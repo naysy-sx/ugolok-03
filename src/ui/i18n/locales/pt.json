@@ -1126,6 +1126,7 @@
 		"channelNotFound": "canal não encontrado",
 		"fileTooLarge": "o arquivo excede o limite de tamanho",
 		"invalidFileType": "tipo de arquivo não permitido: {{mime}}",
+		"keyPackageTimeout": "não foi possível obter a chave do outro lado — o relay não respondeu a tempo. Tente novamente.",
 		"lastRelayCannotBeRemoved": "você não pode remover o último relay — a lista não pode ficar vazia",
 		"nameTakenInFolder": "O nome «{{name}}» já está em uso nesta pasta",
 		"nameTakenInTargetFolder": "O nome «{{name}}» já está em uso na pasta de destino",

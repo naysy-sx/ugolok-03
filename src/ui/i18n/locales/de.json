@@ -1126,6 +1126,7 @@
 		"channelNotFound": "Kanal nicht gefunden",
 		"fileTooLarge": "Datei überschreitet das Größenlimit",
 		"invalidFileType": "unzulässiger Dateityp: {{mime}}",
+		"keyPackageTimeout": "Der Schlüssel der Gegenseite konnte nicht abgerufen werden — das Relais hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es erneut.",
 		"lastRelayCannotBeRemoved": "Sie können den letzten Relay nicht entfernen — die Liste darf nicht leer sein",
 		"nameTakenInFolder": "Der Name „{{name}}“ ist in diesem Ordner bereits vergeben",
 		"nameTakenInTargetFolder": "Der Name „{{name}}“ ist im Zielordner bereits vergeben",

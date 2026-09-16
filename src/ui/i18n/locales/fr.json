@@ -1126,6 +1126,7 @@
 		"channelNotFound": "chaîne introuvable",
 		"fileTooLarge": "le fichier dépasse la limite de taille",
 		"invalidFileType": "type de fichier non autorisé : {{mime}}",
+		"keyPackageTimeout": "impossible d'obtenir la clé de l'interlocuteur — le relais n'a pas répondu à temps. Veuillez réessayer.",
 		"lastRelayCannotBeRemoved": "vous ne pouvez pas supprimer le dernier relay — la liste ne peut pas être vide",
 		"nameTakenInFolder": "Le nom « {{name}} » est déjà utilisé dans ce dossier",
 		"nameTakenInTargetFolder": "Le nom « {{name}} » est déjà utilisé dans le dossier de destination",

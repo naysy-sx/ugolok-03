@@ -1126,6 +1126,7 @@
 		"channelNotFound": "канал не найден",
 		"fileTooLarge": "файл превышает лимит размера",
 		"invalidFileType": "недопустимый тип файла: {{mime}}",
+		"keyPackageTimeout": "не удалось получить ключ собеседника — реле не ответило вовремя. Попробуйте ещё раз.",
 		"lastRelayCannotBeRemoved": "нельзя удалить последний relay — список не может быть пустым",
 		"nameTakenInFolder": "Имя «{{name}}» уже занято в этой папке",
 		"nameTakenInTargetFolder": "Имя «{{name}}» уже занято в целевой папке",
