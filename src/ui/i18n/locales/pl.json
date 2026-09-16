@@ -627,6 +627,7 @@
 			"recordingStatus": "Nagrywanie wiadomości głosowej…",
 			"deleteRecordingButton": "Usuń nagranie",
 			"uploadingAttachment": "Przesyłanie załącznika…",
+			"awaitingCommitter": "Rozmowa nie została jeszcze nawiązana. Wiadomość zostanie wysłana, gdy rozmówca będzie online.",
 			"attachFileAria": "Załącz plik",
 			"attachFromStorageAria": "Załącz plik z magazynu",
 			"recordVoiceAria": "Nagraj wiadomość głosową",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "czekanie na rozmówcę…",
 			"created": "szkic",
 			"sending": "wysyłanie…",
 			"sent": "wysłano",

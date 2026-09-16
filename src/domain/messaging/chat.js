@@ -28,6 +28,7 @@ import { isKnownContact } from "./inbox-requests.js";
 import { withGroupLock } from "../../core/store/mls-lock.js";
 import { touchChatActivity } from "./chat-activity.js";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
+import { transitionMessage } from "./machine.js";
 
 // Этап 74 — T2.3 (CONTRACTS.md/DESIGN.md "Этап 74"): по прецеденту
 // pendingUndecryptedByGroup/UNDECRYPTED_RETRY_TTL_MS (transport.js) — 5 минут,
@@ -285,17 +286,24 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 // вызовы без изменений). sentAt (wall-clock, секунды) генерируется ВСЕГДА — обе
 // стороны видят ОДИНАКОВОЕ время отправки (не время получения); lamportTs (логические
 // часы, порядок сортировки) не трогается — назначение разное, смешивать нельзя.
-export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments) {
+// msgId/sentAt (Этап 1 — MESSAGE-DELIVERY-TZ.md, З1.1) — необязательные
+// аддитивные параметры. sendChatMessageAction/drainPendingOutgoingMessages
+// генерируют их ОДИН РАЗ в момент клика (до сети — строка уже в ленте со
+// статусом "queued"/"sending", см. chats.js) и передают сюда, чтобы doSendMessage
+// не создавала ВТОРОЙ msgId для строки, которая уже существует. Старые прямые
+// вызовы sendMessage() (тесты, АДВЕРСАРНЫЕ вызовы в обход sendChatMessageAction)
+// не передают их — поведение как раньше, генерируются здесь.
+export async function sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, msgId, sentAt) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
 	// Этап 74 — T2.2 (RC-3): единственный писатель на (ownerPubkey, groupIdHex) —
 	// лок ЦЕЛИКОМ, get→крипто→put (DESIGN.md "Этап 74"). drainPendingOutgoingMessages
 	// вызывает sendMessage — лочится только этот, внутренний уровень (правило
 	// нереентерабельности, DESIGN.md).
-	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex));
+	return withGroupLock(ownerPubkey, groupIdHex, () => doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, msgId, sentAt));
 }
 
-async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex) {
+async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, msgIdParam, sentAtParam) {
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) {
 		throw new Error("чат не установлен — вызовите ensureChatEstablished() перед sendMessage()");
@@ -305,8 +313,8 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 	const state = deserializeState(row.state);
 	// msgId (этап 25) — единственный идентификатор, тождественный между живым MLS-путём
 	// и зеркалом одного и того же логического сообщения (DESIGN.md, "Этап 25", раздел 3).
-	const msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-	const sentAt = Math.floor(Date.now() / 1000);
+	const msgId = msgIdParam ?? bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+	const sentAt = sentAtParam ?? Math.floor(Date.now() / 1000);
 	// Этап 74 — T1.1 (RC-1): отправитель едет ВНУТРИ MLS-payload (не видно на
 	// проводе — см. CONTRACTS.md/DESIGN.md "Этап 74"). С этапа 72 все устройства
 	// ОБЕИХ identity состоят в группе — без этого поля приёмник не может отличить
@@ -348,6 +356,38 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		ephemeralPriv,
 	);
 	traceDelivery("event.signed", { msgId, eventId: event.id, groupIdHex });
+
+	// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.1/З1.3/З1.2) — строка УЖЕ существует в
+	// messages со статусом "queued" (написана sendChatMessageAction ДО сети, до
+	// того как MLS-группа вообще была установлена, см. chats.js) для ОБОИХ путей:
+	// немедленная отправка коммиттера и отложенная отправка через drain. Прямые
+	// вызовы sendMessage() в обход sendChatMessageAction (старые тесты) строки не
+	// создают — тогда вставляем её здесь заново, сразу в "sending" (нечего
+	// транзишенить, это первая запись). transitionMessage — единственный
+	// источник истины для допустимости перехода (machine.js), недопустимый бросает.
+	const existingRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, msgId]).first();
+	if (existingRow) {
+		await db
+			.table("messages")
+			.where("[ownerPubkey+chatId+msgId]")
+			.equals([ownerPubkey, contactPubkey, msgId])
+			.modify({ status: transitionMessage(existingRow.status, "ESTABLISHED"), id: event.id });
+	} else {
+		await upsertMessage({
+			ownerPubkey,
+			chatId: contactPubkey,
+			lamportTs,
+			senderPubkey: ownerPubkey,
+			id: event.id,
+			text,
+			status: "sending",
+			msgId,
+			sentAt,
+			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
+		}, dbKey);
+	}
+	traceDelivery("message.upsert", { msgId, status: "sending" });
+
 	const publishStartedAt = Date.now();
 	try {
 		await requirePublishOk(publish, event);
@@ -362,18 +402,11 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		// остаётся видимым локально со статусом "failed", не теряется молча.
 		await enqueue(event, dbKey);
 		traceDelivery("outbox.enqueued", { msgId, eventId: event.id });
-		await upsertMessage({
-			ownerPubkey,
-			chatId: contactPubkey,
-			lamportTs,
-			senderPubkey: ownerPubkey,
-			id: event.id,
-			text,
-			status: "failed",
-			msgId,
-			sentAt,
-			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
-		}, dbKey);
+		await db
+			.table("messages")
+			.where("[ownerPubkey+chatId+msgId]")
+			.equals([ownerPubkey, contactPubkey, msgId])
+			.modify({ status: transitionMessage("sending", "FAIL") });
 		traceDelivery("message.upsert", { msgId, status: "failed" });
 		// Редизайн интерфейса, этап 5 (CONTRACTS.md) — даже неотправленное
 		// сообщение — реальное локальное действие пользователя в ЭТОМ чате
@@ -383,18 +416,11 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 		return { eventId: event.id, queued: true };
 	}
 
-	await upsertMessage({
-		ownerPubkey,
-		chatId: contactPubkey,
-		lamportTs,
-		senderPubkey: ownerPubkey,
-		id: event.id,
-		text,
-		status: "sent",
-		msgId,
-		sentAt,
-		...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
-	}, dbKey);
+	await db
+		.table("messages")
+		.where("[ownerPubkey+chatId+msgId]")
+		.equals([ownerPubkey, contactPubkey, msgId])
+		.modify({ status: transitionMessage("sending", "ACK") });
 	traceDelivery("message.upsert", { msgId, status: "sent" });
 	// Редизайн интерфейса, этап 5 (CONTRACTS.md) — свежесть переписки.
 	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
@@ -411,10 +437,12 @@ async function doSendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, l
 
 // Этап 73.3 — И3: проигравшая сторона (не коммиттер) копит исходящие здесь,
 // пока коммиттер не создаст группу — см. DESIGN.md/CONTRACTS.md "Этап 73.3".
-export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachments }) {
-	await db.table("pendingOutgoingMessages").put(
-		toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, text, ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}) }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey),
-	);
+// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.3, вариант A) — text/attachments БОЛЬШЕ НЕ
+// параметры: строка со статусом "queued" уже лежит в messages (написана
+// вызывающим, sendChatMessageAction, ДО этого вызова) — drain читает содержимое
+// оттуда по msgId, один источник текста, не два.
+export async function enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, lamportTs, msgId }) {
+	await db.table("pendingOutgoingMessages").put(toEncryptedRow({ ownerPubkey, contactPubkey, lamportTs, msgId }, PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS, dbKey));
 }
 
 // НАЙДЕНО ХАРНЕССОМ (m1-repro.test.js, не домысел): Welcome может прийти
@@ -441,7 +469,19 @@ export async function drainPendingOutgoingMessages(ownerPubkey, privKey, dbKey, 
 		traceDelivery("drain.start", { contactPubkey, count: raw.length });
 		for (const encryptedRow of raw) {
 			const row = fromEncryptedRow(encryptedRow, dbKey);
-			await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachments);
+			// Этап 1 (З1.3, вариант A) — новый формат несёт только msgId, содержимое
+			// (text/attachments/sentAt) читается из messages (строка "queued" уже
+			// там с момента клика). Старый формат (row.text напрямую, msgId
+			// отсутствует) — совместимость с записями, накопленными ДО этого этапа
+			// (живой деплой, очередь могла пережить обновление кода): используем как
+			// раньше, без похода в messages.
+			if (row.msgId !== undefined) {
+				const messageRow = await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ownerPubkey, contactPubkey, row.msgId]).first();
+				const decoded = messageRow ? fromEncryptedRow(messageRow, dbKey) : null;
+				await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, decoded?.text ?? "", row.lamportTs, publish, decoded?.attachments, row.msgId, decoded?.sentAt);
+			} else {
+				await sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, row.text, row.lamportTs, publish, row.attachments);
+			}
 			await db.table("pendingOutgoingMessages").delete([ownerPubkey, contactPubkey, row.lamportTs]);
 		}
 		traceDelivery("drain.done", { contactPubkey, count: raw.length });
@@ -561,8 +601,23 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 
 // Этап 73.3 — И4 (chat.js, ensureChatEstablished): существование, не данные —
 // count() дешевле toArray() для гейта "была ли переписка вообще".
+// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.1/З1.3) — исключаем status:"queued":
+// с этого этапа sendChatMessageAction пишет строку в messages ДО вызова
+// ensureChatEstablished (лента видна сразу, до сети) — без этого исключения
+// СВОЙ ЖЕ только что созданный placeholder ложно засчитывался бы как
+// "другое моё устройство уже разговаривало с этим контактом" (И4) на КАЖДОЙ
+// первой отправке новому контакту, отправляя её в вечную очередь вместо
+// установления чата. "queued" ничего не доказывает — сообщение ещё не
+// покидало это устройство.
 export async function hasAnyMessagesFor(ownerPubkey, contactPubkey) {
-	return (await db.table("messages").where("[ownerPubkey+chatId]").equals([ownerPubkey, contactPubkey]).count()) > 0;
+	return (
+		(await db
+			.table("messages")
+			.where("[ownerPubkey+chatId]")
+			.equals([ownerPubkey, contactPubkey])
+			.filter((r) => r.status !== "queued")
+			.count()) > 0
+	);
 }
 
 // Этап B медиа-подсистемы (MEDIA-SPEC.md §3.7) — та же нормализация, что уже

@@ -11,6 +11,7 @@ import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 
 const STATUS_LABEL_KEYS = {
+	queued: "message.status.queued",
 	created: "message.status.created",
 	sending: "message.status.sending",
 	sent: "message.status.sent",

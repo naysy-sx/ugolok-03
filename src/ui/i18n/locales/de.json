@@ -627,6 +627,7 @@
 			"recordingStatus": "Sprachnachricht wird aufgenommen…",
 			"deleteRecordingButton": "Aufnahme löschen",
 			"uploadingAttachment": "Anhang wird hochgeladen…",
+			"awaitingCommitter": "Das Gespräch ist noch nicht aufgebaut. Die Nachricht wird gesendet, sobald die Gegenseite online ist.",
 			"attachFileAria": "Datei anhängen",
 			"attachFromStorageAria": "Datei aus dem Speicher anhängen",
 			"recordVoiceAria": "Sprachnachricht aufnehmen",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "warte auf Gegenüber…",
 			"created": "Entwurf",
 			"sending": "wird gesendet…",
 			"sent": "gesendet",

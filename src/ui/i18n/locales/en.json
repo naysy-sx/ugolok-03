@@ -627,6 +627,7 @@
 			"recordingStatus": "Recording voice message…",
 			"deleteRecordingButton": "Delete recording",
 			"uploadingAttachment": "Uploading attachment…",
+			"awaitingCommitter": "The conversation isn't established yet. The message will go out as soon as the other person comes online.",
 			"attachFileAria": "Attach a file",
 			"attachFromStorageAria": "Attach a file from storage",
 			"recordVoiceAria": "Record a voice message",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "waiting for the other side…",
 			"created": "draft",
 			"sending": "sending…",
 			"sent": "sent",

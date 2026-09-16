@@ -627,6 +627,7 @@
 			"recordingStatus": "Enregistrement du message vocal…",
 			"deleteRecordingButton": "Supprimer l'enregistrement",
 			"uploadingAttachment": "Envoi de la pièce jointe…",
+			"awaitingCommitter": "La conversation n'est pas encore établie. Le message sera envoyé dès que l'interlocuteur sera en ligne.",
 			"attachFileAria": "Joindre un fichier",
 			"attachFromStorageAria": "Joindre un fichier depuis le stockage",
 			"recordVoiceAria": "Enregistrer un message vocal",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "en attente de l'interlocuteur…",
 			"created": "brouillon",
 			"sending": "envoi…",
 			"sent": "envoyé",

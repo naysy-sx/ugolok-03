@@ -5,7 +5,7 @@ import { db } from "../src/core/store/database.js";
 import { getPublicKey } from "../src/core/crypto/keys.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createOwnKeyPackage } from "../src/core/crypto/mls-session.js";
-import { ensureChatEstablished } from "../src/domain/messaging/chat.js";
+import { ensureChatEstablished, isCommitter } from "../src/domain/messaging/chat.js";
 import {
 	messagingActivity,
 	bumpMessagingActivity,
@@ -181,9 +181,55 @@ test("sendChatMessageAction: fetchDeviceKeyPackages не находит адре
 test("sendChatMessageAction: И4 (mirror-история уже есть) — НЕ бросает, ставит в очередь, возвращает {status:'awaiting_committer'}", async () => {
 	await db.table("messages").add({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "mirrored-ev", status: "sent", msgId: "mirrored-msg" });
 	const result = await sendChatMessageAction(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "привет", 5, async () => ({ ok: true }), async () => new Map(), async () => {});
-	assert.deepEqual(result, { status: "awaiting_committer" });
+	// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.1) — result.status ЧИТАЕТСЯ наверху
+	// (chat.jsx), msgId — новое аддитивное поле (тождественно строке, уже
+	// записанной в messages со статусом "queued" ДО этого вызова).
+	assert.equal(result.status, "awaiting_committer");
+	assert.equal(typeof result.msgId, "string");
+	assert.ok(result.msgId.length > 0);
 	const queued = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).toArray();
 	assert.equal(queued.length, 1);
+	// Этап 1, З1.3 (вариант A) — строка уже в ленте СРАЗУ, до любого сетевого
+	// вызова, со статусом "queued", тем же msgId, что и в очереди.
+	const queuedRow = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([ALICE_PUB, BOB_PUB, result.msgId]).first(), DB_KEY);
+	assert.equal(queuedRow.status, "queued");
+	assert.equal(queuedRow.text, "привет");
+});
+
+// Этап 1 (MESSAGE-DELIVERY-TZ.md, приёмка Этапа 1) — И3 (коммиттер этой пары
+// не я): строка обязана появиться в ленте СРАЗУ, ДО любого сетевого вызова —
+// publish/fetchDeviceKeyPackages не должны быть вызваны вообще, если группы
+// ещё нет и я не коммиттер. Именно это устраняет пользовательский симптом
+// "нажал Отправить — ничего не произошло" (MESSAGE-DELIVERY-AUDIT-BRIEFING.md
+// §0/H1): раньше строка не существовала до конца ensureChatEstablished/sendMessage.
+test("sendChatMessageAction: И3 (не-коммиттер, contact уже подтверждён) — строка 'queued' в ленте появляется ДО любого сетевого вызова, publish/fetchDeviceKeyPackages не трогаются", async () => {
+	// Определяем, кто НЕ коммиттер в паре ALICE/BOB — не жёстко кодируем
+	// порядок ключей (тест не должен зависеть от конкретных fill()-значений).
+	const aliceIsCommitter = isCommitter(ALICE_PUB, BOB_PUB);
+	const [nonCommitterPub, nonCommitterPriv, peerPub] = aliceIsCommitter ? [BOB_PUB, BOB_PRIV, ALICE_PUB] : [ALICE_PUB, ALICE_PRIV, BOB_PUB];
+
+	await db.table("contactRelationships").put({ owner: nonCommitterPub, peer: peerPub, state: "CONTACT" });
+
+	let publishCalled = false;
+	let fetchCalled = false;
+	const publish = async () => {
+		publishCalled = true;
+		return { ok: true };
+	};
+	const fetchDeviceKeyPackages = async () => {
+		fetchCalled = true;
+		return new Map();
+	};
+
+	const result = await sendChatMessageAction(nonCommitterPub, nonCommitterPriv, DB_KEY, peerPub, "жду коммиттера", 1, publish, fetchDeviceKeyPackages, async () => {});
+
+	assert.equal(result.status, "awaiting_committer");
+	assert.equal(publishCalled, false, "не-коммиттер не должен пытаться публиковать что-либо (ни Welcome, ни kind 445)");
+	assert.equal(fetchCalled, false, "не-коммиттер не должен запрашивать KeyPackage контакта — это дело коммиттера");
+
+	const row = fromEncryptedRow(await db.table("messages").where("[ownerPubkey+chatId+msgId]").equals([nonCommitterPub, peerPub, result.msgId]).first(), DB_KEY);
+	assert.equal(row.status, "queued");
+	assert.equal(row.text, "жду коммиттера");
 });
 
 test("deleteChatMessageAction/markChatReadAction/saveChatDraftAction: делегируют в domain-модули этапов 25-26", async () => {

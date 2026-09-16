@@ -627,6 +627,7 @@
 			"recordingStatus": "Registrazione messaggio vocale…",
 			"deleteRecordingButton": "Elimina registrazione",
 			"uploadingAttachment": "Caricamento allegato…",
+			"awaitingCommitter": "La conversazione non è ancora stabilita. Il messaggio verrà inviato non appena l'altra persona sarà online.",
 			"attachFileAria": "Allega file",
 			"attachFromStorageAria": "Allega file dall'archivio",
 			"recordVoiceAria": "Registra messaggio vocale",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "in attesa dell'altra persona…",
 			"created": "bozza",
 			"sending": "invio…",
 			"sent": "inviato",

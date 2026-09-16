@@ -627,6 +627,7 @@
 			"recordingStatus": "音声メッセージを録音中…",
 			"deleteRecordingButton": "録音を削除",
 			"uploadingAttachment": "添付ファイルをアップロード中…",
+			"awaitingCommitter": "会話がまだ確立されていません。相手がオンラインになり次第、メッセージが送信されます。",
 			"attachFileAria": "ファイルを添付",
 			"attachFromStorageAria": "ストレージからファイルを添付",
 			"recordVoiceAria": "音声メッセージを録音",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "相手を待っています…",
 			"created": "下書き",
 			"sending": "送信中…",
 			"sent": "送信済み",

@@ -627,6 +627,7 @@
 			"recordingStatus": "Sesli mesaj kaydediliyor…",
 			"deleteRecordingButton": "Kaydı sil",
 			"uploadingAttachment": "Ek yükleniyor…",
+			"awaitingCommitter": "Sohbet henüz kurulmadı. Karşı taraf çevrimiçi olur olmaz mesaj gönderilecek.",
 			"attachFileAria": "Dosya ekle",
 			"attachFromStorageAria": "Depodan dosya ekle",
 			"recordVoiceAria": "Sesli mesaj kaydet",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "karşı taraf bekleniyor…",
 			"created": "taslak",
 			"sending": "gönderiliyor…",
 			"sent": "gönderildi",

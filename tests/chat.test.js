@@ -351,9 +351,18 @@ test("ensureChatEstablished: И4 срабатывает БЕЗ подтверж�
 	);
 });
 
-test("enqueuePendingOutgoingMessage/drainPendingOutgoingMessages: очередь копится, drain отправляет по порядку lamportTs и опустошает очередь", async () => {
-	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, text: "второе", lamportTs: 2 });
-	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, text: "первое", lamportTs: 1 });
+// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.3, вариант A) — pendingOutgoingMessages
+// больше НЕ несёт text/attachments: строка со статусом "queued" уже лежит в
+// messages (это то, что реально пишет sendChatMessageAction ДО сети) — drain
+// читает содержимое оттуда по msgId. Тест сеет обе таблицы так, как их
+// реально оставляет sendChatMessageAction, не напрямую через старый API.
+test("enqueuePendingOutgoingMessage/drainPendingOutgoingMessages: очередь копится, drain отправляет по порядку lamportTs, опустошает очередь и переводит ТЕ ЖЕ строки messages (тот же msgId) в 'sent' — без дубля", async () => {
+	const msgIdSecond = "queued-msg-second";
+	const msgIdFirst = "queued-msg-first";
+	await upsertMessage({ ownerPubkey: BOB_PUB, chatId: ALICE_PUB, lamportTs: 2, senderPubkey: BOB_PUB, id: "", text: "второе", status: "queued", msgId: msgIdSecond, sentAt: 2000 }, DB_KEY);
+	await upsertMessage({ ownerPubkey: BOB_PUB, chatId: ALICE_PUB, lamportTs: 1, senderPubkey: BOB_PUB, id: "", text: "первое", status: "queued", msgId: msgIdFirst, sentAt: 1000 }, DB_KEY);
+	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, lamportTs: 2, msgId: msgIdSecond });
+	await enqueuePendingOutgoingMessage(BOB_PUB, DB_KEY, { contactPubkey: ALICE_PUB, lamportTs: 1, msgId: msgIdFirst });
 
 	// Группа должна СУЩЕСТВОВАТЬ к моменту drain (создаётся коммиттером/через Welcome —
 	// drain сама группу не создаёт, только шлёт УЖЕ существующей).
@@ -375,6 +384,15 @@ test("enqueuePendingOutgoingMessage/drainPendingOutgoingMessages: очередь
 	const remaining = await db.table("pendingOutgoingMessages").where("[ownerPubkey+contactPubkey]").equals([BOB_PUB, ALICE_PUB]).toArray();
 	assert.equal(remaining.length, 0, "очередь должна опустеть после drain");
 	assert.equal(publishedEvents.filter((e) => e.kind === 445).length, 2, "оба сообщения должны быть реально отправлены (kind 445)");
+
+	const bobMessages = await db.table("messages").where("[ownerPubkey+chatId]").equals([BOB_PUB, ALICE_PUB]).toArray();
+	assert.equal(bobMessages.length, 2, "drain не создаёт вторую строку на то же сообщение — тот же msgId, обновление на месте");
+	const byMsgId = Object.fromEntries(bobMessages.map((r) => [r.msgId, fromEncryptedRow(r, DB_KEY)]));
+	assert.equal(byMsgId[msgIdFirst].status, "sent");
+	assert.equal(byMsgId[msgIdFirst].text, "первое");
+	assert.ok(byMsgId[msgIdFirst].id, "id обязан заполниться реальным eventId после публикации");
+	assert.equal(byMsgId[msgIdSecond].status, "sent");
+	assert.equal(byMsgId[msgIdSecond].text, "второе");
 });
 
 test("sendMessage: бросает, если чат ещё не установлен (нет mlsGroups записи)", async () => {

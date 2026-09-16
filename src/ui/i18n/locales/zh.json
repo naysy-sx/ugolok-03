@@ -627,6 +627,7 @@
 			"recordingStatus": "正在录制语音消息…",
 			"deleteRecordingButton": "删除录音",
 			"uploadingAttachment": "正在上传附件…",
+			"awaitingCommitter": "对话尚未建立。对方上线后消息将会发送。",
 			"attachFileAria": "添加附件",
 			"attachFromStorageAria": "从存储中添加附件",
 			"recordVoiceAria": "录制语音消息",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "等待对方…",
 			"created": "草稿",
 			"sending": "发送中…",
 			"sent": "已发送",

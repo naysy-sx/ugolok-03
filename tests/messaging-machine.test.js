@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MESSAGE_TRANSITIONS, transitionMessage } from "../src/domain/messaging/machine.js";
 
-const STATES = ["created", "sending", "sent", "read", "failed", "discarded"];
-const EVENTS = ["SEND", "ACK", "READ", "FAIL", "RETRY", "DISCARD"];
+const STATES = ["queued", "created", "sending", "sent", "read", "failed", "discarded"];
+const EVENTS = ["ESTABLISHED", "SEND", "ACK", "READ", "FAIL", "RETRY", "DISCARD"];
 
 const VALID = new Set([
+	"queued:ESTABLISHED",
 	"created:SEND",
 	"sending:ACK",
 	"sending:FAIL",
@@ -14,7 +15,8 @@ const VALID = new Set([
 	"failed:DISCARD",
 ]);
 
-test("TECH.md §9.1: ровно 6 валидных переходов, буквально как в спецификации", () => {
+test("TECH.md §9.1 + Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.2) — ровно 7 валидных переходов, буквально как в спецификации", () => {
+	assert.equal(transitionMessage("queued", "ESTABLISHED"), "sending");
 	assert.equal(transitionMessage("created", "SEND"), "sending");
 	assert.equal(transitionMessage("sending", "ACK"), "sent");
 	assert.equal(transitionMessage("sending", "FAIL"), "failed");
@@ -23,7 +25,7 @@ test("TECH.md §9.1: ровно 6 валидных переходов, букв�
 	assert.equal(transitionMessage("failed", "DISCARD"), "discarded");
 });
 
-test("исчерпывающий перебор всех 36 пар (state,event) — недопустимые бросают, не проглатывают молча", () => {
+test("исчерпывающий перебор всех 49 пар (state,event) — недопустимые бросают, не проглатывают молча", () => {
 	let validCount = 0;
 	let invalidCount = 0;
 	for (const state of STATES) {
@@ -38,8 +40,8 @@ test("исчерпывающий перебор всех 36 пар (state,event)
 			}
 		}
 	}
-	assert.equal(validCount, 6);
-	assert.equal(invalidCount, 30);
+	assert.equal(validCount, 7);
+	assert.equal(invalidCount, 42);
 });
 
 test("read и discarded — финальные состояния, без исходящих переходов вообще", () => {

@@ -86,9 +86,14 @@ export const OUTBOX_PLAINTEXT_FIELDS = ["seq", "eventId", "status", "retryCount"
 export const CHANNEL_KEY_META_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId"];
 
 // Этап 73.3 — И3 (единственный коммиттер): исходящие, накопленные проигравшей
-// стороной, пока коммиттер не создал группу. text/attachment — содержательные,
-// шифруются; ownerPubkey/contactPubkey/lamportTs — составной индекс, plaintext.
-export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lamportTs"];
+// стороной, пока коммиттер не создал группу. ownerPubkey/contactPubkey/lamportTs —
+// составной индекс, plaintext.
+// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.3, вариант A) — text/attachments БОЛЬШЕ НЕ
+// хранятся здесь: строка уже существует в messages (status:"queued") с момента
+// клика, drain читает содержимое оттуда по msgId — один источник текста, не два.
+// msgId — plaintext (не секрет, тот же класс, что eventId — уже публичен на relay
+// в момент реальной отправки, здесь нужен как внешний ключ на messages).
+export const PENDING_OUTGOING_MESSAGES_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lamportTs", "msgId"];
 
 // Этап 74 — T2.3 (единственный писатель MLS-состояния): журнал уже
 // обработанных kind:445 для дедупликации между вкладками. Все поля

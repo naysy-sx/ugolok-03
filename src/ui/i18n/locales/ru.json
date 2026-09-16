@@ -627,6 +627,7 @@
 			"recordingStatus": "Идёт запись голосового…",
 			"deleteRecordingButton": "Удалить запись",
 			"uploadingAttachment": "Загрузка вложения…",
+			"awaitingCommitter": "Переписка ещё не создана. Сообщение уйдёт, как только собеседник появится в сети.",
 			"attachFileAria": "Прикрепить файл",
 			"attachFromStorageAria": "Прикрепить файл из хранилища",
 			"recordVoiceAria": "Записать голосовое сообщение",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "ждём собеседника…",
 			"created": "черновик",
 			"sending": "отправка…",
 			"sent": "отправлено",

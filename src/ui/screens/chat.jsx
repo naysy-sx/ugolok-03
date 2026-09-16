@@ -611,6 +611,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const profile = profiles.value[contactPubkey];
 	const displayName = profile?.name || shortPubkey(contactPubkey);
 
+	// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.4) — плашка выводится из ДАННЫХ, не из
+	// локального состояния конкретного клика: строка "queued" уже своего
+	// сообщения означает "переписка ещё не создана, жду коммиттера/sibling-
+	// Welcome" (chat.js, ensureChatEstablished И3/И4), независимо от того, кто
+	// и когда нажал "Отправить" — переживает reload и работает даже если
+	// сообщение было отправлено в прошлой сессии. Исчезает сама, как только
+	// messagingActivity перезагрузит окно и статус сменится (drain выполнился).
+	const awaitingCommitter = messages.some((m) => m.senderPubkey === ownerPubkey && m.status === "queued");
+
 	return (
 		<Screen
 			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
@@ -643,6 +652,12 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			feed
 			footer={
 				<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+					{awaitingCommitter && (
+						<p class="panel__hint" role="status">
+							{t("chat.window.awaitingCommitter")}
+						</p>
+					)}
+
 					{composeError && (
 						<p role="alert" style={{ color: "var(--bad)" }}>
 							{composeError}

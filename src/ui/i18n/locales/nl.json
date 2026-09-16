@@ -627,6 +627,7 @@
 			"recordingStatus": "Spraakbericht opnemen…",
 			"deleteRecordingButton": "Opname verwijderen",
 			"uploadingAttachment": "Bijlage uploaden…",
+			"awaitingCommitter": "Het gesprek is nog niet tot stand gekomen. Het bericht wordt verzonden zodra de ander online is.",
 			"attachFileAria": "Bestand bijvoegen",
 			"attachFromStorageAria": "Bestand uit opslag bijvoegen",
 			"recordVoiceAria": "Spraakbericht opnemen",
@@ -646,6 +647,7 @@
 	},
 	"message": {
 		"status": {
+			"queued": "wachten op de ander…",
 			"created": "concept",
 			"sending": "verzenden…",
 			"sent": "verzonden",

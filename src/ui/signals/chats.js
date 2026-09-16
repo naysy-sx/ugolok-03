@@ -1,11 +1,14 @@
 import { signal } from "@preact/signals";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
-import { ensureChatEstablished, sendMessage, enqueuePendingOutgoingMessage } from "../../domain/messaging/chat.js";
+import { ensureChatEstablished, sendMessage, enqueuePendingOutgoingMessage, upsertMessage } from "../../domain/messaging/chat.js";
+import { touchChatActivity } from "../../domain/messaging/chat-activity.js";
 import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
 import { editMessage } from "../../domain/messaging/edits.js";
 import { markChatAsRead } from "../../domain/messaging/read-status.js";
 import { saveDraft } from "../../domain/messaging/drafts.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
+import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 
 // Находка 2 (CONTRACTS.md, этап 27): диспетчер transport.js работает вне React
 // re-render — этот сигнал сообщает UI "что-то изменилось" (новое сообщение/Welcome/
@@ -48,20 +51,51 @@ export async function sendChatMessageAction(
 	refreshGroupMessageSubscription,
 	attachments,
 ) {
+	// Этап 1 (MESSAGE-DELIVERY-TZ.md, З1.1/З1.3, вариант A) — msgId/sentAt рождаются
+	// ЗДЕСЬ, ДО любого сетевого вызова (ensureChatEstablished может уйти в сеть за
+	// KeyPackage'ами контакта — на этом самом REQ/EOSE поймана H3, MESSAGE-DELIVERY-
+	// AUDIT-BRIEFING.md), и строка немедленно пишется в messages со статусом
+	// "queued" — лента показывает сообщение СРАЗУ, независимо от того, что
+	// произойдёт дальше (успех, awaiting_committer, зависший REQ). Раньше msgId
+	// рождался внутри doSendMessage — уже ПОСЛЕ того, как отправка могла уйти в
+	// очередь (И3/И4) или зависнуть без обратной связи для пользователя.
+	const msgId = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+	const sentAt = Math.floor(Date.now() / 1000);
+	await upsertMessage(
+		{
+			ownerPubkey,
+			chatId: contactPubkey,
+			lamportTs,
+			senderPubkey: ownerPubkey,
+			id: "",
+			text,
+			status: "queued",
+			msgId,
+			sentAt,
+			...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
+		},
+		dbKey,
+	);
+	traceDelivery("message.upsert", { msgId, status: "queued" });
+	// Даже до установления переписки — реальное локальное действие пользователя
+	// прямо сейчас (тот же принцип, что в chat.js doSendMessage при failed).
+	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
+
 	// Этап 73.3 — И3/И4: ensureChatEstablished бросает DomainError с
 	// key="errors.awaitingSiblingSync" (И4 — другое моё устройство уже
 	// разговаривало с этим контактом) или "errors.awaitingCommitter" (И3 —
 	// коммиттер этой пары не я) вместо создания второй независимой группы.
-	// Обе причины — ОДНА и та же реакция: сообщение в очередь, статус для UI.
+	// Обе причины — ОДНА и та же реакция: сообщение остаётся "queued" в очереди,
+	// статус для UI. Строка в messages НЕ трогается — уже видна пользователю.
 	try {
 		await ensureChatEstablished(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages);
 	} catch (e) {
 		if (!e.key?.startsWith("errors.awaiting")) throw e;
-		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, text, lamportTs, attachments });
-		return { status: "awaiting_committer" };
+		await enqueuePendingOutgoingMessage(ownerPubkey, dbKey, { contactPubkey, lamportTs, msgId });
+		return { status: "awaiting_committer", msgId };
 	}
 	await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
-	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments);
+	return sendMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, msgId, sentAt);
 }
 
 export async function deleteChatMessageAction(ownerPubkey, privKey, dbKey, contactPubkey, msgId, lamportTs, publish) {
