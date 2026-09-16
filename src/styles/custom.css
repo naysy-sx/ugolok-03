@@ -2075,6 +2075,29 @@ html[data-media-full] .top-corner-actions {
 .message-bubble-own .message-bubble-meta {
 	color: color-mix(in oklch, var(--accent-contrast), transparent 30%);
 }
+.message-receipt-wrap {
+	display: inline-flex;
+	line-height: 1;
+}
+.message-receipt {
+	display: inline-flex;
+	align-items: center;
+	margin-inline-start: -0.15em;
+}
+.message-receipt .icon {
+	width: 0.9em;
+	height: 0.9em;
+}
+.message-receipt[data-kind="delivered"] .icon:last-child,
+.message-receipt[data-kind="read"] .icon:last-child {
+	margin-inline-start: -0.35em;
+}
+.message-receipt[data-kind="read"] {
+	color: var(--accent);
+}
+.message-receipt[data-kind="failed"] {
+	color: var(--bad);
+}
 .message-bubble-other .message-bubble-meta {
 	color: var(--muted);
 }

@@ -129,7 +129,9 @@
 		"perfLogHint": "Visible uniquement lorsque l'indicateur de mesure est activé (?perf=1)",
 		"copyPerfLogButton": "Copier le journal de vitesse",
 		"perfLogCopied": "Copié dans le presse-papiers",
-		"perfLogManualHint": "Presse-papiers indisponible — sélectionnez et copiez manuellement"
+		"perfLogManualHint": "Presse-papiers indisponible — sélectionnez et copiez manuellement",
+		"sendReadReceiptsLabel": "Envoyer les accusés de lecture",
+		"sendReadReceiptsHint": "Votre contact verra que vous avez ouvert la conversation. Les accusés de réception partent toujours — ils disent seulement que le message a atteint cet appareil."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil et menu principal",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "demande pas encore acceptée",
 			"read": "lu",
 			"failed": "non distribué",
-			"discarded": "abandonné"
+			"discarded": "abandonné",
+			"delivered": "distribué"
 		},
 		"deletedNotice": "Message supprimé",
 		"editedLabel": "(modifié)",

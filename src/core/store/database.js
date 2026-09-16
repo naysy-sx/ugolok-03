@@ -420,6 +420,15 @@ db.version(36).stores({
   chatGeneration: "[ownerPubkey+contactPubkey]"
 });
 
+// READ-STATUS-AND-LAST-SEEN-TZ: peerCursors — чужой delivered/read курсор
+// (два числа на пару, шифровать нечего). peerPresence — производная
+// lastSeenAt по доказанным событиям контакта, отдельно от chatActivity
+// (та про свежесть переписки для сортировки сайдбара).
+db.version(37).stores({
+  peerCursors: "[ownerPubkey+contactPubkey]",
+  peerPresence: "[ownerPubkey+contactPubkey]",
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

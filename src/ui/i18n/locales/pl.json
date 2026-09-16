@@ -129,7 +129,9 @@
 		"perfLogHint": "Widoczny tylko przy włączonej fladze pomiaru (?perf=1)",
 		"copyPerfLogButton": "Kopiuj dziennik szybkości",
 		"perfLogCopied": "Skopiowano do schowka",
-		"perfLogManualHint": "Schowek niedostępny — zaznacz i skopiuj ręcznie"
+		"perfLogManualHint": "Schowek niedostępny — zaznacz i skopiuj ręcznie",
+		"sendReadReceiptsLabel": "Wysyłaj potwierdzenia odczytu",
+		"sendReadReceiptsHint": "Kontakt zobaczy, że otworzyłeś rozmowę. Potwierdzenia dostarczenia i tak wychodzą — znaczą tylko, że wiadomość dotarła na to urządzenie."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil i menu główne",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "prośba jeszcze nie zaakceptowana",
 			"read": "przeczytano",
 			"failed": "niedostarczono",
-			"discarded": "odrzucono"
+			"discarded": "odrzucono",
+			"delivered": "dostarczono"
 		},
 		"deletedNotice": "Wiadomość usunięta",
 		"editedLabel": "(edytowano)",

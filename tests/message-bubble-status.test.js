@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveStatusLabelKey } from "../src/ui/components/message-bubble-status.js";
+import { resolveStatusLabelKey, resolveReceiptKind } from "../src/ui/components/message-bubble-status.js";
 
 // Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.6) — "заявка не принята" обязана
 // перекрывать обычную галочку "отправлено" ТОЛЬКО для status==="sent" и
@@ -31,4 +31,11 @@ test("resolveStatusLabelKey: status='failed' + pendingAcceptance=true -> failed 
 test("resolveStatusLabelKey: неизвестный статус -> undefined (как и раньше, компонент ничего не показывает)", () => {
 	assert.equal(resolveStatusLabelKey("bogus", false), undefined);
 	assert.equal(resolveStatusLabelKey("bogus", true), undefined);
+});
+
+test("resolveReceiptKind: курсоры delivered/read поверх sent", () => {
+	assert.equal(resolveReceiptKind({ status: "sent", lamportTs: 2, deliveredUpTo: 2, readUpTo: 0 }), "delivered");
+	assert.equal(resolveReceiptKind({ status: "sent", lamportTs: 2, deliveredUpTo: 3, readUpTo: 2 }), "read");
+	assert.equal(resolveReceiptKind({ status: "sent", lamportTs: 4, deliveredUpTo: 3, readUpTo: 2 }), "sent");
+	assert.equal(resolveReceiptKind({ status: "failed", lamportTs: 1, deliveredUpTo: 9, readUpTo: 9 }), "failed");
 });

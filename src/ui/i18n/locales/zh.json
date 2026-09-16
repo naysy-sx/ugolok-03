@@ -129,7 +129,9 @@
 		"perfLogHint": "仅在开启测速标志时可见（?perf=1）",
 		"copyPerfLogButton": "复制速度日志",
 		"perfLogCopied": "已复制到剪贴板",
-		"perfLogManualHint": "剪贴板不可用 — 请选中后手动复制"
+		"perfLogManualHint": "剪贴板不可用 — 请选中后手动复制",
+		"sendReadReceiptsLabel": "发送已读回执",
+		"sendReadReceiptsHint": "对方会看到你打开了对话。送达回执仍会发出——只表示消息到达了这台设备。"
 	},
 	"shell": {
 		"sidebarAriaLabel": "个人资料与主菜单",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "请求尚未被接受",
 			"read": "已读",
 			"failed": "未送达",
-			"discarded": "已放弃"
+			"discarded": "已放弃",
+			"delivered": "已送达"
 		},
 		"deletedNotice": "消息已删除",
 		"editedLabel": "（已编辑）",

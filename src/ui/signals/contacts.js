@@ -9,6 +9,7 @@ import { pickLatest, isNewerVersion } from "../../core/sync/lww.js";
 import { revokeIfNoLongerVisible, grantIfNewlyVisible } from "../../domain/content/channel-visibility.js";
 import { fromEncryptedRow, toEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
+import { notePeerActivity } from "../../domain/messaging/peer-presence.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { navigateFromNotification } from "./notification-nav.js";
@@ -253,6 +254,9 @@ export async function applyProfileUpdates(updates) {
 				await db.table("contactProfiles").put(
 					toEncryptedRow({ ownerPubkey: ownerPubkeyRef, contactPubkey: pk, ...incoming, watched, seenAt }, CONTACT_PROFILES_PLAINTEXT_FIELDS, dbKeyRef),
 				);
+				if (typeof incoming.createdAt === "number") {
+					await notePeerActivity(ownerPubkeyRef, pk, incoming.createdAt);
+				}
 			}
 		}
 	}

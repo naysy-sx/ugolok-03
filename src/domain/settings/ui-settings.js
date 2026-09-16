@@ -59,6 +59,9 @@ export const DEFAULT_SETTINGS = {
 	// даже когда открытых дел с сроком снова стало 0 (REDESIGN-SPEC.md:
 	// "мигающий туда-сюда элемент хуже лишней кнопки").
 	everSetDueDate: false,
+	// READ-STATUS-AND-LAST-SEEN-TZ A4 — «Сообщать о прочтении», по умолчанию вкл.
+	// Выключена — read-курсор не уходит; delivered продолжает.
+	sendReadReceipts: true,
 };
 
 // Этап 70 — МИНИМАЛЬНАЯ таблица только для одноразовой миграции старого
@@ -102,6 +105,7 @@ function mergeWithDefaults(parsed) {
 		...DEFAULT_SETTINGS,
 		...parsed,
 		customPalette: migrateAccentColorId(parsed),
+		sendReadReceipts: parsed.sendReadReceipts !== false,
 		notifications: {
 			...DEFAULT_NOTIFICATIONS,
 			...notifications,

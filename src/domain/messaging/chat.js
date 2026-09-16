@@ -27,6 +27,19 @@ import { DomainError } from "../errors.js";
 import { isKnownContact } from "./inbox-requests.js";
 import { withGroupLock } from "../../core/store/mls-lock.js";
 import { touchChatActivity } from "./chat-activity.js";
+import { notePeerActivity } from "./peer-presence.js";
+import {
+	applyPeerCursor,
+	extractCursorFromPayload,
+	parseCursorText,
+	buildCursorText,
+	markCursorSent,
+	cursorGrewSinceLastSend,
+	bindCursorFlush,
+	scheduleCursorFlush,
+	rearmAfterMinInterval,
+} from "./peer-cursors.js";
+import { loadUiSettings } from "../settings/ui-settings.js";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 import { transitionMessage } from "./machine.js";
 
@@ -413,8 +426,12 @@ async function prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey
 	// который мы реально видели ОТ этого контакта — ничего не стоит на проводе
 	// сверх нескольких байт JSON. undefined (контакт нам ещё ничего не писал) —
 	// поле не добавляем вовсе, "работает только при взаимной переписке" (ТЗ).
-	const ackUpTo = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
-	if (ackUpTo !== undefined) messagePayload.ackUpTo = ackUpTo;
+	const receipts = await getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey);
+	if (receipts.d !== undefined) {
+		messagePayload.d = receipts.d;
+		messagePayload.ackUpTo = receipts.d;
+	}
+	if (receipts.r !== undefined) messagePayload.r = receipts.r;
 	if (attachments !== undefined && attachments.length > 0) messagePayload.attachments = attachments;
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
 	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.3) — проверка ДО encryptApplicationMessage,
@@ -517,7 +534,7 @@ async function prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey
 	const seq = await enqueue(event, dbKey);
 	traceDelivery("outbox.enqueued", { msgId, eventId: event.id });
 
-	return { event, seq, msgId, sentAt };
+	return { event, seq, msgId, sentAt, receipts };
 }
 
 // Этап 3 (З3.1) — вне лока: зависшая публикация (H2, или просто медленная
@@ -529,7 +546,7 @@ async function prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey
 // удачной попытке или до "failed" только когда outbox исчерпает MAX_ATTEMPTS
 // (З3.2) — тогда же кнопка "повторить" в UI.
 async function finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey, text, lamportTs, publish, attachments, groupIdHex, prepared) {
-	const { event, seq, msgId, sentAt } = prepared;
+	const { event, seq, msgId, sentAt, receipts } = prepared;
 	const publishStartedAt = Date.now();
 	let result;
 	try {
@@ -571,6 +588,7 @@ async function finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey,
 	}
 
 	await markSent(seq);
+	if (receipts) markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r);
 	await db
 		.table("messages")
 		.where("[ownerPubkey+chatId+msgId]")
@@ -701,19 +719,15 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
 
-	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — ackUpTo (пиггибэк ИЛИ отдельный
-	// ACK-пакет, оба несут одно и то же поле) переводит НАШИ СОБСТВЕННЫЕ
-	// сообщения sent -> read. Применяем ДО ветвления ackOnly — у обоих видов
-	// пакета это ровно одна и та же семантика.
-	if (typeof parsed.ackUpTo === "number") {
-		await applyAckUpTo(ownerPubkey, contactPubkey, parsed.ackUpTo);
+	const incomingCursor = extractCursorFromPayload(parsed);
+	if (incomingCursor) {
+		await applyPeerCursor(ownerPubkey, contactPubkey, incomingCursor);
 	}
-	if (parsed.ackOnly === true) {
-		// Чистый ACK-пакет (sendExplicitAck/sweepPendingAcks) — не сообщение:
-		// не создаёт строку в messages, не будит "новое сообщение от X", не
-		// зеркалируется. Ратчет/mlsGroups.state УЖЕ обновлены выше (общий для
-		// любого kind:445 код), markEventProcessed — тоже.
-		traceDelivery("recv.445.ackonly", { eventId: event.id, groupIdHex, ackUpTo: parsed.ackUpTo });
+
+	const isCursorOnly = parsed.ackOnly === true || parseCursorText(parsed.text) !== null;
+	if (isCursorOnly) {
+		await notePeerActivity(ownerPubkey, contactPubkey, event.created_at);
+		traceDelivery("recv.445.ackonly", { eventId: event.id, groupIdHex, ackUpTo: incomingCursor?.d });
 		return null;
 	}
 
@@ -755,6 +769,9 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	// формата (до этапа 29) — момент ПОЛУЧЕНИЯ не хуже приближение, чем
 	// полное отсутствие записи активности.
 	await touchChatActivity(ownerPubkey, dbKey, contactPubkey, senderPubkey, extra.sentAt ?? Math.floor(Date.now() / 1000));
+	if (senderPubkey === contactPubkey) {
+		await notePeerActivity(ownerPubkey, contactPubkey, event.created_at);
+	}
 
 	// Этап 74 — T1.3: то же вычисленное значение — иначе зеркало несёт ВТОРОЙ
 	// экземпляр той же жёсткой ошибки RC-1.
@@ -769,6 +786,11 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	// для уведомлений "новое сообщение от X", ничего не ломает (существующие вызовы
 	// проверяют отдельные поля через assert.equal, не строгий deepEqual на весь объект).
 	return { text: parsed.text, lamportTs: parsed.lamportTs, contactPubkey, ...extra };
+}
+
+export function armPeerCursorAck(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+	ensureCursorFlushBound(ownerPubkey, privKey, dbKey, contactPubkey, publish);
+	scheduleCursorFlush(ownerPubkey, contactPubkey);
 }
 
 // Этап 73.3 — И4 (chat.js, ensureChatEstablished): существование, не данные —
@@ -867,6 +889,31 @@ async function lastReceivedLamportTs(ownerPubkey, contactPubkey) {
 	return Math.max(...rows.map((r) => r.lamportTs));
 }
 
+async function lastReadIncomingLamport(ownerPubkey, contactPubkey) {
+	const sync = await db.table("chatSyncState").get([ownerPubkey, contactPubkey]);
+	const lastRead = sync?.lastReadLamportTs ?? 0;
+	if (!lastRead) return undefined;
+	const rows = await db
+		.table("messages")
+		.where("[ownerPubkey+chatId]")
+		.equals([ownerPubkey, contactPubkey])
+		.filter((r) => r.senderPubkey === contactPubkey && r.lamportTs <= lastRead)
+		.toArray();
+	if (rows.length === 0) return undefined;
+	return Math.max(...rows.map((r) => r.lamportTs));
+}
+
+async function getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey) {
+	const d = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
+	const settings = await loadUiSettings(ownerPubkey, dbKey);
+	const r = settings.sendReadReceipts === false ? undefined : await lastReadIncomingLamport(ownerPubkey, contactPubkey);
+	return { d, r };
+}
+
+function ensureCursorFlushBound(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+	bindCursorFlush(ownerPubkey, contactPubkey, () => sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish));
+}
+
 // Этап 5 (З5.5) — та же выборка, но с sentAt (шифрованное поле — нужна
 // расшифровка) отправителя, для sweepPendingAcks (нужен момент получения,
 // не только lamportTs, чтобы решить "давно ли это было").
@@ -881,20 +928,6 @@ async function lastReceivedMessageMeta(ownerPubkey, dbKey, contactPubkey) {
 	const maxRow = rows.reduce((a, b) => (b.lamportTs > a.lamportTs ? b : a));
 	const { sentAt } = fromEncryptedRow(maxRow, dbKey);
 	return { lamportTs: maxRow.lamportTs, sentAt };
-}
-
-// Этап 5 (З5.5) — переводит НАШИ исходящие sent -> read вплоть до ackUpTo
-// включительно. Идемпотентно (фильтр status==="sent" — уже read строки не
-// трогает повторно, transitionMessage не вызывается на них снова).
-async function applyAckUpTo(ownerPubkey, contactPubkey, ackUpTo) {
-	await db
-		.table("messages")
-		.where("[ownerPubkey+chatId]")
-		.equals([ownerPubkey, contactPubkey])
-		.filter((r) => r.senderPubkey === ownerPubkey && r.status === "sent" && r.lamportTs <= ackUpTo)
-		.modify((r) => {
-			r.status = transitionMessage(r.status, "READ");
-		});
 }
 
 // Этап 5 (З5.5) — "собеседник уже узнал бы ackUpTo=lamportTs(receivedSentAt)
@@ -926,15 +959,24 @@ async function alreadyAckedViaPiggyback(ownerPubkey, dbKey, contactPubkey, recei
 export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
 	const groupId = computeGroupId(ownerPubkey, contactPubkey);
 	const groupIdHex = bytesToHex(groupId);
-	const ackUpTo = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
-	if (ackUpTo === undefined) return; // контакт нам ещё ничего не писал — нечего подтверждать
+	const receipts = await getOutgoingReceipts(ownerPubkey, contactPubkey, dbKey);
+	if (receipts.d === undefined) return;
+	if (!cursorGrewSinceLastSend(ownerPubkey, contactPubkey, receipts.d, receipts.r)) return;
+	if (rearmAfterMinInterval(ownerPubkey, contactPubkey)) return;
 
 	const event = await withGroupLock(ownerPubkey, groupIdHex, async () => {
 		const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 		if (!raw) return null; // чат не установлен — нечего подтверждать
 		const row = fromEncryptedRow(raw, dbKey);
 		const state = deserializeState(row.state);
-		const plaintextBytes = utf8ToBytes(JSON.stringify({ ackOnly: true, ackUpTo }));
+		const payload = {
+			ackOnly: true,
+			ackUpTo: receipts.d,
+			d: receipts.d,
+			text: buildCursorText({ d: receipts.d, ...(receipts.r !== undefined ? { r: receipts.r } : {}) }),
+		};
+		if (receipts.r !== undefined) payload.r = receipts.r;
+		const plaintextBytes = utf8ToBytes(JSON.stringify(payload));
 		const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 		await db.table("mlsGroups").put(
 			toEncryptedRow(
@@ -959,9 +1001,10 @@ export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey
 
 	try {
 		await requirePublishOk(publish, event);
-		traceDelivery("ack.sent", { groupIdHex, ackUpTo });
+		markCursorSent(ownerPubkey, contactPubkey, receipts.d, receipts.r);
+		traceDelivery("ack.sent", { groupIdHex, ackUpTo: receipts.d });
 	} catch (e) {
-		traceDelivery("ack.publish.reject", { groupIdHex, ackUpTo, reason: String(e?.message ?? e) });
+		traceDelivery("ack.publish.reject", { groupIdHex, ackUpTo: receipts.d, reason: String(e?.message ?? e) });
 	}
 }
 

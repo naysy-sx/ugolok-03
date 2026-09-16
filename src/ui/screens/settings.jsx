@@ -738,6 +738,10 @@ export default function Settings() {
 		persist({ ...settings, language: code });
 	}
 
+	function handleSendReadReceipts(checked) {
+		persist({ ...settings, sendReadReceipts: checked });
+	}
+
 	async function handleToggleEnabled(checked) {
 		if (checked) {
 			await handleRequestPermission();
@@ -881,6 +885,14 @@ export default function Settings() {
 									))}
 								</select>
 							</SetRow>
+
+							<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+								<span class="set-row__text">
+									{t("settings.sendReadReceiptsLabel")}
+									<small class="set-row__hint">{t("settings.sendReadReceiptsHint")}</small>
+								</span>
+								<input type="checkbox" class="set-row__switch" checked={settings.sendReadReceipts !== false} onChange={(e) => handleSendReadReceipts(e.currentTarget.checked)} />
+							</label>
 						</div>
 
 						<PaletteSection customPalette={settings.customPalette ?? DEFAULT_CUSTOM_PALETTE} onChange={handlePaletteChange} />

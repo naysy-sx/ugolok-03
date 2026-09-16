@@ -34,7 +34,9 @@ import {
 	computeGroupId,
 	ensureChatEstablished,
 	sweepPendingAcks,
+	armPeerCursorAck,
 } from "../../domain/messaging/chat.js";
+import { notePeerActivity } from "../../domain/messaging/peer-presence.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
 import { decryptMirrorPayload, buildMirroredMessageRow, KIND_MESSAGE_MIRROR } from "../../domain/messaging/mirror.js";
@@ -675,6 +677,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// принимается автоматически: siblings всегда доверены (это я же), уже
 						// известные контакты — ожидаемый разговор, настоящий незнакомец — в inbox,
 						// без создания MLS-группы, пока пользователь не примет решение явно.
+						if (!isSibling) await notePeerActivity(pubkeyHex, rumor.pubkey, rumor.created_at);
 						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
 							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), welcomeGeneration);
 							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
@@ -727,6 +730,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// Уведомления теперь идут через LOG_JOURNAL -> onJournal (contacts.js),
 						// не отсюда — профиль должен быть закэширован ДО dispatch (там же usernameFor).
 						await ensureProfilesFetched([rumor.pubkey], fetchProfiles).catch(() => {});
+						await notePeerActivity(pubkeyHex, rumor.pubkey, rumor.created_at);
 						await handleIncomingContactRumor(rumor);
 						activityChanged = true; // этап 27, находка 2 — contacts.jsx узнаёт об изменении
 					} else if (rumor.kind === CHAT_OPEN_REQUEST_KIND) {
@@ -1878,6 +1882,9 @@ async function processOneGroupMessageEvent(ownerPubkey, privKey, dbKey, publish,
 	// Найдено реальным использованием — синхронизация Lamport-часов на входящее
 	// (иначе часы двух сторон расходятся, причинный порядок сортировки ломается).
 	if (receivedResult) await receiveLamportTick(ownerPubkey, receivedResult.lamportTs);
+	if (receivedResult) {
+		armPeerCursorAck(ownerPubkey, privKey, dbKey, receivedResult.contactPubkey, publish);
+	}
 	// DESIGN.md, "Этап 25", раздел 5 — delete-маркер поверх уже расшифрованного
 	// application-message; no-op (false), если это обычное сообщение/control.
 	const wasDeletion = await applyIncomingDeletionIfMarker(ownerPubkey, dbKey, event, receivedResult);
@@ -2113,6 +2120,7 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 						const deviceTag = event.tags.find((t) => t[0] === "device");
 						if (!deviceTag) continue; // легаси/чужеродное — не наш протокол
 						await handleDeviceAnnounce(ownerPubkey, privKey, dbKey, publish, event.pubkey, deviceTag[1], decodeBase64(event.content));
+						if (event.pubkey !== ownerPubkey) await notePeerActivity(ownerPubkey, event.pubkey, event.created_at);
 					} catch (e) {
 						console.warn("deviceAnnounceSubscriber: не удалось обработать анонс устройства", event.id, e);
 					}

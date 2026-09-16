@@ -49,6 +49,8 @@ const OWNER_PUBKEY_TABLES = [
 	"chatSyncState",
 	"channelSyncState",
 	"knownDevices",
+	"peerCursors",
+	"peerPresence",
 	"files_nodes",
 	"files_mounts",
 	"files_manifests",

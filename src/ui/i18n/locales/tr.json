@@ -129,7 +129,9 @@
 		"perfLogHint": "Yalnızca ölçüm bayrağı açıkken görünür (?perf=1)",
 		"copyPerfLogButton": "Hız günlüğünü kopyala",
 		"perfLogCopied": "Panoya kopyalandı",
-		"perfLogManualHint": "Pano kullanılamıyor — seçip elle kopyalayın"
+		"perfLogManualHint": "Pano kullanılamıyor — seçip elle kopyalayın",
+		"sendReadReceiptsLabel": "Okundu bilgisi gönder",
+		"sendReadReceiptsHint": "Kişiniz sohbeti açtığınızı görür. İletildi bilgisi yine gider — yalnızca iletinin bu aygıta ulaştığını gösterir."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil ve ana menü",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "istek henüz kabul edilmedi",
 			"read": "okundu",
 			"failed": "iletilmedi",
-			"discarded": "iptal edildi"
+			"discarded": "iptal edildi",
+			"delivered": "iletilmiş"
 		},
 		"deletedNotice": "Mesaj silindi",
 		"editedLabel": "(düzenlendi)",

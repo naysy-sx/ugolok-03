@@ -129,7 +129,9 @@
 		"perfLogHint": "Visible solo cuando el indicador de medición está activado (?perf=1)",
 		"copyPerfLogButton": "Copiar registro de velocidad",
 		"perfLogCopied": "Copiado al portapapeles",
-		"perfLogManualHint": "Portapapeles no disponible — seleccione y copie manualmente"
+		"perfLogManualHint": "Portapapeles no disponible — seleccione y copie manualmente",
+		"sendReadReceiptsLabel": "Enviar confirmaciones de lectura",
+		"sendReadReceiptsHint": "Tu contacto verá que abriste el chat. Las confirmaciones de entrega se siguen enviando: solo indican que el mensaje llegó a este dispositivo."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil y menú principal",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "solicitud aún no aceptada",
 			"read": "leído",
 			"failed": "no entregado",
-			"discarded": "descartado"
+			"discarded": "descartado",
+			"delivered": "entregado"
 		},
 		"deletedNotice": "Mensaje eliminado",
 		"editedLabel": "(editado)",

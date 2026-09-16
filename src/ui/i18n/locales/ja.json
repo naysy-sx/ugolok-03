@@ -129,7 +129,9 @@
 		"perfLogHint": "計測フラグが有効なときのみ表示されます（?perf=1）",
 		"copyPerfLogButton": "速度ログをコピー",
 		"perfLogCopied": "クリップボードにコピーしました",
-		"perfLogManualHint": "クリップボードが使用できません — 選択して手動でコピーしてください"
+		"perfLogManualHint": "クリップボードが使用できません — 選択して手動でコピーしてください",
+		"sendReadReceiptsLabel": "既読を通知する",
+		"sendReadReceiptsHint": "相手はあなたがチャットを開いたことが分かります。配信済みの通知は常に送られます。メッセージがこの端末に届いたことだけを意味します。"
 	},
 	"shell": {
 		"sidebarAriaLabel": "プロフィールとメインメニュー",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "リクエスト未承認",
 			"read": "既読",
 			"failed": "未達",
-			"discarded": "破棄済み"
+			"discarded": "破棄済み",
+			"delivered": "配信済み"
 		},
 		"deletedNotice": "メッセージは削除されました",
 		"editedLabel": "（編集済み）",

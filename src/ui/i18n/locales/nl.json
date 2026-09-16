@@ -129,7 +129,9 @@
 		"perfLogHint": "Alleen zichtbaar als de meetvlag aan staat (?perf=1)",
 		"copyPerfLogButton": "Snelheidslogboek kopiëren",
 		"perfLogCopied": "Gekopieerd naar klembord",
-		"perfLogManualHint": "Klembord niet beschikbaar — selecteer en kopieer handmatig"
+		"perfLogManualHint": "Klembord niet beschikbaar — selecteer en kopieer handmatig",
+		"sendReadReceiptsLabel": "Leesbevestigingen sturen",
+		"sendReadReceiptsHint": "Je contact ziet dat je de chat hebt geopend. Afleverbevestigingen gaan nog steeds mee — ze betekenen alleen dat het bericht dit apparaat heeft bereikt."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profiel en hoofdmenu",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "verzoek nog niet geaccepteerd",
 			"read": "gelezen",
 			"failed": "niet bezorgd",
-			"discarded": "verworpen"
+			"discarded": "verworpen",
+			"delivered": "afgeleverd"
 		},
 		"deletedNotice": "Bericht verwijderd",
 		"editedLabel": "(bewerkt)",

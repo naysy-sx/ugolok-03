@@ -52,7 +52,11 @@ import { classOf, refFromAttachment } from "../../domain/media/media-ref.js";
 import AttachmentSlices from "../components/media/attachment-slices.jsx";
 import AccountAvatar from "../components/account-avatar.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
-import { t, errorMessage } from "../signals/i18n.js";
+import { t, errorMessage, currentLocale } from "../signals/i18n.js";
+import { formatLastSeen } from "../format-last-seen.js";
+import { getPeerLastSeenAt, clampLastSeenAt } from "../../domain/messaging/peer-presence.js";
+import { getPeerCursor, flushCursorNow } from "../../domain/messaging/peer-cursors.js";
+import { armPeerCursorAck } from "../../domain/messaging/chat.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 import EmojiQuickSend from "../components/emoji-quick-send.jsx";
 import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
@@ -342,6 +346,9 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 				// оставался бы прежним навсегда после открытия чата.
 				await markChatReadAction(ownerPubkey, privKey, dbKey, contactPubkey, lastLamportTs, publish).catch(() => {});
 				refreshUnreadMessagesCount(ownerPubkey).catch(() => {});
+				if (typeof document === "undefined" || document.visibilityState === "visible") {
+					armPeerCursorAck(ownerPubkey, privKey, dbKey, contactPubkey, publishToChatPartner);
+				}
 			}
 		}
 		load();
@@ -637,11 +644,41 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// тикает, только пока реально есть что показывать — не крутить лишний
 	// таймер в фоне для чатов без ожидающих сообщений.
 	const [nowTick, setNowTick] = useState(Date.now());
+	const [lastSeenAt, setLastSeenAt] = useState(null);
+	const [peerCursor, setPeerCursor] = useState({ deliveredUpTo: 0, readUpTo: 0 });
 	useEffect(() => {
 		if (!awaitingCommitter) return;
 		const id = setInterval(() => setNowTick(Date.now()), 30000);
 		return () => clearInterval(id);
 	}, [awaitingCommitter]);
+	useEffect(() => {
+		const id = setInterval(() => setNowTick(Date.now()), 60_000);
+		return () => clearInterval(id);
+	}, []);
+	useEffect(() => {
+		let cancelled = false;
+		getPeerLastSeenAt(ownerPubkey, contactPubkey).then((v) => {
+			if (!cancelled) setLastSeenAt(v);
+		});
+		getPeerCursor(ownerPubkey, contactPubkey).then((row) => {
+			if (!cancelled) setPeerCursor(row);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [ownerPubkey, contactPubkey, messagingActivity.value]);
+	useEffect(() => {
+		function onVis() {
+			if (document.visibilityState !== "visible") return;
+			armPeerCursorAck(ownerPubkey, privKey, dbKey, contactPubkey, publishToChatPartner);
+		}
+		document.addEventListener("visibilitychange", onVis);
+		if (document.visibilityState === "visible") onVis();
+		return () => {
+			document.removeEventListener("visibilitychange", onVis);
+			flushCursorNow(ownerPubkey, contactPubkey);
+		};
+	}, [ownerPubkey, privKey, dbKey, contactPubkey]);
 
 	function formatQueuedDuration(sinceSeconds, nowMs) {
 		const totalSeconds = Math.max(0, Math.floor(nowMs / 1000) - sinceSeconds);
@@ -668,6 +705,10 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
 			lead={<AccountAvatar avatar={profile?.picture} login={displayName} />}
 			title={displayName}
+			subtitle={(() => {
+				const clamped = clampLastSeenAt(lastSeenAt, Math.floor(nowTick / 1000));
+				return formatLastSeen(clamped == null ? null : clamped * 1000, nowTick, { locale: currentLocale.value }) || undefined;
+			})()}
 			actions={
 				<>
 					{/* Найдено пользователем (мобильный) — текст кнопки никогда не
@@ -797,6 +838,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 								maxLength={MAX_MESSAGE_LENGTH}
 								onOpenAttachment={openAttachment}
 								pendingAcceptance={pendingStrangerAcceptance}
+								deliveredUpTo={peerCursor.deliveredUpTo}
+								readUpTo={peerCursor.readUpTo}
 							/>
 						);
 					})}

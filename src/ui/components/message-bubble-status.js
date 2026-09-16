@@ -7,10 +7,22 @@ export const STATUS_LABEL_KEYS = {
 	created: "message.status.created",
 	sending: "message.status.sending",
 	sent: "message.status.sent",
+	delivered: "message.status.delivered",
 	read: "message.status.read",
 	failed: "message.status.failed",
 	discarded: "message.status.discarded",
 };
+
+export function resolveReceiptKind({ status, pendingAcceptance = false, lamportTs, deliveredUpTo = 0, readUpTo = 0 } = {}) {
+	if (status === "failed") return "failed";
+	if (status === "queued") return "queued";
+	if (status === "sending" || status === "created") return "sending";
+	if (pendingAcceptance && status === "sent") return "awaitingAcceptance";
+	if (status === "read" || (typeof lamportTs === "number" && readUpTo > 0 && lamportTs <= readUpTo)) return "read";
+	if (typeof lamportTs === "number" && deliveredUpTo > 0 && lamportTs <= deliveredUpTo) return "delivered";
+	if (status === "sent") return "sent";
+	return STATUS_LABEL_KEYS[status] ? status : undefined;
+}
 
 // "sent" здесь означает только "relay принял публикацию", НЕ "получатель
 // состоит в MLS-группе". Пока статус не дошёл до read (пиггибэк/ACK, см.
@@ -18,7 +30,8 @@ export const STATUS_LABEL_KEYS = {
 // писавший" (pendingAcceptance — вычисляется в chat.jsx из contacts.value +
 // истории), обычная галочка "отправлено" вводит в заблуждение: Welcome мог
 // годами лежать непринятым в его inbox.
-export function resolveStatusLabelKey(status, pendingAcceptance) {
-	if (pendingAcceptance && status === "sent") return "message.status.awaitingAcceptance";
-	return STATUS_LABEL_KEYS[status];
+export function resolveStatusLabelKey(status, pendingAcceptance, extras = {}) {
+	const kind = resolveReceiptKind({ status, pendingAcceptance, ...extras });
+	if (kind === "awaitingAcceptance") return "message.status.awaitingAcceptance";
+	return kind ? STATUS_LABEL_KEYS[kind] : undefined;
 }

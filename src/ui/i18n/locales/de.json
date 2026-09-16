@@ -129,7 +129,9 @@
 		"perfLogHint": "Nur sichtbar, wenn das Messflag aktiviert ist (?perf=1)",
 		"copyPerfLogButton": "Geschwindigkeitsprotokoll kopieren",
 		"perfLogCopied": "In die Zwischenablage kopiert",
-		"perfLogManualHint": "Zwischenablage nicht verfügbar — markieren und manuell kopieren"
+		"perfLogManualHint": "Zwischenablage nicht verfügbar — markieren und manuell kopieren",
+		"sendReadReceiptsLabel": "Lesebestätigungen senden",
+		"sendReadReceiptsHint": "Ihr Kontakt sieht, dass Sie den Chat geöffnet haben. Zustellbestätigungen werden weiter gesendet — sie bedeuten nur, dass die Nachricht dieses Gerät erreicht hat."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil und Hauptmenü",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "Anfrage noch nicht angenommen",
 			"read": "gelesen",
 			"failed": "nicht zugestellt",
-			"discarded": "verworfen"
+			"discarded": "verworfen",
+			"delivered": "zugestellt"
 		},
 		"deletedNotice": "Nachricht gelöscht",
 		"editedLabel": "(bearbeitet)",

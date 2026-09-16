@@ -129,7 +129,9 @@
 		"perfLogHint": "Visível apenas com o sinalizador de medição ativado (?perf=1)",
 		"copyPerfLogButton": "Copiar registro de velocidade",
 		"perfLogCopied": "Copiado para a área de transferência",
-		"perfLogManualHint": "Área de transferência indisponível — selecione e copie manualmente"
+		"perfLogManualHint": "Área de transferência indisponível — selecione e copie manualmente",
+		"sendReadReceiptsLabel": "Enviar confirmações de leitura",
+		"sendReadReceiptsHint": "O contato verá que você abriu a conversa. Confirmações de entrega continuam a ser enviadas — só significam que a mensagem chegou a este dispositivo."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil e menu principal",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "pedido ainda não aceito",
 			"read": "lido",
 			"failed": "não entregue",
-			"discarded": "descartado"
+			"discarded": "descartado",
+			"delivered": "entregue"
 		},
 		"deletedNotice": "Mensagem excluída",
 		"editedLabel": "(editado)",

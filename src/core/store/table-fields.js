@@ -144,6 +144,11 @@ export const JOURNAL_ENTRIES_PLAINTEXT_FIELDS = ["id", "owner", "createdAt", "ca
 // PROCESSED_GROUP_EVENTS_PLAINTEXT_FIELDS выше).
 export const CHAT_ACTIVITY_PLAINTEXT_FIELDS = ["ownerPubkey", "chatId", "lastAt", "lastFrom"];
 
+// READ-STATUS-AND-LAST-SEEN-TZ часть A/B — голые числа на пару, не секрет
+// (тот же прецедент, что chatGeneration / knownContactDevices).
+export const PEER_CURSORS_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "deliveredUpTo", "readUpTo", "updatedAt"];
+export const PEER_PRESENCE_PLAINTEXT_FIELDS = ["ownerPubkey", "contactPubkey", "lastSeenAt", "updatedAt"];
+
 // Редизайн интерфейса, этап 6 (CONTRACTS.md) — pinned: закреплённое
 // (каналы+люди). Только ownerPubkey plaintext (структурный индекс) — тот
 // же принцип, что UI_SETTINGS_PLAINTEXT_FIELDS выше, содержимое (channels/

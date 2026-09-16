@@ -39,6 +39,7 @@ import {
 	sweepPendingAcks,
 } from "../src/domain/messaging/chat.js";
 import { listConversations } from "../src/domain/messaging/chat-activity.js";
+import { getPeerCursor, resetCursorRuntime } from "../src/domain/messaging/peer-cursors.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -64,6 +65,9 @@ beforeEach(async () => {
 	await db.table("processedGroupEvents").clear();
 	await db.table("chatActivity").clear();
 	await db.table("chatGeneration").clear();
+	await db.table("peerCursors").clear();
+	await db.table("peerPresence").clear();
+	resetCursorRuntime();
 });
 
 after(() => {
@@ -1250,7 +1254,9 @@ test("пиггибэк: ackUpTo едет в обычном исходящем с
 	await receiveGroupMessageEvent(ALICE_PUB, ALICE_PRIV, DB_KEY, event2, async () => ({ ok: true }));
 
 	aliceMsg1 = await db.table("messages").where("id").equals(event1Id).first();
-	assert.equal(aliceMsg1.status, "read", "ответ Боба нёс ackUpTo>=1 пиггибэком — исходное сообщение Алисы обязано стать read");
+	assert.equal(aliceMsg1.status, "sent", "статус строки остаётся sent — доставка живёт в курсоре, не в status=read");
+	const cursor = await getPeerCursor(ALICE_PUB, BOB_PUB);
+	assert.ok(cursor.deliveredUpTo >= 1, "ответ Боба нёс d/ackUpTo>=1 пиггибэком — курсор Алисы обязан вырасти");
 });
 
 test("ackOnly-пакет (sendExplicitAck): переводит sent -> read, но НЕ создаёт видимую строку сообщения у получателя", async () => {
@@ -1286,7 +1292,9 @@ test("ackOnly-пакет (sendExplicitAck): переводит sent -> read, н�
 	assert.equal(countAfter, countBefore, "ackOnly-пакет не должен создавать новую строку в messages");
 
 	const aliceMsg1 = await db.table("messages").where("id").equals(event1Id).first();
-	assert.equal(aliceMsg1.status, "read", "явный ACK обязан перевести исходное сообщение в read так же, как пиггибэк");
+	assert.equal(aliceMsg1.status, "sent");
+	const cursor = await getPeerCursor(ALICE_PUB, BOB_PUB);
+	assert.ok(cursor.deliveredUpTo >= 1, "явный ACK обязан поднять delivered-курсор так же, как пиггибэк");
 });
 
 test("sendExplicitAck: нечего подтверждать (контакт ещё ничего не присылал) -> no-op, publish не вызывается", async () => {

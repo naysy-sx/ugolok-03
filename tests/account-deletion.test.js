@@ -25,6 +25,7 @@ const OWNER_PUBKEY_TABLES = [
 	"channelIgnores", "bannedMembers", "uiSettings", "channelVisibilityGroups",
 	"discoverySettings", "clock", "attachments", "ownKeyPackage", "mlsGroups",
 	"chatSyncState", "channelSyncState", "knownDevices",
+	"peerCursors", "peerPresence",
 	"files_nodes", "files_mounts", "files_manifests", "files_blobs", "files_thumbs",
 	"files_keys", "files_shares", "files_shareKeys", "files_shareGrantees",
 	"files_mountKeys", "files_mount_nodes", "files_mount_file_meta",

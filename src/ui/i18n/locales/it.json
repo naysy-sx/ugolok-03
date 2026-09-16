@@ -129,7 +129,9 @@
 		"perfLogHint": "Visibile solo con il flag di misurazione attivo (?perf=1)",
 		"copyPerfLogButton": "Copia registro di velocità",
 		"perfLogCopied": "Copiato negli appunti",
-		"perfLogManualHint": "Appunti non disponibili — seleziona e copia manualmente"
+		"perfLogManualHint": "Appunti non disponibili — seleziona e copia manualmente",
+		"sendReadReceiptsLabel": "Invia conferme di lettura",
+		"sendReadReceiptsHint": "Il contatto vedrà che hai aperto la chat. Le conferme di consegna partono comunque: indicano solo che il messaggio ha raggiunto questo dispositivo."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profilo e menu principale",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "richiesta non ancora accettata",
 			"read": "letto",
 			"failed": "non consegnato",
-			"discarded": "scartato"
+			"discarded": "scartato",
+			"delivered": "consegnato"
 		},
 		"deletedNotice": "Messaggio eliminato",
 		"editedLabel": "(modificato)",

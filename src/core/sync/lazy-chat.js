@@ -1,6 +1,7 @@
 import { db } from '../store/database.js';
 import { parseDeletionText } from '../../domain/messaging/deletions.js';
 import { parseEditText } from '../../domain/messaging/edits.js';
+import { parseCursorText } from '../../domain/messaging/peer-cursors.js';
 import { normalizeMessageAttachments } from '../../domain/messaging/chat.js';
 import { toEncryptedRow, fromEncryptedRow } from '../store/encrypted-table.js';
 import { CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from '../store/table-fields.js';
@@ -14,7 +15,7 @@ export async function loadChatWindow(ownerPubkey, contactPubkey, dbKey, { limit 
     // sendMessage создаёт СВОЮ строку messages на КАЖДОЕ kind-445, включая
     // delete/edit-маркеры — без фильтрации это "сиротская" строка с сырым текстом
     // маркера в истории чата.
-    rows = rows.filter((m) => parseDeletionText(m.text) === null && parseEditText(m.text) === null);
+    rows = rows.filter((m) => parseDeletionText(m.text) === null && parseEditText(m.text) === null && parseCursorText(m.text) === null);
 
     rows.sort((a, b) => {
         if (a.lamportTs !== b.lamportTs) return a.lamportTs - b.lamportTs;

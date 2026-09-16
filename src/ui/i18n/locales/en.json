@@ -129,7 +129,9 @@
 		"perfLogHint": "Visible only when the measurement flag is on (?perf=1)",
 		"copyPerfLogButton": "Copy speed log",
 		"perfLogCopied": "Copied to clipboard",
-		"perfLogManualHint": "Clipboard unavailable — select and copy manually"
+		"perfLogManualHint": "Clipboard unavailable — select and copy manually",
+		"sendReadReceiptsLabel": "Send read receipts",
+		"sendReadReceiptsHint": "Your contact will see that you opened the chat. Delivered receipts still go out — they only mean the message reached this device."
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",
@@ -659,7 +661,8 @@
 			"awaitingAcceptance": "request not accepted yet",
 			"read": "read",
 			"failed": "not delivered",
-			"discarded": "discarded"
+			"discarded": "discarded",
+			"delivered": "delivered"
 		},
 		"deletedNotice": "Message deleted",
 		"editedLabel": "(edited)",

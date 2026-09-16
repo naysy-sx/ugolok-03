@@ -9,6 +9,7 @@ import { toEncryptedRow, fromEncryptedRow } from "../src/core/store/encrypted-ta
 import { MESSAGES_PLAINTEXT_FIELDS, CHAT_SYNC_STATE_PLAINTEXT_FIELDS } from "../src/core/store/table-fields.js";
 import { buildDeletionText } from "../src/domain/messaging/deletions.js";
 import { buildEditText } from "../src/domain/messaging/edits.js";
+import { buildCursorText } from "../src/domain/messaging/peer-cursors.js";
 
 const BOB_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(2)));
 const ALICE_PUB = bytesToHex(getPublicKey(new Uint8Array(32).fill(1)));
@@ -143,10 +144,24 @@ test("loadChatWindow: не включает 'сиротские' строки de
 			MESSAGES_PLAINTEXT_FIELDS,
 			DB_KEY,
 		),
+		toEncryptedRow(
+			{
+				ownerPubkey: ALICE_PUB,
+				chatId: BOB_PUB,
+				lamportTs: 6,
+				senderPubkey: ALICE_PUB,
+				id: "cur-evt",
+				text: buildCursorText({ d: 3, r: 2 }),
+				status: "sent",
+				msgId: "cur-msgid",
+			},
+			MESSAGES_PLAINTEXT_FIELDS,
+			DB_KEY,
+		),
 	]);
 	const { messages } = await loadChatWindow(ALICE_PUB, BOB_PUB, DB_KEY, { limit: 100 });
 	assert.equal(messages.length, 3, "маркерные строки не попадают в окно, только 3 исходных сообщения");
-	assert.ok(messages.every((m) => m.msgId !== "del-msgid" && m.msgId !== "edit-msgid"));
+	assert.ok(messages.every((m) => m.msgId !== "del-msgid" && m.msgId !== "edit-msgid" && m.msgId !== "cur-msgid"));
 });
 
 test("loadChatWindow: нормализует старый формат вложения (attachment, единственное число) уже СОХРАНЁННОЙ строки в attachments-массив (этап B, MEDIA-SPEC.md §3.7)", async () => {
