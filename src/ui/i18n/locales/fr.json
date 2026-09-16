@@ -656,6 +656,7 @@
 			"created": "brouillon",
 			"sending": "envoi…",
 			"sent": "envoyé",
+			"awaitingAcceptance": "demande pas encore acceptée",
 			"read": "lu",
 			"failed": "non distribué",
 			"discarded": "abandonné"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "Vous ne pouvez pas déplacer un dossier dans lui-même ou dans sa propre sous-arborescence",
 		"cannotRemoveActiveBlossom": "vous ne pouvez pas supprimer le serveur Blossom actif — basculez d'abord vers un autre",
 		"channelNotFound": "chaîne introuvable",
+		"clockAhead": "L'horloge de votre appareil avance — le serveur a rejeté le message. Vérifiez la date et l'heure de votre appareil.",
+		"clockBehind": "L'horloge de votre appareil retarde — le serveur a rejeté le message. Vérifiez la date et l'heure de votre appareil.",
 		"fileTooLarge": "le fichier dépasse la limite de taille",
 		"invalidFileType": "type de fichier non autorisé : {{mime}}",
 		"keyPackageTimeout": "impossible d'obtenir la clé de l'interlocuteur — le relais n'a pas répondu à temps. Veuillez réessayer.",
 		"lastRelayCannotBeRemoved": "vous ne pouvez pas supprimer le dernier relay — la liste ne peut pas être vide",
+		"messageTooLargeForEvent": "Le message est trop volumineux pour être envoyé en un seul événement. C'est généralement dû à trop de pièces jointes à la fois — essayez de les envoyer séparément.",
 		"nameTakenInFolder": "Le nom « {{name}} » est déjà utilisé dans ce dossier",
 		"nameTakenInTargetFolder": "Le nom « {{name}} » est déjà utilisé dans le dossier de destination",
 		"noReadRelay": "vous ne pouvez pas retirer le dernier relay de lecture de la liste — il n'y aurait plus rien à lire",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Ce contact a trop d'appareils pour envoyer une invitation en un seul message. Réessayez un peu plus tard."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

@@ -656,6 +656,7 @@
 			"created": "Entwurf",
 			"sending": "wird gesendet…",
 			"sent": "gesendet",
+			"awaitingAcceptance": "Anfrage noch nicht angenommen",
 			"read": "gelesen",
 			"failed": "nicht zugestellt",
 			"discarded": "verworfen"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "Sie können einen Ordner nicht in sich selbst oder sein eigenes Unterverzeichnis verschieben",
 		"cannotRemoveActiveBlossom": "Sie können den aktiven Blossom-Server nicht entfernen — wechseln Sie zuerst zu einem anderen",
 		"channelNotFound": "Kanal nicht gefunden",
+		"clockAhead": "Die Uhr Ihres Geräts geht vor — der Server hat die Nachricht abgelehnt. Bitte prüfen Sie Datum und Uhrzeit Ihres Geräts.",
+		"clockBehind": "Die Uhr Ihres Geräts geht nach — der Server hat die Nachricht abgelehnt. Bitte prüfen Sie Datum und Uhrzeit Ihres Geräts.",
 		"fileTooLarge": "Datei überschreitet das Größenlimit",
 		"invalidFileType": "unzulässiger Dateityp: {{mime}}",
 		"keyPackageTimeout": "Der Schlüssel der Gegenseite konnte nicht abgerufen werden — das Relais hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es erneut.",
 		"lastRelayCannotBeRemoved": "Sie können den letzten Relay nicht entfernen — die Liste darf nicht leer sein",
+		"messageTooLargeForEvent": "Die Nachricht ist zu groß, um als ein einzelnes Ereignis gesendet zu werden. Meist liegt das an zu vielen Anhängen auf einmal — versuchen Sie, sie einzeln zu senden.",
 		"nameTakenInFolder": "Der Name „{{name}}“ ist in diesem Ordner bereits vergeben",
 		"nameTakenInTargetFolder": "Der Name „{{name}}“ ist im Zielordner bereits vergeben",
 		"noReadRelay": "Sie können nicht den letzten Lese-Relay aus der Liste entfernen — es gäbe dann nichts zu lesen",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Dieser Kontakt hat zu viele Geräte, um eine Einladung in einer einzigen Nachricht zu senden. Bitte versuchen Sie es später erneut."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

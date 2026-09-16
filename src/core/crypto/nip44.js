@@ -1,6 +1,9 @@
 import { v2, getConversationKey } from "nostr-tools/nip44";
 
-const MAX_PLAINTEXT_BYTES = 65535;
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.3) — экспортируется: chat.js использует
+// её же для проактивной проверки РАЗМЕРА ДО encryptApplicationMessage
+// (единственный источник истины на лимит, не задваивать константу).
+export const MAX_PLAINTEXT_BYTES = 65535;
 
 export function encrypt(plaintext, privateKey, recipientPublicKey) {
   const byteLength = new TextEncoder().encode(plaintext).length;

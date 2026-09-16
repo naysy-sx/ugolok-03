@@ -34,6 +34,9 @@ import {
 	listDesyncedChats,
 	recreateChatConversation,
 	upsertMessage,
+	requirePublishOk,
+	sendExplicitAck,
+	sweepPendingAcks,
 } from "../src/domain/messaging/chat.js";
 import { listConversations } from "../src/domain/messaging/chat-activity.js";
 
@@ -60,6 +63,7 @@ beforeEach(async () => {
 	await db.table("pendingOutgoingMessages").clear();
 	await db.table("processedGroupEvents").clear();
 	await db.table("chatActivity").clear();
+	await db.table("chatGeneration").clear();
 });
 
 after(() => {
@@ -505,6 +509,134 @@ test("AC-09 АДВЕРСАРНО: sendMessage — publish() бросает ис�
 	assert.equal(outboxRows.length, 1);
 });
 
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.2) — strfry отвечает OK:false с сырым
+// текстом "invalid: created_at too late"/"...too early" на расхождение
+// часов (проверено чтением server/strfry/strfry-src/src/events.cpp и
+// apps/relay/RelayIngester.cpp, не домысел) — requirePublishOk обязана
+// превратить это в понятную, переведённую причину, а не пробрасывать
+// строку от relay как есть.
+test("requirePublishOk: OK:false с 'invalid: created_at too late' -> DomainError('errors.clockAhead')", async () => {
+	const event = { id: "ev-clock-1", kind: 445 };
+	const publish = async () => ({ ok: false, reason: "invalid: created_at too late" });
+	await assert.rejects(
+		() => requirePublishOk(publish, event),
+		(e) => {
+			assert.equal(e.name, "DomainError");
+			assert.equal(e.key, "errors.clockAhead");
+			return true;
+		},
+	);
+});
+
+test("requirePublishOk: OK:false с 'invalid: created_at too early' -> DomainError('errors.clockBehind')", async () => {
+	const event = { id: "ev-clock-2", kind: 445 };
+	const publish = async () => ({ ok: false, reason: "invalid: created_at too early" });
+	await assert.rejects(
+		() => requirePublishOk(publish, event),
+		(e) => {
+			assert.equal(e.name, "DomainError");
+			assert.equal(e.key, "errors.clockBehind");
+			return true;
+		},
+	);
+});
+
+test("requirePublishOk: OK:false с прочей причиной -> обычный Error(reason), не DomainError (не за что зацепиться классификации)", async () => {
+	const event = { id: "ev-other", kind: 445 };
+	const publish = async () => ({ ok: false, reason: "blocked: pubkey not on whitelist" });
+	await assert.rejects(() => requirePublishOk(publish, event), /blocked: pubkey not on whitelist/);
+});
+
+// Этап 5 (З5.2) — sendMessage/finishOutgoingMessage: расхождение часов
+// обязано ВСПЛЫТЬ к вызывающему коду (chat.jsx показывает пользователю
+// понятную причину сразу), а не молча уйти в тот же "sending"+outbox-retry
+// путь, что обычный сетевой сбой — но событие ВСЁ РАВНО остаётся в outbox
+// (вдруг часы поправятся сами, retry той же попытки тогда пройдёт).
+test("sendMessage: publish возвращает 'created_at too late' -> бросает DomainError('errors.clockAhead') вызывающему коду, НО событие всё равно уже в outbox", async () => {
+	await establishAliceToBob();
+	const publish = async () => ({ ok: false, reason: "invalid: created_at too late" });
+
+	await assert.rejects(
+		() => sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "часы врут", 9, publish),
+		(e) => {
+			assert.equal(e.key, "errors.clockAhead");
+			return true;
+		},
+	);
+
+	const outboxRows = await db.table("outbox").toArray();
+	assert.equal(outboxRows.filter((r) => r.status === "pending").length, 1, "событие обязано остаться в outbox, а не потеряться из-за немедленного throw");
+});
+
+// Этап 5 (МESSAGE-DELIVERY-TZ.md, З5.3) — проверка размера ДО encryptApplicationMessage:
+// раньше nip44.js бросала СВОЙ предел УЖЕ ПОСЛЕ того, как MLS-ратчет продвинулся
+// (encryptApplicationMessage успевала отработать) — слишком большое сообщение
+// теряло бы генерацию ратчета впустую, тот же класс дыры, что AC-09 до Этапа 3.
+test("sendMessage: слишком большой payload (много вложений) -> DomainError('errors.messageTooLargeForEvent') ДО того, как MLS-ратчет продвинется", async () => {
+	const { groupId } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const groupRawBefore = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const stateBefore = fromEncryptedRow(groupRawBefore, DB_KEY).state;
+
+	// 80 фиктивных вложений с длинными полями — JSON.stringify этого payload
+	// даёт ~61KB (проверено эмпирически), заведомо выше порога ~44KB
+	// (floor(65535*3/4)-4096), не полагаясь на точный подсчёт байт руками.
+	const attachments = Array.from({ length: 80 }, (_, i) => ({
+		type: "file",
+		sha256: "a".repeat(64),
+		blossomUrl: "http://127.0.0.1:8080/" + "x".repeat(400),
+		encryptionKey: "k".repeat(150),
+		mime: "application/octet-stream",
+		size: 1000 + i,
+		name: "file-" + i + ".bin",
+	}));
+
+	await assert.rejects(
+		() => sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "много вложений", 10, async () => ({ ok: true }), attachments),
+		(e) => {
+			assert.equal(e.name, "DomainError");
+			assert.equal(e.key, "errors.messageTooLargeForEvent");
+			return true;
+		},
+	);
+
+	const groupRawAfter = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const stateAfter = fromEncryptedRow(groupRawAfter, DB_KEY).state;
+	assert.deepEqual(stateAfter, stateBefore, "MLS-состояние не должно измениться — ратчет не должен был продвинуться на отклонённой попытке");
+
+	const outboxRows = await db.table("outbox").toArray();
+	assert.equal(outboxRows.length, 0, "ничего не должно попасть в outbox — событие ещё даже не подписано");
+});
+
+// Этап 5 (З5.3) — ensureChatEstablished: слишком много устройств контакта раздувает
+// Welcome (каждое устройство — отдельный получатель addMembers, накладные расходы
+// TreeKEM растут с числом листьев) настолько, что он не влезет в конверт NIP-59/NIP-44.
+// Порог подобран эмпирически (см. коммит Этапа 5): 50 устройств стабильно даёт
+// welcomeWireBytes ~21KB (> порога 20000), 30 устройств — ~13KB (заведомо ниже).
+test("ensureChatEstablished: контакт с 50 устройствами -> DomainError('errors.welcomeTooLargeForDeviceCount'), группа НЕ создаётся", async () => {
+	const deviceEntries = [];
+	for (let i = 0; i < 50; i++) {
+		const kp = await createOwnKeyPackage(BOB_PUB, "bob-device-" + i);
+		deviceEntries.push(["bob-device-" + i, { wireBytes: kp.wireBytes, createdAt: 1000 + i }]);
+	}
+	const fetchDeviceKeyPackages = async (pubkey) => {
+		assert.equal(pubkey, BOB_PUB);
+		return new Map(deviceEntries);
+	};
+
+	await assert.rejects(
+		() => ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages),
+		(e) => {
+			assert.equal(e.name, "DomainError");
+			assert.equal(e.key, "errors.welcomeTooLargeForDeviceCount");
+			return true;
+		},
+	);
+
+	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
+	assert.equal(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), undefined, "группа не должна персистироваться — Welcome для неё всё равно недоставим");
+});
+
 // Редизайн интерфейса, этап 5 (CONTRACTS.md) — chatActivity: три точки
 // записи внутри chat.js (doSendMessage x2, doReceiveGroupMessageEvent).
 
@@ -858,22 +990,114 @@ test("listDesyncedChats: возвращает только desynced-группы
 	assert.equal(list[0].consecutiveDecryptFailures, 3);
 });
 
-test("recreateChatConversation: удаляет локальную mlsGroups-запись и knownContactDevices для этого контакта", async () => {
-	const bobDevice2 = await createOwnKeyPackage(BOB_PUB, "bob-device-2");
-	const fetchDeviceKeyPackages = async () =>
-		new Map([
-			["bob-device", { wireBytes: (await createOwnKeyPackage(BOB_PUB, "bob-device")).wireBytes, createdAt: 1000 }],
-			["bob-device-2", { wireBytes: bobDevice2.wireBytes, createdAt: 1000 }],
-		]);
-	await ensureChatEstablished(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => ({ ok: true }), fetchDeviceKeyPackages);
-	const groupIdHex = toHex(computeGroupId(ALICE_PUB, BOB_PUB));
-	assert.ok(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), "предусловие: группа существует");
-	assert.ok((await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).count()) > 0, "предусловие: известные устройства есть");
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — правка контракта: recreateChatConversation
+// раньше ТОЛЬКО забывала локальное состояние (сигнатура (owner, contact, dbKey)) и
+// ничего не отправляла — "починка провода" была ленивой (при следующей ручной
+// отправке) и, как выяснилось, вообще не срабатывала (см. следующий тест). Новая
+// сигнатура немедленно пересоздаёт группу и шлёт generation-меченый Welcome.
+test("recreateChatConversation: немедленно создаёт НОВУЮ группу (другое состояние) и шлёт generation-меченый Welcome", async () => {
+	const { groupId } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+	const rawBefore = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	const stateBefore = fromEncryptedRow(rawBefore, DB_KEY).state;
 
-	await recreateChatConversation(ALICE_PUB, BOB_PUB, DB_KEY);
+	const bobKeyPackage2 = await createOwnKeyPackage(BOB_PUB, "bob-device");
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobKeyPackage2.wireBytes, createdAt: 2000 }]]);
+	const published = [];
+	const publish = async (e) => {
+		published.push(e);
+		return { ok: true };
+	};
+	let refreshCalled = 0;
+	const refreshGroupMessageSubscription = async () => {
+		refreshCalled++;
+	};
 
-	assert.equal(await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]), undefined);
-	assert.equal(await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ALICE_PUB, BOB_PUB]).count(), 0);
+	await recreateChatConversation(ALICE_PUB, ALICE_PRIV, BOB_PUB, DB_KEY, publish, fetchDeviceKeyPackages, refreshGroupMessageSubscription);
+
+	const rawAfter = await db.table("mlsGroups").get([ALICE_PUB, groupIdHex]);
+	assert.ok(rawAfter, "новая группа обязана появиться немедленно, не только при следующей ручной отправке");
+	const rowAfter = fromEncryptedRow(rawAfter, DB_KEY);
+	assert.notDeepEqual(rowAfter.state, stateBefore, "это ДРУГАЯ, независимая группа — не восстановление старой");
+	assert.equal(rowAfter.generation, 1, "первое пересоздание — generation 1 (было 0 по умолчанию)");
+	assert.equal(refreshCalled, 1, "подписка на групповые сообщения обязана обновиться — появился новый (пересозданный) groupId");
+
+	const welcomeGiftWrap = published.find((e) => e.kind === 1059);
+	assert.ok(welcomeGiftWrap, "обязан немедленно отправить новый Welcome, не ждать следующего сообщения пользователя");
+	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);
+	assert.equal(rumor.kind, 444);
+	assert.deepEqual(rumor.tags, [["gen", "1"]], "Welcome обязан нести generation, иначе acceptWelcome не отличит его от повторной доставки старого");
+});
+
+// Этап 5 (З5.7) — регрессионный тест на САМУ дыру из ТЗ ("кнопка «пересоздать» —
+// способ окончательно разойтись"): без generation-проверки в acceptWelcome
+// получатель с УЖЕ существующей (устаревшей) группой молча игнорирует новый
+// Welcome ("уже установлено") и продолжает расшифровывать новые 445 старым,
+// несовместимым ключом — необратимое расхождение. С фиксом — новый Welcome
+// (generation строго больше) заменяет старую группу, переписка возобновляется.
+test("recreateChatConversation + acceptWelcome: собеседник со СТАРОЙ группой заменяет её по новому Welcome и снова расшифровывает сообщения (regression: было permanent divergence)", async () => {
+	const { groupId, bobSerializedState: staleBobState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	// Боб публикует свой (реальный, ПЕРСИСТИРОВАННЫЙ) KeyPackage — acceptWelcome
+	// ниже читает его из db.table("ownKeyPackage"), как в реальности (joinFromWelcome
+	// нуждается в privatePackage), в отличие от establishAliceToBob (та ради теста
+	// подставляет bobState напрямую, минуя эту таблицу).
+	await ensureOwnKeyPackagePublished(BOB_PUB, BOB_PRIV, DB_KEY, async () => ({ ok: true }));
+	const bobOwnKeyPackageRow = fromEncryptedRow(await db.table("ownKeyPackage").get(BOB_PUB), DB_KEY);
+	const fetchDeviceKeyPackages = async () => new Map([["bob-device", { wireBytes: bobOwnKeyPackageRow.wireBytes, createdAt: 2000 }]]);
+	const published = [];
+	const publish = async (e) => {
+		published.push(e);
+		return { ok: true };
+	};
+	await recreateChatConversation(ALICE_PUB, ALICE_PRIV, BOB_PUB, DB_KEY, publish, fetchDeviceKeyPackages, async () => {});
+
+	const welcomeGiftWrap = published.find((e) => e.kind === 1059);
+	const rumor = nip59Unwrap(welcomeGiftWrap, BOB_PRIV);
+	const newWelcomeWireBytes = Uint8Array.from(atob(rumor.content), (c) => c.charCodeAt(0));
+	const genTag = rumor.tags.find((t) => t[0] === "gen");
+	const incomingGeneration = Number(genTag[1]);
+
+	// Боб — как будто ещё не видел recreate: у него в базе всё ещё СТАРАЯ группа.
+	await asBob(groupIdHex, staleBobState, async () => {
+		await acceptWelcome(BOB_PUB, DB_KEY, ALICE_PUB, newWelcomeWireBytes, incomingGeneration);
+	});
+
+	const bobRowAfterAccept = fromEncryptedRow(await db.table("mlsGroups").get([BOB_PUB, groupIdHex]), DB_KEY);
+	assert.equal(bobRowAfterAccept.generation, incomingGeneration, "группа Боба обязана обновиться до нового generation, а не остаться на старом (0)");
+
+	// Сквозная проверка: Алиса шлёт сообщение НОВЫМ (пересозданным) состоянием,
+	// Боб успешно расшифровывает его СВОИМ ТОЛЬКО ЧТО ЗАМЕНЁННЫМ состоянием —
+	// до фикса это было бы decrypt failure (несовместимые ключи).
+	const alicePublished = [];
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "после пересоздания", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	});
+	const liveEvent = alicePublished.find((e) => e.kind === 445);
+
+	const { result: received } = await asBob(groupIdHex, bobRowAfterAccept.state, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, liveEvent, async () => ({ ok: true })),
+	);
+	assert.equal(received.text, "после пересоздания", "Боб обязан успешно расшифровать — переписка реально восстановлена, а не только метаданные обновлены");
+});
+
+test("acceptWelcome: повторная доставка ТОГО ЖЕ generation (redelivery/EOSE-повтор) остаётся идемпотентным no-op", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	// Тот же Welcome, что establishAliceToBob уже применил (generation по умолчанию 0),
+	// доставлен ПОВТОРНО (та же причина, что и раньше вызывала "уже установлено" —
+	// EOSE-повтор) — заведомо мусорные welcomeWireBytes: если бы код попытался их
+	// распарсить (не сработал ранний return), тест упал бы с ошибкой декодирования,
+	// а не молча прошёл — это и есть доказательство, что no-op сработал ДО парсинга.
+	const { result, updatedBobSerializedState } = await asBob(groupIdHex, bobSerializedState, async () => {
+		await acceptWelcome(BOB_PUB, DB_KEY, ALICE_PUB, new Uint8Array([1, 2, 3]), 0);
+		return "no-op-completed";
+	});
+	assert.equal(result, "no-op-completed", "не должен был бросить на мусорных байтах — ранний return сработал раньше joinFromWelcome");
+	assert.deepEqual(updatedBobSerializedState, bobSerializedState, "состояние группы не должно было измениться");
 });
 
 // Этап 74 — T3 (CONTRACTS.md/DESIGN.md "Этап 74", RC-2): строки, испорченные RC-1
@@ -988,4 +1212,169 @@ test("upsertMessage: live-дубликат (source по умолчанию) НЕ
 	const row = rows.find((r) => r.msgId === "t3-msg-3");
 	assert.equal(row.senderPubkey, BOB_PUB, "живой путь не корректирует существующую строку");
 	assert.equal(row.id, "live-event-3", "id остаётся от первой записи");
+});
+
+// ===== Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — подтверждение доставки =====
+
+test("пиггибэк: ackUpTo едет в обычном исходящем сообщении Боба и переводит исходное сообщение Алисы sent -> read", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	const alicePublished = [];
+	const { eventId: event1Id } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "первое от Алисы", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	});
+	const event1 = alicePublished.find((e) => e.kind === 445);
+
+	let bobState = bobSerializedState;
+	let step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })));
+	bobState = step.updatedBobSerializedState;
+	assert.equal(step.result.text, "первое от Алисы", "предусловие: Боб реально получил первое сообщение");
+
+	// Алиса ещё не получила ничего от Боба — её статус остаётся "sent", не "read".
+	let aliceMsg1 = await db.table("messages").where("id").equals(event1Id).first();
+	assert.equal(aliceMsg1.status, "sent", "предусловие: до ответа Боба статус ещё не read");
+
+	const bobPublished = [];
+	step = await asBob(groupIdHex, bobState, () =>
+		sendMessage(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, "ответ Боба", 2, async (e) => {
+			bobPublished.push(e);
+			return { ok: true };
+		}),
+	);
+	bobState = step.updatedBobSerializedState;
+	const event2 = bobPublished.find((e) => e.kind === 445);
+	assert.ok(event2, "Боб обязан опубликовать живое kind 445 в ответ");
+
+	await receiveGroupMessageEvent(ALICE_PUB, ALICE_PRIV, DB_KEY, event2, async () => ({ ok: true }));
+
+	aliceMsg1 = await db.table("messages").where("id").equals(event1Id).first();
+	assert.equal(aliceMsg1.status, "read", "ответ Боба нёс ackUpTo>=1 пиггибэком — исходное сообщение Алисы обязано стать read");
+});
+
+test("ackOnly-пакет (sendExplicitAck): переводит sent -> read, но НЕ создаёт видимую строку сообщения у получателя", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	const alicePublished = [];
+	const { eventId: event1Id } = await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "сообщение Алисы", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	});
+	const event1 = alicePublished.find((e) => e.kind === 445);
+
+	let bobState = bobSerializedState;
+	let step = await asBob(groupIdHex, bobState, () => receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })));
+	bobState = step.updatedBobSerializedState;
+
+	const ackPublished = [];
+	step = await asBob(groupIdHex, bobState, () =>
+		sendExplicitAck(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, async (e) => {
+			ackPublished.push(e);
+			return { ok: true };
+		}),
+	);
+	bobState = step.updatedBobSerializedState;
+	const ackEvent = ackPublished.find((e) => e.kind === 445);
+	assert.ok(ackEvent, "sendExplicitAck обязан опубликовать отдельное kind 445");
+
+	const countBefore = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).count();
+	const received = await receiveGroupMessageEvent(ALICE_PUB, ALICE_PRIV, DB_KEY, ackEvent, async () => ({ ok: true }));
+	assert.equal(received, null, "ackOnly-пакет не порождает результат для UI (не сообщение)");
+	const countAfter = await db.table("messages").where("[ownerPubkey+chatId]").equals([ALICE_PUB, BOB_PUB]).count();
+	assert.equal(countAfter, countBefore, "ackOnly-пакет не должен создавать новую строку в messages");
+
+	const aliceMsg1 = await db.table("messages").where("id").equals(event1Id).first();
+	assert.equal(aliceMsg1.status, "read", "явный ACK обязан перевести исходное сообщение в read так же, как пиггибэк");
+});
+
+test("sendExplicitAck: нечего подтверждать (контакт ещё ничего не присылал) -> no-op, publish не вызывается", async () => {
+	await establishAliceToBob();
+	let publishCalled = false;
+	await sendExplicitAck(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, async () => {
+		publishCalled = true;
+		return { ok: true };
+	});
+	assert.equal(publishCalled, false);
+});
+
+test("sweepPendingAcks: недавно полученное сообщение (< порога простоя) -> явный ACK НЕ отправляется", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	const alicePublished = [];
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "свежее", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	});
+	const event1 = alicePublished.find((e) => e.kind === 445);
+	const { updatedBobSerializedState: bobState } = await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })),
+	);
+
+	const sweepPublished = [];
+	await asBob(groupIdHex, bobState, () =>
+		sweepPendingAcks(BOB_PUB, BOB_PRIV, DB_KEY, async (e) => {
+			sweepPublished.push(e);
+			return { ok: true };
+		}),
+	);
+	assert.equal(sweepPublished.length, 0, "сообщение получено только что — не пора подтверждать явно");
+});
+
+test("sweepPendingAcks: старое (> порога простоя) неподтверждённое сообщение -> явный ACK отправляется", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	const oldSentAt = Math.floor(Date.now() / 1000) - 400; // > EXPLICIT_ACK_IDLE_MS (5 мин)
+	const alicePublished = [];
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "старое", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	}, undefined, undefined, oldSentAt);
+	const event1 = alicePublished.find((e) => e.kind === 445);
+	const { updatedBobSerializedState: bobState } = await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })),
+	);
+
+	const sweepPublished = [];
+	await asBob(groupIdHex, bobState, () =>
+		sweepPendingAcks(BOB_PUB, BOB_PRIV, DB_KEY, async (e) => {
+			sweepPublished.push(e);
+			return { ok: true };
+		}),
+	);
+	assert.equal(sweepPublished.filter((e) => e.kind === 445).length, 1, "давно получено и ни разу не отвечено — явный ACK обязан уйти");
+});
+
+test("sweepPendingAcks: старое сообщение, но УЖЕ подтверждено пиггибэком собственного ответа -> явный ACK не дублируется", async () => {
+	const { groupId, bobSerializedState } = await establishAliceToBob();
+	const groupIdHex = toHex(groupId);
+
+	const oldSentAt = Math.floor(Date.now() / 1000) - 400;
+	const alicePublished = [];
+	await sendMessage(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, "старое", 1, async (e) => {
+		alicePublished.push(e);
+		return { ok: true };
+	}, undefined, undefined, oldSentAt);
+	const event1 = alicePublished.find((e) => e.kind === 445);
+	let bobState;
+	({ updatedBobSerializedState: bobState } = await asBob(groupIdHex, bobSerializedState, () =>
+		receiveGroupMessageEvent(BOB_PUB, BOB_PRIV, DB_KEY, event1, async () => ({ ok: true })),
+	));
+
+	// Боб уже успел ответить сам (свежим сообщением) — его payload уже нёс ackUpTo>=1.
+	({ updatedBobSerializedState: bobState } = await asBob(groupIdHex, bobState, () =>
+		sendMessage(BOB_PUB, BOB_PRIV, DB_KEY, ALICE_PUB, "ответ Боба", 2, async () => ({ ok: true })),
+	));
+
+	const sweepPublished = [];
+	await asBob(groupIdHex, bobState, () =>
+		sweepPendingAcks(BOB_PUB, BOB_PRIV, DB_KEY, async (e) => {
+			sweepPublished.push(e);
+			return { ok: true };
+		}),
+	);
+	assert.equal(sweepPublished.length, 0, "уже подтверждено пиггибэком собственного ответа — явный ACK был бы избыточен");
 });

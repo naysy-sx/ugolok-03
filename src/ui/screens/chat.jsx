@@ -623,6 +623,16 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const awaitingCommitter = ownQueuedMessages.length > 0;
 	const oldestQueuedAt = awaitingCommitter ? Math.min(...ownQueuedMessages.map((m) => m.sentAt)) : null;
 
+	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.6) — "заявка не принята": collectPubkey
+	// НЕ входит в contacts.value (заявку ещё не приняли) И от него в этом чате
+	// НИ РАЗУ не приходило ни одного сообщения — relay мог принять публикацию
+	// (status "sent"), но получатель физически не в MLS-группе, пока не примет
+	// Welcome из своего inbox (chat.js/inbox-requests.js) — "галочка" здесь лжёт.
+	// Проверяется ТОЛЬКО для isKnownContact===false (contacts.value), иначе
+	// обычное молчание УЖЕ подтверждённого контакта ложно читалось бы как отказ.
+	const partnerHasWrittenHere = messages.some((m) => m.senderPubkey === contactPubkey);
+	const pendingStrangerAcceptance = !contacts.value.includes(contactPubkey) && !partnerHasWrittenHere;
+
 	// Этап 4 (MESSAGE-DELIVERY-TZ.md, вариант C) — "счётчик времени в очереди":
 	// тикает, только пока реально есть что показывать — не крутить лишний
 	// таймер в фоне для чатов без ожидающих сообщений.
@@ -786,6 +796,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 								onEdit={isOwn ? handleEdit : undefined}
 								maxLength={MAX_MESSAGE_LENGTH}
 								onOpenAttachment={openAttachment}
+								pendingAcceptance={pendingStrangerAcceptance}
 							/>
 						);
 					})}

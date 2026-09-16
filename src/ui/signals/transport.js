@@ -33,6 +33,7 @@ import {
 	recordUndeliverableEvent,
 	computeGroupId,
 	ensureChatEstablished,
+	sweepPendingAcks,
 } from "../../domain/messaging/chat.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { syncDeviceMembership, handleDeviceAnnounce } from "../../domain/messaging/devices.js";
@@ -124,6 +125,7 @@ let deviceAnnounceSubscriber = null; // этап 72 — живая досинх�
 let mirrorSubscriber = null; // этап 72 — живое зеркало истории (было только one-shot catch-up)
 let outboxDrainTimer = null; // Этап 3 (З3.2) — периодический drain, не только на "connected"
 let bufferRetryTimer = null; // Этап 3 (З3.3) — периодический ретрай буфера 445 (нет группы/decrypt fail)
+let ackSweepTimer = null; // Этап 5 (З5.5) — периодическая проверка "не пора ли явно подтвердить"
 
 function waitForConnState(conn, predicate, timeoutMs) {
 	return new Promise((resolve, reject) => {
@@ -310,6 +312,10 @@ function teardown() {
 		clearInterval(bufferRetryTimer);
 		bufferRetryTimer = null;
 	}
+	if (ackSweepTimer) {
+		clearInterval(ackSweepTimer);
+		ackSweepTimer = null;
+	}
 	// Найдено живой проверкой (этап 58 — reconnectWithNewSettings, вызываемый из
 	// новой relay-настроек UI, до этого пути редко доходили с уже установленными
 	// подписками): эти пять singleton-подписчиков, в отличие от groupMessageSubscriber
@@ -481,6 +487,12 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	if (bufferRetryTimer) clearInterval(bufferRetryTimer);
 	bufferRetryTimer = setInterval(() => sweepBufferedGroupMessages(pubkeyHex, privKey, dbKey, publish), OUTBOX_DRAIN_INTERVAL_MS);
 	if (typeof bufferRetryTimer?.unref === "function") bufferRetryTimer.unref();
+	if (ackSweepTimer) clearInterval(ackSweepTimer);
+	// Этап 5 (З5.5) — та же периодичность, что остальные sweep-таймеры: сама
+	// sweepPendingAcks — no-op на большинстве тиков (порог простоя 5 минут
+	// проверяется внутри неё), частый вызов дёшев, не требует своего интервала.
+	ackSweepTimer = setInterval(() => sweepPendingAcks(pubkeyHex, privKey, dbKey, publish), OUTBOX_DRAIN_INTERVAL_MS);
+	if (typeof ackSweepTimer?.unref === "function") ackSweepTimer.unref();
 
 	// Этап 48 — голосовая связь: один call-runtime на подключение (тот же принцип,
 	// что configureDefaultBackend в app.jsx, этап 47) — publisher.publish уже готов.
@@ -653,12 +665,18 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						const contactTag = rumor.tags.find((t) => t[0] === "contact");
 						const isSibling = rumor.pubkey === pubkeyHex;
 						const welcomeContactPubkey = isSibling && contactTag ? contactTag[1] : rumor.pubkey;
+						// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — "поколение" разговора, см.
+						// chat.js createGroupAndSendWelcome/acceptWelcome. 0 по умолчанию —
+						// старый формат без тега (обратная совместимость), обычный первый
+						// Welcome тоже несёт 0, если ни разу не пересоздавали.
+						const genTag = rumor.tags.find((t) => t[0] === "gen");
+						const welcomeGeneration = genTag ? Number(genTag[1]) || 0 : 0;
 						// DESIGN.md, "Этап 25", раздел 4 (AC-IB-01) — Welcome от НЕ-контакта не
 						// принимается автоматически: siblings всегда доверены (это я же), уже
 						// известные контакты — ожидаемый разговор, настоящий незнакомец — в inbox,
 						// без создания MLS-группы, пока пользователь не примет решение явно.
 						if (isSibling || (await isKnownContact(pubkeyHex, welcomeContactPubkey))) {
-							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content));
+							await acceptWelcome(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), welcomeGeneration);
 							await refreshGroupMessageSubscription(pubkeyHex, privKey, dbKey, publish);
 							// Этап 73.3 — И3/И4: группа только что появилась (либо через sibling-
 							// Welcome от моего же другого устройства — И4, либо через Welcome от
@@ -674,7 +692,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 								activityChanged = true;
 							}
 						} else {
-							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at);
+							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at, welcomeGeneration);
 							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА
 							// раньше попадала в inbox БЕЗ единого уведомления вовсе (только activityChanged,
 							// заметно лишь если пользователь уже был на вкладке "Сообщения"). Профиль

@@ -9,23 +9,14 @@ import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cl
 import ActionsMenu from "./actions-menu.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
-
-const STATUS_LABEL_KEYS = {
-	queued: "message.status.queued",
-	created: "message.status.created",
-	sending: "message.status.sending",
-	sent: "message.status.sent",
-	read: "message.status.read",
-	failed: "message.status.failed",
-	discarded: "message.status.discarded",
-};
+import { resolveStatusLabelKey } from "./message-bubble-status.js";
 
 function formatTimestamp(sentAt) {
 	if (typeof sentAt !== "number") return null;
 	return new Date(sentAt * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message" }) {
+export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message", pendingAcceptance = false }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
@@ -41,7 +32,8 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 		);
 	}
 
-	const statusLabel = STATUS_LABEL_KEYS[message.status] ? t(STATUS_LABEL_KEYS[message.status]) : undefined;
+	const statusLabelKey = resolveStatusLabelKey(message.status, pendingAcceptance);
+	const statusLabel = statusLabelKey ? t(statusLabelKey) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
 	const plan = planBubbleAttachments(message.attachments);
 	const origin = { kind: originKind, id: message.id };

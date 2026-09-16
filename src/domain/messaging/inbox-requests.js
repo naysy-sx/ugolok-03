@@ -17,8 +17,10 @@ export async function isKnownContact(ownerPubkey, candidatePubkey) {
 
 // welcomeWireBytes хранится СЫРЫМ, joinFromWelcome НЕ вызывается здесь — Welcome
 // остаётся нераспакованным, пока пользователь явно не примет решение (accept/reject).
-export async function storeInboxRequest(ownerPubkey, dbKey, senderPubkey, welcomeWireBytes, createdAt) {
-	await db.table("inboxRequests").put(toEncryptedRow({ owner: ownerPubkey, senderPubkey, welcomeWireBytes, createdAt }, INBOX_REQUESTS_PLAINTEXT_FIELDS, dbKey));
+// generation (Этап 5, З5.7) — из тега ["gen", N] rumor'а; 0 по умолчанию (старые
+// вызовы/redelivery старого формата) — тот же дефолт, что acceptWelcome.
+export async function storeInboxRequest(ownerPubkey, dbKey, senderPubkey, welcomeWireBytes, createdAt, generation = 0) {
+	await db.table("inboxRequests").put(toEncryptedRow({ owner: ownerPubkey, senderPubkey, welcomeWireBytes, createdAt, generation }, INBOX_REQUESTS_PLAINTEXT_FIELDS, dbKey));
 }
 
 export async function listInboxRequests(ownerPubkey, dbKey) {
@@ -30,7 +32,7 @@ export async function acceptInboxRequest(ownerPubkey, dbKey, senderPubkey) {
 	const raw = await db.table("inboxRequests").get([ownerPubkey, senderPubkey]);
 	if (!raw) throw new DomainError("нет такого входящего запроса", "errors.noSuchInboxRequest");
 	const row = fromEncryptedRow(raw, dbKey);
-	await acceptWelcome(ownerPubkey, dbKey, senderPubkey, row.welcomeWireBytes);
+	await acceptWelcome(ownerPubkey, dbKey, senderPubkey, row.welcomeWireBytes, row.generation ?? 0);
 	await db.table("inboxRequests").delete([ownerPubkey, senderPubkey]);
 }
 

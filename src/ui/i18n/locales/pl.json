@@ -656,6 +656,7 @@
 			"created": "szkic",
 			"sending": "wysyłanie…",
 			"sent": "wysłano",
+			"awaitingAcceptance": "prośba jeszcze nie zaakceptowana",
 			"read": "przeczytano",
 			"failed": "niedostarczono",
 			"discarded": "odrzucono"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "Nie można przenieść folderu do niego samego ani do jego własnego poddrzewa",
 		"cannotRemoveActiveBlossom": "nie możesz usunąć aktywnego serwera Blossom — najpierw przełącz się na inny",
 		"channelNotFound": "nie znaleziono kanału",
+		"clockAhead": "Zegar Twojego urządzenia się spieszy — serwer odrzucił wiadomość. Sprawdź datę i godzinę urządzenia.",
+		"clockBehind": "Zegar Twojego urządzenia się spóźnia — serwer odrzucił wiadomość. Sprawdź datę i godzinę urządzenia.",
 		"fileTooLarge": "plik przekracza limit rozmiaru",
 		"invalidFileType": "niedozwolony typ pliku: {{mime}}",
 		"keyPackageTimeout": "nie udało się pobrać klucza rozmówcy — serwer przekaźnikowy nie odpowiedział na czas. Spróbuj ponownie.",
 		"lastRelayCannotBeRemoved": "nie możesz usunąć ostatniego relay — lista nie może być pusta",
+		"messageTooLargeForEvent": "Wiadomość jest zbyt duża, aby wysłać ją jako jedno zdarzenie. Zwykle powodem jest zbyt wiele załączników naraz — spróbuj wysłać je osobno.",
 		"nameTakenInFolder": "Nazwa „{{name}}” jest już zajęta w tym folderze",
 		"nameTakenInTargetFolder": "Nazwa „{{name}}” jest już zajęta w folderze docelowym",
 		"noReadRelay": "nie możesz zostawić listy bez ani jednego relay do odczytu — nie byłoby skąd czytać",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Ten kontakt ma zbyt wiele urządzeń, aby wysłać zaproszenie w jednej wiadomości. Spróbuj ponownie nieco później."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

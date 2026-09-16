@@ -656,6 +656,7 @@
 			"created": "taslak",
 			"sending": "gönderiliyor…",
 			"sent": "gönderildi",
+			"awaitingAcceptance": "istek henüz kabul edilmedi",
 			"read": "okundu",
 			"failed": "iletilmedi",
 			"discarded": "iptal edildi"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "Bir klasörü kendisinin içine veya kendi alt ağacına taşıyamazsınız",
 		"cannotRemoveActiveBlossom": "etkin Blossom sunucusunu kaldıramazsınız — önce başka birine geçin",
 		"channelNotFound": "kanal bulunamadı",
+		"clockAhead": "Cihazınızın saati ileri — sunucu mesajı reddetti. Lütfen cihazınızın tarih ve saatini kontrol edin.",
+		"clockBehind": "Cihazınızın saati geri — sunucu mesajı reddetti. Lütfen cihazınızın tarih ve saatini kontrol edin.",
 		"fileTooLarge": "dosya boyut sınırını aşıyor",
 		"invalidFileType": "izin verilmeyen dosya türü: {{mime}}",
 		"keyPackageTimeout": "karşı tarafın anahtarı alınamadı — röle zamanında yanıt vermedi. Lütfen tekrar deneyin.",
 		"lastRelayCannotBeRemoved": "son relay'i kaldıramazsınız — liste boş kalamaz",
+		"messageTooLargeForEvent": "Mesaj tek bir olay olarak gönderilemeyecek kadar büyük. Bunun genellikle nedeni aynı anda çok fazla ek olmasıdır — bunları ayrı ayrı göndermeyi deneyin.",
 		"nameTakenInFolder": "«{{name}}» adı bu klasörde zaten kullanılıyor",
 		"nameTakenInTargetFolder": "«{{name}}» adı hedef klasörde zaten kullanılıyor",
 		"noReadRelay": "listede tek bir okuma relay'i bile kalmayacak şekilde bırakamazsınız — okunacak hiçbir şey kalmaz",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

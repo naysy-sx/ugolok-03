@@ -42,10 +42,11 @@ import {
 } from "../../core/diag/delivery-trace.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import Screen from "../components/screen.jsx";
-import { currentUser, dbKeySig } from "../signals/auth.js";
+import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { profiles } from "../signals/contacts.js";
 import { shortPubkey } from "../format.js";
 import { listDesyncedChats, recreateChatConversation } from "../../domain/messaging/chat.js";
+import { publishToContact, fetchDeviceKeyPackages, refreshGroupMessageSubscription } from "../signals/transport.js";
 import { t } from "../signals/i18n.js";
 import IconGlobe from "../icons/globe.jsx";
 import IconServer from "../icons/server.jsx";
@@ -736,10 +737,16 @@ function useDesyncedChats() {
 	async function recreate(contactPubkey) {
 		const user = currentUser.value;
 		const dbKey = dbKeySig.value;
-		if (!user || !dbKey) return;
+		const privKey = privKeySig.value;
+		if (!user || !dbKey || !privKey) return;
 		setBusyContact(contactPubkey);
 		try {
-			await recreateChatConversation(user.id, contactPubkey, dbKey);
+			// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — раньше recreateChatConversation
+			// только забывала локальное состояние; теперь она сама немедленно
+			// пересоздаёт группу и шлёт собеседнику новый (generation-меченый)
+			// Welcome — "починка провода", а не только локальная уборка.
+			const publish = (event) => publishToContact(event, contactPubkey);
+			await recreateChatConversation(user.id, privKey, contactPubkey, dbKey, publish, fetchDeviceKeyPackages, refreshGroupMessageSubscription);
 			await refresh();
 		} finally {
 			setBusyContact(null);

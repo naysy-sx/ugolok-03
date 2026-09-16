@@ -11,7 +11,10 @@ export const OWN_KEY_PACKAGE_PLAINTEXT_FIELDS = ["ownerPubkey"];
 // Этап 73.5 — consecutiveDecryptFailures/desynced (М6, детект расхождения):
 // диагностические метаданные, не содержание — plaintext, не индексируются
 // (db-версия не бампается, Dexie не требует схемы для неиндексируемых полей).
-export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId", "consecutiveDecryptFailures", "desynced"];
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — generation: "поколение" разговора,
+// см. chat.js getChatGeneration/bumpChatGeneration/acceptWelcome. Голый
+// счётчик, не секрет — plaintext, тот же прецедент, что consecutiveDecryptFailures.
+export const MLS_GROUPS_PLAINTEXT_FIELDS = ["ownerPubkey", "groupId", "consecutiveDecryptFailures", "desynced", "generation"];
 
 export const CHANNEL_KEYS_PLAINTEXT_FIELDS = ["ownerPubkey", "channelId", "keyVersion"];
 
@@ -68,7 +71,8 @@ export const CONTACT_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey"];
 
 // createdAt — единственное поле с ОТДЕЛЬНЫМ одноколоночным индексом (database.js,
 // db.version(3)) — обязано остаться plaintext, иначе индекс не построить.
-export const INBOX_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey", "createdAt"];
+// generation (Этап 5, З5.7) — тег ["gen", N] из rumor'а Welcome, см. chat.js.
+export const INBOX_REQUESTS_PLAINTEXT_FIELDS = ["owner", "senderPubkey", "createdAt", "generation"];
 
 export const CHANNEL_REPORTS_PLAINTEXT_FIELDS = ["ownerPubkey", "id", "channelId", "viewed", "reporterPubkey", "targetPubkey", "contentType", "contentId", "reason"];
 

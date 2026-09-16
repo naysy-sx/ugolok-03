@@ -656,6 +656,7 @@
 			"created": "concept",
 			"sending": "verzenden…",
 			"sent": "verzonden",
+			"awaitingAcceptance": "verzoek nog niet geaccepteerd",
 			"read": "gelezen",
 			"failed": "niet bezorgd",
 			"discarded": "verworpen"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "U kunt een map niet naar zichzelf of zijn eigen substructuur verplaatsen",
 		"cannotRemoveActiveBlossom": "u kunt de actieve Blossom-server niet verwijderen — schakel eerst over naar een andere",
 		"channelNotFound": "kanaal niet gevonden",
+		"clockAhead": "De klok van uw apparaat loopt voor — de server heeft het bericht geweigerd. Controleer de datum en tijd van uw apparaat.",
+		"clockBehind": "De klok van uw apparaat loopt achter — de server heeft het bericht geweigerd. Controleer de datum en tijd van uw apparaat.",
 		"fileTooLarge": "bestand overschrijdt de maximale grootte",
 		"invalidFileType": "niet-toegestaan bestandstype: {{mime}}",
 		"keyPackageTimeout": "kon de sleutel van de ander niet ophalen — de relay reageerde niet op tijd. Probeer het opnieuw.",
 		"lastRelayCannotBeRemoved": "u kunt de laatste relay niet verwijderen — de lijst mag niet leeg zijn",
+		"messageTooLargeForEvent": "Het bericht is te groot om als één gebeurtenis te verzenden. Dit komt meestal door te veel bijlagen tegelijk — probeer ze apart te verzenden.",
 		"nameTakenInFolder": "De naam ‘{{name}}’ is al in gebruik in deze map",
 		"nameTakenInTargetFolder": "De naam ‘{{name}}’ is al in gebruik in de doelmap",
 		"noReadRelay": "u kunt niet de laatste lees-relay uit de lijst verwijderen — er zou dan niets meer zijn om te lezen",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Dit contact heeft te veel apparaten om een uitnodiging in één bericht te versturen. Probeer het later nog eens."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

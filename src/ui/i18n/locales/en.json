@@ -656,6 +656,7 @@
 			"created": "draft",
 			"sending": "sending…",
 			"sent": "sent",
+			"awaitingAcceptance": "request not accepted yet",
 			"read": "read",
 			"failed": "not delivered",
 			"discarded": "discarded"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "You can't move a folder into itself or its own subtree",
 		"cannotRemoveActiveBlossom": "you can't remove the active Blossom server — switch to another one first",
 		"channelNotFound": "channel not found",
+		"clockAhead": "Your device's clock is ahead — the server rejected the message. Please check your device's date and time.",
+		"clockBehind": "Your device's clock is behind — the server rejected the message. Please check your device's date and time.",
 		"fileTooLarge": "file exceeds the size limit",
 		"invalidFileType": "invalid file type: {{mime}}",
 		"keyPackageTimeout": "couldn't get the other person's key — the relay didn't respond in time. Please try again.",
 		"lastRelayCannotBeRemoved": "you can't remove the last relay — the list can't be empty",
+		"messageTooLargeForEvent": "The message is too large to send as a single event. This is usually caused by too many attachments at once — try sending them separately.",
 		"nameTakenInFolder": "The name «{{name}}» is already taken in this folder",
 		"nameTakenInTargetFolder": "The name «{{name}}» is already taken in the target folder",
 		"noReadRelay": "you can't leave the list without a single read-relay — there would be nothing to read from",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "This contact has too many devices to send an invitation in a single message. Please try again a bit later."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

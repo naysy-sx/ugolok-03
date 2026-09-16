@@ -656,6 +656,7 @@
 			"created": "bozza",
 			"sending": "invio…",
 			"sent": "inviato",
+			"awaitingAcceptance": "richiesta non ancora accettata",
 			"read": "letto",
 			"failed": "non consegnato",
 			"discarded": "scartato"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "Non puoi spostare una cartella dentro se stessa o nel proprio sottoalbero",
 		"cannotRemoveActiveBlossom": "non puoi rimuovere il server Blossom attivo — passa prima a un altro",
 		"channelNotFound": "canale non trovato",
+		"clockAhead": "L'orologio del tuo dispositivo è avanti — il server ha rifiutato il messaggio. Controlla data e ora del dispositivo.",
+		"clockBehind": "L'orologio del tuo dispositivo è indietro — il server ha rifiutato il messaggio. Controlla data e ora del dispositivo.",
 		"fileTooLarge": "il file supera il limite di dimensione",
 		"invalidFileType": "tipo di file non consentito: {{mime}}",
 		"keyPackageTimeout": "impossibile ottenere la chiave dell'interlocutore — il relay non ha risposto in tempo. Riprova.",
 		"lastRelayCannotBeRemoved": "non puoi rimuovere l'ultimo relay — l'elenco non può restare vuoto",
+		"messageTooLargeForEvent": "Il messaggio è troppo grande per essere inviato come un unico evento. Di solito è dovuto a troppi allegati insieme — prova a inviarli separatamente.",
 		"nameTakenInFolder": "Il nome «{{name}}» è già in uso in questa cartella",
 		"nameTakenInTargetFolder": "Il nome «{{name}}» è già in uso nella cartella di destinazione",
 		"noReadRelay": "non puoi lasciare l'elenco senza un solo relay di lettura — non ci sarebbe nulla da leggere",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "Questo contatto ha troppi dispositivi per inviare un invito in un unico messaggio. Riprova tra un po'."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

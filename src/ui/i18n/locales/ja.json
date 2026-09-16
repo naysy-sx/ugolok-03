@@ -656,6 +656,7 @@
 			"created": "下書き",
 			"sending": "送信中…",
 			"sent": "送信済み",
+			"awaitingAcceptance": "リクエスト未承認",
 			"read": "既読",
 			"failed": "未達",
 			"discarded": "破棄済み"
@@ -1129,10 +1130,13 @@
 		"cannotMoveIntoOwnSubtree": "フォルダをそれ自身または自分のサブツリーの中に移動することはできません",
 		"cannotRemoveActiveBlossom": "アクティブなBlossomサーバーは削除できません — 先に別のサーバーに切り替えてください",
 		"channelNotFound": "チャンネルが見つかりません",
+		"clockAhead": "端末の時計が進んでいます — サーバーがメッセージを拒否しました。端末の日付と時刻を確認してください。",
+		"clockBehind": "端末の時計が遅れています — サーバーがメッセージを拒否しました。端末の日付と時刻を確認してください。",
 		"fileTooLarge": "ファイルがサイズ上限を超えています",
 		"invalidFileType": "許可されていないファイル形式です: {{mime}}",
 		"keyPackageTimeout": "相手の鍵を取得できませんでした — リレーが時間内に応答しませんでした。もう一度お試しください。",
 		"lastRelayCannotBeRemoved": "最後のrelayは削除できません — リストを空にはできません",
+		"messageTooLargeForEvent": "メッセージが大きすぎて1つのイベントとして送信できません。添付ファイルが一度に多すぎることが原因です — 分けて送信してください。",
 		"nameTakenInFolder": "名前「{{name}}」はこのフォルダで既に使用されています",
 		"nameTakenInTargetFolder": "名前「{{name}}」は移動先のフォルダで既に使用されています",
 		"noReadRelay": "読み取り用relayを1つも残さずにはリストを変更できません — 読み込む先がなくなります",
@@ -1155,7 +1159,8 @@
 		"invalidReactionEmoji": "reaction emoji is not in the allowed set",
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
-		"cannotEditDeletedPost": "cannot edit a deleted post"
+		"cannotEditDeletedPost": "cannot edit a deleted post",
+		"welcomeTooLargeForDeviceCount": "この相手はデバイスが多すぎて、招待を1つのメッセージで送信できません。しばらくしてからもう一度お試しください。"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

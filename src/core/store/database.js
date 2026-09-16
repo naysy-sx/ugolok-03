@@ -411,6 +411,15 @@ db.version(35).stores({
   undeliverable: "[ownerPubkey+eventId], ownerPubkey, [ownerPubkey+droppedAt]"
 });
 
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — "поколение" разговора для пары
+// (owner, contact): переживает удаление mlsGroups-строки (recreateChatConversation
+// стирает её целиком), поэтому не может жить полем ВНУТРИ mlsGroups — нужна
+// отдельная таблица, не привязанная к жизненному циклу самой группы. Голый
+// счётчик, не секрет — тот же прецедент, что knownContactDevices (без шифрования).
+db.version(36).stores({
+  chatGeneration: "[ownerPubkey+contactPubkey]"
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

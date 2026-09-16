@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { generateSecretKey } from "nostr-tools/pure";
 import { sign } from "../../core/crypto/sign.js";
-import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
+import { encrypt as nip44Encrypt, decrypt as nip44Decrypt, MAX_PLAINTEXT_BYTES } from "../../core/crypto/nip44.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import {
 	createOwnKeyPackage,
@@ -69,9 +69,25 @@ export function isCommitter(pubkeyHexA, pubkeyHexB) {
 	return String(pubkeyHexA).toLowerCase() < String(pubkeyHexB).toLowerCase();
 }
 
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.2) — strfry (server/strfry/strfry.conf,
+// rejectEventsNewerThanSeconds=900/rejectEventsOlderThanSeconds) отвергает
+// событие с сильно расходящимся created_at сообщением "invalid: created_at
+// too late"/"invalid: created_at too early" (проверено чтением исходника
+// relay, server/strfry/strfry-src/src/{events,apps/relay/RelayIngester}.cpp —
+// не домысел). Раньше это всплывало как сырой английский текст от relay —
+// теперь явная, переведённая причина.
+const CLOCK_SKEW_REASON_PATTERN = /created_at too (late|early)/;
+
 export async function requirePublishOk(publish, event) {
 	const result = await publish(event);
 	if (!result.ok) {
+		if (result.reason && CLOCK_SKEW_REASON_PATTERN.test(result.reason)) {
+			const tooLate = result.reason.includes("too late");
+			throw new DomainError(
+				tooLate ? "часы устройства спешат — сообщение не принято реле" : "часы устройства отстают — сообщение не принято реле",
+				tooLate ? "errors.clockAhead" : "errors.clockBehind",
+			);
+		}
 		if (result.reason) throw new Error(result.reason);
 		throw new DomainError("relay отклонил публикацию", "errors.relayRejected");
 	}
@@ -191,6 +207,13 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	// получают ОДИНАКОВЫЙ ответ isCommitter(). Восстановление — БЕЗ нового
 	// кода: существующий sibling-sync (devices.js, ветка announcerPubkey===
 	// ownerPubkey) уже добавляет новое устройство в СУЩЕСТВУЮЩУЮ группу.
+	//
+	// Этап 5 (З5.7) — этот гейт СОЗНАТЕЛЬНО обходится recreateChatConversation
+	// (вызывает createGroupAndSendWelcome напрямую, минуя doEnsureChatEstablished):
+	// после осознанного "пересоздать" СТАРЫЕ messages этого же контакта неизбежно
+	// есть (сама переписка, которую только что признали desynced) — здесь это
+	// было бы ложным срабатыванием И4 (гейт создан для ДРУГОГО случая — sibling-
+	// устройство той же identity, не "я сам только что решил начать заново").
 	if (await hasAnyMessagesFor(ownerPubkey, contactPubkey)) {
 		traceDelivery("establish.throw", { groupIdHex, key: "errors.awaitingSiblingSync" });
 		throw new DomainError("другое моё устройство уже разговаривало с этим контактом — жду синхронизации", "errors.awaitingSiblingSync", { contactPubkey });
@@ -209,6 +232,15 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 		throw new DomainError("ожидание установления переписки — коммиттер этой пары не я", "errors.awaitingCommitter", { contactPubkey });
 	}
 
+	await createGroupAndSendWelcome(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex);
+}
+
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — вынесено из doEnsureChatEstablished
+// (та часть, что идёт ПОСЛЕ гейтов И3/И4): recreateChatConversation вызывает
+// это НАПРЯМУЮ, под тем же локом, обходя гейты (см. комментарий у И4 выше) —
+// единственное отличие от обычного establish-пути в том, ЧТО именно вызвало
+// эту функцию, не в том, что она делает.
+async function createGroupAndSendWelcome(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex) {
 	traceDelivery("keypackages.req", { peer: contactPubkey });
 	const t0 = Date.now();
 	const theirDevices = await fetchDeviceKeyPackages(contactPubkey);
@@ -224,6 +256,34 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	// у новой группы нет других СУЩЕСТВУЮЩИХ участников кроме новых, которые
 	// узнают состояние из Welcome, не из коммита.
 
+	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.3) — ДО db.table("mlsGroups").put() ниже:
+	// эта группа ещё нигде не персистирована — если welcomeWireBytes заведомо не
+	// поместится в конверт (два слоя NIP-59: seal+wrap, оба поверх NIP-44 v2 с
+	// лимитом 65535 байт на СВОЙ plaintext — вложенный JSON накапливает накладные
+	// расходы обоих слоёв), лучше не создавать локальную группу вовсе, чем
+	// создать её и никогда не суметь доставить Welcome контакту (тот молча
+	// копит 445 в буфере до TTL, см. Этап 3, undeliverable). Порог —
+	// консервативная ОЦЕНКА (не точный расчёт компаундирующихся накладных
+	// расходов двух слоёв NIP-44 + JSON-обёртки события), намеренно с запасом.
+	const MAX_SAFE_WELCOME_WIRE_BYTES = 20000;
+	if (welcomeWireBytes.length > MAX_SAFE_WELCOME_WIRE_BYTES) {
+		throw new DomainError(
+			`слишком много устройств у контакта (${theirDevices.size}) для одного приглашения — попробуйте ещё раз позже`,
+			"errors.welcomeTooLargeForDeviceCount",
+			{ deviceCount: theirDevices.size },
+		);
+	}
+
+	// Этап 5 (З5.7) — "поколение" этой пары: bumpChatGeneration (вызывается
+	// recreateChatConversation ДО удаления старой группы) переживает удаление
+	// mlsGroups-строки — обычный establish (не после recreate) видит 0 всегда.
+	// Едет В ОТКРЫТУЮ в теге Welcome (не секрет, не аутентифицирован NIP-44 —
+	// целостность обеспечивает сам NIP-59 wrap/seal, подделать тег отдельно от
+	// содержимого нельзя, не расширяя поверхность атаки) — приёмная сторона
+	// (acceptWelcome) сверяет его с уже сохранённым, чтобы отличить "новый
+	// Welcome взамен мёртвой группы" от "повторная доставка ТОГО ЖЕ Welcome".
+	const generation = await getChatGeneration(ownerPubkey, contactPubkey);
+
 	// contactPubkey хранится РЯДОМ с состоянием (не отдельной таблицей-маппингом) —
 	// нужен для обратного поиска "чьё это kind 445" по groupId из h-тега: groupId —
 	// однонаправленный хэш (DESIGN.md п.2), pubkey из него не восстановить назад.
@@ -231,7 +291,7 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	// Этап 39 — contactPubkey/state теперь sensitive (шифруются dbKey), ownerPubkey/groupId
 	// остаются plaintext (составной PK, нужен для .get([ownerPubkey, groupIdHex])).
 	await db.table("mlsGroups").put(
-		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+		toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey, state: serializeState(newSessionState), generation }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
 	);
 
 	// Бухгалтерия для реактивной досинхронизации (devices.js, handleDeviceAnnounce) —
@@ -242,7 +302,7 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 	}
 
 	const welcomeEvent = nip59Wrap(
-		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [] },
+		{ kind: 444, content: encodeBase64(welcomeWireBytes), tags: [["gen", String(generation)]] },
 		privKey,
 		contactPubkey,
 	);
@@ -252,16 +312,32 @@ async function doEnsureChatEstablished(ownerPubkey, privKey, dbKey, contactPubke
 // Вызывается диспетчером входящих gift wrap (transport.js) на rumor.kind===444.
 // welcomeSenderPubkey = rumor.pubkey (уже проверен nip59.unwrap — F-EV-05) — это и есть
 // контакт, с которым устанавливается разговор с ПОЛУЧАЮЩЕЙ стороны.
-export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, welcomeWireBytes) {
+// incomingGeneration (Этап 5, З5.7) — из тега ["gen", N] rumor'а Welcome
+// (createGroupAndSendWelcome кладёт его туда); 0 по умолчанию для старых
+// вызовов без этого параметра (тесты, обратная совместимость).
+export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, welcomeWireBytes, incomingGeneration = 0) {
 	const groupId = computeGroupId(ownerPubkey, welcomeSenderPubkey);
 	const groupIdHex = bytesToHex(groupId);
-	traceDelivery("recv.welcome", { contact: welcomeSenderPubkey, groupIdHex });
+	traceDelivery("recv.welcome", { contact: welcomeSenderPubkey, groupIdHex, incomingGeneration });
 
 	// Этап 74 — T2.2 (RC-3): гонка "две вкладки одновременно принимают один
 	// Welcome" — существует (DESIGN.md "Этап 74"), лок ЦЕЛИКОМ вокруг get→put.
 	return withGroupLock(ownerPubkey, groupIdHex, async () => {
-		const existing = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
-		if (existing) return; // уже установлено (повторная доставка того же Welcome, EOSE-повтор и т.п.)
+		const existingRaw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+		if (existingRaw) {
+			// Этап 5 (З5.7) — раньше ЛЮБОЙ Welcome при уже существующей локальной
+			// группе молча игнорировался ("уже установлено") — это верно для
+			// повторной доставки ТОГО ЖЕ Welcome (EOSE-повтор и т.п.), но означало
+			// permanent-divergence дыру для recreateChatConversation: собеседник
+			// пересоздал группу локально и шлёт НОВЫЙ Welcome, а мы, всё ещё думая,
+			// что старая группа рабочая, тихо выбрасываем его и продолжаем
+			// расшифровывать его будущие 445 СТАРЫМ (несовместимым) ключом —
+			// desync без пути назад. incomingGeneration СТРОГО больше уже
+			// сохранённого — однозначный сигнал "замени", не "дубль".
+			const existing = fromEncryptedRow(existingRaw, dbKey);
+			if (incomingGeneration <= (existing.generation ?? 0)) return;
+			traceDelivery("recv.welcome.replace", { contact: welcomeSenderPubkey, groupIdHex, fromGeneration: existing.generation ?? 0, toGeneration: incomingGeneration });
+		}
 
 		const ownKeyPackageRaw = await db.table("ownKeyPackage").get(ownerPubkey);
 		if (!ownKeyPackageRaw) {
@@ -275,7 +351,11 @@ export async function acceptWelcome(ownerPubkey, dbKey, welcomeSenderPubkey, wel
 
 		const state = await joinFromWelcome(ownKeyPackage, welcomeWireBytes);
 		await db.table("mlsGroups").put(
-			toEncryptedRow({ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state) }, MLS_GROUPS_PLAINTEXT_FIELDS, dbKey),
+			toEncryptedRow(
+				{ ownerPubkey, groupId: groupIdHex, contactPubkey: welcomeSenderPubkey, state: serializeState(state), generation: incomingGeneration },
+				MLS_GROUPS_PLAINTEXT_FIELDS,
+				dbKey,
+			),
 		);
 	});
 }
@@ -328,8 +408,36 @@ async function prepareOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey
 	// ОБЕИХ identity состоят в группе — без этого поля приёмник не может отличить
 	// живое 445 от sibling-устройства владельца от живого 445 от контакта.
 	const messagePayload = { text, lamportTs, msgId, sentAt, senderPubkey: ownerPubkey };
+	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — пиггибэк-подтверждение (вариант
+	// "дёшево" из ТЗ): "везём" вместе с обычным сообщением наивысший lamportTs,
+	// который мы реально видели ОТ этого контакта — ничего не стоит на проводе
+	// сверх нескольких байт JSON. undefined (контакт нам ещё ничего не писал) —
+	// поле не добавляем вовсе, "работает только при взаимной переписке" (ТЗ).
+	const ackUpTo = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
+	if (ackUpTo !== undefined) messagePayload.ackUpTo = ackUpTo;
 	if (attachments !== undefined && attachments.length > 0) messagePayload.attachments = attachments;
 	const plaintextBytes = utf8ToBytes(JSON.stringify(messagePayload));
+	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.3) — проверка ДО encryptApplicationMessage,
+	// не после: та продвигает MLS-ратчет НЕОБРАТИМО (тот же принцип, что
+	// AC-09/З3.1 — событие, для которого ратчет уже сдвинут, нельзя просто
+	// перегенерировать). Раньше nip44.js бросала СВОЙ предел (65535 байт на
+	// base64(wireBytes)) уже ПОСЛЕ шифрования — ратчет успевал сдвинуться
+	// впустую, сообщение терялось бы безвозвратно (та же дыра, что была у
+	// outbox.enqueue "только в catch" до Этапа 3). Порог здесь — консервативная
+	// оценка СВЕРХУ по входному plaintext (запас на служебные накладные
+	// расходы MLS-шифрования + base64: 4/3 расширение), не точный расчёт —
+	// пропускает погранично малые случаи в штатный путь (там всё ещё есть
+	// финальная проверка nip44.js как страховка), но отсекает заведомо
+	// слишком большие ДО того, как ратчет пострадает.
+	const SAFE_PLAINTEXT_MARGIN_BYTES = 4096; // накладные расходы MLS-framing + AEAD-тег + запас
+	const maxSafePayloadBytes = Math.floor((MAX_PLAINTEXT_BYTES * 3) / 4) - SAFE_PLAINTEXT_MARGIN_BYTES;
+	if (plaintextBytes.length > maxSafePayloadBytes) {
+		throw new DomainError(
+			`сообщение слишком большое для отправки одним событием (${plaintextBytes.length} байт) — обычно причина в количестве вложений; попробуйте отправить их по отдельности`,
+			"errors.messageTooLargeForEvent",
+			{ bytes: plaintextBytes.length },
+		);
+	}
 	const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
 	traceDelivery("encrypt.done", { msgId, groupIdHex, epoch: newSessionState.groupContext?.epoch?.toString?.() });
 
@@ -441,6 +549,15 @@ async function finishOutgoingMessage(ownerPubkey, privKey, dbKey, contactPubkey,
 		// провала (это и была исходная дыра, AUDIT-BRIEFING §4.6: "одна
 		// неудача = конец").
 		const { finalFailure } = await markFailed(seq);
+		// Этап 5 (З5.2) — расхождение часов не самовосстанавливается молчаливым
+		// повтором так же надёжно, как обычный сетевой сбой: событие остаётся в
+		// outbox (не теряется — вдруг часы поправятся сами, тогда ЭТА ЖЕ
+		// попытка от drainOutboxSafely пройдёт), но пользователю нужно увидеть
+		// ПРИЧИНУ сразу, не только после исчерпания MAX_ATTEMPTS (~сутки).
+		if (e?.key === "errors.clockAhead" || e?.key === "errors.clockBehind") {
+			await touchChatActivity(ownerPubkey, dbKey, contactPubkey, ownerPubkey, sentAt);
+			throw e;
+		}
 		if (finalFailure) {
 			await db
 				.table("messages")
@@ -583,6 +700,23 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	if (result.kind === "control") return null;
 
 	const parsed = JSON.parse(new TextDecoder().decode(result.message));
+
+	// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — ackUpTo (пиггибэк ИЛИ отдельный
+	// ACK-пакет, оба несут одно и то же поле) переводит НАШИ СОБСТВЕННЫЕ
+	// сообщения sent -> read. Применяем ДО ветвления ackOnly — у обоих видов
+	// пакета это ровно одна и та же семантика.
+	if (typeof parsed.ackUpTo === "number") {
+		await applyAckUpTo(ownerPubkey, contactPubkey, parsed.ackUpTo);
+	}
+	if (parsed.ackOnly === true) {
+		// Чистый ACK-пакет (sendExplicitAck/sweepPendingAcks) — не сообщение:
+		// не создаёт строку в messages, не будит "новое сообщение от X", не
+		// зеркалируется. Ратчет/mlsGroups.state УЖЕ обновлены выше (общий для
+		// любого kind:445 код), markEventProcessed — тоже.
+		traceDelivery("recv.445.ackonly", { eventId: event.id, groupIdHex, ackUpTo: parsed.ackUpTo });
+		return null;
+	}
+
 	// Этап 29 — sentAt ОТСУТСТВУЕТ у сообщений старого формата (до этого этапа) —
 	// включается в строку/результат, только если РЕАЛЬНО пришёл в payload, не как
 	// undefined-значение (иначе deepEqual-тесты на старый формат, devices.test.js,
@@ -718,6 +852,142 @@ export async function listDesyncedChats(ownerPubkey, dbKey) {
 	return rows.filter((r) => r.desynced).map((r) => ({ contactPubkey: r.contactPubkey, groupId: r.groupId, consecutiveDecryptFailures: r.consecutiveDecryptFailures }));
 }
 
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — наивысший lamportTs среди сообщений,
+// реально пришедших ОТ contactPubkey в этом чате. lamportTs/senderPubkey —
+// plaintext-поля (MESSAGES_PLAINTEXT_FIELDS) — читаем сырые строки без
+// расшифровки, по прецеденту hasAnyMessagesFor выше.
+async function lastReceivedLamportTs(ownerPubkey, contactPubkey) {
+	const rows = await db
+		.table("messages")
+		.where("[ownerPubkey+chatId]")
+		.equals([ownerPubkey, contactPubkey])
+		.filter((r) => r.senderPubkey === contactPubkey)
+		.toArray();
+	if (rows.length === 0) return undefined;
+	return Math.max(...rows.map((r) => r.lamportTs));
+}
+
+// Этап 5 (З5.5) — та же выборка, но с sentAt (шифрованное поле — нужна
+// расшифровка) отправителя, для sweepPendingAcks (нужен момент получения,
+// не только lamportTs, чтобы решить "давно ли это было").
+async function lastReceivedMessageMeta(ownerPubkey, dbKey, contactPubkey) {
+	const rows = await db
+		.table("messages")
+		.where("[ownerPubkey+chatId]")
+		.equals([ownerPubkey, contactPubkey])
+		.filter((r) => r.senderPubkey === contactPubkey)
+		.toArray();
+	if (rows.length === 0) return undefined;
+	const maxRow = rows.reduce((a, b) => (b.lamportTs > a.lamportTs ? b : a));
+	const { sentAt } = fromEncryptedRow(maxRow, dbKey);
+	return { lamportTs: maxRow.lamportTs, sentAt };
+}
+
+// Этап 5 (З5.5) — переводит НАШИ исходящие sent -> read вплоть до ackUpTo
+// включительно. Идемпотентно (фильтр status==="sent" — уже read строки не
+// трогает повторно, transitionMessage не вызывается на них снова).
+async function applyAckUpTo(ownerPubkey, contactPubkey, ackUpTo) {
+	await db
+		.table("messages")
+		.where("[ownerPubkey+chatId]")
+		.equals([ownerPubkey, contactPubkey])
+		.filter((r) => r.senderPubkey === ownerPubkey && r.status === "sent" && r.lamportTs <= ackUpTo)
+		.modify((r) => {
+			r.status = transitionMessage(r.status, "READ");
+		});
+}
+
+// Этап 5 (З5.5) — "собеседник уже узнал бы ackUpTo=lamportTs(receivedSentAt)
+// через пиггибэк сам собой" — верно, если у нас есть ХОТЯ БЫ ОДНО собственное
+// сообщение со статусом sent/read, отправленное ПОСЛЕ получения этого: его
+// payload нёс бы ackUpTo >= этого lamportTs (prepareOutgoingMessage считает
+// его заново при КАЖДОЙ отправке, см. выше) — отдельный ACK был бы избыточен.
+async function alreadyAckedViaPiggyback(ownerPubkey, dbKey, contactPubkey, receivedSentAt) {
+	if (typeof receivedSentAt !== "number") return false;
+	const rows = await db
+		.table("messages")
+		.where("[ownerPubkey+chatId]")
+		.equals([ownerPubkey, contactPubkey])
+		.filter((r) => r.senderPubkey === ownerPubkey && (r.status === "sent" || r.status === "read"))
+		.toArray();
+	for (const raw of rows) {
+		const { sentAt } = fromEncryptedRow(raw, dbKey);
+		if (typeof sentAt === "number" && sentAt >= receivedSentAt) return true;
+	}
+	return false;
+}
+
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.5) — явный ACK ("дорого" из ТЗ): отдельный
+// kind:445 без text/msgId, только { ackOnly: true, ackUpTo }. Продвигает MLS-
+// ратчет как любое applicationMessage — вызывать РЕДКО (см. sweepPendingAcks),
+// не на каждое взаимодействие. Best-effort, НЕ через outbox: если публикация
+// не удалась сейчас, условие "давно не подтверждали" на следующем тике
+// sweepPendingAcks всё ещё истинно — отдельный durable-путь не нужен.
+export async function sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish) {
+	const groupId = computeGroupId(ownerPubkey, contactPubkey);
+	const groupIdHex = bytesToHex(groupId);
+	const ackUpTo = await lastReceivedLamportTs(ownerPubkey, contactPubkey);
+	if (ackUpTo === undefined) return; // контакт нам ещё ничего не писал — нечего подтверждать
+
+	const event = await withGroupLock(ownerPubkey, groupIdHex, async () => {
+		const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
+		if (!raw) return null; // чат не установлен — нечего подтверждать
+		const row = fromEncryptedRow(raw, dbKey);
+		const state = deserializeState(row.state);
+		const plaintextBytes = utf8ToBytes(JSON.stringify({ ackOnly: true, ackUpTo }));
+		const { newSessionState, wireBytes } = await encryptApplicationMessage(state, plaintextBytes);
+		await db.table("mlsGroups").put(
+			toEncryptedRow(
+				{
+					ownerPubkey,
+					groupId: groupIdHex,
+					contactPubkey: row.contactPubkey,
+					state: serializeState(newSessionState),
+					consecutiveDecryptFailures: row.consecutiveDecryptFailures ?? 0,
+					desynced: row.desynced ?? false,
+				},
+				MLS_GROUPS_PLAINTEXT_FIELDS,
+				dbKey,
+			),
+		);
+		const { privateKey, publicKey } = await deriveNostrEnvelopeKeys(newSessionState);
+		const content = nip44Encrypt(encodeBase64(wireBytes), privateKey, bytesToHex(publicKey));
+		const ephemeralPriv = generateSecretKey();
+		return sign({ kind: 445, tags: [["h", groupIdHex]], content, created_at: Math.floor(Date.now() / 1000) }, ephemeralPriv);
+	});
+	if (!event) return;
+
+	try {
+		await requirePublishOk(publish, event);
+		traceDelivery("ack.sent", { groupIdHex, ackUpTo });
+	} catch (e) {
+		traceDelivery("ack.publish.reject", { groupIdHex, ackUpTo, reason: String(e?.message ?? e) });
+	}
+}
+
+const EXPLICIT_ACK_IDLE_MS = 5 * 60 * 1000; // ТЗ З5.5: "если от собеседника ничего не приходило дольше N минут"
+
+// Этап 5 (З5.5) — периодический sweep (вызывающий код — transport.js, по
+// прецеденту sweepBufferedGroupMessages, таймер ~30-60с): для каждого
+// установленного чата этого owner проверяет "получено давно, ни разу не
+// ответили — пиггибэк не мог доехать сам собой" и явно подтверждает такие.
+export async function sweepPendingAcks(ownerPubkey, privKey, dbKey, publish) {
+	const groups = await db.table("mlsGroups").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const now = Date.now();
+	for (const raw of groups) {
+		const { contactPubkey } = fromEncryptedRow(raw, dbKey);
+		const lastReceived = await lastReceivedMessageMeta(ownerPubkey, dbKey, contactPubkey);
+		if (!lastReceived || typeof lastReceived.sentAt !== "number") continue;
+		if (now - lastReceived.sentAt * 1000 < EXPLICIT_ACK_IDLE_MS) continue;
+		if (await alreadyAckedViaPiggyback(ownerPubkey, dbKey, contactPubkey, lastReceived.sentAt)) continue;
+		try {
+			await sendExplicitAck(ownerPubkey, privKey, dbKey, contactPubkey, publish);
+		} catch (e) {
+			console.warn("sweepPendingAcks: sendExplicitAck упал, попробуем на следующем тике", e);
+		}
+	}
+}
+
 // Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.6) — "буфер не должен молча дропать":
 // вызывается ТОЛЬКО из retryBufferedGroupMessages (transport.js) в момент
 // окончательного (TTL истёк) отказа от буферной записи — та же точка, что уже
@@ -734,13 +1004,57 @@ export async function listUndeliverable(ownerPubkey, dbKey) {
 	return rows.map((r) => fromEncryptedRow(r, dbKey)).sort((a, b) => b.droppedAt - a.droppedAt);
 }
 
-// Забывает ЛОКАЛЬНОЕ состояние (группу + бухгалтерию известных устройств
-// контакта) — НЕ решает, кто в паре коммиттер: следующий ensureChatEstablished
-// (ручная отправка) либо реактивный sibling-Welcome отработают ТЕМ ЖЕ путём,
-// что уже реализуют И3/И4 (DESIGN.md "Реализация (73.5)") — не отдельный
-// протокольный механизм.
-export async function recreateChatConversation(ownerPubkey, contactPubkey, dbKey) {
-	const groupIdHex = bytesToHex(computeGroupId(ownerPubkey, contactPubkey));
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — "поколение" разговора для пары
+// (ownerPubkey, contactPubkey): переживает удаление mlsGroups-строки
+// (recreateChatConversation стирает её), поэтому не может жить ВНУТРИ этой
+// строки — отдельная маленькая таблица. Не шифруется (голый счётчик, не
+// секрет — тот же прецедент, что knownContactDevices).
+async function getChatGeneration(ownerPubkey, contactPubkey) {
+	const row = await db.table("chatGeneration").get([ownerPubkey, contactPubkey]);
+	return row?.generation ?? 0;
+}
+
+async function bumpChatGeneration(ownerPubkey, contactPubkey) {
+	const next = (await getChatGeneration(ownerPubkey, contactPubkey)) + 1;
+	await db.table("chatGeneration").put({ ownerPubkey, contactPubkey, generation: next });
+	return next;
+}
+
+// Этап 5 (MESSAGE-DELIVERY-TZ.md, З5.7) — раньше эта функция ТОЛЬКО забывала
+// локальное состояние и полагалась на то, что следующая исходящая отправка
+// (ручная — от пользователя, когда бы она ни случилась) реактивирует И3/И4 —
+// два независимых пробела: (1) "починка провода" ленивая, а не немедленная —
+// собеседник ничего не узнаёт, пока владелец САМ не напишет что-то новое;
+// (2) даже когда Welcome в итоге уходил, acceptWelcome видел "у меня уже есть
+// группа с этим groupId" и молча его игнорировал — обе стороны навсегда
+// расходятся в несовместимых MLS-состояниях под одним и тем же groupId
+// (permanent divergence, ровно то, о чём предупреждает ТЗ: "кнопка
+// «пересоздать» — способ окончательно разойтись").
+//
+// Теперь: генерация бьётся СРАЗУ (до удаления — переживает его), затем НОВАЯ
+// группа создаётся и Welcome публикуется НЕМЕДЛЕННО (createGroupAndSendWelcome
+// напрямую, в обход И3/И4 — см. комментарий у И4 в doEnsureChatEstablished),
+// а не отложенно при следующей отправке. Новый Welcome несёт generation
+// СТРОГО больше предыдущего — acceptWelcome (получающая сторона, тот же
+// код, что обрабатывает и обычные первые Welcome) обязан распознать это как
+// "замени мёртвую группу", а не как повторную доставку старого приглашения.
+export async function recreateChatConversation(ownerPubkey, privKey, contactPubkey, dbKey, publish, fetchDeviceKeyPackages, refreshGroupMessageSubscription) {
+	const groupId = computeGroupId(ownerPubkey, contactPubkey);
+	const groupIdHex = bytesToHex(groupId);
+	await bumpChatGeneration(ownerPubkey, contactPubkey);
 	await db.table("mlsGroups").delete([ownerPubkey, groupIdHex]);
 	await db.table("knownContactDevices").where("[ownerPubkey+contactPubkey]").equals([ownerPubkey, contactPubkey]).delete();
+	await withGroupLock(ownerPubkey, groupIdHex, () =>
+		createGroupAndSendWelcome(ownerPubkey, privKey, dbKey, contactPubkey, publish, fetchDeviceKeyPackages, groupId, groupIdHex),
+	);
+	// Этап 73.3, тот же принцип, что sendChatMessageAction (chats.js) после
+	// ensureChatEstablished — набор groupId'ов, за которыми следит live-подписка,
+	// только что изменился (новая группа под тем же groupIdHex, но она только
+	// что создана заново — подписка могла быть настроена ДО этого момента).
+	// Параметр НЕ импортируется напрямую (transport.js уже импортирует ИЗ
+	// chat.js — обратный импорт был бы циклическим), передаётся вызывающим
+	// UI-кодом, как и во всех остальных подобных местах этого файла.
+	if (typeof refreshGroupMessageSubscription === "function") {
+		await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish);
+	}
 }
