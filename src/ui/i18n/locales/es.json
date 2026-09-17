@@ -146,8 +146,8 @@
 		"emptyBody": "No hay nadie en tu lista. Echa un vistazo a «Descubrir» — ahí hay personas abiertas a conocerse.",
 		"emptyAction": "Abrir Descubrir",
 		"favoritesHeading": "Favorites",
-		"peopleGroupHeading": "People",
-		"peopleGroupTitle": "All people, groups and requests",
+		"peopleGroupHeading": "Contactos",
+		"peopleGroupTitle": "Todos los contactos, grupos y solicitudes",
 		"myChannelsGroupHeading": "My channels",
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
@@ -158,7 +158,9 @@
 		"switchToLightTheme": "Cambiar a tema claro",
 		"switchToDarkTheme": "Cambiar a tema oscuro",
 		"quickConnect": "Quick Connect",
-		"quickConnectHint": "conversation without an account"
+		"quickConnectHint": "conversation without an account",
+		"quickConnectActiveHint": "Minimizado — toca para volver",
+		"serviceUnavailable": "servicio no disponible"
 	},
 	"unlock": {
 		"checking": "Comprobando…",
@@ -579,7 +581,9 @@
 	},
 	"contacts": {
 		"openChatAria": "Abrir chat con {{name}}",
-		"addContactLabel": "Añadir contacto (npub o clave hex)",
+		"addContactHeading": "Nuevo contacto",
+		"addContactPlaceholder": "npub o clave hex",
+		"sendRequestButton": "Enviar solicitud",
 		"groupsHeading": "Grupos",
 		"allGroupsLabel": "Todos los grupos",
 		"renameGroupLabel": "Nuevo nombre del grupo",

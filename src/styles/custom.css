@@ -1138,6 +1138,37 @@ html[data-media-full] .top-corner-actions {
 	transform: translateX(2px);
 }
 
+/* Пользователь (item 1) — "Добавить контакт": было кнопкой (низ панели,
+   .act--primary), теперь ссылка иконка+текст между заголовком группы и
+   самим списком. Подчёркнута ПО УМОЛЧАНИЮ, hover её убирает (пользователь:
+   ровно наоборот обычного поведения ссылок) — так она отличается на глаз от
+   соседних пунктов списка (те никогда не подчёркнуты). Свои
+   display/gap/padding-inline, не .row (ловушка файла — глобальное
+   [type="button"]:has(> .icon) выше по файлу иначе переписало бы оба). */
+.add-contact-link {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	width: 100%;
+	background: none;
+	border: none;
+	padding: var(--space-2xs) var(--space-3xs);
+	color: var(--accent);
+	font-size: var(--step--1);
+	line-height: 1.35;
+	text-align: start;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+.add-contact-link:hover,
+.add-contact-link:focus-visible {
+	text-decoration: none;
+}
+.add-contact-link:has(> .icon) {
+	padding-inline: var(--space-3xs);
+}
+
 /* Список переписок/каналов внутри группы — без буллетов/отступа списка,
    зазор между строками почти нулевой (макет: 1px) — плотность важнее
    воздуха в списке из десятков переписок/каналов. */
@@ -1327,6 +1358,17 @@ html[data-media-full] .top-corner-actions {
 	color: var(--accent);
 	background-color: color-mix(in oklch, var(--accent), transparent 88%);
 }
+/* Подпись строки — сейчас нужна только "Быстрой связи" (QuickConnectRow,
+   nav-groups.jsx: "разговор без учётной записи"/имя комнаты), но живёт на
+   уровне .discover, а не отдельным классом — тот же приём, что был у .quick
+   small (удалено вместе с переездом кнопки-входа сюда). */
+.discover small {
+	display: block;
+	color: var(--muted);
+	font-size: var(--step--2);
+	font-weight: var(--weight-normal);
+	line-height: 1.3;
+}
 
 /* CONTRACTS.md §DISCOVERY — глобальный индикатор "мой профиль сейчас
    открыт для знакомств", виден на любом экране, не только на самом
@@ -1337,6 +1379,21 @@ html[data-media-full] .top-corner-actions {
 .discover-row--visible .discover-mark {
 	color: var(--good);
 	background-color: color-mix(in oklch, var(--good), transparent 80%);
+}
+
+/* Пользователь (item 7) — "Быстрая связь" (QuickConnectRow, nav-groups.jsx),
+   строкой над "Знакомства": комната открыта (развёрнута ИЛИ свёрнута) — та же
+   акцентная подсветка, что active-строки списков (.stream-row.is-active), не
+   зелёная (.discover-row--visible — другой смысл, "открыт для знакомств"), не
+   спутать. Свёрнутое состояние ДОЛЖНО оставаться отличимым от простоя — точка
+   .quick-live-dot (уже используется внутри самой Quick) вместо статичного
+   компаса ровно это и обеспечивает (пульсирует, даже когда список сообщений
+   под ней молчит). */
+.discover-row--active {
+	background-color: color-mix(in oklch, var(--accent), transparent 88%);
+}
+.discover-row--active .discover-mark {
+	background-color: color-mix(in oklch, var(--accent), transparent 78%);
 }
 
 /* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — подписанная строка-действие
@@ -1426,73 +1483,53 @@ html[data-media-full] .top-corner-actions {
 	justify-content: center;
 }
 
-/* Низ панели ("Быстрая связь" + статус соединения) — .pane__body (NavGroups)
-   выше уже grow+scroller и толкает этот блок к низу колонки, margin-auto
-   не нужен (было нужно раньше, когда весь <aside> скроллился одним куском). */
+/* Низ панели — раньше "Быстрая связь" + статус соединения, оба переехали
+   (пользователь, item 1/7: "им там не место") — "Добавить контакт" и "Быстрая
+   связь" теперь строки внутри NavGroups (список/эйброу-группа "Контакты" и
+   строка над "Знакомства"), сама кнопка-вход "Быстрая связь" (.quick/
+   .quick-active) и её ActiveRoomSummary упразднены вместе с переездом
+   (см. QuickConnectRow, nav-groups.jsx). Здесь остались (item 8) компактная
+   сводка скорости трёх сервисов (.services-status ниже) и ссылка "Выйти"
+   (.sidebar-logout-link) — .pane__body (NavGroups) выше уже grow+scroller и
+   толкает этот блок к низу колонки, margin-auto не нужен. */
 .pane__bottom {
 	padding: var(--space-2xs) var(--space-xs);
 	border-block-start: var(--border-width) solid var(--border);
 }
-/* "Быстрая связь" — пунктирная рамка, сплошная+акцентная по hover (макет);
-   ПРЕФИКС .quick НЕ пересекается с семейством .quick-* (quick.jsx, экран
-   "Быстрая связь" целиком) — разные сущности, здесь только кнопка-вход. */
-.quick {
-	width: 100%;
-	/* Ловушка файла (см. комментарий в самом верху custom.css) — глобальный
-	   элементный button{background-color:var(--accent)} (minimal.css,
-	   @layer elements) побеждает молча на СВОЙСТВАХ, которые .quick не
-	   задаёт явно; background:none обязателен, не подразумевается. */
-	background: none;
-	padding: var(--space-2xs) var(--space-xs);
-	border-radius: var(--radius-sm);
-	border: var(--border-width) dashed var(--border);
-	color: var(--muted);
-	font-size: var(--step--1);
-	/* Живой фидбек пользователя — заголовок+подпись читались центрированными
-	   внутри строки: не авторский стиль, УА-дефолт <button>{text-align:center}
-	   (ни один слой файла его не перебивал явно — та же ловушка, что уже не
-	   раз описана в шапке этого файла). */
-	text-align: start;
-}
-/* Заголовок+подпись — .stack внутри .bar, а --align:center на кнопке
-   наследуется на колонку и центрирует короткую строку относительно
-   длинной. Явно start, не inherit. */
-.quick .stack {
-	align-items: start;
-	text-align: start;
-}
-/* ЛОВУШКА ФАЙЛА — IconGlobe прямым child'ом (app.jsx) → глобальное
-   [type="button"]:has(> .icon) иначе раздувало бы padding-inline до
-   var(--step-0) вместо var(--space-xs). Тот же случай, что .act/
-   .fav-toggle/.account-key/.menu-pop button выше. */
-.quick:has(> .icon) {
-	padding-inline: var(--space-xs);
-}
-.quick:hover,
-.quick:focus-visible {
-	color: var(--fg);
-	border-color: var(--accent);
-	border-style: solid;
-}
-.quick small {
-	display: block;
-	color: var(--muted);
+/* Пользователь (item 8) — три строки term/значение, CSS grid на всю катушку:
+   dt/dd — прямые дети <dl>, авто-раскладка в 2 колонки без враппер-<div>. */
+.services-status {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: var(--space-s);
+	row-gap: var(--space-3xs);
+	margin: var(--space-2xs) var(--space-3xs);
 	font-size: var(--step--2);
-	font-weight: var(--weight-normal);
-	line-height: 1.3;
 }
-/* Активная сводка (ActiveRoomSummary) — комната уже открыта, эта кнопка
-   всегда возвращает к ней (развёрнута или свёрнута, app.jsx). Сплошная
-   рамка+акцентный текст вместо приглушённой пунктирной — тот же язык,
-   что .call-bar (CallOverlay) для идущего звонка: заметно, что "занято". */
-.quick-active {
-	border-style: solid;
-	border-color: var(--accent);
-	color: var(--fg);
+.services-status dt {
+	color: var(--muted);
 }
-.quick-active svg {
-	flex: none;
-	color: var(--accent);
+.services-status dd {
+	margin: 0;
+	text-align: end;
+	font-variant-numeric: tabular-nums;
+}
+.services-status-value--ok {
+	color: var(--good);
+}
+.services-status-value--bad {
+	color: var(--bad);
+}
+.services-status-value--checking {
+	color: var(--muted);
+}
+/* "Выйти" — переехала сюда из меню карточки учётной записи (account-card.jsx,
+   пользователь: то же место, что и остальные ambient-пункты низа панели).
+   .act — тот же готовый рецепт иконка+текст на всю ширину, что "Добавить
+   контакт" использовал раньше (act--primary модификатор здесь не нужен —
+   это не первичное действие экрана). */
+.sidebar-logout-link {
+	margin-block-start: var(--space-2xs);
 }
 
 /* ================================================================== *
@@ -5858,8 +5895,11 @@ button[type="button"].media-mini-bar-btn {
 }
 /* Пользователь (item 26): без обёртки .card, поле ввода + кнопка визуально
    слиты в один элемент — общая рамка, скругление обрезано на стыке, зазора
-   между ними нет. Подпись переехала в placeholder, шрифт крупнее (это
-   главное действие раздела). */
+   между ними нет, шрифт поля крупнее (это главное действие раздела).
+   Подпись (item 5, довесок) вернулась видимой НАД полем — .contact-add-label
+   ниже — вместо чисто placeholder-варианта: та же форма теперь живёт ещё и
+   в модальном окне (add-contact-modal.jsx), где подсказать назначение поля
+   одним лишь placeholder недостаточно. */
 /* .row (раскладка, --gap:0 + alignItems:stretch) уже в JSX. */
 /* .row/.grow (раскладка) уже в JSX — здесь только оформление/сайзинг. */
 .row.contacts-add-form {
@@ -5876,6 +5916,11 @@ button[type="button"].media-mini-bar-btn {
 	padding-inline: var(--space-s);
 	background-color: var(--surface);
 	color: var(--muted);
+}
+.contact-add-label {
+	font-size: var(--step--2);
+	color: var(--muted);
+	line-height: 1.2;
 }
 .contact-add-field input {
 	flex: 1;
@@ -5901,6 +5946,26 @@ button[type="button"].media-mini-bar-btn {
 		font-size: var(--step-0);
 		padding-block: 0;
 	}
+}
+
+/* Та же форма внутри модального окна (add-contact-modal.jsx, item 2) —
+   карточка модалки узкая (26rem), рядом с длинной кнопкой "Отправить
+   запрос" (было короче — "Добавить") полю почти не остаётся места. Строкой
+   вниз, а не сжатым в одну линию — поле на всю ширину, кнопка под ним, уже
+   не единая "таблетка" (join-стык больше не нужен — оба независимо
+   скруглены). */
+.add-contact-modal-form .row.contacts-add-form {
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+.add-contact-modal-form .contact-add-field {
+	flex-basis: 100%;
+	border-inline-end: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+}
+.add-contact-modal-form .contacts-add-form button[type="submit"] {
+	flex: 1 1 100%;
+	border-radius: var(--radius-sm);
 }
 
 /* VISUAL.md v2 (пользователь): "юзай css grid на всю катушку, все эти

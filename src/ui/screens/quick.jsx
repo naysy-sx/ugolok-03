@@ -29,7 +29,7 @@ function bootstrapRelayUrl() {
 	return readBootstrapEndpoints().relayUrl || BUILD_DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777";
 }
 // Редизайн интерфейса, "область контента" — сворачивание в панель сайдбара
-// (app.jsx's ActiveRoomSummary), тот же принцип, что mediaSession (media.js):
+// (QuickConnectRow, nav-groups.jsx), тот же принцип, что mediaSession (media.js):
 // лёгкое зеркало самого нужного (название+число участников) в сигнал
 // модульного уровня, чтобы читать его СНАРУЖИ Quick без размонтирования
 // компонента — размонтирование закрыло бы сессию (см. cleanup-эффект ниже,

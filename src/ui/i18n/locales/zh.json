@@ -146,8 +146,8 @@
 		"emptyBody": "列表里还没有人。看看「发现」——那里有愿意认识新朋友的人。",
 		"emptyAction": "打开发现",
 		"favoritesHeading": "Favorites",
-		"peopleGroupHeading": "People",
-		"peopleGroupTitle": "All people, groups and requests",
+		"peopleGroupHeading": "联系人",
+		"peopleGroupTitle": "所有联系人、群组和请求",
 		"myChannelsGroupHeading": "My channels",
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
@@ -158,7 +158,9 @@
 		"switchToLightTheme": "切换到浅色主题",
 		"switchToDarkTheme": "切换到深色主题",
 		"quickConnect": "Quick Connect",
-		"quickConnectHint": "conversation without an account"
+		"quickConnectHint": "conversation without an account",
+		"quickConnectActiveHint": "已最小化 — 点击返回",
+		"serviceUnavailable": "服务不可用"
 	},
 	"unlock": {
 		"checking": "正在检查…",
@@ -579,7 +581,9 @@
 	},
 	"contacts": {
 		"openChatAria": "与 {{name}} 开始聊天",
-		"addContactLabel": "添加联系人（npub 或十六进制密钥）",
+		"addContactHeading": "新联系人",
+		"addContactPlaceholder": "npub 或十六进制密钥",
+		"sendRequestButton": "发送请求",
 		"groupsHeading": "分组",
 		"allGroupsLabel": "所有分组",
 		"renameGroupLabel": "新的分组名称",

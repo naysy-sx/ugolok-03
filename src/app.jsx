@@ -1,5 +1,4 @@
 import { useState, useEffect } from "preact/hooks";
-import { signal } from "@preact/signals";
 import Quick from "./ui/screens/quick.jsx";
 import Diagnostics from "./ui/screens/diagnostics.jsx";
 import Placeholder from "./ui/screens/placeholder.jsx";
@@ -16,7 +15,7 @@ import Today from "./ui/screens/today.jsx";
 import Files from "./ui/screens/files.jsx";
 import Help from "./ui/screens/help.jsx";
 import Search from "./ui/screens/search.jsx";
-import { currentUser, dbKeySig, privKeySig, onLock } from "./ui/signals/auth.js";
+import { currentUser, dbKeySig, privKeySig, onLock, lock } from "./ui/signals/auth.js";
 import { publish, ensureConnected } from "./ui/signals/transport.js";
 import { startPlayerBridge } from "./domain/files/player-bridge.js";
 import { loadUiSettings, saveUiSettings } from "./domain/settings/ui-settings.js";
@@ -39,25 +38,10 @@ import SyncProgressBar from "./ui/components/sync-progress-bar.jsx";
 import { NOTIFICATION_SOUND_DATA_URI } from "./domain/notifications/sound-asset.js";
 import AccountCard from "./ui/components/account-card.jsx";
 import NavGroups from "./ui/components/nav-groups.jsx";
-import ConnectionStatusPanel from "./ui/components/connection-status.jsx";
-import ActiveRoomSummary from "./ui/components/active-room-summary.jsx";
+import ServicesStatusPanel from "./ui/components/services-status-panel.jsx";
 import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
-import IconGlobe from "./ui/icons/globe.jsx";
-import IconPersonAdd from "./ui/icons/person-add.jsx";
-
-// ROOMS-SPEC.md §1.4 — "Быстрая связь" (Rooms) — отдельная ветка ВЕРХНЕГО
-// уровня, НЕ внутри MainShell (иначе гостевые if внутри общей оболочки дают
-// тот же класс расползающихся правок, что owner-scoping доставался четырьмя
-// заходами, см. ROOMS-SPEC). Сигнал модульного уровня, не useState внутри
-// MainShell — доступен App() снаружи MainShell для переключения ветки.
-export const roomsScreenActive = signal(false);
-// Редизайн интерфейса, "область контента" (пользователь) — "Быстрая связь"
-// теперь модальным окном ПОВЕРХ MainShell вместо полноэкранной замены, со
-// сворачиванием в активную сводку сайдбара (тот же принцип, что media-mini-bar
-// у видео/музыки) — но ТОЛЬКО когда есть куда сворачивать (залогинен, есть
-// MainShell/сайдбар); гостевой вход unlock.jsx's temp-chat — свой независимый
-// Quick, этого сигнала не касается.
-export const roomsMinimized = signal(false);
+import IconExit from "./ui/icons/exit.jsx";
+import { roomsScreenActive, roomsMinimized } from "./ui/signals/rooms.js";
 
 onLock(() => {
 	roomsScreenActive.value = false;
@@ -102,8 +86,8 @@ function MainShell() {
 	// ensureConnected идемпотентен (см. transport.js — де-дуп по
 	// connectedForPubkey/connectPromise), поэтому безопасно вызвать его ещё
 	// раз здесь и ещё раз с каждого экрана ниже — повторные вызовы не
-	// пересоздают соединение. Ошибка — best-effort: ConnectionStatusPanel
-	// уже отражает connState реактивно, отдельный экран покажет её сам,
+	// пересоздают соединение. Ошибка — best-effort: ServicesStatusPanel уже
+	// отражает состояние сервисов реактивно, отдельный экран покажет её сам,
 	// если попытается что-то запросить без соединения.
 	useEffect(() => {
 		ensureConnected(ownerPubkey, privKey, dbKey).catch(() => {});
@@ -235,8 +219,7 @@ function MainShell() {
 			{/* Угол сверху-справа — бургер адаптива (пользователь: "весь sidebar
 			    прятать в бургер-кнопку справа вверху"). Переключатель темы отсюда
 			    убран (пользователь) — переехал в сайдбар отдельной панелью
-			    (ThemeStatusPanel), над ConnectionStatusPanel, тот же визуальный
-			    язык. */}
+			    (ThemeStatusPanel), над низом панели, тот же визуальный язык. */}
 			<div class="top-corner-actions row" style={{ "--gap": "var(--space-2xs)" }}>
 				<button
 					type="button"
@@ -285,64 +268,19 @@ function MainShell() {
 					/>
 				</div>
 				<NavGroups unreadJournalCount={unreadJournalCount} />
-				{/* ROOMS-SPEC.md §1.4 — вход в отдельную верхнеуровневую ветку (см.
-				    App() ниже), не переключение activeId: "Быстрая связь" не является
-				    вкладкой MainShell, у неё своя, независимая от аккаунта, identity.
-				    "Выйти" сюда больше не дублируется — уже есть в identity-меню.
-				    .pane__body (NavGroups) — grow, сам толкает этот блок к низу
-				    прокручиваемой колонки, margin-auto больше не нужен. */}
+				{/* Пользователь: "Добавить контакт" и "Быстрая связь" здесь были не на
+				    месте — обе переехали внутрь NavGroups (список группы "Контакты" и
+				    строка над "Знакомства" соответственно, item 1/7). Низ панели
+				    (item 8) — вместо опустевшего места теперь компактная сводка
+				    скорости трёх сервисов и ссылка "Выйти" (убрана из identity-меню,
+				    account-card.jsx, — то же действие, не дублировать). .pane__body
+				    (NavGroups) — grow, сам толкает этот блок к низу прокручиваемой
+				    колонки, margin-auto не нужен. */}
 				<div class="pane__bottom stack" style={{ "--gap": "var(--space-2xs)" }}>
-					{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — "Добавить контакт"
-					    вместо "+" в строке поиска (убран этапом 1): ведёт СРАЗУ на поле
-					    ввода ключа, не на экран, где надо ещё раз нажать кнопку (та же
-					    ошибка, что была у "Написать" — бесполезность под другой
-					    надписью). goTo напрямую, не selectNavItem — тому не передать
-					    focus, но setSidebarOpen(false) всё равно нужен (мобильная
-					    панель закрывается по любому переходу на экран, ТЗ-1 §4.2). */}
-					<button
-						type="button"
-						class="act act--primary"
-						onClick={() => {
-							goTo({ kind: "people", focus: "add" });
-							setSidebarOpen(false);
-						}}
-					>
-						<IconPersonAdd /> {t("shell.addContact")}
+					<ServicesStatusPanel />
+					<button type="button" class="act sidebar-logout-link" onClick={lock}>
+						<IconExit /> {t("shell.logout")}
 					</button>
-					{/* Редизайн интерфейса, "область контента" — комната открыта (не
-					    обязательно свёрнута: пока развёрнута, сайдбар всё равно скрыт
-					    под .rooms-overlay, но React/Preact продолжает его рендерить)
-					    → активная сводка вместо статичной кнопки-входа, тот же принцип,
-					    что .call-bar (CallOverlay). */}
-					{roomsScreenActive.value ? (
-						<ActiveRoomSummary
-							onExpand={() => {
-								roomsMinimized.value = false;
-								setSidebarOpen(false); // "Быстрая связь" вне place — эффект выше её не ловит
-							}}
-						/>
-					) : (
-						<button
-							type="button"
-							class="quick bar"
-							style={{ "--gap": "var(--space-xs)", "--align": "center" }}
-							onClick={() => {
-								roomsScreenActive.value = true;
-								roomsMinimized.value = false;
-								setSidebarOpen(false); // см. комментарий в onExpand выше
-							}}
-						>
-							<IconGlobe aria-hidden="true" />
-							<span class="stack" style={{ "--gap": "0" }}>
-								{t("shell.quickConnect")}
-								<small>{t("shell.quickConnectHint")}</small>
-							</span>
-						</button>
-					)}
-					{/* Пользователь (item 4) — статус соединения ПОСТОЯННО виден под
-					    главным меню, на любом экране, не только там, где раньше был
-					    ad-hoc "Соединение: ..." (contacts.jsx/chat.jsx — убраны). */}
-					<ConnectionStatusPanel />
 				</div>
 			</aside>
 			<div class="main-content grow">
@@ -381,8 +319,9 @@ export default function App() {
 
 	// Редизайн интерфейса, "область контента" — залогинен + комната открыта:
 	// MainShell остаётся смонтирован ПОД оверлеем (не заменяется), сворачивание —
-	// просто CSS у RoomsOverlay (см. её комментарий), сайдбар покажет
-	// ActiveRoomSummary вместо статичной кнопки, пока roomsScreenActive.
+	// просто CSS у RoomsOverlay (см. её комментарий), сайдбар покажет активную
+	// сводку вместо строки-приглашения (QuickConnectRow, nav-groups.jsx), пока
+	// roomsScreenActive.
 	if (user && roomsScreenActive.value) {
 		return (
 			<>

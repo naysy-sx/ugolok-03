@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
-import { place, openChat } from "../signals/place.js";
+import { openChat } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconPencil from "../icons/pencil.jsx";
@@ -12,8 +12,8 @@ import IconGear from "../icons/gear.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
 import IconPlus from "../icons/plus.jsx";
-import IconPersonAdd from "../icons/person-add.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
+import AddContactForm from "../components/add-contact-form.jsx";
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import {
 	contacts,
@@ -122,8 +122,6 @@ export default function Contacts() {
 	const dbKey = dbKeySig.value;
 
 	const [connectionError, setConnectionError] = useState("");
-	const [npubInput, setNpubInput] = useState("");
-	const [addError, setAddError] = useState("");
 	const [newGroupName, setNewGroupName] = useState("");
 	const [groupError, setGroupError] = useState("");
 	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
@@ -156,22 +154,6 @@ export default function Contacts() {
 			.catch((e) => setConnectionError(errorMessage(e)));
 	}, [ownerPubkey]);
 
-	// ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — "Добавить контакт" (низ
-	// панели, app.jsx) ведёт СЮДА с place.focus==="add": ключевое требование
-	// ТЗ — привести человека сразу к полю ввода, а не на экран, где надо
-	// нажать ещё одну кнопку (та же ошибка, что была у "Написать"). Без
-	// модального <dialog> (в проекте его нет нигде, ради одной кнопки вводить
-	// фокус-ловушку не стоит) — просто фокус+скролл на уже существующее поле.
-	// Зависимость — только place.value.focus, не весь place.value: смена
-	// kind без смены focus (напр. с "add" на что-то ещё внутри "people")
-	// перезапускать эффект не должна.
-	useEffect(() => {
-		if (place.value.focus !== "add") return;
-		const input = document.getElementById("add-contact-input");
-		input?.focus();
-		input?.scrollIntoView({ block: "nearest" });
-	}, [place.value.focus]);
-
 	// F-CT-04, этап 49 — сигналы (contacts/incomingRequests/outgoingRequests/
 	// rejectedByMe) теперь реактивны САМИ ПО СЕБЕ (EMIT из contact-runtime.js на
 	// каждый переход состояния peer'а) — отдельный "messagingActivity"-триггер
@@ -191,32 +173,6 @@ export default function Contacts() {
 			refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 		}
 	}, [contacts.value, incomingRequests.value, outgoingRequests.value, rejectedByMe.value]);
-
-	// busy сериализует действия этого экрана намеренно — найдено адверсарной фазой:
-	// два быстрых клика подряд (напр. "Добавить" дважды с разными контактами) читают
-	// contacts.value ДО того, как первое действие успевает его обновить — второе
-	// добавление тихо теряется (lost update). Простое отключение кнопок на время
-	// одного in-flight действия полностью устраняет гонку для UI, управляемого кликом.
-	async function handleAddContact(e) {
-		e.preventDefault();
-		if (busyRef.current) return;
-		busyRef.current = true;
-		setAddError("");
-		setBusy(true);
-		try {
-			// Находка 1 (CONTRACTS.md, этап 27) — теперь единая точка для ОБОИХ путей
-			// отправки заявки ("Добавить контакт" здесь И "Обзор", discovery.jsx, этап 49):
-			// адресат больше НЕ добавляется оптимистично — увидит заявку во "Входящих"
-			// и решит сам (это и убрало найденную дублирующуюся запись бага).
-			await sendContactRequestAction(npubInput, "");
-			setNpubInput("");
-		} catch (err) {
-			setAddError(errorMessage(err));
-		} finally {
-			busyRef.current = false;
-			setBusy(false);
-		}
-	}
 
 	async function handleAcceptContactRequest(peerPubkey) {
 		if (busyRef.current) return;
@@ -313,29 +269,7 @@ export default function Contacts() {
 					</p>
 				)}
 
-				<form class="row contacts-add-form" style={{ "--gap": "0", "--align": "stretch" }} onSubmit={handleAddContact}>
-					<div class="row grow contact-add-field" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<IconPersonAdd aria-hidden="true" />
-						<label class="visually-hidden" for="add-contact-input">
-							{t("contacts.addContactLabel")}
-						</label>
-						<input
-							id="add-contact-input"
-							type="text"
-							placeholder={t("contacts.addContactLabel")}
-							value={npubInput}
-							onInput={(e) => setNpubInput(e.currentTarget.value)}
-						/>
-					</div>
-					<button type="submit" disabled={busy}>
-						{t("common.add")}
-					</button>
-				</form>
-				{addError && (
-					<p role="alert" style={{ color: "var(--bad)" }}>
-						{addError}
-					</p>
-				)}
+				<AddContactForm />
 			</div>
 
 			<div class="contacts-layout">

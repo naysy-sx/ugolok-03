@@ -146,8 +146,8 @@
 		"emptyBody": "リストに誰もいません。「出会い」を覗いてみましょう — そこには知り合いたい人たちがいます。",
 		"emptyAction": "出会いを開く",
 		"favoritesHeading": "Favorites",
-		"peopleGroupHeading": "People",
-		"peopleGroupTitle": "All people, groups and requests",
+		"peopleGroupHeading": "連絡先",
+		"peopleGroupTitle": "すべての連絡先、グループ、リクエスト",
 		"myChannelsGroupHeading": "My channels",
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
@@ -158,7 +158,9 @@
 		"switchToLightTheme": "ライトテーマに切り替える",
 		"switchToDarkTheme": "ダークテーマに切り替える",
 		"quickConnect": "Quick Connect",
-		"quickConnectHint": "conversation without an account"
+		"quickConnectHint": "conversation without an account",
+		"quickConnectActiveHint": "最小化中 — タップして戻る",
+		"serviceUnavailable": "サービス利用不可"
 	},
 	"unlock": {
 		"checking": "確認中…",
@@ -579,7 +581,9 @@
 	},
 	"contacts": {
 		"openChatAria": "{{name}} とのチャットを開く",
-		"addContactLabel": "連絡先を追加（npub または16進鍵）",
+		"addContactHeading": "新しい連絡先",
+		"addContactPlaceholder": "npub または16進鍵",
+		"sendRequestButton": "リクエストを送信",
 		"groupsHeading": "グループ",
 		"allGroupsLabel": "すべてのグループ",
 		"renameGroupLabel": "新しいグループ名",

@@ -4,6 +4,8 @@ import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
 import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, incomingRequests } from "../signals/contacts.js";
 import { place, openChat, openChannel, openSearch, closeSearch, goTo } from "../signals/place.js";
+import { roomsScreenActive, roomsMinimized } from "../signals/rooms.js";
+import { activeRoomSummary } from "../screens/quick.jsx";
 import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/channel.js";
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
@@ -19,12 +21,15 @@ import {
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
+import AddContactModal from "./add-contact-modal.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconCross from "../icons/cross.jsx";
 import IconStar from "../icons/star.jsx";
 import IconStarFill from "../icons/star-fill.jsx";
 import IconCompass from "../icons/compass.jsx";
 import IconEye from "../icons/eye.jsx";
+import IconGlobe from "../icons/globe.jsx";
+import IconPersonAdd from "../icons/person-add.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -106,6 +111,9 @@ export default function NavGroups({ unreadJournalCount }) {
 	const searchId = useId();
 
 	const [query, setQuery] = useState("");
+	// Пользователь (item 2) — "Добавить контакт" открывает модальное окно с
+	// формой заявки, а не отдельный экран (см. AddContactModal).
+	const [showAddContact, setShowAddContact] = useState(false);
 
 	// Вход на экран поиска — поле показывает зафиксированный запрос
 	// (SEARCH-SPEC.md §3.7). Дальше это снова обычное локальное поле:
@@ -249,10 +257,18 @@ export default function NavGroups({ unreadJournalCount }) {
 			    через .sidebar теперь заходит СЮДА, не в сам <aside>, см. app.jsx). */}
 			<div class="pane__body stack scroller grow" style={{ "--gap": "var(--space-s)" }}>
 				{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4 — "Знакомства" постоянной
-				    первой строкой, до всех групп (включая "Избранное"): раздел живёт
+				    строкой до всех групп (включая "Избранное"): раздел живёт
 				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
-				    компас, не лупа (та уже занята полем поиска строкой выше). */}
+				    компас, не лупа (та уже занята полем поиска строкой выше).
+				    Пользователь (item 7) — "Быстрая связь" переехала сюда же, ПЕРЕД
+				    "Знакомства" (низ панели, app.jsx, больше не годился — там ей "не
+				    место", те же слова, что про "Добавить контакт"): тот же смысл
+				    (познакомиться/поговорить с кем-то новым), тот же визуальный язык
+				    (.discover-row/.discover), просто отдельная строка, не общий пункт —
+				    "Быстрая связь" не место (place.js), это независимая модалка
+				    (roomsScreenActive, rooms.js). */}
 				<ul class="streams stack" style={{ "--gap": "1px" }}>
+					<QuickConnectRow />
 					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}${ownDiscoveryVisible.value ? " discover-row--visible" : ""}`}>
 						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
 							<span class="discover-mark">
@@ -330,6 +346,16 @@ export default function NavGroups({ unreadJournalCount }) {
 						)}
 						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
 					</button>
+					{/* Пользователь (item 1) — "Добавить контакт" переехала сюда, между
+					    заголовком группы и самим списком (было — низ панели, app.jsx,
+					    рядом с "Быстрая связь": "им там не место", те же слова
+					    пользователя). Ссылка, не кнопка (item 1: "убрать кнопочный вид") —
+					    ведёт СРАЗУ на модалку с формой заявки (item 2), не на этот же
+					    экран ещё раз (кнопка заголовка bar выше и так уже сюда ведёт). */}
+					<button type="button" class="add-contact-link" onClick={() => setShowAddContact(true)}>
+						<IconPersonAdd aria-hidden="true" />
+						<span>{t("shell.addContact")}</span>
+					</button>
 					<ul class="streams stack" style={{ "--gap": "1px" }}>
 						{visiblePeople.map((pk) => (
 							<StreamItem
@@ -394,6 +420,54 @@ export default function NavGroups({ unreadJournalCount }) {
 				</div>
 				</>
 			</div>
+			{showAddContact && <AddContactModal onClose={() => setShowAddContact(false)} />}
 		</>
+	);
+}
+
+// Пользователь (item 7) — тот же визуальный язык, что "Знакомства" (.discover-row/
+// .discover/.discover-mark), но собственное состояние: не активна (обычный вход,
+// как и раньше — "разговор без учётной записи") ИЛИ активна (комната открыта, окно
+// развёрнуто ИЛИ свёрнуто — свёрнутое состояние должно оставаться ЗАМЕТНО отличным
+// от простоя, иначе пользователь забывает, что где-то идёт разговор, см. .quick-live-dot,
+// уже использованный тем же языком внутри самой Quick). roomsScreenActive/roomsMinimized —
+// rooms.js, не app.jsx (циклический импорт), activeRoomSummary — quick.jsx (имя
+// комнаты/число участников, если сессия уже идёт).
+function QuickConnectRow() {
+	const active = roomsScreenActive.value;
+	const minimized = roomsMinimized.value;
+	const summary = activeRoomSummary.value;
+
+	function handleClick() {
+		if (active) {
+			roomsMinimized.value = false;
+		} else {
+			roomsScreenActive.value = true;
+			roomsMinimized.value = false;
+		}
+	}
+
+	// Подпись — "свёрнуто, нажмите чтобы вернуться" ТОЛЬКО пока модалка правда
+	// свёрнута (minimized): активна-но-развёрнута (пользователь только что
+	// открыл, комнату ещё не создал/не вошёл) — тот же текст был бы неверен,
+	// самой модалки и так видно на экране. Число участников (summary) —
+	// приоритетнее в обоих случаях, если сессия уже идёт.
+	let hint;
+	if (summary) hint = t("quick.room.participantsTitle", { count: summary.count });
+	else if (active && minimized) hint = t("shell.quickConnectActiveHint");
+	else hint = t("shell.quickConnectHint");
+
+	return (
+		<li class={`discover-row${active ? " discover-row--active" : ""}`}>
+			<button type="button" class="discover" onClick={handleClick}>
+				<span class="discover-mark">
+					{active ? <span class="quick-live-dot" aria-hidden="true" /> : <IconGlobe aria-hidden="true" />}
+				</span>
+				<span class="stack grow" style={{ "--gap": "0" }}>
+					<span class="stream__name">{summary?.name || t("shell.quickConnect")}</span>
+					<small>{hint}</small>
+				</span>
+			</button>
+		</li>
 	);
 }

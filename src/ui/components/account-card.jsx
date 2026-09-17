@@ -1,6 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
-import { currentUser, lock } from "../signals/auth.js";
+import { currentUser } from "../signals/auth.js";
 import { profileActivity } from "../signals/profile.js";
 import { connState, synced } from "../signals/transport.js";
 import { getProfile } from "../../core/crypto/keystore.js";
@@ -17,7 +17,6 @@ import IconLockClosed from "../icons/lock-closed.jsx";
 import IconFolder from "../icons/folder.jsx";
 import IconHelpCircle from "../icons/help-circle.jsx";
 import IconActivityLog from "../icons/activity-log.jsx";
-import IconExit from "../icons/exit.jsx";
 import IconCopy from "../icons/copy.jsx";
 import IconChevronDown from "../icons/chevron-down.jsx";
 import IconBell from "../icons/bell.jsx";
@@ -144,13 +143,6 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 						<li>
 							<button type="button" onClick={onOpenHelp}>
 								<IconHelpCircle /> {t("sidebarCard.menuHelp")}
-							</button>
-						</li>
-					</ul>
-					<ul class="stack" style={{ "--gap": "1px" }}>
-						<li>
-							<button type="button" onClick={lock}>
-								<IconExit /> {t("shell.logout")}
 							</button>
 						</li>
 					</ul>

@@ -146,8 +146,8 @@
 		"emptyBody": "Listende kimse yok. “Keşfet”e göz at — orada tanışmaya açık kişiler var.",
 		"emptyAction": "Keşfet'i aç",
 		"favoritesHeading": "Favorites",
-		"peopleGroupHeading": "People",
-		"peopleGroupTitle": "All people, groups and requests",
+		"peopleGroupHeading": "Kişiler",
+		"peopleGroupTitle": "Tüm kişiler, gruplar ve istekler",
 		"myChannelsGroupHeading": "My channels",
 		"myChannelsGroupTitle": "All my channels",
 		"subscriptionsGroupHeading": "Subscriptions",
@@ -158,7 +158,9 @@
 		"switchToLightTheme": "Açık temaya geç",
 		"switchToDarkTheme": "Koyu temaya geç",
 		"quickConnect": "Quick Connect",
-		"quickConnectHint": "conversation without an account"
+		"quickConnectHint": "conversation without an account",
+		"quickConnectActiveHint": "Küçültüldü — dönmek için dokunun",
+		"serviceUnavailable": "hizmet kullanılamıyor"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",
@@ -579,7 +581,9 @@
 	},
 	"contacts": {
 		"openChatAria": "{{name}} ile sohbeti aç",
-		"addContactLabel": "Kişi ekle (npub veya onaltılık anahtar)",
+		"addContactHeading": "Yeni kişi",
+		"addContactPlaceholder": "npub veya onaltılık anahtar",
+		"sendRequestButton": "İstek gönder",
 		"groupsHeading": "Gruplar",
 		"allGroupsLabel": "Tüm gruplar",
 		"renameGroupLabel": "Yeni grup adı",
