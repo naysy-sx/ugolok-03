@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "Henüz hiçbir şeye abone değilsiniz.",
 			"availableAriaLabel": "Kullanılabilir kanallar",
 			"availableTitle": "Kullanılabilir ({{count}})",
-			"availableEmpty": "Kullanılabilir kanal yok."
+			"availableEmpty": "Kullanılabilir kanal yok.",
+			"subscribeRequestSentToast": "Abonelik isteği gönderildi"
 		}
 	},
 	"search": {

@@ -19,6 +19,7 @@ import ChannelAvatarThumb from "../components/channel-avatar-thumb.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
 import { t, currentLocale, errorMessage } from "../signals/i18n.js";
+import { pushToast } from "../signals/toasts.js";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -268,6 +269,7 @@ function ChannelsList() {
 		setError("");
 		try {
 			await subscribeToChannelAction(ownerPubkey, privKey, channelId, publish);
+			pushToast({ title: t("channels.list.subscribeRequestSentToast") });
 		} catch (err) {
 			setError(errorMessage(err));
 		} finally {

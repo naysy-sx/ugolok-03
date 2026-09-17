@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "Je bent nog nergens op geabonneerd.",
 			"availableAriaLabel": "Beschikbare kanalen",
 			"availableTitle": "Beschikbaar ({{count}})",
-			"availableEmpty": "Geen beschikbare kanalen."
+			"availableEmpty": "Geen beschikbare kanalen.",
+			"subscribeRequestSentToast": "Abonnementsverzoek verstuurd"
 		}
 	},
 	"search": {

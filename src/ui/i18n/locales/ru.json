@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "Вы пока ни на что не подписаны.",
 			"availableAriaLabel": "Доступные каналы",
 			"availableTitle": "Доступные ({{count}})",
-			"availableEmpty": "Нет доступных каналов."
+			"availableEmpty": "Нет доступных каналов.",
+			"subscribeRequestSentToast": "Запрос на подписку отправлен"
 		}
 	},
 	"search": {

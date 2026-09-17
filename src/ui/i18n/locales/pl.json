@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "Nie masz jeszcze żadnych subskrypcji.",
 			"availableAriaLabel": "Dostępne kanały",
 			"availableTitle": "Dostępne ({{count}})",
-			"availableEmpty": "Brak dostępnych kanałów."
+			"availableEmpty": "Brak dostępnych kanałów.",
+			"subscribeRequestSentToast": "Prośba o subskrypcję wysłana"
 		}
 	},
 	"search": {

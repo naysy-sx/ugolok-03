@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "まだ何も登録していません。",
 			"availableAriaLabel": "利用可能なチャンネル",
 			"availableTitle": "利用可能（{{count}}）",
-			"availableEmpty": "利用可能なチャンネルはありません。"
+			"availableEmpty": "利用可能なチャンネルはありません。",
+			"subscribeRequestSentToast": "登録リクエストを送信しました"
 		}
 	},
 	"search": {

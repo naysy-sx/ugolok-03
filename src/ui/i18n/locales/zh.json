@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "您还没有订阅任何内容。",
 			"availableAriaLabel": "可用频道",
 			"availableTitle": "可用（{{count}}）",
-			"availableEmpty": "没有可用的频道。"
+			"availableEmpty": "没有可用的频道。",
+			"subscribeRequestSentToast": "订阅请求已发送"
 		}
 	},
 	"search": {

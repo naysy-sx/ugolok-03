@@ -454,7 +454,8 @@
 			"subscriptionsEmpty": "Vous n'êtes encore abonné à rien.",
 			"availableAriaLabel": "Chaînes disponibles",
 			"availableTitle": "Disponibles ({{count}})",
-			"availableEmpty": "Aucune chaîne disponible."
+			"availableEmpty": "Aucune chaîne disponible.",
+			"subscribeRequestSentToast": "Demande d'abonnement envoyée"
 		}
 	},
 	"search": {
