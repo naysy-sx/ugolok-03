@@ -5896,10 +5896,16 @@ button[type="button"].media-mini-bar-btn {
 /* Пользователь (item 26): без обёртки .card, поле ввода + кнопка визуально
    слиты в один элемент — общая рамка, скругление обрезано на стыке, зазора
    между ними нет, шрифт поля крупнее (это главное действие раздела).
-   Подпись (item 5, довесок) вернулась видимой НАД полем — .contact-add-label
-   ниже — вместо чисто placeholder-варианта: та же форма теперь живёт ещё и
-   в модальном окне (add-contact-modal.jsx), где подсказать назначение поля
-   одним лишь placeholder недостаточно. */
+   Подпись (item 5, довесок) вернулась видимой — .contact-add-label ниже —
+   вместо чисто placeholder-варианта: та же форма теперь живёт ещё и в
+   модальном окне (add-contact-modal.jsx), где подсказать назначение поля
+   одним лишь placeholder недостаточно.
+   Живая проверка пользователя — подпись раньше была ВНУТРИ .contact-add-field
+   (третий уровень стека с иконкой+инпутом), из-за чего центрировалась
+   посередине серой рамки вперемешку с иконкой. Теперь label — родной брат
+   .contacts-add-form (см. JSX), а не потомок поля: стоит НАД всей группой
+   поле+кнопка, в раскладке поля не участвует и на её размер не влияет. */
+/* .stack родителя (--gap в JSX) — единственный источник зазора label/form. */
 /* .row (раскладка, --gap:0 + alignItems:stretch) уже в JSX. */
 /* .row/.grow (раскладка) уже в JSX — здесь только оформление/сайзинг. */
 .row.contacts-add-form {
@@ -5918,6 +5924,7 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--muted);
 }
 .contact-add-label {
+	display: block;
 	font-size: var(--step--2);
 	color: var(--muted);
 	line-height: 1.2;
@@ -5927,6 +5934,7 @@ button[type="button"].media-mini-bar-btn {
 	min-width: 0;
 	border: none;
 	background: none;
+	color: var(--fg);
 	font-size: var(--step-1);
 	padding-block: var(--space-2xs);
 }

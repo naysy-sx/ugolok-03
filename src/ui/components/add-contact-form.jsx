@@ -46,27 +46,26 @@ export default function AddContactForm({ autoFocus, onSent }) {
 	}
 
 	return (
-		<>
+		<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+			{/* Пользователь (item 5) — раньше подпись поля жила только в aria
+			    (visually-hidden), placeholder дублировал её текстом. Теперь подпись
+			    видна НАД всей группой поле+кнопка (не внутри серого поля — она не
+			    часть его раскладки/бордера, только заголовок над ним), а placeholder —
+			    короче и не повторяет заголовок кнопки. */}
+			<label class="contact-add-label" for={inputId}>
+				{t("contacts.addContactHeading")}
+			</label>
 			<form class="row contacts-add-form" style={{ "--gap": "0", "--align": "stretch" }} onSubmit={handleAddContact}>
 				<div class="row grow contact-add-field" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 					<IconPersonAdd aria-hidden="true" />
-					<div class="stack grow" style={{ "--gap": "2px" }}>
-						{/* Пользователь (item 5) — раньше подпись поля жила только в
-						    aria (visually-hidden), placeholder дублировал её текстом.
-						    Теперь подпись видна над полем, а placeholder — короче и не
-						    повторяет заголовок кнопки. */}
-						<label class="contact-add-label" for={inputId}>
-							{t("contacts.addContactHeading")}
-						</label>
-						<input
-							id={inputId}
-							ref={inputRef}
-							type="text"
-							placeholder={t("contacts.addContactPlaceholder")}
-							value={npubInput}
-							onInput={(e) => setNpubInput(e.currentTarget.value)}
-						/>
-					</div>
+					<input
+						id={inputId}
+						ref={inputRef}
+						type="text"
+						placeholder={t("contacts.addContactPlaceholder")}
+						value={npubInput}
+						onInput={(e) => setNpubInput(e.currentTarget.value)}
+					/>
 				</div>
 				<button type="submit" disabled={busy}>
 					{t("contacts.sendRequestButton")}
@@ -77,6 +76,6 @@ export default function AddContactForm({ autoFocus, onSent }) {
 					{addError}
 				</p>
 			)}
-		</>
+		</div>
 	);
 }
