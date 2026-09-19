@@ -6,6 +6,7 @@ import { buildGroupEvent, addMember, removeMember, renameGroup } from "../../dom
 import { foldGroup, buildAddressableDeletionEvent } from "../../domain/events/handlers.js";
 import { createContactRuntime } from "../../domain/contacts/contact-runtime.js";
 import { pickLatest, isNewerVersion } from "../../core/sync/lww.js";
+import { safePictureUrl } from "../../domain/media/url-guard.js";
 import { revokeIfNoLongerVisible, grantIfNewlyVisible } from "../../domain/content/channel-visibility.js";
 import { fromEncryptedRow, toEncryptedRow } from "../../core/store/encrypted-table.js";
 import { CONTACT_PROFILES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
@@ -273,7 +274,7 @@ export async function hydrateProfilesFromCache(ownerPubkey, dbKey) {
 	const next = { ...profiles.value };
 	for (const row of rows) {
 		const decrypted = fromEncryptedRow(row, dbKey);
-		next[decrypted.contactPubkey] = { name: decrypted.name, about: decrypted.about, picture: decrypted.picture, createdAt: decrypted.createdAt, id: decrypted.id };
+		next[decrypted.contactPubkey] = { name: decrypted.name, about: decrypted.about, picture: safePictureUrl(decrypted.picture), createdAt: decrypted.createdAt, id: decrypted.id };
 	}
 	profiles.value = next;
 }

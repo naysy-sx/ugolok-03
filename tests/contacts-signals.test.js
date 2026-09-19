@@ -568,13 +568,25 @@ test("applyProfileUpdates: возвращает true, если что-то из�
 
 test("hydrateProfilesFromCache: гидрирует profiles.value из персиста, без сети", async () => {
 	await db.table("contactProfiles").put(
-		toEncryptedRow({ ownerPubkey: OWNER_PUBKEY, contactPubkey: ALICE_STUB_PK, name: "Алиса", about: "био", picture: "https://x.png", createdAt: 1000, id: "ev1" }, CONTACT_PROFILES_PLAINTEXT_FIELDS, DB_KEY),
+		toEncryptedRow({ ownerPubkey: OWNER_PUBKEY, contactPubkey: ALICE_STUB_PK, name: "Алиса", about: "био", picture: "data:image/png;base64,AAAA", createdAt: 1000, id: "ev1" }, CONTACT_PROFILES_PLAINTEXT_FIELDS, DB_KEY),
 	);
 	profiles.value = {};
 	await hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY);
 	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
 	assert.equal(profiles.value[ALICE_STUB_PK].about, "био");
-	assert.equal(profiles.value[ALICE_STUB_PK].picture, "https://x.png");
+	assert.equal(profiles.value[ALICE_STUB_PK].picture, "data:image/png;base64,AAAA");
+});
+
+// AUDIT-EGOROD: профиль, сохранённый ДО фильтра источников, не должен снова
+// превратиться в запрос к чужому серверу при холодном старте из кэша.
+test("hydrateProfilesFromCache: сохранённый ранее picture с чужого хоста отбрасывается", async () => {
+	await db.table("contactProfiles").put(
+		toEncryptedRow({ ownerPubkey: OWNER_PUBKEY, contactPubkey: ALICE_STUB_PK, name: "Алиса", about: "", picture: "https://tracker.example/p.png", createdAt: 1000, id: "ev1" }, CONTACT_PROFILES_PLAINTEXT_FIELDS, DB_KEY),
+	);
+	profiles.value = {};
+	await hydrateProfilesFromCache(OWNER_PUBKEY, DB_KEY);
+	assert.equal(profiles.value[ALICE_STUB_PK].picture, "");
+	assert.equal(profiles.value[ALICE_STUB_PK].name, "Алиса");
 });
 
 test("hydrateProfilesFromCache: пустой персист -> profiles.value не трогается, не бросает", async () => {

@@ -5,6 +5,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { publishDurably } from "../../core/store/outbox.js";
+import { registerTrustedImageOrigins } from "../media/url-guard.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
@@ -154,7 +155,9 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 		});
 	}
 	const { ownerPubkey: _drop, ...settings } = row;
-	return mergeWithDefaults(settings);
+	const merged = mergeWithDefaults(settings);
+	registerTrustedImageOrigins(merged.blossomUrls);
+	return merged;
 }
 
 // Этап 61 — прямая проверка "есть ли локальная запись НА ЭТОМ устройстве".
@@ -173,6 +176,7 @@ export async function hasLocalUiSettings(ownerPubkey) {
 // шифра, не путать.
 export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish) {
 	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
+	registerTrustedImageOrigins(settings.blossomUrls);
 	try {
 		// AUDIT-EGOROD A2: через постоянный outbox — настройки (включая список relay)
 		// доедут до других устройств и после оффлайна/закрытой вкладки.

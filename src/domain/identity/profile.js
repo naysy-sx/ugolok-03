@@ -1,3 +1,4 @@
+import { safePictureUrl } from '../media/url-guard.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { sign } from '../../core/crypto/sign.js';
@@ -107,6 +108,8 @@ export function accumulateProfileVersions(results, event) {
     return; // повреждённый/не-JSON профиль чужого клиента — пропустить, не ронять батч
   }
   const incoming = { ...parsed, createdAt: event.created_at, id: event.id };
+  // Чужой профиль: picture идёт в <img src> — только Blossom/data:/blob: (url-guard.js).
+  if (incoming.picture !== undefined) incoming.picture = safePictureUrl(incoming.picture);
   const existing = results.get(event.pubkey);
   if (!existing || isNewerVersion(incoming, existing)) {
     results.set(event.pubkey, incoming);
