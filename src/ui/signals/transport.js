@@ -69,6 +69,7 @@ import { rebuildChannelReadStatus, isChannelContentRead } from "../../domain/con
 import { notifyAndLog } from "../../domain/notifications/journal.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import { drain } from "../../core/store/outbox.js";
+import { scrubLegacyMetadata } from "../../domain/messaging/metadata-scrub.js";
 import { transitionMessage } from "../../domain/messaging/machine.js";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
 import { ensureProfilePublished, hydrateOwnProfile, applyLiveOwnProfileEvent } from "../../domain/identity/profile.js";
@@ -577,6 +578,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// read-tracking каналов (kind 30074), не личных чатов.
 	await rebuildChannelReadStatus(pubkeyHex, privKey);
 	logSync(t("syncLog.readMarksDone"));
+	// AUDIT-EGOROD J1: одноразовая зачистка старых событий с открытыми d-тегами
+	// (pubkey собеседника / id канала). Не блокирует вход, не бросает; флаг в
+	// keystore ставится только после успешной публикации всего набора.
+	scrubLegacyMetadata(pubkeyHex, privKey, dbKey, publish).catch(() => {});
 
 	// Этап 71 (пользователь, живьём — несколько окон/браузеров одной identity):
 	// hydrateOwnProfile обязана отработать ДО ensureProfilePublished ниже — иначе

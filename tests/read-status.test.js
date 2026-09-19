@@ -12,7 +12,10 @@ import {
 	getUnreadCount,
 	rebuildReadStatus,
 	isChatContentRead,
+	readStatusDTag,
 } from "../src/domain/messaging/read-status.js";
+import { sign } from "../src/core/crypto/sign.js";
+import { encrypt as nip44Encrypt } from "../src/core/crypto/nip44.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const BOB_PRIV = new Uint8Array(32).fill(2);
@@ -36,12 +39,33 @@ after(() => {
 	db.close();
 });
 
-test("buildReadStatusEvent/parseReadStatusEvent: round-trip, d-tag = chatId в открытом виде", () => {
+test("buildReadStatusEvent/parseReadStatusEvent: round-trip, d-tag непрозрачен (AUDIT-EGOROD J1)", () => {
 	const event = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 });
 	assert.equal(event.kind, 30070);
-	assert.deepEqual(event.tags, [["d", BOB_PUB]]);
+	const dTag = event.tags[0][1];
+	assert.equal(event.tags.length, 1);
+	assert.notEqual(dTag, BOB_PUB, "pubkey собеседника не должен лежать в открытом теге");
+	assert.ok(!JSON.stringify(event).includes(BOB_PUB), "и нигде в открытой части события");
+	assert.equal(dTag, readStatusDTag(ALICE_PRIV, BOB_PUB), "тег стабилен — замена (replaceable) на relay работает");
+	assert.notEqual(dTag, readStatusDTag(ALICE_PRIV, "c".repeat(64)), "разные чаты — разные теги");
 	const parsed = parseReadStatusEvent(event, ALICE_PRIV);
-	assert.deepEqual(parsed, { chatId: BOB_PUB, lastReadLamportTs: 5 });
+	assert.deepEqual(parsed, { chatId: BOB_PUB, lastReadLamportTs: 5, legacy: false });
+});
+
+test("parseReadStatusEvent: старое событие (chatId только в d-теге) читается", () => {
+	const ownPub = ALICE_PUB;
+	const legacy = sign({ kind: 30070, tags: [["d", BOB_PUB]], content: nip44Encrypt(JSON.stringify({ lastReadLamportTs: 7 }), ALICE_PRIV, ownPub), created_at: 1000 }, ALICE_PRIV);
+	assert.deepEqual(parseReadStatusEvent(legacy, ALICE_PRIV), { chatId: BOB_PUB, lastReadLamportTs: 7, legacy: true });
+});
+
+test("rebuildReadStatus: старые и новые события одного чата конкурируют по LWW, чужие чаты не смешиваются", async () => {
+	const legacy = sign({ kind: 30070, tags: [["d", BOB_PUB]], content: nip44Encrypt(JSON.stringify({ lastReadLamportTs: 9 }), ALICE_PRIV, ALICE_PUB), created_at: 1000 }, ALICE_PRIV);
+	const fresh = buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 12 }, 2000);
+	const other = buildReadStatusEvent(ALICE_PRIV, { chatId: "d".repeat(64), lastReadLamportTs: 3 }, 1500);
+	await db.table("events").bulkAdd([legacy, fresh, other].map((e) => ({ ...e, flatTags: [] })));
+	await rebuildReadStatus(ALICE_PUB, ALICE_PRIV, DB_KEY);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 12);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, "d".repeat(64)])).lastReadLamportTs, 3);
 });
 
 test("foldReadStatus: сохраняет lastReadLamportTs в chatSyncState", async () => {
@@ -116,10 +140,22 @@ test("markChatAsRead: публикует событие и применяет fo
 	assert.equal(in1.status, "read");
 });
 
-test("markChatAsRead: сбой публикации -> throw, не применяет fold локально", async () => {
+// AUDIT-EGOROD C2: локальный курсор применяется ДО публикации — оффлайн бейдж гаснет.
+test("markChatAsRead: сбой публикации -> throw, но локальный курсор применён", async () => {
 	const publish = async () => ({ ok: false, reason: "отклонено" });
 	await assert.rejects(() => markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 1, publish), /отклонено/);
-	assert.equal(await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB]), undefined);
+	assert.equal((await db.table("chatSyncState").get([ALICE_PUB, BOB_PUB])).lastReadLamportTs, 1);
+});
+
+test("markChatAsRead: курсор не продвинулся -> ничего не публикуется (открытие чата — не запись)", async () => {
+	let published = 0;
+	const publish = async () => (published++, { ok: true });
+	await markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 5, publish);
+	await markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 5, publish);
+	await markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 3, publish);
+	assert.equal(published, 1, "публикация только когда курсор реально вырос");
+	await markChatAsRead(ALICE_PUB, ALICE_PRIV, DB_KEY, BOB_PUB, 6, publish);
+	assert.equal(published, 2);
 });
 
 test("getUnreadCount: считает входящие сообщения после lastReadLamportTs", async () => {

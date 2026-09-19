@@ -6,14 +6,22 @@ import { db } from "../../core/store/database.js";
 import { fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { computeReachableCommentIds } from "./comments.js";
+import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
 
 export const CHANNEL_READ_STATUS_KIND = 30074;
 
+// AUDIT-EGOROD J1: d-тег с id канала открытым текстом показывал relay, какие
+// (в том числе приватные) каналы читает пользователь. Теперь d непрозрачен,
+// channelId едет внутри шифртекста (старые события читаются по d-тегу).
+export function channelReadStatusDTag(privKey, channelId) {
+	return opaqueDTag(deriveMasterSecret(privKey), CHANNEL_READ_STATUS_KIND, channelId);
+}
+
 export function buildChannelReadStatusEvent(privKey, { channelId, lastReadAt }, createdAt = Math.floor(Date.now() / 1000)) {
 	const ownPubHex = bytesToHex(getPublicKey(privKey));
-	const plaintext = JSON.stringify({ lastReadAt });
+	const plaintext = JSON.stringify({ lastReadAt, channelId });
 	const content = nip44Encrypt(plaintext, privKey, ownPubHex);
-	const eventTemplate = { kind: CHANNEL_READ_STATUS_KIND, tags: [["d", channelId]], content, created_at: createdAt };
+	const eventTemplate = { kind: CHANNEL_READ_STATUS_KIND, tags: [["d", channelReadStatusDTag(privKey, channelId)]], content, created_at: createdAt };
 	return sign(eventTemplate, privKey);
 }
 
@@ -21,8 +29,8 @@ export function parseChannelReadStatusEvent(event, privKey) {
 	const ownPubHex = bytesToHex(getPublicKey(privKey));
 	const plaintext = nip44Decrypt(event.content, privKey, event.pubkey || ownPubHex);
 	const parsed = JSON.parse(plaintext);
-	const channelId = event.tags.find((tag) => tag[0] === "d")[1];
-	return { channelId, lastReadAt: parsed.lastReadAt };
+	const channelId = parsed.channelId ?? event.tags.find((tag) => tag[0] === "d")[1];
+	return { channelId, lastReadAt: parsed.lastReadAt, legacy: parsed.channelId === undefined };
 }
 
 // ownerPubkey берётся из event.pubkey — read-status ВСЕГДА self-signed ("я прочитал"),
@@ -80,11 +88,18 @@ export async function rebuildChannelReadStatus(ownerPubkey, privKey) {
 	const events = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, CHANNEL_READ_STATUS_KIND]).toArray();
 	const byChannelId = new Map();
 	for (const event of events) {
-		const dTag = event.tags.find((t) => t[0] === "d")?.[1];
-		if (!dTag) continue;
-		const group = byChannelId.get(dTag) ?? [];
+		// настоящий channelId — из шифртекста (d-тег теперь непрозрачен, а у старых
+		// событий совпадает с channelId): старые и новые события одного канала
+		// конкурируют между собой по LWW в одной группе.
+		let channelId;
+		try {
+			channelId = parseChannelReadStatusEvent(event, privKey).channelId;
+		} catch {
+			continue;
+		}
+		const group = byChannelId.get(channelId) ?? [];
 		group.push(event);
-		byChannelId.set(dTag, group);
+		byChannelId.set(channelId, group);
 	}
 	for (const group of byChannelId.values()) {
 		await foldChannelReadStatus(pickLatest(group), privKey);

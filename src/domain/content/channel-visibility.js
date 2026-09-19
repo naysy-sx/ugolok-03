@@ -5,7 +5,7 @@ import { getPublicKey } from "../../core/crypto/keys.js";
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/crypto/nip44.js";
 import { generateChannelKey, encryptChannelContent } from "../../core/crypto/channel-key.js";
 import { buildAllowlistEvent } from "../../core/crypto/comment-allowlist.js";
-import { deriveMasterSecret } from "../../core/crypto/derivation.js";
+import { deriveMasterSecret, opaqueDTag } from "../../core/crypto/derivation.js";
 import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import { sendViewGrant, buildChannelUnviewRumor, buildChannelOldHistoryUnavailableRumor } from "./channel-access.js";
 import { deleteChannelLocally } from "./moderation.js";
@@ -45,18 +45,24 @@ export async function findChannelIdsByVisibilityGroup(ownerPubkey, groupId) {
 // переиздаётся при любом изменении состава, не патчится по одному участнику.
 export const CHANNEL_VISIBILITY_SYNC_KIND = 30065;
 
-function buildChannelVisibilitySyncEvent(privKey, channelId, groupIds, createdAt = Math.floor(Date.now() / 1000)) {
-	const ownPubHex = bytesToHex(getPublicKey(privKey));
-	const content = nip44Encrypt(JSON.stringify({ groupIds }), privKey, ownPubHex);
-	return sign({ kind: CHANNEL_VISIBILITY_SYNC_KIND, tags: [["d", channelId]], content, created_at: createdAt }, privKey);
+// AUDIT-EGOROD J1: d-тег — opaqueDTag, channelId внутри шифртекста (иначе relay
+// видел бы, у каких каналов владельца настроены группы видимости).
+export function channelVisibilitySyncDTag(privKey, channelId) {
+	return opaqueDTag(deriveMasterSecret(privKey), CHANNEL_VISIBILITY_SYNC_KIND, channelId);
 }
 
-function parseChannelVisibilitySyncEvent(event, privKey) {
+function buildChannelVisibilitySyncEvent(privKey, channelId, groupIds, createdAt = Math.floor(Date.now() / 1000)) {
+	const ownPubHex = bytesToHex(getPublicKey(privKey));
+	const content = nip44Encrypt(JSON.stringify({ groupIds, channelId }), privKey, ownPubHex);
+	return sign({ kind: CHANNEL_VISIBILITY_SYNC_KIND, tags: [["d", channelVisibilitySyncDTag(privKey, channelId)]], content, created_at: createdAt }, privKey);
+}
+
+export function parseChannelVisibilitySyncEvent(event, privKey) {
 	const ownPubHex = bytesToHex(getPublicKey(privKey));
 	const plaintext = nip44Decrypt(event.content, privKey, event.pubkey || ownPubHex);
 	const parsed = JSON.parse(plaintext);
-	const channelId = event.tags.find((t) => t[0] === "d")[1];
-	return { channelId, groupIds: parsed.groupIds };
+	const channelId = parsed.channelId ?? event.tags.find((t) => t[0] === "d")[1];
+	return { channelId, groupIds: parsed.groupIds, legacy: parsed.channelId === undefined };
 }
 
 // Delete-all + bulkAdd для [ownerPubkey, channelId] — зеркально foldGroup
@@ -77,8 +83,12 @@ export async function rebuildChannelVisibilityGroups(ownerPubkey, privKey, dbKey
 	const syncEvents = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, CHANNEL_VISIBILITY_SYNC_KIND]).toArray();
 	const latestByDTag = new Map();
 	for (const ev of syncEvents) {
-		const dTag = ev.tags.find((t) => t[0] === "d")?.[1];
-		if (!dTag) continue;
+		let dTag;
+		try {
+			dTag = parseChannelVisibilitySyncEvent(ev, privKey).channelId;
+		} catch {
+			continue;
+		}
 		const existing = latestByDTag.get(dTag);
 		latestByDTag.set(dTag, existing ? lwwWinner(existing, ev) : ev);
 	}

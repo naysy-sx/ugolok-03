@@ -16,6 +16,7 @@ import {
 	getChannelUnreadCount,
 	getChannelChatUnreadCount,
 	isChannelContentRead,
+	channelReadStatusDTag,
 } from "../src/domain/content/channel-read-status.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(21);
@@ -45,12 +46,15 @@ test("CHANNEL_READ_STATUS_KIND: 30074", () => {
 	assert.equal(CHANNEL_READ_STATUS_KIND, 30074);
 });
 
-test("buildChannelReadStatusEvent/parseChannelReadStatusEvent: round-trip, d-tag = channelId в открытом виде", () => {
+test("buildChannelReadStatusEvent/parseChannelReadStatusEvent: round-trip, d-tag непрозрачен (AUDIT-EGOROD J1)", () => {
 	const event = buildChannelReadStatusEvent(ALICE_PRIV, { channelId: CHAN_A, lastReadAt: 1000 });
 	assert.equal(event.kind, 30074);
-	assert.deepEqual(event.tags, [["d", CHAN_A]]);
+	assert.equal(event.tags.length, 1);
+	assert.notEqual(event.tags[0][1], CHAN_A);
+	assert.ok(!JSON.stringify(event).includes(CHAN_A), "id канала не в открытой части события");
+	assert.equal(event.tags[0][1], channelReadStatusDTag(ALICE_PRIV, CHAN_A), "тег стабилен для замены на relay");
 	const parsed = parseChannelReadStatusEvent(event, ALICE_PRIV);
-	assert.deepEqual(parsed, { channelId: CHAN_A, lastReadAt: 1000 });
+	assert.deepEqual(parsed, { channelId: CHAN_A, lastReadAt: 1000, legacy: false });
 });
 
 test("foldChannelReadStatus: сохраняет lastReadAt в channelSyncState (голый put, без шифрования)", async () => {
