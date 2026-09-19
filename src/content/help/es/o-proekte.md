@@ -20,6 +20,9 @@
 - Canales — algo entre una publicación en redes sociales y un chat grupal, con control flexible sobre quién puede leer y comentar.
 - Archivos y adjuntos — con su propio almacenamiento cifrado.
 - Llamadas de voz.
+- **Conexión rápida**: una sala temporal para texto y voz, sin registro ni intercambio previo de claves; desaparece cuando todos salen.
+- Búsqueda en todo el historial (contactos, mensajes, publicaciones y comentarios); los adjuntos de un chat se pueden filtrar por tipo (imágenes, vídeo, audio, documentos).
+- Interfaz en 12 idiomas, con color de acento y escala a elegir.
 - La posibilidad de montar tu propio servidor y controlar por completo tus datos.
 
 Ugolok es un proyecto vivo que sigue cambiando y creciendo. Esta ayuda crece junto con él.

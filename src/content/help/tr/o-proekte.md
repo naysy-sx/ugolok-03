@@ -20,6 +20,9 @@
 - Kanallar — bir sosyal medya gönderisi ile grup sohbeti arasında bir şey; kimin okuyup yorum yapabileceği esnek şekilde ayarlanabilir.
 - Dosyalar ve ekler — kendi şifreli depolamasıyla.
 - Sesli aramalar.
+- **Hızlı bağlantı** — kayıt olmadan ve önceden anahtar değişimi yapmadan metin ve ses için geçici oda; herkes çıkınca kaybolur.
+- Tüm geçmişte arama — kişiler, mesajlar, gönderiler ve yorumlar; bir sohbetteki ekler türe göre süzülebilir (görseller, video, ses, belgeler).
+- 12 dilde arayüz; vurgu rengi ve ölçek seçilebilir.
 - Kendi sunucunuzu çalıştırma ve verileriniz üzerinde tam kontrol sahibi olma imkânı.
 
 Ugolok, değişmeye ve büyümeye devam eden canlı bir projedir. Bu yardım bölümü de onunla birlikte büyüyor.

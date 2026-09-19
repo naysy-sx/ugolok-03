@@ -2,7 +2,7 @@
 
 Ugolok to projekt o otwartym kodzie źródłowym. Każdy chętny może zbadać, jak dokładnie wszystko działa w środku, i upewnić się, że deklarowane szyfrowanie i model prywatności są zaimplementowane tak, jak opisano, a nie tylko zadeklarowane słownie.
 
-Repozytorium projektu: **git.ugolok.tech**
+Repozytorium projektu: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
 
 Z czasem pojawią się tam również:
 

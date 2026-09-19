@@ -20,6 +20,9 @@
 - Canali — qualcosa a metà tra un post sui social e una chat di gruppo, con controllo flessibile su chi può leggere e commentare.
 - File e allegati — con un proprio archivio cifrato.
 - Chiamate vocali.
+- **Connessione rapida** — una stanza temporanea per testo e voce, senza registrazione e senza scambio preventivo di chiavi; scompare quando tutti escono.
+- Ricerca in tutta la cronologia — contatti, messaggi, post e commenti; gli allegati di una chat si possono filtrare per tipo (immagini, video, audio, documenti).
+- Interfaccia in 12 lingue, con scelta del colore d'accento e della scala.
 - La possibilità di avviare un proprio server e avere il pieno controllo dei propri dati.
 
 Ugolok è un progetto vivo, che continua a cambiare e crescere. Questa guida cresce insieme a lui.

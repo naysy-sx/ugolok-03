@@ -20,6 +20,9 @@
 - Canais — algo entre uma publicação de rede social e um chat em grupo, com controle flexível sobre quem pode ler e comentar.
 - Arquivos e anexos — com armazenamento próprio criptografado.
 - Chamadas de voz.
+- **Conexão rápida** — uma sala temporária para texto e voz, sem cadastro e sem troca prévia de chaves; desaparece quando todos saem.
+- Busca em todo o histórico — contatos, mensagens, publicações e comentários; os anexos de uma conversa podem ser filtrados por tipo (imagens, vídeo, áudio, documentos).
+- Interface em 12 idiomas, com escolha da cor de destaque e da escala.
 - A possibilidade de manter seu próprio servidor e ter controle total sobre seus dados.
 
 Ugolok é um projeto vivo que continua mudando e crescendo. Esta ajuda cresce junto com ele.

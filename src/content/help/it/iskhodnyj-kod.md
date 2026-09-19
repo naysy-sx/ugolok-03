@@ -2,7 +2,7 @@
 
 Ugolok è un progetto open source. Chiunque può studiare esattamente come funziona tutto al suo interno, e verificare che la cifratura e il modello di privacy dichiarati siano implementati come descritto, e non solo affermati a parole.
 
-Repository del progetto: **git.ugolok.tech**
+Repository del progetto: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
 
 Con il tempo, lì compariranno anche:
 

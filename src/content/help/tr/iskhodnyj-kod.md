@@ -2,7 +2,7 @@
 
 Ugolok açık kaynaklı bir projedir. İsteyen herkes içeride her şeyin tam olarak nasıl çalıştığını inceleyebilir ve iddia edilen şifreleme ile gizlilik modelinin sadece sözde değil, açıklandığı gibi uygulandığından emin olabilir.
 
-Proje deposu: **git.ugolok.tech**
+Proje deposu: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
 
 Zamanla orada şunlar da yer alacak:
 

@@ -28,4 +28,4 @@ Ugolok jest zbudowany na **Nostr** — otwartym protokole do zdecentralizowanej 
 
 ## Otwarty kod źródłowy
 
-Kod projektu jest otwarty i będzie w pełni dostępny do zapoznania się dla każdego chętnego na **git.ugolok.tech**.
+Kod projektu jest otwarty i będzie w pełni dostępny do zapoznania się dla każdego chętnego na **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**.
