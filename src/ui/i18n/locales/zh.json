@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Blossom 服务器返回了被篡改的分片 {{chunkIndex}}（摘要不匹配）",
 		"blossomManifestTampered": "Blossom 服务器返回了被篡改的清单（摘要不匹配）",
+		"manifestTooNew": "此文件由更新版本的应用创建。请刷新页面以更新。",
 		"blossomRejectedFile": "Blossom 服务器拒绝了该文件{{detail}}",
 		"cannotAddSelf": "不能给自己发送联系人请求",
 		"cannotDeleteOthersMessage": "无法删除他人的消息",

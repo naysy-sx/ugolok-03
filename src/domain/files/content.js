@@ -82,6 +82,7 @@ export async function putStream(
 	// сырой ключ — сырой fileKey возвращается ОТДЕЛЬНЫМ полем, персистентность/
 	// обёртка ключа (share.js, И6) вне ответственности content.js.
 	const manifest = {
+		v: MANIFEST_VERSION,
 		size,
 		chunkSize,
 		chunks: chunkDigests,
@@ -95,6 +96,21 @@ export async function putStream(
 	await uploadBlob(serverUrl, manifestBytes, manifestDigest, privateKey, uploadOptions);
 
 	return { manifest, manifestDigest, fileKey, size };
+}
+
+// AUDIT-EGOROD E4. Версия формата манифеста. Раньше поля версии не было, и любое
+// изменение геометрии чанков (MEDIA-PERF-TZ-6 §7) пришлось бы распознавать «по
+// отсутствию полей». Теперь новые манифесты несут v, а старые (без v) читаются
+// как версия 1 навсегда — файлы, уже лежащие на Blossom, не перезаливаются.
+// Клиент, встретивший версию новее известной, отказывает ЧЕСТНО (иначе битое
+// видео вместо ошибки — «ошибка на единицу не ловится глазами»).
+export const MANIFEST_VERSION = 1;
+
+export function assertManifestSupported(manifest) {
+	const v = manifest.v ?? 1;
+	if (!Number.isInteger(v) || v > MANIFEST_VERSION) {
+		throw new DomainError("Манифест создан более новой версией приложения", "errors.manifestTooNew");
+	}
 }
 
 const MANIFEST_CACHE_MAX = 64;
@@ -117,6 +133,7 @@ export async function getManifest(manifestDigest, { serverUrl, fetchImpl, priori
 		throw new DomainError("Blossom-сервер вернул подменённый манифест (digest не совпадает)", "errors.blossomManifestTampered");
 	}
 	const manifest = JSON.parse(new TextDecoder().decode(bytes));
+	assertManifestSupported(manifest);
 	if (manifestCache.size >= MANIFEST_CACHE_MAX) {
 		const oldest = manifestCache.keys().next().value;
 		manifestCache.delete(oldest);

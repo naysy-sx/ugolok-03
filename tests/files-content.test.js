@@ -369,3 +369,34 @@ test("getRange поверх getChunk: результат ИДЕНТИЧЕН пр
 	const manual = new Uint8Array([...chunk0, ...chunk1]).subarray(200, 400);
 	assert.deepEqual(viaRange, manual);
 });
+
+// AUDIT-EGOROD E4: версия манифеста.
+test("манифест несёт v; манифест БЕЗ v (залитый до версионирования) читается как версия 1", async () => {
+	const { fetchImpl, store } = makeFakeBlossom();
+	const original = new Uint8Array(700).fill(7);
+	const { manifest, manifestDigest, fileKey } = await putStream(original, { name: "v.bin", mime: "application/octet-stream", chunkSize: 256, serverUrl: "https://blossom.test", privateKey: ALICE_PRIV, fetchImpl });
+	assert.equal(manifest.v, 1);
+	// «старый» манифест: тот же, но без поля v (другой digest — кладём как отдельный blob)
+	const { v: _drop, ...legacy } = manifest;
+	const legacyBytes = new TextEncoder().encode(JSON.stringify(legacy));
+	const { sha256 } = await import("@noble/hashes/sha2.js");
+	const { bytesToHex } = await import("@noble/hashes/utils.js");
+	const legacyDigest = bytesToHex(sha256(legacyBytes));
+	store.set(legacyDigest, legacyBytes);
+	clearManifestCache();
+	const got = await getManifest(legacyDigest, { serverUrl: "https://blossom.test", fetchImpl });
+	assert.equal(got.v, undefined);
+	assert.deepEqual(await getRange(got, fileKey, 0, 700, { serverUrl: "https://blossom.test", fetchImpl }), original);
+	void manifestDigest;
+});
+
+test("манифест новее известной версии -> честный отказ, а не битое чтение", async () => {
+	const { fetchImpl, store } = makeFakeBlossom();
+	const future = new TextEncoder().encode(JSON.stringify({ v: 2, size: 1, chunkSize: 1, chunks: ["x"], blobSha256: "y", mime: "a/b", name: "n", keyId: "k" }));
+	const { sha256 } = await import("@noble/hashes/sha2.js");
+	const { bytesToHex } = await import("@noble/hashes/utils.js");
+	const digest = bytesToHex(sha256(future));
+	store.set(digest, future);
+	clearManifestCache();
+	await assert.rejects(() => getManifest(digest, { serverUrl: "https://blossom.test", fetchImpl }), (e) => e.key === "errors.manifestTooNew");
+});

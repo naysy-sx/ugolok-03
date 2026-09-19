@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Serwer Blossom zwrócił zmanipulowany fragment {{chunkIndex}} (digest się nie zgadza)",
 		"blossomManifestTampered": "Serwer Blossom zwrócił zmanipulowany manifest (digest się nie zgadza)",
+		"manifestTooNew": "Ten plik został utworzony w nowszej wersji aplikacji. Odśwież stronę, aby zaktualizować.",
 		"blossomRejectedFile": "Serwer Blossom odrzucił plik{{detail}}",
 		"cannotAddSelf": "nie możesz wysłać zaproszenia do samego siebie",
 		"cannotDeleteOthersMessage": "nie możesz usunąć cudzej wiadomości",

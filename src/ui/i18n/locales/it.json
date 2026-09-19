@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Il server Blossom ha restituito un chunk {{chunkIndex}} manomesso (il digest non corrisponde)",
 		"blossomManifestTampered": "Il server Blossom ha restituito un manifest manomesso (il digest non corrisponde)",
+		"manifestTooNew": "Questo file è stato creato da una versione più recente dell'app. Ricarica la pagina per aggiornare.",
 		"blossomRejectedFile": "Il server Blossom ha rifiutato il file{{detail}}",
 		"cannotAddSelf": "non puoi inviare una richiesta di contatto a te stesso",
 		"cannotDeleteOthersMessage": "non puoi eliminare il messaggio di qualcun altro",

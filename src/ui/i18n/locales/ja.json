@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Blossomサーバーが改ざんされたチャンク{{chunkIndex}}を返しました（ダイジェストが一致しません）",
 		"blossomManifestTampered": "Blossomサーバーが改ざんされたマニフェストを返しました（ダイジェストが一致しません）",
+		"manifestTooNew": "このファイルはより新しいバージョンのアプリで作成されました。ページを再読み込みして更新してください。",
 		"blossomRejectedFile": "Blossomサーバーがファイルを拒否しました{{detail}}",
 		"cannotAddSelf": "自分自身に連絡先リクエストは送れません",
 		"cannotDeleteOthersMessage": "他人のメッセージは削除できません",

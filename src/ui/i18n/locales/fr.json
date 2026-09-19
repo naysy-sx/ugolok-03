@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Le serveur Blossom a renvoyé un fragment {{chunkIndex}} altéré (le digest ne correspond pas)",
 		"blossomManifestTampered": "Le serveur Blossom a renvoyé un manifeste altéré (le digest ne correspond pas)",
+		"manifestTooNew": "Ce fichier a été créé par une version plus récente de l'application. Rechargez la page pour mettre à jour.",
 		"blossomRejectedFile": "Le serveur Blossom a rejeté le fichier{{detail}}",
 		"cannotAddSelf": "vous ne pouvez pas vous envoyer une demande de contact à vous-même",
 		"cannotDeleteOthersMessage": "vous ne pouvez pas supprimer le message de quelqu'un d'autre",

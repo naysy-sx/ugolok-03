@@ -1132,6 +1132,7 @@
 	"errors": {
 		"blossomChunkTampered": "Blossom server returned a tampered chunk {{chunkIndex}} (digest mismatch)",
 		"blossomManifestTampered": "Blossom server returned a tampered manifest (digest mismatch)",
+		"manifestTooNew": "This file was created by a newer version of the app. Reload the page to update.",
 		"blossomRejectedFile": "Blossom server rejected the file{{detail}}",
 		"cannotAddSelf": "you can't send a contact request to yourself",
 		"cannotDeleteOthersMessage": "you can't delete someone else's message",
