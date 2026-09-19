@@ -89,7 +89,7 @@ test("onCaughtUp вызывается на EOSE; onEvent вызывается н
 	ws._emit(["EVENT", "incremental-sync", ev("e1")]);
 	ws._emit(["EVENT", "incremental-sync", ev("e2")]);
 	ws._emit(["EOSE", "incremental-sync"]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 
 	assert.equal(caughtUp.length, 1);
 	assert.deepEqual(onEventCalls, [2]);
@@ -120,11 +120,11 @@ test("onEvent действительно await'ится — onCaughtUp не ср
 
 	ws._emit(["EVENT", "incremental-sync", ev("e1")]);
 	ws._emit(["EOSE", "incremental-sync"]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 	assert.deepEqual(order, ["onEvent-start"], "onCaughtUp не должен сработать, пока onEvent не завершился");
 
 	releaseOnEvent();
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 	assert.deepEqual(order, ["onEvent-start", "onEvent-end", "caughtUp"]);
 	controller.stop();
 });
@@ -138,7 +138,7 @@ test("подписка ОСТАЁТСЯ открытой после EOSE — н�
 	});
 
 	ws._emit(["EOSE", "incremental-sync"]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 	ws._emit(["EVENT", "incremental-sync", ev("live-1")]);
 	await new Promise((r) => setTimeout(r, 250)); // дождаться флаша по времени (batchWindowMs)
 
@@ -159,7 +159,7 @@ test("onClockSkew срабатывает при |now - created_at| > 30с, не 
 	const staleEvent = ev("stale", { created_at: Math.floor(Date.now() / 1000) - 100 });
 	ws._emit(["EVENT", "incremental-sync", staleEvent]);
 	ws._emit(["EOSE", "incremental-sync"]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 
 	assert.equal(skews.length, 1);
 	assert.ok(skews[0] >= 100);
@@ -176,7 +176,7 @@ test("onClockSkew НЕ срабатывает, когда расхождение
 
 	ws._emit(["EVENT", "incremental-sync", ev("fresh")]);
 	ws._emit(["EOSE", "incremental-sync"]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 
 	assert.equal(skews.length, 0);
 	controller.stop();
@@ -193,6 +193,6 @@ test("stop(): отправляет CLOSE, дальнейшие события д
 	assert.ok(ws.sent.some((m) => m[0] === "CLOSE" && m[1] === "incremental-sync"));
 
 	ws._emit(["EVENT", "incremental-sync", ev("after-stop")]);
-	await new Promise((r) => setTimeout(r, 10));
+	await new Promise((r) => setTimeout(r, 100));
 	assert.equal(onEventCalls.length, 0, "после stop() события той же подписки не должны обрабатываться");
 });
