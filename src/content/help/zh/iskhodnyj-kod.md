@@ -2,7 +2,7 @@
 
 Ugolok 是一个开源项目。任何人都可以研究其内部究竟是如何运作的，并确认所宣称的加密和隐私模型确实是按照描述实现的，而不仅仅是口头上的承诺。
 
-项目仓库：**git.ugolok.tech**
+项目仓库：**[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
 
 随着时间推移，那里还将出现：
 

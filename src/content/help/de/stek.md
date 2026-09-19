@@ -28,4 +28,4 @@ Ugolok basiert auf **Nostr** — einem offenen Protokoll für dezentrale Nachric
 
 ## Offener Quellcode
 
-Der Code des Projekts ist offen und wird für jeden vollständig einsehbar sein unter **git.ugolok.tech**.
+Der Code des Projekts ist offen und wird für jeden vollständig einsehbar sein unter **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**.

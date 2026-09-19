@@ -20,6 +20,9 @@
 - Kanäle — etwas zwischen einem Social-Media-Beitrag und einem Gruppenchat, mit flexibler Steuerung, wer lesen und kommentieren darf.
 - Dateien und Anhänge — mit einem eigenen verschlüsselten Speicher.
 - Sprachanrufe.
+- **Schnellverbindung** – ein temporärer Raum für Text und Sprache ohne Registrierung und ohne vorherigen Schlüsselaustausch; er verschwindet, sobald alle gegangen sind.
+- Suche im gesamten Verlauf – Kontakte, Nachrichten, Beiträge und Kommentare; Anhänge in einem Chat lassen sich nach Typ filtern (Bilder, Video, Audio, Dokumente).
+- Oberfläche in 12 Sprachen, mit wählbarer Akzentfarbe und Skalierung.
 - Die Möglichkeit, einen eigenen Server zu betreiben und die volle Kontrolle über die eigenen Daten zu haben.
 
 Ugolok ist ein lebendiges Projekt, das sich ständig weiterentwickelt. Diese Hilfe wächst mit ihm mit.

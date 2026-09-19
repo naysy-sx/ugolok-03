@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
+import { pickIndicator } from "../../../domain/media/progress-indicator.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 

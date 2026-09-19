@@ -2,7 +2,7 @@
 
 Ugolok is an open-source project. Anyone can study exactly how everything works inside, and confirm that the claimed encryption and privacy model are implemented the way they're described, not just claimed in words.
 
-Project repository: **git.ugolok.tech**
+Project repository: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
 
 Over time, it will also host:
 

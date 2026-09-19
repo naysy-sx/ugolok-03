@@ -20,6 +20,9 @@
 - Channels — something between a social media post and a group chat, with flexible control over who can read and comment.
 - Files and attachments — with their own encrypted storage.
 - Voice calls.
+- **Quick connect** — a temporary room for text and voice with no sign-up and no key exchange in advance; it disappears when everyone leaves.
+- Search across your whole history — contacts, messages, posts and comments; attachments in a chat can be filtered by type (images, video, audio, documents).
+- Interface in 12 languages, with a choice of accent color and scale.
 - The ability to run your own server and fully control your own data.
 
 Ugolok is a living project that keeps changing and growing. This help section grows along with it.

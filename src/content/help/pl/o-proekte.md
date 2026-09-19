@@ -20,6 +20,9 @@
 - Kanały — coś pomiędzy postem w mediach społecznościowych a czatem grupowym, z elastyczną kontrolą tego, kto może czytać i komentować.
 - Pliki i załączniki — z własnym szyfrowanym magazynem.
 - Połączenia głosowe.
+- **Szybki kontakt** — tymczasowy pokój na tekst i głos bez rejestracji i bez wcześniejszej wymiany kluczy; znika, gdy wszyscy wyjdą.
+- Wyszukiwanie w całej historii — kontakty, wiadomości, posty i komentarze; załączniki w czacie można filtrować według typu (obrazy, wideo, audio, dokumenty).
+- Interfejs w 12 językach, z wyborem koloru akcentu i skali.
 - Możliwość uruchomienia własnego serwera i pełnej kontroli nad swoimi danymi.
 
 Ugolok to żywy projekt, który wciąż się zmienia i rozwija. Ta pomoc rośnie razem z nim.

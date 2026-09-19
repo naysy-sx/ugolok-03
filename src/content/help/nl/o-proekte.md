@@ -20,6 +20,9 @@
 - Kanalen — iets tussen een social-mediabericht en een groepschat, met flexibele controle over wie kan lezen en reageren.
 - Bestanden en bijlagen — met eigen versleutelde opslag.
 - Spraakoproepen.
+- **Snelle verbinding** — een tijdelijke ruimte voor tekst en spraak zonder registratie en zonder eerdere sleuteluitwisseling; verdwijnt zodra iedereen weg is.
+- Zoeken in je hele geschiedenis — contacten, berichten, posts en reacties; bijlagen in een chat kun je filteren op type (afbeeldingen, video, audio, documenten).
+- Interface in 12 talen, met keuze van accentkleur en schaal.
 - De mogelijkheid om je eigen server te draaien en volledige controle over je eigen gegevens te hebben.
 
 Ugolok is een levend project dat blijft veranderen en groeien. Deze hulp groeit mee.

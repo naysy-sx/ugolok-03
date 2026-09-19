@@ -28,4 +28,4 @@ O Ugolok é construído sobre o **Nostr** — um protocolo aberto para mensagens
 
 ## Código aberto
 
-O código do projeto é aberto e ficará totalmente disponível para qualquer pessoa estudar em **git.ugolok.tech**.
+O código do projeto é aberto e ficará totalmente disponível para qualquer pessoa estudar em **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**.
