@@ -15,6 +15,7 @@
 import { getPlaintextBytes, getPreviewUrl, getOverlayUrl, putPlaintextBytes, setPreviewUrl, setOverlayUrl } from "./plaintext-cache.js";
 import { rasterizeImagePreview, overlayTargetWidth } from "./raster-image.js";
 import { startTrace } from "./perf-trace.js";
+import { downloadPercent } from "./progress-indicator.js";
 
 // Бабл: уменьшенный растр (WebP/JPEG/PNG по формату источника). loadBytes(trace) —
 // вызывающая сторона (attachment-view.jsx/feed-item.jsx) МОЖЕТ принять trace
@@ -32,16 +33,19 @@ export async function resolveImagePreviewUrl(digest, mime, loadBytes, adapters, 
 	let bytes = getPlaintextBytes(digest);
 	let bytesCacheHit = bytes ? 1 : 0;
 	if (!bytes) {
-		onProgress?.("loading");
+		// MEDIA-PERF-TZ-6.md §8.2: onProgress получает объект {phase, percent}
+		// (тот же контракт, что media-url.js), не строку. percent — только из
+		// фактических байтов getRange (loadBytes зовёт onDownload), иначе null.
+		onProgress?.({ phase: "loading", percent: null });
 		// loadBytes(trace) — closures existant с нулём объявленных параметров
 		// (старые тесты/вызовы) молча игнорируют лишний аргумент, JS это
 		// разрешает; новые closures (attachment-view.jsx и т.д.) принимают
 		// trace и пробрасывают его в getOrDownloadMessageAttachment/getRange,
 		// чтобы net/decrypt легли В ТУ ЖЕ строку, что raster ниже.
-		bytes = await loadBytes(trace);
+		bytes = await loadBytes(trace, downloadReporter(onProgress));
 		putPlaintextBytes(digest, bytes, mime);
 	}
-	onProgress?.("preparing");
+	onProgress?.({ phase: "preparing", percent: null });
 	const rasterStart = perfNow();
 	const raster = await rasterizeImagePreview(bytes, mime, adapters);
 	trace.mark("raster", perfNow() - rasterStart);
@@ -72,11 +76,11 @@ export async function resolveImageOverlayUrl(digest, mime, loadBytes, adapters =
 	let bytes = getPlaintextBytes(digest);
 	let bytesCacheHit = bytes ? 1 : 0;
 	if (!bytes) {
-		onProgress?.("loading");
-		bytes = await loadBytes(trace);
+		onProgress?.({ phase: "loading", percent: null });
+		bytes = await loadBytes(trace, downloadReporter(onProgress));
 		putPlaintextBytes(digest, bytes, mime);
 	}
-	onProgress?.("preparing");
+	onProgress?.({ phase: "preparing", percent: null });
 
 	const rasterStart = perfNow();
 	const raster = await rasterizeImagePreview(bytes, mime, {
@@ -89,6 +93,15 @@ export async function resolveImageOverlayUrl(digest, mime, loadBytes, adapters =
 	setOverlayUrl(digest, targetWidth, raster.url);
 	trace.end({ cacheHit: bytesCacheHit, bytes: bytes.length, outBytes: raster.blobSize ?? bytes.length, targetWidth });
 	return raster;
+}
+
+// Второй аргумент loadBytes: closure передаёт его как onProgress в getRange
+// (через options-мешок), а сюда приходит {bytesDone, bytesTotal}. Closures со
+// старой сигнатурой (без второго параметра) молча его игнорируют — процента
+// у них просто не будет, волчок остаётся.
+function downloadReporter(onProgress) {
+	if (!onProgress) return undefined;
+	return (p) => onProgress({ phase: "loading", percent: downloadPercent(p) });
 }
 
 function perfNow() {

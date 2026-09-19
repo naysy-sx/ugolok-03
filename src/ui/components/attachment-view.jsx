@@ -17,6 +17,8 @@ import IconImage from "../icons/image-icon.jsx";
 import IconFolder from "../icons/folder.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 import { truncateFileName } from "./bubble-attachment-plan.js";
+import { pickIndicator } from "../../domain/media/progress-indicator.js";
+import { reservedBoxStyle } from "./attachment-box.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
@@ -68,9 +70,14 @@ export function openWithOrigin(e, attachment, onOpen) {
 // бабле продолжает идти через attachment-memory-cache.js (эта функция), fullscreen-
 // вид — через media-url.js/resourceOwner (media-overlay.jsx) — два независимых кэша
 // одной и той же картинки, сознательная избыточность этого прохода, не оптимизировано.
-export function ImageAttachment({ attachment, onOpen }) {
+// reserve — MEDIA-PERF-TZ-6.md §8.1: резервировать ли место по width/height
+// вложения. Плитки в пузыре (bubble-attachment-cluster.jsx) уже имеют
+// фиксированный aspect-ratio из CSS раскладки, им резерв не нужен (reserve=false);
+// одиночная картинка вне кластера (пост, канал, «Файлы») до этого схлопывалась
+// в строку с волчком и потом прыгала до размера картинки.
+export function ImageAttachment({ attachment, onOpen, reserve = true }) {
 	const [url, setUrl] = useState(() => getPreviewUrl(attachment.manifestDigest) ?? null);
-	const [phase, setPhase] = useState("loading");
+	const [progress, setProgress] = useState({ phase: "loading", percent: null });
 	const [error, setError] = useState("");
 	const [retryTick, setRetryTick] = useState(0);
 
@@ -84,7 +91,7 @@ export function ImageAttachment({ attachment, onOpen }) {
 		let cancelled = false;
 		setUrl(null);
 		setError("");
-		setPhase("loading");
+		setProgress({ phase: "loading", percent: null });
 
 		// MEDIA-PERF-TZ-5.md §3 — previewDigest, если есть, резолвится ОТДЕЛЬНЫМ
 		// маленьким blob'ом, оригинал (manifestDigest) в этой ветке не трогаем
@@ -110,10 +117,13 @@ export function ImageAttachment({ attachment, onOpen }) {
 					// существующий options-мешок (content-cache.js -> attachments.js
 					// -> content.js форвардят объект без изменений), net/decrypt
 					// лягут в ту же строку, что raster в image-preview.js.
-					(trace) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace }),
+					// onDownload (MEDIA-PERF-TZ-6.md §8.2) уходит в getRange как
+					// onProgress через тот же options-мешок — процент из фактических
+					// байтов, без выдумывания.
+					(trace, onDownload) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace, onProgress: onDownload }),
 					undefined,
 					(p) => {
-						if (!cancelled) setPhase(p);
+						if (!cancelled) setProgress(p);
 					},
 				);
 				if (!cancelled) setUrl(raster.url);
@@ -138,24 +148,35 @@ export function ImageAttachment({ attachment, onOpen }) {
 			</p>
 		);
 	}
+	const boxStyle = reserve ? reservedBoxStyle(attachment) : undefined;
 	if (!url) {
+		const { phase } = progress;
+		const indicator = pickIndicator(progress);
+		// Волчок — только когда процента нет (decrypting, кэш, нет манифеста).
 		const status =
-			phase === "preparing" ? t("attachment.statusPreparing") : phase === "decrypting" ? t("attachment.statusDecrypting") : t("attachment.loadingImage");
+			indicator.kind === "percent" && phase === "loading"
+				? t("attachment.statusDownloading", { percent: indicator.percent })
+				: phase === "preparing"
+					? t("attachment.statusPreparing")
+					: phase === "decrypting"
+						? t("attachment.statusDecrypting")
+						: t("attachment.loadingImage");
 		return (
-			<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center", color: "var(--muted)" }}>
-				<span class="spinner" aria-hidden="true" /> {status}
+			<p class="row" style={{ "--gap": "var(--space-s)", "--align": "center", color: "var(--muted)", ...boxStyle }}>
+				{indicator.kind !== "percent" && <span class="spinner" aria-hidden="true" />} {status}
 			</p>
 		);
 	}
-
-	return (
+	const img = (
 		<img
 			class="attachment-image"
 			src={url}
 			alt={attachment.name || ""}
 			onClick={(e) => openWithOrigin(e, attachment, onOpen)}
+			style={boxStyle ? { width: "100%", height: "100%", objectFit: "cover" } : undefined}
 		/>
 	);
+	return boxStyle ? <div style={{ ...boxStyle, display: "block" }}>{img}</div> : img;
 }
 
 // Голосовое (voice/voiceInline, F-AT-08) — БЕЗ изменений Этапом F: остаётся eager

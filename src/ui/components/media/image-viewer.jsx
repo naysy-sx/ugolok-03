@@ -26,7 +26,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 	// ВМЕСТЕ со своим digest, рендер сверяет с текущим mediaRef.digest
 	// СИНХРОННО, не дожидаясь эффекта.
 	const [state, setState] = useState(null); // { digest, url } | null
-	const [phase, setPhase] = useState("loading");
+	const [progress, setProgress] = useState({ phase: "loading", percent: null });
 	const [error, setError] = useState("");
 	const [retryTick, setRetryTick] = useState(0);
 	const url = state?.digest === mediaRef.digest ? state.url : null;
@@ -34,7 +34,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 	useEffect(() => {
 		let cancelled = false;
 		setError("");
-		setPhase("loading");
+		setProgress({ phase: "loading", percent: null });
 		acquireMediaUrl(mediaRef, {
 			serverUrl: BLOSSOM_URL,
 			// MEDIA-PERF-TZ-4.md §4 A.1 — цель растра оверлея = вьюпорт по большей
@@ -45,7 +45,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 				viewportLargerSidePx: typeof window !== "undefined" ? Math.max(window.innerWidth, window.innerHeight) : undefined,
 			},
 			onProgress: (p) => {
-				if (!cancelled) setPhase(p);
+				if (!cancelled) setProgress(p);
 			},
 		})
 			.then((handle) => {
@@ -70,8 +70,17 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		);
 	}
 	if (!url) {
+		// MEDIA-PERF-TZ-6.md §8.2: процент — только когда он известен из байтов.
+		const indicator = pickIndicator(progress);
+		const { phase } = progress;
 		const status =
-			phase === "preparing" ? t("attachment.statusPreparing") : phase === "decrypting" ? t("attachment.statusDecrypting") : t("attachment.loadingImage");
+			indicator.kind === "percent" && phase === "loading"
+				? t("attachment.statusDownloading", { percent: indicator.percent })
+				: phase === "preparing"
+					? t("attachment.statusPreparing")
+					: phase === "decrypting"
+						? t("attachment.statusDecrypting")
+						: t("attachment.loadingImage");
 		return <p style={{ color: "#fff" }}>{status}</p>;
 	}
 	return (

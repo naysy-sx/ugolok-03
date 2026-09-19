@@ -23,6 +23,7 @@ import { registerPlayerFile, unregisterPlayerFile } from "../../files/player-bri
 import { resolveImageOverlayUrl } from "../image-preview.js";
 import { putPlaintextBytes } from "../plaintext-cache.js";
 import { recordControllerCheck } from "../perf-trace.js";
+import { downloadPercent } from "../progress-indicator.js";
 import { PRIORITY } from "../../../core/transport/blossom-queue.js";
 
 const handles = new Map(); // digest -> Promise<{kind, src, url}>
@@ -84,13 +85,13 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 			const raster = await resolveImageOverlayUrl(
 				ref.digest,
 				ref.mime,
-				async (trace) => {
-					onProgress?.("decrypting");
+				async (trace, onDownload) => {
+					onProgress?.({ phase: "decrypting", percent: null });
 					// MEDIA-PERF-TZ-5.md §2 — оверлей: пользователь смотрит ПРЯМО
 					// СЕЙЧАС, приоритет выше фоновых превью, но ниже активного
 					// плеера видео/аудио.
 					const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl, priority: PRIORITY.OVERLAY });
-					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl, trace, priority: PRIORITY.OVERLAY });
+					return getRange(manifest, ref.key, 0, manifest.size, { serverUrl, fetchImpl, trace, priority: PRIORITY.OVERLAY, onProgress: onDownload });
 				},
 				rasterAdapters,
 				onProgress,
@@ -116,10 +117,7 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 				serverUrl,
 				fetchImpl,
 				priority: PRIORITY.PREVIEW,
-				onProgress: ({ bytesDone, bytesTotal }) => {
-					const percent = bytesTotal > 0 ? Math.round((bytesDone / bytesTotal) * 100) : 0;
-					onProgress?.({ phase: "preparing", percent });
-				},
+				onProgress: (p) => onProgress?.({ phase: "preparing", percent: downloadPercent(p) ?? 0 }),
 			});
 			putPlaintextBytes(ref.digest, bytes, ref.mime);
 			const url = URL.createObjectURL(new Blob([bytes], { type: ref.mime }));

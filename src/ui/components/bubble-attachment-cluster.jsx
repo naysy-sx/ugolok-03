@@ -95,7 +95,7 @@ function VideoTile({ attachment, onOpen, moreCount = 0 }) {
 function ImageTile({ attachment, onOpen, moreCount = 0 }) {
 	return (
 		<div class="bubble-tile bubble-tile--image">
-			<ImageAttachment attachment={attachment} onOpen={onOpen} />
+			<ImageAttachment attachment={attachment} onOpen={onOpen} reserve={false} />
 			{moreCount > 0 && (
 				<span class="bubble-tile-more" aria-hidden="true">
 					{t("attachment.moreCount", { count: moreCount })}
