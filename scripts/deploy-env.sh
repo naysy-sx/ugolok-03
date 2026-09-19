@@ -41,9 +41,12 @@ else
 	CADDY_MODE=full
 fi
 
+# Только СВОЙ STUN/TURN (AUDIT-EGOROD, соседняя находка): публичный STUN третьей
+# стороны отдавал бы ей IP каждого звонящего и ломает инвариант «клиент ходит
+# только в свой инстанс» (GATEWAY-TZ-1 §1); свой coturn STUN обслуживает сам.
 # Только urls — ни username, ни credential (этап 6): временные TURN-креды
 # клиент запрашивает у /api/turn-credentials в рантайме, не из сборки.
-ICE_JSON='[{"urls":"stun:ugolok.tech:3478"},{"urls":"turn:ugolok.tech:3478?transport=udp"},{"urls":"turn:ugolok.tech:3478?transport=tcp"},{"urls":"stun:stun.l.google.com:19302"}]'
+ICE_JSON='[{"urls":"stun:ugolok.tech:3478"},{"urls":"turn:ugolok.tech:3478?transport=udp"},{"urls":"turn:ugolok.tech:3478?transport=tcp"}]'
 
 echo "deploy-env: env=$ENV www=$WWW"
 

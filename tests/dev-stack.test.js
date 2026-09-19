@@ -46,7 +46,6 @@ const LOCAL_ICE = [
 		username: "ugolok",
 		credential: "ugolok-dev",
 	},
-	{ urls: "stun:stun.l.google.com:19302" },
 ];
 
 function assertLocalIslandDefines(cfg) {

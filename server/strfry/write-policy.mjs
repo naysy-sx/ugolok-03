@@ -3,6 +3,7 @@
 // (tests/whitelist-plugin.test.js). whitelist-plugin.mjs остаётся тонкой
 // обёрткой: читает файлы на каждое событие и печатает ответ.
 import { isClean } from "../../src/domain/discovery/wordfilter.js";
+import { mergeLimits } from "./rate-limit.mjs";
 
 const DISCOVERY_KIND = 30073;
 
@@ -68,7 +69,11 @@ function discoveryContentIsClean(event, stopwords) {
 
 // ctx: { whitelist: Set<string>, peers: object|null, stopwords: string[]|() => string[] }.
 // stopwords — функция, чтобы читать файл только для kind 30073, как раньше.
-export function decide(req, { whitelist, peers, stopwords }) {
+//   policy — { mode: "open"|"readonly", limits }, перечитывается плагином на каждое
+//            событие (рубильник без перезапуска, как whitelist.json);
+//   limiter — createLimiter() из rate-limit.mjs (без него лимитов нет, как раньше);
+//   now — часы для тестов.
+export function decide(req, { whitelist, peers, stopwords, policy, limiter, now }) {
 	const res = { id: req.event.id };
 	const event = req.event;
 
@@ -91,11 +96,27 @@ export function decide(req, { whitelist, peers, stopwords }) {
 		res.action = "accept";
 	} else {
 		const pubkey = (event?.pubkey ?? "").toLowerCase();
+		if (policy?.mode === "readonly") {
+			// AUDIT-EGOROD G4: аварийный рубильник — запись клиентов закрыта одной
+			// правкой policy.json, без пересборки и перезапуска strfry.
+			res.action = "reject";
+			res.msg = "blocked: relay is temporarily read-only";
+			return res;
+		}
 		if (whitelist.has("*") || whitelist.has(pubkey)) {
 			res.action = "accept";
 		} else {
 			res.action = "reject";
 			res.msg = "blocked: pubkey not on whitelist";
+		}
+		// AUDIT-EGOROD G1: лимиты только для тех, кого whitelist уже пустил, и
+		// только для клиентских сокетов (Import/Stored — операции оператора).
+		if (res.action === "accept" && limiter && (req.sourceType === "IP4" || req.sourceType === "IP6")) {
+			const limited = limiter.check({ ip: req.sourceInfo, pubkey, now: now ?? Date.now(), limits: mergeLimits(policy?.limits) });
+			if (limited) {
+				res.action = "reject";
+				res.msg = `rate-limited: ${limited.reason}`;
+			}
 		}
 	}
 

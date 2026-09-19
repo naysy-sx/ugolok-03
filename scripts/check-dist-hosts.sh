@@ -74,6 +74,17 @@ for f in "${FILES[@]}"; do
       bad=1
     fi
   done < <(grep -oE '(https?|wss?)://[^"'"'"'` <>)\\,;]+' "$f" | sort -u)
+
+  # STUN/TURN-адреса (не URL с //): такой литерал — тоже исходящий контакт
+  # клиента с чужим хостом (публичный STUN отдаёт стороннему серверу IP звонящего).
+  # Якорь на кавычку перед схемой отсекает слова вроде `return:`.
+  while IFS= read -r uri; do
+    host=$(printf '%s' "$uri" | sed -E 's#^["'"'"'`]?(stuns?|turns?):##; s#[:?].*$##')
+    if ! is_allowed "$host"; then
+      echo "check-dist-hosts: чужой ICE-хост '$host' в $f ($uri)" >&2
+      bad=1
+    fi
+  done < <(grep -oE '["'"'"'`](stuns?|turns?):[A-Za-z0-9.$_-]+' "$f" | sort -u)
 done
 
 if [ "$bad" -ne 0 ]; then

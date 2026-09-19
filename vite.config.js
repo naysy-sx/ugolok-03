@@ -203,7 +203,6 @@ function buildDefaultIceServers() {
             username: "ugolok",
             credential: "ugolok-dev",
         },
-        { urls: "stun:stun.l.google.com:19302" },
     ];
 }
 
