@@ -2,16 +2,18 @@
 // strfry write-policy plugin — whitelist по event.pubkey (не по NIP-42 authed).
 // Обоснование решения — DESIGN.md/CONTRACTS.md, этап 17. Протокол ввода/вывода —
 // server/strfry/strfry-src/docs/plugins.md (построчный JSON, stdin/stdout).
+// Само решение — write-policy.mjs (чистая функция, GATEWAY-TZ-1.md §2); здесь
+// только чтение файлов и ввод/вывод.
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { isClean } from "../../src/domain/discovery/wordfilter.js";
+import { decide } from "./write-policy.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WHITELIST_PATH = join(HERE, "whitelist.json");
+const PEERS_PATH = join(HERE, "peers.json");
 const STOPWORDS_PATH = join(HERE, "../../src/domain/discovery/stopwords.json");
-const DISCOVERY_KIND = 30073;
 
 function loadWhitelist() {
 	try {
@@ -19,6 +21,18 @@ function loadWhitelist() {
 		return new Set(raw.map((pubkey) => pubkey.toLowerCase()));
 	} catch {
 		return new Set();
+	}
+}
+
+// GATEWAY-TZ-1.md §2/§4. Политика приёма зеркального потока. Перечитываем на
+// каждое событие — тот же приём, что whitelist.json: пира отключают правкой
+// файла без перезапуска strfry. Нет файла / битый JSON → null → зеркало
+// отвергается целиком (сегодняшнее поведение установки без пиров).
+function loadPeers() {
+	try {
+		return JSON.parse(readFileSync(PEERS_PATH, "utf8"));
+	} catch {
+		return null;
 	}
 }
 
@@ -36,23 +50,6 @@ function loadStopwords() {
 	}
 }
 
-function discoveryContentIsClean(event) {
-	let content;
-	try {
-		content = JSON.parse(event.content);
-	} catch {
-		return true; // не наш формат — не дело этого фильтра решать, whitelist уже пропустил
-	}
-	const stopwords = loadStopwords();
-	const texts = [content?.bio];
-	if (Array.isArray(content?.channels)) {
-		for (const c of content.channels) {
-			texts.push(c?.name, c?.description, c?.rules);
-		}
-	}
-	return texts.every((text) => typeof text !== "string" || isClean(text, stopwords));
-}
-
 const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
 
 rl.on("line", (line) => {
@@ -66,29 +63,10 @@ rl.on("line", (line) => {
 
 	// Перечитываем whitelist на каждое событие — простой файл, не нагрузочный
 	// сценарий для локального/self-hosted relay; исключает рассинхронизацию
-	// после правки whitelist.json без перезапуска strfry.
-	const whitelist = loadWhitelist();
-	const pubkey = (req.event?.pubkey ?? "").toLowerCase();
-
-	// "*" — специальный элемент: allow-all. Дефолт локального dev-relay (см.
-	// whitelist.json) — целевая аудитория дев-сборки: любой, кто зарегистрировался
-	// на СВОЁМ устройстве в локальной сети (CLAUDE.md), не нуждается в ручном
-	// добавлении pubkey просто чтобы попробовать приложение. Deny-by-default
-	// (конкретный список без "*") остаётся рабочим режимом для целевой проверки
-	// самого механизма whitelist (AC-14, этап 17) — переключается правкой файла,
-	// не кода.
-	const res = { id: req.event.id };
-	if (whitelist.has("*") || whitelist.has(pubkey)) {
-		res.action = "accept";
-	} else {
-		res.action = "reject";
-		res.msg = "blocked: pubkey not on whitelist";
-	}
-
-	if (res.action === "accept" && req.event.kind === DISCOVERY_KIND && !discoveryContentIsClean(req.event)) {
-		res.action = "reject";
-		res.msg = "blocked: discovery content failed wordlist filter";
-	}
-
+	// после правки whitelist.json без перезапуска strfry. "*" — allow-all,
+	// дефолт локального dev-relay (см. whitelist.json); deny-by-default
+	// (конкретный список без "*") — рабочий режим для проверки самого
+	// механизма (AC-14, этап 17), переключается правкой файла, не кода.
+	const res = decide(req, { whitelist: loadWhitelist(), peers: loadPeers(), stopwords: loadStopwords });
 	process.stdout.write(JSON.stringify(res) + "\n");
 });
