@@ -189,7 +189,50 @@ function assertChunkDigest(manifest, chunkIndex, cipherChunk) {
 // накопительная сумма в mark(phase, ms), не последовательная дельта.
 export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetchImpl, trace, priority } = {}) {
 	const options = { ...(fetchImpl ? { fetchImpl } : {}), ...(priority !== undefined ? { priority } : {}) };
+	const cipherChunk = await obtainCipherChunk(manifest, chunkIndex, { serverUrl, options, trace });
+	// Расшифровка — у каждого вызывающего своя, вне реестра (MEDIA-PERF-TZ-6.md
+	// §6): fileKey одного блоба может различаться (перезаливка под ключом доли),
+	// а общий plaintext-буфер сделал бы владение байтами неочевидным.
+	const decStart = trace ? nowMs() : 0;
+	const plain = decryptChunk(cipherChunk, fileKey, chunkIndex);
+	if (trace) trace.mark("decrypt", nowMs() - decStart);
+	return plain;
+}
+
+// MEDIA-PERF-TZ-6.md §6. Реестр чанков «в полёте»: ключ тот же, что у
+// cipherRam, значение — промис ШИФРОТЕКСТА. Дубли давали prefetch плеера,
+// несколько потребителей одного файла и два независимых пула
+// (getRange/player-session); очередь §2 лишь ограничивала параллелизм, но
+// честно выполняла оба запроса. Запись снимается и при успехе, и при отказе:
+// закэшированный отказ навсегда ломал бы чанк до перезагрузки вкладки.
+// Известное ограничение: приоритет очереди у объединённого запроса — того, кто
+// пришёл первым. Если PREVIEW уже отдал запрос в blossomQueue, а тот же чанк
+// потом понадобился PLAYER, плеер ждёт низкоприоритетный запрос: перепланировать
+// отданное нельзя без переделки очереди. Размен осознанный — дубль стоил бы
+// слота и полного тела чанка, а тут проигрыш только в задержке.
+const chunkInflight = new Map(); // cipherRamKey -> Promise<Uint8Array>
+
+function obtainCipherChunk(manifest, chunkIndex, { serverUrl, options, trace }) {
 	const ramKey = cipherRamKey(manifest.blobSha256, chunkIndex);
+	const inflight = chunkInflight.get(ramKey);
+	if (inflight) {
+		trace?.count("dedup");
+		return inflight;
+	}
+	const promise = fetchCipherChunk(manifest, chunkIndex, ramKey, { serverUrl, options, trace });
+	chunkInflight.set(ramKey, promise);
+	// Снятие — обработчиком, зарегистрированным ДО обработчиков ожидающих:
+	// к моменту, когда они проснутся, записи уже нет, и повтор после отказа
+	// снова идёт в сеть. Проверка на тождество — на случай, если запись успели
+	// заменить.
+	const clear = () => {
+		if (chunkInflight.get(ramKey) === promise) chunkInflight.delete(ramKey);
+	};
+	promise.then(clear, clear);
+	return promise;
+}
+
+async function fetchCipherChunk(manifest, chunkIndex, ramKey, { serverUrl, options, trace }) {
 	let cipherChunk = cipherRam.get(ramKey);
 	if (cipherChunk) {
 		cipherRam.delete(ramKey);
@@ -209,6 +252,8 @@ export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetch
 		cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
 		if (trace) {
 			trace.mark("net", nowMs() - netStart);
+			// Только у владельца запроса: счётчик обязан показывать число
+			// реальных HTTP-запросов (по нему §0 мерил нагрузку).
 			trace.count("requests");
 		}
 		assertChunkDigest(manifest, chunkIndex, cipherChunk);
@@ -216,10 +261,7 @@ export async function getChunk(manifest, fileKey, chunkIndex, { serverUrl, fetch
 	} else {
 		assertChunkDigest(manifest, chunkIndex, cipherChunk);
 	}
-	const decStart = trace ? nowMs() : 0;
-	const plain = decryptChunk(cipherChunk, fileKey, chunkIndex);
-	if (trace) trace.mark("decrypt", nowMs() - decStart);
-	return plain;
+	return cipherChunk;
 }
 
 function nowMs() {
