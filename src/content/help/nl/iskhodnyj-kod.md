@@ -2,7 +2,7 @@
 
 Ugolok is een opensource-project. Iedereen kan precies bestuderen hoe alles vanbinnen werkt, en bevestigen dat de beweerde versleuteling en het privacymodel zijn geïmplementeerd zoals beschreven, en niet alleen in woorden worden beweerd.
 
-Project-repository: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
+Project-repository: **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)**
 
 Na verloop van tijd verschijnen daar ook:
 

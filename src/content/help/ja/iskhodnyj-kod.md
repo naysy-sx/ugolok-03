@@ -2,7 +2,7 @@
 
 Ugolok はオープンソースプロジェクトです。誰でも内部が実際にどう動いているかを調べ、うたわれている暗号化とプライバシーモデルが、単に言葉で主張されているだけでなく、説明どおりに実装されていることを確認できます。
 
-プロジェクトのリポジトリ: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**
+プロジェクトのリポジトリ: **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)**
 
 そこには、時間とともに以下も追加されていきます:
 

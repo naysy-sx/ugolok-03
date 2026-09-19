@@ -28,4 +28,4 @@ Ugolok は、分散型メッセージングのためのオープンプロトコ�
 
 ## オープンソース
 
-プロジェクトのコードはオープンであり、**[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)** で誰でも完全に閲覧できるようになります。
+プロジェクトのコードはオープンであり、**[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)** で誰でも完全に閲覧できるようになります。

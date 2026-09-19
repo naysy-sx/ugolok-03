@@ -28,4 +28,4 @@ Ugolok is gebouwd op **Nostr** — een open protocol voor gedecentraliseerde ber
 
 ## Open source
 
-De code van het project is open en zal volledig te bekijken zijn door iedereen op **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**.
+De code van het project is open en zal volledig te bekijken zijn door iedereen op **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)**.
