@@ -16,12 +16,12 @@
 #                                 который перезаписал blossom-config.yml)
 #
 # Переменные: ISLAND_DATA (/var/lib/ugolok), ISLAND_DIR (/opt/ugolok/island),
-# WATCHDOG_STATE (/var/lib/ugolok-watchdog), WARN_PCT (80), CUT_PCT (92).
+# WATCHDOG_STATE (/var/lib/ugolok/watchdog), WARN_PCT (80), CUT_PCT (92).
 set -euo pipefail
 
 ISLAND_DATA="${ISLAND_DATA:-/var/lib/ugolok}"
 ISLAND_DIR="${ISLAND_DIR:-/opt/ugolok/island}"
-STATE="${WATCHDOG_STATE:-/var/lib/ugolok-watchdog}"
+STATE="${WATCHDOG_STATE:-/var/lib/ugolok/watchdog}"
 WARN_PCT="${WARN_PCT:-80}"
 CUT_PCT="${CUT_PCT:-92}"
 BLOSSOM_C="${BLOSSOM_CONTAINER:-ugolok-blossom}"

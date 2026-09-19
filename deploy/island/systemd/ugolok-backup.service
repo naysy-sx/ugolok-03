@@ -3,5 +3,7 @@ Description=Ugolok island backup (relay events, blossom sqlite + blobs)
 
 [Service]
 Type=oneshot
+User=ugolok
+Group=ugolok
 UMask=0077
 ExecStart=/opt/ugolok/bin/island-backup.sh

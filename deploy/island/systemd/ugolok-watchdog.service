@@ -3,4 +3,6 @@ Description=Ugolok island watchdog (диск, рубильники записи)
 
 [Service]
 Type=oneshot
+User=ugolok
+Group=ugolok
 ExecStart=/opt/ugolok/bin/island-watchdog.sh

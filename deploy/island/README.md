@@ -107,11 +107,16 @@ Caddy: `deploy/caddy/`. Тестовый остров (отдельные relay/
 
 **Выкладка** (`scripts/deploy-env.sh`, prod): бэкап → снимок прежнего PWA, конфигов и образов (`:prev`) → `up` → `scripts/island-health.sh` (NIP-11 relay, плагин политики отвечает, Blossom `/stats`, `/turn-credentials`) → при провале откат кода и `exit 1`. Данные автоматически не откатываются. `UGOLK_BACKUP_REQUIRED=1` делает провал бэкапа фатальным для выкладки.
 
-**Сторож** — `scripts/island-watchdog.sh` по таймеру: пишет в `/var/lib/ugolok-watchdog/watchdog.log` строку с заполнением диска и размерами relay/blossom (тренд роста), при диске ≥ 92% сам закрывает запись relay (`policy.lock`) и загрузки Blossom (`UPLOAD → DENY`). Чтение продолжает работать. Снять: `island-watchdog.sh --release`.
+**Сторож** — `scripts/island-watchdog.sh` по таймеру: пишет в `/var/lib/ugolok/watchdog/watchdog.log` строку с заполнением диска и размерами relay/blossom (тренд роста), при диске ≥ 92% сам закрывает запись relay (`policy.lock`) и загрузки Blossom (`UPLOAD → DENY`). Чтение продолжает работать. Снять: `island-watchdog.sh --release`.
 
 Одноразовая установка таймеров (root на VPS):
 
 ```bash
+# юниты работают от пользователя ugolok (он же раннер деплоя, группа docker): один и
+# тот же каталог бэкапов и состояния доступен и таймеру, и deploy-env.sh
+apt-get install -y sqlite3            # согласованная копия sqlite Blossom (.backup)
+install -d -o ugolok -g ugolok -m 700 /var/backups/ugolok /var/lib/ugolok/watchdog /var/lib/ugolok/deploy
+install -m 755 scripts/island-{backup,health,watchdog}.sh /opt/ugolok/bin/
 cp deploy/island/systemd/ugolok-{watchdog,backup}.{service,timer} /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now ugolok-watchdog.timer ugolok-backup.timer
 ```
