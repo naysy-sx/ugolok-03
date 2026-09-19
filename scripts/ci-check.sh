@@ -12,3 +12,4 @@ if [ ! -f dist/index.html ] || [ ! -f dist/service-worker.js ]; then
 fi
 
 bash "$(dirname "${BASH_SOURCE[0]}")/check-dist-size.sh"
+bash "$(dirname "${BASH_SOURCE[0]}")/check-dist-hosts.sh"
