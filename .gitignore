@@ -35,4 +35,4 @@ server/blossom/blossom.log
 # server/coturn — локальный TURN/STUN (Homebrew coturn). Конфиг и скрипты
 # версионируются, pid/лог — нет.
 server/coturn/turnserver.pid
-server/coturn/coturn.log
+server/coturn/coturn.logserver/strfry/mirror-state.json

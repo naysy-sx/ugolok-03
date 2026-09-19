@@ -108,3 +108,12 @@ export function decide(req, { whitelist, peers, stopwords }) {
 	}
 	return res;
 }
+
+// Какие kind'ы реально тянуть/держать у данного пира: те же правила, что в
+// decide() — единый источник, чтобы фильтр тяги (mirror-pull.mjs), очистка
+// (mirror-prune.mjs) и политика приёма не разошлись.
+export function effectiveMirrorKinds(peer, peers) {
+	const kinds = Array.isArray(peer?.kinds) ? peer.kinds : peers?.kinds;
+	if (!Array.isArray(kinds)) return [];
+	return kinds.filter((k) => Number.isInteger(k) && !NEVER_MIRROR_KINDS.has(k));
+}
