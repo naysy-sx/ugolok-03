@@ -28,4 +28,4 @@
 
 ## Открытый исходный код
 
-Код проекта открыт и доступен для изучения любому желающему: **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)**.
+Код проекта открыт и доступен для изучения любому желающему: **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)**.

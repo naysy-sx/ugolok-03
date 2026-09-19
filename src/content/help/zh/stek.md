@@ -28,4 +28,4 @@ Ugolok 构建于 **Nostr** 之上——一个用于去中心化消息传递的�
 
 ## 开源代码
 
-项目代码是开放的，最终将在 **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)** 上供任何人完整查阅。
+项目代码是开放的，最终将在 **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)** 上供任何人完整查阅。

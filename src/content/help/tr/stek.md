@@ -28,4 +28,4 @@ Ugolok, merkezi olmayan mesajlaşma için açık bir protokol olan **Nostr** üz
 
 ## Açık kaynak kod
 
-Projenin kodu açıktır ve zamanla **[github.com/naysy-sx/ugolok-03](https://github.com/naysy-sx/ugolok-03)** adresinde isteyen herkesin incelemesi için tamamen erişilebilir olacaktır.
+Projenin kodu açıktır ve zamanla **[git.ugolok.tech](https://git.ugolok.tech/naysy/ugolok)** adresinde isteyen herkesin incelemesi için tamamen erişilebilir olacaktır.
