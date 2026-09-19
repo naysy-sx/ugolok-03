@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "Could not open the local database — it may be in an incompatible format left over from an app update.",
 			"warning": "This will erase all local data on this device (accounts, conversations, channels) and require signing in or registering again.",
-			"resetButton": "Clear local data and start over"
+			"resetButton": "Clear local data and start over",
+			"messageOther": "Could not open the local database. The app may be open in another tab, or the browser has restricted storage.",
+			"retryButton": "Try again"
 		},
 		"createGenerate": {
 			"title": "Recovery phrase",

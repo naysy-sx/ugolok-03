@@ -96,6 +96,13 @@ function reloadForFreshServiceWorker() {
 	} catch {
 		// не критично — хуже случай: один лишний reload
 	}
+	reloadWhenIdle();
+}
+
+// Перезагрузка в безопасный момент (не посреди набора пароля/текста) — общая для
+// обновления SW и для закрытия базы другой вкладкой (AUDIT-EGOROD E3).
+function reloadWhenIdle() {
+	if (refreshing) return;
 	if (isAuthScreenVisible()) {
 		const root = document.getElementById("app") || document.body;
 		const obs = new MutationObserver(() => {
@@ -115,6 +122,15 @@ function reloadForFreshServiceWorker() {
 	}
 	doReload();
 }
+
+// AUDIT-EGOROD E3: другая вкладка открыла базу более новой версии (обновление
+// приложения) — database.js уже закрыл наше соединение, и без перезагрузки эта
+// вкладка осталась бы «живой», но с молча падающими операциями (DatabaseClosedError).
+// Перезагружаемся — новая вкладка уже принесла новый код через service worker.
+window.addEventListener("ugolok:db-versionchange", () => {
+	traceRecord("db-versionchange-reload", {});
+	reloadWhenIdle();
+});
 
 if ("serviceWorker" in navigator) {
 	navigator.serviceWorker.addEventListener("controllerchange", reloadForFreshServiceWorker);

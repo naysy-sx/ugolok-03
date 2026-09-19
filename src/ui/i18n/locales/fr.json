@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "Impossible d'ouvrir la base de données locale — elle est peut-être restée dans un format incompatible après une mise à jour de l'application.",
 			"warning": "Cette action effacera toutes les données locales sur cet appareil (comptes, conversations, chaînes) et nécessitera une nouvelle connexion ou inscription.",
-			"resetButton": "Effacer les données locales et recommencer"
+			"resetButton": "Effacer les données locales et recommencer",
+			"messageOther": "Impossible d'ouvrir la base de données locale. L'application est peut-être ouverte dans un autre onglet, ou le navigateur restreint le stockage.",
+			"retryButton": "Réessayer"
 		},
 		"createGenerate": {
 			"title": "Phrase de récupération",

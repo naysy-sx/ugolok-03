@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "No se pudo abrir la base de datos local — puede que haya quedado en un formato incompatible tras una actualización de la aplicación.",
 			"warning": "Esto borrará todos los datos locales en este dispositivo (cuentas, conversaciones, canales) y requerirá volver a iniciar sesión o registrarse.",
-			"resetButton": "Borrar datos locales y empezar de nuevo"
+			"resetButton": "Borrar datos locales y empezar de nuevo",
+			"messageOther": "No se pudo abrir la base de datos local. Puede que la aplicación esté abierta en otra pestaña o que el navegador limite el almacenamiento.",
+			"retryButton": "Reintentar"
 		},
 		"createGenerate": {
 			"title": "Frase de recuperación",

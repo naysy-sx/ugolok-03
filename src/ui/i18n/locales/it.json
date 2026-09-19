@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "Impossibile aprire il database locale — potrebbe essere rimasto in un formato incompatibile dopo un aggiornamento dell'app.",
 			"warning": "Questa operazione cancellerà tutti i dati locali su questo dispositivo (account, conversazioni, canali) e richiederà un nuovo accesso o una nuova registrazione.",
-			"resetButton": "Cancella i dati locali e ricomincia"
+			"resetButton": "Cancella i dati locali e ricomincia",
+			"messageOther": "Impossibile aprire il database locale. L'app potrebbe essere aperta in un'altra scheda, oppure il browser limita l'archiviazione.",
+			"retryButton": "Riprova"
 		},
 		"createGenerate": {
 			"title": "Frase di recupero",

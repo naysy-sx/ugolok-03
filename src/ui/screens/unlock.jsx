@@ -83,6 +83,7 @@ export default function Unlock() {
 	// этом же списке — bio лежит в keystore нешифрованным, читать до входа
 	// не новый прецедент.
 	const [openAccountBio, setOpenAccountBio] = useState("");
+	const [dbErrorIncompatible, setDbErrorIncompatible] = useState(true);
 
 	useEffect(() => {
 		(async () => {
@@ -98,9 +99,13 @@ export default function Unlock() {
 					setOpenLoginForId(match ? match.id : list[0].id);
 				}
 				setStep("main");
-			} catch {
-				// Дев-стадия: несовместимая со старой схемой локальная база (см. database.js,
-				// resetLocalDatabase) — без этого экран остался бы на "Проверка…" навсегда.
+			} catch (e) {
+				// Несовместимая со старой схемой локальная база (UpgradeError — смена
+				// первичного ключа, Dexie так не умеет, см. tests/dexie-migration.test.js)
+				// или иная причина (другая вкладка держит апгрейд, ограничение хранилища).
+				// AUDIT-EGOROD E3: раньше любой сбой открытия вёл только к кнопке «стереть
+				// всё» — теперь для НЕ-совместимостных причин первым идёт «повторить».
+				setDbErrorIncompatible(e?.name === "UpgradeError");
 				setStep("db-error");
 			}
 		})();
@@ -269,8 +274,13 @@ export default function Unlock() {
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p role="alert" style={{ color: "var(--bad)" }}>
-						{t("unlock.dbError.message")}
+						{t(dbErrorIncompatible ? "unlock.dbError.message" : "unlock.dbError.messageOther")}
 					</p>
+					{!dbErrorIncompatible && (
+						<button type="button" onClick={() => location.reload()}>
+							{t("unlock.dbError.retryButton")}
+						</button>
+					)}
 					<p style={{ color: "var(--muted)" }}>
 						{t("unlock.dbError.warning")}
 					</p>

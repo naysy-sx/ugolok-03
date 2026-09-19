@@ -429,6 +429,20 @@ db.version(37).stores({
   peerPresence: "[ownerPubkey+contactPubkey]",
 });
 
+// AUDIT-EGOROD E3: вкладка с НОВЫМ кодом хочет поднять версию базы и ждёт, пока
+// старые вкладки отпустят соединение. Штатное поведение Dexie — тихо закрыть
+// соединение, после чего любая операция этой вкладки падает DatabaseClosedError,
+// а сама вкладка выглядит живой. Закрываем явно и просим оболочку (main.jsx)
+// перезагрузиться в безопасный момент; return false — Dexie не должна закрывать
+// второй раз по-своему.
+db.on("versionchange", () => {
+  db.close();
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof Event === "function") {
+    window.dispatchEvent(new Event("ugolok:db-versionchange"));
+  }
+  return false;
+});
+
 db.on("ready", () => {
   logInfo(`база данных открыта, схема ${db.verno}`);
 });

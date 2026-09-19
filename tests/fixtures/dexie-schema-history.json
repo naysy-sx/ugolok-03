@@ -1,0 +1,272 @@
+[
+	{
+		"version": 1,
+		"stores": {
+			"events": "++seq, id, [pubkey+kind], created_at, *flatTags",
+			"contacts": "[owner+pubkey], owner",
+			"blockedContacts": "[owner+pubkey], owner",
+			"groups": "[owner+id], owner",
+			"groupMembers": "[groupId+pubkey], groupId",
+			"permissions": "[owner+subject+resource], owner, subject, resource",
+			"effectivePerms": "[owner+subject+resource], owner, subject, resource",
+			"channelKeys": "[channelId+keyVersion], channelId",
+			"channelKeyMeta": "channelId",
+			"channelTopics": "channelId",
+			"commentAllowlists": "[channelId+keyVersion], channelId",
+			"messages": "++seq, [chatId+lamportTs+senderPubkey+id], chatId, id, status, deleted",
+			"channels": "id, owner",
+			"posts": "id, [channelId+created_at], channelId, author, keyVersion, deleted",
+			"comments": "[authorPubkey+commentId], postId, parentId, keyVersion, deleted",
+			"attachments": "sha256, messageId, type, mime",
+			"keystore": "id",
+			"clock": "id",
+			"syncState": "relay",
+			"chatSyncState": "chatId",
+			"channelSyncState": "channelId",
+			"outbox": "++seq, eventId, status, retryCount",
+			"inboxRequests": "id, senderPubkey, created_at",
+			"deletions": "targetId, deleterPubkey, created_at",
+			"mlsGroups": "groupId"
+		}
+	},
+	{
+		"version": 2,
+		"stores": {
+			"ownKeyPackage": "id",
+			"contactRequests": "[owner+senderPubkey], owner"
+		}
+	},
+	{
+		"version": 3,
+		"stores": {
+			"deviceIdentity": "id",
+			"knownDevices": "[ownerPubkey+deviceId], ownerPubkey",
+			"messages": "++seq, &[chatId+msgId], [chatId+lamportTs+senderPubkey+id], chatId, id, status, deleted",
+			"inboxRequests": "[owner+senderPubkey], owner, senderPubkey, createdAt"
+		}
+	},
+	{
+		"version": 4,
+		"stores": {
+			"ownKeyPackage": "ownerPubkey",
+			"mlsGroups": "[ownerPubkey+groupId], ownerPubkey",
+			"messages": "++seq, &[ownerPubkey+chatId+msgId], [ownerPubkey+chatId+lamportTs+senderPubkey+id], [ownerPubkey+chatId], id, status, deleted",
+			"chatSyncState": "[ownerPubkey+chatId], ownerPubkey"
+		}
+	},
+	{
+		"version": 5,
+		"stores": {
+			"channels": "[ownerPubkey+id], ownerPubkey, channelTopic",
+			"channelKeys": "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+			"channelKeyMeta": "[ownerPubkey+channelId]",
+			"commentAllowlists": "[ownerPubkey+channelId+keyVersion], [ownerPubkey+channelId]",
+			"channelTopics": null
+		}
+	},
+	{
+		"version": 6,
+		"stores": {
+			"posts": "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted",
+			"comments": "[ownerPubkey+id], [ownerPubkey+postId], deleted"
+		}
+	},
+	{
+		"version": 7,
+		"stores": {
+			"channelMessages": "[ownerPubkey+id], [ownerPubkey+channelId+createdAt]"
+		}
+	},
+	{
+		"version": 8,
+		"stores": {
+			"channelReaders": "[ownerPubkey+channelId+readerPubkey], [ownerPubkey+channelId]",
+			"channelReports": "[ownerPubkey+id], [ownerPubkey+channelId], viewed",
+			"channelIgnores": "[ownerPubkey+channelId+ignoredPubkey], [ownerPubkey+channelId]",
+			"bannedMembers": "[ownerPubkey+channelId+pubkey], [ownerPubkey+channelId]"
+		}
+	},
+	{
+		"version": 9,
+		"stores": {
+			"uiSettings": "ownerPubkey"
+		}
+	},
+	{
+		"version": 10,
+		"stores": {
+			"channelVisibilityGroups": "[ownerPubkey+channelId+groupId], [ownerPubkey+channelId], [ownerPubkey+groupId]"
+		}
+	},
+	{
+		"version": 11,
+		"stores": {
+			"clock": "[ownerPubkey+id]"
+		}
+	},
+	{
+		"version": 12,
+		"stores": {
+			"attachments": "[ownerPubkey+sha256], ownerPubkey, lastAccessedAt"
+		}
+	},
+	{
+		"version": 13,
+		"stores": {
+			"discoverySettings": "ownerPubkey",
+			"discoveryProfiles": "pubkey",
+			"outgoingAcquaintanceRequests": "[owner+targetPubkey], owner"
+		}
+	},
+	{
+		"version": 14,
+		"stores": {
+			"channelSyncState": "[ownerPubkey+channelId]"
+		}
+	},
+	{
+		"version": 15,
+		"stores": {
+			"contactRelationships": "[owner+peer], [owner+state]"
+		}
+	},
+	{
+		"version": 16,
+		"stores": {
+			"journalEntries": "id, owner, [owner+createdAt]"
+		}
+	},
+	{
+		"version": 17,
+		"stores": {
+			"files_nodes": "[ownerPubkey+id], ownerPubkey",
+			"files_mounts": "[ownerPubkey+nodeId], ownerPubkey",
+			"files_manifests": "[ownerPubkey+digest], ownerPubkey",
+			"files_blobs": "[ownerPubkey+digest+chunkIndex], ownerPubkey, digest",
+			"files_thumbs": "[ownerPubkey+digest], ownerPubkey"
+		}
+	},
+	{
+		"version": 18,
+		"stores": {
+			"files_keys": "[ownerPubkey+digest], ownerPubkey"
+		}
+	},
+	{
+		"version": 19,
+		"stores": {
+			"files_shares": "[ownerPubkey+nodeId], ownerPubkey",
+			"files_shareKeys": "[ownerPubkey+nodeId+version], [ownerPubkey+nodeId]",
+			"files_shareGrantees": "[ownerPubkey+nodeId+granteePubkey], [ownerPubkey+nodeId]",
+			"files_mountKeys": "[ownerPubkey+nodeId+version], [ownerPubkey+nodeId]",
+			"files_mount_nodes": "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
+		}
+	},
+	{
+		"version": 20,
+		"stores": {
+			"files_mount_file_meta": "[ownerPubkey+mountId+id], [ownerPubkey+mountId]"
+		}
+	},
+	{
+		"version": 21,
+		"stores": {
+			"knownContactDevices": "[ownerPubkey+contactPubkey+deviceId], [ownerPubkey+contactPubkey]"
+		}
+	},
+	{
+		"version": 22,
+		"stores": {
+			"pendingOutgoingMessages": "[ownerPubkey+contactPubkey+lamportTs], [ownerPubkey+contactPubkey]"
+		}
+	},
+	{
+		"version": 23,
+		"stores": {
+			"processedGroupEvents": "[ownerPubkey+eventId], [ownerPubkey+firstSeenAt]"
+		}
+	},
+	{
+		"version": 24,
+		"stores": {
+			"contactProfiles": "[ownerPubkey+contactPubkey], ownerPubkey"
+		}
+	},
+	{
+		"version": 25,
+		"stores": {
+			"posts": "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt]"
+		}
+	},
+	{
+		"version": 26,
+		"stores": {
+			"chatActivity": "[ownerPubkey+chatId], ownerPubkey"
+		}
+	},
+	{
+		"version": 27,
+		"stores": {
+			"pinned": "ownerPubkey"
+		}
+	},
+	{
+		"version": 28,
+		"stores": {
+			"channelReactions": "[ownerPubkey+channelId+targetType+targetId+reactorPubkey], [ownerPubkey+postId], [ownerPubkey+targetId]"
+		}
+	},
+	{
+		"version": 29,
+		"stores": {
+			"contactProfiles": "[ownerPubkey+contactPubkey], ownerPubkey, [ownerPubkey+watched+seenAt]"
+		}
+	},
+	{
+		"version": 30,
+		"stores": {}
+	},
+	{
+		"version": 31,
+		"stores": {
+			"discoveryHidden": "[ownerPubkey+targetPubkey], ownerPubkey",
+			"discoveryReports": "[ownerPubkey+id], ownerPubkey"
+		}
+	},
+	{
+		"version": 32,
+		"stores": {}
+	},
+	{
+		"version": 33,
+		"stores": {
+			"posts": "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], deleted, [ownerPubkey+dueAt], [ownerPubkey+createdAt]",
+			"channelMessages": "[ownerPubkey+id], [ownerPubkey+channelId+createdAt], [ownerPubkey+createdAt]"
+		}
+	},
+	{
+		"version": 34,
+		"stores": {
+			"files_blobs": "[ownerPubkey+digest+chunkIndex], ownerPubkey, digest, [ownerPubkey+lastAccess]"
+		}
+	},
+	{
+		"version": 35,
+		"stores": {
+			"undeliverable": "[ownerPubkey+eventId], ownerPubkey, [ownerPubkey+droppedAt]"
+		}
+	},
+	{
+		"version": 36,
+		"stores": {
+			"chatGeneration": "[ownerPubkey+contactPubkey]"
+		}
+	},
+	{
+		"version": 37,
+		"stores": {
+			"peerCursors": "[ownerPubkey+contactPubkey]",
+			"peerPresence": "[ownerPubkey+contactPubkey]"
+		}
+	}
+]

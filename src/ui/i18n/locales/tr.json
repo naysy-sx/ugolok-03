@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "Yerel veritabanı açılamadı — uygulama güncellemesinden sonra uyumsuz bir biçimde kalmış olabilir.",
 			"warning": "Bu işlem, bu cihazdaki tüm yerel verileri (hesaplar, sohbetler, kanallar) silecek ve yeniden giriş yapmanızı veya kayıt olmanızı gerektirecektir.",
-			"resetButton": "Yerel verileri temizle ve yeniden başla"
+			"resetButton": "Yerel verileri temizle ve yeniden başla",
+			"messageOther": "Yerel veritabanı açılamadı. Uygulama başka bir sekmede açık olabilir veya tarayıcı depolamayı kısıtlamış olabilir.",
+			"retryButton": "Tekrar dene"
 		},
 		"createGenerate": {
 			"title": "Kurtarma ifadesi",

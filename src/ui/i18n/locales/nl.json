@@ -168,7 +168,9 @@
 		"dbError": {
 			"message": "Kan de lokale database niet openen — deze is mogelijk in een onverenigbaar formaat achtergebleven na een app-update.",
 			"warning": "Hierdoor worden alle lokale gegevens op dit apparaat gewist (accounts, gesprekken, kanalen) en moet je opnieuw inloggen of registreren.",
-			"resetButton": "Lokale gegevens wissen en opnieuw beginnen"
+			"resetButton": "Lokale gegevens wissen en opnieuw beginnen",
+			"messageOther": "De lokale database kon niet worden geopend. De app staat mogelijk open in een ander tabblad, of de browser beperkt de opslag.",
+			"retryButton": "Opnieuw proberen"
 		},
 		"createGenerate": {
 			"title": "Herstelzin",
