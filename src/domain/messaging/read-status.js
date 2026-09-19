@@ -2,6 +2,7 @@ import { sign } from '../../core/crypto/sign.js';
 import { getPublicKey } from '../../core/crypto/keys.js';
 import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from '../../core/crypto/nip44.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import Dexie from 'dexie';
 import { db } from '../../core/store/database.js';
 import { transitionMessage } from './machine.js';
 import { pickLatest } from '../../core/sync/lww.js';
@@ -109,8 +110,14 @@ export async function rebuildReadStatus(ownerPubkey, privKey, dbKey) {
 export async function getUnreadCount(ownerPubkey, contactPubkey) {
   const existing = await db.table('chatSyncState').get([ownerPubkey, contactPubkey]);
   const lastRead = existing?.lastReadLamportTs ?? 0;
-  const rows = await db.table('messages').where('[ownerPubkey+chatId]').equals([ownerPubkey, contactPubkey]).toArray();
-  return rows.filter(m => m.senderPubkey === contactPubkey && m.lamportTs > lastRead).length;
+  // AUDIT-EGOROD I1: раньше — вся переписка целиком в память на каждый пересчёт
+  // бейджей (по разу на контакт). Теперь по индексу сортировки читаются только
+  // сообщения ПОСЛЕ курсора прочтения — обычно единицы.
+  return db.table('messages')
+    .where('[ownerPubkey+chatId+lamportTs+senderPubkey+id]')
+    .between([ownerPubkey, contactPubkey, lastRead, Dexie.maxKey], [ownerPubkey, contactPubkey, Dexie.maxKey], false, true)
+    .filter(m => m.senderPubkey === contactPubkey)
+    .count();
 }
 
 // Этап 50 (CONTACTS-FSM.md §6, приложение А — инвариант N1). rebuildReadStatus

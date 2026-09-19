@@ -243,3 +243,17 @@ test("isChatContentRead: курсор ДРУГОГО чата не влияет"
 	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: CAROL_PUB, lastReadLamportTs: 100 }), ALICE_PRIV, DB_KEY);
 	assert.equal(await isChatContentRead(ALICE_PUB, BOB_PUB, 1), false);
 });
+
+test("getUnreadCount (индексный диапазон): чужие чаты и чужие владельцы не попадают в счёт, граница курсора строгая", async () => {
+	const row = (over) => ({ ownerPubkey: ALICE_PUB, chatId: BOB_PUB, senderPubkey: BOB_PUB, status: "sent", ...over });
+	await db.table("messages").bulkAdd([
+		row({ lamportTs: 5, id: "a", msgId: "ma" }),
+		row({ lamportTs: 6, id: "b", msgId: "mb" }),
+		row({ lamportTs: 7, id: "c", msgId: "mc" }),
+		row({ chatId: "other-chat", senderPubkey: "other-chat", lamportTs: 9, id: "d", msgId: "md" }),
+		row({ ownerPubkey: "someone-else", lamportTs: 9, id: "e", msgId: "me" }),
+		row({ senderPubkey: ALICE_PUB, lamportTs: 8, id: "f", msgId: "mf" }),
+	]);
+	await foldReadStatus(buildReadStatusEvent(ALICE_PRIV, { chatId: BOB_PUB, lastReadLamportTs: 5 }), ALICE_PRIV, DB_KEY);
+	assert.equal(await getUnreadCount(ALICE_PUB, BOB_PUB), 2, "5 — прочитано (строго после курсора), 6 и 7 — нет; чужое и своё не считается");
+});

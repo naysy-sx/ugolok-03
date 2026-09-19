@@ -38,11 +38,24 @@ export async function enqueue(event, dbKey) {
 export async function listPending(dbKey) {
   const now = Date.now();
   const rows = await db.outbox.where("status").equals("pending").sortBy("seq");
-  return rows.map((row) => fromEncryptedRow(row, dbKey)).filter((r) => (r.nextAttemptAt ?? 0) <= now);
+  // AUDIT-EGOROD (соседняя находка): таблица outbox не привязана к аккаунту, а на
+  // устройстве может быть несколько аккаунтов. Строка другого аккаунта не
+  // расшифровывается ключом текущего и раньше валила ВЕСЬ проход — пока тот аккаунт
+  // не входил снова, у текущего не уходило ничего. Чужие строки пропускаем: они
+  // останутся pending и уйдут, когда их владелец войдёт.
+  const own = [];
+  for (const row of rows) {
+    try {
+      own.push(fromEncryptedRow(row, dbKey));
+    } catch {
+      // чужая запись
+    }
+  }
+  return own.filter((r) => (r.nextAttemptAt ?? 0) <= now);
 }
 
 export async function markSent(seq) {
-  await db.outbox.update(seq, { status: "sent" });
+  await db.outbox.update(seq, { status: "sent", sentAt: Date.now() });
 }
 
 // Возвращает { finalFailure, eventId } — finalFailure=true ТОЛЬКО когда
@@ -62,6 +75,7 @@ export async function markFailed(seq) {
 }
 
 export async function drain(publishFn, dbKey) {
+  await purgeSent().catch(() => {});
   let records = await listPending(dbKey);
   let sentCount = 0;
   let failedCount = 0; // ОКОНЧАТЕЛЬНЫЕ провалы (MAX_ATTEMPTS исчерпан) в этом проходе — не единичные неудачи
@@ -90,4 +104,35 @@ export async function drain(publishFn, dbKey) {
   }
 
   return { sentCount, failedCount, finallyFailedEventIds };
+}
+
+// AUDIT-EGOROD A2/D2. Публикация «с гарантией повтора» для событий, которые не
+// чат-сообщения (журнал файлов, настройки): раньше они уходили «выстрелил и
+// забыл» — закрытая вкладка, обрыв связи или отказ relay терял правку для ВСЕХ
+// остальных устройств навсегда. Событие сначала кладётся в постоянный outbox
+// (тот же, что у сообщений: backoff, nextAttemptAt, drain по подключению и
+// таймеру), затем делается одна немедленная попытка. Успех — запись помечается
+// отправленной; иначе она остаётся pending, и drain доставит её позже. Тот же
+// подписанный event → тот же id: relay-повторы безопасны (идемпотентно).
+// Возвращает результат publish ({ok, ...}); исключение сети превращается в {ok:false}.
+export async function publishDurably(event, publish, dbKey) {
+  const seq = await enqueue(event, dbKey);
+  try {
+    const result = await publish(event);
+    if (result?.ok) await markSent(seq);
+    return result;
+  } catch (e) {
+    return { ok: false, reason: e?.message ?? String(e) };
+  }
+}
+
+// AUDIT-EGOROD I1. Строки со статусом "sent" нужны лишь до подтверждения; дальше
+// они только растут (таблица никогда не чистилась). Удаляем отправленные старше
+// суток — вызывается из drain-прохода.
+export async function purgeSent(olderThanMs = 24 * 60 * 60 * 1000) {
+  const cutoff = Date.now() - olderThanMs;
+  const rows = await db.outbox.where("status").equals("sent").toArray();
+  const stale = rows.filter((r) => (r.sentAt ?? 0) < cutoff).map((r) => r.seq);
+  if (stale.length) await db.outbox.bulkDelete(stale);
+  return stale.length;
 }

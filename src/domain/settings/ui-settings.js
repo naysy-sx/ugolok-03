@@ -4,6 +4,7 @@ import { encrypt as nip44Encrypt, decrypt as nip44Decrypt } from "../../core/cry
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
+import { publishDurably } from "../../core/store/outbox.js";
 import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
@@ -173,10 +174,11 @@ export async function hasLocalUiSettings(ownerPubkey) {
 export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish) {
 	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 	try {
-		await publish(buildUiSettingsEvent(privKey, settings));
+		// AUDIT-EGOROD A2: через постоянный outbox — настройки (включая список relay)
+		// доедут до других устройств и после оффлайна/закрытой вкладки.
+		await publishDurably(buildUiSettingsEvent(privKey, settings), publish, dbKey);
 	} catch {
-		// сеть недоступна / relay отклонил — настройка уже сохранена локально, это
-		// синхронизация между СВОИМИ устройствами, не критичный путь.
+		// локально уже сохранено; outbox/сеть недоступны — не критичный путь.
 	}
 }
 

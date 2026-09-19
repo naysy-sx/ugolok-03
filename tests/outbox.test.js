@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { test, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/core/store/database.js";
-import { enqueue, listPending, markSent, markFailed, drain, MAX_ATTEMPTS } from "../src/core/store/outbox.js";
+import { enqueue, listPending, markSent, markFailed, drain, MAX_ATTEMPTS, publishDurably, purgeSent } from "../src/core/store/outbox.js";
 
 const DB_KEY = crypto.getRandomValues(new Uint8Array(32));
 
@@ -225,8 +225,56 @@ test("AC-16: сырая запись outbox не содержит event в от�
 	assert.ok(row.nonce && row.ciphertext);
 });
 
-test("неверный dbKey -> listPending бросает, не молча возвращает мусор вместо event", async () => {
+// Прежний контракт «неверный dbKey -> throw» держал ВЕСЬ дренаж заложником чужой
+// записи (несколько аккаунтов на устройстве). Суть осталась: мусор вместо event
+// не возвращается никогда — запись чужого аккаунта просто пропускается.
+test("неверный dbKey -> запись пропускается, мусор вместо event не возвращается", async () => {
 	await enqueue(fakeEvent("event-1"), DB_KEY);
 	const wrongKey = crypto.getRandomValues(new Uint8Array(32));
-	await assert.rejects(() => listPending(wrongKey));
+	assert.deepEqual(await listPending(wrongKey), []);
+	assert.equal((await listPending(DB_KEY)).length, 1, "владелец её по-прежнему видит");
+});
+
+// AUDIT-EGOROD: outbox не привязан к аккаунту — запись другого аккаунта не должна
+// блокировать отправку текущего.
+test("listPending/drain: неотправленная запись ДРУГОГО аккаунта (другой dbKey) не блокирует свои", async () => {
+	const OTHER_KEY = crypto.getRandomValues(new Uint8Array(32));
+	await enqueue(fakeEvent("foreign"), OTHER_KEY);
+	await enqueue(fakeEvent("mine"), DB_KEY);
+	const pending = await listPending(DB_KEY);
+	assert.deepEqual(pending.map((r) => r.eventId), ["mine"]);
+	const sent = [];
+	const res = await drain(async (r) => (sent.push(r.eventId), { ok: true }), DB_KEY);
+	assert.deepEqual(sent, ["mine"]);
+	assert.equal(res.sentCount, 1);
+	// чужая осталась pending и уйдёт, когда её владелец войдёт
+	assert.deepEqual((await listPending(OTHER_KEY)).map((r) => r.eventId), ["foreign"]);
+});
+
+test("publishDurably: успех сразу помечает отправленным, отказ/исключение оставляют запись для drain", async () => {
+	const ok = await publishDurably(fakeEvent("d1"), async () => ({ ok: true }), DB_KEY);
+	assert.equal(ok.ok, true);
+	assert.deepEqual(await listPending(DB_KEY), []);
+
+	const rejected = await publishDurably(fakeEvent("d2"), async () => ({ ok: false, reason: "relay" }), DB_KEY);
+	assert.equal(rejected.ok, false);
+	const thrown = await publishDurably(fakeEvent("d3"), async () => { throw new Error("сеть"); }, DB_KEY);
+	assert.deepEqual(thrown, { ok: false, reason: "сеть" });
+	assert.deepEqual((await listPending(DB_KEY)).map((r) => r.eventId), ["d2", "d3"], "события не потеряны");
+
+	const sent = [];
+	await drain(async (r) => (sent.push(r.eventId), { ok: true }), DB_KEY);
+	assert.deepEqual(sent, ["d2", "d3"], "drain доставляет позже те же события (тот же id)");
+});
+
+test("purgeSent: отправленные старше порога удаляются, свежие и pending остаются", async () => {
+	const a = await enqueue(fakeEvent("old"), DB_KEY);
+	const b = await enqueue(fakeEvent("fresh"), DB_KEY);
+	await enqueue(fakeEvent("pending"), DB_KEY);
+	await markSent(a);
+	await markSent(b);
+	await db.table("outbox").update(a, { sentAt: Date.now() - 2 * 24 * 3600 * 1000 });
+	assert.equal(await purgeSent(), 1);
+	const left = (await db.table("outbox").toArray()).map((r) => r.eventId).sort();
+	assert.deepEqual(left, ["fresh", "pending"]);
 });

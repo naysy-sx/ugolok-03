@@ -11,6 +11,7 @@ import { saveTreeState, loadTreeState, loadFilesClockValue, saveFilesClockValue,
 import { buildFilesLogEvent, parseFilesLogEvent, KIND_FILES_OP, KIND_FILES_OP_LEGACY } from "../../domain/files/sync.js";
 import { db } from "../../core/store/database.js";
 import { dbKeySig } from "./auth.js";
+import { publishDurably } from "../../core/store/outbox.js";
 import { createClipboard, copyToClipboard, cutToClipboard, paste as pasteClipboard, cancelClipboard, hasClipboardItems } from "../../domain/files/clipboard.js";
 import { createUndoStack, pushUndo, popUndo, canUndo as canUndoNow, recordMove, recordRename, recordCreate } from "../../domain/files/undo.js";
 import { createLamportClock } from "../../core/sync/lamport.js";
@@ -81,7 +82,25 @@ function flushPendingOps() {
 	const ops = pendingOps;
 	pendingOps = [];
 	const event = buildFilesLogEvent(cachedPrivKey, ops);
-	cachedPublish(event).catch(() => {});
+	// AUDIT-EGOROD A2: через постоянный outbox — правка дерева файлов не теряется
+	// при закрытой вкладке/обрыве связи/отказе relay, drain доставит позже.
+	publishDurably(event, cachedPublish, dbKeySig.value).catch(() => {});
+}
+
+// AUDIT-EGOROD A2: операции, накопленные в окне дебаунса (300 мс), живут только в
+// памяти — при закрытии/сворачивании вкладки сбрасываем их СРАЗУ (запись в
+// IndexedDB стартует синхронно, браузер обычно успевает её завершить).
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+	window.addEventListener("pagehide", () => {
+		if (publishTimer) clearTimeout(publishTimer);
+		flushPendingOps();
+	});
+	document.addEventListener?.("visibilitychange", () => {
+		if (document.visibilityState === "hidden") {
+			if (publishTimer) clearTimeout(publishTimer);
+			flushPendingOps();
+		}
+	});
 }
 
 // Экспортирована (этап 53 И6, задача 6.7) — ui/signals/mounts.js нужна ТА
