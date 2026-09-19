@@ -1,0 +1,10 @@
+[Unit]
+Description=Ugolok island watchdog каждые 5 минут
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=ugolok-watchdog.service
+
+[Install]
+WantedBy=timers.target

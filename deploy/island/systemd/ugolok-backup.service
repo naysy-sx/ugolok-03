@@ -1,0 +1,6 @@
+[Unit]
+Description=Ugolok island backup (relay events, blossom sqlite + blobs)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ugolok/bin/island-backup.sh

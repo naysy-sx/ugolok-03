@@ -54,6 +54,71 @@ ICE_FILE="$(mktemp)"
 printf '%s' "$ICE_JSON" >"$ICE_FILE"
 trap 'rm -f "$ICE_FILE"' EXIT
 
+# --- AUDIT-EGOROD H1: снимок перед выкладкой, проверка здоровья, откат ---------
+# Раньше выкладка перекладывала PWA rsync --delete поверх и делала compose up без
+# единой копии данных, без проверки «поднялось ли по делу» и без пути назад.
+# Теперь (только prod — у test нет собственных образов и данных пользователей):
+#   1. бэкап данных relay/Blossom (scripts/island-backup.sh);
+#   2. снимок прежнего PWA, конфигов острова и тегов образов (:prev);
+#   3. после compose up — scripts/island-health.sh; провал → откат кода
+#      (PWA, конфиги, образы) и exit 1. Данные пользователей автоматически НЕ
+#      откатываются: пока шла выкладка, люди уже успели что-то записать —
+#      восстановление данных только руками из снимка (scripts/island-restore.md).
+STATE_DIR="${UGOLK_STATE_DIR:-/var/lib/ugolok/deploy}"
+WWW_PREV="$STATE_DIR/www-prev-$ENV"
+ISLAND_PREV="$STATE_DIR/island-prev-$ENV"
+BIN_DIR="${UGOLK_BIN:-/opt/ugolok/bin}"
+HAVE_STATE_DIR=0
+if [[ "$ENV" == "prod" ]] && mkdir -p "$STATE_DIR" 2>/dev/null; then
+	HAVE_STATE_DIR=1
+elif [[ "$ENV" == "prod" ]]; then
+	echo "deploy-env: нет доступа к $STATE_DIR — снимок для отката не будет сохранён" >&2
+fi
+ISLAND_EXCLUDES=(--exclude relay-src --exclude blossom-src --exclude agent-src --exclude policy --exclude policy-conf --exclude '.git')
+DEPLOY_IMAGES=(ugolok-strfry ugolok-blossom ugolok-turncreds-server)
+
+pre_deploy_backup() {
+	[[ "$ENV" == "prod" ]] || return 0
+	if [[ -x "$ROOT/scripts/island-backup.sh" ]]; then
+		if ! bash "$ROOT/scripts/island-backup.sh"; then
+			if [[ "${UGOLK_BACKUP_REQUIRED:-0}" == "1" ]]; then
+				echo "deploy-env: бэкап не удался, UGOLK_BACKUP_REQUIRED=1 — выкладка отменена" >&2
+				exit 1
+			fi
+			echo "deploy-env: ВНИМАНИЕ — бэкап перед выкладкой не удался, выкладка продолжается без него (UGOLK_BACKUP_REQUIRED=1 делает это ошибкой)" >&2
+		fi
+	fi
+}
+
+snapshot_www() {
+	[[ "$HAVE_STATE_DIR" == 1 && -d "$WWW" ]] || return 0
+	mkdir -p "$WWW_PREV" && rsync -a --delete --omit-dir-times "$WWW/" "$WWW_PREV/" || echo "deploy-env: снимок PWA не сохранён" >&2
+}
+
+snapshot_island() {
+	[[ "$HAVE_STATE_DIR" == 1 && -d "$ISLAND_DST" ]] || return 0
+	mkdir -p "$ISLAND_PREV" && rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" "$ISLAND_DST/" "$ISLAND_PREV/" || echo "deploy-env: снимок конфигов острова не сохранён" >&2
+	for img in "${DEPLOY_IMAGES[@]}"; do
+		docker image inspect "$img:local" >/dev/null 2>&1 && docker tag "$img:local" "$img:prev" || true
+	done
+}
+
+rollback_deploy() {
+	echo "deploy-env: ОТКАТ кода к предыдущей версии" >&2
+	if [[ -d "$WWW_PREV" ]]; then
+		rsync -a --delete --omit-dir-times "$WWW_PREV/" "$WWW/" || echo "deploy-env: не удалось откатить PWA" >&2
+	fi
+	if [[ -d "$ISLAND_PREV" ]]; then
+		rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" --exclude coturn.conf --exclude turncreds.env "$ISLAND_PREV/" "$ISLAND_DST/" || echo "deploy-env: не удалось откатить конфиги" >&2
+	fi
+	for img in "${DEPLOY_IMAGES[@]}"; do
+		docker image inspect "$img:prev" >/dev/null 2>&1 && docker tag "$img:prev" "$img:local" || true
+	done
+	docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --no-build --force-recreate \
+		|| echo "deploy-env: откат образов не удался — нужен ручной разбор" >&2
+	bash "$ROOT/scripts/island-health.sh" "$ENV" || echo "deploy-env: и ПОСЛЕ отката остров нездоров — вмешательство оператора" >&2
+}
+
 # Кэш — оптимизация, не обязательное условие деплоя: если каталог ещё не
 # создан оператором ([VPS], docs/environments.md) или /var/cache недоступен
 # для записи uid раннера, просто не монтируем его — контейнер использует
@@ -122,6 +187,8 @@ fi
 
 bash "$ROOT/scripts/check-dist-size.sh"
 
+pre_deploy_backup
+snapshot_www
 mkdir -p "$WWW"
 # без owner/group: каталог www принадлежит caddy, runner — ugolok; -a иначе падает на chgrp.
 # --omit-dir-times: живая проверка (прод, run #30) — "$WWW" (уже существующий,
@@ -135,6 +202,7 @@ rsync -rltD --omit-dir-times --delete --delay-updates \
 	dist/ "$WWW/"
 
 if [[ -d "$ISLAND_SRC" ]]; then
+	snapshot_island
 	mkdir -p "$ISLAND_DST"
 	# turncreds.env — секрет оператора (этап 6), как и coturn.conf: не в git,
 	# живёт только в $ISLAND_DST. Живая проверка (прод, run #33) — без этого
@@ -147,6 +215,8 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		--exclude 'agent-src' \
 		--exclude 'coturn.conf' \
 		--exclude 'turncreds.env' \
+		--exclude 'policy' \
+		--exclude 'policy-conf' \
 		--exclude '.git' \
 		"$ISLAND_SRC/" "$ISLAND_DST/"
 	# turncreds-server (этап 6) собирается из agent/ этого же клона — в отличие
@@ -157,6 +227,33 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	# docker-compose.yml относительный, от $ISLAND_DST, а не от репозитория).
 	if [[ -d "$ROOT/agent" ]]; then
 		rsync -a --omit-dir-times --delete --exclude '.git' "$ROOT/agent/" "$ISLAND_DST/agent-src/"
+	fi
+	# AUDIT-EGOROD G1/G4: код плагина политики записи (монтируется в контейнер relay,
+	# см. deploy/island/docker-compose.yml) и редактируемые оператором файлы.
+	# policy — код, перезаписывается каждый деплой; policy-conf — правки оператора
+	# на хосте, НИКОГДА не перезаписываются (создаются только если их нет).
+	if [[ "$ENV" == "prod" ]]; then
+		POLICY_DST="$ISLAND_DST/policy"
+		mkdir -p "$POLICY_DST/server/strfry" "$POLICY_DST/src/domain/discovery" "$ISLAND_DST/policy-conf"
+		for f in whitelist-plugin.mjs write-policy.mjs rate-limit.mjs; do
+			install -m 755 "$ROOT/server/strfry/$f" "$POLICY_DST/server/strfry/$f"
+		done
+		for f in wordfilter.js stopwords.json; do
+			install -m 644 "$ROOT/src/domain/discovery/$f" "$POLICY_DST/src/domain/discovery/$f"
+		done
+		[[ -f "$ISLAND_DST/policy-conf/whitelist.json" ]] || echo '["*"]' >"$ISLAND_DST/policy-conf/whitelist.json"
+		[[ -f "$ISLAND_DST/policy-conf/peers.json" ]] || printf '{\n\t"kinds": [],\n\t"peers": []\n}\n' >"$ISLAND_DST/policy-conf/peers.json"
+		[[ -f "$ISLAND_DST/policy-conf/policy.json" ]] || printf '{\n\t"mode": "open"\n}\n' >"$ISLAND_DST/policy-conf/policy.json"
+		# скрипты эксплуатации — рядом с apply-caddy.sh, чтобы systemd-юниты не
+		# зависели от временного каталога раннера
+		if [[ -d "$BIN_DIR" && -w "$BIN_DIR" ]]; then
+			for f in island-backup.sh island-health.sh island-watchdog.sh; do
+				install -m 755 "$ROOT/scripts/$f" "$BIN_DIR/$f" || true
+			done
+		fi
+		# деплой перезаписал blossom-config.yml — если сторож диска держит запись
+		# закрытой, повторно применить рубильник
+		[[ -x "$BIN_DIR/island-watchdog.sh" ]] && "$BIN_DIR/island-watchdog.sh" --reapply || true
 	fi
 	# blossom-src исключён из rsync (сторонний форк, клон один раз). Патчи
 	# живут в deploy/island/patches — без этого шага test-деплой обновляет
@@ -210,6 +307,17 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# recreate контейнер останется на старом sha даже после build выше.
 		if [[ "$BLOSSOM_REBUILT" == 1 ]]; then
 			docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --force-recreate --no-deps blossom
+		fi
+	fi
+	# AUDIT-EGOROD H1: «поднялось» != «работает». Провал проверки на prod откатывает
+	# код (см. rollback_deploy); на test — только красный прогон.
+	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
+		if ! bash "$ROOT/scripts/island-health.sh" "$ENV"; then
+			if [[ "$ENV" == "prod" ]]; then
+				rollback_deploy
+			fi
+			echo "deploy-env: проверка здоровья после выкладки не пройдена" >&2
+			exit 1
 		fi
 	fi
 fi

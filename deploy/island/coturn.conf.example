@@ -60,7 +60,8 @@ denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 total-quota=1008
 user-quota=48
 max-bps=1000000
-verbose
+# AUDIT-EGOROD J1: без verbose — журнал не копит пары IP звонящих и их трафик
+# дольше необходимого для диагностики (включать точечно на время разбора).
 log-file=stdout
 simple-log
 

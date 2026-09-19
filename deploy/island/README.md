@@ -85,3 +85,35 @@ sudo systemctl enable --now docker-prune.timer
 | `prod` | ручной merge `main` → `prod` | `ugolok.tech` (`scripts/deploy-env.sh prod`) |
 
 Caddy: `deploy/caddy/`. Тестовый остров (отдельные relay/Blossom): `deploy/island-test/`. TURN общий.
+
+## Эксплуатация: политика записи, бэкап, проверка, сторож (AUDIT-EGOROD)
+
+Аудит `AUDIT-EGOROD-REPORT.md` нашёл, что боевой остров принимал запись и загрузки от любого ключа без лимитов, выкладывался без копии данных и без проверки здоровья. Что теперь есть:
+
+**Политика записи relay** (`server/strfry/write-policy.mjs`, `rate-limit.mjs`, плагин strfry). Код монтируется в контейнер из `/opt/ugolok/island/policy` (деплой синхронизирует), файлы оператора — из `/opt/ugolok/island/policy-conf` (деплой их **не** трогает, создаёт только при отсутствии):
+
+| Файл | Что |
+|---|---|
+| `whitelist.json` | `["*"]` — писать может любой ключ; конкретный список pubkey — только они |
+| `policy.json` | `{"mode":"open"}` или `{"mode":"readonly"}` (рубильник, действует на следующее событие без перезапуска); `limits`: `perPubkeyPerMinute` (300), `perIpPerMinute` (1500), `newPubkeysPerIpPerHour` (60) |
+| `policy.lock` | маркер сторожа диска: файл есть — запись закрыта; удалять командой `island-watchdog.sh --release` |
+| `peers.json` | зеркало (GATEWAY-TZ-1), по умолчанию пуст |
+
+Значения лимитов рассчитаны на звонки (десятки сигнальных событий за раз) и мобильный CGNAT (много честных пользователей за одним IP). Раз в 5 минут плагин пишет в журнал контейнера строку `[policy-stats] {...}` — всплеск `newPubkeys`/`limited*` означает атаку.
+
+**Blossom** (upstream не умеет квот на ключ): защита — потолок размера файла и сторож диска ниже. Полноценная квота на ключ потребует патча форка.
+
+**Бэкап** — `scripts/island-backup.sh` (события relay `strfry export`, sqlite Blossom, blob'ы hardlink-инкрементом; ротация; отказ при нехватке места). Запускается перед каждой prod-выкладкой и по таймеру. Локальный снимок не защищает от гибели диска — задайте `BACKUP_REMOTE` или вынесите `BACKUP_DIR` на другой том. Восстановление — `scripts/island-restore.md`; **проверьте его до аварии**.
+
+**Выкладка** (`scripts/deploy-env.sh`, prod): бэкап → снимок прежнего PWA, конфигов и образов (`:prev`) → `up` → `scripts/island-health.sh` (NIP-11 relay, плагин политики отвечает, Blossom `/stats`, `/turn-credentials`) → при провале откат кода и `exit 1`. Данные автоматически не откатываются. `UGOLK_BACKUP_REQUIRED=1` делает провал бэкапа фатальным для выкладки.
+
+**Сторож** — `scripts/island-watchdog.sh` по таймеру: пишет в `/var/lib/ugolok-watchdog/watchdog.log` строку с заполнением диска и размерами relay/blossom (тренд роста), при диске ≥ 92% сам закрывает запись relay (`policy.lock`) и загрузки Blossom (`UPLOAD → DENY`). Чтение продолжает работать. Снять: `island-watchdog.sh --release`.
+
+Одноразовая установка таймеров (root на VPS):
+
+```bash
+cp deploy/island/systemd/ugolok-{watchdog,backup}.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now ugolok-watchdog.timer ugolok-backup.timer
+```
+
+Скрипты деплой кладёт в `/opt/ugolok/bin/` (если каталог доступен на запись).

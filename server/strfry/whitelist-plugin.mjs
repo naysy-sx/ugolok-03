@@ -4,7 +4,7 @@
 // server/strfry/strfry-src/docs/plugins.md (построчный JSON, stdin/stdout).
 // Само решение — write-policy.mjs (чистая функция, GATEWAY-TZ-1.md §2); здесь
 // только чтение файлов и ввод/вывод.
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -19,6 +19,7 @@ const CONF_DIR = process.env.POLICY_CONF_DIR || HERE;
 const WHITELIST_PATH = join(CONF_DIR, "whitelist.json");
 const PEERS_PATH = join(CONF_DIR, "peers.json");
 const POLICY_PATH = join(CONF_DIR, "policy.json");
+const LOCK_PATH = join(CONF_DIR, "policy.lock");
 const STOPWORDS_PATH = join(HERE, "../../src/domain/discovery/stopwords.json");
 
 function loadWhitelist() {
@@ -59,11 +60,17 @@ function loadStopwords() {
 // AUDIT-EGOROD G4: policy.json — { "mode": "open" | "readonly", "limits": {...} }.
 // Нет файла / битый JSON → значения по умолчанию (открыто, лимиты по умолчанию).
 function loadPolicy() {
+	let policy = {};
 	try {
-		return JSON.parse(readFileSync(POLICY_PATH, "utf8"));
+		policy = JSON.parse(readFileSync(POLICY_PATH, "utf8"));
 	} catch {
-		return {};
+		// нет файла / битый JSON — значения по умолчанию
 	}
+	// policy.lock — маркер, который ставит сторож диска (scripts/island-watchdog.sh):
+	// файл существует → запись закрыта, JSON править не нужно (на хосте нет ни Node,
+	// ни jq). Снимается вручную: island-watchdog.sh --release.
+	if (existsSync(LOCK_PATH)) return { ...policy, mode: "readonly" };
+	return policy;
 }
 
 const limiter = createLimiter();

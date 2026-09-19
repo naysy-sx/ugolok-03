@@ -1,0 +1,11 @@
+[Unit]
+Description=Ugolok island backup ежедневно
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=ugolok-backup.service
+
+[Install]
+WantedBy=timers.target

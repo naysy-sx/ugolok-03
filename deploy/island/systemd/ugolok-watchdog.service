@@ -1,0 +1,6 @@
+[Unit]
+Description=Ugolok island watchdog (диск, рубильники записи)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ugolok/bin/island-watchdog.sh

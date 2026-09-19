@@ -13,9 +13,25 @@ services:
     volumes:
       - ./strfry.conf:/app/strfry.conf:ro
       - /var/lib/ugolok/relay:/app/strfry-db
+      # AUDIT-EGOROD G1/G4: политика записи. policy — код (синхронизируется деплоем),
+      # policy-conf — файлы оператора (whitelist/peers/policy.json), править на хосте.
+      - ./policy:/app/policy:ro
+      - ./policy-conf:/app/policy-conf:ro
     ports:
       - "127.0.0.1:7777:7777"
     mem_limit: 512m
+    logging: &logging
+      # AUDIT-EGOROD J1/G5: без ограничений json-file растёт без предела (диск),
+      # а журнал с IP хранился бы вечно. Небольшое скользящее окно.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header", "Accept: application/nostr+json", "http://127.0.0.1:7777/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   blossom:
     build:
@@ -37,6 +53,7 @@ services:
     # реальный риск OOM. Хост 4ГБ — поднято до 512m, не выше остальных
     # сервисов вместе (relay 512m + coturn 128m + turncreds 32m).
     mem_limit: 512m
+    logging: *logging
     # /.well-known/health в форке есть, но через Caddy часто 404 (ACME
     # перехватывает .well-known). /stats — живой BUD-эндпоинт без auth.
     healthcheck:
@@ -57,6 +74,7 @@ services:
       - ./coturn.conf:/etc/coturn/turnserver.conf:ro
     command: ["-c", "/etc/coturn/turnserver.conf"]
     mem_limit: 128m
+    logging: *logging
 
   # Этап 6 (TZ-cicd-hardening) — выдача временных TURN-кредов (agent/cmd/
   # turncreds-server), TURN_STATIC_AUTH_SECRET — тот же секрет, что
@@ -77,3 +95,4 @@ services:
     ports:
       - "127.0.0.1:8090:8090"
     mem_limit: 32m
+    logging: *logging

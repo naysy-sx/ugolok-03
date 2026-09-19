@@ -30,8 +30,11 @@ FROM alpine:3.18.3
 # правами root:root ДО первого запуска — непривилегированный strfry не может
 # открыть LMDB там без chown в рантайме (найдено живой проверкой, не
 # гипотезой: "mdb_env_open: Permission denied" при первом docker compose up).
+# nodejs — write-policy плагин (server/strfry/whitelist-plugin.mjs, AUDIT-EGOROD G1):
+# лимиты записи и рубильник. Сам код плагина в образ НЕ копируется, а монтируется
+# с хоста (см. docker-compose.yml, ./policy) — правка политики не требует пересборки.
 RUN apk --no-cache add \
-    lmdb flatbuffers libsecp256k1 libb2 zstd libressl su-exec \
+    lmdb flatbuffers libsecp256k1 libb2 zstd libressl su-exec nodejs \
   && rm -rf /var/cache/apk/*
 RUN adduser -D -h /app -s /bin/sh strfry && \
     chown -R strfry:strfry /app
