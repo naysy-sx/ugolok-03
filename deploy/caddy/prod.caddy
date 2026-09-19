@@ -116,7 +116,28 @@ blossom.ugolok.tech {
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 	}
+	# AUDIT-EGOROD J1/G5: журнал нужен для разбора всплесков (видно, что и как часто
+	# качают/льют), но не как архив «кто что запрашивал»: адрес клиента обрезается
+	# до подсети (/24, /56), файл ротируется и живёт не дольше 3 суток. Без
+	# ротации он рос бы вечно (диск), а IP хранились бы бессрочно.
 	log {
-		output file /var/log/caddy/blossom-access.log
+		output file /var/log/caddy/blossom-access.log {
+			roll_size 10MiB
+			roll_keep 5
+			roll_keep_for 72h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip ip_mask {
+					ipv4 24
+					ipv6 56
+				}
+				request>client_ip ip_mask {
+					ipv4 24
+					ipv6 56
+				}
+			}
+		}
 	}
 }

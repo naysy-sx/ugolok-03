@@ -1,0 +1,20 @@
+# AUDIT-EGOROD G1/G2 — пример первой линии защиты на уровне хоста (nftables).
+# Ограничивает СКОРОСТЬ НОВЫХ TCP-соединений с одного адреса на 443 (Caddy → relay/
+# Blossom/PWA). Не применяется автоматически: значения зависят от вашей аудитории.
+#
+# ОСТОРОЖНО, мобильный CGNAT: за одним публичным адресом оператора могут сидеть
+# тысячи честных пользователей — слишком низкий лимит отрежет их всех сразу.
+# Начинайте с большого запаса, смотрите `nft list ruleset` (счётчики) и журнал
+# сторожа, снижайте постепенно. Действует ТОЛЬКО на новые соединения: уже
+# открытые WebSocket relay не рвутся.
+#
+# Применить:  nft -f nftables-ratelimit.conf.example
+# Снять:      nft delete table inet ugolok_limits
+table inet ugolok_limits {
+	chain input {
+		type filter hook input priority -10; policy accept;
+		# meter — классический синтаксис счётчика на адрес; отдельно для IPv4 и IPv6
+		tcp dport 443 ct state new meter flood4 { ip saddr limit rate over 300/minute burst 600 packets } counter drop
+		tcp dport 443 ct state new meter flood6 { ip6 saddr and ffff:ffff:ffff:ffff:: limit rate over 300/minute burst 600 packets } counter drop
+	}
+}
