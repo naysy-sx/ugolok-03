@@ -38,6 +38,7 @@ export async function execute(command, ctx) {
 	switch (command.type) {
 		case "SEND_OFFER":
 			payload = { type: "offer", sessionId, sdp: command.sdp };
+			if (command.restart) payload.restart = true;
 			break;
 		case "SEND_ANSWER":
 			payload = { type: "answer", sessionId, sdp: command.sdp };
@@ -58,6 +59,7 @@ export async function execute(command, ctx) {
 		default:
 			return undefined;
 	}
+	if (typeof command.seq === "number") payload.seq = command.seq;
 	const event = buildCallSignalEvent(privKey, peerPubkey, payload, undefined, hTopic);
 	// TZ-diag-trace.md §2.4 — eventId примешивается к результату publish() ниже
 	// ТОЛЬКО ради трассировки (call-runtime.js её читает и пишет в запись, если
@@ -80,7 +82,7 @@ export async function execute(command, ctx) {
 export function toFsmEvent(payload, senderPubkey, myPubkey) {
 	switch (payload.type) {
 		case "offer":
-			return { type: "REMOTE_OFFER", sdp: payload.sdp, sessionId: payload.sessionId, fromPubkey: senderPubkey, myPubkey };
+			return { type: "REMOTE_OFFER", sdp: payload.sdp, sessionId: payload.sessionId, fromPubkey: senderPubkey, myPubkey, restart: payload.restart === true };
 		case "answer":
 			return { type: "REMOTE_ANSWER", sdp: payload.sdp, sessionId: payload.sessionId };
 		case "ice":

@@ -94,6 +94,43 @@ test("И2 (граница τ): предикат Present(t) = {a > r ∧ a ≥ t�
 	assert.deepEqual(present(state, T + TAU + 1, TAU), [], "T+τ+1 — a ≥ t−τ ложно, аренда истекла");
 });
 
+test("аренда по receivedAt: heartbeat с created_at, отстающим на 120с, — участник присутствует", () => {
+	let state = emptyPresence();
+	const now = 200_000;
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", at: now - 120_000, receivedAt: now });
+	assert.deepEqual(present(state, now, TAU).map((p) => p.pubkey), ["alice"]);
+});
+
+test("mergeExit: аренда по receivedAt — exit с created_at в будущем не прячет участника навсегда", () => {
+	let state = emptyPresence();
+	const now = 10_000;
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", at: now, receivedAt: now });
+	state = mergeExit(state, { pubkey: "alice", at: now + 30 * 24 * 3600 * 1000, receivedAt: now + 50 });
+	assert.deepEqual(present(state, now + 50, TAU), [], "exit по локальному receivedAt действует сразу");
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", at: now + 100, receivedAt: now + 100 });
+	assert.deepEqual(present(state, now + 100, TAU).map((p) => p.pubkey), ["alice"], "последующий heartbeat возвращает");
+});
+
+test("часы из будущего не замораживают inVoice: последующий heartbeat с inVoice:false применяется", () => {
+	let state = emptyPresence();
+	const now = 10_000;
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", inVoice: true, at: now + 30 * 24 * 3600 * 1000, receivedAt: now });
+	assert.equal(present(state, now, TAU)[0].inVoice, true);
+	state = mergeHeartbeat(state, { pubkey: "alice", nick: "Алиса", inVoice: false, at: now + 1000, receivedAt: now + 1000 });
+	assert.equal(present(state, now + 1000, TAU)[0].inVoice, false);
+});
+
+test("два наблюдателя с одинаковым набором и равным joinedAt дают одинаковый порядок (тай-брейк pubkey)", () => {
+	let left = emptyPresence();
+	let right = emptyPresence();
+	left = mergeHeartbeat(left, { pubkey: "bob", nick: "Боб", at: 100, receivedAt: 100 });
+	left = mergeHeartbeat(left, { pubkey: "alice", nick: "Алиса", at: 100, receivedAt: 500 });
+	right = mergeHeartbeat(right, { pubkey: "alice", nick: "Алиса", at: 100, receivedAt: 900 });
+	right = mergeHeartbeat(right, { pubkey: "bob", nick: "Боб", at: 100, receivedAt: 100 });
+	assert.deepEqual(present(left, 100, TAU).map((p) => p.pubkey), ["alice", "bob"]);
+	assert.deepEqual(present(right, 100, TAU).map((p) => p.pubkey), ["alice", "bob"]);
+});
+
 test("stable order: present() отсортирован по joinedAt возрастанию", () => {
 	let state = emptyPresence();
 	state = heartbeat(state, "carol", 300);

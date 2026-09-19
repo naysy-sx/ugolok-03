@@ -86,6 +86,7 @@ export function createRelayConnection(url, options = {}) {
   // reportProcessed() ниже даёt МЕНЬШИЙ, безопасный водяной знак, который
   // withResumedSince предпочитает, если он есть для этого subId.
   const processedWatermarkBySubId = new Map();
+  let lastDisconnectAtMs = null;
 
   const messageHandlers = [];
 
@@ -155,6 +156,7 @@ export function createRelayConnection(url, options = {}) {
       if (onTrace && reqsBeforeOpen.size > 0) trace("resubscribe", { subIds: [...reqsBeforeOpen.keys()] });
     };
     ws.onclose = (evt) => {
+      lastDisconnectAtMs = Date.now();
       trace("close", { code: evt?.code, reason: evt?.reason });
       if (stableTimer) {
         clearTimeout(stableTimer);
@@ -168,7 +170,12 @@ export function createRelayConnection(url, options = {}) {
       apply("ERROR");
     };
     ws.onmessage = (evt) => {
-      const msg = JSON.parse(evt.data);
+      let msg;
+      try {
+        msg = JSON.parse(evt.data);
+      } catch {
+        return;
+      }
       // TZ-recovery-policy.md §5 — запоминаем created_at последнего EVENT по
       // каждой подписке, ДО раздачи обработчикам: нужно только для
       // replayActiveReqs() после следующего реконнекта этого же соединения.
@@ -192,12 +199,9 @@ export function createRelayConnection(url, options = {}) {
     ws.send(JSON.stringify(msgArray));
   }
 
-  // TZ-recovery-policy.md §5 — "возобновлять от метки времени последнего
-  // полученного события, а не с начала". Если для subId уже видели EVENT на
-  // этом соединении, каждому объекту-фильтру в REQ подставляется/поднимается
-  // since на (последний created_at + 1) — не пересылать уже виденное. Без
-  // истории (первая подписка в жизни соединения) REQ уходит как есть,
-  // поведение не меняется.
+  // TZ-recovery-policy.md §5 — возобновлять от метки последнего события.
+  // since включительно (не lastSeen+1): offer и первые ICE часто уходят в
+  // ту же секунду, +1 терял бы пачку. Повтор безвреден (restart-флаг, ICE).
   function withResumedSince(req) {
     const subId = req[1];
     // Этап 3 (З3.5) — предпочитаем явно подтверждённый водяной знак ОБРАБОТКИ
@@ -205,8 +209,14 @@ export function createRelayConnection(url, options = {}) {
     // subId; иначе — прежнее поведение (водяной знак "видел", без изменений
     // для всех подписчиков, которые reportProcessed не зовут).
     const lastSeen = processedWatermarkBySubId.get(subId) ?? lastEventCreatedAtBySubId.get(subId);
-    if (lastSeen === undefined) return req;
-    const resumeSince = lastSeen + 1;
+    let resumeSince;
+    if (lastSeen !== undefined) {
+      resumeSince = lastSeen;
+    } else if (lastDisconnectAtMs !== null) {
+      resumeSince = Math.floor((lastDisconnectAtMs - 10000) / 1000);
+    } else {
+      return req;
+    }
     const [type, id, ...filters] = req;
     const patchedFilters = filters.map((f) => (typeof f?.since === "number" && f.since >= resumeSince ? f : { ...f, since: resumeSince }));
     return [type, id, ...patchedFilters];

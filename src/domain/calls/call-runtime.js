@@ -22,6 +22,12 @@ const TIMER_EVENT_BY_NAME = {
 // (раз в CALL_HEARTBEAT_MS) переживает единичную потерю без отдельного retry.
 const MEDIA_COMMAND_TYPES = new Set(["ACQUIRE_MIC", "CREATE_OFFER", "CREATE_ANSWER", "SET_REMOTE", "ADD_ICE", "DO_ICE_RESTART", "CLOSE_PC"]);
 const SIGNAL_COMMAND_TYPES = new Set(["SEND_OFFER", "SEND_ANSWER", "SEND_ICE", "SEND_HEARTBEAT"]);
+const RETRIABLE_SIGNAL_TYPES = new Set(["SEND_OFFER", "SEND_ANSWER", "SEND_ICE"]);
+// Согласовано явно: CONNECT_TIMEOUT=15с, publisher timeout=8с, reconnect backoff от 1с.
+// Бюджет 10с — успевает дождаться реконнекта и одну полную публикацию, не съедая
+// CONNECT_TIMEOUT. Поллинг 400мс — чаще минимального backoff релея.
+const SIGNAL_RETRY_BUDGET_MS = 10000;
+const SIGNAL_RETRY_POLL_MS = 400;
 
 // TZ-recovery-policy.md §2.2 — разброс ±30% на реальном таймере (не в чистом
 // FSM, которое обязано быть детерминированным — см. call-fsm.js). Применяется
@@ -100,6 +106,8 @@ export function createCallRuntime(options = {}) {
 	let state = idleState();
 	const timers = new Map(); // name -> timer id
 	let endedResetTimerId = null;
+	let dispatchChain = Promise.resolve();
+	let outgoingSeq = 0;
 	// TZ-recovery-policy.md §3 — бухгалтерия "жив ли собеседник" ЦЕЛИКОМ здесь
 	// (call-fsm.js чистое ядро, часов не имеет). reconnectingStartedAt — момент
 	// входа в текущий эпизод RECONNECTING (null вне его), нужен для §2.2's фаз
@@ -128,7 +136,13 @@ export function createCallRuntime(options = {}) {
 	// синхронный код до первого await выполняется сразу) — CREATE_OFFER нередко
 	// успевал создать offer РАНЬШЕ, чем ACQUIRE_MIC's addTrack — SDP без media-
 	// секций, ICE вообще не собирался (звонок молча "тикал" 15с до CONNECT_TIMEOUT).
-	async function dispatch(event) {
+	function dispatch(event) {
+		const run = () => runDispatch(event);
+		dispatchChain = dispatchChain.then(run, run);
+		return dispatchChain;
+	}
+
+	async function runDispatch(event) {
 		const prevState = state;
 
 		// TZ-recovery-policy.md §4 — REMOTE_HANGUP, пришедший когда FSM уже в
@@ -181,6 +195,9 @@ export function createCallRuntime(options = {}) {
 
 		const result = reduce(state, event);
 		state = result.state;
+		if (state.sessionId && state.sessionId !== prevState.sessionId) {
+			outgoingSeq = 0;
+		}
 
 		// Выход из эпизода RECONNECTING (восстановились или завершились) —
 		// обнулить бухгалтерию, чтобы следующий эпизод (новый обрыв того же
@@ -287,10 +304,88 @@ export function createCallRuntime(options = {}) {
 		}
 	}
 
+	function sleep(ms) {
+		return new Promise((resolve) => setTimeoutImpl(resolve, ms));
+	}
+
+	async function publishSignal(command, ctx = {}) {
+		const seq = ++outgoingSeq;
+		const peerPubkey = ctx.peerPubkey ?? state.peerPubkey;
+		const sessionId = ctx.sessionId ?? state.sessionId;
+		const relayStateBefore = getRelayState ? getRelayState() : undefined;
+		trace("command", { name: command.type, phase: "start", sessionId, relayState: relayStateBefore, seq });
+		const started = Date.now();
+		try {
+			const result = await signalingAdapter.execute(
+				{ ...command, seq },
+				{ privKey, peerPubkey, sessionId, publish, hTopic },
+			);
+			const tookMs = Date.now() - started;
+			const sdpFields = command.sdp ? extractSdpTraceFields(command.sdp) : {};
+			trace("command", {
+				name: command.type,
+				phase: "ok",
+				sessionId,
+				relayOk: result?.ok,
+				relayReason: result?.reason,
+				eventId: result?.eventId,
+				seq,
+				...sdpFields,
+			});
+			trace("publish-result", {
+				commandType: command.type,
+				sessionId,
+				ok: result?.ok !== false,
+				reason: result?.reason ?? null,
+				tookMs,
+			});
+			return result;
+		} catch (e) {
+			const tookMs = Date.now() - started;
+			trace("command", { name: command.type, phase: "error", sessionId, errorMessage: String(e?.message ?? e), seq });
+			trace("publish-result", {
+				commandType: command.type,
+				sessionId,
+				ok: false,
+				reason: String(e?.message ?? e),
+				tookMs,
+			});
+			throw e;
+		}
+	}
+
+	async function executeSignalCommand(command) {
+		const sessionIdAtStart = state.sessionId;
+		const nameAtStart = state.name;
+		const peerAtStart = state.peerPubkey;
+		const deadline = Date.now() + SIGNAL_RETRY_BUDGET_MS;
+		while (Date.now() < deadline) {
+			if (state.sessionId !== sessionIdAtStart || state.name !== nameAtStart) return;
+			if (transportAlive()) {
+				try {
+					const result = await publishSignal(command, { peerPubkey: peerAtStart, sessionId: sessionIdAtStart });
+					if (result?.ok !== false) return;
+				} catch {
+					// повторим, пока жив транспорт и не истёк бюджет
+				}
+			}
+			if (state.sessionId !== sessionIdAtStart || state.name !== nameAtStart) return;
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) break;
+			await sleep(Math.min(SIGNAL_RETRY_POLL_MS, remaining));
+		}
+		console.warn(`call-runtime: сигнальная команда ${command.type} не доставлена за ${SIGNAL_RETRY_BUDGET_MS}мс`);
+	}
+
+	function transportAlive() {
+		const s = getRelayState ? getRelayState() : "connected";
+		return s === "connected" || s === "subscribed" || s === "authenticating";
+	}
+
 	async function executeCommand(command) {
 		if (command.type === "SEND_HANGUP") {
-			// Захват контекста ДО await — см. комментарий sendHangupReliably.
-			return sendHangupReliably({ peerPubkey: state.peerPubkey, sessionId: state.sessionId });
+			void sendHangupReliably({ peerPubkey: state.peerPubkey, sessionId: state.sessionId });
+			return;
 		}
 		if (MEDIA_COMMAND_TYPES.has(command.type)) {
 			if (command.type === "CLOSE_PC") clearAllTimers(); // защита от осиротевших grace/backoff/restartTick таймеров
@@ -310,35 +405,8 @@ export function createCallRuntime(options = {}) {
 			return;
 		}
 		if (SIGNAL_COMMAND_TYPES.has(command.type)) {
-			// TZ §2.4, второй капкан (явно назван в задании) — "publish() не
-			// бросил исключение" НИЧЕГО не значит на полуживом сокете: send()
-			// может не бросить, а событие не дойти. Единственное надёжное
-			// подтверждение — OK от релея ПО ИДЕНТИФИКАТОРУ СОБЫТИЯ, которое
-			// publisher.js уже возвращает через signalingAdapter.execute()
-			// (см. signaling-adapter.js — result теперь содержит {ok, reason,
-			// eventId}). Раньше это значение НИКЕМ не читалось (await без
-			// присваивания) — здесь оно читается ТОЛЬКО для записи, ни одна
-			// ветка catch/console.warn ниже не изменена и не зависит от result.ok.
-			const relayStateBefore = getRelayState ? getRelayState() : undefined;
-			trace("command", { name: command.type, phase: "start", sessionId: state.sessionId, relayState: relayStateBefore });
-			try {
-				const result = await signalingAdapter.execute(command, { privKey, peerPubkey: state.peerPubkey, sessionId: state.sessionId, publish, hTopic });
-				const sdpFields = command.sdp ? extractSdpTraceFields(command.sdp) : {};
-				trace("command", {
-					name: command.type,
-					phase: "ok",
-					sessionId: state.sessionId,
-					relayOk: result?.ok,
-					relayReason: result?.reason,
-					eventId: result?.eventId,
-					...sdpFields,
-				});
-			} catch (e) {
-				// НЕ ЧИНИТЬ (TZ §0.1) — по-прежнему только console.warn, команда
-				// по-прежнему теряется навсегда, retry не добавляется.
-				trace("command", { name: command.type, phase: "error", sessionId: state.sessionId, errorMessage: String(e?.message ?? e) });
-				console.warn(`call-runtime: сигнальная команда ${command.type} упала`, e);
-			}
+			if (RETRIABLE_SIGNAL_TYPES.has(command.type)) void executeSignalCommand(command);
+			else void publishSignal(command).catch(() => {});
 			return;
 		}
 		if (command.type === "START_TIMER") {
@@ -359,16 +427,16 @@ export function createCallRuntime(options = {}) {
 
 	// --- Публичный API: пользовательские действия (Σ_in-A, §1.3 VOICE.md) ---
 	function placeCall(peerPubkey) {
-		dispatch({ type: "USER_PLACE_CALL", peerPubkey, myPubkey, safetyCapMs });
+		return dispatch({ type: "USER_PLACE_CALL", peerPubkey, myPubkey, safetyCapMs });
 	}
 	function accept() {
-		dispatch({ type: "USER_ACCEPT", sessionId: state.sessionId });
+		return dispatch({ type: "USER_ACCEPT", sessionId: state.sessionId });
 	}
 	function reject() {
-		dispatch({ type: "USER_REJECT", sessionId: state.sessionId });
+		return dispatch({ type: "USER_REJECT", sessionId: state.sessionId });
 	}
 	function hangup() {
-		dispatch({ type: "USER_HANGUP", sessionId: state.sessionId });
+		return dispatch({ type: "USER_HANGUP", sessionId: state.sessionId });
 	}
 
 	// --- Входящий сигналинг (kind 20075) — сырое nostr-событие с relay. Вызывающий
@@ -390,5 +458,14 @@ export function createCallRuntime(options = {}) {
 		return state;
 	}
 
-	return { placeCall, accept, reject, hangup, handleIncomingSignal, getState, dismissEnded: resetToIdle };
+	function getInboundAudioStats() {
+		return mediaController.getInboundAudioStats?.() ?? Promise.resolve(null);
+	}
+
+	function closeNow() {
+		clearAllTimers();
+		return mediaController.execute({ type: "CLOSE_PC" });
+	}
+
+	return { placeCall, accept, reject, hangup, handleIncomingSignal, getState, getInboundAudioStats, closeNow, dismissEnded: resetToIdle };
 }

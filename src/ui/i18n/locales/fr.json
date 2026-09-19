@@ -1224,6 +1224,13 @@
 			"volumeLabel": "Volume",
 			"ephemeralNotice": "Messages aren't saved or loaded on join — anyone who joins later won't see the history. A message sent right when the recipient briefly drops offline is lost for good.",
 			"edgeSilentHint": "can't hear you",
+			"edgeOpeningHint": "connecting…",
+			"edgeRecoveringHint": "reconnecting",
+			"edgeBrokenHint": "can't hear you",
+			"edgeRetryButton": "Reconnect",
+			"edgeAttemptLabel": "attempt {{n}}",
+			"turnUnavailableWarning": "Relay is unavailable; you may not be able to hear everyone",
+			"enableSoundButton": "Enable sound",
 			"emptyChat": "No messages yet. Send the first one."
 		},
 		"errors": {

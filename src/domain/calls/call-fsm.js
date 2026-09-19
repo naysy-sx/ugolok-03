@@ -326,7 +326,10 @@ function reduceConnected(state, event) {
 		case "ICE_FAILED":
 			return enterReconnecting(state);
 		case "REMOTE_OFFER":
-			// Пир инициировал ICE restart (§2.2) — отвечаем, оставаясь CONNECTED.
+			// Повтор той же сессии без restart — реплей strfry / ретрай первой
+			// установки, не ICE-рестарт. Без флага SET_REMOTE со старым SDP
+			// на живом соединении ломает пару.
+			if (!event.restart) return ignore(state);
 			return { state, commands: [{ type: "SET_REMOTE", sdp: event.sdp }, { type: "CREATE_ANSWER" }] };
 		case "HEARTBEAT_TICK":
 			return { state, commands: [{ type: "SEND_HEARTBEAT" }, { type: "START_TIMER", name: "heartbeat", ms: CALL_HEARTBEAT_MS }] };
@@ -401,8 +404,9 @@ function reduceReconnecting(state, event) {
 		case "HEARTBEAT_TICK":
 			return { state, commands: [{ type: "SEND_HEARTBEAT" }, { type: "START_TIMER", name: "heartbeat", ms: CALL_HEARTBEAT_MS }] };
 		case "LOCAL_OFFER_READY":
-			return { state, commands: [{ type: "SEND_OFFER", sdp: event.sdp }] };
+			return { state, commands: [{ type: "SEND_OFFER", sdp: event.sdp, restart: true }] };
 		case "REMOTE_OFFER":
+			if (!event.restart) return ignore(state);
 			return { state, commands: [{ type: "SET_REMOTE", sdp: event.sdp }, { type: "CREATE_ANSWER" }] };
 		case "REMOTE_ANSWER":
 			return { state, commands: [{ type: "SET_REMOTE", sdp: event.sdp }] };

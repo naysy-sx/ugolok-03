@@ -68,12 +68,17 @@ export function buildRoomPresenceEvent(privKey, kSess, hTopic, { type, nick, inV
 	return buildEvent(privKey, kSess, ROOM_PRESENCE_KIND, hTopic, payload, createdAtMs);
 }
 
-export function parseRoomPresenceEvent(event, kSess) {
+export function parseRoomPresenceEvent(event, kSess, receivedAt) {
 	const payload = parseEvent(event, kSess);
 	if (payload === null) return null;
 	const at = event.created_at * 1000;
-	if (payload.type === "heartbeat") return { pubkey: event.pubkey, type: "heartbeat", nick: payload.nick, inVoice: payload.inVoice ?? false, at };
-	if (payload.type === "exit") return { pubkey: event.pubkey, type: "exit", at };
+	const received = receivedAt ?? at;
+	if (payload.type === "heartbeat") {
+		return { pubkey: event.pubkey, type: "heartbeat", nick: payload.nick, inVoice: payload.inVoice ?? false, at, receivedAt: received };
+	}
+	if (payload.type === "exit") {
+		return { pubkey: event.pubkey, type: "exit", at, receivedAt: received };
+	}
 	return null;
 }
 

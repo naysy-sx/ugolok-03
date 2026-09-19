@@ -258,7 +258,7 @@ export default function ConnectionEndpoints() {
 					// RTCPeerConnection с turn: без username/credential бросает
 					// InvalidAccessError синхронно (живая проверка, прод, 2026-09-06).
 					const iceForProbe = await resolveCallIceServers();
-					return probeIce(iceForProbe);
+					return probeIce(iceForProbe.iceServers ?? iceForProbe);
 				},
 				{ attempts: 2, delayMs: 900, isCancelled: () => cancelled },
 			);

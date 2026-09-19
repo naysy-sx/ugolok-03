@@ -1,106 +1,62 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { createAudioGraph } from "../../domain/rooms/adapters/audio-graph.js";
-import { computeBlitRegions, nextWriteIndex } from "../../domain/rooms/ring-column-blit.js";
 import { t } from "../signals/i18n.js";
+import { record as defaultTraceRecord, isTraceEnabled } from "../../core/diag/call-trace.js";
 
-// Rooms, этап 5 — визуализатор комнаты (спектрограмма + "кто говорит" + регулятор
-// громкости). Контракт и design-записка: PROCESS-DOCS/CONTRACTS.md/DESIGN.md
-// "Rooms — Этап 5". ROOMS-SPEC §4.4, ROOMS-ALGO §7.
+// Rooms, этап 5 — визуализатор комнаты (волна + "кто говорит" + регулятор
+// громкости). Контракт: PROCESS-DOCS/CONTRACTS.md "Rooms — Этап 5".
 //
 // Один requestAnimationFrame на всю комнату (ROOMS-ALGO §7.4) — этот компонент
-// существует РОВНО в одном экземпляре на сессию (не на участника). Владеет
-// собственным audio-graph.js (создаёт при появлении localStream, закрывает при
-// его исчезновении) — ЕДИНСТВЕННЫЙ путь воспроизведения удалённых участников
-// (замена <audio>-элементов Этапа 4-довеска №2, design-записка "Rooms — Этап 5":
-// два параллельных пути одного MediaStream дали бы удвоенный звук).
-//
-// Рендерится ВСЕГДА, пока voiceActive (quick.jsx) — воспроизведение не должно
-// зависеть от того, свёрнут ли визуально канвас.
+// существует РОВНО в одном экземпляре на сессию. Владеет audio-graph.js
+// (создаёт при появлении localStream). Рендерится ВСЕГДА, пока voiceActive —
+// воспроизведение не зависит от того, свёрнут ли канвас.
 const CANVAS_WIDTH = 300;
 const CANVAS_HEIGHT = 80;
-const LEVELS_EVERY_N_FRAMES = 4; // ROOMS-ALGO §7.4 — "каждый третий-четвёртый"
-const PALETTE_SIZE = 256;
+const LEVELS_EVERY_N_FRAMES = 4;
+const BAR_CSS_PX = 2;
+const GAP_CSS_PX = 1;
+// Кислотная тройка: бас / середина / верх.
+const COLOR_LOW = [255, 16, 240];
+const COLOR_MID = [57, 255, 20];
+const COLOR_HIGH = [0, 255, 255];
 
-// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ: getComputedStyle(...).getPropertyValue("--accent")
-// возвращает СЫРУЮ строку кастомного свойства буквально как записана в
-// minimal.css — "light-dark(oklch(...), oklch(...))" — браузер резолвит
-// light-dark() только когда свойство используется как значение НАСТОЯЩЕГО
-// CSS-свойства (color/background и т.п.), не при чтении самого custom
-// property. Canvas 2D's addColorStop() такой синтаксис не понимает вовсе и
-// бросает SyntaxError (ctx.fillStyle = ... для сравнения молча ИГНОРИРУЕТ
-// невалидное значение, поэтому та же ошибка раньше была не видна). Резолвим
-// через служебный элемент — единственный надёжный способ получить
-// КОНКРЕТНЫЙ цвет для текущей темы без дублирования логики light-dark в JS.
-function resolveCssColor(colorExpression, fallback) {
-	const probe = document.createElement("span");
-	probe.style.position = "absolute";
-	probe.style.visibility = "hidden";
-	probe.style.color = colorExpression;
-	document.body.appendChild(probe);
-	const resolved = getComputedStyle(probe).color;
-	probe.remove();
-	return resolved || fallback;
+function lerpChannel(a, b, t) {
+	return a + (b - a) * t;
 }
 
-// lookup[0..255] по интенсивности сэмпла спектра — построен через встроенный
-// canvas-градиент (принимает любую валидную CSS-строку цвета в addColorStop,
-// включая oklch()/var()-резолвленный accentColor), а не вручную интерполяцией
-// каналов: гарантированно то же цветовое пространство, что и у самого accent.
-function buildHeatPalette(accentColor) {
-	const paletteCanvas = document.createElement("canvas");
-	paletteCanvas.width = PALETTE_SIZE;
-	paletteCanvas.height = 1;
-	const ctx = paletteCanvas.getContext("2d");
-	const gradient = ctx.createLinearGradient(0, 0, PALETTE_SIZE, 0);
-	gradient.addColorStop(0, "transparent");
-	gradient.addColorStop(0.5, accentColor);
-	gradient.addColorStop(1, "white");
-	ctx.fillStyle = gradient;
-	ctx.fillRect(0, 0, PALETTE_SIZE, 1);
-	const { data } = ctx.getImageData(0, 0, PALETTE_SIZE, 1);
-	const palette = new Array(PALETTE_SIZE);
-	for (let i = 0; i < PALETTE_SIZE; i++) {
-		const o = i * 4;
-		palette[i] = `rgba(${data[o]}, ${data[o + 1]}, ${data[o + 2]}, ${data[o + 3] / 255})`;
+function colorForBand(t) {
+	if (t < 0.5) {
+		const u = t / 0.5;
+		return [
+			lerpChannel(COLOR_LOW[0], COLOR_MID[0], u),
+			lerpChannel(COLOR_LOW[1], COLOR_MID[1], u),
+			lerpChannel(COLOR_LOW[2], COLOR_MID[2], u),
+		];
 	}
-	return palette;
+	const u = (t - 0.5) / 0.5;
+	return [
+		lerpChannel(COLOR_MID[0], COLOR_HIGH[0], u),
+		lerpChannel(COLOR_MID[1], COLOR_HIGH[1], u),
+		lerpChannel(COLOR_MID[2], COLOR_HIGH[2], u),
+	];
 }
 
-// Тот же приём, что call-overlay.jsx RemoteAudio: удалённый MediaStream в
-// Chrome/Safari не звучит из AudioContext.destination, только из <audio srcObject>.
-// Граф (спектрограмма/уровни) остаётся; громкость комнаты — volume у этих элементов,
-// masterGain графа держим на 0, чтобы не словить удвоенный звук там, где destination всё же играет.
-function RemoteRoomAudio({ stream, volume }) {
-	const audioRef = useRef(null);
-	useEffect(() => {
-		const el = audioRef.current;
-		if (!el || !stream) return;
-		el.srcObject = stream;
-		el.volume = volume;
-		el.play().catch(() => {});
-		return () => {
-			el.srcObject = null;
-		};
-	}, [stream]);
-	useEffect(() => {
-		if (audioRef.current) audioRef.current.volume = volume;
-	}, [volume]);
-	return <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />;
-}
-
-export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPubkey, participantNicks }) {
+export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPubkey, participantNicks, audioPoolRef, audioContext }) {
 	const canvasRef = useRef(null);
-	const bufferCanvasRef = useRef(null);
-	const writeIndexRef = useRef(0);
 	const audioGraphRef = useRef(null);
 	const [levels, setLevels] = useState(new Map());
 	const [gain, setGain] = useState(1);
+	const [audioBlocked, setAudioBlocked] = useState(false);
+	const slotByPeerRef = useRef(new Map());
+	const prevRemotePeersRef = useRef(new Set());
+	const prevRemoteStreamsRef = useRef(new Map());
+	const trace = isTraceEnabled() ? defaultTraceRecord : null;
 
 	// Граф создаётся, когда появляется localStream (voiceActive стал true), и
 	// закрывается, когда он пропадает (voiceActive стал false / leaveVoice()).
 	useEffect(() => {
 		if (!localStream) return;
-		const graph = createAudioGraph();
+		const graph = createAudioGraph(audioContext ? { context: audioContext } : {});
 		graph.setMasterGain(0);
 		void graph.resume();
 		graph.addStream(selfPubkey, localStream, { isSelf: true });
@@ -114,18 +70,73 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [localStream]);
 
-	// Диффинг remoteStreams (Map<peer, MediaStream>) -> addStream/removeStream.
-	// Тот же принцип diff, что mesh-supervisor.js's updateRoster/diffEdges, но
-	// без турнира (просто добавить недостающее, убрать пропавшее).
 	useEffect(() => {
 		const graph = audioGraphRef.current;
 		if (!graph) return;
 		const currentPeers = new Set(remoteStreams.keys());
-		for (const peer of currentPeers) graph.addStream(peer, remoteStreams.get(peer), { isSelf: false });
-		return () => {
-			for (const peer of currentPeers) graph.removeStream(peer);
-		};
+		const prev = prevRemotePeersRef.current;
+		for (const peer of currentPeers) {
+			const stream = remoteStreams.get(peer);
+			if (!prev.has(peer) || prevRemoteStreamsRef.current.get(peer) !== stream) {
+				graph.addStream(peer, stream, { isSelf: false });
+			}
+		}
+		for (const peer of prev) {
+			if (!currentPeers.has(peer)) graph.removeStream(peer);
+		}
+		prevRemotePeersRef.current = currentPeers;
+		prevRemoteStreamsRef.current = new Map(remoteStreams);
 	}, [remoteStreams, localStream]);
+
+	useEffect(() => {
+		const audioPool = audioPoolRef?.current;
+		if (!audioPool || audioPool.length === 0) return;
+		const slotByPeer = slotByPeerRef.current;
+		const occupied = new Set(slotByPeer.values());
+		for (const [peer, stream] of remoteStreams.entries()) {
+			let idx = slotByPeer.get(peer);
+			if (idx === undefined || idx >= audioPool.length) {
+				idx = -1;
+				for (let i = 0; i < audioPool.length; i++) {
+					if (!occupied.has(i)) {
+						idx = i;
+						break;
+					}
+				}
+				if (idx < 0) continue;
+				slotByPeer.set(peer, idx);
+				occupied.add(idx);
+			}
+			const el = audioPool[idx];
+			if (!el) continue;
+			if (el.srcObject !== stream) {
+				el.removeAttribute("src");
+				el.srcObject = stream;
+				el.play().then(
+					() => trace?.("play-attempt", { peer, ok: true }),
+					(err) => {
+						trace?.("play-rejected", { peer, name: err?.name ?? "Error" });
+						setAudioBlocked(true);
+					},
+				);
+			}
+		}
+		for (const [peer, idx] of [...slotByPeer.entries()]) {
+			if (remoteStreams.has(peer)) continue;
+			const el = audioPool[idx];
+			if (el) {
+				el.srcObject = null;
+				el.removeAttribute("src");
+			}
+			slotByPeer.delete(peer);
+		}
+	}, [remoteStreams, audioPoolRef, trace]);
+
+	useEffect(() => {
+		const audioPool = audioPoolRef?.current;
+		if (!audioPool) return;
+		for (const el of audioPool) el.volume = gain;
+	}, [gain, audioPoolRef]);
 
 	useEffect(() => {
 		audioGraphRef.current?.setMasterGain(0);
@@ -133,52 +144,57 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 
 	useEffect(() => {
 		if (!localStream || !canvasRef.current) return;
-		const visibleCanvas = canvasRef.current;
-		const bufferCanvas = document.createElement("canvas");
-		bufferCanvas.width = CANVAS_WIDTH;
-		bufferCanvas.height = CANVAS_HEIGHT;
-		bufferCanvasRef.current = bufferCanvas;
-		const bufferCtx = bufferCanvas.getContext("2d");
-		const visibleCtx = visibleCanvas.getContext("2d");
-		const accentColor = resolveCssColor("var(--accent)", "#4a90d9");
-		// Тепловая палитра (пользователь: "спектрограмму можно в другом стиле
-		// сделать?") вместо плоского --accent+alpha — тихо гаснет в прозрачность,
-		// громко разгорается до белого, тот же язык, что лампа/свечение quick-entry.
-		// Построена ОДИН раз через canvas-градиент (не пересчитывается по кадрам —
-		// пересчёт цвета на каждый из 80 пикселей столбца 60 раз/сек был бы лишней
-		// работой ради того же результата, что готовый lookup по значению).
-		const palette = buildHeatPalette(accentColor);
-		writeIndexRef.current = 0;
+		const canvas = canvasRef.current;
+		const ctx = canvas.getContext("2d");
 		let raf;
 		let frame = 0;
 
-		function drawColumn(spectrum) {
-			const x = writeIndexRef.current;
-			bufferCtx.clearRect(x, 0, 1, CANVAS_HEIGHT);
-			// Каждая строка канваса — один сэмпл спектра (ближайший сосед), O(H) на столбец.
-			for (let row = 0; row < CANVAS_HEIGHT; row++) {
-				const binIndex = Math.floor(((CANVAS_HEIGHT - 1 - row) / CANVAS_HEIGHT) * spectrum.length);
-				const value = spectrum[binIndex] / 255;
-				if (value <= 0.02) continue; // тишина — не рисовать (палитра там и так почти прозрачна)
-				bufferCtx.fillStyle = palette[Math.round(value * 255)];
-				bufferCtx.fillRect(x, row, 1, 1);
+		function syncSize() {
+			const dpr = window.devicePixelRatio || 1;
+			const cssW = canvas.clientWidth || CANVAS_WIDTH;
+			const cssH = canvas.clientHeight || CANVAS_HEIGHT;
+			const w = Math.max(1, Math.floor(cssW * dpr));
+			const h = Math.max(1, Math.floor(cssH * dpr));
+			if (canvas.width !== w || canvas.height !== h) {
+				canvas.width = w;
+				canvas.height = h;
 			}
-			writeIndexRef.current = nextWriteIndex(writeIndexRef.current, CANVAS_WIDTH);
+			return { w, h, dpr };
 		}
 
-		function render() {
-			visibleCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-			for (const region of computeBlitRegions(writeIndexRef.current, CANVAS_WIDTH)) {
-				visibleCtx.drawImage(bufferCanvas, region.srcX, 0, region.width, CANVAS_HEIGHT, region.destX, 0, region.width, CANVAS_HEIGHT);
+		function drawWave(spectrum, w, h, dpr) {
+			ctx.fillStyle = "#fff";
+			ctx.fillRect(0, 0, w, h);
+			const barW = Math.max(1, Math.round(BAR_CSS_PX * dpr));
+			const gap = Math.max(0, Math.round(GAP_CSS_PX * dpr));
+			const stride = barW + gap;
+			const n = Math.floor(w / stride);
+			if (n <= 0 || !spectrum || spectrum.length === 0) return;
+			const midY = h / 2;
+			ctx.shadowBlur = 8 * dpr;
+			for (let i = 0; i < n; i++) {
+				const specIndex = Math.min(spectrum.length - 1, Math.floor((i / n) * spectrum.length));
+				const v = spectrum[specIndex] / 255;
+				const amp = Math.max(dpr, v * h * 0.48);
+				const t = n === 1 ? 0 : i / (n - 1);
+				const [r, g, b] = colorForBand(t);
+				const x = i * stride;
+				ctx.fillStyle = `rgba(${r | 0}, ${g | 0}, ${b | 0}, ${0.4 + v * 0.6})`;
+				ctx.shadowColor = `rgba(${r | 0}, ${g | 0}, ${b | 0}, 0.85)`;
+				ctx.fillRect(x, midY - amp, barW, amp * 2);
 			}
+			ctx.shadowBlur = 0;
 		}
 
 		function tick() {
 			const graph = audioGraphRef.current;
+			const { w, h, dpr } = syncSize();
 			if (graph) {
-				drawColumn(graph.getSpectrum());
-				render();
+				drawWave(graph.getSpectrum(), w, h, dpr);
 				if (frame % LEVELS_EVERY_N_FRAMES === 0) setLevels(graph.getLevels());
+			} else {
+				ctx.fillStyle = "#fff";
+				ctx.fillRect(0, 0, w, h);
 			}
 			frame++;
 			raf = requestAnimationFrame(tick);
@@ -190,12 +206,27 @@ export default function RoomAudioVisualizer({ localStream, remoteStreams, selfPu
 
 	if (!localStream) return null;
 
+	function handleEnableSound() {
+		const audioPool = audioPoolRef?.current;
+		if (!audioPool) return;
+		Promise.all(audioPool.map((el) => el.play().catch((err) => err))).then((results) => {
+			const blocked = results.some((r) => r instanceof Error);
+			setAudioBlocked(blocked);
+			for (const [peer] of remoteStreams.entries()) {
+				if (blocked) trace?.("play-rejected", { peer, name: "NotAllowedError" });
+				else trace?.("play-attempt", { peer, ok: true });
+			}
+		});
+	}
+
 	return (
 		<div class="room-audio-visualizer stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
-			{[...remoteStreams.entries()].map(([peer, stream]) => (
-				<RemoteRoomAudio key={peer} stream={stream} volume={gain} />
-			))}
 			<canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} class="room-spectrogram" aria-hidden="true" />
+			{audioBlocked && (
+				<button type="button" class="btn self-start" onClick={handleEnableSound}>
+					{t("quick.room.enableSoundButton")}
+				</button>
+			)}
 			<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
 				{t("quick.room.volumeLabel")}
 				<input type="range" min="0" max="1" step="0.05" value={gain} onInput={(e) => setGain(Number(e.currentTarget.value))} />

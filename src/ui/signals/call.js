@@ -70,7 +70,10 @@ export function configureCallRuntime({ myPubkey, privKey, publish, dbKey, getRel
 		// Этап 6 (TZ-cicd-hardening) — функция, не массив: media-controller.js
 		// дожидается её ПЕРЕД каждым новым RTCPeerConnection (свежие TURN-креды
 		// на весь звонок, не заморожены на момент configureCallRuntime()).
-		iceServers: resolveCallIceServers,
+		iceServers: async (opts) => {
+			const resolved = await resolveCallIceServers(opts);
+			return resolved.iceServers ?? resolved;
+		},
 		onTrace: diagOn ? traceRecord : undefined,
 		getRelayState,
 		getIceCredsExpiryMs: diagOn ? getCachedTurnCredsExpiry : undefined,

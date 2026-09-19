@@ -16,6 +16,13 @@ export function createMediaController(options = {}) {
 	// дожидаются здесь, ПЕРЕД созданием RTCPeerConnection (не один раз при старте
 	// сессии в call.js — иначе креды протухают к середине долгой сессии).
 	const resolveIceServers = typeof options.iceServers === "function" ? options.iceServers : async () => options.iceServers ?? [];
+	const ownsLocalStream = options.ownsLocalStream !== false;
+
+	function normalizeIceServers(resolved) {
+		if (Array.isArray(resolved)) return resolved;
+		if (resolved && Array.isArray(resolved.iceServers)) return resolved.iceServers;
+		return [];
+	}
 	// onEvent — обратный канал в call-runtime.js: события Σ_in (§1.3-C VOICE.md),
 	// те же, что call-runtime дальше кормит в reduce(). Контроллер НЕ знает про FSM.
 	const onEvent = options.onEvent ?? (() => {});
@@ -77,7 +84,11 @@ export function createMediaController(options = {}) {
 		if (pc) return Promise.resolve(pc);
 		if (!pcPromise) {
 			pcPromise = (async () => {
-				const iceServers = overrides?.iceServers ?? (await resolveIceServers());
+				const resolved = overrides?.iceServers ?? (await resolveIceServers());
+				const iceServers = normalizeIceServers(resolved);
+				if (!Array.isArray(resolved) && resolved?.turn) {
+					trace("turn-status", { status: resolved.turn, urlCount: iceServers.length, tookMs: resolved.tookMs ?? null });
+				}
 				const config = { iceServers };
 				if (overrides?.iceTransportPolicy) config.iceTransportPolicy = overrides.iceTransportPolicy;
 				pc = new RTCPeerConnectionImpl(config);
@@ -131,7 +142,8 @@ export function createMediaController(options = {}) {
 						e.track.onunmute = () => trace("track", { kind: e.track.kind, muteEvent: "unmute" });
 						e.track.onended = () => trace("track", { kind: e.track.kind, muteEvent: "ended" });
 					}
-					onRemoteStream(e.streams[0]);
+					const stream = e.streams?.[0] ?? (e.track && typeof MediaStream === "function" ? new MediaStream([e.track]) : undefined);
+					if (stream) onRemoteStream(stream);
 				};
 				if (onTrace) startStatsPolling();
 				return pc;
@@ -225,7 +237,7 @@ export function createMediaController(options = {}) {
 		const recreate = !!command?.recreate;
 		const forceRelay = !!command?.forceRelay;
 
-		const iceServers = await resolveIceServers({ refreshIfStale: true });
+		const iceServers = normalizeIceServers(await resolveIceServers({ refreshIfStale: true }));
 		trace("ice-cred-refresh", { hasCredentials: iceServers.some((s) => !!s.username), ttlRemainingSec: ttlRemainingSecNow() });
 
 		if (!recreate) {
@@ -298,7 +310,9 @@ export function createMediaController(options = {}) {
 			statsIntervalId = null;
 		}
 		if (localStream) {
-			for (const track of localStream.getTracks()) track.stop();
+			if (ownsLocalStream) {
+				for (const track of localStream.getTracks()) track.stop();
+			}
 			localStream = null;
 		}
 		if (pc) {
@@ -333,5 +347,26 @@ export function createMediaController(options = {}) {
 		}
 	}
 
-	return { execute };
+	async function getInboundAudioStats() {
+		if (!pc || typeof pc.getStats !== "function") return null;
+		const report = await pc.getStats();
+		let inbound = null;
+		let pair = null;
+		report.forEach((s) => {
+			if (s.type === "inbound-rtp" && s.kind === "audio") inbound = s;
+			if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded") pair = s;
+		});
+		if (!inbound) return null;
+		const local = pair ? report.get(pair.localCandidateId) : null;
+		const remote = pair ? report.get(pair.remoteCandidateId) : null;
+		return {
+			packetsReceived: inbound.packetsReceived ?? 0,
+			bytesReceived: inbound.bytesReceived ?? 0,
+			jitter: inbound.jitter ?? null,
+			localType: local?.candidateType ?? null,
+			remoteType: remote?.candidateType ?? null,
+		};
+	}
+
+	return { execute, getInboundAudioStats };
 }

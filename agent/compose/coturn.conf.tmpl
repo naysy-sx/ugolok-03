@@ -35,3 +35,9 @@ max-port=65535
 no-cli
 no-tlsv1
 no-tlsv1_1
+
+# user-quota ≥ 2 · (MAX_VOICE_PARTICIPANTS − 1) · (1 + ожидаемые рестарты)
+# MAX_VOICE=7, ожидаемые рестарты=3 → 2·6·4=48.
+# total-quota = user-quota × MAX_VOICE × комнат (3) = 1008.
+user-quota=48
+total-quota=1008

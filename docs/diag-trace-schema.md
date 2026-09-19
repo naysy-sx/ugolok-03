@@ -88,8 +88,12 @@
 
 ### Комната («Быстрая связь», `mesh-supervisor.js`)
 
-- **`edge-state`** — `{ peer, role, state }` — переход конкретного голосового ребра (те же состояния `call-fsm.js`, что и у 1:1). Раньше это состояние не наблюдалось никем, кроме пассивного снимка для UI (`09-FINAL-AUDIT.md`, Opus H6).
-- **`roster`** — `{ rosterSize, edgesOpened, edgesClosed }` — только когда состав РЕАЛЬНО изменился (идемпотентный `updateRoster()` не шумит).
+- **`edge-state`** — `{ peer, role, state, generation }` — переход конкретного голосового ребра (те же состояния `call-fsm.js`, что и у 1:1).
+- **`roster-diff`** — `{ toOpen, toClose, reopened, desired, actual }` — только когда сверка реально открыла, закрыла или пересоздала ребро.
+- **`edge-health`** — раз в 2 с на ребро: `{ peer, state, packetsReceived, bytesReceived, jitter, localType, remoteType }`. `localType`/`remoteType` — `host` | `srflx` | `relay`. По росту `packetsReceived` в `CONNECTED` отличают «ребро встало» от «ICE сошёлся, RTP нет».
+- **`play-attempt`** / **`play-rejected`** — из пула `<audio>` комнаты: `{ peer, ok: true }` либо `{ peer, name }` (`err.name`).
+- **`turn-status`** — из `resolveCallIceServers`: `{ status: "ok"|"unavailable"|"not-configured", urlCount, tookMs }`.
+- **`publish-result`** — на каждое событие kind 20075: `{ commandType, sessionId, ok, reason, tookMs }`.
 
 ### Окружение и жизненный цикл (`main.jsx`, `call-overlay.jsx`, `service-worker.js`)
 

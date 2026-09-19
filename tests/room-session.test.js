@@ -112,6 +112,8 @@ function fakeMeshSupervisorFactory({ joinVoiceResult = true } = {}) {
 			joinVoiceCalls: 0,
 			leaveVoiceCalls: 0,
 			updateRosterCalls: [],
+			setDesiredPeersCalls: [],
+			reconcileCalls: [],
 			onSignalCalls: [],
 		};
 		const supervisor = {
@@ -122,9 +124,15 @@ function fakeMeshSupervisorFactory({ joinVoiceResult = true } = {}) {
 			leaveVoice: () => {
 				instance.leaveVoiceCalls += 1;
 			},
-			updateRoster: (pubkeys) => {
+			setDesiredPeers: (pubkeys) => {
+				instance.setDesiredPeersCalls.push(pubkeys);
 				instance.updateRosterCalls.push(pubkeys);
 			},
+			reconcile: (now) => {
+				instance.reconcileCalls.push(now);
+			},
+			pollHealth: async () => {},
+			retryEdge: () => {},
 			onSignal: (event) => {
 				instance.onSignalCalls.push(event);
 			},

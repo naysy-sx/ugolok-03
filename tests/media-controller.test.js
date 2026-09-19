@@ -416,6 +416,52 @@ test("onTrace: 'created' содержит uris/hasCredentials, 'icecandidate' и
 	await controller.execute({ type: "CLOSE_PC" });
 });
 
+test("ownsLocalStream:false — CLOSE_PC не останавливает треки клона", async () => {
+	const { controller, tracks } = makeOptions({ ownsLocalStream: false });
+	await controller.execute({ type: "ACQUIRE_MIC" });
+	await controller.execute({ type: "CLOSE_PC" });
+	assert.equal(tracks[0].stopped, false);
+});
+
+test("ontrack без streams[0] не бросает и отдаёт поток, если MediaStream доступен", async () => {
+	const { controller, remoteStreams } = makeOptions();
+	await controller.execute({ type: "CREATE_OFFER" });
+	const pc = FakeRTCPeerConnection.instances[0];
+	const track = fakeTrack();
+	assert.doesNotThrow(() => pc.ontrack({ track, streams: [] }));
+	if (typeof MediaStream === "function") {
+		assert.equal(remoteStreams.length, 1);
+	}
+});
+
+test("getInboundAudioStats: inbound-rtp audio + nominated pair", async () => {
+	const { controller } = makeOptions();
+	await controller.execute({ type: "CREATE_OFFER" });
+	const pc = FakeRTCPeerConnection.instances[0];
+	pc.getStats = async () => {
+		const local = { id: "L", type: "local-candidate", candidateType: "relay" };
+		const remote = { id: "R", type: "remote-candidate", candidateType: "srflx" };
+		const pair = { id: "P", type: "candidate-pair", nominated: true, state: "succeeded", localCandidateId: "L", remoteCandidateId: "R" };
+		const inbound = { id: "I", type: "inbound-rtp", kind: "audio", packetsReceived: 9, bytesReceived: 99, jitter: 0.01 };
+		const map = new Map([
+			["L", local],
+			["R", remote],
+			["P", pair],
+			["I", inbound],
+		]);
+		map.forEach = Map.prototype.forEach;
+		return map;
+	};
+	const st = await controller.getInboundAudioStats();
+	assert.deepEqual(st, {
+		packetsReceived: 9,
+		bytesReceived: 99,
+		jitter: 0.01,
+		localType: "relay",
+		remoteType: "srflx",
+	});
+});
+
 test("onTrace, который бросает исключение, не долетает до media-controller.js (ACQUIRE_MIC всё равно отрабатывает)", async () => {
 	const { controller, localStreams } = makeOptions({
 		onTrace: () => {

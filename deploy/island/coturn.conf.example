@@ -6,8 +6,12 @@ listening-ip=130.17.31.118
 relay-ip=130.17.31.118
 external-ip=130.17.31.118
 listening-port=3478
+# Диапазон согласован с квотой: устойчивая полная комната 7×6×2 = 84 UDP-аллокации;
+# 261 порт (49160–49420) ≈ 3 таких комнаты. Уже этого порта, не user-quota, —
+# жёсткий потолок UDP-relay. Открыть тот же диапазон в UFW на VPS
+# (network_mode: host, docker порты не пробрасывает).
 min-port=49160
-max-port=49200
+max-port=49420
 fingerprint
 use-auth-secret
 static-auth-secret=CHANGE_ME
@@ -42,20 +46,19 @@ denied-peer-ip=130.17.31.118
 allowed-peer-ip=130.17.31.118
 denied-peer-ip=::1
 denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-# Стартовые значения — подобрать по факту использования (docs/environments.md).
-# TZ-recovery-policy.md §8 — 10 оказалось мало на практике: 10-LIVE-INCIDENT-
-# 2026-09-07.md §5 — один шторм ICE-рестартов (старый код пересоздавал
-# RTCPeerConnection БЕЗ явного pc.close() перед этим, TURN-аллокации предыдущих
-# попыток висели до серверного таймаута) исчерпал квоту одного пользователя
-# за секунды. Явный pc.close() перед пересозданием это устранил (media-
-# controller.js, doIceRestart), но 40 — разумный запас на тот же счёт с другой
-# стороны: room-звонок на 5 человек — до 4 одновременных граней (mesh), на
-# каждой грани при затяжном сбое может идти собственный цикл рестартов
-# параллельно (не пересекающиеся TURN-аллокации, каждая грань — отдельный
-# RTCPeerConnection) — 4 грани × ~10 (старый предел) с запасом на пересечение
-# фаз пересоздания.
-total-quota=100
-user-quota=40
+# Квота выводится из размера mesh, не назначается отдельно:
+#   user-quota ≥ 2 · (MAX_VOICE_PARTICIPANTS − 1) · (1 + ожидаемые рестарты)
+# MAX_VOICE_PARTICIPANTS = 7 (room-session.js), ожидаемые рестарты = 3
+# (порог recreate PC в call-fsm.js) → 2 · 6 · 4 = 48. Каждое ребро — свой
+# RTCPeerConnection, каждый PC берёт аллокацию на UDP и при turns: ещё на TLS.
+# Старые аллокации при пересоздании PC освобождаются явным pc.close()
+# (media-controller.js doIceRestart); lifetime coturn должен быть короче
+# каденции рестартов, иначе квота снова упрётся в висящие refresh.
+# total-quota = user-quota × MAX_VOICE_PARTICIPANTS × комнат.
+# 48 × 7 × 3 = 1008. Реальный потолок UDP — диапазон портов (~261), не эта цифра;
+# 1008 оставляет запас на TLS-аллокации turns: и пересечение рестартов.
+total-quota=1008
+user-quota=48
 max-bps=1000000
 verbose
 log-file=stdout

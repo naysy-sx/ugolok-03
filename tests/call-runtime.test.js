@@ -355,7 +355,7 @@ test("onTrace, который бросает исключение, не доле
 // публикации по-прежнему теряется молча (никакого retry), но теперь ВИДЕН в
 // трассировке как phase:"error" с errorMessage — этого раньше нельзя было
 // различить снаружи никак, кроме console.warn.
-test("onTrace видит phase:'error' на сигнальной команде, когда publish() бросает — команда всё равно теряется (retry НЕ добавлен)", async () => {
+test("onTrace видит phase:'error' на сигнальной команде, когда publish() бросает", async () => {
 	const traced = [];
 	const { runtime, media } = makeRuntime(ALICE_PRIV, ALICE_PUB, {
 		publish: async () => {
@@ -372,9 +372,145 @@ test("onTrace видит phase:'error' на сигнальной команде,
 	const errorTrace = commandTraces.find((t) => t.payload.phase === "error");
 	assert.ok(errorTrace, "ожидалась запись phase:'error'");
 	assert.match(errorTrace.payload.errorMessage, /disconnected/);
-	// Всё ещё не сделано никакого повторного вызова publish — команда потеряна,
-	// как и до этой задачи (TZ-diag-trace.md §0.1: "не чинить").
 	assert.equal(runtime.getState().name, "OUTGOING_RINGING");
+});
+
+test("SEND_OFFER: первые две публикации падают — третья доставляет, ребро не молчит", async () => {
+	let calls = 0;
+	const delayed = [];
+	const media = fakeMediaController();
+	const runtime = createCallRuntime({
+		myPubkey: ALICE_PUB,
+		privKey: ALICE_PRIV,
+		publish: async (event) => {
+			calls += 1;
+			if (calls < 3) throw new Error("transient");
+			return { ok: true, eventId: event.id };
+		},
+		createMediaController: media.factory,
+		setTimeoutImpl: (fn, ms) => {
+			if (ms === 400) {
+				delayed.push(fn);
+				return delayed.length;
+			}
+			return 0;
+		},
+		clearTimeoutImpl: () => {},
+	});
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	const offerDone = media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+	await flush();
+	assert.equal(calls, 1);
+	assert.equal(delayed.length, 1);
+	delayed.shift()();
+	await flush();
+	assert.equal(calls, 2);
+	delayed.shift()();
+	await flush();
+	await offerDone;
+	assert.equal(calls, 3);
+	assert.equal(runtime.getState().name, "OUTGOING_RINGING");
+});
+
+test("hangup: CLOSE_PC и EMIT не ждут SEND_HANGUP", async () => {
+	let releaseHangup;
+	const hangupGate = new Promise((r) => {
+		releaseHangup = r;
+	});
+	let blockPublish = false;
+	const media = fakeMediaController();
+	const stateChanges = [];
+	const runtime = createCallRuntime({
+		myPubkey: ALICE_PUB,
+		privKey: ALICE_PRIV,
+		publish: async () => {
+			if (blockPublish) await hangupGate;
+			return { ok: true };
+		},
+		onStateChange: (stateName) => stateChanges.push(stateName),
+		createMediaController: media.factory,
+		setTimeoutImpl: () => 0,
+		clearTimeoutImpl: () => {},
+	});
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+	const answer = incomingEventFrom(BOB_PRIV, ALICE_PUB, { type: "answer", sessionId: runtime.getState().sessionId, sdp: { type: "answer", sdp: "a" } });
+	runtime.handleIncomingSignal(answer);
+	await flush();
+	await media.fire({ type: "ICE_CONNECTED" });
+	await flush();
+	assert.equal(runtime.getState().name, "CONNECTED");
+	media.calls.length = 0;
+	blockPublish = true;
+	runtime.hangup();
+	await flush();
+	assert.ok(media.calls.some((c) => c.type === "CLOSE_PC"), "CLOSE_PC не ждёт доставку хангапа");
+	assert.ok(stateChanges.includes("ENDED"), "EMIT(ENDED) не ждёт доставку хангапа");
+	releaseHangup();
+});
+
+test("dispatch сериализован: SET_REMOTE ещё не закончился, REMOTE_ICE ждёт своей очереди", async () => {
+	const order = [];
+	let releaseSetRemote;
+	const runtime = createCallRuntime({
+		myPubkey: BOB_PUB,
+		privKey: BOB_PRIV,
+		publish: async () => ({ ok: true }),
+		createMediaController: () => ({
+			execute: async (command) => {
+				order.push(command.type);
+				if (command.type === "SET_REMOTE") {
+					await new Promise((resolve) => {
+						releaseSetRemote = resolve;
+					});
+				}
+			},
+		}),
+		setTimeoutImpl: () => 0,
+		clearTimeoutImpl: () => {},
+	});
+	const offer = incomingEventFrom(ALICE_PRIV, BOB_PUB, { type: "offer", sessionId: "sid-1", sdp: { type: "offer", sdp: "o" } });
+	runtime.handleIncomingSignal(offer);
+	await flush();
+	assert.deepEqual(order, ["SET_REMOTE"]);
+	const ice = incomingEventFrom(ALICE_PRIV, BOB_PUB, { type: "ice", sessionId: "sid-1", candidate: "c1" });
+	runtime.handleIncomingSignal(ice);
+	await flush();
+	assert.deepEqual(order, ["SET_REMOTE"], "ICE не должен стартовать, пока SET_REMOTE не закончился");
+	releaseSetRemote();
+	await flush();
+	await flush();
+	assert.deepEqual(order, ["SET_REMOTE", "ADD_ICE"]);
+});
+
+test("тот же offer трижды в CONNECTED без restart -> CREATE_ANSWER не вызывается", async () => {
+	const { runtime, media } = makeRuntime(ALICE_PRIV, ALICE_PUB);
+	runtime.placeCall(BOB_PUB);
+	await flush();
+	await media.fire({ type: "LOCAL_OFFER_READY", sdp: { type: "offer", sdp: "sdp" } });
+	const answer = incomingEventFrom(BOB_PRIV, ALICE_PUB, { type: "answer", sessionId: runtime.getState().sessionId, sdp: { type: "answer", sdp: "a" } });
+	runtime.handleIncomingSignal(answer);
+	await flush();
+	await media.fire({ type: "ICE_CONNECTED" });
+	await flush();
+	assert.equal(runtime.getState().name, "CONNECTED");
+	media.calls.length = 0;
+	const replay = incomingEventFrom(BOB_PRIV, ALICE_PUB, {
+		type: "offer",
+		sessionId: runtime.getState().sessionId,
+		sdp: { type: "offer", sdp: "old" },
+	});
+	runtime.handleIncomingSignal(replay);
+	await flush();
+	runtime.handleIncomingSignal(replay);
+	await flush();
+	runtime.handleIncomingSignal(replay);
+	await flush();
+	assert.equal(runtime.getState().name, "CONNECTED");
+	assert.equal(media.calls.filter((c) => c.type === "CREATE_ANSWER").length, 0);
+	assert.equal(media.calls.filter((c) => c.type === "SET_REMOTE").length, 0);
 });
 
 // TZ §2.4, второй капкан — реальное подтверждение OK от релея (не просто

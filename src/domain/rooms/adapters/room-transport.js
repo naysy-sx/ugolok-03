@@ -10,7 +10,7 @@ import { verify } from "../../../core/crypto/sign.js";
 import { ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, ROOM_POINTER_KIND } from "../../events/kind-registry.js";
 import { CALL_SIGNAL_KIND } from "../../calls/signaling-adapter.js";
 
-const ROOM_KINDS = [ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND, CALL_SIGNAL_KIND];
+const ROOM_KINDS = [ROOM_ANNOUNCE_KIND, ROOM_PROBE_KIND, ROOM_PRESENCE_KIND, ROOM_CHAT_KIND];
 const SUB_ID = "room";
 
 function waitForConnState(conn, predicate, timeoutMs) {
@@ -88,7 +88,10 @@ export async function openRoomTransport({ relayUrl, hTopic = null, hDisc = null,
 	conn.addMessageHandler(publisher.handleMessage);
 	conn.addMessageHandler(subscriber.handleMessage);
 	const filters = [];
-	if (hTopic) filters.push({ kinds: ROOM_KINDS, "#h": [hTopic] });
+	if (hTopic) {
+		filters.push({ kinds: ROOM_KINDS, "#h": [hTopic] });
+		filters.push({ kinds: [CALL_SIGNAL_KIND], "#h": [hTopic], "#p": [selfPubkey] });
+	}
 	if (hDisc) filters.push({ kinds: [ROOM_POINTER_KIND], "#h": [hDisc] });
 	subscriber.subscribe(SUB_ID, filters);
 

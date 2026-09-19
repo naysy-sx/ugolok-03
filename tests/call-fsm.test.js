@@ -226,9 +226,16 @@ test("рестарт (polite): RESTART_TICK -> ждёт (без DO_ICE_RESTART),
 	assert.deepEqual(names(r.commands), ["START_TIMER"], "polite НЕ инициирует рестарт сам");
 	s = r.state;
 
-	r = reduce(s, { type: "REMOTE_OFFER", sdp: "restart-offer", sessionId: SID, fromPubkey: BOB });
+	r = reduce(s, { type: "REMOTE_OFFER", sdp: "restart-offer", sessionId: SID, fromPubkey: BOB, restart: true });
 	assert.equal(r.state.name, "RECONNECTING");
 	assert.deepEqual(names(r.commands), ["SET_REMOTE", "CREATE_ANSWER"]);
+});
+
+test("RECONNECTING: REMOTE_OFFER без restart -> ignore", () => {
+	const s = { name: "RECONNECTING", role: "callee", sessionId: SID, peerPubkey: BOB, polite: true, restartCount: 1, reason: null, safetyCapMs: DEFAULT_RECOVERY_SAFETY_CAP_MS };
+	const r = reduce(s, { type: "REMOTE_OFFER", sdp: "replayed", sessionId: SID, fromPubkey: BOB });
+	assert.equal(r.state.name, "RECONNECTING");
+	assert.deepEqual(names(r.commands), []);
 });
 
 // --- 9. Новая модель восстановления (TZ-recovery-policy.md §1/§2/§3/§2.4):
@@ -379,11 +386,18 @@ test("CONNECTED: REMOTE_HANGUP -> ENDED(remote_hangup)", () => {
 	assert.deepEqual(names(r.commands), ["CLOSE_PC", "EMIT"]);
 });
 
-test("CONNECTED: REMOTE_OFFER (пир инициировал ICE restart) -> остаёмся CONNECTED, отвечаем", () => {
+test("CONNECTED: REMOTE_OFFER с restart:true (пир инициировал ICE restart) -> остаёмся CONNECTED, отвечаем", () => {
 	const s = { name: "CONNECTED", role: "callee", sessionId: SID, peerPubkey: ALICE, polite: true, restartCount: 0, reason: null };
-	const r = reduce(s, { type: "REMOTE_OFFER", sdp: "restart-offer", sessionId: SID, fromPubkey: ALICE });
+	const r = reduce(s, { type: "REMOTE_OFFER", sdp: "restart-offer", sessionId: SID, fromPubkey: ALICE, restart: true });
 	assert.equal(r.state.name, "CONNECTED", "остаёмся в CONNECTED, НЕ переходим в RECONNECTING сами по себе");
 	assert.deepEqual(names(r.commands), ["SET_REMOTE", "CREATE_ANSWER"]);
+});
+
+test("CONNECTED: REMOTE_OFFER без restart -> ignore, CREATE_ANSWER не вызывается", () => {
+	const s = { name: "CONNECTED", role: "callee", sessionId: SID, peerPubkey: ALICE, polite: true, restartCount: 0, reason: null };
+	const r = reduce(s, { type: "REMOTE_OFFER", sdp: "replayed-offer", sessionId: SID, fromPubkey: ALICE });
+	assert.equal(r.state.name, "CONNECTED");
+	assert.deepEqual(names(r.commands), []);
 });
 
 // TZ-recovery-policy.md §2 — попытки теперь driven исключительно расписанием

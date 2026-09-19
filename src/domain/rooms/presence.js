@@ -30,40 +30,47 @@ export function emptyPresence() {
 // оба поля приходят В ОДНОМ heartbeat, отдельная временная метка на inVoice не
 // нужна — используется тот же nickAt-барьер (переименовывать поле — лишний churn,
 // семантика "момент последнего обновления nick/inVoice вместе" не меняется).
-export function mergeHeartbeat(state, { pubkey, nick, inVoice = false, at }) {
+// Порядок (joinedAt/nickAt) — по объявленному времени отправителя, с зажимом
+// от часов из будущего. Живость (a) — по локальному receivedAt, чтобы скос
+// чужих часов не мигал ростером.
+export const CLOCK_TOLERANCE_MS = 120000;
+
+export function mergeHeartbeat(state, { pubkey, nick, inVoice = false, at, receivedAt = at }) {
+	const atClamped = at > receivedAt + CLOCK_TOLERANCE_MS ? receivedAt : at;
 	const next = new Map(state);
 	const existing = next.get(pubkey);
 	if (!existing) {
-		next.set(pubkey, { a: at, r: -Infinity, nick, inVoice, nickAt: at, joinedAt: at });
+		next.set(pubkey, { a: receivedAt, r: -Infinity, nick, inVoice, nickAt: atClamped, joinedAt: atClamped });
 		return next;
 	}
 	const periodClosed = existing.r >= existing.joinedAt;
-	const joinedAt = periodClosed ? at : Math.min(existing.joinedAt, at);
-	const a = Math.max(existing.a, at);
+	const joinedAt = periodClosed ? atClamped : Math.min(existing.joinedAt, atClamped);
+	const a = Math.max(existing.a, receivedAt);
 	const nickAt = existing.nickAt ?? existing.a;
-	const useNewFields = at >= nickAt;
+	const useNewFields = atClamped >= nickAt;
 	next.set(pubkey, {
 		a,
 		r: existing.r,
 		nick: useNewFields ? nick : existing.nick,
 		inVoice: useNewFields ? inVoice : existing.inVoice,
-		nickAt: useNewFields ? at : nickAt,
+		nickAt: useNewFields ? atClamped : nickAt,
 		joinedAt,
 	});
 	return next;
 }
 
-export function mergeExit(state, { pubkey, at }) {
+export function mergeExit(state, { pubkey, at, receivedAt = at }) {
+	const atClamped = at > receivedAt + CLOCK_TOLERANCE_MS ? receivedAt : at;
 	const next = new Map(state);
 	const existing = next.get(pubkey);
 	if (!existing) {
 		// Выход без предшествующего heartbeat (не должно происходить в норме, но
 		// покомпонентный max обязан быть определён везде — a остаётся -Infinity,
 		// предикат present() уже ложен без специального случая).
-		next.set(pubkey, { a: -Infinity, r: at, nick: "", inVoice: false, joinedAt: at });
+		next.set(pubkey, { a: -Infinity, r: receivedAt, nick: "", inVoice: false, joinedAt: atClamped });
 		return next;
 	}
-	next.set(pubkey, { ...existing, r: Math.max(existing.r, at) });
+	next.set(pubkey, { ...existing, r: Math.max(existing.r, receivedAt) });
 	return next;
 }
 
@@ -76,7 +83,7 @@ export function present(state, now, tau) {
 			result.push({ pubkey, nick: entry.nick, joinedAt: entry.joinedAt, inVoice: entry.inVoice });
 		}
 	}
-	result.sort((x, y) => x.joinedAt - y.joinedAt);
+	result.sort((x, y) => x.joinedAt - y.joinedAt || (x.pubkey < y.pubkey ? -1 : x.pubkey > y.pubkey ? 1 : 0));
 	return result;
 }
 

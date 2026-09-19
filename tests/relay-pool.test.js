@@ -63,6 +63,18 @@ test("createRelayConnection: начальное состояние disconnected"
 	assert.equal(conn.getState(), "disconnected");
 });
 
+test("битый кадр в onmessage не роняет обработчик соединения", () => {
+	const WS = freshWS();
+	const messages = [];
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, onMessage: (msg) => messages.push(msg) });
+	conn.connect();
+	WS.instances[0]._open();
+	assert.doesNotThrow(() => WS.instances[0].onmessage({ data: "not-json{" }));
+	assert.equal(conn.getState(), "connected");
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", "sub1"]) });
+	assert.deepEqual(messages, [["EOSE", "sub1"]]);
+});
+
 test("connect() -> connecting -> OPEN -> connected (НЕ authenticating — ключевая правка автомата)", () => {
 	const WS = freshWS();
 	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS });
@@ -221,7 +233,7 @@ test("после RECONNECT_STABLE_MS стабильной работы заде�
 // --- TZ-recovery-policy.md §5 — возобновление подписки от метки времени
 // последнего полученного события, не с начала. ---
 
-test("после реконнекта REQ реплеится с since = (created_at последнего виденного EVENT по этому subId) + 1", () => {
+test("после реконнекта REQ реплеится с since = created_at последнего виденного EVENT (включительно, чтобы не потерять пачку той же секунды)", () => {
 	const WS = freshWS();
 	// autoReconnect:false — реконнект вызывается вручную, без реальных
 	// таймеров backoff (не предмет этого теста, только резюмирование since).
@@ -238,7 +250,7 @@ test("после реконнекта REQ реплеится с since = (created
 	WS.instances[1]._open(); // реплей activeReqs
 
 	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
-	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1], since: 1501 }]]);
+	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1], since: 1500 }]]);
 });
 
 // Этап 3 (MESSAGE-DELIVERY-TZ.md, З3.5) — водяной знак ОБРАБОТКИ (reportProcessed)
@@ -267,8 +279,8 @@ test("reportProcessed(): withResumedSince использует МЕНЬШИЙ в
 	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
 	assert.deepEqual(
 		replayed,
-		[["REQ", "sub1", { kinds: [445], since: 1001 }]],
-		"since обязан начинаться СРАЗУ ПОСЛЕ последнего ОБРАБОТАННОГО, не последнего просто увиденного — иначе e2/e3 не переприехали бы после реконнекта",
+		[["REQ", "sub1", { kinds: [445], since: 1000 }]],
+		"since включительно от последнего ОБРАБОТАННОГО — повтор дешевле потери пачки той же секунды",
 	);
 });
 
@@ -285,20 +297,27 @@ test("reportProcessed(): без единого вызова для subId — п�
 	WS.instances[1]._open();
 
 	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
-	assert.deepEqual(replayed, [["REQ", "sub-other", { kinds: [1], since: 43 }]]);
+	assert.deepEqual(replayed, [["REQ", "sub-other", { kinds: [1], since: 42 }]]);
 });
 
-test("без единого полученного EVENT по subId — REQ реплеится КАК ЕСТЬ, since не подставляется (не меняет поведение для новой/нетронутой подписки)", () => {
+test("без единого полученного EVENT по subId после обрыва — REQ реплеится с since = (обрыв − 10с)", () => {
 	const WS = freshWS();
 	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, autoReconnect: false });
 	conn.connect();
 	WS.instances[0]._open();
 	conn.send(["REQ", "sub1", { kinds: [1] }]);
+	const beforeClose = Date.now();
 	WS.instances[0]._remoteClose();
 	conn.connect();
 	WS.instances[1]._open();
 	const replayed = WS.instances[1].sent.map((s) => JSON.parse(s));
-	assert.deepEqual(replayed, [["REQ", "sub1", { kinds: [1] }]]);
+	assert.equal(replayed.length, 1);
+	assert.equal(replayed[0][0], "REQ");
+	assert.equal(replayed[0][1], "sub1");
+	const since = replayed[0][2].since;
+	assert.equal(typeof since, "number");
+	assert.ok(since >= Math.floor((beforeClose - 10000) / 1000) - 1);
+	assert.ok(since <= Math.floor(Date.now() / 1000));
 });
 
 // TZ-diag-trace.md §2.5 — открытие/закрытие(код)/ошибка/каждая попытка

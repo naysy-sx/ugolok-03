@@ -246,9 +246,18 @@ export function resetBootstrapEndpoints(storage) {
 // Кэш в памяти до expiry-60с — вкладка живёт часами, повторный fetch на
 // КАЖДЫЙ звонок не нужен, пока креды ещё не протухли.
 let cachedTurnCreds = null; // { iceServers, expiryMs } | null
+let lastTurnStatus = "not-configured"; // "ok" | "unavailable" | "not-configured"
+let turnFailedUntilMs = 0;
+const TURN_NEGATIVE_CACHE_MS = 45000;
+const TURN_FETCH_TIMEOUT_MS = 3000;
+
+export function getLastTurnStatus() {
+	return lastTurnStatus;
+}
 
 export function resetTurnCredentialsCache() {
 	cachedTurnCreds = null;
+	turnFailedUntilMs = 0;
 }
 
 // TZ-diag-trace.md §2.1 — чистый геттер поверх уже существующего кэша, НЕ
@@ -278,28 +287,38 @@ export async function fetchTurnCredentials(url, options = {}) {
 	if (cachedTurnCreds && now < cachedTurnCreds.expiryMs) {
 		return cachedTurnCreds.iceServers;
 	}
+	if (now < turnFailedUntilMs) return null;
 	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 	if (!url || typeof fetchImpl !== 'function') return null;
-	const timeoutMs = options.timeoutMs ?? 4000;
+	const timeoutMs = options.timeoutMs ?? TURN_FETCH_TIMEOUT_MS;
 	let timer;
 	const timeout = new Promise((_, reject) => {
 		timer = setTimeout(() => reject(new Error('fetchTurnCredentials: таймаут')), timeoutMs);
 	});
 	try {
 		const res = await Promise.race([fetchImpl(url, { cache: 'no-store' }), timeout]);
-		if (!res || !res.ok) return null;
+		if (!res || !res.ok) {
+			turnFailedUntilMs = now + TURN_NEGATIVE_CACHE_MS;
+			return null;
+		}
 		const data = await res.json();
 		if (!data || typeof data.username !== 'string' || typeof data.credential !== 'string' || !Array.isArray(data.uris)) {
+			turnFailedUntilMs = now + TURN_NEGATIVE_CACHE_MS;
 			return null;
 		}
 		const iceServers = data.uris
 			.filter((u) => typeof u === 'string' && u)
 			.map((urls) => ({ urls, username: data.username, credential: data.credential }));
-		if (iceServers.length === 0) return null;
+		if (iceServers.length === 0) {
+			turnFailedUntilMs = now + TURN_NEGATIVE_CACHE_MS;
+			return null;
+		}
+		turnFailedUntilMs = 0;
 		const ttlSeconds = typeof data.ttl === 'number' && data.ttl > 60 ? data.ttl : 3600;
 		cachedTurnCreds = { iceServers, expiryMs: now + (ttlSeconds - 60) * 1000, issuedAtMs: now };
 		return iceServers;
 	} catch {
+		turnFailedUntilMs = now + TURN_NEGATIVE_CACHE_MS;
 		return null;
 	} finally {
 		clearTimeout(timer);
@@ -331,11 +350,22 @@ function stripIceCredentials(list) {
 // кредов перед КАЖДЫМ pc, см. media-controller.js/resolveIceServers).
 // turnCredentialsUrl отсутствует (self-host/LAN, config.json без него) —
 // прежнее поведение: iceServers из bootstrap/build-time дефолта как есть.
+export function iceServersFromResolved(resolved) {
+	if (Array.isArray(resolved)) return resolved;
+	if (resolved && Array.isArray(resolved.iceServers)) return resolved.iceServers;
+	return [];
+}
+
 export async function resolveCallIceServers(options = {}) {
+	const started = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+	const took = () => Math.round((typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()) - started);
 	const boot = readBootstrapEndpoints();
 	const baseIce = boot.iceServers.length ? boot.iceServers : BUILD_DEFAULT_ICE_SERVERS;
 	const turnCredentialsUrl = getRuntimeConfig().turnCredentialsUrl;
-	if (!turnCredentialsUrl) return baseIce;
+	if (!turnCredentialsUrl) {
+		lastTurnStatus = "not-configured";
+		return { iceServers: baseIce, turn: "not-configured", urlCount: baseIce.length, tookMs: took() };
+	}
 	// TZ-recovery-policy.md §2.3 — вызывается media-controller.js's doIceRestart
 	// перед КАЖДОЙ попыткой рестарта: если больше половины TTL уже прошло,
 	// сбросить кэш и запросить свежие креды, а не ждать полного истечения.
@@ -344,8 +374,12 @@ export async function resolveCallIceServers(options = {}) {
 	}
 	const turnServers = await fetchTurnCredentials(turnCredentialsUrl, options);
 	if (!turnServers) {
+		lastTurnStatus = "unavailable";
 		logWarn('TURN: креды недоступны, только STUN');
-		return stripIceCredentials(baseIce);
+		const iceServers = stripIceCredentials(baseIce);
+		return { iceServers, turn: "unavailable", urlCount: iceServers.length, tookMs: took() };
 	}
-	return [...stripIceCredentials(baseIce), ...turnServers];
+	lastTurnStatus = "ok";
+	const iceServers = [...stripIceCredentials(baseIce), ...turnServers];
+	return { iceServers, turn: "ok", urlCount: iceServers.length, tookMs: took() };
 }

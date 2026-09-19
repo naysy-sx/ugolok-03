@@ -2605,9 +2605,9 @@ button[type="button"].attach-tray-thumb-remove {
    внутри собственной поверхности сцены (двух поверхностей не нужно). */
 .room-spectrogram {
 	inline-size: 100%;
-	block-size: 5rem;
+	block-size: 6.5rem;
 	border-radius: var(--radius);
-	background-color: var(--surface-raised);
+	background-color: #fff;
 }
 
 /* ================================================================== *
@@ -2689,9 +2689,8 @@ button[type="button"].attach-tray-thumb-remove {
 }
 .quick-stage .room-spectrogram {
 	inline-size: 100%;
-	block-size: 5rem;
-	/* Поверхность и рамка — на .quick-stage; холст рисует только сигнал. */
-	background-color: transparent;
+	block-size: 6.5rem;
+	background-color: #fff;
 	border: 0;
 	border-radius: var(--radius-md);
 }

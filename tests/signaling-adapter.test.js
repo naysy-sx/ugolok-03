@@ -97,7 +97,12 @@ test("execute: команда без сигнального эквивалент
 
 test("toFsmEvent: offer -> REMOTE_OFFER с fromPubkey и myPubkey", () => {
 	const fsmEvent = toFsmEvent({ type: "offer", sessionId: SID, sdp: "x" }, ALICE_PUB, BOB_PUB);
-	assert.deepEqual(fsmEvent, { type: "REMOTE_OFFER", sdp: "x", sessionId: SID, fromPubkey: ALICE_PUB, myPubkey: BOB_PUB });
+	assert.deepEqual(fsmEvent, { type: "REMOTE_OFFER", sdp: "x", sessionId: SID, fromPubkey: ALICE_PUB, myPubkey: BOB_PUB, restart: false });
+});
+
+test("toFsmEvent: offer с restart:true пробрасывает флаг", () => {
+	const fsmEvent = toFsmEvent({ type: "offer", sessionId: SID, sdp: "x", restart: true }, ALICE_PUB, BOB_PUB);
+	assert.equal(fsmEvent.restart, true);
 });
 
 test("toFsmEvent: answer -> REMOTE_ANSWER (без fromPubkey/myPubkey — не нужны для этого перехода)", () => {
@@ -133,6 +138,7 @@ test("сквозной цикл: Алиса publish(SEND_OFFER) -> Боб пол
 		sessionId: SID,
 		fromPubkey: ALICE_PUB,
 		myPubkey: BOB_PUB,
+		restart: false,
 	});
 });
 

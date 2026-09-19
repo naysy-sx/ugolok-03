@@ -243,6 +243,20 @@ test("fetchTurnCredentials: ответ не ok -> null", async () => {
 	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl }), null);
 });
 
+test("fetchTurnCredentials: отрицательный результат кэшируется — повторный вызов не бьёт сеть", async () => {
+	let calls = 0;
+	const now = 1_000_000;
+	const fetchImpl = async () => {
+		calls++;
+		return { ok: false, json: async () => ({}) };
+	};
+	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now }), null);
+	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now: now + 1000 }), null);
+	assert.equal(calls, 1);
+	assert.equal(await fetchTurnCredentials("https://x/api/turn-credentials", { fetchImpl, now: now + 45_000 }), null);
+	assert.equal(calls, 2);
+});
+
 test("fetchTurnCredentials: кэш — второй вызов ДО expiry-60с не бьёт сеть заново", async () => {
 	let calls = 0;
 	const fetchImpl = async () => {
@@ -309,11 +323,12 @@ test("resolveCallIceServers({refreshIfStale:true}): протухшие боль�
 	// Внутри половины TTL — refreshIfStale не должен бить сеть повторно.
 	const second = await resolveCallIceServers({ fetchImpl, now: now + 800_000, refreshIfStale: true });
 	assert.equal(calls, 1, "ещё не протухло — кэш используется как есть");
-	assert.deepEqual(second, first);
+	assert.deepEqual(second.iceServers, first.iceServers);
+	assert.equal(second.turn, "ok");
 	// За половиной TTL — обязан сбросить кэш и запросить заново.
 	const third = await resolveCallIceServers({ fetchImpl, now: now + 2_600_000, refreshIfStale: true });
 	assert.equal(calls, 2, "протухло больше половины — повторный запрос");
-	assert.notDeepEqual(third, first, "новые креды (другой username) — не тот же кэш");
+	assert.notDeepEqual(third.iceServers, first.iceServers, "новые креды (другой username) — не тот же кэш");
 });
 
 test("resolveCallIceServers без refreshIfStale (обычный путь) НЕ форсирует обновление даже при протухании больше половины", async () => {
@@ -334,7 +349,8 @@ test("resolveCallIceServers без refreshIfStale (обычный путь) НЕ
 test("resolveCallIceServers: нет turnCredentialsUrl в config.json -> прежнее поведение (bootstrap/build-time ICE как есть)", async () => {
 	resetRuntimeConfig();
 	const result = await resolveCallIceServers();
-	assert.deepEqual(result, BUILD_DEFAULT_ICE_SERVERS);
+	assert.deepEqual(result.iceServers, BUILD_DEFAULT_ICE_SERVERS);
+	assert.equal(result.turn, "not-configured");
 });
 
 test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт отвечает -> STUN (без кредов) + свежий TURN", async () => {
@@ -349,10 +365,11 @@ test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт от�
 		json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:ugolok.tech:3478?transport=udp"] }),
 	});
 	const result = await resolveCallIceServers({ fetchImpl });
-	assert.deepEqual(result, [
+	assert.deepEqual(result.iceServers, [
 		...BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ urls: s.urls })),
 		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "u", credential: "c" },
 	]);
+	assert.equal(result.turn, "ok");
 });
 
 test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт недоступен -> фолбэк STUN-only (без username/credential)", async () => {
@@ -366,8 +383,9 @@ test("resolveCallIceServers: turnCredentialsUrl есть, эндпоинт не�
 		throw new Error("network down");
 	};
 	const result = await resolveCallIceServers({ fetchImpl });
-	assert.deepEqual(result, BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ urls: s.urls })));
-	for (const s of result) {
+	assert.deepEqual(result.iceServers, BUILD_DEFAULT_ICE_SERVERS.map((s) => ({ urls: s.urls })));
+	assert.equal(result.turn, "unavailable");
+	for (const s of result.iceServers) {
 		assert.equal("username" in s, false);
 		assert.equal("credential" in s, false);
 	}
@@ -397,11 +415,12 @@ test("resolveCallIceServers: config.json несёт turn: без кредов р
 		json: async () => ({ username: "u", credential: "c", ttl: 3600, uris: ["turn:ugolok.tech:3478?transport=udp"] }),
 	});
 	const result = await resolveCallIceServers({ fetchImpl });
-	assert.deepEqual(result, [
+	assert.deepEqual(result.iceServers, [
 		{ urls: "stun:ugolok.tech:3478" },
 		{ urls: "turn:ugolok.tech:3478?transport=udp", username: "u", credential: "c" },
 	]);
-	for (const s of result) {
+	assert.equal(result.turn, "ok");
+	for (const s of result.iceServers) {
 		const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
 		const isTurn = urls.some((u) => /^turns?:/i.test(u));
 		if (isTurn) {
@@ -425,5 +444,6 @@ test("resolveCallIceServers: config.json несёт turn: без кредов, �
 		throw new Error("network down");
 	};
 	const result = await resolveCallIceServers({ fetchImpl });
-	assert.deepEqual(result, [{ urls: "stun:ugolok.tech:3478" }]);
+	assert.deepEqual(result.iceServers, [{ urls: "stun:ugolok.tech:3478" }]);
+	assert.equal(result.turn, "unavailable");
 });

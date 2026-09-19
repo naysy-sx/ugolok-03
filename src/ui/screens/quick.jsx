@@ -10,8 +10,9 @@ import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconCopy from "../icons/copy.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
-import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry } from "../../domain/settings/bootstrap-endpoints.js";
+import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry, getLastTurnStatus } from "../../domain/settings/bootstrap-endpoints.js";
 import { isTraceEnabled, record as traceRecord } from "../../core/diag/call-trace.js";
+import { BROKEN_BANNER_AFTER_ATTEMPTS } from "../../domain/rooms/adapters/mesh-supervisor.js";
 
 // TZ-diag-trace.md §1 — то же решение "писать или нет", что call.js делает
 // для 1:1 (см. configureCallRuntime): один раз на сессию комнаты, здесь.
@@ -96,6 +97,12 @@ export default function Quick({ onExit }) {
 	const [voiceBusy, setVoiceBusy] = useState(false);
 	const [voiceError, setVoiceError] = useState("");
 	const [remoteStreams, setRemoteStreams] = useState(new Map());
+	const [turnStatus, setTurnStatus] = useState(null);
+	const audioPoolRef = useRef(null);
+	const audioCtxRef = useRef(null);
+	// 0.1 с тишины — play() на элементе без источника не резолвится (HTML),
+	// Safari снимает автоплей только после реального воспроизведения в жесте.
+	const SILENT_WAV = "data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAPP4AAEagAAACABAAZGF0YQgAAAAAAAAA";
 	// Этап 5 — сырой (не клонированный) собственный поток, нужен
 	// room-audio-visualizer.jsx для audio-graph.js (собственный уровень/
 	// спектрограмма); mesh-supervisor.js's onLocalStream — единственный источник.
@@ -137,6 +144,7 @@ export default function Quick({ onExit }) {
 		return () => {
 			sessionRef.current?.close();
 			activeRoomSummary.value = null;
+			destroyAudioPool();
 		};
 	}, []);
 
@@ -212,12 +220,80 @@ export default function Quick({ onExit }) {
 	// шлёт это явно при закрытии — room-audio-visualizer.jsx's диффинг-эффект
 	// обязан узнать об уходе, чтобы вызвать audioGraph.removeStream).
 	function handleRemoteStream(peer, stream) {
+		if (!stream) return;
 		setRemoteStreams((prev) => {
 			const next = new Map(prev);
-			if (stream) next.set(peer, stream);
-			else next.delete(peer);
+			next.set(peer, stream);
 			return next;
 		});
+	}
+
+	function handleEdgeClosed(peer) {
+		setRemoteStreams((prev) => {
+			const next = new Map(prev);
+			next.delete(peer);
+			return next;
+		});
+	}
+
+	function destroyAudioPool() {
+		const pool = audioPoolRef.current;
+		if (pool) {
+			for (const el of pool) {
+				el.srcObject = null;
+				el.removeAttribute("src");
+				el.remove();
+			}
+			audioPoolRef.current = null;
+		}
+		if (audioCtxRef.current) {
+			try {
+				audioCtxRef.current.close();
+			} catch {
+				// уже закрыт
+			}
+			audioCtxRef.current = null;
+		}
+	}
+
+	async function ensureAudioPoolUnlocked() {
+		const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+		if (AC && !audioCtxRef.current) {
+			const ctx = new AC();
+			audioCtxRef.current = ctx;
+			try {
+				await ctx.resume();
+				const buf = ctx.createBuffer(1, 1, 22050);
+				const src = ctx.createBufferSource();
+				src.buffer = buf;
+				src.connect(ctx.destination);
+				src.start(0);
+			} catch {
+				// жест мог уже истечь
+			}
+		} else if (audioCtxRef.current?.state === "suspended") {
+			await audioCtxRef.current.resume().catch(() => {});
+		}
+		if (audioPoolRef.current) {
+			await Promise.all(audioPoolRef.current.map((el) => el.play().catch(() => {})));
+			return;
+		}
+		const els = [];
+		for (let i = 0; i < MAX_VOICE_PARTICIPANTS - 1; i++) {
+			const el = document.createElement("audio");
+			el.setAttribute("playsinline", "");
+			el.autoplay = true;
+			el.style.display = "none";
+			el.src = SILENT_WAV;
+			document.body.appendChild(el);
+			els.push(el);
+		}
+		audioPoolRef.current = els;
+		await Promise.all(els.map((el) => el.play().catch(() => {})));
+	}
+
+	function iceServersForCall(opts) {
+		return resolveCallIceServers(opts).then((r) => r.iceServers ?? r);
 	}
 
 	function handleLocalStream(stream) {
@@ -235,6 +311,7 @@ export default function Quick({ onExit }) {
 		// без явного действия пользователя, onChange — единственный способ узнать об этом.
 		setVoiceActive(s.isVoiceActive());
 		setConnectionState(s.getConnectionState());
+		setTurnStatus(getLastTurnStatus());
 	}
 
 	async function handleCreate(e) {
@@ -248,10 +325,11 @@ export default function Quick({ onExit }) {
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
 				openMode,
-				iceServers: resolveCallIceServers,
+				iceServers: iceServersForCall,
 				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onEdgeClosed: handleEdgeClosed,
 				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(roomName, roomPassword, newSession.getSuffix()), roomName, roomPassword);
@@ -278,10 +356,11 @@ export default function Quick({ onExit }) {
 				suffix: decoded.suffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: resolveCallIceServers,
+				iceServers: iceServersForCall,
 				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onEdgeClosed: handleEdgeClosed,
 				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, inviteInput.trim(), decoded.name, decoded.password);
@@ -302,10 +381,11 @@ export default function Quick({ onExit }) {
 				password: joinPwPassword,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: resolveCallIceServers,
+				iceServers: iceServersForCall,
 				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onEdgeClosed: handleEdgeClosed,
 				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(joinPwName, joinPwPassword, newSession.getSuffix()), joinPwName, joinPwPassword);
@@ -333,10 +413,11 @@ export default function Quick({ onExit }) {
 				suffix: raceOutcome.winningSuffix,
 				nick: nick || t("quick.anonymousNick"),
 				relayUrl: bootstrapRelayUrl(),
-				iceServers: resolveCallIceServers,
+				iceServers: iceServersForCall,
 				...roomTraceOptions(),
 				onChange: handleSessionChange,
 				onRemoteStream: handleRemoteStream,
+				onEdgeClosed: handleEdgeClosed,
 				onLocalStream: handleLocalStream,
 			});
 			attachSession(newSession, encodeInviteLink(activeRoomName, activeRoomPassword, raceOutcome.winningSuffix), activeRoomName, activeRoomPassword);
@@ -355,7 +436,13 @@ export default function Quick({ onExit }) {
 		if (!sessionRef.current) return;
 		setVoiceBusy(true);
 		setVoiceError("");
+		await ensureAudioPoolUnlocked();
 		try {
+			const ice = await resolveCallIceServers();
+			setTurnStatus(ice.turn ?? getLastTurnStatus());
+			if (ice.turn) {
+				traceRecord("turn-status", { status: ice.turn, urlCount: ice.urlCount, tookMs: ice.tookMs });
+			}
 			await sessionRef.current.joinVoice();
 			setVoiceActive(true);
 		} catch (err) {
@@ -378,6 +465,7 @@ export default function Quick({ onExit }) {
 		setVoiceError("");
 		setRemoteStreams(new Map());
 		setLocalStream(null);
+		destroyAudioPool();
 	}
 
 	function handleSendChat(e) {
@@ -459,6 +547,12 @@ export default function Quick({ onExit }) {
 					</p>
 				)}
 
+				{voiceActive && turnStatus === "unavailable" && (
+					<p role="status" class="status-warn">
+						{t("quick.room.turnUnavailableWarning")}
+					</p>
+				)}
+
 				{raceOutcome && (
 					<div role="alert" class="quick-race-warning stack box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
 						<p>{t("quick.room.raceWarning")}</p>
@@ -506,6 +600,8 @@ export default function Quick({ onExit }) {
 							remoteStreams={remoteStreams}
 							selfPubkey={selfPubkey}
 							participantNicks={new Map(present.map((p) => [p.pubkey, p.nick || t("quick.anonymousNick")]))}
+							audioPoolRef={audioPoolRef}
+							audioContext={audioCtxRef.current}
 						/>
 					)}
 				</section>
@@ -524,8 +620,12 @@ export default function Quick({ onExit }) {
 								// установки (OUTGOING_RINGING/INCOMING_RINGING/CONNECTING) — те не
 								// диагностика, а нормальные первые секунды процесса (см. CONTRACTS.md).
 								const edge = edgeStates.find((e) => e.peer === p.pubkey);
-								const edgeSilent = voiceActive && p.inVoice && p.pubkey !== selfPubkey && edge && (edge.state === "ENDED" || edge.state === "RECONNECTING");
+								const phase = edge?.phase;
 								const isSelf = p.pubkey === selfPubkey;
+								const showVoiceStatus = voiceActive && p.inVoice && !isSelf;
+								const failing = phase === "broken" || phase === "recovering";
+								const giveUp = failing && (edge?.attempts ?? 0) >= BROKEN_BANNER_AFTER_ATTEMPTS;
+								const connecting = showVoiceStatus && (phase === "opening" || (failing && !giveUp));
 								return (
 									<li
 										key={p.pubkey}
@@ -537,10 +637,24 @@ export default function Quick({ onExit }) {
 											{p.nick || t("quick.anonymousNick")}
 											{isSelf ? ` (${t("quick.room.selfMarker")})` : ""}
 										</span>
-										{edgeSilent ? (
-											<small role="alert" class="quick-edge-silent">
-												{t("quick.room.edgeSilentHint")}
+										{connecting ? (
+											<small class="quick-edge-silent">
+												{phase === "recovering" || phase === "broken" ? t("quick.room.edgeRecoveringHint") : t("quick.room.edgeOpeningHint")}
 											</small>
+										) : showVoiceStatus && giveUp ? (
+											<span class="quick-edge-silent row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+												<small role="alert">
+													{t("quick.room.edgeBrokenHint")}
+													{edge.attempts > 0 ? ` · ${t("quick.room.edgeAttemptLabel", { n: edge.attempts })}` : ""}
+												</small>
+												<button
+													type="button"
+													class="btn--ghost"
+													onClick={() => sessionRef.current?.retryVoiceEdge(p.pubkey)}
+												>
+													{t("quick.room.edgeRetryButton")}
+												</button>
+											</span>
 										) : (
 											p.inVoice && <span class="quick-voice-pill">{t("quick.room.inVoiceMarker")}</span>
 										)}

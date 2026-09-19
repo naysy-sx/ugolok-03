@@ -8,8 +8,9 @@ const LEVEL_FFT_SIZE = 256;
 // Постоянная времени setTargetAtTime — быстро, но без щелчка мгновенного присваивания.
 const GAIN_TIME_CONSTANT = 0.01;
 
-export function createAudioGraph({ AudioContextImpl = globalThis.AudioContext || globalThis.webkitAudioContext } = {}) {
-	const ctx = new AudioContextImpl();
+export function createAudioGraph({ AudioContextImpl = globalThis.AudioContext || globalThis.webkitAudioContext, context } = {}) {
+	const ctx = context ?? new AudioContextImpl();
+	const ownsContext = !context;
 	// Единственный AnalyserNode спектрограммы — И15 по построению (design-записка):
 	// это ЕДИНСТВЕННОЕ место во всём графе, где вызывается getByteFrequencyData.
 	const spectrogramAnalyser = ctx.createAnalyser();
@@ -73,7 +74,7 @@ export function createAudioGraph({ AudioContextImpl = globalThis.AudioContext ||
 		for (const pubkey of [...streams.keys()]) removeStream(pubkey);
 		masterGain.disconnect();
 		spectrogramAnalyser.disconnect();
-		ctx.close();
+		if (ownsContext) ctx.close();
 	}
 
 	// Chrome/Safari: AudioContext часто создаётся в state=suspended; анализатор

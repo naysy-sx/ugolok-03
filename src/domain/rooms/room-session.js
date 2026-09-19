@@ -82,6 +82,7 @@ async function openSession({
 	iceServers = [],
 	createMeshSupervisor: createMeshSupervisorImpl = createMeshSupervisor,
 	onRemoteStream = () => {},
+	onEdgeClosed = null,
 	onLocalStream = () => {},
 	// TZ-diag-trace.md §0.3/§2.5/§2.7 — необязательные, DI: этот оркестратор
 	// (не "чистое ядро" — см. tests/rooms-no-browser-api.test.js) по-прежнему
@@ -191,20 +192,28 @@ async function openSession({
 			}
 			case ROOM_PRESENCE_KIND: {
 				if (!ready) return;
-				const payload = parseRoomPresenceEvent(event, kSess);
+				const t = now();
+				const payload = parseRoomPresenceEvent(event, kSess, t);
 				if (!payload) return;
 				if (payload.type === "heartbeat") {
-					presenceState = mergeHeartbeat(presenceState, { pubkey: payload.pubkey, nick: payload.nick, inVoice: payload.inVoice, at: payload.at });
+					presenceState = mergeHeartbeat(presenceState, {
+						pubkey: payload.pubkey,
+						nick: payload.nick,
+						inVoice: payload.inVoice,
+						at: payload.at,
+						receivedAt: payload.receivedAt ?? t,
+					});
 				} else if (payload.type === "exit") {
-					presenceState = mergeExit(presenceState, { pubkey: payload.pubkey, at: payload.at });
+					presenceState = mergeExit(presenceState, {
+						pubkey: payload.pubkey,
+						at: payload.at,
+						receivedAt: payload.receivedAt ?? t,
+					});
 				}
-				const t = now();
 				const currentK = present(presenceState, t, PRESENCE_TAU_MS).length;
 				roomMachineState = syncRoomMachineK(roomMachineState, currentK, t);
-				// Этап 4 — новый/ушедший голосовой участник виден немедленно, не ждать
-				// следующего sweep-тика (до 1с — некритично, но мгновенная реакция лучше).
 				if (voiceActive && meshSupervisor) {
-					meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+					meshSupervisor.setDesiredPeers(getVoicePresent().map((p) => p.pubkey));
 				}
 				onChange();
 				return;
@@ -236,7 +245,7 @@ async function openSession({
 				// room-transport.js уже отфильтровал по тегу p (Этап 2) — событие точно
 				// адресовано нам. meshSupervisor может отсутствовать (голос ещё не включён
 				// НИ разу за сессию) — тогда сигналу просто некому маршрутизировать.
-				if (meshSupervisor) meshSupervisor.onSignal(event);
+				if (meshSupervisor) meshSupervisor.onSignal(event, now());
 				return;
 			}
 			default:
@@ -283,6 +292,7 @@ async function openSession({
 				getUserMedia,
 				iceServers,
 				onRemoteStream,
+				onEdgeClosed,
 				onLocalStream,
 				onTrace,
 				// Единственный транспорт комнаты (openRoomTransport выше) — то же
@@ -306,8 +316,9 @@ async function openSession({
 		lastHeartbeatAt = t;
 		// Оптимистичное локальное обновление — не ждать эха публикации с relay
 		// (тот же приём, что уже применяется для входящих heartbeat).
-		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: true, at: t });
-		meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: true, at: t, receivedAt: t });
+		meshSupervisor.setDesiredPeers(getVoicePresent().map((p) => p.pubkey));
+		meshSupervisor.reconcile(t);
 		onChange();
 	}
 
@@ -318,8 +329,9 @@ async function openSession({
 		const t = now();
 		publishHeartbeat(t);
 		lastHeartbeatAt = t;
-		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: false, at: t });
-		meshSupervisor.updateRoster(getVoicePresent().map((p) => p.pubkey));
+		presenceState = mergeHeartbeat(presenceState, { pubkey: identity.pubkeyHex, nick, inVoice: false, at: t, receivedAt: t });
+		meshSupervisor.setDesiredPeers(getVoicePresent().map((p) => p.pubkey));
+		meshSupervisor.reconcile(t);
 		onChange();
 	}
 
@@ -347,7 +359,9 @@ async function openSession({
 				if (myIndex >= MAX_VOICE_PARTICIPANTS) {
 					leaveVoice(); // И10 при гонке — сам себя эвиктирую, детерминировано для всех наблюдателей
 				} else if (meshSupervisor) {
-					meshSupervisor.updateRoster(voiceList.map((p) => p.pubkey));
+					meshSupervisor.setDesiredPeers(voiceList.map((p) => p.pubkey));
+					meshSupervisor.reconcile(t);
+					void meshSupervisor.pollHealth?.(t);
 				}
 			}
 		}
@@ -367,6 +381,10 @@ async function openSession({
 		isVoiceActive: () => voiceActive,
 		getEdgeStates: () => (meshSupervisor ? meshSupervisor.getEdgeStates() : []),
 		getConnectionState: () => connectionState,
+		retryVoiceEdge: (peer) => {
+			if (!meshSupervisor) return;
+			meshSupervisor.retryEdge(peer, now());
+		},
 		joinVoice,
 		leaveVoice,
 		getRaceOutcome: () => raceOutcome,

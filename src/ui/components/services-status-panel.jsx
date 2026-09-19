@@ -58,7 +58,8 @@ export default function ServicesStatusPanel() {
 		if (!getRuntimeConfig().turnCredentialsUrl) {
 			await loadRuntimeConfig();
 		}
-		return probeIce(await resolveCallIceServers());
+		const resolved = await resolveCallIceServers();
+		return probeIce(resolved.iceServers ?? resolved);
 	});
 
 	return (
