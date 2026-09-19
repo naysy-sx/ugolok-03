@@ -31,7 +31,10 @@ BLOSSOM_DB="${BLOSSOM_DB:-$BLOSSOM_DIR/database.sqlite3}"
 
 log() { echo "island-backup: $*" >&2; }
 
+# Снимок содержит все события relay и всю базу Blossom — только для владельца.
+umask 077
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 if command -v flock >/dev/null 2>&1; then
 	exec 8>"$BACKUP_DIR/.lock"
 	flock -n 8 || { log "уже выполняется другой бэкап"; exit 0; }
@@ -84,6 +87,10 @@ fi
 if [ -d "$BLOSSOM_DIR/blobs" ]; then
 	log "blossom: blobs"
 	rsync -a "${LINK[@]+"${LINK[@]}"}" "$BLOSSOM_DIR/blobs/" "$TMP/blobs/"
+else
+	# Блобы лежат внутри самой sqlite (миграция на файловые блобы не выполнена) — они
+	# уже в blossom.sqlite3, отдельного каталога нет.
+	log "blossom: каталога blobs/ нет — содержимое в sqlite"
 fi
 blob_count=$(find "$TMP/blobs" -type f | wc -l | tr -d ' ')
 
