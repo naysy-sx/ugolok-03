@@ -6,6 +6,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { generateFileKey } from "./crypto.js";
 import { planChunks } from "./manifest.js";
+import { MANIFEST_VERSION } from "./content.js";
 import { uploadBlob, checkUploadRequirements } from "./blob.js";
 import { chunkSizeFor } from "../media/upload-plan.js";
 import { createThumbnailQueue } from "./thumbnail-queue.js";
@@ -86,6 +87,7 @@ export async function putFileStreaming(
 
 	onProgress?.({ phase: "manifest" });
 	const manifest = {
+		v: MANIFEST_VERSION, // AUDIT-EGOROD E4 — тот же формат, что content.js::putStream (тест «бит-в-бит»)
 		size,
 		chunkSize: cSize,
 		chunks: chunkDigests,
