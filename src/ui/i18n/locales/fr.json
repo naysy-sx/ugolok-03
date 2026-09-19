@@ -246,8 +246,8 @@
 				"importKey": "Connexion avec une clé (nsec)"
 			},
 			"hero": {
-				"title": "Une messagerie pour les vôtres",
-				"lead": "Messages et appels qu'aucun inconnu ne peut lire."
+				"title": "Une messagerie chaleureuse",
+				"lead": "Messages, appels et canaux.\nSans numéro de téléphone et sans dépendre d'un seul serveur."
 			},
 			"footer": {
 				"tagline": "{{appName}} — une messagerie privée.",

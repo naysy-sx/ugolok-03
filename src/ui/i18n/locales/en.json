@@ -247,8 +247,8 @@
 				"importKey": "Sign in with a key (nsec)"
 			},
 			"hero": {
-				"title": "A messenger for your circle",
-				"lead": "Chats and calls that no outsider can read."
+				"title": "A cozy messenger",
+				"lead": "Messages, calls and channels.\nNo phone number, no tie to a single server."
 			},
 			"footer": {
 				"tagline": "{{appName}} — a private messenger.",

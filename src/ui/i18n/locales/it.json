@@ -246,8 +246,8 @@
 				"importKey": "Accedi con una chiave (nsec)"
 			},
 			"hero": {
-				"title": "Un messenger per i tuoi",
-				"lead": "Chat e chiamate che nessun estraneo può leggere."
+				"title": "Un messenger accogliente",
+				"lead": "Messaggi, chiamate e canali.\nSenza numero di telefono e senza legame a un solo server."
 			},
 			"footer": {
 				"tagline": "{{appName}} — un messenger privato.",

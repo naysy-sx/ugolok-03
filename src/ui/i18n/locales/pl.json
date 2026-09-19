@@ -246,8 +246,8 @@
 				"importKey": "Zaloguj się kluczem (nsec)"
 			},
 			"hero": {
-				"title": "Komunikator dla swoich",
-				"lead": "Czat i rozmowy, których nie odczyta nikt obcy."
+				"title": "Przytulny komunikator",
+				"lead": "Wiadomości, rozmowy i kanały.\nBez numeru telefonu i bez przywiązania do jednego serwera."
 			},
 			"footer": {
 				"tagline": "{{appName}} — prywatny komunikator.",

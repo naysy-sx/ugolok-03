@@ -4365,6 +4365,8 @@ body:has(.auth-layout) {
 	color: var(--muted);
 	max-width: none;
 	margin: 0;
+	/* \n из локали — перенос строки в подписи */
+	white-space: pre-line;
 }
 
 .auth-layout .site-footer {

@@ -246,8 +246,8 @@
 				"importKey": "Mit Schlüssel anmelden (nsec)"
 			},
 			"hero": {
-				"title": "Ein Messenger für die Deinen",
-				"lead": "Chats und Anrufe, die niemand Fremdes mitlesen kann."
+				"title": "Ein gemütlicher Messenger",
+				"lead": "Nachrichten, Anrufe und Kanäle.\nOhne Telefonnummer und ohne Bindung an einen einzelnen Server."
 			},
 			"footer": {
 				"tagline": "{{appName}} — ein privater Messenger.",

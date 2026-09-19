@@ -246,8 +246,8 @@
 				"importKey": "Entrar com uma chave (nsec)"
 			},
 			"hero": {
-				"title": "Um mensageiro para os seus",
-				"lead": "Conversas e chamadas que nenhum estranho consegue ler."
+				"title": "Um mensageiro aconchegante",
+				"lead": "Mensagens, chamadas e canais.\nSem número de telefone e sem depender de um único servidor."
 			},
 			"footer": {
 				"tagline": "{{appName}} — um mensageiro privado.",
