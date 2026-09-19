@@ -60,7 +60,7 @@ import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTOR
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
 import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
-import { buildDmRelayListEvent, parseDmRelayListEvent } from "../../domain/identity/dm-relay-list.js";
+import { buildDmRelayListEvent, parseDmRelayListEvent, selectInboxRelays } from "../../domain/identity/dm-relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
 import { rebuildFilesLog } from "./files.js";
 import { FILE_SHARE_GRANT_KIND, FILE_SUBTREE_OP_KIND } from "../../domain/files/share.js";
@@ -119,6 +119,7 @@ export function getRelayMembers() {
 let connection = null;
 let publisher = null;
 let cryptoWorker = null;
+let ownRelayUrls = []; // relay из настроек пользователя — единственные, куда клиент ходит сам (AUDIT-EGOROD)
 let connectPromise = null;
 let connectedForPubkey = null;
 let lastSessionPubkey = null;
@@ -444,6 +445,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 		const boot = readBootstrapEndpoints();
 		relayEntries = [{ url: boot.relayUrl || DEFAULT_RELAYS[0] || "ws://127.0.0.1:7777", read: true, write: true }];
 	}
+	ownRelayUrls = relayEntries.map((e) => e.url);
 	connection = createRelayPool(relayEntries, {
 		privKey,
 		// TZ-diag-trace.md §2.5 — общий сокет аккаунта (звонок 1:1 сигналит
@@ -1048,8 +1050,14 @@ export async function fetchInboxRelays(pubkeyHex) {
 // CONTRACTS.md, этап 60 — сознательно, изредка избыточный повторный publish,
 // relay дедуплицирует по id).
 async function deliverToInboxRelays(recipientPubkeyHex, event) {
+	// AUDIT-EGOROD: по умолчанию чужие relay не трогаем (см. selectInboxRelays) — не
+	// делаем даже сетевой запрос за списком получателя, если использовать его нельзя.
+	if (getRuntimeConfig().allowForeignInboxRelays !== true) return;
 	try {
-		const relays = await fetchInboxRelays(recipientPubkeyHex);
+		const relays = selectInboxRelays(await fetchInboxRelays(recipientPubkeyHex), {
+			ownRelayUrls: ownRelayUrls,
+			allowForeign: true,
+		});
 		await Promise.allSettled(relays.map((url) => publishToRelay(url, event)));
 	} catch {
 		// получатель не объявил inbox-relay / сеть недоступна — не критично

@@ -55,6 +55,9 @@ function validate(raw) {
 	// turnCredentialsUrl — этап 6, здесь только пропускаем как строку без
 	// дальнейшей интерпретации (потребитель появится там же).
 	if (typeof raw.turnCredentialsUrl === "string" && raw.turnCredentialsUrl) out.turnCredentialsUrl = raw.turnCredentialsUrl;
+	// AUDIT-EGOROD: явное разрешение слать события на inbox-relay ПОЛУЧАТЕЛЯ (чужие
+	// серверы). По умолчанию выключено — см. dm-relay-list.js::selectInboxRelays.
+	if (raw.allowForeignInboxRelays === true) out.allowForeignInboxRelays = true;
 	return out;
 }
 

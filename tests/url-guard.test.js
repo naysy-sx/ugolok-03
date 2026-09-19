@@ -48,3 +48,29 @@ test("accumulateProfileVersions: picture чужого kind:0 фильтрует�
 	accumulateProfileVersions(r2, { id: "e3", pubkey: "q", created_at: 1, content: JSON.stringify({ name: "Q" }) });
 	assert.equal("picture" in r2.get("q"), false);
 });
+
+// AUDIT-EGOROD: inbox-relay получателя — чужой адрес, куда клиент не должен ходить сам.
+import { selectInboxRelays } from "../src/domain/identity/dm-relay-list.js";
+
+const OWN = ["wss://relay.ugolok.tech"];
+
+test("selectInboxRelays: по умолчанию чужие relay не используются вовсе (получатель не узнаёт IP отправителя)", () => {
+	assert.deepEqual(selectInboxRelays(["wss://evil.example", "wss://relay.ugolok.tech"], { ownRelayUrls: OWN }), []);
+	assert.deepEqual(selectInboxRelays(["wss://evil.example"], { ownRelayUrls: OWN, allowForeign: false }), []);
+});
+
+test("selectInboxRelays: с явным разрешением — только wss, без частных сетей и IP-литералов, свои пропускаются, не более 3", () => {
+	const got = selectInboxRelays(
+		[
+			"wss://relay.ugolok.tech", // свой — уже получил через пул
+			"ws://plain.example", // не wss
+			"wss://localhost", "wss://127.0.0.1", "wss://192.168.1.10", "wss://10.0.0.5:7777", "wss://[::1]", "wss://printer.local",
+			"wss://93.184.216.34", // публичный IP-литерал — тоже нет (только имена)
+			"https://not-a-relay.example",
+			"wss://a.example", "wss://a.example/duplicate-origin", "wss://b.example", "wss://c.example", "wss://d.example",
+			42, null,
+		],
+		{ ownRelayUrls: OWN, allowForeign: true },
+	);
+	assert.deepEqual(got, ["wss://a.example", "wss://b.example", "wss://c.example"]);
+});
