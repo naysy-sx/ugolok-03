@@ -93,13 +93,13 @@ export default function AttachmentSlices({ items, typeFilter, onSelectType, layo
 							{layout === "grid" ? (
 								<div class="mgrid">
 									{filtered.map((i, idx) => (
-										<CollectionTile key={idx} attachment={i.attachment} onOpen={() => onOpenItem(i)} />
+										<CollectionTile key={`${i.attachment.manifestDigest}#${idx}`} attachment={i.attachment} onOpen={() => onOpenItem(i)} />
 									))}
 								</div>
 							) : (
 								<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 									{filtered.map((i, idx) => (
-										<AttachmentView key={idx} attachment={i.attachment} onOpen={() => onOpenItem(i)} />
+										<AttachmentView key={`${i.attachment.manifestDigest}#${idx}`} attachment={i.attachment} onOpen={() => onOpenItem(i)} />
 									))}
 								</div>
 							)}

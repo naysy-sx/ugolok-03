@@ -395,13 +395,20 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 // channel-chat.jsx), не только CollectionGrid поста.
 export function CollectionTile({ attachment, onOpen }) {
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
-	const [thumbUrl, setThumbUrl] = useState(
-		() =>
-			getPreviewUrl(attachment.manifestDigest) ||
-			getMemoryCachedUrl(attachment.manifestDigest) ||
+	const digest = attachment.manifestDigest;
+	// Превью хранится ВМЕСТЕ со своим digest и сверяется с текущим вложением
+	// синхронно: Preact переиспользует экземпляр плитки, когда в списке меняется
+	// вложение (смена фильтра типа), и без сверки остаётся чужое превью
+	// (у видео/аудио всплывали картинки предыдущего списка).
+	const [thumb, setThumb] = useState(() => ({
+		digest,
+		url:
+			getPreviewUrl(digest) ||
+			getMemoryCachedUrl(digest) ||
 			(attachment.previewDigest ? getMemoryCachedUrl(attachment.previewDigest) : null) ||
 			null,
-	);
+	}));
+	const thumbUrl = thumb.digest === digest ? thumb.url : null;
 
 	useEffect(() => {
 		if (thumbUrl) return;
@@ -411,7 +418,7 @@ export function CollectionTile({ attachment, onOpen }) {
 			if (attachment.previewDigest) {
 				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
 				if (!cancelled && previewUrl) {
-					setThumbUrl(previewUrl);
+					setThumb({ digest, url: previewUrl });
 					return;
 				}
 			}
@@ -426,7 +433,7 @@ export function CollectionTile({ attachment, onOpen }) {
 							trace,
 						}),
 				);
-				if (!cancelled && raster?.url) setThumbUrl(raster.url);
+				if (!cancelled && raster?.url) setThumb({ digest, url: raster.url });
 			} catch {
 				// плитка остаётся иконкой+размером
 			}
@@ -434,7 +441,7 @@ export function CollectionTile({ attachment, onOpen }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [attachment, thumbUrl]);
+	}, [attachment, thumbUrl, digest]);
 
 	return (
 		<button
