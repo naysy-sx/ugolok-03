@@ -241,6 +241,10 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		for f in wordfilter.js stopwords.json; do
 			install -m 644 "$ROOT/src/domain/discovery/$f" "$POLICY_DST/src/domain/discovery/$f"
 		done
+		# В контейнере нет корневого package.json репозитория: без "type":"module"
+		# Node читает wordfilter.js как CommonJS и плагин падает на import (найдено
+		# пробным запуском под alpine:3.18 + nodejs на VPS).
+		printf '{"type":"module"}\n' >"$POLICY_DST/package.json"
 		[[ -f "$ISLAND_DST/policy-conf/whitelist.json" ]] || echo '["*"]' >"$ISLAND_DST/policy-conf/whitelist.json"
 		[[ -f "$ISLAND_DST/policy-conf/peers.json" ]] || printf '{\n\t"kinds": [],\n\t"peers": []\n}\n' >"$ISLAND_DST/policy-conf/peers.json"
 		[[ -f "$ISLAND_DST/policy-conf/policy.json" ]] || printf '{\n\t"mode": "open"\n}\n' >"$ISLAND_DST/policy-conf/policy.json"

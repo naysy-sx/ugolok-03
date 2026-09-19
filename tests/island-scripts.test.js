@@ -168,3 +168,25 @@ test("плагин политики: policy.lock -> запись клиенто�
 	writeFileSync(join(dir, "policy.lock"), "x");
 	assert.match(ask().stdout, /read-only/);
 });
+
+// Раскладка плагина ровно как её делает deploy-env.sh (код + package.json с
+// "type":"module", без корневого package.json репозитория): пробный запуск на VPS
+// показал, что без этого файла Node читает wordfilter.js как CommonJS.
+test("плагин работает в раскладке контейнера (без package.json репозитория)", () => {
+	const deploy = readFileSync(resolve("scripts/deploy-env.sh"), "utf8");
+	assert.match(deploy, /printf '\{"type":"module"\}\\n' >"\$POLICY_DST\/package\.json"/);
+	const root = mkdtempSync(join(tmpdir(), "layout-"));
+	const dst = join(root, "policy");
+	mkdirSync(join(dst, "server/strfry"), { recursive: true });
+	mkdirSync(join(dst, "src/domain/discovery"), { recursive: true });
+	for (const f of ["whitelist-plugin.mjs", "write-policy.mjs", "rate-limit.mjs"]) writeFileSync(join(dst, "server/strfry", f), readFileSync(resolve("server/strfry", f)));
+	for (const f of ["wordfilter.js", "stopwords.json"]) writeFileSync(join(dst, "src/domain/discovery", f), readFileSync(resolve("src/domain/discovery", f)));
+	writeFileSync(join(dst, "package.json"), '{"type":"module"}\n');
+	const conf = join(root, "conf");
+	mkdirSync(conf);
+	writeFileSync(join(conf, "whitelist.json"), '["*"]');
+	const req = JSON.stringify({ type: "new", event: { id: "e".repeat(64), pubkey: "a".repeat(64), kind: 1, content: "" }, sourceType: "IP4", sourceInfo: "203.0.113.1" });
+	// запуск из чужого cwd — как это делает strfry
+	const res = spawnSync("node", [join(dst, "server/strfry/whitelist-plugin.mjs")], { input: req + "\n", cwd: root, env: { ...process.env, POLICY_CONF_DIR: conf }, encoding: "utf8", timeout: 5000 });
+	assert.match(res.stdout, /"action":"accept"/, res.stderr);
+});
