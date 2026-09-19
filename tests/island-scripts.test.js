@@ -20,6 +20,30 @@ function sandbox() {
 		chmodSync(join(bin, name), 0o755);
 	};
 	stub("timeout", 'shift; exec "$@"'); // macOS без coreutils
+	// node:22-bookworm в деплое/CI без rsync. Заглушка повторяет -a и --link-dest
+	// (hardlink на уже существующий файл), иначе тест hardlink-ротации не о чём.
+	stub("rsync", `
+link=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-a|--delete-after) shift ;;
+		--link-dest=*) link="\${1#--link-dest=}"; shift ;;
+		*) break ;;
+	esac
+done
+src="\${1%/}"; dst="\${2%/}"
+mkdir -p "$dst"
+[ -d "$src" ] || exit 0
+find "$src" -type f -print | while IFS= read -r f; do
+	rel="\${f#"$src"/}"
+	mkdir -p "$dst/\$(dirname "$rel")"
+	if [ -n "$link" ] && [ -f "$link/$rel" ]; then
+		ln "$link/$rel" "$dst/$rel"
+	else
+		cp -a "$f" "$dst/$rel"
+	fi
+done
+`);
 	return { root, bin, stub, env: (extra = {}) => ({ ...process.env, PATH: `${bin}:${process.env.PATH}`, ...extra }) };
 }
 
