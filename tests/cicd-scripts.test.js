@@ -426,7 +426,12 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /safe\.directory=/);
 	assert.match(deploy, /docker compose -f "\$PROD_COMPOSE" --project-directory "\$PROD_DIR" build blossom/);
 	assert.match(deploy, /up -d --force-recreate --no-deps blossom/);
-	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + force-recreate blossom, не больше");
+	// AUDIT-EGOROD H1: третий вызов — откат образов после провала проверки здоровья
+	// (up --no-build --force-recreate на :prev-образах), не второй «up --build».
+	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 3, "up --build + force-recreate blossom + откат --no-build, не больше");
+	assert.match(deploy, /up -d --no-build --force-recreate/);
+	assert.match(deploy, /island-health\.sh/);
+	assert.match(deploy, /island-backup\.sh/);
 	assert.match(deploy, /blossom rebuild не удался/);
 	assert.match(deploy, /apply-caddy не применился/);
 });
