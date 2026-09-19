@@ -246,8 +246,8 @@
 				"importKey": "Inloggen met een sleutel (nsec)"
 			},
 			"hero": {
-				"title": "Een messenger voor de jouwen",
-				"lead": "Chats en gesprekken die geen buitenstaander kan lezen."
+				"title": "Een gezellige messenger",
+				"lead": "Berichten, gesprekken en kanalen.\nZonder telefoonnummer en zonder afhankelijkheid van één server."
 			},
 			"footer": {
 				"tagline": "{{appName}} — een privémessenger.",
