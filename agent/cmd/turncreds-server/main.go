@@ -57,9 +57,10 @@ type wireResponse struct {
 }
 
 type rateLimiter struct {
-	mu      sync.Mutex
-	perHour int
-	buckets map[string]*bucket
+	mu        sync.Mutex
+	perHour   int
+	buckets   map[string]*bucket
+	lastSweep time.Time
 }
 
 type bucket struct {
@@ -74,9 +75,21 @@ func newRateLimiter(perHour int) *rateLimiter {
 // allow — фиксированное часовое окно на IP (не скользящее) — простой
 // счётчик in-memory, без внешних зависимостей (redis и т.п. — не нужны для
 // 30 запросов в час на IP).
+//
+// AUDIT-EGOROD G3: устаревшие ведра раньше не удалялись никогда (рост памяти
+// пропорционально числу когда-либо приходивших IP — тривиальный способ раздуть
+// процесс с диапазона адресов). Теперь раз в окно вычищаются просроченные.
 func (r *rateLimiter) allow(ip string, now time.Time) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if now.Sub(r.lastSweep) >= time.Hour {
+		for k, b := range r.buckets {
+			if now.Sub(b.windowStart) >= time.Hour {
+				delete(r.buckets, k)
+			}
+		}
+		r.lastSweep = now
+	}
 	b, ok := r.buckets[ip]
 	if !ok || now.Sub(b.windowStart) >= time.Hour {
 		r.buckets[ip] = &bucket{windowStart: now, count: 1}
@@ -89,12 +102,36 @@ func (r *rateLimiter) allow(ip string, now time.Time) bool {
 	return true
 }
 
+// clientIP — AUDIT-EGOROD G3. Сервис стоит ЗА Caddy (127.0.0.1) и docker-мостом:
+// r.RemoteAddr всегда адрес прокси, поэтому раньше ведро лимита было ОДНО на
+// всех посетителей — 31-й запрос в час от кого угодно лишал TURN-кредов всех
+// остальных (и это же тривиальный DoS звонков). Реальный клиент берётся из
+// X-Forwarded-For, но ТОЛЬКО если соединение пришло от доверенного прокси
+// (loopback/приватный адрес): иначе заголовок подделывается клиентом. Из
+// заголовка берётся ПОСЛЕДНЯЯ запись — её дописал наш Caddy, всё левее могло
+// прийти от клиента. IPv6 группируется по /64: один хост получает /64 целиком
+// и иначе обходил бы лимит сменой адреса.
 func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	peer := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		peer = host
 	}
-	return host
+	ip := net.ParseIP(peer)
+	if ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if fwd := net.ParseIP(strings.TrimSpace(parts[len(parts)-1])); fwd != nil {
+				ip = fwd
+			}
+		}
+	}
+	if ip == nil {
+		return peer
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String()
 }
 
 // TZ-recovery-policy.md §8 — turns:443 (TURN поверх TLS, порт 443) НЕ входит
@@ -205,5 +242,16 @@ func main() {
 	mux.HandleFunc("/api/turn-credentials", handler)
 
 	log.Printf("turncreds-server: слушаю %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	// Таймауты — AUDIT-EGOROD G3: голый http.ListenAndServe без них позволял
+	// держать соединения открытыми бесконечно (slowloris) на публичном эндпоинте.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    8 << 10,
+	}
+	log.Fatal(srv.ListenAndServe())
 }
