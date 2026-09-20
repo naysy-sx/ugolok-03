@@ -437,6 +437,13 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.equal(deploy.includes("build blossom"), false);
 	assert.equal(deploy.includes("BLOSSOM_PATCHES"), false);
 	assert.equal(/DEPLOY_IMAGES=\([^)]*ugolok-blossom/.test(deploy), false);
+	// Смонтированные с хоста файлы (политика relay, конфиги) compose не замечает: перезапуск
+	// точечный и по отпечатку, а не «всё после каждой выкладки» (на хосте Forgejo с раннером).
+	assert.match(deploy, /restart_if_changed\(\)/);
+	assert.match(deploy, /restart_if_changed "\$RELAY_RESTART_C" "\$STAMP_DIR\/relay"/);
+	assert.match(deploy, /restart_if_changed "\$BLOSSOM_RESTART_C" "\$STAMP_DIR\/blossom"/);
+	assert.match(deploy, /write-policy\.mjs/);
+	assert.equal(/docker restart forgejo|docker restart ugolok-mail|restart coturn/.test(deploy), false, "перезапускаем только relay/blossom");
 	// AUDIT-EGOROD H1: второй вызов — откат образов после провала проверки здоровья
 	// (up --no-build --force-recreate на :prev-образах), не второй «up --build».
 	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + откат --no-build, не больше");
