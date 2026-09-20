@@ -1407,7 +1407,8 @@
 			"toStorage": "Apri archiviazione",
 			"toPlans": "Ottieni più spazio"
 		},
-		"serverLabel": "Server di archiviazione: {{server}}"
+		"serverLabel": "Server di archiviazione: {{server}}",
+		"filesCount": "File: {{count}}"
 	},
 	"plans": {
 		"title": "Piani di archiviazione",

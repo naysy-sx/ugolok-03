@@ -1407,7 +1407,8 @@
 			"toStorage": "Open storage",
 			"toPlans": "Get more space"
 		},
-		"serverLabel": "Storage server: {{server}}"
+		"serverLabel": "Storage server: {{server}}",
+		"filesCount": "Files: {{count}}"
 	},
 	"plans": {
 		"title": "Storage plans",

@@ -1407,7 +1407,8 @@
 			"toStorage": "ストレージを開く",
 			"toPlans": "容量を増やす"
 		},
-		"serverLabel": "ストレージサーバー: {{server}}"
+		"serverLabel": "ストレージサーバー: {{server}}",
+		"filesCount": "ファイル数: {{count}}"
 	},
 	"plans": {
 		"title": "ストレージのプラン",

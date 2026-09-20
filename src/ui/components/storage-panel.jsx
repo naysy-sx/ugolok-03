@@ -204,7 +204,9 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 						<h3 class="sect-title">{t("storage.usedTitle")}</h3>
 						<p class="muted" style={{ margin: 0, fontSize: "var(--text-s, 0.85rem)" }}>{t("storage.serverLabel", { server: uploadTarget().replace(/^https?:\/\//, "") })}</p>
 						{/* Полоса заполнения (ТЗ-04) сама показывает «занято X из Y» — второе число рядом было бы дублем */}
-						{!(quotaState.value.status === "ok" && quotaState.value.quota?.enabled) && (
+						{quotaState.value.status === "ok" && quotaState.value.quota?.enabled ? (
+							<p class="muted" style={{ margin: 0, fontSize: "var(--text-s, 0.85rem)" }}>{t("storage.filesCount", { count: entries.length })}</p>
+						) : (
 							<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: entries.length })}</p>
 						)}
 						{quotaState.value.status === "ok" && <QuotaBar quota={quotaState.value.quota} onGetMore={() => goTo({ kind: "plans" })} />}

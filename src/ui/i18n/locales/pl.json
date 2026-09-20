@@ -1407,7 +1407,8 @@
 			"toStorage": "Otwórz pamięć",
 			"toPlans": "Zdobądź więcej miejsca"
 		},
-		"serverLabel": "Serwer przechowywania: {{server}}"
+		"serverLabel": "Serwer przechowywania: {{server}}",
+		"filesCount": "Plików: {{count}}"
 	},
 	"plans": {
 		"title": "Plany pamięci",
