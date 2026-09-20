@@ -1177,7 +1177,8 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "この相手はデバイスが多すぎて、招待を1つのメッセージで送信できません。しばらくしてからもう一度お試しください。"
+		"welcomeTooLargeForDeviceCount": "この相手はデバイスが多すぎて、招待を1つのメッセージで送信できません。しばらくしてからもう一度お試しください。",
+		"blobGone": "このファイルはサーバー上に存在しません（サーバーから容量が解放された可能性があります）。"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

@@ -3,7 +3,7 @@
 // Числа берутся с сервера (GET /list/<pubkey>: хеши, размеры, даты — сервер считает свои
 // байты), имена и назначения — из журнала. Экран полезен и без журнала.
 import { deleteBlob } from "../files/blob.js";
-import { groupRows, classOfName } from "./records.js";
+import { groupRows, classOfName, sentPlaces } from "./records.js";
 import { removeUploads } from "./journal.js";
 
 // -> [{hash, size, uploaded}] (uploaded — секунды). Бросает при сетевой ошибке/не-200.
@@ -50,6 +50,7 @@ export function buildEntries(serverBlobs, journalRows) {
 			name: g.name,
 			purpose: g.purpose,
 			targets: g.targets,
+			sentTo: sentPlaces(g.targets).length,
 			hashes: present.map((r) => r.hash),
 			size: present.reduce((s, r) => s + serverByHash.get(r.hash).size, 0),
 			at: g.at,
@@ -58,7 +59,7 @@ export function buildEntries(serverBlobs, journalRows) {
 	}
 	for (const b of serverBlobs) {
 		if (used.has(b.hash) || byHash.has(b.hash)) continue;
-		entries.push({ key: "h:" + b.hash, known: false, hashes: [b.hash], size: b.size, at: b.uploaded * 1000, kind: "other", targets: [] });
+		entries.push({ key: "h:" + b.hash, known: false, hashes: [b.hash], size: b.size, at: b.uploaded * 1000, kind: "other", targets: [], sentTo: 0 });
 	}
 	entries.sort((a, b) => b.size - a.size);
 	return entries;

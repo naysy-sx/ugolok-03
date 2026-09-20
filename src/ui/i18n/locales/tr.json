@@ -1177,7 +1177,8 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin."
+		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin.",
+		"blobGone": "Dosya artık sunucuda mevcut değil (sunucudan boşaltılmış olabilir)."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

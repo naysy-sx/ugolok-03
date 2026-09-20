@@ -198,7 +198,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				<>
 					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<h3 class="sect-title">{t("storage.usedTitle")}</h3>
-						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: blobs.length })}</p>
+						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: entries.length })}</p>
 						{/* Место под полосу заполнения: число квоты появится в ТЗ-04. Готовых элементов
 						    в проекте нет (.sync-progress-bar — бегущая полоса без значения). */}
 						<div class="storage-bar" data-storage-bar aria-hidden="true" hidden />
@@ -252,7 +252,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 												<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.known ? e.name || t("storage.unnamed") : t("storage.unknownEntry", { date: fmtDate(e.at) })}</span>
 												<small style={{ color: "var(--muted)" }}>
 													{t("storage.entryMeta", { size: formatBytes(e.size), date: fmtDate(e.at) })}
-													{e.known && e.targets.length > 0 ? ` · ${t("storage.sentTo", { count: e.targets.length })}` : ""}
+													{e.sentTo > 0 ? ` · ${t("storage.sentTo", { count: e.sentTo })}` : ""}
 												</small>
 											</div>
 											<button type="button" class="btn--ghost" onClick={() => askFreeEntry(e)}>

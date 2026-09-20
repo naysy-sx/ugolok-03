@@ -1177,7 +1177,8 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Ce contact a trop d'appareils pour envoyer une invitation en un seul message. Réessayez un peu plus tard."
+		"welcomeTooLargeForDeviceCount": "Ce contact a trop d'appareils pour envoyer une invitation en un seul message. Réessayez un peu plus tard.",
+		"blobGone": "Le fichier n’est plus disponible sur le serveur (il a peut-être été libéré du serveur)."
 	},
 	"quick": {
 		"anonymousNick": "Guest",

@@ -1177,7 +1177,8 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "该联系人的设备太多，无法在一条消息中发送邀请。请稍后再试。"
+		"welcomeTooLargeForDeviceCount": "该联系人的设备太多，无法在一条消息中发送邀请。请稍后再试。",
+		"blobGone": "该文件已不在服务器上（可能已被从服务器释放）。"
 	},
 	"quick": {
 		"anonymousNick": "Guest",

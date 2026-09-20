@@ -17,6 +17,16 @@ const HASH_RE = /^[0-9a-f]{64}$/;
 
 const OP_RANK = { add: 0, target: 1, del: 2, freed: 3 };
 
+// Цель заливки бывает двух видов: получатель (беседа, канал) и узел «Файлов»/профиль. Узлы
+// помечаются префиксом "n:" — «отправлено в N мест» и предупреждение «перестанет открываться у
+// получателей» считают только получателей.
+const NODE_PURPOSES = ["files", "share", "avatar"];
+const NODE_PREFIX = "n:";
+
+export function sentPlaces(targets) {
+	return (targets ?? []).filter((x) => typeof x === "string" && x && !x.startsWith(NODE_PREFIX));
+}
+
 function str(v, max = MAX_STR) {
 	if (typeof v !== "string") return undefined;
 	return v.length > max ? v.slice(0, max) : v;
@@ -43,7 +53,7 @@ export function makeAdd(e, now = Date.now()) {
 		role: e.role,
 		group: str(e.group, 64) ?? newGroupId(),
 		purpose: e.purpose,
-		target: str(e.target) ?? "",
+		target: withNodePrefix(e.purpose, str(e.target) ?? ""),
 	};
 	const name = str(e.name, MAX_NAME);
 	if (name) op.name = name;
@@ -52,6 +62,11 @@ export function makeAdd(e, now = Date.now()) {
 	const src = str(e.sourceDigest, 64);
 	if (src && HASH_RE.test(src)) op.sourceDigest = src;
 	return op;
+}
+
+function withNodePrefix(purpose, target) {
+	if (!target || !NODE_PURPOSES.includes(purpose) || target.startsWith(NODE_PREFIX)) return target;
+	return NODE_PREFIX + target;
 }
 
 export function makeTarget(hash, target, now = Date.now()) {
