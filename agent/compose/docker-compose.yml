@@ -27,7 +27,7 @@ services:
     # Готовый образ форка (репозиторий ugolok-blossom), тот же тег, что у
     # боевого острова (deploy/island/docker-compose.yml). Тег пинится точно:
     # обновление — осознанная смена этой строки, не latest.
-    image: git.ugolok.tech/naysy/ugolok-blossom:1.0.0
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.1.0
     # blossom.env создаёт агент (права 600) до compose up. Сейчас пуст —
     # сюда лягут ключи S3 (ТЗ-02), чтобы секреты не попадали в compose.
     env_file:
