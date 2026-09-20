@@ -1406,7 +1406,8 @@
 			"warning": "Nog maar {{free}} van {{limit}} over.",
 			"toStorage": "Opslag openen",
 			"toPlans": "Meer ruimte krijgen"
-		}
+		},
+		"serverLabel": "Opslagserver: {{server}}"
 	},
 	"plans": {
 		"title": "Opslagabonnementen",

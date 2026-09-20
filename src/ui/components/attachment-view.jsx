@@ -9,7 +9,6 @@ import { publish } from "../signals/transport.js";
 import { initFiles, createFileEntry, treeState, getFileKeyFor } from "../signals/files.js";
 import { prepareOwnCopy } from "../../domain/files/copy-attachment.js";
 import { PreconditionError } from "../../domain/files/ops.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
@@ -20,12 +19,12 @@ import { t, tPlural, errorMessage } from "../signals/i18n.js";
 import { truncateFileName } from "./bubble-attachment-plan.js";
 import { pickIndicator } from "../../domain/media/progress-indicator.js";
 import { reservedBoxStyle } from "./attachment-box.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
 // через content.js — тот же ОДИН сконфигурированный Blossom-сервер, что везде
 // в разделе "Файлы" (files.jsx/file-player.jsx), не per-вложение URL.
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function base64ToBytes(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -103,7 +102,7 @@ export function ImageAttachment({ attachment, onOpen, reserve = true }) {
 		// оригинала — ровно как до этой задачи, ни строки поведения не меняется.
 		async function load() {
 			if (attachment.previewDigest) {
-				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() });
 				if (cancelled) return;
 				if (previewUrl) {
 					setUrl(previewUrl);
@@ -121,7 +120,7 @@ export function ImageAttachment({ attachment, onOpen, reserve = true }) {
 					// onDownload (MEDIA-PERF-TZ-6.md §8.2) уходит в getRange как
 					// onProgress через тот же options-мешок — процент из фактических
 					// байтов, без выдумывания.
-					(trace, onDownload) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace, onProgress: onDownload }),
+					(trace, onDownload) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget(), trace, onProgress: onDownload }),
 					undefined,
 					(p) => {
 						if (!cancelled) setProgress(p);
@@ -207,7 +206,7 @@ function AudioAttachment({ attachment, onOpen }) {
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
+		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget() })
 			.then((bytes) => {
 				if (cancelled) return;
 				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
@@ -345,7 +344,7 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 			const ownerPubkey = currentUser.value.id;
 			await initFiles(ownerPubkey, privKeySig.value, publish);
 			const name = attachmentDisplayName(attachment) || attachment.name;
-			const res = await prepareOwnCopy({ attachment, name, serverUrl: BLOSSOM_URL, privateKey: privKeySig.value });
+			const res = await prepareOwnCopy({ attachment, name, serverUrl: uploadTarget(), privateKey: privKeySig.value });
 
 			if (res.kind === "existing") {
 				// Копия уже залита. Если в «Файлах» есть живой узел на неё — ничего не делаем;
@@ -436,7 +435,7 @@ export function CollectionTile({ attachment, onOpen }) {
 		let cancelled = false;
 		(async () => {
 			if (attachment.previewDigest) {
-				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() });
 				if (!cancelled && previewUrl) {
 					setThumb({ digest, url: previewUrl });
 					return;
@@ -449,7 +448,7 @@ export function CollectionTile({ attachment, onOpen }) {
 					attachment.mime,
 					(trace) =>
 						getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, {
-							serverUrl: BLOSSOM_URL,
+							serverUrl: uploadTarget(),
 							trace,
 						}),
 				);
@@ -562,7 +561,7 @@ export function AttachmentDownloadLink({ attachment, menu = false }) {
 		try {
 			const bytes = attachment.voiceInline
 				? base64ToBytes(attachment.voiceInline)
-				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL });
+				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget() });
 			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
 			const a = document.createElement("a");
 			a.href = url;

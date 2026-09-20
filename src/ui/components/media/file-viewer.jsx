@@ -1,11 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
 import { formatFileSize } from "../attachment-view.jsx";
 import IconFileText from "../../icons/file-text.jsx";
+import { uploadTarget } from "../../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Редизайн интерфейса, этап 3 (DESIGN.md) — 4-й "глупый вид" (VIEWS.other,
 // media-overlay.jsx), для класса "other" (файлы: документы, архивы и т.п.).
@@ -20,7 +19,7 @@ export default function FileViewer({ mediaRef }) {
 		let cancelled = false;
 		setSrc(null);
 		setError("");
-		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
+		acquireMediaUrl(mediaRef, { serverUrl: uploadTarget() })
 			.then((handle) => {
 				if (!cancelled) setSrc(mediaElementSrc(handle));
 			})

@@ -8,9 +8,8 @@ import { videoPosterStyle, videoPosterUrl } from "./video-poster-style.js";
 import { getMemoryCachedUrl } from "../attachment-memory-cache.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
 import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // M:SS — attachment.duration (секунды, MEDIA-PERF-TZ-5.md §3) снят с
 // <video>.duration при заливке, дробный. Часы не нужны: видео-вложения чата
@@ -43,7 +42,7 @@ function VideoTile({ attachment, onOpen, moreCount = 0 }) {
 	useEffect(() => {
 		if (!attachment.previewDigest || videoPosterUrl(attachment.poster)) return;
 		let cancelled = false;
-		resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL }).then((url) => {
+		resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() }).then((url) => {
 			if (!cancelled && url) setPreviewUrl(url);
 		});
 		return () => {

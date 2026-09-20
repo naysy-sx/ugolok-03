@@ -1406,7 +1406,8 @@
 			"warning": "Zostało tylko {{free}} z {{limit}}.",
 			"toStorage": "Otwórz pamięć",
 			"toPlans": "Zdobądź więcej miejsca"
-		}
+		},
+		"serverLabel": "Serwer przechowywania: {{server}}"
 	},
 	"plans": {
 		"title": "Plany pamięci",

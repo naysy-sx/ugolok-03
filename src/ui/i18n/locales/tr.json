@@ -1406,7 +1406,8 @@
 			"warning": "{{limit}} içinde yalnızca {{free}} kaldı.",
 			"toStorage": "Depolamayı aç",
 			"toPlans": "Daha fazla yer edin"
-		}
+		},
+		"serverLabel": "Depolama sunucusu: {{server}}"
 	},
 	"plans": {
 		"title": "Depolama planları",

@@ -1406,7 +1406,8 @@
 			"warning": "Nur noch {{free}} von {{limit}} frei.",
 			"toStorage": "Speicher öffnen",
 			"toPlans": "Mehr Speicher holen"
-		}
+		},
+		"serverLabel": "Speicherserver: {{server}}"
 	},
 	"plans": {
 		"title": "Speichertarife",

@@ -2,11 +2,10 @@
 // после каждой успешной заливки/освобождения места; фоновой периодики нет.
 import { signal, effect } from "@preact/signals";
 import { currentUser, privKeySig } from "./auth.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { fetchQuota } from "../../core/transport/blossom-client.js";
 import { normalizeQuota } from "../../domain/uploads/quota.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // status: unknown (не спрашивали) | loading | ok | unsupported (старый сервер без квот) | error
 export const quotaState = signal({ status: "unknown", quota: null, at: 0 });
@@ -25,13 +24,13 @@ export function getQuotaSnapshot() {
 export async function refreshQuota() {
 	const user = currentUser.peek();
 	const priv = privKeySig.peek();
-	if (!user || !priv || !BLOSSOM_URL) return quotaState.value;
+	if (!user || !priv || !uploadTarget()) return quotaState.value;
 	if (inflight) return inflight;
 	const gen = generation;
 	quotaState.value = { ...quotaState.value, status: quotaState.value.quota ? "ok" : "loading" };
 	inflight = (async () => {
 		try {
-			const quota = normalizeQuota(await fetchQuota(BLOSSOM_URL, priv));
+			const quota = normalizeQuota(await fetchQuota(uploadTarget(), priv));
 			if (gen === generation) quotaState.value = { status: quota ? "ok" : "error", quota, at: Date.now() };
 		} catch (err) {
 			if (gen !== generation) return quotaState.value;
@@ -43,6 +42,17 @@ export async function refreshQuota() {
 		return quotaState.value;
 	})();
 	return inflight;
+}
+
+// ТЗ-05 §6: остаток — свойство пары «ключ + сервер». Сменился активный сервер (или добавили/убрали
+// единственный) — старые цифры принадлежат другому серверу: сбросить и спросить заново.
+export function resetQuotaForServerChange() {
+	generation += 1;
+	if (timer) clearTimeout(timer);
+	timer = null;
+	inflight = null;
+	quotaState.value = { status: "unknown", quota: null, at: 0 };
+	return refreshQuota();
 }
 
 // После заливки/освобождения — обновить остаток (с небольшой задержкой: несколько блобов

@@ -12,7 +12,6 @@ import {
 } from "../../domain/content/channel.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { place, openChannel } from "../signals/place.js";
 import ChannelDetail from "./channel.jsx";
 import ChannelAvatarThumb from "../components/channel-avatar-thumb.jsx";
@@ -20,11 +19,11 @@ import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
 import { t, currentLocale, errorMessage } from "../signals/i18n.js";
 import { pushToast } from "../signals/toasts.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function formatUpdatedDate(unixSeconds) {
 	if (typeof unixSeconds !== "number") return null;
@@ -113,7 +112,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: "channel" } });
+				avatarDescriptor = await uploadMessageAttachment(uploadTarget(), bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: "channel" } });
 			}
 			await createChannel(
 				ownerPubkey,

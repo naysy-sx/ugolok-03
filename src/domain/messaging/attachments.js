@@ -8,6 +8,7 @@
 // просто источник ключа/адресации — content-addressed чанкованное хранилище
 // files, а не отдельное whole-file шифрование attachments).
 import { putStream, getManifest, getRange } from "../files/content.js";
+import { resolveReadServers, sanitizeServerHint } from "../files/servers.js";
 import { recordUploads, newGroupId } from "../uploads/journal.js";
 import { putFileStreaming } from "../files/stream-upload.js";
 import { validateAttachment } from "../files/attachment-validation.js";
@@ -57,6 +58,12 @@ async function journalBlobs(journal, blobs, roles, { name, serverUrl, group }) {
 // вызывающие) и НЕ обязана быть настолько же осторожной — контракт "отказ
 // превью не должен срывать оригинал" должен держаться независимо от того,
 // насколько defensively написан конкретный generate().
+// ТЗ-05 §4: куда файл реально залит. Необязательное поле — сообщения без него читаются как раньше.
+function serverHint(serverUrl) {
+	const servers = sanitizeServerHint(serverUrl);
+	return servers.length > 0 ? { servers } : {};
+}
+
 async function withPreview(descriptor, input, serverUrl, privateKey, options, journalCtx) {
 	const generate = options.generatePreview ?? generateAttachmentPreview;
 	// fileKey/generatePreview НЕ пробрасываются в putStream превью: fileKey —
@@ -96,7 +103,7 @@ async function withPreview(descriptor, input, serverUrl, privateKey, options, jo
 export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: fileBytes.length });
 	const { manifestDigest, fileKey, size, blobs } = await putStream(fileBytes, { name, mime, serverUrl, privateKey, ...options });
-	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name, ...serverHint(serverUrl) };
 	const journalCtx = { name, serverUrl, group: options.journal?.group ?? newGroupId() };
 	await journalBlobs(options.journal, blobs, {}, journalCtx);
 	return withPreview(descriptor, { bytes: fileBytes, mime }, serverUrl, privateKey, options, journalCtx);
@@ -119,7 +126,7 @@ export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name
 export async function uploadMessageAttachmentStreaming(serverUrl, file, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: file.size });
 	const { manifestDigest, fileKey, size, blobs } = await putFileStreaming(file, { name, mime, serverUrl, privateKey, ...options });
-	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name, ...serverHint(serverUrl) };
 	const journalCtx = { name, serverUrl, group: options.journal?.group ?? newGroupId() };
 	await journalBlobs(options.journal, blobs, {}, journalCtx);
 	const bytes = typeof mime === "string" && mime.startsWith("image/") ? new Uint8Array(await file.arrayBuffer()) : undefined;
@@ -147,7 +154,8 @@ export function referenceStoredFile(manifestDigest, fileKeyBytes, manifest) {
 // eager, целиком в память (вложения чата не перематываются, в отличие от
 // плеера "Файлы" — getRange(0, size) целиком оправдан тем же приёмом, что
 // file-player.jsx для картинок, И7 довесок).
-export async function downloadMessageAttachment({ manifestDigest, fileKey }, options = {}) {
-	const manifest = await getManifest(manifestDigest, options);
-	return getRange(manifest, base64ToBytes(fileKey), 0, manifest.size, options);
+export async function downloadMessageAttachment({ manifestDigest, fileKey, servers }, options = {}) {
+	const opts = { ...options, serverUrl: resolveReadServers(servers, options.serverUrl) };
+	const manifest = await getManifest(manifestDigest, opts);
+	return getRange(manifest, base64ToBytes(fileKey), 0, manifest.size, opts);
 }

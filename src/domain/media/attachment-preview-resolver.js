@@ -7,6 +7,7 @@
 // обязана сама решить рендерить старым путём (обратная совместимость,
 // контракт §3: "без миграции старых сообщений").
 import { getManifest, getRange } from "../files/content.js";
+import { resolveReadServers } from "../files/servers.js";
 import { PRIORITY } from "../../core/transport/blossom-queue.js";
 
 function base64ToBytes(str) {
@@ -31,6 +32,7 @@ export async function resolveAttachmentPreviewUrl(attachment, { serverUrl, fetch
 	if (cached) return cached;
 
 	const promise = (async () => {
+		serverUrl = resolveReadServers(attachment.servers, serverUrl);
 		const manifest = await getManifest(attachment.previewDigest, { serverUrl, fetchImpl, priority: PRIORITY.PREVIEW });
 		const bytes = await getRange(manifest, base64ToBytes(attachment.previewKey), 0, manifest.size, {
 			serverUrl,

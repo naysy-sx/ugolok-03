@@ -1406,7 +1406,8 @@
 			"warning": "{{limit}} 中、残り {{free}} のみ。",
 			"toStorage": "ストレージを開く",
 			"toPlans": "容量を増やす"
-		}
+		},
+		"serverLabel": "ストレージサーバー: {{server}}"
 	},
 	"plans": {
 		"title": "ストレージのプラン",

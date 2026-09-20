@@ -1406,7 +1406,8 @@
 			"warning": "Il ne reste que {{free}} sur {{limit}}.",
 			"toStorage": "Ouvrir le stockage",
 			"toPlans": "Obtenir plus d’espace"
-		}
+		},
+		"serverLabel": "Serveur de stockage : {{server}}"
 	},
 	"plans": {
 		"title": "Offres de stockage",

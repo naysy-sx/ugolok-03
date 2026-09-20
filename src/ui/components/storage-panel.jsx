@@ -6,7 +6,6 @@
 // на новом устройстве, а не ошибка.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { t, errorMessage, currentLocale } from "../signals/i18n.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { fetchServerBlobs, totalBytes, reconcile, buildEntries, breakdownByPurpose, breakdownByKind } from "../../domain/uploads/storage.js";
 import { listUploads, removeUploads, getJournalSync, getJournalStatus } from "../../domain/uploads/journal.js";
 import { pullUploadJournal, refreshFreed } from "../signals/uploads.js";
@@ -15,8 +14,8 @@ import FreeSpaceDialog from "./free-space-dialog.jsx";
 import QuotaBar from "./quota-bar.jsx";
 import { quotaState, refreshQuota } from "../signals/quota.js";
 import { goTo } from "../signals/place.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const PAGE = 20;
 const PURPOSE_ORDER = ["dm", "group", "channel", "files", "share", "avatar", "unknown"];
 const KIND_ORDER = ["image", "video", "audio", "document", "other", "unknown"];
@@ -95,7 +94,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 		setError("");
 		try {
 			// Сначала числа с сервера и то, что журнал уже знает локально — экран полезен сразу.
-			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }), listUploads()]);
+			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(uploadTarget(), ownerPubkey, { privateKey: privKey }), listUploads()]);
 			if (!alive.current) return;
 			setBlobs(serverBlobs);
 			setRows(local);
@@ -120,7 +119,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 		setRec(null);
 		refreshFreed();
 		try {
-			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }));
+			setBlobs(await fetchServerBlobs(uploadTarget(), ownerPubkey, { privateKey: privKey }));
 			setRows(await listUploads());
 		} catch (err) {
 			setError(errorMessage(err));
@@ -139,7 +138,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				setRecError(t("storage.reconcile.needFull"));
 				return;
 			}
-			const fresh = await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey });
+			const fresh = await fetchServerBlobs(uploadTarget(), ownerPubkey, { privateKey: privKey });
 			const local = await listUploads();
 			setBlobs(fresh);
 			setRows(local);
@@ -203,6 +202,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				<>
 					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<h3 class="sect-title">{t("storage.usedTitle")}</h3>
+						<p class="muted" style={{ margin: 0, fontSize: "var(--text-s, 0.85rem)" }}>{t("storage.serverLabel", { server: uploadTarget().replace(/^https?:\/\//, "") })}</p>
 						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: entries.length })}</p>
 						{/* Полоса заполнения (ТЗ-04): числа потолка приходят с сервера */}
 						{quotaState.value.status === "ok" && <QuotaBar quota={quotaState.value.quota} onGetMore={() => goTo({ kind: "plans" })} />}
@@ -325,7 +325,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				</>
 			)}
 
-			{dialog && <FreeSpaceDialog {...dialog} serverUrl={BLOSSOM_URL} privKey={privKey} onClose={() => setDialog(null)} onDone={refreshAfterChange} />}
+			{dialog && <FreeSpaceDialog {...dialog} serverUrl={uploadTarget()} privKey={privKey} onClose={() => setDialog(null)} onDone={refreshAfterChange} />}
 		</div>
 	);
 }
