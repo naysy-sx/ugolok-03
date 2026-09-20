@@ -9,7 +9,7 @@ import { db } from "../../core/store/database.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
 import { UPLOADS_PLAINTEXT_FIELDS, UPLOAD_BATCHES_PLAINTEXT_FIELDS } from "../../core/store/table-fields.js";
 import { publishDurably } from "../../core/store/outbox.js";
-import { makeAdd, makeTarget, makeDel, applyOp, foldOps, newGroupId } from "./records.js";
+import { makeAdd, makeTarget, makeDel, makeFreed, applyOp, foldOps, foldFreed, newGroupId } from "./records.js";
 import { appendOps, devShort, buildBatchEvent, parseBatchEvent, journalPubkey, JOURNAL_KIND } from "./batches.js";
 
 const FLUSH_DELAY_MS = 15_000;
@@ -17,10 +17,12 @@ const FLUSH_DELAY_MS = 15_000;
 let ctx = null;
 let lock = Promise.resolve();
 let flushTimer = null;
+let lastPublishError = null; // причина последнего отказа публикации (виден на экране хранилища)
 
 // ctx: { ownerPubkey, dbKey, journalKey, journalSigner, deviceId, publish, now?, flushDelayMs? }
 export function bindJournal(c) {
 	unbindJournal();
+	lastPublishError = null;
 	ctx = {
 		...c,
 		dev: devShort(c.deviceId),
@@ -90,11 +92,16 @@ function rowToUpload(row) {
 
 // Полная пересборка материализованной таблицы из всех пачек.
 async function rebuildUploads(batches) {
-	const rows = foldOps(batches.flatMap((b) => b.ops));
-	await db.transaction("rw", db.table("uploads"), async () => {
+	const allOps = batches.flatMap((b) => b.ops);
+	const rows = foldOps(allOps);
+	const freed = foldFreed(allOps);
+	await db.transaction("rw", db.table("uploads"), db.table("uploadFreed"), async () => {
 		await db.table("uploads").where("ownerPubkey").equals(ctx.ownerPubkey).delete();
 		const out = [...rows.values()].map(uploadToRow);
 		if (out.length) await db.table("uploads").bulkPut(out);
+		await db.table("uploadFreed").where("ownerPubkey").equals(ctx.ownerPubkey).delete();
+		const fr = [...freed].map(([hash, at]) => ({ ownerPubkey: ctx.ownerPubkey, hash, at }));
+		if (fr.length) await db.table("uploadFreed").bulkPut(fr);
 	});
 }
 
@@ -102,6 +109,11 @@ async function rebuildUploads(batches) {
 // возрастанию времени, семантика та же, что у свёртки).
 async function applyToUploads(ops) {
 	for (const op of ops) {
+		if (op.op === "freed") {
+			await db.table("uploadFreed").put({ ownerPubkey: ctx.ownerPubkey, hash: op.hash, at: op.at });
+			continue;
+		}
+		if (op.op === "add") await db.table("uploadFreed").delete([ctx.ownerPubkey, op.hash]);
 		const key = [ctx.ownerPubkey, op.hash];
 		const existing = await db.table("uploads").get(key);
 		const rows = new Map();
@@ -135,6 +147,7 @@ export async function recordUploads(entries) {
 			const ops = entries.map((e) => makeAdd({ ...e, at: e.at ?? now }, now)).filter(Boolean);
 			await commitOps(ops);
 		});
+		safeNotify();
 	} catch {
 		// журнал — вспомогательная бухгалтерия, заливку он ломать не вправе
 	}
@@ -181,12 +194,21 @@ export async function addTargetToGroupOf(hash, target) {
 	}
 }
 
+// Сообщает UI, что состав загруженного изменился (квота на сервере тоже): обновить остаток.
+function safeNotify() {
+	try {
+		ctx?.onChanged?.();
+	} catch {
+		// подписчик не должен ломать запись в журнал
+	}
+}
+
 // Удаляет записи (после освобождения места на сервере). Единственный случай, когда
 // ЗАКРЫТАЯ пачка переписывается: операции удалённых блобов вычищаются из своих
 // пачек (иначе имена удалённых файлов вечно лежали бы на relay). Если операции
 // живут в пачке другого устройства — переписать её нельзя без гонки, вместо этого в
 // свою пачку кладётся надгробие.
-export async function removeUploads(hashes) {
+export async function removeUploads(hashes, { markFreed = false } = {}) {
 	if (!ctx || hashes.length === 0) return { ok: true };
 	try {
 		return await withLock(async () => {
@@ -196,7 +218,8 @@ export async function removeUploads(hashes) {
 			const changed = [];
 			const foreign = new Set();
 			for (const b of batches) {
-				const kept = b.ops.filter((o) => !set.has(o.hash));
+				// freed-метки переживают очистку: они и есть след «стёрто с сервера»
+				const kept = b.ops.filter((o) => o.op === "freed" || !set.has(o.hash));
 				if (b.dev === ctx.dev) {
 					if (kept.length !== b.ops.length) {
 						b.ops = kept;
@@ -205,7 +228,7 @@ export async function removeUploads(hashes) {
 						changed.push(b);
 					}
 				} else {
-					for (const o of b.ops) if (set.has(o.hash)) foreign.add(o.hash);
+					for (const o of b.ops) if (set.has(o.hash) && o.op !== "freed") foreign.add(o.hash);
 				}
 			}
 			await saveBatches(changed);
@@ -215,8 +238,15 @@ export async function removeUploads(hashes) {
 				const touched = appendOps(all, tombstones, { dev: ctx.dev, now });
 				await saveBatches(all.filter((b) => touched.has(b.d)));
 			}
+			if (markFreed) {
+				const marks = hashes.map((h) => makeFreed(h, now)).filter(Boolean);
+				const all = await loadBatches();
+				const touched = appendOps(all, marks, { dev: ctx.dev, now });
+				await saveBatches(all.filter((b) => touched.has(b.d)));
+			}
 			await rebuildUploads(await loadBatches());
 			scheduleFlush();
+			safeNotify();
 			return { ok: true };
 		});
 	} catch (e) {
@@ -245,6 +275,20 @@ export async function getGroupOfHash(hash) {
 	const { group } = rowToUpload(row);
 	const rows = (await db.table("uploads").where("[ownerPubkey+group]").equals([ctx.ownerPubkey, group]).toArray()).map(rowToUpload);
 	return { group, rows };
+}
+
+// Хеши, стёртые с сервера (для пометки узлов «Файлов»).
+export async function listFreed() {
+	if (!ctx) return [];
+	const rows = await db.table("uploadFreed").where("ownerPubkey").equals(ctx.ownerPubkey).toArray();
+	return rows.map((r) => r.hash);
+}
+
+// Состояние публикации журнала: сколько пачек не ушло и почему (последний отказ relay).
+export async function getJournalStatus() {
+	if (!ctx) return { dirty: 0, lastError: null };
+	const dirty = (await loadBatches()).filter((b) => b.dev === ctx.dev && b.dirty).length;
+	return { dirty, lastError: lastPublishError };
 }
 
 export async function hasUpload(hash) {
@@ -289,8 +333,11 @@ export async function flushJournal() {
 				b.remoteAt = createdAt;
 				await saveBatches([b]);
 				sent += 1;
+				lastPublishError = null;
 			} else {
 				failed += 1;
+				// Не молчим: relay мог отклонить (whitelist, лимиты) — причина уйдёт на экран хранилища.
+				lastPublishError = result?.reason || result?.message || "relay не принял событие";
 			}
 		}
 		// Нет сети / relay отказал: пачка осталась «грязной», повторяем позже сами —

@@ -6,6 +6,18 @@ import { isClean } from "../../src/domain/discovery/wordfilter.js";
 import { mergeLimits } from "./rate-limit.mjs";
 
 const DISCOVERY_KIND = 30073;
+// ТЗ-03: пачки журнала загрузок подписаны ПРОИЗВОДНЫМ ключом (не тем, что в whitelist).
+// Оператор добавляет в whitelist основные ключи и не может знать производные, поэтому при
+// включённом whitelist журнал молча перестал бы публиковаться. Эти kind'ы принимаются от
+// любого автора (лимиты и размер события действуют как обычно). Отключить или расширить
+// список — policy.json: "openKinds": [] / [30076, ...].
+export const JOURNAL_KIND = 30076;
+export const DEFAULT_OPEN_KINDS = Object.freeze([JOURNAL_KIND]);
+
+export function openKindsOf(policy) {
+	if (!Array.isArray(policy?.openKinds)) return DEFAULT_OPEN_KINDS;
+	return policy.openKinds.filter((k) => Number.isInteger(k));
+}
 
 // Откуда пришло событие — поле sourceType из протокола плагина
 // (strfry-src/docs/plugins.md): IP4/IP6 — клиентский сокет, Import/Stored —
@@ -103,7 +115,7 @@ export function decide(req, { whitelist, peers, stopwords, policy, limiter, now 
 			res.msg = "blocked: relay is temporarily read-only";
 			return res;
 		}
-		if (whitelist.has("*") || whitelist.has(pubkey)) {
+		if (whitelist.has("*") || whitelist.has(pubkey) || openKindsOf(policy).includes(event.kind)) {
 			res.action = "accept";
 		} else {
 			res.action = "reject";

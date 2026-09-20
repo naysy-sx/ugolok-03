@@ -842,7 +842,9 @@
 		"pasteInto": "Plakken",
 		"pasteHere": "Hier plakken",
 		"clipboardCopied": "Gekopieerd: {{count}}",
-		"clipboardCut": "Geknipt: {{count}}"
+		"clipboardCut": "Geknipt: {{count}}",
+		"freedFromServer": "Van de server verwijderd",
+		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Dit contact heeft te veel apparaten om een uitnodiging in één bericht te versturen. Probeer het later nog eens."
+		"welcomeTooLargeForDeviceCount": "Dit contact heeft te veel apparaten om een uitnodiging in één bericht te versturen. Probeer het later nog eens.",
+		"blobGone": "Het bestand is niet meer beschikbaar op de server (mogelijk is het van de server vrijgemaakt).",
+		"fileTooLargeForServer": "“{{name}}” is {{size}}, maar de server accepteert bestanden tot {{max}}.",
+		"quotaExceeded": "Niet genoeg ruimte voor “{{name}}”: {{need}} nodig, {{free}} vrij.",
+		"storageReadonly": "De opslag is nu alleen-lezen: nieuwe bestanden uploaden kan niet. Alles wat al is geüpload blijft openen."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "Het is naar {{count}} plekken verzonden: het kan niet meer worden geopend door wie het nog niet heeft gedownload.",
 			"usageNone": "Voor dit bestand is geen verzending vastgelegd.",
 			"limit": "Wat ontvangers al hebben gedownload, blijft bij hen. Dit kan niet ongedaan worden gemaakt.",
-			"filesNote": "Het item in “Bestanden” kan ook niet meer worden geopend.",
+			"filesNote": "Het item in “Bestanden”, als dat er is, gaat ook naar de prullenbak.",
 			"confirm": "Ruimte vrijmaken",
 			"cancel": "Annuleren",
 			"working": "Verwijderen… {{done}} van {{total}}",
 			"done": "Ruimte vrijgemaakt.",
 			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw."
+		},
+		"journalPublishFailed": "Het uploadlogboek bereikt de relay niet: {{reason}}. Je bestanden worden hier niet door geraakt, maar op andere apparaten verschijnen geen namen.",
+		"quota": {
+			"unlimited": "Op deze server is er geen ruimtelimiet.",
+			"barAria": "Gebruikte opslag",
+			"usedOfLimit": "{{used}} van {{limit}} gebruikt",
+			"warning": "Het wordt krap: nog {{free}} vrij.",
+			"full": "De opslag is vol. Maak ruimte vrij of haal meer op om nieuwe bestanden te uploaden.",
+			"readonly": "De opslag is alleen-lezen: nieuwe bestanden uploaden kan niet, alles wat al is geüpload blijft openen.",
+			"getMore": "Meer ruimte krijgen",
+			"plansLink": "Abonnementen en hoe je meer ruimte krijgt"
+		},
+		"notice": {
+			"readonly": "De opslag is alleen-lezen: nieuwe bestanden uploaden kan niet.",
+			"full": "De opslag is vol: nieuwe bestanden uploaden kan niet.",
+			"warning": "Nog maar {{free}} van {{limit}} over.",
+			"toStorage": "Opslag openen",
+			"toPlans": "Meer ruimte krijgen"
 		}
+	},
+	"plans": {
+		"title": "Opslagabonnementen",
+		"intro": "Ruimte op de server wordt per sleutel geteld: alles wat je uploadt telt mee — bestanden, voorvertoningen, avatars.",
+		"yourUsage": "Je gebruikt {{used}} van {{limit}}.",
+		"free": {
+			"name": "Gratis",
+			"size": "1 GB",
+			"desc": "Genoeg voor chats en alledaagse bestanden."
+		},
+		"paid": {
+			"name": "Uitgebreid",
+			"size": "100 GB",
+			"price": "5 $ per maand",
+			"desc": "Voor foto’s, video en een archief."
+		},
+		"how": {
+			"title": "Zo krijg je meer ruimte",
+			"text": "Betalen gaat voorlopig handmatig. Schrijf naar {{email}} en vermeld hieronder je openbare sleutel (npub) — wij voegen de ruimte toe en antwoorden.",
+			"write": "Schrijf naar support",
+			"note": "Je openbare sleutel kun je gerust delen: hij vertelt ons alleen aan wie we de ruimte geven."
+		},
+		"mailSubject": "Meer opslagruimte",
+		"mailBody": "Hallo! Geef alsjeblieft meer ruimte aan mijn sleutel: {{npub}}",
+		"back": "Terug naar opslag"
 	}
 }

@@ -46,6 +46,13 @@ export default function Unlock() {
 	const [step, setStep] = useState("loading");
 	const [accounts, setAccounts] = useState([]);
 
+	// Метка для ui/reload-gate.js: на каком шаге входа/регистрации человек. Пока идёт
+	// регистрация (сид-фраза, подтверждение, пароль), автоперезагрузка страницы запрещена.
+	useEffect(() => {
+		document.documentElement.setAttribute("data-auth-flow", step);
+		return () => document.documentElement.removeAttribute("data-auth-flow");
+	}, [step]);
+
 	// Какой раздел показан в <main> стартовой страницы (не связано с "step" —
 	// тот управляет всем экраном целиком: логин/регистрация/раскрытие мнемоники
 	// и т.п., этот — только контентом <main> ВНУТРИ step === "main").

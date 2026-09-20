@@ -842,7 +842,9 @@
 		"pasteInto": "Wklej",
 		"pasteHere": "Wklej tutaj",
 		"clipboardCopied": "Skopiowano: {{count}}",
-		"clipboardCut": "Wycięto: {{count}}"
+		"clipboardCut": "Wycięto: {{count}}",
+		"freedFromServer": "Usunięto z serwera",
+		"freedOpenHint": "„{{name}}” został zwolniony z serwera i już się nie otwiera. Usuń go z listy, jeśli jest niepotrzebny."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Ten kontakt ma zbyt wiele urządzeń, aby wysłać zaproszenie w jednej wiadomości. Spróbuj ponownie nieco później."
+		"welcomeTooLargeForDeviceCount": "Ten kontakt ma zbyt wiele urządzeń, aby wysłać zaproszenie w jednej wiadomości. Spróbuj ponownie nieco później.",
+		"blobGone": "Plik nie jest już dostępny na serwerze (mógł zostać zwolniony z serwera).",
+		"fileTooLargeForServer": "„{{name}}” ma {{size}}, a serwer przyjmuje pliki do {{max}}.",
+		"quotaExceeded": "Za mało miejsca na „{{name}}”: potrzeba {{need}}, wolne {{free}}.",
+		"storageReadonly": "Pamięć jest teraz tylko do odczytu: nie można wysyłać nowych plików. Wszystko, co już wysłano, nadal się otwiera."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "Wysłano go w {{count}} miejsc: przestanie się otwierać u wszystkich, którzy jeszcze go nie pobrali.",
 			"usageNone": "Brak zapisu o wysłaniu tego pliku.",
 			"limit": "To, co odbiorcy już pobrali, zostaje u nich. Nie można tego cofnąć.",
-			"filesNote": "Wpis w „Plikach” też przestanie się otwierać.",
+			"filesNote": "Wpis w „Plikach”, jeśli istnieje, również trafi do kosza.",
 			"confirm": "Zwolnij miejsce",
 			"cancel": "Anuluj",
 			"working": "Usuwanie… {{done}} z {{total}}",
 			"done": "Miejsce zwolnione.",
 			"failed": "Nie udało się usunąć plików: {{count}}. Spróbuj później."
+		},
+		"journalPublishFailed": "Dziennik wysyłania nie dociera do przekaźnika: {{reason}}. Twoje pliki nie są dotknięte, ale na innych urządzeniach nie pojawią się nazwy.",
+		"quota": {
+			"unlimited": "Na tym serwerze nie ma limitu miejsca.",
+			"barAria": "Zajęta pamięć",
+			"usedOfLimit": "Zajęte {{used}} z {{limit}}",
+			"warning": "Kończy się miejsce: zostało {{free}}.",
+			"full": "Pamięć jest pełna. Zwolnij miejsce lub zdobądź więcej, aby wysyłać nowe pliki.",
+			"readonly": "Pamięć jest tylko do odczytu: nie można wysyłać nowych plików, wszystko, co już wysłano, nadal się otwiera.",
+			"getMore": "Zdobądź więcej miejsca",
+			"plansLink": "Plany i jak zdobyć więcej miejsca"
+		},
+		"notice": {
+			"readonly": "Pamięć jest tylko do odczytu: nie można wysyłać nowych plików.",
+			"full": "Pamięć jest pełna: nie można wysyłać nowych plików.",
+			"warning": "Zostało tylko {{free}} z {{limit}}.",
+			"toStorage": "Otwórz pamięć",
+			"toPlans": "Zdobądź więcej miejsca"
 		}
+	},
+	"plans": {
+		"title": "Plany pamięci",
+		"intro": "Miejsce na serwerze liczy się na klucz: liczy się wszystko, co wysyłasz — pliki, podglądy, awatary.",
+		"yourUsage": "Używasz {{used}} z {{limit}}.",
+		"free": {
+			"name": "Bezpłatny",
+			"size": "1 GB",
+			"desc": "Wystarczy na rozmowy i zwykłe pliki."
+		},
+		"paid": {
+			"name": "Rozszerzony",
+			"size": "100 GB",
+			"price": "5 $ miesięcznie",
+			"desc": "Na zdjęcia, wideo i archiwum."
+		},
+		"how": {
+			"title": "Jak zdobyć więcej miejsca",
+			"text": "Płatności są na razie obsługiwane ręcznie. Napisz na {{email}} i podaj poniżej swój klucz publiczny (npub) — dodamy miejsce i odpiszemy.",
+			"write": "Napisz do wsparcia",
+			"note": "Kluczem publicznym można się dzielić bez obaw: mówi nam tylko, komu przyznać miejsce."
+		},
+		"mailSubject": "Więcej miejsca w pamięci",
+		"mailBody": "Dzień dobry! Proszę o więcej miejsca dla mojego klucza: {{npub}}",
+		"back": "Wróć do pamięci"
 	}
 }

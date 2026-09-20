@@ -8,10 +8,13 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { t, errorMessage, currentLocale } from "../signals/i18n.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { fetchServerBlobs, totalBytes, reconcile, buildEntries, breakdownByPurpose, breakdownByKind } from "../../domain/uploads/storage.js";
-import { listUploads, removeUploads, getJournalSync } from "../../domain/uploads/journal.js";
-import { pullUploadJournal } from "../signals/uploads.js";
+import { listUploads, removeUploads, getJournalSync, getJournalStatus } from "../../domain/uploads/journal.js";
+import { pullUploadJournal, refreshFreed } from "../signals/uploads.js";
 import { formatBytes } from "../../domain/uploads/format.js";
 import FreeSpaceDialog from "./free-space-dialog.jsx";
+import QuotaBar from "./quota-bar.jsx";
+import { quotaState, refreshQuota } from "../signals/quota.js";
+import { goTo } from "../signals/place.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const PAGE = 20;
@@ -53,6 +56,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 	const [journal, setJournal] = useState({ state: "idle", exhausted: false }); // idle | loading | done | failed
 	const [visible, setVisible] = useState(PAGE);
 	const [dialog, setDialog] = useState(null);
+	const [pubStatus, setPubStatus] = useState({ dirty: 0, lastError: null }); // публикация журнала
 	const [rec, setRec] = useState(null); // результат сверки
 	const [recBusy, setRecBusy] = useState(false);
 	const [recError, setRecError] = useState("");
@@ -73,6 +77,8 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 			const sync = await getJournalSync();
 			if (!alive.current) return false;
 			setRows(await listUploads());
+			refreshFreed();
+			setPubStatus(await getJournalStatus());
 			const done = res.exhausted || !!sync?.exhausted;
 			setJournal({ state: "done", exhausted: done });
 			return done;
@@ -89,10 +95,11 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 		setError("");
 		try {
 			// Сначала числа с сервера и то, что журнал уже знает локально — экран полезен сразу.
-			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(BLOSSOM_URL, ownerPubkey), listUploads()]);
+			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }), listUploads()]);
 			if (!alive.current) return;
 			setBlobs(serverBlobs);
 			setRows(local);
+			setPubStatus(await getJournalStatus());
 			setPhase("ready");
 		} catch (err) {
 			if (!alive.current) return;
@@ -100,6 +107,8 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 			setPhase("error");
 			return;
 		}
+		// Остаток — заново (мог измениться на другом устройстве).
+		refreshQuota();
 		// Затем — по требованию, постранично — пачки журнала (только теперь, не при запуске).
 		loadJournal(5);
 	}
@@ -109,8 +118,9 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 
 	async function refreshAfterChange() {
 		setRec(null);
+		refreshFreed();
 		try {
-			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey));
+			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }));
 			setRows(await listUploads());
 		} catch (err) {
 			setError(errorMessage(err));
@@ -129,7 +139,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				setRecError(t("storage.reconcile.needFull"));
 				return;
 			}
-			const fresh = await fetchServerBlobs(BLOSSOM_URL, ownerPubkey);
+			const fresh = await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey });
 			const local = await listUploads();
 			setBlobs(fresh);
 			setRows(local);
@@ -193,13 +203,25 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				<>
 					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<h3 class="sect-title">{t("storage.usedTitle")}</h3>
-						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: blobs.length })}</p>
-						{/* Место под полосу заполнения: число квоты появится в ТЗ-04. Готовых элементов
-						    в проекте нет (.sync-progress-bar — бегущая полоса без значения). */}
-						<div class="storage-bar" data-storage-bar aria-hidden="true" hidden />
+						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: entries.length })}</p>
+						{/* Полоса заполнения (ТЗ-04): числа потолка приходят с сервера */}
+						{quotaState.value.status === "ok" && <QuotaBar quota={quotaState.value.quota} onGetMore={() => goTo({ kind: "plans" })} />}
+						{quotaState.value.status === "ok" && quotaState.value.quota?.enabled && (
+							<div>
+								<button type="button" class="btn--ghost" onClick={() => goTo({ kind: "plans" })}>
+									{t("storage.quota.plansLink")}
+								</button>
+							</div>
+						)}
 					</div>
 
 					{blobs.length === 0 && <p style={{ color: "var(--muted)" }}>{t("storage.empty")}</p>}
+
+					{pubStatus.dirty > 0 && pubStatus.lastError && (
+						<p role="alert" class="callout callout--warn" style={{ margin: 0 }}>
+							{t("storage.journalPublishFailed", { reason: pubStatus.lastError })}
+						</p>
+					)}
 
 					{journal.state === "loading" && (
 						<p role="status" style={{ color: "var(--muted)", margin: 0 }}>
@@ -241,7 +263,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 												<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.known ? e.name || t("storage.unnamed") : t("storage.unknownEntry", { date: fmtDate(e.at) })}</span>
 												<small style={{ color: "var(--muted)" }}>
 													{t("storage.entryMeta", { size: formatBytes(e.size), date: fmtDate(e.at) })}
-													{e.known && e.targets.length > 0 ? ` · ${t("storage.sentTo", { count: e.targets.length })}` : ""}
+													{e.sentTo > 0 ? ` · ${t("storage.sentTo", { count: e.sentTo })}` : ""}
 												</small>
 											</div>
 											<button type="button" class="btn--ghost" onClick={() => askFreeEntry(e)}>

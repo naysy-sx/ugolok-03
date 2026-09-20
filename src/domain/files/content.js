@@ -5,6 +5,7 @@ import { planChunks, rangeToChunks } from "./manifest.js";
 import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } from "./blob.js";
 import { getCachedCipherChunk, putCachedCipherChunk } from "./blob-cache.js";
 import { DomainError } from "../errors.js";
+import { refusalFromRequirements, toDomainRefusal } from "../uploads/quota.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
 const GET_RANGE_CONCURRENCY = 6;
@@ -69,13 +70,21 @@ export async function putStream(
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal, timeoutMs, retries, backoffMs, expirationSec };
 	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }, privateKey, uploadOptions);
 	if (!requirements.ok) {
+		// ТЗ-04: машинная причина отказа (квота/размер/только чтение) -> понятная ошибка, а не «сервер отклонил»
+		const refusal = refusalFromRequirements(requirements, fullCiphertext.length, name);
+		if (refusal) throw refusal;
 		const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
 		throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
 	}
-	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, {
-		...uploadOptions,
-		onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? fullCiphertext.length }) : undefined,
-	});
+	let uploadResponse;
+	try {
+		uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, {
+			...uploadOptions,
+			onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? fullCiphertext.length }) : undefined,
+		});
+	} catch (err) {
+		throw toDomainRefusal(err, { name, sizeBytes: fullCiphertext.length }); // гонка: HEAD прошёл, а к PUT остаток кончился — тот же понятный отказ
+	}
 	onProgress?.({ phase: "manifest" });
 
 	// keyId — непрозрачная ССЫЛКА (§4.1 MATH.md: "Manifest.keyId : KeyId"), не

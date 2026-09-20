@@ -842,7 +842,9 @@
 		"pasteInto": "Colar",
 		"pasteHere": "Colar aqui",
 		"clipboardCopied": "Copiado: {{count}}",
-		"clipboardCut": "Recortado: {{count}}"
+		"clipboardCut": "Recortado: {{count}}",
+		"freedFromServer": "Apagado do servidor",
+		"freedOpenHint": "“{{name}}” foi libertado do servidor e já não abre. Remova-o da lista se não precisar dele."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Este contato tem dispositivos demais para enviar um convite em uma única mensagem. Tente novamente um pouco mais tarde."
+		"welcomeTooLargeForDeviceCount": "Este contato tem dispositivos demais para enviar um convite em uma única mensagem. Tente novamente um pouco mais tarde.",
+		"blobGone": "O ficheiro já não está disponível no servidor (pode ter sido libertado do servidor).",
+		"fileTooLargeForServer": "“{{name}}” tem {{size}}, mas o servidor aceita ficheiros até {{max}}.",
+		"quotaExceeded": "Sem espaço suficiente para “{{name}}”: precisa de {{need}}, livres {{free}}.",
+		"storageReadonly": "O armazenamento está agora só de leitura: não é possível enviar novos ficheiros. Tudo o que já enviou continua a abrir."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "Foi enviado para {{count}} locais: deixará de abrir para quem ainda não o descarregou.",
 			"usageNone": "Não há envios registados para este ficheiro.",
 			"limit": "O que os destinatários já descarregaram fica com eles. Não é possível anular.",
-			"filesNote": "A entrada em “Ficheiros” também deixará de abrir.",
+			"filesNote": "A entrada em “Ficheiros”, se existir, também irá para o lixo.",
 			"confirm": "Libertar espaço",
 			"cancel": "Cancelar",
 			"working": "A apagar… {{done}} de {{total}}",
 			"done": "Espaço libertado.",
 			"failed": "Não foi possível apagar {{count}} ficheiros. Tente mais tarde."
+		},
+		"journalPublishFailed": "O registo de envios não chega ao relay: {{reason}}. Os seus ficheiros não são afetados, mas os nomes não vão aparecer noutros dispositivos.",
+		"quota": {
+			"unlimited": "Não há limite de espaço neste servidor.",
+			"barAria": "Armazenamento usado",
+			"usedOfLimit": "{{used}} de {{limit}} usados",
+			"warning": "Está a acabar: restam {{free}}.",
+			"full": "O armazenamento está cheio. Liberte espaço ou obtenha mais para enviar novos ficheiros.",
+			"readonly": "O armazenamento é só de leitura: não é possível enviar novos ficheiros, tudo o que já enviou continua a abrir.",
+			"getMore": "Obter mais espaço",
+			"plansLink": "Planos e como obter mais espaço"
+		},
+		"notice": {
+			"readonly": "O armazenamento é só de leitura: não é possível enviar novos ficheiros.",
+			"full": "O armazenamento está cheio: não é possível enviar novos ficheiros.",
+			"warning": "Restam só {{free}} de {{limit}}.",
+			"toStorage": "Abrir armazenamento",
+			"toPlans": "Obter mais espaço"
 		}
+	},
+	"plans": {
+		"title": "Planos de armazenamento",
+		"intro": "O espaço no servidor conta-se por chave: conta tudo o que envia — ficheiros, pré-visualizações, avatares.",
+		"yourUsage": "Está a usar {{used}} de {{limit}}.",
+		"free": {
+			"name": "Grátis",
+			"size": "1 GB",
+			"desc": "Chega para conversas e ficheiros do dia a dia."
+		},
+		"paid": {
+			"name": "Alargado",
+			"size": "100 GB",
+			"price": "5 $ por mês",
+			"desc": "Para fotos, vídeo e um arquivo."
+		},
+		"how": {
+			"title": "Como obter mais espaço",
+			"text": "O pagamento é tratado à mão por agora. Escreva para {{email}} e indique abaixo a sua chave pública (npub) — acrescentamos o espaço e respondemos.",
+			"write": "Escrever ao suporte",
+			"note": "Pode partilhar a chave pública sem risco: só nos diz a quem dar o espaço."
+		},
+		"mailSubject": "Mais espaço de armazenamento",
+		"mailBody": "Olá! Por favor, deem mais espaço à minha chave: {{npub}}",
+		"back": "Voltar ao armazenamento"
 	}
 }

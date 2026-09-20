@@ -5,6 +5,10 @@ import { useEffect, useState } from "preact/hooks";
 import { t, errorMessage } from "../signals/i18n.js";
 import { freeBlobs } from "../../domain/uploads/storage.js";
 import { formatBytes } from "../../domain/uploads/format.js";
+import { sentPlaces } from "../../domain/uploads/records.js";
+import { currentUser } from "../signals/auth.js";
+import { publish } from "../signals/transport.js";
+import { initFiles, trashNodesForBlobs } from "../signals/files.js";
 
 // props: {hashes, name, size, targets, inFiles, serverUrl, privKey, onClose, onDone}
 export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFiles, serverUrl, privKey, title, body, confirmLabel, onClose, onDone }) {
@@ -27,6 +31,14 @@ export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFi
 		try {
 			const res = await freeBlobs({ serverUrl, privateKey: privKey, hashes, onProgress: setProgress });
 			setFailed(res.failed.length);
+			// Файл стёрт с сервера — записи «Файлов» на него убираем в корзину (иначе в списке
+			// остался бы файл, который нельзя открыть). Сбой здесь не отменяет освобождение.
+			try {
+				await initFiles(currentUser.value.id, privKey, publish);
+				await trashNodesForBlobs(res.deleted);
+			} catch {
+				// журнал «Файлов» недоступен — метка «удалён с сервера» всё равно подскажет
+			}
 			setState("done");
 			onDone?.(res);
 		} catch (err) {
@@ -48,8 +60,8 @@ export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFi
 				{state !== "done" && (
 					<>
 						<p style={{ margin: 0 }}>{body ?? t("storage.free.body", { name: name || t("storage.unnamed"), size: formatBytes(size) })}</p>
-						{!body && (targets.length > 0 ? <p class="callout callout--warn" style={{ margin: 0 }}>{t("storage.free.usage", { count: targets.length })}</p> : <p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.usageNone")}</p>)}
-						{inFiles && <p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.filesNote")}</p>}
+						{!body && (sentPlaces(targets).length > 0 ? <p class="callout callout--warn" style={{ margin: 0 }}>{t("storage.free.usage", { count: sentPlaces(targets).length })}</p> : <p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.usageNone")}</p>)}
+						<p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.filesNote")}</p>
 						<p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.limit")}</p>
 					</>
 				)}

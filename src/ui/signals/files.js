@@ -359,6 +359,37 @@ export async function removeNode(id) {
 	canUndo.value = canUndoNow(undoStack);
 }
 
+// Узел уже в корзине или лежит внутри удалённой папки.
+function isTrashed(state, node) {
+	let cur = node;
+	for (let i = 0; i < 64 && cur; i++) {
+		const parentId = cur.par?.value;
+		if (parentId === TRASH_ID) return true;
+		if (!parentId || parentId === ROOT_ID) return false;
+		cur = state.nodes.get(parentId);
+	}
+	return false;
+}
+
+// ТЗ-03: «освободить место» стёрло байты блоба с сервера — записи «Файлов», которые на него
+// ссылались, теперь бесполезны (открыть их нельзя), и оставлять их в списке значило бы сбивать
+// человека с толку: «удалил в хранилище, а в Файлах осталось». Убираем их в корзину — как
+// обычное удаление, но без записи в стек отмены (возвращать нечего, файла нет). Возвращает
+// число убранных узлов.
+export async function trashNodesForBlobs(hashes) {
+	const set = new Set(hashes);
+	const state = treeState.value;
+	const lbl = await label();
+	const ops = [];
+	for (const node of state.nodes.values()) {
+		if (node.kind !== "file" || !node.blob || !set.has(node.blob)) continue;
+		if (isTrashed(state, node)) continue;
+		ops.push(opRemove(state, node.id, lbl));
+	}
+	if (ops.length > 0) await applyAndPersist(ops);
+	return ops.length;
+}
+
 export async function purgeNode(id) {
 	const op = opPurge(treeState.value, id);
 	await applyAndPersist([op]); // НЕ кладём в undo-стек — purge монотонен, необратим (§5.6 MATH.md)

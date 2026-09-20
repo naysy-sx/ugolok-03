@@ -4,7 +4,8 @@ import "./styles/prosemirror.css";
 import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
-import { startIdleWatcher } from "./ui/signals/auth.js";
+import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
+import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
 import { logInfo } from "./core/diag/boot-log.js";
 // TZ-diag-trace.md — main.jsx не домен, импорт трассировщика напрямую
@@ -72,9 +73,21 @@ function doReload() {
 	refreshing = true;
 	location.reload();
 }
-function isAuthScreenVisible() {
-	return !!document.querySelector(".auth-layout, .unlock-home");
-}
+
+// Автоперезагрузка — только в безопасный момент (ui/reload-gate.js): не посреди регистрации,
+// не при введённом тексте и не при живой сессии (тогда — после блокировки). Раньше отложенная
+// перезагрузка срабатывала сразу после входа и выкидывала человека на стартовый экран.
+const reloadScheduler = createReloadScheduler({
+	doc: document,
+	isLoggedIn: () => !!currentUser.peek(),
+	onceOnLock: (fn) => {
+		const off = onLock(() => {
+			off();
+			fn();
+		});
+	},
+	reload: doReload,
+});
 
 function reloadForFreshServiceWorker() {
 	if (refreshing) return;
@@ -99,28 +112,11 @@ function reloadForFreshServiceWorker() {
 	reloadWhenIdle();
 }
 
-// Перезагрузка в безопасный момент (не посреди набора пароля/текста) — общая для
-// обновления SW и для закрытия базы другой вкладкой (AUDIT-EGOROD E3).
+// Перезагрузка в безопасный момент — общая для обновления SW и для закрытия базы другой
+// вкладкой (AUDIT-EGOROD E3).
 function reloadWhenIdle() {
 	if (refreshing) return;
-	if (isAuthScreenVisible()) {
-		const root = document.getElementById("app") || document.body;
-		const obs = new MutationObserver(() => {
-			if (!isAuthScreenVisible()) {
-				obs.disconnect();
-				doReload();
-			}
-		});
-		obs.observe(root, { childList: true, subtree: true });
-		return;
-	}
-	const active = document.activeElement;
-	const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
-	if (isTyping) {
-		active.addEventListener("blur", doReload, { once: true });
-		return;
-	}
-	doReload();
+	reloadScheduler.request();
 }
 
 // AUDIT-EGOROD E3: другая вкладка открыла базу более новой версии (обновление

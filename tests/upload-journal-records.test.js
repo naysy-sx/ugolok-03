@@ -159,3 +159,15 @@ test("событие пачки: подписано производным кл�
 	assert.equal(parseBatchEvent({ ...ev, content: "!!!" }, key, jpub), null, "битый шифротекст");
 	assert.equal(parseBatchEvent({ ...ev, kind: 1 }, key, jpub), null);
 });
+
+test("sentPlaces: узлы «Файлов» и профиль не считаются местами отправки, получатели — считаются", async () => {
+	const { sentPlaces } = await import("../src/domain/uploads/records.js");
+	const files = makeAdd({ hash: H(1), size: 1, role: "content", purpose: "files", target: "node-42" });
+	assert.equal(files.target, "n:node-42");
+	assert.deepEqual(sentPlaces([files.target]), []);
+	const dm = makeAdd({ hash: H(2), size: 1, role: "content", purpose: "dm", target: "peerA" });
+	assert.equal(dm.target, "peerA");
+	assert.deepEqual(sentPlaces([files.target, dm.target, "chan1"]), ["peerA", "chan1"]);
+	// повторная обработка уже помеченной цели не удваивает префикс
+	assert.equal(makeAdd({ ...files, hash: H(3) }).target, "n:node-42");
+});

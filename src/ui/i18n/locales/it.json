@@ -842,7 +842,9 @@
 		"pasteInto": "Incolla",
 		"pasteHere": "Incolla qui",
 		"clipboardCopied": "Copiati: {{count}}",
-		"clipboardCut": "Tagliati: {{count}}"
+		"clipboardCut": "Tagliati: {{count}}",
+		"freedFromServer": "Eliminato dal server",
+		"freedOpenHint": "«{{name}}» è stato liberato dal server e non si apre più. Rimuovilo dall’elenco se non ti serve."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Questo contatto ha troppi dispositivi per inviare un invito in un unico messaggio. Riprova tra un po'."
+		"welcomeTooLargeForDeviceCount": "Questo contatto ha troppi dispositivi per inviare un invito in un unico messaggio. Riprova tra un po'.",
+		"blobGone": "Il file non è più disponibile sul server (potrebbe essere stato liberato dal server).",
+		"fileTooLargeForServer": "«{{name}}» pesa {{size}}, ma il server accetta file fino a {{max}}.",
+		"quotaExceeded": "Spazio insufficiente per «{{name}}»: servono {{need}}, liberi {{free}}.",
+		"storageReadonly": "L’archiviazione è ora in sola lettura: non si possono caricare nuovi file. Ciò che è già caricato si apre normalmente."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "È stato inviato in {{count}} posti: non si aprirà più per chi non l’ha ancora scaricato.",
 			"usageNone": "Per questo file non risultano invii.",
 			"limit": "Ciò che i destinatari hanno già scaricato resta con loro. Non si può annullare.",
-			"filesNote": "Anche la voce in «File» smetterà di aprirsi.",
+			"filesNote": "Anche la voce in «File», se presente, andrà nel cestino.",
 			"confirm": "Libera spazio",
 			"cancel": "Annulla",
 			"working": "Eliminazione… {{done}} di {{total}}",
 			"done": "Spazio liberato.",
 			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi."
+		},
+		"journalPublishFailed": "Il registro dei caricamenti non raggiunge il relay: {{reason}}. I tuoi file non sono coinvolti, ma i nomi non compariranno sugli altri dispositivi.",
+		"quota": {
+			"unlimited": "Nessun limite di spazio su questo server.",
+			"barAria": "Archiviazione usata",
+			"usedOfLimit": "{{used}} di {{limit}} usati",
+			"warning": "Sta finendo: restano {{free}}.",
+			"full": "L’archiviazione è piena. Libera spazio o ottieni altro spazio per caricare nuovi file.",
+			"readonly": "L’archiviazione è in sola lettura: non si possono caricare nuovi file, ciò che è già caricato si apre normalmente.",
+			"getMore": "Ottieni più spazio",
+			"plansLink": "Piani e come ottenere più spazio"
+		},
+		"notice": {
+			"readonly": "L’archiviazione è in sola lettura: non si possono caricare nuovi file.",
+			"full": "L’archiviazione è piena: non si possono caricare nuovi file.",
+			"warning": "Restano solo {{free}} su {{limit}}.",
+			"toStorage": "Apri archiviazione",
+			"toPlans": "Ottieni più spazio"
 		}
+	},
+	"plans": {
+		"title": "Piani di archiviazione",
+		"intro": "Lo spazio sul server si conta per chiave: conta tutto ciò che carichi — file, anteprime, avatar.",
+		"yourUsage": "Stai usando {{used}} di {{limit}}.",
+		"free": {
+			"name": "Gratis",
+			"size": "1 GB",
+			"desc": "Basta per chat e file di tutti i giorni."
+		},
+		"paid": {
+			"name": "Esteso",
+			"size": "100 GB",
+			"price": "5 $ al mese",
+			"desc": "Per foto, video e un archivio."
+		},
+		"how": {
+			"title": "Come ottenere più spazio",
+			"text": "Per ora il pagamento è manuale. Scrivi a {{email}} indicando qui sotto la tua chiave pubblica (npub): aggiungeremo lo spazio e risponderemo.",
+			"write": "Scrivi al supporto",
+			"note": "La chiave pubblica si può condividere senza rischi: ci dice solo a chi dare lo spazio."
+		},
+		"mailSubject": "Più spazio di archiviazione",
+		"mailBody": "Salve! Per favore date più spazio alla mia chiave: {{npub}}",
+		"back": "Torna all’archiviazione"
 	}
 }

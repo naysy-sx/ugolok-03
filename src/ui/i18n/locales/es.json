@@ -842,7 +842,9 @@
 		"pasteInto": "Pegar",
 		"pasteHere": "Pegar aquí",
 		"clipboardCopied": "Copiado: {{count}}",
-		"clipboardCut": "Cortado: {{count}}"
+		"clipboardCut": "Cortado: {{count}}",
+		"freedFromServer": "Borrado del servidor",
+		"freedOpenHint": "«{{name}}» se liberó del servidor y ya no se abre. Quítalo de la lista si no lo necesitas."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Este contacto tiene demasiados dispositivos para enviar una invitación en un solo mensaje. Inténtalo de nuevo un poco más tarde."
+		"welcomeTooLargeForDeviceCount": "Este contacto tiene demasiados dispositivos para enviar una invitación en un solo mensaje. Inténtalo de nuevo un poco más tarde.",
+		"blobGone": "El archivo ya no está disponible en el servidor (puede que se haya liberado del servidor).",
+		"fileTooLargeForServer": "«{{name}}» ocupa {{size}}, pero el servidor acepta archivos de hasta {{max}}.",
+		"quotaExceeded": "No hay espacio suficiente para «{{name}}»: se necesitan {{need}} y hay {{free}} libres.",
+		"storageReadonly": "El almacenamiento es ahora de solo lectura: no se pueden subir archivos nuevos. Todo lo ya subido se sigue abriendo."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "Se envió a {{count}} lugares: dejará de abrirse para quienes aún no lo hayan descargado.",
 			"usageNone": "No hay envíos registrados de este archivo.",
 			"limit": "Lo que los destinatarios ya descargaron se queda con ellos. No se puede deshacer.",
-			"filesNote": "La entrada en «Archivos» también dejará de abrirse.",
+			"filesNote": "La entrada en «Archivos», si existe, también irá a la papelera.",
 			"confirm": "Liberar espacio",
 			"cancel": "Cancelar",
 			"working": "Borrando… {{done}} de {{total}}",
 			"done": "Espacio liberado.",
 			"failed": "No se pudieron borrar {{count}} archivos. Inténtalo más tarde."
+		},
+		"journalPublishFailed": "El registro de subidas no llega al relay: {{reason}}. Tus archivos no se ven afectados, pero los nombres no aparecerán en otros dispositivos.",
+		"quota": {
+			"unlimited": "No hay límite de espacio en este servidor.",
+			"barAria": "Almacenamiento usado",
+			"usedOfLimit": "{{used}} de {{limit}} usados",
+			"warning": "Queda poco: {{free}} libres.",
+			"full": "El almacenamiento está lleno. Libera espacio u obtén más para subir archivos nuevos.",
+			"readonly": "El almacenamiento es de solo lectura: no se pueden subir archivos nuevos, todo lo ya subido se sigue abriendo.",
+			"getMore": "Obtener más espacio",
+			"plansLink": "Planes y cómo obtener más espacio"
+		},
+		"notice": {
+			"readonly": "El almacenamiento es de solo lectura: no se pueden subir archivos nuevos.",
+			"full": "El almacenamiento está lleno: no se pueden subir archivos nuevos.",
+			"warning": "Solo quedan {{free}} de {{limit}}.",
+			"toStorage": "Abrir almacenamiento",
+			"toPlans": "Obtener más espacio"
 		}
+	},
+	"plans": {
+		"title": "Planes de almacenamiento",
+		"intro": "El espacio en el servidor se cuenta por clave: cuenta todo lo que subes — archivos, vistas previas, avatares.",
+		"yourUsage": "Usas {{used}} de {{limit}}.",
+		"free": {
+			"name": "Gratis",
+			"size": "1 GB",
+			"desc": "Suficiente para chats y archivos cotidianos."
+		},
+		"paid": {
+			"name": "Ampliado",
+			"size": "100 GB",
+			"price": "5 $ al mes",
+			"desc": "Para fotos, vídeo y un archivo."
+		},
+		"how": {
+			"title": "Cómo obtener más espacio",
+			"text": "El pago se gestiona a mano por ahora. Escribe a {{email}} e indica tu clave pública (npub) de abajo: añadiremos el espacio y te responderemos.",
+			"write": "Escribir a soporte",
+			"note": "Puedes compartir tu clave pública sin riesgo: solo nos dice a quién dar el espacio."
+		},
+		"mailSubject": "Más espacio de almacenamiento",
+		"mailBody": "¡Hola! Por favor, dad más espacio a mi clave: {{npub}}",
+		"back": "Volver al almacenamiento"
 	}
 }

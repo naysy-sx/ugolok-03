@@ -32,6 +32,7 @@ import IconGear from "../icons/gear.jsx";
 import IconBell from "../icons/bell.jsx";
 import IconServer from "../icons/server.jsx";
 import StoragePanel from "../components/storage-panel.jsx";
+import { place } from "../signals/place.js";
 import IconPower from "../icons/power.jsx";
 import IconChevronDown from "../icons/chevron-down.jsx";
 
@@ -680,7 +681,8 @@ export default function Settings() {
 	// Статус — ОТДЕЛЬНОЕ состояние, не производное от settings, чтобы кнопка ниже
 	// могла явно предложить запросить его.
 	const [browserPermission, setBrowserPermission] = useState(() => globalThis.Notification?.permission ?? "unsupported");
-	const [tab, setTab] = useState("view");
+	// ТЗ-04: ссылки «открыть хранилище» из лотка/тарифов открывают нужную вкладку сразу
+	const [tab, setTab] = useState(() => (["view", "notifications", "network", "storage", "session"].includes(place.value?.tab) ? place.value.tab : "view"));
 	const instanceId = useId();
 
 	useEffect(() => {

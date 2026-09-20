@@ -1,3 +1,4 @@
+import QuotaNotice from "../quota-notice.jsx";
 import { useEffect, useMemo } from "preact/hooks";
 import { t } from "../../signals/i18n.js";
 import FileKindIcon from "../file-kind-icon.jsx";
@@ -99,6 +100,7 @@ export default function AttachmentTray({ items, errors, onRemove, layout = null,
 					))}
 				</div>
 			)}
+			<QuotaNotice />
 		</div>
 	);
 }

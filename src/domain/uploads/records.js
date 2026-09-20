@@ -15,7 +15,17 @@ const MAX_NAME = 120;
 const MAX_STR = 200;
 const HASH_RE = /^[0-9a-f]{64}$/;
 
-const OP_RANK = { add: 0, target: 1, del: 2 };
+const OP_RANK = { add: 0, target: 1, del: 2, freed: 3 };
+
+// Цель заливки бывает двух видов: получатель (беседа, канал) и узел «Файлов»/профиль. Узлы
+// помечаются префиксом "n:" — «отправлено в N мест» и предупреждение «перестанет открываться у
+// получателей» считают только получателей.
+const NODE_PURPOSES = ["files", "share", "avatar"];
+const NODE_PREFIX = "n:";
+
+export function sentPlaces(targets) {
+	return (targets ?? []).filter((x) => typeof x === "string" && x && !x.startsWith(NODE_PREFIX));
+}
 
 function str(v, max = MAX_STR) {
 	if (typeof v !== "string") return undefined;
@@ -43,7 +53,7 @@ export function makeAdd(e, now = Date.now()) {
 		role: e.role,
 		group: str(e.group, 64) ?? newGroupId(),
 		purpose: e.purpose,
-		target: str(e.target) ?? "",
+		target: withNodePrefix(e.purpose, str(e.target) ?? ""),
 	};
 	const name = str(e.name, MAX_NAME);
 	if (name) op.name = name;
@@ -54,11 +64,25 @@ export function makeAdd(e, now = Date.now()) {
 	return op;
 }
 
+function withNodePrefix(purpose, target) {
+	if (!target || !NODE_PURPOSES.includes(purpose) || target.startsWith(NODE_PREFIX)) return target;
+	return NODE_PREFIX + target;
+}
+
 export function makeTarget(hash, target, now = Date.now()) {
 	if (typeof hash !== "string" || !HASH_RE.test(hash)) return null;
 	const t = str(target);
 	if (!t) return null;
 	return { op: "target", hash, target: t, at: now };
+}
+
+// «Байты этого блоба стёрты с сервера» (освобождение места). В отличие от add/target/del
+// остаётся в журнале НАВСЕГДА (хеш и время, без имени): по нему «Файлы» помечают узел
+// «удалён с сервера», в том числе на других устройствах. Новая заливка того же хеша
+// (add позже freed) метку снимает.
+export function makeFreed(hash, now = Date.now()) {
+	if (typeof hash !== "string" || !HASH_RE.test(hash)) return null;
+	return { op: "freed", hash, at: now };
 }
 
 export function makeDel(hash, now = Date.now()) {
@@ -75,6 +99,7 @@ export function sanitizeOp(raw) {
 		return o;
 	}
 	if (raw.op === "del") return makeDel(raw.hash, Number.isFinite(raw.at) ? raw.at : 0);
+	if (raw.op === "freed") return makeFreed(raw.hash, Number.isFinite(raw.at) ? raw.at : 0);
 	return null;
 }
 
@@ -118,6 +143,18 @@ export function foldOps(ops) {
 	const rows = new Map();
 	for (const { op } of indexed) applyOp(rows, op);
 	return rows;
+}
+
+// Хеши, помеченные «стёрто с сервера»: последняя метка freed не перекрыта более поздним add.
+export function foldFreed(ops) {
+	const freed = new Map();
+	const added = new Map();
+	for (const op of ops) {
+		if (op.op === "freed") freed.set(op.hash, Math.max(freed.get(op.hash) ?? 0, op.at));
+		else if (op.op === "add") added.set(op.hash, Math.max(added.get(op.hash) ?? 0, op.at));
+	}
+	for (const [hash, at] of [...freed]) if ((added.get(hash) ?? 0) > at) freed.delete(hash);
+	return freed;
 }
 
 // Вложение = группа записей с общим group.

@@ -85,3 +85,28 @@ test("10. freeBlobs: DELETE на каждый блоб; 404 считается �
 	const left = (await listUploads()).map((r) => r.hash);
 	assert.deepEqual(left, [H(3)], "в журнале осталась запись, которую не удалось удалить с сервера");
 });
+
+test("fetchServerBlobs с ключом: запрос подписан (kind 24242, t=list, без x), ответ разбирается", async () => {
+	const { decode } = await import("../src/core/transport/blossom-client.js").catch(() => ({}));
+	let seen;
+	const fetchImpl = async (url, init) => {
+		seen = { url, headers: init.headers };
+		return { ok: true, json: async () => [{ sha256: H(1), size: 10, uploaded: 5 }] };
+	};
+	const priv = new Uint8Array(32).fill(5);
+	const blobs = await fetchServerBlobs("https://b.example", "pk", { fetchImpl, privateKey: priv });
+	assert.equal(blobs.length, 1);
+	assert.equal(seen.url, "https://b.example/list/pk");
+	const auth = seen.headers.Authorization;
+	assert.match(auth, /^Nostr /);
+	const ev = JSON.parse(Buffer.from(auth.slice(6), "base64").toString("utf8"));
+	assert.equal(ev.kind, 24242);
+	assert.deepEqual(ev.tags.find((t) => t[0] === "t"), ["t", "list"]);
+	assert.equal(ev.tags.some((t) => t[0] === "x"), false, "у запроса без тела нет хеша");
+	assert.ok(ev.tags.some((t) => t[0] === "expiration"));
+	void decode;
+});
+
+test("fetchServerBlobs: не-200 (например 403 чужой ключ) бросает ошибку со статусом", async () => {
+	await assert.rejects(fetchServerBlobs("https://b", "pk", { privateKey: new Uint8Array(32).fill(5), fetchImpl: async () => ({ ok: false, status: 403 }) }), (e) => e.status === 403);
+});

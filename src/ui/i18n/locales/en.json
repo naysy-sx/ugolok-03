@@ -842,7 +842,9 @@
 		"pasteInto": "Paste",
 		"pasteHere": "Paste here",
 		"clipboardCopied": "Copied: {{count}}",
-		"clipboardCut": "Cut: {{count}}"
+		"clipboardCut": "Cut: {{count}}",
+		"freedFromServer": "Deleted from server",
+		"freedOpenHint": "“{{name}}” was freed from the server and no longer opens. Remove it from the list if you don't need it."
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "This contact has too many devices to send an invitation in a single message. Please try again a bit later."
+		"welcomeTooLargeForDeviceCount": "This contact has too many devices to send an invitation in a single message. Please try again a bit later.",
+		"blobGone": "The file is no longer available on the server (it may have been freed from the server).",
+		"fileTooLargeForServer": "“{{name}}” is {{size}}, but the server accepts files up to {{max}}.",
+		"quotaExceeded": "Not enough space for “{{name}}”: {{need}} needed, {{free}} free.",
+		"storageReadonly": "Storage is read-only right now: new files can't be uploaded. Everything you already uploaded still opens."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "It was sent to {{count}} places: it will stop opening for everyone who has not downloaded it yet.",
 			"usageNone": "No sending is recorded for this file.",
 			"limit": "What recipients have already downloaded stays with them. This cannot be undone.",
-			"filesNote": "The entry in “Files” will stop opening too.",
+			"filesNote": "The entry in “Files”, if there is one, will be moved to the trash too.",
 			"confirm": "Free up space",
 			"cancel": "Cancel",
 			"working": "Deleting… {{done}} of {{total}}",
 			"done": "Space freed.",
 			"failed": "Could not delete {{count}} of the files. Try again later."
+		},
+		"journalPublishFailed": "Upload journal isn't reaching the relay: {{reason}}. Your files are not affected, but names won't appear on other devices.",
+		"quota": {
+			"unlimited": "No space limit on this server.",
+			"barAria": "Storage used",
+			"usedOfLimit": "{{used}} of {{limit}} used",
+			"warning": "Running low: {{free}} left.",
+			"full": "Storage is full. Free up space or get more to upload new files.",
+			"readonly": "Storage is read-only: new files can't be uploaded, everything already uploaded still opens.",
+			"getMore": "Get more space",
+			"plansLink": "Plans and how to get more space"
+		},
+		"notice": {
+			"readonly": "Storage is read-only: new files can't be uploaded.",
+			"full": "Storage is full: new files can't be uploaded.",
+			"warning": "Only {{free}} of {{limit}} left.",
+			"toStorage": "Open storage",
+			"toPlans": "Get more space"
 		}
+	},
+	"plans": {
+		"title": "Storage plans",
+		"intro": "Space on the server is counted per key: everything you upload counts — files, previews, avatars.",
+		"yourUsage": "You're using {{used}} of {{limit}}.",
+		"free": {
+			"name": "Free",
+			"size": "1 GB",
+			"desc": "Enough for chats and everyday files."
+		},
+		"paid": {
+			"name": "Extended",
+			"size": "100 GB",
+			"price": "$5 per month",
+			"desc": "For photos, video and an archive."
+		},
+		"how": {
+			"title": "How to get more space",
+			"text": "Payment is handled manually for now. Write to {{email}} and include your public key (npub) below — we'll add the space and reply.",
+			"write": "Write to support",
+			"note": "Your public key is safe to share: it only tells us whom to give the space to."
+		},
+		"mailSubject": "More storage space",
+		"mailBody": "Hello! Please give more space to my key: {{npub}}",
+		"back": "Back to storage"
 	}
 }

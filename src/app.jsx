@@ -43,6 +43,8 @@ import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import { roomsScreenActive, roomsMinimized } from "./ui/signals/rooms.js";
 import "./ui/signals/uploads.js";
+import "./ui/signals/quota.js";
+import Plans from "./ui/screens/plans.jsx";
 
 onLock(() => {
 	roomsScreenActive.value = false;
@@ -297,9 +299,10 @@ function MainShell() {
 				{place.value.kind === "journal" && <Journal />}
 				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
 				{place.value.kind === "storage" && <Files />}
+				{place.value.kind === "plans" && <Plans />}
 				{place.value.kind === "search" && <Search />}
 				{(() => {
-					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage", "search"];
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage", "plans", "search"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
 					return <Placeholder title={place.value.kind} />;
 				})()}

@@ -842,7 +842,9 @@
 		"pasteInto": "貼り付け",
 		"pasteHere": "ここに貼り付け",
 		"clipboardCopied": "コピー済み: {{count}}",
-		"clipboardCut": "切り取り済み: {{count}}"
+		"clipboardCut": "切り取り済み: {{count}}",
+		"freedFromServer": "サーバーから削除済み",
+		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。"
 	},
 	"profile": {
 		"server": {
@@ -1175,7 +1177,11 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "この相手はデバイスが多すぎて、招待を1つのメッセージで送信できません。しばらくしてからもう一度お試しください。"
+		"welcomeTooLargeForDeviceCount": "この相手はデバイスが多すぎて、招待を1つのメッセージで送信できません。しばらくしてからもう一度お試しください。",
+		"blobGone": "このファイルはサーバー上に存在しません（サーバーから容量が解放された可能性があります）。",
+		"fileTooLargeForServer": "「{{name}}」は {{size}} ですが、サーバーが受け付けるのは {{max}} までです。",
+		"quotaExceeded": "「{{name}}」の空きが足りません。必要 {{need}}、空き {{free}}。",
+		"storageReadonly": "現在ストレージは読み取り専用です。新しいファイルはアップロードできませんが、アップロード済みのものは開けます。"
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1376,12 +1382,55 @@
 			"usage": "{{count}} か所に送信されています。まだダウンロードしていない人は開けなくなります。",
 			"usageNone": "このファイルの送信記録はありません。",
 			"limit": "受信者がすでにダウンロードした分は相手の手元に残ります。元に戻せません。",
-			"filesNote": "「ファイル」内の項目も開けなくなります。",
+			"filesNote": "「ファイル」に項目がある場合は、そちらもごみ箱に移動します。",
 			"confirm": "容量を空ける",
 			"cancel": "キャンセル",
 			"working": "削除中… {{done}} / {{total}}",
 			"done": "容量を空けました。",
 			"failed": "{{count}} 件のファイルを削除できませんでした。後でもう一度お試しください。"
+		},
+		"journalPublishFailed": "アップロードのジャーナルがリレーに届いていません: {{reason}}。ファイル自体には影響しませんが、他の端末ではファイル名が表示されません。",
+		"quota": {
+			"unlimited": "このサーバーには容量の上限がありません。",
+			"barAria": "ストレージ使用量",
+			"usedOfLimit": "{{limit}} 中 {{used}} 使用中",
+			"warning": "残りわずか：{{free}}。",
+			"full": "容量がいっぱいです。新しいファイルをアップロードするには、空きを作るか容量を増やしてください。",
+			"readonly": "ストレージは読み取り専用です。新しいファイルはアップロードできませんが、アップロード済みのものは開けます。",
+			"getMore": "容量を増やす",
+			"plansLink": "プランと容量の増やし方"
+		},
+		"notice": {
+			"readonly": "ストレージは読み取り専用です。新しいファイルはアップロードできません。",
+			"full": "容量がいっぱいです。新しいファイルはアップロードできません。",
+			"warning": "{{limit}} 中、残り {{free}} のみ。",
+			"toStorage": "ストレージを開く",
+			"toPlans": "容量を増やす"
 		}
+	},
+	"plans": {
+		"title": "ストレージのプラン",
+		"intro": "サーバー上の容量は鍵ごとに数えます。アップロードしたものすべて（ファイル、プレビュー、アバター）が対象です。",
+		"yourUsage": "{{limit}} 中 {{used}} を使用中です。",
+		"free": {
+			"name": "無料",
+			"size": "1 GB",
+			"desc": "チャットや日常のファイルには十分です。"
+		},
+		"paid": {
+			"name": "拡張",
+			"size": "100 GB",
+			"price": "月額 5 ドル",
+			"desc": "写真・動画・アーカイブ向け。"
+		},
+		"how": {
+			"title": "容量を増やすには",
+			"text": "支払いは今のところ手動で受け付けています。{{email}} 宛てに、下の公開鍵（npub）を添えてご連絡ください。容量を追加してお返事します。",
+			"write": "サポートに連絡",
+			"note": "公開鍵は共有しても安全です。どの鍵に容量を付与するかを知るためだけに使います。"
+		},
+		"mailSubject": "ストレージ容量の追加",
+		"mailBody": "こんにちは。私の鍵に容量を追加してください：{{npub}}",
+		"back": "ストレージに戻る"
 	}
 }

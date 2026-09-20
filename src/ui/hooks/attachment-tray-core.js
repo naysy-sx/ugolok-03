@@ -2,6 +2,7 @@ import { DomainError } from "../../domain/errors.js";
 import { classOf } from "../../domain/media/media-ref.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { inferLayout } from "../components/bubble-attachment-plan.js";
+import { checkBatch, estimateUploadBytes } from "../../domain/uploads/quota.js";
 
 function typeFromMime(mime) {
 	const c = classOf(mime);
@@ -36,25 +37,50 @@ export function emptyTrayState() {
 	return { items: [], errors: [], layout: null };
 }
 
-export function addFiles(state, files, maxItems) {
+// Сколько места на сервере займёт то, что уже стоит в лотке на заливку (ссылки «из хранилища»
+// байтов не занимают).
+function pendingUploadBytes(items) {
+	return items.filter((it) => it.file).reduce((sum, it) => sum + estimateUploadBytes(it.size, it.mime).total, 0);
+}
+
+// opts.quota — снимок квоты с сервера (domain/uploads/quota.js normalizeQuota) или null. Файл,
+// который не проходит по размеру или остатку, В ЛОТОК НЕ ДОБАВЛЯЕТСЯ: причина уходит в errors с
+// внятным текстом («файл 400 МБ, предел 300 МБ» / «нужно 250 МБ, свободно 80 МБ»).
+export function addFiles(state, files, maxItems, opts = {}) {
+	const quota = opts.quota ?? null;
 	const room = maxItems - state.items.length;
 	const input = Array.from(files);
 	if (room <= 0) {
 		return withLayout({ items: state.items, errors: input.length > 0 ? [tooManyError(maxItems)] : [], layout: state.layout });
 	}
 	const taken = input.slice(0, room);
-	const newItems = taken.map((file) => ({
-		id: crypto.randomUUID(),
-		file,
-		storageRef: null,
-		mime: file.type,
-		name: file.name,
-		size: file.size,
-		type: typeFromMime(file.type),
-		position: "below",
-		error: withValidation(file.type, file.size),
-	}));
-	const errors = input.length > taken.length ? [tooManyError(maxItems)] : [];
+	const quotaErrors = [];
+	let pending = pendingUploadBytes(state.items);
+	const newItems = [];
+	for (const file of taken) {
+		if (quota) {
+			const chk = checkBatch([{ name: file.name, size: file.size, mime: file.type }], quota, pending);
+			if (!chk.ok) {
+				quotaErrors.push(chk.error);
+				continue;
+			}
+			pending += estimateUploadBytes(file.size, file.type).total;
+		}
+		newItems.push({
+			id: crypto.randomUUID(),
+			file,
+			storageRef: null,
+			mime: file.type,
+			name: file.name,
+			size: file.size,
+			type: typeFromMime(file.type),
+			position: "below",
+			// предел размера файла с сервера заменяет зашитый (он лишь страховка): при известной квоте
+			// здесь проверяется только тип
+			error: withValidation(file.type, quota?.maxFileSize ? 0 : file.size),
+		});
+	}
+	const errors = [...(input.length > taken.length ? [tooManyError(maxItems)] : []), ...quotaErrors];
 	return withLayout({ items: [...state.items, ...newItems], errors, layout: state.layout });
 }
 

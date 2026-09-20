@@ -57,6 +57,7 @@ async function wipeLocal() {
 	await db.table("uploads").clear();
 	await db.table("uploadBatches").clear();
 	await db.table("uploadSync").clear();
+	await db.table("uploadFreed").clear();
 }
 
 beforeEach(async () => {
@@ -298,4 +299,77 @@ test("ошибка публикации оставляет пачку грязн
 	assert.equal(await flushJournal(), 0);
 	ok = true;
 	assert.equal(await flushJournal(), 1);
+});
+
+// ---- доработки после ревью ----
+import { removeUploads as _rm, listFreed, getJournalStatus } from "../src/domain/uploads/journal.js";
+import { mnemonicToPrivateKey } from "../src/core/crypto/mnemonic.js";
+import { journalPubkey } from "../src/domain/uploads/batches.js";
+import { foldFreed, makeFreed, makeAdd } from "../src/domain/uploads/records.js";
+
+test("освобождение места ставит метку «стёрто с сервера»; она переживает очистку пачек и видна на другом устройстве", async () => {
+	const relay = makeRelay();
+	bind(DEV_A, relay);
+	await recordUploads(attachment(1));
+	clock += 26 * 3600 * 1000; // пачка с записями станет закрытой
+	await recordUploads(attachment(10));
+	await flushJournal();
+	await _rm([H(1), H(2), H(3), H(4)], { markFreed: true });
+	assert.deepEqual((await listFreed()).sort(), [H(1), H(2), H(3), H(4)].sort());
+	// имена убраны из журнала, метка (без имени) осталась в пачке
+	const raw = JSON.stringify(await db.table("uploadBatches").toArray());
+	assert.equal(raw.includes("video.mp4"), false);
+	await flushJournal();
+	// второе устройство
+	await wipeLocal();
+	bind(DEV_B, relay);
+	assert.deepEqual(await listFreed(), []);
+	await pullJournal({ fetchEvents: relay.fetchEvents });
+	assert.deepEqual((await listFreed()).sort(), [H(1), H(2), H(3), H(4)].sort());
+	assert.equal((await listUploads()).some((r) => r.hash === H(1)), false);
+});
+
+test("повторная заливка того же хеша снимает метку «стёрто с сервера»", async () => {
+	bind(DEV_A, makeRelay());
+	await recordUploads(attachment(1));
+	await _rm([H(1), H(2), H(3), H(4)], { markFreed: true });
+	assert.equal((await listFreed()).length, 4);
+	clock += 5000;
+	await recordUploads([attachment(1)[0]]);
+	assert.equal((await listFreed()).includes(H(1)), false);
+	assert.equal((await listFreed()).includes(H(2)), true);
+});
+
+test("foldFreed: метка перекрыта только более поздним add", () => {
+	const h = H(5);
+	assert.equal(foldFreed([makeFreed(h, 10)]).has(h), true);
+	assert.equal(foldFreed([makeFreed(h, 10), makeAdd({ hash: h, size: 1, role: "content", purpose: "dm" }, 20)]).has(h), false);
+	assert.equal(foldFreed([makeAdd({ hash: h, size: 1, role: "content", purpose: "dm", at: 5 }, 5), makeFreed(h, 10)]).has(h), true);
+});
+
+test("отказ relay не молчит: причина доступна для экрана хранилища, пачка остаётся грязной", async () => {
+	bindJournal({ ownerPubkey: OWNER, dbKey: DBKEY, journalKey: JKEY, journalSigner: JSIGN, deviceId: DEV_A, publish: async () => ({ ok: false, reason: "blocked: pubkey not on whitelist" }), now: () => clock, flushDelayMs: 3_600_000, flushRetryMs: 3_600_000 });
+	await recordUploads(attachment(1));
+	assert.deepEqual(await getJournalStatus(), { dirty: 1, lastError: null }, "до первой попытки публикации ошибки нет, пачка ждёт отправки");
+	assert.equal(await flushJournal(), 0);
+	const st = await getJournalStatus();
+	assert.equal(st.dirty, 1);
+	assert.match(st.lastError, /whitelist/);
+});
+
+test("восстановление по сид-фразе: тот же ключ-автор журнала, старые пачки читаются на «переустановленном» устройстве", async () => {
+	const phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+	const priv1 = await mnemonicToPrivateKey(phrase);
+	const priv2 = await mnemonicToPrivateKey(phrase);
+	const m1 = deriveMasterSecret(priv1), m2 = deriveMasterSecret(priv2);
+	assert.equal(journalPubkey(deriveJournalSigner(m1)), journalPubkey(deriveJournalSigner(m2)));
+	// журнал, записанный до «переустановки», читается ключами, выведенными заново из сид-фразы
+	const relay = makeRelay();
+	bindJournal({ ownerPubkey: OWNER, dbKey: deriveDbKey(m1), journalKey: deriveJournalKey(m1), journalSigner: deriveJournalSigner(m1), deviceId: DEV_A, publish: relay.publish, now: () => clock, flushDelayMs: 3_600_000 });
+	await recordUploads(attachment(1));
+	await flushJournal();
+	await wipeLocal();
+	bindJournal({ ownerPubkey: OWNER, dbKey: deriveDbKey(m2), journalKey: deriveJournalKey(m2), journalSigner: deriveJournalSigner(m2), deviceId: DEV_B, publish: relay.publish, now: () => clock, flushDelayMs: 3_600_000 });
+	await pullJournal({ fetchEvents: relay.fetchEvents });
+	assert.equal((await listUploads()).length, 4);
 });

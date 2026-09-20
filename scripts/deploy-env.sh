@@ -104,6 +104,29 @@ snapshot_island() {
 	done
 }
 
+# Перезапускает контейнер, если изменились файлы, которые он монтирует с хоста
+# (compose up -d этого не замечает). stamp хранит отпечаток прошлой выкладки; первый запуск
+# без отпечатка перезапускает один раз (безвредно) и запоминает.
+restart_if_changed() {
+	local container="$1" stamp="$2"; shift 2
+	local now prev=""
+	now="$(cat "$@" 2>/dev/null | sha256sum | awk '{print $1}')"
+	[[ -f "$stamp" ]] && prev="$(cat "$stamp")"
+	if [[ "$now" == "$prev" ]]; then
+		return 0
+	fi
+	if docker inspect "$container" >/dev/null 2>&1; then
+		echo "deploy-env: изменились смонтированные файлы — перезапускаю $container"
+		if docker restart "$container" >/dev/null 2>&1; then
+			echo "$now" >"$stamp" 2>/dev/null || true
+		else
+			echo "deploy-env: не удалось перезапустить $container (отпечаток не сохранён, повтор при следующей выкладке)" >&2
+		fi
+	else
+		echo "deploy-env: контейнера $container нет — перезапуск пропущен" >&2
+	fi
+}
+
 rollback_deploy() {
 	echo "deploy-env: ОТКАТ кода к предыдущей версии" >&2
 	if [[ -d "$WWW_PREV" ]]; then
@@ -272,6 +295,27 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# ПОСЛЕ фикса 127.0.0.1->0.0.0.0 в коде: контейнер не пересобрался,
 		# работал старый образ со старой привязкой.
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --build
+
+		# `compose up -d` пересоздаёт контейнер только при смене образа/его параметров в compose.
+		# Файлы, смонтированные с хоста (конфиг и код политики relay, конфиг Blossom), он НЕ
+		# замечает: плагин политики — долгоживущий процесс и работал бы на старом коде. Поэтому
+		# точечно перезапускаем ТОЛЬКО тот сервис, у которого изменились такие файлы (отпечаток
+		# по репозиторию, не по хосту: watchdog сам правит blossom-config.yml на хосте). Не
+		# «перезапускать всё»: на хосте живут Forgejo с раннером (перезапуск убил бы саму
+		# CI-задачу), почта и coturn (обрыв звонков).
+		if [[ "$ENV" == "test" ]]; then
+			RELAY_RESTART_C="${RELAY_CONTAINER:-ugolok-test-relay}"; BLOSSOM_RESTART_C="${BLOSSOM_CONTAINER:-ugolok-test-blossom}"
+		else
+			RELAY_RESTART_C="${RELAY_CONTAINER:-ugolok-relay}"; BLOSSOM_RESTART_C="${BLOSSOM_CONTAINER:-ugolok-blossom}"
+		fi
+		STAMP_DIR="$ISLAND_DST/.restart-stamps"
+		mkdir -p "$STAMP_DIR" 2>/dev/null || true
+		RELAY_FILES=("$ISLAND_SRC/strfry.conf")
+		if [[ "$ENV" == "prod" ]]; then
+			RELAY_FILES+=("$ROOT/server/strfry/whitelist-plugin.mjs" "$ROOT/server/strfry/write-policy.mjs" "$ROOT/server/strfry/rate-limit.mjs" "$ROOT/src/domain/discovery/wordfilter.js" "$ROOT/src/domain/discovery/stopwords.json")
+		fi
+		restart_if_changed "$RELAY_RESTART_C" "$STAMP_DIR/relay" "${RELAY_FILES[@]}"
+		restart_if_changed "$BLOSSOM_RESTART_C" "$STAMP_DIR/blossom" "$ISLAND_SRC/blossom-config.yml"
 	fi
 	# AUDIT-EGOROD H1: «поднялось» != «работает». Провал проверки на prod откатывает
 	# код (см. rollback_deploy); на test — только красный прогон.

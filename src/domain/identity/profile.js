@@ -1,4 +1,5 @@
 import { recordUploads } from '../uploads/journal.js';
+import { refusalFromRequirements, toDomainRefusal } from '../uploads/quota.js';
 import { safePictureUrl } from '../media/url-guard.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -40,10 +41,17 @@ export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, o
   const sha256Hex = bytesToHex(sha256(fileBytes));
   const requirements = await checkUploadRequirements(serverUrl, { sha256Hex, mime, size: fileBytes.length }, privateKey, options);
   if (!requirements.ok) {
+    const refusal = refusalFromRequirements(requirements, fileBytes.length, 'avatar');
+    if (refusal) throw refusal;
     const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
     throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
   }
-  const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  let response;
+  try {
+    response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  } catch (err) {
+    throw toDomainRefusal(err, { name: 'avatar', sizeBytes: fileBytes.length });
+  }
   // ТЗ-03: аватар — тоже занятое место (публичный блоб без манифеста).
   await recordUploads([{ hash: sha256Hex, size: fileBytes.length, role: 'content', purpose: 'avatar', target: 'profile', name: 'avatar', server: serverUrl }]);
   return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);
