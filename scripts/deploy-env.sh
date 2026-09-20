@@ -75,7 +75,8 @@ elif [[ "$ENV" == "prod" ]]; then
 	echo "deploy-env: нет доступа к $STATE_DIR — снимок для отката не будет сохранён" >&2
 fi
 ISLAND_EXCLUDES=(--exclude relay-src --exclude blossom-src --exclude agent-src --exclude policy --exclude policy-conf --exclude '.git')
-DEPLOY_IMAGES=(ugolok-strfry ugolok-blossom ugolok-turncreds-server)
+# ugolok-blossom здесь нет: образ пинуется тегом в compose, откат — сменой тега.
+DEPLOY_IMAGES=(ugolok-strfry ugolok-turncreds-server)
 
 pre_deploy_backup() {
 	[[ "$ENV" == "prod" ]] || return 0
@@ -259,46 +260,10 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# закрытой, повторно применить рубильник
 		[[ -x "$BIN_DIR/island-watchdog.sh" ]] && "$BIN_DIR/island-watchdog.sh" --reapply || true
 	fi
-	# blossom-src исключён из rsync (сторонний форк, клон один раз). Патчи
-	# живут в deploy/island/patches — без этого шага test-деплой обновляет
-	# только PWA, а ugolok-test-blossom крутит старый образ (415 audio/webm).
-	# Образ общий (ugolok-blossom:local), собираем из /opt/ugolok/island.
-	BLOSSOM_SRC="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/blossom-src"
-	BLOSSOM_PATCHES="$ROOT/deploy/island/patches"
-	BLOSSOM_REF="${BLOSSOM_REF:-ba1444c31d517de9fcb512f7fff92bfed421aaa7}"
-	BLOSSOM_STAMP_FILE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/.blossom-patches.sha"
-	BLOSSOM_REBUILT=0
-	if [[ -d "$BLOSSOM_SRC/.git" && -d "$BLOSSOM_PATCHES" ]]; then
-		BLOSSOM_STAMP="$(ls -1 "$BLOSSOM_PATCHES"/*.patch 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
-		if [[ ! -f "$BLOSSOM_STAMP_FILE" || "$(cat "$BLOSSOM_STAMP_FILE")" != "$BLOSSOM_STAMP" ]]; then
-			echo "deploy-env: blossom patches changed — checkout $BLOSSOM_REF + apply + build"
-			# blossom-src на VPS принадлежит root, раннер — ugolok: без
-			# safe.directory git 2.35+ орёт "dubious ownership" и set -e
-			# роняет ВЕСЬ деплой уже после rsync PWA (живая проверка:
-			# test 15af37c / prod 945fc42 — Action красный, сайт обновлён).
-			git_blossom() { git -c safe.directory="$BLOSSOM_SRC" -C "$BLOSSOM_SRC" "$@"; }
-			blossom_ok=0
-			git_blossom fetch --tags origin || true
-			if git_blossom checkout -f "$BLOSSOM_REF"; then
-				blossom_ok=1
-				for p in "$BLOSSOM_PATCHES"/*.patch; do
-					[[ -f "$p" ]] || continue
-					if ! git_blossom apply "$p"; then
-						blossom_ok=0
-						break
-					fi
-				done
-			fi
-			PROD_COMPOSE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/docker-compose.yml"
-			PROD_DIR="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
-			if [[ "$blossom_ok" == 1 ]] && docker compose -f "$PROD_COMPOSE" --project-directory "$PROD_DIR" build blossom; then
-				echo "$BLOSSOM_STAMP" > "$BLOSSOM_STAMP_FILE" || true
-				BLOSSOM_REBUILT=1
-			else
-				echo "deploy-env: blossom rebuild не удался — PWA уже выложена, образ не трогаем" >&2
-			fi
-		fi
-	fi
+	# Blossom — готовый образ форка по пинованному тегу из docker-compose.yml
+	# (prod и test). Ничего не собираем: смена тега в compose + up -d сама
+	# подтягивает образ и пересоздаёт контейнер. Раньше здесь был checkout
+	# апстрима, применение deploy/island/patches и docker compose build.
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
 		# --build: без него compose переиспользует уже существующий образ
 		# ugolok-turncreds-server:local как есть, даже если agent-src только что
@@ -307,11 +272,6 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# ПОСЛЕ фикса 127.0.0.1->0.0.0.0 в коде: контейнер не пересобрался,
 		# работал старый образ со старой привязкой.
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --build
-		# test-compose берёт готовый ugolok-blossom:local без build: — без
-		# recreate контейнер останется на старом sha даже после build выше.
-		if [[ "$BLOSSOM_REBUILT" == 1 ]]; then
-			docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --force-recreate --no-deps blossom
-		fi
 	fi
 	# AUDIT-EGOROD H1: «поднялось» != «работает». Провал проверки на prod откатывает
 	# код (см. rollback_deploy); на test — только красный прогон.

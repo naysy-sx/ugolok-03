@@ -283,7 +283,20 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	assert.match(compose, /\/var\/lib\/ugolok\/blossom:\/app\/data/);
 	assert.match(read(join(ROOT, "deploy/island/blossom-config.yml")), /database\.sqlite3/);
 	assert.ok(existsSync(join(ROOT, "deploy/island/relay.Dockerfile")));
-	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
+});
+
+test("ТЗ-01: остров, тестовый остров и self-host берут один и тот же пинованный образ Blossom", () => {
+	const files = ["deploy/island/docker-compose.yml", "deploy/island-test/docker-compose.yml", "agent/compose/docker-compose.yml"];
+	const tags = files.map((f) => {
+		const text = read(join(ROOT, f));
+		const blossom = text.slice(text.indexOf("\n  blossom:"), text.indexOf("\n  coturn:") > 0 ? text.indexOf("\n  coturn:") : undefined);
+		const m = /^\s+image:\s+(ghcr\.io\/[^\s/]+\/ugolok-blossom:\d+\.\d+\.\d+)\s*$/m.exec(blossom);
+		assert.ok(m, f + ": blossom.image должен быть ghcr.io/<owner>/ugolok-blossom:X.Y.Z (точный тег, не latest)");
+		assert.equal(/^\s+build:/m.test(blossom), false, f + ": blossom не собирается из исходников");
+		return m[1];
+	});
+	assert.equal(new Set(tags).size, 1, "разные теги образа: " + tags.join(", "));
+	assert.match(read(join(ROOT, "agent/compose/docker-compose.yml")), /env_file:\s*\n\s+- \.\/blossom\.env/);
 });
 
 test("security: TURN без релея во внутренние сети, Caddy admin API за сокетом, HSTS", () => {
@@ -418,21 +431,18 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	// существующий образ ugolok-turncreds-server:local как есть — тег
 	// статический, свежий agent-src сам по себе рекомпиляцию не триггерит.
 	assert.match(deploy, /docker compose -f "\$ISLAND_DST\/docker-compose\.yml" --project-directory "\$ISLAND_DST" up -d --build/);
-	// Живая проверка (test, 415 audio/webm): патчи Blossom не подхватывались —
-	// rsync исключает blossom-src, test-compose берёт готовый образ без build:.
-	// При смене набора патчей — checkout pin + apply + build, затем recreate
-	// контейнера blossom этого env (второй compose, не дубль up --build).
-	assert.match(deploy, /\.blossom-patches\.sha/);
-	assert.match(deploy, /safe\.directory=/);
-	assert.match(deploy, /docker compose -f "\$PROD_COMPOSE" --project-directory "\$PROD_DIR" build blossom/);
-	assert.match(deploy, /up -d --force-recreate --no-deps blossom/);
-	// AUDIT-EGOROD H1: третий вызов — откат образов после провала проверки здоровья
+	// ТЗ-01: Blossom — готовый образ форка по пинованному тегу, деплой его не
+	// собирает. Возврата к сборке из патчей быть не должно.
+	assert.equal(deploy.includes(".blossom-patches.sha"), false);
+	assert.equal(deploy.includes("build blossom"), false);
+	assert.equal(deploy.includes("BLOSSOM_PATCHES"), false);
+	assert.equal(/DEPLOY_IMAGES=\([^)]*ugolok-blossom/.test(deploy), false);
+	// AUDIT-EGOROD H1: второй вызов — откат образов после провала проверки здоровья
 	// (up --no-build --force-recreate на :prev-образах), не второй «up --build».
-	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 3, "up --build + force-recreate blossom + откат --no-build, не больше");
+	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + откат --no-build, не больше");
 	assert.match(deploy, /up -d --no-build --force-recreate/);
 	assert.match(deploy, /island-health\.sh/);
 	assert.match(deploy, /island-backup\.sh/);
-	assert.match(deploy, /blossom rebuild не удался/);
 	assert.match(deploy, /apply-caddy не применился/);
 });
 
