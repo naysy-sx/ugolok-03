@@ -18,7 +18,7 @@ services:
 
   blossom:
     # Тот же пинованный образ, что у боевого острова (deploy/island/docker-compose.yml).
-    image: ghcr.io/naysy-sx/ugolok-blossom:1.0.0
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.0.0
     container_name: ugolok-test-blossom
     restart: unless-stopped
     volumes:

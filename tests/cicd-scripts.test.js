@@ -290,8 +290,8 @@ test("ТЗ-01: остров, тестовый остров и self-host беру
 	const tags = files.map((f) => {
 		const text = read(join(ROOT, f));
 		const blossom = text.slice(text.indexOf("\n  blossom:"), text.indexOf("\n  coturn:") > 0 ? text.indexOf("\n  coturn:") : undefined);
-		const m = /^\s+image:\s+(ghcr\.io\/[^\s/]+\/ugolok-blossom:\d+\.\d+\.\d+)\s*$/m.exec(blossom);
-		assert.ok(m, f + ": blossom.image должен быть ghcr.io/<owner>/ugolok-blossom:X.Y.Z (точный тег, не latest)");
+		const m = /^\s+image:\s+(git\.ugolok\.tech\/naysy\/ugolok-blossom:\d+\.\d+\.\d+)\s*$/m.exec(blossom);
+		assert.ok(m, f + ": blossom.image должен быть git.ugolok.tech/naysy/ugolok-blossom:X.Y.Z (точный тег, не latest)");
 		assert.equal(/^\s+build:/m.test(blossom), false, f + ": blossom не собирается из исходников");
 		return m[1];
 	});
