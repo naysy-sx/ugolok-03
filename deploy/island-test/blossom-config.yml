@@ -20,9 +20,9 @@ access_control_rules:
 storage:
   mode: disk
 
-# Квоты (ТЗ-04). false = поведение как до квот: /list открыт, предел файла = max_upload_size_bytes.
+# Квоты (ТЗ-04). true = квоты включены. false = поведение как до квот: /list открыт, предел файла = max_upload_size_bytes.
 # max_file_bytes должен совпадать с max_upload_size_bytes.
 quota:
-  enabled: false
+  enabled: true
   default_bytes: 1073741824
   max_file_bytes: 314572800
