@@ -1178,7 +1178,10 @@
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
 		"welcomeTooLargeForDeviceCount": "Dieser Kontakt hat zu viele Geräte, um eine Einladung in einer einzigen Nachricht zu senden. Bitte versuchen Sie es später erneut.",
-		"blobGone": "Die Datei ist auf dem Server nicht mehr verfügbar (möglicherweise wurde sie vom Server freigegeben)."
+		"blobGone": "Die Datei ist auf dem Server nicht mehr verfügbar (möglicherweise wurde sie vom Server freigegeben).",
+		"fileTooLargeForServer": "„{{name}}“ ist {{size}} groß, der Server nimmt aber nur Dateien bis {{max}} an.",
+		"quotaExceeded": "Nicht genug Platz für „{{name}}“: {{need}} nötig, {{free}} frei.",
+		"storageReadonly": "Der Speicher ist gerade schreibgeschützt: neue Dateien lassen sich nicht hochladen. Alles bereits Hochgeladene öffnet sich weiter."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1386,6 +1389,48 @@
 			"done": "Speicher freigegeben.",
 			"failed": "{{count}} Dateien konnten nicht gelöscht werden. Versuche es später erneut."
 		},
-		"journalPublishFailed": "Das Upload-Journal erreicht das Relay nicht: {{reason}}. Deine Dateien sind nicht betroffen, aber auf anderen Geräten erscheinen keine Namen."
+		"journalPublishFailed": "Das Upload-Journal erreicht das Relay nicht: {{reason}}. Deine Dateien sind nicht betroffen, aber auf anderen Geräten erscheinen keine Namen.",
+		"quota": {
+			"unlimited": "Auf diesem Server gibt es keine Speichergrenze.",
+			"barAria": "Belegter Speicher",
+			"usedOfLimit": "{{used}} von {{limit}} belegt",
+			"warning": "Wird knapp: noch {{free}} frei.",
+			"full": "Der Speicher ist voll. Gib Platz frei oder hole dir mehr, um neue Dateien hochzuladen.",
+			"readonly": "Der Speicher ist schreibgeschützt: neue Dateien lassen sich nicht hochladen, alles Vorhandene öffnet sich weiter.",
+			"getMore": "Mehr Speicher holen",
+			"plansLink": "Tarife und wie du mehr Speicher bekommst"
+		},
+		"notice": {
+			"readonly": "Der Speicher ist schreibgeschützt: neue Dateien lassen sich nicht hochladen.",
+			"full": "Der Speicher ist voll: neue Dateien lassen sich nicht hochladen.",
+			"warning": "Nur noch {{free}} von {{limit}} frei.",
+			"toStorage": "Speicher öffnen",
+			"toPlans": "Mehr Speicher holen"
+		}
+	},
+	"plans": {
+		"title": "Speichertarife",
+		"intro": "Der Platz auf dem Server wird pro Schlüssel gezählt: alles, was du hochlädst, zählt — Dateien, Vorschauen, Avatare.",
+		"yourUsage": "Du nutzt {{used}} von {{limit}}.",
+		"free": {
+			"name": "Kostenlos",
+			"size": "1 GB",
+			"desc": "Genug für Chats und alltägliche Dateien."
+		},
+		"paid": {
+			"name": "Erweitert",
+			"size": "100 GB",
+			"price": "5 $ pro Monat",
+			"desc": "Für Fotos, Videos und ein Archiv."
+		},
+		"how": {
+			"title": "So bekommst du mehr Speicher",
+			"text": "Die Zahlung läuft vorerst manuell. Schreib an {{email}} und gib unten deinen öffentlichen Schlüssel (npub) an — wir schalten den Platz frei und antworten.",
+			"write": "An den Support schreiben",
+			"note": "Den öffentlichen Schlüssel kannst du bedenkenlos weitergeben: er sagt uns nur, wem wir den Platz geben."
+		},
+		"mailSubject": "Mehr Speicherplatz",
+		"mailBody": "Hallo! Bitte gebt meinem Schlüssel mehr Platz: {{npub}}",
+		"back": "Zurück zum Speicher"
 	}
 }

@@ -14,7 +14,8 @@ function buildAuthEvent(action, sha256Hex, expirationSec = 300) {
     kind: 24242,
     created_at: now,
     content: action + ' blob',
-    tags: [['t', action], ['x', sha256Hex], ['expiration', String(now + expirationSec)]],
+    // x — хеш тела; у действий без тела (quota, list) тега нет (ТЗ-04)
+    tags: [['t', action], ...(sha256Hex ? [['x', sha256Hex]] : []), ['expiration', String(now + expirationSec)]],
   };
 }
 
@@ -140,6 +141,8 @@ function xhrPut(url, body, headers, { timeoutMs, signal, onUploadProgress } = {}
         status: xhr.status,
         text: async () => xhr.responseText,
         json: async () => JSON.parse(xhr.responseText),
+        // тот же интерфейс, что у fetch-ответа: X-Reason/X-Quota-* нужны для отказов по квоте
+        headers: { get: (name) => xhr.getResponseHeader(name) },
       });
     };
     xhr.onerror = () => reject(new TypeError('Blossom upload: сетевая ошибка XHR'));
@@ -218,9 +221,62 @@ export async function uploadBlob(serverUrl, encryptedBytes, sha256Hex, privateKe
   );
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    const reason = response.headers?.get?.('X-Reason');
+    if (REFUSAL_REASONS.has(reason)) {
+      let info = {};
+      try {
+        info = JSON.parse(text);
+      } catch {
+        // тела может не быть — остаток уйдёт в заголовках, если они доступны
+      }
+      throw new BlossomRefusal(response.status, reason, info);
+    }
     throw new Error('Blossom upload failed: ' + response.status + ' ' + text);
   }
   return await response.json();
+}
+
+// ТЗ-04: машинные причины отказа сервера при заливке (заголовок X-Reason).
+export const REFUSAL_REASONS = new Set(['quota-exceeded', 'file-too-large', 'readonly']);
+
+export class BlossomRefusal extends Error {
+  constructor(status, reason, info = {}) {
+    super('Blossom refused upload: ' + reason);
+    this.name = 'BlossomRefusal';
+    this.status = status;
+    this.reason = reason;
+    this.info = info; // {used, limit, remaining, maxFileSize, mode} — если сервер их прислал
+  }
+}
+
+function quotaFromHeaders(response) {
+  const get = (n) => response.headers?.get?.(n);
+  const num = (v) => (v == null || v === '' ? undefined : Number(v));
+  const used = num(get('X-Quota-Used'));
+  if (used === undefined) return undefined;
+  return { used, limit: num(get('X-Quota-Limit')), remaining: num(get('X-Quota-Remaining')), maxFileSize: num(get('X-Max-File-Size')) };
+}
+
+// GET с подписью (события kind 24242 без хеша тела): /api/quota (t=quota), /list/<pubkey> (t=list).
+export async function signedGet(serverUrl, path, action, privateKey, options = {}) {
+  const { fetchImpl, signal, timeoutMs = 10_000 } = options;
+  const authEvent = sign(buildAuthEvent(action, null, 60), privateKey);
+  const doFetch = fetchImpl ?? globalThis.fetch;
+  const response = await doFetch(stripTrailingSlash(serverUrl) + path, {
+    headers: { Authorization: encodeAuthHeader(authEvent) },
+    signal: combineSignals(signal, timeoutMs),
+  });
+  if (!response.ok) {
+    const err = new Error('Blossom ' + action + ' failed: ' + response.status);
+    err.status = response.status;
+    throw err;
+  }
+  return response.json();
+}
+
+// Состояние квоты этого ключа. Старый сервер (без квот) отвечает 404 — вызывающий сам решает.
+export function fetchQuota(serverUrl, privateKey, options = {}) {
+  return signedGet(serverUrl, '/api/quota', 'quota', privateKey, options);
 }
 
 export async function checkBlossomReachable(serverUrl, options = {}) {
@@ -299,7 +355,10 @@ export async function checkUploadRequirements(serverUrl, { sha256Hex, mime, size
     if (response.ok) {
       return { ok: true };
     }
-    return { ok: false, status: response.status, reason: response.headers.get('X-Reason') ?? null };
+    const refusal = { ok: false, status: response.status, reason: response.headers.get('X-Reason') ?? null };
+    const quota = quotaFromHeaders(response);
+    if (quota) refusal.quota = quota; // ключ только если сервер прислал остаток (X-Quota-*)
+    return refusal;
   } catch {
     return { ok: true, unknown: true };
   }

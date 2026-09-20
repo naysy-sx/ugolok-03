@@ -12,6 +12,9 @@ import { listUploads, removeUploads, getJournalSync, getJournalStatus } from "..
 import { pullUploadJournal, refreshFreed } from "../signals/uploads.js";
 import { formatBytes } from "../../domain/uploads/format.js";
 import FreeSpaceDialog from "./free-space-dialog.jsx";
+import QuotaBar from "./quota-bar.jsx";
+import { quotaState, refreshQuota } from "../signals/quota.js";
+import { goTo } from "../signals/place.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const PAGE = 20;
@@ -92,7 +95,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 		setError("");
 		try {
 			// Сначала числа с сервера и то, что журнал уже знает локально — экран полезен сразу.
-			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(BLOSSOM_URL, ownerPubkey), listUploads()]);
+			const [serverBlobs, local] = await Promise.all([fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }), listUploads()]);
 			if (!alive.current) return;
 			setBlobs(serverBlobs);
 			setRows(local);
@@ -104,6 +107,8 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 			setPhase("error");
 			return;
 		}
+		// Остаток — заново (мог измениться на другом устройстве).
+		refreshQuota();
 		// Затем — по требованию, постранично — пачки журнала (только теперь, не при запуске).
 		loadJournal(5);
 	}
@@ -115,7 +120,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 		setRec(null);
 		refreshFreed();
 		try {
-			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey));
+			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey }));
 			setRows(await listUploads());
 		} catch (err) {
 			setError(errorMessage(err));
@@ -134,7 +139,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 				setRecError(t("storage.reconcile.needFull"));
 				return;
 			}
-			const fresh = await fetchServerBlobs(BLOSSOM_URL, ownerPubkey);
+			const fresh = await fetchServerBlobs(BLOSSOM_URL, ownerPubkey, { privateKey: privKey });
 			const local = await listUploads();
 			setBlobs(fresh);
 			setRows(local);
@@ -199,9 +204,15 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 					<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<h3 class="sect-title">{t("storage.usedTitle")}</h3>
 						<p style={{ margin: 0, fontSize: "var(--text-l, 1.25rem)" }}>{t("storage.usedValue", { size: formatBytes(total), count: entries.length })}</p>
-						{/* Место под полосу заполнения: число квоты появится в ТЗ-04. Готовых элементов
-						    в проекте нет (.sync-progress-bar — бегущая полоса без значения). */}
-						<div class="storage-bar" data-storage-bar aria-hidden="true" hidden />
+						{/* Полоса заполнения (ТЗ-04): числа потолка приходят с сервера */}
+						{quotaState.value.status === "ok" && <QuotaBar quota={quotaState.value.quota} onGetMore={() => goTo({ kind: "plans" })} />}
+						{quotaState.value.status === "ok" && quotaState.value.quota?.enabled && (
+							<div>
+								<button type="button" class="btn--ghost" onClick={() => goTo({ kind: "plans" })}>
+									{t("storage.quota.plansLink")}
+								</button>
+							</div>
+						)}
 					</div>
 
 					{blobs.length === 0 && <p style={{ color: "var(--muted)" }}>{t("storage.empty")}</p>}

@@ -3,15 +3,23 @@
 // Числа берутся с сервера (GET /list/<pubkey>: хеши, размеры, даты — сервер считает свои
 // байты), имена и назначения — из журнала. Экран полезен и без журнала.
 import { deleteBlob } from "../files/blob.js";
+import { signedGet } from "../../core/transport/blossom-client.js";
 import { groupRows, classOfName, sentPlaces } from "./records.js";
 import { removeUploads } from "./journal.js";
 
 // -> [{hash, size, uploaded}] (uploaded — секунды). Бросает при сетевой ошибке/не-200.
-export async function fetchServerBlobs(serverUrl, pubkey, { fetchImpl = globalThis.fetch, signal } = {}) {
-	const url = `${serverUrl.replace(/\/$/, "")}/list/${pubkey}`;
-	const res = await fetchImpl(url, { signal });
-	if (!res.ok) throw new Error(`Blossom list failed: ${res.status}`);
-	const data = await res.json();
+// ТЗ-04: при включённых квотах сервер отдаёт список ТОЛЬКО владельцу по подписи (t=list), поэтому
+// с privateKey запрос подписывается (старый сервер подпись игнорирует и отдаёт как раньше).
+export async function fetchServerBlobs(serverUrl, pubkey, { fetchImpl = globalThis.fetch, signal, privateKey } = {}) {
+	let data;
+	if (privateKey) {
+		data = await signedGet(serverUrl, `/list/${pubkey}`, "list", privateKey, { fetchImpl, signal });
+	} else {
+		const url = `${serverUrl.replace(/\/$/, "")}/list/${pubkey}`;
+		const res = await fetchImpl(url, { signal });
+		if (!res.ok) throw new Error(`Blossom list failed: ${res.status}`);
+		data = await res.json();
+	}
 	if (!Array.isArray(data)) return [];
 	return data
 		.filter((b) => b && typeof b.sha256 === "string" && Number.isFinite(b.size))

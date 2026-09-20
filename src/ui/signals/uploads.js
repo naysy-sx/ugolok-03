@@ -7,6 +7,7 @@ import { currentUser, dbKeySig, masterSecretSig } from "./auth.js";
 import { publish, fetchJournalEvents, ensureConnected } from "./transport.js";
 import { privKeySig } from "./auth.js";
 import { deriveJournalKey, deriveJournalSigner } from "../../core/crypto/derivation.js";
+import { scheduleQuotaRefresh } from "./quota.js";
 import { getOrCreateDeviceId } from "../../domain/identity/device.js";
 import { bindJournal, unbindJournal, pullJournal, listFreed } from "../../domain/uploads/journal.js";
 
@@ -43,6 +44,8 @@ effect(() => {
 				journalSigner: deriveJournalSigner(master),
 				deviceId,
 				publish: (event) => publish(event),
+				// ТЗ-04: заливка или освобождение места изменили квоту — спросить сервер заново
+				onChanged: () => scheduleQuotaRefresh(),
 			});
 			refreshFreed();
 		})

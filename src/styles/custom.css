@@ -10147,3 +10147,24 @@ button[type="button"].media-mini-bar-btn {
 	pointer-events: none;
 	opacity: 0.85;
 }
+
+/* ТЗ-04 — полоса заполнения хранилища (storage-bar): три состояния по data-level. */
+.storage-bar {
+	block-size: 0.5rem;
+	border-radius: 999px;
+	overflow: hidden;
+	background: color-mix(in oklch, var(--muted), transparent 80%);
+}
+.storage-bar__fill {
+	block-size: 100%;
+	border-radius: inherit;
+	background: var(--good, var(--accent, currentColor));
+	transition: inline-size 0.3s ease;
+}
+.storage-bar[data-level="warning"] .storage-bar__fill {
+	background: var(--warn);
+}
+.storage-bar[data-level="full"] .storage-bar__fill,
+.storage-bar[data-level="readonly"] .storage-bar__fill {
+	background: var(--bad);
+}

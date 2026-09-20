@@ -147,6 +147,7 @@ export async function recordUploads(entries) {
 			const ops = entries.map((e) => makeAdd({ ...e, at: e.at ?? now }, now)).filter(Boolean);
 			await commitOps(ops);
 		});
+		safeNotify();
 	} catch {
 		// журнал — вспомогательная бухгалтерия, заливку он ломать не вправе
 	}
@@ -193,6 +194,15 @@ export async function addTargetToGroupOf(hash, target) {
 	}
 }
 
+// Сообщает UI, что состав загруженного изменился (квота на сервере тоже): обновить остаток.
+function safeNotify() {
+	try {
+		ctx?.onChanged?.();
+	} catch {
+		// подписчик не должен ломать запись в журнал
+	}
+}
+
 // Удаляет записи (после освобождения места на сервере). Единственный случай, когда
 // ЗАКРЫТАЯ пачка переписывается: операции удалённых блобов вычищаются из своих
 // пачек (иначе имена удалённых файлов вечно лежали бы на relay). Если операции
@@ -236,6 +246,7 @@ export async function removeUploads(hashes, { markFreed = false } = {}) {
 			}
 			await rebuildUploads(await loadBatches());
 			scheduleFlush();
+			safeNotify();
 			return { ok: true };
 		});
 	} catch (e) {

@@ -1178,7 +1178,10 @@
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
 		"welcomeTooLargeForDeviceCount": "Ce contact a trop d'appareils pour envoyer une invitation en un seul message. Réessayez un peu plus tard.",
-		"blobGone": "Le fichier n’est plus disponible sur le serveur (il a peut-être été libéré du serveur)."
+		"blobGone": "Le fichier n’est plus disponible sur le serveur (il a peut-être été libéré du serveur).",
+		"fileTooLargeForServer": "« {{name}} » fait {{size}}, mais le serveur accepte des fichiers jusqu’à {{max}}.",
+		"quotaExceeded": "Pas assez de place pour « {{name}} » : {{need}} nécessaires, {{free}} libres.",
+		"storageReadonly": "Le stockage est en lecture seule pour le moment : impossible d’envoyer de nouveaux fichiers. Tout ce qui a déjà été envoyé reste accessible."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1386,6 +1389,48 @@
 			"done": "Espace libéré.",
 			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard."
 		},
-		"journalPublishFailed": "Le journal des envois n’atteint pas le relais : {{reason}}. Vos fichiers ne sont pas touchés, mais les noms n’apparaîtront pas sur les autres appareils."
+		"journalPublishFailed": "Le journal des envois n’atteint pas le relais : {{reason}}. Vos fichiers ne sont pas touchés, mais les noms n’apparaîtront pas sur les autres appareils.",
+		"quota": {
+			"unlimited": "Aucune limite d’espace sur ce serveur.",
+			"barAria": "Stockage utilisé",
+			"usedOfLimit": "{{used}} utilisés sur {{limit}}",
+			"warning": "Il en reste peu : {{free}} libres.",
+			"full": "Le stockage est plein. Libérez de l’espace ou obtenez-en plus pour envoyer de nouveaux fichiers.",
+			"readonly": "Le stockage est en lecture seule : impossible d’envoyer de nouveaux fichiers, tout ce qui a déjà été envoyé reste accessible.",
+			"getMore": "Obtenir plus d’espace",
+			"plansLink": "Offres et comment obtenir plus d’espace"
+		},
+		"notice": {
+			"readonly": "Le stockage est en lecture seule : impossible d’envoyer de nouveaux fichiers.",
+			"full": "Le stockage est plein : impossible d’envoyer de nouveaux fichiers.",
+			"warning": "Il ne reste que {{free}} sur {{limit}}.",
+			"toStorage": "Ouvrir le stockage",
+			"toPlans": "Obtenir plus d’espace"
+		}
+	},
+	"plans": {
+		"title": "Offres de stockage",
+		"intro": "L’espace sur le serveur est compté par clé : tout ce que vous envoyez compte — fichiers, aperçus, avatars.",
+		"yourUsage": "Vous utilisez {{used}} sur {{limit}}.",
+		"free": {
+			"name": "Gratuit",
+			"size": "1 Go",
+			"desc": "Suffisant pour les discussions et les fichiers courants."
+		},
+		"paid": {
+			"name": "Étendu",
+			"size": "100 Go",
+			"price": "5 $ par mois",
+			"desc": "Pour les photos, la vidéo et une archive."
+		},
+		"how": {
+			"title": "Comment obtenir plus d’espace",
+			"text": "Le paiement se fait à la main pour le moment. Écrivez à {{email}} en indiquant votre clé publique (npub) ci-dessous — nous ajouterons l’espace et vous répondrons.",
+			"write": "Écrire au support",
+			"note": "Vous pouvez partager votre clé publique sans risque : elle nous indique seulement à qui donner l’espace."
+		},
+		"mailSubject": "Plus d’espace de stockage",
+		"mailBody": "Bonjour ! Merci d’attribuer plus d’espace à ma clé : {{npub}}",
+		"back": "Retour au stockage"
 	}
 }

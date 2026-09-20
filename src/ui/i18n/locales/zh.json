@@ -1178,7 +1178,10 @@
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
 		"welcomeTooLargeForDeviceCount": "该联系人的设备太多，无法在一条消息中发送邀请。请稍后再试。",
-		"blobGone": "该文件已不在服务器上（可能已被从服务器释放）。"
+		"blobGone": "该文件已不在服务器上（可能已被从服务器释放）。",
+		"fileTooLargeForServer": "“{{name}}”大小为 {{size}}，但服务器只接受不超过 {{max}} 的文件。",
+		"quotaExceeded": "“{{name}}”空间不足：需要 {{need}}，剩余 {{free}}。",
+		"storageReadonly": "存储目前为只读：无法上传新文件，已上传的内容仍可正常打开。"
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1386,6 +1389,48 @@
 			"done": "已释放空间。",
 			"failed": "有 {{count}} 个文件未能删除。请稍后重试。"
 		},
-		"journalPublishFailed": "上传日志未能发送到中继：{{reason}}。你的文件不受影响，但其他设备上不会显示文件名。"
+		"journalPublishFailed": "上传日志未能发送到中继：{{reason}}。你的文件不受影响，但其他设备上不会显示文件名。",
+		"quota": {
+			"unlimited": "此服务器没有空间限制。",
+			"barAria": "已用存储",
+			"usedOfLimit": "已用 {{used}} / {{limit}}",
+			"warning": "空间不多了：仅剩 {{free}}。",
+			"full": "存储空间已满。请释放空间或获取更多空间后再上传新文件。",
+			"readonly": "存储为只读：无法上传新文件，已上传的内容仍可正常打开。",
+			"getMore": "获取更多空间",
+			"plansLink": "套餐与如何获取更多空间"
+		},
+		"notice": {
+			"readonly": "存储为只读：无法上传新文件。",
+			"full": "存储空间已满：无法上传新文件。",
+			"warning": "{{limit}} 中仅剩 {{free}}。",
+			"toStorage": "打开存储",
+			"toPlans": "获取更多空间"
+		}
+	},
+	"plans": {
+		"title": "存储套餐",
+		"intro": "服务器上的空间按密钥计算：你上传的一切都会计入——文件、预览、头像。",
+		"yourUsage": "你已使用 {{used}} / {{limit}}。",
+		"free": {
+			"name": "免费",
+			"size": "1 GB",
+			"desc": "足够日常聊天和普通文件使用。"
+		},
+		"paid": {
+			"name": "扩展",
+			"size": "100 GB",
+			"price": "每月 5 美元",
+			"desc": "适用于照片、视频和存档。"
+		},
+		"how": {
+			"title": "如何获取更多空间",
+			"text": "目前付款为人工处理。请发邮件到 {{email}}，并附上下方的公钥（npub），我们会为你增加空间并回复。",
+			"write": "联系支持",
+			"note": "公钥可以放心分享：它只用于告诉我们给谁增加空间。"
+		},
+		"mailSubject": "增加存储空间",
+		"mailBody": "你好！请为我的密钥增加空间：{{npub}}",
+		"back": "返回存储"
 	}
 }

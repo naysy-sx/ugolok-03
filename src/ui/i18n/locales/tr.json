@@ -1178,7 +1178,10 @@
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
 		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin.",
-		"blobGone": "Dosya artık sunucuda mevcut değil (sunucudan boşaltılmış olabilir)."
+		"blobGone": "Dosya artık sunucuda mevcut değil (sunucudan boşaltılmış olabilir).",
+		"fileTooLargeForServer": "“{{name}}” {{size}} boyutunda, ancak sunucu en fazla {{max}} boyutundaki dosyaları kabul ediyor.",
+		"quotaExceeded": "“{{name}}” için yeterli yer yok: {{need}} gerekli, {{free}} boş.",
+		"storageReadonly": "Depolama şu anda salt okunur: yeni dosya yüklenemez. Daha önce yüklediğiniz her şey açılmaya devam eder."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
@@ -1386,6 +1389,48 @@
 			"done": "Yer açıldı.",
 			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin."
 		},
-		"journalPublishFailed": "Yükleme günlüğü relay’e ulaşmıyor: {{reason}}. Dosyalarınız etkilenmez, ancak diğer cihazlarda adlar görünmez."
+		"journalPublishFailed": "Yükleme günlüğü relay’e ulaşmıyor: {{reason}}. Dosyalarınız etkilenmez, ancak diğer cihazlarda adlar görünmez.",
+		"quota": {
+			"unlimited": "Bu sunucuda yer sınırı yok.",
+			"barAria": "Kullanılan depolama",
+			"usedOfLimit": "{{limit}} içinde {{used}} kullanılıyor",
+			"warning": "Yer azalıyor: {{free}} kaldı.",
+			"full": "Depolama dolu. Yeni dosya yüklemek için yer açın veya daha fazlasını edinin.",
+			"readonly": "Depolama salt okunur: yeni dosya yüklenemez, daha önce yüklediğiniz her şey açılmaya devam eder.",
+			"getMore": "Daha fazla yer edin",
+			"plansLink": "Planlar ve daha fazla yer nasıl edinilir"
+		},
+		"notice": {
+			"readonly": "Depolama salt okunur: yeni dosya yüklenemez.",
+			"full": "Depolama dolu: yeni dosya yüklenemez.",
+			"warning": "{{limit}} içinde yalnızca {{free}} kaldı.",
+			"toStorage": "Depolamayı aç",
+			"toPlans": "Daha fazla yer edin"
+		}
+	},
+	"plans": {
+		"title": "Depolama planları",
+		"intro": "Sunucudaki yer anahtar başına sayılır: yüklediğiniz her şey sayılır — dosyalar, önizlemeler, avatarlar.",
+		"yourUsage": "{{limit}} içinden {{used}} kullanıyorsunuz.",
+		"free": {
+			"name": "Ücretsiz",
+			"size": "1 GB",
+			"desc": "Sohbetler ve günlük dosyalar için yeterli."
+		},
+		"paid": {
+			"name": "Genişletilmiş",
+			"size": "100 GB",
+			"price": "Ayda 5 $",
+			"desc": "Fotoğraf, video ve arşiv için."
+		},
+		"how": {
+			"title": "Daha fazla yer nasıl edinilir",
+			"text": "Ödeme şimdilik elle alınıyor. {{email}} adresine yazın ve aşağıdaki açık anahtarınızı (npub) belirtin — yeri ekleyip yanıtlayacağız.",
+			"write": "Destek ekibine yaz",
+			"note": "Açık anahtarınızı paylaşmakta sakınca yok: bize yalnızca yerin kime verileceğini söyler."
+		},
+		"mailSubject": "Daha fazla depolama alanı",
+		"mailBody": "Merhaba! Lütfen anahtarıma daha fazla yer verin: {{npub}}",
+		"back": "Depolamaya dön"
 	}
 }
