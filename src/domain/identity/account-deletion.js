@@ -63,6 +63,9 @@ const OWNER_PUBKEY_TABLES = [
 	"files_mountKeys",
 	"files_mount_nodes",
 	"files_mount_file_meta",
+	"uploads",
+	"uploadBatches",
+	"uploadSync",
 ];
 
 // Таблицы, owner-scoped полем "owner" (легаси-именование, этапы 11-50 —

@@ -12,6 +12,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { liveChildrenOf, ROOT_ID } from "./tree.js";
 import { loadShareMeta, saveShareMeta, saveShareKey, getShareKey, addShareGrantee, removeShareGrantee, listShareGrantees, getFileKey } from "./store.js";
 import { getManifest, getRange, putStream } from "./content.js";
+import { recordBlobs } from "../uploads/journal.js";
 import { DomainError } from "../errors.js";
 
 export const FILE_SHARE_GRANT_KIND = 30075;
@@ -34,7 +35,10 @@ export async function reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKey
 	const plaintext = await getRange(manifest, ownerFileKey, 0, manifest.size, opts);
 	const plaintextDigest = bytesToHex(sha256(plaintext));
 	const derivedKey = deriveShareFileKey(subtreeKeyHex, plaintextDigest);
-	const { manifestDigest } = await putStream(plaintext, { ...opts, name: node.name.value, mime: manifest.mime, fileKey: derivedKey });
+	const { manifestDigest, blobs } = await putStream(plaintext, { ...opts, name: node.name.value, mime: manifest.mime, fileKey: derivedKey });
+	// ТЗ-03: перезаливка в долю — тоже занятое место (тот же файл под тем же производным
+	// ключом даёт тот же блоб: журнал не дублирует запись, а дополняет цель).
+	await recordBlobs(blobs, { purpose: "share", target: opts.journalTarget ?? node.id, name: node.name.value, server: opts.serverUrl });
 	return { blob: manifestDigest, plaintextDigest };
 }
 
@@ -54,7 +58,7 @@ export async function snapshotSubtree(ownerPubkey, dbKey, treeState, nodeId, sub
 		const { id, parentId } = stack.pop();
 		const node = treeState.nodes.get(id);
 		if (node.kind === "file") {
-			const { blob, plaintextDigest } = await reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, opts);
+			const { blob, plaintextDigest } = await reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, { ...opts, journalTarget: nodeId });
 			ops.push({ type: "create", id, kind: "file", blob, parentId, name: node.name.value, origin: node.origin.value, label, plaintextDigest });
 		} else {
 			ops.push({ type: "create", id, kind: node.kind, blob: null, parentId, name: node.name.value, origin: node.origin.value, label });

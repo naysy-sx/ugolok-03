@@ -110,7 +110,8 @@
 			"view": "Vista",
 			"notifications": "Notificaciones",
 			"network": "Red",
-			"session": "Sesión"
+			"session": "Sesión",
+			"storage": "Almacenamiento"
 		},
 		"viewSectionHint": "El color de acento define toda la paleta: el fondo, las superficies y los bordes lo siguen.",
 		"themeLabel": "Tema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Abrir vídeo {{name}}",
 		"openAudioAria": "Abrir audio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "No se encontró la clave de la copia guardada."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Almacenamiento",
+		"hint": "Cuánto espacio ocupan en el servidor tus archivos subidos y qué puedes liberar.",
+		"loading": "Cargando…",
+		"empty": "Aún no has subido nada.",
+		"serverFailed": "No se pudieron obtener los datos del servidor.",
+		"retry": "Reintentar",
+		"usedTitle": "Ocupado en el servidor",
+		"usedValue": "{{size}} · archivos: {{count}}",
+		"byPurposeTitle": "Por lugar",
+		"byKindTitle": "Por tipo",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Grupos",
+			"channel": "Canales",
+			"files": "Archivos",
+			"share": "Carpetas compartidas",
+			"avatar": "Avatares",
+			"unknown": "Aún sin etiqueta"
+		},
+		"kind": {
+			"image": "Fotos",
+			"video": "Vídeo",
+			"audio": "Audio",
+			"document": "Documentos",
+			"other": "Otros",
+			"unknown": "Aún sin etiqueta"
+		},
+		"listTitle": "Subidas más grandes",
+		"showMore": "Mostrar más",
+		"unnamed": "Archivo sin nombre",
+		"unknownEntry": "Archivo subido el {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "enviado a: {{count}}",
+		"journalLoading": "Cargando nombres de archivos…",
+		"journalPartial": "Los nombres se han cargado solo en parte: algunos archivos se muestran sin nombre.",
+		"journalMore": "Cargar más nombres",
+		"journalFailed": "No se pudieron cargar los nombres desde la red. Los tamaños son exactos, pero pueden faltar algunos nombres.",
+		"reconcile": {
+			"button": "Comparar con el servidor",
+			"running": "Comparando…",
+			"needFull": "Aún no se han cargado todos los nombres. Inténtalo de nuevo; si no, archivos reales podrían parecer no reconocidos.",
+			"clean": "Todo lo que hay en el servidor está registrado.",
+			"unknownTitle": "Archivos no reconocidos: {{count}} · {{size}}",
+			"unknownRange": "Subidos {{from}} – {{to}}",
+			"unknownHint": "El servidor tiene estos archivos, pero tu registro no. Pueden pertenecer a mensajes antiguos: al borrarlos dejarán de abrirse.",
+			"deleteUnknown": "Borrar todos los no reconocidos",
+			"confirmBody": "¿Borrar {{count}} archivos no reconocidos ({{size}}) del servidor? No se puede deshacer.",
+			"missingTitle": "En el registro pero no en el servidor: {{count}}",
+			"forgetMissing": "Quitar del registro"
+		},
+		"free": {
+			"button": "Liberar espacio",
+			"title": "Liberar espacio",
+			"body": "«{{name}}» ({{size}}) se borrará del servidor.",
+			"usage": "Se envió a {{count}} lugares: dejará de abrirse para quienes aún no lo hayan descargado.",
+			"usageNone": "No hay envíos registrados de este archivo.",
+			"limit": "Lo que los destinatarios ya descargaron se queda con ellos. No se puede deshacer.",
+			"filesNote": "La entrada en «Archivos» también dejará de abrirse.",
+			"confirm": "Liberar espacio",
+			"cancel": "Cancelar",
+			"working": "Borrando… {{done}} de {{total}}",
+			"done": "Espacio liberado.",
+			"failed": "No se pudieron borrar {{count}} archivos. Inténtalo más tarde."
 		}
 	}
 }

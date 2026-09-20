@@ -110,7 +110,8 @@
 			"view": "Weergave",
 			"notifications": "Meldingen",
 			"network": "Netwerk",
-			"session": "Sessie"
+			"session": "Sessie",
+			"storage": "Opslag"
 		},
 		"viewSectionHint": "De accentkleur bepaalt het hele palet — achtergrond, oppervlakken en randen volgen hieruit.",
 		"themeLabel": "Thema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Video openen {{name}}",
 		"openAudioAria": "Audio openen {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "De sleutel van de opgeslagen kopie is niet gevonden."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Opslag",
+		"hint": "Hoeveel ruimte je geüploade bestanden op de server innemen en wat je kunt vrijmaken.",
+		"loading": "Laden…",
+		"empty": "Je hebt nog niets geüpload.",
+		"serverFailed": "Kon geen gegevens van de server ophalen.",
+		"retry": "Opnieuw proberen",
+		"usedTitle": "In gebruik op de server",
+		"usedValue": "{{size}} · bestanden: {{count}}",
+		"byPurposeTitle": "Per plek",
+		"byKindTitle": "Per type",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Groepen",
+			"channel": "Kanalen",
+			"files": "Bestanden",
+			"share": "Gedeelde mappen",
+			"avatar": "Avatars",
+			"unknown": "Nog zonder naam"
+		},
+		"kind": {
+			"image": "Foto’s",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Documenten",
+			"other": "Overig",
+			"unknown": "Nog zonder naam"
+		},
+		"listTitle": "Grootste uploads",
+		"showMore": "Meer tonen",
+		"unnamed": "Bestand zonder naam",
+		"unknownEntry": "Bestand geüpload op {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "verzonden naar: {{count}}",
+		"journalLoading": "Bestandsnamen laden…",
+		"journalPartial": "Bestandsnamen zijn maar gedeeltelijk geladen — sommige bestanden worden zonder naam getoond.",
+		"journalMore": "Meer namen laden",
+		"journalFailed": "Kon de bestandsnamen niet van het netwerk laden. De groottes kloppen, maar sommige namen kunnen ontbreken.",
+		"reconcile": {
+			"button": "Vergelijken met de server",
+			"running": "Vergelijken…",
+			"needFull": "Nog niet alle bestandsnamen zijn geladen. Probeer opnieuw — anders kunnen echte bestanden onherkend lijken.",
+			"clean": "Alles op de server is verantwoord.",
+			"unknownTitle": "Onherkende bestanden: {{count}} · {{size}}",
+			"unknownRange": "Geüpload {{from}} – {{to}}",
+			"unknownHint": "De server heeft deze bestanden, maar je logboek niet. Ze horen mogelijk bij oude berichten — na verwijderen kunnen ze niet meer worden geopend.",
+			"deleteUnknown": "Alle onherkende verwijderen",
+			"confirmBody": "{{count}} onherkende bestanden ({{size}}) van de server verwijderen? Dit kan niet ongedaan worden gemaakt.",
+			"missingTitle": "In het logboek maar niet op de server: {{count}}",
+			"forgetMissing": "Uit logboek verwijderen"
+		},
+		"free": {
+			"button": "Ruimte vrijmaken",
+			"title": "Ruimte vrijmaken",
+			"body": "“{{name}}” ({{size}}) wordt van de server gewist.",
+			"usage": "Het is naar {{count}} plekken verzonden: het kan niet meer worden geopend door wie het nog niet heeft gedownload.",
+			"usageNone": "Voor dit bestand is geen verzending vastgelegd.",
+			"limit": "Wat ontvangers al hebben gedownload, blijft bij hen. Dit kan niet ongedaan worden gemaakt.",
+			"filesNote": "Het item in “Bestanden” kan ook niet meer worden geopend.",
+			"confirm": "Ruimte vrijmaken",
+			"cancel": "Annuleren",
+			"working": "Verwijderen… {{done}} van {{total}}",
+			"done": "Ruimte vrijgemaakt.",
+			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw."
 		}
 	}
 }

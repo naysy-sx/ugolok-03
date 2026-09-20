@@ -84,13 +84,13 @@ export function useVoiceRecording() {
 	// undefined, если нечего прикреплять (recordingState !== "recorded") — тот же
 	// контракт, что buildOutgoingAttachments() в chat.jsx раньше. Голосовое
 	// ≤32КБ — inline base64 прямо в сообщении, иначе — обычная загрузка на Blossom.
-	async function buildAttachment(privKey) {
+	async function buildAttachment(privKey, options = {}) {
 		if (!recordedVoiceBlob) return undefined;
 		const bytes = new Uint8Array(await recordedVoiceBlob.arrayBuffer());
 		if (shouldInlineVoice(bytes.length)) {
 			return { type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) };
 		}
-		const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey);
+		const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey, { journal: options.journal });
 		descriptor.voice = true;
 		return descriptor;
 	}

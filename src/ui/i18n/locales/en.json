@@ -110,7 +110,8 @@
 			"view": "View",
 			"notifications": "Notifications",
 			"network": "Network",
-			"session": "Session"
+			"session": "Session",
+			"storage": "Storage"
 		},
 		"viewSectionHint": "The accent color sets the whole palette — background, surfaces, and borders follow it.",
 		"themeLabel": "Theme",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Open video {{name}}",
 		"openAudioAria": "Open audio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "The saved copy's key was not found."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Storage",
+		"hint": "How much space your uploaded files take on the server, and what you can free up.",
+		"loading": "Loading…",
+		"empty": "You haven't uploaded anything yet.",
+		"serverFailed": "Couldn't get data from the server.",
+		"retry": "Try again",
+		"usedTitle": "Used on the server",
+		"usedValue": "{{size}} · files: {{count}}",
+		"byPurposeTitle": "By place",
+		"byKindTitle": "By type",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Groups",
+			"channel": "Channels",
+			"files": "Files",
+			"share": "Shared folders",
+			"avatar": "Avatars",
+			"unknown": "Not labeled yet"
+		},
+		"kind": {
+			"image": "Photos",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Documents",
+			"other": "Other",
+			"unknown": "Not labeled yet"
+		},
+		"listTitle": "Largest uploads",
+		"showMore": "Show more",
+		"unnamed": "Unnamed file",
+		"unknownEntry": "File uploaded {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "sent to: {{count}}",
+		"journalLoading": "Loading file names…",
+		"journalPartial": "File names are loaded partially — some files are shown without a name.",
+		"journalMore": "Load more names",
+		"journalFailed": "Couldn't load file names from the network. Sizes are exact; some names may be missing.",
+		"reconcile": {
+			"button": "Check against the server",
+			"running": "Checking…",
+			"needFull": "Not all file names are loaded yet. Try again — otherwise real files could look unrecognized.",
+			"clean": "Everything on the server is accounted for.",
+			"unknownTitle": "Unrecognized files: {{count}} · {{size}}",
+			"unknownRange": "Uploaded {{from}} – {{to}}",
+			"unknownHint": "The server has these files but your journal does not. They may belong to old messages — once deleted they will stop opening.",
+			"deleteUnknown": "Delete all unrecognized",
+			"confirmBody": "Delete {{count}} unrecognized files ({{size}}) from the server? This cannot be undone.",
+			"missingTitle": "In the journal but not on the server: {{count}}",
+			"forgetMissing": "Remove from journal"
+		},
+		"free": {
+			"button": "Free up space",
+			"title": "Free up space",
+			"body": "“{{name}}” ({{size}}) will be erased from the server.",
+			"usage": "It was sent to {{count}} places: it will stop opening for everyone who has not downloaded it yet.",
+			"usageNone": "No sending is recorded for this file.",
+			"limit": "What recipients have already downloaded stays with them. This cannot be undone.",
+			"filesNote": "The entry in “Files” will stop opening too.",
+			"confirm": "Free up space",
+			"cancel": "Cancel",
+			"working": "Deleting… {{done}} of {{total}}",
+			"done": "Space freed.",
+			"failed": "Could not delete {{count}} of the files. Try again later."
 		}
 	}
 }

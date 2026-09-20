@@ -95,7 +95,12 @@ export async function putStream(
 	const manifestDigest = bytesToHex(sha256(manifestBytes));
 	await uploadBlob(serverUrl, manifestBytes, manifestDigest, privateKey, uploadOptions);
 
-	return { manifest, manifestDigest, fileKey, size };
+	// ТЗ-03: список залитых блобов (для журнала загрузок) — аддитивно, остальные поля прежние.
+	const blobs = [
+		{ role: "content", hash: uploadResponse.sha256, size: fullCiphertext.length },
+		{ role: "manifest", hash: manifestDigest, size: manifestBytes.length },
+	];
+	return { manifest, manifestDigest, fileKey, size, blobs };
 }
 
 // AUDIT-EGOROD E4. Версия формата манифеста. Раньше поля версии не было, и любое

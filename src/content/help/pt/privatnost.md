@@ -29,3 +29,7 @@ Se for crítico para você não apenas "que a conversa não seja lida", mas "que
 
 - Manter seu próprio servidor, se não quiser depender nem mesmo dos servidores do projeto.
 - Usar ferramentas de contorno de bloqueios em nível de rede, se isso for relevante para você — o Ugolok deliberadamente não se posiciona como uma ferramenta de burlar censura (veja a seção "Sobre o projeto"), mas nada impede que você o use sobre uma conexão que já configurou por conta própria.
+
+## Espaço no servidor e «libertar espaço»
+
+Em «Definições → Armazenamento» vê quanto espaço os seus ficheiros enviados ocupam no servidor. «Libertar espaço» apaga os bytes do ficheiro do servidor, não apenas a sua entrada. **Não recupera** o que um destinatário já descarregou: ele fica com uma cópia — a chave está na mensagem dele e os bytes na cache dele. Não existe um botão «apagar para todos», porque não é possível fazê-lo com honestidade. Um ficheiro que «guarda para si» a partir da mensagem de outra pessoa é agora copiado por inteiro e ocupa espaço do seu lado, não do autor.

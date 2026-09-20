@@ -110,7 +110,8 @@
 			"view": "Visual",
 			"notifications": "Notificações",
 			"network": "Rede",
-			"session": "Sessão"
+			"session": "Sessão",
+			"storage": "Armazenamento"
 		},
 		"viewSectionHint": "A cor de destaque define toda a paleta — o fundo, as superfícies e as bordas seguem a partir dela.",
 		"themeLabel": "Tema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Abrir vídeo {{name}}",
 		"openAudioAria": "Abrir áudio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "A chave da cópia guardada não foi encontrada."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Armazenamento",
+		"hint": "Quanto espaço os seus ficheiros enviados ocupam no servidor e o que pode libertar.",
+		"loading": "A carregar…",
+		"empty": "Ainda não enviou nada.",
+		"serverFailed": "Não foi possível obter os dados do servidor.",
+		"retry": "Tentar novamente",
+		"usedTitle": "Ocupado no servidor",
+		"usedValue": "{{size}} · ficheiros: {{count}}",
+		"byPurposeTitle": "Por local",
+		"byKindTitle": "Por tipo",
+		"purpose": {
+			"dm": "Conversas",
+			"group": "Grupos",
+			"channel": "Canais",
+			"files": "Ficheiros",
+			"share": "Pastas partilhadas",
+			"avatar": "Avatares",
+			"unknown": "Ainda sem nome"
+		},
+		"kind": {
+			"image": "Fotos",
+			"video": "Vídeo",
+			"audio": "Áudio",
+			"document": "Documentos",
+			"other": "Outros",
+			"unknown": "Ainda sem nome"
+		},
+		"listTitle": "Maiores envios",
+		"showMore": "Mostrar mais",
+		"unnamed": "Ficheiro sem nome",
+		"unknownEntry": "Ficheiro enviado em {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "enviado para: {{count}}",
+		"journalLoading": "A carregar nomes de ficheiros…",
+		"journalPartial": "Os nomes foram carregados só em parte — alguns ficheiros aparecem sem nome.",
+		"journalMore": "Carregar mais nomes",
+		"journalFailed": "Não foi possível carregar os nomes a partir da rede. Os tamanhos são exatos, mas alguns nomes podem faltar.",
+		"reconcile": {
+			"button": "Comparar com o servidor",
+			"running": "A comparar…",
+			"needFull": "Ainda não foram carregados todos os nomes. Tente novamente — caso contrário, ficheiros reais poderiam parecer não reconhecidos.",
+			"clean": "Tudo o que está no servidor está contabilizado.",
+			"unknownTitle": "Ficheiros não reconhecidos: {{count}} · {{size}}",
+			"unknownRange": "Enviados {{from}} – {{to}}",
+			"unknownHint": "O servidor tem estes ficheiros, mas o seu registo não. Podem pertencer a mensagens antigas — depois de apagados deixam de abrir.",
+			"deleteUnknown": "Apagar todos os não reconhecidos",
+			"confirmBody": "Apagar {{count}} ficheiros não reconhecidos ({{size}}) do servidor? Não é possível anular.",
+			"missingTitle": "No registo mas não no servidor: {{count}}",
+			"forgetMissing": "Remover do registo"
+		},
+		"free": {
+			"button": "Libertar espaço",
+			"title": "Libertar espaço",
+			"body": "“{{name}}” ({{size}}) será apagado do servidor.",
+			"usage": "Foi enviado para {{count}} locais: deixará de abrir para quem ainda não o descarregou.",
+			"usageNone": "Não há envios registados para este ficheiro.",
+			"limit": "O que os destinatários já descarregaram fica com eles. Não é possível anular.",
+			"filesNote": "A entrada em “Ficheiros” também deixará de abrir.",
+			"confirm": "Libertar espaço",
+			"cancel": "Cancelar",
+			"working": "A apagar… {{done}} de {{total}}",
+			"done": "Espaço libertado.",
+			"failed": "Não foi possível apagar {{count}} ficheiros. Tente mais tarde."
 		}
 	}
 }

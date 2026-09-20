@@ -29,3 +29,7 @@ Se per te è fondamentale non solo «che la conversazione non venga letta», ma 
 
 - Avviare un tuo server personale, se non vuoi dipendere nemmeno dai server del progetto.
 - Usare strumenti di elusione dei blocchi a livello di rete, se per te è rilevante — Ugolok non si presenta deliberatamente come uno strumento anticensura (vedi la sezione «Informazioni sul progetto»), ma nulla ti impedisce di usarlo sopra una connessione che hai già configurato.
+
+## Spazio sul server e «libera spazio»
+
+In «Impostazioni → Archiviazione» vedi quanto spazio occupano sul server i file che hai caricato. «Libera spazio» cancella i byte del file dal server, non solo la tua voce. **Non richiama** ciò che un destinatario ha già scaricato: ne conserva una copia — la chiave è nel suo messaggio, i byte nella sua cache. Non esiste un pulsante «elimina per tutti», perché non si può realizzare in modo onesto. Un file che «salvi per te» da un messaggio altrui ora viene copiato per intero e occupa spazio da te, non dall’autore.

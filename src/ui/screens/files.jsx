@@ -57,6 +57,8 @@ import { classOf } from "../../domain/media/media-ref.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFilesStreaming } from "../../domain/files/stream-upload.js";
+import { recordBlobs, getGroupOfHash } from "../../domain/uploads/journal.js";
+import FreeSpaceDialog from "../components/free-space-dialog.jsx";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
 import FileKindIcon from "../components/file-kind-icon.jsx";
@@ -272,6 +274,7 @@ export default function Files() {
 	// v0.1 производит только read-гранты).
 	const [view, setView] = useState("own"); // "own" | "mounts"
 	const [shareDialogTarget, setShareDialogTarget] = useState(null); // nodeId папки
+	const [freeDialog, setFreeDialog] = useState(null); // ТЗ-03: диалог «освободить место»
 	const [shareSelectedPubkeys, setShareSelectedPubkeys] = useState(() => new Set());
 	const [shareBusy, setShareBusy] = useState(false);
 	const [shareError, setShareError] = useState("");
@@ -365,6 +368,8 @@ export default function Files() {
 				concurrency: 2,
 				signal: controller.signal,
 				onJobDone: (i, result) => {
+					// ТЗ-03: журнал загрузок (purpose files, цель — папка, куда грузим).
+					recordBlobs(result.blobs, { purpose: "files", target: currentFolderId.value, name: files[i].name, server: BLOSSOM_URL }).catch(() => {});
 					succeeded.push({ i, result });
 					noteSettled();
 					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
@@ -687,6 +692,23 @@ export default function Files() {
 	function setLayoutForType(next) {
 		if (typeFilter === "all") return;
 		setViewOverride((prev) => ({ ...prev, [typeFilter]: next }));
+	}
+
+	// ТЗ-03, раздел 6: «освободить место» — стирает байты этого файла с сервера. Журнал
+	// знает все блобы вложения; без журнала (новое устройство) берём то, что видно из
+	// самого узла: манифест и содержимое.
+	async function openFreeSpace(entry) {
+		try {
+			const group = await getGroupOfHash(entry.blob);
+			if (group) {
+				setFreeDialog({ hashes: group.rows.map((r) => r.hash), name: entry.displayName, size: group.rows.reduce((sum, r) => sum + r.size, 0), targets: group.rows.flatMap((r) => r.targets).filter((x, i, a) => a.indexOf(x) === i), inFiles: true });
+				return;
+			}
+			const manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+			setFreeDialog({ hashes: [entry.blob, manifest.blobSha256], name: entry.displayName, size: manifest.size, targets: [], inFiles: true });
+		} catch (err) {
+			setUploadError(translateErrorMessage(err));
+		}
 	}
 
 	async function handleDelete(ids) {
@@ -1064,6 +1086,9 @@ export default function Files() {
 														<IconGlobe /> {t("files.shareButton")}
 													</button>
 												))}
+											{entry.kind === "file" && (
+												<button type="button" onClick={() => openFreeSpace(entry)}>{t("storage.free.button")}</button>
+											)}
 											<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 												<IconTrash /> {t("common.delete")}
 											</button>
@@ -1176,6 +1201,9 @@ export default function Files() {
 												</button>
 											)
 										)}
+										{entry.kind === "file" && (
+											<button type="button" onClick={() => openFreeSpace(entry)}>{t("storage.free.button")}</button>
+										)}
 										<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 											<IconTrash /> {t("common.delete")}
 										</button>
@@ -1189,6 +1217,7 @@ export default function Files() {
 			</div>
 			)}
 		</Screen>
+		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={BLOSSOM_URL} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} />}
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}

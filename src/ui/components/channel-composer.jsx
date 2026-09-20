@@ -47,9 +47,10 @@ export default function ChannelComposer({ ownerPubkey, privKey, dbKey, channelId
 		setError("");
 		try {
 			let attachments = [];
-			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey);
+			const journal = { purpose: "channel", target: channelId }; // ТЗ-03
+			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey, undefined, { journal });
 			else if (voice.hasRecording) {
-				const descriptor = await voice.buildAttachment(privKey);
+				const descriptor = await voice.buildAttachment(privKey, { journal });
 				if (descriptor) attachments = [descriptor];
 			}
 			await sendChannelMessage(ownerPubkey, privKey, dbKey, channelId, text, attachments, publish);

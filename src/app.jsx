@@ -42,6 +42,7 @@ import ServicesStatusPanel from "./ui/components/services-status-panel.jsx";
 import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import { roomsScreenActive, roomsMinimized } from "./ui/signals/rooms.js";
+import "./ui/signals/uploads.js";
 
 onLock(() => {
 	roomsScreenActive.value = false;

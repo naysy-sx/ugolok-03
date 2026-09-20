@@ -29,3 +29,7 @@ Als het voor jou cruciaal is niet alleen "dat het gesprek niet wordt gelezen", m
 
 - Je eigen server draaien als je niet eens van de servers van het project afhankelijk wilt zijn.
 - Netwerkniveau-tools voor het omzeilen van blokkades gebruiken als dat voor jou relevant is — Ugolok wordt bewust niet gepositioneerd als een tool voor het omzeilen van censuur zelf (zie de sectie "Over het project"), maar niets weerhoudt je ervan het te gebruiken bovenop een verbinding die je al zelf hebt ingesteld.
+
+## Ruimte op de server en “ruimte vrijmaken”
+
+Onder “Instellingen → Opslag” zie je hoeveel ruimte je geüploade bestanden op de server innemen. “Ruimte vrijmaken” wist de bytes van het bestand van de server, niet alleen jouw vermelding. Het **haalt niet terug** wat een ontvanger al heeft gedownload: die houdt een kopie — de sleutel zit in zijn bericht en de bytes in zijn cache. Een knop “voor iedereen verwijderen” bestaat niet, omdat die eerlijk niet te maken is. Een bestand dat je uit iemands bericht “voor jezelf bewaart”, wordt nu volledig gekopieerd en neemt ruimte bij jou in, niet bij de auteur.

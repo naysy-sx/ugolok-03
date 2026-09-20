@@ -110,7 +110,8 @@
 			"view": "Aspetto",
 			"notifications": "Notifiche",
 			"network": "Rete",
-			"session": "Sessione"
+			"session": "Sessione",
+			"storage": "Archiviazione"
 		},
 		"viewSectionHint": "Il colore d'accento definisce l'intera palette — sfondo, superfici e bordi lo seguono.",
 		"themeLabel": "Tema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Apri video {{name}}",
 		"openAudioAria": "Apri audio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "La chiave della copia salvata non è stata trovata."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Archiviazione",
+		"hint": "Quanto spazio occupano sul server i file che hai caricato e cosa puoi liberare.",
+		"loading": "Caricamento…",
+		"empty": "Non hai ancora caricato nulla.",
+		"serverFailed": "Impossibile ottenere i dati dal server.",
+		"retry": "Riprova",
+		"usedTitle": "Occupato sul server",
+		"usedValue": "{{size}} · file: {{count}}",
+		"byPurposeTitle": "Per posizione",
+		"byKindTitle": "Per tipo",
+		"purpose": {
+			"dm": "Chat",
+			"group": "Gruppi",
+			"channel": "Canali",
+			"files": "File",
+			"share": "Cartelle condivise",
+			"avatar": "Avatar",
+			"unknown": "Ancora senza etichetta"
+		},
+		"kind": {
+			"image": "Foto",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Documenti",
+			"other": "Altro",
+			"unknown": "Ancora senza etichetta"
+		},
+		"listTitle": "Caricamenti più grandi",
+		"showMore": "Mostra altro",
+		"unnamed": "File senza nome",
+		"unknownEntry": "File caricato il {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "inviato a: {{count}}",
+		"journalLoading": "Caricamento dei nomi dei file…",
+		"journalPartial": "I nomi sono stati caricati solo in parte: alcuni file compaiono senza nome.",
+		"journalMore": "Carica altri nomi",
+		"journalFailed": "Impossibile caricare i nomi dalla rete. Le dimensioni sono esatte, ma alcuni nomi potrebbero mancare.",
+		"reconcile": {
+			"button": "Confronta con il server",
+			"running": "Confronto…",
+			"needFull": "Non tutti i nomi sono ancora caricati. Riprova, altrimenti file reali potrebbero sembrare non riconosciuti.",
+			"clean": "Tutto ciò che è sul server è registrato.",
+			"unknownTitle": "File non riconosciuti: {{count}} · {{size}}",
+			"unknownRange": "Caricati {{from}} – {{to}}",
+			"unknownHint": "Il server ha questi file ma il tuo registro no. Potrebbero appartenere a vecchi messaggi: dopo l’eliminazione non si apriranno più.",
+			"deleteUnknown": "Elimina tutti i non riconosciuti",
+			"confirmBody": "Eliminare {{count}} file non riconosciuti ({{size}}) dal server? Non si può annullare.",
+			"missingTitle": "Nel registro ma non sul server: {{count}}",
+			"forgetMissing": "Rimuovi dal registro"
+		},
+		"free": {
+			"button": "Libera spazio",
+			"title": "Libera spazio",
+			"body": "«{{name}}» ({{size}}) verrà cancellato dal server.",
+			"usage": "È stato inviato in {{count}} posti: non si aprirà più per chi non l’ha ancora scaricato.",
+			"usageNone": "Per questo file non risultano invii.",
+			"limit": "Ciò che i destinatari hanno già scaricato resta con loro. Non si può annullare.",
+			"filesNote": "Anche la voce in «File» smetterà di aprirsi.",
+			"confirm": "Libera spazio",
+			"cancel": "Annulla",
+			"working": "Eliminazione… {{done}} di {{total}}",
+			"done": "Spazio liberato.",
+			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi."
 		}
 	}
 }

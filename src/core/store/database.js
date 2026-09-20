@@ -429,6 +429,17 @@ db.version(37).stores({
   peerPresence: "[ownerPubkey+contactPubkey]",
 });
 
+// ТЗ-03 — журнал загрузок (domain/uploads). uploads — материализованное состояние
+// («что я залил», ключ — hash блоба); uploadBatches — исходные пачки операций (по ним
+// журнал синхронизируется между устройствами и пересобирается); uploadSync — отметка
+// «докуда дочитаны пачки с relay». Имена файлов и цели шифруются dbKey; индексируемые
+// поля (at/group/purpose) остаются открытыми — см. table-fields.js.
+db.version(38).stores({
+  uploads: "[ownerPubkey+hash], ownerPubkey, [ownerPubkey+at], [ownerPubkey+group], [ownerPubkey+purpose]",
+  uploadBatches: "[ownerPubkey+d], ownerPubkey",
+  uploadSync: "ownerPubkey",
+});
+
 // AUDIT-EGOROD E3: вкладка с НОВЫМ кодом хочет поднять версию базы и ждёт, пока
 // старые вкладки отпустят соединение. Штатное поведение Dexie — тихо закрыть
 // соединение, после чего любая операция этой вкладки падает DatabaseClosedError,

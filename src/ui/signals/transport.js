@@ -1146,6 +1146,16 @@ export async function receiveLamportTick(ownerPubkey, remoteLamportTs) {
 // Этап 2 (MESSAGE-DELIVERY-TZ.md, З2.3/З2.4) — oneShotRequest: срок (10с) +
 // гарантированная очистка обработчика на любом исходе (было известное
 // ограничение — обработчик оставался в цепочке навсегда, см. git-историю).
+// ТЗ-03 — журнал загрузок: одноразовый запрос пачек по требованию (экран хранилища).
+// Автор пачек — производный ключ (не основной), поэтому в стартовую синхронизацию
+// ({authors:[я]}) они не попадают. filter целиком задаёт domain/uploads/journal.js.
+export async function fetchJournalEvents(filter) {
+	if (!connection) {
+		throw new Error("нет активного соединения — вызовите ensureConnected() перед fetchJournalEvents()");
+	}
+	return oneShotRequest(connection, [filter], { timeoutMs: 15000, verifyBatch: verifyBatchFn });
+}
+
 export async function fetchProfiles(pubkeys) {
 	if (pubkeys.length === 0) return new Map();
 	if (!connection) {

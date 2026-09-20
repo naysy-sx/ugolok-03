@@ -2,6 +2,7 @@ import { useState, useCallback } from "preact/hooks";
 import * as core from "./attachment-tray-core.js";
 import { errorMessage } from "../signals/i18n.js";
 import { uploadMessageAttachmentStreaming, referenceStoredFile } from "../../domain/messaging/attachments.js";
+import { addTargetToGroupOf } from "../../domain/uploads/journal.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
 
@@ -47,7 +48,8 @@ export function useAttachmentTray({ maxItems }) {
 	// же содержимого не страшен, но недогруженный PUT должен прерываться).
 	const uploadAll = useCallback(
 		async (privKey, onProgress, options = {}) => {
-			const { signal } = options;
+			// options.journal = {purpose, target} — куда уходит вложение (журнал загрузок, ТЗ-03).
+			const { signal, journal } = options;
 			const jobs = core.planUpload(state);
 			const results = [];
 			const failures = [];
@@ -61,8 +63,10 @@ export function useAttachmentTray({ maxItems }) {
 					let descriptor;
 					if (job.kind === "reference") {
 						descriptor = referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest);
+						// Новых байтов нет — журнал лишь дополняет «куда отправлено» у уже залитой группы.
+						if (journal?.target) await addTargetToGroupOf(job.manifestDigest, journal.target);
 					} else {
-						descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey, { signal });
+						descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal });
 					}
 					if (job.isImage) descriptor.position = job.position;
 					if (job.layout) descriptor.layout = job.layout;

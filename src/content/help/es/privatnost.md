@@ -29,3 +29,7 @@ Si para ti es crítico no solo «que no se lea la conversación», sino «que no
 
 - Montar tu propio servidor si no quieres depender ni siquiera de los servidores del proyecto.
 - Usar herramientas de elusión de bloqueos a nivel de red si es relevante para ti — Ugolok deliberadamente no se presenta como una herramienta contra la censura (ver la sección «Sobre el proyecto»), pero nada impide usarlo sobre una conexión que ya hayas configurado tú mismo.
+
+## Espacio en el servidor y «liberar espacio»
+
+En «Ajustes → Almacenamiento» ves cuánto espacio ocupan en el servidor tus archivos subidos. «Liberar espacio» borra los bytes del archivo del servidor, no solo tu entrada. **No recupera** lo que un destinatario ya descargó: conserva una copia; la clave está en su mensaje y los bytes en su caché. No existe un botón «borrar para todos» porque no se puede hacer de forma honesta. Un archivo que «guardas para ti» desde un mensaje ajeno ahora se copia por completo y ocupa espacio en tu cuenta, no en la del autor.

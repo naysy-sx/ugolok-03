@@ -136,7 +136,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: channelId } });
 			}
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
 			for (const groupId of originalGroupIds) {

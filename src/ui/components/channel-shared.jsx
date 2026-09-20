@@ -62,7 +62,7 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 		setBusy(true);
 		setError("");
 		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: channelId } }) : [];
 			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments });
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
@@ -162,7 +162,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 		setBusy(true);
 		setError("");
 		try {
-			const added = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
+			const added = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: post.channelId } }) : [];
 			await editPost(ownerPubkey, privKey, dbKey, post.id, { text, attachments: [...kept, ...added], title: title.trim() || null }, publish);
 			onSaved();
 		} catch (err) {
@@ -270,7 +270,7 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 		setError("");
 		try {
 			let attachments = [];
-			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey);
+			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: channelId } });
 			else if (voice.hasRecording) {
 				const descriptor = await voice.buildAttachment(privKey);
 				if (descriptor) attachments = [descriptor];

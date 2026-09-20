@@ -424,9 +424,10 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// UI: старт записи вызывает tray.reset(), выбор файла сбрасывает запись),
 	// поэтому здесь простое ветвление, не слияние.
 	async function buildOutgoingAttachments() {
-		if (tray.items.length > 0) return tray.uploadAll(privKey);
+		const journal = { purpose: "dm", target: contactPubkey }; // ТЗ-03: куда уходит файл
+		if (tray.items.length > 0) return tray.uploadAll(privKey, undefined, { journal });
 		if (voice.hasRecording) {
-			const descriptor = await voice.buildAttachment(privKey);
+			const descriptor = await voice.buildAttachment(privKey, { journal });
 			return descriptor ? [descriptor] : undefined;
 		}
 		return undefined;
@@ -911,7 +912,7 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 		setError("");
 		setBusy(true);
 		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : undefined;
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "dm", target: contactPubkey } }) : undefined;
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			const publishToRecipient = (event) => publishToContact(event, recipient);
 			const lamportTs = await nextLamportTick(ownerPubkey);

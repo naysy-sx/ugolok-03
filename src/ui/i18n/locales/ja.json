@@ -110,7 +110,8 @@
 			"view": "表示",
 			"notifications": "通知",
 			"network": "ネットワーク",
-			"session": "セッション"
+			"session": "セッション",
+			"storage": "ストレージ"
 		},
 		"viewSectionHint": "アクセントカラーがパレット全体を決めます — 背景、表面、境界線はそれに従います。",
 		"themeLabel": "テーマ",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "動画を開く {{name}}",
 		"openAudioAria": "音声を開く {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "保存したコピーのキーが見つかりません。"
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "ストレージ",
+		"hint": "アップロードしたファイルがサーバーで使っている容量と、空けられる分を確認できます。",
+		"loading": "読み込み中…",
+		"empty": "まだ何もアップロードしていません。",
+		"serverFailed": "サーバーからデータを取得できませんでした。",
+		"retry": "再試行",
+		"usedTitle": "サーバーでの使用量",
+		"usedValue": "{{size}} · ファイル数: {{count}}",
+		"byPurposeTitle": "場所別",
+		"byKindTitle": "種類別",
+		"purpose": {
+			"dm": "チャット",
+			"group": "グループ",
+			"channel": "チャンネル",
+			"files": "ファイル",
+			"share": "共有フォルダ",
+			"avatar": "アバター",
+			"unknown": "名前未取得"
+		},
+		"kind": {
+			"image": "写真",
+			"video": "動画",
+			"audio": "音声",
+			"document": "書類",
+			"other": "その他",
+			"unknown": "名前未取得"
+		},
+		"listTitle": "サイズの大きいアップロード",
+		"showMore": "さらに表示",
+		"unnamed": "名前のないファイル",
+		"unknownEntry": "{{date}} にアップロードしたファイル",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "送信先: {{count}}",
+		"journalLoading": "ファイル名を読み込み中…",
+		"journalPartial": "ファイル名を一部しか読み込めていません。名前なしで表示されるファイルがあります。",
+		"journalMore": "ファイル名をさらに読み込む",
+		"journalFailed": "ネットワークからファイル名を読み込めませんでした。サイズは正確ですが、名前が表示されない場合があります。",
+		"reconcile": {
+			"button": "サーバーと照合",
+			"running": "照合中…",
+			"needFull": "ファイル名がまだ全部は読み込まれていません。もう一度お試しください。そうしないと通常のファイルが不明扱いになる恐れがあります。",
+			"clean": "サーバー上のものはすべて把握できています。",
+			"unknownTitle": "不明なファイル: {{count}}件 · {{size}}",
+			"unknownRange": "アップロード {{from}} – {{to}}",
+			"unknownHint": "これらのファイルはサーバーにありますが、あなたのジャーナルにはありません。古いメッセージで使われている可能性があり、削除すると開けなくなります。",
+			"deleteUnknown": "不明なファイルをすべて削除",
+			"confirmBody": "サーバーから不明なファイル {{count}} 件（{{size}}）を削除しますか？ 元に戻せません。",
+			"missingTitle": "ジャーナルにあるがサーバーにない: {{count}}件",
+			"forgetMissing": "ジャーナルから外す"
+		},
+		"free": {
+			"button": "容量を空ける",
+			"title": "容量を空ける",
+			"body": "「{{name}}」（{{size}}）をサーバーから消去します。",
+			"usage": "{{count}} か所に送信されています。まだダウンロードしていない人は開けなくなります。",
+			"usageNone": "このファイルの送信記録はありません。",
+			"limit": "受信者がすでにダウンロードした分は相手の手元に残ります。元に戻せません。",
+			"filesNote": "「ファイル」内の項目も開けなくなります。",
+			"confirm": "容量を空ける",
+			"cancel": "キャンセル",
+			"working": "削除中… {{done}} / {{total}}",
+			"done": "容量を空けました。",
+			"failed": "{{count}} 件のファイルを削除できませんでした。後でもう一度お試しください。"
 		}
 	}
 }
