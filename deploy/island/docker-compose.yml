@@ -37,7 +37,7 @@ services:
     # Готовый образ форка (репозиторий ugolok-blossom, UPSTREAM.md там же).
     # Тег ПИНИТСЯ точно: обновление — осознанная смена этой строки. Откат —
     # возврат прежнего тега и docker compose up -d; данные (том) не затрагиваются.
-    image: git.ugolok.tech/naysy/ugolok-blossom:1.0.0
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.1.0
     container_name: ugolok-blossom
     restart: unless-stopped
     volumes:
