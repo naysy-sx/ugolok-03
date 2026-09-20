@@ -1,3 +1,4 @@
+import { recordUploads } from '../uploads/journal.js';
 import { safePictureUrl } from '../media/url-guard.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -43,6 +44,8 @@ export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, o
     throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
   }
   const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  // ТЗ-03: аватар — тоже занятое место (публичный блоб без манифеста).
+  await recordUploads([{ hash: sha256Hex, size: fileBytes.length, role: 'content', purpose: 'avatar', target: 'profile', name: 'avatar', server: serverUrl }]);
   return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);
 }
 

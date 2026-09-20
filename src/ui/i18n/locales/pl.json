@@ -110,7 +110,8 @@
 			"view": "Widok",
 			"notifications": "Powiadomienia",
 			"network": "Sieć",
-			"session": "Sesja"
+			"session": "Sesja",
+			"storage": "Pamięć"
 		},
 		"viewSectionHint": "Kolor akcentu określa całą paletę — tło, powierzchnie i obramowania są od niego zależne.",
 		"themeLabel": "Motyw",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Otwórz wideo {{name}}",
 		"openAudioAria": "Otwórz audio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Nie znaleziono klucza zapisanej kopii."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Pamięć",
+		"hint": "Ile miejsca na serwerze zajmują wysłane przez Ciebie pliki i co można zwolnić.",
+		"loading": "Wczytywanie…",
+		"empty": "Nic jeszcze nie wysłano.",
+		"serverFailed": "Nie udało się pobrać danych z serwera.",
+		"retry": "Spróbuj ponownie",
+		"usedTitle": "Zajęte na serwerze",
+		"usedValue": "{{size}} · plików: {{count}}",
+		"byPurposeTitle": "Według miejsca",
+		"byKindTitle": "Według typu",
+		"purpose": {
+			"dm": "Rozmowy",
+			"group": "Grupy",
+			"channel": "Kanały",
+			"files": "Pliki",
+			"share": "Udostępnione foldery",
+			"avatar": "Awatary",
+			"unknown": "Jeszcze bez opisu"
+		},
+		"kind": {
+			"image": "Zdjęcia",
+			"video": "Wideo",
+			"audio": "Audio",
+			"document": "Dokumenty",
+			"other": "Inne",
+			"unknown": "Jeszcze bez opisu"
+		},
+		"listTitle": "Największe wysłane pliki",
+		"showMore": "Pokaż więcej",
+		"unnamed": "Plik bez nazwy",
+		"unknownEntry": "Plik wysłany {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "wysłano do: {{count}}",
+		"journalLoading": "Wczytywanie nazw plików…",
+		"journalPartial": "Nazwy wczytano tylko częściowo — część plików jest widoczna bez nazwy.",
+		"journalMore": "Wczytaj więcej nazw",
+		"journalFailed": "Nie udało się wczytać nazw z sieci. Rozmiary są dokładne, ale części nazw może brakować.",
+		"reconcile": {
+			"button": "Porównaj z serwerem",
+			"running": "Porównuję…",
+			"needFull": "Nie wszystkie nazwy są jeszcze wczytane. Spróbuj ponownie — inaczej prawdziwe pliki mogłyby wyglądać na nierozpoznane.",
+			"clean": "Wszystko, co jest na serwerze, jest ujęte.",
+			"unknownTitle": "Nierozpoznane pliki: {{count}} · {{size}}",
+			"unknownRange": "Wysłane {{from}} – {{to}}",
+			"unknownHint": "Serwer ma te pliki, ale nie ma ich w Twoim dzienniku. Mogą należeć do starych wiadomości — po usunięciu przestaną się otwierać.",
+			"deleteUnknown": "Usuń wszystkie nierozpoznane",
+			"confirmBody": "Usunąć {{count}} nierozpoznanych plików ({{size}}) z serwera? Nie można tego cofnąć.",
+			"missingTitle": "W dzienniku, ale nie na serwerze: {{count}}",
+			"forgetMissing": "Usuń z dziennika"
+		},
+		"free": {
+			"button": "Zwolnij miejsce",
+			"title": "Zwolnij miejsce",
+			"body": "„{{name}}” ({{size}}) zostanie usunięty z serwera.",
+			"usage": "Wysłano go w {{count}} miejsc: przestanie się otwierać u wszystkich, którzy jeszcze go nie pobrali.",
+			"usageNone": "Brak zapisu o wysłaniu tego pliku.",
+			"limit": "To, co odbiorcy już pobrali, zostaje u nich. Nie można tego cofnąć.",
+			"filesNote": "Wpis w „Plikach” też przestanie się otwierać.",
+			"confirm": "Zwolnij miejsce",
+			"cancel": "Anuluj",
+			"working": "Usuwanie… {{done}} z {{total}}",
+			"done": "Miejsce zwolnione.",
+			"failed": "Nie udało się usunąć plików: {{count}}. Spróbuj później."
 		}
 	}
 }

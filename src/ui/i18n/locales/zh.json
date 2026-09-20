@@ -110,7 +110,8 @@
 			"view": "外观",
 			"notifications": "通知",
 			"network": "网络",
-			"session": "会话"
+			"session": "会话",
+			"storage": "存储"
 		},
 		"viewSectionHint": "强调色决定整个配色方案 — 背景、表面和边框都随之变化。",
 		"themeLabel": "主题",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "打开视频 {{name}}",
 		"openAudioAria": "打开音频 {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "未找到已保存副本的密钥。"
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "存储",
+		"hint": "查看你上传的文件在服务器上占用了多少空间，以及可以释放什么。",
+		"loading": "加载中…",
+		"empty": "你还没有上传任何内容。",
+		"serverFailed": "无法从服务器获取数据。",
+		"retry": "重试",
+		"usedTitle": "服务器上已占用",
+		"usedValue": "{{size}} · 文件数：{{count}}",
+		"byPurposeTitle": "按位置",
+		"byKindTitle": "按类型",
+		"purpose": {
+			"dm": "聊天",
+			"group": "群组",
+			"channel": "频道",
+			"files": "文件",
+			"share": "共享文件夹",
+			"avatar": "头像",
+			"unknown": "尚无名称"
+		},
+		"kind": {
+			"image": "照片",
+			"video": "视频",
+			"audio": "音频",
+			"document": "文档",
+			"other": "其他",
+			"unknown": "尚无名称"
+		},
+		"listTitle": "最大的上传",
+		"showMore": "显示更多",
+		"unnamed": "未命名文件",
+		"unknownEntry": "{{date}} 上传的文件",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "已发送到：{{count}}",
+		"journalLoading": "正在加载文件名…",
+		"journalPartial": "文件名只加载了一部分——部分文件显示为无名称。",
+		"journalMore": "加载更多名称",
+		"journalFailed": "无法从网络加载文件名。大小是准确的，但部分名称可能缺失。",
+		"reconcile": {
+			"button": "与服务器核对",
+			"running": "正在核对…",
+			"needFull": "文件名尚未全部加载。请重试——否则正常文件可能被显示为无法识别。",
+			"clean": "服务器上的内容都已记录。",
+			"unknownTitle": "无法识别的文件：{{count}} 个 · {{size}}",
+			"unknownRange": "上传时间 {{from}} – {{to}}",
+			"unknownHint": "服务器上有这些文件，但你的日志里没有。它们可能属于旧消息——删除后将无法再打开。",
+			"deleteUnknown": "删除所有无法识别的文件",
+			"confirmBody": "要从服务器删除 {{count}} 个无法识别的文件（{{size}}）吗？此操作无法撤销。",
+			"missingTitle": "日志中有、服务器上没有：{{count}} 个",
+			"forgetMissing": "从日志中移除"
+		},
+		"free": {
+			"button": "释放空间",
+			"title": "释放空间",
+			"body": "“{{name}}”（{{size}}）将从服务器上删除。",
+			"usage": "它已发送到 {{count}} 个位置：尚未下载的人将无法再打开它。",
+			"usageNone": "没有该文件的发送记录。",
+			"limit": "接收者已经下载的内容会留在他们那里，此操作无法撤销。",
+			"filesNote": "“文件”中的对应条目也将无法打开。",
+			"confirm": "释放空间",
+			"cancel": "取消",
+			"working": "正在删除… {{done}} / {{total}}",
+			"done": "已释放空间。",
+			"failed": "有 {{count}} 个文件未能删除。请稍后重试。"
 		}
 	}
 }

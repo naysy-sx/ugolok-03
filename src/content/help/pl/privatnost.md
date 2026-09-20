@@ -29,3 +29,7 @@ Jeśli dla ciebie kluczowe jest nie tylko to, „żeby rozmowa nie była czytana
 
 - Uruchomić własny serwer, jeśli nie chcesz zależeć nawet od serwerów projektu.
 - Korzystać z narzędzi omijania blokad na poziomie sieci, jeśli jest to dla ciebie istotne — Ugolok świadomie nie jest pozycjonowany jako narzędzie do obchodzenia cenzury (patrz sekcja „O projekcie”), ale nic nie stoi na przeszkodzie, by korzystać z niego na już skonfigurowanym przez ciebie połączeniu.
+
+## Miejsce na serwerze i „zwolnij miejsce”
+
+W „Ustawienia → Pamięć” zobaczysz, ile miejsca na serwerze zajmują wysłane przez Ciebie pliki. „Zwolnij miejsce” usuwa z serwera bajty pliku, a nie tylko Twój wpis. **Nie cofa** tego, co odbiorca już pobrał: zachowuje kopię — klucz jest w jego wiadomości, a bajty w jego pamięci podręcznej. Nie ma przycisku „usuń u wszystkich”, bo nie da się go zrobić uczciwie. Plik, który „zapisujesz u siebie” z cudzej wiadomości, jest teraz kopiowany w całości i zajmuje miejsce u Ciebie, a nie u autora.

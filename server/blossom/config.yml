@@ -40,3 +40,8 @@ access_control_rules:
   - action: "ALLOW"
     pubkey: "ALL"
     resource: "GET"
+
+# Хранилище байтов (форк 1.1.0+). disk — файлы в blobs_dir. Для локального MinIO
+# положите рядом blossom.env (см. run.sh): STORAGE_MODE=s3 и параметры S3_*.
+storage:
+  mode: disk

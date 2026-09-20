@@ -110,7 +110,8 @@
 			"view": "Affichage",
 			"notifications": "Notifications",
 			"network": "Réseau",
-			"session": "Session"
+			"session": "Session",
+			"storage": "Stockage"
 		},
 		"viewSectionHint": "La couleur d'accent définit toute la palette — l'arrière-plan, les surfaces et les bordures en découlent.",
 		"themeLabel": "Thème",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} o",
 			"kb": "{{count}} Ko",
-			"mb": "{{count}} Mo"
+			"mb": "{{count}} Mo",
+			"gb": "{{count}} Go"
 		},
 		"openVideoAria": "Ouvrir la vidéo {{name}}",
 		"openAudioAria": "Ouvrir l'audio {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "La clé de la copie enregistrée est introuvable."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Stockage",
+		"hint": "L’espace que vos fichiers envoyés occupent sur le serveur, et ce que vous pouvez libérer.",
+		"loading": "Chargement…",
+		"empty": "Vous n’avez encore rien envoyé.",
+		"serverFailed": "Impossible de récupérer les données du serveur.",
+		"retry": "Réessayer",
+		"usedTitle": "Occupé sur le serveur",
+		"usedValue": "{{size}} · fichiers : {{count}}",
+		"byPurposeTitle": "Par emplacement",
+		"byKindTitle": "Par type",
+		"purpose": {
+			"dm": "Discussions",
+			"group": "Groupes",
+			"channel": "Canaux",
+			"files": "Fichiers",
+			"share": "Dossiers partagés",
+			"avatar": "Avatars",
+			"unknown": "Pas encore nommé"
+		},
+		"kind": {
+			"image": "Photos",
+			"video": "Vidéo",
+			"audio": "Audio",
+			"document": "Documents",
+			"other": "Autre",
+			"unknown": "Pas encore nommé"
+		},
+		"listTitle": "Plus gros envois",
+		"showMore": "Afficher plus",
+		"unnamed": "Fichier sans nom",
+		"unknownEntry": "Fichier envoyé le {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "envoyé à : {{count}}",
+		"journalLoading": "Chargement des noms de fichiers…",
+		"journalPartial": "Les noms ne sont que partiellement chargés : certains fichiers s’affichent sans nom.",
+		"journalMore": "Charger plus de noms",
+		"journalFailed": "Impossible de charger les noms depuis le réseau. Les tailles sont exactes, certains noms peuvent manquer.",
+		"reconcile": {
+			"button": "Comparer avec le serveur",
+			"running": "Comparaison…",
+			"needFull": "Tous les noms ne sont pas encore chargés. Réessayez — sinon de vrais fichiers pourraient paraître non reconnus.",
+			"clean": "Tout ce qui est sur le serveur est comptabilisé.",
+			"unknownTitle": "Fichiers non reconnus : {{count}} · {{size}}",
+			"unknownRange": "Envoyés {{from}} – {{to}}",
+			"unknownHint": "Le serveur contient ces fichiers, mais pas votre journal. Ils peuvent appartenir à d’anciens messages : une fois supprimés, ils ne s’ouvriront plus.",
+			"deleteUnknown": "Supprimer tous les non reconnus",
+			"confirmBody": "Supprimer {{count}} fichiers non reconnus ({{size}}) du serveur ? Action irréversible.",
+			"missingTitle": "Dans le journal mais pas sur le serveur : {{count}}",
+			"forgetMissing": "Retirer du journal"
+		},
+		"free": {
+			"button": "Libérer de l’espace",
+			"title": "Libérer de l’espace",
+			"body": "« {{name}} » ({{size}}) sera effacé du serveur.",
+			"usage": "Il a été envoyé à {{count}} endroits : il ne s’ouvrira plus pour ceux qui ne l’ont pas encore téléchargé.",
+			"usageNone": "Aucun envoi n’est enregistré pour ce fichier.",
+			"limit": "Ce que les destinataires ont déjà téléchargé leur reste. Action irréversible.",
+			"filesNote": "L’entrée dans « Fichiers » ne s’ouvrira plus non plus.",
+			"confirm": "Libérer de l’espace",
+			"cancel": "Annuler",
+			"working": "Suppression… {{done}} sur {{total}}",
+			"done": "Espace libéré.",
+			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard."
 		}
 	}
 }

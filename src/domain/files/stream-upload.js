@@ -100,7 +100,12 @@ export async function putFileStreaming(
 	const manifestDigest = bytesToHex(sha256(manifestBytes));
 	await uploadBlob(serverUrl, manifestBytes, manifestDigest, privateKey, uploadOptions);
 
-	return { manifest, manifestDigest, fileKey, size };
+	// ТЗ-03: список залитых блобов (для журнала загрузок) — аддитивно.
+	const blobs = [
+		{ role: "content", hash: uploadResponse.sha256, size: body.size },
+		{ role: "manifest", hash: manifestDigest, size: manifestBytes.length },
+	];
+	return { manifest, manifestDigest, fileKey, size, blobs };
 }
 
 // jobs: Array<{ file, options }> — options тот же объект, что putFileStreaming

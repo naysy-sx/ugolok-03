@@ -29,3 +29,7 @@ Si pour vous il est crucial non seulement « que la conversation ne soit pas lue
 
 - Héberger votre propre serveur si vous ne voulez dépendre même pas des serveurs du projet.
 - Utiliser des outils de contournement des blocages au niveau réseau si cela vous concerne — Ugolok ne se présente délibérément pas comme un outil de contournement de la censure (voir la section « À propos du projet »), mais rien ne vous empêche de l'utiliser par-dessus une connexion que vous avez déjà configurée.
+
+## Espace sur le serveur et « libérer de l’espace »
+
+« Paramètres → Stockage » indique l’espace que vos fichiers envoyés occupent sur le serveur. « Libérer de l’espace » efface les octets du fichier du serveur, et pas seulement votre entrée. Cela **ne rappelle pas** ce qu’un destinataire a déjà téléchargé : il en garde une copie — la clé est dans son message, les octets dans son cache. Il n’existe pas de bouton « supprimer pour tous », car on ne peut pas le faire honnêtement. Un fichier que vous « enregistrez chez vous » depuis le message de quelqu’un d’autre est désormais copié en entier et occupe de la place chez vous, pas chez l’auteur.

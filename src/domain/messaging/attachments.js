@@ -8,6 +8,7 @@
 // просто источник ключа/адресации — content-addressed чанкованное хранилище
 // files, а не отдельное whole-file шифрование attachments).
 import { putStream, getManifest, getRange } from "../files/content.js";
+import { recordUploads, newGroupId } from "../uploads/journal.js";
 import { putFileStreaming } from "../files/stream-upload.js";
 import { validateAttachment } from "../files/attachment-validation.js";
 import { classOf } from "../media/media-ref.js";
@@ -29,6 +30,25 @@ function attachmentTypeFromMime(mime) {
 	return c === "other" ? "file" : c;
 }
 
+// ТЗ-03 — запись залитых блобов в журнал. journal = {purpose, target, group?} от вызывающего
+// (контекст беседы); без него (аватары каналов старых вызовов, тесты) — ничего не пишем.
+// roles: как называть блобы (content/manifest либо preview/previewManifest).
+async function journalBlobs(journal, blobs, roles, { name, serverUrl, group }) {
+	if (!journal?.purpose) return;
+	await recordUploads(
+		blobs.map((b) => ({
+			hash: b.hash,
+			size: b.size,
+			role: roles[b.role] ?? b.role,
+			purpose: journal.purpose,
+			target: journal.target,
+			group,
+			name,
+			server: serverUrl,
+		})),
+	);
+}
+
 // MEDIA-PERF-TZ-5.md §3 — превью/постер, отдельный маленький putStream ТЕМ ЖЕ
 // serverUrl/privateKey/options (тот же сервер, тот же signal — отмена заливки
 // оригинала отменяет и превью). ВЕСЬ блок (генерация И заливка) — под одним
@@ -37,7 +57,7 @@ function attachmentTypeFromMime(mime) {
 // вызывающие) и НЕ обязана быть настолько же осторожной — контракт "отказ
 // превью не должен срывать оригинал" должен держаться независимо от того,
 // насколько defensively написан конкретный generate().
-async function withPreview(descriptor, input, serverUrl, privateKey, options) {
+async function withPreview(descriptor, input, serverUrl, privateKey, options, journalCtx) {
 	const generate = options.generatePreview ?? generateAttachmentPreview;
 	// fileKey/generatePreview НЕ пробрасываются в putStream превью: fileKey —
 	// оверрайд оригинала (share.js-подобные сценарии), превью ОБЯЗАНО получить
@@ -47,13 +67,14 @@ async function withPreview(descriptor, input, serverUrl, privateKey, options) {
 	try {
 		const preview = await generate(input);
 		if (!preview) return descriptor;
-		const { manifestDigest: previewDigest, fileKey: previewFileKey } = await putStream(preview.bytes, {
+		const { manifestDigest: previewDigest, fileKey: previewFileKey, blobs: previewBlobs } = await putStream(preview.bytes, {
 			name: "preview.jpg",
 			mime: preview.mime,
 			serverUrl,
 			privateKey,
 			...putOptions,
 		});
+		if (journalCtx) await journalBlobs(options.journal, previewBlobs, { content: "preview", manifest: "previewManifest" }, journalCtx);
 		return {
 			...descriptor,
 			previewDigest,
@@ -74,9 +95,11 @@ async function withPreview(descriptor, input, serverUrl, privateKey, options) {
 // остаются eager whole-file чтением, attachment-view.jsx не меняет UX).
 export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: fileBytes.length });
-	const { manifestDigest, fileKey, size } = await putStream(fileBytes, { name, mime, serverUrl, privateKey, ...options });
+	const { manifestDigest, fileKey, size, blobs } = await putStream(fileBytes, { name, mime, serverUrl, privateKey, ...options });
 	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
-	return withPreview(descriptor, { bytes: fileBytes, mime }, serverUrl, privateKey, options);
+	const journalCtx = { name, serverUrl, group: options.journal?.group ?? newGroupId() };
+	await journalBlobs(options.journal, blobs, {}, journalCtx);
+	return withPreview(descriptor, { bytes: fileBytes, mime }, serverUrl, privateKey, options, journalCtx);
 }
 
 // Этап C медиа-подсистемы — тот же путь "с диска", но file — File|Blob, не
@@ -95,10 +118,12 @@ export async function uploadMessageAttachment(serverUrl, fileBytes, { mime, name
 // сам семплит один кадр через <video>+object-URL.
 export async function uploadMessageAttachmentStreaming(serverUrl, file, { mime, name }, privateKey, options = {}) {
 	validateAttachment({ mime, size: file.size });
-	const { manifestDigest, fileKey, size } = await putFileStreaming(file, { name, mime, serverUrl, privateKey, ...options });
+	const { manifestDigest, fileKey, size, blobs } = await putFileStreaming(file, { name, mime, serverUrl, privateKey, ...options });
 	const descriptor = { type: attachmentTypeFromMime(mime), manifestDigest, fileKey: base64FromBytes(fileKey), mime, size, name };
+	const journalCtx = { name, serverUrl, group: options.journal?.group ?? newGroupId() };
+	await journalBlobs(options.journal, blobs, {}, journalCtx);
 	const bytes = typeof mime === "string" && mime.startsWith("image/") ? new Uint8Array(await file.arrayBuffer()) : undefined;
-	return withPreview(descriptor, { bytes, file, mime }, serverUrl, privateKey, options);
+	return withPreview(descriptor, { bytes, file, mime }, serverUrl, privateKey, options, journalCtx);
 }
 
 // Путь "из хранилища" (chat.jsx, 7.3, переделка этого прохода) — БЕЗ СЕТИ.

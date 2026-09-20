@@ -31,6 +31,7 @@ import IconPlus from "../icons/plus.jsx";
 import IconGear from "../icons/gear.jsx";
 import IconBell from "../icons/bell.jsx";
 import IconServer from "../icons/server.jsx";
+import StoragePanel from "../components/storage-panel.jsx";
 import IconPower from "../icons/power.jsx";
 import IconChevronDown from "../icons/chevron-down.jsx";
 
@@ -824,7 +825,7 @@ export default function Settings() {
 			title={t("nav.settings")}
 			slices={
 				<div class="tabs bar" style={{ "--gap": "0" }} role="tablist" aria-label={t("settings.tabsAria")}>
-					{["view", "notifications", "network", "session"].map((id) => (
+					{["view", "notifications", "network", "storage", "session"].map((id) => (
 						<button
 							key={id}
 							type="button"
@@ -1018,6 +1019,16 @@ export default function Settings() {
 						<SelfHostedSection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
 					</Panel>
 					<PerfLogExport />
+				</div>
+			)}
+
+			{tab === "storage" && (
+				<div class="stack" style={{ "--gap": "var(--space-l)" }}>
+					{/* ТЗ-03: занятое место (с сервера), журнал загрузок, освобождение места. Именно
+					    вкладкой настроек, а не пунктом навигации: `storage` там уже занят «Файлами». */}
+					<Panel title={t("storage.title")} hint={t("storage.hint")} icon={IconServer}>
+						<StoragePanel ownerPubkey={ownerPubkey} privKey={privKey} />
+					</Panel>
 				</div>
 			)}
 

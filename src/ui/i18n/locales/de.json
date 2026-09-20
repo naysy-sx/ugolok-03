@@ -110,7 +110,8 @@
 			"view": "Ansicht",
 			"notifications": "Benachrichtigungen",
 			"network": "Netzwerk",
-			"session": "Sitzung"
+			"session": "Sitzung",
+			"storage": "Speicher"
 		},
 		"viewSectionHint": "Die Akzentfarbe bestimmt die gesamte Palette — Hintergrund, Oberflächen und Ränder folgen ihr.",
 		"themeLabel": "Thema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Video öffnen {{name}}",
 		"openAudioAria": "Audio öffnen {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Der Schlüssel der gespeicherten Kopie wurde nicht gefunden."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Speicher",
+		"hint": "Wie viel Platz deine hochgeladenen Dateien auf dem Server belegen und was du freigeben kannst.",
+		"loading": "Lädt…",
+		"empty": "Du hast noch nichts hochgeladen.",
+		"serverFailed": "Daten vom Server konnten nicht abgerufen werden.",
+		"retry": "Erneut versuchen",
+		"usedTitle": "Auf dem Server belegt",
+		"usedValue": "{{size}} · Dateien: {{count}}",
+		"byPurposeTitle": "Nach Ort",
+		"byKindTitle": "Nach Typ",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Gruppen",
+			"channel": "Kanäle",
+			"files": "Dateien",
+			"share": "Geteilte Ordner",
+			"avatar": "Avatare",
+			"unknown": "Noch ohne Bezeichnung"
+		},
+		"kind": {
+			"image": "Fotos",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Dokumente",
+			"other": "Sonstiges",
+			"unknown": "Noch ohne Bezeichnung"
+		},
+		"listTitle": "Größte Uploads",
+		"showMore": "Mehr anzeigen",
+		"unnamed": "Datei ohne Namen",
+		"unknownEntry": "Am {{date}} hochgeladene Datei",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "gesendet an: {{count}}",
+		"journalLoading": "Dateinamen werden geladen…",
+		"journalPartial": "Dateinamen sind nur teilweise geladen — einige Dateien werden ohne Namen angezeigt.",
+		"journalMore": "Weitere Namen laden",
+		"journalFailed": "Dateinamen konnten nicht aus dem Netz geladen werden. Die Größen stimmen, manche Namen können fehlen.",
+		"reconcile": {
+			"button": "Mit Server abgleichen",
+			"running": "Gleiche ab…",
+			"needFull": "Noch nicht alle Dateinamen sind geladen. Versuche es erneut — sonst könnten echte Dateien als unbekannt erscheinen.",
+			"clean": "Alles auf dem Server ist erfasst.",
+			"unknownTitle": "Unbekannte Dateien: {{count}} · {{size}}",
+			"unknownRange": "Hochgeladen {{from}} – {{to}}",
+			"unknownHint": "Diese Dateien liegen auf dem Server, fehlen aber in deinem Journal. Sie könnten zu alten Nachrichten gehören — nach dem Löschen lassen sie sich nicht mehr öffnen.",
+			"deleteUnknown": "Alle unbekannten löschen",
+			"confirmBody": "{{count}} unbekannte Dateien ({{size}}) vom Server löschen? Das lässt sich nicht rückgängig machen.",
+			"missingTitle": "Im Journal, aber nicht auf dem Server: {{count}}",
+			"forgetMissing": "Aus dem Journal entfernen"
+		},
+		"free": {
+			"button": "Speicher freigeben",
+			"title": "Speicher freigeben",
+			"body": "„{{name}}“ ({{size}}) wird vom Server gelöscht.",
+			"usage": "Es wurde an {{count}} Orte gesendet: Für alle, die es noch nicht heruntergeladen haben, lässt es sich nicht mehr öffnen.",
+			"usageNone": "Für diese Datei ist kein Versand vermerkt.",
+			"limit": "Was Empfänger bereits heruntergeladen haben, bleibt bei ihnen. Das lässt sich nicht rückgängig machen.",
+			"filesNote": "Der Eintrag unter „Dateien“ lässt sich dann ebenfalls nicht mehr öffnen.",
+			"confirm": "Speicher freigeben",
+			"cancel": "Abbrechen",
+			"working": "Lösche… {{done}} von {{total}}",
+			"done": "Speicher freigegeben.",
+			"failed": "{{count}} Dateien konnten nicht gelöscht werden. Versuche es später erneut."
 		}
 	}
 }

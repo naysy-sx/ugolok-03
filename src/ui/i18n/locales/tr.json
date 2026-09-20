@@ -110,7 +110,8 @@
 			"view": "Görünüm",
 			"notifications": "Bildirimler",
 			"network": "Ağ",
-			"session": "Oturum"
+			"session": "Oturum",
+			"storage": "Depolama"
 		},
 		"viewSectionHint": "Vurgu rengi tüm paleti belirler — arka plan, yüzeyler ve kenarlıklar ona göre şekillenir.",
 		"themeLabel": "Tema",
@@ -698,7 +699,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Videoyu aç {{name}}",
 		"openAudioAria": "Sesi aç {{name}}",
@@ -714,7 +716,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Kaydedilen kopyanın anahtarı bulunamadı."
 	},
 	"media": {
 		"buttons": {
@@ -1313,6 +1316,72 @@
 			"copied": "Copied",
 			"share": "Share",
 			"clear": "Clear recording"
+		}
+	},
+	"storage": {
+		"title": "Depolama",
+		"hint": "Yüklediğiniz dosyaların sunucuda ne kadar yer kapladığı ve neyi boşaltabileceğiniz.",
+		"loading": "Yükleniyor…",
+		"empty": "Henüz hiçbir şey yüklemediniz.",
+		"serverFailed": "Sunucudan veri alınamadı.",
+		"retry": "Tekrar dene",
+		"usedTitle": "Sunucuda kullanılan",
+		"usedValue": "{{size}} · dosya: {{count}}",
+		"byPurposeTitle": "Yere göre",
+		"byKindTitle": "Türe göre",
+		"purpose": {
+			"dm": "Sohbetler",
+			"group": "Gruplar",
+			"channel": "Kanallar",
+			"files": "Dosyalar",
+			"share": "Paylaşılan klasörler",
+			"avatar": "Avatarlar",
+			"unknown": "Henüz adsız"
+		},
+		"kind": {
+			"image": "Fotoğraflar",
+			"video": "Video",
+			"audio": "Ses",
+			"document": "Belgeler",
+			"other": "Diğer",
+			"unknown": "Henüz adsız"
+		},
+		"listTitle": "En büyük yüklemeler",
+		"showMore": "Daha fazla göster",
+		"unnamed": "Adsız dosya",
+		"unknownEntry": "{{date}} tarihinde yüklenen dosya",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "gönderildiği yer: {{count}}",
+		"journalLoading": "Dosya adları yükleniyor…",
+		"journalPartial": "Adlar yalnızca kısmen yüklendi — bazı dosyalar adsız gösteriliyor.",
+		"journalMore": "Daha fazla ad yükle",
+		"journalFailed": "Dosya adları ağdan yüklenemedi. Boyutlar doğru, ancak bazı adlar eksik olabilir.",
+		"reconcile": {
+			"button": "Sunucuyla karşılaştır",
+			"running": "Karşılaştırılıyor…",
+			"needFull": "Tüm adlar henüz yüklenmedi. Tekrar deneyin — aksi hâlde gerçek dosyalar tanınmıyor gibi görünebilir.",
+			"clean": "Sunucudaki her şey kayıtlı.",
+			"unknownTitle": "Tanınmayan dosyalar: {{count}} · {{size}}",
+			"unknownRange": "Yüklenme {{from}} – {{to}}",
+			"unknownHint": "Bu dosyalar sunucuda var ama günlüğünüzde yok. Eski mesajlara ait olabilir — silinirse artık açılmazlar.",
+			"deleteUnknown": "Tanınmayanların hepsini sil",
+			"confirmBody": "Sunucudan {{count}} tanınmayan dosya ({{size}}) silinsin mi? Bu geri alınamaz.",
+			"missingTitle": "Günlükte var, sunucuda yok: {{count}}",
+			"forgetMissing": "Günlükten kaldır"
+		},
+		"free": {
+			"button": "Yer aç",
+			"title": "Yer aç",
+			"body": "“{{name}}” ({{size}}) sunucudan silinecek.",
+			"usage": "{{count}} yere gönderildi: henüz indirmemiş olanlar için artık açılmayacak.",
+			"usageNone": "Bu dosya için kayıtlı bir gönderim yok.",
+			"limit": "Alıcıların zaten indirdikleri onlarda kalır. Bu geri alınamaz.",
+			"filesNote": "“Dosyalar” içindeki kayıt da artık açılmayacak.",
+			"confirm": "Yer aç",
+			"cancel": "İptal",
+			"working": "Siliniyor… {{done}} / {{total}}",
+			"done": "Yer açıldı.",
+			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin."
 		}
 	}
 }

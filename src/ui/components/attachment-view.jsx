@@ -6,7 +6,8 @@ import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-previ
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { currentUser, dbKeySig, privKeySig } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
-import { initFiles, createFileEntry } from "../signals/files.js";
+import { initFiles, createFileEntry, treeState, getFileKeyFor } from "../signals/files.js";
+import { prepareOwnCopy } from "../../domain/files/copy-attachment.js";
 import { PreconditionError } from "../../domain/files/ops.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
@@ -330,22 +331,41 @@ function FileAttachment({ attachment }) {
 // — идемпотентный бутстрап (тот же вызов, что file-picker.jsx) — вложение
 // может открываться, даже если "Файлы"/FilePicker ни разу не открывались за
 // сессию, без него createFileEntry писал бы под cachedOwnerPubkey===null.
-function base64ToFileKeyBytes(fileKeyBase64) {
-	return Uint8Array.from(atob(fileKeyBase64), (c) => c.charCodeAt(0));
-}
-
 export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 	const [status, setStatus] = useState("idle"); // idle | busy | done | error
 	const [error, setError] = useState("");
 
+	// ТЗ-03, раздел 7: «Сохранить к себе» — настоящая копия (своя заливка, своя квота), а не
+	// ссылка на блоб автора. Повторное нажатие дублей не плодит: журнал помнит, что этот
+	// исходный манифест уже копировали.
 	async function handleSave() {
 		setStatus("busy");
 		setError("");
 		try {
 			const ownerPubkey = currentUser.value.id;
 			await initFiles(ownerPubkey, privKeySig.value, publish);
-			const fileKeyBytes = base64ToFileKeyBytes(attachment.fileKey);
-			const op = await createFileEntry(attachmentDisplayName(attachment) || attachment.name, attachment.manifestDigest, fileKeyBytes, origin, attachment.mime);
+			const name = attachmentDisplayName(attachment) || attachment.name;
+			const res = await prepareOwnCopy({ attachment, name, serverUrl: BLOSSOM_URL, privateKey: privKeySig.value });
+
+			if (res.kind === "existing") {
+				// Копия уже залита. Если в «Файлах» есть живой узел на неё — ничего не делаем;
+				// если узел удалили — заводим заново на ТОТ ЖЕ блоб (ключ хранится у нас).
+				const hasNode = [...treeState.value.nodes.values()].some((n) => n.kind === "file" && n.blob === res.manifestDigest && n.par?.value !== "$trash");
+				if (!hasNode) {
+					const key = await getFileKeyFor(res.manifestDigest);
+					if (!key) throw new Error(t("attachment.copyKeyMissing"));
+					const op = await createFileEntry(name, res.manifestDigest, key, origin, attachment.mime);
+					if (op instanceof PreconditionError) {
+						setError(errorMessage(op));
+						setStatus("error");
+						return;
+					}
+				}
+				setStatus("done");
+				return;
+			}
+
+			const op = await createFileEntry(res.name, res.manifestDigest, res.fileKey, origin, res.mime ?? attachment.mime);
 			if (op instanceof PreconditionError) {
 				setError(errorMessage(op));
 				setStatus("error");
