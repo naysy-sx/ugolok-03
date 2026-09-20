@@ -842,7 +842,9 @@
 		"pasteInto": "Einfügen",
 		"pasteHere": "Hier einfügen",
 		"clipboardCopied": "Kopiert: {{count}}",
-		"clipboardCut": "Ausgeschnitten: {{count}}"
+		"clipboardCut": "Ausgeschnitten: {{count}}",
+		"freedFromServer": "Vom Server gelöscht",
+		"freedOpenHint": "„{{name}}“ wurde vom Server freigegeben und lässt sich nicht mehr öffnen. Entferne es aus der Liste, wenn du es nicht brauchst."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Lösche… {{done}} von {{total}}",
 			"done": "Speicher freigegeben.",
 			"failed": "{{count}} Dateien konnten nicht gelöscht werden. Versuche es später erneut."
-		}
+		},
+		"journalPublishFailed": "Das Upload-Journal erreicht das Relay nicht: {{reason}}. Deine Dateien sind nicht betroffen, aber auf anderen Geräten erscheinen keine Namen."
 	}
 }

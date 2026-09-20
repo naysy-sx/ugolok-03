@@ -8,8 +8,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { t, errorMessage, currentLocale } from "../signals/i18n.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { fetchServerBlobs, totalBytes, reconcile, buildEntries, breakdownByPurpose, breakdownByKind } from "../../domain/uploads/storage.js";
-import { listUploads, removeUploads, getJournalSync } from "../../domain/uploads/journal.js";
-import { pullUploadJournal } from "../signals/uploads.js";
+import { listUploads, removeUploads, getJournalSync, getJournalStatus } from "../../domain/uploads/journal.js";
+import { pullUploadJournal, refreshFreed } from "../signals/uploads.js";
 import { formatBytes } from "../../domain/uploads/format.js";
 import FreeSpaceDialog from "./free-space-dialog.jsx";
 
@@ -53,6 +53,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 	const [journal, setJournal] = useState({ state: "idle", exhausted: false }); // idle | loading | done | failed
 	const [visible, setVisible] = useState(PAGE);
 	const [dialog, setDialog] = useState(null);
+	const [pubStatus, setPubStatus] = useState({ dirty: 0, lastError: null }); // публикация журнала
 	const [rec, setRec] = useState(null); // результат сверки
 	const [recBusy, setRecBusy] = useState(false);
 	const [recError, setRecError] = useState("");
@@ -73,6 +74,8 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 			const sync = await getJournalSync();
 			if (!alive.current) return false;
 			setRows(await listUploads());
+			refreshFreed();
+			setPubStatus(await getJournalStatus());
 			const done = res.exhausted || !!sync?.exhausted;
 			setJournal({ state: "done", exhausted: done });
 			return done;
@@ -93,6 +96,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 			if (!alive.current) return;
 			setBlobs(serverBlobs);
 			setRows(local);
+			setPubStatus(await getJournalStatus());
 			setPhase("ready");
 		} catch (err) {
 			if (!alive.current) return;
@@ -109,6 +113,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 
 	async function refreshAfterChange() {
 		setRec(null);
+		refreshFreed();
 		try {
 			setBlobs(await fetchServerBlobs(BLOSSOM_URL, ownerPubkey));
 			setRows(await listUploads());
@@ -200,6 +205,12 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 					</div>
 
 					{blobs.length === 0 && <p style={{ color: "var(--muted)" }}>{t("storage.empty")}</p>}
+
+					{pubStatus.dirty > 0 && pubStatus.lastError && (
+						<p role="alert" class="callout callout--warn" style={{ margin: 0 }}>
+							{t("storage.journalPublishFailed", { reason: pubStatus.lastError })}
+						</p>
+					)}
 
 					{journal.state === "loading" && (
 						<p role="status" style={{ color: "var(--muted)", margin: 0 }}>

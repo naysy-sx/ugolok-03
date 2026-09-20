@@ -58,6 +58,7 @@ import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.j
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFilesStreaming } from "../../domain/files/stream-upload.js";
 import { recordBlobs, getGroupOfHash } from "../../domain/uploads/journal.js";
+import { freedDigests, refreshFreed } from "../signals/uploads.js";
 import FreeSpaceDialog from "../components/free-space-dialog.jsx";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
@@ -199,6 +200,14 @@ function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 		};
 	}, [entry.blob, entry.kind, ownerPubkey]);
 
+	// ТЗ-03: байты стёрты с сервера («освободить место») — узел остался, но не откроется.
+	if (entry.kind === "file" && entry.blob && freedDigests.value.has(entry.blob)) {
+		return (
+			<small class={cls} style={{ color: "var(--warn, var(--muted))" }}>
+				{t("files.freedFromServer")}
+			</small>
+		);
+	}
 	if (STATUS_LABEL_KEYS[entry.status]) {
 		return <small class={cls}>{t(STATUS_LABEL_KEYS[entry.status])}</small>;
 	}
@@ -666,6 +675,10 @@ export default function Files() {
 		if (entry.kind === "dir") {
 			openFolder(entry.id);
 			setSelected(new Set());
+			return;
+		}
+		if (entry.blob && freedDigests.value.has(entry.blob)) {
+			setError(t("files.freedOpenHint", { name: entry.displayName }));
 			return;
 		}
 		const cls = entry.mime ? classOf(entry.mime) : "other";
@@ -1217,7 +1230,7 @@ export default function Files() {
 			</div>
 			)}
 		</Screen>
-		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={BLOSSOM_URL} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} />}
+		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={BLOSSOM_URL} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} onDone={() => refreshFreed()} />}
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}

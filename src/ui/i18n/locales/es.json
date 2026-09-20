@@ -842,7 +842,9 @@
 		"pasteInto": "Pegar",
 		"pasteHere": "Pegar aquí",
 		"clipboardCopied": "Copiado: {{count}}",
-		"clipboardCut": "Cortado: {{count}}"
+		"clipboardCut": "Cortado: {{count}}",
+		"freedFromServer": "Borrado del servidor",
+		"freedOpenHint": "«{{name}}» se liberó del servidor y ya no se abre. Quítalo de la lista si no lo necesitas."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Borrando… {{done}} de {{total}}",
 			"done": "Espacio liberado.",
 			"failed": "No se pudieron borrar {{count}} archivos. Inténtalo más tarde."
-		}
+		},
+		"journalPublishFailed": "El registro de subidas no llega al relay: {{reason}}. Tus archivos no se ven afectados, pero los nombres no aparecerán en otros dispositivos."
 	}
 }

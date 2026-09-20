@@ -66,6 +66,7 @@ const OWNER_PUBKEY_TABLES = [
 	"uploads",
 	"uploadBatches",
 	"uploadSync",
+	"uploadFreed",
 ];
 
 // Таблицы, owner-scoped полем "owner" (легаси-именование, этапы 11-50 —

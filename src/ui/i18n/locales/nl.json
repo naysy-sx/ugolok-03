@@ -842,7 +842,9 @@
 		"pasteInto": "Plakken",
 		"pasteHere": "Hier plakken",
 		"clipboardCopied": "Gekopieerd: {{count}}",
-		"clipboardCut": "Geknipt: {{count}}"
+		"clipboardCut": "Geknipt: {{count}}",
+		"freedFromServer": "Van de server verwijderd",
+		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Verwijderen… {{done}} van {{total}}",
 			"done": "Ruimte vrijgemaakt.",
 			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw."
-		}
+		},
+		"journalPublishFailed": "Het uploadlogboek bereikt de relay niet: {{reason}}. Je bestanden worden hier niet door geraakt, maar op andere apparaten verschijnen geen namen."
 	}
 }

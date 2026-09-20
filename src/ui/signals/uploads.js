@@ -2,15 +2,26 @@
 // app.jsx: при входе журнал получает ключи, при блокировке — отвязывается.
 // Доменный код (attachments.js, files/*) с UI-сигналами не связан и пишет в журнал
 // через domain/uploads/journal.js, который без привязки просто ничего не делает.
-import { effect } from "@preact/signals";
+import { effect, signal } from "@preact/signals";
 import { currentUser, dbKeySig, masterSecretSig } from "./auth.js";
 import { publish, fetchJournalEvents, ensureConnected } from "./transport.js";
 import { privKeySig } from "./auth.js";
 import { deriveJournalKey, deriveJournalSigner } from "../../core/crypto/derivation.js";
 import { getOrCreateDeviceId } from "../../domain/identity/device.js";
-import { bindJournal, unbindJournal, pullJournal } from "../../domain/uploads/journal.js";
+import { bindJournal, unbindJournal, pullJournal, listFreed } from "../../domain/uploads/journal.js";
 
 let generation = 0;
+
+// Хеши блобов, стёртых с сервера («освободить место»): по ним «Файлы» помечают узел.
+export const freedDigests = signal(new Set());
+
+export async function refreshFreed() {
+	try {
+		freedDigests.value = new Set(await listFreed());
+	} catch {
+		// журнал не привязан / база недоступна — пометок просто нет
+	}
+}
 
 effect(() => {
 	const user = currentUser.value;
@@ -19,6 +30,7 @@ effect(() => {
 	const gen = ++generation;
 	if (!user || !dbKey || !master) {
 		unbindJournal();
+		freedDigests.value = new Set();
 		return;
 	}
 	getOrCreateDeviceId()
@@ -32,6 +44,7 @@ effect(() => {
 				deviceId,
 				publish: (event) => publish(event),
 			});
+			refreshFreed();
 		})
 		.catch(() => {});
 });

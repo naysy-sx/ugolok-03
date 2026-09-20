@@ -842,7 +842,9 @@
 		"pasteInto": "Paste",
 		"pasteHere": "Paste here",
 		"clipboardCopied": "Copied: {{count}}",
-		"clipboardCut": "Cut: {{count}}"
+		"clipboardCut": "Cut: {{count}}",
+		"freedFromServer": "Deleted from server",
+		"freedOpenHint": "“{{name}}” was freed from the server and no longer opens. Remove it from the list if you don't need it."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Deleting… {{done}} of {{total}}",
 			"done": "Space freed.",
 			"failed": "Could not delete {{count}} of the files. Try again later."
-		}
+		},
+		"journalPublishFailed": "Upload journal isn't reaching the relay: {{reason}}. Your files are not affected, but names won't appear on other devices."
 	}
 }

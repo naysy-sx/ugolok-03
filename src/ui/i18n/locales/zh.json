@@ -842,7 +842,9 @@
 		"pasteInto": "粘贴",
 		"pasteHere": "粘贴到此处",
 		"clipboardCopied": "已复制：{{count}}",
-		"clipboardCut": "已剪切：{{count}}"
+		"clipboardCut": "已剪切：{{count}}",
+		"freedFromServer": "已从服务器删除",
+		"freedOpenHint": "“{{name}}”已从服务器释放，无法再打开。如不需要，请从列表中移除。"
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "正在删除… {{done}} / {{total}}",
 			"done": "已释放空间。",
 			"failed": "有 {{count}} 个文件未能删除。请稍后重试。"
-		}
+		},
+		"journalPublishFailed": "上传日志未能发送到中继：{{reason}}。你的文件不受影响，但其他设备上不会显示文件名。"
 	}
 }

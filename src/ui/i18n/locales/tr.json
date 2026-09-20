@@ -842,7 +842,9 @@
 		"pasteInto": "Yapıştır",
 		"pasteHere": "Buraya yapıştır",
 		"clipboardCopied": "Kopyalandı: {{count}}",
-		"clipboardCut": "Kesildi: {{count}}"
+		"clipboardCut": "Kesildi: {{count}}",
+		"freedFromServer": "Sunucudan silindi",
+		"freedOpenHint": "“{{name}}” sunucudan boşaltıldı ve artık açılmıyor. Gerek yoksa listeden kaldırın."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Siliniyor… {{done}} / {{total}}",
 			"done": "Yer açıldı.",
 			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin."
-		}
+		},
+		"journalPublishFailed": "Yükleme günlüğü relay’e ulaşmıyor: {{reason}}. Dosyalarınız etkilenmez, ancak diğer cihazlarda adlar görünmez."
 	}
 }

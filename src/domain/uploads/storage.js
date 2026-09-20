@@ -100,6 +100,6 @@ export async function freeBlobs({ serverUrl, privateKey, hashes, deleteFn = dele
 		}
 		onProgress?.({ done: i + 1, total: hashes.length });
 	}
-	if (deleted.length > 0) await removeUploads(deleted);
+	if (deleted.length > 0) await removeUploads(deleted, { markFreed: true });
 	return { deleted, failed };
 }

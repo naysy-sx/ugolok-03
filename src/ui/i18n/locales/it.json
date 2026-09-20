@@ -842,7 +842,9 @@
 		"pasteInto": "Incolla",
 		"pasteHere": "Incolla qui",
 		"clipboardCopied": "Copiati: {{count}}",
-		"clipboardCut": "Tagliati: {{count}}"
+		"clipboardCut": "Tagliati: {{count}}",
+		"freedFromServer": "Eliminato dal server",
+		"freedOpenHint": "«{{name}}» è stato liberato dal server e non si apre più. Rimuovilo dall’elenco se non ti serve."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Eliminazione… {{done}} di {{total}}",
 			"done": "Spazio liberato.",
 			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi."
-		}
+		},
+		"journalPublishFailed": "Il registro dei caricamenti non raggiunge il relay: {{reason}}. I tuoi file non sono coinvolti, ma i nomi non compariranno sugli altri dispositivi."
 	}
 }

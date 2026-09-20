@@ -842,7 +842,9 @@
 		"pasteInto": "Colar",
 		"pasteHere": "Colar aqui",
 		"clipboardCopied": "Copiado: {{count}}",
-		"clipboardCut": "Recortado: {{count}}"
+		"clipboardCut": "Recortado: {{count}}",
+		"freedFromServer": "Apagado do servidor",
+		"freedOpenHint": "“{{name}}” foi libertado do servidor e já não abre. Remova-o da lista se não precisar dele."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "A apagar… {{done}} de {{total}}",
 			"done": "Espaço libertado.",
 			"failed": "Não foi possível apagar {{count}} ficheiros. Tente mais tarde."
-		}
+		},
+		"journalPublishFailed": "O registo de envios não chega ao relay: {{reason}}. Os seus ficheiros não são afetados, mas os nomes não vão aparecer noutros dispositivos."
 	}
 }

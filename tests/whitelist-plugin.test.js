@@ -185,3 +185,39 @@ test("статистика: счётчики копятся и сбрасыва�
 	assert.equal(s.newPubkeys, 1);
 	assert.equal(limiter.drainStats().accepted, 0);
 });
+
+// ---- ТЗ-03: журнал загрузок и whitelist ----
+import { JOURNAL_KIND, openKindsOf } from "../server/strfry/write-policy.mjs";
+
+test("журнал загрузок (kind 30076) принимается от ключа вне whitelist — автор пачек производный", () => {
+	assert.equal(JOURNAL_KIND, 30076);
+	const res = decide(client(ev(FOREIGN, JOURNAL_KIND)), ctx());
+	assert.equal(res.action, "accept");
+});
+
+test("исключение только для открытых kind'ов: остальные от ключа вне whitelist по-прежнему отвергаются", () => {
+	assert.equal(decide(client(ev(FOREIGN, 1)), ctx()).action, "reject");
+	assert.equal(decide(client(ev(FOREIGN, 30075)), ctx()).action, "reject");
+});
+
+test("policy.openKinds: пустой список отключает исключение, свой список заменяет умолчание", () => {
+	assert.deepEqual(openKindsOf(undefined), [30076]);
+	assert.deepEqual(openKindsOf({ openKinds: [] }), []);
+	assert.deepEqual(openKindsOf({ openKinds: [30076, 30099, "x"] }), [30076, 30099]);
+	assert.equal(decide(client(ev(FOREIGN, JOURNAL_KIND)), ctx({ policy: { openKinds: [] } })).action, "reject");
+	assert.equal(decide(client(ev(FOREIGN, 30099)), ctx({ policy: { openKinds: [30099] } })).action, "accept");
+});
+
+test("рубильник read-only сильнее исключения: журнал тоже не пишется", () => {
+	assert.equal(decide(client(ev(FOREIGN, JOURNAL_KIND)), ctx({ policy: { mode: "readonly" } })).action, "reject");
+});
+
+test("лимиты на исключение действуют: открытый kind не обходит rate-limit", () => {
+	const limiter = createLimiter();
+	const policy = { limits: { perPubkeyPerMinute: 2 } };
+	const now = 1_000_000;
+	const r = () => decide(client(ev(FOREIGN, JOURNAL_KIND)), ctx({ policy, limiter, now }));
+	assert.equal(r().action, "accept");
+	assert.equal(r().action, "accept");
+	assert.equal(r().action, "reject");
+});

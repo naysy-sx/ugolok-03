@@ -842,7 +842,9 @@
 		"pasteInto": "貼り付け",
 		"pasteHere": "ここに貼り付け",
 		"clipboardCopied": "コピー済み: {{count}}",
-		"clipboardCut": "切り取り済み: {{count}}"
+		"clipboardCut": "切り取り済み: {{count}}",
+		"freedFromServer": "サーバーから削除済み",
+		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。"
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "削除中… {{done}} / {{total}}",
 			"done": "容量を空けました。",
 			"failed": "{{count}} 件のファイルを削除できませんでした。後でもう一度お試しください。"
-		}
+		},
+		"journalPublishFailed": "アップロードのジャーナルがリレーに届いていません: {{reason}}。ファイル自体には影響しませんが、他の端末ではファイル名が表示されません。"
 	}
 }

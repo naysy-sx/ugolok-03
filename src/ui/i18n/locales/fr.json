@@ -842,7 +842,9 @@
 		"pasteInto": "Coller",
 		"pasteHere": "Coller ici",
 		"clipboardCopied": "Copié : {{count}}",
-		"clipboardCut": "Coupé : {{count}}"
+		"clipboardCut": "Coupé : {{count}}",
+		"freedFromServer": "Supprimé du serveur",
+		"freedOpenHint": "« {{name}} » a été libéré du serveur et ne s’ouvre plus. Retirez-le de la liste si vous n’en avez pas besoin."
 	},
 	"profile": {
 		"server": {
@@ -1382,6 +1384,7 @@
 			"working": "Suppression… {{done}} sur {{total}}",
 			"done": "Espace libéré.",
 			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard."
-		}
+		},
+		"journalPublishFailed": "Le journal des envois n’atteint pas le relais : {{reason}}. Vos fichiers ne sont pas touchés, mais les noms n’apparaîtront pas sur les autres appareils."
 	}
 }
