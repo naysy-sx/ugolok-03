@@ -1379,7 +1379,7 @@
 			"usage": "{{count}} yere gönderildi: henüz indirmemiş olanlar için artık açılmayacak.",
 			"usageNone": "Bu dosya için kayıtlı bir gönderim yok.",
 			"limit": "Alıcıların zaten indirdikleri onlarda kalır. Bu geri alınamaz.",
-			"filesNote": "“Dosyalar” içindeki kayıt da artık açılmayacak.",
+			"filesNote": "“Dosyalar” içindeki kayıt varsa, o da çöp kutusuna taşınır.",
 			"confirm": "Yer aç",
 			"cancel": "İptal",
 			"working": "Siliniyor… {{done}} / {{total}}",

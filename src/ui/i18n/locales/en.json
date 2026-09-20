@@ -1379,7 +1379,7 @@
 			"usage": "It was sent to {{count}} places: it will stop opening for everyone who has not downloaded it yet.",
 			"usageNone": "No sending is recorded for this file.",
 			"limit": "What recipients have already downloaded stays with them. This cannot be undone.",
-			"filesNote": "The entry in “Files” will stop opening too.",
+			"filesNote": "The entry in “Files”, if there is one, will be moved to the trash too.",
 			"confirm": "Free up space",
 			"cancel": "Cancel",
 			"working": "Deleting… {{done}} of {{total}}",

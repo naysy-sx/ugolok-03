@@ -1379,7 +1379,7 @@
 			"usage": "È stato inviato in {{count}} posti: non si aprirà più per chi non l’ha ancora scaricato.",
 			"usageNone": "Per questo file non risultano invii.",
 			"limit": "Ciò che i destinatari hanno già scaricato resta con loro. Non si può annullare.",
-			"filesNote": "Anche la voce in «File» smetterà di aprirsi.",
+			"filesNote": "Anche la voce in «File», se presente, andrà nel cestino.",
 			"confirm": "Libera spazio",
 			"cancel": "Annulla",
 			"working": "Eliminazione… {{done}} di {{total}}",

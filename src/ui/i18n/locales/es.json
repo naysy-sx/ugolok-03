@@ -1379,7 +1379,7 @@
 			"usage": "Se envió a {{count}} lugares: dejará de abrirse para quienes aún no lo hayan descargado.",
 			"usageNone": "No hay envíos registrados de este archivo.",
 			"limit": "Lo que los destinatarios ya descargaron se queda con ellos. No se puede deshacer.",
-			"filesNote": "La entrada en «Archivos» también dejará de abrirse.",
+			"filesNote": "La entrada en «Archivos», si existe, también irá a la papelera.",
 			"confirm": "Liberar espacio",
 			"cancel": "Cancelar",
 			"working": "Borrando… {{done}} de {{total}}",

@@ -261,3 +261,38 @@ test("pasteHere с Cut: узел, удалённый другой реплико
 		"метка par purged-узла не должна была измениться — операция для него не строилась вовсе",
 	);
 });
+
+// ---- ТЗ-03: освобождение места убирает записи «Файлов» ----
+import { trashNodesForBlobs } from "../src/ui/signals/files.js";
+
+test("trashNodesForBlobs: узлы, ссылающиеся на стёртые блобы, уходят в корзину; остальные не тронуты", async () => {
+	const key = crypto.getRandomValues(new Uint8Array(32));
+	const D1 = "a".repeat(64), D2 = "b".repeat(64), D3 = "c".repeat(64);
+	await createFileEntry("удалённый.txt", D1, key, null, "text/plain");
+	await createFileEntry("копия-того-же.txt", D1, key, null, "text/plain"); // два узла на один блоб
+	await createFileEntry("останется.txt", D2, key, null, "text/plain");
+	await createFileEntry("другой.txt", D3, key, null, "text/plain");
+
+	const n = await trashNodesForBlobs([D1]);
+	assert.equal(n, 2);
+	const live = currentEntries.value.map((e) => e.displayName);
+	assert.equal(live.includes("удалённый.txt"), false);
+	assert.equal(live.includes("копия-того-же.txt"), false);
+	assert.deepEqual(live.filter((x) => x.endsWith(".txt")).sort(), ["другой.txt", "останется.txt"]);
+	// они в корзине, а не стёрты насовсем
+	const inTrash = [...treeState.value.nodes.values()].filter((nd) => nd.kind === "file" && nd.par.value === TRASH_ID).map((nd) => nd.name.value).sort();
+	assert.deepEqual(inTrash, ["копия-того-же.txt", "удалённый.txt"]);
+	// отмена не возвращает мёртвые файлы: она откатывает последнее ДЕЙСТВИЕ ЧЕЛОВЕКА (создание), а не наше
+	await undo();
+	assert.equal(currentEntries.value.map((e) => e.displayName).includes("удалённый.txt"), false);
+});
+
+test("trashNodesForBlobs: повторный вызов и узлы уже в корзине — ничего не делают", async () => {
+	const key = crypto.getRandomValues(new Uint8Array(32));
+	const D = "d".repeat(64);
+	const op = await createFileEntry("a.txt", D, key, null, "text/plain");
+	assert.equal(await trashNodesForBlobs([D]), 1);
+	assert.equal(await trashNodesForBlobs([D]), 0);
+	assert.equal(await trashNodesForBlobs(["e".repeat(64)]), 0);
+	assert.ok(op);
+});

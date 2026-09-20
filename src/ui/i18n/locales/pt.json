@@ -1379,7 +1379,7 @@
 			"usage": "Foi enviado para {{count}} locais: deixará de abrir para quem ainda não o descarregou.",
 			"usageNone": "Não há envios registados para este ficheiro.",
 			"limit": "O que os destinatários já descarregaram fica com eles. Não é possível anular.",
-			"filesNote": "A entrada em “Ficheiros” também deixará de abrir.",
+			"filesNote": "A entrada em “Ficheiros”, se existir, também irá para o lixo.",
 			"confirm": "Libertar espaço",
 			"cancel": "Cancelar",
 			"working": "A apagar… {{done}} de {{total}}",

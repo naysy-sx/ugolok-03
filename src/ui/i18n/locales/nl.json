@@ -1379,7 +1379,7 @@
 			"usage": "Het is naar {{count}} plekken verzonden: het kan niet meer worden geopend door wie het nog niet heeft gedownload.",
 			"usageNone": "Voor dit bestand is geen verzending vastgelegd.",
 			"limit": "Wat ontvangers al hebben gedownload, blijft bij hen. Dit kan niet ongedaan worden gemaakt.",
-			"filesNote": "Het item in “Bestanden” kan ook niet meer worden geopend.",
+			"filesNote": "Het item in “Bestanden”, als dat er is, gaat ook naar de prullenbak.",
 			"confirm": "Ruimte vrijmaken",
 			"cancel": "Annuleren",
 			"working": "Verwijderen… {{done}} van {{total}}",

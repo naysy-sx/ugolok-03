@@ -1379,7 +1379,7 @@
 			"usage": "Il a été envoyé à {{count}} endroits : il ne s’ouvrira plus pour ceux qui ne l’ont pas encore téléchargé.",
 			"usageNone": "Aucun envoi n’est enregistré pour ce fichier.",
 			"limit": "Ce que les destinataires ont déjà téléchargé leur reste. Action irréversible.",
-			"filesNote": "L’entrée dans « Fichiers » ne s’ouvrira plus non plus.",
+			"filesNote": "L’entrée dans « Fichiers », s’il y en a une, ira aussi à la corbeille.",
 			"confirm": "Libérer de l’espace",
 			"cancel": "Annuler",
 			"working": "Suppression… {{done}} sur {{total}}",

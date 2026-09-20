@@ -1379,7 +1379,7 @@
 			"usage": "Es wurde an {{count}} Orte gesendet: Für alle, die es noch nicht heruntergeladen haben, lässt es sich nicht mehr öffnen.",
 			"usageNone": "Für diese Datei ist kein Versand vermerkt.",
 			"limit": "Was Empfänger bereits heruntergeladen haben, bleibt bei ihnen. Das lässt sich nicht rückgängig machen.",
-			"filesNote": "Der Eintrag unter „Dateien“ lässt sich dann ebenfalls nicht mehr öffnen.",
+			"filesNote": "Der Eintrag unter „Dateien“ (falls vorhanden) wandert ebenfalls in den Papierkorb.",
 			"confirm": "Speicher freigeben",
 			"cancel": "Abbrechen",
 			"working": "Lösche… {{done}} von {{total}}",

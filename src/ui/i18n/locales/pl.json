@@ -1379,7 +1379,7 @@
 			"usage": "Wysłano go w {{count}} miejsc: przestanie się otwierać u wszystkich, którzy jeszcze go nie pobrali.",
 			"usageNone": "Brak zapisu o wysłaniu tego pliku.",
 			"limit": "To, co odbiorcy już pobrali, zostaje u nich. Nie można tego cofnąć.",
-			"filesNote": "Wpis w „Plikach” też przestanie się otwierać.",
+			"filesNote": "Wpis w „Plikach”, jeśli istnieje, również trafi do kosza.",
 			"confirm": "Zwolnij miejsce",
 			"cancel": "Anuluj",
 			"working": "Usuwanie… {{done}} z {{total}}",
