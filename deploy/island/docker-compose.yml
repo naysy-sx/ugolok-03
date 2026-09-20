@@ -34,10 +34,10 @@ services:
       retries: 3
 
   blossom:
-    build:
-      context: ./blossom-src
-      dockerfile: ../blossom.Dockerfile
-    image: ugolok-blossom:local
+    # Готовый образ форка (репозиторий ugolok-blossom, UPSTREAM.md там же).
+    # Тег ПИНИТСЯ точно: обновление — осознанная смена этой строки. Откат —
+    # возврат прежнего тега и docker compose up -d; данные (том) не затрагиваются.
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.0.0
     container_name: ugolok-blossom
     restart: unless-stopped
     volumes:

@@ -131,6 +131,10 @@ func main() {
 			log.Fatalf("не удалось загрузить/создать TLS-сертификат TURN: %v", err)
 		}
 
+		if err := ensureBlossomEnv(filepath.Join(*composeDir, "blossom.env")); err != nil {
+			log.Fatalf("не удалось подготовить blossom.env: %v", err)
+		}
+
 		if err := orchestrator.ComposeUp(orchestrator.RealRunner, *composeDir); err != nil {
 			log.Fatalf("не удалось поднять docker compose стек (%s): %v", *composeDir, err)
 		}
@@ -162,4 +166,21 @@ func main() {
 
 	log.Printf("агент слушает :%d (host=%s)", *port, *host)
 	log.Fatal(server.ListenAndServeTLS("", ""))
+}
+
+// ensureBlossomEnv создаёт env-файл Blossom с правами 600, если его ещё нет, и
+// приводит права существующего к 600 (там окажутся ключи S3, ТЗ-02). Содержимое
+// существующего файла не трогает. docker-compose.yml подключает его как env_file,
+// поэтому без файла compose up не стартует.
+func ensureBlossomEnv(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err == nil {
+		defer f.Close()
+		_, err = f.WriteString("# Секреты Blossom (ключи S3 и т.п.). Права 600, не коммитить.\n")
+		return err
+	}
+	if !os.IsExist(err) {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }

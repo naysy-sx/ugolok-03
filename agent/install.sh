@@ -73,19 +73,13 @@ fi
 log "Собираю агент управления..."
 (cd "$AGENT_DIR" && go build -o /usr/local/bin/ugolok-agent ./cmd/agent)
 
-# --- 5. Клонирование relay-src/blossom-src ---
+# --- 5. Клонирование relay-src (Blossom — готовый образ, см. docker-compose.yml) ---
 if [ ! -d "$COMPOSE_DIR/relay-src" ]; then
 	log "Клонирую strfry (relay-src)..."
 	git clone https://github.com/hoytech/strfry.git "$COMPOSE_DIR/relay-src"
 	(cd "$COMPOSE_DIR/relay-src" && git submodule update --init)
 else
 	log "relay-src уже существует — пропускаю клонирование."
-fi
-if [ ! -d "$COMPOSE_DIR/blossom-src" ]; then
-	log "Клонирую blossom-server (blossom-src)..."
-	git clone https://github.com/sebdeveloper6952/blossom-server.git "$COMPOSE_DIR/blossom-src"
-else
-	log "blossom-src уже существует — пропускаю клонирование."
 fi
 
 # --- 6. Конфигурация ---
