@@ -5,10 +5,9 @@ import { uploadMessageAttachmentStreaming, referenceStoredFile } from "../../dom
 import { addTargetToGroupOf } from "../../domain/uploads/journal.js";
 import { getQuotaSnapshot, refreshQuota } from "../signals/quota.js";
 import { checkBatch, isRefusalError } from "../../domain/uploads/quota.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function schedulePosters(items, setState) {
 	for (const item of items) {
@@ -84,7 +83,7 @@ export function useAttachmentTray({ maxItems }) {
 						// Новых байтов нет — журнал лишь дополняет «куда отправлено» у уже залитой группы.
 						if (journal?.target) await addTargetToGroupOf(job.manifestDigest, journal.target);
 					} else {
-						descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal });
+						descriptor = await uploadMessageAttachmentStreaming(uploadTarget(), job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal });
 					}
 					if (job.isImage) descriptor.position = job.position;
 					if (job.layout) descriptor.layout = job.layout;

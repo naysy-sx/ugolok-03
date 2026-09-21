@@ -4,7 +4,6 @@ import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache
 import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
 import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { kindOf } from "../../domain/content/record-kind.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import { CHANNEL_REACTION_SET } from "../../domain/content/reactions.js";
@@ -12,8 +11,8 @@ import { t } from "../signals/i18n.js";
 import { DueChip, formatDateTime } from "./post-card.jsx";
 import { videoPosterUrl } from "./video-poster-style.js";
 import IconChatBubbleFill from "../icons/chat-bubble-fill.jsx";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function firstVisual(attachments) {
 	return (attachments ?? []).find((a) => a.type === "image" || a.type === "video") ?? null;
@@ -70,7 +69,7 @@ function FeedThumb({ attachment }) {
 	useEffect(() => {
 		if (attachment.previewDigest) {
 			let cancelled = false;
-			resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_SERVER_URL }).then((previewUrl) => {
+			resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() }).then((previewUrl) => {
 				if (!cancelled && previewUrl) setUrl(previewUrl);
 			});
 			return () => {
@@ -89,7 +88,7 @@ function FeedThumb({ attachment }) {
 		}
 		let cancelled = false;
 		resolveImagePreviewUrl(attachment.manifestDigest, attachment.mime, (trace) =>
-			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL, trace }),
+			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget(), trace }),
 		)
 			.then((raster) => {
 				if (!cancelled) setUrl(raster.url);

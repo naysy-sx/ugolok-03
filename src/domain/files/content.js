@@ -5,6 +5,7 @@ import { planChunks, rangeToChunks } from "./manifest.js";
 import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } from "./blob.js";
 import { getCachedCipherChunk, putCachedCipherChunk } from "./blob-cache.js";
 import { DomainError } from "../errors.js";
+import { resolveReadServers, sanitizeServerHint } from "./servers.js";
 import { refusalFromRequirements, toDomainRefusal } from "../uploads/quota.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
@@ -99,6 +100,8 @@ export async function putStream(
 		mime,
 		name,
 		blobSha256: uploadResponse.sha256,
+		// ТЗ-05 §4: куда залит контент — подсказка чтения на другом сервере (необязательное поле).
+		...(sanitizeServerHint(serverUrl).length > 0 ? { servers: sanitizeServerHint(serverUrl) } : {}),
 	};
 	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
 	const manifestDigest = bytesToHex(sha256(manifestBytes));
@@ -280,7 +283,7 @@ async function fetchCipherChunk(manifest, chunkIndex, ramKey, { serverUrl, optio
 		const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
 		const cipherEnd = cipherStart + cipherChunkLength(manifest, chunkIndex) - 1;
 		const netStart = trace ? nowMs() : 0;
-		cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
+		cipherChunk = await downloadBlobRange(resolveReadServers(manifest.servers, serverUrl), manifest.blobSha256, cipherStart, cipherEnd, options);
 		if (trace) {
 			trace.mark("net", nowMs() - netStart);
 			// Только у владельца запроса: счётчик обязан показывать число

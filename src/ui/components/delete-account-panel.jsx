@@ -3,10 +3,9 @@ import { decryptPrivateKey } from "../../core/crypto/keystore.js";
 import { deleteAccountEverywhere } from "../../domain/identity/account-deletion.js";
 import { lock } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { t, errorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Необратимое действие — пользователь: подтверждение сильнее обычного
 // window.confirm (тот же принцип, что GitHub у удаления репозитория):
@@ -53,7 +52,7 @@ export default function DeleteAccountPanel({ ownerPubkey, login, privKey, dbKey 
 			return;
 		}
 		try {
-			await deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, BLOSSOM_URL);
+			await deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, uploadTarget());
 			lock();
 		} catch (err) {
 			setError(errorMessage(err));

@@ -22,12 +22,11 @@ import EmojiQuickSend from "./emoji-quick-send.jsx";
 import PostEditor from "../editor/editor.jsx";
 import { parseRich } from "../../core/markdown/parse.js";
 import { toPlainText } from "../../core/markdown/to-plain.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const POST_MAX_LENGTH = 10000;
 const POST_SOURCE_MAX_LENGTH = 20000;
 const COMMENT_MAX_LENGTH = 4000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // CHANNEL-V2 часть D1 — isNpub добавлен: вызывающий код раньше не мог
 // отличить настоящее имя от npub-заглушки и красил npub как обычное имя,
@@ -78,7 +77,7 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
 		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
 				setError(t("chat.window.fileKeyNotFoundError"));
@@ -177,7 +176,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
 		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
 				setError(t("chat.window.fileKeyNotFoundError"));

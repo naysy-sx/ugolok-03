@@ -1419,7 +1419,9 @@
 			"warning": "Nur noch {{free}} von {{limit}} frei.",
 			"toStorage": "Speicher öffnen",
 			"toPlans": "Mehr Speicher holen"
-		}
+		},
+		"serverLabel": "Speicherserver: {{server}}",
+		"filesCount": "Dateien: {{count}}"
 	},
 	"plans": {
 		"title": "Speichertarife",

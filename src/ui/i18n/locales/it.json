@@ -1419,7 +1419,9 @@
 			"warning": "Restano solo {{free}} su {{limit}}.",
 			"toStorage": "Apri archiviazione",
 			"toPlans": "Ottieni più spazio"
-		}
+		},
+		"serverLabel": "Server di archiviazione: {{server}}",
+		"filesCount": "File: {{count}}"
 	},
 	"plans": {
 		"title": "Piani di archiviazione",

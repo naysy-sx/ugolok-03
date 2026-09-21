@@ -1419,7 +1419,9 @@
 			"warning": "{{limit}} 中仅剩 {{free}}。",
 			"toStorage": "打开存储",
 			"toPlans": "获取更多空间"
-		}
+		},
+		"serverLabel": "存储服务器：{{server}}",
+		"filesCount": "文件数：{{count}}"
 	},
 	"plans": {
 		"title": "存储套餐",

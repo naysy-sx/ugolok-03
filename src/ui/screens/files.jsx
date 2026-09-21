@@ -73,7 +73,6 @@ import IconScissors from "../icons/scissors.jsx";
 import IconEmpty from "../icons/empty.jsx";
 import IconFolders from "../icons/folders.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
 import IconPeople from "../icons/people.jsx";
@@ -81,10 +80,10 @@ import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import { openMedia } from "../signals/media.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
 import { t, tPlural, errorMessage as translateErrorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
 const ROW_HEIGHT_PX = 60; // = --file-row-height в custom.css, держать в синхроне
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 const TYPE_MODE = {
 	image: { labelKey: "files.typeImages", Icon: IconImage, playKey: "files.watch" },
@@ -123,7 +122,7 @@ function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 			let m = await getCachedManifest(ownerPubkey, entry.blob);
 			if (!m) {
 				try {
-					m = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+					m = await getManifest(entry.blob, { serverUrl: uploadTarget() });
 					if (m) await putCachedManifest(ownerPubkey, entry.blob, m);
 				} catch {
 					return;
@@ -292,7 +291,7 @@ export default function Files() {
 			options: {
 				name: file.name,
 				mime: file.type || "application/octet-stream",
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
 				onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, fileName: file.name, ...p } : prev)),
 			},
@@ -317,7 +316,7 @@ export default function Files() {
 				signal: controller.signal,
 				onJobDone: (i, result) => {
 					// ТЗ-03: журнал загрузок (purpose files, цель — папка, куда грузим).
-					recordBlobs(result.blobs, { purpose: "files", target: currentFolderId.value, name: files[i].name, server: BLOSSOM_URL }).catch(() => {});
+					recordBlobs(result.blobs, { purpose: "files", target: currentFolderId.value, name: files[i].name, server: uploadTarget() }).catch(() => {});
 					succeeded.push({ i, result });
 					noteSettled();
 					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
@@ -431,7 +430,7 @@ export default function Files() {
 		setShareError("");
 		try {
 			const result = await shareFolder(ownerPubkey, privKeySig.value, dbKeySig.value, shareDialogTarget, [...shareSelectedPubkeys], publish, {
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
 				onShareProgress: setShareProgress,
 			});
@@ -469,7 +468,7 @@ export default function Files() {
 		setSaveProgress({ filesDone: 0, filesTotal: 1 });
 		try {
 			await saveMountedItemToOwn(ownerPubkey, dbKeySig.value, mountId, nodeId, currentFolderId.value, {
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
 				onProgress: (p) => setSaveProgress(p),
 			});
@@ -528,7 +527,7 @@ export default function Files() {
 	const manifestInfo = useManifestInfo(
 		ownerPubkey,
 		(sortKey === "size" ? baseEntries : sortedNoSize.slice(windowStart, windowEnd)).filter((e) => e.kind === "file"),
-		BLOSSOM_URL,
+		uploadTarget(),
 	);
 	const entries =
 		sortKey === "size" ? sortEntries(baseEntries.map((e) => (e.kind === "file" ? { ...e, size: manifestInfo[e.id]?.size ?? 0 } : e)), "size", sortDir) : sortedNoSize;
@@ -589,7 +588,7 @@ export default function Files() {
 	async function resolveMediaRef(node) {
 		let manifest = await getCachedManifest(ownerPubkey, node.blob);
 		if (!manifest) {
-			manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			await putCachedManifest(ownerPubkey, node.blob, manifest);
 		}
 		if (node.mime == null) backfillMime(node.id, manifest.mime).catch(() => {});
@@ -675,7 +674,7 @@ export default function Files() {
 				setFreeDialog({ hashes: group.rows.map((r) => r.hash), name: entry.displayName, size: group.rows.reduce((sum, r) => sum + r.size, 0), targets: group.rows.flatMap((r) => r.targets).filter((x, i, a) => a.indexOf(x) === i), inFiles: true });
 				return;
 			}
-			const manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+			const manifest = await getManifest(entry.blob, { serverUrl: uploadTarget() });
 			setFreeDialog({ hashes: [entry.blob, manifest.blobSha256], name: entry.displayName, size: manifest.size, targets: [], inFiles: true });
 		} catch (err) {
 			setUploadError(translateErrorMessage(err));
@@ -1217,7 +1216,7 @@ export default function Files() {
 			</div>
 			)}
 		</Screen>
-		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={BLOSSOM_URL} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} onDone={() => refreshFreed()} />}
+		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={uploadTarget()} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} onDone={() => refreshFreed()} />}
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}

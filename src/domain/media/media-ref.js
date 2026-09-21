@@ -25,6 +25,7 @@ export function refFromAttachment(attachment, sourceMeta) {
     size: attachment.size,
     previewDigest: attachment.previewDigest || null,
     previewKey: attachment.previewKey || null,
+    servers: Array.isArray(attachment.servers) ? attachment.servers : null,
     sourceKind: "attachment",
     sourceMeta: sourceMeta
   };

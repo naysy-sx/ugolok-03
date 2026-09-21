@@ -1419,7 +1419,9 @@
 			"warning": "Only {{free}} of {{limit}} left.",
 			"toStorage": "Open storage",
 			"toPlans": "Get more space"
-		}
+		},
+		"serverLabel": "Storage server: {{server}}",
+		"filesCount": "Files: {{count}}"
 	},
 	"plans": {
 		"title": "Storage plans",

@@ -1,7 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import { getManifest } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import FilePicker from "./file-picker.jsx";
 import IconPaperclip from "../icons/paperclip.jsx";
 import IconFolder from "../icons/folder.jsx";
@@ -9,8 +8,8 @@ import IconMicrophone from "../icons/microphone.jsx";
 import IconStop from "../icons/stop.jsx";
 import IconCross from "../icons/cross.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Живой фидбег — единый набор кнопок прикрепления (файл/из хранилища/голос)
 // для ВСЕХ трёх композиторов (личный чат — chat.jsx, комментарий и общий чат
@@ -49,7 +48,7 @@ export function ComposeAttachButtons({ tray, voice, disabled, onError }) {
 			const node = projected.value.nodes.get(id);
 			if (!node || node.kind !== "file") continue;
 			try {
-				const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+				const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 				const fileKey = await getFileKeyFor(node.blob);
 				if (!fileKey) {
 					lastError = t("chat.window.fileKeyNotFoundError");

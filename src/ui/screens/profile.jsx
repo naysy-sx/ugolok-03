@@ -8,7 +8,6 @@ import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish } from "../signals/transport.js";
 import { projected, getFileKeyFor } from "../signals/files.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import Screen from "../components/screen.jsx";
 import FilePicker from "../components/file-picker.jsx";
 import DeleteAccountPanel from "../components/delete-account-panel.jsx";
@@ -16,8 +15,8 @@ import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
 import IconTrash from "../icons/trash.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
@@ -80,8 +79,8 @@ export default function Profile() {
 	async function publishAvatarBytes(fileBytes, mimeType) {
 		setPublishStatus(t("profile.publishingStatus"));
 		try {
-			const settings = await loadUiSettings(id, dbKeySig.value);
-			const serverUrl = settings.activeBlossomUrl;
+			await loadUiSettings(id, dbKeySig.value);
+			const serverUrl = uploadTarget();
 			if (!serverUrl) {
 				setPublishStatus(t("profile.notPublishedNoBlossom"));
 				return;
@@ -151,7 +150,7 @@ export default function Profile() {
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
 		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			if (!manifest.mime?.startsWith("image/")) {
 				setAvatarError(t("profile.selectImageError"));
 				return;
@@ -166,7 +165,7 @@ export default function Profile() {
 				return;
 			}
 			if (!window.confirm(t("profile.avatarPublicConfirm"))) return;
-			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
+			const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: uploadTarget() });
 			let avatarBlob = new Blob([bytes], { type: manifest.mime });
 			try {
 				avatarBlob = await resizeAvatarBlob(avatarBlob);

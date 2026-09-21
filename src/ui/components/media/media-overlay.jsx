@@ -7,7 +7,6 @@ import { consumeMediaOrigin } from "../../signals/media-origin.js";
 import { getMemoryCachedUrl } from "../../attachment-memory-cache.js";
 import { getPreviewUrl } from "../../../domain/media/plaintext-cache.js";
 import { resolveAttachmentPreviewUrl } from "../../../domain/media/attachment-preview-resolver.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import VideoPlayer from "./video-player.jsx";
 import AudioPlayer from "./audio-player.jsx";
 import ImageViewer from "./image-viewer.jsx";
@@ -25,6 +24,7 @@ import IconRepeat from "../../icons/repeat.jsx";
 import IconRepeatOnce from "../../icons/repeat-once.jsx";
 import { formatFileSize } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
+import { uploadTarget } from "../../../domain/files/servers.js";
 
 const OPEN_ANIMATION_MS = 420;
 const CLOSE_ANIMATION_MS = 200;
@@ -47,7 +47,6 @@ function prefersReducedMotion() {
 
 const VIEWS = { video: VideoPlayer, audio: AudioPlayer, image: ImageViewer, other: FileViewer };
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function OverlayThumb({ thumbRef, isActive, onGo, ariaLabel, buttonRef }) {
 	const [url, setUrl] = useState(
@@ -58,7 +57,7 @@ function OverlayThumb({ thumbRef, isActive, onGo, ariaLabel, buttonRef }) {
 		let cancelled = false;
 		resolveAttachmentPreviewUrl(
 			{ previewDigest: thumbRef.previewDigest, previewKey: thumbRef.previewKey },
-			{ serverUrl: BLOSSOM_URL },
+			{ serverUrl: uploadTarget() },
 		).then((previewUrl) => {
 			if (!cancelled && previewUrl) setUrl(previewUrl);
 		});

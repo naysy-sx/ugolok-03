@@ -21,3 +21,11 @@ export const BUILD_HASH =
 // CONTRACTS.md §DISCOVERY, T9 — пустая строка -> кнопка "Пожаловаться" скрыта.
 export const BUILD_ADMIN_PUBKEY =
 	typeof __BUILD_ADMIN_PUBKEY__ !== "undefined" ? __BUILD_ADMIN_PUBKEY__ : "";
+
+// Крайний запасной адрес хранилища. Читать его напрямую нельзя — только через
+// domain/files/servers.js (uploadTarget / readCandidates): иначе config.json и
+// настройки пользователя не действуют (ТЗ-05). Тест tests/server-addressing.test.js
+// запрещает возврат.
+export function getBuildBlossomServers() {
+	return [...BUILD_DEFAULT_BLOSSOM_SERVERS];
+}

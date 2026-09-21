@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../../domain/media/adapters/media-url.js";
 import { mediaErrorReasonKey, isTransientMediaError } from "../../../domain/media/media-error.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
+import { uploadTarget } from "../../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Аудио внутри медиа-сессии (Этап D) — тот же приём/те же гарантии, что
 // video-player.jsx (см. комментарий там: src через мост SW, двунаправленная
@@ -36,7 +35,7 @@ export default function AudioPlayer({ mediaRef, playing, onToggle, onEnded, comp
 		setError("");
 		setPercent(null);
 		acquireMediaUrl(mediaRef, {
-			serverUrl: BLOSSOM_URL,
+			serverUrl: uploadTarget(),
 			onProgress: (p) => {
 				if (!cancelled && p && typeof p === "object" && p.phase === "preparing") setPercent(p.percent);
 			},

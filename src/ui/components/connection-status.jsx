@@ -1,10 +1,9 @@
 import { useEffect } from "preact/hooks";
 import { connState, synced } from "../signals/transport.js";
 import { blossomStatus, refreshBlossomStatus } from "../signals/connectivity.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { t } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const BLOSSOM_CHECK_INTERVAL_MS = 30000;
 const TONE_RANK = { ok: 0, warn: 1, bad: 2 };
 
@@ -34,8 +33,8 @@ const BLOSSOM_LABEL_KEYS = {
 // WebSocket), поэтому периодическая проверка достижимости раз в 30с.
 export default function ConnectionStatusPanel() {
 	useEffect(() => {
-		refreshBlossomStatus(BLOSSOM_URL);
-		const id = setInterval(() => refreshBlossomStatus(BLOSSOM_URL), BLOSSOM_CHECK_INTERVAL_MS);
+		refreshBlossomStatus(uploadTarget());
+		const id = setInterval(() => refreshBlossomStatus(uploadTarget()), BLOSSOM_CHECK_INTERVAL_MS);
 		return () => clearInterval(id);
 	}, []);
 

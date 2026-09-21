@@ -8,10 +8,9 @@ import { registerPlayerFile, unregisterPlayerFile, isPlayerFileRegistered } from
 import { extractVideoFrameFromSrc } from "../media/extract-video-poster.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 import FileKindIcon from "./file-kind-icon.jsx";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 // Общая на весь экран очередь — иначе каждая строка получила бы СВОЙ
 // параллелизм, и общее число одновременных задач росло бы с числом видимых
 // строк, а не оставалось 2-4 (ALGO.MD §15).
@@ -42,7 +41,7 @@ const THUMB_CACHE_PREFIX = "thumb:";
 async function videoFrameThumbnail(digest, manifest, fileKey) {
 	if (typeof navigator === "undefined" || !navigator.serviceWorker?.controller) return null;
 	const alreadyRegistered = isPlayerFileRegistered(digest); // плеер открыт на этом файле — не трогаем его регистрацию
-	if (!alreadyRegistered) registerPlayerFile(digest, { manifest, fileKey, serverUrl: BLOSSOM_URL });
+	if (!alreadyRegistered) registerPlayerFile(digest, { manifest, fileKey, serverUrl: uploadTarget() });
 	try {
 		return await extractVideoFrameFromSrc(`/files-content/${digest}`, manifest.mime);
 	} finally {
@@ -67,7 +66,7 @@ export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row
 				handle = thumbnailQueue.enqueue(async () => {
 					let manifest = await getCachedManifest(ownerPubkey, entry.blob);
 					if (!manifest) {
-						manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+						manifest = await getManifest(entry.blob, { serverUrl: uploadTarget() });
 						await putCachedManifest(ownerPubkey, entry.blob, manifest);
 					}
 					// Этап E, E1-доп (DESIGN.md) — дозаливка mime старому узлу (⊥),
@@ -81,7 +80,7 @@ export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row
 					const fileKey = await (resolveKey ? resolveKey() : getFileKeyFor(entry.blob));
 					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
 					if (isVideo) return videoFrameThumbnail(entry.blob, manifest, fileKey);
-					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
+					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: uploadTarget() });
 					return createThumbnailBlob(bytes, manifest.mime);
 				});
 				handle.promise

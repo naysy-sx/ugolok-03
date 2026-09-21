@@ -1,4 +1,5 @@
 import { useState, useEffect, useId } from "preact/hooks";
+import { resetQuotaForServerChange } from "../signals/quota.js";
 import { currentUser, privKeySig, dbKeySig, lock } from "../signals/auth.js";
 import {
 	loadUiSettings,
@@ -528,9 +529,9 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 				urls={settings.blossomUrls}
 				activeUrl={settings.activeBlossomUrl}
 				busy={busy}
-				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
+				onAdd={(url) => withBusy(async () => { await addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
+				onRemove={(url) => withBusy(async () => { await removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
+				onSetActive={(url) => withBusy(async () => { await setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
 			/>
 		</div>
 	);
