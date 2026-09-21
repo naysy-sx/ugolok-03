@@ -2,7 +2,7 @@
 // Доля — read-only: файлы можно смотреть (картинки/видео/аудио — в оверлее, документы — в карточке),
 // фильтровать по типу и сохранять к себе. Ключ файла берётся из гранта (resolveMountFileKey),
 // mime — из манифеста (в узле доли его нет), манифесты подтягиваются лениво и кэшируются.
-import { useState, useEffect, useMemo } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { activeMounts, mountProjections } from "../signals/mounts.js";
 import { profiles } from "../signals/contacts.js";
 import { currentUser, dbKeySig } from "../signals/auth.js";
@@ -15,11 +15,13 @@ import { ROOT_ID, TRASH_ID, LOST_FOUND_ID } from "../../domain/files/tree.js";
 import { sortEntries } from "../../domain/files/sort.js";
 import { filterByClass } from "../../domain/files/filter.js";
 import { buildVisibleMediaPlaylist } from "../../domain/files/visible-media.js";
-import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-meta.js";
+import { fileExtLabel, liveChildCount } from "../../domain/files/file-meta.js";
 import { classOf } from "../../domain/media/media-ref.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { formatFileSize } from "./attachment-view.jsx";
 import FileThumbnail from "./file-thumbnail.jsx";
+import FileTableHead from "./file-table-head.jsx";
+import { useManifestInfo } from "../hooks/use-manifest-info.js";
 import FileInfoDialog from "./file-info-dialog.jsx";
 import TypeFilterBar from "./files-type-filter.jsx";
 import IconGlobe from "../icons/globe.jsx";
@@ -30,39 +32,6 @@ import IconChevronRight from "../icons/chevron-right.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
-const MANIFEST_CONCURRENCY = 3;
-
-// Манифесты файлов текущей папки: mime и размер. Кэш IndexedDB → сеть, не больше трёх запросов одновременно.
-function useMountManifests(ownerPubkey, files) {
-	const [info, setInfo] = useState({}); // nodeId -> { mime, size, name }
-	useEffect(() => {
-		let cancelled = false;
-		const todo = files.filter((f) => f.blob && !info[f.id]);
-		if (todo.length === 0) return;
-		let next = 0;
-		async function worker() {
-			while (!cancelled && next < todo.length) {
-				const node = todo[next++];
-				try {
-					let manifest = await getCachedManifest(ownerPubkey, node.blob);
-					if (!manifest) {
-						manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
-						await putCachedManifest(ownerPubkey, node.blob, manifest);
-					}
-					if (!cancelled) setInfo((prev) => ({ ...prev, [node.id]: { mime: manifest.mime, size: manifest.size, name: manifest.name } }));
-				} catch {
-					// нет манифеста (сервер недоступен / файл убран) — строка остаётся с общей иконкой
-				}
-			}
-		}
-		for (let i = 0; i < MANIFEST_CONCURRENCY; i++) worker();
-		return () => {
-			cancelled = true;
-		};
-		// eslint-disable-next-line
-	}, [ownerPubkey, files.map((f) => f.id).join("|")]);
-	return info;
-}
 
 function MountsList({ openMountView, handleUnmountShare }) {
 	const mounts = activeMounts.value;
@@ -114,25 +83,27 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 	const [typeFilter, setTypeFilter] = useState("all");
 	const [docInfo, setDocInfo] = useState(null);
 	const [error, setError] = useState("");
+	const [sortKey, setSortKey] = useState("name");
+	const [sortDir, setSortDir] = useState("asc");
 	const R = mountProjections.value.get(openMountId);
 
 	// Mount.state — createInitialState() СОЗДАЁТ $trash/$lost+found: это технические узлы получателя,
 	// владелец доли их не наполняет; показывать их бессмысленно.
-	const rawEntries = useMemo(
-		() =>
-			R
-				? sortEntries(
-						(R.children.get(mountFolderId) ?? [])
-							.filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID)
-							.map((id) => ({ id, ...R.nodes.get(id) })),
-						"name",
-					)
-				: [],
-		[R, mountFolderId],
-	);
-	const info = useMountManifests(ownerPubkey, rawEntries.filter((e) => e.kind === "file"));
-	const entriesAll = rawEntries.map((e) => (e.kind === "file" ? { ...e, mime: e.mime ?? info[e.id]?.mime ?? null } : e));
-	const entries = filterByClass(entriesAll, typeFilter);
+	const rawEntries = R
+		? (R.children.get(mountFolderId) ?? []).filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID).map((id) => ({ id, ...R.nodes.get(id) }))
+		: [];
+	// В долях (обычно небольших) манифесты всех файлов папки нужны сразу: и mime для фильтра, и размер для сортировки.
+	const info = useManifestInfo(ownerPubkey, rawEntries.filter((e) => e.kind === "file"), BLOSSOM_URL);
+	const entriesAll = rawEntries.map((e) => (e.kind === "file" ? { ...e, mime: e.mime ?? info[e.id]?.mime ?? null, size: info[e.id]?.size ?? 0 } : e));
+	const entries = sortEntries(filterByClass(entriesAll, typeFilter), sortKey, sortDir);
+
+	function changeSort(key) {
+		if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else {
+			setSortKey(key);
+			setSortDir("asc");
+		}
+	}
 
 	useEffect(() => setTypeFilter("all"), [openMountId, mountFolderId]);
 
@@ -191,9 +162,6 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 	return (
 		<div class="stack">
 			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button type="button" class="btn--ghost" onClick={closeMountView}>
-					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> {t("files.backToMountsList")}
-				</button>
 				{mountFolderId !== ROOT_ID && (
 					<button type="button" class="btn--ghost" onClick={() => setMountFolderId(ROOT_ID)}>
 						{t("files.mountRootButton")}
@@ -211,20 +179,7 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 				<p style={{ color: "var(--muted)" }}>{typeFilter !== "all" ? t("files.typeEmpty") : t("files.folderEmpty")}</p>
 			) : (
 				<table class="file-table">
-					<thead>
-						<tr>
-							<th scope="col" class="file-table__icon">
-								<span class="visually-hidden">{t("files.columnPreview")}</span>
-							</th>
-							<th scope="col">{t("files.columnName")}</th>
-							<th scope="col" class="file-table__type">
-								{t("files.columnType")}
-							</th>
-							<th scope="col" class="file-table__actions">
-								<span class="visually-hidden">{t("files.columnActions")}</span>
-							</th>
-						</tr>
-					</thead>
+					<FileTableHead sortKey={sortKey} sortDir={sortDir} onSort={changeSort} showAccess={false} />
 					<tbody>
 						{entries.map((entry) => (
 							<tr key={entry.id} class="file-row">
@@ -246,10 +201,11 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 									</button>
 								</td>
 								<td class="file-table__type">
+									<small class="file-row-status">{entry.kind === "dir" ? t("files.kindFolder") : fileExtLabel(entry.displayName)}</small>
+								</td>
+								<td class="file-table__size">
 									<small class="file-row-status">
-										{entry.kind === "dir"
-											? tPlural("files.objectCount", liveChildCount(R.children, entry.id))
-											: joinMeta([fileExtLabel(entry.displayName), info[entry.id]?.size != null ? formatFileSize(info[entry.id].size) : ""])}
+										{entry.kind === "dir" ? tPlural("files.objectCount", liveChildCount(R.children, entry.id)) : info[entry.id]?.size != null ? formatFileSize(info[entry.id].size) : ""}
 									</small>
 								</td>
 								<td class="file-table__actions">

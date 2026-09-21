@@ -851,7 +851,11 @@
 		"columnName": "Ad",
 		"columnType": "Tür",
 		"columnActions": "İşlemler",
-		"columnSelect": "Seçim"
+		"columnSelect": "Seçim",
+		"columnSize": "Boyut",
+		"columnAccess": "Erişim",
+		"kindFolder": "Klasör",
+		"sortBy": "Sırala: {{label}}"
 	},
 	"profile": {
 		"server": {

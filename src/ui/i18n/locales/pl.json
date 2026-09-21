@@ -851,7 +851,11 @@
 		"columnName": "Nazwa",
 		"columnType": "Typ",
 		"columnActions": "Akcje",
-		"columnSelect": "Wybór"
+		"columnSelect": "Wybór",
+		"columnSize": "Rozmiar",
+		"columnAccess": "Dostęp",
+		"kindFolder": "Folder",
+		"sortBy": "Sortuj: {{label}}"
 	},
 	"profile": {
 		"server": {

@@ -63,6 +63,8 @@ import FreeSpaceDialog from "../components/free-space-dialog.jsx";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
 import FileThumbnail from "../components/file-thumbnail.jsx";
+import FileTableHead from "../components/file-table-head.jsx";
+import { useManifestInfo } from "../hooks/use-manifest-info.js";
 import MountsView from "../components/mounts-view.jsx";
 import { formatFileSize } from "../components/attachment-view.jsx";
 import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-meta.js";
@@ -90,6 +92,27 @@ const TYPE_MODE = {
 	audio: { labelKey: "files.typeAudio", Icon: IconMusicNote, playKey: "files.playSequential" },
 	other: { labelKey: "files.typeDocs", Icon: IconFileText, playKey: null },
 };
+
+// Ячейка «Размер» таблицы: для папки — число элементов, для файла — размер из манифеста; статус
+// «ремонта» и пометка «удалён с сервера» (ТЗ-03) показываются вместо размера, как и в плитках.
+function FileSizeCell({ entry, size }) {
+	if (entry.kind === "file" && entry.blob && freedDigests.value.has(entry.blob)) {
+		return (
+			<small class="file-row-status" title={t("files.freedFromServer")} style={{ color: "var(--warn, var(--muted))" }}>
+				{t("files.freedFromServer")}
+			</small>
+		);
+	}
+	if (STATUS_LABEL_KEYS[entry.status]) {
+		return (
+			<small class="file-row-status" title={t(STATUS_LABEL_KEYS[entry.status])}>
+				{t(STATUS_LABEL_KEYS[entry.status])}
+			</small>
+		);
+	}
+	if (entry.kind === "dir") return <small class="file-row-status">{tPlural("files.objectCount", liveChildCount(projected.value.children, entry.id))}</small>;
+	return <small class="file-row-status">{size != null ? formatFileSize(size) : ""}</small>;
+}
 
 function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 	const [size, setSize] = useState(null);
@@ -218,6 +241,8 @@ export default function Files() {
 	const [uploadError, setUploadError] = useState("");
 	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
 	const [typeFilter, setTypeFilter] = useState("all");
+	const [sortKey, setSortKey] = useState("name"); // name | type | size
+	const [sortDir, setSortDir] = useState("asc");
 	const [viewOverride, setViewOverride] = useState({});
 	const [docInfo, setDocInfo] = useState(null); // {entry, mediaRef} | null
 	const fileInputRef = useRef(null);
@@ -478,10 +503,9 @@ export default function Files() {
 
 	const layout = layoutFor(typeFilter, viewOverride);
 	const folderEntries = currentEntries.value;
-	const entries = sortEntries(
-		filterEntries(filterByClass(folderEntries, typeFilter), debouncedQuery),
-		"name",
-	);
+	const baseEntries = filterEntries(filterByClass(folderEntries, typeFilter), debouncedQuery);
+	// Порядок без размеров (по имени/типу) — дёшево; по размеру нужны манифесты ВСЕХ файлов папки.
+	const sortedNoSize = sortEntries(baseEntries, sortKey === "size" ? "name" : sortKey, sortDir);
 	const path = breadcrumbPath.value;
 	const inTrash = currentFolderId.value === TRASH_ID;
 	const classArr = treeState.value.classCount.get(currentFolderId.value);
@@ -497,10 +521,26 @@ export default function Files() {
 	// рендерится целиком". Рендерятся только entries[start:end] — окно
 	// строк, видимое (+overscan) в единственной скролл-зоне экрана.
 	const { anchorRef, start: windowStart, end: windowEnd } = useVirtualWindow({
-		count: entries.length,
+		count: baseEntries.length,
 		rowHeight: ROW_HEIGHT_PX,
 	});
+	// Размеры/типы из манифестов: видимому окну — всегда, целой папке — только при сортировке по размеру.
+	const manifestInfo = useManifestInfo(
+		ownerPubkey,
+		(sortKey === "size" ? baseEntries : sortedNoSize.slice(windowStart, windowEnd)).filter((e) => e.kind === "file"),
+		BLOSSOM_URL,
+	);
+	const entries =
+		sortKey === "size" ? sortEntries(baseEntries.map((e) => (e.kind === "file" ? { ...e, size: manifestInfo[e.id]?.size ?? 0 } : e)), "size", sortDir) : sortedNoSize;
 	const visibleEntries = entries.slice(windowStart, windowEnd);
+
+	function changeSort(key) {
+		if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else {
+			setSortKey(key);
+			setSortDir("asc");
+		}
+	}
 
 	function toggleSelect(id) {
 		setSelected((prev) => {
@@ -732,6 +772,8 @@ export default function Files() {
 	return (
 		<>
 		<Screen
+			// Внутри полученной доли — стрелка «назад» перед заголовком (вместо кнопки «К списку долей» в теле).
+			breadcrumb={view === "mounts" && openMountId !== null ? { label: t("files.receivedFoldersTab"), onBack: () => setOpenMountId(null) } : undefined}
 			// Живой фидбег: пункт меню назывался "Хранилище", а сюда попадали на
 			// экран "Файлы" — разнобой в названии одного и того же места.
 			// sidebarCard.storageMenuItem переименован в "Файлы" (account-card.jsx),
@@ -1052,22 +1094,11 @@ export default function Files() {
 					<>
 						<div ref={anchorRef} aria-hidden="true" />
 						<table class={"file-table" + (inTrash ? " file-table--trash" : "")}>
-							<thead>
-								<tr>
-									<th scope="col" class="file-table__icon">
-										<span class="visually-hidden">{t("files.columnPreview")}</span>
-									</th>
-									<th scope="col">{t("files.columnName")}</th>
-									<th scope="col" class="file-table__type">{t("files.columnType")}</th>
-									<th scope="col" class="file-table__actions">
-										<span class="visually-hidden">{t("files.columnActions")}</span>
-									</th>
-								</tr>
-							</thead>
+							<FileTableHead sortKey={sortKey} sortDir={sortDir} onSort={changeSort} />
 							<tbody>
 								{windowStart > 0 && (
 									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${windowStart * ROW_HEIGHT_PX}px` }}>
-										<td colSpan={4} />
+										<td colSpan={6} />
 									</tr>
 								)}
 								{visibleEntries.map((entry) => (
@@ -1114,9 +1145,14 @@ export default function Files() {
 											)}
 										</td>
 										<td class="file-table__type">
-											<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-row-status" />
+											<small class="file-row-status">{entry.kind === "dir" ? t("files.kindFolder") : fileExtLabel(entry.displayName)}</small>
+										</td>
+										<td class="file-table__size">
+											<FileSizeCell entry={entry} size={manifestInfo[entry.id]?.size} />
+										</td>
+										<td class="file-table__access">
 											{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
-												<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
+												<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="icon file-row-icon file-row-icon--shared" />
 											)}
 										</td>
 										<td class="file-table__actions">
@@ -1171,7 +1207,7 @@ export default function Files() {
 								))}
 								{windowEnd < entries.length && (
 									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px` }}>
-										<td colSpan={4} />
+										<td colSpan={6} />
 									</tr>
 								)}
 							</tbody>

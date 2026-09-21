@@ -851,7 +851,11 @@
 		"columnName": "名称",
 		"columnType": "类型",
 		"columnActions": "操作",
-		"columnSelect": "选择"
+		"columnSelect": "选择",
+		"columnSize": "大小",
+		"columnAccess": "访问",
+		"kindFolder": "文件夹",
+		"sortBy": "排序：{{label}}"
 	},
 	"profile": {
 		"server": {

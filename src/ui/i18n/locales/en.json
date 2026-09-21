@@ -851,7 +851,11 @@
 		"columnName": "Name",
 		"columnType": "Type",
 		"columnActions": "Actions",
-		"columnSelect": "Select"
+		"columnSelect": "Select",
+		"columnSize": "Size",
+		"columnAccess": "Access",
+		"kindFolder": "Folder",
+		"sortBy": "Sort by: {{label}}"
 	},
 	"profile": {
 		"server": {

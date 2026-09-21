@@ -851,7 +851,11 @@
 		"columnName": "Nome",
 		"columnType": "Tipo",
 		"columnActions": "Azioni",
-		"columnSelect": "Selezione"
+		"columnSelect": "Selezione",
+		"columnSize": "Dimensione",
+		"columnAccess": "Accesso",
+		"kindFolder": "Cartella",
+		"sortBy": "Ordina per: {{label}}"
 	},
 	"profile": {
 		"server": {

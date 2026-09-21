@@ -78,3 +78,14 @@ test("устойчивость при 10^4 записях с одинаковы�
 		sorted2.map((e) => e.id),
 	);
 });
+
+test("сортировка по типу: по расширению, папки впереди; без расширения — в начале", () => {
+	const entries = [file("a", "z.pdf"), file("b", "a.jpg"), file("c", "noext"), dir("d", "папка")];
+	assert.deepEqual(sortEntries(entries, "type").map((e) => e.id), ["d", "c", "b", "a"]);
+	assert.deepEqual(sortEntries(entries, "type", "desc").map((e) => e.id), ["d", "a", "b", "c"]);
+});
+
+test("сортировка по размеру берёт entry.size (размер из манифеста), а не только blob.size", () => {
+	const entries = [{ ...file("a", "big"), blob: "digest", size: 300 }, { ...file("b", "small"), blob: "digest2", size: 1 }];
+	assert.deepEqual(sortEntries(entries, "size").map((e) => e.id), ["b", "a"]);
+});

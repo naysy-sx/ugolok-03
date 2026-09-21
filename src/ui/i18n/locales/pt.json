@@ -851,7 +851,11 @@
 		"columnName": "Nome",
 		"columnType": "Tipo",
 		"columnActions": "Ações",
-		"columnSelect": "Seleção"
+		"columnSelect": "Seleção",
+		"columnSize": "Tamanho",
+		"columnAccess": "Acesso",
+		"kindFolder": "Pasta",
+		"sortBy": "Ordenar por: {{label}}"
 	},
 	"profile": {
 		"server": {

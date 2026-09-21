@@ -7831,7 +7831,37 @@ button[type="button"].media-mini-bar-btn {
 	inline-size: 2.5rem;
 }
 .file-table__type {
-	inline-size: 10rem;
+	inline-size: 6rem;
+}
+.file-table__size {
+	inline-size: 7.5rem;
+}
+.file-table__access {
+	inline-size: 3rem;
+	text-align: center;
+}
+.file-row-icon--shared {
+	color: var(--accent);
+	display: inline-block;
+	font-size: 1.25rem;
+}
+/* Кнопка-заголовок сортировки: выглядит как заголовок колонки, не как кнопка. */
+.file-table__sort {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+.file-table__sort--on {
+	color: var(--fg);
+}
+.file-table__sort-icon {
+	font-size: 0.9em;
 }
 .file-table__actions {
 	inline-size: 4.5rem;
@@ -7863,8 +7893,12 @@ button[type="button"].media-mini-bar-btn {
 	vertical-align: middle;
 }
 @media (max-width: 576px) {
-	.file-table__type {
+	.file-table__type,
+	.file-table__access {
 		display: none;
+	}
+	.file-table__size {
+		inline-size: 5rem;
 	}
 	.file-table--trash .file-table__actions,
 	.file-table__actions--wide {
@@ -10232,6 +10266,7 @@ button[type="button"].media-mini-bar-btn {
 
 /* Иконка перед заголовком экрана (акцентная, как и сам заголовок). */
 .screen-title__icon {
+	display: inline-block; /* глобально .icon может быть block — тогда текст заголовка уезжает на новую строку */
 	margin-inline-end: var(--space-2xs);
 	vertical-align: -0.125em;
 }

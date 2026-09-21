@@ -851,7 +851,11 @@
 		"columnName": "Naam",
 		"columnType": "Type",
 		"columnActions": "Acties",
-		"columnSelect": "Selectie"
+		"columnSelect": "Selectie",
+		"columnSize": "Grootte",
+		"columnAccess": "Toegang",
+		"kindFolder": "Map",
+		"sortBy": "Sorteren op: {{label}}"
 	},
 	"profile": {
 		"server": {

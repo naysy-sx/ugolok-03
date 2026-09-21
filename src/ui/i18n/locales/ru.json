@@ -851,7 +851,11 @@
 		"columnName": "Название",
 		"columnType": "Тип",
 		"columnActions": "Действия",
-		"columnSelect": "Выбор"
+		"columnSelect": "Выбор",
+		"columnSize": "Размер",
+		"columnAccess": "Доступ",
+		"kindFolder": "Папка",
+		"sortBy": "Сортировать: {{label}}"
 	},
 	"profile": {
 		"server": {

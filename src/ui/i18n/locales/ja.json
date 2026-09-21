@@ -851,7 +851,11 @@
 		"columnName": "名前",
 		"columnType": "種類",
 		"columnActions": "操作",
-		"columnSelect": "選択"
+		"columnSelect": "選択",
+		"columnSize": "サイズ",
+		"columnAccess": "アクセス",
+		"kindFolder": "フォルダ",
+		"sortBy": "並べ替え：{{label}}"
 	},
 	"profile": {
 		"server": {
