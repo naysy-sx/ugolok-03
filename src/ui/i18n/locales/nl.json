@@ -846,7 +846,12 @@
 		"freedFromServer": "Van de server verwijderd",
 		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt.",
 		"shareProgress": "Kopiëren voor lezers: bestand {{done}} van {{total}} · {{percent}}% · {{name}}",
-		"shareProgressStart": "Bestanden voor lezers voorbereiden…"
+		"shareProgressStart": "Bestanden voor lezers voorbereiden…",
+		"columnPreview": "Pictogram",
+		"columnName": "Naam",
+		"columnType": "Type",
+		"columnActions": "Acties",
+		"columnSelect": "Selectie"
 	},
 	"profile": {
 		"server": {

@@ -846,7 +846,12 @@
 		"freedFromServer": "Удалён с сервера",
 		"freedOpenHint": "«{{name}}» освобождён с сервера и больше не открывается. Уберите его из списка, если он не нужен.",
 		"shareProgress": "Копирую для читателей: файл {{done}} из {{total}} · {{percent}} % · {{name}}",
-		"shareProgressStart": "Готовлю файлы для читателей…"
+		"shareProgressStart": "Готовлю файлы для читателей…",
+		"columnPreview": "Значок",
+		"columnName": "Название",
+		"columnType": "Тип",
+		"columnActions": "Действия",
+		"columnSelect": "Выбор"
 	},
 	"profile": {
 		"server": {

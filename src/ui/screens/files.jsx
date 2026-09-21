@@ -62,16 +62,15 @@ import { freedDigests, refreshFreed } from "../signals/uploads.js";
 import FreeSpaceDialog from "../components/free-space-dialog.jsx";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
-import FileKindIcon from "../components/file-kind-icon.jsx";
+import FileThumbnail from "../components/file-thumbnail.jsx";
+import MountsView from "../components/mounts-view.jsx";
 import { formatFileSize } from "../components/attachment-view.jsx";
 import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-meta.js";
 import IconRestore from "../icons/restore.jsx";
+import IconScissors from "../icons/scissors.jsx";
+import IconEmpty from "../icons/empty.jsx";
+import IconFolders from "../icons/folders.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
-import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
-import { registerPlayerFile, unregisterPlayerFile, isPlayerFileRegistered } from "../../domain/files/player-bridge.js";
-import { extractVideoFrameFromSrc } from "../media/extract-video-poster.js";
-import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
-import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
@@ -82,12 +81,8 @@ import { setMediaOrigin } from "../signals/media-origin.js";
 import { t, tPlural, errorMessage as translateErrorMessage } from "../signals/i18n.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
-const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
+const ROW_HEIGHT_PX = 60; // = --file-row-height в custom.css, держать в синхроне
 const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
-// Общая на весь экран очередь — иначе каждая строка получила бы СВОЙ
-// параллелизм, и общее число одновременных задач росло бы с числом видимых
-// строк, а не оставалось 2-4 (ALGO.MD §15).
-const thumbnailQueue = createThumbnailQueue(3);
 
 const TYPE_MODE = {
 	image: { labelKey: "files.typeImages", Icon: IconImage, playKey: "files.watch" },
@@ -95,106 +90,6 @@ const TYPE_MODE = {
 	audio: { labelKey: "files.typeAudio", Icon: IconMusicNote, playKey: "files.playSequential" },
 	other: { labelKey: "files.typeDocs", Icon: IconFileText, playKey: null },
 };
-
-// Миниатюра по видимости (IntersectionObserver) — задача 3.8 TASK.md.
-// Манифест (mime/size) неизвестен из самого узла дерева (Node.blob — только
-// дайджест, §4.1 TASK.md) — приходится сходить за ним (кэш в files_manifests,
-// store.js, сперва; сеть — только если кэш пуст). Отмена — если строка
-// покинула вьюпорт РАНЬШЕ, чем задание стартовало (thumbnail-queue.js);
-// уже стартовавшее докручивается, не прерывается на середине.
-// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 53 И7 4.4-довесок): "отправитель видит
-// маленькую фотку, получатель — нормальную". Причина — ключ кэша здесь
-// (entry.blob = manifestDigest) СОВПАДАЛ с ключом, которым attachment-
-// view.jsx кэширует ПОЛНОРАЗМЕРНОЕ вложение чата (тот же manifestDigest,
-// если файл был отправлен через дедупликацию, И7 7.4 — один и тот же
-// блоб). Миниатюра (200px, downscale) — не то же самое содержимое, что
-// полный файл, но раньше делила с ним ОДИН слот в attachment-memory-
-// cache.js — кто первым закэшировал (превью в "Файлы" или полный
-// просмотр в чате), тот и "выигрывал" для ВСЕХ последующих чтений под
-// этим digest'ом. THUMB_CACHE_PREFIX — отдельный неймспейс, чтобы
-// уменьшенная и полная версии никогда не делили один ключ.
-const THUMB_CACHE_PREFIX = "thumb:";
-
-// Кадр видео для плитки «Файлов». Файл целиком не скачивается: кадр берётся через тот же мост
-// /files-content/…, что и плеер — браузер читает только нужные диапазоны. Без service worker
-// (нет моста) и при любой неудаче остаётся иконка.
-async function videoFrameThumbnail(digest, manifest, fileKey) {
-	if (typeof navigator === "undefined" || !navigator.serviceWorker?.controller) return null;
-	const alreadyRegistered = isPlayerFileRegistered(digest); // плеер открыт на этом файле — не трогаем его регистрацию
-	if (!alreadyRegistered) registerPlayerFile(digest, { manifest, fileKey, serverUrl: BLOSSOM_URL });
-	try {
-		return await extractVideoFrameFromSrc(`/files-content/${digest}`, manifest.mime);
-	} finally {
-		if (!alreadyRegistered) unregisterPlayerFile(digest);
-	}
-}
-
-function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb" }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
-	const [failed, setFailed] = useState(false);
-	const elRef = useRef(null);
-
-	useEffect(() => {
-		if (url || failed || !entry.blob) return;
-		let handle = null;
-		let cancelled = false;
-
-		const observer = new IntersectionObserver(([observedEntry]) => {
-			if (observedEntry.isIntersecting && !handle) {
-				handle = thumbnailQueue.enqueue(async () => {
-					let manifest = await getCachedManifest(ownerPubkey, entry.blob);
-					if (!manifest) {
-						manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
-						await putCachedManifest(ownerPubkey, entry.blob, manifest);
-					}
-					// Этап E, E1-доп (DESIGN.md) — дозаливка mime старому узлу (⊥),
-					// событийно: манифест и так уже резолвлен ради миниатюры. НЕ
-					// блокирует саму миниатюру (fire-and-forget) — classCount обновится
-					// к следующему открытию/перерисовке шапки, не в этом кадре.
-					if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
-					const isVideo = typeof manifest.mime === "string" && manifest.mime.startsWith("video/");
-					if (!isThumbnailable(manifest.mime) && !isVideo) return null;
-					const fileKey = await getFileKeyFor(entry.blob);
-					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
-					if (isVideo) return videoFrameThumbnail(entry.blob, manifest, fileKey);
-					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
-					return createThumbnailBlob(bytes, manifest.mime);
-				});
-				handle.promise
-					.then((thumbBytes) => {
-						if (cancelled) return;
-						if (!thumbBytes) {
-							setFailed(true);
-							return;
-						}
-						setUrl(putMemoryCachedAttachment(THUMB_CACHE_PREFIX + entry.blob, thumbBytes, "image/jpeg"));
-					})
-					.catch(() => {
-						if (!cancelled) setFailed(true);
-					});
-			} else if (!observedEntry.isIntersecting && handle) {
-				handle.cancel();
-				handle = null;
-			}
-		});
-		if (elRef.current) observer.observe(elRef.current);
-
-		return () => {
-			cancelled = true;
-			observer.disconnect();
-			handle?.cancel();
-		};
-	}, [entry.blob, url, failed]);
-
-	if (url) return <img src={url} alt="" class={imgClass} />;
-	// ref — на обычный <span>, не напрямую на иконку: Icon* без forwardRef,
-	// ref на него не долетает до DOM (найдено живой проверкой).
-	return (
-		<span ref={elRef} style={{ display: "inline-flex" }}>
-			<FileKindIcon mime={entry.mime} />
-		</span>
-	);
-}
 
 function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 	const [size, setSize] = useState(null);
@@ -842,7 +737,12 @@ export default function Files() {
 			// sidebarCard.storageMenuItem переименован в "Файлы" (account-card.jsx),
 			// плюс имя пользователя — тот же приём, что "Профиль и аватар"/
 			// "Секретная фраза".
-			title={`${currentUser.value.login || t("profile.noNameFallback")}: ${path[path.length - 1]?.name || t("nav.files")}`}
+			title={
+				<>
+					<IconFolders aria-hidden="true" class="icon screen-title__icon" />
+					{path[path.length - 1]?.name || t("nav.files")}
+				</>
+			}
 			actions={
 				<>
 					{view === "own" && (
@@ -1051,7 +951,7 @@ export default function Files() {
 							<IconCopy /> {t("common.copy")}
 						</button>
 						<button type="button" class="btn--ghost" onClick={cutSelected}>
-							{t("files.cutButton")}
+							<IconScissors /> {t("files.cutButton")}
 						</button>
 						<button type="button" class="btn--ghost btn--danger" onClick={() => handleDelete([...selected])}>
 							<IconTrash /> {t("common.delete")}
@@ -1105,7 +1005,7 @@ export default function Files() {
 												<IconCopy /> {t("common.copy")}
 											</button>
 											<button type="button" onClick={() => cutSelection([entry.id])}>
-												{t("files.cutButton")}
+												<IconScissors /> {t("files.cutButton")}
 											</button>
 											{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
 												<button type="button" onClick={() => pasteHere(entry.id)}>
@@ -1123,7 +1023,9 @@ export default function Files() {
 													</button>
 												))}
 											{entry.kind === "file" && (
-												<button type="button" onClick={() => openFreeSpace(entry)}>{t("storage.free.button")}</button>
+												<button type="button" onClick={() => openFreeSpace(entry)}>
+													<IconEmpty /> {t("storage.free.button")}
+												</button>
 											)}
 											<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 												<IconTrash /> {t("common.delete")}
@@ -1149,68 +1051,85 @@ export default function Files() {
 				) : (
 					<>
 						<div ref={anchorRef} aria-hidden="true" />
-						<ul
-							role="list"
-							class="file-row-list"
-							style={{
-								paddingBlockStart: `${windowStart * ROW_HEIGHT_PX}px`,
-								paddingBlockEnd: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px`,
-							}}
-						>
-						{visibleEntries.map((entry) => (
-							<li
-								key={entry.id}
-								class={"row file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
-								style={{ "--gap": "var(--space-s)", "--align": "center" }}
-								onContextMenu={openRowActionsMenu}
-								draggable={!inTrash && renamingId !== entry.id}
-								onDragStart={(e) => handleRowDragStart(entry, e)}
-								onDragEnd={handleRowDragEnd}
-								onDragOver={entry.kind === "dir" ? (e) => handleFolderDragOver(entry, e) : undefined}
-								onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
-								onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
-							>
-								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
-								{renamingId === entry.id ? (
-									<form class="row grow file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
-										<label class="visually-hidden" for={`rename-${entry.id}`}>
-											{t("files.newNameLabel")}
-										</label>
-										<input id={`rename-${entry.id}`} type="text" value={renameValue} onInput={(e) => setRenameValue(e.currentTarget.value)} autoFocus />
-										<button type="submit" class="icon-btn" aria-label={t("common.save")}>
-											<IconCheck />
-										</button>
-										<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label={t("files.cancelRenameAria")}>
-											<IconCross />
-										</button>
-									</form>
-								) : (
-									<button
-										type="button"
-										class="file-row-name grow truncate"
-										style={{ "--lines": 1 }}
-										onClick={(e) => {
-											if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
-											openEntry(entry);
-										}}
+						<table class={"file-table" + (inTrash ? " file-table--trash" : "")}>
+							<thead>
+								<tr>
+									<th scope="col" class="file-table__icon">
+										<span class="visually-hidden">{t("files.columnPreview")}</span>
+									</th>
+									<th scope="col">{t("files.columnName")}</th>
+									<th scope="col" class="file-table__type">{t("files.columnType")}</th>
+									<th scope="col" class="file-table__actions">
+										<span class="visually-hidden">{t("files.columnActions")}</span>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{windowStart > 0 && (
+									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${windowStart * ROW_HEIGHT_PX}px` }}>
+										<td colSpan={4} />
+									</tr>
+								)}
+								{visibleEntries.map((entry) => (
+									<tr
+										key={entry.id}
+										class={"file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
+										onContextMenu={openRowActionsMenu}
+										draggable={!inTrash && renamingId !== entry.id}
+										onDragStart={(e) => handleRowDragStart(entry, e)}
+										onDragEnd={handleRowDragEnd}
+										onDragOver={entry.kind === "dir" ? (e) => handleFolderDragOver(entry, e) : undefined}
+										onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
+										onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
 									>
-										{entry.displayName}
-									</button>
-								)}
-								<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-row-status" />
-								{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
-									<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
-								)}
-								{inTrash ? (
-									<>
-										<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)}>
-											{t("files.restoreButton")}
-										</button>
-										<button type="button" class="btn--ghost btn--danger" onClick={() => handlePurge(entry.id)}>
-											{t("files.purgeButton")}
-										</button>
-									</>
-								) : (
+										<td class="file-table__icon">
+											{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="icon file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
+										</td>
+										<td>
+											{renamingId === entry.id ? (
+												<form class="row file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
+													<label class="visually-hidden" for={`rename-${entry.id}`}>
+														{t("files.newNameLabel")}
+													</label>
+													<input id={`rename-${entry.id}`} type="text" value={renameValue} onInput={(e) => setRenameValue(e.currentTarget.value)} autoFocus />
+													<button type="submit" class="icon-btn" aria-label={t("common.save")}>
+														<IconCheck />
+													</button>
+													<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label={t("files.cancelRenameAria")}>
+														<IconCross />
+													</button>
+												</form>
+											) : (
+												<button
+													type="button"
+													class="file-row-name"
+													title={entry.displayName}
+													onClick={(e) => {
+														if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
+														openEntry(entry);
+													}}
+												>
+													{entry.displayName}
+												</button>
+											)}
+										</td>
+										<td class="file-table__type">
+											<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-row-status" />
+											{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
+												<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
+											)}
+										</td>
+										<td class="file-table__actions">
+											{inTrash ? (
+												<>
+													<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)} aria-label={t("files.restoreButton")} title={t("files.restoreButton")}>
+														<IconRestore /> <span class="slice__label">{t("files.restoreButton")}</span>
+													</button>
+													<button type="button" class="btn--ghost btn--danger" onClick={() => handlePurge(entry.id)} aria-label={t("files.purgeButton")} title={t("files.purgeButton")}>
+														<IconTrash /> <span class="slice__label">{t("files.purgeButton")}</span>
+													</button>
+												</>
+											) : (
 									<ActionsMenu label={t("files.rowActionsAria", { name: entry.displayName })}>
 										<button type="button" onClick={() => startRename(entry)}>
 											<IconPencil /> {t("contacts.renameAction")}
@@ -1219,7 +1138,7 @@ export default function Files() {
 											<IconCopy /> {t("common.copy")}
 										</button>
 										<button type="button" onClick={() => cutSelection([entry.id])}>
-											{t("files.cutButton")}
+											<IconScissors /> {t("files.cutButton")}
 										</button>
 										{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
 											<button type="button" onClick={() => pasteHere(entry.id)}>
@@ -1238,16 +1157,25 @@ export default function Files() {
 											)
 										)}
 										{entry.kind === "file" && (
-											<button type="button" onClick={() => openFreeSpace(entry)}>{t("storage.free.button")}</button>
+											<button type="button" onClick={() => openFreeSpace(entry)}>
+													<IconEmpty /> {t("storage.free.button")}
+												</button>
 										)}
 										<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 											<IconTrash /> {t("common.delete")}
 										</button>
 									</ActionsMenu>
+											)}
+										</td>
+									</tr>
+								))}
+								{windowEnd < entries.length && (
+									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px` }}>
+										<td colSpan={4} />
+									</tr>
 								)}
-							</li>
-						))}
-						</ul>
+							</tbody>
+						</table>
 					</>
 				)}
 			</div>
@@ -1367,87 +1295,3 @@ function AccessPanel({ grantees, onRevoke, onClose }) {
 	);
 }
 
-// Раздел "Полученные доли" (этап 53 И6, задача 6.7 — сужение MVP, CONTRACTS.md):
-// СВОЯ локальная навигация внутри ОДНОЙ доли, read-only (share() в v0.1 —
-// только read-гранты), получение содержимого — ТОЛЬКО через "Сохранить себе".
-function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountView, closeMountView, handleSaveToOwn, handleUnmountShare, saveProgress }) {
-	if (openMountId === null) {
-		return (
-			<div class="stack">
-				{activeMounts.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{t("files.noSharedWithYou")}</p>
-				) : (
-					<ul role="list" class="stack">
-						{activeMounts.value.map((m) => (
-							<li key={m.mountId} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-								<IconGlobe aria-hidden="true" class="file-row-icon" />
-								<span class="grow">{profiles.value[m.ownerPubkey]?.name || `${m.ownerPubkey.slice(0, 16)}…`}</span>
-								<button type="button" class="btn--ghost" onClick={() => openMountView(m.mountId)}>
-									{t("files.openButton")}
-								</button>
-								<button type="button" class="btn--ghost btn--danger" onClick={() => handleUnmountShare(m.mountId)}>
-									{t("files.disconnectButton")}
-								</button>
-							</li>
-						))}
-					</ul>
-				)}
-			</div>
-		);
-	}
-
-	const R = mountProjections.value.get(openMountId);
-	if (!R) return null;
-	// Mount.state — createInitialState() СОЗДАЁТ $trash/$lost+found (тот же
-	// старт, что любой TreeState, mount.js) — это ТЕХНИЧЕСКИЕ узлы получателя
-	// (пустые, никогда не наполняются владельцем доли — snapshotSubtree/
-	// subtreeOpsRootedAt пишут только под ROOT_ID реального содержимого),
-	// показывать их в списке доли бессмысленно и вводит в заблуждение
-	// (найдено живым тестированием — пустая доля показывала "Корзину"/
-	// "lost+found", будто это содержимое владельца).
-	const entries = (R.children.get(mountFolderId) ?? [])
-		.filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID)
-		.map((id) => ({ id, ...R.nodes.get(id) }));
-
-	return (
-		<div class="stack">
-			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button type="button" class="btn--ghost" onClick={closeMountView}>
-					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> {t("files.backToMountsList")}
-				</button>
-				{mountFolderId !== ROOT_ID && (
-					<button type="button" class="btn--ghost" onClick={() => setMountFolderId(ROOT_ID)}>
-						{t("files.mountRootButton")}
-					</button>
-				)}
-			</div>
-			{saveProgress && (
-				<p role="status">
-					{t("files.savingProgress", { done: saveProgress.filesDone, total: saveProgress.filesTotal })}
-				</p>
-			)}
-			{entries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>
-			) : (
-				<ul role="list" class="file-row-list">
-					{entries.map((entry) => (
-						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
-							{entry.kind === "dir" ? (
-								<button type="button" class="file-row-name" onClick={() => setMountFolderId(entry.id)}>
-									{entry.displayName}
-								</button>
-							) : (
-								<span class="file-row-name">{entry.displayName}</span>
-							)}
-							<span class="grow" />
-							<button type="button" class="btn--ghost" onClick={() => handleSaveToOwn(openMountId, entry.id)} disabled={!!saveProgress}>
-								{t("files.saveToOwnButton")}
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
-		</div>
-	);
-}

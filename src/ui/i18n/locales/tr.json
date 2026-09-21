@@ -846,7 +846,12 @@
 		"freedFromServer": "Sunucudan silindi",
 		"freedOpenHint": "“{{name}}” sunucudan boşaltıldı ve artık açılmıyor. Gerek yoksa listeden kaldırın.",
 		"shareProgress": "Okuyucular için kopyalanıyor: dosya {{done}} / {{total}} · %{{percent}} · {{name}}",
-		"shareProgressStart": "Okuyucular için dosyalar hazırlanıyor…"
+		"shareProgressStart": "Okuyucular için dosyalar hazırlanıyor…",
+		"columnPreview": "Simge",
+		"columnName": "Ad",
+		"columnType": "Tür",
+		"columnActions": "İşlemler",
+		"columnSelect": "Seçim"
 	},
 	"profile": {
 		"server": {

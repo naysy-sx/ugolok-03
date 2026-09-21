@@ -28,9 +28,11 @@ export default function TypeFilterBar({ counts, active, onSelect }) {
 						class={"slice bar rigid" + (on ? " slice--on" : "")}
 						style={{ "--gap": "var(--space-3xs)", "--align": "center" }}
 						aria-pressed={on}
+						aria-label={t(labelKey)}
+						title={t(labelKey)}
 						onClick={() => onSelect(id)}
 					>
-						<Icon aria-hidden="true" /> {t(labelKey)}
+						<Icon aria-hidden="true" class="icon slice__icon" /> <span class="slice__label">{t(labelKey)}</span>
 						{id === "all" || n > 0 ? <span class="slice__n">{n}</span> : null}
 					</button>
 				);

@@ -846,7 +846,12 @@
 		"freedFromServer": "已从服务器删除",
 		"freedOpenHint": "“{{name}}”已从服务器释放，无法再打开。如不需要，请从列表中移除。",
 		"shareProgress": "正在为读者复制：第 {{done}} / {{total}} 个文件 · {{percent}}% · {{name}}",
-		"shareProgressStart": "正在为读者准备文件…"
+		"shareProgressStart": "正在为读者准备文件…",
+		"columnPreview": "图标",
+		"columnName": "名称",
+		"columnType": "类型",
+		"columnActions": "操作",
+		"columnSelect": "选择"
 	},
 	"profile": {
 		"server": {

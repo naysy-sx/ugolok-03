@@ -846,7 +846,12 @@
 		"freedFromServer": "Supprimé du serveur",
 		"freedOpenHint": "« {{name}} » a été libéré du serveur et ne s’ouvre plus. Retirez-le de la liste si vous n’en avez pas besoin.",
 		"shareProgress": "Copie pour les lecteurs : fichier {{done}} sur {{total}} · {{percent}} % · {{name}}",
-		"shareProgressStart": "Préparation des fichiers pour les lecteurs…"
+		"shareProgressStart": "Préparation des fichiers pour les lecteurs…",
+		"columnPreview": "Icône",
+		"columnName": "Nom",
+		"columnType": "Type",
+		"columnActions": "Actions",
+		"columnSelect": "Sélection"
 	},
 	"profile": {
 		"server": {

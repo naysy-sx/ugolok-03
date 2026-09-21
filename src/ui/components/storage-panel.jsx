@@ -5,6 +5,7 @@
 // того, как суммы показаны, и лишь подписывает строки; без него экран — нормальная работа
 // на новом устройстве, а не ошибка.
 import { useEffect, useRef, useState } from "preact/hooks";
+import IconEmpty from "../icons/empty.jsx";
 import { t, errorMessage, currentLocale } from "../signals/i18n.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { fetchServerBlobs, totalBytes, reconcile, buildEntries, breakdownByPurpose, breakdownByKind } from "../../domain/uploads/storage.js";
@@ -267,7 +268,7 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 												</small>
 											</div>
 											<button type="button" class="btn--ghost" onClick={() => askFreeEntry(e)}>
-												{t("storage.free.button")}
+												<IconEmpty /> {t("storage.free.button")}
 											</button>
 										</li>
 									))}

@@ -846,7 +846,12 @@
 		"freedFromServer": "サーバーから削除済み",
 		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。",
 		"shareProgress": "閲覧者向けにコピー中：{{done}} / {{total}} ファイル · {{percent}}% · {{name}}",
-		"shareProgressStart": "閲覧者向けにファイルを準備中…"
+		"shareProgressStart": "閲覧者向けにファイルを準備中…",
+		"columnPreview": "アイコン",
+		"columnName": "名前",
+		"columnType": "種類",
+		"columnActions": "操作",
+		"columnSelect": "選択"
 	},
 	"profile": {
 		"server": {
