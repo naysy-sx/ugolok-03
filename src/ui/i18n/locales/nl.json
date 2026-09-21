@@ -844,7 +844,9 @@
 		"clipboardCopied": "Gekopieerd: {{count}}",
 		"clipboardCut": "Geknipt: {{count}}",
 		"freedFromServer": "Van de server verwijderd",
-		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt."
+		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt.",
+		"shareProgress": "Kopiëren voor lezers: bestand {{done}} van {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Bestanden voor lezers voorbereiden…"
 	},
 	"profile": {
 		"server": {

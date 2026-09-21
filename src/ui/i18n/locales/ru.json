@@ -844,7 +844,9 @@
 		"clipboardCopied": "Скопировано: {{count}}",
 		"clipboardCut": "Вырезано: {{count}}",
 		"freedFromServer": "Удалён с сервера",
-		"freedOpenHint": "«{{name}}» освобождён с сервера и больше не открывается. Уберите его из списка, если он не нужен."
+		"freedOpenHint": "«{{name}}» освобождён с сервера и больше не открывается. Уберите его из списка, если он не нужен.",
+		"shareProgress": "Копирую для читателей: файл {{done}} из {{total}} · {{percent}} % · {{name}}",
+		"shareProgressStart": "Готовлю файлы для читателей…"
 	},
 	"profile": {
 		"server": {

@@ -844,7 +844,9 @@
 		"clipboardCopied": "Kopyalandı: {{count}}",
 		"clipboardCut": "Kesildi: {{count}}",
 		"freedFromServer": "Sunucudan silindi",
-		"freedOpenHint": "“{{name}}” sunucudan boşaltıldı ve artık açılmıyor. Gerek yoksa listeden kaldırın."
+		"freedOpenHint": "“{{name}}” sunucudan boşaltıldı ve artık açılmıyor. Gerek yoksa listeden kaldırın.",
+		"shareProgress": "Okuyucular için kopyalanıyor: dosya {{done}} / {{total}} · %{{percent}} · {{name}}",
+		"shareProgressStart": "Okuyucular için dosyalar hazırlanıyor…"
 	},
 	"profile": {
 		"server": {

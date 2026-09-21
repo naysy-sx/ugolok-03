@@ -844,7 +844,9 @@
 		"clipboardCopied": "コピー済み: {{count}}",
 		"clipboardCut": "切り取り済み: {{count}}",
 		"freedFromServer": "サーバーから削除済み",
-		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。"
+		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。",
+		"shareProgress": "閲覧者向けにコピー中：{{done}} / {{total}} ファイル · {{percent}}% · {{name}}",
+		"shareProgressStart": "閲覧者向けにファイルを準備中…"
 	},
 	"profile": {
 		"server": {

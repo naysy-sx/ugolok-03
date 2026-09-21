@@ -304,6 +304,7 @@ export default function Files() {
 	const [freeDialog, setFreeDialog] = useState(null); // ТЗ-03: диалог «освободить место»
 	const [shareSelectedPubkeys, setShareSelectedPubkeys] = useState(() => new Set());
 	const [shareBusy, setShareBusy] = useState(false);
+	const [shareProgress, setShareProgress] = useState(null); // {done, total, name, fraction} — копирование файлов для читателей
 	const [shareError, setShareError] = useState("");
 	const [accessPanelTarget, setAccessPanelTarget] = useState(null); // nodeId папки
 	const [grantees, setGrantees] = useState([]);
@@ -506,21 +507,25 @@ export default function Files() {
 	async function submitShare() {
 		if (shareSelectedPubkeys.size === 0) return;
 		setShareBusy(true);
+		setShareProgress(null);
 		setShareError("");
 		try {
 			const result = await shareFolder(ownerPubkey, privKeySig.value, dbKeySig.value, shareDialogTarget, [...shareSelectedPubkeys], publish, {
 				serverUrl: BLOSSOM_URL,
 				privateKey: privKeySig.value,
+				onShareProgress: setShareProgress,
 			});
 			if (result instanceof Error) {
 				setShareError(translateErrorMessage(result) || t("files.shareFailedGeneric"));
 				return;
 			}
 			setShareDialogTarget(null);
-		} catch {
-			setShareError(t("files.networkUnavailable"));
+		} catch (err) {
+			// Настоящая причина (квота, отказ relay, сеть), а не всегда «сеть недоступна».
+			setShareError(err?.key || err?.message ? translateErrorMessage(err) : t("files.networkUnavailable"));
 		} finally {
 			setShareBusy(false);
+			setShareProgress(null);
 		}
 	}
 
@@ -1252,6 +1257,7 @@ export default function Files() {
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}
+				progress={shareProgress}
 				error={shareError}
 				selected={shareSelectedPubkeys}
 				onToggle={toggleShareRecipient}
@@ -1288,7 +1294,7 @@ function ModalShell({ label, onClose, children }) {
 // Диалог "Поделиться" (этап 53 И6, задача 6.7) — выбор контактов чекбоксами.
 // share() в v0.1 производит только read-гранты (CONTRACTS.md 6.2) — второй
 // уровень доступа выбирать не из чего, поэтому его в интерфейсе просто нет.
-function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
+function ShareDialog({ busy, progress, error, selected, onToggle, onSubmit, onCancel }) {
 	return (
 		<ModalShell label={t("files.shareButton")} onClose={onCancel}>
 			<h2>{t("files.shareButton")}</h2>
@@ -1306,6 +1312,16 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 						</li>
 					))}
 				</ul>
+			)}
+			{busy && (
+				<div role="status" class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+					<progress max="100" value={progress ? Math.round(progress.fraction * 100) : undefined} style={{ width: "100%" }} />
+					<small style={{ color: "var(--muted)" }}>
+						{progress && progress.total > 0
+							? t("files.shareProgress", { done: Math.min(progress.done + (progress.done < progress.total ? 1 : 0), progress.total), total: progress.total, percent: Math.round(progress.fraction * 100), name: progress.name })
+							: t("files.shareProgressStart")}
+					</small>
+				</div>
 			)}
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>

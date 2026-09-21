@@ -844,7 +844,9 @@
 		"clipboardCopied": "Copiado: {{count}}",
 		"clipboardCut": "Recortado: {{count}}",
 		"freedFromServer": "Apagado do servidor",
-		"freedOpenHint": "“{{name}}” foi libertado do servidor e já não abre. Remova-o da lista se não precisar dele."
+		"freedOpenHint": "“{{name}}” foi libertado do servidor e já não abre. Remova-o da lista se não precisar dele.",
+		"shareProgress": "Copiando para os leitores: arquivo {{done}} de {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Preparando arquivos para os leitores…"
 	},
 	"profile": {
 		"server": {
