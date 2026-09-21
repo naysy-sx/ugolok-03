@@ -844,7 +844,18 @@
 		"clipboardCopied": "Skopiowano: {{count}}",
 		"clipboardCut": "Wycięto: {{count}}",
 		"freedFromServer": "Usunięto z serwera",
-		"freedOpenHint": "„{{name}}” został zwolniony z serwera i już się nie otwiera. Usuń go z listy, jeśli jest niepotrzebny."
+		"freedOpenHint": "„{{name}}” został zwolniony z serwera i już się nie otwiera. Usuń go z listy, jeśli jest niepotrzebny.",
+		"shareProgress": "Kopiuję dla czytelników: plik {{done}} z {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Przygotowuję pliki dla czytelników…",
+		"columnPreview": "Ikona",
+		"columnName": "Nazwa",
+		"columnType": "Typ",
+		"columnActions": "Akcje",
+		"columnSelect": "Wybór",
+		"columnSize": "Rozmiar",
+		"columnAccess": "Dostęp",
+		"kindFolder": "Folder",
+		"sortBy": "Sortuj: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "Anuluj",
 			"working": "Usuwanie… {{done}} z {{total}}",
 			"done": "Miejsce zwolnione.",
-			"failed": "Nie udało się usunąć plików: {{count}}. Spróbuj później."
+			"failed": "Nie udało się usunąć plików: {{count}}. Spróbuj później.",
+			"sharedCopy": "Ten plik jest we wspólnym folderze. Czytelnicy tego folderu nie będą mogli go otworzyć.",
+			"sharedOriginal": "Ten plik jest we wspólnym folderze. Osoby, które już mają dostęp, zachowają go, ale nowi czytelnicy nie otworzą pliku."
 		},
 		"journalPublishFailed": "Dziennik wysyłania nie dociera do przekaźnika: {{reason}}. Twoje pliki nie są dotknięte, ale na innych urządzeniach nie pojawią się nazwy.",
 		"quota": {

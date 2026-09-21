@@ -844,7 +844,18 @@
 		"clipboardCopied": "Copiati: {{count}}",
 		"clipboardCut": "Tagliati: {{count}}",
 		"freedFromServer": "Eliminato dal server",
-		"freedOpenHint": "«{{name}}» è stato liberato dal server e non si apre più. Rimuovilo dall’elenco se non ti serve."
+		"freedOpenHint": "«{{name}}» è stato liberato dal server e non si apre più. Rimuovilo dall’elenco se non ti serve.",
+		"shareProgress": "Copia per i lettori: file {{done}} di {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Preparazione dei file per i lettori…",
+		"columnPreview": "Icona",
+		"columnName": "Nome",
+		"columnType": "Tipo",
+		"columnActions": "Azioni",
+		"columnSelect": "Selezione",
+		"columnSize": "Dimensione",
+		"columnAccess": "Accesso",
+		"kindFolder": "Cartella",
+		"sortBy": "Ordina per: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "Annulla",
 			"working": "Eliminazione… {{done}} di {{total}}",
 			"done": "Spazio liberato.",
-			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi."
+			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi.",
+			"sharedCopy": "Questo file è in una cartella condivisa. Non si aprirà più per i lettori della cartella.",
+			"sharedOriginal": "Questo file è in una cartella condivisa. Chi ha già accesso lo mantiene, ma non si aprirà per nuovi lettori."
 		},
 		"journalPublishFailed": "Il registro dei caricamenti non raggiunge il relay: {{reason}}. I tuoi file non sono coinvolti, ma i nomi non compariranno sugli altri dispositivi.",
 		"quota": {

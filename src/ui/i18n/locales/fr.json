@@ -844,7 +844,18 @@
 		"clipboardCopied": "Copié : {{count}}",
 		"clipboardCut": "Coupé : {{count}}",
 		"freedFromServer": "Supprimé du serveur",
-		"freedOpenHint": "« {{name}} » a été libéré du serveur et ne s’ouvre plus. Retirez-le de la liste si vous n’en avez pas besoin."
+		"freedOpenHint": "« {{name}} » a été libéré du serveur et ne s’ouvre plus. Retirez-le de la liste si vous n’en avez pas besoin.",
+		"shareProgress": "Copie pour les lecteurs : fichier {{done}} sur {{total}} · {{percent}} % · {{name}}",
+		"shareProgressStart": "Préparation des fichiers pour les lecteurs…",
+		"columnPreview": "Icône",
+		"columnName": "Nom",
+		"columnType": "Type",
+		"columnActions": "Actions",
+		"columnSelect": "Sélection",
+		"columnSize": "Taille",
+		"columnAccess": "Accès",
+		"kindFolder": "Dossier",
+		"sortBy": "Trier par : {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "Annuler",
 			"working": "Suppression… {{done}} sur {{total}}",
 			"done": "Espace libéré.",
-			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard."
+			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard.",
+			"sharedCopy": "Ce fichier est dans un dossier partagé. Il ne s'ouvrira plus pour les lecteurs de ce dossier.",
+			"sharedOriginal": "Ce fichier est dans un dossier partagé. Ceux qui y ont déjà accès le gardent, mais il ne s'ouvrira pas pour de nouveaux lecteurs."
 		},
 		"journalPublishFailed": "Le journal des envois n’atteint pas le relais : {{reason}}. Vos fichiers ne sont pas touchés, mais les noms n’apparaîtront pas sur les autres appareils.",
 		"quota": {

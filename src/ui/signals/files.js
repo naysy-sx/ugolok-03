@@ -390,6 +390,34 @@ export async function trashNodesForBlobs(hashes) {
 	return ops.length;
 }
 
+// «Освободить место» и доли. Возвращает, чем рискуют читатели общих папок:
+//   ownCopy  — среди стираемых блобов есть копия, залитая для доли (purpose "share"): у читателей
+//              доли файл перестанет открываться;
+//   original — стирается оригинал узла, лежащего в общей папке: у уже получивших доступ остаётся
+//              их копия, но новым читателям файл не отдать (перезаливка в долю берёт оригинал).
+// sharedIds — узлы с прямым грантом (signals/shares.js::sharedNodeIds).
+export function shareRiskForBlobs(hashes, sharedIds, shareBlobHashes = new Set()) {
+	const set = new Set(hashes);
+	const state = treeState.value;
+	const ownCopy = hashes.some((h) => shareBlobHashes.has(h));
+	let original = false;
+	for (const node of state.nodes.values()) {
+		if (node.kind !== "file" || !node.blob || !set.has(node.blob) || isTrashed(state, node)) continue;
+		let cur = node;
+		for (let i = 0; i < 64 && cur; i++) {
+			if (sharedIds.has(cur.id)) {
+				original = true;
+				break;
+			}
+			const parentId = cur.par?.value;
+			if (!parentId || parentId === ROOT_ID) break;
+			cur = state.nodes.get(parentId);
+		}
+		if (original) break;
+	}
+	return { ownCopy, original };
+}
+
 export async function purgeNode(id) {
 	const op = opPurge(treeState.value, id);
 	await applyAndPersist([op]); // НЕ кладём в undo-стек — purge монотонен, необратим (§5.6 MATH.md)

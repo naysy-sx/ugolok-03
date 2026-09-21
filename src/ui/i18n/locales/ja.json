@@ -844,7 +844,18 @@
 		"clipboardCopied": "コピー済み: {{count}}",
 		"clipboardCut": "切り取り済み: {{count}}",
 		"freedFromServer": "サーバーから削除済み",
-		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。"
+		"freedOpenHint": "「{{name}}」はサーバーから容量が解放され、開けなくなりました。不要なら一覧から削除してください。",
+		"shareProgress": "閲覧者向けにコピー中：{{done}} / {{total}} ファイル · {{percent}}% · {{name}}",
+		"shareProgressStart": "閲覧者向けにファイルを準備中…",
+		"columnPreview": "アイコン",
+		"columnName": "名前",
+		"columnType": "種類",
+		"columnActions": "操作",
+		"columnSelect": "選択",
+		"columnSize": "サイズ",
+		"columnAccess": "アクセス",
+		"kindFolder": "フォルダ",
+		"sortBy": "並べ替え：{{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "キャンセル",
 			"working": "削除中… {{done}} / {{total}}",
 			"done": "容量を空けました。",
-			"failed": "{{count}} 件のファイルを削除できませんでした。後でもう一度お試しください。"
+			"failed": "{{count}} 件のファイルを削除できませんでした。後でもう一度お試しください。",
+			"sharedCopy": "このファイルは共有フォルダにあります。フォルダの閲覧者は開けなくなります。",
+			"sharedOriginal": "このファイルは共有フォルダにあります。すでにアクセスできる人はそのまま開けますが、新しい閲覧者には開けません。"
 		},
 		"journalPublishFailed": "アップロードのジャーナルがリレーに届いていません: {{reason}}。ファイル自体には影響しませんが、他の端末ではファイル名が表示されません。",
 		"quota": {

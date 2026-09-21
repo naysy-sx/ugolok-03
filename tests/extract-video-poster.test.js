@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractVideoPoster, extractVideoPosterCapture, dataUrlFromJpegBytes } from "../src/ui/media/extract-video-poster.js";
+import { extractVideoPoster, extractVideoPosterCapture, extractVideoFrameFromSrc, dataUrlFromJpegBytes } from "../src/ui/media/extract-video-poster.js";
 
 // MEDIA-PERF-TZ-5.md §3 — общий helper для fake video/canvas (тот же приём,
 // что "revoke вызывается даже при таймауте" выше), параметризован реальными
@@ -190,4 +190,17 @@ test("extractVideoPoster (data:URL) и extractVideoPosterCapture (сырые б�
 	const dataUrl = await extractVideoPoster({ type: "video/mp4" }, fakeVideoAdapters({ jpegBytes }));
 	const captured = await extractVideoPosterCapture({ type: "video/mp4" }, fakeVideoAdapters({ jpegBytes }));
 	assert.equal(dataUrl, dataUrlFromJpegBytes(captured.bytes));
+});
+
+test("extractVideoFrameFromSrc: кадр берётся по готовому адресу (мост «Файлов»), object URL не создаётся и не освобождается", async () => {
+	const a = fakeVideoAdapters({ jpegBytes: new Uint8Array([9, 8, 7]) });
+	let created = 0;
+	const bytes = await extractVideoFrameFromSrc("/files-content/abc", "video/mp4", { ...a, createObjectURL: () => (created++, "blob:x") });
+	assert.deepEqual([...bytes], [9, 8, 7]);
+	assert.equal(created, 0);
+	assert.deepEqual(a.revoked, []);
+});
+
+test("extractVideoFrameFromSrc: не видео и пустой адрес — null", async () => {
+	assert.equal(await extractVideoFrameFromSrc("/files-content/abc", "image/png", fakeVideoAdapters()), null);
 });

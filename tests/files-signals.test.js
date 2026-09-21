@@ -296,3 +296,21 @@ test("trashNodesForBlobs: повторный вызов и узлы уже в к
 	assert.equal(await trashNodesForBlobs(["e".repeat(64)]), 0);
 	assert.ok(op);
 });
+
+// ---- «освободить место» и доли: что предупреждать до подтверждения ----
+import { shareRiskForBlobs } from "../src/ui/signals/files.js";
+
+test("shareRiskForBlobs: оригинал узла в общей папке -> original; копия доли среди блобов -> ownCopy; обычный файл -> ничего", async () => {
+	const key = crypto.getRandomValues(new Uint8Array(32));
+	const DA = "1".repeat(64), DB = "2".repeat(64);
+	const opA = await createFileEntry("в-доле.txt", DA, key, null, "text/plain");
+	await createFileEntry("обычный.txt", DB, key, null, "text/plain");
+	const fileA = treeState.value.nodes.get(opA.id);
+	assert.deepEqual(shareRiskForBlobs([DB], new Set([fileA.par.value])), { ownCopy: false, original: false });
+	// расшарен сам узел
+	assert.deepEqual(shareRiskForBlobs([DA], new Set([opA.id])), { ownCopy: false, original: true });
+	// расшарена папка-предок: root не считается, а прямой грант на родителя — да
+	assert.deepEqual(shareRiskForBlobs([DA], new Set(["не-тот-узел"])), { ownCopy: false, original: false });
+	// среди стираемых блобов — копия, залитая для доли
+	assert.deepEqual(shareRiskForBlobs(["9".repeat(64)], new Set(), new Set(["9".repeat(64)])), { ownCopy: true, original: false });
+});

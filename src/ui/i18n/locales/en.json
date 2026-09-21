@@ -844,7 +844,18 @@
 		"clipboardCopied": "Copied: {{count}}",
 		"clipboardCut": "Cut: {{count}}",
 		"freedFromServer": "Deleted from server",
-		"freedOpenHint": "“{{name}}” was freed from the server and no longer opens. Remove it from the list if you don't need it."
+		"freedOpenHint": "“{{name}}” was freed from the server and no longer opens. Remove it from the list if you don't need it.",
+		"shareProgress": "Copying for readers: file {{done}} of {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Preparing files for readers…",
+		"columnPreview": "Icon",
+		"columnName": "Name",
+		"columnType": "Type",
+		"columnActions": "Actions",
+		"columnSelect": "Select",
+		"columnSize": "Size",
+		"columnAccess": "Access",
+		"kindFolder": "Folder",
+		"sortBy": "Sort by: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "Cancel",
 			"working": "Deleting… {{done}} of {{total}}",
 			"done": "Space freed.",
-			"failed": "Could not delete {{count}} of the files. Try again later."
+			"failed": "Could not delete {{count}} of the files. Try again later.",
+			"sharedCopy": "This file is in a shared folder. It will stop opening for the readers of that folder.",
+			"sharedOriginal": "This file is in a shared folder. People who already have access keep it, but it will not open for new readers."
 		},
 		"journalPublishFailed": "Upload journal isn't reaching the relay: {{reason}}. Your files are not affected, but names won't appear on other devices.",
 		"quota": {

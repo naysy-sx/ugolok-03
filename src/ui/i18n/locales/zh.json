@@ -844,7 +844,18 @@
 		"clipboardCopied": "已复制：{{count}}",
 		"clipboardCut": "已剪切：{{count}}",
 		"freedFromServer": "已从服务器删除",
-		"freedOpenHint": "“{{name}}”已从服务器释放，无法再打开。如不需要，请从列表中移除。"
+		"freedOpenHint": "“{{name}}”已从服务器释放，无法再打开。如不需要，请从列表中移除。",
+		"shareProgress": "正在为读者复制：第 {{done}} / {{total}} 个文件 · {{percent}}% · {{name}}",
+		"shareProgressStart": "正在为读者准备文件…",
+		"columnPreview": "图标",
+		"columnName": "名称",
+		"columnType": "类型",
+		"columnActions": "操作",
+		"columnSelect": "选择",
+		"columnSize": "大小",
+		"columnAccess": "访问",
+		"kindFolder": "文件夹",
+		"sortBy": "排序：{{label}}"
 	},
 	"profile": {
 		"server": {
@@ -1387,7 +1398,9 @@
 			"cancel": "取消",
 			"working": "正在删除… {{done}} / {{total}}",
 			"done": "已释放空间。",
-			"failed": "有 {{count}} 个文件未能删除。请稍后重试。"
+			"failed": "有 {{count}} 个文件未能删除。请稍后重试。",
+			"sharedCopy": "此文件位于共享文件夹中。该文件夹的读者将无法再打开它。",
+			"sharedOriginal": "此文件位于共享文件夹中。已获得访问权限的人仍可打开，但新读者将无法打开。"
 		},
 		"journalPublishFailed": "上传日志未能发送到中继：{{reason}}。你的文件不受影响，但其他设备上不会显示文件名。",
 		"quota": {

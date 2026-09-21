@@ -7774,28 +7774,46 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius);
 }
 
-/* Строка списка — прямой прецедент .contact-row-list (contacts.jsx). */
-/* Высота строки ФИКСИРОВАНА (задача 3.2 TASK.md — виртуализация требует
-   точного совпадения с ROW_HEIGHT_PX, files.jsx): без gap на списке,
-   разделитель — border-block-end на самой строке (тот же приём, что
-   .contact-row) — иначе gap добавлял бы к высоте слота, не учтённую
-   виртуализацией величину, и строки "дрожали" бы при скролле. */
-.file-row-list {
-	list-style: none;
-	padding-inline-start: 0;
+/* Список файлов — настоящая таблица (files.jsx, file-picker.jsx, «Полученные»). Раньше это были
+   ul/li на flex, и длинное имя файла растягивало строку и ломало вёрстку. table-layout: fixed
+   держит ширину колонок по <th>, а ячейка с именем сжимается и обрезается многоточием.
+   Размеры — переменные: --file-thumb-size (иконка/миниатюра) и --file-row-height (высота строки;
+   ROW_HEIGHT_PX в files.jsx обязан совпадать — на нём стоит виртуализация). */
+:root {
+	--file-thumb-size: 2.75rem;
+	--file-row-height: 60px;
+}
+.file-table {
+	inline-size: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
 	margin-block: 0;
 }
-/* .row (раскладка) уже в JSX — height ЗДЕСЬ, не через .box (тот даёт
-   padding на все стороны, а высота строки — точное число ROW_HEIGHT_PX
-   для виртуализации, .box лишний block-padding эту точность сломал бы). */
-.file-row {
-	height: 56px; /* = ROW_HEIGHT_PX, files.jsx */
+.file-table th {
+	text-align: start;
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+	color: var(--muted);
+	padding: var(--space-2xs) var(--space-s);
+	border: none; /* глобальные границы ячеек из minimal.css тут не нужны */
+	border-block-end: var(--border-width) solid var(--border);
+	background-color: transparent;
+	white-space: nowrap;
+}
+.file-table td {
 	padding-inline: var(--space-s);
+	border: none;
+	vertical-align: middle;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* Высота строки ФИКСИРОВАНА (виртуализация): tr.height — минимум, а nowrap+overflow в ячейках
+   не дают строке вырасти. Разделитель — border на самой строке. */
+.file-row {
+	height: var(--file-row-height);
 	border-block-end: var(--border-width) solid var(--border);
 }
-/* НЕ :last-child — с виртуализацией последняя строка В DOM не обязательно
-   последняя в списке (может быть просто последней ВИДИМОЙ). Граница под
-   каждой строкой, включая логически последнюю, — не проблема визуально. */
 .file-row:hover {
 	background-color: var(--surface);
 }
@@ -7806,18 +7824,98 @@ button[type="button"].media-mini-bar-btn {
 	outline: var(--border-width) dashed var(--accent);
 	outline-offset: -2px;
 }
+.file-table__icon {
+	inline-size: calc(var(--file-thumb-size) + var(--space-s) * 2);
+}
+.file-table__check {
+	inline-size: 2.5rem;
+}
+.file-table__type {
+	inline-size: 6rem;
+}
+.file-table__size {
+	inline-size: 7.5rem;
+}
+.file-table__access {
+	inline-size: 3rem;
+	text-align: center;
+}
+.file-row-icon--shared {
+	color: var(--accent);
+	display: inline-block;
+	font-size: 1.25rem;
+}
+/* Кнопка-заголовок сортировки: выглядит как заголовок колонки, не как кнопка. */
+.file-table__sort {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+.file-table__sort--on {
+	color: var(--fg);
+}
+.file-table__sort-icon {
+	font-size: 0.9em;
+}
+.file-table__actions {
+	inline-size: 4.5rem;
+	text-align: end;
+	overflow: visible; /* выпадающее меню действий не должно обрезаться ячейкой */
+}
+.file-table--trash .file-table__actions,
+.file-table__actions--wide {
+	inline-size: 15rem;
+}
+.file-table__spacer td {
+	padding: 0;
+	border: none;
+}
+/* Ячейка иконки/миниатюры: значок и картинка одного размера. */
+.file-table__icon .file-row-icon,
+.file-table__icon .file-row-thumb {
+	display: block;
+	inline-size: var(--file-thumb-size);
+	block-size: var(--file-thumb-size);
+}
+.file-table__icon .file-row-icon {
+	font-size: calc(var(--file-thumb-size) * 0.6);
+	padding: calc(var(--file-thumb-size) * 0.2);
+	box-sizing: border-box;
+}
+/* Ячейка действий: меню/кнопки к правому краю, без переносов. */
+.file-table__actions > * {
+	vertical-align: middle;
+}
+@media (max-width: 576px) {
+	.file-table__type,
+	.file-table__access {
+		display: none;
+	}
+	.file-table__size {
+		inline-size: 5rem;
+	}
+	.file-table--trash .file-table__actions,
+	.file-table__actions--wide {
+		inline-size: 6.5rem;
+	}
+}
 .file-row-icon {
 	flex: none;
 	color: var(--muted);
 	font-size: 1.1rem;
 }
-/* Миниатюра (задача 3.8 TASK.md) — тот же слот в строке, что file-row-icon,
-   но сама картинка, не иконка типа. Квадратная, чуть больше просто иконки
-   (иначе изображение неразличимо), обрезана по центру (object-fit). */
+/* Миниатюра (задача 3.8 TASK.md) — тот же слот, что file-row-icon, но сама картинка.
+   Квадратная, обрезана по центру (object-fit). */
 .file-row-thumb {
 	flex: none;
-	width: 1.75rem;
-	height: 1.75rem;
+	width: var(--file-thumb-size);
+	height: var(--file-thumb-size);
 	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
@@ -7833,11 +7931,8 @@ button[type="button"].media-mini-bar-btn {
 	white-space: nowrap;
 	font-weight: var(--weight-normal);
 	color: var(--fg);
-	/* Найдено пользователем (мобильный) — длинные имена файлов не обрезались,
-	   а вылезали за строку и "съезжали" под иконку. Причина: flex-элемент
-	   (.grow, flex:1) по умолчанию min-width:auto — не может сжаться уже
-	   собственного содержимого, что и не давало overflow/ellipsis выше
-	   вообще сработать. */
+	display: block;
+	max-inline-size: 100%;
 	min-width: 0;
 }
 .file-row-name:hover {
@@ -7931,7 +8026,6 @@ button[type="button"].media-mini-bar-btn {
 }
 .mode-bar {
 	padding: var(--space-2xs) var(--space-s);
-	margin-block-end: var(--space-m);
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
@@ -10167,4 +10261,28 @@ button[type="button"].media-mini-bar-btn {
 .storage-bar[data-level="full"] .storage-bar__fill,
 .storage-bar[data-level="readonly"] .storage-bar__fill {
 	background: var(--bad);
+}
+
+
+/* Иконка перед заголовком экрана (акцентная, как и сам заголовок). */
+.screen-title__icon {
+	display: inline-block; /* глобально .icon может быть block — тогда текст заголовка уезжает на новую строку */
+	margin-inline-end: var(--space-2xs);
+	vertical-align: -0.125em;
+}
+
+/* Чипы фильтра типа («Файлы»): иконки вдвое крупнее, подписи на узких экранах прячутся —
+   иначе .reel уезжает в горизонтальную прокрутку внутри .slices-zone. */
+.slice .slice__icon {
+	font-size: 2em;
+}
+@media (max-width: 576px) {
+	.slice__label {
+		display: none;
+	}
+	/* Чипы только с иконкой и счётчиком: поджимаем отступы, чтобы все пять влезали без прокрутки. */
+	.slice:has(> .slice__icon) {
+		padding-inline: var(--space-2xs);
+		--gap: 0;
+	}
 }

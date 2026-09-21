@@ -142,34 +142,57 @@ function PickerBody({ folderId, setFolderId, predicate, selected, multiple, onOp
 					</span>
 				))}
 			</nav>
-			<ul role="list" class="file-row-list" style={{ overflowY: "auto", flex: 1 }}>
-				{entries.length === 0 && <p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>}
-				{entries.map((entry) => {
-					const selectable = entry.kind === "dir" || predicate(entry);
-					return (
-						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							{/* Живой фидбег: тут не было .row + --gap/--align, хотя custom.css
-							    (.file-row-icon{flex:none} и комментарий "раскладка уже в JSX")
-							    предполагает их — чекбокс/иконка/имя стояли друг под другом
-							    вместо одной строки. Тот же приём, что в files.jsx (основной
-							    список), которая эту строку не потеряла. */}
-							{multiple && entry.kind === "file" && (
-								<input
-									type="checkbox"
-									checked={selected.has(entry.id)}
-									disabled={!selectable}
-									onChange={() => onOpenEntry(entry)}
-									aria-label={t("files.selectRowAria", { name: entry.displayName })}
-								/>
-							)}
-							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
-							<button type="button" class="file-row-name" disabled={!selectable} onClick={() => onOpenEntry(entry)} style={!selectable ? { opacity: 0.5 } : undefined}>
-								{entry.displayName}
-							</button>
-						</li>
-					);
-				})}
-			</ul>
+			<div style={{ overflowY: "auto", flex: 1, minHeight: 0, minWidth: 0 }}>
+				{entries.length === 0 ? (
+					<p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>
+				) : (
+					<table class="file-table file-table--picker">
+						<thead>
+							<tr>
+								{multiple && (
+									<th scope="col" class="file-table__check">
+										<span class="visually-hidden">{t("files.columnSelect")}</span>
+									</th>
+								)}
+								<th scope="col" class="file-table__icon">
+									<span class="visually-hidden">{t("files.columnPreview")}</span>
+								</th>
+								<th scope="col">{t("files.columnName")}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{entries.map((entry) => {
+								const selectable = entry.kind === "dir" || predicate(entry);
+								return (
+									<tr key={entry.id} class="file-row">
+										{multiple && (
+											<td class="file-table__check">
+												{entry.kind === "file" && (
+													<input
+														type="checkbox"
+														checked={selected.has(entry.id)}
+														disabled={!selectable}
+														onChange={() => onOpenEntry(entry)}
+														aria-label={t("files.selectRowAria", { name: entry.displayName })}
+													/>
+												)}
+											</td>
+										)}
+										<td class="file-table__icon">
+											{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="icon file-row-icon" /> : <IconFileText aria-hidden="true" class="icon file-row-icon" />}
+										</td>
+										<td>
+											<button type="button" class="file-row-name" title={entry.displayName} disabled={!selectable} onClick={() => onOpenEntry(entry)} style={!selectable ? { opacity: 0.5 } : undefined}>
+												{entry.displayName}
+											</button>
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				)}
+			</div>
 		</>
 	);
 }
