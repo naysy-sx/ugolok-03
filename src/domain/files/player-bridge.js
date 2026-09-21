@@ -49,6 +49,10 @@ export function registerPlayerFile(manifestDigest, { manifest, fileKey, serverUr
 	sharedCache.setBudget(budgetFor(registry.size));
 }
 
+export function isPlayerFileRegistered(manifestDigest) {
+	return registry.has(manifestDigest);
+}
+
 export function unregisterPlayerFile(manifestDigest) {
 	registry.delete(manifestDigest);
 	sharedCache.setBudget(budgetFor(registry.size));

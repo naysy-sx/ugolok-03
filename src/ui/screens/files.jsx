@@ -68,6 +68,8 @@ import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-
 import IconRestore from "../icons/restore.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
+import { registerPlayerFile, unregisterPlayerFile, isPlayerFileRegistered } from "../../domain/files/player-bridge.js";
+import { extractVideoFrameFromSrc } from "../media/extract-video-poster.js";
 import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
 import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
@@ -113,6 +115,20 @@ const TYPE_MODE = {
 // уменьшенная и полная версии никогда не делили один ключ.
 const THUMB_CACHE_PREFIX = "thumb:";
 
+// Кадр видео для плитки «Файлов». Файл целиком не скачивается: кадр берётся через тот же мост
+// /files-content/…, что и плеер — браузер читает только нужные диапазоны. Без service worker
+// (нет моста) и при любой неудаче остаётся иконка.
+async function videoFrameThumbnail(digest, manifest, fileKey) {
+	if (typeof navigator === "undefined" || !navigator.serviceWorker?.controller) return null;
+	const alreadyRegistered = isPlayerFileRegistered(digest); // плеер открыт на этом файле — не трогаем его регистрацию
+	if (!alreadyRegistered) registerPlayerFile(digest, { manifest, fileKey, serverUrl: BLOSSOM_URL });
+	try {
+		return await extractVideoFrameFromSrc(`/files-content/${digest}`, manifest.mime);
+	} finally {
+		if (!alreadyRegistered) unregisterPlayerFile(digest);
+	}
+}
+
 function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb" }) {
 	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
 	const [failed, setFailed] = useState(false);
@@ -136,9 +152,11 @@ function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb" }) {
 					// блокирует саму миниатюру (fire-and-forget) — classCount обновится
 					// к следующему открытию/перерисовке шапки, не в этом кадре.
 					if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
-					if (!isThumbnailable(manifest.mime)) return null;
+					const isVideo = typeof manifest.mime === "string" && manifest.mime.startsWith("video/");
+					if (!isThumbnailable(manifest.mime) && !isVideo) return null;
 					const fileKey = await getFileKeyFor(entry.blob);
 					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
+					if (isVideo) return videoFrameThumbnail(entry.blob, manifest, fileKey);
 					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
 					return createThumbnailBlob(bytes, manifest.mime);
 				});
