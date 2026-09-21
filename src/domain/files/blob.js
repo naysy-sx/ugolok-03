@@ -45,6 +45,53 @@ function stripTrailingSlash(url) {
 	return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
+// ТЗ-05 §5 — перебор адресов при чтении. serverUrl — строка ИЛИ упорядоченный список
+// (readCandidates). Простой обход по порядку, без «здоровья серверов» и параллельных
+// попыток. Успешный адрес запоминается на время сессии для этого хеша, чтобы остальные
+// диапазонные запросы того же видео не начинали обход заново.
+const rememberedServer = new Map();
+
+export function resetRememberedServers() {
+	rememberedServer.clear();
+}
+
+function candidateList(serverUrl, sha256Hex) {
+	const list = (Array.isArray(serverUrl) ? serverUrl : [serverUrl]).filter((u) => typeof u === "string" && u);
+	const remembered = rememberedServer.get(sha256Hex);
+	if (remembered && list.includes(remembered)) return [remembered, ...list.filter((u) => u !== remembered)];
+	return list;
+}
+
+// 404 — блоба здесь нет; 401/403 — нет доступа; сетевая ошибка/таймаут — сервер недоступен;
+// 5xx (после повторов того же адреса) — сервер не справился. Всё это — «пробуем следующий».
+function shouldTryNext(err) {
+	if (err?.name === "AbortError") return false;
+	if (isNetworkError(err) || err?.code === "network-failed") return true;
+	const status = err?.status;
+	return status === 404 || status === 401 || status === 403 || (typeof status === "number" && status >= 500);
+}
+
+async function firstWorking(serverUrl, sha256Hex, attempt) {
+	const candidates = candidateList(serverUrl, sha256Hex);
+	if (candidates.length === 0) throw readError("network-failed", "Адрес хранилища не задан");
+	let lastError = null;
+	let transientError = null;
+	for (const url of candidates) {
+		try {
+			const result = await attempt(url);
+			rememberedServer.set(sha256Hex, url);
+			return result;
+		} catch (err) {
+			if (!shouldTryNext(err)) throw err;
+			lastError = err;
+			// Блоб мог быть на сервере, который временно не отвечает: такой отказ важнее
+			// «404» с соседнего — иначе клиент решит, что файла нет вовсе.
+			if (err?.status == null || err.status >= 500) transientError = err;
+		}
+	}
+	throw transientError ?? lastError;
+}
+
 // MEDIA-PERF-TZ-5.md §2 — единственная точка внедрения общей очереди: обе
 // функции ЧТЕНИЯ (эта и downloadBlob ниже) заворачиваются в
 // blossomQueue.schedule; заливка/удаление (uploadBlob/deleteBlob) в очередь
@@ -70,24 +117,26 @@ export async function downloadBlobRange(serverUrl, sha256Hex, start, end, option
 	return blossomQueue.schedule(
 		priority,
 		() =>
-			withRetry(
-				async () => {
-					const url = `${stripTrailingSlash(serverUrl)}/${sha256Hex}`;
-					const combined = combineSignals(signal, timeout);
-					const response = await fetchImpl(url, { headers: { Range: `bytes=${start}-${end}` }, signal: combined });
-					if (response.status === 206) {
-						return new Uint8Array(await response.arrayBuffer());
-					}
-					// 4xx не повторяем (ТЗ §5). 502/503/504 — транзиентные, бросаем
-					// с .status, withRetry подхватит. 200 вместо 206 — громкий отказ
-					// (П-4 CONTRACTS.md), не «скачать всё».
-					throw readError(
-						"network-failed",
-						`Blossom Range GET не поддержан (ожидался 206, получен ${response.status}) для ${sha256Hex}`,
-						response.status,
-					);
-				},
-				{ retries, backoffMs, isRetryable: isRetryableReadError },
+			firstWorking(serverUrl, sha256Hex, (baseUrl) =>
+				withRetry(
+					async () => {
+						const url = `${stripTrailingSlash(baseUrl)}/${sha256Hex}`;
+						const combined = combineSignals(signal, timeout);
+						const response = await fetchImpl(url, { headers: { Range: `bytes=${start}-${end}` }, signal: combined });
+						if (response.status === 206) {
+							return new Uint8Array(await response.arrayBuffer());
+						}
+						// 4xx не повторяем (ТЗ §5). 502/503/504 — транзиентные, бросаем
+						// с .status, withRetry подхватит. 200 вместо 206 — громкий отказ
+						// (П-4 CONTRACTS.md), не «скачать всё».
+						throw readError(
+							"network-failed",
+							`Blossom Range GET не поддержан (ожидался 206, получен ${response.status}) для ${sha256Hex}`,
+							response.status,
+						);
+					},
+					{ retries, backoffMs, isRetryable: isRetryableReadError },
+				),
 			),
 		{ signal },
 	);
@@ -101,23 +150,25 @@ export async function downloadBlob(serverUrl, sha256Hex, options = {}) {
 	return blossomQueue.schedule(
 		priority,
 		() =>
-			withRetry(
-				async () => {
-					try {
-						return await blossomDownloadBlob(serverUrl, sha256Hex, {
-							...rest,
-							signal: combineSignals(signal, timeout),
-						});
-					} catch (err) {
-						if (err?.status == null) {
-							const m = /failed: (\d+)/.exec(err?.message);
-							if (m) err.status = Number(m[1]);
+			firstWorking(serverUrl, sha256Hex, (baseUrl) =>
+				withRetry(
+					async () => {
+						try {
+							return await blossomDownloadBlob(baseUrl, sha256Hex, {
+								...rest,
+								signal: combineSignals(signal, timeout),
+							});
+						} catch (err) {
+							if (err?.status == null) {
+								const m = /failed: (\d+)/.exec(err?.message);
+								if (m) err.status = Number(m[1]);
+							}
+							if (isRetryableStatus(err?.status) || isNetworkError(err)) err.code = "network-failed";
+							throw err;
 						}
-						if (isRetryableStatus(err?.status) || isNetworkError(err)) err.code = "network-failed";
-						throw err;
-					}
-				},
-				{ retries, backoffMs, isRetryable: isRetryableReadError },
+					},
+					{ retries, backoffMs, isRetryable: isRetryableReadError },
+				),
 			),
 		{ signal },
 	);

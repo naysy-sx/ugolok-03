@@ -2,9 +2,8 @@ import { useState, useEffect } from "preact/hooks";
 import { currentUser, dbKeySig } from "../signals/auth.js";
 import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache.js";
 import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Вынесено из channels.jsx (было локальным ChannelAvatarThumb) — тот же
 // компонент нужен в панели сайдбара (nav-groups.jsx, разметка по макету,
@@ -29,7 +28,7 @@ export default function ChannelAvatarThumb({ channel, small }) {
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadMessageAttachment(ownerPubkey, dbKey, channel.avatar, { serverUrl: BLOSSOM_SERVER_URL })
+		getOrDownloadMessageAttachment(ownerPubkey, dbKey, channel.avatar, { serverUrl: uploadTarget() })
 			.then((bytes) => {
 				if (!cancelled) setUrl(putMemoryCachedAttachment(channel.avatar.manifestDigest, bytes, channel.avatar.mime));
 			})

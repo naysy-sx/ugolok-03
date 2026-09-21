@@ -7,6 +7,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { generateFileKey } from "./crypto.js";
 import { planChunks } from "./manifest.js";
 import { MANIFEST_VERSION } from "./content.js";
+import { sanitizeServerHint } from "./servers.js";
 import { uploadBlob, checkUploadRequirements } from "./blob.js";
 import { chunkSizeFor } from "../media/upload-plan.js";
 import { createThumbnailQueue } from "./thumbnail-queue.js";
@@ -104,6 +105,7 @@ export async function putFileStreaming(
 		mime,
 		name,
 		blobSha256: uploadResponse.sha256,
+		...(sanitizeServerHint(serverUrl).length > 0 ? { servers: sanitizeServerHint(serverUrl) } : {}),
 	};
 	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
 	const manifestDigest = bytesToHex(sha256(manifestBytes));

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
 import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
 import { pickIndicator } from "../../../domain/media/progress-indicator.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
+import { uploadTarget } from "../../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // Просмотрщик картинки внутри медиа-сессии (Этап D) — без zoom/swipe, тот
 // же отказ, что уже был у ImageModal (CONTRACTS.md, этап 29: "модалка +
@@ -37,7 +36,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		setError("");
 		setProgress({ phase: "loading", percent: null });
 		acquireMediaUrl(mediaRef, {
-			serverUrl: BLOSSOM_URL,
+			serverUrl: uploadTarget(),
 			// MEDIA-PERF-TZ-4.md §4 A.1 — цель растра оверлея = вьюпорт по большей
 			// стороне (image-preview.js::overlayTargetWidth сам умножает на DPR и
 			// применяет потолок 2560px). Читаем window ЗДЕСЬ (на момент открытия/

@@ -19,6 +19,7 @@
 // acquire того же digest); кросс-сессионное кэширование манифеста -
 // не в скоупе этого этапа, при необходимости — отдельное решение.
 import { getManifest, getRange } from "../../files/content.js";
+import { resolveReadServers } from "../../files/servers.js";
 import { registerPlayerFile, unregisterPlayerFile } from "../../files/player-bridge.js";
 import { resolveImageOverlayUrl } from "../image-preview.js";
 import { putPlaintextBytes } from "../plaintext-cache.js";
@@ -76,6 +77,7 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 		return handle;
 	}
 
+	serverUrl = resolveReadServers(ref.servers, serverUrl);
 	const promise = (async () => {
 		if (ref.mime.startsWith("image/")) {
 			// Оверлей (MEDIA-PERF-TZ.md §4.1) — единственный вызывающий этой ветки

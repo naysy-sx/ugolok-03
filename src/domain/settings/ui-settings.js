@@ -6,7 +6,8 @@ import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { publishDurably } from "../../core/store/outbox.js";
 import { registerTrustedImageOrigins } from "../media/url-guard.js";
-import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { registerUserServers } from "../files/servers.js";
+import { BUILD_DEFAULT_RELAYS, getBuildBlossomServers } from "../../config.js";
 import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
 import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
@@ -146,17 +147,20 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 		const relayUrls = boot.relayUrl
 			? [{ url: boot.relayUrl, read: true, write: true }]
 			: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true }));
-		const blossomUrls = boot.blossomUrl ? [boot.blossomUrl] : [...BUILD_DEFAULT_BLOSSOM_SERVERS];
-		return mergeWithDefaults({
+		const blossomUrls = boot.blossomUrl ? [boot.blossomUrl] : getBuildBlossomServers();
+		const first = mergeWithDefaults({
 			language: detectSystemLocale(),
 			relayUrls,
 			blossomUrls,
 			activeBlossomUrl: blossomUrls[0] ?? null,
 		});
+		registerUserServers({ activeUrl: first.activeBlossomUrl, urls: first.blossomUrls });
+		return first;
 	}
 	const { ownerPubkey: _drop, ...settings } = row;
 	const merged = mergeWithDefaults(settings);
 	registerTrustedImageOrigins(merged.blossomUrls);
+	registerUserServers({ activeUrl: merged.activeBlossomUrl, urls: merged.blossomUrls });
 	return merged;
 }
 
@@ -177,6 +181,7 @@ export async function hasLocalUiSettings(ownerPubkey) {
 export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish) {
 	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 	registerTrustedImageOrigins(settings.blossomUrls);
+	registerUserServers({ activeUrl: settings.activeBlossomUrl, urls: settings.blossomUrls });
 	try {
 		// AUDIT-EGOROD A2: через постоянный outbox — настройки (включая список relay)
 		// доедут до других устройств и после оффлайна/закрытой вкладки.

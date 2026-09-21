@@ -1419,7 +1419,9 @@
 			"warning": "Solo quedan {{free}} de {{limit}}.",
 			"toStorage": "Abrir almacenamiento",
 			"toPlans": "Obtener más espacio"
-		}
+		},
+		"serverLabel": "Servidor de almacenamiento: {{server}}",
+		"filesCount": "Archivos: {{count}}"
 	},
 	"plans": {
 		"title": "Planes de almacenamiento",

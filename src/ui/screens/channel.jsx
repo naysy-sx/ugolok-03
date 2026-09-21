@@ -19,7 +19,6 @@ import AttachmentSlices from "../components/media/attachment-slices.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import ChannelChat from "../components/channel-chat.jsx";
 import ChannelComposer from "../components/channel-composer.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
@@ -32,11 +31,11 @@ import IconShield from "../icons/shield.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import { ChannelLead, ChannelSubtitle, ChannelAbout, ChannelPostsTab } from "../components/channel-feed.jsx";
 import ChannelPostPage from "../components/channel-post-page.jsx";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function sameSet(a, b) {
 	if (a.size !== b.size) return false;
@@ -136,7 +135,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: channelId } });
+				avatarDescriptor = await uploadMessageAttachment(uploadTarget(), bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: channelId } });
 			}
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
 			for (const groupId of originalGroupIds) {

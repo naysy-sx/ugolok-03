@@ -10,7 +10,7 @@ import { createResourceOwner } from "../../domain/media/adapters/resource-owner.
 import { acquireMediaUrl, releaseMediaUrlHandle } from "../../domain/media/adapters/media-url.js";
 import { setThumbnailWorkPaused } from "../../domain/files/thumbnail-queue.js";
 import { callState } from "./call.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 // Продуктовое решение PM (в MEDIA-MATH/ALGO/SPEC числа нет — тот же класс
 // решения, что MAX_ATTACHMENTS_PER_MESSAGE на этапе B4): окно эагерной
@@ -18,7 +18,6 @@ import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 // (там allocWindow всегда отдаёт ровно текущий digest, budgetBytes не
 // используется в этой ветке media-machine.js).
 const MEDIA_WINDOW_BUDGET_BYTES = 16 * 1024 * 1024;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 export const mediaSession = signal(null); // MediaState & {playlist} | null
 
@@ -61,7 +60,7 @@ const resourceOwner = createResourceOwner({
 	// не показ); ошибку показывает view-компонент, вызвав acquireMediaUrl
 	// ЕЩЁ РАЗ САМ (мемоизация — тот же promise, свой .catch на своей стороне).
 	acquire: (ref) => {
-		acquireMediaUrl(ref, { serverUrl: BLOSSOM_SERVER_URL }).catch(() => {});
+		acquireMediaUrl(ref, { serverUrl: uploadTarget() }).catch(() => {});
 	},
 	release: (digest) => {
 		releaseMediaUrlHandle(digest).catch(() => {});

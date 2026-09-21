@@ -17,7 +17,7 @@ import { filterByClass } from "../../domain/files/filter.js";
 import { buildVisibleMediaPlaylist } from "../../domain/files/visible-media.js";
 import { fileExtLabel, liveChildCount } from "../../domain/files/file-meta.js";
 import { classOf } from "../../domain/media/media-ref.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 import { formatFileSize } from "./attachment-view.jsx";
 import FileThumbnail from "./file-thumbnail.jsx";
 import FileTableHead from "./file-table-head.jsx";
@@ -31,7 +31,6 @@ import IconTrash from "../icons/trash.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function MountsList({ openMountView, handleUnmountShare }) {
 	const mounts = activeMounts.value;
@@ -93,7 +92,7 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 		? (R.children.get(mountFolderId) ?? []).filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID).map((id) => ({ id, ...R.nodes.get(id) }))
 		: [];
 	// В долях (обычно небольших) манифесты всех файлов папки нужны сразу: и mime для фильтра, и размер для сортировки.
-	const info = useManifestInfo(ownerPubkey, rawEntries.filter((e) => e.kind === "file"), BLOSSOM_URL);
+	const info = useManifestInfo(ownerPubkey, rawEntries.filter((e) => e.kind === "file"), uploadTarget());
 	const entriesAll = rawEntries.map((e) => (e.kind === "file" ? { ...e, mime: e.mime ?? info[e.id]?.mime ?? null, size: info[e.id]?.size ?? 0 } : e));
 	const entries = sortEntries(filterByClass(entriesAll, typeFilter), sortKey, sortDir);
 
@@ -119,7 +118,7 @@ function MountFolder({ openMountId, mountFolderId, setMountFolderId, closeMountV
 		if (!key) return null;
 		let manifest = await getCachedManifest(ownerPubkey, node.blob);
 		if (!manifest) {
-			manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			await putCachedManifest(ownerPubkey, node.blob, manifest);
 		}
 		return { digest: node.blob, key, mime: manifest.mime, name: manifest.name || node.displayName, size: manifest.size, sourceKind: "node", sourceMeta: { nodeId: node.id, mountId: openMountId } };

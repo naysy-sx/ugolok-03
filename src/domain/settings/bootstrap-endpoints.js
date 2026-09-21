@@ -1,7 +1,7 @@
 // Device-level endpoints до логина (localStorage). ICE в uiSettings /
 // kind-событие НЕ кладётся — этого слоя достаточно для стартового экрана
 // и звонков с этого устройства.
-import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS, BUILD_DEFAULT_ICE_SERVERS } from '../../config.js';
+import { BUILD_DEFAULT_RELAYS, getBuildBlossomServers, BUILD_DEFAULT_ICE_SERVERS } from '../../config.js';
 import { getRuntimeConfig } from './runtime-config.js';
 import { logWarn } from '../../core/diag/boot-log.js';
 
@@ -141,7 +141,7 @@ function buildTimeDefaults() {
 	const runtimeIce = Array.isArray(runtime.iceServers) && runtime.iceServers.length > 0 ? runtime.iceServers : null;
 	return {
 		relayUrl: runtime.relays?.[0] ?? BUILD_DEFAULT_RELAYS[0] ?? '',
-		blossomUrl: runtime.blossomServers?.[0] ?? BUILD_DEFAULT_BLOSSOM_SERVERS[0] ?? '',
+		blossomUrl: runtime.blossomServers?.[0] ?? getBuildBlossomServers()[0] ?? '',
 		iceServers: (runtimeIce ?? (Array.isArray(BUILD_DEFAULT_ICE_SERVERS) ? BUILD_DEFAULT_ICE_SERVERS : [])).map((s) => ({ ...s })),
 	};
 }
