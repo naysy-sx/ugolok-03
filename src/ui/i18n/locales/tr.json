@@ -1387,7 +1387,9 @@
 			"cancel": "İptal",
 			"working": "Siliniyor… {{done}} / {{total}}",
 			"done": "Yer açıldı.",
-			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin."
+			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin.",
+			"sharedCopy": "Bu dosya paylaşılan bir klasörde. Klasörün okuyucuları için açılmayacak.",
+			"sharedOriginal": "Bu dosya paylaşılan bir klasörde. Erişimi olanlarda kalır, ancak yeni okuyucular için açılmaz."
 		},
 		"journalPublishFailed": "Yükleme günlüğü relay’e ulaşmıyor: {{reason}}. Dosyalarınız etkilenmez, ancak diğer cihazlarda adlar görünmez.",
 		"quota": {

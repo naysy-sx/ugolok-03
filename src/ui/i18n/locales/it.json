@@ -1387,7 +1387,9 @@
 			"cancel": "Annulla",
 			"working": "Eliminazione… {{done}} di {{total}}",
 			"done": "Spazio liberato.",
-			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi."
+			"failed": "Impossibile eliminare {{count}} file. Riprova più tardi.",
+			"sharedCopy": "Questo file è in una cartella condivisa. Non si aprirà più per i lettori della cartella.",
+			"sharedOriginal": "Questo file è in una cartella condivisa. Chi ha già accesso lo mantiene, ma non si aprirà per nuovi lettori."
 		},
 		"journalPublishFailed": "Il registro dei caricamenti non raggiunge il relay: {{reason}}. I tuoi file non sono coinvolti, ma i nomi non compariranno sugli altri dispositivi.",
 		"quota": {

@@ -1387,7 +1387,9 @@
 			"cancel": "Cancelar",
 			"working": "Borrando… {{done}} de {{total}}",
 			"done": "Espacio liberado.",
-			"failed": "No se pudieron borrar {{count}} archivos. Inténtalo más tarde."
+			"failed": "No se pudieron borrar {{count}} archivos. Inténtalo más tarde.",
+			"sharedCopy": "Este archivo está en una carpeta compartida. Dejará de abrirse para sus lectores.",
+			"sharedOriginal": "Este archivo está en una carpeta compartida. Quienes ya tienen acceso lo conservan, pero no se abrirá para nuevos lectores."
 		},
 		"journalPublishFailed": "El registro de subidas no llega al relay: {{reason}}. Tus archivos no se ven afectados, pero los nombres no aparecerán en otros dispositivos.",
 		"quota": {

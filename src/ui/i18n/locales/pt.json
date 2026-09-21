@@ -1387,7 +1387,9 @@
 			"cancel": "Cancelar",
 			"working": "A apagar… {{done}} de {{total}}",
 			"done": "Espaço libertado.",
-			"failed": "Não foi possível apagar {{count}} ficheiros. Tente mais tarde."
+			"failed": "Não foi possível apagar {{count}} ficheiros. Tente mais tarde.",
+			"sharedCopy": "Este arquivo está em uma pasta compartilhada. Ele deixará de abrir para os leitores da pasta.",
+			"sharedOriginal": "Este arquivo está em uma pasta compartilhada. Quem já tem acesso continua com ele, mas não abrirá para novos leitores."
 		},
 		"journalPublishFailed": "O registo de envios não chega ao relay: {{reason}}. Os seus ficheiros não são afetados, mas os nomes não vão aparecer noutros dispositivos.",
 		"quota": {

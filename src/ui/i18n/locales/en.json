@@ -1387,7 +1387,9 @@
 			"cancel": "Cancel",
 			"working": "Deleting… {{done}} of {{total}}",
 			"done": "Space freed.",
-			"failed": "Could not delete {{count}} of the files. Try again later."
+			"failed": "Could not delete {{count}} of the files. Try again later.",
+			"sharedCopy": "This file is in a shared folder. It will stop opening for the readers of that folder.",
+			"sharedOriginal": "This file is in a shared folder. People who already have access keep it, but it will not open for new readers."
 		},
 		"journalPublishFailed": "Upload journal isn't reaching the relay: {{reason}}. Your files are not affected, but names won't appear on other devices.",
 		"quota": {

@@ -8,7 +8,9 @@ import { formatBytes } from "../../domain/uploads/format.js";
 import { sentPlaces } from "../../domain/uploads/records.js";
 import { currentUser } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
-import { initFiles, trashNodesForBlobs } from "../signals/files.js";
+import { initFiles, trashNodesForBlobs, shareRiskForBlobs } from "../signals/files.js";
+import { initShares, sharedNodeIds } from "../signals/shares.js";
+import { listUploads } from "../../domain/uploads/journal.js";
 
 // props: {hashes, name, size, targets, inFiles, serverUrl, privKey, onClose, onDone}
 export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFiles, serverUrl, privKey, title, body, confirmLabel, onClose, onDone }) {
@@ -16,6 +18,25 @@ export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFi
 	const [progress, setProgress] = useState({ done: 0, total: hashes.length });
 	const [failed, setFailed] = useState(0);
 	const [error, setError] = useState("");
+	const [shareRisk, setShareRisk] = useState({ ownCopy: false, original: false });
+
+	// Предупреждение о долях считаем до подтверждения: после удаления говорить поздно.
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				await initFiles(currentUser.value.id, privKey, publish);
+				await initShares(currentUser.value.id);
+				const shareHashes = new Set((await listUploads()).filter((r) => r.purpose === "share").map((r) => r.hash));
+				if (!cancelled) setShareRisk(shareRiskForBlobs(hashes, sharedNodeIds.value, shareHashes));
+			} catch {
+				// журнал/дерево недоступны — диалог работает без этого предупреждения
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		function onKey(e) {
@@ -61,6 +82,8 @@ export default function FreeSpaceDialog({ hashes, name, size, targets = [], inFi
 					<>
 						<p style={{ margin: 0 }}>{body ?? t("storage.free.body", { name: name || t("storage.unnamed"), size: formatBytes(size) })}</p>
 						{!body && (sentPlaces(targets).length > 0 ? <p class="callout callout--warn" style={{ margin: 0 }}>{t("storage.free.usage", { count: sentPlaces(targets).length })}</p> : <p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.usageNone")}</p>)}
+						{shareRisk.ownCopy && <p class="callout callout--warn" style={{ margin: 0 }}>{t("storage.free.sharedCopy")}</p>}
+						{shareRisk.original && !shareRisk.ownCopy && <p class="callout callout--warn" style={{ margin: 0 }}>{t("storage.free.sharedOriginal")}</p>}
 						<p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.filesNote")}</p>
 						<p style={{ margin: 0, color: "var(--muted)" }}>{t("storage.free.limit")}</p>
 					</>

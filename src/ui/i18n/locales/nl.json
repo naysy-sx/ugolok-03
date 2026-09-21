@@ -1387,7 +1387,9 @@
 			"cancel": "Annuleren",
 			"working": "Verwijderen… {{done}} van {{total}}",
 			"done": "Ruimte vrijgemaakt.",
-			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw."
+			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw.",
+			"sharedCopy": "Dit bestand staat in een gedeelde map. Het opent niet meer voor de lezers van die map.",
+			"sharedOriginal": "Dit bestand staat in een gedeelde map. Wie al toegang heeft, houdt het, maar voor nieuwe lezers opent het niet."
 		},
 		"journalPublishFailed": "Het uploadlogboek bereikt de relay niet: {{reason}}. Je bestanden worden hier niet door geraakt, maar op andere apparaten verschijnen geen namen.",
 		"quota": {

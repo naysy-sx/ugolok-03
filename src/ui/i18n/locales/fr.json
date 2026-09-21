@@ -1387,7 +1387,9 @@
 			"cancel": "Annuler",
 			"working": "Suppression… {{done}} sur {{total}}",
 			"done": "Espace libéré.",
-			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard."
+			"failed": "Impossible de supprimer {{count}} fichiers. Réessayez plus tard.",
+			"sharedCopy": "Ce fichier est dans un dossier partagé. Il ne s'ouvrira plus pour les lecteurs de ce dossier.",
+			"sharedOriginal": "Ce fichier est dans un dossier partagé. Ceux qui y ont déjà accès le gardent, mais il ne s'ouvrira pas pour de nouveaux lecteurs."
 		},
 		"journalPublishFailed": "Le journal des envois n’atteint pas le relais : {{reason}}. Vos fichiers ne sont pas touchés, mais les noms n’apparaîtront pas sur les autres appareils.",
 		"quota": {
