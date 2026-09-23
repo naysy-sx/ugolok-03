@@ -165,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "已最小化 — 点击返回",
-		"serviceUnavailable": "服务不可用"
+		"serviceUnavailable": "服务不可用",
+		"copyAddress": "复制地址",
+		"sectionTalk": "交流",
+		"sectionServices": "服务",
+		"sectionMore": "更多",
+		"navChats": "聊天",
+		"navRequests": "申请",
+		"navNetwork": "网络"
 	},
 	"unlock": {
 		"checking": "正在检查…",

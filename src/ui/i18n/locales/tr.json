@@ -165,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Küçültüldü — dönmek için dokunun",
-		"serviceUnavailable": "hizmet kullanılamıyor"
+		"serviceUnavailable": "hizmet kullanılamıyor",
+		"copyAddress": "Adresi kopyala",
+		"sectionTalk": "Sohbet",
+		"sectionServices": "Servisler",
+		"sectionMore": "Diğer",
+		"navChats": "Sohbetler",
+		"navRequests": "İstekler",
+		"navNetwork": "Ağ"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",

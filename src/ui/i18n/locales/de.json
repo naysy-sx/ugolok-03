@@ -165,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Minimiert — zum Zurückkehren tippen",
-		"serviceUnavailable": "Dienst nicht erreichbar"
+		"serviceUnavailable": "Dienst nicht erreichbar",
+		"copyAddress": "Adresse kopieren",
+		"sectionTalk": "Gespräch",
+		"sectionServices": "Dienste",
+		"sectionMore": "Mehr",
+		"navChats": "Chats",
+		"navRequests": "Anfragen",
+		"navNetwork": "Netzwerk"
 	},
 	"unlock": {
 		"checking": "Wird geprüft…",

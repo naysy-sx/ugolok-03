@@ -165,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "最小化中 — タップして戻る",
-		"serviceUnavailable": "サービス利用不可"
+		"serviceUnavailable": "サービス利用不可",
+		"copyAddress": "アドレスをコピー",
+		"sectionTalk": "会話",
+		"sectionServices": "サービス",
+		"sectionMore": "その他",
+		"navChats": "チャット",
+		"navRequests": "申請",
+		"navNetwork": "ネットワーク"
 	},
 	"unlock": {
 		"checking": "確認中…",
