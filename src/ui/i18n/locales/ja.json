@@ -65,7 +65,11 @@
 			"amethyst": "アメジスト",
 			"magenta": "マゼンタ",
 			"fuchsia": "フクシア",
-			"pink": "ピンク"
+			"pink": "ピンク",
+			"terracotta": "テラコッタ",
+			"steel": "スチール",
+			"sand": "サンド",
+			"ink": "インク"
 		},
 		"notificationsTitle": "通知",
 		"enableNotifications": "通知を有効にする",

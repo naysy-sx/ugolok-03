@@ -65,7 +65,11 @@
 			"amethyst": "Ametist",
 			"magenta": "Macenta",
 			"fuchsia": "Fuşya",
-			"pink": "Pembe"
+			"pink": "Pembe",
+			"terracotta": "Terrakota",
+			"steel": "Çelik",
+			"sand": "Kum",
+			"ink": "Mürekkep"
 		},
 		"notificationsTitle": "Bildirimler",
 		"enableNotifications": "Bildirimleri etkinleştir",

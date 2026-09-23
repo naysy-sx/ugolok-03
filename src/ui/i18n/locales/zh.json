@@ -65,7 +65,11 @@
 			"amethyst": "紫水晶色",
 			"magenta": "洋红色",
 			"fuchsia": "紫红色",
-			"pink": "粉色"
+			"pink": "粉色",
+			"terracotta": "赤陶",
+			"steel": "钢",
+			"sand": "沙",
+			"ink": "墨"
 		},
 		"notificationsTitle": "通知",
 		"enableNotifications": "启用通知",

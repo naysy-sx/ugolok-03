@@ -65,7 +65,11 @@
 			"amethyst": "Amatista",
 			"magenta": "Magenta",
 			"fuchsia": "Fucsia",
-			"pink": "Rosa"
+			"pink": "Rosa",
+			"terracotta": "Terracota",
+			"steel": "Acero",
+			"sand": "Arena",
+			"ink": "Tinta"
 		},
 		"notificationsTitle": "Notificaciones",
 		"enableNotifications": "Activar notificaciones",

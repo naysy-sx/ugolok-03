@@ -537,7 +537,9 @@ html[data-media-full] .top-corner-actions {
 .sidebar-toggle-btn {
 	display: none;
 }
-@media (max-width: 47.99em) {
+/* Бургер до --bp-tablet (64em): между 48 и 64em сайдбар ещё drawer,
+   не колонка в потоке — иначе список плющится. */
+@media (max-width: 63.99em) {
 	.sidebar-toggle-btn {
 		display: flex;
 	}
@@ -578,7 +580,7 @@ html[data-media-full] .top-corner-actions {
 .sidebar-backdrop {
 	display: none;
 }
-@media (max-width: 47.99em) {
+@media (max-width: 63.99em) {
 	.sidebar {
 		position: fixed;
 		inset-block: 0;
@@ -591,6 +593,8 @@ html[data-media-full] .top-corner-actions {
 		box-shadow: var(--shadow);
 		transform: translateX(-100%);
 		transition: transform var(--transition-speed) var(--transition-ease);
+		padding-block-start: env(safe-area-inset-top);
+		padding-block-end: env(safe-area-inset-bottom);
 	}
 	.sidebar.sidebar-open {
 		transform: translateX(0);
@@ -609,24 +613,22 @@ html[data-media-full] .top-corner-actions {
 	overflow: hidden;
 }
 
-/* ≥768px (тот же порог, что auth-layout, — обсуждено с пользователем):
-   сайдбар сбоку фиксированной ширины, не полосой сверху. На узких экранах
-   сознательно НЕ включаем фикс-высоту/hidden-скролл — это отдельная, не
-   затронутая сейчас задача (просили именно "десктоп, большие разрешения"),
-   ниже порога просто обычная прокручиваемая страница, как было раньше. */
-@media (min-width: 48em) {
+/* В потоке с --bp-tablet (64em). Ниже — drawer из запроса выше.
+   Уже 16rem колонку не сжимаем; с --bp-desk (80em) она 18rem. */
+@media (min-width: 64em) {
 	.app-layout {
 		flex-direction: row;
 	}
 	.sidebar {
 		flex: 0 0 auto;
-		/* Было 18rem (288px, буквально по --aside:292px мокапа) — живой
-		   фидбек пользователя: на экране заметно шире соседних приложений,
-		   контенту не нужно столько места. 16rem (256px) — компромисс между
-		   мокапом и компактностью. */
 		width: 16rem;
 		border-block-end: none;
 		border-inline-end: var(--border-width) solid var(--border);
+	}
+}
+@media (min-width: 80em) {
+	.sidebar {
+		width: 18rem;
 	}
 }
 
@@ -912,7 +914,7 @@ html[data-media-full] .top-corner-actions {
    имя+био справа от него, ключ/статус — отдельными строками во всю ширину
    под ними. Только мобильный порог: десктопная раскладка (полноширинный
    портрет сверху) не тронута ни строкой. */
-@media (max-width: 47.99em) {
+@media (max-width: 63.99em) {
 	.account {
 		display: grid;
 		grid-template-columns: 4.375rem 1fr;
@@ -1955,7 +1957,7 @@ html[data-media-full] .top-corner-actions {
    auto, не сжимается). На той же ширине, на которой бургер появляется
    (47.99em, тот же порог, что .sidebar-toggle-btn), резервируем под него
    место — тот же приём, что уже применён у .call-overlay-ended-close. */
-@media (max-width: 47.99em) {
+@media (max-width: 63.99em) {
 	.section-header {
 		padding-inline-end: calc(var(--space-xs) * 2 + 2.25rem);
 	}
@@ -2242,7 +2244,7 @@ html[data-media-full] .top-corner-actions {
 	padding-block-end: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 47.99em) { /* --bp-phablet */
 	.message-bubble {
 		max-width: 88%;
 	}
@@ -2667,7 +2669,7 @@ button[type="button"].attach-tray-thumb-remove {
    статическая раскладка — тот же случай, что .quick-participants выше;
    порог тот же (48em), чтобы "мобильный режим" всей комнаты включался в
    одной точке, а не в россыпи разных брейкпоинтов. */
-@media (max-width: 47.9375em) {
+@media (max-width: 47.99em) {
 	.quick-stage-header {
 		flex-direction: column;
 		align-items: stretch;
@@ -2767,7 +2769,7 @@ button[type="button"].attach-tray-thumb-remove {
    .row: тот же класс бага (перенос считается по гипотетической ширине,
    не по итоговой) один раз уже ломал раскладку в обе стороны, поэтому
    обе границы теперь заданы явно, а не половина явно/половина расчётом. */
-@media (max-width: 47.9375em) {
+@media (max-width: 47.99em) {
 	.quick-room-layout {
 		flex-direction: column;
 	}
@@ -3204,7 +3206,7 @@ body:has(.auth-layout) {
 	background:
 		radial-gradient(
 			ellipse 80% 50% at 50% -10%,
-			color-mix(in oklch, var(--info) 32%, transparent),
+			color-mix(in oklch, var(--accent) 18%, transparent),
 			transparent
 		),
 		var(--bg);
@@ -3249,12 +3251,12 @@ body:has(.auth-layout) {
 
 .unlock-home {
 	width: 100%;
-	max-width: 34rem;
+	max-width: 24rem;
 	margin-inline: auto;
 	padding-block: var(--space-m) var(--space-xl);
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	align-items: stretch;
 	gap: var(--space-m);
 }
 .auth-layout .main:has(.unlock-home) {
@@ -3360,10 +3362,12 @@ body:has(.auth-layout) {
 
 .unlock-card {
 	width: 100%;
-	max-width: 28rem;
-	padding: var(--space-l);
+	max-width: none;
+	padding: 0;
 	overflow: hidden;
-	background-color: var(--surface);
+	background-color: transparent;
+	border: none;
+	box-shadow: none;
 }
 .unlock-card .btn.btn-block {
 	padding: 0.75rem 1.1rem;
@@ -3385,33 +3389,40 @@ body:has(.auth-layout) {
 }
 
 .unlock-modes {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 3px;
-	width: 100%;
-	background-color: var(--surface-raised);
-	border-radius: var(--radius-sm);
-	padding: 3px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-s);
+	width: auto;
+	background: none;
+	padding: 0;
 }
 .unlock-modes [role="tab"] {
 	background: none;
 	border: 0;
-	padding: var(--space-2xs) var(--space-s);
-	border-radius: calc(var(--radius-sm) - 1px);
+	padding: 0;
+	border-radius: 0;
 	color: var(--muted);
 	font-weight: 550;
-	font-size: 0.9rem;
+	font-size: var(--step-0);
 	box-shadow: none;
 	transform: none;
+}
+.unlock-modes [role="tab"] + [role="tab"]::before {
+	content: "·";
+	margin-inline-end: var(--space-s);
+	color: var(--muted);
+	font-weight: 400;
 }
 .unlock-modes [role="tab"]:hover {
 	background: none;
 	color: var(--fg);
 }
 .unlock-modes [role="tab"][aria-selected="true"] {
-	background-color: var(--surface);
+	background: none;
 	color: var(--fg);
-	box-shadow: 0 1px 3px color-mix(in oklch, var(--fg) 12%, transparent);
+	font-weight: var(--weight-bold);
+	box-shadow: none;
 }
 
 .unlock-home .form-group label {
@@ -4089,8 +4100,9 @@ body:has(.auth-layout) {
 	text-align: start;
 }
 .logo-name {
-	font-size: var(--step-3);
-	font-weight: 900;
+	font-family: var(--font-display);
+	font-size: var(--step-2);
+	font-weight: 500;
 	letter-spacing: var(--heading-letter-spacing);
 	color: var(--accent);
 }
@@ -4347,17 +4359,19 @@ body:has(.auth-layout) {
 }
 
 .hero-section {
-	text-align: center;
-	max-width: 22rem;
+	text-align: start;
+	max-width: none;
 	padding-block: 0;
 }
 .hero-section h1 {
 	max-width: none;
 	margin: 0 0 var(--space-2xs);
-	font-size: clamp(1.45rem, 4vw, 1.8rem);
-	font-weight: 650;
-	letter-spacing: -0.02em;
-	line-height: 1.25;
+	font-family: var(--font-display);
+	font-size: var(--step-3);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: var(--line-height-heading);
+	color: var(--fg);
 }
 .hero-lead {
 	font-size: 0.95rem;
@@ -6497,39 +6511,27 @@ button[type="button"].media-mini-bar-btn {
    раньше он держался на этом единственном ручном margin, из-за чего
    секции БЕЗ такого патча (например "Relay-серверы") слипались с
    соседом — баг был и до REGLAMENT.md, не регрессия миграции. */
-/* display:flex ОСТАЁТСЯ (не .stack) — на ≥40em (медиазапрос ниже) строка
-   вместо столбика, это переключение состояния по брейкпоинту, REGLAMENT.md
-   сознательно не покрывает (тот же принцип, что .app-layout). */
+/* Колонка, не ряд: герой 16:9 на всю ширину карточки, поля под ним.
+   На десктопе колонка не растягивается шире 36rem. */
 .profile-photo-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
+	max-inline-size: 36rem;
 }
-@media (min-width: 40em) {
-	.profile-photo-layout {
-		flex-direction: row;
-		align-items: flex-start;
-	}
-	.profile-photo-col {
-		flex: 0 0 12rem;
-	}
-	.profile-bio-col {
-		flex: 1;
-		min-width: 0;
-	}
-}
-/* .stack (раскладка) уже в JSX. */
-.profile-avatar-square {
-	width: 12rem;
-	height: 12rem;
-	aspect-ratio: 1;
+.profile-avatar-square,
+.profile-avatar-square-fallback {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 9;
 	object-fit: cover;
-	border-radius: var(--radius);
+	border-radius: var(--radius-lg);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
 }
 .profile-avatar-square-fallback {
-	/* .row (раскладка) уже в JSX. */
+	display: grid;
+	place-items: center;
 	font-size: var(--step-4);
 	color: var(--muted);
 	font-weight: var(--weight-bold);
@@ -7892,7 +7894,7 @@ button[type="button"].media-mini-bar-btn {
 .file-table__actions > * {
 	vertical-align: middle;
 }
-@media (max-width: 576px) {
+@media (max-width: 35.99em) { /* --bp-phone */
 	.file-table__type,
 	.file-table__access {
 		display: none;
@@ -8138,7 +8140,7 @@ button[type="button"].media-mini-bar-btn {
 	gap: var(--space-m);
 	align-items: start;
 }
-@media (max-width: 720px) {
+@media (max-width: 47.99em) { /* --bp-phablet */
 	.app-layout .help-layout,
 	.auth-layout .help-layout {
 		grid-template-columns: 1fr;
@@ -10276,7 +10278,7 @@ button[type="button"].media-mini-bar-btn {
 .slice .slice__icon {
 	font-size: 2em;
 }
-@media (max-width: 576px) {
+@media (max-width: 35.99em) { /* --bp-phone */
 	.slice__label {
 		display: none;
 	}
@@ -10285,4 +10287,307 @@ button[type="button"].media-mini-bar-btn {
 		padding-inline: var(--space-2xs);
 		--gap: 0;
 	}
+}
+
+/* ================================================================== *
+ *  REDESIGN-2 — визуальный контракт. Поведение экранов не меняет.    *
+ * ================================================================== */
+
+.shell {
+	padding-block-start: env(safe-area-inset-top);
+}
+
+/* Корень экрана — Unbounded, не акцентная заливка заголовка.
+   Push (назад, без аватара в шапке) — заголовок по центру. */
+.screen-title__text {
+	color: var(--fg);
+}
+.section-header {
+	background: var(--bg);
+}
+.section-header:not(:has(.header-back)) .screen-title__text {
+	font-family: var(--font-display);
+	font-size: var(--step-3);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: var(--line-height-heading);
+}
+.section-header:not(:has(.header-back)) {
+	border-block-end-color: transparent;
+}
+.section-header:has(.header-back):not(:has(.header-lead)) {
+	grid-template-areas: "back ident actions";
+	grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.section-header:has(.header-back):not(:has(.header-lead)) .screen-title {
+	text-align: center;
+}
+.section-header:has(.header-back):not(:has(.header-lead)) .screen-title__text {
+	font-family: var(--font-display);
+	font-weight: 500;
+}
+
+/* Строка списка. .chat-row вешается на журнал; тот же ритм — канон. */
+.chat-row,
+.jitem__link {
+	min-block-size: 3.5rem;
+}
+.chat-row__ava,
+.stream-ava,
+.jtype {
+	border-radius: var(--radius-full);
+	object-fit: cover;
+}
+.chat-row__name,
+.stream__name,
+.jtitle {
+	font-weight: var(--weight-bold);
+}
+.chat-row__snippet,
+.jmeta {
+	color: var(--muted);
+}
+.chat-row__time,
+.jtime {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+.chat-row__badge,
+.group-count,
+.tab__badge,
+.jdot {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.group-count,
+.chat-row__badge,
+.tab__badge {
+	border-radius: var(--radius-full);
+}
+
+@container screen (width < 48em) {
+	.content-wrapper:has(.journal) {
+		padding-inline: 0;
+	}
+	.journal .chat-row {
+		border-radius: 0;
+		border-block-end: var(--border-width) solid color-mix(in oklch, var(--border), transparent 40%);
+	}
+	.journal .empty,
+	.journal .jlead,
+	.journal .jgroup__date,
+	.journal .jmore {
+		padding-inline: var(--space-m);
+	}
+}
+
+/* Пузыри: исходящий — тёплый замес, не сплошная лампа. Входящий — surface. */
+.msg,
+.message-bubble {
+	box-shadow: none;
+	--bubble-radius: var(--radius-lg);
+}
+.msg--out,
+.message-bubble-own {
+	background-color: color-mix(in oklch, var(--accent) 14%, var(--surface));
+	background-image: none;
+	color: var(--fg);
+	border: none;
+}
+.msg--in,
+.message-bubble-other {
+	background-color: var(--surface);
+	border-color: color-mix(in oklch, var(--border), transparent 45%);
+}
+.message-bubble-own .message-bubble-sender,
+.message-bubble-own .message-bubble-meta,
+.message-bubble-own a,
+.message-bubble-own a:hover {
+	color: var(--fg);
+}
+.message-bubble-own .message-bubble-meta {
+	color: var(--muted);
+}
+.message-bubble-own .audio-shell {
+	background-color: color-mix(in oklch, var(--accent) 10%, var(--bg));
+}
+.message-bubble-own .audio-shell audio {
+	accent-color: var(--accent);
+}
+.msg-voice,
+.message-bubble:has(.audio-shell) {
+	border-radius: var(--radius-lg);
+}
+
+/* Композер — пилюля на фоне страницы, отправка кругом. Инструменты
+   остаются вторым рядом: вложение, Aa, голос и смайл не выкидываем. */
+.section-footer:has(.message-compose) {
+	background: var(--bg);
+}
+.message-compose,
+.composer {
+	background-color: var(--surface);
+	border-color: color-mix(in oklch, var(--border), transparent 30%);
+	border-radius: var(--radius-full);
+	box-shadow: none;
+}
+.compose-tools {
+	padding-inline: var(--space-2xs);
+}
+
+/* Сегмент — подчёркивание, не заливка. Переключатель вида (иконки) не трогаем. */
+.seg:not(.view-toggle) .slice {
+	border: none;
+	border-radius: 0;
+	background: none;
+	border-block-end: 2px solid transparent;
+	margin-block-end: -1px;
+	flex: 1 1 auto;
+	justify-content: center;
+}
+.seg:not(.view-toggle) .slice + .slice {
+	margin-inline-start: 0;
+}
+.seg:not(.view-toggle) .slice--on {
+	background: none;
+	border-color: transparent;
+	border-block-end-color: var(--accent);
+	color: var(--fg);
+	box-shadow: none;
+}
+
+/* Образец цвета: выбранный — кольцо акцента и галочка. */
+.swatch {
+	position: relative;
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+}
+.swatch.is-on,
+.swatch[aria-pressed="true"] {
+	border-color: var(--accent);
+}
+.swatch[aria-pressed="true"]::after {
+	content: "";
+	position: absolute;
+	inset-inline-start: 50%;
+	inset-block-start: 46%;
+	inline-size: 0.45rem;
+	block-size: 0.8rem;
+	border: solid var(--accent-contrast);
+	border-width: 0 2px 2px 0;
+	rotate: 45deg;
+	translate: -50% -50%;
+	pointer-events: none;
+}
+
+/* Тумблер строки настройки — пилюля, не системный квадрат. */
+.set-row__switch {
+	appearance: none;
+	inline-size: 2.75rem;
+	block-size: 1.6rem;
+	border-radius: var(--radius-full);
+	border: var(--border-width) solid var(--border);
+	background-color: var(--surface-raised);
+	position: relative;
+}
+.set-row__switch::before {
+	content: "";
+	position: absolute;
+	inset-block-start: 0.15rem;
+	inset-inline-start: 0.15rem;
+	inline-size: 1.2rem;
+	block-size: 1.2rem;
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	transition: translate var(--transition-speed) var(--transition-ease);
+}
+.set-row__switch:checked {
+	background-color: var(--accent);
+	border-color: var(--accent);
+}
+.set-row__switch:checked::before {
+	translate: 1.25rem 0;
+}
+
+/* Поиск — пилюля. */
+.file-search-field {
+	border-radius: var(--radius-full);
+	background-color: var(--surface);
+	border-color: transparent;
+}
+
+/* Файлы: 2 / 3 / 4 по ширине ЭКРАНА, не вьюпорта. */
+.file-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container screen (width >= 40em) {
+	.file-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+@container screen (width >= 64em) {
+	.file-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+.file-row {
+	min-block-size: 3.5rem;
+	align-items: center;
+}
+
+/* Карточка поста — поверхность и сетка медиа, если разметка её возьмёт. */
+.post-card {
+	background-color: var(--surface);
+	border: var(--border-width) solid color-mix(in oklch, var(--border), transparent 40%);
+	border-radius: var(--radius-lg);
+	padding: var(--space-s);
+}
+.post-card__media {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-2xs);
+}
+.post-card__media > * {
+	border-radius: var(--radius);
+	overflow: hidden;
+	aspect-ratio: 1;
+	object-fit: cover;
+}
+
+.profile-hero {
+	inline-size: 100%;
+	aspect-ratio: 16 / 9;
+	object-fit: cover;
+	border-radius: var(--radius-lg);
+}
+/* Профиль: фото — герой 16:9 на ширину колонки, поля под ним, не квадрат сбоку. */
+.ident {
+	flex-direction: column;
+	align-items: stretch;
+	max-inline-size: 40rem;
+}
+.ident__photo,
+.ava {
+	inline-size: 100%;
+}
+.ava {
+	border-radius: var(--radius-lg);
+}
+
+.empty h2,
+.empty h3 {
+	font-family: var(--font-display);
+	font-weight: 500;
+	color: var(--fg);
+}
+.panel--danger .panel__title {
+	color: var(--bad);
+}
+
+/* Секции drawer — тихие подписи, не кнопки-кирпичи. */
+.sidebar .eyebrow,
+.sidebar .grouphead {
+	letter-spacing: 0.14em;
+	font-size: var(--step--2);
+	color: var(--muted);
 }

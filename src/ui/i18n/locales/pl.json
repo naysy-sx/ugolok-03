@@ -65,7 +65,11 @@
 			"amethyst": "Ametystowy",
 			"magenta": "Karmazynowy",
 			"fuchsia": "Fuksja",
-			"pink": "Różowy"
+			"pink": "Różowy",
+			"terracotta": "Terakota",
+			"steel": "Stal",
+			"sand": "Piasek",
+			"ink": "Atrament"
 		},
 		"notificationsTitle": "Powiadomienia",
 		"enableNotifications": "Włącz powiadomienia",

@@ -51,7 +51,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
 
-	const bubbleClass = `message-bubble stack box ${isOwn ? "message-bubble-own self-end" : "message-bubble-other self-start"}`;
+	const bubbleClass = `message-bubble msg stack box ${isOwn ? "message-bubble-own msg--out self-end" : "message-bubble-other msg--in self-start"}`;
 	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" };
 
 	if (message.deleted) {

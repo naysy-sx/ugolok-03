@@ -48,28 +48,15 @@ const LEVEL_LABEL_KEYS = {
 
 const DEFAULT_SENTINEL = "__default__";
 
-// Этап 70 — именованные пресеты-стартовые точки нового генератора палитры
-// (accent-palette.js/ACCENT_COLORS удалены целиком, см. CONTRACTS.md): только
-// hue, cNeutral пресет не трогает (остаётся текущим значением пользователя —
-// "Настроить" ниже позволяет донастроить обе оси после выбора стартовой точки).
-// Значения — вне запретных зон служебных тонов (ACCENT_FORBIDDEN_ZONES:
-// 25/85/145/235 ±20°), проверено расчётом при подборе.
+// Пять стартовых точек макета «Вид»: терракота, олива, сталь, песок, чернила.
+// hue вне запретных зон (край зоны допустим: 45/65/215). cNeutral пресет не
+// трогает. Остальной круг — слайдер «Настроить». swatch — только кружок.
 const PALETTE_PRESETS = [
-	{ id: "amber", hue: 55 },
+	{ id: "terracotta", hue: 45 },
 	{ id: "olive", hue: 115 },
-	{ id: "teal", hue: 172 },
-	{ id: "cyan", hue: 184 },
-	{ id: "sky", hue: 196 },
-	{ id: "azure", hue: 208 },
-	{ id: "blue", hue: 260 },
-	{ id: "indigo", hue: 272 },
-	{ id: "violet", hue: 284 },
-	{ id: "lavender", hue: 296 },
-	{ id: "purple", hue: 308 },
-	{ id: "amethyst", hue: 320 },
-	{ id: "magenta", hue: 332 },
-	{ id: "fuchsia", hue: 344 },
-	{ id: "pink", hue: 356 },
+	{ id: "steel", hue: 215 },
+	{ id: "sand", hue: 65 },
+	{ id: "ink", hue: 255, swatch: "oklch(0.28 0.03 255)" },
 ];
 
 // customPalette — всегда {cNeutral, accentHue}, никогда null (вызывающий код
@@ -97,7 +84,7 @@ function PaletteSection({ customPalette, onChange }) {
 						title={t(`settings.palettePresets.${p.id}`)}
 						onClick={() => onChange({ cNeutral: customPalette.cNeutral, accentHue: p.hue })}
 					>
-						<span style={{ background: `oklch(0.6 0.17 ${p.hue})` }} />
+						<span style={{ background: p.swatch ?? `oklch(0.58 0.13 ${p.hue})` }} />
 					</button>
 				))}
 			</div>
