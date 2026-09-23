@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { getManifest } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
 import FilePicker from "./file-picker.jsx";
-import IconPaperclip from "../icons/paperclip.jsx";
+import IconPlus from "../icons/plus.jsx";
 import IconFolder from "../icons/folder.jsx";
 import IconMicrophone from "../icons/microphone.jsx";
 import IconStop from "../icons/stop.jsx";
@@ -73,16 +73,16 @@ export function ComposeAttachButtons({ tray, voice, disabled, onError }) {
 	return (
 		<>
 			<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFilesSelected} aria-hidden="true" tabIndex={-1} />
-			<button type="button" class="message-compose-tool-btn" onClick={() => fileInputRef.current?.click()} disabled={disabled} aria-label={t("chat.window.attachFileAria")}>
-				<IconPaperclip />
+			<button type="button" class="message-compose-tool-btn composer-plus" onClick={() => fileInputRef.current?.click()} disabled={disabled} aria-label={t("chat.window.attachFileAria")}>
+				<IconPlus />
 			</button>
-			<button type="button" class="message-compose-tool-btn" onClick={() => setFilePickerOpen(true)} disabled={disabled} aria-label={t("chat.window.attachFromStorageAria")}>
+			<button type="button" class="message-compose-tool-btn composer-library" onClick={() => setFilePickerOpen(true)} disabled={disabled} aria-label={t("chat.window.attachFromStorageAria")}>
 				<IconFolder />
 			</button>
 			{voice && (
 				<button
 					type="button"
-					class="message-compose-tool-btn"
+					class="message-compose-tool-btn composer-mic"
 					onClick={handleStartRecording}
 					disabled={disabled || !voice.isIdle || tray.items.length > 0}
 					aria-label={t("chat.window.recordVoiceAria")}

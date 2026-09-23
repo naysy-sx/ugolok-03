@@ -619,6 +619,10 @@ export default function Unlock() {
 				{mainView === "home" && (
 					<div class="unlock-home">
 						<section class="hero-section">
+							<p class="unlock-brand bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+								<img class="unlock-logo-mark" src={`${import.meta.env.BASE_URL}logo-source.png`} width="28" height="28" alt="" aria-hidden="true" />
+								<span class="logo-name">{t("app.name")}</span>
+							</p>
 							<h1>{t("unlock.main.hero.title")}</h1>
 							<p class="hero-lead">{t("unlock.main.hero.lead")}</p>
 						</section>

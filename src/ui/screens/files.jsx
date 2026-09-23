@@ -1139,7 +1139,11 @@ export default function Files() {
 														openEntry(entry);
 													}}
 												>
-													{entry.displayName}
+													<span class="file-row-title">{entry.displayName}</span>
+													<small class="file-row-sub">
+														{entry.kind === "dir" ? t("files.kindFolder") : fileExtLabel(entry.displayName)}
+														{manifestInfo[entry.id]?.size ? ` · ${formatFileSize(manifestInfo[entry.id].size)}` : ""}
+													</small>
 												</button>
 											)}
 										</td>

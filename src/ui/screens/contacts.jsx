@@ -6,6 +6,7 @@ import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription
 import { openChat } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconGear from "../icons/gear.jsx";
@@ -258,7 +259,14 @@ export default function Contacts() {
 			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
 
 	return (
-		<Screen title={t("nav.contacts")}>
+		<Screen
+			title={t("nav.contacts")}
+			actions={
+				<button type="button" class="btn--ghost" onClick={() => document.querySelector(".contacts-add-form input")?.focus()}>
+					{t("common.add")}
+				</button>
+			}
+		>
 			<div class="contacts-toolbar stack" style={{ "--gap": "var(--space-s)" }}>
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
@@ -411,10 +419,13 @@ export default function Contacts() {
 											openLabel={t("contacts.openChatAria", { name: displayName })}
 											actions={
 												<>
-													<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-														<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
+													<button type="button" class="contact-chat" onClick={() => openChat(pubkey)} aria-label={t("contacts.openChatAria", { name: displayName })}>
+														<IconChatBubble />
 													</button>
 													<ActionsMenu label={t("channel.comment.moreActionsAria", { name: displayName })}>
+														<button type="button" onClick={() => placeCall(pubkey)}>
+															<IconPhoneCall /> {t("common.call")}
+														</button>
 														<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
 															<IconGear /> {isExpanded ? t("contacts.hidePermissions") : t("contacts.showPermissions")}
 														</button>

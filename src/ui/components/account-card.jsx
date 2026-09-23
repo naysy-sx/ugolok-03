@@ -22,16 +22,6 @@ import IconChevronDown from "../icons/chevron-down.jsx";
 import IconBell from "../icons/bell.jsx";
 import { t } from "../signals/i18n.js";
 
-// Первые 9 символов npub + многоточие + последние 4 (ASIDE-REDESIGN/
-// SIDEBAR-SPEC-2.md, этап 2) — npub bech32, алфавит фиксированной ширины,
-// обрезка по числу символов здесь допустима (не текст произвольной длины).
-// В буфер обмена (handleCopyKey ниже) идёт ПОЛНЫЙ npub, эта строка — только
-// для отображения.
-function shortNpub(pubkeyHex) {
-	const npub = npubEncode(pubkeyHex);
-	return `${npub.slice(0, 9)}…${npub.slice(-4)}`;
-}
-
 // ASIDE-REDESIGN/SIDEBAR-SPEC.md, этап 3 — карточка учётной записи БОЛЬШЕ
 // НЕ <details> и не одна кликабельная цель на всю карточку (было —
 // sidebar-profile-card.jsx, вся строка аватар+имя+био+шеврон как один
@@ -78,26 +68,33 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 	}
 
 	return (
-		<div class="account stack" style={{ "--gap": "var(--space-3xs)" }}>
-			{/* Портрет — кнопка ровно с одной ролью: открыть «Профиль».
-			    Вешать сюда ещё и меню нельзя: человек, пришедший посмотреть
-			    своё фото, будет каждый раз получать список с «Выйти». */}
-			<button type="button" class="account-portrait" onClick={onEditProfile} aria-label={t("account.portraitAria")} data-hint={t("account.portraitHint")}>
-				<AccountAvatar avatar={avatar || avatarUrl} login={login || id} />
-				<span class={`account-dot${degraded ? " account-dot--warn" : ""}`} aria-hidden="true" />
+		<div class="account drawer-head stack" style={{ "--gap": "var(--space-s)" }}>
+			<div class="drawer-me bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+				{/* Портрет — кнопка ровно с одной ролью: открыть «Профиль». */}
+				<button type="button" class="account-portrait" onClick={onEditProfile} aria-label={t("account.portraitAria")} data-hint={t("account.portraitHint")}>
+					<AccountAvatar avatar={avatar || avatarUrl} login={login || id} />
+					<span class={`account-dot${degraded ? " account-dot--warn" : ""}`} aria-hidden="true" />
+				</button>
+				<div class="stack grow" style={{ "--gap": "0", minWidth: 0 }}>
+					<strong class="account-name truncate" title={login || id}>
+						{login || id.slice(0, 16) + "…"}
+					</strong>
+					{bio && (
+						<p class="account-bio truncate" style={{ "--lines": "2" }} title={bio}>
+							{bio}
+						</p>
+					)}
+				</div>
+			</div>
+
+			<button type="button" class="drawer-copy btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={handleCopyKey}>
+				<IconCopy /> {t("shell.copyAddress")}
 			</button>
 
 			<details class="account-menu" ref={menuRef} onClick={handleMenuClick}>
-				<summary aria-label={t("account.menuAria")}>
-					<span class="account-trigger">
-						<strong class="account-name truncate" title={login || id}>
-							{login || id.slice(0, 16) + "…"}
-						</strong>
-						{unreadJournalCount > 0 && <span class="unread-dot" aria-hidden="true" />}
-						<span class="account-chev" aria-hidden="true">
-							<IconChevronDown />
-						</span>
-					</span>
+				<summary class="drawer-more" aria-label={t("account.menuAria")}>
+					{unreadJournalCount > 0 && <span class="unread-dot" aria-hidden="true" />}
+					<IconChevronDown />
 				</summary>
 				<div class="menu-pop stack" style={{ "--gap": "0" }}>
 					<ul class="stack" style={{ "--gap": "1px" }}>
@@ -148,17 +145,6 @@ export default function AccountCard({ onEditProfile, onOpenStorage, onOpenSettin
 					</ul>
 				</div>
 			</details>
-
-			{bio && (
-				<p class="account-bio truncate" style={{ "--lines": "5" }} title={bio}>
-					{bio}
-				</p>
-			)}
-
-			<button type="button" class="account-key" onClick={handleCopyKey} title={t("account.copyKeyAria")}>
-				<span class="truncate">{shortNpub(id)}</span>
-				<IconCopy />
-			</button>
 
 			{degraded && <p class="account-alert">{t(relay.labelKey)}</p>}
 		</div>

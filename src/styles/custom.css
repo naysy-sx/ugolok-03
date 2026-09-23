@@ -914,37 +914,59 @@ html[data-media-full] .top-corner-actions {
    имя+био справа от него, ключ/статус — отдельными строками во всю ширину
    под ними. Только мобильный порог: десктопная раскладка (полноширинный
    портрет сверху) не тронута ни строкой. */
-@media (max-width: 63.99em) {
-	.account {
-		display: grid;
-		grid-template-columns: 4.375rem 1fr;
-		grid-template-areas:
-			"portrait menu"
-			"portrait bio"
-			"key key"
-			"alert alert";
-		column-gap: var(--space-s);
-		align-items: start;
-	}
-	.account-portrait {
-		grid-area: portrait;
-		inline-size: 4.375rem;
-		aspect-ratio: 1;
-	}
-	.account-menu {
-		grid-area: menu;
-		align-self: center;
-	}
-	.account-bio {
-		grid-area: bio;
-		margin-block-start: 0;
-	}
-	.account-key {
-		grid-area: key;
-	}
-	.account-alert {
-		grid-area: alert;
-	}
+.drawer-me .account-portrait {
+	flex: none;
+	inline-size: 3.25rem;
+	block-size: 3.25rem;
+	aspect-ratio: 1;
+	border-radius: var(--radius-full);
+}
+.drawer-me .account-name {
+	font-size: var(--step-0);
+}
+.drawer-me .account-bio {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.drawer-copy {
+	justify-content: center;
+	border-radius: var(--radius-full);
+	color: var(--fg);
+}
+.drawer-more {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	color: var(--muted);
+	font-size: var(--step--1);
+	cursor: pointer;
+	list-style: none;
+}
+.drawer-section {
+	margin: var(--space-s) 0 0;
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.drawer-link {
+	width: 100%;
+	background: none;
+	border: none;
+	color: var(--fg);
+	padding: var(--space-2xs) var(--space-3xs);
+	border-radius: var(--radius);
+	text-align: start;
+}
+.drawer-link:hover,
+.drawer-link.is-active {
+	background: color-mix(in oklch, var(--accent), transparent 90%);
+}
+.drawer-link .icon {
+	color: var(--fg);
+	flex: none;
 }
 
 /* Строка состояния: тишина означает норму. Появляется в DOM только при
@@ -10590,4 +10612,178 @@ button[type="button"].media-mini-bar-btn {
 	letter-spacing: 0.14em;
 	font-size: var(--step--2);
 	color: var(--muted);
+}
+
+/* Композер треда — одна строка: + / поле / Aa / микрофон / отправить. */
+.composer {
+	background: none;
+	border: none;
+	box-shadow: none;
+	padding: 0;
+	flex-wrap: wrap;
+}
+.composer__attach {
+	display: contents;
+}
+.composer__field {
+	display: flex;
+	align-items: center;
+	flex: 1 1 8rem;
+	min-inline-size: 0;
+	background: var(--surface);
+	border: var(--border-width) solid color-mix(in oklch, var(--border), transparent 25%);
+	border-radius: var(--radius-full);
+	padding-inline: var(--space-s) var(--space-3xs);
+}
+.composer .message-compose-field {
+	min-block-size: 2.5rem;
+	padding-block: var(--space-2xs);
+}
+.composer .composer-plus { order: 1; }
+.composer .composer__field { order: 2; }
+.composer .composer-mic { order: 3; }
+.composer .message-compose-send-btn { order: 4; }
+.composer .composer-library,
+.composer .composer__emoji { order: 5; }
+.composer-aa { position: relative; }
+.composer-aa > summary {
+	list-style: none;
+	color: var(--muted);
+	font-weight: var(--weight-bold);
+	cursor: pointer;
+}
+.composer-aa > summary::-webkit-details-marker { display: none; }
+.composer-aa[open] .markdown-toolbar {
+	position: absolute;
+	inset-inline-end: 0;
+	inset-block-end: calc(100% + var(--space-2xs));
+	background: var(--surface);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius);
+	padding: var(--space-2xs);
+	box-shadow: var(--shadow);
+	z-index: 5;
+}
+.header-actions .icon-btn {
+	border: none;
+	background: none;
+	color: var(--accent);
+}
+
+/* Файлы: строка списка — имя и подпись столбиком, превью скруглённое. */
+.file-row-name {
+	white-space: normal;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.1rem;
+}
+.file-row-title {
+	font-weight: var(--weight-bold);
+}
+.file-row-sub {
+	color: var(--muted);
+	font-size: var(--step--2);
+	font-weight: var(--weight-normal);
+}
+.file-table {
+	background: var(--surface);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+.file-table td {
+	border-block-end: var(--border-width) solid color-mix(in oklch, var(--border), transparent 45%);
+	padding-block: var(--space-2xs);
+}
+.file-row-thumb,
+.file-table__icon .file-row-icon {
+	inline-size: 3rem;
+	block-size: 3rem;
+	border-radius: var(--radius);
+}
+.file-types {
+	margin-block: 0;
+	border-block-end: none;
+}
+.file-types .tab {
+	padding-inline: var(--space-2xs);
+}
+.file-tile__frame {
+	aspect-ratio: 4 / 3;
+	border-radius: var(--radius);
+}
+.file-tile__name {
+	font-weight: var(--weight-bold);
+}
+
+/* Контакты: группы — пилюли, кнопка чата — квадрат акцента. */
+.contacts-groups-aside {
+	background: none;
+	border: none;
+	box-shadow: none;
+	padding: 0;
+}
+.contacts-groups-aside > h2 {
+	font-size: var(--step--2);
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.group-filter-list {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+.group-filter-chip {
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-full);
+	padding: var(--space-3xs) var(--space-s);
+	background: var(--surface);
+}
+.group-filter-chip:has(input:checked) {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.contact-chat,
+.contact-chat:has(> .icon) {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	padding: 0;
+	padding-inline: 0;
+	border: none;
+	border-radius: var(--radius);
+	background: var(--accent);
+	color: var(--accent-contrast);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.contact-chat:hover {
+	filter: brightness(1.06);
+}
+
+/* Старт: логотип в колонке, гостевой вход — не карточка. */
+.auth-layout:has(.unlock-home) .site-header {
+	border: none;
+}
+.auth-layout:has(.unlock-home) .site-header .logo-link {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+}
+.unlock-brand {
+	margin: 0 0 var(--space-m);
+}
+.unlock-brand .logo-name {
+	font-size: var(--step-1);
+}
+.unlock-quick-card {
+	border-style: solid;
+	border-color: var(--border);
+	background: var(--surface);
+	border-radius: var(--radius);
 }

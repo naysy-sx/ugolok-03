@@ -718,8 +718,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					    текст нигде не был обёрнут в этот класс — "Позвонить" с
 					    полным текстом распирал и без того тесную строку шапки
 					    (шла внахлёст с глобальным бургером в углу). */}
-					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-						<IconPhoneCall /> <span class="btn-label">{t("common.call")}</span>
+					<button type="button" class="icon-btn" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
+						<IconPhoneCall />
 					</button>
 					<ActionsMenu label={t("chat.window.chatMenuAria")}>
 						{/* Живой фидбег — пункт добавлен заранее (вид меню важнее самой
@@ -766,24 +766,37 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+					<form class="composer bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+						<div class="composer__attach">
+							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
+						</div>
 						<label class="visually-hidden" for="chat-message-input">
 							{t("chat.window.messageLabel")}
 						</label>
-						<textarea
-							id="chat-message-input"
-							ref={composerTextareaRef}
-							class="message-compose-field"
-							value={text}
-							maxLength={MAX_MESSAGE_LENGTH}
-							onInput={handleTextInput}
-							onKeyDown={(e) => {
-								if (!isComposeSubmitKey(e)) return;
-								e.preventDefault();
-								handleSend(e);
-							}}
-							rows={2}
-						/>
+						<div class="composer__field">
+							<textarea
+								id="chat-message-input"
+								ref={composerTextareaRef}
+								class="message-compose-field"
+								value={text}
+								placeholder={t("chat.window.messageLabel")}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onInput={handleTextInput}
+								onKeyDown={(e) => {
+									if (!isComposeSubmitKey(e)) return;
+									e.preventDefault();
+									handleSend(e);
+								}}
+								rows={1}
+							/>
+							<details class="composer-aa">
+								<summary class="message-compose-tool-btn" aria-label={t("markdownToolbar.boldAria")}>Aa</summary>
+								<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
+							</details>
+						</div>
+						<div class="composer__emoji">
+							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
+						</div>
 						<button
 							type="submit"
 							class="message-compose-send-btn row"
@@ -794,15 +807,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							<IconSend />
 						</button>
 					</form>
-					<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
-							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
-						</div>
-						<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
-						<div class="compose-tools__emoji">
-							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
-						</div>
-					</div>
 				</div>
 			}
 		>

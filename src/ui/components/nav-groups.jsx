@@ -30,6 +30,11 @@ import IconCompass from "../icons/compass.jsx";
 import IconEye from "../icons/eye.jsx";
 import IconGlobe from "../icons/globe.jsx";
 import IconPersonAdd from "../icons/person-add.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
+import IconPeople from "../icons/people.jsx";
+import IconReader from "../icons/reader.jsx";
+import IconServer from "../icons/server.jsx";
+import IconFolder from "../icons/folder.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -256,28 +261,47 @@ export default function NavGroups({ unreadJournalCount }) {
 			    "ровно один .scroller на каждом пути от .shell до листа"; путь
 			    через .sidebar теперь заходит СЮДА, не в сам <aside>, см. app.jsx). */}
 			<div class="pane__body stack scroller grow" style={{ "--gap": "var(--space-s)" }}>
-				{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4 — "Знакомства" постоянной
-				    строкой до всех групп (включая "Избранное"): раздел живёт
-				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
-				    компас, не лупа (та уже занята полем поиска строкой выше).
-				    Пользователь (item 7) — "Быстрая связь" переехала сюда же, ПЕРЕД
-				    "Знакомства" (низ панели, app.jsx, больше не годился — там ей "не
-				    место", те же слова, что про "Добавить контакт"): тот же смысл
-				    (познакомиться/поговорить с кем-то новым), тот же визуальный язык
-				    (.discover-row/.discover), просто отдельная строка, не общий пункт —
-				    "Быстрая связь" не место (place.js), это независимая модалка
-				    (roomsScreenActive, rooms.js). */}
-				<ul class="streams stack" style={{ "--gap": "1px" }}>
-					<QuickConnectRow />
-					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}${ownDiscoveryVisible.value ? " discover-row--visible" : ""}`}>
-						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
-							<span class="discover-mark">
-								{ownDiscoveryVisible.value ? <IconEye /> : <IconCompass />}
-							</span>
-							<span class="stream__name">{t("shell.discoverHeading")}</span>
-						</button>
-					</li>
-				</ul>
+				<nav class="drawer-nav stack" style={{ "--gap": "var(--space-2xs)" }} aria-label={t("shell.navAriaLabel")}>
+					<p class="drawer-section">{t("shell.sectionTalk")}</p>
+					<button type="button" class={"drawer-link bar" + (place.value.kind === "journal" ? " is-active" : "")} style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "journal" })}>
+						<IconChatBubble /> <span class="grow">{t("shell.navChats")}</span>
+						{unreadJournalCount > 0 && <span class="chat-row__badge">{unreadJournalCount}</span>}
+					</button>
+					<button type="button" class={"drawer-link bar" + (place.value.kind === "people" ? " is-active" : "")} style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "people" })}>
+						<IconPeople /> <span class="grow">{t("nav.contacts")}</span>
+					</button>
+					<button type="button" class="drawer-link bar" style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "people" })}>
+						<IconPersonAdd /> <span class="grow">{t("shell.navRequests")}</span>
+						{incomingRequests.value.length > 0 && <span class="chat-row__badge">{incomingRequests.value.length}</span>}
+					</button>
+
+					<p class="drawer-section">{t("shell.sectionServices")}</p>
+					<ul class="streams stack" style={{ "--gap": "1px" }}>
+						<QuickConnectRow />
+						<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}${ownDiscoveryVisible.value ? " discover-row--visible" : ""}`}>
+							<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
+								<span class="discover-mark">
+									{ownDiscoveryVisible.value ? <IconEye /> : <IconCompass />}
+								</span>
+								<span class="stream__name">{t("shell.discoverHeading")}</span>
+							</button>
+						</li>
+					</ul>
+
+					<p class="drawer-section">{t("shell.sectionMore")}</p>
+					<button type="button" class={"drawer-link bar" + (place.value.kind === "channels" || place.value.kind === "channel" ? " is-active" : "")} style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "channels" })}>
+						<IconReader /> <span class="grow">{t("nav.channels")}</span>
+					</button>
+					<button type="button" class={"drawer-link bar" + (place.value.kind === "storage" ? " is-active" : "")} style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "storage" })}>
+						<IconFolder /> <span class="grow">{t("nav.files")}</span>
+					</button>
+					<button type="button" class={"drawer-link bar" + (place.value.kind === "settings" ? " is-active" : "")} style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => goTo({ kind: "settings" })}>
+						<IconServer /> <span class="grow">{t("shell.navNetwork")}</span>
+					</button>
+					<button type="button" class="drawer-link bar" style={{ "--gap": "var(--space-s)", "--align": "center" }} onClick={() => setShowAddContact(true)}>
+						<IconPersonAdd /> <span class="grow">{t("shell.addContact")}</span>
+					</button>
+				</nav>
 
 				{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (
 					<div class="stack" style={{ "--gap": "1px" }}>
