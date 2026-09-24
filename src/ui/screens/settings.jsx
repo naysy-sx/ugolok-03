@@ -29,7 +29,6 @@ import { isPerfTraceEnabled, getPerfLog, readControllerCounters } from "../../do
 import Screen from "../components/screen.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
-import IconGear from "../icons/gear.jsx";
 import IconBell from "../icons/bell.jsx";
 import IconServer from "../icons/server.jsx";
 import StoragePanel from "../components/storage-panel.jsx";
@@ -66,7 +65,11 @@ function PaletteSection({ customPalette, onChange }) {
 	const instanceId = useId();
 
 	return (
-		<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+		<div class="palette-section stack" style={{ "--gap": "var(--space-s)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<p class="set-label">{t("settings.accentColorTitle")}</p>
+				<p class="set-hint">{t("settings.viewSectionHint")}</p>
+			</div>
 			{/* Было: пятнадцать <button>, то есть пятнадцать заливок акцентным
 			    цветом, и внутри каждой кружок нужного оттенка плюс подпись.
 			    Цвет, который выбираешь, конкурировал с цветом кнопки, на
@@ -673,6 +676,13 @@ export default function Settings() {
 	const [tab, setTab] = useState(() => (["view", "notifications", "network", "storage", "session"].includes(place.value?.tab) ? place.value.tab : "view"));
 	const instanceId = useId();
 
+	// Пункт меню «Сеть» открывает эти же настройки сразу на нужной вкладке: экран уже
+	// смонтирован, поэтому useState-инициализатора мало — следим за самим place.
+	useEffect(() => {
+		const wanted = place.value?.tab;
+		if (place.value?.kind === "settings" && ["view", "notifications", "network", "storage", "session"].includes(wanted)) setTab(wanted);
+	}, [place.value]);
+
 	useEffect(() => {
 		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
 			setSettings(loaded);
@@ -839,7 +849,7 @@ export default function Settings() {
 
 			{tab === "view" && (
 				<div class="stack" style={{ "--gap": "var(--space-l)" }}>
-					<Panel title={t("settings.tabs.view")} hint={t("settings.viewSectionHint")} icon={IconGear}>
+					<Panel>
 						<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
 							<SetRow label={t("settings.themeLabel")}>
 								<div class="seg bar rigid" style={{ "--gap": "0" }} role="group" aria-label={t("settings.themeLabel")}>

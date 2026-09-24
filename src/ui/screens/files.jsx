@@ -788,11 +788,11 @@ export default function Files() {
 				<>
 					{view === "own" && (
 						<>
-							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadState}>
-								<IconUpload aria-hidden="true" /> {t("files.uploadFileButton")}
+							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadState} aria-label={t("files.uploadFileButton")} title={t("files.uploadFileButton")}>
+								<IconUpload aria-hidden="true" /> <span class="btn-label">{t("files.uploadFileButton")}</span>
 							</button>
-							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)}>
-								<IconFolderPlus aria-hidden="true" /> {t("files.newFolderButton")}
+							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)} aria-label={t("files.newFolderButton")} title={t("files.newFolderButton")}>
+								<IconFolderPlus aria-hidden="true" /> <span class="btn-label">{t("files.newFolderButton")}</span>
 							</button>
 							<input
 								ref={fileInputRef}
@@ -809,9 +809,11 @@ export default function Files() {
 						class={(view === "mounts" ? "" : "btn--ghost ") + "bar"}
 						style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
 						aria-pressed={view === "mounts"}
+						aria-label={t("files.receivedFoldersTab")}
+						title={t("files.receivedFoldersTab")}
 						onClick={() => setView((v) => (v === "mounts" ? "own" : "mounts"))}
 					>
-						<IconGlobe aria-hidden="true" /> {t("files.receivedFoldersTab")}
+						<IconGlobe aria-hidden="true" /> <span class="btn-label">{t("files.receivedFoldersTab")}</span>
 						{activeMounts.value.length > 0 ? <span class="slice__n">{activeMounts.value.length}</span> : null}
 					</button>
 					{view === "own" && !inTrash && (

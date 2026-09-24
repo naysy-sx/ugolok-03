@@ -620,7 +620,11 @@ export default function Unlock() {
 					<div class="unlock-home">
 						<section class="hero-section">
 							<p class="unlock-brand bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								<img class="unlock-logo-mark" src={`${import.meta.env.BASE_URL}logo-source.png`} width="28" height="28" alt="" aria-hidden="true" />
+								{/* Знак «уголок» (макет Bbl2A3.jpg): контур-угол с чертой, цвет — акцент темы. */}
+								<svg class="brand-mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false">
+									<path d="M6 28V13a7 7 0 0 1 7-7h11a2 2 0 0 1 2 2v9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+									<path d="M17 26h9" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" />
+								</svg>
 								<span class="logo-name">{t("app.name")}</span>
 							</p>
 							<h1>{t("unlock.main.hero.title")}</h1>

@@ -259,13 +259,10 @@ function MainShell() {
 					    не рендерится здесь). */}
 					<AccountCard
 						onEditProfile={() => selectNavItem("profile")}
-						onOpenStorage={() => selectNavItem("storage")}
 						onOpenSettings={() => selectNavItem("settings")}
 						onOpenSecurity={() => selectNavItem("security")}
 						onOpenHelp={() => selectNavItem("help")}
 						onOpenDiagnostics={() => selectNavItem("diagnostics")}
-						onOpenJournal={() => selectNavItem("journal")}
-						unreadJournalCount={unreadJournalCount}
 						themeMode={themeMode}
 						onToggleTheme={handleToggleTheme}
 					/>

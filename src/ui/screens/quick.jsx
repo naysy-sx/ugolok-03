@@ -7,7 +7,9 @@ import { relayStatusInfo } from "../components/connection-status.jsx";
 import IconQuickRoomPeople from "../icons/quick-room-people.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
-import IconCopy from "../icons/copy.jsx";
+import IconSend from "../icons/send.jsx";
+import IconNavPrev from "../icons/nav-prev.jsx";
+import IconShare from "../icons/share.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry, getLastTurnStatus } from "../../domain/settings/bootstrap-endpoints.js";
@@ -507,39 +509,38 @@ export default function Quick({ onExit }) {
 				: tPlural("quick.room.voiceFreeSlots", voiceFree, { max: MAX_VOICE_PARTICIPANTS });
 		return (
 			<div class={voiceActive ? "quick-room stack is-voice-live" : "quick-room stack"} style={{ "--gap": "var(--space-m)" }}>
-				<header class="quick-room-header row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<div class="bar grow" style={{ "--gap": "var(--space-l)", "--align": "flex-start" }}>
-						<IconQuickRoomPeople class="icon quick-room-icon rigid" aria-hidden="true" />
-						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-								<h2 class="quick-room-title truncate grow">{activeRoomName || t("quick.room.titleFallback")}</h2>
-							</div>
-							{inviteLink && (
-								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-									<code class="quick-invite-code grow truncate">{inviteLink}</code>
-									<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
-										<IconCopy class="icon" aria-hidden="true" />
-									</button>
-									{inviteCopyStatus && (
-										<small role="status" class="quick-invite-status rigid">
-											{inviteCopyStatus}
-										</small>
-									)}
-								</div>
-							)}
-							<p class="quick-room-subtitle">
-								{t("quick.room.participantsTitle", { count: present.length })} · {t("quick.room.ephemeralNotice")}
-							</p>
-						</div>
-					</div>
+				{/* Макет pZ6X2.jpg: назад, посередине название и число участников, справа
+				    «поделиться ссылкой». Сообщения не сохраняются — короткой
+				    подписью над лентой (ниже), а не внутри шапки. */}
+				<header class="quick-room-header">
 					{typeof onExit === "function" && (
-						<div class="row rigid" style={{ "--gap": "var(--space-2xs)", "--align": "center", marginInlineStart: "auto" }}>
-							<button type="button" class="btn--ghost" onClick={onExit}>
-								{t("quick.exitButton")}
-							</button>
-						</div>
+						<button type="button" class="header-back" onClick={onExit} aria-label={t("quick.exitButton")}>
+							<IconNavPrev />
+						</button>
+					)}
+					<div class="quick-room-headtext">
+						<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+						<p class="quick-room-subtitle" aria-label={t("quick.room.participantsTitle", { count: present.length })}>
+							<IconQuickRoomPeople class="icon" aria-hidden="true" /> {present.length}
+						</p>
+					</div>
+					{inviteLink && (
+						<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
+							<IconShare class="icon" aria-hidden="true" />
+						</button>
 					)}
 				</header>
+
+				{inviteLink && (
+					<div class="quick-invite-strip">
+						<code class="quick-invite-code truncate">{inviteLink}</code>
+						{inviteCopyStatus && (
+							<small role="status" class="quick-invite-status">
+								{inviteCopyStatus}
+							</small>
+						)}
+					</div>
+				)}
 
 				{relayInfo.tone !== "ok" && (
 					<p role="status" class={`status-${relayInfo.tone}`}>
@@ -666,6 +667,7 @@ export default function Quick({ onExit }) {
 
 					<section class="quick-chat stack grow box" style={{ "--gap": "var(--space-s)" }}>
 						<div ref={messagesScrollRef} class="quick-messages stack scroller box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
+							<p class="quick-ephemeral">{t("quick.room.ephemeralNotice")}</p>
 							{messages.length === 0 && <p class="quick-empty">{t("quick.room.emptyChat")}</p>}
 							{messages.map((m) => (
 								<MessageBubble
@@ -694,8 +696,8 @@ export default function Quick({ onExit }) {
 								placeholder={t("quick.room.chatPlaceholder")}
 								aria-label={t("quick.room.chatPlaceholder")}
 							/>
-							<button type="submit" class="btn self-end" disabled={chatText.trim().length === 0}>
-								{t("quick.room.sendButton")}
+							<button type="submit" class="quick-send" disabled={chatText.trim().length === 0} aria-label={t("quick.room.sendButton")}>
+								<IconSend />
 							</button>
 						</form>
 					</section>
@@ -706,13 +708,12 @@ export default function Quick({ onExit }) {
 
 	return (
 		<div class="quick-entry stack" style={{ "--gap": "var(--space-m)" }}>
-			<span class="quick-lamp" aria-hidden="true" />
 			{/* Живой фидбек пользователя — кнопка "Назад" (onExit) здесь была
 			    дублем: RoomsOverlay (rooms-overlay.jsx) уже оборачивает ВЕСЬ
 			    Quick (и этот экран входа, и комнату) собственной явной кнопкой
 			    закрытия (.rooms-overlay-close) — второй выход рядом с
 			    заголовком больше не нужен. */}
-			<header class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "center" }}>
+			<header class="quick-entry__head">
 				<h2>{t("quick.entry.title")}</h2>
 			</header>
 			<p class="hero-lead">{t("quick.entry.lead")}</p>
@@ -763,9 +764,9 @@ export default function Quick({ onExit }) {
 								<label for="quick-create-password">{t("quick.entry.passwordLabel")}</label>
 								<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
 							</div>
-							<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								<input type="checkbox" checked={openMode} onChange={(e) => setOpenMode(e.currentTarget.checked)} />
-								{t("quick.entry.openModeLabel")}
+							<label class="switch-row">
+								<span>{t("quick.entry.openModeLabel")}</span>
+								<input type="checkbox" class="set-row__switch" checked={openMode} onChange={(e) => setOpenMode(e.currentTarget.checked)} />
 							</label>
 							<p class="auth-widget-subtitle">{openMode ? t("quick.entry.openModeHintOn") : t("quick.entry.openModeHintOff")}</p>
 							<button type="submit" class="btn btn-block" disabled={busy}>

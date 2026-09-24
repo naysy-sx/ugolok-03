@@ -2,7 +2,9 @@ import { useRef, useState } from "preact/hooks";
 import { getManifest } from "../../domain/files/content.js";
 import { getFileKeyFor, projected } from "../signals/files.js";
 import FilePicker from "./file-picker.jsx";
+import ActionsMenu from "./actions-menu.jsx";
 import IconPlus from "../icons/plus.jsx";
+import IconPaperclip from "../icons/paperclip.jsx";
 import IconFolder from "../icons/folder.jsx";
 import IconMicrophone from "../icons/microphone.jsx";
 import IconStop from "../icons/stop.jsx";
@@ -73,12 +75,16 @@ export function ComposeAttachButtons({ tray, voice, disabled, onError }) {
 	return (
 		<>
 			<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleFilesSelected} aria-hidden="true" tabIndex={-1} />
-			<button type="button" class="message-compose-tool-btn composer-plus" onClick={() => fileInputRef.current?.click()} disabled={disabled} aria-label={t("chat.window.attachFileAria")}>
-				<IconPlus />
-			</button>
-			<button type="button" class="message-compose-tool-btn composer-library" onClick={() => setFilePickerOpen(true)} disabled={disabled} aria-label={t("chat.window.attachFromStorageAria")}>
-				<IconFolder />
-			</button>
+			{/* «+» — меню вложений (макет image.jpg: слот слева от поля ввода). Оба способа
+			    прикрепить остались: файл с устройства и файл из хранилища. */}
+			<ActionsMenu label={t("chat.window.attachFileAria")} icon={IconPlus} summaryClass="message-compose-tool-btn composer-plus" popClass="menu-pop--up">
+				<button type="button" onClick={() => fileInputRef.current?.click()} disabled={disabled}>
+					<IconPaperclip /> {t("chat.window.attachFileAria")}
+				</button>
+				<button type="button" onClick={() => setFilePickerOpen(true)} disabled={disabled}>
+					<IconFolder /> {t("chat.window.attachFromStorageAria")}
+				</button>
+			</ActionsMenu>
 			{voice && (
 				<button
 					type="button"

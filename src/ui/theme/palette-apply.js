@@ -1,6 +1,6 @@
 import { generatePalette } from "./palette-generator.js";
 
-export const BUILD_LBG_LIGHT = 0.99;
+export const BUILD_LBG_LIGHT = 0.98;
 export const BUILD_LBG_DARK = 0.17;
 // cNeutral: 0.022 (=старый --chroma-ui) визуально читался как заметный
 // цветной оттенок у .card/.surface-raised для холодных hue (indigo/violet) —

@@ -505,8 +505,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			actions={
 				<>
 					{isOwner && tab === "posts" && (
-						<button type="button" class="btn--primary" onClick={() => setComposerOpen(true)}>
-							<IconPencil /> {t("channel.writePostButton")}
+						<button type="button" class="btn--primary" onClick={() => setComposerOpen(true)} aria-label={t("channel.writePostButton")} title={t("channel.writePostButton")}>
+							<IconPencil /> <span class="btn-label">{t("channel.writePostButton")}</span>
 						</button>
 					)}
 					{/* CHANNEL-V2 часть B5 — «Скопировать ссылку» пропущен: готового

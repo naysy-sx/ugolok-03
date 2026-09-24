@@ -142,7 +142,7 @@
 		"sidebarAriaLabel": "Профиль и главное меню",
 		"navAriaLabel": "Главное меню",
 		"quickConnect": "Быстрая связь",
-		"quickConnectHint": "разговор без учётной записи",
+		"quickConnectHint": "чат без регистрации",
 		"quickConnectActiveHint": "Свёрнуто — нажмите, чтобы вернуться",
 		"serviceUnavailable": "сервис недоступен",
 		"logout": "Выйти",
