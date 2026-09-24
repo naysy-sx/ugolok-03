@@ -1,6 +1,6 @@
 import { generatePalette } from "./palette-generator.js";
 
-export const BUILD_LBG_LIGHT = 0.99;
+export const BUILD_LBG_LIGHT = 0.98;
 export const BUILD_LBG_DARK = 0.17;
 // cNeutral: 0.022 (=старый --chroma-ui) визуально читался как заметный
 // цветной оттенок у .card/.surface-raised для холодных hue (indigo/violet) —
@@ -13,7 +13,11 @@ export const BUILD_LBG_DARK = 0.17;
 // рекомендация дизайн-систем), но не плоский серый — лёгкий подтон
 // остаётся. Диапазон слайдера (0-0.035, settings.jsx) не сужен — кто хочет
 // более насыщенные нейтрали, может выкрутить сам.
-export const DEFAULT_CUSTOM_PALETTE = { cNeutral: 0.01, accentHue: 265 };
+// accentHue 45, не 42: 42 внутри запретной зоны --bad (25±20, diff < 20).
+// 45 — тёплый край зоны, тот же кирпич, что макеты, и generatePalette его
+// принимает. cNeutral 0.016 чуть теплее прежних 0.01: на тёплом hue глаз
+// читает ту же хрому серее; слайдер по-прежнему до 0.035.
+export const DEFAULT_CUSTOM_PALETTE = { cNeutral: 0.016, accentHue: 45 };
 
 export function applyCustomPalette(customPalette) {
 	const { cNeutral, accentHue } = customPalette ?? DEFAULT_CUSTOM_PALETTE;

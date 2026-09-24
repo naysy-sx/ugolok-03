@@ -65,7 +65,11 @@
 			"amethyst": "Ametista",
 			"magenta": "Magenta",
 			"fuchsia": "Fúcsia",
-			"pink": "Rosa"
+			"pink": "Rosa",
+			"terracotta": "Terracota",
+			"steel": "Aço",
+			"sand": "Areia",
+			"ink": "Tinta"
 		},
 		"notificationsTitle": "Notificações",
 		"enableNotifications": "Ativar notificações",
@@ -161,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Minimizado — toque para voltar",
-		"serviceUnavailable": "serviço indisponível"
+		"serviceUnavailable": "serviço indisponível",
+		"copyAddress": "Copiar endereço",
+		"sectionTalk": "Conversa",
+		"sectionServices": "Serviços",
+		"sectionMore": "Mais",
+		"navChats": "Conversas",
+		"navRequests": "Pedidos",
+		"navNetwork": "Rede"
 	},
 	"unlock": {
 		"checking": "Verificando…",

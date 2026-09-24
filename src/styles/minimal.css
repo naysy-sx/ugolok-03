@@ -205,7 +205,7 @@
      вариантов Opus выбран "геометричный, дерзкий", не серифно-литературный).
      Точечно (.brand-heading/.empty-state), не на все заголовки подряд —
      Opus прямо предупреждала не тратить смелость на каждый h2/h3. */
-		--font-display: "Unbounded", var(--font-body);
+		--font-display: var(--font-body); /* заголовки — тот же Golos Text, вес 600 (макеты REDESIGN-2); Unbounded снят */
 
 		/* ---- Шкала отступов -----------------------------------------------
        VISUAL.md v2 (Claude Opus) — пользователь: "вертикальный ритм
@@ -245,7 +245,10 @@
        light-dark() требует `color-scheme` (задан в `base`) — перевернуть
        страницу или любой блок целиком — поставить на него `color-scheme:
        light` / `dark`. */
-		--accent-hue: 265;
+		/* Терракота макетов — hue ~42, но 6…44 заняты служебным --bad
+		   (зона 25±20, palette-generator.js). 45 — ближайший допустимый
+		   край: тёплый кирпич, не пастель. Совпадает с DEFAULT_CUSTOM_PALETTE. */
+		--accent-hue: 45;
 		/* --hue — алиас, не отдельная константа (была --hue:55, независимая от
      accent-hue, "тёплый янтарь" — этап 70 сознательно объединил нейтрали и
      акцент в один узел, см. CONTRACTS.md/DESIGN.md, решение подтверждено
@@ -253,24 +256,24 @@
      градиенты) — держит их в тон общей палитре, а не в устаревшем hue. */
 		--hue: var(--accent-hue);
 
-		--bg-light: oklch(0.99 0.004 var(--accent-hue));
-		--bg-dark: oklch(0.17 0.022 var(--accent-hue));
+		--bg-light: oklch(0.98 0.008 calc(var(--accent-hue) + 25));
+		--bg-dark: oklch(0.17 0.016 calc(var(--accent-hue) + 25));
 		--bg: light-dark(var(--bg-light), var(--bg-dark));
 
-		--surface-light: oklch(0.94 0.022 var(--accent-hue));
-		--surface-dark: oklch(0.22 0.022 var(--accent-hue));
+		--surface-light: oklch(0.94 0.016 calc(var(--accent-hue) + 25));
+		--surface-dark: oklch(0.21 0.016 calc(var(--accent-hue) + 25));
 		--surface: light-dark(var(--surface-light), var(--surface-dark));
 
 		/* Приподнятые элементы (карточки поверх surface — этап 34, auth-layout) —
      раньше жил ЛОКАЛЬНО только в .auth-layout с фолбэком var(--surface-raised,
      var(--surface)) в паре мест (call-overlay); теперь глобальный токен —
      один источник истины для всего приложения. */
-		--surface-raised-light: oklch(0.88 0.022 var(--accent-hue));
-		--surface-raised-dark: oklch(0.28 0.022 var(--accent-hue));
+		--surface-raised-light: oklch(0.895 0.016 calc(var(--accent-hue) + 25));
+		--surface-raised-dark: oklch(0.255 0.016 calc(var(--accent-hue) + 25));
 		--surface-raised: light-dark(var(--surface-raised-light), var(--surface-raised-dark));
 
-		--border-light: oklch(0.83 0.022 var(--accent-hue));
-		--border-dark: oklch(0.33 0.022 var(--accent-hue));
+		--border-light: oklch(0.82 0.016 calc(var(--accent-hue) + 25));
+		--border-dark: oklch(0.33 0.016 calc(var(--accent-hue) + 25));
 		--border: light-dark(var(--border-light), var(--border-dark));
 
 		/* Затемняющая подложка за всплывающим слоем (выдвижная панель
@@ -284,19 +287,19 @@
 		   иначе в светлой теме затемнение выглядело бы инвертированным.*/
 		--overlay-backdrop-tint: oklch(0.2 0.03 var(--hue) / 0.45);
 
-		--muted-light: oklch(0.54 0.022 var(--accent-hue));
-		--muted-dark: oklch(0.62 0.022 var(--accent-hue));
+		--muted-light: oklch(0.53 0.016 calc(var(--accent-hue) + 25));
+		--muted-dark: oklch(0.62 0.016 calc(var(--accent-hue) + 25));
 		--muted: light-dark(var(--muted-light), var(--muted-dark));
 
-		--fg-light: oklch(0.27 0.0352 var(--accent-hue));
-		--fg-dark: oklch(0.89 0.0352 var(--accent-hue));
+		--fg-light: oklch(0.26 0.0256 calc(var(--accent-hue) + 25));
+		--fg-dark: oklch(0.89 0.0256 calc(var(--accent-hue) + 25));
 		--fg: light-dark(var(--fg-light), var(--fg-dark));
 
 		/* --accent — "лампа" (VISUAL.md): тепло, исходящие сообщения, primary-
      кнопки. Управляется ЦЕЛИКОМ через --accent-hue (settings.jsx — генератор
      палитры, именованные пресеты + "Настроить", см. CONTRACTS.md этап 70). */
-		--accent-light: oklch(0.55 0.085 var(--accent-hue));
-		--accent-dark: oklch(0.74 0.085 var(--accent-hue));
+		--accent-light: oklch(0.55 0.1288 var(--accent-hue));
+		--accent-dark: oklch(0.74 0.1288 var(--accent-hue));
 		--accent: light-dark(var(--accent-light), var(--accent-dark));
 		--accent-contrast-light: oklch(1 0 0);
 		--accent-contrast-dark: oklch(0.1 0 0);
@@ -322,9 +325,9 @@
 		--bad-dark: oklch(0.68 0.2 25);
 		--bad: light-dark(var(--bad-light), var(--bad-dark));
 		--bad-surface-light: oklch(0.94 0.024 25);
-		--bad-surface-dark: oklch(0.22 0.0319 25);
+		--bad-surface-dark: oklch(0.21 0.0305 25);
 		--bad-surface: light-dark(var(--bad-surface-light), var(--bad-surface-dark));
-		--bad-edge-light: oklch(0.83 0.09 25);
+		--bad-edge-light: oklch(0.82 0.09 25);
 		--bad-edge-dark: oklch(0.33 0.0478 25);
 		--bad-edge: light-dark(var(--bad-edge-light), var(--bad-edge-dark));
 
@@ -332,9 +335,9 @@
 		--warn-dark: oklch(0.66 0.1 85);
 		--warn: light-dark(var(--warn-light), var(--warn-dark));
 		--warn-surface-light: oklch(0.94 0.024 85);
-		--warn-surface-dark: oklch(0.22 0.0319 85);
+		--warn-surface-dark: oklch(0.21 0.0305 85);
 		--warn-surface: light-dark(var(--warn-surface-light), var(--warn-surface-dark));
-		--warn-edge-light: oklch(0.83 0.09 85);
+		--warn-edge-light: oklch(0.82 0.09 85);
 		--warn-edge-dark: oklch(0.33 0.0478 85);
 		--warn-edge: light-dark(var(--warn-edge-light), var(--warn-edge-dark));
 
@@ -342,9 +345,9 @@
 		--good-dark: oklch(0.65 0.15 145);
 		--good: light-dark(var(--good-light), var(--good-dark));
 		--good-surface-light: oklch(0.94 0.024 145);
-		--good-surface-dark: oklch(0.22 0.0319 145);
+		--good-surface-dark: oklch(0.21 0.0305 145);
 		--good-surface: light-dark(var(--good-surface-light), var(--good-surface-dark));
-		--good-edge-light: oklch(0.83 0.09 145);
+		--good-edge-light: oklch(0.82 0.09 145);
 		--good-edge-dark: oklch(0.33 0.0478 145);
 		--good-edge: light-dark(var(--good-edge-light), var(--good-edge-dark));
 
@@ -352,9 +355,9 @@
 		--info-dark: oklch(0.66 0.1 235);
 		--info: light-dark(var(--info-light), var(--info-dark));
 		--info-surface-light: oklch(0.94 0.024 235);
-		--info-surface-dark: oklch(0.22 0.0319 235);
+		--info-surface-dark: oklch(0.21 0.0305 235);
 		--info-surface: light-dark(var(--info-surface-light), var(--info-surface-dark));
-		--info-edge-light: oklch(0.83 0.09 235);
+		--info-edge-light: oklch(0.82 0.09 235);
 		--info-edge-dark: oklch(0.33 0.0478 235);
 		--info-edge: light-dark(var(--info-edge-light), var(--info-edge-dark));
 
@@ -416,6 +419,14 @@
 			токен, не --measure: тот наследуется в p{max-width}, общий на
 			ВЕСЬ проект для длины строки прозы (65ch) — общее имя протекло бы
 			в каждый <p> внутри залогиненного приложения. */
+
+		/* Канон адаптива (TZ-MOBILE-REDESIGN). В @media var() не подставляется —
+		   литералы 36/48/64/80em в custom.css обязаны совпадать с этими токенами.
+		   Порог «ниже» пишется 35.99/47.99/63.99em, чтобы не пересечься с min-width. */
+		--bp-phone: 36em; /* < 576 */
+		--bp-phablet: 48em; /* < 768 */
+		--bp-tablet: 64em; /* < 1024 */
+		--bp-desk: 80em; /* ≥ 1280 */
 	}
 
 	/* Широкие экраны: более драматичная шкала. Меняется только --ratio,

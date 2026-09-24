@@ -65,7 +65,11 @@
 			"amethyst": "Ametist",
 			"magenta": "Macenta",
 			"fuchsia": "Fuşya",
-			"pink": "Pembe"
+			"pink": "Pembe",
+			"terracotta": "Terrakota",
+			"steel": "Çelik",
+			"sand": "Kum",
+			"ink": "Mürekkep"
 		},
 		"notificationsTitle": "Bildirimler",
 		"enableNotifications": "Bildirimleri etkinleştir",
@@ -161,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Küçültüldü — dönmek için dokunun",
-		"serviceUnavailable": "hizmet kullanılamıyor"
+		"serviceUnavailable": "hizmet kullanılamıyor",
+		"copyAddress": "Adresi kopyala",
+		"sectionTalk": "Sohbet",
+		"sectionServices": "Servisler",
+		"sectionMore": "Diğer",
+		"navChats": "Sohbetler",
+		"navRequests": "İstekler",
+		"navNetwork": "Ağ"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",

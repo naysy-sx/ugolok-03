@@ -15,6 +15,7 @@ import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
 import { place, openChannel } from "../signals/place.js";
 import ChannelDetail from "./channel.jsx";
 import ChannelAvatarThumb from "../components/channel-avatar-thumb.jsx";
+import FavStar from "../components/fav-star.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
 import { t, currentLocale, errorMessage } from "../signals/i18n.js";
@@ -42,10 +43,12 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 					{updated && <small class="channel-card-updated">{t("channels.card.updated", { date: updated })}</small>}
 				</span>
 			</button>
-			{showSubscribe && (
+			{showSubscribe ? (
 				<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
 					{t("channels.card.subscribeButton")}
 				</button>
+			) : (
+				<FavStar kind="channel" id={channel.id} name={channel.name || t("channels.card.untitled")} />
 			)}
 		</li>
 	);

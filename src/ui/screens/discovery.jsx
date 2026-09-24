@@ -340,7 +340,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 			<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
 				<input
 					type="checkbox"
-					class="set-row__switch"
+					class="set-row__check"
 					checked={draft.showBio}
 					onChange={(e) => setDraft((prev) => ({ ...prev, showBio: e.currentTarget.checked }))}
 					style={{ inlineSize: "1.7rem", blockSize: "1.7rem" }}
@@ -368,7 +368,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 										<input
 											id={`${instanceId}-ch-${c.id}`}
 											type="checkbox"
-											class="set-row__switch"
+											class="set-row__check"
 											checked={checked}
 											onChange={() => toggleDraftChannel(c.id)}
 										/>
@@ -387,7 +387,7 @@ function VisibilitySection({ ownerPubkey, privKey, dbKey }) {
 				<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
 					<input
 						type="checkbox"
-						class="set-row__switch"
+						class="set-row__check"
 						checked={draft.showRules}
 						onChange={(e) => setDraft((prev) => ({ ...prev, showRules: e.currentTarget.checked }))}
 					/>

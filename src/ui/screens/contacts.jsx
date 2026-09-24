@@ -3,15 +3,17 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
-import { openChat } from "../signals/place.js";
+import { openChat, place } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconGear from "../icons/gear.jsx";
 import IconLockClosed from "../icons/lock-closed.jsx";
 import IconChevronRight from "../icons/chevron-right.jsx";
 import IconPlus from "../icons/plus.jsx";
+import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import ActionsMenu from "../components/actions-menu.jsx";
 import AddContactForm from "../components/add-contact-form.jsx";
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
@@ -130,6 +132,13 @@ export default function Contacts() {
 	const [renameValue, setRenameValue] = useState("");
 	const [rowError, setRowError] = useState("");
 	const [busy, setBusy] = useState(false);
+	// Панель «Добавить», поиск по списку и форма новой группы раскрываются по
+	// кнопкам, а не занимают экран всегда (макет vqL6N.jpg): это только вид,
+	// данные и действия те же.
+	const [showAdd, setShowAdd] = useState(false);
+	const [showGroupForm, setShowGroupForm] = useState(false);
+	const [query, setQuery] = useState("");
+	const requestsRef = useRef(null);
 	// busyRef — синхронная защита от повторного входа. busy (state) обновляется через
 	// setBusy и коммитится АСИНХРОННО (рендер-цикл) — обработчик второго клика,
 	// вызванный до коммита, читает СТАРОЕ значение busy из замыкания того же рендера
@@ -173,6 +182,13 @@ export default function Contacts() {
 			refreshLiveProfileSubscription(ownerPubkey).catch(() => {});
 		}
 	}, [contacts.value, incomingRequests.value, outgoingRequests.value, rejectedByMe.value]);
+
+	// «Заявки» в меню открывают этот же экран сразу на блоке входящих заявок.
+	useEffect(() => {
+		if (place.value.kind === "people" && place.value.section === "requests") {
+			requestsRef.current?.scrollIntoView({ block: "start" });
+		}
+	}, [place.value]);
 
 	async function handleAcceptContactRequest(peerPubkey) {
 		if (busyRef.current) return;
@@ -252,14 +268,30 @@ export default function Contacts() {
 	// Контакты и заблокированные теперь СТРУКТУРНО взаимоисключающие (единая
 	// contactRelationships, один state на peer — этап 49, CONTACTS-FSM.md) —
 	// отдельный фильтр здесь больше не нужен.
-	const visibleContacts =
+	const byGroup =
 		selectedGroupIds.size === 0
 			? contacts.value
 			: contacts.value.filter((pk) => groupsForContact(pk).some((g) => selectedGroupIds.has(g.id)));
+	const needle = query.trim().toLowerCase();
+	const visibleContacts = needle
+		? byGroup.filter((pk) => `${profiles.value[pk]?.name || ""} ${shortPubkey(pk)} ${pk}`.toLowerCase().includes(needle))
+		: byGroup;
+
+	// «Заявки» из меню — отдельный вид: только входящие заявки, без списка контактов.
+	const requestsOnly = place.value.kind === "people" && place.value.section === "requests";
 
 	return (
-		<Screen title={t("nav.contacts")}>
-			<div class="contacts-toolbar stack" style={{ "--gap": "var(--space-s)" }}>
+		<Screen
+			title={requestsOnly ? t("shell.navRequests") : t("nav.contacts")}
+			actions={
+				requestsOnly ? undefined : (
+					<button type="button" class="btn-soft" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
+						{t("common.add")}
+					</button>
+				)
+			}
+		>
+			<div class="contacts-page stack">
 				{/* "Соединение: ..." переехало в постоянную панель под главным
 				    меню (app.jsx, ConnectionStatusPanel) — видна на любом экране,
 				    здесь дублировать незачем (пользователь, item 4). */}
@@ -269,15 +301,25 @@ export default function Contacts() {
 					</p>
 				)}
 
-				<AddContactForm />
-			</div>
+				{!requestsOnly && showAdd && (
+					<div class="contacts-add-panel">
+						<AddContactForm autoFocus onSent={() => setShowAdd(false)} />
+					</div>
+				)}
 
-			<div class="contacts-layout">
-				<aside class="card contacts-groups-aside" aria-labelledby="groups-heading">
-					<h2 id="groups-heading">{t("contacts.groupsHeading")}</h2>
-					<ul role="list" class="group-filter-list stack">
+				{!requestsOnly && (
+				<div class="search-field row">
+					<IconMagnifyingGlass aria-hidden="true" />
+					<input type="search" aria-label={t("shell.searchLabel")} placeholder={t("shell.searchPlaceholder")} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+				</div>
+				)}
+
+				{!requestsOnly && (
+				<section class="contact-groups stack" aria-labelledby="groups-heading">
+					<h2 id="groups-heading" class="visually-hidden">{t("contacts.groupsHeading")}</h2>
+					<ul role="list" class="contact-chips">
 						<li>
-							<span class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+							<span class="group-filter-chip">
 								<input
 									id="group-filter-all"
 									type="checkbox"
@@ -289,7 +331,7 @@ export default function Contacts() {
 						</li>
 						{groups.value.map((g) => (
 							<li key={g.id}>
-								<div class="group-filter-chip row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
+								<div class="group-filter-chip">
 									<input
 										id={`group-filter-${g.id}`}
 										type="checkbox"
@@ -299,7 +341,7 @@ export default function Contacts() {
 									{renamingGroupId === g.id ? (
 										<form
 											class="row"
-											style={{ "--gap": "var(--space-s)", "--align": "center" }}
+											style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
 											onSubmit={(e) => {
 												e.preventDefault();
 												runRowAction(async () => {
@@ -320,7 +362,7 @@ export default function Contacts() {
 											<button type="submit" disabled={busy}>
 												{t("common.save")}
 											</button>
-											<button type="button" onClick={() => setRenamingGroupId(null)}>
+											<button type="button" class="btn--ghost" onClick={() => setRenamingGroupId(null)}>
 												{t("common.cancel")}
 											</button>
 										</form>
@@ -355,37 +397,53 @@ export default function Contacts() {
 								</div>
 							</li>
 						))}
+						<li>
+							<button
+								type="button"
+								class="chip-add"
+								aria-expanded={showGroupForm}
+								aria-label={t("contacts.newGroupNameLabel")}
+								onClick={() => setShowGroupForm((v) => !v)}
+							>
+								<IconPlus aria-hidden="true" />
+							</button>
+						</li>
 					</ul>
 
-					<form class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={handleCreateGroup}>
-						<label class="visually-hidden" for="new-group-name">
-							{t("contacts.newGroupNameLabel")}
-						</label>
-						<input
-							id="new-group-name"
-							type="text"
-							placeholder={t("contacts.newGroupPlaceholder")}
-							value={newGroupName}
-							onInput={(e) => setNewGroupName(e.currentTarget.value)}
-						/>
-						<button type="submit" disabled={busy}>
-							{t("common.add")}
-						</button>
-					</form>
+					{showGroupForm && (
+						<form class="contact-group-form row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleCreateGroup}>
+							<label class="visually-hidden" for="new-group-name">
+								{t("contacts.newGroupNameLabel")}
+							</label>
+							<input
+								id="new-group-name"
+								type="text"
+								class="grow"
+								placeholder={t("contacts.newGroupPlaceholder")}
+								value={newGroupName}
+								onInput={(e) => setNewGroupName(e.currentTarget.value)}
+							/>
+							<button type="submit" disabled={busy}>
+								{t("common.add")}
+							</button>
+						</form>
+					)}
 					{groupError && (
 						<p role="alert" style={{ color: "var(--bad)" }}>
 							{groupError}
 						</p>
 					)}
-				</aside>
+				</section>
+				)}
 
-				<div class="contacts-main stack" style={{ "--gap": "var(--space-l)" }}>
+				<div class="contacts-main stack">
 					{/* Пользователь: "существующие контакты — главный рабочий блок,
 					    надо поднять вверх и выделить" — был зажат между "Отклонённые"
 					    и "Заблокированные" внизу страницы. Теперь первым, в своей
 					    рамке (contacts-primary-section). */}
-					<section class="stack card contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--gap": "var(--space-s)" }}>
-						<h2 id="contacts-heading">{t("contacts.heading", { count: visibleContacts.length })}</h2>
+					{!requestsOnly && (
+					<section class="stack contacts-primary-section" aria-labelledby="contacts-heading" style={{ "--gap": "var(--space-s)" }}>
+						<h2 id="contacts-heading" class="visually-hidden">{t("contacts.heading", { count: visibleContacts.length })}</h2>
 						{rowError && (
 							<p role="alert" style={{ color: "var(--bad)" }}>
 								{rowError}
@@ -411,10 +469,13 @@ export default function Contacts() {
 											openLabel={t("contacts.openChatAria", { name: displayName })}
 											actions={
 												<>
-													<button type="button" onClick={() => placeCall(pubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-														<IconPhoneCall /> <span class="call-txt">{t("common.call")}</span>
+													<button type="button" class="contact-chat" onClick={() => openChat(pubkey)} aria-label={t("contacts.openChatAria", { name: displayName })}>
+														<IconChatBubble />
 													</button>
 													<ActionsMenu label={t("channel.comment.moreActionsAria", { name: displayName })}>
+														<button type="button" onClick={() => placeCall(pubkey)}>
+															<IconPhoneCall /> {t("common.call")}
+														</button>
 														<button type="button" onClick={() => setExpandedPubkey(isExpanded ? null : pubkey)}>
 															<IconGear /> {isExpanded ? t("contacts.hidePermissions") : t("contacts.showPermissions")}
 														</button>
@@ -488,11 +549,12 @@ export default function Contacts() {
 							</p>
 						)}
 					</section>
+					)}
 
-					<section class="stack" aria-labelledby="requests-heading" style={{ "--gap": "var(--space-s)" }}>
+					<section ref={requestsRef} class="contacts-requests stack" aria-labelledby="requests-heading" style={{ "--gap": "var(--space-s)" }}>
 						<h2 id="requests-heading">{t("contacts.incomingHeading", { count: incomingRequests.value.length })}</h2>
 						{incomingRequests.value.length === 0 ? (
-							<p style={{ color: "var(--muted)" }}>{t("contacts.noIncoming")}</p>
+							<p class="empty-note">{t("contacts.noIncoming")}</p>
 						) : (
 							<ul role="list" class="ucard-list ucard-list--divided stack">
 								{incomingRequests.value.map((req) => {
@@ -525,6 +587,8 @@ export default function Contacts() {
 						)}
 					</section>
 
+					{!requestsOnly && (
+					<>
 					{/* Пользователь: не диктовал явно, но "Входящие" остаётся всегда
 					    развёрнутым (требует решения) — эти два списка вторичны
 					    (редко нужны, обычно пусты), сворачиваем в <details>
@@ -645,6 +709,8 @@ export default function Contacts() {
 							</div>
 						</details>
 					</div>
+					</>
+					)}
 				</div>
 			</div>
 		</Screen>

@@ -11,8 +11,6 @@ import { listOwnedChannels, listSubscribedChannels } from "../../domain/content/
 import { loadPinned, pinChannel, unpinChannel, pinPerson, unpinPerson } from "../../domain/contacts/pinned.js";
 import {
 	unreadMessagesCount,
-	unreadOwnedChannelsCount,
-	unreadSubscribedChannelsCount,
 	unreadByContact,
 	unreadByChannel,
 	refreshUnreadMessagesCount,
@@ -26,10 +24,15 @@ import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconCross from "../icons/cross.jsx";
 import IconStar from "../icons/star.jsx";
 import IconStarFill from "../icons/star-fill.jsx";
-import IconCompass from "../icons/compass.jsx";
-import IconEye from "../icons/eye.jsx";
-import IconGlobe from "../icons/globe.jsx";
 import IconPersonAdd from "../icons/person-add.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconChatBubble from "../icons/chat-bubble.jsx";
+import IconActivityLog from "../icons/activity-log.jsx";
+import IconLightning from "../icons/lightning.jsx";
+import IconHeart from "../icons/heart.jsx";
+import IconHash from "../icons/hash.jsx";
+import IconGear from "../icons/gear.jsx";
+import IconFolder from "../icons/folder.jsx";
 import { t } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
@@ -101,6 +104,23 @@ function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabe
 			</button>
 			<FavToggle pinned={pinned} onToggle={onTogglePin} label={pinLabel} />
 		</li>
+	);
+}
+
+// Пункт главного меню (макет ggQHr.jpg): иконка, подпись, необязательная
+// вторая строка-пояснение, бейдж-счётчик и метка «живого» состояния (открытая
+// комната / включённая видимость в «Знакомствах»). Пустой/нулевой badge не рисуется.
+function DrawerLink({ icon: Icon, label, hint, active, badge = 0, live = false, onClick }) {
+	return (
+		<button type="button" class={"drawer-link" + (active ? " is-active" : "") + (live ? " is-live" : "")} aria-current={active ? "page" : undefined} onClick={onClick}>
+			<Icon class="icon drawer-link__icon" aria-hidden="true" />
+			<span class="drawer-link__text">
+				<span class="drawer-link__label">{label}</span>
+				{hint && <small class="drawer-link__hint">{hint}</small>}
+			</span>
+			{live && <span class="drawer-link__live" aria-hidden="true" />}
+			{badge > 0 && <span class="chat-row__badge">{badge}</span>}
+		</button>
 	);
 }
 
@@ -178,34 +198,6 @@ export default function NavGroups({ unreadJournalCount }) {
 	const favoriteChannels = pinned.channels.map((id) => ({ id, name: channelName(id) })).filter((c) => c.name && matches(c.name));
 	const favoritePeople = pinned.people.filter((pk) => matches(personName(pk)));
 
-	// "Люди" — переписки (свежие первыми, этап 5), ДОПОЛНЕННЫЕ остальными
-	// контактами без переписки (иначе свежий аккаунт с контактами, но без
-	// открытых чатов, видел бы пустую группу — найдено пользователем).
-	// Контакты — НЕ полный экран управления (группы/заявки остаются только
-	// на "Люди"), просто ещё несколько строк в том же списке.
-	// Избранные исключены отсюда (найдено пользователем — раньше пункт
-	// дублировался и в "Избранном", и в своей обычной группе): у каждого
-	// контакта/канала/подписки теперь ровно одна строка в списке.
-	const conversationPubkeys = new Set(conversations.map((c) => c.chatId));
-	const contactsWithoutConversation = contacts.value.filter((pk) => !conversationPubkeys.has(pk));
-	const visiblePeople = [...conversations.map((c) => c.chatId), ...contactsWithoutConversation]
-		.filter((pk) => matches(personName(pk)))
-		.filter((pk) => !pinned.people.includes(pk));
-	const visibleOwned = owned.filter((c) => matches(c.name || "")).filter((c) => !pinned.channels.includes(c.id));
-	const visibleSubscribed = subscribed.filter((c) => matches(c.name || "")).filter((c) => !pinned.channels.includes(c.id));
-
-	// ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 5 — пустое состояние: ПОЛНЫЕ
-	// списки (до search-фильтра), не visiblePeople/visibleOwned/
-	// visibleSubscribed — иначе пустой поисковый запрос без совпадений
-	// показывал бы приглашение "начни знакомиться" вместо честного "ничего
-	// не найдено" (тот список НЕ пуст, просто фильтр ничего не оставил).
-	// Живой фидбек пользователя — входящая заявка от НЕ-контакта (обычный
-	// путь через "Знакомства") не создаёт ни conversation, ни contact, ни
-	// канал: без этого условия пустое состояние пряталО единственный путь
-	// в "Контакты" ровно тогда, когда там лежит заявка, которую нужно
-	// принять/отклонить — ни постоянного пункта меню, ни бейджа не было.
-	const isEmpty = conversations.length + contactsWithoutConversation.length === 0 && owned.length === 0 && subscribed.length === 0 && incomingRequests.value.length === 0;
-
 	// Активная строка (этап 4) — сравнение с ЕДИНЫМ источником "где я
 	// нахожусь" (place.js), не отдельным локальным состоянием: то же
 	// значение уже двигает саму навигацию (openChat/openChannel).
@@ -256,28 +248,35 @@ export default function NavGroups({ unreadJournalCount }) {
 			    "ровно один .scroller на каждом пути от .shell до листа"; путь
 			    через .sidebar теперь заходит СЮДА, не в сам <aside>, см. app.jsx). */}
 			<div class="pane__body stack scroller grow" style={{ "--gap": "var(--space-s)" }}>
-				{/* ASIDE-REDESIGN/SIDEBAR-SPEC-2.md, этап 4 — "Знакомства" постоянной
-				    строкой до всех групп (включая "Избранное"): раздел живёт
-				    отдельным экраном (discovery.jsx), не внутри "Контактов". Иконка —
-				    компас, не лупа (та уже занята полем поиска строкой выше).
-				    Пользователь (item 7) — "Быстрая связь" переехала сюда же, ПЕРЕД
-				    "Знакомства" (низ панели, app.jsx, больше не годился — там ей "не
-				    место", те же слова, что про "Добавить контакт"): тот же смысл
-				    (познакомиться/поговорить с кем-то новым), тот же визуальный язык
-				    (.discover-row/.discover), просто отдельная строка, не общий пункт —
-				    "Быстрая связь" не место (place.js), это независимая модалка
-				    (roomsScreenActive, rooms.js). */}
-				<ul class="streams stack" style={{ "--gap": "1px" }}>
+				<nav class="drawer-nav stack" aria-label={t("shell.navAriaLabel")}>
+					<p class="drawer-section">{t("shell.sectionTalk")}</p>
+					<DrawerLink icon={IconChatBubble} label={t("shell.navChats")} active={place.value.kind === "chat"} badge={unreadMessagesCount.value} onClick={() => openChat(null)} />
+					<DrawerLink icon={IconActivityLog} label={t("nav.journal")} active={place.value.kind === "journal"} badge={unreadJournalCount} onClick={() => goTo({ kind: "journal" })} />
+					<DrawerLink icon={IconPerson} label={t("nav.contacts")} active={place.value.kind === "people" && place.value.section !== "requests"} onClick={() => goTo({ kind: "people" })} />
+					<DrawerLink
+						icon={IconPersonAdd}
+						label={t("shell.navRequests")}
+						active={place.value.kind === "people" && place.value.section === "requests"}
+						badge={incomingRequests.value.length}
+						onClick={() => goTo({ kind: "people", section: "requests" })}
+					/>
+
+					<p class="drawer-section">{t("shell.sectionServices")}</p>
 					<QuickConnectRow />
-					<li class={`discover-row${place.value.kind === "discovery" ? " is-active" : ""}${ownDiscoveryVisible.value ? " discover-row--visible" : ""}`}>
-						<button type="button" class="discover" onClick={() => goTo({ kind: "discovery" })}>
-							<span class="discover-mark">
-								{ownDiscoveryVisible.value ? <IconEye /> : <IconCompass />}
-							</span>
-							<span class="stream__name">{t("shell.discoverHeading")}</span>
-						</button>
-					</li>
-				</ul>
+					<DrawerLink
+						icon={IconHeart}
+						label={t("shell.discoverHeading")}
+						active={place.value.kind === "discovery"}
+						live={ownDiscoveryVisible.value}
+						onClick={() => goTo({ kind: "discovery" })}
+					/>
+
+					<p class="drawer-section">{t("shell.sectionMore")}</p>
+					<DrawerLink icon={IconHash} label={t("nav.channels")} active={place.value.kind === "channels" || place.value.kind === "channel"} onClick={() => goTo({ kind: "channels" })} />
+					<DrawerLink icon={IconFolder} label={t("nav.files")} active={place.value.kind === "storage"} onClick={() => goTo({ kind: "storage" })} />
+					<DrawerLink icon={IconGear} label={t("nav.settings")} active={place.value.kind === "settings"} onClick={() => goTo({ kind: "settings" })} />
+					<DrawerLink icon={IconPersonAdd} label={t("shell.addContact")} onClick={() => setShowAddContact(true)} />
+				</nav>
 
 				{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (
 					<div class="stack" style={{ "--gap": "1px" }}>
@@ -313,112 +312,6 @@ export default function NavGroups({ unreadJournalCount }) {
 					</div>
 				)}
 
-				{/* Живой фидбек пользователя — isEmpty раньше ПОДМЕНЯЛ собой весь
-				    список групп (тернарник): на свежем аккаунте (нет ни переписок,
-				    ни контактов, ни каналов, ни заявок) заголовки "Люди"/"Мои
-				    каналы"/"Подписки" не рендерились вовсе — а именно заголовок
-				    "Мои каналы" ведёт на экран Channels, где живёт кнопка "Создать
-				    канал" (channels.jsx). Единственным выходом оставались
-				    "Знакомства" (искать ЧУЖИЕ каналы/людей) — создать СВОЙ канал
-				    было решительно негде. Приветственная панель теперь ДОПОЛНЯЕТ
-				    группы, а не заменяет их — группы рендерятся всегда (пустой
-				    список под заголовком — уже штатное поведение, тот же паттерн,
-				    что "Мои каналы" с owned=0 при непустых остальных категориях). */}
-				{isEmpty && (
-					<div class="empty">
-						<h3>{t("shell.emptyTitle")}</h3>
-						<p>{t("shell.emptyBody")}</p>
-						<button type="button" class="act act--primary" onClick={() => goTo({ kind: "discovery" })}>
-							<IconCompass /> {t("shell.emptyAction")}
-						</button>
-					</div>
-				)}
-				<>
-				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "people" })} title={t("shell.peopleGroupTitle")}>
-						{t("shell.peopleGroupHeading")}
-						{/* Живой фидбек пользователя — входящая заявка от НЕ-контакта не
-						    считается unreadMessagesCount (та — только непрочитанные
-						    СООБЩЕНИЯ уже существующих контактов). Без этого числа заявка
-						    от незнакомца не давала НИКАКОГО визуального сигнала здесь. */}
-						{unreadMessagesCount.value + incomingRequests.value.length > 0 && (
-							<span class="group-count">{unreadMessagesCount.value + incomingRequests.value.length}</span>
-						)}
-						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-					</button>
-					{/* Пользователь (item 1) — "Добавить контакт" переехала сюда, между
-					    заголовком группы и самим списком (было — низ панели, app.jsx,
-					    рядом с "Быстрая связь": "им там не место", те же слова
-					    пользователя). Ссылка, не кнопка (item 1: "убрать кнопочный вид") —
-					    ведёт СРАЗУ на модалку с формой заявки (item 2), не на этот же
-					    экран ещё раз (кнопка заголовка bar выше и так уже сюда ведёт). */}
-					<button type="button" class="add-contact-link" onClick={() => setShowAddContact(true)}>
-						<IconPersonAdd aria-hidden="true" />
-						<span>{t("shell.addContact")}</span>
-					</button>
-					<ul class="streams stack" style={{ "--gap": "1px" }}>
-						{visiblePeople.map((pk) => (
-							<StreamItem
-								key={pk}
-								avatar={<PersonAvatar pubkey={pk} name={personName(pk)} />}
-								name={personName(pk)}
-								onOpen={() => openChat(pk)}
-								active={isPersonActive(pk)}
-								unread={unreadByContact.value[pk] ?? 0}
-								pinned={pinned.people.includes(pk)}
-								onTogglePin={() => handleTogglePinPerson(pk, pinned.people.includes(pk))}
-								pinLabel={t(pinned.people.includes(pk) ? "account.favRemove" : "account.favAdd", { name: personName(pk) })}
-							/>
-						))}
-					</ul>
-				</div>
-
-				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.myChannelsGroupTitle")}>
-						{t("shell.myChannelsGroupHeading")}
-						{unreadOwnedChannelsCount.value > 0 && <span class="group-count">{unreadOwnedChannelsCount.value}</span>}
-						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-					</button>
-					<ul class="streams stack" style={{ "--gap": "1px" }}>
-						{visibleOwned.map((c) => (
-							<StreamItem
-								key={c.id}
-								avatar={<ChannelAvatarThumb channel={c} small />}
-								name={c.name || t("channels.card.untitled")}
-								onOpen={() => openChannel(c.id)}
-								active={isChannelActive(c.id)}
-								unread={unreadByChannel.value[c.id] ?? 0}
-								pinned={pinned.channels.includes(c.id)}
-								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-								pinLabel={t(pinned.channels.includes(c.id) ? "account.favRemove" : "account.favAdd", { name: c.name || t("channels.card.untitled") })}
-							/>
-						))}
-					</ul>
-				</div>
-
-				<div class="stack" style={{ "--gap": "1px" }}>
-					<button type="button" class="eyebrow grouphead bar" style={{ "--align": "center" }} onClick={() => goTo({ kind: "channels" })} title={t("shell.subscriptionsGroupTitle")}>
-						{t("shell.subscriptionsGroupHeading")}
-						{unreadSubscribedChannelsCount.value > 0 && <span class="group-count">{unreadSubscribedChannelsCount.value}</span>}
-						<span class="grouphead__all">{t("shell.groupAllLink")}</span>
-					</button>
-					<ul class="streams stack" style={{ "--gap": "1px" }}>
-						{visibleSubscribed.map((c) => (
-							<StreamItem
-								key={c.id}
-								avatar={<ChannelAvatarThumb channel={c} small />}
-								name={c.name || t("channels.card.untitled")}
-								onOpen={() => openChannel(c.id)}
-								active={isChannelActive(c.id)}
-								unread={unreadByChannel.value[c.id] ?? 0}
-								pinned={pinned.channels.includes(c.id)}
-								onTogglePin={() => handleTogglePinChannel(c.id, pinned.channels.includes(c.id))}
-								pinLabel={t(pinned.channels.includes(c.id) ? "account.favRemove" : "account.favAdd", { name: c.name || t("channels.card.untitled") })}
-							/>
-						))}
-					</ul>
-				</div>
-				</>
 			</div>
 			{showAddContact && <AddContactModal onClose={() => setShowAddContact(false)} />}
 		</>
@@ -458,16 +351,13 @@ function QuickConnectRow() {
 	else hint = t("shell.quickConnectHint");
 
 	return (
-		<li class={`discover-row${active ? " discover-row--active" : ""}`}>
-			<button type="button" class="discover" onClick={handleClick}>
-				<span class="discover-mark">
-					{active ? <span class="quick-live-dot" aria-hidden="true" /> : <IconGlobe aria-hidden="true" />}
-				</span>
-				<span class="stack grow" style={{ "--gap": "0" }}>
-					<span class="stream__name">{summary?.name || t("shell.quickConnect")}</span>
-					<small>{hint}</small>
-				</span>
-			</button>
-		</li>
+		<DrawerLink
+			icon={IconLightning}
+			label={summary?.name || t("shell.quickConnect")}
+			hint={hint}
+			active={active}
+			live={active}
+			onClick={handleClick}
+		/>
 	);
 }

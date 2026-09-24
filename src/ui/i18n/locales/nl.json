@@ -65,7 +65,11 @@
 			"amethyst": "Amethist",
 			"magenta": "Magenta",
 			"fuchsia": "Fuchsia",
-			"pink": "Roze"
+			"pink": "Roze",
+			"terracotta": "Terracotta",
+			"steel": "Staal",
+			"sand": "Zand",
+			"ink": "Inkt"
 		},
 		"notificationsTitle": "Meldingen",
 		"enableNotifications": "Meldingen inschakelen",
@@ -161,7 +165,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Geminimaliseerd — tik om terug te keren",
-		"serviceUnavailable": "dienst niet beschikbaar"
+		"serviceUnavailable": "dienst niet beschikbaar",
+		"copyAddress": "Adres kopiëren",
+		"sectionTalk": "Gesprek",
+		"sectionServices": "Diensten",
+		"sectionMore": "Meer",
+		"navChats": "Chats",
+		"navRequests": "Verzoeken",
+		"navNetwork": "Netwerk"
 	},
 	"unlock": {
 		"checking": "Bezig met controleren…",

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { npubEncode } from "nostr-tools/nip19";
+import { shortPubkey } from "../format.js";
 import { getProfile, updateProfile } from "../../core/crypto/keystore.js";
 import { buildProfileEvent, uploadAvatarBlob } from "../../domain/identity/profile.js";
 import { resizeAvatarBlob } from "../../domain/identity/avatar-resize.js";
@@ -13,7 +14,6 @@ import FilePicker from "../components/file-picker.jsx";
 import DeleteAccountPanel from "../components/delete-account-panel.jsx";
 import { bumpProfileActivity } from "../signals/profile.js";
 import IconCopy from "../icons/copy.jsx";
-import IconTrash from "../icons/trash.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import { uploadTarget } from "../../domain/files/servers.js";
 
@@ -233,107 +233,92 @@ export default function Profile() {
 		// — тот же приём просят применить и на "Ключ и восстановление"
 		// (security.jsx), и на "Файлы" (files.jsx).
 		<Screen title={`${login || t("profile.noNameFallback")}: ${t("sidebarCard.menuProfile")}`}>
-			<div class="stack" style={{ "--gap": "var(--space-l)" }}>
-				<section class="panel stack" style={{ "--gap": "var(--space-m)" }}>
-					<div class="ident row" style={{ "--gap": "var(--space-m)" }}>
-						{/* Фото и две кнопки под ним были парой, делающей одно и то
-						    же, но в двух разных формах: "Заменить" — <label>-пилюля
-						    (--radius-full), "Из хранилища" — обычная кнопка
-						    (--radius). Теперь обе
-						    внутри одной накладки на нижней кромке фотографии.
-						    .layer — композиционный класс: обе дочки в одной
-						    ячейке грида, накладка прижата вниз через .self-end. */}
-						<div class="ident__photo">
-							<div class="ava layer">
-								{/* Приоритет avatar || avatarUrl НЕ менять — см. комментарий
-								    этапа 74 в истории файла: корректность обеспечивает
-								    инвалидация в hydrateOwnProfile, а не порядок здесь. */}
-								{avatar || avatarUrl ? (
-									<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
-								) : (
-									<div
-										role="img"
-										aria-label={t("profile.avatarNotSetAria")}
-										class="profile-avatar-square profile-avatar-square-fallback row"
-										style={{ "--align": "center", justifyContent: "center" }}
-									>
-										{initial}
-									</div>
-								)}
-								<div class="ava__actions over self-end bar" style={{ "--gap": "var(--space-3xs)" }}>
-									<label for="profile-avatar-input" class="ava__btn bar">
-										{t("profile.replaceAvatarLabel")}
-									</label>
-									<input id="profile-avatar-input" class="visually-hidden" type="file" accept="image/*" onChange={handleAvatarChange} />
-									<button type="button" class="ava__btn bar" onClick={() => setAvatarPickerOpen(true)}>
-										{t("profile.chooseFromStorageButton")}
-									</button>
-								</div>
+			<div class="profile-page stack">
+				{/* Макет 0teqm.jpg: фото-герой 16:9, под ним ссылки «сменить», ниже
+				    поля-карточки (идентификатор, о себе) и в самом низу — удаление. */}
+				<section class="profile-photo stack">
+					<div class="profile-hero">
+						{/* Приоритет avatar || avatarUrl НЕ менять — см. комментарий
+						    этапа 74 в истории файла: корректность обеспечивает
+						    инвалидация в hydrateOwnProfile, а не порядок здесь. */}
+						{avatar || avatarUrl ? (
+							<img src={avatar || avatarUrl} alt="" class="profile-avatar-square" />
+						) : (
+							<div
+								role="img"
+								aria-label={t("profile.avatarNotSetAria")}
+								class="profile-avatar-square profile-avatar-square-fallback row"
+								style={{ "--align": "center", justifyContent: "center" }}
+							>
+								{initial}
 							</div>
-							{avatarError && (
-								<p role="alert" class="callout callout--bad">
-									{avatarError}
-								</p>
-							)}
-						</div>
-
-						{avatarPickerOpen && (
-							<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
 						)}
-
-						<form class="ident__body stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleBioSubmit}>
-							{/* Живой фидбек: имя пользователя над ключом дублировало заголовок
-							    экрана (Screen title теперь тоже содержит имя) — читалось как
-							    "имя, потом непонятно что за строка ниже". identifierHeading —
-							    уже существовавший, но ни разу не подключённый ключ перевода. */}
-							<h2 class="ident__name">{t("profile.identifierHeading")}</h2>
-
-							<div class="keybox row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								<code>{npubEncode(id)}</code>
-								<button type="button" class="icon-btn rigid" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
-									<IconCopy />
-								</button>
-							</div>
-							{copyStatus && (
-								<p role="status" class="panel__hint">
-									{copyStatus}
-								</p>
-							)}
-							<p class="panel__hint">{t("profile.identifierHint")}</p>
-
-							<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
-								<label for="profile-bio">{t("profile.bioLabel")}</label>
-								<textarea id="profile-bio" rows="4" value={bio} onInput={(e) => setBio(e.currentTarget.value)} />
-							</div>
-
-							<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-								<button type="submit" class="rigid" disabled={!bioIsDirty}>
-									{t("common.save")}
-								</button>
-								{bioStatus && (
-									<span role="status" class="panel__hint">
-										{bioStatus}
-									</span>
-								)}
-								{publishStatus && (
-									<span role="status" class="panel__hint">
-										{publishStatus}
-									</span>
-								)}
-							</div>
-						</form>
 					</div>
+					<div class="profile-photo__actions">
+						<label for="profile-avatar-input" class="link-btn">
+							{t("profile.replaceAvatarLabel")}
+						</label>
+						<input id="profile-avatar-input" class="visually-hidden" type="file" accept="image/*" onChange={handleAvatarChange} />
+						<button type="button" class="link-btn" onClick={() => setAvatarPickerOpen(true)}>
+							{t("profile.chooseFromStorageButton")}
+						</button>
+					</div>
+					{avatarError && (
+						<p role="alert" class="callout callout--bad">
+							{avatarError}
+						</p>
+					)}
 				</section>
+
+				{avatarPickerOpen && (
+					<FilePicker predicate={(node) => node.kind === "file"} multiple={false} onSelect={handleAvatarFromStorage} onCancel={() => setAvatarPickerOpen(false)} />
+				)}
+
+				<form class="profile-fields stack" onSubmit={handleBioSubmit}>
+					<div class="field-card">
+						<span class="field-card__label">{t("profile.identifierHeading")}</span>
+						<div class="field-card__row">
+							<code class="field-card__value" title={npubEncode(id)}>
+								{shortPubkey(id)}
+							</code>
+							<button type="button" class="icon-btn rigid" onClick={handleCopyNpub} aria-label={t("profile.copyKeyAria")}>
+								<IconCopy />
+							</button>
+						</div>
+						{copyStatus && (
+							<p role="status" class="field-card__hint">
+								{copyStatus}
+							</p>
+						)}
+						<p class="field-card__hint">{t("profile.identifierHint")}</p>
+					</div>
+
+					<div class="field-card">
+						<label class="field-card__label" for="profile-bio">
+							{t("profile.aboutMeLegend")}
+						</label>
+						<textarea id="profile-bio" rows="4" value={bio} onInput={(e) => setBio(e.currentTarget.value)} />
+						<div class="field-card__foot">
+							{bioStatus && (
+								<span role="status" class="field-card__hint">
+									{bioStatus}
+								</span>
+							)}
+							{publishStatus && (
+								<span role="status" class="field-card__hint">
+									{publishStatus}
+								</span>
+							)}
+							<button type="submit" class="link-btn" disabled={!bioIsDirty}>
+								{t("common.save")}
+							</button>
+						</div>
+					</div>
+				</form>
 
 				{/* Переехало из "Настроек": удаление относится к тому, КТО ты, а
 				    не к тому, как ведёт себя приложение. */}
-				<section class="panel panel--danger stack" style={{ "--gap": "var(--space-m)" }}>
-					<div class="panel__head stack" style={{ "--gap": "var(--space-3xs)" }}>
-						<h2 class="panel__title bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-							<IconTrash />
-							{t("settings.dangerZoneTitle")}
-						</h2>
-					</div>
+				<section class="profile-danger stack" style={{ "--gap": "var(--space-s)" }} aria-label={t("settings.dangerZoneTitle")}>
 					<DeleteAccountPanel ownerPubkey={id} login={login} privKey={privKeySig.value} dbKey={dbKeySig.value} />
 				</section>
 			</div>

@@ -37,6 +37,7 @@ import { refreshInboxRequests, acceptInboxRequestAction, rejectInboxRequestActio
 import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
 import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
+import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import MessageBubble from "../components/message-bubble.jsx";
@@ -59,6 +60,7 @@ import { getPeerCursor, flushCursorNow } from "../../domain/messaging/peer-curso
 import { armPeerCursorAck } from "../../domain/messaging/chat.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 import EmojiQuickSend from "../components/emoji-quick-send.jsx";
+import FavStar from "../components/fav-star.jsx";
 import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
@@ -66,10 +68,24 @@ const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 // contacts.jsx уже вызывает ensureConnected при заходе на вкладку "Контакты" — но
 // пользователь может открыть "Сообщения" напрямую, минуя её. ensureConnected идемпотентна
 // (singleton-соединение на вкладку), повторный вызов отсюда безопасен.
+// Подпись времени в строке списка: сегодня — часы:минуты, до недели назад — день
+// недели, дальше — дата. Локаль — текущая локаль интерфейса.
+function formatRowTime(ms) {
+	const now = new Date();
+	const d = new Date(ms);
+	const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+	const days = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+	const locale = currentLocale.value;
+	if (days <= 0) return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+	if (days < 7) return d.toLocaleDateString(locale, { weekday: "short" });
+	return d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+}
+
 function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 	const [chatPartners, setChatPartners] = useState([]);
 	const [inboxList, setInboxList] = useState([]);
 	const [unreadByPartner, setUnreadByPartner] = useState({});
+	const [lastAtByPartner, setLastAtByPartner] = useState({});
 	const [listError, setListError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
@@ -86,7 +102,11 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 				for (const partnerPubkey of partners) {
 					unread[partnerPubkey] = await getUnreadCount(ownerPubkey, partnerPubkey);
 				}
+				// Время последней активности — только для подписи и порядка строк.
+				const lastAt = {};
+				for (const c of await listConversations(ownerPubkey, dbKey)) lastAt[c.chatId] = c.lastAt;
 				if (cancelled) return;
+				setLastAtByPartner(lastAt);
 				setChatPartners(partners);
 				setInboxList(inbox);
 				setUnreadByPartner(unread);
@@ -162,7 +182,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 	return (
 		<Screen
-			title={totalUnread > 0 ? `${t("nav.messages")} [${totalUnread}]` : t("nav.messages")}
+			title={t("shell.navChats")}
 			actions={
 				<button type="button" onClick={onCompose}>
 					<IconPencil /> {t("chat.list.composeButton")}
@@ -187,25 +207,15 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 			{inboxList.length > 0 && (
 				<section class="stack" aria-label={t("chat.list.inboxHeading", { count: inboxList.length })} style={{ "--gap": "var(--space-s)" }}>
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+					<ul role="list" class="inbox-list">
 						{inboxList.map((req) => (
-							<li
-								key={req.senderPubkey}
-								class="row"
-								style={{
-									"--gap": "var(--space-s)",
-									"--align": "center",
-									justifyContent: "space-between",
-									paddingBlock: "var(--space-s)",
-									borderBlockEnd: "var(--border-width) solid var(--border)",
-								}}
-							>
+							<li key={req.senderPubkey} class="inbox-row">
 								<ContactIdentity pubkey={req.senderPubkey} />
-								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+								<div class="inbox-row__actions">
 									<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
 										{t("contacts.acceptButton")}
 									</button>
-									<button type="button" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
+									<button type="button" class="btn--ghost" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
 										{t("contacts.rejectButton")}
 									</button>
 								</div>
@@ -217,38 +227,38 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 			<section class="stack" aria-label={t("chat.list.chatsHeading", { count: chatPartners.length })} style={{ "--gap": "var(--space-s)" }}>
 				{chatPartners.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>
-						{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}
-					</p>
+					<p class="empty-note">{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}</p>
 				) : (
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-						{chatPartners.map((pubkey) => (
-							<li
-								key={pubkey}
-								style={{ paddingBlock: "var(--space-s)", borderBlockEnd: "var(--border-width) solid var(--border)" }}
-							>
-								<button
-									type="button"
-									onClick={() => openChat(pubkey)}
-									aria-label={t("contacts.openChatAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}
-									class="row"
-									style={{
-										"--gap": "var(--space-s)",
-										"--align": "center",
-										justifyContent: "space-between",
-										width: "100%",
-										background: "none",
-										border: "none",
-										padding: 0,
-										cursor: "pointer",
-										font: "inherit",
-										color: "inherit",
-									}}
-								>
-									<ContactIdentity pubkey={pubkey} unreadCount={unreadByPartner[pubkey]} />
-								</button>
-							</li>
-						))}
+					<ul role="list" class="chat-list">
+						{[...chatPartners]
+							.sort((a, b) => (lastAtByPartner[b] ?? 0) - (lastAtByPartner[a] ?? 0))
+							.map((pubkey) => {
+								const profile = profiles.value[pubkey];
+								const name = profile?.name || shortPubkey(pubkey);
+								const unread = unreadByPartner[pubkey] ?? 0;
+								return (
+									<li key={pubkey} class="chat-list__item">
+										<button type="button" class="chat-row" onClick={() => openChat(pubkey)} aria-label={t("contacts.openChatAria", { name })}>
+											<span class="chat-row__ava">
+												<AccountAvatar avatar={profile?.picture} login={name} />
+											</span>
+											<span class="chat-row__body">
+												<span class="chat-row__name">{name}</span>
+												{profile?.about && <span class="chat-row__snippet">{profile.about}</span>}
+											</span>
+											<span class="chat-row__meta">
+												{lastAtByPartner[pubkey] != null && <time class="chat-row__time">{formatRowTime(lastAtByPartner[pubkey] * 1000)}</time>}
+												{unread > 0 && (
+													<span class="chat-row__badge" aria-label={t("chat.list.unreadAria", { count: unread })}>
+														{unread}
+													</span>
+												)}
+											</span>
+										</button>
+										<FavStar kind="person" id={pubkey} name={name} />
+									</li>
+								);
+							})}
 					</ul>
 				)}
 			</section>
@@ -703,7 +713,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 
 	return (
 		<Screen
-			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
+			breadcrumb={{ label: t("shell.navChats"), onBack: () => openChat(null) }}
 			lead={<AccountAvatar avatar={profile?.picture} login={displayName} />}
 			title={displayName}
 			subtitle={(() => {
@@ -718,8 +728,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					    текст нигде не был обёрнут в этот класс — "Позвонить" с
 					    полным текстом распирал и без того тесную строку шапки
 					    (шла внахлёст с глобальным бургером в углу). */}
-					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-						<IconPhoneCall /> <span class="btn-label">{t("common.call")}</span>
+					<button type="button" class="icon-btn" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
+						<IconPhoneCall />
 					</button>
 					<ActionsMenu label={t("chat.window.chatMenuAria")}>
 						{/* Живой фидбег — пункт добавлен заранее (вид меню важнее самой
@@ -766,24 +776,35 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 						</p>
 					)}
 
-					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+					<form class="composer bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+						<div class="composer__attach">
+							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
+						</div>
 						<label class="visually-hidden" for="chat-message-input">
 							{t("chat.window.messageLabel")}
 						</label>
-						<textarea
-							id="chat-message-input"
-							ref={composerTextareaRef}
-							class="message-compose-field"
-							value={text}
-							maxLength={MAX_MESSAGE_LENGTH}
-							onInput={handleTextInput}
-							onKeyDown={(e) => {
-								if (!isComposeSubmitKey(e)) return;
-								e.preventDefault();
-								handleSend(e);
-							}}
-							rows={2}
-						/>
+						<div class="composer__field">
+							<textarea
+								id="chat-message-input"
+								ref={composerTextareaRef}
+								class="message-compose-field"
+								value={text}
+								placeholder={t("chat.window.messageLabel")}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onInput={handleTextInput}
+								onKeyDown={(e) => {
+									if (!isComposeSubmitKey(e)) return;
+									e.preventDefault();
+									handleSend(e);
+								}}
+								rows={1}
+							/>
+							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
+							<details class="composer-aa">
+								<summary class="message-compose-tool-btn" aria-label={t("markdownToolbar.boldAria")}>Aa</summary>
+								<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
+							</details>
+						</div>
 						<button
 							type="submit"
 							class="message-compose-send-btn row"
@@ -794,15 +815,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							<IconSend />
 						</button>
 					</form>
-					<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
-							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
-						</div>
-						<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
-						<div class="compose-tools__emoji">
-							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
-						</div>
-					</div>
 				</div>
 			}
 		>

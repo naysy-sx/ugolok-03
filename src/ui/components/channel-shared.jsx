@@ -115,16 +115,17 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 			)}
 			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-				<button type="button" onClick={() => fileInputRef.current?.click()}>
+				<button type="button" class="btn--ghost" onClick={() => fileInputRef.current?.click()}>
 					<IconPaperclip /> {t("channel.composer.attachButton")}
 				</button>
-				<button type="button" onClick={() => setFilePickerOpen(true)}>
+				<button type="button" class="btn--ghost" onClick={() => setFilePickerOpen(true)}>
 					<IconFolder /> {t("channel.composer.attachFromStorageButton")}
 				</button>
+				<span class="grow" />
 				<button type="submit" class="post-cta--compact" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 					<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
+				<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 					<IconCross /> {t("common.cancel")}
 				</button>
 			</div>
@@ -235,7 +236,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 				<button type="submit" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 					<IconSend /> {busy ? t("common.saving") : t("common.save")}
 				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
+				<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 					<IconCross /> {t("common.cancel")}
 				</button>
 			</div>
