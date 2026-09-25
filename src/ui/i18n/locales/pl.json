@@ -614,6 +614,12 @@
 		"showPermissions": "Uprawnienia",
 		"blockAction": "Zablokuj",
 		"removeFromGroupAria": "Usuń z grupy {{name}}",
+		"removeDialog": {
+			"title": "Usunąć kontakt „{{name}}”?",
+			"body": "Możesz też usunąć rozmowę z tą osobą: zniknie z listy czatów na tym urządzeniu na zawsze i nie wróci po ponownym uruchomieniu. Druga osoba zachowa swoją kopię.",
+			"withChat": "Usuń kontakt i rozmowę",
+			"contactOnly": "Usuń tylko kontakt"
+		},
 		"addToGroupLabel": "do grupy",
 		"noContactsAtAll": "Nie masz jeszcze żadnych kontaktów.",
 		"noContactsInGroups": "Żaden kontakt nie należy do wybranych grup.",

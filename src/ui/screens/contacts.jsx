@@ -2,9 +2,11 @@ import { Fragment } from "preact";
 import { useState, useEffect, useRef } from "preact/hooks";
 import { shortPubkey } from "../format.js";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
-import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription } from "../signals/transport.js";
+import { ensureConnected, publish, fetchProfiles, refreshLiveProfileSubscription, refreshGroupMessageSubscription } from "../signals/transport.js";
 import { openChat, place } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
+import { deleteChatForeverAction } from "../signals/chats.js";
+import RemoveContactDialog from "../components/remove-contact-dialog.jsx";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconPencil from "../icons/pencil.jsx";
@@ -139,6 +141,8 @@ export default function Contacts() {
 	const [showGroupForm, setShowGroupForm] = useState(false);
 	const [query, setQuery] = useState("");
 	const requestsRef = useRef(null);
+	// Диалог «Удалить контакт (и переписку?)» — {pubkey, name} или null.
+	const [removeTarget, setRemoveTarget] = useState(null);
 	// busyRef — синхронная защита от повторного входа. busy (state) обновляется через
 	// setBusy и коммитится АСИНХРОННО (рендер-цикл) — обработчик второго клика,
 	// вызванный до коммита, читает СТАРОЕ значение busy из замыкания того же рендера
@@ -491,7 +495,7 @@ export default function Contacts() {
 															type="button"
 															class="danger"
 															disabled={busy}
-															onClick={() => runRowAction(() => removeContactAction(pubkey))}
+															onClick={() => setRemoveTarget({ pubkey, name: displayName })}
 														>
 															<IconTrash /> {t("common.delete")}
 														</button>
@@ -719,6 +723,21 @@ export default function Contacts() {
 					)}
 				</div>
 			</div>
+			{removeTarget && (
+				<RemoveContactDialog
+					name={removeTarget.name}
+					busy={busy}
+					onCancel={() => setRemoveTarget(null)}
+					onConfirm={(withChat) => {
+						const { pubkey } = removeTarget;
+						setRemoveTarget(null);
+						runRowAction(async () => {
+							await removeContactAction(pubkey);
+							if (withChat) await deleteChatForeverAction(ownerPubkey, privKey, dbKey, pubkey, publish, refreshGroupMessageSubscription);
+						});
+					}}
+				/>
+			)}
 		</Screen>
 	);
 }

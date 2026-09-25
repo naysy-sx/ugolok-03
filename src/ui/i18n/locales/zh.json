@@ -614,6 +614,12 @@
 		"showPermissions": "权限",
 		"blockAction": "屏蔽",
 		"removeFromGroupAria": "从分组 {{name}} 中移除",
+		"removeDialog": {
+			"title": "删除联系人“{{name}}”？",
+			"body": "也可以一并删除与此人的聊天记录：它会从这台设备的聊天列表中永久消失，重启后也不会回来。对方那边的记录仍会保留。",
+			"withChat": "删除联系人和聊天记录",
+			"contactOnly": "仅删除联系人"
+		},
 		"addToGroupLabel": "添加到分组",
 		"noContactsAtAll": "您还没有任何联系人。",
 		"noContactsInGroups": "没有联系人属于所选分组。",

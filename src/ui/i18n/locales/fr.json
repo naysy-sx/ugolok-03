@@ -614,6 +614,12 @@
 		"showPermissions": "Autorisations",
 		"blockAction": "Bloquer",
 		"removeFromGroupAria": "Retirer du groupe {{name}}",
+		"removeDialog": {
+			"title": "Supprimer le contact « {{name}} » ?",
+			"body": "Vous pouvez aussi supprimer la conversation avec cette personne : elle disparaît définitivement de votre liste de discussions sur cet appareil et ne reviendra pas après un redémarrage. L’autre personne garde sa copie.",
+			"withChat": "Supprimer le contact et la conversation",
+			"contactOnly": "Supprimer seulement le contact"
+		},
 		"addToGroupLabel": "au groupe",
 		"noContactsAtAll": "Vous n'avez encore aucun contact.",
 		"noContactsInGroups": "Aucun contact n'appartient aux groupes sélectionnés.",
