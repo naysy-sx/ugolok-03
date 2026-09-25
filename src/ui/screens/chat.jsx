@@ -320,6 +320,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const voice = useVoiceRecording();
 	const [uploadingAttachment, setUploadingAttachment] = useState(false);
+	const [uploadFraction, setUploadFraction] = useState(0);
 
 	useEffect(() => {
 		// Найденный баг (пользователь): при входе в чат подтягиваем СВЕЖИЙ профиль
@@ -435,7 +436,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// поэтому здесь простое ветвление, не слияние.
 	async function buildOutgoingAttachments() {
 		const journal = { purpose: "dm", target: contactPubkey }; // ТЗ-03: куда уходит файл
-		if (tray.items.length > 0) return tray.uploadAll(privKey, undefined, { journal });
+		if (tray.items.length > 0) return tray.uploadAll(privKey, undefined, { journal, onBytes: setUploadFraction });
 		if (voice.hasRecording) {
 			const descriptor = await voice.buildAttachment(privKey, { journal });
 			return descriptor ? [descriptor] : undefined;
@@ -773,6 +774,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					{uploadingAttachment && (
 						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
 							<span class="spinner" aria-hidden="true" /> {t("chat.window.uploadingAttachment")}
+							<progress class="upload-progress" max="100" value={Math.round(uploadFraction * 100)} aria-label={t("chat.window.uploadingAttachment")} />
+							<span class="upload-percent">{Math.round(uploadFraction * 100)}%</span>
 						</p>
 					)}
 

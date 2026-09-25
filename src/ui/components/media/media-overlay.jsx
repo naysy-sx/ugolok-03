@@ -22,7 +22,7 @@ import IconPlayerPlay from "../../icons/player-play.jsx";
 import IconPlayerPause from "../../icons/player-pause.jsx";
 import IconRepeat from "../../icons/repeat.jsx";
 import IconRepeatOnce from "../../icons/repeat-once.jsx";
-import { formatFileSize } from "../attachment-view.jsx";
+import { formatFileSize, AttachmentDownloadLink, AttachmentSaveButton } from "../attachment-view.jsx";
 import { t } from "../../signals/i18n.js";
 import { uploadTarget } from "../../../domain/files/servers.js";
 
@@ -141,6 +141,19 @@ function splitName(name) {
 // compact-проп у VideoPlayer/AudioPlayer убирает нативные controls (в
 // mini свои кнопки) и переключает размер/видимость через CSS — сам
 // элемент не пересоздаётся.
+// Обратно из медиа-ссылки в дескриптор вложения — для «скачать»/«сохранить к себе».
+function attachmentOfRef(ref) {
+	return {
+		type: ref.mime?.startsWith("video/") ? "video" : ref.mime?.startsWith("audio/") ? "audio" : ref.mime?.startsWith("image/") ? "image" : "file",
+		manifestDigest: ref.digest,
+		fileKey: btoa(String.fromCharCode(...ref.key)),
+		mime: ref.mime,
+		name: ref.name,
+		size: ref.size,
+		servers: ref.servers ?? undefined,
+	};
+}
+
 export default function MediaOverlay() {
 	const session = mediaSession.value;
 	const currentRef = session ? session.playlist.items[session.position] : null;
@@ -986,6 +999,14 @@ export default function MediaOverlay() {
 						<small>{metaLine}</small>
 					</div>
 					<div class="media-overlay-acts bar rigid">
+						{/* Скачать и «сохранить к себе» — только для вложений сообщений/постов
+						    (у узла «Файлов» свои действия в самом экране). */}
+						{currentRef.sourceKind === "attachment" && (
+							<span class="media-overlay-save bar" onClick={(e) => e.stopPropagation()}>
+								<AttachmentDownloadLink iconOnly attachment={attachmentOfRef(currentRef)} />
+								<AttachmentSaveButton iconOnly attachment={attachmentOfRef(currentRef)} />
+							</span>
+						)}
 						<button
 							type="button"
 							class="media-overlay-btn"

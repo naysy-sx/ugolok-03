@@ -97,7 +97,7 @@ export default function AttachmentSlices({ items, typeFilter, onSelectType, layo
 									))}
 								</div>
 							) : (
-								<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+								<div class="attachment-list stack" style={{ "--gap": "var(--space-2xs)" }}>
 									{filtered.map((i, idx) => (
 										<AttachmentView key={`${i.attachment.manifestDigest}#${idx}`} attachment={i.attachment} onOpen={() => onOpenItem(i)} />
 									))}

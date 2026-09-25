@@ -47,14 +47,26 @@ const LEVEL_LABEL_KEYS = {
 
 const DEFAULT_SENTINEL = "__default__";
 
-// Пять стартовых точек макета «Вид»: терракота, олива, сталь, песок, чернила.
-// hue вне запретных зон (край зоны допустим: 45/65/215). cNeutral пресет не
-// трогает. Остальной круг — слайдер «Настроить». swatch — только кружок.
+// Шестнадцать стартовых точек «Вида»: от тёплых (терракота, янтарь, песок) через зелёно-
+// голубые к холодным и ягодным. Все hue вне запретных зон служебных тонов (край зоны
+// допустим: 45/65/215); подписи — существующие ключи settings.palettePresets.*.
+// cNeutral пресет не трогает. Остальной круг — слайдер «Настроить». swatch — только кружок.
 const PALETTE_PRESETS = [
 	{ id: "terracotta", hue: 45 },
-	{ id: "olive", hue: 115 },
-	{ id: "steel", hue: 215 },
+	{ id: "amber", hue: 55 },
 	{ id: "sand", hue: 65 },
+	{ id: "olive", hue: 115 },
+	{ id: "teal", hue: 172 },
+	{ id: "sky", hue: 196 },
+	{ id: "steel", hue: 215 },
+	{ id: "blue", hue: 260 },
+	{ id: "indigo", hue: 272 },
+	{ id: "violet", hue: 284 },
+	{ id: "lavender", hue: 296 },
+	{ id: "purple", hue: 308 },
+	{ id: "amethyst", hue: 320 },
+	{ id: "magenta", hue: 332 },
+	{ id: "pink", hue: 356 },
 	{ id: "ink", hue: 255, swatch: "oklch(0.28 0.03 255)" },
 ];
 
@@ -87,7 +99,7 @@ function PaletteSection({ customPalette, onChange }) {
 						title={t(`settings.palettePresets.${p.id}`)}
 						onClick={() => onChange({ cNeutral: customPalette.cNeutral, accentHue: p.hue })}
 					>
-						<span style={{ background: p.swatch ?? `oklch(0.58 0.13 ${p.hue})` }} />
+						<span style={{ background: p.swatch ?? `oklch(0.6 0.12 ${p.hue})` }} />
 					</button>
 				))}
 			</div>

@@ -38,6 +38,7 @@ const MAP = {
 	copy: "copy",
 	"corner-back": "arrow-u-up-left",
 	cross: "x",
+	download: "download-simple",
 	"dots-horizontal": "dots-three",
 	"dots-vertical": "dots-three-vertical",
 	"envelope-closed": "envelope",
@@ -109,6 +110,7 @@ const MAP = {
 	repeat: "repeat",
 	restore: "arrow-counter-clockwise",
 	scissors: "scissors",
+	scroll: "scroll",
 	"share-network": "share-network",
 	share: "export",
 	send: "paper-plane-tilt",
@@ -138,6 +140,7 @@ const MAP = {
 	"video-camera": "video-camera",
 	"voice-broadcast": "broadcast",
 	warning: "warning",
+	wave: "hand-waving",
 	waveform: "waveform",
 };
 

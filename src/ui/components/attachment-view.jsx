@@ -15,6 +15,9 @@ import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
 import IconFolder from "../icons/folder.jsx";
+import IconCheck from "../icons/check.jsx";
+import IconDownload from "../icons/download.jsx";
+import { pushToast } from "../signals/toasts.js";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 import { truncateFileName } from "./bubble-attachment-plan.js";
 import { pickIndicator } from "../../domain/media/progress-indicator.js";
@@ -330,7 +333,7 @@ function FileAttachment({ attachment }) {
 // — идемпотентный бутстрап (тот же вызов, что file-picker.jsx) — вложение
 // может открываться, даже если "Файлы"/FilePicker ни разу не открывались за
 // сессию, без него createFileEntry писал бы под cachedOwnerPubkey===null.
-export function AttachmentSaveButton({ attachment, origin, menu = false }) {
+export function AttachmentSaveButton({ attachment, origin, menu = false, iconOnly = false }) {
 	const [status, setStatus] = useState("idle"); // idle | busy | done | error
 	const [error, setError] = useState("");
 
@@ -380,6 +383,22 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 	const saveLabel = menu
 		? t("attachment.saveNamed", { name: truncateFileName(attachmentDisplayName(attachment)) })
 		: t("attachment.saveToStorage");
+
+	// Полноэкранный просмотр: кнопка-иконка, итог — тостом (места для строки статуса нет).
+	useEffect(() => {
+		if (!iconOnly) return;
+		if (status === "done") pushToast({ title: t("attachment.savedToStorage") });
+		if (status === "error" && error) pushToast({ title: error });
+	}, [status]);
+
+	if (iconOnly) {
+		const label = status === "busy" ? t("attachment.saving") : t("attachment.saveToStorage");
+		return (
+			<button type="button" class="media-overlay-btn" onClick={handleSave} disabled={status === "busy" || status === "done"} aria-label={label} title={label}>
+				{status === "done" ? <IconCheck aria-hidden="true" /> : <IconFolder aria-hidden="true" />}
+			</button>
+		);
+	}
 
 	if (status === "done") {
 		return (
@@ -546,7 +565,7 @@ export default function AttachmentView({ attachment, onOpen, origin }) {
 // используется message-bubble.jsx в футере сообщения, ДО кнопки "Удалить".
 // Формат: {{иконка типа}} Скачать {{имя}} ({{размер}}). voiceInline (F-AT-08,
 // ≤32КБ) декодируется прямо из payload, без сети — как AudioAttachment.
-export function AttachmentDownloadLink({ attachment, menu = false }) {
+export function AttachmentDownloadLink({ attachment, menu = false, iconOnly = false }) {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
@@ -570,9 +589,19 @@ export function AttachmentDownloadLink({ attachment, menu = false }) {
 			URL.revokeObjectURL(url);
 		} catch (err) {
 			setError(errorMessage(err));
+			if (iconOnly) pushToast({ title: errorMessage(err) });
 		} finally {
 			setBusy(false);
 		}
+	}
+
+	if (iconOnly) {
+		const iconLabel = busy ? t("attachment.downloading") : t("attachment.download");
+		return (
+			<button type="button" class="media-overlay-btn" onClick={handleDownload} disabled={busy} aria-label={iconLabel} title={iconLabel}>
+				<IconDownload aria-hidden="true" />
+			</button>
+		);
 	}
 
 	return (

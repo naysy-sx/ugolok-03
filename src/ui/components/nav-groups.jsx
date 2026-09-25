@@ -2,7 +2,7 @@ import { useState, useEffect, useId } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { publish, fetchProfiles } from "../signals/transport.js";
 import { messagingActivity } from "../signals/chats.js";
-import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, incomingRequests } from "../signals/contacts.js";
+import { contacts, profiles, ensureProfilesFetched, ownDiscoveryVisible, discoveryProfiles, incomingRequests } from "../signals/contacts.js";
 import { place, openChat, openChannel, openSearch, closeSearch, goTo } from "../signals/place.js";
 import { roomsScreenActive, roomsMinimized } from "../signals/rooms.js";
 import { activeRoomSummary } from "../screens/quick.jsx";
@@ -29,11 +29,12 @@ import IconPerson from "../icons/person.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconActivityLog from "../icons/activity-log.jsx";
 import IconLightning from "../icons/lightning.jsx";
-import IconHeart from "../icons/heart.jsx";
+import IconWave from "../icons/wave.jsx";
 import IconHash from "../icons/hash.jsx";
 import IconGear from "../icons/gear.jsx";
 import IconFolder from "../icons/folder.jsx";
-import { t } from "../signals/i18n.js";
+import { loadDiscoverySettings } from "../../domain/discovery/discovery.js";
+import { t, currentLocale } from "../signals/i18n.js";
 
 // Редизайн интерфейса, этап 10.2 (CONTRACTS.md) — "Люди" здесь это
 // ПЕРЕПИСКИ (listConversations, этап 5) ДОПОЛНЕННЫЕ остальными контактами
@@ -110,12 +111,15 @@ function StreamItem({ avatar, name, onOpen, active, pinned, onTogglePin, pinLabe
 // Пункт главного меню (макет ggQHr.jpg): иконка, подпись, необязательная
 // вторая строка-пояснение, бейдж-счётчик и метка «живого» состояния (открытая
 // комната / включённая видимость в «Знакомствах»). Пустой/нулевой badge не рисуется.
-function DrawerLink({ icon: Icon, label, hint, active, badge = 0, live = false, onClick }) {
+function DrawerLink({ icon: Icon, label, hint, active, badge = 0, count = null, live = false, onClick }) {
 	return (
 		<button type="button" class={"drawer-link" + (active ? " is-active" : "") + (live ? " is-live" : "")} aria-current={active ? "page" : undefined} onClick={onClick}>
 			<Icon class="icon drawer-link__icon" aria-hidden="true" />
 			<span class="drawer-link__text">
-				<span class="drawer-link__label">{label}</span>
+				<span class="drawer-link__label">
+					{label}
+					{count != null && <span class="drawer-link__count">{count}</span>}
+				</span>
 				{hint && <small class="drawer-link__hint">{hint}</small>}
 			</span>
 			{live && <span class="drawer-link__live" aria-hidden="true" />}
@@ -149,6 +153,18 @@ export default function NavGroups({ unreadJournalCount }) {
 		const trimmed = query.trim();
 		if (trimmed) openSearch(trimmed); // I-EMPTY-NOOP: пустой запрос — не сюда вовсе
 	}
+
+	// До какого часа видна моя карточка в «Кто здесь» — для подписи пункта меню.
+	const [ownVisibleUntil, setOwnVisibleUntil] = useState(0);
+	useEffect(() => {
+		if (!ownDiscoveryVisible.value) {
+			setOwnVisibleUntil(0);
+			return;
+		}
+		loadDiscoverySettings(ownerPubkey)
+			.then((s) => setOwnVisibleUntil(s.visible ? s.visibleUntil : 0))
+			.catch(() => {});
+	}, [ownDiscoveryVisible.value, ownerPubkey]);
 
 	const [conversations, setConversations] = useState([]);
 	const [owned, setOwned] = useState([]);
@@ -264,8 +280,14 @@ export default function NavGroups({ unreadJournalCount }) {
 					<p class="drawer-section">{t("shell.sectionServices")}</p>
 					<QuickConnectRow />
 					<DrawerLink
-						icon={IconHeart}
+						icon={IconWave}
 						label={t("shell.discoverHeading")}
+						count={discoveryProfiles.value.length}
+						hint={
+							ownDiscoveryVisible.value && ownVisibleUntil > 0
+								? t("shell.discoverHintVisible", { time: new Date(ownVisibleUntil * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" }) })
+								: t("shell.discoverHintHidden")
+						}
 						active={place.value.kind === "discovery"}
 						live={ownDiscoveryVisible.value}
 						onClick={() => goTo({ kind: "discovery" })}

@@ -1,12 +1,11 @@
 import { useState } from "preact/hooks";
-import AttachmentView, { AttachmentDownloadLink, AttachmentSaveButton } from "./attachment-view.jsx";
+import AttachmentView from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
 import StickerView from "./sticker-view.jsx";
 import { parseStickerKey } from "../../domain/content/sticker.js";
 import { planBubbleAttachments } from "./bubble-attachment-plan.js";
 import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cluster.jsx";
-import ActionsMenu from "./actions-menu.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconCheck from "../icons/check.jsx";
@@ -74,10 +73,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	const statusLabel = statusLabelKey ? t(statusLabelKey) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
 	const plan = planBubbleAttachments(message.attachments);
-	const origin = { kind: originKind, id: message.id };
 	const open = (a) => onOpenAttachment?.(message, a);
-	const attachments = message.attachments ?? [];
-	const hasMenu = attachments.length > 0 || (isOwn && typeof onEdit === "function") || typeof onDeleteForMe === "function";
 
 	if (mode === "editing") {
 		return (
@@ -110,6 +106,23 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 
 	return (
 		<div class={bubbleClass} style={bubbleStyle}>
+			{/* Действия по наведению (на сенсорных экранах — всегда): «Изменить» и «Удалить» —
+			    компактные круглые кнопки в верхнем углу пузыря вместо меню «⋯». Скачать и
+			    «сохранить к себе» вложения — в полноэкранном просмотре (media-overlay). */}
+			{mode !== "confirming-delete" && (typeof onDeleteForMe === "function" || (isOwn && typeof onEdit === "function")) && (
+				<div class="bubble-tools">
+					{isOwn && typeof onEdit === "function" && (
+						<button type="button" class="bubble-tool" onClick={() => setMode("editing")} aria-label={t("message.editButton")} title={t("message.editButton")}>
+							<IconPencil />
+						</button>
+					)}
+					{typeof onDeleteForMe === "function" && (
+						<button type="button" class="bubble-tool bubble-tool--danger" onClick={() => setMode("confirming-delete")} aria-label={t("common.delete")} title={t("common.delete")}>
+							<IconTrash />
+						</button>
+					)}
+				</div>
+			)}
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
 			<BubbleAttachmentCluster plan={plan} onOpen={open} />
 			{message.text && (parseStickerKey(message.text) ? <StickerView text={message.text} /> : <MarkdownView source={message.text} profile="lite" />)}
@@ -126,26 +139,6 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 					</span>
 				)}
 				{message.edited && <small>{t("message.editedLabel")}</small>}
-				{mode !== "confirming-delete" && hasMenu && (
-					<ActionsMenu label={t("attachment.actionsMenuAria")} popClass="menu-pop--bubble">
-						{attachments.map((a, i) => (
-							<AttachmentDownloadLink key={`dl-${i}`} attachment={a} menu />
-						))}
-						{attachments.map((a, i) => (
-							<AttachmentSaveButton key={`sv-${i}`} attachment={a} origin={origin} menu />
-						))}
-						{isOwn && typeof onEdit === "function" && (
-							<button type="button" onClick={() => setMode("editing")}>
-								<IconPencil /> {t("message.editButton")}
-							</button>
-						)}
-						{typeof onDeleteForMe === "function" && (
-							<button type="button" class="danger" onClick={() => setMode("confirming-delete")}>
-								<IconTrash /> {t("common.delete")}
-							</button>
-						)}
-					</ActionsMenu>
-				)}
 				{mode === "confirming-delete" && (
 					<>
 						<button

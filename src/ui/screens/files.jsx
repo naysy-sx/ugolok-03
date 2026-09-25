@@ -71,7 +71,6 @@ import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-
 import IconRestore from "../icons/restore.jsx";
 import IconScissors from "../icons/scissors.jsx";
 import IconEmpty from "../icons/empty.jsx";
-import IconFolders from "../icons/folders.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
@@ -199,6 +198,10 @@ function uploadProgressText(state) {
 // иконку — размер/mime живут в манифесте (content.js), не в самом узле
 // дерева; подгрузка манифеста по каждой строке — из той же серии, что
 // миниатюры, следующим шагом (3.8), не задача этого прохода.
+// Плитки «Файлов» крупнее строк списка: миниатюра 200px на плитке в ~180 CSS-px при
+// плотности экрана 2 выглядела зернистой — для плитки строим кадр покрупнее.
+const TILE_THUMBNAIL_SIZE = 520;
+
 export default function Files() {
 	const ownerPubkey = currentUser.value.id;
 	const [ready, setReady] = useState(false);
@@ -778,12 +781,7 @@ export default function Files() {
 			// sidebarCard.storageMenuItem переименован в "Файлы" (account-card.jsx),
 			// плюс имя пользователя — тот же приём, что "Профиль и аватар"/
 			// "Секретная фраза".
-			title={
-				<>
-					<IconFolders aria-hidden="true" class="icon screen-title__icon" />
-					{path[path.length - 1]?.name || t("nav.files")}
-				</>
-			}
+			title={path[path.length - 1]?.name || t("nav.files")}
 			actions={
 				<>
 					{view === "own" && (
@@ -1035,7 +1033,7 @@ export default function Files() {
 									{entry.kind === "dir" ? (
 										<IconFolder aria-hidden="true" class="icon" />
 									) : (
-										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" />
+										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" maxDimension={TILE_THUMBNAIL_SIZE} />
 									)}
 								</button>
 								{!inTrash && (

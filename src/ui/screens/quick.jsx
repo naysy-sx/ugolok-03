@@ -8,7 +8,8 @@ import IconQuickRoomPeople from "../icons/quick-room-people.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
 import IconSend from "../icons/send.jsx";
-import IconNavPrev from "../icons/nav-prev.jsx";
+import IconExit from "../icons/exit.jsx";
+import IconCopy from "../icons/copy.jsx";
 import IconShare from "../icons/share.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
@@ -514,31 +515,42 @@ export default function Quick({ onExit }) {
 				    подписью над лентой (ниже), а не внутри шапки. */}
 				<header class="quick-room-header">
 					{typeof onExit === "function" && (
-						<button type="button" class="header-back" onClick={onExit} aria-label={t("quick.exitButton")}>
-							<IconNavPrev />
+						<button type="button" class="quick-room-exit" onClick={onExit}>
+							<IconExit class="icon" aria-hidden="true" />
+							<span>{t("quick.exitButton")}</span>
 						</button>
 					)}
 					<div class="quick-room-headtext">
-						<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+						{/* Кнопка «скопировать ссылку» стоит в одной строке с названием: она копирует
+						    приглашение именно в эту комнату, поэтому держится рядом с её именем. */}
+						<div class="quick-room-titlerow">
+							<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+							{inviteLink && (
+								<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")} title={t("quick.room.copyInviteAria")}>
+									<IconShare class="icon" aria-hidden="true" />
+								</button>
+							)}
+						</div>
 						<p class="quick-room-subtitle" aria-label={t("quick.room.participantsTitle", { count: present.length })}>
 							<IconQuickRoomPeople class="icon" aria-hidden="true" /> {present.length}
 						</p>
 					</div>
-					{inviteLink && (
-						<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
-							<IconShare class="icon" aria-hidden="true" />
-						</button>
-					)}
 				</header>
 
 				{inviteLink && (
-					<div class="quick-invite-strip">
-						<code class="quick-invite-code truncate">{inviteLink}</code>
-						{inviteCopyStatus && (
-							<small role="status" class="quick-invite-status">
-								{inviteCopyStatus}
-							</small>
-						)}
+					<div class="quick-invite">
+						<p class="quick-invite__hint">{t("quick.room.inviteHint")}</p>
+						<div class="quick-invite-strip">
+							<code class="quick-invite-code truncate">{inviteLink}</code>
+							<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")} title={t("quick.room.copyInviteAria")}>
+								<IconCopy class="icon" aria-hidden="true" />
+							</button>
+							{inviteCopyStatus && (
+								<small role="status" class="quick-invite-status">
+									{inviteCopyStatus}
+								</small>
+							)}
+						</div>
 					</div>
 				)}
 
