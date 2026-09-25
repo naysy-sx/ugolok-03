@@ -13616,3 +13616,370 @@ body:has(.rooms-overlay:not(.is-minimized)) .top-corner-actions {
 .unlock-conn details[open] > summary {
 	box-shadow: none;
 }
+
+/* ---- 15. Правки по живой проверке (серия 2) ---------------------------- */
+/* Кнопки с иконкой и вторичные не переносят подпись на вторую строку. */
+.btn--ghost,
+button:has(> .icon),
+[type="button"]:has(> .icon) {
+	white-space: nowrap;
+}
+
+/* Корневая шапка: чуть больше воздуха между бургером и заголовком. */
+@media (max-width: 63.99em) {
+	.section-header:not(:has(.header-back)) {
+		padding-inline-start: calc(var(--space-xs) + var(--tap) + var(--space-2xs));
+	}
+}
+/* Экран-колонка (профиль): заголовок встаёт в ту же колонку, что и содержимое. */
+.content-section:has(.profile-page) > .section-header {
+	padding-inline: max(var(--gutter), calc((100cqi - 40rem) / 2));
+}
+@media (max-width: 63.99em) {
+	.content-section:has(.profile-page) > .section-header:not(:has(.header-back)) {
+		padding-inline-start: max(calc(var(--space-xs) + var(--tap) + var(--space-2xs)), calc((100cqi - 40rem) / 2));
+	}
+}
+
+/* Контакты: у списка нет собственных боковых полей. */
+.contacts-primary-section,
+.contacts-main > section {
+	padding: 0;
+}
+
+/* Полоса режима в «Файлах»: воздух сверху и снизу. */
+.mode-bar {
+	margin-block: var(--space-xs);
+}
+.files-shell > .mode-bar:first-child {
+	margin-block-start: var(--space-2xs);
+}
+
+/* Пузырь: действия по наведению вместо меню «⋯». */
+.message-bubble {
+	position: relative;
+}
+.bubble-tools {
+	position: absolute;
+	inset-block-start: -0.625rem;
+	inset-inline-end: -0.375rem;
+	z-index: 2;
+	display: flex;
+	gap: 0.25rem;
+	opacity: 0;
+	translate: 0 2px;
+	pointer-events: none;
+	transition: opacity var(--transition-speed) var(--transition-ease), translate var(--transition-speed) var(--ease);
+}
+.message-bubble:hover > .bubble-tools,
+.bubble-tools:focus-within {
+	opacity: 1;
+	translate: 0 0;
+	pointer-events: auto;
+}
+@media (hover: none) {
+	.bubble-tools {
+		opacity: 1;
+		translate: 0 0;
+		pointer-events: auto;
+	}
+}
+.bubble-tool,
+.bubble-tool:has(> .icon) {
+	display: inline-grid;
+	place-items: center;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	padding: 0;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	color: var(--muted);
+	box-shadow: 0 1px 4px color-mix(in oklch, var(--fg), transparent 82%);
+}
+.bubble-tool .icon {
+	inline-size: 0.9375rem;
+	block-size: 0.9375rem;
+}
+.bubble-tool:hover {
+	background-color: var(--bg);
+	color: var(--fg);
+	transform: none;
+}
+.bubble-tool--danger:hover {
+	color: var(--bad);
+	border-color: color-mix(in oklch, var(--bad), transparent 55%);
+}
+/* Несколько вложений: пузырь не сжимается до размера содержимого. */
+.message-bubble:has(.bubble-media) {
+	min-inline-size: min(85%, 18rem);
+}
+.bubble-media {
+	inline-size: 100%;
+}
+
+/* Загрузка вложения: полоса и проценты. */
+.upload-progress {
+	appearance: none;
+	flex: 1 1 6rem;
+	inline-size: auto;
+	block-size: 0.5rem;
+	border: 0;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	overflow: hidden;
+	accent-color: var(--accent);
+}
+.upload-progress::-webkit-progress-bar {
+	background-color: var(--surface-raised);
+}
+.upload-progress::-webkit-progress-value {
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+	transition: inline-size var(--transition-speed) var(--transition-ease);
+}
+.upload-progress::-moz-progress-bar {
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+}
+.upload-percent {
+	min-inline-size: 2.75rem;
+	text-align: end;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+/* Полноэкранный просмотр: «скачать» и «сохранить к себе» рядом с закрытием. */
+.media-overlay-save {
+	gap: var(--space-2xs);
+}
+
+/* ---- 16. Быстрая связь: доработки ---------------------------------------- */
+/* Кнопка «Подключиться»: контур акцента, при наведении — мягкий тон, а не тёмная заливка. */
+.quick-stage .btn--good,
+.quick-stage .btn--good:hover,
+.quick-stage .btn--good:focus-visible,
+.quick-stage .btn--ghost:hover {
+	background-image: none;
+	color: var(--accent);
+	border-color: var(--accent);
+}
+.quick-stage .btn--good {
+	background-color: transparent;
+}
+.quick-stage .btn--good:hover,
+.quick-stage .btn--good:focus-visible,
+.quick-stage .btn--ghost:hover {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+}
+.quick-stage .btn--good:disabled {
+	color: var(--muted);
+	border-color: var(--hairline);
+}
+/* Блок голоса компактнее. */
+.quick-stage {
+	padding: var(--space-xs) var(--space-s);
+}
+.room-audio-visualizer,
+.room-audio-visualizer.box {
+	padding: 0;
+}
+.room-speaking-indicators,
+.room-speaking-indicators.row {
+	margin-block-start: 0;
+	padding-block-start: 0;
+}
+/* Шапка комнаты: название и «скопировать» — в одной строке, вся шапка прижата вверх. */
+.quick-room-header {
+	align-items: start;
+	grid-template-columns: auto minmax(0, 1fr);
+}
+.quick-room-headtext {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding-block: var(--space-2xs);
+}
+.quick-room-titlerow {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: var(--space-3xs);
+	max-inline-size: 100%;
+}
+.quick-room-titlerow .quick-room-title {
+	line-height: 2rem;
+}
+.quick-room-titlerow .quick-room-link {
+	flex: none;
+	inline-size: 2rem;
+	block-size: 2rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+	color: var(--muted);
+}
+.quick-room-titlerow .quick-room-link:hover {
+	color: var(--accent);
+}
+/* Кнопка отправки — круг с иконкой (перебивает «недописанный пузырь» из блока комнаты). */
+.quick-compose,
+.quick-compose:focus-within {
+	margin: 0;
+	overflow: visible;
+	outline: none;
+	background: none;
+	border: 0;
+}
+.quick-compose button.quick-send[type="submit"] {
+	flex: none;
+	align-self: center;
+	margin: 0;
+	inline-size: 3rem;
+	block-size: 3rem;
+	padding: 0;
+	border-radius: var(--radius-full);
+	display: inline-grid;
+	place-items: center;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.quick-compose button.quick-send[type="submit"]:disabled {
+	background-color: var(--surface-raised);
+	color: var(--muted);
+	opacity: 1;
+}
+.quick-compose button.quick-send .icon {
+	display: block;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+/* Широкий экран: комната и вход занимают ширину под список гостей и чат. */
+@media (min-width: 48em) {
+	.auth-layout:has(.quick-room) {
+		max-inline-size: 76rem;
+	}
+	.auth-layout:has(.quick-entry) {
+		max-inline-size: 48rem;
+	}
+	.auth-layout .quick-room,
+	.quick-room {
+		max-inline-size: none;
+	}
+	.quick-room.is-voice-live {
+		padding-inline: 0;
+	}
+	.rooms-overlay-panel:has(.quick-room) {
+		max-inline-size: 76rem;
+	}
+	.quick-room-header {
+		margin-inline: 0;
+	}
+}
+.quick-room-header {
+	padding-inline-end: var(--gutter);
+}
+.quick-room-header:not(:has(.header-back)) {
+	grid-template-columns: minmax(0, 1fr);
+	padding-inline-start: var(--gutter);
+}
+.quick-room-header:has(.header-back) {
+	grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+}
+.quick-room-headtext {
+	inline-size: 100%;
+}
+/* В окне поверх приложения справа кнопки «свернуть/закрыть» — оставляем им место. */
+.rooms-overlay-panel .quick-room-header {
+	padding-inline-end: 5.5rem;
+}
+.rooms-overlay-panel .quick-room-header:has(.header-back) {
+	grid-template-columns: var(--tap) minmax(0, 1fr);
+}
+
+/* ---- 17. Модальные окна и поля с рамкой на обёртке ------------------------ */
+[role="dialog"] h2 {
+	font-family: var(--font-body);
+	font-size: var(--step-1);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	margin: 0;
+	color: var(--fg);
+}
+[role="dialog"] .row:has(> h2.grow) {
+	flex-wrap: nowrap;
+	align-items: center;
+}
+[role="dialog"] .row:has(> h2.grow) > .icon-btn {
+	flex: none;
+}
+/* Рамка и фокус у обёртки, а не у самого <input> внутри неё. */
+.contact-add-field:focus-within,
+.file-search-field:focus-within,
+.search-field:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent), transparent 82%);
+}
+.contact-add-field input:focus-visible,
+.contact-add-field input:focus,
+.file-search-field input:focus-visible,
+.search-field input:focus-visible {
+	outline: none;
+	border: 0;
+	box-shadow: none;
+}
+
+/* Переключатель темы в строке настроек — подчёркивание, а не рамка выбора срока. */
+.set-row .seg:not(.view-toggle) {
+	border: 0;
+	border-radius: 0;
+	background: none;
+	overflow: visible;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	border: 0;
+	border-inline-start: 0;
+	border-block-end: 2px solid transparent;
+	border-radius: 0;
+	background: none;
+	color: var(--muted);
+	padding: var(--space-xs) 0;
+}
+.set-row .seg:not(.view-toggle) .slice--on {
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+	border-block-end-color: var(--accent);
+	background: none;
+}
+.exceptions > summary {
+	background: none;
+	border: 0;
+	padding-inline: 0;
+}
+
+/* Вложения «списком» (лента канала/чата): не в натуральном размере, а в аккуратных рамках. */
+.attachment-list {
+	align-items: flex-start;
+}
+.attachment-list img,
+.attachment-list video,
+.attachment-list .attachment-image {
+	display: block;
+	inline-size: 100%;
+	max-inline-size: 24rem;
+	max-block-size: 14rem;
+	object-fit: cover;
+	border-radius: var(--radius-md);
+	background-color: var(--surface-raised);
+}
+.attachment-list > * {
+	max-inline-size: 100%;
+}
+.attachment-list > * {
+	max-inline-size: min(100%, 18rem);
+}
+.attachment-list img,
+.attachment-list .attachment-image {
+	max-inline-size: 100%;
+	max-block-size: 12rem;
+}

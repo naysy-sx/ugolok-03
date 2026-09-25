@@ -519,16 +519,20 @@ export default function Quick({ onExit }) {
 						</button>
 					)}
 					<div class="quick-room-headtext">
-						<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+						{/* Кнопка «скопировать ссылку» стоит в одной строке с названием: она копирует
+						    приглашение именно в эту комнату, поэтому держится рядом с её именем. */}
+						<div class="quick-room-titlerow">
+							<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
+							{inviteLink && (
+								<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")} title={t("quick.room.copyInviteAria")}>
+									<IconShare class="icon" aria-hidden="true" />
+								</button>
+							)}
+						</div>
 						<p class="quick-room-subtitle" aria-label={t("quick.room.participantsTitle", { count: present.length })}>
 							<IconQuickRoomPeople class="icon" aria-hidden="true" /> {present.length}
 						</p>
 					</div>
-					{inviteLink && (
-						<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
-							<IconShare class="icon" aria-hidden="true" />
-						</button>
-					)}
 				</header>
 
 				{inviteLink && (

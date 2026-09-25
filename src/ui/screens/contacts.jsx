@@ -551,6 +551,7 @@ export default function Contacts() {
 					</section>
 					)}
 
+					{requestsOnly && (
 					<section ref={requestsRef} class="contacts-requests stack" aria-labelledby="requests-heading" style={{ "--gap": "var(--space-s)" }}>
 						<h2 id="requests-heading">{t("contacts.incomingHeading", { count: incomingRequests.value.length })}</h2>
 						{incomingRequests.value.length === 0 ? (
@@ -586,8 +587,11 @@ export default function Contacts() {
 							</ul>
 						)}
 					</section>
+					)}
 
-					{!requestsOnly && (
+					{/* Входящие, отправленные и отклонённые заявки живут на экране «Заявки»;
+					    «Контакты» показывают только людей и заблокированных. */}
+					{requestsOnly && (
 					<>
 					{/* Пользователь: не диктовал явно, но "Входящие" остаётся всегда
 					    развёрнутым (требует решения) — эти два списка вторичны
@@ -672,7 +676,10 @@ export default function Contacts() {
 							</div>
 						</details>
 					</div>
+					</>
+					)}
 
+					{!requestsOnly && (
 					<div class="requests stack" style={{ "--gap": "var(--space-2xs)" }}>
 						<details class="req">
 							<summary class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
@@ -709,7 +716,6 @@ export default function Contacts() {
 							</div>
 						</details>
 					</div>
-					</>
 					)}
 				</div>
 			</div>

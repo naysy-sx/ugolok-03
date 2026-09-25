@@ -120,10 +120,15 @@ export function neutralHue(accentHue) {
 	return (accentHue + WARM_NEUTRAL_SHIFT * warmWeight(accentHue)) % 360;
 }
 
+// Общий уровень насыщенности акцента вне тёплого окна: 0.085 было запасом «на всех hue
+// сразу», но для большинства оттенков гамма sRGB даёт больше — с 0.085 выбранные цвета
+// выглядели блёклыми. Потолок по-прежнему — 92% реальной границы гаммы для пары (L, hue).
+const GENERAL_ACCENT_CHROMA = 0.115;
+
 function accentChroma(l, hue, base) {
 	const weight = warmWeight(hue);
-	if (weight === 0) return base;
-	const target = base + (WARM_ACCENT_PEAK_CHROMA - base) * weight;
+	const warmTarget = base + (WARM_ACCENT_PEAK_CHROMA - base) * weight;
+	const target = Math.max(warmTarget, GENERAL_ACCENT_CHROMA);
 	const safe = maxGamutChroma(l, hue, target) * 0.92;
 	return Math.max(base, Math.min(target, safe));
 }

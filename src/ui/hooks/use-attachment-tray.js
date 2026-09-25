@@ -50,7 +50,7 @@ export function useAttachmentTray({ maxItems }) {
 	const uploadAll = useCallback(
 		async (privKey, onProgress, options = {}) => {
 			// options.journal = {purpose, target} — куда уходит вложение (журнал загрузок, ТЗ-03).
-			const { signal, journal } = options;
+			const { signal, journal, onBytes } = options;
 			const jobs = core.planUpload(state);
 			const results = [];
 			const failures = [];
@@ -69,6 +69,12 @@ export function useAttachmentTray({ maxItems }) {
 				}
 			}
 
+			// Долевой прогресс по байтам (0..1) — для строки «Загрузка вложения…» в композере.
+			// Шифрование ≈ 40% времени файла, отправка ≈ 55%, манифест — остаток.
+			const totalBytes = uploads.reduce((sum, j) => sum + (j.file?.size ?? 0), 0) || 1;
+			let doneBytes = 0;
+			onBytes?.(0);
+
 			let stopped = false;
 			for (let i = 0; i < jobs.length; i++) {
 				const job = jobs[i];
@@ -83,7 +89,16 @@ export function useAttachmentTray({ maxItems }) {
 						// Новых байтов нет — журнал лишь дополняет «куда отправлено» у уже залитой группы.
 						if (journal?.target) await addTargetToGroupOf(job.manifestDigest, journal.target);
 					} else {
-						descriptor = await uploadMessageAttachmentStreaming(uploadTarget(), job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal });
+						const jobSize = job.file.size || 0;
+						const onProgress = onBytes
+							? (p) => {
+									const within = p.phase === "encrypt" ? 0.4 * (p.chunksDone / (p.chunksTotal || 1)) : p.phase === "upload" ? 0.4 + 0.55 * (p.bytesSent / (p.bytesTotal || 1)) : 0.97;
+									onBytes(Math.min(1, (doneBytes + within * jobSize) / totalBytes));
+								}
+							: undefined;
+						descriptor = await uploadMessageAttachmentStreaming(uploadTarget(), job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal, onProgress });
+						doneBytes += jobSize;
+						onBytes?.(Math.min(1, doneBytes / totalBytes));
 					}
 					if (job.isImage) descriptor.position = job.position;
 					if (job.layout) descriptor.layout = job.layout;

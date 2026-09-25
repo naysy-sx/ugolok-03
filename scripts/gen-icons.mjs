@@ -38,6 +38,7 @@ const MAP = {
 	copy: "copy",
 	"corner-back": "arrow-u-up-left",
 	cross: "x",
+	download: "download-simple",
 	"dots-horizontal": "dots-three",
 	"dots-vertical": "dots-three-vertical",
 	"envelope-closed": "envelope",
