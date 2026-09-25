@@ -14,6 +14,13 @@ export function reduce(peerState, event) {
         };
       }
       if (event.type === "REMOTE_REQUEST") {
+        // I1 (redelivery-safety) и для NONE: после «удалить контакт»/«отклонили»/«отменили»
+        // строка остаётся с resolvedAt — старая заявка того же человека, которую relay
+        // передоставляет при перезапуске, НЕ должна воскрешать «Входящие» и уведомление.
+        // Свежая заявка (createdAt > resolvedAt) проходит как обычно.
+        if (event.createdAt <= (peerState.resolvedAt || 0)) {
+          return { state: peerState, commands: [] };
+        }
         return {
           state: { ...peerState, name: "INCOMING_PENDING", greeting: event.greeting, resolvedAt: peerState.resolvedAt || 0 },
           commands: [

@@ -55,6 +55,7 @@ import { receivePost } from "../../domain/content/post.js";
 import { receiveComment } from "../../domain/content/comments.js";
 import { CHANNEL_REACTION_KIND, receiveReaction } from "../../domain/content/reactions.js";
 import { receiveChannelMessage } from "../../domain/content/channel-chat.js";
+import { isBeforeChatDeletion } from "../../domain/messaging/chat-tombstone.js";
 import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
@@ -680,6 +681,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 						// Welcome тоже несёт 0, если ни разу не пересоздавали.
 						const genTag = rumor.tags.find((t) => t[0] === "gen");
 						const welcomeGeneration = genTag ? Number(genTag[1]) || 0 : 0;
+						// Переписка с этим человеком удалена «навсегда»: Welcome, созданный до удаления
+						// (relay передоставляет всю историю при перезапуске), не принимаем — ни как чат,
+						// ни как «незнакомец хочет написать». Более свежий Welcome (разговор начат
+						// заново) проходит.
+						if (await isBeforeChatDeletion(pubkeyHex, welcomeContactPubkey, rumor.created_at)) continue;
 						// DESIGN.md, "Этап 25", раздел 4 (AC-IB-01) — Welcome от НЕ-контакта не
 						// принимается автоматически: siblings всегда доверены (это я же), уже
 						// известные контакты — ожидаемый разговор, настоящий незнакомец — в inbox,
@@ -702,6 +708,11 @@ async function connect(pubkeyHex, privKey, dbKey) {
 								activityChanged = true;
 							}
 						} else {
+							// Контакт удалён, а переписка осталась: relay передоставляет ТОТ ЖЕ Welcome, по
+							// которому группа уже принята, — это не новый «незнакомец хочет написать».
+							// Настоящий новый запрос (поколение выше принятого или группы нет) проходит.
+							const knownGroupRaw = await db.table("mlsGroups").get([pubkeyHex, bytesToHex(computeGroupId(pubkeyHex, welcomeContactPubkey))]);
+							if (knownGroupRaw && welcomeGeneration <= (fromEncryptedRow(knownGroupRaw, dbKey).generation ?? 0)) continue;
 							await storeInboxRequest(pubkeyHex, dbKey, welcomeContactPubkey, decodeBase64(rumor.content), rumor.created_at, welcomeGeneration);
 							// Этап 47-довесок-3 — найденный пробел: заявка (MLS Welcome) от НЕЗНАКОМЦА
 							// раньше попадала в inbox БЕЗ единого уведомления вовсе (только activityChanged,
@@ -2202,7 +2213,10 @@ export async function syncMirroredHistory(ownerPubkey, mirrorKey, dbKey) {
 			// отдельно от WebSocket-обвязки, см. mirror.test.js).
 			// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
 			// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
-			await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
+			const mirroredRow = buildMirroredMessageRow(ownerPubkey, payload, event.id);
+			// Зеркало собственных сообщений тоже не возвращает удалённую переписку.
+			if (await isBeforeChatDeletion(ownerPubkey, mirroredRow.chatId, event.created_at)) continue;
+			await upsertMessage(mirroredRow, dbKey, "mirror");
 			await receiveLamportTick(ownerPubkey, payload.lamportTs);
 		} catch (e) {
 			console.warn("syncMirroredHistory: не удалось расшифровать зеркалированное сообщение", e);
@@ -2241,7 +2255,10 @@ export async function refreshLiveMirrorSubscription(ownerPubkey, mirrorKey, dbKe
 						const payload = decryptMirrorPayload(event.content, mirrorKey);
 						// Этап 74 — T3.2 (RC-2, CONTRACTS.md "Этап 74"): зеркало авторитетно чинит
 					// senderPubkey испорченных RC-1-строк (upsertMessage, source:"mirror").
-					await upsertMessage(buildMirroredMessageRow(ownerPubkey, payload, event.id), dbKey, "mirror");
+					const mirroredRow = buildMirroredMessageRow(ownerPubkey, payload, event.id);
+			// Зеркало собственных сообщений тоже не возвращает удалённую переписку.
+			if (await isBeforeChatDeletion(ownerPubkey, mirroredRow.chatId, event.created_at)) continue;
+			await upsertMessage(mirroredRow, dbKey, "mirror");
 						await receiveLamportTick(ownerPubkey, payload.lamportTs);
 						activityChanged = true;
 					} catch (e) {

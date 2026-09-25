@@ -614,6 +614,12 @@
 		"showPermissions": "Rechten",
 		"blockAction": "Blokkeren",
 		"removeFromGroupAria": "Verwijderen uit groep {{name}}",
+		"removeDialog": {
+			"title": "Contact “{{name}}” verwijderen?",
+			"body": "Je kunt ook het gesprek met deze persoon verwijderen: het verdwijnt voorgoed uit je chatlijst op dit apparaat en komt na een herstart niet terug. De ander houdt zijn eigen kopie.",
+			"withChat": "Contact en gesprek verwijderen",
+			"contactOnly": "Alleen contact verwijderen"
+		},
 		"addToGroupLabel": "naar groep",
 		"noContactsAtAll": "Je hebt nog geen contacten.",
 		"noContactsInGroups": "Geen enkel contact behoort tot de geselecteerde groepen.",

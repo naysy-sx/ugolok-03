@@ -614,6 +614,12 @@
 		"showPermissions": "İzinler",
 		"blockAction": "Engelle",
 		"removeFromGroupAria": "{{name}} grubundan çıkar",
+		"removeDialog": {
+			"title": "“{{name}}” kişisi silinsin mi?",
+			"body": "Bu kişiyle olan sohbeti de silebilirsin: bu cihazdaki sohbet listesinden kalıcı olarak kaybolur ve yeniden başlatınca geri gelmez. Karşı tarafta sohbet kalır.",
+			"withChat": "Kişiyi ve sohbeti sil",
+			"contactOnly": "Yalnızca kişiyi sil"
+		},
 		"addToGroupLabel": "gruba",
 		"noContactsAtAll": "Henüz hiç kişiniz yok.",
 		"noContactsInGroups": "Seçili gruplara ait hiçbir kişi yok.",

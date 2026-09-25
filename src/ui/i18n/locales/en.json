@@ -614,6 +614,12 @@
 		"showPermissions": "Permissions",
 		"blockAction": "Block",
 		"removeFromGroupAria": "Remove from group {{name}}",
+		"removeDialog": {
+			"title": "Remove contact “{{name}}”?",
+			"body": "You can also delete your conversation with this person: it disappears from your chat list on this device for good and will not come back after a restart. The other person keeps their copy.",
+			"withChat": "Remove contact and conversation",
+			"contactOnly": "Remove contact only"
+		},
 		"addToGroupLabel": "to group",
 		"noContactsAtAll": "You don't have any contacts yet.",
 		"noContactsInGroups": "No contact belongs to the selected groups.",

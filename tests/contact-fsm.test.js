@@ -316,3 +316,31 @@ test("адверсарно: reduce не мутирует замороженны�
 		assert.doesNotThrow(() => reduce(s, event));
 	}
 });
+
+// --- Регресс: «удалённый контакт воскресает при перезапуске» ---
+test("I1 в NONE: после удаления контакта старая (историческая) заявка того же человека игнорируется", () => {
+	const contact = { name: "CONTACT", peerPubkey: BOB, resolvedAt: 1000, greeting: null };
+	const removed = reduce(contact, { type: "USER_REMOVE_CONTACT", peer: BOB }).state;
+	assert.equal(removed.name, "NONE");
+	assert.ok(removed.resolvedAt > 0);
+	// relay передоставил заявку, отправленную ДО удаления
+	const r = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "привет", createdAt: 900 });
+	assert.equal(r.state.name, "NONE");
+	assert.deepEqual(r.commands, []);
+	// ровно в момент удаления — тоже старая
+	const same = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "", createdAt: removed.resolvedAt });
+	assert.equal(same.state.name, "NONE");
+	assert.deepEqual(same.commands, []);
+});
+
+test("I1 в NONE: СВЕЖАЯ заявка после удаления проходит (человек имеет право постучаться снова)", () => {
+	const removed = { name: "NONE", peerPubkey: BOB, resolvedAt: 1000, greeting: null };
+	const r = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "это снова я", createdAt: 1001 });
+	assert.equal(r.state.name, "INCOMING_PENDING");
+	assert.ok(r.commands.some((c) => c.type === "EMIT"));
+});
+
+test("NONE без истории (resolvedAt = 0): первая заявка проходит как раньше", () => {
+	const r = reduce({ name: "NONE", peerPubkey: BOB, resolvedAt: 0, greeting: null }, { type: "REMOTE_REQUEST", peer: BOB, greeting: "", createdAt: 5 });
+	assert.equal(r.state.name, "INCOMING_PENDING");
+});

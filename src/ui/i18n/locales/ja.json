@@ -614,6 +614,12 @@
 		"showPermissions": "権限",
 		"blockAction": "ブロック",
 		"removeFromGroupAria": "グループ {{name}} から削除",
+		"removeDialog": {
+			"title": "連絡先「{{name}}」を削除しますか？",
+			"body": "この人とのやり取りも削除できます。このデバイスのチャット一覧から完全に消え、再起動しても戻りません。相手側にはやり取りが残ります。",
+			"withChat": "連絡先とやり取りを削除",
+			"contactOnly": "連絡先だけ削除"
+		},
 		"addToGroupLabel": "グループへ",
 		"noContactsAtAll": "まだ連絡先がありません。",
 		"noContactsInGroups": "選択したグループに属する連絡先はありません。",
