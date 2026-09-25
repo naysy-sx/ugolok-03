@@ -12662,9 +12662,6 @@ nav.tabs.reel .tab {
 }
 
 /* ---- 11. Файлы (макеты lIDaE.jpg, Cv8vL.jpg, qfVuy.jpg) ---------------- */
-.screen-title__icon {
-	display: none;
-}
 /* Действия «Файлов» на узком экране — голые иконки акцентом, как «⋯» на макете. */
 @container (width < 30rem) {
 	.header-actions button:has(> .btn-label) {
@@ -13865,9 +13862,6 @@ button:has(> .icon),
 	.quick-room {
 		max-inline-size: none;
 	}
-	.quick-room.is-voice-live {
-		padding-inline: 0;
-	}
 	.rooms-overlay-panel:has(.quick-room) {
 		max-inline-size: 76rem;
 	}
@@ -13982,4 +13976,354 @@ button:has(> .icon),
 .attachment-list .attachment-image {
 	max-inline-size: 100%;
 	max-block-size: 12rem;
+}
+
+/* ---- 18. Серия правок 3 -------------------------------------------------- */
+/* Журнал: фильтр не вылезает за правый край полосы. */
+.filter-row {
+	padding-inline-end: var(--gutter);
+}
+
+/* Заголовок экрана: иконка пункта меню слева, подпись чуть приподнята к линии бургера. */
+.screen-title__text {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+.screen-title__icon {
+	flex: none;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	color: var(--fg);
+}
+.screen-title__label {
+	position: relative;
+	top: -3px;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* На экране с «назад» иконки нет — подпись не поднимаем. */
+.section-header:has(.header-back) .screen-title__label {
+	top: 0;
+}
+
+/* Тема: подпись крупно и жирно, справа от неё — группа кнопок-переключателей. */
+.set-row:has(.seg) {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-xs);
+	min-block-size: 0;
+	border-block-end: var(--border-width) solid var(--hairline);
+	padding-block: var(--space-s);
+}
+.set-row:has(.seg) > .set-row__text {
+	flex: none;
+	font-size: var(--step-1);
+	font-weight: 600;
+	color: var(--fg);
+}
+.set-row .seg:not(.view-toggle) {
+	display: inline-flex;
+	inline-size: auto;
+	align-self: flex-start;
+	gap: 0.25rem;
+	padding: 0.25rem;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	background-color: var(--surface);
+	overflow: visible;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-block-size: 2.25rem;
+	padding: 0 var(--space-m);
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--fg);
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	line-height: 1;
+}
+.set-row .seg:not(.view-toggle) .slice--on {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: var(--weight-medium);
+}
+@container screen (width >= 40em) {
+	.set-row:has(.seg) {
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-start;
+		gap: var(--space-l);
+	}
+	.set-row .seg:not(.view-toggle) {
+		align-self: center;
+	}
+}
+/* Кнопки-переключатели: текст по центру по вертикали. */
+.seg .slice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
+/* Подсказки в панелях не ограничены шириной прозы. */
+.panel p,
+.panel__hint {
+	max-inline-size: none;
+}
+
+/* Меню: точка статуса у аватара видна целиком. */
+.drawer-me .account-portrait {
+	overflow: visible;
+}
+.drawer-me .account-portrait .account-avatar {
+	border-radius: var(--radius-full);
+}
+.account-dot {
+	inset-block-end: 0;
+	inset-inline-end: 0;
+	inset-block-start: auto;
+	inline-size: 0.75rem;
+	block-size: 0.75rem;
+	box-shadow: 0 0 0 2px var(--bg);
+}
+.drawer-link__count {
+	margin-inline-start: 0.4rem;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--weight-normal);
+}
+
+/* Быстрая связь: название не сжимается до буквы, «Выйти» — подписанная кнопка. */
+.quick-room-titlerow {
+	inline-size: 100%;
+	min-inline-size: 0;
+}
+.quick-room-titlerow .quick-room-title,
+.quick-room-title.truncate {
+	display: block;
+	flex: 0 1 auto;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	-webkit-line-clamp: unset;
+	-webkit-box-orient: unset;
+}
+.quick-room-exit,
+.quick-room-exit:has(> .icon) {
+	grid-area: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 2.5rem;
+	padding: 0 var(--space-s);
+	margin-block-start: var(--space-2xs);
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	font-weight: var(--weight-medium);
+	font-size: var(--step-0);
+}
+.quick-room-exit:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 94%);
+	color: var(--fg);
+}
+.quick-room-exit .icon {
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+}
+.quick-room-header:has(.quick-room-exit) {
+	grid-template-columns: auto minmax(0, 1fr);
+	padding-inline-start: var(--gutter);
+}
+.quick-participant {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+.quick-participant-icon {
+	display: block;
+	flex: none;
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+}
+.quick-participant-name {
+	line-height: 1.25;
+}
+/* Ссылка-приглашение: пояснение, код и кнопка «скопировать». */
+.quick-invite {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.quick-invite__hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+	max-inline-size: none;
+}
+.quick-invite-strip .icon-btn {
+	flex: none;
+	color: var(--muted);
+}
+.quick-invite-strip .icon-btn:hover {
+	color: var(--accent);
+}
+
+/* Создание канала: поля с иконками, крупное описание, выбор аватара, воздух внизу. */
+.channel-form {
+	padding-block-end: var(--space-l);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+}
+.channel-form > h2 {
+	font-family: var(--font-body);
+	font-size: var(--step-1);
+	font-weight: 600;
+	margin: 0;
+}
+.field-icon {
+	position: relative;
+	display: block;
+}
+.field-icon__ico {
+	position: absolute;
+	inset-inline-start: var(--space-s);
+	inset-block-start: 50%;
+	translate: 0 -50%;
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+	color: var(--muted);
+	pointer-events: none;
+}
+.field-icon--area .field-icon__ico {
+	inset-block-start: var(--space-s);
+	translate: none;
+}
+.field-icon input,
+.field-icon textarea {
+	padding-inline-start: 2.75rem;
+}
+.field-icon:focus-within .field-icon__ico {
+	color: var(--accent);
+}
+.avatar-pick__title {
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+}
+.avatar-pick {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	margin: 0;
+	cursor: pointer;
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+}
+.avatar-pick__circle {
+	flex: none;
+	display: grid;
+	place-items: center;
+	inline-size: 4.5rem;
+	block-size: 4.5rem;
+	overflow: hidden;
+	border: 2px dashed color-mix(in oklch, var(--accent), transparent 55%);
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	color: var(--accent);
+	transition: border-color var(--transition-speed) var(--transition-ease), background-color var(--transition-speed) var(--transition-ease);
+}
+.avatar-pick__circle .icon {
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+}
+.avatar-pick__circle img {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}
+.avatar-pick:hover .avatar-pick__circle {
+	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 92%);
+}
+.avatar-pick:has(+ input:focus-visible) .avatar-pick__circle {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.screen-title__icon {
+	position: relative;
+	top: -2px;
+}
+.section-header:has(.header-back) .screen-title__icon {
+	top: 0;
+}
+.set-row .seg:not(.view-toggle) .slice.slice--on,
+.set-row .seg:not(.view-toggle) .slice + .slice.slice--on {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: var(--weight-medium);
+}
+/* Телефон: группа на всю ширину, три равные кнопки. */
+.set-row .seg:not(.view-toggle) {
+	display: flex;
+	align-self: stretch;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	flex: 1 1 0;
+	padding-inline: var(--space-2xs);
+	white-space: nowrap;
+}
+@container screen (width >= 40em) {
+	.set-row .seg:not(.view-toggle) {
+		display: inline-flex;
+		align-self: center;
+	}
+	.set-row .seg:not(.view-toggle) .slice,
+	.set-row .seg:not(.view-toggle) .slice + .slice {
+		flex: 0 0 auto;
+		padding-inline: var(--space-m);
+	}
+}
+/* Поля создания канала: высота по rows, а не по содержимому. */
+.field-icon textarea {
+	field-sizing: fixed;
+	resize: vertical;
+	min-block-size: 6rem;
+}
+.field-icon--area:has(#description, textarea[rows="6"]) textarea {
+	min-block-size: 10rem;
+}
+.channel-form .avatar-pick {
+	font-size: var(--step-0);
+	color: var(--fg);
+}
+/* Кнопка-крестик в заголовке панели (например «Знакомства»): тихая иконка, а не залитый квадрат. */
+.panel .bar > button.rigid:has(> svg:only-child) {
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	min-inline-size: 0;
+	padding: 0;
+	display: inline-grid;
+	place-items: center;
+	background: none;
+	color: var(--fg);
+	border: 0;
+	border-radius: var(--radius-full);
+}
+.panel .bar > button.rigid:has(> svg:only-child):hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
 }

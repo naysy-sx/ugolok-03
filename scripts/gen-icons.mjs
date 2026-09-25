@@ -110,6 +110,7 @@ const MAP = {
 	repeat: "repeat",
 	restore: "arrow-counter-clockwise",
 	scissors: "scissors",
+	scroll: "scroll",
 	"share-network": "share-network",
 	share: "export",
 	send: "paper-plane-tilt",
@@ -139,6 +140,7 @@ const MAP = {
 	"video-camera": "video-camera",
 	"voice-broadcast": "broadcast",
 	warning: "warning",
+	wave: "hand-waving",
 	waveform: "waveform",
 };
 

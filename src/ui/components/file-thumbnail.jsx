@@ -51,8 +51,10 @@ async function videoFrameThumbnail(digest, manifest, fileKey) {
 
 // resolveKey — как получить ключ файла (по умолчанию — свой файл; для доли — ключ из гранта).
 // onManifest — что сделать с манифестом (по умолчанию — дозалить mime узлу «Файлов»).
-export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb", resolveKey, onManifest }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
+export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb", resolveKey, onManifest, maxDimension }) {
+	// Крупная миниатюра (плитка) — свой ключ кэша: мелкая и крупная версии не делят слот.
+	const cachePrefix = maxDimension ? `${THUMB_CACHE_PREFIX}${maxDimension}:` : THUMB_CACHE_PREFIX;
+	const [url, setUrl] = useState(() => getMemoryCachedUrl(cachePrefix + entry.blob) ?? null);
 	const [failed, setFailed] = useState(false);
 	const elRef = useRef(null);
 
@@ -81,7 +83,7 @@ export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row
 					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
 					if (isVideo) return videoFrameThumbnail(entry.blob, manifest, fileKey);
 					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: uploadTarget() });
-					return createThumbnailBlob(bytes, manifest.mime);
+					return maxDimension ? createThumbnailBlob(bytes, manifest.mime, maxDimension) : createThumbnailBlob(bytes, manifest.mime);
 				});
 				handle.promise
 					.then((thumbBytes) => {
@@ -90,7 +92,7 @@ export default function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row
 							setFailed(true);
 							return;
 						}
-						setUrl(putMemoryCachedAttachment(THUMB_CACHE_PREFIX + entry.blob, thumbBytes, "image/jpeg"));
+						setUrl(putMemoryCachedAttachment(cachePrefix + entry.blob, thumbBytes, "image/jpeg"));
 					})
 					.catch(() => {
 						if (!cancelled) setFailed(true);
