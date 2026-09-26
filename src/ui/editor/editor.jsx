@@ -11,7 +11,7 @@ import { editorKeymap, baseKeymapPlugin } from "./keymap.js";
 import PostEditorToolbar from "./toolbar.jsx";
 import { t } from "../signals/i18n.js";
 
-export default function PostEditor({ initialSource, onChange }) {
+export default function PostEditor({ initialSource, onChange, heading }) {
 	const hostRef = useRef(null);
 	const viewRef = useRef(null);
 	const [, forceUpdate] = useState(0);
@@ -41,7 +41,7 @@ export default function PostEditor({ initialSource, onChange }) {
 
 	return (
 		<div class="post-editor-wrap">
-			<PostEditorToolbar view={viewRef.current} />
+			<PostEditorToolbar view={viewRef.current} heading={heading} />
 			<div class="post-editor" ref={hostRef} />
 			<p class="post-editor-hint">{t("postEditor.syntaxHint")}</p>
 		</div>

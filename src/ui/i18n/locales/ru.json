@@ -535,7 +535,9 @@
 			"publishingButton": "Публикация…",
 			"publishButton": "Опубликовать",
 			"tooLongError": "Слишком длинный текст (лимит — {{max}} символов)",
-			"titleLabel": "Заголовок (необязательно)"
+			"titleLabel": "Заголовок (необязательно)",
+			"newPostHeading": "Новая запись",
+			"editPostHeading": "Редактирование записи"
 		},
 		"commentComposer": {
 			"ariaLabel": "Новый комментарий",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Разделы канала",
 		"tabs": {
 			"posts": "Посты",
-			"chat": "Чат",
+			"chat": "Общий чат канала",
 			"moderation": "Модерация",
 			"editChannelWithName": "Редактировать канал «{{name}}»",
 			"settings": "Настройки"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Добавить всё же",
 		"blockedSummary": "Заблокированные",
 		"unblockButton": "Разблокировать",
-		"noBlocked": "Нет заблокированных."
+		"noBlocked": "Нет заблокированных.",
+		"card": {
+			"aria": "Карточка контакта {{name}}",
+			"openAria": "Открыть карточку контакта {{name}}",
+			"lastSeen": "Был(а) в сети: {{when}}",
+			"openChat": "Открыть чат",
+			"about": "О себе",
+			"noAbout": "Человек пока ничего не написал о себе.",
+			"details": "Сведения",
+			"contactSince": "В контактах с",
+			"profileUpdated": "Профиль обновлён",
+			"key": "Ключ"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Вернуться в список чатов",
 			"toLabel": "Кому",
 			"attachmentsLabel": "Вложения",
-			"composeInvalidRecipient": "Выберите получателя из списка контактов"
+			"composeInvalidRecipient": "Выберите получателя из списка контактов",
+			"deleteAria": "Удалить переписку с {{name}}",
+			"deleteDialog": {
+				"title": "Удалить переписку с {{name}}?",
+				"body": "Переписка исчезнет с этого устройства навсегда. Собеседник ничего не узнает, и у него она останется. Если вы или он напишете снова, чат появится в списке заново.",
+				"confirm": "Удалить переписку"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Очистить переписку",
@@ -757,7 +777,9 @@
 			"repeatOff": "Повтор: выключен",
 			"repeatAll": "Повтор: весь список",
 			"repeatOne": "Повтор: текущий",
-			"autoplay": "Автовоспроизведение"
+			"autoplay": "Автовоспроизведение",
+			"zoomIn": "Увеличить",
+			"zoomOut": "Уменьшить"
 		},
 		"classNames": {
 			"audio": "аудио",

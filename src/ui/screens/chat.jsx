@@ -11,13 +11,15 @@ import {
 	refreshLiveProfileSubscription,
 	nextLamportTick,
 } from "../signals/transport.js";
-import { place, openChat } from "../signals/place.js";
+import { place, openChat, goTo, getChatBackTo } from "../signals/place.js";
 import { contacts, profiles, refreshAll, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconSend from "../icons/send.jsx";
 import IconEraser from "../icons/eraser.jsx";
 import IconPencil from "../icons/pencil.jsx";
+import IconTrash from "../icons/trash.jsx";
+import DeleteChatDialog from "../components/delete-chat-dialog.jsx";
 import IconArrowLeft from "../icons/arrow-left.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
@@ -28,6 +30,7 @@ import {
 	deleteChatMessageAction,
 	deleteMessageForMeAction,
 	clearChatHistoryAction,
+	deleteChatForeverAction,
 	editChatMessageAction,
 	markChatReadAction,
 	saveChatDraftAction,
@@ -89,6 +92,8 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 	const [listError, setListError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
+	// Диалог «Удалить переписку» — {pubkey, name} или null.
+	const [deleteTarget, setDeleteTarget] = useState(null);
 
 	// Находка 2 (CONTRACTS.md, этап 27): messagingActivity — диспетчер transport.js
 	// работает вне React re-render, этот сигнал сообщает "что-то изменилось".
@@ -163,6 +168,17 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 	function handleAccept(senderPubkey) {
 		return runAction(async () => {
 			await acceptInboxRequestAction(ownerPubkey, privKey, dbKey, senderPubkey, refreshGroupMessageSubscription, publish);
+		});
+	}
+
+	// Переписка исчезает из списка на этом устройстве насовсем (надгробие, см.
+	// chat-delete.js), даже если контакт уже удалён или аккаунт собеседника мёртв.
+	function handleDeleteChat() {
+		const { pubkey } = deleteTarget;
+		setDeleteTarget(null);
+		return runAction(async () => {
+			await deleteChatForeverAction(ownerPubkey, privKey, dbKey, pubkey, publish, refreshGroupMessageSubscription);
+			setChatPartners((prev) => prev.filter((pk) => pk !== pubkey));
 		});
 	}
 
@@ -256,6 +272,16 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 											</span>
 										</button>
 										<FavStar kind="person" id={pubkey} name={name} />
+										<button
+											type="button"
+											class="chat-list__delete"
+											disabled={busy}
+											onClick={() => setDeleteTarget({ pubkey, name })}
+											aria-label={t("chat.list.deleteAria", { name })}
+											title={t("chat.list.deleteAria", { name })}
+										>
+											<IconTrash />
+										</button>
 									</li>
 								);
 							})}
@@ -263,6 +289,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 				)}
 			</section>
 			</div>
+			{deleteTarget && <DeleteChatDialog name={deleteTarget.name} busy={busy} onCancel={() => setDeleteTarget(null)} onConfirm={handleDeleteChat} />}
 		</Screen>
 	);
 }
@@ -712,9 +739,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		}
 	}
 
+	// «Назад» ведёт туда, откуда пришли: из «Контактов» — в контакты, иначе в список чатов.
+	const backTo = getChatBackTo();
+	const chatBreadcrumb = backTo
+		? { label: t("nav.contacts"), onBack: () => goTo(backTo) }
+		: { label: t("shell.navChats"), onBack: () => openChat(null) };
+
 	return (
 		<Screen
-			breadcrumb={{ label: t("shell.navChats"), onBack: () => openChat(null) }}
+			breadcrumb={chatBreadcrumb}
 			lead={<AccountAvatar avatar={profile?.picture} login={displayName} />}
 			title={displayName}
 			subtitle={(() => {

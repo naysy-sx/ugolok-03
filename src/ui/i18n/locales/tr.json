@@ -535,7 +535,9 @@
 			"publishingButton": "Yayınlanıyor…",
 			"publishButton": "Yayınla",
 			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Yeni gönderi",
+			"editPostHeading": "Gönderiyi düzenle"
 		},
 		"commentComposer": {
 			"ariaLabel": "Yeni yorum",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Kanal bölümleri",
 		"tabs": {
 			"posts": "Gönderiler",
-			"chat": "Sohbet",
+			"chat": "Kanal sohbeti",
 			"moderation": "Moderasyon",
 			"editChannelWithName": "«{{name}}» kanalını düzenle",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Yine de ekle",
 		"blockedSummary": "Engellenenler",
 		"unblockButton": "Engeli kaldır",
-		"noBlocked": "Engellenen kişi yok."
+		"noBlocked": "Engellenen kişi yok.",
+		"card": {
+			"aria": "Kişi kartı: {{name}}",
+			"openAria": "{{name}} kişi kartını aç",
+			"lastSeen": "Son görülme: {{when}}",
+			"openChat": "Sohbeti aç",
+			"about": "Hakkında",
+			"noAbout": "Bu kişi henüz kendisi hakkında bir şey yazmadı.",
+			"details": "Ayrıntılar",
+			"contactSince": "Kişilerde şu tarihten beri",
+			"profileUpdated": "Profil güncellendi",
+			"key": "Anahtar"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Sohbet listesine dön",
 			"toLabel": "Kime",
 			"attachmentsLabel": "Ekler",
-			"composeInvalidRecipient": "Kişilerinizden bir alıcı seçin"
+			"composeInvalidRecipient": "Kişilerinizden bir alıcı seçin",
+			"deleteAria": "{{name}} ile sohbeti sil",
+			"deleteDialog": {
+				"title": "{{name}} ile sohbet silinsin mi?",
+				"body": "Sohbet bu cihazdan kalıcı olarak silinecek. Karşı taraf bilgilendirilmez ve kendi kopyası kalır. İkinizden biri tekrar yazarsa sohbet listede yeniden görünür.",
+				"confirm": "Sohbeti sil"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Sohbeti temizle",
@@ -757,7 +777,9 @@
 			"repeatOff": "Tekrar: kapalı",
 			"repeatAll": "Tekrar: tümü",
 			"repeatOne": "Tekrar: bir",
-			"autoplay": "Otomatik oynatma"
+			"autoplay": "Otomatik oynatma",
+			"zoomIn": "Yakınlaştır",
+			"zoomOut": "Uzaklaştır"
 		},
 		"classNames": {
 			"audio": "ses",

@@ -39,6 +39,7 @@ export function commentAuthorInfo(pubkey) {
 
 export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPublished, onCancel }) {
 	const [text, setText] = useState("");
+	const [title, setTitle] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
@@ -62,7 +63,7 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 		setError("");
 		try {
 			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: channelId } }) : [];
-			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments });
+			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments, title: title.trim() || null });
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
 		} catch (err) {
@@ -101,10 +102,15 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 					{error}
 				</p>
 			)}
+			{/* Заголовок виден сразу, как и при правке записи, — а не появляется только потом. */}
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<label for="new-post-title">{t("channel.composer.titleLabel")}</label>
+				<input id="new-post-title" type="text" value={title} onInput={(e) => setTitle(e.currentTarget.value)} />
+			</div>
 			<label class="visually-hidden" for="post-text">
 				{t("channel.composer.postTextLabel")}
 			</label>
-			<PostEditor initialSource={text} onChange={setText} />
+			<PostEditor initialSource={text} onChange={setText} heading={t("channel.composer.newPostHeading")} />
 			{(plainTooLong || sourceTooLong) && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
@@ -204,7 +210,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 			<label class="visually-hidden" for="edit-post-text">
 				{t("channel.composer.postTextLabel")}
 			</label>
-			<PostEditor initialSource={post.text || ""} onChange={setText} />
+			<PostEditor initialSource={post.text || ""} onChange={setText} heading={t("channel.composer.editPostHeading")} />
 			{(plainTooLong || sourceTooLong) && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}

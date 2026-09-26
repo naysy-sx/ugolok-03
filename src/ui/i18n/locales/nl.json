@@ -535,7 +535,9 @@
 			"publishingButton": "Publiceren…",
 			"publishButton": "Publiceren",
 			"tooLongError": "Tekst te lang (limiet: {{max}} tekens)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nieuw bericht",
+			"editPostHeading": "Bericht bewerken"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nieuwe reactie",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Kanaalonderdelen",
 		"tabs": {
 			"posts": "Berichten",
-			"chat": "Chat",
+			"chat": "Kanaalchat",
 			"moderation": "Moderatie",
 			"editChannelWithName": "Kanaal ‘{{name}}’ bewerken",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Toch toevoegen",
 		"blockedSummary": "Geblokkeerd",
 		"unblockButton": "Deblokkeren",
-		"noBlocked": "Geen geblokkeerde contacten."
+		"noBlocked": "Geen geblokkeerde contacten.",
+		"card": {
+			"aria": "Contactkaart: {{name}}",
+			"openAria": "Contactkaart van {{name}} openen",
+			"lastSeen": "Laatst online: {{when}}",
+			"openChat": "Chat openen",
+			"about": "Over",
+			"noAbout": "Deze persoon heeft nog niets over zichzelf geschreven.",
+			"details": "Details",
+			"contactSince": "In contacten sinds",
+			"profileUpdated": "Profiel bijgewerkt",
+			"key": "Sleutel"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Terug naar chatlijst",
 			"toLabel": "Aan",
 			"attachmentsLabel": "Bijlagen",
-			"composeInvalidRecipient": "Kies een ontvanger uit je contacten"
+			"composeInvalidRecipient": "Kies een ontvanger uit je contacten",
+			"deleteAria": "Gesprek met {{name}} verwijderen",
+			"deleteDialog": {
+				"title": "Gesprek met {{name}} verwijderen?",
+				"body": "Het gesprek wordt definitief van dit apparaat verwijderd. De ander krijgt geen melding en houdt zijn eigen kopie. Als een van jullie opnieuw schrijft, verschijnt de chat weer in de lijst.",
+				"confirm": "Gesprek verwijderen"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Gesprek wissen",
@@ -757,7 +777,9 @@
 			"repeatOff": "Herhalen: uit",
 			"repeatAll": "Herhalen: alles",
 			"repeatOne": "Herhalen: één",
-			"autoplay": "Automatisch afspelen"
+			"autoplay": "Automatisch afspelen",
+			"zoomIn": "Inzoomen",
+			"zoomOut": "Uitzoomen"
 		},
 		"classNames": {
 			"audio": "audio",

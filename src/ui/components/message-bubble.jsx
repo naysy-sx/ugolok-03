@@ -1,4 +1,5 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
+import { signal } from "@preact/signals";
 import AttachmentView from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
@@ -46,9 +47,34 @@ function formatTimestamp(sentAt) {
 	return new Date(sentAt * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
+// На сенсорных экранах (hover: none) наведения нет, а кнопки «Изменить»/«Удалить» всё время
+// на виду загромождали пузыри. Теперь их показывает тап по тексту или пустому месту пузыря
+// (не по вложению, ссылке или кнопке — те делают своё). Раскрыт может быть один пузырь:
+// тап по другому или мимо закрывает предыдущий.
+const toolsOpenId = signal(null);
+const TAP_IGNORE = "a, button, input, textarea, video, audio, img, summary, .bubble-media, .bubble-chips, .bubble-tools";
+
 export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message", pendingAcceptance = false, deliveredUpTo = 0, readUpTo = 0 }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
+	const toolsOpen = toolsOpenId.value === message.msgId;
+
+	useEffect(() => {
+		if (!toolsOpen) return;
+		// Тап мимо пузыря закрывает кнопки; тап по самому пузырю разбирает handleBubbleTap.
+		function onOutside(e) {
+			if (!e.target.closest?.(".message-bubble")) toolsOpenId.value = null;
+		}
+		document.addEventListener("pointerdown", onOutside);
+		return () => document.removeEventListener("pointerdown", onOutside);
+	}, [toolsOpen]);
+
+	function handleBubbleTap(e) {
+		if (!window.matchMedia?.("(hover: none)").matches) return; // с мышью работает наведение
+		if (e.target.closest(TAP_IGNORE)) return;
+		if (window.getSelection?.()?.toString()) return; // человек выделяет текст — не мешаем
+		toolsOpenId.value = toolsOpen ? null : message.msgId;
+	}
 
 	const bubbleClass = `message-bubble msg stack box ${isOwn ? "message-bubble-own msg--out self-end" : "message-bubble-other msg--in self-start"}`;
 	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" };
@@ -105,8 +131,8 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	}
 
 	return (
-		<div class={bubbleClass} style={bubbleStyle}>
-			{/* Действия по наведению (на сенсорных экранах — всегда): «Изменить» и «Удалить» —
+		<div class={bubbleClass + (toolsOpen ? " is-tools-open" : "")} style={bubbleStyle} onClick={handleBubbleTap}>
+			{/* Действия по наведению (на сенсорных — по тапу на текст пузыря): «Изменить» и «Удалить» —
 			    компактные круглые кнопки в верхнем углу пузыря вместо меню «⋯». Скачать и
 			    «сохранить к себе» вложения — в полноэкранном просмотре (media-overlay). */}
 			{mode !== "confirming-delete" && (typeof onDeleteForMe === "function" || (isOwn && typeof onEdit === "function")) && (

@@ -535,7 +535,9 @@
 			"publishingButton": "Publicando…",
 			"publishButton": "Publicar",
 			"tooLongError": "Texto demasiado largo (límite: {{max}} caracteres)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nueva publicación",
+			"editPostHeading": "Editar publicación"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nuevo comentario",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Secciones del canal",
 		"tabs": {
 			"posts": "Publicaciones",
-			"chat": "Chat",
+			"chat": "Chat del canal",
 			"moderation": "Moderación",
 			"editChannelWithName": "Editar canal «{{name}}»",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Añadir de todos modos",
 		"blockedSummary": "Bloqueados",
 		"unblockButton": "Desbloquear",
-		"noBlocked": "No hay contactos bloqueados."
+		"noBlocked": "No hay contactos bloqueados.",
+		"card": {
+			"aria": "Ficha de contacto: {{name}}",
+			"openAria": "Abrir la ficha de contacto de {{name}}",
+			"lastSeen": "Última conexión: {{when}}",
+			"openChat": "Abrir chat",
+			"about": "Acerca de",
+			"noAbout": "Esta persona aún no ha escrito nada sobre sí misma.",
+			"details": "Detalles",
+			"contactSince": "En contactos desde",
+			"profileUpdated": "Perfil actualizado",
+			"key": "Clave"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Volver a la lista de chats",
 			"toLabel": "Para",
 			"attachmentsLabel": "Adjuntos",
-			"composeInvalidRecipient": "Elige un destinatario de tus contactos"
+			"composeInvalidRecipient": "Elige un destinatario de tus contactos",
+			"deleteAria": "Eliminar la conversación con {{name}}",
+			"deleteDialog": {
+				"title": "¿Eliminar la conversación con {{name}}?",
+				"body": "La conversación se eliminará de este dispositivo para siempre. La otra persona no recibirá ningún aviso y conservará su copia. Si alguno de los dos vuelve a escribir, el chat aparecerá de nuevo en la lista.",
+				"confirm": "Eliminar conversación"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Borrar conversación",
@@ -757,7 +777,9 @@
 			"repeatOff": "Repetir: desactivado",
 			"repeatAll": "Repetir: todo",
 			"repeatOne": "Repetir: uno",
-			"autoplay": "Reproducción automática"
+			"autoplay": "Reproducción automática",
+			"zoomIn": "Acercar",
+			"zoomOut": "Alejar"
 		},
 		"classNames": {
 			"audio": "audio",

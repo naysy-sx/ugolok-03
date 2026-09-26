@@ -9,7 +9,7 @@ import { groups, refreshGroups } from "../signals/contacts.js";
 import { place, goTo, openChannel } from "../signals/place.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
-import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
+import { loadPostsWindow, countChannelContent } from "../../core/sync/lazy-channel.js";
 import { countCommentsByPost } from "../../domain/content/comments.js";
 import { listReactionsForTargets, aggregateReactions } from "../../domain/content/reactions.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
@@ -31,6 +31,7 @@ import IconShield from "../icons/shield.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import { ChannelLead, ChannelSubtitle, ChannelAbout, ChannelPostsTab } from "../components/channel-feed.jsx";
 import ChannelPostPage from "../components/channel-post-page.jsx";
+import BracketCount from "../components/bracket-count.jsx";
 import { uploadTarget } from "../../domain/files/servers.js";
 
 const NAME_MAX_LENGTH = 100;
@@ -330,6 +331,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// сигнал, на который реагируют chat.jsx/channel-chat.jsx при любой
 	// read/write активности, включая markChannelAsRead внутри ChannelChat).
 	const [chatUnreadCount, setChatUnreadCount] = useState(0);
+	// Общие счётчики на вкладках: всего записей и всего сообщений чата (не окно из 10/15).
+	const [tabCounts, setTabCounts] = useState({ posts: 0, chat: 0 });
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
@@ -392,6 +395,13 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		if (!channelRow) return;
 		getChannelChatUnreadCount(ownerPubkey, channelId)
 			.then(setChatUnreadCount)
+			.catch(() => {});
+	}, [ownerPubkey, channelId, tab, messagingActivity.value, channelRow]);
+
+	useEffect(() => {
+		if (!channelRow) return;
+		countChannelContent(ownerPubkey, channelId)
+			.then(setTabCounts)
 			.catch(() => {});
 	}, [ownerPubkey, channelId, tab, messagingActivity.value, channelRow]);
 
@@ -486,10 +496,10 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const tabsBar = (
 		<nav class="tabs reel" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
-				{t("channel.tabs.posts")}
+				{t("channel.tabs.posts")} <BracketCount value={tabCounts.posts} />
 			</button>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
-				{t("channel.tabs.chat")}
+				{t("channel.tabs.chat")} <BracketCount value={tabCounts.chat} />
 				{chatUnreadCount > 0 && <span class="tab__badge">{chatUnreadCount}</span>}
 			</button>
 		</nav>

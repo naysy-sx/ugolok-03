@@ -535,7 +535,9 @@
 			"publishingButton": "发布中…",
 			"publishButton": "发布",
 			"tooLongError": "文本过长（上限 {{max}} 字符）",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "新帖子",
+			"editPostHeading": "编辑帖子"
 		},
 		"commentComposer": {
 			"ariaLabel": "新评论",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "频道分区",
 		"tabs": {
 			"posts": "帖子",
-			"chat": "聊天",
+			"chat": "频道聊天",
 			"moderation": "管理",
 			"editChannelWithName": "编辑频道“{{name}}”",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "仍然添加",
 		"blockedSummary": "已屏蔽",
 		"unblockButton": "取消屏蔽",
-		"noBlocked": "没有已屏蔽的联系人。"
+		"noBlocked": "没有已屏蔽的联系人。",
+		"card": {
+			"aria": "联系人名片：{{name}}",
+			"openAria": "打开 {{name}} 的名片",
+			"lastSeen": "最后在线：{{when}}",
+			"openChat": "打开聊天",
+			"about": "简介",
+			"noAbout": "对方还没有填写简介。",
+			"details": "详情",
+			"contactSince": "成为联系人的时间",
+			"profileUpdated": "资料更新时间",
+			"key": "密钥"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "返回聊天列表",
 			"toLabel": "收件人",
 			"attachmentsLabel": "附件",
-			"composeInvalidRecipient": "请从联系人中选择收件人"
+			"composeInvalidRecipient": "请从联系人中选择收件人",
+			"deleteAria": "删除与 {{name}} 的对话",
+			"deleteDialog": {
+				"title": "删除与 {{name}} 的对话？",
+				"body": "该对话将从此设备上永久删除。对方不会收到通知，其副本仍会保留。若你们任何一方再次发消息，该聊天会重新出现在列表中。",
+				"confirm": "删除对话"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "清空聊天记录",
@@ -757,7 +777,9 @@
 			"repeatOff": "重复：关闭",
 			"repeatAll": "重复：全部",
 			"repeatOne": "重复：单曲",
-			"autoplay": "自动播放"
+			"autoplay": "自动播放",
+			"zoomIn": "放大",
+			"zoomOut": "缩小"
 		},
 		"classNames": {
 			"audio": "音频",

@@ -10,6 +10,7 @@ import { ComposeAttachButtons, VoiceRecordingStatus } from "./compose-attach-too
 import IconSend from "../icons/send.jsx";
 import MarkdownFormatToolbar from "./markdown-format-toolbar.jsx";
 import EmojiQuickSend from "./emoji-quick-send.jsx";
+import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
 import { t, errorMessage } from "../signals/i18n.js";
 
 const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что комментарии (этап 31)
@@ -22,11 +23,8 @@ const MESSAGE_MAX_LENGTH = 4000; // тот же лимит, что коммен�
 // что такой приём плохо читается. refresh() ленты отдельно наверх не
 // поднимаем: отправка бампает messagingActivity, ChannelChat и так
 // перечитывает окно по этому сигналу (тот же приём, что реакции/действия
-// на странице записи, channel-post-page.jsx). Живой фидбег (визуальная
-// правка) — MarkdownFormatToolbar вернулся в отдельный .compose-tools блок
-// ПОД полем ввода (тот же блок несёт прикрепление и смайлы, EmojiQuickSend):
-// исходное решение E1 не заводить третью строку ради панели форматирования
-// снято тем же блоком, который решает и вопрос места для смайлов.
+// на странице записи, channel-post-page.jsx). Разметка и вид — как у композера
+// личного чата (chat.jsx): плашка [вложения · микрофон] [поле · смайл · Aa] [отправить].
 export default function ChannelComposer({ ownerPubkey, privKey, dbKey, channelId, canWrite, allowAttachments, limiter }) {
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -88,48 +86,63 @@ export default function ChannelComposer({ ownerPubkey, privKey, dbKey, channelId
 		return <p class="readonly-notice">{t("channelChat.readOnlyNotice")}</p>;
 	}
 
+	// Та же разметка, что у композера личного чата (chat.jsx): [+ · микрофон] [поле · смайл · Aa] [отправить].
+	// Ошибка, лоток вложений и статус записи — над формой, как там.
+	const cannotSend = busy || (text.length === 0 && tray.items.length === 0 && !voice.hasRecording) || tray.items.some((item) => item.error);
 	return (
-		<>
-			<form class="composer stack" onSubmit={handleSubmit} style={{ "--gap": "var(--space-2xs)" }}>
-				{error && (
-					<p role="alert" style={{ color: "var(--bad)" }}>
-						{error}
-					</p>
+		<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+			{error && (
+				<p role="alert" style={{ color: "var(--bad)" }}>
+					{error}
+				</p>
+			)}
+			{(tray.items.length > 0 || tray.errors.length > 0) && (
+				<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
+			)}
+			<VoiceRecordingStatus voice={voice} />
+			<form class="composer bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSubmit}>
+				{allowAttachments && (
+					<div class="composer__attach">
+						<ComposeAttachButtons tray={tray} voice={voice} disabled={busy} onError={setError} />
+					</div>
 				)}
-				{(tray.items.length > 0 || tray.errors.length > 0) && (
-					<AttachmentTray items={tray.items} errors={tray.errors} onRemove={tray.remove} layout={tray.layout} onLayoutChange={tray.setLayout} />
-				)}
-				<VoiceRecordingStatus voice={voice} />
 				<label class="visually-hidden" for="channel-chat-text">
 					{t("channelChat.messageLabel")}
 				</label>
-				<div class="composer__field bar" style={{ "--gap": "var(--space-2xs)", "--align": "end" }}>
+				<div class="composer__field">
 					<textarea
 						id="channel-chat-text"
 						ref={textareaRef}
-						class="grow"
+						class="message-compose-field"
 						value={text}
 						maxLength={MESSAGE_MAX_LENGTH}
 						rows={1}
 						placeholder={t("channelChat.placeholder")}
 						onInput={(e) => setText(e.currentTarget.value)}
+						onKeyDown={(e) => {
+							if (!isComposeSubmitKey(e)) return;
+							e.preventDefault();
+							handleSubmit(e);
+						}}
 					/>
-					<button type="submit" class="btn--primary rigid" disabled={busy || (text.length === 0 && tray.items.length === 0 && !voice.hasRecording) || tray.items.some((item) => item.error)}>
-						<IconSend /> {busy ? t("channel.commentComposer.sendingButton") : t("common.send")}
-					</button>
+					<EmojiQuickSend onSend={handleSendEmoji} disabled={busy} />
+					<details class="composer-aa">
+						<summary class="message-compose-tool-btn" aria-label={t("markdownToolbar.boldAria")}>
+							Aa
+						</summary>
+						<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
+					</details>
 				</div>
-				<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-					{allowAttachments && (
-						<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
-							<ComposeAttachButtons tray={tray} voice={voice} disabled={busy} onError={setError} />
-						</div>
-					)}
-					<MarkdownFormatToolbar textareaRef={textareaRef} value={text} onChange={setText} />
-					<div class="compose-tools__emoji">
-						<EmojiQuickSend onSend={handleSendEmoji} disabled={busy} />
-					</div>
-				</div>
+				<button
+					type="submit"
+					class="message-compose-send-btn row"
+					style={{ "--align": "center", justifyContent: "center" }}
+					disabled={cannotSend}
+					aria-label={t("common.send")}
+				>
+					<IconSend />
+				</button>
 			</form>
-		</>
+		</div>
 	);
 }

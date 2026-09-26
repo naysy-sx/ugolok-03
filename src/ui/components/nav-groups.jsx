@@ -19,6 +19,7 @@ import {
 import { useDetailsMenu } from "../hooks/use-details-menu.js";
 import { shortPubkey } from "../format.js";
 import ChannelAvatarThumb from "./channel-avatar-thumb.jsx";
+import BracketCount from "./bracket-count.jsx";
 import AddContactModal from "./add-contact-modal.jsx";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconCross from "../icons/cross.jsx";
@@ -31,7 +32,6 @@ import IconActivityLog from "../icons/activity-log.jsx";
 import IconLightning from "../icons/lightning.jsx";
 import IconWave from "../icons/wave.jsx";
 import IconHash from "../icons/hash.jsx";
-import IconGear from "../icons/gear.jsx";
 import IconFolder from "../icons/folder.jsx";
 import { loadDiscoverySettings } from "../../domain/discovery/discovery.js";
 import { t, currentLocale } from "../signals/i18n.js";
@@ -118,7 +118,7 @@ function DrawerLink({ icon: Icon, label, hint, active, badge = 0, count = null, 
 			<span class="drawer-link__text">
 				<span class="drawer-link__label">
 					{label}
-					{count != null && <span class="drawer-link__count">{count}</span>}
+					{count != null && <BracketCount class="drawer-link__count" value={count} />}
 				</span>
 				{hint && <small class="drawer-link__hint">{hint}</small>}
 			</span>
@@ -269,6 +269,7 @@ export default function NavGroups({ unreadJournalCount }) {
 					<DrawerLink icon={IconChatBubble} label={t("shell.navChats")} active={place.value.kind === "chat"} badge={unreadMessagesCount.value} onClick={() => openChat(null)} />
 					<DrawerLink icon={IconActivityLog} label={t("nav.journal")} active={place.value.kind === "journal"} badge={unreadJournalCount} onClick={() => goTo({ kind: "journal" })} />
 					<DrawerLink icon={IconPerson} label={t("nav.contacts")} active={place.value.kind === "people" && place.value.section !== "requests"} onClick={() => goTo({ kind: "people" })} />
+					<DrawerLink icon={IconPersonAdd} label={t("shell.addContact")} onClick={() => setShowAddContact(true)} />
 					<DrawerLink
 						icon={IconPersonAdd}
 						label={t("shell.navRequests")}
@@ -296,8 +297,6 @@ export default function NavGroups({ unreadJournalCount }) {
 					<p class="drawer-section">{t("shell.sectionMore")}</p>
 					<DrawerLink icon={IconHash} label={t("nav.channels")} active={place.value.kind === "channels" || place.value.kind === "channel"} onClick={() => goTo({ kind: "channels" })} />
 					<DrawerLink icon={IconFolder} label={t("nav.files")} active={place.value.kind === "storage"} onClick={() => goTo({ kind: "storage" })} />
-					<DrawerLink icon={IconGear} label={t("nav.settings")} active={place.value.kind === "settings"} onClick={() => goTo({ kind: "settings" })} />
-					<DrawerLink icon={IconPersonAdd} label={t("shell.addContact")} onClick={() => setShowAddContact(true)} />
 				</nav>
 
 				{(favoriteChannels.length > 0 || favoritePeople.length > 0) && (

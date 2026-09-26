@@ -86,6 +86,8 @@ const MAP = {
 	"lock-closed": "lock",
 	"log-out": "sign-out",
 	"magnifying-glass": "magnifying-glass",
+	"zoom-in": "magnifying-glass-plus",
+	"zoom-out": "magnifying-glass-minus",
 	microphone: "microphone",
 	menu: "list",
 	minimize: "arrows-in-simple",

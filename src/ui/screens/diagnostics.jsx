@@ -798,18 +798,18 @@ function Gauge({ used, total }) {
 	);
 }
 
+// Строка таблицы состояний: [точка + название] [статус, по правому краю] [действие]. Колонки
+// общие для всех строк, поэтому длинные значения не «пляшут» и не сдвигают соседей.
 function EngineRow({ label, status, tone, action }) {
 	return (
-		<div class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-			<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+		<tr>
+			<td class="set-table__name">
 				<span class="dot" style={{ backgroundColor: tone }} aria-hidden="true" />
 				<span>{label}</span>
-			</div>
-			<span class="gauge__legend rigid truncate" style={{ "--lines": "1" }}>
-				{status}
-			</span>
-			{action}
-		</div>
+			</td>
+			<td class="set-table__value">{status}</td>
+			<td class="set-table__action">{action}</td>
+		</tr>
 	);
 }
 
@@ -894,19 +894,23 @@ export default function Diagnostics() {
 					{relays.members.length === 0 ? (
 						<p class="panel__hint">{t("diagnostics.noRelays")}</p>
 					) : (
-						<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
-							{relays.members.map((m) => (
-								<div key={m.url} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
-									<div class="set-row__text bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-										<span class={`dot dot--${m.state === "connected" ? "good" : "warn"}`} aria-hidden="true" />
-										<span class="truncate" style={{ "--lines": "1" }}>{m.url}</span>
-									</div>
-									<span class="gauge__legend rigid">
-										{relays.latency[m.url] == null ? t("diagnostics.metrics.noAnswer") : t("diagnostics.metrics.ms", { n: relays.latency[m.url] })}
-									</span>
-								</div>
-							))}
-						</div>
+						<table class="set-table">
+							<tbody>
+								{relays.members.map((m) => (
+									<tr key={m.url}>
+										<td class="set-table__name">
+											<span class={`dot dot--${m.state === "connected" ? "good" : "warn"}`} aria-hidden="true" />
+											<span class="set-table__text" title={m.url}>
+												{m.url}
+											</span>
+										</td>
+										<td class="set-table__value">
+											{relays.latency[m.url] == null ? t("diagnostics.metrics.noAnswer") : t("diagnostics.metrics.ms", { n: relays.latency[m.url] })}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					)}
 					<div class="row" style={{ "--gap": "var(--space-s)" }}>
 						<button type="button" class="btn--ghost rigid" disabled={relays.probing} onClick={relays.refresh}>
@@ -1065,26 +1069,28 @@ export default function Diagnostics() {
 							{t("diagnostics.engineSummary")}
 						</summary>
 						<div class="exceptions__body">
-							<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
-								<EngineRow label={t("diagnostics.engine.crypto")} status={signCryptoStatus} tone={nip9Tone(signCryptoStatus)} />
-								<EngineRow label={t("diagnostics.engine.keys")} status={`${nip06Status} · ${keystoreStatus}`} tone={keystoreTone(keystoreStatus)} />
-								<EngineRow label={t("diagnostics.engine.worker")} status={cryptoWorkerStatus} tone={cryptoWorkerTone(cryptoWorkerStatus)} />
-								<EngineRow label={t("diagnostics.engine.crdt")} status={coreLogicStatus} tone={coreLogicTone(coreLogicStatus)} />
-								<EngineRow label={t("diagnostics.engine.database")} status={dbStatus} tone={dbTone(dbStatus)} />
-								<EngineRow label={t("diagnostics.engine.outbox")} status={outboxStatus} tone={stage5Tone(outboxStatus)} />
-								<EngineRow label={t("diagnostics.engine.serviceWorker")} status={`${sw} · ${cacheStatus}`} tone={cacheTone(cacheStatus)} />
-								<EngineRow label={t("diagnostics.engine.release")} status={releaseHashStatus} tone={releaseHashTone(releaseHashStatus)} />
-								<EngineRow
-									label={t("diagnostics.engine.transport")}
-									status={transportSync.status}
-									tone={transportSyncTone(transportSync.status)}
-									action={
-										<button type="button" class="btn--ghost rigid" onClick={transportSync.run}>
-											{t("diagnostics.check")}
-										</button>
-									}
-								/>
-							</div>
+							<table class="set-table">
+								<tbody>
+									<EngineRow label={t("diagnostics.engine.crypto")} status={signCryptoStatus} tone={nip9Tone(signCryptoStatus)} />
+									<EngineRow label={t("diagnostics.engine.keys")} status={`${nip06Status} · ${keystoreStatus}`} tone={keystoreTone(keystoreStatus)} />
+									<EngineRow label={t("diagnostics.engine.worker")} status={cryptoWorkerStatus} tone={cryptoWorkerTone(cryptoWorkerStatus)} />
+									<EngineRow label={t("diagnostics.engine.crdt")} status={coreLogicStatus} tone={coreLogicTone(coreLogicStatus)} />
+									<EngineRow label={t("diagnostics.engine.database")} status={dbStatus} tone={dbTone(dbStatus)} />
+									<EngineRow label={t("diagnostics.engine.outbox")} status={outboxStatus} tone={stage5Tone(outboxStatus)} />
+									<EngineRow label={t("diagnostics.engine.serviceWorker")} status={`${sw} · ${cacheStatus}`} tone={cacheTone(cacheStatus)} />
+									<EngineRow label={t("diagnostics.engine.release")} status={releaseHashStatus} tone={releaseHashTone(releaseHashStatus)} />
+									<EngineRow
+										label={t("diagnostics.engine.transport")}
+										status={transportSync.status}
+										tone={transportSyncTone(transportSync.status)}
+										action={
+											<button type="button" class="btn--ghost rigid" onClick={transportSync.run}>
+												{t("diagnostics.check")}
+											</button>
+										}
+									/>
+								</tbody>
+							</table>
 						</div>
 					</details>
 				</div>

@@ -535,7 +535,9 @@
 			"publishingButton": "Publishing…",
 			"publishButton": "Publish",
 			"tooLongError": "Text too long (limit — {{max}} characters)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "New post",
+			"editPostHeading": "Editing post"
 		},
 		"commentComposer": {
 			"ariaLabel": "New comment",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Channel sections",
 		"tabs": {
 			"posts": "Posts",
-			"chat": "Chat",
+			"chat": "Channel chat",
 			"moderation": "Moderation",
 			"editChannelWithName": "Edit channel «{{name}}»",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Add anyway",
 		"blockedSummary": "Blocked",
 		"unblockButton": "Unblock",
-		"noBlocked": "No blocked contacts."
+		"noBlocked": "No blocked contacts.",
+		"card": {
+			"aria": "Contact card: {{name}}",
+			"openAria": "Open contact card for {{name}}",
+			"lastSeen": "Last seen: {{when}}",
+			"openChat": "Open chat",
+			"about": "About",
+			"noAbout": "This person hasn’t written anything about themselves yet.",
+			"details": "Details",
+			"contactSince": "In contacts since",
+			"profileUpdated": "Profile updated",
+			"key": "Key"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Back to chat list",
 			"toLabel": "To",
 			"attachmentsLabel": "Attachments",
-			"composeInvalidRecipient": "Choose a recipient from your contacts"
+			"composeInvalidRecipient": "Choose a recipient from your contacts",
+			"deleteAria": "Delete conversation with {{name}}",
+			"deleteDialog": {
+				"title": "Delete conversation with {{name}}?",
+				"body": "The conversation will be removed from this device for good. The other person won't be notified and keeps their copy. If either of you writes again, the chat will show up in the list anew.",
+				"confirm": "Delete conversation"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Clear history",
@@ -757,7 +777,9 @@
 			"repeatOff": "Repeat: off",
 			"repeatAll": "Repeat: all",
 			"repeatOne": "Repeat: one",
-			"autoplay": "Autoplay"
+			"autoplay": "Autoplay",
+			"zoomIn": "Zoom in",
+			"zoomOut": "Zoom out"
 		},
 		"classNames": {
 			"audio": "audio",

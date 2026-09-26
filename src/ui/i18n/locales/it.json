@@ -535,7 +535,9 @@
 			"publishingButton": "Pubblicazione…",
 			"publishButton": "Pubblica",
 			"tooLongError": "Testo troppo lungo (limite: {{max}} caratteri)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nuovo post",
+			"editPostHeading": "Modifica post"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nuovo commento",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Sezioni del canale",
 		"tabs": {
 			"posts": "Post",
-			"chat": "Chat",
+			"chat": "Chat del canale",
 			"moderation": "Moderazione",
 			"editChannelWithName": "Modifica canale «{{name}}»",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Aggiungi comunque",
 		"blockedSummary": "Bloccati",
 		"unblockButton": "Sblocca",
-		"noBlocked": "Nessun contatto bloccato."
+		"noBlocked": "Nessun contatto bloccato.",
+		"card": {
+			"aria": "Scheda contatto: {{name}}",
+			"openAria": "Apri la scheda contatto di {{name}}",
+			"lastSeen": "Ultimo accesso: {{when}}",
+			"openChat": "Apri chat",
+			"about": "Informazioni",
+			"noAbout": "Questa persona non ha ancora scritto nulla su di sé.",
+			"details": "Dettagli",
+			"contactSince": "Nei contatti dal",
+			"profileUpdated": "Profilo aggiornato",
+			"key": "Chiave"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Torna all'elenco chat",
 			"toLabel": "A",
 			"attachmentsLabel": "Allegati",
-			"composeInvalidRecipient": "Scegli un destinatario dai tuoi contatti"
+			"composeInvalidRecipient": "Scegli un destinatario dai tuoi contatti",
+			"deleteAria": "Elimina la conversazione con {{name}}",
+			"deleteDialog": {
+				"title": "Eliminare la conversazione con {{name}}?",
+				"body": "La conversazione verrà eliminata da questo dispositivo per sempre. L’altra persona non riceverà alcun avviso e conserverà la sua copia. Se uno dei due scrive di nuovo, la chat ricomparirà nell’elenco.",
+				"confirm": "Elimina conversazione"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Cancella conversazione",
@@ -757,7 +777,9 @@
 			"repeatOff": "Ripeti: disattivato",
 			"repeatAll": "Ripeti: tutto",
 			"repeatOne": "Ripeti: uno",
-			"autoplay": "Riproduzione automatica"
+			"autoplay": "Riproduzione automatica",
+			"zoomIn": "Ingrandisci",
+			"zoomOut": "Riduci"
 		},
 		"classNames": {
 			"audio": "audio",
