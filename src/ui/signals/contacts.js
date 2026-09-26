@@ -519,3 +519,11 @@ export async function refreshDiscoveryProfiles(ownerPubkey) {
 			isDiscoveryCardClean(r),
 	);
 }
+
+// Когда контакт стал контактом (секунды) — для карточки контакта. Нет записи или
+// состояние не CONTACT — null. Читает то же состояние, что и списки выше.
+export function getContactSince(peerPubkey) {
+	const state = runtime?.getPeerState(peerPubkey);
+	if (!state || state.name !== "CONTACT" || !state.resolvedAt) return null;
+	return state.resolvedAt;
+}

@@ -17,8 +17,19 @@ export function goTo(next) {
 // id опционален (undefined = список переписок) — единственный kind, где
 // отсутствие id не значит "другой экран", а значит "тот же экран, режим
 // списка" (chat.jsx уже так устроен изнутри).
-export function openChat(pubkey) {
+export function openChat(pubkey, { backTo } = {}) {
+	// Куда ведёт «Назад» из открытого чата: откуда человек пришёл (например, из
+	// «Контактов»), а не всегда в список чатов. Хранится отдельно от place — форма
+	// place остаётся ровно такой, какую проверяют тесты и остальной код. Каждый вход
+	// в чат перезаписывает значение, поэтому «Назад» не утекает из прошлого перехода.
+	chatBackTo = pubkey && backTo ? backTo : null;
 	place.value = pubkey ? { kind: "chat", id: pubkey } : { kind: "chat" };
+}
+
+let chatBackTo = null;
+
+export function getChatBackTo() {
+	return chatBackTo;
 }
 
 // target — {postId?, commentId?, subTab?}, атомарно ОДНИМ присваиванием

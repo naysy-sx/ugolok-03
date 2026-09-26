@@ -13674,12 +13674,11 @@ button:has(> .icon),
 	translate: 0 0;
 	pointer-events: auto;
 }
-@media (hover: none) {
-	.bubble-tools {
-		opacity: 1;
-		translate: 0 0;
-		pointer-events: auto;
-	}
+/* Сенсорные экраны: кнопки скрыты, пока не тапнули по тексту пузыря (message-bubble.jsx). */
+.message-bubble.is-tools-open > .bubble-tools {
+	opacity: 1;
+	translate: 0 0;
+	pointer-events: auto;
 }
 .bubble-tool,
 .bubble-tool:has(> .icon) {
@@ -14371,4 +14370,595 @@ button:has(> .icon),
 	align-self: center;
 	padding-block: var(--space-2xs);
 	font-size: var(--step-0);
+}
+
+/* ================================================================== *
+ *  СЕРИЯ ПРАВОК 4 — замечания по живой проверке (30 пунктов).          *
+ *  Стоит ПОСЛЕДНИМ и перебивает то, что выше в файле задано иначе.     *
+ * ================================================================== */
+
+/* ---- Вход: стартовая страница -------------------------------------- */
+/* Список аккаунтов — .stack с глобальным margin-block списков (проза, minimal.css):
+   отступ сверху и снизу лишний, ритм задаёт --gap родителя. */
+.accounts-list {
+	margin-block: 0;
+}
+/* Карточка входа: подложка, поле и лёгкое свечение акцентом. */
+.unlock-card {
+	padding: var(--space-s);
+	background-color: var(--surface);
+	border-radius: var(--radius-lg);
+	box-shadow: 0 0 5px 0 color-mix(in oklch, var(--accent), transparent 70%);
+}
+
+/* ---- Компактные контролы -------------------------------------------- */
+.drawer-copy,
+.drawer-copy:has(> .icon) {
+	min-block-size: 2rem;
+	padding-inline: var(--space-xs);
+}
+.file-search-field,
+.sidebar-row .file-search-field {
+	min-block-size: 2.5rem;
+	padding-inline: var(--space-xs);
+}
+
+/* ---- Счётчик «[ 12 ]» в <sup> (пункты 10 и 27) ------------------------ */
+.bracket-count {
+	margin-inline-start: 0.2em;
+	font-size: 0.7em;
+	font-weight: var(--weight-normal);
+	font-variant-numeric: tabular-nums;
+	line-height: 0;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* ---- Меню: акцентные иконки и заголовки разделов (пункт 16) ------------ */
+.drawer-link__icon,
+.drawer-link .icon {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+.drawer-link.is-active .drawer-link__icon,
+.drawer-link.is-active .icon,
+.drawer-link.is-live .drawer-link__icon {
+	color: var(--accent);
+}
+.drawer-section {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+
+/* ---- Заголовок экрана (пункт 17) -------------------------------------- */
+.screen-title__label {
+	color: var(--accent);
+}
+.screen-title__icon {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+
+/* ---- Список чатов: кнопка «удалить переписку» (пункт 5) --------------- */
+/* Справа у строки — узкая колонка действий: звезда внизу, корзина сверху. Место под неё
+   зарезервировано, чтобы кнопки не налезали на время и счётчик. */
+.chat-list__item > .chat-row {
+	padding-inline-end: 2.5rem;
+}
+.chat-list__delete,
+.chat-list__delete:has(> .icon) {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	display: grid;
+	place-items: center;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--muted);
+	opacity: 0.55;
+	line-height: 0;
+}
+.chat-list__delete .icon {
+	inline-size: 1.0625rem;
+	block-size: 1.0625rem;
+}
+.chat-list__delete:hover:not(:disabled),
+.chat-list__delete:focus-visible {
+	opacity: 1;
+	color: var(--bad);
+	background-color: color-mix(in oklch, var(--bad), transparent 88%);
+}
+/* С мышью корзина проявляется по наведению на строку; на сенсорных — всегда видна тихо. */
+@media (hover: hover) {
+	.chat-list__delete {
+		opacity: 0;
+	}
+	.chat-list__item:hover .chat-list__delete,
+	.chat-list__item:focus-within .chat-list__delete {
+		opacity: 0.7;
+	}
+	.chat-list__item .chat-list__delete:hover,
+	.chat-list__item .chat-list__delete:focus-visible {
+		opacity: 1;
+	}
+}
+
+/* ---- Карточка контакта (пункт 6) --------------------------------------- */
+.modal-card.contact-modal {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	max-inline-size: 30rem;
+	max-block-size: min(46rem, calc(100dvh - 2 * var(--space-m)));
+	padding: 0;
+	overflow: hidden;
+}
+.contact-modal__close,
+.contact-modal__close:has(> .icon) {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	z-index: 2;
+	color: var(--muted);
+}
+.contact-modal__body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-m);
+	padding: var(--space-l) var(--space-m) var(--space-m);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.contact-modal__hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-2xs);
+	text-align: center;
+}
+.contact-modal__photo {
+	inline-size: 7rem;
+	block-size: 7rem;
+	border-radius: var(--radius-full);
+	object-fit: cover;
+	background-color: var(--surface-raised);
+	box-shadow: 0 0 0 4px var(--bg), 0 0 0 5px var(--hairline);
+}
+.contact-modal__photo--empty {
+	display: grid;
+	place-items: center;
+	color: var(--accent);
+	font-size: 3rem;
+	font-weight: 600;
+}
+.contact-modal__name {
+	margin: var(--space-2xs) 0 0;
+	font-size: var(--step-2);
+	font-weight: 600;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+.contact-modal__name--npub {
+	font-size: var(--step-0);
+	font-family: var(--font-mono, monospace);
+	font-weight: var(--weight-normal);
+}
+.contact-modal__status {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+/* «Позвонить» и «Открыть чат» — сразу под именем: две крупные кнопки одной высоты. */
+.contact-modal__primary {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-xs);
+}
+.contact-modal__call,
+.contact-modal__call:has(> .icon),
+.contact-modal__chat,
+.contact-modal__chat:has(> .icon) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2xs);
+	min-block-size: 3rem;
+	padding: 0 var(--space-s);
+	border-radius: var(--radius-md);
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	line-height: 1.1;
+}
+.contact-modal__call,
+.contact-modal__call:has(> .icon) {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border: 0;
+}
+.contact-modal__call:hover {
+	background-color: var(--accent-hover);
+}
+.contact-modal__chat,
+.contact-modal__chat:has(> .icon) {
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+}
+.contact-modal__chat:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+	border-color: color-mix(in oklch, var(--accent), transparent 60%);
+}
+.contact-modal__section h3 {
+	margin: 0 0 var(--space-2xs);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.contact-modal__about {
+	margin: 0;
+	max-inline-size: none;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.contact-modal__empty {
+	margin: 0;
+	color: var(--muted);
+}
+.contact-modal__facts {
+	display: grid;
+	margin: 0;
+}
+.contact-modal__facts > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	padding-block: var(--space-2xs);
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.contact-modal__facts > div:last-child {
+	border-block-end: 0;
+}
+.contact-modal__facts dt {
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.contact-modal__facts dd {
+	margin: 0;
+	text-align: end;
+}
+.contact-modal__key {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-3xs);
+}
+.contact-modal__key code {
+	font-size: var(--step--1);
+	overflow-wrap: anywhere;
+}
+.contact-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+	padding: var(--space-s) var(--space-m);
+	background-color: var(--surface);
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.contact-modal__footer > button,
+.contact-modal__footer > button:has(> .icon) {
+	flex: 1 1 auto;
+	justify-content: center;
+	min-block-size: 2.5rem;
+	border-radius: var(--radius-md);
+}
+.contact-modal__footer .btn--ghost.btn--warn {
+	color: var(--warn);
+}
+/* Телефон: карточка — «шторка» снизу на всю ширину. */
+@media (max-width: 35.99em) {
+	.modal-backdrop:has(.contact-modal) {
+		align-items: flex-end;
+		padding: 0;
+	}
+	.modal-card.contact-modal {
+		max-inline-size: none;
+		max-block-size: 92dvh;
+		border-end-start-radius: 0;
+		border-end-end-radius: 0;
+	}
+	.contact-modal__footer {
+		padding-block-end: calc(var(--space-s) + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+/* ---- Просмотр картинки: зум (пункт 9) ---------------------------------- */
+/* Жесты (щипок, перетаскивание) забирает JS: браузеру отдавать прокрутку/масштаб страницы нельзя. */
+.media-overlay-viewport:has(.media-overlay-track) {
+	touch-action: none;
+}
+.media-overlay-slide img {
+	cursor: zoom-in;
+	transform-origin: center;
+}
+.media-overlay-track.is-zoomed .media-overlay-slide img {
+	cursor: grab;
+	will-change: transform;
+}
+.media-overlay-slide img.is-zoom-anim {
+	transition: transform 0.2s var(--ease);
+}
+/* Увеличенная картинка выходит за рамки слайда на весь экран; соседние слайды прячем. */
+.media-overlay-track.is-zoomed .media-overlay-slide {
+	overflow: visible;
+}
+.media-overlay-track.is-zoomed .media-overlay-slide:not(:nth-child(2)) {
+	visibility: hidden;
+}
+button[type="button"].media-overlay-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ---- Пузыри: кнопки по тапу на сенсорных (пункт 8) — правило .is-tools-open выше ---- */
+
+/* ---- День в ленте (пункт 19) -------------------------------------------- */
+.day-sep {
+	margin-block-end: var(--space-l);
+}
+
+/* ---- Файлы: длинные названия (пункт 13) -------------------------------- */
+/* Строки списка виртуализируются и обязаны быть ФИКСИРОВАННОЙ высоты (ROW_HEIGHT_PX в files.jsx),
+   поэтому «растянуть ячейку под название» нельзя — иначе окно прокрутки считает высоту неверно.
+   Название и подпись обрезаются многоточием; полное название — во всплывающей подсказке. */
+:root {
+	--file-row-height: 72px;
+}
+.file-table tbody tr {
+	block-size: var(--file-row-height);
+	min-block-size: 0;
+}
+.file-row-name,
+.file-row-name:has(> .icon) {
+	max-inline-size: 100%;
+	overflow: hidden;
+}
+.file-row-title,
+.file-row-sub {
+	display: block;
+	max-inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+/* ---- Настройки: список исключений (пункт 14) --------------------------- */
+.exceptions > summary {
+	padding-inline: var(--space-s) 0;
+	color: var(--accent);
+}
+.exceptions > summary:hover {
+	color: var(--accent-hover);
+}
+
+/* ---- Хранилище: «Самые крупные загрузки» (пункт 15) -------------------- */
+.storage-table {
+	inline-size: 100%;
+	margin-block: 0;
+	border-collapse: collapse;
+}
+.storage-table tr {
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.storage-table tr:last-child {
+	border-block-end: 0;
+}
+.storage-table td {
+	padding-block: var(--space-xs);
+	border: 0;
+	vertical-align: middle;
+}
+/* Первая колонка забирает всё свободное место и обрезает текст многоточием
+   (max-inline-size:0 + inline-size:100% — приём для таблиц с авторазмером колонок). */
+.storage-table__file {
+	inline-size: 100%;
+	max-inline-size: 0;
+}
+.storage-table__name,
+.storage-table__meta {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.storage-table__meta {
+	color: var(--muted);
+}
+.storage-table__action {
+	inline-size: 1%;
+	padding-inline-start: var(--space-s);
+	text-align: end;
+	white-space: nowrap;
+}
+.storage-table__action button,
+.storage-table__action button:has(> .icon) {
+	min-block-size: 2.5rem;
+}
+@media (max-width: 35.99em) {
+	.storage-table .btn-label {
+		display: none;
+	}
+	.storage-table__action button,
+	.storage-table__action button:has(> .icon) {
+		inline-size: 2.5rem;
+		padding: 0;
+		justify-content: center;
+	}
+}
+
+/* ---- Диагностика и «Знакомства»: строки с точкой (пункт 18) ------------- */
+/* .set-row__text из настроек — колонка, а .bar в JSX просил строку: точка оказывалась НАД подписью,
+   по центру блока. Возвращаем строку: точка слева от подписи. */
+.set-row__text.bar {
+	flex-direction: row;
+	align-items: center;
+}
+/* Таблица состояний: колонки общие для всех строк, значения — по правому краю. */
+.set-table {
+	inline-size: 100%;
+	margin-block: 0;
+	border-collapse: collapse;
+}
+.set-table tr {
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.set-table tr:last-child {
+	border-block-end: 0;
+}
+.set-table td {
+	padding-block: var(--space-xs);
+	border: 0;
+	vertical-align: middle;
+}
+.set-table__name {
+	font-size: var(--step-0);
+	overflow-wrap: anywhere;
+}
+.set-table__name .dot {
+	display: inline-block;
+	margin-inline-end: var(--space-2xs);
+	vertical-align: middle;
+}
+.set-table__value {
+	padding-inline-start: var(--space-s);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-variant-numeric: tabular-nums;
+	text-align: end;
+	overflow-wrap: anywhere;
+}
+.set-table__action {
+	inline-size: 1%;
+	padding-inline-start: var(--space-s);
+	text-align: end;
+	white-space: nowrap;
+}
+
+/* ---- Каналы: текст записи (пункт 20) ------------------------------------ */
+.app-layout .md-view p,
+.auth-layout .md-view p {
+	font-size: var(--font-size-base);
+}
+.app-layout .md-view blockquote,
+.auth-layout .md-view blockquote {
+	margin: var(--space-s) 0;
+}
+
+/* ---- Реакции и аватар комментария (пункты 21–23) ------------------------ */
+/* «+» был вытянутым эллипсом: ширина 2rem при высоте 2.5rem. Теперь круг 2.5rem со смайликом. */
+.react-add,
+.react-add:has(> .icon) {
+	inline-size: 2.5rem;
+	min-inline-size: 2.5rem;
+	block-size: 2.5rem;
+	padding: 0;
+	justify-content: center;
+}
+.react-add .icon {
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+	flex-shrink: 0;
+}
+/* Чип реакции: глобальное правило кнопок с иконкой обнуляло боковые отступы. */
+.react-chip,
+.react-chip:has(> .icon) {
+	min-inline-size: 2.5rem;
+	padding-inline: var(--space-xs);
+	justify-content: center;
+}
+/* Кнопки выбора реакции «схлопывались в точки» из-за боковых отступов по умолчанию. */
+.react-picker button,
+.react-picker button:has(> .icon) {
+	padding-inline: 0;
+	color: var(--accent);
+}
+/* Аватар комментария: колонка сетки была 2.125rem, а сам аватар 2.75rem — картинку сжимало в эллипс. */
+.cmt__box {
+	grid-template-columns: 2.75rem minmax(0, 1fr);
+}
+.cmt__ava {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	max-inline-size: none;
+	flex: none;
+}
+
+/* ---- Полоса срезов внутри статьи (пункт 24) ------------------------------ */
+.media-buttons-bar {
+	flex-wrap: wrap;
+}
+.media-buttons-bar .slice,
+.media-buttons-bar .slice:has(> .icon) {
+	min-block-size: 2.25rem;
+	padding-inline: var(--space-s);
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+}
+.media-buttons-bar .slice .icon {
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+	color: var(--accent);
+}
+.media-buttons-bar .slice .slice__n {
+	font-weight: var(--weight-normal);
+}
+
+/* ---- Общий чат канала: вложения (пункт 25) -------------------------------- */
+/* Вложение занимало всю ширину колонки, а высота ограничена — вертикальное видео превращалось
+   в широкую полосу. Ширина одиночного вложения считается из его пропорций и потолка высоты:
+   вертикальное остаётся вертикальным, горизонтальное упирается в 20.5rem. */
+.chat-msg .bubble-media {
+	inline-size: min(100%, 20.5rem);
+}
+.chat-msg .bubble-media--single {
+	--media-max-h: 22rem;
+	inline-size: min(100%, 20.5rem, calc(var(--media-max-h) * var(--media-ar, 1.6)));
+}
+.chat-msg .bubble-media--single .bubble-tile {
+	aspect-ratio: var(--media-ar, 16 / 10);
+	max-height: none;
+}
+
+/* ---- Форма новой записи (пункты 28–30) ------------------------------------- */
+.composer-card .row > button,
+.composer-card .row > button:has(> .icon) {
+	min-block-size: 1.75rem;
+}
+@media (pointer: coarse) {
+	.composer-card .row > button,
+	.composer-card .row > button:has(> .icon) {
+		min-block-size: 2.5rem;
+	}
+}
+.post-editor-toolbar {
+	flex-wrap: wrap;
+}
+.post-editor-toolbar__title {
+	flex: 1 0 100%;
+	font-size: var(--step-1);
+	font-weight: 600;
+}
+/* Поле записи светлее карточки и с еле заметной точечной сеткой — «режим правки». */
+.post-editor {
+	background:
+		radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--accent) 14%, transparent) 1px, transparent 0) 0 0 / 20px 20px,
+		light-dark(var(--bg-light), var(--surface-raised-dark));
 }

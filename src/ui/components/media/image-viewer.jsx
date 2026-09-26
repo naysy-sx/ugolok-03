@@ -5,14 +5,14 @@ import { t, errorMessage } from "../../signals/i18n.js";
 import { uploadTarget } from "../../../domain/files/servers.js";
 
 
-// Просмотрщик картинки внутри медиа-сессии (Этап D) — без zoom/swipe, тот
-// же отказ, что уже был у ImageModal (CONTRACTS.md, этап 29: "модалка +
-// кнопка закрыть", без lightbox-библиотеки). Next/prev/закрытие/сворачивание
-// — общий chrome в media-overlay.jsx, этот компонент — только сама картинка.
+// Просмотрщик картинки внутри медиа-сессии (Этап D). Next/prev/закрытие/сворачивание
+// и зум (щипок, колесо, двойной тап, кнопки — use-image-zoom.js) живут в общем chrome
+// media-overlay.jsx; этот компонент — только сама картинка. imgRef получает <img>
+// текущего слайда, чтобы зум мог писать в него transform.
 // acquireMediaUrl — та же мемоизированная функция, что уже вызвал
 // resourceOwner (ui/signals/media.js) — повторный вызов здесь НЕ повторяет
 // сеть/регистрацию, просто дожидается готового handle (CONTRACTS.md "Этап D").
-export default function ImageViewer({ mediaRef, onMeta }) {
+export default function ImageViewer({ mediaRef, onMeta, imgRef }) {
 	// MEDIA-OVERLAY-UI.md, этап 3 — довесок: в ленте (media-overlay-track)
 	// Preact ПЕРЕИСПОЛЬЗУЕТ этот же экземпляр компонента для соседнего слайда
 	// на каждый next/prev (три позиции — три СТАБИЛЬНЫХ инстанса, без key).
@@ -85,6 +85,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 	}
 	return (
 		<img
+			ref={imgRef}
 			src={url}
 			alt={mediaRef.name || ""}
 			draggable={false}

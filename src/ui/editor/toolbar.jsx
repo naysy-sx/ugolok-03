@@ -66,9 +66,13 @@ function insertLink(view) {
 	view.focus();
 }
 
-export default function PostEditorToolbar({ view }) {
+export default function PostEditorToolbar({ view, heading }) {
 	if (!view) {
-		return <div class="post-editor-toolbar row" style={{ "--gap": "var(--space-2xs)" }} />;
+		return (
+			<div class="post-editor-toolbar row" style={{ "--gap": "var(--space-2xs)" }}>
+				{heading && <strong class="post-editor-toolbar__title">{heading}</strong>}
+			</div>
+		);
 	}
 	const state = view.state;
 	const boldActive = isMarkActive(state, schema.marks.strong);
@@ -78,6 +82,7 @@ export default function PostEditorToolbar({ view }) {
 
 	return (
 		<div class="post-editor-toolbar row" style={{ "--gap": "var(--space-2xs)" }}>
+			{heading && <strong class="post-editor-toolbar__title">{heading}</strong>}
 			<button type="button" class={"post-editor-toolbar-btn" + (headingActive ? " is-active" : "")} onClick={() => cycleHeading(view)} aria-label={t("postEditor.headingAria")}>
 				<IconFormatHeading />
 			</button>

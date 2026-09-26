@@ -535,7 +535,9 @@
 			"publishingButton": "Publication…",
 			"publishButton": "Publier",
 			"tooLongError": "Texte trop long (limite : {{max}} caractères)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nouvelle publication",
+			"editPostHeading": "Modifier la publication"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nouveau commentaire",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Sections de la chaîne",
 		"tabs": {
 			"posts": "Publications",
-			"chat": "Chat",
+			"chat": "Chat de la chaîne",
 			"moderation": "Modération",
 			"editChannelWithName": "Modifier la chaîne « {{name}} »",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Ajouter quand même",
 		"blockedSummary": "Bloqués",
 		"unblockButton": "Débloquer",
-		"noBlocked": "Aucun contact bloqué."
+		"noBlocked": "Aucun contact bloqué.",
+		"card": {
+			"aria": "Fiche de contact : {{name}}",
+			"openAria": "Ouvrir la fiche de contact de {{name}}",
+			"lastSeen": "Dernière connexion : {{when}}",
+			"openChat": "Ouvrir le chat",
+			"about": "À propos",
+			"noAbout": "Cette personne n’a encore rien écrit sur elle.",
+			"details": "Détails",
+			"contactSince": "Dans les contacts depuis",
+			"profileUpdated": "Profil mis à jour",
+			"key": "Clé"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Retour à la liste des discussions",
 			"toLabel": "À",
 			"attachmentsLabel": "Pièces jointes",
-			"composeInvalidRecipient": "Choisissez un destinataire parmi vos contacts"
+			"composeInvalidRecipient": "Choisissez un destinataire parmi vos contacts",
+			"deleteAria": "Supprimer la conversation avec {{name}}",
+			"deleteDialog": {
+				"title": "Supprimer la conversation avec {{name}} ?",
+				"body": "La conversation sera supprimée définitivement de cet appareil. L’autre personne n’en sera pas informée et conserve sa copie. Si l’un de vous écrit à nouveau, la discussion réapparaîtra dans la liste.",
+				"confirm": "Supprimer la conversation"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Effacer la conversation",
@@ -757,7 +777,9 @@
 			"repeatOff": "Répéter : désactivé",
 			"repeatAll": "Répéter : tout",
 			"repeatOne": "Répéter : un seul",
-			"autoplay": "Lecture automatique"
+			"autoplay": "Lecture automatique",
+			"zoomIn": "Agrandir",
+			"zoomOut": "Réduire"
 		},
 		"classNames": {
 			"audio": "audio",

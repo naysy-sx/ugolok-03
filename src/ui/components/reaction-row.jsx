@@ -6,6 +6,7 @@ import IconHeartFill from "../icons/heart-fill.jsx";
 import IconSmileyFill from "../icons/smiley-fill.jsx";
 import IconFireFill from "../icons/fire-fill.jsx";
 import IconEyesFill from "../icons/eyes-fill.jsx";
+import IconSmiley from "../icons/smiley.jsx";
 
 // Живой фидбег — реакции хранятся и передаются по протоколу как юникод-
 // эмодзи (data-контракт, reactions.js's CHANNEL_REACTION_SET/isAllowedEmoji —
@@ -76,7 +77,7 @@ export default function ReactionRow({ counts = {}, mine, canReact, onToggle, com
 					aria-expanded={open}
 					onClick={() => setOpen((v) => !v)}
 				>
-					+
+					<IconSmiley aria-hidden="true" />
 				</button>
 			)}
 			{open && canReact && (

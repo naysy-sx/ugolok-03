@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { useImageZoom } from "../../hooks/use-image-zoom.js";
+import { MAX_SCALE as ZOOM_MAX } from "../../../domain/media/zoom-math.js";
 import { mediaSession, mediaNext, mediaPrev, mediaGoTo, mediaToggle, mediaMinimize, mediaRestore, mediaEnded, closeMedia, setRepeat } from "../../signals/media.js";
 import { stepInClass } from "../../../domain/media/playlist.js";
 import { elasticDx, verticalCommit } from "../../../domain/media/swipe-gesture.js";
@@ -18,6 +20,8 @@ import IconNavNext from "../../icons/nav-next.jsx";
 import IconMinimize from "../../icons/minimize.jsx";
 import IconRestore from "../../icons/restore.jsx";
 import IconInfoCircle from "../../icons/info-circle.jsx";
+import IconZoomIn from "../../icons/zoom-in.jsx";
+import IconZoomOut from "../../icons/zoom-out.jsx";
 import IconPlayerPlay from "../../icons/player-play.jsx";
 import IconPlayerPause from "../../icons/player-pause.jsx";
 import IconRepeat from "../../icons/repeat.jsx";
@@ -179,6 +183,13 @@ export default function MediaOverlay() {
 	const viewportRef = useRef(null);
 	const innerRef = useRef(null);
 	const trackRef = useRef(null);
+	// Зум картинки (щипок, колесо, двойной тап, кнопки) — см. use-image-zoom.js. Сбрасывается
+	// на каждую смену картинки; в свёрнутом виде и для не-картинок не активен.
+	const zoom = useImageZoom({
+		active: !!session && session.cls === "image" && session.display === "full",
+		viewportRef,
+		resetKey: session ? session.position : null,
+	});
 	const originRectRef = useRef(null); // rect источника открытия — для симметричного закрытия
 	const prevSessionExistedRef = useRef(false);
 	// MEDIA-OVERLAY-UI-2.md, этап 7 — состояние автомата жеста (Мура,
@@ -509,6 +520,9 @@ export default function MediaOverlay() {
 			if (e.key === "Escape") handleClose();
 			else if (e.key === "ArrowLeft") mediaPrev();
 			else if (e.key === "ArrowRight") mediaNext();
+			else if (e.key === "+" || e.key === "=") zoom.zoomIn();
+			else if (e.key === "-" || e.key === "_") zoom.zoomOut();
+			else if (e.key === "0") zoom.reset();
 			else if (e.key === " ") {
 				e.preventDefault(); // иначе прокрутка страницы под fixed-оверлеем
 				mediaToggle();
@@ -829,6 +843,20 @@ export default function MediaOverlay() {
 	function handleGesturePointerDown(e) {
 		if (isMini) return;
 		if (e.target.closest("button, video, audio")) return;
+		// Зум забирает жест, если картинка увеличена или на экране уже два пальца: тогда
+		// листание/закрытие свайпом не работают, а начатый свайп (первый палец щипка) отменяется.
+		if (zoom.pointerDown(e)) {
+			if (pointerTrackRef.current) {
+				dispatchGesture("cancel", null);
+				pointerTrackRef.current = null;
+			}
+			try {
+				overlayRef.current?.setPointerCapture(e.pointerId);
+			} catch {
+				// указатель уже исчез — жест закончится сам
+			}
+			return;
+		}
 		const accepting = gestureStateRef.current.name === "IDLE" || gestureStateRef.current.name === "SETTLING";
 		if (!accepting) return;
 		pointerTrackRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
@@ -842,12 +870,14 @@ export default function MediaOverlay() {
 	}
 
 	function handleGesturePointerMove(e) {
+		if (zoom.pointerMove(e)) return;
 		const track = pointerTrackRef.current;
 		if (!track || e.pointerId !== track.pointerId) return;
 		dispatchGesture("move", { dx: e.clientX - track.startX, dy: e.clientY - track.startY });
 	}
 
 	function handleGesturePointerUp(e) {
+		if (zoom.pointerUp(e)) return;
 		const track = pointerTrackRef.current;
 		if (!track || e.pointerId !== track.pointerId) return;
 		const wasRealDrag = gestureStateRef.current.name === "DRAG_H" || gestureStateRef.current.name === "DRAG_V";
@@ -858,6 +888,7 @@ export default function MediaOverlay() {
 	}
 
 	function handleGesturePointerCancel(e) {
+		zoom.pointerCancel(e);
 		const track = pointerTrackRef.current;
 		if (!track || e.pointerId !== track.pointerId) return;
 		dispatchGesture("cancel", null);
@@ -955,7 +986,7 @@ export default function MediaOverlay() {
 				>
 					<div ref={innerRef} class="media-overlay-inner" onClick={(e) => e.stopPropagation()}>
 						{session.cls === "image" ? (
-							<div class="media-overlay-track" ref={trackRef}>
+							<div class={"media-overlay-track" + (zoom.zoomed ? " is-zoomed" : "")} ref={trackRef}>
 								{/* key — АБСОЛЮТНАЯ позиция в плейлисте, не индекс слота (0/1/2).
 								    Без key Preact сопоставляет слайды позиционно: на next/prev
 								    ТЕ ЖЕ 3 инстанса ImageViewer просто получают чужой mediaRef,
@@ -972,7 +1003,7 @@ export default function MediaOverlay() {
 									{leftRef && <ImageViewer mediaRef={leftRef} />}
 								</div>
 								<div class="media-overlay-slide" key={session.position}>
-									<ImageViewer mediaRef={currentRef} onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })} />
+									<ImageViewer mediaRef={currentRef} imgRef={zoom.targetRef} onMeta={(m) => setMeta({ digest: currentRef.digest, ...m })} />
 								</div>
 								<div class="media-overlay-slide" key={rightPos === -1 ? "gap-next" : rightPos}>
 									{rightRef && <ImageViewer mediaRef={rightRef} />}
@@ -1006,6 +1037,16 @@ export default function MediaOverlay() {
 								<AttachmentDownloadLink iconOnly attachment={attachmentOfRef(currentRef)} />
 								<AttachmentSaveButton iconOnly attachment={attachmentOfRef(currentRef)} />
 							</span>
+						)}
+						{session.cls === "image" && (
+							<>
+								<button type="button" class="media-overlay-btn" disabled={!zoom.zoomed} onClick={withDragGuard(zoom.zoomOut)} aria-label={t("media.player.zoomOut")}>
+									<IconZoomOut />
+								</button>
+								<button type="button" class="media-overlay-btn" disabled={zoom.scale >= ZOOM_MAX} onClick={withDragGuard(zoom.zoomIn)} aria-label={t("media.player.zoomIn")}>
+									<IconZoomIn />
+								</button>
+							</>
 						)}
 						<button
 							type="button"

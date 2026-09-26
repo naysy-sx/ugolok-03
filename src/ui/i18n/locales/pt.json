@@ -535,7 +535,9 @@
 			"publishingButton": "Publicando…",
 			"publishButton": "Publicar",
 			"tooLongError": "Texto muito longo (limite: {{max}} caracteres)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nova publicação",
+			"editPostHeading": "Editar publicação"
 		},
 		"commentComposer": {
 			"ariaLabel": "Novo comentário",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Seções do canal",
 		"tabs": {
 			"posts": "Publicações",
-			"chat": "Chat",
+			"chat": "Chat do canal",
 			"moderation": "Moderação",
 			"editChannelWithName": "Editar canal «{{name}}»",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Adicionar mesmo assim",
 		"blockedSummary": "Bloqueados",
 		"unblockButton": "Desbloquear",
-		"noBlocked": "Nenhum contato bloqueado."
+		"noBlocked": "Nenhum contato bloqueado.",
+		"card": {
+			"aria": "Cartão de contato: {{name}}",
+			"openAria": "Abrir o cartão de contato de {{name}}",
+			"lastSeen": "Visto por último: {{when}}",
+			"openChat": "Abrir chat",
+			"about": "Sobre",
+			"noAbout": "Esta pessoa ainda não escreveu nada sobre si.",
+			"details": "Detalhes",
+			"contactSince": "Nos contatos desde",
+			"profileUpdated": "Perfil atualizado",
+			"key": "Chave"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Voltar à lista de conversas",
 			"toLabel": "Para",
 			"attachmentsLabel": "Anexos",
-			"composeInvalidRecipient": "Escolha um destinatário entre seus contatos"
+			"composeInvalidRecipient": "Escolha um destinatário entre seus contatos",
+			"deleteAria": "Excluir a conversa com {{name}}",
+			"deleteDialog": {
+				"title": "Excluir a conversa com {{name}}?",
+				"body": "A conversa será removida deste dispositivo para sempre. A outra pessoa não será avisada e mantém a sua cópia. Se um de vocês escrever de novo, o chat voltará a aparecer na lista.",
+				"confirm": "Excluir conversa"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Limpar conversa",
@@ -757,7 +777,9 @@
 			"repeatOff": "Repetir: desativado",
 			"repeatAll": "Repetir: tudo",
 			"repeatOne": "Repetir: um",
-			"autoplay": "Reprodução automática"
+			"autoplay": "Reprodução automática",
+			"zoomIn": "Ampliar",
+			"zoomOut": "Reduzir"
 		},
 		"classNames": {
 			"audio": "áudio",

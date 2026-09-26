@@ -82,7 +82,7 @@ import { t, tPlural, errorMessage as translateErrorMessage } from "../signals/i1
 import { uploadTarget } from "../../domain/files/servers.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
-const ROW_HEIGHT_PX = 60; // = --file-row-height в custom.css, держать в синхроне
+const ROW_HEIGHT_PX = 72; // = --file-row-height в custom.css, держать в синхроне
 
 const TYPE_MODE = {
 	image: { labelKey: "files.typeImages", Icon: IconImage, playKey: "files.watch" },

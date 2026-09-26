@@ -535,7 +535,9 @@
 			"publishingButton": "公開中…",
 			"publishButton": "公開する",
 			"tooLongError": "テキストが長すぎます（上限 {{max}} 文字）",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "新規投稿",
+			"editPostHeading": "投稿を編集"
 		},
 		"commentComposer": {
 			"ariaLabel": "新しいコメント",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "チャンネルのセクション",
 		"tabs": {
 			"posts": "投稿",
-			"chat": "チャット",
+			"chat": "チャンネルチャット",
 			"moderation": "モデレーション",
 			"editChannelWithName": "チャンネル「{{name}}」を編集",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "それでも追加する",
 		"blockedSummary": "ブロック済み",
 		"unblockButton": "ブロック解除",
-		"noBlocked": "ブロックした連絡先はありません。"
+		"noBlocked": "ブロックした連絡先はありません。",
+		"card": {
+			"aria": "連絡先カード：{{name}}",
+			"openAria": "{{name}} の連絡先カードを開く",
+			"lastSeen": "最終ログイン：{{when}}",
+			"openChat": "チャットを開く",
+			"about": "自己紹介",
+			"noAbout": "自己紹介はまだありません。",
+			"details": "詳細",
+			"contactSince": "連絡先に追加した日",
+			"profileUpdated": "プロフィール更新日",
+			"key": "鍵"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "チャット一覧に戻る",
 			"toLabel": "宛先",
 			"attachmentsLabel": "添付ファイル",
-			"composeInvalidRecipient": "連絡先から宛先を選んでください"
+			"composeInvalidRecipient": "連絡先から宛先を選んでください",
+			"deleteAria": "{{name}} との会話を削除",
+			"deleteDialog": {
+				"title": "{{name}} との会話を削除しますか？",
+				"body": "この端末から会話が完全に削除されます。相手には通知されず、相手側の会話は残ります。どちらかが再びメッセージを送ると、チャットは一覧に再び表示されます。",
+				"confirm": "会話を削除"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "会話を消去",
@@ -757,7 +777,9 @@
 			"repeatOff": "リピート: オフ",
 			"repeatAll": "リピート: 全部",
 			"repeatOne": "リピート: 1曲",
-			"autoplay": "自動再生"
+			"autoplay": "自動再生",
+			"zoomIn": "拡大",
+			"zoomOut": "縮小"
 		},
 		"classNames": {
 			"audio": "音声",

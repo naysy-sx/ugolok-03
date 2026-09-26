@@ -535,7 +535,9 @@
 			"publishingButton": "Publikowanie…",
 			"publishButton": "Opublikuj",
 			"tooLongError": "Tekst zbyt długi (limit: {{max}} znaków)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nowy wpis",
+			"editPostHeading": "Edycja wpisu"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nowy komentarz",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Sekcje kanału",
 		"tabs": {
 			"posts": "Posty",
-			"chat": "Czat",
+			"chat": "Czat kanału",
 			"moderation": "Moderacja",
 			"editChannelWithName": "Edytuj kanał „{{name}}”",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Dodaj mimo to",
 		"blockedSummary": "Zablokowani",
 		"unblockButton": "Odblokuj",
-		"noBlocked": "Brak zablokowanych kontaktów."
+		"noBlocked": "Brak zablokowanych kontaktów.",
+		"card": {
+			"aria": "Karta kontaktu: {{name}}",
+			"openAria": "Otwórz kartę kontaktu {{name}}",
+			"lastSeen": "Ostatnio online: {{when}}",
+			"openChat": "Otwórz czat",
+			"about": "O sobie",
+			"noAbout": "Ta osoba nie napisała jeszcze nic o sobie.",
+			"details": "Szczegóły",
+			"contactSince": "W kontaktach od",
+			"profileUpdated": "Profil zaktualizowany",
+			"key": "Klucz"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Wróć do listy czatów",
 			"toLabel": "Do",
 			"attachmentsLabel": "Załączniki",
-			"composeInvalidRecipient": "Wybierz odbiorcę z listy kontaktów"
+			"composeInvalidRecipient": "Wybierz odbiorcę z listy kontaktów",
+			"deleteAria": "Usuń rozmowę z {{name}}",
+			"deleteDialog": {
+				"title": "Usunąć rozmowę z {{name}}?",
+				"body": "Rozmowa zniknie z tego urządzenia na zawsze. Rozmówca się o tym nie dowie i zachowa swoją kopię. Jeśli któreś z was napisze ponownie, czat znów pojawi się na liście.",
+				"confirm": "Usuń rozmowę"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Wyczyść rozmowę",
@@ -757,7 +777,9 @@
 			"repeatOff": "Powtarzanie: wyłączone",
 			"repeatAll": "Powtarzanie: wszystko",
 			"repeatOne": "Powtarzanie: jeden",
-			"autoplay": "Autoodtwarzanie"
+			"autoplay": "Autoodtwarzanie",
+			"zoomIn": "Powiększ",
+			"zoomOut": "Pomniejsz"
 		},
 		"classNames": {
 			"audio": "audio",

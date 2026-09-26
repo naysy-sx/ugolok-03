@@ -535,7 +535,9 @@
 			"publishingButton": "Wird veröffentlicht…",
 			"publishButton": "Veröffentlichen",
 			"tooLongError": "Text zu lang (Limit: {{max}} Zeichen)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Neuer Beitrag",
+			"editPostHeading": "Beitrag bearbeiten"
 		},
 		"commentComposer": {
 			"ariaLabel": "Neuer Kommentar",
@@ -566,7 +568,7 @@
 		"tabsAriaLabel": "Kanalbereiche",
 		"tabs": {
 			"posts": "Beiträge",
-			"chat": "Chat",
+			"chat": "Kanal-Chat",
 			"moderation": "Moderation",
 			"editChannelWithName": "Kanal „{{name}}“ bearbeiten",
 			"settings": "Settings"
@@ -635,7 +637,19 @@
 		"addAnywayButton": "Trotzdem hinzufügen",
 		"blockedSummary": "Blockiert",
 		"unblockButton": "Entsperren",
-		"noBlocked": "Keine blockierten Kontakte."
+		"noBlocked": "Keine blockierten Kontakte.",
+		"card": {
+			"aria": "Kontaktkarte: {{name}}",
+			"openAria": "Kontaktkarte von {{name}} öffnen",
+			"lastSeen": "Zuletzt online: {{when}}",
+			"openChat": "Chat öffnen",
+			"about": "Über mich",
+			"noAbout": "Diese Person hat noch nichts über sich geschrieben.",
+			"details": "Details",
+			"contactSince": "Im Kontakt seit",
+			"profileUpdated": "Profil aktualisiert",
+			"key": "Schlüssel"
+		}
 	},
 	"chat": {
 		"list": {
@@ -649,7 +663,13 @@
 			"backToChatsButton": "Zurück zur Chatliste",
 			"toLabel": "An",
 			"attachmentsLabel": "Anhänge",
-			"composeInvalidRecipient": "Wählen Sie einen Empfänger aus Ihren Kontakten"
+			"composeInvalidRecipient": "Wählen Sie einen Empfänger aus Ihren Kontakten",
+			"deleteAria": "Unterhaltung mit {{name}} löschen",
+			"deleteDialog": {
+				"title": "Unterhaltung mit {{name}} löschen?",
+				"body": "Die Unterhaltung wird dauerhaft von diesem Gerät entfernt. Die andere Person erfährt nichts davon und behält ihre Kopie. Schreibt einer von euch erneut, erscheint der Chat wieder in der Liste.",
+				"confirm": "Unterhaltung löschen"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Verlauf löschen",
@@ -757,7 +777,9 @@
 			"repeatOff": "Wiederholen: aus",
 			"repeatAll": "Wiederholen: alle",
 			"repeatOne": "Wiederholen: einzeln",
-			"autoplay": "Automatische Wiedergabe"
+			"autoplay": "Automatische Wiedergabe",
+			"zoomIn": "Vergrößern",
+			"zoomOut": "Verkleinern"
 		},
 		"classNames": {
 			"audio": "Audio",

@@ -261,22 +261,35 @@ export default function StoragePanel({ ownerPubkey, privKey }) {
 
 							<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
 								<h3 class="sect-title">{t("storage.listTitle")}</h3>
-								<ul class="stack" style={{ "--gap": "var(--space-xs)", listStyle: "none", margin: 0, padding: 0 }}>
-									{shown.map((e) => (
-										<li key={e.key} class="bar" style={{ "--gap": "var(--space-s)", justifyContent: "space-between", alignItems: "center" }}>
-											<div class="stack" style={{ "--gap": "0", minWidth: 0 }}>
-												<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.known ? e.name || t("storage.unnamed") : t("storage.unknownEntry", { date: fmtDate(e.at) })}</span>
-												<small style={{ color: "var(--muted)" }}>
-													{t("storage.entryMeta", { size: formatBytes(e.size), date: fmtDate(e.at) })}
-													{e.sentTo > 0 ? ` · ${t("storage.sentTo", { count: e.sentTo })}` : ""}
-												</small>
-											</div>
-											<button type="button" class="btn--ghost" onClick={() => askFreeEntry(e)}>
-												<IconEmpty /> {t("storage.free.button")}
-											</button>
-										</li>
-									))}
-								</ul>
+								{/* Таблица, а не список: кнопки «Освободить место» стоят в одном столбце у правого
+								    края и не «пляшут» от длины названий. Название обрезается многоточием (полное — в
+								    подсказке), на телефоне у кнопки остаётся только иконка. */}
+								<table class="storage-table">
+									<caption class="visually-hidden">{t("storage.listTitle")}</caption>
+									<tbody>
+										{shown.map((e) => {
+											const name = e.known ? e.name || t("storage.unnamed") : t("storage.unknownEntry", { date: fmtDate(e.at) });
+											return (
+												<tr key={e.key}>
+													<td class="storage-table__file">
+														<span class="storage-table__name" title={name}>
+															{name}
+														</span>
+														<small class="storage-table__meta">
+															{t("storage.entryMeta", { size: formatBytes(e.size), date: fmtDate(e.at) })}
+															{e.sentTo > 0 ? ` · ${t("storage.sentTo", { count: e.sentTo })}` : ""}
+														</small>
+													</td>
+													<td class="storage-table__action">
+														<button type="button" class="btn--ghost" onClick={() => askFreeEntry(e)} aria-label={`${t("storage.free.button")}: ${name}`} title={t("storage.free.button")}>
+															<IconEmpty /> <span class="btn-label">{t("storage.free.button")}</span>
+														</button>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
 								{entries.length > visible && (
 									<div>
 										<button type="button" class="btn--ghost" onClick={() => setVisible((v) => v + PAGE)}>

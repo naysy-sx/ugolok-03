@@ -7,6 +7,7 @@ import { openChat, place } from "../signals/place.js";
 import { placeCall } from "../signals/call.js";
 import { deleteChatForeverAction } from "../signals/chats.js";
 import RemoveContactDialog from "../components/remove-contact-dialog.jsx";
+import ContactModal from "../components/contact-modal.jsx";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconChatBubble from "../icons/chat-bubble.jsx";
 import IconPencil from "../icons/pencil.jsx";
@@ -143,6 +144,8 @@ export default function Contacts() {
 	const requestsRef = useRef(null);
 	// Диалог «Удалить контакт (и переписку?)» — {pubkey, name} или null.
 	const [removeTarget, setRemoveTarget] = useState(null);
+	// Карточка контакта (модальное окно) — pubkey открытого контакта или null.
+	const [cardPubkey, setCardPubkey] = useState(null);
 	// busyRef — синхронная защита от повторного входа. busy (state) обновляется через
 	// setBusy и коммитится АСИНХРОННО (рендер-цикл) — обработчик второго клика,
 	// вызванный до коммита, читает СТАРОЕ значение busy из замыкания того же рендера
@@ -469,11 +472,11 @@ export default function Contacts() {
 											nameIsNpub={!profile?.name}
 											bio={profile?.about}
 											bioLines={2}
-											onOpen={() => openChat(pubkey)}
-											openLabel={t("contacts.openChatAria", { name: displayName })}
+											onOpen={() => setCardPubkey(pubkey)}
+											openLabel={t("contacts.card.openAria", { name: displayName })}
 											actions={
 												<>
-													<button type="button" class="contact-chat" onClick={() => openChat(pubkey)} aria-label={t("contacts.openChatAria", { name: displayName })}>
+													<button type="button" class="contact-chat" onClick={() => openChat(pubkey, { backTo: { kind: "people" } })} aria-label={t("contacts.openChatAria", { name: displayName })}>
 														<IconChatBubble />
 													</button>
 													<ActionsMenu label={t("channel.comment.moreActionsAria", { name: displayName })}>
@@ -723,6 +726,33 @@ export default function Contacts() {
 					)}
 				</div>
 			</div>
+			{cardPubkey && contacts.value.includes(cardPubkey) && (
+				<ContactModal
+					pubkey={cardPubkey}
+					profile={profiles.value[cardPubkey]}
+					displayName={profiles.value[cardPubkey]?.name || shortPubkey(cardPubkey)}
+					busy={busy}
+					onClose={() => setCardPubkey(null)}
+					onOpenChat={() => {
+						setCardPubkey(null);
+						openChat(cardPubkey, { backTo: { kind: "people" } });
+					}}
+					onCall={() => {
+						setCardPubkey(null);
+						placeCall(cardPubkey);
+					}}
+					onBlock={() => {
+						const pk = cardPubkey;
+						setCardPubkey(null);
+						runRowAction(() => blockContactAction(pk));
+					}}
+					onRemove={() => {
+						const pk = cardPubkey;
+						setCardPubkey(null);
+						setRemoveTarget({ pubkey: pk, name: profiles.value[pk]?.name || shortPubkey(pk) });
+					}}
+				/>
+			)}
 			{removeTarget && (
 				<RemoveContactDialog
 					name={removeTarget.name}
