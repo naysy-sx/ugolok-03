@@ -4269,6 +4269,7 @@ name = "ugolok-desktop"
 version = "0.1.0"
 dependencies = [
  "log",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tauri",

@@ -95,8 +95,31 @@ fn set_macos_menu(app: &tauri::App) -> tauri::Result<()> {
 	Ok(())
 }
 
+// Э3, найдено живьём (владелец, Mac mini, 2026-09-27) — WebSocket-соединение
+// к relay обрывалось короткими циклами (code 1005), пока окно приложения не
+// было В ФОКУСЕ (например, открыт инспектор поверх него) — macOS App Nap
+// придерживает таймеры/сеть у процессов, которые считает фоновыми/незанятыми,
+// даже если их окно всё ещё видно. NSAppSleepDisabled в Info.plist это НЕ
+// лечит (задокументированный факт — App Nap решает на уровне процесса, не
+// по декларации в plist) — единственный рабочий способ снять её на весь
+// процесс: удерживать activity-токен через NSProcessInfo и никогда его не
+// отпускать (endActivity не зовём нарочно — тот же приём, что в реальных
+// проектах с этим же багом, см. PROGRESS.md со ссылками).
+#[cfg(target_os = "macos")]
+fn disable_app_nap() {
+	use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+	let process_info = NSProcessInfo::processInfo();
+	let reason = NSString::from_str("WebSocket relay keep-alive (Уголок)");
+	let activity = process_info.beginActivityWithOptions_reason(NSActivityOptions::UserInitiated, &reason);
+	// Намеренная утечка — токен обязан жить всё время работы процесса.
+	std::mem::forget(activity);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+	#[cfg(target_os = "macos")]
+	disable_app_nap();
+
 	let mut builder = tauri::Builder::default();
 
 	// Single-instance (И9) — ОБЯЗАН регистрироваться первым плагином

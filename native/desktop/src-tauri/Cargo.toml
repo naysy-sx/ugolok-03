@@ -30,3 +30,12 @@ tauri-plugin-window-state = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
+
+# Э3, найдено живьём (владелец, Mac mini, 2026-09-27) — macOS App Nap
+# обрывает WebSocket relay-соединение (code 1005) короткими циклами, даже
+# пока окно приложения на экране, если оно не в фокусе (напр. открыт
+# инспектор). NSAppSleepDisabled в Info.plist это НЕ лечит (задокументированный
+# факт — сама App Nap работает на уровне процесса, не декларации в plist) —
+# нужен настоящий activity-токен через NSProcessInfo, см. lib.rs.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSProcessInfo", "NSString"] }
