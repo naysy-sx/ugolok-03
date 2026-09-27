@@ -128,7 +128,12 @@ window.addEventListener("ugolok:db-versionchange", () => {
 	reloadWhenIdle();
 });
 
-if ("serviceWorker" in navigator) {
+// Э1/§4.2 — «в нативных режимах не эмитится service-worker.js и не выполняется
+// его регистрация»: __TARGET__ !== "web" исключает саму попытку регистрации
+// (файла нет в dist-capacitor/dist-tauri, см. vite.config.js), не полагаясь на
+// то, что .catch(() => {}) ниже просто молча проглотит 404 — так честнее и не
+// тратит сетевой запрос внутри нативной оболочки впустую.
+if (__TARGET__ === "web" && "serviceWorker" in navigator) {
 	navigator.serviceWorker.addEventListener("controllerchange", reloadForFreshServiceWorker);
 
 	// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (этап 53-довесок, тот же класс пробела, что

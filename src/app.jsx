@@ -29,6 +29,7 @@ import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
 import { journalEntries, refreshJournal } from "./ui/signals/journal.js";
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
+import { getPlatform } from "./platform/index.js";
 import { pushToast } from "./ui/signals/toasts.js";
 import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
@@ -100,6 +101,27 @@ function MainShell() {
 	// перехвата Range (CONTRACTS.md/DESIGN.md). Один раз на приложение,
 	// не завязан на ownerPubkey (реестр открытых файлов — player-bridge.js).
 	useEffect(() => startPlayerBridge(), []);
+
+	// Э1.4/§4.3 ТЗ-NATIVE-APPS — на вебе клик по внешней ссылке остаётся
+	// стандартным поведением браузера (перехватчик сразу выходит, ничего не
+	// трогает). В нативных оболочках клик по target="_blank"/обычной <a>
+	// внутри WebView обычно уводит либо в никуда, либо в свой же WebView без
+	// системного браузера — перехватываем capture-фазой и открываем явно.
+	// Единственное реальное место сегодня — target="_blank" в markdown-view.jsx
+	// (E1-INVENTORY.md), но перехватчик глобальный, не завязан на конкретный компонент.
+	useEffect(() => {
+		if (getPlatform().shell === "web") return;
+		function onClickCapture(e) {
+			const a = e.target.closest?.("a[href]");
+			if (!a) return;
+			const href = a.getAttribute("href");
+			if (!href || href.startsWith("#")) return;
+			e.preventDefault();
+			getPlatform().links.openExternal(a.href);
+		}
+		document.addEventListener("click", onClickCapture, true);
+		return () => document.removeEventListener("click", onClickCapture, true);
+	}, []);
 
 	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает
 	// от ТЕКУЩЕЙ эффективной темы даже если пользователь ещё ни разу не выбирал

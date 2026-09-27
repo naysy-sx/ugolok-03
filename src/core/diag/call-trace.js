@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { getPlatform } from "../../platform/index.js";
 
 // TZ-diag-trace.md — трассировка звонков за флагом ?diag=1. НЕ меняет логику
 // звонков ни на бит: домен (src/domain/calls/*, src/domain/rooms/*) не
@@ -339,15 +340,11 @@ export function traceAsJson() {
 // должна мешать остальным (телефон без "Скачать", десктоп без Web Share…).
 export function downloadTraceFile() {
 	if (typeof document === "undefined") return;
-	const blob = new Blob([traceAsJson()], { type: "application/json" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = traceFileName();
-	document.body.appendChild(a);
-	a.click();
-	a.remove();
-	setTimeout(() => URL.revokeObjectURL(url), 1000);
+	getPlatform().files.saveAs({
+		name: traceFileName(),
+		mime: "application/json",
+		data: traceAsJson(),
+	});
 }
 
 export async function copyTraceToClipboard() {

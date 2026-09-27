@@ -25,7 +25,14 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"test": "node --test tests/*.test.js tests/harness/*.test.js",
-		"gen:icons": "node scripts/gen-icons.mjs"
+		"gen:icons": "node scripts/gen-icons.mjs",
+		"build:capacitor": "vite build --mode capacitor",
+		"build:tauri": "vite build --mode tauri",
+		"native:android": "node -e \"console.error('native/mobile (Capacitor Android) ещё не создан — Э3 ТЗ-NATIVE-APPS'); process.exit(1)\"",
+		"native:ios": "node -e \"console.error('native/mobile (Capacitor iOS) ещё не создан — Э3 ТЗ-NATIVE-APPS, отложено владельцем (недостаточно диска для Xcode)'); process.exit(1)\"",
+		"native:desktop:dev": "node -e \"console.error('native/desktop (Tauri) ещё не создан — Э3/Э8 ТЗ-NATIVE-APPS'); process.exit(1)\"",
+		"native:desktop:build": "node -e \"console.error('native/desktop (Tauri) ещё не создан — Э3/Э8 ТЗ-NATIVE-APPS'); process.exit(1)\"",
+		"native:sync": "node -e \"console.error('native/mobile ещё не создан — нечего синхронизировать (Capacitor sync — Э3 ТЗ-NATIVE-APPS)'); process.exit(1)\""
 	},
 	"dependencies": {
 		"@fontsource/golos-text": "^5.3.0",

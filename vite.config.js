@@ -5,6 +5,11 @@ import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { execSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+// Э1.5/§4.3 — platform.info().appVersion (экран «Диагностика»): версия из
+// package.json, отдельно от BUILD_HASH (тот — git-идентификатор сборки, этот —
+// человекочитаемый semver, каким его увидит стор на Э3/Э4).
+const APP_VERSION = JSON.parse(readFileSync("package.json", "utf8")).version;
+
 // Метка сборки для версионирования cache (F-OF-06: ugolok-cache-v{BUILD_HASH}).
 // ВАЖНО: это НЕ хеш содержимого index.html для NF-18 — тот считается ПОСТ-сборки
 // в scripts/release-hash.sh. Здесь — build-time идентификатор, не content-hash.
@@ -352,6 +357,7 @@ export default defineConfig(({ command, mode }) => {
         ],
         define: {
             __TARGET__: JSON.stringify(target),
+            __APP_VERSION__: JSON.stringify(APP_VERSION),
             __BUILD_HASH__: JSON.stringify(BUILD_HASH),
             __BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays()),
             __BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(buildBootstrapRelays()),

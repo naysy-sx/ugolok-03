@@ -3,7 +3,8 @@ import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
-import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
+import { getRuntimeConfig } from "../../domain/settings/runtime-config.js";
+import { getPlatform } from "../../platform/index.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { record as traceRecord } from "../../core/diag/call-trace.js";
@@ -396,8 +397,10 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// обращения к readBootstrapEndpoints() ниже (её build-time дефолт теперь
 	// приоритетно берёт значения из config.json, см. bootstrap-endpoints.js).
 	// Провал/таймаут loadRuntimeConfig -> {} — откат на build-time дефолт,
-	// connect() не блокируется дольше 3с сверху.
-	await loadRuntimeConfig();
+	// connect() не блокируется дольше 3с сверху. Э1.3/Р6 — через platform.config
+	// (веб: тот же loadRuntimeConfig(); нативные оболочки читают свой config.json
+	// из каталога сборки, см. vite.config.js copyNativeConfigJson, Э3/Э4).
+	await getPlatform().config.load();
 	// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-2): гидратация
 	// profiles.value из персиста ДО любых сетевых запросов — критерий приёмки
 	// "холодный старт офлайн показывает закэшированные профили контактов, не

@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { getPlatform } from "../../platform/index.js";
 
 // Этап 0 (PROCESS-DOCS/AUDIT/MESSAGE-DELIVERY-TZ.md, З0.1) — журнал доставки
 // 1:1 сообщений. Прямой архитектурный клон src/core/diag/call-trace.js (тот
@@ -243,15 +244,11 @@ export function deliveryTraceAsJson() {
 
 export function downloadDeliveryTraceFile() {
 	if (typeof document === "undefined") return;
-	const blob = new Blob([deliveryTraceAsJson()], { type: "application/json" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = traceFileName();
-	document.body.appendChild(a);
-	a.click();
-	a.remove();
-	setTimeout(() => URL.revokeObjectURL(url), 1000);
+	getPlatform().files.saveAs({
+		name: traceFileName(),
+		mime: "application/json",
+		data: deliveryTraceAsJson(),
+	});
 }
 
 export async function copyDeliveryTraceToClipboard() {
