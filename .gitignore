@@ -6,6 +6,7 @@ worker.sh
 PROCESS-DOCS/
 
 node_modules/
+target/
 dist/
 .DS_Store
 *.log

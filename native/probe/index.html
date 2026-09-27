@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Уголок — зонд Э0</title>
+<style>
+	:root { color-scheme: dark light; }
+	body { font: 14px/1.4 -apple-system, system-ui, sans-serif; margin: 0; padding: 12px 12px calc(40px + env(safe-area-inset-bottom, 0px)); background: #16181c; color: #e8e8e8; }
+	h1 { font-size: 18px; margin: 4px 0 2px; }
+	h2 { font-size: 15px; margin: 22px 0 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+	.sub { color: #9aa0a6; font-size: 12px; margin-bottom: 8px; }
+	.row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid #24262b; flex-wrap: wrap; }
+	.row .id { width: 34px; flex: 0 0 34px; font-weight: 700; color: #d98a4c; }
+	.row .body { flex: 1 1 260px; min-width: 200px; }
+	.row .desc { color: #c6c9cd; }
+	.row .out { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; margin-top: 4px; color: #8fd08f; }
+	.row .out.err { color: #e08080; }
+	.row .out.warn { color: #e0c060; }
+	button { background: #2a2d33; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+	button:active { background: #3a3d43; }
+	button.primary { background: #c45c32; border-color: #c45c32; color: #fff; }
+	input[type=text], textarea { width: 100%; box-sizing: border-box; background: #0f1013; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px; font-family: ui-monospace, monospace; font-size: 12px; }
+	textarea { min-height: 70px; resize: vertical; }
+	.cfg { display: grid; grid-template-columns: 120px 1fr; gap: 6px; align-items: center; margin-bottom: 6px; }
+	.badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+	.badge.pass { background: #1f3d1f; color: #8fd08f; }
+	.badge.fail { background: #3d1f1f; color: #e08080; }
+	.badge.warn { background: #3d351f; color: #e0c060; }
+	.badge.unknown { background: #2a2c30; color: #999; }
+	.manual-controls { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+	footer { margin-top: 26px; }
+	#jsonOut { min-height: 200px; }
+	.flex { display: flex; gap: 8px; flex-wrap: wrap; }
+	.hide { display: none !important; }
+	.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+	@media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+	code { background: #0f1013; padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Уголок — зонд Э0</h1>
+<div class="sub">Пункты T01–T20 из ТЗ-NATIVE-APPS §Э0.2. Не часть основного бандла. Результат — JSON внизу страницы, копируется/скачивается и вставляется в <code>E0-REPORT.md</code>.</div>
+
+<h2>Конфигурация окружения</h2>
+<div class="cfg">
+	<label for="cfgRelay">Relay (wss)</label>
+	<input type="text" id="cfgRelay" value="wss://relay.test.ugolok.tech" />
+</div>
+<div class="cfg">
+	<label for="cfgBlossom">Blossom (https)</label>
+	<input type="text" id="cfgBlossom" value="https://blossom.test.ugolok.tech" />
+</div>
+<div class="cfg">
+	<label for="cfgTurnCreds">TURN-credentials URL</label>
+	<input type="text" id="cfgTurnCreds" value="https://test.ugolok.tech/api/turn-credentials" />
+</div>
+<div class="sub">Дефолты — тестовый остров test.ugolok.tech. Поменяйте на свой self-host при необходимости.</div>
+
+<div class="flex">
+	<button class="primary" id="runAllAuto">Запустить все автоматические (T01,T02,T04,T05,T06,T09,T11,T14,T15,T19)</button>
+	<button id="btnEnv">Определить среду запуска</button>
+</div>
+<div id="envOut" class="row"></div>
+
+<h2>Автоматические проверки</h2>
+<div id="autoTests"></div>
+
+<h2>Ручные / визуальные проверки</h2>
+<div id="manualTests"></div>
+
+<footer>
+	<h2>Экспорт результата</h2>
+	<div class="flex">
+		<button id="btnCopy">Скопировать JSON</button>
+		<button id="btnDownload">Скачать JSON (проверяет заодно T13)</button>
+		<button id="btnRefresh">Обновить JSON</button>
+	</div>
+	<textarea id="jsonOut" readonly></textarea>
+</footer>
+
+<script>
+"use strict";
+
+const RESULTS = {}; // id -> { status: 'pass'|'fail'|'warn'|'unknown', detail: any, ts }
+
+function setResult(id, status, detail) {
+	RESULTS[id] = { status, detail, ts: new Date().toISOString() };
+	renderBadge(id);
+	renderJSON();
+}
+
+function renderBadge(id) {
+	const el = document.querySelector(`[data-badge="${id}"]`);
+	if (!el) return;
+	const r = RESULTS[id];
+	el.className = "badge " + (r ? r.status : "unknown");
+	el.textContent = r ? r.status : "не запущено";
+	const out = document.querySelector(`[data-out="${id}"]`);
+	if (out && r) {
+		out.textContent = typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail, null, 2);
+		out.className = "out" + (r.status === "fail" ? " err" : r.status === "warn" ? " warn" : "");
+	}
+}
+
+function renderJSON() {
+	const env = window.__ENV_INFO__ || null;
+	document.getElementById("jsonOut").value = JSON.stringify({
+		capturedAt: new Date().toISOString(),
+		userAgent: navigator.userAgent,
+		env,
+		results: RESULTS,
+	}, null, 2);
+}
+
+function cfg() {
+	return {
+		relay: document.getElementById("cfgRelay").value.trim(),
+		blossom: document.getElementById("cfgBlossom").value.trim(),
+		turnCreds: document.getElementById("cfgTurnCreds").value.trim(),
+	};
+}
+
+function withTimeout(promise, ms, label) {
+	return Promise.race([
+		promise,
+		new Promise((_, rej) => setTimeout(() => rej(new Error(`таймаут ${ms}мс: ${label}`)), ms)),
+	]);
+}
+
+// ---------- Определение среды ----------
+function detectEnv() {
+	const hasTauri = typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
+	const hasCapacitor = typeof window.Capacitor !== "undefined";
+	const shell = hasTauri ? "tauri" : hasCapacitor ? "capacitor" : "web/unknown";
+	const info = {
+		shell,
+		origin: location.origin,
+		protocol: location.protocol,
+		host: location.host,
+		userAgent: navigator.userAgent,
+		platform: navigator.platform,
+		uaDataBrands: navigator.userAgentData ? navigator.userAgentData.brands : null,
+		uaDataPlatform: navigator.userAgentData ? navigator.userAgentData.platform : null,
+	};
+	window.__ENV_INFO__ = info;
+	document.getElementById("envOut").innerHTML =
+		`<div class="body"><div class="desc">shell=<b>${info.shell}</b> origin=<code>${info.origin}</code></div>` +
+		`<div class="out">${JSON.stringify(info, null, 2)}</div></div>`;
+	renderJSON();
+	return info;
+}
+document.getElementById("btnEnv").addEventListener("click", detectEnv);
+
+// ================= АВТОМАТИЧЕСКИЕ ПРОВЕРКИ =================
+
+async function testT01() {
+	const isSecureContext = window.isSecureContext;
+	const hasSubtle = typeof crypto !== "undefined" && typeof crypto.subtle !== "undefined";
+	const hasRandom = typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function";
+	const ok = isSecureContext && hasSubtle && hasRandom;
+	setResult("T01", ok ? "pass" : "fail", { isSecureContext, hasSubtle, hasRandom });
+}
+
+async function testT02() {
+	if (!(crypto && crypto.subtle)) return setResult("T02", "fail", "crypto.subtle недоступен");
+	const enc = new TextEncoder();
+	const start = performance.now();
+	try {
+		const keyMaterial = await crypto.subtle.importKey("raw", enc.encode("probe-password"), "PBKDF2", false, ["deriveKey"]);
+		const salt = crypto.getRandomValues(new Uint8Array(16));
+		await crypto.subtle.deriveKey(
+			{ name: "PBKDF2", salt, iterations: 600000, hash: "SHA-256" },
+			keyMaterial,
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["encrypt", "decrypt"],
+		);
+		const ms = Math.round(performance.now() - start);
+		setResult("T02", ms > 5000 ? "warn" : "pass", { ms, note: ms > 5000 ? "медленнее 5с — проблема UX при разблокировке" : "ок" });
+	} catch (e) {
+		setResult("T02", "fail", String(e));
+	}
+}
+
+async function testT03_write() {
+	try {
+		const db = await openProbeDb();
+		const tx = db.transaction("markers", "readwrite");
+		const marker = "T03-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+		tx.objectStore("markers").put({ id: "current", value: marker, writtenAt: new Date().toISOString() });
+		await txDone(tx);
+		document.getElementById("t03written").textContent = marker;
+		setResult("T03_write", "unknown", { marker, note: "перезапустите приложение (или установите новую сборку поверх), затем нажмите «Шаг 2: прочитать»" });
+	} catch (e) {
+		setResult("T03_write", "fail", String(e));
+	}
+}
+async function testT03_read() {
+	try {
+		const db = await openProbeDb();
+		const tx = db.transaction("markers", "readonly");
+		const rec = await reqDone(tx.objectStore("markers").get("current"));
+		if (rec) {
+			setResult("T03_read", "pass", { found: rec.value, writtenAt: rec.writtenAt, note: "сравните с записанным значением визуально — если совпадает, IndexedDB пережила перезапуск/переустановку" });
+		} else {
+			setResult("T03_read", "fail", "запись не найдена — данные потеряны");
+		}
+	} catch (e) {
+		setResult("T03_read", "fail", String(e));
+	}
+}
+function openProbeDb() {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.open("ugolok-probe-t03", 1);
+		req.onupgradeneeded = () => req.result.createObjectStore("markers", { keyPath: "id" });
+		req.onsuccess = () => resolve(req.result);
+		req.onerror = () => reject(req.error);
+	});
+}
+function txDone(tx) { return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+function reqDone(req) { return new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+
+async function testT04() {
+	const { relay } = cfg();
+	if (!relay) return setResult("T04", "fail", "не задан адрес relay");
+	try {
+		const result = await withTimeout(new Promise((resolve, reject) => {
+			const ws = new WebSocket(relay);
+			const sub = "probe-" + Math.random().toString(36).slice(2, 8);
+			let gotEose = false, gotEvent = false;
+			ws.onopen = () => { ws.send(JSON.stringify(["REQ", sub, { kinds: [0, 1], limit: 1 }])); };
+			ws.onmessage = (ev) => {
+				try {
+					const msg = JSON.parse(ev.data);
+					if (msg[0] === "EVENT" && msg[1] === sub) gotEvent = true;
+					if (msg[0] === "EOSE" && msg[1] === sub) { gotEose = true; ws.close(); resolve({ gotEvent, gotEose }); }
+				} catch { /* ignore non-JSON */ }
+			};
+			ws.onerror = (e) => reject(new Error("WebSocket error"));
+			ws.onclose = (e) => { if (!gotEose) reject(new Error(`закрыт до EOSE, code=${e.code}`)); };
+		}), 10000, "relay REQ/EOSE");
+		setResult("T04", "pass", result);
+	} catch (e) {
+		setResult("T04", "fail", String(e.message || e));
+	}
+}
+
+async function testT05() {
+	const { blossom, turnCreds } = cfg();
+	const out = { origin: location.origin };
+	try {
+		const r1 = await withTimeout(fetch(blossom.replace(/\/$/, "") + "/.well-known/health", { mode: "cors" }), 8000, "blossom health");
+		out.blossom = { ok: r1.ok, status: r1.status };
+	} catch (e) {
+		out.blossom = { ok: false, error: String(e.message || e) };
+	}
+	try {
+		const r2 = await withTimeout(fetch(turnCreds, { mode: "cors" }), 8000, "turn-credentials");
+		out.turnCreds = { ok: r2.ok, status: r2.status };
+	} catch (e) {
+		out.turnCreds = { ok: false, error: String(e.message || e) };
+	}
+	const ok = out.blossom.ok && out.turnCreds.ok;
+	setResult("T05", ok ? "pass" : "warn", out);
+}
+
+async function testT06() {
+	try {
+		const src = `self.onmessage = (e) => self.postMessage('pong:' + e.data);`;
+		const url = "data:text/javascript;base64," + btoa(src);
+		const result = await withTimeout(new Promise((resolve, reject) => {
+			let w;
+			try { w = new Worker(url); } catch (e) { return reject(e); }
+			w.onmessage = (ev) => { resolve(ev.data); w.terminate(); };
+			w.onerror = (ev) => reject(new Error(ev.message || "worker error"));
+			w.postMessage("ping");
+		}), 5000, "data: worker roundtrip");
+		setResult("T06", result === "pong:ping" ? "pass" : "warn", result);
+	} catch (e) {
+		setResult("T06", "fail", String(e.message || e));
+	}
+}
+
+async function testT09() {
+	const has = "serviceWorker" in navigator;
+	if (!has) return setResult("T09", "warn", "navigator.serviceWorker отсутствует (ожидаемо на iOS/macOS-обёртках)");
+	try {
+		const blob = new Blob(["self.addEventListener('install',()=>self.skipWaiting());"], { type: "text/javascript" });
+		const url = URL.createObjectURL(blob);
+		await withTimeout(navigator.serviceWorker.register(url), 5000, "SW register");
+		setResult("T09", "pass", "регистрация прошла (неожиданно для blob: URL — перепроверить)");
+	} catch (e) {
+		setResult("T09", "warn", { hasApi: true, registerError: String(e.message || e), note: "blob: URL для SW обычно запрещён спецификацией — это не значит, что SW недоступен вообще, только что нужен обычный файл сценария" });
+	}
+}
+
+async function testT11() {
+	const sizes = [200, 500]; // MiB
+	const out = {};
+	for (const mb of sizes) {
+		const bytes = mb * 1024 * 1024;
+		const start = performance.now();
+		try {
+			const arr = new Uint8Array(bytes);
+			arr[0] = 1; arr[bytes - 1] = 1; // touch pages
+			const blob = new Blob([arr]);
+			const url = URL.createObjectURL(blob);
+			URL.revokeObjectURL(url);
+			out[mb + "MiB"] = { ok: true, ms: Math.round(performance.now() - start) };
+		} catch (e) {
+			out[mb + "MiB"] = { ok: false, error: String(e.message || e) };
+		}
+	}
+	const ok = Object.values(out).every((o) => o.ok);
+	setResult("T11", ok ? "pass" : "warn", out);
+}
+
+async function testT14() {
+	const hasNotification = typeof Notification !== "undefined";
+	const hasBadge = typeof navigator.setAppBadge === "function";
+	setResult("T14", hasNotification || hasBadge ? "pass" : "warn", {
+		hasNotification,
+		notificationPermission: hasNotification ? Notification.permission : null,
+		hasBadge,
+	});
+}
+
+async function testT15() {
+	if (!navigator.clipboard) return setResult("T15", "warn", "navigator.clipboard отсутствует");
+	const marker = "probe-clip-" + Date.now();
+	try {
+		await withTimeout(navigator.clipboard.writeText(marker), 4000, "clipboard.writeText");
+		let readBack = null, readErr = null;
+		try { readBack = await withTimeout(navigator.clipboard.readText(), 4000, "clipboard.readText"); } catch (e) { readErr = String(e.message || e); }
+		setResult("T15", readBack === marker ? "pass" : "warn", { wrote: marker, readBack, readErr });
+	} catch (e) {
+		setResult("T15", "fail", String(e.message || e));
+	}
+}
+
+async function testT19() {
+	const out = {
+		userAgent: navigator.userAgent,
+		platform: navigator.platform,
+		uaDataBrands: navigator.userAgentData ? navigator.userAgentData.brands : null,
+		hasStructuredClone: typeof structuredClone === "function",
+		hasArrayAt: typeof Array.prototype.at === "function",
+		hasOKLCH: typeof CSS !== "undefined" && CSS.supports && CSS.supports("color", "oklch(0.5 0.1 30)"),
+		hasContainerQueries: typeof CSS !== "undefined" && CSS.supports && CSS.supports("container-type", "inline-size"),
+	};
+	setResult("T19", "unknown", out); // статус не авто-определяем — интерпретация ручная (см. таблицу минимальных версий Р9)
+}
+
+const AUTO = [
+	["T01", "isSecureContext, crypto.subtle, crypto.getRandomValues", testT01],
+	["T02", "PBKDF2 600 000 итераций (как в keystore.js) — время в мс", testT02],
+	["T04", "WebSocket до тестового relay: REQ → EOSE", testT04],
+	["T05", "fetch Blossom /.well-known/health и TURN-credentials — CORS с нативным origin", testT05],
+	["T06", "Web Worker из data:-URL", testT06],
+	["T09", "Service Worker: feature-detect + попытка регистрации", testT09],
+	["T11", "Blob 200 МБ и 500 МБ в памяти", testT11],
+	["T14", "Notification, navigator.setAppBadge", testT14],
+	["T15", "navigator.clipboard.writeText/readText", testT15],
+	["T19", "Версия движка WebView (сырые данные, интерпретация вручную по Р9)", testT19],
+];
+
+function renderAuto() {
+	const root = document.getElementById("autoTests");
+	root.innerHTML = AUTO.map(([id, desc]) => `
+		<div class="row">
+			<div class="id">${id}</div>
+			<div class="body">
+				<div class="desc">${desc} <span class="badge unknown" data-badge="${id}">не запущено</span></div>
+				<div class="out" data-out="${id}"></div>
+			</div>
+			<button data-run="${id}">Запустить</button>
+		</div>
+	`).join("");
+	root.querySelectorAll("[data-run]").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const id = btn.getAttribute("data-run");
+			const fn = AUTO.find((a) => a[0] === id)[2];
+			fn();
+		});
+	});
+}
+document.getElementById("runAllAuto").addEventListener("click", async () => {
+	for (const [, , fn] of AUTO) { await fn(); }
+});
+
+// ================= РУЧНЫЕ / ВИЗУАЛЬНЫЕ ПРОВЕРКИ =================
+
+function manualRecorder(id, extraHtml, onMount) {
+	return `
+		<div class="row" id="manual-${id}">
+			<div class="id">${id}</div>
+			<div class="body">
+				<div class="desc"><span class="badge unknown" data-badge="${id}">не запущено</span></div>
+				${extraHtml}
+				<div class="out" data-out="${id}"></div>
+				<div class="manual-controls">
+					<button data-mark="${id}" data-status="pass">✅ Работает</button>
+					<button data-mark="${id}" data-status="fail">❌ Не работает</button>
+					<button data-mark="${id}" data-status="warn">⚠️ Частично / особенность</button>
+				</div>
+				<input type="text" placeholder="Заметка (необязательно)" data-note="${id}" style="margin-top:4px" />
+			</div>
+		</div>
+	`;
+}
+
+function wireManualMarkers() {
+	document.querySelectorAll("[data-mark]").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const id = btn.getAttribute("data-mark");
+			const status = btn.getAttribute("data-status");
+			const noteEl = document.querySelector(`[data-note="${id}"]`);
+			const note = noteEl ? noteEl.value : "";
+			setResult(id, status, note || "(без заметки)");
+		});
+	});
+}
+
+let ws03Live = null;
+let t18Log = [];
+let t18Start = null;
+
+function renderManual() {
+	const root = document.getElementById("manualTests");
+	root.innerHTML = [
+		// T03
+		`<div class="row">
+			<div class="id">T03</div>
+			<div class="body">
+				<div class="desc">IndexedDB переживает перезапуск и установку новой сборки поверх <span class="badge unknown" data-badge="T03_write">шаг1</span> <span class="badge unknown" data-badge="T03_read">шаг2</span></div>
+				<div class="flex">
+					<button id="t03w">Шаг 1: записать маркер</button>
+					<button id="t03r">Шаг 2: прочитать маркер (после перезапуска)</button>
+				</div>
+				<div>Записанный маркер: <code id="t03written">—</code></div>
+				<div class="out" data-out="T03_write"></div>
+				<div class="out" data-out="T03_read"></div>
+			</div>
+		</div>`,
+
+		// T07
+		manualRecorder("T07", `
+			<div>getUserMedia({audio:true}) дважды подряд — появляется ли системный запрос оба раза.</div>
+			<div class="flex"><button id="t07go">Запросить микрофон (можно жать несколько раз)</button></div>
+			<div class="out" data-out="T07_raw"></div>
+		`),
+
+		// T08 — manual WebRTC signaling
+		`<div class="row">
+			<div class="id">T08</div>
+			<div class="body">
+				<div class="desc">RTCPeerConnection с TURN, вручную обменяться SDP между двумя окнами (зонд↔браузер) <span class="badge unknown" data-badge="T08"></span></div>
+				<div class="two-col">
+					<div>
+						<b>Роль А (звонящий)</b>
+						<div class="flex"><button id="t08caller">1. Создать оффер</button></div>
+						<textarea id="t08offerOut" placeholder="Оффер появится здесь — скопируйте на сторону Б"></textarea>
+						<textarea id="t08answerIn" placeholder="Вставьте сюда ответ от стороны Б"></textarea>
+						<div class="flex"><button id="t08callerApply">3. Применить ответ</button></div>
+					</div>
+					<div>
+						<b>Роль Б (отвечающий)</b>
+						<textarea id="t08offerIn" placeholder="Вставьте сюда оффер от стороны А"></textarea>
+						<div class="flex"><button id="t08callee">2. Создать ответ</button></div>
+						<textarea id="t08answerOut" placeholder="Ответ появится здесь — скопируйте на сторону А"></textarea>
+					</div>
+				</div>
+				<div>Состояние соединения: <code id="t08state">—</code></div>
+				<audio id="t08audio" autoplay controls style="width:100%;margin-top:4px"></audio>
+				<div class="out" data-out="T08"></div>
+				<div class="manual-controls">
+					<button data-mark="T08" data-status="pass">✅ Звук пошёл</button>
+					<button data-mark="T08" data-status="fail">❌ Не соединилось</button>
+					<button data-mark="T08" data-status="warn">⚠️ Соединилось, но без звука/особенность</button>
+				</div>
+				<input type="text" placeholder="Заметка" data-note="T08" />
+			</div>
+		</div>`,
+
+		// T10 + T12 combined (file → blob playback)
+		manualRecorder("T10", `
+			<div>Выберите локальный аудио/видео файл — проверьте воспроизведение и перемотку из blob-URL. Заодно проверяет T12 (открылся ли системный выбор файлов).</div>
+			<div class="flex"><button id="t12pick">Выбрать файл (T12)</button></div>
+			<input type="file" id="t12input" accept="audio/*,video/*" multiple class="hide" />
+			<div class="out" data-out="T12_raw"></div>
+			<div id="t10players"></div>
+		`),
+		manualRecorder("T12", `<div>Открылся ли системный выбор файлов при клике выше? Оцените здесь отдельно.</div>`),
+
+		// T13
+		manualRecorder("T13", `
+			<div>Скачивание blob через &lt;a download&gt;.</div>
+			<div class="flex"><button id="t13go">Скачать тестовый файл</button></div>
+		`),
+
+		// T16
+		manualRecorder("T16", `
+			<div>target=_blank и window.open — куда уходит переход?</div>
+			<div class="flex">
+				<button id="t16a">Ссылка target=_blank</button>
+				<button id="t16b">window.open()</button>
+			</div>
+		`),
+
+		// T17
+		`<div class="row">
+			<div class="id">T17</div>
+			<div class="body">
+				<div class="desc">Клавиатура: visualViewport и safe-area-inset <span class="badge unknown" data-badge="T17"></span></div>
+				<input type="text" id="t17input" placeholder="Нажмите сюда, чтобы вызвать клавиатуру" />
+				<div class="out" id="t17live"></div>
+				<div class="manual-controls">
+					<button data-mark="T17" data-status="pass">✅ Поле не перекрыто клавиатурой</button>
+					<button data-mark="T17" data-status="fail">❌ Перекрыто / двойной сдвиг</button>
+				</div>
+				<input type="text" placeholder="Заметка" data-note="T17" />
+			</div>
+		</div>`,
+
+		// T18
+		`<div class="row">
+			<div class="id">T18</div>
+			<div class="body">
+				<div class="desc">Фон: сверните на 1/5/15 мин — жив ли WebSocket, тикают ли таймеры <span class="badge unknown" data-badge="T18"></span></div>
+				<div class="flex">
+					<button id="t18start">Начать (открыть WS + таймер)</button>
+					<button id="t18check">Проверить сейчас</button>
+				</div>
+				<div class="out" data-out="T18"></div>
+				<div class="manual-controls">
+					<button data-mark="T18" data-status="pass">✅ Пережило фон</button>
+					<button data-mark="T18" data-status="fail">❌ WS/таймер умерли в фоне</button>
+					<button data-mark="T18" data-status="warn">⚠️ Частично (уточнить в заметке)</button>
+				</div>
+				<input type="text" placeholder="Заметка (через сколько минут проверяли)" data-note="T18" />
+			</div>
+		</div>`,
+
+		// T20
+		manualRecorder("T20", `
+			<div>Только macOS. Выделите текст ниже и попробуйте Cmd+A / Cmd+C / Cmd+V.</div>
+			<textarea id="t20area">Тестовый текст для Cmd+A / Cmd+C / Cmd+V без Edit-меню.</textarea>
+		`),
+	].join("");
+
+	wireManualMarkers();
+	wireManualHandlers();
+}
+
+function wireManualHandlers() {
+	// T07
+	document.getElementById("t07go").addEventListener("click", async () => {
+		try {
+			const perm = navigator.permissions ? await navigator.permissions.query({ name: "microphone" }).catch(() => null) : null;
+			const before = perm ? perm.state : "unknown";
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			stream.getTracks().forEach((t) => t.stop());
+			const after = perm ? perm.state : "unknown";
+			document.querySelector('[data-out="T07_raw"]').textContent = `permission before=${before} after=${after} — ok`;
+		} catch (e) {
+			document.querySelector('[data-out="T07_raw"]').textContent = "Ошибка: " + (e.message || e);
+		}
+	});
+
+	// T08 manual WebRTC
+	let pcA = null, pcB = null;
+	async function iceServersFromConfig() {
+		const { turnCreds } = cfg();
+		try {
+			const r = await fetch(turnCreds);
+			const j = await r.json();
+			const servers = (j.uris || []).map((u) => ({ urls: u, username: j.username, credential: j.credential }));
+			return servers.length ? servers : [{ urls: "stun:stun.l.google.com:19302" }];
+		} catch {
+			return [{ urls: "stun:stun.l.google.com:19302" }];
+		}
+	}
+	async function gatherComplete(pc) {
+		if (pc.iceGatheringState === "complete") return;
+		await new Promise((resolve) => {
+			pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === "complete") resolve(); };
+			setTimeout(resolve, 6000); // не ждём вечно — частичный набор кандидатов тоже покажет что-то
+		});
+	}
+	document.getElementById("t08caller").addEventListener("click", async () => {
+		try {
+			const iceServers = await iceServersFromConfig();
+			pcA = new RTCPeerConnection({ iceServers });
+			pcA.onconnectionstatechange = () => { document.getElementById("t08state").textContent = "A: " + pcA.connectionState; };
+			pcA.ontrack = (ev) => { document.getElementById("t08audio").srcObject = ev.streams[0]; };
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			stream.getTracks().forEach((t) => pcA.addTrack(t, stream));
+			const offer = await pcA.createOffer();
+			await pcA.setLocalDescription(offer);
+			await gatherComplete(pcA);
+			document.getElementById("t08offerOut").value = JSON.stringify(pcA.localDescription);
+		} catch (e) {
+			document.querySelector('[data-out="T08"]').textContent = "Ошибка (сторона А): " + (e.message || e);
+		}
+	});
+	document.getElementById("t08callee").addEventListener("click", async () => {
+		try {
+			const iceServers = await iceServersFromConfig();
+			pcB = new RTCPeerConnection({ iceServers });
+			pcB.onconnectionstatechange = () => { document.getElementById("t08state").textContent = "B: " + pcB.connectionState; };
+			pcB.ontrack = (ev) => { document.getElementById("t08audio").srcObject = ev.streams[0]; };
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			stream.getTracks().forEach((t) => pcB.addTrack(t, stream));
+			const offer = JSON.parse(document.getElementById("t08offerIn").value);
+			await pcB.setRemoteDescription(offer);
+			const answer = await pcB.createAnswer();
+			await pcB.setLocalDescription(answer);
+			await gatherComplete(pcB);
+			document.getElementById("t08answerOut").value = JSON.stringify(pcB.localDescription);
+		} catch (e) {
+			document.querySelector('[data-out="T08"]').textContent = "Ошибка (сторона Б): " + (e.message || e);
+		}
+	});
+	document.getElementById("t08callerApply").addEventListener("click", async () => {
+		try {
+			const answer = JSON.parse(document.getElementById("t08answerIn").value);
+			await pcA.setRemoteDescription(answer);
+			document.querySelector('[data-out="T08"]').textContent = "Ответ применён, ждите connectionState=connected";
+		} catch (e) {
+			document.querySelector('[data-out="T08"]').textContent = "Ошибка применения ответа: " + (e.message || e);
+		}
+	});
+
+	// T12 / T10
+	document.getElementById("t12pick").addEventListener("click", () => document.getElementById("t12input").click());
+	document.getElementById("t12input").addEventListener("change", (e) => {
+		const files = Array.from(e.target.files || []);
+		document.querySelector('[data-out="T12_raw"]').textContent = files.length
+			? `Выбрано файлов: ${files.length} — ` + files.map((f) => `${f.name} (${Math.round(f.size / 1024)} КБ)`).join(", ")
+			: "Файлы не выбраны — системный выбор не сработал?";
+		const holder = document.getElementById("t10players");
+		holder.innerHTML = "";
+		files.forEach((f) => {
+			const url = URL.createObjectURL(f);
+			const el = document.createElement(f.type.startsWith("video") ? "video" : "audio");
+			el.src = url; el.controls = true; el.style.width = "100%"; el.style.marginTop = "4px";
+			holder.appendChild(el);
+		});
+	});
+
+	// T13
+	document.getElementById("t13go").addEventListener("click", () => {
+		const blob = new Blob(["probe-download-test " + Date.now()], { type: "text/plain" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url; a.download = "ugolok-probe-download-test.txt";
+		document.body.appendChild(a); a.click(); document.body.removeChild(a);
+		setTimeout(() => URL.revokeObjectURL(url), 5000);
+	});
+
+	// T16
+	document.getElementById("t16a").addEventListener("click", () => {
+		const a = document.createElement("a");
+		a.href = "https://ugolok.tech"; a.target = "_blank"; a.rel = "noopener";
+		document.body.appendChild(a); a.click(); document.body.removeChild(a);
+	});
+	document.getElementById("t16b").addEventListener("click", () => { window.open("https://ugolok.tech", "_blank"); });
+
+	// T17
+	const t17update = () => {
+		const vv = window.visualViewport;
+		const probe = document.createElement("div");
+		probe.style.cssText = "position:fixed;left:-9999px;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);";
+		document.body.appendChild(probe);
+		const cs = getComputedStyle(probe);
+		document.getElementById("t17live").textContent = JSON.stringify({
+			innerHeight: window.innerHeight,
+			vvHeight: vv ? vv.height : null,
+			vvOffsetTop: vv ? vv.offsetTop : null,
+			safeAreaTop: cs.paddingTop,
+			safeAreaBottom: cs.paddingBottom,
+		}, null, 2);
+		document.body.removeChild(probe);
+	};
+	document.getElementById("t17input").addEventListener("focus", t17update);
+	document.getElementById("t17input").addEventListener("blur", t17update);
+	if (window.visualViewport) window.visualViewport.addEventListener("resize", t17update);
+	t17update();
+
+	// T18
+	let t18Timer = null;
+	document.getElementById("t18start").addEventListener("click", () => {
+		t18Log = [];
+		t18Start = Date.now();
+		if (ws03Live) try { ws03Live.close(); } catch {}
+		const { relay } = cfg();
+		try {
+			ws03Live = new WebSocket(relay);
+			ws03Live.onopen = () => t18Log.push({ t: Date.now(), e: "ws-open" });
+			ws03Live.onclose = (ev) => t18Log.push({ t: Date.now(), e: "ws-close", code: ev.code });
+			ws03Live.onerror = () => t18Log.push({ t: Date.now(), e: "ws-error" });
+		} catch (e) { t18Log.push({ t: Date.now(), e: "ws-throw", msg: String(e) }); }
+		if (t18Timer) clearInterval(t18Timer);
+		t18Timer = setInterval(() => t18Log.push({ t: Date.now(), e: "tick" }), 15000);
+		document.querySelector('[data-out="T18"]').textContent = "Запущено в " + new Date(t18Start).toISOString() + " — теперь сверните приложение.";
+	});
+	document.getElementById("t18check").addEventListener("click", () => {
+		const elapsedMin = t18Start ? ((Date.now() - t18Start) / 60000).toFixed(1) : "—";
+		const wsState = ws03Live ? ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][ws03Live.readyState] : "нет соединения";
+		const gaps = [];
+		for (let i = 1; i < t18Log.length; i++) gaps.push(t18Log[i].t - t18Log[i - 1].t);
+		const maxGapSec = gaps.length ? Math.round(Math.max(...gaps) / 1000) : null;
+		document.querySelector('[data-out="T18"]').textContent = JSON.stringify({
+			elapsedMinutes: elapsedMin, wsReadyState: wsState, tickCount: t18Log.length, maxGapSeconds: maxGapSec,
+			note: "ожидались тики каждые 15с; maxGapSeconds заметно больше 15 = таймер троттлился/приостанавливался в фоне",
+			log: t18Log,
+		}, null, 2);
+	});
+}
+
+// ---------- Экспорт ----------
+document.getElementById("btnRefresh").addEventListener("click", renderJSON);
+document.getElementById("btnCopy").addEventListener("click", async () => {
+	const text = document.getElementById("jsonOut").value;
+	try {
+		await navigator.clipboard.writeText(text);
+		alert("Скопировано в буфер обмена");
+	} catch {
+		document.getElementById("jsonOut").select();
+		document.execCommand("copy");
+	}
+});
+document.getElementById("btnDownload").addEventListener("click", () => {
+	const text = document.getElementById("jsonOut").value;
+	const blob = new Blob([text], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url; a.download = "e0-probe-result.json";
+	document.body.appendChild(a); a.click(); document.body.removeChild(a);
+	setTimeout(() => URL.revokeObjectURL(url), 5000);
+});
+
+// init
+detectEnv();
+renderAuto();
+renderManual();
+renderJSON();
+
+// В нативных оболочках (Tauri/Capacitor) автоматически прогоняем авто-тесты
+// и отправляем результат наружу через IPC, чтобы не требовать ручного клика
+// в headless/CI-подобном прогоне (Э0.1).
+(async () => {
+	if (window.__ENV_INFO__.shell === "tauri" && window.__TAURI__) {
+		for (const [, , fn] of AUTO) { await fn(); }
+		try {
+			await window.__TAURI__.core.invoke("probe_report", { json: document.getElementById("jsonOut").value });
+		} catch (e) {
+			console.error("probe_report invoke failed", e);
+		}
+	}
+})();
+</script>
+</body>
+</html>
