@@ -93,6 +93,13 @@ function envChecks() {
 function useServiceWorker() {
 	const [state, set] = useState("инициализация…");
 	useEffect(() => {
+		// Э1/§4.2, найдено живьём (владелец, Mac mini, Э3, 2026-09-27) — та же
+		// история, что main.jsx's основная регистрация SW (уже гейтится
+		// __TARGET__==="web"): эта, ОТДЕЛЬНАЯ регистрация на экране Диагностики
+		// была пропущена при том фиксе. На tauri:// (и capacitor://) страница
+		// грузится не по http(s), register() бросает "protocol must be HTTP or
+		// HTTPS" — в нативных режимах SW не эмитится и не регистрируется вовсе.
+		if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "web") return set("не применимо (нативная оболочка)");
 		if (!("serviceWorker" in navigator)) return set("не поддерживается");
 		if (import.meta.env.DEV)
 			return set("пропущено (dev — SW появляется только в vite build)");
