@@ -216,6 +216,76 @@ test("loadUiSettings: сохранённый Blossom-сервер — насто
 	}
 });
 
+// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же баг, что уже
+// найден и исправлен для Blossom выше, только для relay: transport.js's
+// connect() читает relayEntries = localSettings.relayUrls напрямую и падает
+// на bootstrap-дефолт ТОЛЬКО когда список пуст — непустой список из одного
+// loopback-адреса проходит эту проверку. connState повисает на "connecting"
+// навсегда (WebSocket на 127.0.0.1 в нативной оболочке блокируется CSP).
+test("loadUiSettings: сохранённый relay — loopback, свежий bootstrap-дефолт настоящий -> подменяется свежим", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, relayUrls: [{ url: "ws://127.0.0.1:7777", read: true, write: true }] },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay.ugolok.tech", read: true, write: true }]);
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+test("loadUiSettings: сохранённый relay — настоящий (не loopback) -> НЕ подменяется, даже если bootstrap-дефолт другой", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, relayUrls: [{ url: "wss://relay-a.example", read: true, write: true }] },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay-a.example", read: true, write: true }], "пользовательский выбор сильнее config.json — так задумано");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
 // Этап 70 — миграция старого accentColorId (14 именованных пресетов, удалены
 // вместе с accent-palette.js) в customPalette: {cNeutral, accentHue} нового
 // генератора палитры. Часть пресетов (sky/terracotta/amber/saffron/moss)

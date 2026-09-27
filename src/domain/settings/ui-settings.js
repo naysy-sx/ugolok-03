@@ -174,6 +174,21 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 			merged.activeBlossomUrl = boot.blossomUrl;
 		}
 	}
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же баг, что
+	// Blossom выше, только для relay: transport.js's connect() берёт
+	// relayEntries = localSettings.relayUrls НАПРЯМУЮ и переключается на
+	// bootstrap-дефолт ТОЛЬКО когда список пуст (relayEntries.length === 0) —
+	// непустой список из ОДНОГО loopback-адреса (личность создана на дев-
+	// конфиге) проходит эту проверку и используется как есть. connState
+	// повисает на "connecting" навсегда (WebSocket на 127.0.0.1 в нативной
+	// оболочке блокируется CSP), хотя config.json давно указывает на
+	// настоящий остров. Тот же принцип защиты, что и для Blossom.
+	if (merged.relayUrls.length > 0 && merged.relayUrls.every((r) => isLoopbackHost(r.url))) {
+		const boot = readBootstrapEndpoints();
+		if (boot.relayUrl && !isLoopbackHost(boot.relayUrl)) {
+			merged.relayUrls = [{ url: boot.relayUrl, read: true, write: true }];
+		}
+	}
 	registerTrustedImageOrigins(merged.blossomUrls);
 	registerUserServers({ activeUrl: merged.activeBlossomUrl, urls: merged.blossomUrls });
 	return merged;
