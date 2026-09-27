@@ -22,13 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Отключить Windows Defender real-time scanning (известная причина файловых блокировок в tauri-build на windows-latest)
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Кэш cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: native/probe/tauri-shell/src-tauri
 
       - name: Собрать оболочку
         run: cargo build
@@ -75,13 +74,10 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Кэш cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: native/probe/tauri-shell/src-tauri
-
-      - name: Собрать оболочку
-        run: cargo build
+      - name: Собрать оболочку (ограниченный параллелизм линковки — известная причина OOM/SIGTERM на ubuntu-latest при линковке Tauri+WebKit)
+        env:
+          CARGO_BUILD_JOBS: "2"
+        run: cargo build -j 2
 
       - name: Прогнать зонд под Xvfb (автоматические тесты) и снять PROBE_RESULT
         run: |
