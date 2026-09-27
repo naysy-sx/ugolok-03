@@ -1,0 +1,13 @@
+{
+  "name": "ugolok-probe-capacitor-shell",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Одноразовая оболочка Capacitor для прогона зонда Э0 (native/probe). Не часть основного приложения.",
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
