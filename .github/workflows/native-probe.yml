@@ -29,12 +29,13 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Подменить frontendDist на абсолютный путь без ".." (подозреваемый баг tauri-build на Windows с относительными ".." в пути — воспроизводится 100% даже при -j 1, значит не гонка потоков)
+      - name: Скопировать index.html в простую подпапку и указать frontendDist без ".." и без абсолютного пути (абсолютный путь чинил сборку, но ломал поиск ассетов в рантайме — "asset not found: index.html")
         shell: pwsh
         run: |
-          $absPath = (Resolve-Path "..\..").Path.Replace('\', '\\')
+          New-Item -ItemType Directory -Force -Path "_ci_frontend" | Out-Null
+          Copy-Item "..\..\index.html" "_ci_frontend\index.html" -Force
           $content = Get-Content tauri.conf.json -Raw
-          $content = $content.Replace('"frontendDist": "../../"', '"frontendDist": "' + $absPath + '"')
+          $content = $content.Replace('"frontendDist": "../../"', '"frontendDist": "_ci_frontend"')
           Set-Content -Path tauri.conf.json -Value $content -NoNewline
           Get-Content tauri.conf.json
 
