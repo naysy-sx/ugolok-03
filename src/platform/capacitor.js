@@ -7,12 +7,29 @@
 // не требует native SDK, см. media-native-fallback.js).
 import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
+import { APP_VERSION, BUILD_HASH } from "../config.js";
 
 // TODO(Э3): различать android/ios через реальный Capacitor.getPlatform() —
 // недоступно без настоящего native/mobile проекта. iOS отложен владельцем
 // (недостаточно диска для Xcode, см. PROGRESS.md), Android — текущий фокус.
 const SHELL = "capacitor";
 const OS = "android";
+
+// НАЙДЕНО ЖИВЬЁМ на tauri.js (владелец, Mac mini, Э3, 2026-09-27) — экран
+// «Диагностика» (Э1.5) вызывает platform.info() безусловно в теле рендера,
+// без try/catch; notImplemented ронял отрисовку всего экрана целиком —
+// пустой белый экран. Тот же баг был бы и здесь при первом же открытии
+// экрана на Android — метод дешёвый, не требует native SDK, реализован
+// сразу и тут, той же формы, что web.js/tauri.js.
+function info() {
+	return {
+		shell: SHELL,
+		os: OS,
+		appVersion: APP_VERSION,
+		buildHash: BUILD_HASH,
+		engineVersion: globalThis.navigator?.userAgent ?? "",
+	};
+}
 
 async function getPlayableSource(fileRef, opts = {}) {
 	const size = opts.size ?? fileRef?.size;
@@ -32,7 +49,7 @@ export function createPlatform() {
 	return {
 		shell: SHELL,
 		os: OS,
-		info: notImplemented(SHELL, "info"),
+		info,
 
 		config: { load: notImplemented(SHELL, "config.load") },
 

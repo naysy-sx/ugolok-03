@@ -340,11 +340,19 @@ export function traceAsJson() {
 // должна мешать остальным (телефон без "Скачать", десктоп без Web Share…).
 export function downloadTraceFile() {
 	if (typeof document === "undefined") return;
-	getPlatform().files.saveAs({
-		name: traceFileName(),
-		mime: "application/json",
-		data: traceAsJson(),
-	});
+	// best-effort (см. комментарий выше) — platform.files.saveAs может быть ещё
+	// не реализован (capacitor.js) и бросить синхронно, до возврата промиса.
+	try {
+		Promise.resolve(
+			getPlatform().files.saveAs({
+				name: traceFileName(),
+				mime: "application/json",
+				data: traceAsJson(),
+			}),
+		).catch(() => {});
+	} catch {
+		// платформа не поддерживает — тот же принцип, что остальные два способа выгрузки
+	}
 }
 
 export async function copyTraceToClipboard() {

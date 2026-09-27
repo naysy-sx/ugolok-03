@@ -845,7 +845,19 @@ export default function Diagnostics() {
 	// не проблема, и живёт в проверках движка.
 	const problemCount = missingApis.length + desynced.chats.length;
 
-	const platformInfo = getPlatform().info();
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini, Э3, 2026-09-27) — platform.info()
+	// был notImplemented на tauri.js, throw в теле рендера ронял ВЕСЬ экран
+	// (пустой белый экран, ошибка только в консоли). Сам info() уже
+	// реализован на всех адаптерах (см. platform/*.js), но try/catch —
+	// защита на будущее от ЛЮБОГО метода адаптера, а не повтор именно этой
+	// ошибки: экран диагностики не должен становиться нерабочим целиком
+	// из-за одного платформенного вызова.
+	let platformInfo;
+	try {
+		platformInfo = getPlatform().info();
+	} catch {
+		platformInfo = { shell: "?", os: "?", appVersion: "?", buildHash: "?" };
+	}
 
 	function copyReport() {
 		const report = [

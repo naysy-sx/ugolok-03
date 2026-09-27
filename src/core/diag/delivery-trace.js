@@ -244,11 +244,19 @@ export function deliveryTraceAsJson() {
 
 export function downloadDeliveryTraceFile() {
 	if (typeof document === "undefined") return;
-	getPlatform().files.saveAs({
-		name: traceFileName(),
-		mime: "application/json",
-		data: deliveryTraceAsJson(),
-	});
+	// best-effort (тот же принцип, что call-trace.js) — platform.files.saveAs
+	// может быть ещё не реализован (capacitor.js) и бросить синхронно.
+	try {
+		Promise.resolve(
+			getPlatform().files.saveAs({
+				name: traceFileName(),
+				mime: "application/json",
+				data: deliveryTraceAsJson(),
+			}),
+		).catch(() => {});
+	} catch {
+		// платформа не поддерживает
+	}
 }
 
 export async function copyDeliveryTraceToClipboard() {

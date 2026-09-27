@@ -315,13 +315,28 @@ test("tauri: media.getPlayableSource — файл больше лимита бр
 test("capacitor/tauri: не-media методы бросают 'не реализовано' с именем метода в сообщении", () => {
 	const capacitor = createCapacitorPlatform();
 	const tauri = createTauriPlatform();
-	// capacitor.js — всё ещё заготовка целиком, кроме media (Э2.1).
+	// capacitor.js — заготовка, кроме media (Э2.1) и info (найдено живьём на
+	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь).
 	assert.throws(() => capacitor.files.saveAs(), /files\.saveAs/);
 	assert.throws(() => capacitor.links.openExternal(), /links\.openExternal/);
 	assert.throws(() => capacitor.push.supported(), /push\.supported/);
-	// tauri.js — Э3: config/notifications/files/links реализованы по-настоящему
-	// (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
+	// tauri.js — Э3: config/notifications/files/links/info реализованы по-
+	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
 	assert.throws(() => tauri.lifecycle.onResume(), /lifecycle\.onResume/);
 	assert.throws(() => tauri.push.supported(), /push\.supported/);
-	assert.throws(() => tauri.info(), /\binfo\b/);
+});
+
+// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini, Э3, 2026-09-27) — platform.info() был
+// notImplemented на tauri.js; экран «Диагностика» (Э1.5) вызывает его
+// БЕЗУСЛОВНО в теле рендера без try/catch — throw ронял отрисовку всего
+// экрана целиком (пустой белый экран, ошибка видна только в консоли).
+test("capacitor/tauri: info() реализован по-настоящему (не notImplemented) — экран «Диагностика» не должен падать целиком из-за одного метода адаптера", () => {
+	const capacitor = createCapacitorPlatform();
+	const tauri = createTauriPlatform();
+	for (const [shell, platform] of [["capacitor", capacitor], ["tauri", tauri]]) {
+		const info = platform.info();
+		assert.equal(info.shell, shell);
+		assert.equal(typeof info.appVersion, "string");
+		assert.equal(typeof info.buildHash, "string");
+	}
 });

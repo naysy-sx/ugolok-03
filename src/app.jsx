@@ -117,7 +117,14 @@ function MainShell() {
 			const href = a.getAttribute("href");
 			if (!href || href.startsWith("#")) return;
 			e.preventDefault();
-			getPlatform().links.openExternal(a.href);
+			// Найдено на platform.info()/config.load() (Э3, живые баги) — тот же
+			// принцип: метод адаптера может быть ещё не реализован (capacitor.js) —
+			// не даём клику по ссылке молча зависнуть необработанным исключением.
+			try {
+				Promise.resolve(getPlatform().links.openExternal(a.href)).catch(() => {});
+			} catch {
+				// не реализовано на этой платформе — ссылка просто не открылась
+			}
 		}
 		document.addEventListener("click", onClickCapture, true);
 		return () => document.removeEventListener("click", onClickCapture, true);

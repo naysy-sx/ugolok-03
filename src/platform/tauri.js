@@ -8,6 +8,7 @@
 import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
 import { loadRuntimeConfig } from "../domain/settings/runtime-config.js";
+import { APP_VERSION, BUILD_HASH } from "../config.js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
@@ -117,11 +118,27 @@ async function openExternal(url) {
 	await openUrl(url);
 }
 
+// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini, 2026-09-27) — экран «Диагностика»
+// (Э1.5) вызывает platform.info() БЕЗУСЛОВНО в теле рендера, без try/catch;
+// пока он был notImplemented, throw ронял отрисовку всего экрана целиком —
+// пустой белый экран, без видимой причины (ошибка только в консоли). Метод
+// дешёвый и не требует native SDK — реализован по-настоящему, той же формы,
+// что web.js.
+function info() {
+	return {
+		shell: SHELL,
+		os: OS,
+		appVersion: APP_VERSION,
+		buildHash: BUILD_HASH,
+		engineVersion: globalThis.navigator?.userAgent ?? "",
+	};
+}
+
 export function createPlatform() {
 	return {
 		shell: SHELL,
 		os: OS,
-		info: notImplemented(SHELL, "info"),
+		info,
 
 		config,
 
