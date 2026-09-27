@@ -231,6 +231,10 @@ func main() {
 		"tauri://localhost":        true,
 		"http://tauri.localhost":   true,
 		"https://tauri.localhost":  true,
+		// Э4 — Capacitor/Android грузит страницу с capacitor.config.json's
+		// androidScheme:"https"+hostname:"localhost" — тот же принцип, что
+		// у Tauri выше (страница не с ugolok.tech, свой фиксированный origin).
+		"https://localhost": true,
 	}
 	if raw := os.Getenv("TURN_CORS_ORIGINS"); raw != "" {
 		allowedOrigins = parseOrigins(raw)
