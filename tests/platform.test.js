@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getPlatform, resetPlatformForTests } from "../src/platform/index.js";
 import { createPlatform as createWebPlatform } from "../src/platform/web.js";
+import { createPlatform as createCapacitorPlatform } from "../src/platform/capacitor.js";
+import { createPlatform as createTauriPlatform } from "../src/platform/tauri.js";
+import { mediaSizeLimitBytes, exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "../src/platform/media-native-fallback.js";
 
 // Э1.6 ТЗ-NATIVE-APPS — выбор адаптера по __TARGET__. Под `node --test` нет
 // Vite `define` (см. tests/config.test.js) — __TARGET__ ставим/убираем сами
@@ -23,18 +26,22 @@ test("getPlatform(): __TARGET__='web' -> веб-адаптер", () => {
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='capacitor' -> бросает (заготовка Э1, реализация — Э3)", () => {
+test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1: media реализован, остальное — заготовка до Э3)", () => {
 	globalThis.__TARGET__ = "capacitor";
 	resetPlatformForTests();
-	assert.throws(() => getPlatform(), /capacitor/);
+	const platform = getPlatform();
+	assert.equal(platform.shell, "capacitor");
+	assert.throws(() => platform.notifications.permission(), /не реализовано/);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='tauri' -> бросает (заготовка Э1, реализация — Э3/Э8)", () => {
+test("getPlatform(): __TARGET__='tauri' -> tauri-адаптер (Э2.1: media реализован, остальное — заготовка до Э3/Э8)", () => {
 	globalThis.__TARGET__ = "tauri";
 	resetPlatformForTests();
-	assert.throws(() => getPlatform(), /tauri/);
+	const platform = getPlatform();
+	assert.equal(platform.shell, "tauri");
+	assert.throws(() => platform.notifications.permission(), /не реализовано/);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });
@@ -66,7 +73,7 @@ test("web: push — стаб, ничего не поддерживает (PUSH-D
 	assert.equal(typeof platform.push.onWake(() => {}), "function");
 });
 
-test("web: media.getPlayableSource — бросает до Э2 (E1-INVENTORY.md — намеренно не подключено)", async () => {
+test("web: media.getPlayableSource — бросает (Э2.4: веб навсегда остаётся на SW-плеере, метод там не вызывается)", async () => {
 	const platform = createWebPlatform();
 	await assert.rejects(() => platform.media.getPlayableSource());
 });
@@ -255,4 +262,60 @@ test("web: lifecycle.onNetworkChange — подписывается/отписы
 		if (savedRemove === undefined) delete globalThis.removeEventListener;
 		else globalThis.removeEventListener = savedRemove;
 	}
+});
+
+// --- Э2.1: media.getPlayableSource на capacitor/tauri (E1-INVENTORY.md/Р2.2) ---
+
+test("media-native-fallback: mediaSizeLimitBytes — desktop одинаково, android/ios различаются", () => {
+	assert.equal(mediaSizeLimitBytes("tauri", "windows"), 1024 * 1024 * 1024);
+	assert.equal(mediaSizeLimitBytes("tauri", "macos"), 1024 * 1024 * 1024);
+	assert.equal(mediaSizeLimitBytes("tauri", "linux"), 1024 * 1024 * 1024);
+	assert.equal(mediaSizeLimitBytes("capacitor", "android"), 256 * 1024 * 1024);
+	assert.equal(mediaSizeLimitBytes("capacitor", "ios"), 150 * 1024 * 1024);
+});
+
+test("media-native-fallback: exceedsMediaSizeLimit — размер неизвестен не блокирует вслепую", () => {
+	assert.equal(exceedsMediaSizeLimit("capacitor", "android", undefined), false);
+	assert.equal(exceedsMediaSizeLimit("capacitor", "android", 100), false);
+	assert.equal(exceedsMediaSizeLimit("capacitor", "android", 300 * 1024 * 1024), true);
+});
+
+test("media-native-fallback: getPlayableSourceUnderLimit — url приходит от decrypt(), release() освобождает через URL.revokeObjectURL", async () => {
+	const calls = [];
+	const fileRef = { digest: "abc123", mime: "video/mp4" };
+	const fakeUrl = URL.createObjectURL(new Blob(["x"]));
+	const result = await getPlayableSourceUnderLimit(fileRef, {
+		decrypt: async (ref, opts) => {
+			calls.push(["decrypt", ref, opts]);
+			return fakeUrl;
+		},
+	});
+	assert.equal(result.url, fakeUrl);
+	assert.equal(calls[0][0], "decrypt");
+	assert.equal(calls[0][1], fileRef);
+	await result.release();
+});
+
+test("capacitor: media.getPlayableSource — файл больше лимита бросает явно (владелец выбрал А, не реализовано без реального native/mobile)", async () => {
+	const platform = createCapacitorPlatform();
+	await assert.rejects(
+		() => platform.media.getPlayableSource({ digest: "x", mime: "video/mp4" }, { size: 300 * 1024 * 1024 }),
+		/больше лимита/,
+	);
+});
+
+test("tauri: media.getPlayableSource — файл больше лимита бросает явно (владелец выбрал А, не реализовано без реального native/desktop)", async () => {
+	const platform = createTauriPlatform();
+	await assert.rejects(
+		() => platform.media.getPlayableSource({ digest: "x", mime: "video/mp4" }, { size: 2 * 1024 * 1024 * 1024 }),
+		/больше лимита/,
+	);
+});
+
+test("capacitor/tauri: не-media методы бросают 'не реализовано' с именем метода в сообщении", () => {
+	const capacitor = createCapacitorPlatform();
+	const tauri = createTauriPlatform();
+	assert.throws(() => capacitor.files.saveAs(), /files\.saveAs/);
+	assert.throws(() => tauri.links.openExternal(), /links\.openExternal/);
+	assert.throws(() => capacitor.push.supported(), /push\.supported/);
 });

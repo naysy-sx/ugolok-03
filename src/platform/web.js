@@ -131,12 +131,15 @@ function setBadge(n) {
 	else nav?.clearAppBadge?.()?.catch?.(() => {});
 }
 
-// Э2 — плеер продолжает читать медиа через player-bridge.js/Service Worker
-// напрямую (не через этот метод) до тех пор, пока Э2 не спроектирует и не
-// протестирует настоящую замену. Метод существует уже сейчас только чтобы
-// форма контракта не менялась, когда Э2 до него дойдёт (E1-INVENTORY.md).
+// Э2.4 ТЗ-NATIVE-APPS — «веб-режим продолжает использовать SW-плеер без
+// изменений»: player-bridge.js/media-url.js читают медиа напрямую через
+// Service Worker и НЕ вызывают этот метод на вебе вовсе (media-url.js's
+// acquireMediaUrl уходит сюда только когда getPlatform().shell !== "web").
+// Метод существует в контракте только для симметрии — на вебе не реализован
+// НАВСЕГДА, не "пока", в отличие от capacitor.js/tauri.js, где Э2.1 его уже
+// реализовал.
 async function getPlayableSource() {
-	throw new Error("platform.media.getPlayableSource — не реализовано до Э2 (см. E1-INVENTORY.md)");
+	throw new Error("platform.media.getPlayableSource — не реализовано на вебе (Э2.4: SW-плеер используется напрямую)");
 }
 
 // Э6 — удержание звонка в фоне. На вебе сегодня отдельного "удержания" нет
