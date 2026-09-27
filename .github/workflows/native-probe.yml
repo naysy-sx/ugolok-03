@@ -29,8 +29,17 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Собрать оболочку (сериализовано -j 1 — гонка файловых блокировок на Windows при параллельном кодогене, не лечится отключением Defender/кэша)
-        run: cargo build -j 1
+      - name: Подменить frontendDist на абсолютный путь без ".." (подозреваемый баг tauri-build на Windows с относительными ".." в пути — воспроизводится 100% даже при -j 1, значит не гонка потоков)
+        shell: pwsh
+        run: |
+          $absPath = (Resolve-Path "..\..").Path.Replace('\', '\\')
+          $content = Get-Content tauri.conf.json -Raw
+          $content = $content.Replace('"frontendDist": "../../"', '"frontendDist": "' + $absPath + '"')
+          Set-Content -Path tauri.conf.json -Value $content -NoNewline
+          Get-Content tauri.conf.json
+
+      - name: Собрать оболочку
+        run: cargo build
 
       - name: Прогнать зонд (автоматические тесты) и снять PROBE_RESULT
         shell: bash
@@ -74,12 +83,13 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Добавить своп (линковка Tauri+WebKit в debug пикует по памяти на ubuntu-latest)
+      - name: Добавить своп (линковка Tauri+WebKit в debug пикует по памяти на ubuntu-latest; на раннере уже есть /swapfile — добавляем ещё один по другому пути)
         run: |
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          free -h
+          sudo fallocate -l 8G /extra-swapfile
+          sudo chmod 600 /extra-swapfile
+          sudo mkswap /extra-swapfile
+          sudo swapon /extra-swapfile
           free -h
 
       - name: Собрать оболочку (минимум debug-инфо — раздутые символы, а не параллелизм, топят линковщик по памяти)
