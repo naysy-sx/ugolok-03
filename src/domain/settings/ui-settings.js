@@ -8,7 +8,7 @@ import { publishDurably } from "../../core/store/outbox.js";
 import { registerTrustedImageOrigins } from "../media/url-guard.js";
 import { registerUserServers } from "../files/servers.js";
 import { BUILD_DEFAULT_RELAYS, getBuildBlossomServers } from "../../config.js";
-import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
+import { readBootstrapEndpoints, isLoopbackHost } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
 import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
@@ -159,6 +159,21 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 	}
 	const { ownerPubkey: _drop, ...settings } = row;
 	const merged = mergeWithDefaults(settings);
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же класс проблемы,
+	// что readBootstrapEndpoints уже решает для relay (см. её isLoopbackHost-
+	// проверку): активный Blossom-сервер, сохранённый ПРИ ПЕРВОМ ЗАПУСКЕ (когда
+	// config.json ещё указывал на локальный тестовый адрес), застревал в
+	// uiSettings навсегда — правка config.json на реальный адрес острова после
+	// этого ничего не меняла для уже существующих личностей на этом устройстве.
+	// Срабатывает только когда И активный адрес, И весь список — loopback (не
+	// трогает случай, где пользователь сам добавил настоящий сервер рядом).
+	if (isLoopbackHost(merged.activeBlossomUrl) && merged.blossomUrls.every(isLoopbackHost)) {
+		const boot = readBootstrapEndpoints();
+		if (boot.blossomUrl && !isLoopbackHost(boot.blossomUrl)) {
+			merged.blossomUrls = [boot.blossomUrl];
+			merged.activeBlossomUrl = boot.blossomUrl;
+		}
+	}
 	registerTrustedImageOrigins(merged.blossomUrls);
 	registerUserServers({ activeUrl: merged.activeBlossomUrl, urls: merged.blossomUrls });
 	return merged;

@@ -8,6 +8,9 @@ PROCESS-DOCS/
 node_modules/
 target/
 dist/
+dist-capacitor/
+native/desktop/src-tauri/dist-tauri/
+native/desktop/src-tauri/gen/
 .DS_Store
 *.log
 .env

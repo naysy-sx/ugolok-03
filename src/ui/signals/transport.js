@@ -400,7 +400,18 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// connect() не блокируется дольше 3с сверху. Э1.3/Р6 — через platform.config
 	// (веб: тот же loadRuntimeConfig(); нативные оболочки читают свой config.json
 	// из каталога сборки, см. vite.config.js copyNativeConfigJson, Э3/Э4).
-	await getPlatform().config.load();
+	// try/catch — НАЙДЕНО ЖИВЬЁМ (владелец, macOS-сборка Э3, 2026-09-27): пока
+	// не все методы адаптера реализованы на каждой платформе, единственный
+	// непойманный throw здесь рвал connect() целиком — "Связи нет" без единой
+	// попытки подключения к relay. loadRuntimeConfig() сам никогда не бросает
+	// (любая его ошибка -> {}), но platform.config.load() — не он один навсегда,
+	// это чужая реализация за интерфейсом; откат на build-time дефолт безопаснее
+	// падения всего bootstrap'а из-за одного метода адаптера.
+	try {
+		await getPlatform().config.load();
+	} catch (err) {
+		logWarn(`platform.config.load() провалился, идём на build-time дефолт: ${err?.message ?? String(err)}`);
+	}
 	// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-2): гидратация
 	// profiles.value из персиста ДО любых сетевых запросов — критерий приёмки
 	// "холодный старт офлайн показывает закэшированные профили контактов, не

@@ -322,7 +322,12 @@ export default defineConfig(({ command, mode }) => {
         target === "capacitor"
             ? "dist-capacitor"
             : target === "tauri"
-              ? "dist-tauri"
+              ? // Э3.1 находка Н10 (E0-REPORT.md) — frontendDist с ".." детерминированно
+                // ломает tauri::generate_context!() на Windows (.cargo-artifact-lock,
+                // os error 33). Кладём dist-tauri ВНУТРЬ native/desktop/src-tauri —
+                // tauri.conf.json's frontendDist остаётся простым "dist-tauri" без
+                // единого "..", закладывая это с самого начала Э3, а не постфактум.
+                "native/desktop/src-tauri/dist-tauri"
               : "dist";
 
     return {

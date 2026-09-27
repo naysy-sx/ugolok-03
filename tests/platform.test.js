@@ -36,12 +36,12 @@ test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1: 
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='tauri' -> tauri-адаптер (Э2.1: media реализован, остальное — заготовка до Э3/Э8)", () => {
+test("getPlatform(): __TARGET__='tauri' -> tauri-адаптер (Э3: config/notifications/files/links/media реализованы, lifecycle/updates/ui/call/push — ещё нет)", () => {
 	globalThis.__TARGET__ = "tauri";
 	resetPlatformForTests();
 	const platform = getPlatform();
 	assert.equal(platform.shell, "tauri");
-	assert.throws(() => platform.notifications.permission(), /не реализовано/);
+	assert.throws(() => platform.lifecycle.onResume(), /не реализовано/);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });
@@ -315,7 +315,13 @@ test("tauri: media.getPlayableSource — файл больше лимита бр
 test("capacitor/tauri: не-media методы бросают 'не реализовано' с именем метода в сообщении", () => {
 	const capacitor = createCapacitorPlatform();
 	const tauri = createTauriPlatform();
+	// capacitor.js — всё ещё заготовка целиком, кроме media (Э2.1).
 	assert.throws(() => capacitor.files.saveAs(), /files\.saveAs/);
-	assert.throws(() => tauri.links.openExternal(), /links\.openExternal/);
+	assert.throws(() => capacitor.links.openExternal(), /links\.openExternal/);
 	assert.throws(() => capacitor.push.supported(), /push\.supported/);
+	// tauri.js — Э3: config/notifications/files/links реализованы по-настоящему
+	// (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
+	assert.throws(() => tauri.lifecycle.onResume(), /lifecycle\.onResume/);
+	assert.throws(() => tauri.push.supported(), /push\.supported/);
+	assert.throws(() => tauri.info(), /\binfo\b/);
 });

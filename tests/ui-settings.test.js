@@ -143,6 +143,79 @@ test("loadUiSettings: нет uiSettings — relay/blossom из bootstrap-endpoin
 	}
 });
 
+// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — активный Blossom-сервер,
+// сохранённый в uiSettings ПРИ ПЕРВОМ ЗАПУСКЕ (пока config.json указывал на
+// localhost), застревал там навсегда — правка config.json на реальный адрес
+// острова ничего не меняла для уже существующих личностей. Тот же принцип
+// защиты, что уже есть у readBootstrapEndpoints для relay.
+test("loadUiSettings: сохранённый активный Blossom-сервер — loopback, свежий bootstrap-дефолт настоящий -> подменяется свежим", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		// Сохранённая запись — как будто личность создана на дев-конфиге.
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, blossomUrls: ["http://127.0.0.1:8080"], activeBlossomUrl: "http://127.0.0.1:8080" },
+			failingPublish(),
+		);
+		// config.json теперь указывает на настоящий остров.
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.blossomUrls, ["https://blossom.ugolok.tech"]);
+		assert.equal(settings.activeBlossomUrl, "https://blossom.ugolok.tech");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+test("loadUiSettings: сохранённый Blossom-сервер — настоящий (не loopback) -> НЕ подменяется, даже если bootstrap-дефолт другой", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, blossomUrls: ["https://blossom-a.example"], activeBlossomUrl: "https://blossom-a.example" },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.blossomUrls, ["https://blossom-a.example"], "пользовательский выбор сильнее config.json — так задумано");
+		assert.equal(settings.activeBlossomUrl, "https://blossom-a.example");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
 // Этап 70 — миграция старого accentColorId (14 именованных пресетов, удалены
 // вместе с accent-palette.js) в customPalette: {cNeutral, accentHue} нового
 // генератора палитры. Часть пресетов (sky/terracotta/amber/saffron/moss)

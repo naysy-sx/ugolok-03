@@ -30,8 +30,8 @@
 		"build:tauri": "vite build --mode tauri",
 		"native:android": "node -e \"console.error('native/mobile (Capacitor Android) ещё не создан — Э3 ТЗ-NATIVE-APPS'); process.exit(1)\"",
 		"native:ios": "node -e \"console.error('native/mobile (Capacitor iOS) ещё не создан — Э3 ТЗ-NATIVE-APPS, отложено владельцем (недостаточно диска для Xcode)'); process.exit(1)\"",
-		"native:desktop:dev": "node -e \"console.error('native/desktop (Tauri) ещё не создан — Э3/Э8 ТЗ-NATIVE-APPS'); process.exit(1)\"",
-		"native:desktop:build": "node -e \"console.error('native/desktop (Tauri) ещё не создан — Э3/Э8 ТЗ-NATIVE-APPS'); process.exit(1)\"",
+		"native:desktop:dev": "cd native/desktop/src-tauri && tauri dev",
+		"native:desktop:build": "cd native/desktop/src-tauri && tauri build",
 		"native:sync": "node -e \"console.error('native/mobile ещё не создан — нечего синхронизировать (Capacitor sync — Э3 ТЗ-NATIVE-APPS)'); process.exit(1)\""
 	},
 	"dependencies": {
@@ -48,6 +48,11 @@
 		"@preact/signals": "^2.9.2",
 		"@scure/bip32": "^2.2.0",
 		"@scure/bip39": "^2.2.0",
+		"@tauri-apps/api": "^2.12.0",
+		"@tauri-apps/plugin-dialog": "^2.8.0",
+		"@tauri-apps/plugin-fs": "^2.6.0",
+		"@tauri-apps/plugin-notification": "^2.5.0",
+		"@tauri-apps/plugin-opener": "^2.6.0",
 		"comlink": "^4.4.2",
 		"dexie": "^4.4.4",
 		"mdast-util-from-markdown": "^2.0.3",
@@ -69,6 +74,7 @@
 	"devDependencies": {
 		"@phosphor-icons/core": "^2.1.1",
 		"@preact/preset-vite": "^2.10.5",
+		"@tauri-apps/cli": "^2.12.0",
 		"fake-indexeddb": "^6.2.5",
 		"playwright": "^1.61.1",
 		"vite": "^8.1.0",

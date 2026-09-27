@@ -156,7 +156,7 @@ function isValidStored(obj) {
 	);
 }
 
-function isLoopbackHost(urlStr) {
+export function isLoopbackHost(urlStr) {
 	if (!urlStr || typeof urlStr !== 'string') return false;
 	try {
 		const host = new URL(urlStr).hostname;

@@ -1,0 +1,12 @@
+{
+  "instanceName": "ugolok.tech",
+  "relays": ["wss://relay.ugolok.tech"],
+  "bootstrapRelays": ["wss://relay.ugolok.tech"],
+  "blossomServers": ["https://blossom.ugolok.tech"],
+  "iceServers": [
+    { "urls": "stun:ugolok.tech:3478" },
+    { "urls": "turn:ugolok.tech:3478?transport=udp" },
+    { "urls": "turn:ugolok.tech:3478?transport=tcp" }
+  ],
+  "turnCredentialsUrl": "https://ugolok.tech/api/turn-credentials"
+}
