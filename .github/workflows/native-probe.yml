@@ -29,8 +29,8 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Собрать оболочку
-        run: cargo build
+      - name: Собрать оболочку (сериализовано -j 1 — гонка файловых блокировок на Windows при параллельном кодогене, не лечится отключением Defender/кэша)
+        run: cargo build -j 1
 
       - name: Прогнать зонд (автоматические тесты) и снять PROBE_RESULT
         shell: bash
@@ -74,9 +74,17 @@ jobs:
       - name: Установить Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Собрать оболочку (ограниченный параллелизм линковки — известная причина OOM/SIGTERM на ubuntu-latest при линковке Tauri+WebKit)
+      - name: Добавить своп (линковка Tauri+WebKit в debug пикует по памяти на ubuntu-latest)
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Собрать оболочку (минимум debug-инфо — раздутые символы, а не параллелизм, топят линковщик по памяти)
         env:
-          CARGO_BUILD_JOBS: "2"
+          CARGO_PROFILE_DEV_DEBUG: "0"
         run: cargo build -j 2
 
       - name: Прогнать зонд под Xvfb (автоматические тесты) и снять PROBE_RESULT
