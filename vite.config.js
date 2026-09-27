@@ -268,45 +268,104 @@ function emitServiceWorker(buildHash) {
     };
 }
 
-export default defineConfig(({ command }) => ({
-    base: "./", // переносимость пары файлов на произвольный путь
-    server: {
-        // Разовый tuna-туннель для проверки с телефона (пользователь, 2026-08-15).
-        // Оба пункта нашлись по факту EOF в тоннеле, не по документации:
-        // (1) без host Vite слушал только IPv6 [::1] — tuna целится в 127.0.0.1
-        //     (IPv4) буквально, туда никто не отвечал (`nc` -> Connection refused).
-        //     "127.0.0.1", не true — не открываем 0.0.0.0/LAN, только то, во что
-        //     метит именно tuna.
-        // (2) без allowedHosts Vite рвёт соединение на чужом Host-заголовке
-        //     (защита от DNS rebinding) — тоже выглядело бы как EOF.
-        // Убрать после теста, если туннель больше не нужен.
-        host: "127.0.0.1",
-        allowedHosts: ["ory3yt-150-241-83-79.ru.tuna.am"],
-    },
-    plugins: [
-        preact({ devToolsEnabled: false }), // обход бага preset×Vite8×zimmerframe
-        emitServiceWorker(BUILD_HASH),
-        viteSingleFile(),
-        ...(command === "serve"
-            ? [
-                  devRelayPlugin(),
-                  devBlossomPlugin(),
-                  devTurnPlugin(),
-                  devServiceWorkerPlugin(),
-              ]
-            : []),
-    ],
-    define: {
-        __BUILD_HASH__: JSON.stringify(BUILD_HASH),
-        __BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays()),
-        __BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(buildBootstrapRelays()),
-        __BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(
-            buildDefaultBlossomServers(),
-        ),
-        __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(buildDefaultIceServers()),
-        __BUILD_ADMIN_PUBKEY__: JSON.stringify(buildAdminPubkey()),
-    },
-    build: {
-        target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры
-    },
-}));
+// Э1/§4.2 ТЗ-NATIVE-APPS — режим сборки задаёт __TARGET__ (читает src/platform/
+// index.js, чтобы выбрать web/capacitor/tauri-адаптер БЕЗ динамического импорта —
+// Rollup вырезает недостижимые ветки статического if по литералу __TARGET__,
+// значит и импорт @capacitor/*/@tauri-apps/* из неиспользуемого адаптера
+// не попадает в веб-бандл) и каталог вывода. `vite build` без --mode или с
+// --mode production/development — обычная веб-сборка, без изменений.
+function resolveTarget(mode) {
+    if (mode === "capacitor") return "capacitor";
+    if (mode === "tauri") return "tauri";
+    return "web";
+}
+
+// Р6 ТЗ — «config.json упаковывается в нативный бандл рядом с index.html».
+// На вебе config.json НЕ входит в сборку вовсе — его кладёт на сервер деплой
+// (docs/config.md), рядом с уже собранным index.html конкретного острова.
+// Нативная оболочка грузит страницу с capacitor://localhost / tauri://localhost,
+// такого сервера рядом нет — файл обязан физически лежать в каталоге вывода.
+// Источник на Э1 — заглушка (NATIVE_CONFIG_JSON или deploy/config.example.json):
+// реальный prod config.json конкретной нативной сборки — открытый вопрос
+// Э3/Э4 (см. PROGRESS.md), не решается в рамках Э1.
+function copyNativeConfigJson(target) {
+    return {
+        name: "ugolok:copy-native-config",
+        apply: "build",
+        generateBundle() {
+            if (target === "web") return;
+            const src =
+                process.env.NATIVE_CONFIG_JSON ?? "deploy/config.example.json";
+            if (!existsSync(src)) {
+                this.warn(
+                    `[ugolok:copy-native-config] ${src} не найден — config.json не попадёт в ${target}-бандл (Р6 ТЗ не выполнен для этой сборки).`,
+                );
+                return;
+            }
+            this.emitFile({
+                type: "asset",
+                fileName: "config.json",
+                source: readFileSync(src, "utf8"),
+            });
+        },
+    };
+}
+
+export default defineConfig(({ command, mode }) => {
+    const target = resolveTarget(mode);
+    const outDir =
+        target === "capacitor"
+            ? "dist-capacitor"
+            : target === "tauri"
+              ? "dist-tauri"
+              : "dist";
+
+    return {
+        base: "./", // переносимость пары файлов на произвольный путь
+        server: {
+            // Разовый tuna-туннель для проверки с телефона (пользователь, 2026-08-15).
+            // Оба пункта нашлись по факту EOF в тоннеле, не по документации:
+            // (1) без host Vite слушал только IPv6 [::1] — tuna целится в 127.0.0.1
+            //     (IPv4) буквально, туда никто не отвечал (`nc` -> Connection refused).
+            //     "127.0.0.1", не true — не открываем 0.0.0.0/LAN, только то, во что
+            //     метит именно tuna.
+            // (2) без allowedHosts Vite рвёт соединение на чужом Host-заголовке
+            //     (защита от DNS rebinding) — тоже выглядело бы как EOF.
+            // Убрать после теста, если туннель больше не нужен.
+            host: "127.0.0.1",
+            allowedHosts: ["ory3yt-150-241-83-79.ru.tuna.am"],
+        },
+        plugins: [
+            preact({ devToolsEnabled: false }), // обход бага preset×Vite8×zimmerframe
+            // Э1/§4.2 — «в нативных режимах не эмитится service-worker.js».
+            ...(target === "web" ? [emitServiceWorker(BUILD_HASH)] : []),
+            copyNativeConfigJson(target),
+            viteSingleFile(),
+            ...(command === "serve"
+                ? [
+                      devRelayPlugin(),
+                      devBlossomPlugin(),
+                      devTurnPlugin(),
+                      devServiceWorkerPlugin(),
+                  ]
+                : []),
+        ],
+        define: {
+            __TARGET__: JSON.stringify(target),
+            __BUILD_HASH__: JSON.stringify(BUILD_HASH),
+            __BUILD_DEFAULT_RELAYS__: JSON.stringify(buildDefaultRelays()),
+            __BUILD_BOOTSTRAP_RELAYS__: JSON.stringify(buildBootstrapRelays()),
+            __BUILD_DEFAULT_BLOSSOM_SERVERS__: JSON.stringify(
+                buildDefaultBlossomServers(),
+            ),
+            __BUILD_DEFAULT_ICE_SERVERS__: JSON.stringify(
+                buildDefaultIceServers(),
+            ),
+            __BUILD_ADMIN_PUBKEY__: JSON.stringify(buildAdminPubkey()),
+        },
+        build: {
+            outDir,
+            target: ["chrome100", "firefox100", "safari15.4"], // = твои min-браузеры
+        },
+    };
+});
