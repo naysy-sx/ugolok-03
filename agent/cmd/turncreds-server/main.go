@@ -217,9 +217,20 @@ func main() {
 		uris = strings.Split(raw, ",")
 	}
 
+	// Э3 ТЗ-NATIVE-APPS, найдено живьём (владелец, Mac mini, 2026-09-27) —
+	// нативная оболочка грузит страницу не с ugolok.tech, а со своего
+	// внутреннего origin (tauri://localhost на macOS/Linux, http://
+	// tauri.localhost на Windows WebView2 — https:// добавлен на всякий
+	// случай, наблюдалась путаница именно вокруг http/https для Windows).
+	// Без этого CORS отклонял ЛЮБОЙ Fetch с нативного клиента к этому
+	// эндпоинту — звонок падал на этапе получения TURN-кредов ещё до
+	// попытки установить соединение.
 	allowedOrigins := map[string]bool{
 		"https://ugolok.tech":      true,
 		"https://test.ugolok.tech": true,
+		"tauri://localhost":        true,
+		"http://tauri.localhost":   true,
+		"https://tauri.localhost":  true,
 	}
 	if raw := os.Getenv("TURN_CORS_ORIGINS"); raw != "" {
 		allowedOrigins = parseOrigins(raw)
