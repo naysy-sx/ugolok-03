@@ -11359,8 +11359,13 @@ nav.tabs.reel .tab {
 }
 .message-bubble-own .audio-shell,
 .message-bubble .audio-shell {
-	min-inline-size: 0;
-	inline-size: min(100%, 18rem);
+	/* Найдено живьём (владелец, Tauri/macOS, Э3, 2026-09-27) — 18rem (288px)
+	   меньше 320px, задокументированных выше (.audio-shell) как минимум для
+	   нормального отображения нативных <audio controls>; min-inline-size:0
+	   снимал ту защиту. WKWebView особенно требователен к ширине controls —
+	   органы управления становились почти невидимыми. */
+	min-inline-size: 320px;
+	inline-size: min(100%, 20rem);
 	background-color: transparent;
 	border-radius: var(--radius-full);
 }
