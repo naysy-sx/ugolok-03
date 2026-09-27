@@ -436,19 +436,27 @@ export default function Quick({ onExit }) {
 	// joinVoice() (микрофон запрещён/голос заполнен/TURN недоступен) оставляет
 	// комнату и чат полностью рабочими, только показывает сообщение об ошибке.
 	async function handleJoinVoice() {
+		// Временная трассировка (владелец, Mac mini, Э3, 2026-09-27) —
+		// "Подключиться" не даёт вообще никакой видимой реакции, нужно точно
+		// узнать, доходит ли исполнение до каждого шага. Убрать после диагностики.
+		traceRecord("room-join-voice", { phase: "handler-entered", hasSession: !!sessionRef.current });
 		if (!sessionRef.current) return;
 		setVoiceBusy(true);
 		setVoiceError("");
 		await ensureAudioPoolUnlocked();
+		traceRecord("room-join-voice", { phase: "audio-pool-unlocked" });
 		try {
 			const ice = await resolveCallIceServers();
 			setTurnStatus(ice.turn ?? getLastTurnStatus());
 			if (ice.turn) {
 				traceRecord("turn-status", { status: ice.turn, urlCount: ice.urlCount, tookMs: ice.tookMs });
 			}
+			traceRecord("room-join-voice", { phase: "before-joinVoice" });
 			await sessionRef.current.joinVoice();
+			traceRecord("room-join-voice", { phase: "joinVoice-ok" });
 			setVoiceActive(true);
 		} catch (err) {
+			traceRecord("room-join-voice", { phase: "error", errorName: err?.name, errorMessage: err?.message ?? String(err) });
 			const message = err?.message || "";
 			if (message.includes("заполнена")) {
 				setVoiceError(t("quick.room.voiceFullError"));
@@ -459,6 +467,7 @@ export default function Quick({ onExit }) {
 			}
 		} finally {
 			setVoiceBusy(false);
+			traceRecord("room-join-voice", { phase: "finally", voiceActive });
 		}
 	}
 
