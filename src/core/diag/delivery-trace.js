@@ -25,7 +25,9 @@ const PERSIST_INTERVAL_MS = 5000;
 // keypackages.eose, encrypt.done, state.persisted, event.signed,
 // outbox.enqueued, publish.sent, publish.ok, publish.reject, message.upsert,
 // recv.445, recv.445.nogroup, recv.445.decryptfail, recv.welcome,
-// drain.start, drain.done, relay.state — каждый вызывающий код передаёт своё
+// drain.start, drain.done, relay.state, ownkp.enter, ownkp.already-exists,
+// ownkp.device-id, ownkp.keypackage-created, ownkp.db-persisted, ownkp.signed,
+// ownkp.publish-ok, ownkp.publish-error — каждый вызывающий код передаёт своё
 // имя строкой, модуль их не валидирует (та же позиция, что call-trace.js:
 // список — контракт по конвенции, не enum в коде).
 
