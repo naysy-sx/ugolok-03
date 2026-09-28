@@ -1489,5 +1489,10 @@
 		"mailSubject": "Più spazio di archiviazione",
 		"mailBody": "Salve! Per favore date più spazio alla mia chiave: {{npub}}",
 		"back": "Torna all’archiviazione"
+	},
+	"webviewOutdated": {
+		"title": "Aggiorna Android System WebView",
+		"body": "{{appName}} utilizza funzionalità moderne del browser non ancora supportate dalla versione installata di Android System WebView. Aggiornalo tramite Google Play per continuare.",
+		"updateButton": "Aggiorna su Google Play"
 	}
 }

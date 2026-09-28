@@ -1489,5 +1489,10 @@
 		"mailSubject": "ストレージ容量の追加",
 		"mailBody": "こんにちは。私の鍵に容量を追加してください：{{npub}}",
 		"back": "ストレージに戻る"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView を更新してください",
+		"body": "{{appName}} は最新のブラウザ機能を使用していますが、インストールされている Android System WebView のバージョンではまだサポートされていません。続けるには Google Play で更新してください。",
+		"updateButton": "Google Play で更新"
 	}
 }

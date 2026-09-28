@@ -1489,5 +1489,10 @@
 		"mailSubject": "Plus d’espace de stockage",
 		"mailBody": "Bonjour ! Merci d’attribuer plus d’espace à ma clé : {{npub}}",
 		"back": "Retour au stockage"
+	},
+	"webviewOutdated": {
+		"title": "Mettez à jour Android System WebView",
+		"body": "{{appName}} utilise des fonctionnalités de navigateur modernes que votre version installée d'Android System WebView ne prend pas encore en charge. Mettez-la à jour via Google Play pour continuer.",
+		"updateButton": "Mettre à jour sur Google Play"
 	}
 }

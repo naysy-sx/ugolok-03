@@ -1489,5 +1489,10 @@
 		"mailSubject": "Meer opslagruimte",
 		"mailBody": "Hallo! Geef alsjeblieft meer ruimte aan mijn sleutel: {{npub}}",
 		"back": "Terug naar opslag"
+	},
+	"webviewOutdated": {
+		"title": "Werk Android System WebView bij",
+		"body": "{{appName}} gebruikt moderne browserfuncties die je geïnstalleerde versie van Android System WebView nog niet ondersteunt. Werk deze bij via Google Play om door te gaan.",
+		"updateButton": "Bijwerken in Google Play"
 	}
 }

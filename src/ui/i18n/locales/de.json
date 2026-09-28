@@ -1489,5 +1489,10 @@
 		"mailSubject": "Mehr Speicherplatz",
 		"mailBody": "Hallo! Bitte gebt meinem Schlüssel mehr Platz: {{npub}}",
 		"back": "Zurück zum Speicher"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView aktualisieren",
+		"body": "{{appName}} nutzt moderne Browserfunktionen, die deine installierte Version von Android System WebView noch nicht unterstützt. Aktualisiere sie über Google Play, um fortzufahren.",
+		"updateButton": "In Google Play aktualisieren"
 	}
 }

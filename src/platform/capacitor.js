@@ -8,6 +8,7 @@
 import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
 import { APP_VERSION, BUILD_HASH } from "../config.js";
+import { Browser } from "@capacitor/browser";
 
 // TODO(Э3): различать android/ios через реальный Capacitor.getPlatform() —
 // недоступно без настоящего native/mobile проекта. iOS отложен владельцем
@@ -29,6 +30,16 @@ function info() {
 		buildHash: BUILD_HASH,
 		engineVersion: globalThis.navigator?.userAgent ?? "",
 	};
+}
+
+// Э1.4/Э4.4 — открытие URL в системном браузере (Chrome Custom Tabs, не
+// собственный WebView приложения — иначе пользователь остался бы "заперт"
+// внутри приложения без адресной строки и с чужими cookie/сессией). Первый
+// потребитель — ссылка "Обновить WebView" на экране блокировки устаревшего
+// движка (Э4.4), но перехватчик внешних ссылок в app.jsx (§4.3) использует
+// тот же метод для любых markdown-ссылок.
+async function openExternal(url) {
+	await Browser.open({ url });
 }
 
 async function getPlayableSource(fileRef, opts = {}) {
@@ -70,7 +81,7 @@ export function createPlatform() {
 		},
 
 		links: {
-			openExternal: notImplemented(SHELL, "links.openExternal"),
+			openExternal,
 			onDeepLink: notImplemented(SHELL, "links.onDeepLink"),
 		},
 

@@ -1489,5 +1489,10 @@
 		"mailSubject": "增加存储空间",
 		"mailBody": "你好！请为我的密钥增加空间：{{npub}}",
 		"back": "返回存储"
+	},
+	"webviewOutdated": {
+		"title": "请更新 Android System WebView",
+		"body": "{{appName}} 使用了一些现代浏览器功能，您当前安装的 Android System WebView 版本尚不支持。请通过 Google Play 更新后再继续。",
+		"updateButton": "在 Google Play 中更新"
 	}
 }

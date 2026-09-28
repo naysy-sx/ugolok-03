@@ -4,6 +4,9 @@ import "./styles/prosemirror.css";
 import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
+import WebViewOutdated from "./ui/screens/webview-outdated.jsx";
+import { getPlatform } from "./platform/index.js";
+import { isChromiumTooOld } from "./platform/webview-gate.js";
 import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
 import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
@@ -170,4 +173,16 @@ if (__TARGET__ === "web" && "serviceWorker" in navigator) {
 
 const root = document.getElementById("app");
 root.replaceChildren();
-render(<App />, document.getElementById("app"));
+
+// Э4.4 ТЗ-NATIVE-APPS — буквально "не грузить приложение дальше": проверка
+// ДО render(<App/>), не внутри неё — весь остальной код приложения (домен,
+// IndexedDB, ключи) не должен инициализироваться на слишком старом движке.
+// Только Android (getPlatform().os) — на iOS (Capacitor, ещё не создан, Э5)
+// движок WKWebView, UA не содержит "Chrome/N" вовсе, парсер честно вернёт
+// null/"слишком стар" — их сюда пускать нельзя, ТЗ (раздел 5) ограничивает
+// это требование явно Android'ом.
+if (__TARGET__ === "capacitor" && getPlatform().os === "android" && isChromiumTooOld(navigator.userAgent)) {
+	render(<WebViewOutdated />, root);
+} else {
+	render(<App />, root);
+}

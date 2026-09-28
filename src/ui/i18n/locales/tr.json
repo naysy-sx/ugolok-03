@@ -1489,5 +1489,10 @@
 		"mailSubject": "Daha fazla depolama alanı",
 		"mailBody": "Merhaba! Lütfen anahtarıma daha fazla yer verin: {{npub}}",
 		"back": "Depolamaya dön"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView'i güncelleyin",
+		"body": "{{appName}}, yüklü Android System WebView sürümünüzün henüz desteklemediği modern tarayıcı özelliklerini kullanıyor. Devam etmek için Google Play üzerinden güncelleyin.",
+		"updateButton": "Google Play'de güncelle"
 	}
 }

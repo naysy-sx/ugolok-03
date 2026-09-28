@@ -1489,5 +1489,10 @@
 		"mailSubject": "Więcej miejsca w pamięci",
 		"mailBody": "Dzień dobry! Proszę o więcej miejsca dla mojego klucza: {{npub}}",
 		"back": "Wróć do pamięci"
+	},
+	"webviewOutdated": {
+		"title": "Zaktualizuj Android System WebView",
+		"body": "{{appName}} korzysta z nowoczesnych funkcji przeglądarki, których zainstalowana wersja Android System WebView jeszcze nie obsługuje. Zaktualizuj ją w Google Play, aby kontynuować.",
+		"updateButton": "Aktualizuj w Google Play"
 	}
 }

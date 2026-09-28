@@ -315,10 +315,12 @@ test("tauri: media.getPlayableSource — файл больше лимита бр
 test("capacitor/tauri: не-media методы бросают 'не реализовано' с именем метода в сообщении", () => {
 	const capacitor = createCapacitorPlatform();
 	const tauri = createTauriPlatform();
-	// capacitor.js — заготовка, кроме media (Э2.1) и info (найдено живьём на
-	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь).
+	// capacitor.js — заготовка, кроме media (Э2.1), info (найдено живьём на
+	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь) и
+	// links.openExternal (Э4.4, через @capacitor/browser — не тестируется тут
+	// юнит-тестом, тем же принципом, что и tauri.openExternal ниже: реальный
+	// вызов требует нативного моста, мок был бы фиктивным).
 	assert.throws(() => capacitor.files.saveAs(), /files\.saveAs/);
-	assert.throws(() => capacitor.links.openExternal(), /links\.openExternal/);
 	assert.throws(() => capacitor.push.supported(), /push\.supported/);
 	// tauri.js — Э3: config/notifications/files/links/info реализованы по-
 	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
