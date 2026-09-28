@@ -50,6 +50,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Э4.8 ТЗ-NATIVE-APPS — @capacitor/local-notifications приносит этот
+             receiver для восстановления ЗАПЛАНИРОВАННЫХ уведомлений после
+             перезагрузки устройства (BOOT_COMPLETED). Мы используем плагин
+             только для НЕМЕДЛЕННЫХ уведомлений (пришло сообщение, пока
+             приложение свёрнуто) — ничего не планируем на будущее, этот
+             компонент лишний (И5). -->
+        <receiver
+            android:name="com.capacitorjs.plugins.localnotifications.LocalNotificationRestoreReceiver"
+            tools:node="remove" />
     </application>
 
     <!-- Permissions — Э4.2 ТЗ-NATIVE-APPS: итоговый манифест содержит ТОЛЬКО
@@ -65,4 +75,9 @@
          должен содержать это заранее (Э4.2 буквально). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Э4.8 — @capacitor/local-notifications: RECEIVE_BOOT_COMPLETED и
+         SCHEDULE_EXACT_ALARM относятся к запланированным (не немедленным)
+         уведомлениям, которыми мы не пользуемся (И5). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

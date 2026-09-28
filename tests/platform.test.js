@@ -26,12 +26,12 @@ test("getPlatform(): __TARGET__='web' -> веб-адаптер", () => {
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1: media реализован, остальное — заготовка до Э3)", () => {
+test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1/Э4: media/links/ui/notifications реализованы, часть остального — заготовка)", () => {
 	globalThis.__TARGET__ = "capacitor";
 	resetPlatformForTests();
 	const platform = getPlatform();
 	assert.equal(platform.shell, "capacitor");
-	assert.throws(() => platform.notifications.permission(), /не реализовано/);
+	assert.throws(() => platform.files.saveAs(), /не реализовано/);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });

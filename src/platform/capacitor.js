@@ -11,6 +11,7 @@ import { APP_VERSION, BUILD_HASH } from "../config.js";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import { SystemBars, SystemBarsStyle } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 // TODO(Э3): различать android/ios через реальный Capacitor.getPlatform() —
 // недоступно без настоящего native/mobile проекта. iOS отложен владельцем
@@ -83,6 +84,82 @@ async function setSystemBarsTheme(theme) {
 	await SystemBars.setStyle({ style: theme === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
 }
 
+// Э4.8 — локальные уведомления через @capacitor/local-notifications. Только
+// НЕМЕДЛЕННЫЕ (schedule опущен вовсе) — пришло сообщение, пока приложение
+// свёрнуто; никаких запланированных на будущее (см. AndroidManifest.xml —
+// RECEIVE_BOOT_COMPLETED/SCHEDULE_EXACT_ALARM явно убраны, они не нужны).
+// PermissionState плагина ('prompt'|'prompt-with-rationale'|'granted'|
+// 'denied') сводится к контракту §4.3 ('granted'|'denied'|'default'), тот
+// же паттерн, что tauri.js's permission()/requestPermission().
+function mapPermissionState(display) {
+	if (display === "granted") return "granted";
+	if (display === "denied") return "denied";
+	return "default";
+}
+
+async function permission() {
+	const { display } = await LocalNotifications.checkPermissions();
+	return mapPermissionState(display);
+}
+
+async function requestPermission() {
+	const { display } = await LocalNotifications.requestPermissions();
+	return mapPermissionState(display);
+}
+
+// id обязателен у плагина (в отличие от tauri-plugin-notification, где он
+// опционален) — генерируем, если вызывающий код его не передал.
+let notificationIdCounter = 1;
+
+async function show({ id, title, body, route }) {
+	await LocalNotifications.schedule({
+		notifications: [
+			{
+				id: typeof id === "number" ? id : notificationIdCounter++,
+				title,
+				body,
+				extra: route ? { route } : undefined,
+				// Найдено живьём (эмулятор) — isExactNotification по умолчанию true
+				// БЕЗУСЛОВНО, даже без schedule-поля (немедленное уведомление): плагин
+				// автоматически открывает системный экран "Alarms & reminders",
+				// заставляя JS-промис висеть, пока пользователь не вернётся оттуда
+				// вручную. Мы никогда ничего не планируем на будущее (RECEIVE_BOOT_
+				// COMPLETED/SCHEDULE_EXACT_ALARM явно убраны из манифеста, Э4.8) —
+				// exact alarm нам не нужен вовсе.
+				isExactNotification: false,
+			},
+		],
+	});
+}
+
+let actionListenerRegistered = false;
+const clickHandlers = [];
+
+async function ensureActionListener() {
+	if (actionListenerRegistered) return;
+	actionListenerRegistered = true;
+	await LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
+		const route = action?.notification?.extra?.route;
+		for (const cb of clickHandlers) cb(route);
+	});
+}
+
+function onClick(cb) {
+	ensureActionListener();
+	clickHandlers.push(cb);
+	return () => {
+		const i = clickHandlers.indexOf(cb);
+		if (i >= 0) clickHandlers.splice(i, 1);
+	};
+}
+
+// ТЗ, Э4.8 — "Бейдж — через число в уведомлении, как принято на Android":
+// нет отдельного публичного API у local-notifications для счётчика на
+// иконке (в отличие от tauri's setBadgeCount) — на Android бейдж формируется
+// самим фактом наличия активных уведомлений, не отдельным вызовом. Тихий
+// no-op, тот же принцип, что web.js для возможностей другой платформы.
+async function setBadge() {}
+
 async function getPlayableSource(fileRef, opts = {}) {
 	const size = opts.size ?? fileRef?.size;
 	if (exceedsMediaSizeLimit(SHELL, OS, size)) {
@@ -106,11 +183,11 @@ export function createPlatform() {
 		config: { load: notImplemented(SHELL, "config.load") },
 
 		notifications: {
-			permission: notImplemented(SHELL, "notifications.permission"),
-			requestPermission: notImplemented(SHELL, "notifications.requestPermission"),
-			show: notImplemented(SHELL, "notifications.show"),
-			onClick: notImplemented(SHELL, "notifications.onClick"),
-			setBadge: notImplemented(SHELL, "notifications.setBadge"),
+			permission,
+			requestPermission,
+			show,
+			onClick,
+			setBadge,
 		},
 
 		media: {

@@ -1,8 +1,16 @@
-import { createWebNotificationBackend } from "./backend.js";
+import { createWebNotificationBackend, createCapacitorNotificationBackend } from "./backend.js";
+import { getPlatform } from "../../platform/index.js";
 
 // CONTRACTS.md, этап 34 — DI для NotificationImpl, по прецеденту MediaRecorderImpl/
-// WebSocketImpl.
+// WebSocketImpl. Э4.8 — на Capacitor нет browser Notification API вовсе (WebView),
+// разрешение запрашивается через getPlatform().notifications.* вместо него.
 export async function requestNotificationPermission(options = {}) {
+	const platform = options.platform ?? getPlatform();
+	if (platform.shell === "capacitor") {
+		const current = await platform.notifications.permission();
+		if (current === "granted" || current === "denied") return current;
+		return platform.notifications.requestPermission();
+	}
 	const NotificationImpl = options.NotificationImpl ?? globalThis.Notification;
 	if (!NotificationImpl) return "unsupported";
 	if (NotificationImpl.permission === "granted" || NotificationImpl.permission === "denied") {
@@ -28,7 +36,10 @@ export function configureDefaultBackend(options) {
 }
 
 function getDefaultBackend() {
-	if (!defaultBackend) defaultBackend = createWebNotificationBackend(defaultBackendOptions);
+	if (!defaultBackend) {
+		defaultBackend =
+			getPlatform().shell === "capacitor" ? createCapacitorNotificationBackend(defaultBackendOptions) : createWebNotificationBackend(defaultBackendOptions);
+	}
 	return defaultBackend;
 }
 
