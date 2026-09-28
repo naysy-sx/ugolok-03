@@ -162,6 +162,38 @@ export function reduce(peerState, event) {
       break;
 
     case "CONTACT":
+      if (event.type === "REMOTE_REQUEST") {
+        // Найдено живой проверкой (native/Android, чек-лист §6): разблокировка
+        // сбрасывает МОЁ состояние в NONE, но ничего не сообщает собеседнику —
+        // блокировка по конструкции односторонняя (§1.1 CONTACTS-FSM.md), он
+        // остаётся CONTACT. Повторная заявка после этого молча отбрасывалась
+        // (I2 трактовала ЛЮБОЙ REMOTE_REQUEST как безусловный игнор) —
+        // отправитель зависал в OUTGOING_PENDING навсегда, собеседник никогда
+        // не видел заявку и нечего было принимать. Тот же симптом даёт ЛЮБАЯ
+        // причина, по которой СОБЕСЕДНИК потерял общее состояние (переустановка,
+        // восстановление по мнемонике на новом устройстве, потерянная IndexedDB) —
+        // не только разблокировка. Правило одно: заявка от того, кто уже мой
+        // контакт, означает "собеседник потерял наше состояние", отвечаем
+        // автоматически (согласие уже было дано однажды).
+        //
+        // I1-гейт (createdAt <= resolvedAt) — та же защита от повторной доставки,
+        // что у остальных состояний: giftWrapSubscriber (transport.js) не имеет
+        // since-фильтра, а isNewEvent — in-memory, не переживает reload/reconnect
+        // (см. её же комментарий) — без гейта по времени PUBLISH_ACCEPT слался бы
+        // заново на КАЖДЫЙ повторный вход, пока исходное событие живёт на relay.
+        // resolvedAt продвигается вперёд на принятом событии — тот же приём, что
+        // OUTGOING_PENDING/INCOMING_PENDING уже используют для своих I1-переходов.
+        if (event.createdAt <= peerState.resolvedAt) {
+          return { state: peerState, commands: [] };
+        }
+        return {
+          state: { ...peerState, resolvedAt: event.createdAt },
+          commands: [
+            { type: "PUBLISH_ACCEPT", peer: event.peer },
+            { type: "UPSERT", peer: event.peer, fields: { resolvedAt: event.createdAt } },
+          ],
+        };
+      }
       if (event.type === "USER_REMOVE_CONTACT") {
         return {
           state: { ...peerState, name: "NONE", resolvedAt: now },

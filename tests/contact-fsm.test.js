@@ -93,12 +93,43 @@ test("I1: CONTACT (resolvedAt=1000) + REMOTE_ACCEPT(createdAt=500, старее)
 	assert.deepEqual(r.commands, []);
 });
 
-// --- 7. I2: ГЛАВНЫЙ регресс-тест бага пользователя ---
-test("I2 (ГЛАВНЫЙ регресс-тест): CONTACT + REMOTE_REQUEST(ЛЮБОЙ createdAt, даже далёкое будущее) -> остаёмся CONTACT, никакой заявки не создаётся", () => {
+// --- 7. I1 (было I2-безусловный, правка 2026-09-28 — см. CONTACTS-FSM.md §1.1-довесок): ГЛАВНЫЙ регресс-тест бага пользователя ---
+test("I1: CONTACT + REMOTE_REQUEST(createdAt <= resolvedAt, redelivery уже учтённой заявки) -> остаёмся CONTACT, никакой заявки не создаётся", () => {
 	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
-	const farFuture = 99999999999;
-	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "снова привет", createdAt: farFuture });
+	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "снова привет", createdAt: 1000 });
 	assert.equal(r.state.name, "CONTACT", "уже принятый контакт НЕ должен снова попасть во входящие");
+	assert.deepEqual(r.state, s);
+	assert.deepEqual(r.commands, []);
+});
+
+// --- 7a: собеседник потерял состояние (разблокировка+заявка заново; переустановка; ...) ---
+test("7a: CONTACT(resolvedAt=T) + REMOTE_REQUEST(createdAt > T) -> остаёмся CONTACT, автоматический PUBLISH_ACCEPT, resolvedAt продвинут", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.equal(r.state.name, "CONTACT", "остаёмся CONTACT — это не новая входящая заявка, а автоответ");
+	assert.equal(r.state.resolvedAt, 2000);
+	assert.deepEqual(names(r.commands), ["PUBLISH_ACCEPT", "UPSERT"]);
+	assert.deepEqual(findCmd(r.commands, "PUBLISH_ACCEPT"), { type: "PUBLISH_ACCEPT", peer: BOB });
+	assert.deepEqual(findCmd(r.commands, "UPSERT"), { type: "UPSERT", peer: BOB, fields: { resolvedAt: 2000 } });
+	assert.ok(!names(r.commands).includes("EMIT"), "видимое для UI состояние не меняется — EMIT не нужен");
+});
+
+// --- 7b: повтор ТОЙ ЖЕ новой заявки (следующий relogin) не даёт второго PUBLISH_ACCEPT ---
+test("7b: 7a применена дважды подряд (redelivery на relogin) -> второй раз commands пустые, resolvedAt не откатывается", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const first = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.deepEqual(names(first.commands), ["PUBLISH_ACCEPT", "UPSERT"]);
+
+	const second = reduce(first.state, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.equal(second.state.name, "CONTACT");
+	assert.equal(second.state.resolvedAt, 2000, "resolvedAt не откатывается и не дублируется");
+	assert.deepEqual(second.commands, [], "тот же createdAt второй раз — I1-гейт гасит, PUBLISH_ACCEPT не повторяется");
+});
+
+// --- 7c: REMOTE_ACCEPT на CONTACT по-прежнему безусловный игнор (I2 для ACCEPT/REJECT/CANCEL не тронут 7a) ---
+test("7c: CONTACT + REMOTE_ACCEPT(даже свежий createdAt) -> состояние и resolvedAt не меняются, команды пустые", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const r = reduce(s, { type: "REMOTE_ACCEPT", peer: BOB, createdAt: 5000 });
 	assert.deepEqual(r.state, s);
 	assert.deepEqual(r.commands, []);
 });
