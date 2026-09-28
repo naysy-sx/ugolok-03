@@ -7,6 +7,7 @@ import App from "./app.jsx";
 import WebViewOutdated from "./ui/screens/webview-outdated.jsx";
 import { getPlatform } from "./platform/index.js";
 import { isChromiumTooOld } from "./platform/webview-gate.js";
+import { startKeyboardInsetTracking } from "./platform/keyboard-inset.js";
 import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
 import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
@@ -47,6 +48,13 @@ if (isTraceEnabled()) {
 }
 
 startIdleWatcher();
+
+// Э4.7 ТЗ-NATIVE-APPS — только Android/Capacitor (см. keyboard-inset.js);
+// глобально и безусловно с самого старта (не только внутри залогиненного
+// MainShell) — клавиатура нужна и на экране входа/регистрации (пароль,
+// мнемоника). Никогда не отписывается — живёт всю жизнь вкладки, тот же
+// принцип, что startIdleWatcher() выше.
+if (__TARGET__ === "capacitor") startKeyboardInsetTracking();
 
 const SW_RELOAD_ONCE_KEY = "ugolok.swReloadOnce";
 let refreshing = false;

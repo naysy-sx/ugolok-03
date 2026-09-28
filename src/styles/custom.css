@@ -10339,6 +10339,18 @@ button[type="button"].media-mini-bar-btn {
 .shell {
 	padding-block-start: env(safe-area-inset-top);
 	padding-block-end: env(safe-area-inset-bottom);
+	/* Э4.7 ТЗ-NATIVE-APPS — найдено живьём (Android 16/API 36, эмулятор):
+	   WebView не меняет размер при появлении клавиатуры даже с явным
+	   android:windowSoftInputMode="adjustResize" в манифесте — известный
+	   нерешённый апстрим-баг Capacitor 8 в edge-to-edge на Android 15/16
+	   (ionic-team/capacitor#7983, #8432). --keyboard-inset — 0px везде,
+	   кроме Android/Capacitor, где keyboard-inset.js (Э4.7) выставляет его
+	   через window.visualViewport при появлении/скрытии клавиатуры; на
+	   остальных платформах переменная никогда не установлена, calc()
+	   вырождается в обычный 100dvh — ПОЭТОМУ это не "складывается" с
+	   поведением других платформ (тот самый риск двойного сдвига, о
+	   котором предупреждает ТЗ, — избегается тем, что источник ОДИН). */
+	block-size: calc(100dvh - var(--keyboard-inset, 0px));
 }
 
 /* Круглые аватары везде: макеты не знают квадратных «плиток». */

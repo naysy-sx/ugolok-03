@@ -16,12 +16,22 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Э4.7 ТЗ-NATIVE-APPS — найдено живьём (эмулятор, Android 16/API 36,
+             ровно targetSdkVersion этого проекта): БЕЗ явного windowSoftInputMode
+             WebView вообще не менял размер при появлении клавиатуры — контент
+             оставался статичным, клавиатура просто накладывалась поверх снизу
+             (совпадает с открытыми апстрим-багами Capacitor 8 на Android
+             15/16 edge-to-edge: ionic-team/capacitor#7983, #8432 — "WebView is
+             not resizing when the keyboard is visible"). adjustResize здесь —
+             явное намерение вместо неявного выбора ОС, которая, по данным тех
+             же issue, ненадёжна именно в edge-to-edge на этих версиях. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
 
             <intent-filter>
