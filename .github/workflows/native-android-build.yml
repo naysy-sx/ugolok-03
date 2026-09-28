@@ -35,11 +35,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Установить Java 17 (AGP 8.13 требует JDK 17)
+      - name: Установить Java 21 (найдено CI — capacitor-android требует source release 21, не 17, при сборке с этой версией AGP/плагинов; сверено с локальной средой, где сборка уже работает — там тоже JDK 21)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: npm ci (корень — платформенный адаптер собирается отсюда)
         run: npm ci
