@@ -10,7 +10,7 @@ import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-nati
 import { APP_VERSION, BUILD_HASH } from "../config.js";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
-import { SystemBars, SystemBarsStyle } from "@capacitor/core";
+import { SystemBars, SystemBarsStyle, registerPlugin } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
@@ -84,6 +84,21 @@ function setBackHandler(cb) {
 // докстрингам @capacitor/core/types/core-plugins.d.ts, не домысел.
 async function setSystemBarsTheme(theme) {
 	await SystemBars.setStyle({ style: theme === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+}
+
+// Э4.10 — "запрет скриншотов и превью в списке задач на время показа
+// мнемоники". FLAG_SECURE нет ни в @capacitor/core, ни в официальном
+// first-party плагине под Capacitor 8 — собственный минимальный native
+// plugin (native/mobile/android/.../SecureScreenPlugin.java), тот же
+// принцип, что MainActivity.java's Э4.7 WindowInsets-код: небольшой
+// прямой native-код там, где готового API не существует. registerPlugin
+// без второго аргумента — стандартный способ создать JS-биндинг к
+// кастомному нативному плагину (тот же механизм, что первопартийные
+// @capacitor/* пакеты используют под капотом).
+const SecureScreen = registerPlugin("SecureScreen");
+
+async function setSecureScreen(enabled) {
+	await SecureScreen.setEnabled({ enabled });
 }
 
 // Э4.8 — локальные уведомления через @capacitor/local-notifications. Только
@@ -263,7 +278,7 @@ export function createPlatform() {
 		ui: {
 			setBackHandler,
 			setSystemBarsTheme,
-			setSecureScreen: notImplemented(SHELL, "ui.setSecureScreen"),
+			setSecureScreen,
 			keepAwake: notImplemented(SHELL, "ui.keepAwake"),
 		},
 

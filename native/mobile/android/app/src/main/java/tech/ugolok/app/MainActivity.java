@@ -22,6 +22,9 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// Э4.10 — registerPlugin ОБЯЗАН быть ДО super.onCreate(): Bridge
+		// загружает уже зарегистрированные плагины внутри super.onCreate().
+		registerPlugin(SecureScreenPlugin.class);
 		super.onCreate(savedInstanceState);
 		final android.webkit.WebView webView = getBridge().getWebView();
 		ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {

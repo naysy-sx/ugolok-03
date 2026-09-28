@@ -317,10 +317,12 @@ test("capacitor/tauri: не-media методы бросают 'не реализ
 	const tauri = createTauriPlatform();
 	// capacitor.js — заготовка, кроме media (Э2.1), info (найдено живьём на
 	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь),
-	// links.openExternal (Э4.4), notifications.* (Э4.8) и files.saveAs (Э4.9) —
-	// все через реальные @capacitor/* плагины, не тестируются тут юнит-тестом:
-	// реальный вызов требует нативного моста, мок был бы фиктивным.
-	assert.throws(() => capacitor.ui.setSecureScreen(), /ui\.setSecureScreen/);
+	// links.openExternal (Э4.4), notifications.* (Э4.8), files.saveAs (Э4.9),
+	// ui.setSystemBarsTheme/setBackHandler/setSecureScreen (Э4.5/4.6/4.10) —
+	// все через реальные @capacitor/* плагины (в т.ч. собственный
+	// SecureScreenPlugin.java), не тестируются тут юнит-тестом: реальный
+	// вызов требует нативного моста, мок был бы фиктивным.
+	assert.throws(() => capacitor.ui.keepAwake(), /ui\.keepAwake/);
 	assert.throws(() => capacitor.push.supported(), /push\.supported/);
 	// tauri.js — Э3: config/notifications/files/links/info реализованы по-
 	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
