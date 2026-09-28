@@ -10554,11 +10554,18 @@ select:focus-visible {
 }
 
 /* Меню-бургер: голая иконка в левом углу шапки корневого экрана. На экране
-   с «назад» его нет (в мобильных приложениях назад заменяет меню). */
+   с «назад» его нет (в мобильных приложениях назад заменяет меню).
+   БЕЗ env(safe-area-inset-top) здесь — .top-corner-actions всегда потомок
+   .shell (app.jsx), которая УЖЕ компенсирует safe-area через
+   padding-block-start (см. ".shell" выше в этом же REDESIGN-2 блоке).
+   Раньше это правило добавляло его ЕЩЁ РАЗ — на вебе/desktop inset всегда
+   был 0px, поэтому дубль был математически незаметен; на Android живьём
+   (эмулятор, статус-бар 49px) бургер оказывался на 2×49px ниже нужного
+   места (найдено пользователем, Э4 ТЗ-NATIVE-APPS, 2026-09-28). */
 .top-corner-actions {
 	inset-inline-start: var(--space-xs);
 	inset-inline-end: auto;
-	inset-block-start: calc((3.5rem - var(--tap)) / 2 + env(safe-area-inset-top, 0px));
+	inset-block-start: calc((3.5rem - var(--tap)) / 2);
 }
 .sidebar-toggle-btn {
 	inline-size: var(--tap);
