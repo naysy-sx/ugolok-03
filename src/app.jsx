@@ -23,7 +23,7 @@ import { applyCustomPalette } from "./ui/theme/palette-apply.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
 import { applyThemeMode, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { setLocale, t } from "./ui/signals/i18n.js";
-import { place, goTo } from "./ui/signals/place.js";
+import { place, goTo, goBackOnePlace } from "./ui/signals/place.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
@@ -128,6 +128,37 @@ function MainShell() {
 		}
 		document.addEventListener("click", onClickCapture, true);
 		return () => document.removeEventListener("click", onClickCapture, true);
+	}, []);
+
+	// Э4.5 ТЗ-NATIVE-APPS — аппаратная кнопка «Назад» на Android: закрыть
+	// оверлей/модалку → закрыть drawer → шаг назад по навигации → на корне
+	// свернуть (App.minimizeApp() в capacitor.js, если cb вернул false — не
+	// завершать процесс). Первые два уровня — ОДИН механизм: [role="dialog"]
+	// (общий атрибут, уже последовательно применяемый во ВСЕХ модалках/
+	// оверлеях проекта — add-contact-modal/call-overlay/file-picker/contact-
+	// modal/free-space-dialog/file-info-dialog/delete-chat-dialog/image-modal/
+	// rooms-overlay/remove-contact-dialog) и .sidebar-open (drawer) уже
+	// закрываются СВОИМИ локальными keydown-Escape-обработчиками (см. выше в
+	// этом файле и в каждом из компонентов) — синтетический Escape переиспользует
+	// их БЕЗ дублирования логики закрытия в каждом месте. Третий уровень —
+	// goBackOnePlace() (place.js, 10.1 "состояние места" — единственный
+	// источник "где я нахожусь"). Только Android: на desktop нет аппаратной
+	// кнопки "Назад" вообще, на iOS (Э5, отложен) контракт тот же метод, но
+	// пока не проверено — сознательно не включаем шире, чем capacitor.
+	//
+	// НЕ покрыто: экран входа/регистрации (unlock.jsx, до логина) — та же
+	// граница, что уже принята для перехватчика внешних ссылок выше (эффект
+	// живёт в MainShell, не в App) — на Unlock "Назад" даёт дефолтное
+	// поведение Android (закрыть activity), не проверено живьём отдельно.
+	useEffect(() => {
+		if (getPlatform().shell !== "capacitor") return;
+		return getPlatform().ui.setBackHandler(() => {
+			if (document.querySelector('[role="dialog"], .sidebar.sidebar-open')) {
+				document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+				return true;
+			}
+			return goBackOnePlace();
+		});
 	}, []);
 
 	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает

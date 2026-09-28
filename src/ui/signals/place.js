@@ -78,3 +78,32 @@ export function openSearch(query) {
 export function closeSearch() {
 	place.value = placeBeforeSearch;
 }
+
+// Э4.5 ТЗ-NATIVE-APPS — аппаратная кнопка «Назад» на Android, третий шаг
+// цепочки (после закрытия оверлея/модалки и drawer — те решаются платформенно
+// в app.jsx через уже существующий Escape-путь, DOM здесь не нужен). "Место"
+// (10.1) — единственный источник "где я нахожусь", поэтому единственный
+// источник и для "куда назад": детальные views (chat/channel с id, search)
+// возвращают к своему списку/точке входа; верхнеуровневые "вкладки" (people,
+// discovery, settings и т.д.) возвращают в DEFAULT_PLACE (journal); сам
+// journal — корень, возвращать false (вызывающий код на Android сворачивает
+// приложение, не завершает процесс).
+export function goBackOnePlace() {
+	const current = place.value;
+	if (current.kind === DEFAULT_PLACE.kind) return false;
+	if (current.kind === "search") {
+		closeSearch();
+		return true;
+	}
+	if (current.kind === "chat" && current.id) {
+		const backTo = getChatBackTo();
+		place.value = backTo ?? { kind: "chat" };
+		return true;
+	}
+	if (current.kind === "channel" && current.id) {
+		place.value = { kind: "channels" };
+		return true;
+	}
+	place.value = DEFAULT_PLACE;
+	return true;
+}

@@ -9,6 +9,8 @@ import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
 import { APP_VERSION, BUILD_HASH } from "../config.js";
 import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
+import { SystemBars, SystemBarsStyle } from "@capacitor/core";
 
 // TODO(Э3): различать android/ios через реальный Capacitor.getPlatform() —
 // недоступно без настоящего native/mobile проекта. iOS отложен владельцем
@@ -40,6 +42,45 @@ function info() {
 // тот же метод для любых markdown-ссылок.
 async function openExternal(url) {
 	await Browser.open({ url });
+}
+
+// Э4.5 — аппаратная кнопка «Назад». ОДИН нативный listener на весь жизненный
+// цикл приложения (регистрируется один раз, лениво) — не по одному на каждый
+// вызов setBackHandler(): app.jsx переустанавливает обработчик при каждом
+// изменении sidebarOpen (замыкание должно видеть актуальный state), частое
+// накопление нативных addListener-подписок дало бы то же нажатие "Назад",
+// обработанное N раз одновременно. Тот же приём, что tauri.js's
+// ensureActionListener/clickHandlers — одна подписка, переключаемый колбэк.
+// Контракт (§4.3) — cb() -> true, если обработано; false -> сворачиваем
+// приложение (App.minimizeApp(), НЕ завершаем процесс — Э4.5 буквально).
+let backButtonListenerRegistered = false;
+let currentBackHandler = null;
+
+function ensureBackButtonListener() {
+	if (backButtonListenerRegistered) return;
+	backButtonListenerRegistered = true;
+	App.addListener("backButton", () => {
+		const handled = currentBackHandler ? currentBackHandler() : false;
+		if (!handled) App.minimizeApp();
+	});
+}
+
+function setBackHandler(cb) {
+	ensureBackButtonListener();
+	currentBackHandler = cb;
+	return () => {
+		if (currentBackHandler === cb) currentBackHandler = null;
+	};
+}
+
+// Э4.6 — "цвет иконок статус-бара следует теме". SystemBars — встроенный
+// core-плагин Capacitor 8 (не отдельный пакет — тот же, что уже настроен в
+// capacitor.config.json's plugins.SystemBars.insetsHandling для edge-to-edge,
+// найдено при разборе того бага). SystemBarsStyle.Dark — "светлые иконки НА
+// тёмном фоне" (т.е. тёмная ТЕМА ПРИЛОЖЕНИЯ), Light — наоборот; сверено по
+// докстрингам @capacitor/core/types/core-plugins.d.ts, не домысел.
+async function setSystemBarsTheme(theme) {
+	await SystemBars.setStyle({ style: theme === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
 }
 
 async function getPlayableSource(fileRef, opts = {}) {
@@ -98,8 +139,8 @@ export function createPlatform() {
 		},
 
 		ui: {
-			setBackHandler: notImplemented(SHELL, "ui.setBackHandler"),
-			setSystemBarsTheme: notImplemented(SHELL, "ui.setSystemBarsTheme"),
+			setBackHandler,
+			setSystemBarsTheme,
 			setSecureScreen: notImplemented(SHELL, "ui.setSecureScreen"),
 			keepAwake: notImplemented(SHELL, "ui.keepAwake"),
 		},
