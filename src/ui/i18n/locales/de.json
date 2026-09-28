@@ -46,6 +46,12 @@
 			"default": "(Standard)"
 		},
 		"scaleLabel": "Oberflächenskalierung",
+		"scale": {
+			"small": "Klein (90%)",
+			"medium": "Mittel (100%)",
+			"large": "Groß (110%)",
+			"xlarge": "Sehr groß (125%)"
+		},
 		"accentColorTitle": "Akzentfarbe",
 		"paletteCustomizeButton": "Anpassen",
 		"paletteHueLabel": "Farbton",

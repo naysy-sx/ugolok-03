@@ -883,7 +883,7 @@ export default function Settings() {
 								<select id={`${instanceId}-scale`} class="set-row__control" value={settings.uiScale} onChange={(e) => handleScaleChange(e.currentTarget.value)}>
 									{SCALE_OPTIONS.map((opt) => (
 										<option key={opt.id} value={opt.id}>
-											{opt.label}
+											{t(`settings.scale.${opt.id}`)}
 										</option>
 									))}
 								</select>

@@ -46,6 +46,12 @@
 			"default": "(default)"
 		},
 		"scaleLabel": "Interface scale",
+		"scale": {
+			"small": "Small (90%)",
+			"medium": "Medium (100%)",
+			"large": "Large (110%)",
+			"xlarge": "Extra Large (125%)"
+		},
 		"accentColorTitle": "Accent color",
 		"paletteCustomizeButton": "Customize",
 		"paletteHueLabel": "Hue",

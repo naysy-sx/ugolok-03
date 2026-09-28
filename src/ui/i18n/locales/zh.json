@@ -46,6 +46,12 @@
 			"default": "（默认）"
 		},
 		"scaleLabel": "界面缩放",
+		"scale": {
+			"small": "小 (90%)",
+			"medium": "中 (100%)",
+			"large": "大 (110%)",
+			"xlarge": "特大 (125%)"
+		},
 		"accentColorTitle": "强调色",
 		"paletteCustomizeButton": "自定义",
 		"paletteHueLabel": "色相",

@@ -46,6 +46,12 @@
 			"default": "(varsayılan)"
 		},
 		"scaleLabel": "Arayüz ölçeği",
+		"scale": {
+			"small": "Küçük (%90)",
+			"medium": "Orta (%100)",
+			"large": "Büyük (%110)",
+			"xlarge": "Çok büyük (%125)"
+		},
 		"accentColorTitle": "Vurgu rengi",
 		"paletteCustomizeButton": "Özelleştir",
 		"paletteHueLabel": "Ton",

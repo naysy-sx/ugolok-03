@@ -46,6 +46,12 @@
 			"default": "(predefinito)"
 		},
 		"scaleLabel": "Scala dell'interfaccia",
+		"scale": {
+			"small": "Piccolo (90%)",
+			"medium": "Medio (100%)",
+			"large": "Grande (110%)",
+			"xlarge": "Molto grande (125%)"
+		},
 		"accentColorTitle": "Colore accento",
 		"paletteCustomizeButton": "Personalizza",
 		"paletteHueLabel": "Tonalità",

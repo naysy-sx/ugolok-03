@@ -46,6 +46,12 @@
 			"default": "（デフォルト）"
 		},
 		"scaleLabel": "インターフェースの拡大率",
+		"scale": {
+			"small": "小 (90%)",
+			"medium": "中 (100%)",
+			"large": "大 (110%)",
+			"xlarge": "特大 (125%)"
+		},
 		"accentColorTitle": "アクセントカラー",
 		"paletteCustomizeButton": "カスタマイズ",
 		"paletteHueLabel": "色相",

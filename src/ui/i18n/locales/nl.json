@@ -46,6 +46,12 @@
 			"default": "(standaard)"
 		},
 		"scaleLabel": "Schaal van de interface",
+		"scale": {
+			"small": "Klein (90%)",
+			"medium": "Middel (100%)",
+			"large": "Groot (110%)",
+			"xlarge": "Extra groot (125%)"
+		},
 		"accentColorTitle": "Accentkleur",
 		"paletteCustomizeButton": "Aanpassen",
 		"paletteHueLabel": "Tint",

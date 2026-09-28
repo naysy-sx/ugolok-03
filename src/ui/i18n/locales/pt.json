@@ -46,6 +46,12 @@
 			"default": "(padrão)"
 		},
 		"scaleLabel": "Escala da interface",
+		"scale": {
+			"small": "Pequeno (90%)",
+			"medium": "Médio (100%)",
+			"large": "Grande (110%)",
+			"xlarge": "Muito grande (125%)"
+		},
 		"accentColorTitle": "Cor de destaque",
 		"paletteCustomizeButton": "Personalizar",
 		"paletteHueLabel": "Matiz",

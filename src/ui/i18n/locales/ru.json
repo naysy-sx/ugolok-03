@@ -46,6 +46,12 @@
 			"default": "(по умолчанию)"
 		},
 		"scaleLabel": "Масштаб интерфейса",
+		"scale": {
+			"small": "Маленький (90%)",
+			"medium": "Средний (100%)",
+			"large": "Крупный (110%)",
+			"xlarge": "Очень крупный (125%)"
+		},
 		"accentColorTitle": "Акцентный цвет",
 		"paletteCustomizeButton": "Настроить",
 		"paletteHueLabel": "Оттенок",
