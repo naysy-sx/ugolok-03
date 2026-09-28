@@ -26,12 +26,12 @@ test("getPlatform(): __TARGET__='web' -> веб-адаптер", () => {
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1/Э4: media/links/ui/notifications реализованы, часть остального — заготовка)", () => {
+test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1/Э4: media/links/ui/notifications/files реализованы, часть остального — заготовка)", () => {
 	globalThis.__TARGET__ = "capacitor";
 	resetPlatformForTests();
 	const platform = getPlatform();
 	assert.equal(platform.shell, "capacitor");
-	assert.throws(() => platform.files.saveAs(), /не реализовано/);
+	assert.throws(() => platform.push.supported(), /не реализовано/);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });
@@ -316,11 +316,11 @@ test("capacitor/tauri: не-media методы бросают 'не реализ
 	const capacitor = createCapacitorPlatform();
 	const tauri = createTauriPlatform();
 	// capacitor.js — заготовка, кроме media (Э2.1), info (найдено живьём на
-	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь) и
-	// links.openExternal (Э4.4, через @capacitor/browser — не тестируется тут
-	// юнит-тестом, тем же принципом, что и tauri.openExternal ниже: реальный
-	// вызов требует нативного моста, мок был бы фиктивным).
-	assert.throws(() => capacitor.files.saveAs(), /files\.saveAs/);
+	// tauri.js — см. отдельный тест ниже, тот же баг был бы и здесь),
+	// links.openExternal (Э4.4), notifications.* (Э4.8) и files.saveAs (Э4.9) —
+	// все через реальные @capacitor/* плагины, не тестируются тут юнит-тестом:
+	// реальный вызов требует нативного моста, мок был бы фиктивным.
+	assert.throws(() => capacitor.ui.setSecureScreen(), /ui\.setSecureScreen/);
 	assert.throws(() => capacitor.push.supported(), /push\.supported/);
 	// tauri.js — Э3: config/notifications/files/links/info реализованы по-
 	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.

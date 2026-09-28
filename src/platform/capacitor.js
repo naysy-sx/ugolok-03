@@ -12,6 +12,8 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import { SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 // TODO(Э3): различать android/ios через реальный Capacitor.getPlatform() —
 // недоступно без настоящего native/mobile проекта. iOS отложен владельцем
@@ -160,6 +162,49 @@ function onClick(cb) {
 // no-op, тот же принцип, что web.js для возможностей другой платформы.
 async function setBadge() {}
 
+// Chunked, не String.fromCharCode.apply(null, bytes) целиком — тот падает с
+// "Maximum call stack size exceeded" на больших файлах (аргументы функции —
+// не безлимитный буфер). 32 КиБ — с запасом ниже типичных лимитов движка.
+function bytesToBase64(bytes) {
+	const CHUNK_SIZE = 0x8000;
+	let binary = "";
+	for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+		binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK_SIZE));
+	}
+	return btoa(binary);
+}
+
+// Э4.9 ТЗ-NATIVE-APPS — "запись во временный кэш → системное меню «Поделиться»
+// → удаление временного файла после закрытия меню" (буквально). Directory.Cache
+// — приватная директория приложения (не публичное хранилище, не требует
+// доп. разрешений на запись). Share.share({files}) ожидает "file:// URL" —
+// именно это отдаёт Filesystem.getUri() для Cache (сверено по докстрингам
+// обоих плагинов, не домысел). Имя файла (не отдельный mime-параметр —
+// ShareOptions его не принимает вовсе) несёт расширение, по которому
+// принимающее приложение определяет тип. Удаление — в finally: происходит
+// ВСЕГДА после закрытия шторки «Поделиться», независимо от того, выбрал ли
+// пользователь получателя или отменил.
+//
+// Найдено живьём (эмулятор) — Share.share() РЕДЖЕКТИТ с "Share canceled"
+// (сверено дословно по исходнику плагина, SharePlugin.java: call.reject
+// ("Share canceled")), если пользователь просто закрыл шторку — то же
+// нажатие "Отмена" в системном диалоге, что tauri.js's saveDialog(): там
+// это "path === null -> тихо ничего", здесь — тот же принцип, но через
+// catch по тексту сообщения (плагин не даёт отдельного кода ошибки).
+async function saveAs({ name, mime, data }) {
+	const bytes = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : data instanceof Uint8Array ? data : new Uint8Array(await new Blob([data], { type: mime }).arrayBuffer());
+	const path = `share-${Date.now()}-${name}`;
+	await Filesystem.writeFile({ path, data: bytesToBase64(bytes), directory: Directory.Cache });
+	try {
+		const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+		await Share.share({ files: [uri], dialogTitle: name });
+	} catch (err) {
+		if (err?.message !== "Share canceled") throw err;
+	} finally {
+		await Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
+	}
+}
+
 async function getPlayableSource(fileRef, opts = {}) {
 	const size = opts.size ?? fileRef?.size;
 	if (exceedsMediaSizeLimit(SHELL, OS, size)) {
@@ -195,7 +240,7 @@ export function createPlatform() {
 		},
 
 		files: {
-			saveAs: notImplemented(SHELL, "files.saveAs"),
+			saveAs,
 		},
 
 		links: {
