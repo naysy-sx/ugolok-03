@@ -1,0 +1,84 @@
+name: Native Android build (Э4)
+
+# Проверка, что native/mobile (реальный проект, Capacitor) СОБИРАЕТСЯ.
+# Живой интерактивный прогон (§6 — уведомления, клавиатура, secure screen
+# и т.д.) здесь не входит — уже проверен живьём на эмуляторе локально
+# (см. PROCESS-DOCS/NATIVE/PROGRESS.md, Э4.4–Э4.10); эта сборка только
+# подтверждает, что APK/AAB вообще собираются и упаковываются, и что
+# случайное изменение манифеста/зависимостей не ломает компиляцию.
+#
+# self-hosted раннер "ugolok" (.forgejo/workflows/ci.yml) ограничен 2 ГБ
+# памяти в Docker — недостаточно для Android SDK/Gradle (тот же принцип,
+# что уже применён для Windows/macOS desktop-сборок: GitHub Actions вместо
+# self-hosted, где ресурсов раннера не хватает). ubuntu-latest уже имеет
+# Android SDK предустановленным — local.properties не нужен, Gradle
+# подхватывает ANDROID_HOME из окружения раннера сам.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [native/e1-platform-adapter]
+    paths:
+      - "native/mobile/**"
+      - "src/**"
+      - "vite.config.js"
+      - "package.json"
+      - ".github/workflows/native-android-build.yml"
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Установить Java 17 (AGP 8.13 требует JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: npm ci (корень — платформенный адаптер собирается отсюда)
+        run: npm ci
+
+      - name: Собрать веб-бандл под Capacitor
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npm run build:capacitor
+
+      - name: npm ci (native/mobile — Capacitor CLI/плагины)
+        working-directory: native/mobile
+        run: npm ci
+
+      - name: cap sync android
+        working-directory: native/mobile
+        run: npx cap sync android
+
+      - name: Собрать debug APK
+        working-directory: native/mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Собрать release APK (неподписанный — секретов подписи нет, Э8.4)
+        working-directory: native/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Собрать release AAB
+        working-directory: native/mobile/android
+        run: ./gradlew bundleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-android-debug-apk
+          path: native/mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-android-release-unsigned
+          path: |
+            native/mobile/android/app/build/outputs/apk/release/*.apk
+            native/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
