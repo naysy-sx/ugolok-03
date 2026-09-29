@@ -60,7 +60,7 @@ import { isBeforeChatDeletion } from "../../domain/messaging/chat-tombstone.js";
 import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
-import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings, applyUiSettingsEvents, KIND_UI_SETTINGS } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
 import { buildDmRelayListEvent, parseDmRelayListEvent, selectInboxRelays } from "../../domain/identity/dm-relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
@@ -549,17 +549,50 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	logSync(t("syncLog.settingsDone"));
 	// Этап 59 — backfill: делает kind:10002 реальным для аккаунтов, заведённых
 	// до этапа 59 (relayUrls до сих пор нигде публично не анонсировался, кроме
-	// куцего self-check'а diagnostics.jsx). Без флага "announced" (в отличие от
-	// этапа 57's file-key backfill) — kind:10002 replaceable (NIP-01) и дешёвый,
-	// republish на каждый вход безопасен и идемпотентен по протокольной природе.
-	const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
+	// куцего self-check'а diagnostics.jsx).
+	//
+	// Этап 71-довесок (найдено живой проверкой, восстановление по мнемонике на
+	// чистом устройстве, ТЗ-NATIVE-APPS §6.3) — комментарий ВЫШЕ был неверен:
+	// "republish на каждый вход безопасен и идемпотентен по протокольной
+	// природе" верно ТОЛЬКО когда republish несёт ТЕ ЖЕ данные. `rebuildUiSettings`
+	// читает СВОЙ локальный кэш `events` (наполняется общим bootstrap выше) — если
+	// bootstrap не успел (таймаут runBootstrap, коммит 9ec2a3d, медленная сеть,
+	// заблокированный relay), локальный kind:30072 пуст, `loadUiSettings`
+	// возвращает build-default relayUrls — и этот backfill СТИРАЕТ настоящий
+	// список пользователя на relay (kind:10002/10050 replaceable) build-дефолтом.
+	// Тот же класс бага, что identity/profile.js's ensureProfilePublished
+	// (kind:0) — то же лекарство: публикуем, ТОЛЬКО когда точно знаем состояние
+	// на relay, не полагаясь на то, успел ли bootstrap его донести до локального
+	// кэша. "Не знаю" означает "не трогаю", не "считаю, что там пусто".
 	if (!skipCold) {
-		publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
-		// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
-		// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
-		publisher
-			.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
-			.catch(() => {});
+		let settingsConfirmed = true;
+		try {
+			const remoteSettingsEvents = await oneShotRequest(connection, [{ authors: [pubkeyHex], kinds: [KIND_UI_SETTINGS] }], {
+				timeoutMs: 10000,
+				verifyBatch,
+			});
+			if (remoteSettingsEvents.length > 0) {
+				// На relay уже ЕСТЬ настройки — подтягиваем САМУЮ свежую версию
+				// напрямую (не дожидаясь, донесёт ли её общий bootstrap до локального
+				// кэша), чтобы backfill ниже публиковал ПРАВИЛЬНЫЙ список, не пустой/дефолтный.
+				await applyUiSettingsEvents(pubkeyHex, privKey, dbKey, remoteSettingsEvents);
+			}
+		} catch {
+			// Таймаут/relay недоступен/ответ неполный — состояние на relay НЕИЗВЕСТНО,
+			// backfill в этом connect() пропускаем целиком (не публикуем ничего),
+			// повторим на следующем connect() — та же терпимость к частичному сбою,
+			// что withDeadline/outbox.drain() в остальном проекте.
+			settingsConfirmed = false;
+		}
+		if (settingsConfirmed) {
+			const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
+			publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
+			// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
+			// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
+			publisher
+				.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
+				.catch(() => {});
+		}
 	}
 	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2+T4) — тот же backfill-принцип, что
 	// kind:10002/10050 выше: без этого события 30073 переставало доходить до
@@ -619,7 +652,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
 	// best-effort (сбой сети не блокирует остальной connect()).
 	if (currentUser.value?.login) {
-		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish);
+		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish, connection, verifyBatch);
 	}
 	logSync(t("syncLog.publishingKeyProfileDone"));
 

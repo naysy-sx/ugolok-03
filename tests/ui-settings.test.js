@@ -13,6 +13,7 @@ import {
 	loadUiSettings,
 	saveUiSettings,
 	rebuildUiSettings,
+	applyUiSettingsEvents,
 	hasLocalUiSettings,
 	addRelayUrl,
 	removeRelayUrl,
@@ -516,6 +517,35 @@ test("rebuildUiSettings: сканирует events, берёт ПОСЛЕДНИ�
 	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY);
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.accentColorId, "moss", "последняя по created_at версия выигрывает (LWW)");
+});
+
+// Этап 71-довесок (transport.js, ТЗ-NATIVE-APPS §6.3) — rebuildUiSettings сама
+// теперь только читает ЛОКАЛЬНЫЙ кэш events; когда connect() не уверен, что
+// bootstrap успел его наполнить, он делает отдельный прицельный запрос к relay
+// и применяет результат ЭТОЙ функцией напрямую, минуя таблицу events. Здесь
+// проверяем именно её — не зависит от того, что лежит в db.table("events").
+test("applyUiSettingsEvents: применяет напрямую переданные события (не читает db.table events) -> true", async () => {
+	const event = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "amber" }, 1000);
+	const applied = await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, [event]);
+	assert.equal(applied, true);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "amber");
+});
+
+test("applyUiSettingsEvents: пустой список -> false, не трогает уже сохранённое", async () => {
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, accentColorId: "teal" }, async () => ({ ok: true }));
+	const applied = await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, []);
+	assert.equal(applied, false);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "teal", "пустой список — no-op, не откатывает уже сохранённое");
+});
+
+test("applyUiSettingsEvents: несколько версий -> берёт ПОСЛЕДНЮЮ по created_at (LWW), тот же приём, что rebuildUiSettings", async () => {
+	const older = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "sky" }, 1000);
+	const newer = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "moss" }, 2000);
+	await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, [older, newer]);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "moss");
 });
 
 test("rebuildUiSettings: нет событий -> no-op, не бросает", async () => {

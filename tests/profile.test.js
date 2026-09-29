@@ -8,8 +8,67 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { verify } from "../src/core/crypto/sign.js";
 import { buildProfileEvent, parseProfileEvent, ensureProfilePublished, hydrateOwnProfile, uploadAvatarBlob, accumulateProfileVersions, applyLiveOwnProfileEvent } from "../src/domain/identity/profile.js";
 import { sign } from "../src/core/crypto/sign.js";
+import { createRelayConnection } from "../src/core/transport/relay-pool.js";
 
 const PRIV_KEY = new Uint8Array(32).fill(11);
+
+// ensureProfilePublished (правка "Этап 71-довесок") теперь сама спрашивает
+// write-relay (oneShotRequest) перед публикацией — тот же фейковый WebSocket-
+// харнесс, что tests/bootstrap.test.js, но с ожиданием отправки REQ: в отличие
+// от runBootstrap, ensureProfilePublished сначала делает await db.table('keystore').get(...)
+// (реальная асинхронная fake-indexeddb операция) ДО отправки REQ — ws.sent
+// заполняется не синхронно с вызовом функции, нужно дождаться.
+class FakeWebSocket {
+	static instances = [];
+	constructor(url) {
+		this.url = url;
+		this.readyState = 0;
+		this.sent = [];
+		FakeWebSocket.instances.push(this);
+	}
+	send(data) {
+		this.sent.push(JSON.parse(data));
+	}
+	close() {
+		this.readyState = 3;
+		this.onclose?.({});
+	}
+	_open() {
+		this.readyState = 1;
+		this.onopen?.({});
+	}
+	_emit(msg) {
+		this.onmessage?.({ data: JSON.stringify(msg) });
+	}
+}
+
+function setupConnected() {
+	FakeWebSocket.instances = [];
+	const conn = createRelayConnection("ws://test-relay", { WebSocketImpl: FakeWebSocket });
+	conn.connect();
+	FakeWebSocket.instances[0]._open();
+	return { conn, ws: FakeWebSocket.instances[0] };
+}
+
+function acceptAllVerify(events) {
+	return events.map(() => true);
+}
+
+// Ждёт, пока появится N-е по счёту REQ-сообщение (не просто N-е сообщение
+// вообще — CLOSE от cleanup ПРЕДЫДУЩЕГО oneShotRequest тоже пишется в ws.sent
+// и сдвигает индексы, если полагаться на них буквально).
+async function waitForReq(ws, count = 1) {
+	for (let i = 0; i < 200; i++) {
+		const reqs = ws.sent.filter((m) => m[0] === "REQ");
+		if (reqs.length >= count) return reqs[count - 1][1];
+		await new Promise((r) => setTimeout(r, 0));
+	}
+	throw new Error("timeout ждали, пока ensureProfilePublished отправит REQ");
+}
+
+function profileEventOnRelay(ownerPubkey, privKey, createdAt, content) {
+	return sign({ kind: 0, created_at: createdAt, tags: [], content: JSON.stringify(content), pubkey: bytesToHex(getPublicKey(privKey)) }, privKey);
+}
 
 before(async () => {
 	await db.open();
@@ -66,14 +125,25 @@ async function seedKeystoreRow(id) {
 	await db.table("keystore").put({ id, salt: new Uint8Array(1), iv: new Uint8Array(1), ciphertext: new Uint8Array(1), login: "тест-логин" });
 }
 
-test("ensureProfilePublished: первый вызов публикует {name: login}, ставит локальный флаг", async () => {
+test("ensureProfilePublished: relay подтвердил EOSE, событий ноль -> публикует {name: login}, ставит локальный флаг", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);
 	const published = [];
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async (event) => {
-		published.push(event);
-		return { ok: true };
-	});
+	const { conn, ws } = setupConnected();
+	const promise = ensureProfilePublished(
+		OWNER_PUBKEY,
+		"тест-логин",
+		PRIV_KEY,
+		async (event) => {
+			published.push(event);
+			return { ok: true };
+		},
+		conn,
+		acceptAllVerify,
+	);
+	const subId = await waitForReq(ws, 1);
+	ws._emit(["EOSE", subId]);
+	await promise;
 
 	assert.equal(published.length, 1);
 	assert.equal(published[0].kind, 0);
@@ -83,7 +153,7 @@ test("ensureProfilePublished: первый вызов публикует {name: 
 	assert.equal(row.profileAutoPublished, true);
 });
 
-test("ensureProfilePublished: повторный вызов — no-op, publish не вызывается снова (флаг уже стоит)", async () => {
+test("ensureProfilePublished: повторный вызов — no-op, publish и REQ не отправляются снова (флаг уже стоит)", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);
 	let calls = 0;
@@ -91,18 +161,22 @@ test("ensureProfilePublished: повторный вызов — no-op, publish �
 		calls++;
 		return { ok: true };
 	};
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
+	const { conn, ws } = setupConnected();
+	const first = ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish, conn, acceptAllVerify);
+	ws._emit(["EOSE", await waitForReq(ws, 1)]);
+	await first;
+
+	const sentBefore = ws.sent.length;
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish, conn, acceptAllVerify);
 	assert.equal(calls, 1);
+	assert.equal(ws.sent.length, sentBefore, "флаг уже стоит — даже сетевой запрос-проверка не должен уйти повторно");
 });
 
-// Этап 71 (пользователь, живьём — несколько окон/браузеров одной identity):
-// первый вход на НОВОМ устройстве раньше публиковал ГОЛЫЙ {name}, стирая на
-// relay уже существующие about/picture у ВСЕХ, кто спрашивает эту identity
-// (kind:0 replaceable). Порядок в connect() теперь такой, что hydrateOwnProfile
-// (подтягивает уже опубликованное в keystore) отрабатывает ДО этого вызова —
-// ensureProfilePublished обязан использовать то, что уже лежит в keystore.
-test("ensureProfilePublished: bio/avatarUrl уже в keystore (после hydrateOwnProfile) -> публикует их вместе с именем, не голый {name}", async () => {
+// Обычный успешный путь (не регресс): hydrateOwnProfile уже заполнил keystore
+// (см. transport.js — она отрабатывает раньше по коду), И relay независимо
+// подтверждает, что своего kind:0 там ещё нет (совсем новый аккаунт, первый
+// вход) — тогда локальные bio/avatarUrl идут В публикуемое событие вместе с именем.
+test("ensureProfilePublished: bio/avatarUrl уже в keystore, relay подтвердил пустоту -> публикует их вместе с именем, не голый {name}", async () => {
 	await db.table("keystore").clear();
 	await db.table("keystore").put({
 		id: OWNER_PUBKEY,
@@ -114,10 +188,20 @@ test("ensureProfilePublished: bio/avatarUrl уже в keystore (после hydra
 		avatarUrl: "https://blossom.test/good.png",
 	});
 	const published = [];
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async (event) => {
-		published.push(event);
-		return { ok: true };
-	});
+	const { conn, ws } = setupConnected();
+	const promise = ensureProfilePublished(
+		OWNER_PUBKEY,
+		"тест-логин",
+		PRIV_KEY,
+		async (event) => {
+			published.push(event);
+			return { ok: true };
+		},
+		conn,
+		acceptAllVerify,
+	);
+	ws._emit(["EOSE", await waitForReq(ws, 1)]);
+	await promise;
 
 	assert.equal(published.length, 1);
 	assert.deepEqual(JSON.parse(published[0].content), {
@@ -127,7 +211,66 @@ test("ensureProfilePublished: bio/avatarUrl уже в keystore (после hydra
 	});
 });
 
-test("ensureProfilePublished АДВЕРСАРНО: только bio без avatarUrl (частичные локальные данные) -> about есть, picture честно отсутствует в content (не пустая строка)", async () => {
+// Этап 71-довесок (найдено живой проверкой native/Android, восстановление по
+// мнемонике на чистом устройстве, ТЗ-NATIVE-APPS §6.3 — реальная потеря
+// about/picture на relay, kind:0 replaceable, старую версию не вернуть).
+// ГЛАВНЫЙ регресс-тест: локальный keystore ПУСТ (чистое устройство), но на
+// relay уже ЕСТЬ содержательный профиль — раньше это публиковало голый
+// {name}, стирая about/picture НАВСЕГДА. Теперь: явный запрос kind:0
+// подтверждает, что профиль уже есть, — публикации не происходит вовсе,
+// вместо этого свежепришедшее событие сразу гидрируется в keystore.
+test("ensureProfilePublished ГЛАВНЫЙ РЕГРЕСС: пустой локальный keystore, но на relay уже есть профиль с bio -> НЕ публикует голый {name}, гидрирует bio из relay", async () => {
+	await db.table("keystore").clear();
+	await db.table("events").clear();
+	await seedKeystoreRow(OWNER_PUBKEY); // login есть, bio/avatarUrl — нет (чистое устройство)
+	const published = [];
+	const { conn, ws } = setupConnected();
+	const remoteEvent = profileEventOnRelay(OWNER_PUBKEY, PRIV_KEY, 1000, { name: "тест-логин", about: "био с другого устройства", picture: "https://blossom.test/good.png" });
+
+	const promise = ensureProfilePublished(
+		OWNER_PUBKEY,
+		"тест-логин",
+		PRIV_KEY,
+		async (event) => {
+			published.push(event);
+			return { ok: true };
+		},
+		conn,
+		acceptAllVerify,
+	);
+	const subId = await waitForReq(ws, 1);
+	ws._emit(["EVENT", subId, remoteEvent]);
+	ws._emit(["EOSE", subId]);
+	await promise;
+
+	assert.equal(published.length, 0, "профиль на relay уже есть — публиковать поверх него ничего нельзя");
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.profileAutoPublished, true, "устройству больше никогда не нужно предлагать 'первичный' профиль для этой identity");
+	assert.equal(row.bio, "био с другого устройства", "гидрировано из СВЕЖЕГО ответа relay, не дожидаясь общего bootstrap");
+	assert.equal(row.avatarUrl, "https://blossom.test/good.png");
+});
+
+// Таймаут/недоступный relay — состояние НЕИЗВЕСТНО, а не "пусто". "Не знаю"
+// должно значить "не трогаю": ни публикации, ни флага, следующий connect()
+// попробует снова.
+test("ensureProfilePublished: relay не отвечает (таймаут, EOSE не пришло) -> НЕ публикует, флаг НЕ ставит, следующий вызов пробует снова", async () => {
+	await db.table("keystore").clear();
+	await seedKeystoreRow(OWNER_PUBKEY);
+	let calls = 0;
+	const publish = async () => {
+		calls++;
+		return { ok: true };
+	};
+	const { conn } = setupConnected();
+	// EOSE сознательно не эмитируется — таймаут должен сработать сам (deadline.js).
+	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish, conn, acceptAllVerify, 20);
+
+	assert.equal(calls, 0, "неизвестное состояние relay -> ничего не публикуем");
+	const row = await db.table("keystore").get(OWNER_PUBKEY);
+	assert.equal(row.profileAutoPublished, undefined, "флаг НЕ ставится при неопределённости — следующий connect() обязан попробовать снова");
+});
+
+test("ensureProfilePublished АДВЕРСАРНО: только bio без avatarUrl (частичные локальные данные, relay подтвердил пустоту) -> about есть, picture честно отсутствует в content (не пустая строка)", async () => {
 	await db.table("keystore").clear();
 	await db.table("keystore").put({
 		id: OWNER_PUBKEY,
@@ -139,10 +282,21 @@ test("ensureProfilePublished АДВЕРСАРНО: только bio без avata
 		avatarUrl: "",
 	});
 	const published = [];
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async (event) => {
-		published.push(event);
-		return { ok: true };
-	});
+	const { conn, ws } = setupConnected();
+	const promise = ensureProfilePublished(
+		OWNER_PUBKEY,
+		"тест-логин",
+		PRIV_KEY,
+		async (event) => {
+			published.push(event);
+			return { ok: true };
+		},
+		conn,
+		acceptAllVerify,
+	);
+	ws._emit(["EOSE", await waitForReq(ws, 1)]);
+	await promise;
+
 	const content = JSON.parse(published[0].content);
 	assert.equal(content.about, "только био, без аватара");
 	assert.equal("picture" in content, false);
@@ -154,19 +308,27 @@ test("ensureProfilePublished АДВЕРСАРНО: только bio без avata
 // оставлял аккаунт без kind:0 (все видят npub вместо имени). Стало: флаг —
 // только ПОСЛЕ подтверждения релея; сбой не блокирует вход (try/catch
 // остаётся), но следующий connect() пробует опубликовать снова.
-test("ensureProfilePublished АДВЕРСАРНО: publish бросает исключение — флаг НЕ стоит (следующий connect пробует снова), сам вызов НЕ бросает наружу", async () => {
+test("ensureProfilePublished АДВЕРСАРНО: relay подтвердил пустоту, но publish бросает исключение — флаг НЕ стоит (следующий connect пробует снова), сам вызов НЕ бросает наружу", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);
-	await assert.doesNotReject(() =>
-		ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, async () => {
+	const { conn, ws } = setupConnected();
+	const promise = ensureProfilePublished(
+		OWNER_PUBKEY,
+		"тест-логин",
+		PRIV_KEY,
+		async () => {
 			throw new Error("relay недоступен");
-		}),
+		},
+		conn,
+		acceptAllVerify,
 	);
+	ws._emit(["EOSE", await waitForReq(ws, 1)]);
+	await assert.doesNotReject(() => promise);
 	const row = await db.table("keystore").get(OWNER_PUBKEY);
 	assert.equal(row.profileAutoPublished, undefined, "флаг НЕ ставится при сбое — иначе аккаунт остаётся без kind:0 навсегда");
 });
 
-test("ensureProfilePublished: publish резолвится {ok:false} — флаг НЕ стоит, повторный вызов пробует снова", async () => {
+test("ensureProfilePublished: relay подтвердил пустоту, но publish резолвится {ok:false} — флаг НЕ стоит, повторный вызов пробует снова", async () => {
 	await db.table("keystore").clear();
 	await seedKeystoreRow(OWNER_PUBKEY);
 	let calls = 0;
@@ -174,10 +336,15 @@ test("ensureProfilePublished: publish резолвится {ok:false} — фла
 		calls++;
 		return { ok: false, reason: "relay отклонил" };
 	};
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
+	const { conn, ws } = setupConnected();
+	const first = ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish, conn, acceptAllVerify);
+	ws._emit(["EOSE", await waitForReq(ws, 1)]);
+	await first;
 	assert.equal((await db.table("keystore").get(OWNER_PUBKEY)).profileAutoPublished, undefined);
 
-	await ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish);
+	const second = ensureProfilePublished(OWNER_PUBKEY, "тест-логин", PRIV_KEY, publish, conn, acceptAllVerify);
+	ws._emit(["EOSE", await waitForReq(ws, 2)]);
+	await second;
 	assert.equal(calls, 2, "{ok:false} не ставит флаг — повторный вызов пробует опубликовать снова");
 });
 
