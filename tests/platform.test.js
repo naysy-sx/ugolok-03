@@ -5,6 +5,7 @@ import { createPlatform as createWebPlatform } from "../src/platform/web.js";
 import { createPlatform as createCapacitorPlatform } from "../src/platform/capacitor.js";
 import { createPlatform as createTauriPlatform } from "../src/platform/tauri.js";
 import { mediaSizeLimitBytes, exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "../src/platform/media-native-fallback.js";
+import { loadRuntimeConfig, resetRuntimeConfig, getRuntimeConfig } from "../src/domain/settings/runtime-config.js";
 
 // Э1.6 ТЗ-NATIVE-APPS — выбор адаптера по __TARGET__. Под `node --test` нет
 // Vite `define` (см. tests/config.test.js) — __TARGET__ ставим/убираем сами
@@ -343,4 +344,19 @@ test("capacitor/tauri: info() реализован по-настоящему (н
 		assert.equal(typeof info.appVersion, "string");
 		assert.equal(typeof info.buildHash, "string");
 	}
+});
+
+// НАЙДЕНО ЖИВЬЁМ (владелец, 2026-09-29) — capacitor.js's config.load был
+// notImplemented: config.json физически лежал в APK (copyNativeConfigJson),
+// но ничто его не читало в рантайме — клиент навсегда откатывался на
+// build-time дефолт (BUILD_DEFAULT_*), адреса нельзя было сменить без
+// пересборки JS, что прямо противоречит Р6 ТЗ.
+test("capacitor: config.load — настоящая реализация (loadRuntimeConfig), не notImplemented-заглушка", async () => {
+	const capacitor = createCapacitorPlatform();
+	assert.equal(capacitor.config.load, loadRuntimeConfig);
+	resetRuntimeConfig();
+	const fetchImpl = async () => ({ ok: true, json: async () => ({ relays: ["wss://relay.example"] }) });
+	await capacitor.config.load({ fetchImpl });
+	assert.deepEqual(getRuntimeConfig().relays, ["wss://relay.example"]);
+	resetRuntimeConfig();
 });

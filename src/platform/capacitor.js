@@ -8,6 +8,7 @@
 import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
 import { APP_VERSION, BUILD_HASH } from "../config.js";
+import { loadRuntimeConfig } from "../domain/settings/runtime-config.js";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import { SystemBars, SystemBarsStyle, registerPlugin } from "@capacitor/core";
@@ -240,7 +241,14 @@ export function createPlatform() {
 		os: OS,
 		info,
 
-		config: { load: notImplemented(SHELL, "config.load") },
+		// Р6 ТЗ — config.json лежит рядом с index.html в самом APK
+		// (copyNativeConfigJson, vite.config.js), страница грузится с
+		// https://localhost/ через WebViewAssetLoader — fetch('./config.json')
+		// разрешается туда же, что и на вебе. Найдено живой проверкой (владелец,
+		// 2026-09-29): без этого метода адреса menu не переопределялись вовсе,
+		// клиент навсегда откатывался на build-time дефолт (BUILD_DEFAULT_*)
+		// и не позволял сменить адреса без полной пересборки JS.
+		config: { load: loadRuntimeConfig },
 
 		notifications: {
 			permission,
