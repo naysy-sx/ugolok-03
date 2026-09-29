@@ -20,6 +20,7 @@
 //   извлечения digest'а, сознательно вне периметра этого прохода.
 import { db } from "../../core/store/database.js";
 import { buildProfileEvent } from "./profile.js";
+import { getProfile } from "../../core/crypto/keystore.js";
 import { listOwnedChannels, deleteChannel } from "../content/channel.js";
 import { loadTreeState } from "../files/store.js";
 import { getManifest } from "../files/content.js";
@@ -96,8 +97,18 @@ const OWNER_TABLES = [
 // кэшируется в IndexedDB у контактов (только in-memory signal + живая
 // подписка, ui/signals/contacts.js) — обновление придёт само тем, у кого
 // открыт чат, без отдельного протокола "аккаунт удалён".
-async function tombstoneProfile(login, privKey, publish) {
-	const event = buildProfileEvent(privKey, { name: `${login} (удалённый аккаунт)` });
+//
+// kind:0 replaceable — публикация нового события целиком заменяет старое
+// на relay. Меняем только имя, поэтому about/picture берём из локального
+// keystore и переносим как есть — иначе тем же путём, что и в
+// ensureProfilePublished, безвозвратно стёрли бы био/аватар на relay.
+async function tombstoneProfile(ownerPubkey, login, privKey, publish) {
+	const current = await getProfile(ownerPubkey);
+	const event = buildProfileEvent(privKey, {
+		name: `${login} (удалённый аккаунт)`,
+		about: current?.bio || undefined,
+		picture: current?.avatarUrl || undefined,
+	});
 	await publish(event);
 }
 
@@ -177,7 +188,7 @@ async function wipeLocalData(ownerPubkey) {
 // (повторный ввод логина+пароля — проверяется вызывающей стороной).
 export async function deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, serverUrl, opts = {}) {
 	try {
-		await tombstoneProfile(login, privKey, publish);
+		await tombstoneProfile(ownerPubkey, login, privKey, publish);
 	} catch {}
 	try {
 		await deleteOwnedChannels(ownerPubkey, privKey, dbKey, publish, serverUrl, opts);
