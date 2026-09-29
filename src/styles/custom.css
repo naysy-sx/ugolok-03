@@ -1579,7 +1579,16 @@ html[data-media-full] .top-corner-actions {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: var(--space-l);
+	padding-inline: var(--space-l);
+	/* Живой фидбек пользователя (реальный телефон, 2026-09-29) — системная
+	   статус-панель (часы/иконки) перекрывала .rooms-overlay-controls
+	   (закрыть/свернуть): var(--space-l) фиксированный отступ не учитывал
+	   safe-area-inset-top вовсе, а панель "Быстрая связь" — единственный
+	   полноэкранный оверлей проекта без этого (Screen/.shell его уже
+	   применяют, см. custom.css выше). env(...,0px) — сам себе fallback,
+	   там где safe-area не поддерживается/равна 0 отступ не меняется. */
+	padding-block-start: calc(var(--space-l) + env(safe-area-inset-top, 0px));
+	padding-block-end: calc(var(--space-l) + env(safe-area-inset-bottom, 0px));
 }
 .rooms-overlay-panel {
 	position: relative;
