@@ -159,11 +159,18 @@ async function mirrorBestEffort(privKey, publish, payload, groupIdHex) {
 }
 
 export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, publish) {
+	traceDelivery("ownkp.enter", {});
 	const existing = await db.table("ownKeyPackage").get(ownerPubkey);
-	if (existing) return;
+	if (existing) {
+		traceDelivery("ownkp.already-exists", {});
+		return;
+	}
 
 	const deviceId = await getOrCreateDeviceId();
+	traceDelivery("ownkp.device-id", { deviceId });
+	const t0 = Date.now();
 	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
+	traceDelivery("ownkp.keypackage-created", { elapsed: Date.now() - t0, wireBytesLen: ownKeyPackage.wireBytes.length });
 	await db.table("ownKeyPackage").put(
 		toEncryptedRow(
 			{
@@ -176,6 +183,7 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, 
 			dbKey,
 		),
 	);
+	traceDelivery("ownkp.db-persisted", {});
 
 	const event = sign(
 		{
@@ -186,7 +194,15 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, 
 		},
 		privKey,
 	);
-	await requirePublishOk(publish, event);
+	traceDelivery("ownkp.signed", { eventId: event.id });
+	const t1 = Date.now();
+	try {
+		await requirePublishOk(publish, event);
+		traceDelivery("ownkp.publish-ok", { elapsed: Date.now() - t1 });
+	} catch (err) {
+		traceDelivery("ownkp.publish-error", { elapsed: Date.now() - t1, message: String(err?.message ?? err), code: err?.code });
+		throw err;
+	}
 }
 
 // DESIGN.md, этап 24, п.3 — установление 1:1-разговора. Своя (не из NIP-EE

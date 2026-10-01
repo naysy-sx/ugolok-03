@@ -3,7 +3,9 @@ import * as Comlink from "comlink";
 import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
-import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
+import { getRuntimeConfig } from "../../domain/settings/runtime-config.js";
+import { notifyGroupsMayHaveChanged } from "../../domain/push/registration.js";
+import { getPlatform } from "../../platform/index.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
 import { record as traceRecord } from "../../core/diag/call-trace.js";
@@ -59,7 +61,7 @@ import { isBeforeChatDeletion } from "../../domain/messaging/chat-tombstone.js";
 import { ChannelContentNotReadyError } from "../../domain/content/channel-content-errors.js";
 import { CHANNEL_SUBSCRIBE_REQUEST_KIND, CHANNEL_UNVIEW_KIND, CHANNEL_OLD_HISTORY_UNAVAILABLE_KIND, handleIncomingSubscribeRequest } from "../../domain/content/channel-access.js";
 import { CHANNEL_REPORT_KIND, CHANNEL_BAN_KIND, receiveReport, receiveBanAnnouncement } from "../../domain/content/moderation.js";
-import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings } from "../../domain/settings/ui-settings.js";
+import { loadUiSettings, saveUiSettings, hasLocalUiSettings, rebuildUiSettings, applyUiSettingsEvents, KIND_UI_SETTINGS } from "../../domain/settings/ui-settings.js";
 import { buildRelayListEvent, parseRelayListEvent } from "../../domain/identity/relay-list.js";
 import { buildDmRelayListEvent, parseDmRelayListEvent, selectInboxRelays } from "../../domain/identity/dm-relay-list.js";
 import { rebuildReadStatus, isChatContentRead } from "../../domain/messaging/read-status.js";
@@ -396,8 +398,21 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// обращения к readBootstrapEndpoints() ниже (её build-time дефолт теперь
 	// приоритетно берёт значения из config.json, см. bootstrap-endpoints.js).
 	// Провал/таймаут loadRuntimeConfig -> {} — откат на build-time дефолт,
-	// connect() не блокируется дольше 3с сверху.
-	await loadRuntimeConfig();
+	// connect() не блокируется дольше 3с сверху. Э1.3/Р6 — через platform.config
+	// (веб: тот же loadRuntimeConfig(); нативные оболочки читают свой config.json
+	// из каталога сборки, см. vite.config.js copyNativeConfigJson, Э3/Э4).
+	// try/catch — НАЙДЕНО ЖИВЬЁМ (владелец, macOS-сборка Э3, 2026-09-27): пока
+	// не все методы адаптера реализованы на каждой платформе, единственный
+	// непойманный throw здесь рвал connect() целиком — "Связи нет" без единой
+	// попытки подключения к relay. loadRuntimeConfig() сам никогда не бросает
+	// (любая его ошибка -> {}), но platform.config.load() — не он один навсегда,
+	// это чужая реализация за интерфейсом; откат на build-time дефолт безопаснее
+	// падения всего bootstrap'а из-за одного метода адаптера.
+	try {
+		await getPlatform().config.load();
+	} catch (err) {
+		logWarn(`platform.config.load() провалился, идём на build-time дефолт: ${err?.message ?? String(err)}`);
+	}
 	// Этап 74 — Часть B, T5.2 (CONTRACTS.md/DESIGN.md "Этап 74", P-2): гидратация
 	// profiles.value из персиста ДО любых сетевых запросов — критерий приёмки
 	// "холодный старт офлайн показывает закэшированные профили контактов, не
@@ -535,17 +550,50 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	logSync(t("syncLog.settingsDone"));
 	// Этап 59 — backfill: делает kind:10002 реальным для аккаунтов, заведённых
 	// до этапа 59 (relayUrls до сих пор нигде публично не анонсировался, кроме
-	// куцего self-check'а diagnostics.jsx). Без флага "announced" (в отличие от
-	// этапа 57's file-key backfill) — kind:10002 replaceable (NIP-01) и дешёвый,
-	// republish на каждый вход безопасен и идемпотентен по протокольной природе.
-	const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
+	// куцего self-check'а diagnostics.jsx).
+	//
+	// Этап 71-довесок (найдено живой проверкой, восстановление по мнемонике на
+	// чистом устройстве, ТЗ-NATIVE-APPS §6.3) — комментарий ВЫШЕ был неверен:
+	// "republish на каждый вход безопасен и идемпотентен по протокольной
+	// природе" верно ТОЛЬКО когда republish несёт ТЕ ЖЕ данные. `rebuildUiSettings`
+	// читает СВОЙ локальный кэш `events` (наполняется общим bootstrap выше) — если
+	// bootstrap не успел (таймаут runBootstrap, коммит 9ec2a3d, медленная сеть,
+	// заблокированный relay), локальный kind:30072 пуст, `loadUiSettings`
+	// возвращает build-default relayUrls — и этот backfill СТИРАЕТ настоящий
+	// список пользователя на relay (kind:10002/10050 replaceable) build-дефолтом.
+	// Тот же класс бага, что identity/profile.js's ensureProfilePublished
+	// (kind:0) — то же лекарство: публикуем, ТОЛЬКО когда точно знаем состояние
+	// на relay, не полагаясь на то, успел ли bootstrap его донести до локального
+	// кэша. "Не знаю" означает "не трогаю", не "считаю, что там пусто".
 	if (!skipCold) {
-		publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
-		// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
-		// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
-		publisher
-			.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
-			.catch(() => {});
+		let settingsConfirmed = true;
+		try {
+			const remoteSettingsEvents = await oneShotRequest(connection, [{ authors: [pubkeyHex], kinds: [KIND_UI_SETTINGS] }], {
+				timeoutMs: 10000,
+				verifyBatch,
+			});
+			if (remoteSettingsEvents.length > 0) {
+				// На relay уже ЕСТЬ настройки — подтягиваем САМУЮ свежую версию
+				// напрямую (не дожидаясь, донесёт ли её общий bootstrap до локального
+				// кэша), чтобы backfill ниже публиковал ПРАВИЛЬНЫЙ список, не пустой/дефолтный.
+				await applyUiSettingsEvents(pubkeyHex, privKey, dbKey, remoteSettingsEvents);
+			}
+		} catch {
+			// Таймаут/relay недоступен/ответ неполный — состояние на relay НЕИЗВЕСТНО,
+			// backfill в этом connect() пропускаем целиком (не публикуем ничего),
+			// повторим на следующем connect() — та же терпимость к частичному сбою,
+			// что withDeadline/outbox.drain() в остальном проекте.
+			settingsConfirmed = false;
+		}
+		if (settingsConfirmed) {
+			const settingsAfterRebuild = await loadUiSettings(pubkeyHex, dbKey);
+			publisher.publish(buildRelayListEvent(privKey, settingsAfterRebuild.relayUrls)).catch(() => {});
+			// Этап 60 — тот же backfill-принцип, для kind:10050 (NIP-17, "куда мне
+			// присылайте") — только read-relay, см. ui-settings.js's publishRelayList.
+			publisher
+				.publish(buildDmRelayListEvent(privKey, settingsAfterRebuild.relayUrls.filter((r) => r.read).map((r) => r.url)))
+				.catch(() => {});
+		}
 	}
 	// DISCOVERY (CONTRACTS.md §DISCOVERY, T2+T4) — тот же backfill-принцип, что
 	// kind:10002/10050 выше: без этого события 30073 переставало доходить до
@@ -605,7 +653,7 @@ async function connect(pubkeyHex, privKey, dbKey) {
 	// вовсе, пока сам не тронет вкладку "Био". Идемпотентно (локальный флаг),
 	// best-effort (сбой сети не блокирует остальной connect()).
 	if (currentUser.value?.login) {
-		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish);
+		await ensureProfilePublished(pubkeyHex, currentUser.value.login, privKey, publish, connection, verifyBatch);
 	}
 	logSync(t("syncLog.publishingKeyProfileDone"));
 
@@ -2050,6 +2098,16 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 	);
 	const groupIds = groupRows.map((row) => row.groupId);
 	const contactPubkeys = [...new Set(groupRows.map((row) => row.contactPubkey))];
+
+	// Э-PUSH П3.3 — эта функция вызывается на КАЖДОЕ изменение состава групп
+	// (вступление/выход), а ТАКЖЕ безусловно на каждую отправку сообщения
+	// (см. комментарий выше). notifyGroupsMayHaveChanged сама дешёво
+	// сравнивает список с уже зарегистрированным на мосту и не делает сетевых
+	// вызовов, если он не изменился — безопасно звать на каждый чих. ДО
+	// раннего return ниже: переход "была хотя бы одна группа -> стало 0"
+	// (вышел из последней группы) тоже должен попасть в PUT.
+	notifyGroupsMayHaveChanged(ownerPubkey, privKey, dbKey, groupIds);
+
 	if (groupIds.length === 0) return;
 
 	if (!groupMessageSubscriber) {

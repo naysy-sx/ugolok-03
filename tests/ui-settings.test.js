@@ -13,6 +13,7 @@ import {
 	loadUiSettings,
 	saveUiSettings,
 	rebuildUiSettings,
+	applyUiSettingsEvents,
 	hasLocalUiSettings,
 	addRelayUrl,
 	removeRelayUrl,
@@ -137,6 +138,149 @@ test("loadUiSettings: нет uiSettings — relay/blossom из bootstrap-endpoin
 		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay.example:7777", read: true, write: true }]);
 		assert.deepEqual(settings.blossomUrls, ["https://blossom.example:8080"]);
 		assert.equal(settings.activeBlossomUrl, "https://blossom.example:8080");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — активный Blossom-сервер,
+// сохранённый в uiSettings ПРИ ПЕРВОМ ЗАПУСКЕ (пока config.json указывал на
+// localhost), застревал там навсегда — правка config.json на реальный адрес
+// острова ничего не меняла для уже существующих личностей. Тот же принцип
+// защиты, что уже есть у readBootstrapEndpoints для relay.
+test("loadUiSettings: сохранённый активный Blossom-сервер — loopback, свежий bootstrap-дефолт настоящий -> подменяется свежим", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		// Сохранённая запись — как будто личность создана на дев-конфиге.
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, blossomUrls: ["http://127.0.0.1:8080"], activeBlossomUrl: "http://127.0.0.1:8080" },
+			failingPublish(),
+		);
+		// config.json теперь указывает на настоящий остров.
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.blossomUrls, ["https://blossom.ugolok.tech"]);
+		assert.equal(settings.activeBlossomUrl, "https://blossom.ugolok.tech");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+test("loadUiSettings: сохранённый Blossom-сервер — настоящий (не loopback) -> НЕ подменяется, даже если bootstrap-дефолт другой", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, blossomUrls: ["https://blossom-a.example"], activeBlossomUrl: "https://blossom-a.example" },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.blossomUrls, ["https://blossom-a.example"], "пользовательский выбор сильнее config.json — так задумано");
+		assert.equal(settings.activeBlossomUrl, "https://blossom-a.example");
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же баг, что уже
+// найден и исправлен для Blossom выше, только для relay: transport.js's
+// connect() читает relayEntries = localSettings.relayUrls напрямую и падает
+// на bootstrap-дефолт ТОЛЬКО когда список пуст — непустой список из одного
+// loopback-адреса проходит эту проверку. connState повисает на "connecting"
+// навсегда (WebSocket на 127.0.0.1 в нативной оболочке блокируется CSP).
+test("loadUiSettings: сохранённый relay — loopback, свежий bootstrap-дефолт настоящий -> подменяется свежим", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, relayUrls: [{ url: "ws://127.0.0.1:7777", read: true, write: true }] },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay.ugolok.tech", read: true, write: true }]);
+	} finally {
+		if (prev === undefined) delete globalThis.localStorage;
+		else globalThis.localStorage = prev;
+	}
+});
+
+test("loadUiSettings: сохранённый relay — настоящий (не loopback) -> НЕ подменяется, даже если bootstrap-дефолт другой", async () => {
+	const map = new Map();
+	const storage = {
+		getItem(k) {
+			return map.has(k) ? map.get(k) : null;
+		},
+		setItem(k, v) {
+			map.set(k, String(v));
+		},
+		removeItem(k) {
+			map.delete(k);
+		},
+	};
+	const prev = globalThis.localStorage;
+	globalThis.localStorage = storage;
+	try {
+		await saveUiSettings(
+			ALICE_PUB,
+			ALICE_PRIV,
+			DB_KEY,
+			{ ...DEFAULT_SETTINGS, relayUrls: [{ url: "wss://relay-a.example", read: true, write: true }] },
+			failingPublish(),
+		);
+		writeBootstrapEndpoints({ relayUrl: "wss://relay.ugolok.tech", blossomUrl: "https://blossom.ugolok.tech" }, storage);
+		const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+		assert.deepEqual(settings.relayUrls, [{ url: "wss://relay-a.example", read: true, write: true }], "пользовательский выбор сильнее config.json — так задумано");
 	} finally {
 		if (prev === undefined) delete globalThis.localStorage;
 		else globalThis.localStorage = prev;
@@ -373,6 +517,35 @@ test("rebuildUiSettings: сканирует events, берёт ПОСЛЕДНИ�
 	await rebuildUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY);
 	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
 	assert.equal(settings.accentColorId, "moss", "последняя по created_at версия выигрывает (LWW)");
+});
+
+// Этап 71-довесок (transport.js, ТЗ-NATIVE-APPS §6.3) — rebuildUiSettings сама
+// теперь только читает ЛОКАЛЬНЫЙ кэш events; когда connect() не уверен, что
+// bootstrap успел его наполнить, он делает отдельный прицельный запрос к relay
+// и применяет результат ЭТОЙ функцией напрямую, минуя таблицу events. Здесь
+// проверяем именно её — не зависит от того, что лежит в db.table("events").
+test("applyUiSettingsEvents: применяет напрямую переданные события (не читает db.table events) -> true", async () => {
+	const event = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "amber" }, 1000);
+	const applied = await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, [event]);
+	assert.equal(applied, true);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "amber");
+});
+
+test("applyUiSettingsEvents: пустой список -> false, не трогает уже сохранённое", async () => {
+	await saveUiSettings(ALICE_PUB, ALICE_PRIV, DB_KEY, { ...DEFAULT_SETTINGS, accentColorId: "teal" }, async () => ({ ok: true }));
+	const applied = await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, []);
+	assert.equal(applied, false);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "teal", "пустой список — no-op, не откатывает уже сохранённое");
+});
+
+test("applyUiSettingsEvents: несколько версий -> берёт ПОСЛЕДНЮЮ по created_at (LWW), тот же приём, что rebuildUiSettings", async () => {
+	const older = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "sky" }, 1000);
+	const newer = buildUiSettingsEvent(ALICE_PRIV, { ...DEFAULT_SETTINGS, accentColorId: "moss" }, 2000);
+	await applyUiSettingsEvents(ALICE_PUB, ALICE_PRIV, DB_KEY, [older, newer]);
+	const settings = await loadUiSettings(ALICE_PUB, DB_KEY);
+	assert.equal(settings.accentColorId, "moss");
 });
 
 test("rebuildUiSettings: нет событий -> no-op, не бросает", async () => {

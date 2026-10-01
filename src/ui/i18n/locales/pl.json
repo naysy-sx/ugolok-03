@@ -46,6 +46,12 @@
 			"default": "(domyślne)"
 		},
 		"scaleLabel": "Skala interfejsu",
+		"scale": {
+			"small": "Mały (90%)",
+			"medium": "Średni (100%)",
+			"large": "Duży (110%)",
+			"xlarge": "Bardzo duży (125%)"
+		},
 		"accentColorTitle": "Kolor akcentu",
 		"paletteCustomizeButton": "Dostosuj",
 		"paletteHueLabel": "Odcień",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "Skopiowano do schowka",
 		"perfLogManualHint": "Schowek niedostępny — zaznacz i skopiuj ręcznie",
 		"sendReadReceiptsLabel": "Wysyłaj potwierdzenia odczytu",
-		"sendReadReceiptsHint": "Kontakt zobaczy, że otworzyłeś rozmowę. Potwierdzenia dostarczenia i tak wychodzą — znaczą tylko, że wiadomość dotarła na to urządzenie."
+		"sendReadReceiptsHint": "Kontakt zobaczy, że otworzyłeś rozmowę. Potwierdzenia dostarczenia i tak wychodzą — znaczą tylko, że wiadomość dotarła na to urządzenie.",
+		"pushBackground": {
+			"title": "Powiadomienia w tle",
+			"hint": "Otrzymuj powiadomienia o nowych wiadomościach i połączeniach, nawet gdy Ugolok jest zamknięty",
+			"enableLabel": "Włącz powiadomienia w tle",
+			"actionError": "Coś poszło nie tak — spróbuj ponownie",
+			"batteryLabel": "Brak ograniczeń baterii",
+			"notificationsLabel": "Powiadomienia dozwolone",
+			"fullScreenLabel": "Pełnoekranowe wyświetlanie połączeń dozwolone",
+			"runningLabel": "Połączenie aktywne",
+			"fixButton": "Napraw",
+			"lastConnectedLabel": "Ostatnie połączenie",
+			"neverConnected": "nigdy",
+			"autostartTitle": "Autostart",
+			"autostartHint": "Na niektórych telefonach (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) system sam zamyka aplikacje działające w tle, aby oszczędzać baterię. Aby powiadomienia docierały niezawodnie, zezwól Ugolokowi na działanie w tle i automatyczne uruchamianie w ustawieniach producenta.",
+			"openAutostartButton": "Otwórz ustawienia autostartu",
+			"privacyExplanation": "Serwer powiadomień zna jedynie moment nadejścia wiadomości lub połączenia — tak samo jak zwykły serwer przekaźnikowy. Nigdy nie widzi treści, nadawcy ani zawartości.",
+			"unlockLimitation": "Jeśli system usunął aplikację z pamięci, dotknięcie powiadomienia będzie wymagało ponownego wpisania hasła — połączenie może się zakończyć, zanim skończysz je wpisywać.",
+			"onboardingToastTitle": "Powiadomienia w tle",
+			"onboardingToastBody": "Otrzymuj powiadomienia o wiadomościach i połączeniach, nawet gdy Ugolok jest zamknięty. Dotknij, aby skonfigurować."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil i menu główne",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "Więcej miejsca w pamięci",
 		"mailBody": "Dzień dobry! Proszę o więcej miejsca dla mojego klucza: {{npub}}",
 		"back": "Wróć do pamięci"
+	},
+	"webviewOutdated": {
+		"title": "Zaktualizuj Android System WebView",
+		"body": "{{appName}} korzysta z nowoczesnych funkcji przeglądarki, których zainstalowana wersja Android System WebView jeszcze nie obsługuje. Zaktualizuj ją w Google Play, aby kontynuować.",
+		"updateButton": "Aktualizuj w Google Play"
 	}
 }

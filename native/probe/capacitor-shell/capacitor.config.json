@@ -1,0 +1,8 @@
+{
+  "appId": "tech.ugolok.probe",
+  "appName": "Уголок — зонд Э0",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

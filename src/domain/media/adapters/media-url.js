@@ -26,6 +26,7 @@ import { putPlaintextBytes } from "../plaintext-cache.js";
 import { recordControllerCheck } from "../perf-trace.js";
 import { downloadPercent } from "../progress-indicator.js";
 import { PRIORITY } from "../../../core/transport/blossom-queue.js";
+import { getPlatform } from "../../../platform/index.js";
 
 const handles = new Map(); // digest -> Promise<{kind, src, url}>
 
@@ -60,6 +61,36 @@ async function canUseFilesContentBridge() {
 	const ok = !!navigator.serviceWorker.controller;
 	recordControllerCheck(ok);
 	return ok;
+}
+
+// Э2.1 ТЗ-NATIVE-APPS — тот же полный download-фолбэк, что раньше был нужен
+// ТОЛЬКО для старого мобильного Safari без SW-controller (MEDIA-PERF-TZ.md
+// §6.3), вынесен отдельной функцией: platform/media-native-fallback.js
+// (capacitor.js/tauri.js) вызывает её напрямую, БЕЗ прохода через
+// acquireMediaUrl целиком (нет ни SW-bridge-ветки, ни памяти handles —
+// нативные оболочки вообще не регистрируют service-worker.js, ветвиться
+// незачем). acquireMediaUrl ниже тоже вызывает эту функцию — единственное
+// место, где живёт сама логика getRange→Blob→ObjectURL.
+export async function decryptWholeFileToBlobUrl(ref, { serverUrl, fetchImpl, onProgress, manifest } = {}) {
+	serverUrl = resolveReadServers(ref.servers, serverUrl);
+	manifest = manifest ?? (await getManifest(ref.digest, { serverUrl, fetchImpl, priority: PRIORITY.OVERLAY }));
+	// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл ЦЕЛИКОМ;
+	// раньше единственный статус был неопределённый "preparing" (в чате —
+	// "Подготовка просмотра…"). Теперь на каждый чанк отдаём процент —
+	// не ускоряет скачивание, но убирает ощущение зависания, которое и
+	// было предметом жалобы (§6.3, "дёшево, делать в этом проходе").
+	onProgress?.({ phase: "preparing", percent: 0 });
+	// MEDIA-PERF-TZ-5.md §2 — фолбэк без SW-контроллера не может быть
+	// выше плеера, иначе одно видео на старом Safari забьёт весь пул;
+	// PREVIEW и так значение по умолчанию, указано явно для честности.
+	const bytes = await getRange(manifest, ref.key, 0, manifest.size, {
+		serverUrl,
+		fetchImpl,
+		priority: PRIORITY.PREVIEW,
+		onProgress: (p) => onProgress?.({ phase: "preparing", percent: downloadPercent(p) ?? 0 }),
+	});
+	putPlaintextBytes(ref.digest, bytes, ref.mime);
+	return URL.createObjectURL(new Blob([bytes], { type: ref.mime }));
 }
 
 export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapters, onProgress, useFilesContentBridge } = {}) {
@@ -100,29 +131,25 @@ export async function acquireMediaUrl(ref, { serverUrl, fetchImpl, rasterAdapter
 			);
 			return { kind: "cached-url", url: raster.url, src: raster.url, rasterized: raster.rasterized };
 		}
+		// Э2.1 ТЗ-NATIVE-APPS — нативные оболочки (Capacitor/Tauri) вообще не
+		// регистрируют service-worker.js (§4.2), а canUseFilesContentBridge()
+		// ниже опирается на navigator.serviceWorker.ready — на платформе, где
+		// САМ API есть, но ни один SW никогда не зарегистрируется, это завис
+		// бы навсегда, а не корректно отдало false. Проверяем платформу ДО
+		// canUseFilesContentBridge(), а не полагаемся на автоопределение.
+		// useFilesContentBridge !== undefined — явный вызов (этот же файл ниже,
+		// тесты) сохраняет старое поведение без обращения к platform вовсе.
+		if (useFilesContentBridge === undefined && getPlatform().shell !== "web") {
+			const result = await getPlatform().media.getPlayableSource(ref, { mime: ref.mime, size: ref.size, onProgress, serverUrl, fetchImpl });
+			return { kind: "platform-media", url: result.url, src: result.url, release: result.release };
+		}
 		// MEDIA-PERF-TZ-5.md §2 — маленький, но блокирует всё дальнейшее (и
 		// мостовой путь, и фолбэк-скачивание целиком) — PRIORITY.OVERLAY, не
 		// PREVIEW, независимо от того, куда пойдёт дальше.
 		const manifest = await getManifest(ref.digest, { serverUrl, fetchImpl, priority: PRIORITY.OVERLAY });
 		const useBridge = useFilesContentBridge !== undefined ? useFilesContentBridge : await canUseFilesContentBridge();
 		if (!useBridge) {
-			// MEDIA-PERF-TZ.md §6.3 — фолбэк без SW-controller качает файл ЦЕЛИКОМ;
-			// раньше единственный статус был неопределённый "preparing" (в чате —
-			// "Подготовка просмотра…"). Теперь на каждый чанк отдаём процент —
-			// не ускоряет скачивание, но убирает ощущение зависания, которое и
-			// было предметом жалобы (§6.3, "дёшево, делать в этом проходе").
-			onProgress?.({ phase: "preparing", percent: 0 });
-			// MEDIA-PERF-TZ-5.md §2 — фолбэк без SW-контроллера не может быть
-			// выше плеера, иначе одно видео на старом Safari забьёт весь пул;
-			// PREVIEW и так значение по умолчанию, указано явно для честности.
-			const bytes = await getRange(manifest, ref.key, 0, manifest.size, {
-				serverUrl,
-				fetchImpl,
-				priority: PRIORITY.PREVIEW,
-				onProgress: (p) => onProgress?.({ phase: "preparing", percent: downloadPercent(p) ?? 0 }),
-			});
-			putPlaintextBytes(ref.digest, bytes, ref.mime);
-			const url = URL.createObjectURL(new Blob([bytes], { type: ref.mime }));
+			const url = await decryptWholeFileToBlobUrl(ref, { serverUrl, fetchImpl, onProgress, manifest });
 			return { kind: "object-url", url, src: url };
 		}
 		registerPlayerFile(ref.digest, { manifest, fileKey: ref.key, serverUrl, fetchImpl });
@@ -149,6 +176,10 @@ export async function releaseMediaUrlHandle(digest) {
 		const handle = await pending;
 		if (handle.kind === "bridge") unregisterPlayerFile(digest);
 		else if (handle.kind === "object-url") URL.revokeObjectURL(handle.url);
+		// Э2.1 — platform-media: релиз делегирован адаптеру (web.js/capacitor.js/
+		// tauri.js сами знают, как освобождать то, что вернул getPlayableSource —
+		// URL.revokeObjectURL сегодня, возможно удаление временного файла в Э2.2).
+		else if (handle.kind === "platform-media") await handle.release?.();
 	} catch {
 		// acquire упал — нечего освобождать
 	}

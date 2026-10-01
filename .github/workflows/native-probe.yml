@@ -1,0 +1,115 @@
+name: Native probe (Э0)
+
+# Одноразовый/повторяемый прогон зонда native/probe на Windows и Linux
+# для ТЗ-NATIVE-APPS §Э0.2 (пункты T01,T02,T04,T05,T06,T09,T11,T14,T15,T19 —
+# автоматические; остальные требуют ручного/визуального прогона и сюда не входят).
+# Не публикует релиз, не подписывает артефакты — только черновая проверка платформы.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [native/probe]
+    paths:
+      - "native/probe/**"
+      - ".github/workflows/native-probe.yml"
+
+jobs:
+  windows-probe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: native/probe/tauri-shell/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Отключить Windows Defender real-time scanning (известная причина файловых блокировок в tauri-build на windows-latest)
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - name: Установить Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: "Скопировать index.html в простую подпапку (frontendDist без .. и без абсолютного пути - абсолютный путь ломал поиск ассетов в рантайме)"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "_ci_frontend" | Out-Null
+          Copy-Item "..\..\index.html" "_ci_frontend\index.html" -Force
+          $content = Get-Content tauri.conf.json -Raw
+          $content = $content.Replace('"frontendDist": "../../"', '"frontendDist": "_ci_frontend"')
+          Set-Content -Path tauri.conf.json -Value $content -NoNewline
+          Get-Content tauri.conf.json
+
+      - name: Собрать оболочку
+        run: cargo build
+
+      - name: Прогнать зонд (автоматические тесты) и снять PROBE_RESULT
+        shell: bash
+        run: |
+          set -e
+          PROBE_AUTOEXIT=1 timeout 60 ./target/debug/ugolok-probe-shell.exe > probe-output.log 2>&1 || true
+          cat probe-output.log
+          awk '/PROBE_RESULT_BEGIN/{f=1;next} /PROBE_RESULT_END/{f=0} f' probe-output.log > probe-result.json || true
+          echo "---"
+          cat probe-result.json || echo "(пусто — PROBE_RESULT не получен, см. лог выше)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-result-windows
+          path: |
+            native/probe/tauri-shell/src-tauri/probe-output.log
+            native/probe/tauri-shell/src-tauri/probe-result.json
+
+  linux-probe:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native/probe/tauri-shell/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить системные зависимости Tauri 2 (webkit2gtk-4.1)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xvfb \
+            libxdo-dev \
+            build-essential \
+            curl wget file libssl-dev
+
+      - name: Установить Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Добавить своп (линковка Tauri+WebKit в debug пикует по памяти на ubuntu-latest; на раннере уже есть /swapfile — добавляем ещё один по другому пути)
+        run: |
+          free -h
+          sudo fallocate -l 8G /extra-swapfile
+          sudo chmod 600 /extra-swapfile
+          sudo mkswap /extra-swapfile
+          sudo swapon /extra-swapfile
+          free -h
+
+      - name: Собрать оболочку (минимум debug-инфо — раздутые символы, а не параллелизм, топят линковщик по памяти)
+        env:
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: cargo build -j 2
+
+      - name: Прогнать зонд под Xvfb (автоматические тесты) и снять PROBE_RESULT
+        run: |
+          set -e
+          PROBE_AUTOEXIT=1 xvfb-run -a timeout 60 ./target/debug/ugolok-probe-shell > probe-output.log 2>&1 || true
+          cat probe-output.log
+          awk '/PROBE_RESULT_BEGIN/{f=1;next} /PROBE_RESULT_END/{f=0} f' probe-output.log > probe-result.json || true
+          echo "---"
+          cat probe-result.json || echo "(пусто — PROBE_RESULT не получен, см. лог выше)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-result-linux
+          path: |
+            native/probe/tauri-shell/src-tauri/probe-output.log
+            native/probe/tauri-shell/src-tauri/probe-result.json

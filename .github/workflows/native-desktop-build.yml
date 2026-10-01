@@ -1,0 +1,121 @@
+name: Native desktop build (Э3)
+
+# Проверка, что native/desktop/src-tauri (реальный проект, не зонд Э0)
+# СОБИРАЕТСЯ на Windows и Linux — macOS уже собран и живьём проверен
+# владельцем локально (см. PROCESS-DOCS/NATIVE/PROGRESS.md). Живой
+# интерактивный прогон (§6, тест микрофона/аудио и т.п.) здесь не входит —
+# нужен человек с реальным устройством на каждой ОС; эта сборка только
+# подтверждает, что артефакт вообще собирается и упаковывается.
+#
+# frontendDist уже лежит ВНУТРИ src-tauri (vite.config.js — Н10, E0-REPORT.md)
+# без единого ".." в пути — Windows-специфичный обходной путь Э0
+# (копирование index.html в отдельную подпапку) здесь не нужен вообще,
+# это и была цель того фикса с самого начала Э3.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [native/e1-platform-adapter]
+    paths:
+      - "native/desktop/**"
+      - "src/**"
+      - "vite.config.js"
+      - "package.json"
+      - ".github/workflows/native-desktop-build.yml"
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Отключить Windows Defender real-time scanning (известная причина файловых блокировок в tauri-build на windows-latest, см. Э0)
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Установить Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Собрать (без упаковки — быстрая проверка компиляции)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npx tauri build --debug --no-bundle
+
+      - name: Упаковать (NSIS)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npx tauri build --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-desktop-windows
+          path: native/desktop/src-tauri/target/debug/bundle/nsis/*.exe
+          if-no-files-found: warn
+
+  linux-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить системные зависимости Tauri 2 (webkit2gtk-4.1) — тот же список, что Э0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            build-essential \
+            curl wget file libssl-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Установить Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Добавить своп (линковка Tauri+WebKit в debug пикует по памяти на ubuntu-latest, см. Э0 — на раннере уже есть /swapfile, добавляем ещё один по другому пути)
+        run: |
+          free -h
+          sudo fallocate -l 8G /extra-swapfile
+          sudo chmod 600 /extra-swapfile
+          sudo mkswap /extra-swapfile
+          sudo swapon /extra-swapfile
+          free -h
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Собрать (без упаковки — быстрая проверка компиляции, минимум debug-инфо, см. Э0)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: npx tauri build --debug --no-bundle
+
+      - name: Упаковать (AppImage + deb)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: npx tauri build --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ugolok-desktop-linux
+          path: |
+            native/desktop/src-tauri/target/debug/bundle/appimage/*.AppImage
+            native/desktop/src-tauri/target/debug/bundle/deb/*.deb
+          if-no-files-found: warn

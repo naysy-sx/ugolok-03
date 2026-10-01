@@ -46,6 +46,12 @@
 			"default": "（默认）"
 		},
 		"scaleLabel": "界面缩放",
+		"scale": {
+			"small": "小 (90%)",
+			"medium": "中 (100%)",
+			"large": "大 (110%)",
+			"xlarge": "特大 (125%)"
+		},
 		"accentColorTitle": "强调色",
 		"paletteCustomizeButton": "自定义",
 		"paletteHueLabel": "色相",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "已复制到剪贴板",
 		"perfLogManualHint": "剪贴板不可用 — 请选中后手动复制",
 		"sendReadReceiptsLabel": "发送已读回执",
-		"sendReadReceiptsHint": "对方会看到你打开了对话。送达回执仍会发出——只表示消息到达了这台设备。"
+		"sendReadReceiptsHint": "对方会看到你打开了对话。送达回执仍会发出——只表示消息到达了这台设备。",
+		"pushBackground": {
+			"title": "后台通知",
+			"hint": "即使 Ugolok 已关闭，也能收到新消息和来电通知",
+			"enableLabel": "启用后台通知",
+			"actionError": "出错了，请重试",
+			"batteryLabel": "无电池限制",
+			"notificationsLabel": "已允许通知",
+			"fullScreenLabel": "已允许全屏来电显示",
+			"runningLabel": "连接正常",
+			"fixButton": "修复",
+			"lastConnectedLabel": "上次连接",
+			"neverConnected": "从未连接",
+			"autostartTitle": "自启动",
+			"autostartHint": "在部分手机上（小米、华为、三星、Oppo/Realme/OnePlus、Vivo），系统会为节省电量自动关闭后台应用。为确保通知能可靠送达，请在厂商设置中允许 Ugolok 在后台运行并自动启动。",
+			"openAutostartButton": "打开自启动设置",
+			"privacyExplanation": "通知服务器只知道消息或来电到达的时刻，和普通中继服务器一样，它永远看不到文本、发件人或内容。",
+			"unlockLimitation": "如果系统已将应用从内存中卸载，点击通知时需要重新输入密码——在你输完密码之前，来电可能已经结束。",
+			"onboardingToastTitle": "后台通知",
+			"onboardingToastBody": "即使 Ugolok 已关闭，也能收到消息和来电通知。点击进行设置。"
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "个人资料与主菜单",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "增加存储空间",
 		"mailBody": "你好！请为我的密钥增加空间：{{npub}}",
 		"back": "返回存储"
+	},
+	"webviewOutdated": {
+		"title": "请更新 Android System WebView",
+		"body": "{{appName}} 使用了一些现代浏览器功能，您当前安装的 Android System WebView 版本尚不支持。请通过 Google Play 更新后再继续。",
+		"updateButton": "在 Google Play 中更新"
 	}
 }

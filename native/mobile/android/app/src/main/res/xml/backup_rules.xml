@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Э4.3 ТЗ-NATIVE-APPS — то же самое для API < 31 (fullBackupContent),
+     где data_extraction_rules.xml ещё не поддерживается. -->
+<full-backup-content>
+    <exclude domain="root" />
+</full-backup-content>

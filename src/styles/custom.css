@@ -1579,7 +1579,16 @@ html[data-media-full] .top-corner-actions {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: var(--space-l);
+	padding-inline: var(--space-l);
+	/* Живой фидбек пользователя (реальный телефон, 2026-09-29) — системная
+	   статус-панель (часы/иконки) перекрывала .rooms-overlay-controls
+	   (закрыть/свернуть): var(--space-l) фиксированный отступ не учитывал
+	   safe-area-inset-top вовсе, а панель "Быстрая связь" — единственный
+	   полноэкранный оверлей проекта без этого (Screen/.shell его уже
+	   применяют, см. custom.css выше). env(...,0px) — сам себе fallback,
+	   там где safe-area не поддерживается/равна 0 отступ не меняется. */
+	padding-block-start: calc(var(--space-l) + env(safe-area-inset-top, 0px));
+	padding-block-end: calc(var(--space-l) + env(safe-area-inset-bottom, 0px));
 }
 .rooms-overlay-panel {
 	position: relative;
@@ -10339,6 +10348,18 @@ button[type="button"].media-mini-bar-btn {
 .shell {
 	padding-block-start: env(safe-area-inset-top);
 	padding-block-end: env(safe-area-inset-bottom);
+	/* Э4.7 ТЗ-NATIVE-APPS — найдено живьём (Android 16/API 36, эмулятор):
+	   WebView не меняет размер при появлении клавиатуры даже с явным
+	   android:windowSoftInputMode="adjustResize" в манифесте — известный
+	   нерешённый апстрим-баг Capacitor 8 в edge-to-edge на Android 15/16
+	   (ionic-team/capacitor#7983, #8432). --keyboard-inset — 0px везде,
+	   кроме Android/Capacitor, где keyboard-inset.js (Э4.7) выставляет его
+	   через window.visualViewport при появлении/скрытии клавиатуры; на
+	   остальных платформах переменная никогда не установлена, calc()
+	   вырождается в обычный 100dvh — ПОЭТОМУ это не "складывается" с
+	   поведением других платформ (тот самый риск двойного сдвига, о
+	   котором предупреждает ТЗ, — избегается тем, что источник ОДИН). */
+	block-size: calc(100dvh - var(--keyboard-inset, 0px));
 }
 
 /* Круглые аватары везде: макеты не знают квадратных «плиток». */
@@ -10554,11 +10575,18 @@ select:focus-visible {
 }
 
 /* Меню-бургер: голая иконка в левом углу шапки корневого экрана. На экране
-   с «назад» его нет (в мобильных приложениях назад заменяет меню). */
+   с «назад» его нет (в мобильных приложениях назад заменяет меню).
+   БЕЗ env(safe-area-inset-top) здесь — .top-corner-actions всегда потомок
+   .shell (app.jsx), которая УЖЕ компенсирует safe-area через
+   padding-block-start (см. ".shell" выше в этом же REDESIGN-2 блоке).
+   Раньше это правило добавляло его ЕЩЁ РАЗ — на вебе/desktop inset всегда
+   был 0px, поэтому дубль был математически незаметен; на Android живьём
+   (эмулятор, статус-бар 49px) бургер оказывался на 2×49px ниже нужного
+   места (найдено пользователем, Э4 ТЗ-NATIVE-APPS, 2026-09-28). */
 .top-corner-actions {
 	inset-inline-start: var(--space-xs);
 	inset-inline-end: auto;
-	inset-block-start: calc((3.5rem - var(--tap)) / 2 + env(safe-area-inset-top, 0px));
+	inset-block-start: calc((3.5rem - var(--tap)) / 2);
 }
 .sidebar-toggle-btn {
 	inline-size: var(--tap);
@@ -11359,8 +11387,13 @@ nav.tabs.reel .tab {
 }
 .message-bubble-own .audio-shell,
 .message-bubble .audio-shell {
-	min-inline-size: 0;
-	inline-size: min(100%, 18rem);
+	/* Найдено живьём (владелец, Tauri/macOS, Э3, 2026-09-27) — 18rem (288px)
+	   меньше 320px, задокументированных выше (.audio-shell) как минимум для
+	   нормального отображения нативных <audio controls>; min-inline-size:0
+	   снимал ту защиту. WKWebView особенно требователен к ширине controls —
+	   органы управления становились почти невидимыми. */
+	min-inline-size: 320px;
+	inline-size: min(100%, 20rem);
 	background-color: transparent;
 	border-radius: var(--radius-full);
 }

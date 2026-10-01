@@ -10,6 +10,7 @@ import { initFiles, createFileEntry, treeState, getFileKeyFor } from "../signals
 import { prepareOwnCopy } from "../../domain/files/copy-attachment.js";
 import { PreconditionError } from "../../domain/files/ops.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
+import { getPlatform } from "../../platform/index.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
@@ -581,12 +582,11 @@ export function AttachmentDownloadLink({ attachment, menu = false, iconOnly = fa
 			const bytes = attachment.voiceInline
 				? base64ToBytes(attachment.voiceInline)
 				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget() });
-			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = attachmentDisplayName(attachment) || "file";
-			a.click();
-			URL.revokeObjectURL(url);
+			await getPlatform().files.saveAs({
+				name: attachmentDisplayName(attachment) || "file",
+				mime: attachment.mime,
+				data: bytes,
+			});
 		} catch (err) {
 			setError(errorMessage(err));
 			if (iconOnly) pushToast({ title: errorMessage(err) });

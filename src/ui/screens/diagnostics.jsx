@@ -1,5 +1,6 @@
 import { useState, useEffect } from "preact/hooks";
 import { BUILD_HASH, BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS } from "../../config.js";
+import { getPlatform } from "../../platform/index.js";
 import { db } from "../../core/store/database.js";
 import { validateEventId } from "../../domain/events/validators.js";
 import { mergeEvent } from "../../core/sync/g-set.js";
@@ -92,6 +93,13 @@ function envChecks() {
 function useServiceWorker() {
 	const [state, set] = useState("инициализация…");
 	useEffect(() => {
+		// Э1/§4.2, найдено живьём (владелец, Mac mini, Э3, 2026-09-27) — та же
+		// история, что main.jsx's основная регистрация SW (уже гейтится
+		// __TARGET__==="web"): эта, ОТДЕЛЬНАЯ регистрация на экране Диагностики
+		// была пропущена при том фиксе. На tauri:// (и capacitor://) страница
+		// грузится не по http(s), register() бросает "protocol must be HTTP or
+		// HTTPS" — в нативных режимах SW не эмитится и не регистрируется вовсе.
+		if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "web") return set("не применимо (нативная оболочка)");
 		if (!("serviceWorker" in navigator)) return set("не поддерживается");
 		if (import.meta.env.DEV)
 			return set("пропущено (dev — SW появляется только в vite build)");
@@ -402,15 +410,11 @@ function useDeliverySnapshot() {
 		setBusy(true);
 		try {
 			const snapshot = await buildDeliverySnapshot(user.id, dbKey);
-			const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = `delivery-snapshot_${Date.now()}.json`;
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
-			setTimeout(() => URL.revokeObjectURL(url), 1000);
+			await getPlatform().files.saveAs({
+				name: `delivery-snapshot_${Date.now()}.json`,
+				mime: "application/json",
+				data: JSON.stringify(snapshot, null, 2),
+			});
 		} finally {
 			setBusy(false);
 		}
@@ -848,10 +852,25 @@ export default function Diagnostics() {
 	// не проблема, и живёт в проверках движка.
 	const problemCount = missingApis.length + desynced.chats.length;
 
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini, Э3, 2026-09-27) — platform.info()
+	// был notImplemented на tauri.js, throw в теле рендера ронял ВЕСЬ экран
+	// (пустой белый экран, ошибка только в консоли). Сам info() уже
+	// реализован на всех адаптерах (см. platform/*.js), но try/catch —
+	// защита на будущее от ЛЮБОГО метода адаптера, а не повтор именно этой
+	// ошибки: экран диагностики не должен становиться нерабочим целиком
+	// из-за одного платформенного вызова.
+	let platformInfo;
+	try {
+		platformInfo = getPlatform().info();
+	} catch {
+		platformInfo = { shell: "?", os: "?", appVersion: "?", buildHash: "?" };
+	}
+
 	function copyReport() {
 		const report = [
 			`build ${BUILD_HASH}`,
 			`db ${db.verno}`,
+			`platform ${platformInfo.shell}/${platformInfo.os} v${platformInfo.appVersion}`,
 			navigator.userAgent,
 			"",
 			...relays.members.map((m) => `${m.url} — ${m.state} — ${relays.latency[m.url] ?? "—"} ms`),
@@ -1096,7 +1115,7 @@ export default function Diagnostics() {
 				</div>
 
 				<p class="buildinfo">
-					{t("diagnostics.buildLine", { hash: BUILD_HASH, schema: db.verno })} · {navigator.userAgent}{" "}
+					{t("diagnostics.buildLine", { hash: BUILD_HASH, schema: db.verno })} · {platformInfo.shell}/{platformInfo.os} v{platformInfo.appVersion} · {navigator.userAgent}{" "}
 					<button type="button" class="btn--ghost" onClick={copyReport}>
 						{t("diagnostics.copyReport")}
 					</button>

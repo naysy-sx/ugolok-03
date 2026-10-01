@@ -26,11 +26,16 @@ import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import { applyThemeMode } from "../theme/theme-mode.js";
 import { SUPPORTED_LOCALES, setLocale, t, errorMessage } from "../signals/i18n.js";
 import { isPerfTraceEnabled, getPerfLog, readControllerCounters } from "../../domain/media/perf-trace.js";
+import { getPlatform } from "../../platform/index.js";
+import { isPushSupported, isPushEnabled, enablePushForAccount, disablePushEverywhere } from "../../domain/push/registration.js";
 import Screen from "../components/screen.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
 import IconBell from "../icons/bell.jsx";
 import IconServer from "../icons/server.jsx";
+import IconShield from "../icons/shield.jsx";
+import IconCheckCircleFill from "../icons/check-circle-fill.jsx";
+import IconWarning from "../icons/warning.jsx";
 import StoragePanel from "../components/storage-panel.jsx";
 import { place } from "../signals/place.js";
 import IconPower from "../icons/power.jsx";
@@ -623,6 +628,153 @@ function PerfLogExport() {
 	);
 }
 
+// Э-PUSH П3.4 — «Уведомления в фоне», только Android + сервер настроен на
+// push (isPushSupported() уже проверяет оба условия разом). Видимость и
+// статус пунктов не кешируются между рендерами панели нарочно просто —
+// нет lifecycle-подписки на "приложение вернулось из системных настроек"
+// (fix-кнопки уводят в system intent и не возвращают колбэк); пользователь
+// видит актуальное состояние по возврату на этот экран (unmount/mount) или
+// по кнопке "Обновить".
+function PushBackgroundPanel() {
+	const [status, setStatus] = useState(null);
+	const [enabled, setEnabled] = useState(isPushEnabled());
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+
+	const supported = isPushSupported();
+
+	async function refreshStatus() {
+		if (!supported) return;
+		try {
+			setStatus(await getPlatform().push.status());
+		} catch {
+			setStatus(null);
+		}
+	}
+
+	useEffect(() => {
+		refreshStatus();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [supported]);
+
+	if (!supported) return null;
+
+	async function handleToggle(checked) {
+		setBusy(true);
+		setError("");
+		try {
+			if (checked) {
+				await enablePushForAccount(currentUser.value.id, privKeySig.value, dbKeySig.value);
+			} else {
+				await disablePushEverywhere(currentUser.value.id, privKeySig.value);
+			}
+			setEnabled(checked);
+		} catch {
+			setError(t("settings.pushBackground.actionError"));
+		} finally {
+			setBusy(false);
+			await refreshStatus();
+		}
+	}
+
+	async function runFix(action) {
+		setBusy(true);
+		try {
+			await action();
+		} catch {
+			// система сама покажет свой экран/диалог — здесь молчим, ошибка
+			// в основном из-за недоступного конкретного intent (fallback уже
+			// встроен в сам нативный метод, UgolokPushPlugin.kt)
+		} finally {
+			setBusy(false);
+			await refreshStatus();
+		}
+	}
+
+	const items = status
+		? [
+				{
+					key: "battery",
+					ok: status.batteryExempt,
+					label: t("settings.pushBackground.batteryLabel"),
+					fix: () => runFix(() => getPlatform().push.openBatterySettings()),
+				},
+				{
+					key: "notifications",
+					ok: status.notificationsAllowed,
+					label: t("settings.pushBackground.notificationsLabel"),
+					fix: () => runFix(() => getPlatform().notifications.requestPermission()),
+				},
+				{
+					key: "fullScreen",
+					ok: status.fullScreenAllowed,
+					label: t("settings.pushBackground.fullScreenLabel"),
+					fix: () => runFix(() => getPlatform().push.requestFullScreenPermission()),
+				},
+				{
+					key: "running",
+					ok: status.running,
+					label: t("settings.pushBackground.runningLabel"),
+					fix: () => runFix(() => enablePushForAccount(currentUser.value.id, privKeySig.value, dbKeySig.value)),
+				},
+			]
+		: [];
+
+	const lastConnectedLabel = status?.lastConnectedAt ? new Date(status.lastConnectedAt).toLocaleString() : t("settings.pushBackground.neverConnected");
+
+	return (
+		<Panel title={t("settings.pushBackground.title")} icon={IconShield} hint={t("settings.pushBackground.hint")}>
+			<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+				<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+					<span class="set-row__text">{t("settings.pushBackground.enableLabel")}</span>
+					<input type="checkbox" class="set-row__switch" checked={enabled} disabled={busy} onChange={(e) => handleToggle(e.currentTarget.checked)} />
+				</label>
+
+				{error && <p role="alert" class="callout callout--warn">{error}</p>}
+
+				{enabled && (
+					<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+						<div class="set-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+							{items.map((item) => (
+								<div key={item.key} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+									<span class="set-row__text row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+										{item.ok ? <IconCheckCircleFill aria-hidden="true" /> : <IconWarning aria-hidden="true" />}
+										{item.label}
+									</span>
+									{!item.ok && (
+										<button type="button" class="btn--ghost rigid" disabled={busy} onClick={item.fix}>
+											{t("settings.pushBackground.fixButton")}
+										</button>
+									)}
+								</div>
+							))}
+						</div>
+
+						<p class="panel__hint">
+							{t("settings.pushBackground.lastConnectedLabel")}: {lastConnectedLabel}
+						</p>
+
+						<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+							<h3 class="sect-title">{t("settings.pushBackground.autostartTitle")}</h3>
+							<p class="panel__hint">{t("settings.pushBackground.autostartHint")}</p>
+							<button type="button" class="btn--ghost rigid" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => runFix(() => getPlatform().push.openAutostartSettings())}>
+								{t("settings.pushBackground.openAutostartButton")}
+							</button>
+						</div>
+
+						<p class="panel__hint">{t("settings.pushBackground.privacyExplanation")}</p>
+						{/* П3.6 — известное ограничение, сознательно не исправляется (ключ не
+						    хранится вне памяти, Р5): если ОС убила процесс, по нажатию на
+						    уведомление потребуется ввести пароль заново — звонок может успеть
+						    истечь, пока это происходит. */}
+						<p class="panel__hint">{t("settings.pushBackground.unlockLimitation")}</p>
+					</div>
+				)}
+			</div>
+		</Panel>
+	);
+}
+
 // Строка настройки: подпись слева, контрол справа. В проекте эта молекула
 // была написана руками 46 раз через инлайновый justify-content:
 // space-between. Здесь она названа — и вместе с именем получает поведение
@@ -883,7 +1035,7 @@ export default function Settings() {
 								<select id={`${instanceId}-scale`} class="set-row__control" value={settings.uiScale} onChange={(e) => handleScaleChange(e.currentTarget.value)}>
 									{SCALE_OPTIONS.map((opt) => (
 										<option key={opt.id} value={opt.id}>
-											{opt.label}
+											{t(`settings.scale.${opt.id}`)}
 										</option>
 									))}
 								</select>
@@ -1019,6 +1171,8 @@ export default function Settings() {
 							</div>
 						</div>
 					</Panel>
+
+					<PushBackgroundPanel />
 				</div>
 			)}
 

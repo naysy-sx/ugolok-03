@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Э3.3 ТЗ-NATIVE-APPS — только эти права: уведомления, диалог сохранения, запись файла (по пути из диалога), открытие URL в системном браузере. Никакого shell, никакого широкого доступа к ФС.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-badge-count",
+    "notification:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-write",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "opener:default"
+  ]
+}

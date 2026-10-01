@@ -30,6 +30,26 @@ Caddy на хосте. Relay и Blossom слушают только localhost. c
 
 Секрет — `TURN_STATIC_AUTH_SECRET`, тот же, что `static-auth-secret` в `coturn.conf`, через `env_file` (в `.gitignore`, не в git). Контракт и CORS/rate-limit — в самом `agent/cmd/turncreds-server/main.go`.
 
+## Push (Э-PUSH)
+
+ТЗ: `PROCESS-DOCS/NATIVE-APPS/TZ-PUSH-ANDROID.md`. Два новых сервиса, `ntfy` (доставка, self-hosted) и `push-bridge-server` (`agent/cmd/push-bridge-server/`, сопоставляет события пути записи relay с регистрациями и публикует в ntfy). Живут на `relay.ugolok.tech/push/*` (Caddy) — `/push/register` идёт на мост, всё остальное под `/push/` (топики) — на ntfy с срезанным префиксом. Только на боевом `island` — на `island-test` пока не заведено (у него и так нет `turncreds-server`/политики записи, сознательно упрощённый тестовый стек).
+
+**Перед первым `docker compose up` после этой правки — три файла ДОЛЖНЫ существовать (compose падает при старте без них, как и сейчас с `turncreds.env`):**
+
+1. `deploy/island/push-bridge-plugin.env` (из `.example`) — `PUSH_BRIDGE_INTERNAL_TOKEN` сгенерировать (`openssl rand -hex 32`).
+2. `deploy/island/push-bridge.env` (из `.example`) — `PUSH_INTERNAL_TOKEN` — **тот же самый** hex, что в шаге 1 (общий секрет плагин↔мост, тот же принцип, что `TURN_STATIC_AUTH_SECRET`). `PUSH_NTFY_TOKEN` заполняется на шаге ниже.
+3. Первый запуск: `docker compose up -d ntfy`, затем once:
+   ```
+   docker compose exec ntfy ntfy user add --role=admin push-bridge
+   docker compose exec ntfy ntfy token add push-bridge
+   docker compose exec ntfy ntfy access push-bridge '*' write-only
+   ```
+   Токен из вывода `ntfy token add` — в `PUSH_NTFY_TOKEN` (`push-bridge.env`). Дальше `docker compose up -d`.
+
+Без этих трёх шагов `push-bridge-server` не стартует (явные `log.Fatal` на пустые секреты, `agent/cmd/push-bridge-server/main.go`) — но это НЕ ломает остальной остров: `env_file` с пустыми/незаполненными значениями у `relay` (шаг 1) — валиден для docker compose, `push-forward.mjs` в этом случае просто ничего не пересылает (ИП6).
+
+Живой прогон П0 (черновая проверка выживания на реальном Android) — `PROCESS-DOCS/NATIVE/PUSH-E0-REPORT.md`. Врезка в путь записи — `server/strfry/push-forward.mjs` (вызывается из `whitelist-plugin.mjs`, см. комментарий там же про П0.3(Б)).
+
 ## Как выкатывать правку
 
 1. Менять файлы здесь, в репозитории (`deploy/island/`, `deploy/caddy/`).

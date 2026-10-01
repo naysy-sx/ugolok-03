@@ -46,6 +46,12 @@
 			"default": "(predefinito)"
 		},
 		"scaleLabel": "Scala dell'interfaccia",
+		"scale": {
+			"small": "Piccolo (90%)",
+			"medium": "Medio (100%)",
+			"large": "Grande (110%)",
+			"xlarge": "Molto grande (125%)"
+		},
 		"accentColorTitle": "Colore accento",
 		"paletteCustomizeButton": "Personalizza",
 		"paletteHueLabel": "Tonalità",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "Copiato negli appunti",
 		"perfLogManualHint": "Appunti non disponibili — seleziona e copia manualmente",
 		"sendReadReceiptsLabel": "Invia conferme di lettura",
-		"sendReadReceiptsHint": "Il contatto vedrà che hai aperto la chat. Le conferme di consegna partono comunque: indicano solo che il messaggio ha raggiunto questo dispositivo."
+		"sendReadReceiptsHint": "Il contatto vedrà che hai aperto la chat. Le conferme di consegna partono comunque: indicano solo che il messaggio ha raggiunto questo dispositivo.",
+		"pushBackground": {
+			"title": "Notifiche in background",
+			"hint": "Ricevi notifiche di nuovi messaggi e chiamate anche quando Ugolok è chiuso",
+			"enableLabel": "Attiva notifiche in background",
+			"actionError": "Qualcosa è andato storto — riprova",
+			"batteryLabel": "Nessuna restrizione della batteria",
+			"notificationsLabel": "Notifiche consentite",
+			"fullScreenLabel": "Schermata chiamata a tutto schermo consentita",
+			"runningLabel": "Connessione attiva",
+			"fixButton": "Correggi",
+			"lastConnectedLabel": "Ultima connessione",
+			"neverConnected": "mai",
+			"autostartTitle": "Avvio automatico",
+			"autostartHint": "Su alcuni telefoni (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) il sistema chiude le app in background per risparmiare batteria. Perché le notifiche arrivino in modo affidabile, consenti a Ugolok di funzionare in background e di avviarsi automaticamente nelle impostazioni del produttore.",
+			"openAutostartButton": "Apri impostazioni di avvio automatico",
+			"privacyExplanation": "Il server delle notifiche conosce solo il momento in cui arriva un messaggio o una chiamata, proprio come un normale server relay. Non vede mai il testo, il mittente o il contenuto.",
+			"unlockLimitation": "Se il sistema ha rimosso l'app dalla memoria, toccando una notifica dovrai reinserire la password — una chiamata potrebbe terminare prima che tu finisca di digitarla.",
+			"onboardingToastTitle": "Notifiche in background",
+			"onboardingToastBody": "Ricevi notifiche di messaggi e chiamate anche quando Ugolok è chiuso. Tocca per configurare."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profilo e menu principale",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "Più spazio di archiviazione",
 		"mailBody": "Salve! Per favore date più spazio alla mia chiave: {{npub}}",
 		"back": "Torna all’archiviazione"
+	},
+	"webviewOutdated": {
+		"title": "Aggiorna Android System WebView",
+		"body": "{{appName}} utilizza funzionalità moderne del browser non ancora supportate dalla versione installata di Android System WebView. Aggiornalo tramite Google Play per continuare.",
+		"updateButton": "Aggiorna su Google Play"
 	}
 }

@@ -199,6 +199,28 @@ test("deleteAccountEverywhere: сеть ДОСТУПНА — переиздаё�
 	assert.equal(store.has(manifestDigest), false, "манифест файла должен быть удалён с сервера");
 });
 
+test("deleteAccountEverywhere: tombstone-профиль СОХРАНЯЕТ about/picture — kind:0 заменяемый, публикация одного имени стёрла бы био/аватар на relay", async () => {
+	await db.table("keystore").put({
+		id: ALICE_PUB,
+		login: "alice",
+		salt: new Uint8Array(1),
+		iv: new Uint8Array(1),
+		ciphertext: new Uint8Array(1),
+		bio: "люблю котиков",
+		avatarUrl: "https://blossom.test/avatar-hash",
+	});
+
+	const published = [];
+	await deleteAccountEverywhere(ALICE_PUB, ALICE_PRIV, DB_KEY_A, "alice", capturingPublish(published), SERVER_URL);
+
+	const profileEvent = published.find((e) => e.kind === 0);
+	assert.ok(profileEvent, "должен опубликовать kind 0");
+	const content = JSON.parse(profileEvent.content);
+	assert.match(content.name, /удалённый аккаунт/);
+	assert.equal(content.about, "люблю котиков", "about не должен затираться tombstone-публикацией");
+	assert.equal(content.picture, "https://blossom.test/avatar-hash", "picture не должна затираться tombstone-публикацией");
+});
+
 test("deleteAccountEverywhere: адверсарная проверка — если бы wipeLocalData ошибочно чистила ПО ownerPubkey='undefined' (баг подстановки), тест поймал бы чужие данные исчезнувшими", async () => {
 	// Регрессионный тест на класс бага, который этот проект ловил многократно
 	// (этапы 25/30/31/36/43/53, см. комментарии database.js): убеждаемся, что

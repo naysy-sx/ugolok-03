@@ -1,0 +1,12 @@
+{
+  "name": "ugolok-probe-tauri-shell",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Одноразовая оболочка Tauri для прогона зонда Э0 (native/probe). Не часть основного приложения.",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.0"
+  }
+}

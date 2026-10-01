@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Э3.8 ТЗ-NATIVE-APPS — NSMicrophoneUsageDescription (Info.plist) одной
+	     строки НЕ ХВАТАЕТ: без этого entitlement'а и подписи (пусть даже
+	     ad-hoc, signingIdentity "-" в tauri.conf.json) macOS отклоняет
+	     getUserMedia ДО обращения к TCC вообще — ни диалога, ни ошибки,
+	     тишина. Найдено живьём (владелец, Mac mini, 2026-09-27): строка в
+	     Info.plist уже стояла, диалог всё равно не появлялся. Только
+	     audio-input — камера этому приложению не нужна. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

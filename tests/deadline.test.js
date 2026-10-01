@@ -65,6 +65,46 @@ test("withDeadline: исходный reject ДО срока -> проброс о
 	t.mock.timers.reset();
 });
 
+// Регрессия (живой разбор, deploy-test.yml run 207, 2026-10-01): timer.unref()
+// здесь раньше стоял, чтобы "не держать процесс живым дольше, чем нужно" —
+// но unref'нутый таймер Node вправе ПРОПУСТИТЬ ВООБЩЕ, если к моменту
+// срабатывания событийный цикл решит, что ждать больше нечего (смысл unref —
+// не гарантированная задержка). Под node:test каждый тестовый файл — отдельный
+// процесс; если тест таймаут-пути withDeadline (EOSE/ответ намеренно не
+// приходит) оказывается последним, что держит цикл, таймер мог не сработать
+// НИКОГДА — промис висел навсегда (симптом в CI: "Promise resolution is
+// still pending but the event loop has already resolved", cancelledByParent
+// у tests/bootstrap.test.js и tests/profile.test.js). На проде deploy-test.yml
+// гоняет npm test на том же 2-ядерном VPS, что боевые relay/blossom — под их
+// нагрузкой гонка стала детерминированной. Таймер всегда ограничен сверху
+// значением ms, так что без unref процесс максимум завершится на ms позже —
+// не "иногда никогда". Тест ловит регрессию, если unref() когда-нибудь
+// вернут: ловим РЕАЛЬНЫЙ setTimeout (не t.mock.timers — их фейковый Timeout
+// не воспроизводит это поведение Node), подменяем .unref на самом объекте
+// таймера и проверяем, что withDeadline его не вызывает.
+test("withDeadline: не вызывает timer.unref() — таймаут не должен зависеть от того, что ещё держит событийный цикл", async () => {
+	const originalSetTimeout = global.setTimeout;
+	let unrefCalled = false;
+	global.setTimeout = (...args) => {
+		const timer = originalSetTimeout(...args);
+		if (typeof timer?.unref === "function") {
+			const originalUnref = timer.unref.bind(timer);
+			timer.unref = (...a) => {
+				unrefCalled = true;
+				return originalUnref(...a);
+			};
+		}
+		return timer;
+	};
+	try {
+		const never = new Promise(() => {});
+		await assert.rejects(withDeadline(never, 5));
+	} finally {
+		global.setTimeout = originalSetTimeout;
+	}
+	assert.equal(unrefCalled, false, "withDeadline не должен звать timer.unref() — см. комментарий в deadline.js");
+});
+
 // Этап 2, приёмка — "REQ без EOSE -> oneShotRequest отклоняется, подписка снята".
 test("oneShotRequest: EOSE не приходит -> отклоняется по сроку, обработчик снят (removeMessageHandler), CLOSE отправлен", async (t) => {
 	t.mock.timers.enable({ apis: ["setTimeout"] });

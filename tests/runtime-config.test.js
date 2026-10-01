@@ -84,6 +84,24 @@ test("loadRuntimeConfig: сетевая ошибка (fetch reject) -> {}, не 
 	assert.deepEqual(result, {});
 });
 
+test("loadRuntimeConfig: pushBridge — строка пропускается как есть (Э-PUSH П1.3)", async () => {
+	resetRuntimeConfig();
+	const result = await loadRuntimeConfig({
+		fetchImpl: fakeFetch(() => jsonResponse({ pushBridge: "https://relay.ugolok.tech/push" })),
+	});
+	assert.deepEqual(result, { pushBridge: "https://relay.ugolok.tech/push" });
+});
+
+test("loadRuntimeConfig: pushBridge отсутствует/не строка -> поле в результате отсутствует (остров без push, ИП6)", async () => {
+	resetRuntimeConfig();
+	const withoutField = await loadRuntimeConfig({ fetchImpl: fakeFetch(() => jsonResponse({ instanceName: "x" })) });
+	assert.equal("pushBridge" in withoutField, false);
+
+	resetRuntimeConfig();
+	const wrongType = await loadRuntimeConfig({ fetchImpl: fakeFetch(() => jsonResponse({ pushBridge: 42 })) });
+	assert.equal("pushBridge" in wrongType, false);
+});
+
 test("getRuntimeConfig: до первой загрузки — {}", () => {
 	resetRuntimeConfig();
 	assert.deepEqual(getRuntimeConfig(), {});

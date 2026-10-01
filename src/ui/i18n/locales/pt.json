@@ -46,6 +46,12 @@
 			"default": "(padrão)"
 		},
 		"scaleLabel": "Escala da interface",
+		"scale": {
+			"small": "Pequeno (90%)",
+			"medium": "Médio (100%)",
+			"large": "Grande (110%)",
+			"xlarge": "Muito grande (125%)"
+		},
 		"accentColorTitle": "Cor de destaque",
 		"paletteCustomizeButton": "Personalizar",
 		"paletteHueLabel": "Matiz",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "Copiado para a área de transferência",
 		"perfLogManualHint": "Área de transferência indisponível — selecione e copie manualmente",
 		"sendReadReceiptsLabel": "Enviar confirmações de leitura",
-		"sendReadReceiptsHint": "O contato verá que você abriu a conversa. Confirmações de entrega continuam a ser enviadas — só significam que a mensagem chegou a este dispositivo."
+		"sendReadReceiptsHint": "O contato verá que você abriu a conversa. Confirmações de entrega continuam a ser enviadas — só significam que a mensagem chegou a este dispositivo.",
+		"pushBackground": {
+			"title": "Notificações em segundo plano",
+			"hint": "Receba notificações de novas mensagens e chamadas mesmo quando o Ugolok estiver fechado",
+			"enableLabel": "Ativar notificações em segundo plano",
+			"actionError": "Algo deu errado — tente novamente",
+			"batteryLabel": "Sem restrições de bateria",
+			"notificationsLabel": "Notificações permitidas",
+			"fullScreenLabel": "Exibição em tela cheia de chamadas permitida",
+			"runningLabel": "Conexão ativa",
+			"fixButton": "Corrigir",
+			"lastConnectedLabel": "Última conexão",
+			"neverConnected": "nunca",
+			"autostartTitle": "Início automático",
+			"autostartHint": "Em alguns telefones (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) o sistema encerra apps em segundo plano para economizar bateria. Para que as notificações cheguem com confiabilidade, permita que o Ugolok funcione em segundo plano e inicie automaticamente nas configurações do fabricante.",
+			"openAutostartButton": "Abrir configurações de início automático",
+			"privacyExplanation": "O servidor de notificações só sabe o momento em que uma mensagem ou chamada chega — assim como um servidor relay comum. Ele nunca vê o texto, o remetente ou o conteúdo.",
+			"unlockLimitation": "Se o sistema removeu o aplicativo da memória, ao tocar numa notificação será necessário digitar a senha novamente — a chamada pode terminar antes que você termine de digitá-la.",
+			"onboardingToastTitle": "Notificações em segundo plano",
+			"onboardingToastBody": "Receba notificações de mensagens e chamadas mesmo quando o Ugolok estiver fechado. Toque para configurar."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Perfil e menu principal",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "Mais espaço de armazenamento",
 		"mailBody": "Olá! Por favor, deem mais espaço à minha chave: {{npub}}",
 		"back": "Voltar ao armazenamento"
+	},
+	"webviewOutdated": {
+		"title": "Atualize o Android System WebView",
+		"body": "{{appName}} usa recursos modernos do navegador que a versão instalada do Android System WebView ainda não suporta. Atualize-o pela Google Play para continuar.",
+		"updateButton": "Atualizar na Google Play"
 	}
 }

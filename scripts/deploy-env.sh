@@ -259,7 +259,7 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	if [[ "$ENV" == "prod" ]]; then
 		POLICY_DST="$ISLAND_DST/policy"
 		mkdir -p "$POLICY_DST/server/strfry" "$POLICY_DST/src/domain/discovery" "$ISLAND_DST/policy-conf"
-		for f in whitelist-plugin.mjs write-policy.mjs rate-limit.mjs; do
+		for f in whitelist-plugin.mjs write-policy.mjs rate-limit.mjs push-forward.mjs; do
 			install -m 755 "$ROOT/server/strfry/$f" "$POLICY_DST/server/strfry/$f"
 		done
 		for f in wordfilter.js stopwords.json; do
@@ -312,7 +312,7 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		mkdir -p "$STAMP_DIR" 2>/dev/null || true
 		RELAY_FILES=("$ISLAND_SRC/strfry.conf")
 		if [[ "$ENV" == "prod" ]]; then
-			RELAY_FILES+=("$ROOT/server/strfry/whitelist-plugin.mjs" "$ROOT/server/strfry/write-policy.mjs" "$ROOT/server/strfry/rate-limit.mjs" "$ROOT/src/domain/discovery/wordfilter.js" "$ROOT/src/domain/discovery/stopwords.json")
+			RELAY_FILES+=("$ROOT/server/strfry/whitelist-plugin.mjs" "$ROOT/server/strfry/write-policy.mjs" "$ROOT/server/strfry/rate-limit.mjs" "$ROOT/server/strfry/push-forward.mjs" "$ROOT/src/domain/discovery/wordfilter.js" "$ROOT/src/domain/discovery/stopwords.json")
 		fi
 		restart_if_changed "$RELAY_RESTART_C" "$STAMP_DIR/relay" "${RELAY_FILES[@]}"
 		restart_if_changed "$BLOSSOM_RESTART_C" "$STAMP_DIR/blossom" "$ISLAND_SRC/blossom-config.yml"

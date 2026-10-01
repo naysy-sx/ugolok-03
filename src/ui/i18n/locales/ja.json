@@ -46,6 +46,12 @@
 			"default": "（デフォルト）"
 		},
 		"scaleLabel": "インターフェースの拡大率",
+		"scale": {
+			"small": "小 (90%)",
+			"medium": "中 (100%)",
+			"large": "大 (110%)",
+			"xlarge": "特大 (125%)"
+		},
 		"accentColorTitle": "アクセントカラー",
 		"paletteCustomizeButton": "カスタマイズ",
 		"paletteHueLabel": "色相",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "クリップボードにコピーしました",
 		"perfLogManualHint": "クリップボードが使用できません — 選択して手動でコピーしてください",
 		"sendReadReceiptsLabel": "既読を通知する",
-		"sendReadReceiptsHint": "相手はあなたがチャットを開いたことが分かります。配信済みの通知は常に送られます。メッセージがこの端末に届いたことだけを意味します。"
+		"sendReadReceiptsHint": "相手はあなたがチャットを開いたことが分かります。配信済みの通知は常に送られます。メッセージがこの端末に届いたことだけを意味します。",
+		"pushBackground": {
+			"title": "バックグラウンド通知",
+			"hint": "Ugolok を閉じていても、新しいメッセージや着信の通知を受け取れます",
+			"enableLabel": "バックグラウンド通知を有効にする",
+			"actionError": "失敗しました — もう一度お試しください",
+			"batteryLabel": "バッテリー制限なし",
+			"notificationsLabel": "通知が許可されています",
+			"fullScreenLabel": "通話のフルスクリーン表示が許可されています",
+			"runningLabel": "接続中",
+			"fixButton": "修正",
+			"lastConnectedLabel": "最終接続",
+			"neverConnected": "未接続",
+			"autostartTitle": "自動起動",
+			"autostartHint": "一部の端末（Xiaomi、Huawei、Samsung、Oppo/Realme/OnePlus、Vivo）では、バッテリー節約のためシステムがバックグラウンドアプリを終了させることがあります。通知を確実に受け取るには、メーカーの設定で Ugolok のバックグラウンド動作と自動起動を許可してください。",
+			"openAutostartButton": "自動起動の設定を開く",
+			"privacyExplanation": "通知サーバーが知るのは、メッセージや着信が届いた瞬間だけです。通常のリレーサーバーと同じです。本文も送信者も内容も一切見ることはありません。",
+			"unlockLimitation": "システムがアプリをメモリから解放していた場合、通知をタップするとパスワードの再入力が必要になります — 入力が終わる前に通話が切れることがあります。",
+			"onboardingToastTitle": "バックグラウンド通知",
+			"onboardingToastBody": "Ugolok を閉じていてもメッセージや着信の通知を受け取れます。タップして設定してください。"
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "プロフィールとメインメニュー",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "ストレージ容量の追加",
 		"mailBody": "こんにちは。私の鍵に容量を追加してください：{{npub}}",
 		"back": "ストレージに戻る"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView を更新してください",
+		"body": "{{appName}} は最新のブラウザ機能を使用していますが、インストールされている Android System WebView のバージョンではまだサポートされていません。続けるには Google Play で更新してください。",
+		"updateButton": "Google Play で更新"
 	}
 }

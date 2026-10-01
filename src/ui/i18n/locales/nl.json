@@ -46,6 +46,12 @@
 			"default": "(standaard)"
 		},
 		"scaleLabel": "Schaal van de interface",
+		"scale": {
+			"small": "Klein (90%)",
+			"medium": "Middel (100%)",
+			"large": "Groot (110%)",
+			"xlarge": "Extra groot (125%)"
+		},
 		"accentColorTitle": "Accentkleur",
 		"paletteCustomizeButton": "Aanpassen",
 		"paletteHueLabel": "Tint",
@@ -136,7 +142,27 @@
 		"perfLogCopied": "Gekopieerd naar klembord",
 		"perfLogManualHint": "Klembord niet beschikbaar — selecteer en kopieer handmatig",
 		"sendReadReceiptsLabel": "Leesbevestigingen sturen",
-		"sendReadReceiptsHint": "Je contact ziet dat je de chat hebt geopend. Afleverbevestigingen gaan nog steeds mee — ze betekenen alleen dat het bericht dit apparaat heeft bereikt."
+		"sendReadReceiptsHint": "Je contact ziet dat je de chat hebt geopend. Afleverbevestigingen gaan nog steeds mee — ze betekenen alleen dat het bericht dit apparaat heeft bereikt.",
+		"pushBackground": {
+			"title": "Meldingen op de achtergrond",
+			"hint": "Ontvang meldingen van nieuwe berichten en oproepen, ook als Ugolok gesloten is",
+			"enableLabel": "Achtergrondmeldingen inschakelen",
+			"actionError": "Mislukt — probeer het opnieuw",
+			"batteryLabel": "Geen batterijbeperkingen",
+			"notificationsLabel": "Meldingen toegestaan",
+			"fullScreenLabel": "Volledig scherm voor oproepen toegestaan",
+			"runningLabel": "Verbinding actief",
+			"fixButton": "Oplossen",
+			"lastConnectedLabel": "Laatste verbinding",
+			"neverConnected": "nooit",
+			"autostartTitle": "Automatisch starten",
+			"autostartHint": "Op sommige telefoons (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) sluit het systeem zelf achtergrond-apps af om de batterij te sparen. Sta Ugolok toe om op de achtergrond te draaien en automatisch te starten in de instellingen van de fabrikant, zodat meldingen betrouwbaar aankomen.",
+			"openAutostartButton": "Instellingen voor automatisch starten openen",
+			"privacyExplanation": "De meldingenserver weet alleen het moment waarop een bericht of oproep binnenkomt — net als een gewone relayserver. Hij ziet nooit de tekst, de afzender of de inhoud.",
+			"unlockLimitation": "Als het systeem de app uit het geheugen heeft verwijderd, moet u bij het aantikken van een melding opnieuw uw wachtwoord invoeren — een oproep kan eindigen voordat u klaar bent met typen.",
+			"onboardingToastTitle": "Meldingen op de achtergrond",
+			"onboardingToastBody": "Ontvang meldingen van berichten en oproepen, ook als Ugolok gesloten is. Tik om in te stellen."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profiel en hoofdmenu",
@@ -1489,5 +1515,10 @@
 		"mailSubject": "Meer opslagruimte",
 		"mailBody": "Hallo! Geef alsjeblieft meer ruimte aan mijn sleutel: {{npub}}",
 		"back": "Terug naar opslag"
+	},
+	"webviewOutdated": {
+		"title": "Werk Android System WebView bij",
+		"body": "{{appName}} gebruikt moderne browserfuncties die je geïnstalleerde versie van Android System WebView nog niet ondersteunt. Werk deze bij via Google Play om door te gaan.",
+		"updateButton": "Bijwerken in Google Play"
 	}
 }

@@ -1,7 +1,8 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import IconCopy from "../icons/copy.jsx";
 import IconCheck from "../icons/check.jsx";
 import { t } from "../signals/i18n.js";
+import { getPlatform } from "../../platform/index.js";
 
 // Пользователь — три правки разом:
 // 1) auto-fit/minmax вместо жёстких repeat(4,1fr) — тот же приём, что
@@ -16,8 +17,32 @@ import { t } from "../signals/i18n.js";
 //    (то, что реально нужно вставить при восстановлении).
 const COPY_RESET_MS = 2000;
 
+// Э4.10 ТЗ-NATIVE-APPS — "запрет скриншотов и превью в списке задач на время
+// показа мнемоники". Один компонент, оба места показа (unlock.jsx —
+// создание аккаунта, mnemonic-reveal.jsx — просмотр существующей) защищены
+// автоматически, без дублирования в родителях. Best-effort: web.js — тихий
+// no-op, tauri.js пока notImplemented (throw синхронный) — сбой здесь не
+// должен мешать показу самой мнемоники, тот же приём, что openExternal.
+function useSecureScreen() {
+	useEffect(() => {
+		try {
+			Promise.resolve(getPlatform().ui.setSecureScreen(true)).catch(() => {});
+		} catch {
+			// не реализовано на этой платформе
+		}
+		return () => {
+			try {
+				Promise.resolve(getPlatform().ui.setSecureScreen(false)).catch(() => {});
+			} catch {
+				// не реализовано на этой платформе
+			}
+		};
+	}, []);
+}
+
 export default function MnemonicDisplay({ words }) {
 	const [copied, setCopied] = useState(false);
+	useSecureScreen();
 
 	async function handleCopy() {
 		try {

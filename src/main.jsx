@@ -4,6 +4,10 @@ import "./styles/prosemirror.css";
 import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
+import WebViewOutdated from "./ui/screens/webview-outdated.jsx";
+import { getPlatform } from "./platform/index.js";
+import { isChromiumTooOld } from "./platform/webview-gate.js";
+import { startKeyboardInsetTracking } from "./platform/keyboard-inset.js";
 import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
 import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
@@ -44,6 +48,13 @@ if (isTraceEnabled()) {
 }
 
 startIdleWatcher();
+
+// Э4.7 ТЗ-NATIVE-APPS — только Android/Capacitor (см. keyboard-inset.js);
+// глобально и безусловно с самого старта (не только внутри залогиненного
+// MainShell) — клавиатура нужна и на экране входа/регистрации (пароль,
+// мнемоника). Никогда не отписывается — живёт всю жизнь вкладки, тот же
+// принцип, что startIdleWatcher() выше.
+if (__TARGET__ === "capacitor") startKeyboardInsetTracking();
 
 const SW_RELOAD_ONCE_KEY = "ugolok.swReloadOnce";
 let refreshing = false;
@@ -128,7 +139,12 @@ window.addEventListener("ugolok:db-versionchange", () => {
 	reloadWhenIdle();
 });
 
-if ("serviceWorker" in navigator) {
+// Э1/§4.2 — «в нативных режимах не эмитится service-worker.js и не выполняется
+// его регистрация»: __TARGET__ !== "web" исключает саму попытку регистрации
+// (файла нет в dist-capacitor/dist-tauri, см. vite.config.js), не полагаясь на
+// то, что .catch(() => {}) ниже просто молча проглотит 404 — так честнее и не
+// тратит сетевой запрос внутри нативной оболочки впустую.
+if (__TARGET__ === "web" && "serviceWorker" in navigator) {
 	navigator.serviceWorker.addEventListener("controllerchange", reloadForFreshServiceWorker);
 
 	// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (этап 53-довесок, тот же класс пробела, что
@@ -165,4 +181,16 @@ if ("serviceWorker" in navigator) {
 
 const root = document.getElementById("app");
 root.replaceChildren();
-render(<App />, document.getElementById("app"));
+
+// Э4.4 ТЗ-NATIVE-APPS — буквально "не грузить приложение дальше": проверка
+// ДО render(<App/>), не внутри неё — весь остальной код приложения (домен,
+// IndexedDB, ключи) не должен инициализироваться на слишком старом движке.
+// Только Android (getPlatform().os) — на iOS (Capacitor, ещё не создан, Э5)
+// движок WKWebView, UA не содержит "Chrome/N" вовсе, парсер честно вернёт
+// null/"слишком стар" — их сюда пускать нельзя, ТЗ (раздел 5) ограничивает
+// это требование явно Android'ом.
+if (__TARGET__ === "capacitor" && getPlatform().os === "android" && isChromiumTooOld(navigator.userAgent)) {
+	render(<WebViewOutdated />, root);
+} else {
+	render(<App />, root);
+}

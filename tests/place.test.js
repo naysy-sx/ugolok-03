@@ -1,6 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { place, DEFAULT_PLACE, goTo, openChat, openChannel, openChannelPost } from "../src/ui/signals/place.js";
+import { place, DEFAULT_PLACE, goTo, openChat, openChannel, openChannelPost, openSearch, goBackOnePlace } from "../src/ui/signals/place.js";
 import { applyNavTarget } from "../src/ui/signals/notification-nav.js";
 
 beforeEach(() => {
@@ -105,4 +105,56 @@ test("applyNavTarget: {screen:'channels', channelId, subTab:'chat'} (сообщ�
 test("applyNavTarget: {screen:'channels', channelId, subTab:'moderation'} (бан/жалоба) -> {kind:'channel', id, subTab:'moderation'}", () => {
 	applyNavTarget({ screen: "channels", channelId: "chan-1", subTab: "moderation" });
 	assert.deepEqual(place.value, { kind: "channel", id: "chan-1", subTab: "moderation", postId: undefined, commentId: undefined });
+});
+
+// goBackOnePlace — Э4.5 ТЗ-NATIVE-APPS, "шаг назад по навигации" (третий
+// уровень цепочки аппаратной кнопки «Назад» после оверлея/drawer).
+
+test("goBackOnePlace: на корне (journal) -> false, место не меняется", () => {
+	assert.equal(goBackOnePlace(), false);
+	assert.deepEqual(place.value, DEFAULT_PLACE);
+});
+
+test("goBackOnePlace: верхнеуровневая вкладка (people) -> в journal", () => {
+	goTo({ kind: "people" });
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, DEFAULT_PLACE);
+});
+
+test("goBackOnePlace: search -> closeSearch (возврат в точку входа)", () => {
+	goTo({ kind: "people" });
+	openSearch("bob");
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, { kind: "people" });
+});
+
+test("goBackOnePlace: chat с id и backTo -> точка возврата", () => {
+	openChat("pk1", { backTo: { kind: "people" } });
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, { kind: "people" });
+});
+
+test("goBackOnePlace: chat с id без backTo -> список чатов (kind:'chat' без id)", () => {
+	openChat("pk1");
+	assert.equal(goBackOnePlace(), true);
+	assert.equal(place.value.kind, "chat");
+	assert.equal(place.value.id, undefined);
+});
+
+test("goBackOnePlace: chat без id (уже список) -> в journal (это не 'детальный' уровень)", () => {
+	openChat(null);
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, DEFAULT_PLACE);
+});
+
+test("goBackOnePlace: channel с id -> список каналов", () => {
+	openChannel("chan-1");
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, { kind: "channels" });
+});
+
+test("goBackOnePlace: channels (список, без id) -> в journal", () => {
+	openChannel(null);
+	assert.equal(goBackOnePlace(), true);
+	assert.deepEqual(place.value, DEFAULT_PLACE);
 });

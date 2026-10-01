@@ -259,13 +259,25 @@ export default function Quick({ onExit }) {
 		}
 	}
 
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini/Tauri-WKWebView, Э3, 2026-09-27) —
+	// разблокировка пула тихих <audio>-элементов (нужна для последующего
+	// автовоспроизведения удалённых голосов без нового жеста) на этой
+	// платформе заняла 11 СЕКУНД вместо мгновенно — el.play() у WKWebView,
+	// похоже, подвисает на автоплей-политике вместо быстрого resolve/reject.
+	// "Подключиться" выглядел полностью нерабочим все эти 11с (voiceBusy
+	// не имеет отдельного видимого индикатора). Таймаут — best-effort и так
+	// (все .play() уже .catch()'иваются), зависание ничем не лучше отказа.
+	function withTimeout(promise, ms) {
+		return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+	}
+
 	async function ensureAudioPoolUnlocked() {
 		const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
 		if (AC && !audioCtxRef.current) {
 			const ctx = new AC();
 			audioCtxRef.current = ctx;
 			try {
-				await ctx.resume();
+				await withTimeout(ctx.resume(), 1500);
 				const buf = ctx.createBuffer(1, 1, 22050);
 				const src = ctx.createBufferSource();
 				src.buffer = buf;
@@ -275,10 +287,10 @@ export default function Quick({ onExit }) {
 				// жест мог уже истечь
 			}
 		} else if (audioCtxRef.current?.state === "suspended") {
-			await audioCtxRef.current.resume().catch(() => {});
+			await withTimeout(audioCtxRef.current.resume().catch(() => {}), 1500);
 		}
 		if (audioPoolRef.current) {
-			await Promise.all(audioPoolRef.current.map((el) => el.play().catch(() => {})));
+			await Promise.all(audioPoolRef.current.map((el) => withTimeout(el.play().catch(() => {}), 1500)));
 			return;
 		}
 		const els = [];
@@ -292,7 +304,7 @@ export default function Quick({ onExit }) {
 			els.push(el);
 		}
 		audioPoolRef.current = els;
-		await Promise.all(els.map((el) => el.play().catch(() => {})));
+		await Promise.all(els.map((el) => withTimeout(el.play().catch(() => {}), 1500)));
 	}
 
 	function iceServersForCall(opts) {
@@ -436,19 +448,27 @@ export default function Quick({ onExit }) {
 	// joinVoice() (микрофон запрещён/голос заполнен/TURN недоступен) оставляет
 	// комнату и чат полностью рабочими, только показывает сообщение об ошибке.
 	async function handleJoinVoice() {
+		// Временная трассировка (владелец, Mac mini, Э3, 2026-09-27) —
+		// "Подключиться" не даёт вообще никакой видимой реакции, нужно точно
+		// узнать, доходит ли исполнение до каждого шага. Убрать после диагностики.
+		traceRecord("room-join-voice", { phase: "handler-entered", hasSession: !!sessionRef.current });
 		if (!sessionRef.current) return;
 		setVoiceBusy(true);
 		setVoiceError("");
 		await ensureAudioPoolUnlocked();
+		traceRecord("room-join-voice", { phase: "audio-pool-unlocked" });
 		try {
 			const ice = await resolveCallIceServers();
 			setTurnStatus(ice.turn ?? getLastTurnStatus());
 			if (ice.turn) {
 				traceRecord("turn-status", { status: ice.turn, urlCount: ice.urlCount, tookMs: ice.tookMs });
 			}
+			traceRecord("room-join-voice", { phase: "before-joinVoice" });
 			await sessionRef.current.joinVoice();
+			traceRecord("room-join-voice", { phase: "joinVoice-ok" });
 			setVoiceActive(true);
 		} catch (err) {
+			traceRecord("room-join-voice", { phase: "error", errorName: err?.name, errorMessage: err?.message ?? String(err) });
 			const message = err?.message || "";
 			if (message.includes("заполнена")) {
 				setVoiceError(t("quick.room.voiceFullError"));
@@ -459,6 +479,7 @@ export default function Quick({ onExit }) {
 			}
 		} finally {
 			setVoiceBusy(false);
+			traceRecord("room-join-voice", { phase: "finally", voiceActive });
 		}
 	}
 

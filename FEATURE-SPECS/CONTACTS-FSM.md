@@ -36,6 +36,8 @@ FSM = ⟨Q, Σ_in, Σ_out, δ, q₀⟩, **один экземпляр на ка�
 
 **"Липкое" состояние** — меняется ТОЛЬКО пользовательским действием, НИКОГДА само по себе не даунгрейдится входящим Nostr-событием, независимо от таймстампа. Это осознанное отклонение от чистого "новее — значит применяем": пока я СЧИТАЮ кого-то контактом/заблокированным, входящая заявка от него игнорируется целиком — выйти из этих состояний можно только явным моим действием (`USER_REMOVE_CONTACT`/`USER_UNBLOCK`), не автоматически. Это одновременно проще и надёжнее по UX, чем сравнение таймстампов для этих двух состояний.
 
+**Довесок (найдено живой проверкой, 2026-09-28) — CONTACT остаётся sticky, но не глухой к REQUEST.** Блокировка/разблокировка (и вообще любая причина, по которой СОБЕСЕДНИК теряет своё локальное состояние — переустановка, восстановление по мнемонике на новом устройстве, потерянная IndexedDB) — не симметричны: моё состояние сбрасывается в `NONE`, но у собеседника, который меня не блокировал и ничего не терял, остаётся `CONTACT`. Безусловный игнор `REMOTE_REQUEST` в этом состоянии (как было раньше) оставлял того, кто честно пытается восстановить рукопожатие, в `OUTGOING_PENDING` навсегда — принимать было нечему. Правка: `CONTACT` перестаёт быть безусловно глухим именно к `REMOTE_REQUEST` (и только к нему — `REMOTE_ACCEPT`/`REMOTE_REJECT`/`REMOTE_CANCEL` по-прежнему безусловный I2-игнор, там действительно нечего решать) — вместо этого применяется тот же I1-гейт по `createdAt`, что уже используют `OUTGOING_PENDING`/`INCOMING_PENDING`: заявка СТАРШЕ или РАВНА тому моменту, когда я уже стал(а) CONTACT — redelivery уже учтённого события, игнор; заявка ПОЗЖЕ — собеседник искренне не знает, что мы уже знакомы, отвечаю автоматически (согласие один раз уже было дано, повторно спрашивать не у кого). Таблица переходов — см. §2.
+
 Остальные состояния — "решаемые" (resolvable): для них действует инвариант I1 (см. §1.5) — таймстамп-гейт, разрешающий peer'у "постучаться снова" после отказа/отмены, но защищающий от redelivery СТАРОГО, уже разрешённого события.
 
 ### 1.2 Данные состояния (per-peer payload)
@@ -122,11 +124,11 @@ Bootstrap для УЖЕ существующих контактов/блокир
 - `REMOTE_CANCEL(peer, createdAt)` — если `createdAt ≤ resolvedAt` → игнор (нечего отменять, уже решено раньше). Иначе → `NONE` `[DELETE(peer), EMIT]`
 - `REMOTE_REQUEST(peer, greeting, createdAt)` — та же заявка, свежее `createdAt` → *(остаёмся)* `[UPSERT(peer, обновить greeting/createdAt), EMIT]`
 
-### `CONTACT` (sticky, I2)
+### `CONTACT` (sticky для ACCEPT/REJECT/CANCEL — I2; I1-гейт для REQUEST — см. правку ниже)
 - `USER_REMOVE_CONTACT(peer)` → `NONE` `[UPDATE_CONTACTS_LIST(peer,remove), DELETE(peer) с resolvedAt=now перед удалением (см. Frisby — на практике "удалить" здесь означает записать NONE+resolvedAt, не буквально стереть строку, иначе I1 не от чего будет отталкиваться при следующей заявке), EMIT]`
 - `USER_BLOCK(peer)` → `BLOCKED` `[UPDATE_CONTACTS_LIST(peer,remove), UPDATE_MUTE_LIST(peer,add), UPSERT(peer,{resolvedAt:now}), EMIT]`
-- `REMOTE_REQUEST(·)` → **I2, безусловный игнор** (не по таймстампу — вообще всегда, пока CONTACT)
-- `REMOTE_ACCEPT/REMOTE_REJECT/REMOTE_CANCEL(·)` → I5 игнор (нет активной исходящей заявки, если я уже CONTACT)
+- `REMOTE_REQUEST(peer, greeting, createdAt)` — **правка (живая проверка native/Android, чек-лист §6, 2026-09-28):** `createdAt ≤ resolvedAt` → I1-игнор (redelivery уже учтённой заявки — тот же гейт, что у OUTGOING_PENDING/INCOMING_PENDING, не I2). Иначе (`createdAt > resolvedAt`) → **остаёмся** `CONTACT` `[PUBLISH_ACCEPT(peer), UPSERT(peer,{resolvedAt:createdAt})]`, без EMIT (видимое для UI состояние не меняется). См. §1.1-довесок ниже за обоснованием — это НЕ отмена I2, а его уточнение: I2 остаётся безусловным для ACCEPT/REJECT/CANCEL, но для REQUEST решает не "мы уже CONTACT" (то, что I2 изначально проверял), а "это ТА ЖЕ заявка, что уже привела к CONTACT, или НОВАЯ".
+- `REMOTE_ACCEPT/REMOTE_REJECT/REMOTE_CANCEL(·)` → I5 игнор (нет активной исходящей заявки, если я уже CONTACT) — **без изменений**, безусловно, таймстамп не участвует.
 
 ### `REJECTED_BY_ME`
 - `REMOTE_REQUEST(peer, greeting, createdAt)` — `createdAt ≤ resolvedAt` → I1 игнор (старая заявка, уже отклонённая, снова "приехала"). Иначе (**I6**, свежая) → `INCOMING_PENDING` `[UPSERT(peer,{greeting,createdAt}), EMIT]`
@@ -192,7 +194,10 @@ contactRelationships: [owner+peer] → {
 4. **Отказ (сторона получателя):** INCOMING_PENDING → USER_REJECT → REJECTED_BY_ME, PUBLISH_REJECT командой.
 5. **Отмена:** OUTGOING_PENDING → USER_CANCEL → NONE; получатель: INCOMING_PENDING → REMOTE_CANCEL(свежий) → NONE.
 6. **I1, redelivery старого REMOTE_ACCEPT:** CONTACT (resolvedAt=T) → REMOTE_ACCEPT(createdAt<T) → состояние НЕ меняется, команды пустые.
-7. **I1, redelivery старого REMOTE_REQUEST на уже CONTACT (ГЛАВНЫЙ регресс-тест бага):** CONTACT → REMOTE_REQUEST(любой createdAt) → остаёмся CONTACT, `contactRequests` НЕ создаётся.
+7. **I1, redelivery старой/уже учтённой REMOTE_REQUEST на CONTACT (ГЛАВНЫЙ регресс-тест исходного бага; правка 2026-09-28 — см. довесок к §1.1):** CONTACT(resolvedAt=T) → REMOTE_REQUEST(createdAt ≤ T) → остаёмся CONTACT, `resolvedAt` не меняется, commands пустые (PUBLISH_ACCEPT НЕ отправляется, `INCOMING_PENDING`/`contactRequests` НЕ создаётся).
+7a. **Собеседник потерял состояние (НОВЫЙ, живая находка native/Android чек-листа §6):** CONTACT(resolvedAt=T) → REMOTE_REQUEST(createdAt > T) → остаёмся CONTACT (state.name не меняется), commands = [PUBLISH_ACCEPT(peer), UPSERT(peer,{resolvedAt:createdAt})], resolvedAt продвинут вперёд до createdAt. Покрывает ОБА мотивирующих сценария одним правилом (разблокировка+заново заявка; переустановка/восстановление собеседника) — FSM не различает их и не обязан.
+7b. **Повтор старой заявки НЕ даёт больше одного лишнего PUBLISH_ACCEPT (redelivery-safety для 7a):** CONTACT(resolvedAt=T0) → REMOTE_REQUEST(createdAt=T1>T0) → CONTACT(resolvedAt=T1), commands=[PUBLISH_ACCEPT,...] → **тот же** REMOTE_REQUEST(createdAt=T1) применён ПОВТОРНО (симулирует redelivery на следующем relogin — giftWrapSubscriber без since-фильтра, isNewEvent не переживает reload) → CONTACT(resolvedAt=T1 не меняется), commands ПУСТЫЕ (I1-гейт уже отработал, второго PUBLISH_ACCEPT нет).
+7c. **REMOTE_ACCEPT на CONTACT по-прежнему безусловный игнор (I2 для ACCEPT/REJECT/CANCEL не тронут правкой 7a):** CONTACT(resolvedAt=T) → REMOTE_ACCEPT(createdAt=T+1, заведомо свежее) → состояние и resolvedAt не меняются, commands пустые.
 8. **I2, sticky BLOCKED:** BLOCKED → REMOTE_REQUEST(любой createdAt, даже очень свежий) → остаёмся BLOCKED.
 9. **I3, crossed-requests:** OUTGOING_PENDING → REMOTE_REQUEST(от того же peer) → CONTACT напрямую, БЕЗ PUBLISH_ACCEPT в командах.
 10. **I4, send-while-incoming:** INCOMING_PENDING → USER_SEND_REQUEST → тот же результат, что USER_ACCEPT (CONTACT, PUBLISH_ACCEPT).
@@ -205,7 +210,7 @@ contactRelationships: [owner+peer] → {
 17. **reconcileList, I1 против отката:** peer CONTACT (resolvedAt=T1) + `reconcileList("contacts", {} без peer'а, T0<T1)` → peer ОСТАЁТСЯ CONTACT (список старее локального решения — не откатываем).
 18. **reconcileList не трогает несвязанных peer'ов:** relationships с 3 разными peer'ами в разных состояниях + reconcileList по kind="contacts" с одним из них → остальные два не изменились.
 
-Gate воркера: все 18 групп зелёные + `reduce`/`reconcileList` без I/O/async (проверить статикой) → git-чекпоинт.
+Gate воркера: все 18 групп + 7a/7b/7c (правка 2026-09-28) зелёные + `reduce`/`reconcileList` без I/O/async (проверить статикой) → git-чекпоинт.
 
 ---
 

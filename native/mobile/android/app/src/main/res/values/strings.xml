@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Уголок</string>
+    <string name="title_activity_main">Уголок</string>
+    <string name="package_name">tech.ugolok.app</string>
+    <string name="custom_url_scheme">tech.ugolok.app</string>
+</resources>

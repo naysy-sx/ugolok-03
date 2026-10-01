@@ -182,6 +182,36 @@ test("onClockSkew НЕ срабатывает, когда расхождение
 	controller.stop();
 });
 
+test("startIncrementalSync: если EOSE не приходит за caughtUpTimeoutMs, onCaughtUp всё равно срабатывает (не висит вечно)", async () => {
+	const caughtUp = [];
+	const { conn, ws } = setupConnected();
+	const controller = await startIncrementalSync(conn, PUBKEY, {
+		verifyBatch: acceptAllVerify,
+		caughtUpTimeoutMs: 30,
+		onCaughtUp: () => caughtUp.push(true),
+	});
+	// EOSE сознательно не эмитируется.
+	await new Promise((r) => setTimeout(r, 80));
+	assert.equal(caughtUp.length, 1);
+	controller.stop();
+});
+
+test("startIncrementalSync: EOSE, пришедший ПОСЛЕ таймаута, не вызывает onCaughtUp повторно", async () => {
+	const caughtUp = [];
+	const { conn, ws } = setupConnected();
+	const controller = await startIncrementalSync(conn, PUBKEY, {
+		verifyBatch: acceptAllVerify,
+		caughtUpTimeoutMs: 30,
+		onCaughtUp: () => caughtUp.push(true),
+	});
+	await new Promise((r) => setTimeout(r, 80));
+	assert.equal(caughtUp.length, 1, "таймаут уже должен был сработать");
+	ws._emit(["EOSE", "incremental-sync"]);
+	await new Promise((r) => setTimeout(r, 100));
+	assert.equal(caughtUp.length, 1, "повторный вызов onCaughtUp не должен произойти");
+	controller.stop();
+});
+
 test("stop(): отправляет CLOSE, дальнейшие события для этой подписки игнорируются", async () => {
 	const onEventCalls = [];
 	const { conn, ws } = setupConnected();

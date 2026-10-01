@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Э4.3 ТЗ-NATIVE-APPS — android:allowBackup="false" уже полностью отключает
+     Auto Backup на всех уровнях API; этот файл — защита belt-and-suspenders
+     (тот же принцип, что и остальной проект — см. AUDIT-EGOROD): даже если
+     когда-нибудь allowBackup случайно станет true, пустые правила всё равно
+     не дадут ничего извлечь ни в облако, ни при переносе на новое устройство. -->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapability="false">
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

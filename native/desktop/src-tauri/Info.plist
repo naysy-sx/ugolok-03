@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Э3.8 ТЗ-NATIVE-APPS — без этой строки macOS не показывает системный
+	     запрос на микрофон вовсе (ни разрешить, ни отклонить) — getUserMedia
+	     внутри WKWebView просто тихо проваливается. Найдено живьём (владелец,
+	     2026-09-27): звонки/голосовые не имели доступа к микрофону именно по
+	     этой причине. Tauri сливает этот файл с автогенерированным Info.plist
+	     сборки (native/desktop/src-tauri/Info.plist, тот же каталог, что
+	     tauri.conf.json). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Уголку нужен доступ к микрофону для голосовых сообщений и звонков.</string>
+</dict>
+</plist>
