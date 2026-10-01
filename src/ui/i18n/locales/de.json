@@ -142,7 +142,27 @@
 		"perfLogCopied": "In die Zwischenablage kopiert",
 		"perfLogManualHint": "Zwischenablage nicht verfügbar — markieren und manuell kopieren",
 		"sendReadReceiptsLabel": "Lesebestätigungen senden",
-		"sendReadReceiptsHint": "Ihr Kontakt sieht, dass Sie den Chat geöffnet haben. Zustellbestätigungen werden weiter gesendet — sie bedeuten nur, dass die Nachricht dieses Gerät erreicht hat."
+		"sendReadReceiptsHint": "Ihr Kontakt sieht, dass Sie den Chat geöffnet haben. Zustellbestätigungen werden weiter gesendet — sie bedeuten nur, dass die Nachricht dieses Gerät erreicht hat.",
+		"pushBackground": {
+			"title": "Hintergrundbenachrichtigungen",
+			"hint": "Benachrichtigungen über neue Nachrichten und Anrufe erhalten, auch wenn Ugolok geschlossen ist",
+			"enableLabel": "Hintergrundbenachrichtigungen aktivieren",
+			"actionError": "Fehlgeschlagen — bitte erneut versuchen",
+			"batteryLabel": "Keine Akku-Einschränkungen",
+			"notificationsLabel": "Benachrichtigungen erlaubt",
+			"fullScreenLabel": "Vollbildanzeige für Anrufe erlaubt",
+			"runningLabel": "Verbindung aktiv",
+			"fixButton": "Beheben",
+			"lastConnectedLabel": "Letzte Verbindung",
+			"neverConnected": "noch nie",
+			"autostartTitle": "Autostart",
+			"autostartHint": "Auf manchen Telefonen (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) beendet das System Hintergrund-Apps selbst, um Akku zu sparen. Damit Benachrichtigungen zuverlässig ankommen, erlauben Sie Ugolok in den Herstellereinstellungen, im Hintergrund zu laufen und automatisch zu starten.",
+			"openAutostartButton": "Autostart-Einstellungen öffnen",
+			"privacyExplanation": "Der Benachrichtigungsserver erfährt nur den Zeitpunkt, zu dem eine Nachricht oder ein Anruf eintrifft — genau wie ein gewöhnlicher Relay-Server. Er sieht weder den Text noch den Absender noch den Inhalt.",
+			"unlockLimitation": "Wenn das System die App aus dem Speicher entfernt hat, müssen Sie beim Antippen einer Benachrichtigung erneut Ihr Passwort eingeben — ein Anruf kann enden, bevor Sie fertig sind.",
+			"onboardingToastTitle": "Hintergrundbenachrichtigungen",
+			"onboardingToastBody": "Erhalten Sie Benachrichtigungen über Nachrichten und Anrufe, auch wenn Ugolok geschlossen ist. Tippen Sie, um es einzurichten."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil und Hauptmenü",

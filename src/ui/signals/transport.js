@@ -4,6 +4,7 @@ import CryptoWorker from "../../workers/crypto.worker.js?worker&inline";
 import { BUILD_DEFAULT_RELAYS as DEFAULT_RELAYS, BUILD_BOOTSTRAP_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints } from "../../domain/settings/bootstrap-endpoints.js";
 import { getRuntimeConfig } from "../../domain/settings/runtime-config.js";
+import { notifyGroupsMayHaveChanged } from "../../domain/push/registration.js";
 import { getPlatform } from "../../platform/index.js";
 import { createRelayPool, publishToRelay, fetchFromRelay } from "../../core/transport/relay-pool.js";
 import { logInfo, logWarn } from "../../core/diag/boot-log.js";
@@ -2097,6 +2098,16 @@ export async function refreshGroupMessageSubscription(ownerPubkey, privKey, dbKe
 	);
 	const groupIds = groupRows.map((row) => row.groupId);
 	const contactPubkeys = [...new Set(groupRows.map((row) => row.contactPubkey))];
+
+	// Э-PUSH П3.3 — эта функция вызывается на КАЖДОЕ изменение состава групп
+	// (вступление/выход), а ТАКЖЕ безусловно на каждую отправку сообщения
+	// (см. комментарий выше). notifyGroupsMayHaveChanged сама дешёво
+	// сравнивает список с уже зарегистрированным на мосту и не делает сетевых
+	// вызовов, если он не изменился — безопасно звать на каждый чих. ДО
+	// раннего return ниже: переход "была хотя бы одна группа -> стало 0"
+	// (вышел из последней группы) тоже должен попасть в PUT.
+	notifyGroupsMayHaveChanged(ownerPubkey, privKey, dbKey, groupIds);
+
 	if (groupIds.length === 0) return;
 
 	if (!groupMessageSubscriber) {

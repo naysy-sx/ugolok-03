@@ -142,7 +142,27 @@
 		"perfLogCopied": "Panoya kopyalandı",
 		"perfLogManualHint": "Pano kullanılamıyor — seçip elle kopyalayın",
 		"sendReadReceiptsLabel": "Okundu bilgisi gönder",
-		"sendReadReceiptsHint": "Kişiniz sohbeti açtığınızı görür. İletildi bilgisi yine gider — yalnızca iletinin bu aygıta ulaştığını gösterir."
+		"sendReadReceiptsHint": "Kişiniz sohbeti açtığınızı görür. İletildi bilgisi yine gider — yalnızca iletinin bu aygıta ulaştığını gösterir.",
+		"pushBackground": {
+			"title": "Arka plan bildirimleri",
+			"hint": "Ugolok kapalıyken bile yeni mesaj ve arama bildirimleri alın",
+			"enableLabel": "Arka plan bildirimlerini etkinleştir",
+			"actionError": "Bir şeyler ters gitti — lütfen tekrar deneyin",
+			"batteryLabel": "Pil kısıtlaması yok",
+			"notificationsLabel": "Bildirimlere izin verildi",
+			"fullScreenLabel": "Tam ekran arama gösterimine izin verildi",
+			"runningLabel": "Bağlantı aktif",
+			"fixButton": "Düzelt",
+			"lastConnectedLabel": "Son bağlantı",
+			"neverConnected": "hiç",
+			"autostartTitle": "Otomatik başlatma",
+			"autostartHint": "Bazı telefonlarda (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) sistem, pil tasarrufu için arka plan uygulamalarını kendiliğinden kapatır. Bildirimlerin güvenilir şekilde gelmesi için üretici ayarlarından Ugolok'un arka planda çalışmasına ve otomatik başlamasına izin verin.",
+			"openAutostartButton": "Otomatik başlatma ayarlarını aç",
+			"privacyExplanation": "Bildirim sunucusu yalnızca bir mesajın veya aramanın ulaştığı anı bilir — sıradan bir aktarım sunucusu gibi. Metni, göndereni veya içeriği asla görmez.",
+			"unlockLimitation": "Sistem uygulamayı bellekten kaldırmışsa, bir bildirime dokunmak parolanızı yeniden girmenizi gerektirir — siz yazmayı bitirmeden arama sona erebilir.",
+			"onboardingToastTitle": "Arka plan bildirimleri",
+			"onboardingToastBody": "Ugolok kapalıyken bile mesaj ve arama bildirimleri alın. Ayarlamak için dokunun."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil ve ana menü",

@@ -29,6 +29,10 @@ _Актуально на 2026-09-05, описывает config.json и прио�
 
 Если эндпоинт недоступен (сеть, таймаут 3с, сервис лежит) — фолбэк на STUN-only (TURN-записи остаются в списке ICE-серверов, но без `username`/`credential` — браузер их просто не сможет использовать для релея). Запись в диагностику: «TURN: креды недоступны, только STUN». Звонок в одной сети (host/srflx-кандидаты) при этом всё ещё пройдёт; через симметричный NAT — нет, это ожидаемая деградация, не баг.
 
+## Push-мост (Э-PUSH, П1.3)
+
+`config.json.pushBridge` — необязательное поле, базовый внешний URL push-моста (`deploy/island/push-bridge.env.example`: `PUSH_PUBLIC_TOPIC_PREFIX`/`PUSH_REGISTER_URL` без хвоста `/register`), например `https://relay.ugolok.tech/push`. Парсится и пропускается как строка без интерпретации (`runtime-config.js`, тот же приём, что `turnCredentialsUrl`) — потребитель (платформенный адаптер `push`, ТЗ П3.1) появится позже. Поля нет — функция push недоступна в интерфейсе, без ошибок и деградации остального (ИП6 из `TZ-PUSH-ANDROID.md`).
+
 ## Секреты
 
 TURN credential в `deploy/config.example.json` — **только dev** (`ugolok` / `ugolok-dev`), это self-host/LAN путь, не официальный сайт (см. выше).

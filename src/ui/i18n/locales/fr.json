@@ -142,7 +142,27 @@
 		"perfLogCopied": "Copié dans le presse-papiers",
 		"perfLogManualHint": "Presse-papiers indisponible — sélectionnez et copiez manuellement",
 		"sendReadReceiptsLabel": "Envoyer les accusés de lecture",
-		"sendReadReceiptsHint": "Votre contact verra que vous avez ouvert la conversation. Les accusés de réception partent toujours — ils disent seulement que le message a atteint cet appareil."
+		"sendReadReceiptsHint": "Votre contact verra que vous avez ouvert la conversation. Les accusés de réception partent toujours — ils disent seulement que le message a atteint cet appareil.",
+		"pushBackground": {
+			"title": "Notifications en arrière-plan",
+			"hint": "Recevez des notifications pour les nouveaux messages et appels, même lorsque Ugolok est fermé",
+			"enableLabel": "Activer les notifications en arrière-plan",
+			"actionError": "Échec — veuillez réessayer",
+			"batteryLabel": "Aucune restriction de batterie",
+			"notificationsLabel": "Notifications autorisées",
+			"fullScreenLabel": "Affichage plein écran des appels autorisé",
+			"runningLabel": "Connexion active",
+			"fixButton": "Corriger",
+			"lastConnectedLabel": "Dernière connexion",
+			"neverConnected": "jamais",
+			"autostartTitle": "Démarrage automatique",
+			"autostartHint": "Sur certains téléphones (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo), le système arrête lui-même les applications en arrière-plan pour économiser la batterie. Pour que les notifications arrivent de manière fiable, autorisez Ugolok à s'exécuter en arrière-plan et à démarrer automatiquement dans les paramètres du fabricant.",
+			"openAutostartButton": "Ouvrir les paramètres de démarrage automatique",
+			"privacyExplanation": "Le serveur de notifications ne connaît que le moment où un message ou un appel arrive, comme un serveur relais ordinaire. Il ne voit jamais le texte, l'expéditeur ni le contenu.",
+			"unlockLimitation": "Si le système a déchargé l'application de la mémoire, appuyer sur une notification nécessitera de ressaisir votre mot de passe — un appel peut se terminer avant que vous ayez fini de le saisir.",
+			"onboardingToastTitle": "Notifications en arrière-plan",
+			"onboardingToastBody": "Recevez des notifications pour les messages et appels même lorsque Ugolok est fermé. Appuyez pour configurer."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil et menu principal",

@@ -6,6 +6,7 @@ import { t, tPlural, errorMessage, currentLocale } from "../signals/i18n.js";
 import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { login, setRememberedAccountId, getRememberedAccountId, dbKeySig } from "../signals/auth.js";
+import { syncPushOnLogin } from "../../domain/push/registration.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { applyCustomPalette } from "../theme/palette-apply.js";
 import { applyUiScale } from "../theme/ui-scale.js";
@@ -168,6 +169,12 @@ export default function Unlock() {
 			login(openLoginForId, account?.login ?? "", key);
 			setRememberedAccountId(openLoginForId);
 			recordLastUnlock(openLoginForId).catch(() => {});
+			// Э-PUSH П3.2 «продление раз в неделю при запуске» + первая регистрация
+			// для аккаунта, который ещё не видели, пока функция уже включена
+			// (мультиаккаунт). Fire-and-forget — тот же приём, что recordLastUnlock
+			// строкой выше: не блокирует вход сетевым запросом, сам по себе no-op,
+			// если push выключен/не поддерживается/сервер не настроен.
+			syncPushOnLogin(openLoginForId, key, dbKeySig.value).catch(() => {});
 			// Найдено пользователем (баг) — тема/масштаб/акцент применялись только
 			// внутри MainShell'а ПОСЛЕ навигации (app.jsx), поэтому на секунду
 			// показывался build-дефолт вместо сохранённой темы ЭТОГО аккаунта.
@@ -570,6 +577,8 @@ export default function Unlock() {
 							login(id, pendingLogin, privKey);
 							setRememberedAccountId(id);
 							recordLastUnlock(id).catch(() => {});
+							// Э-PUSH П3.2 — см. комментарий у другого вызова login() выше в этом файле.
+							syncPushOnLogin(id, privKey, dbKeySig.value).catch(() => {});
 							navigate("/main");
 						}}
 					>

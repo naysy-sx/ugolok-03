@@ -31,6 +31,7 @@ import { journalEntries, refreshJournal } from "./ui/signals/journal.js";
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
 import { getPlatform } from "./platform/index.js";
 import { pushToast } from "./ui/signals/toasts.js";
+import { isPushSupported, isPushEnabled, hasSeenPushOnboarding, markPushOnboardingSeen } from "./domain/push/registration.js";
 import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
 import DiagTraceBadge from "./ui/components/diag-trace-badge.jsx";
@@ -101,6 +102,27 @@ function MainShell() {
 	// перехвата Range (CONTRACTS.md/DESIGN.md). Один раз на приложение,
 	// не завязан на ownerPubkey (реестр открытых файлов — player-bridge.js).
 	useEffect(() => startPlayerBridge(), []);
+
+	// Э-PUSH П3.5 — одноразовое ненавязчивое предложение включить функцию
+	// (ИП6: не включать без согласия). Тост — уже существующая инфраструктура
+	// (toasts.js), не новый компонент: сам собой исчезает через ~4.5с, если
+	// проигнорировать, это и есть "ненавязчиво" — постоянный доступ к функции
+	// всегда есть в Настройках (П3.4). Флаг "видели" — device-local, не
+	// per-account (markPushOnboardingSeen), поэтому переключение между
+	// аккаунтами на этом устройстве не показывает тост повторно; отмечается
+	// ТОЛЬКО когда реально показан — если сейчас не supported (например
+	// сервер ещё не настроен), тост остаётся "не показанным" и появится
+	// позже, когда условие выполнится.
+	useEffect(() => {
+		if (hasSeenPushOnboarding()) return;
+		if (!isPushSupported() || isPushEnabled()) return;
+		markPushOnboardingSeen();
+		pushToast({
+			title: t("settings.pushBackground.onboardingToastTitle"),
+			body: t("settings.pushBackground.onboardingToastBody"),
+			onClick: () => goTo({ kind: "settings", tab: "notifications" }),
+		});
+	}, [ownerPubkey]);
 
 	// Э1.4/§4.3 ТЗ-NATIVE-APPS — на вебе клик по внешней ссылке остаётся
 	// стандартным поведением браузера (перехватчик сразу выходит, ничего не

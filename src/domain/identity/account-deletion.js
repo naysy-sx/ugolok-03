@@ -19,6 +19,7 @@
 //   потребовало бы расшифровать КАЖДОЕ отправленное сообщение/пост ради
 //   извлечения digest'а, сознательно вне периметра этого прохода.
 import { db } from "../../core/store/database.js";
+import { unregisterPushForAccount } from "../push/registration.js";
 import { buildProfileEvent } from "./profile.js";
 import { getProfile } from "../../core/crypto/keystore.js";
 import { listOwnedChannels, deleteChannel } from "../content/channel.js";
@@ -187,6 +188,13 @@ async function wipeLocalData(ownerPubkey) {
 // Точка входа — вызывается из UI (settings.jsx) ПОСЛЕ подтверждения
 // (повторный ввод логина+пароля — проверяется вызывающей стороной).
 export async function deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, serverUrl, opts = {}) {
+	// Э-PUSH П3.2 «при удалении аккаунта — DELETE и снятие топика». privKey
+	// ещё валиден (параметр, не перечитывается из keystore) — не важно, что это
+	// best-effort ДО wipeLocalData ниже: unregisterPushForAccount читает только
+	// localStorage, keystore здесь не трогает.
+	try {
+		await unregisterPushForAccount(ownerPubkey, privKey);
+	} catch {}
 	try {
 		await tombstoneProfile(ownerPubkey, login, privKey, publish);
 	} catch {}

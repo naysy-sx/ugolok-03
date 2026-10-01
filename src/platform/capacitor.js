@@ -8,7 +8,7 @@
 import { notImplemented } from "./native-stub.js";
 import { exceedsMediaSizeLimit, getPlayableSourceUnderLimit } from "./media-native-fallback.js";
 import { APP_VERSION, BUILD_HASH } from "../config.js";
-import { loadRuntimeConfig } from "../domain/settings/runtime-config.js";
+import { loadRuntimeConfig, getRuntimeConfig } from "../domain/settings/runtime-config.js";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import { SystemBars, SystemBarsStyle, registerPlugin } from "@capacitor/core";
@@ -100,6 +100,57 @@ const SecureScreen = registerPlugin("SecureScreen");
 
 async function setSecureScreen(enabled) {
 	await SecureScreen.setEnabled({ enabled });
+}
+
+// Э-PUSH (TZ-PUSH-ANDROID.md, П2/П3.1) — собственный маленький нативный плагин
+// UgolokPush (Kotlin, native/mobile/android/.../UgolokPushPlugin.kt), тот же
+// приём registerPlugin, что SecureScreen выше. available() — СИНХРОННО, без
+// обращения к нативному коду вовсе: единственное условие — сервер вообще
+// предлагает push (config.json.pushBridge, П1.3); опрашивать нативный статус
+// здесь не нужно и не нужно ждать промис там, где вызывающий код (П3.4) ждёт
+// простого true/false для решения "показывать ли раздел настроек".
+const UgolokPush = registerPlugin("UgolokPush");
+
+function pushAvailable() {
+	return typeof getRuntimeConfig().pushBridge === "string";
+}
+
+async function pushEnable() {
+	await UgolokPush.enable();
+}
+
+async function pushDisable() {
+	await UgolokPush.disable();
+}
+
+// status() — П2.5 контракт нативного плагина ({running, batteryExempt,
+// fullScreenAllowed, notificationsAllowed, lastConnectedAt}) уже совпадает
+// буквально с тем, что ждёт П3.1/П3.4 — передаётся как есть, без пересборки
+// формы (в отличие от notifications.permission() выше, где сопоставление
+// нужно из-за разных словарей значений между Capacitor-плагином и контрактом).
+async function pushStatus() {
+	return UgolokPush.status();
+}
+
+// syncFilters — П3.1 на уровне JS-адаптера это ровно setTopics нативного
+// плагина (П2.5): список {accountId, endpoint} — endpoint это то, что вернул
+// POST/PUT /push/register (registerResponse.endpoint, agent/internal/
+// pushbridge/server.go) для КАЖДОГО локального аккаунта, у которого включён
+// push (мультиаккаунт — один топик на аккаунт, П2.1). Собственно HTTP-запрос
+// к мосту (NIP-98, POST/PUT/DELETE) — не здесь: это платформо-независимая
+// логика (src/core/transport/push-bridge-client.js, работает одинаково через
+// fetch на любой платформе), вызывается из доменного слоя (П3.2/П3.3) ДО
+// syncFilters — сюда попадает уже готовый список конечных точек.
+async function pushSyncFilters(topics) {
+	await UgolokPush.setTopics({ topics: topics ?? [] });
+}
+
+async function pushOpenBatterySettings() {
+	await UgolokPush.openBatterySettings();
+}
+
+async function pushOpenAutostartSettings() {
+	await UgolokPush.openAutostartSettings();
 }
 
 // Э4.8 — локальные уведомления через @capacitor/local-notifications. Только
@@ -296,10 +347,13 @@ export function createPlatform() {
 		},
 
 		push: {
-			supported: notImplemented(SHELL, "push.supported"),
-			getToken: notImplemented(SHELL, "push.getToken"),
-			onTokenChange: notImplemented(SHELL, "push.onTokenChange"),
-			onWake: notImplemented(SHELL, "push.onWake"),
+			available: pushAvailable,
+			enable: pushEnable,
+			disable: pushDisable,
+			status: pushStatus,
+			syncFilters: pushSyncFilters,
+			openBatterySettings: pushOpenBatterySettings,
+			openAutostartSettings: pushOpenAutostartSettings,
 		},
 	};
 }

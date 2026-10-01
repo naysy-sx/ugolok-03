@@ -142,7 +142,27 @@
 		"perfLogCopied": "Copied to clipboard",
 		"perfLogManualHint": "Clipboard unavailable — select and copy manually",
 		"sendReadReceiptsLabel": "Send read receipts",
-		"sendReadReceiptsHint": "Your contact will see that you opened the chat. Delivered receipts still go out — they only mean the message reached this device."
+		"sendReadReceiptsHint": "Your contact will see that you opened the chat. Delivered receipts still go out — they only mean the message reached this device.",
+		"pushBackground": {
+			"title": "Background notifications",
+			"hint": "Get notified about new messages and calls even when Ugolok is closed",
+			"enableLabel": "Enable background notifications",
+			"actionError": "Something went wrong — please try again",
+			"batteryLabel": "No battery restrictions",
+			"notificationsLabel": "Notifications allowed",
+			"fullScreenLabel": "Full-screen call display allowed",
+			"runningLabel": "Connection active",
+			"fixButton": "Fix",
+			"lastConnectedLabel": "Last connected",
+			"neverConnected": "never",
+			"autostartTitle": "Autostart",
+			"autostartHint": "On some phones (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) the system shuts down background apps to save battery. For notifications to arrive reliably, allow Ugolok to run in the background and start automatically in the manufacturer's settings.",
+			"openAutostartButton": "Open autostart settings",
+			"privacyExplanation": "The notification server only learns the moment a message or call arrives — the same as any regular relay server. It never sees the text, the sender, or the content.",
+			"unlockLimitation": "If the system has unloaded the app from memory, tapping a notification will require entering your password again — a call may end before you finish typing it.",
+			"onboardingToastTitle": "Background notifications",
+			"onboardingToastBody": "Get notified about messages and calls even when Ugolok is closed. Tap to set up."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",

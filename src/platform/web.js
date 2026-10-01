@@ -162,19 +162,19 @@ function setBackHandler() {
 function setSystemBarsTheme() {}
 function setSecureScreen() {}
 
-// push — стаб контракта (PUSH-DESIGN.md, приоритет владельца 2026-09-27):
-// реализации пока нет ни на одной платформе, ждёт ответов на В-push-1..5.
-function pushSupported() {
+// push — Э-PUSH (TZ-PUSH-ANDROID.md, П3.1): «Веб и Tauri: available() → false,
+// остальное ничего не делает». Функция целиком Android-only (foreground-
+// service с постоянным соединением — веб-платформа этого не может в принципе,
+// Tauri пока не в фокусе, ТЗ явно ограничивает Э-PUSH Android). status()
+// возвращает форму контракта со всем false/null, а не бросает — вызывающий
+// код (экран «Уведомления в фоне», П3.4) не должен ветвиться по платформе
+// сам, availability уже сказала всё, что нужно знать.
+function pushAvailable() {
 	return false;
 }
-async function getToken() {
-	return null;
-}
-function onTokenChange() {
-	return () => {};
-}
-function onWake() {
-	return () => {};
+async function pushNoop() {}
+async function pushStatus() {
+	return { running: false, batteryExempt: false, fullScreenAllowed: false, notificationsAllowed: false, lastConnectedAt: null };
 }
 
 export function createPlatform() {
@@ -250,10 +250,13 @@ export function createPlatform() {
 		},
 
 		push: {
-			supported: pushSupported,
-			getToken,
-			onTokenChange,
-			onWake,
+			available: pushAvailable,
+			enable: pushNoop,
+			disable: pushNoop,
+			status: pushStatus,
+			syncFilters: pushNoop,
+			openBatterySettings: pushNoop,
+			openAutostartSettings: pushNoop,
 		},
 	};
 }

@@ -55,6 +55,13 @@ function validate(raw) {
 	// turnCredentialsUrl — этап 6, здесь только пропускаем как строку без
 	// дальнейшей интерпретации (потребитель появится там же).
 	if (typeof raw.turnCredentialsUrl === "string" && raw.turnCredentialsUrl) out.turnCredentialsUrl = raw.turnCredentialsUrl;
+	// pushBridge — Э-PUSH П1.3 «Обнаружение»: базовый внешний URL моста push
+	// (deploy/island/push-bridge.env.example: PUSH_REGISTER_URL без "/register",
+	// PUSH_PUBLIC_TOPIC_PREFIX). Тот же приём, что turnCredentialsUrl — просто
+	// строка без интерпретации здесь, потребитель (платформенный адаптер push,
+	// П3) появится позже. Поля нет / остров без push (ИП6) → функция push
+	// недоступна в интерфейсе — П0.3/П1.4 «по умолчанию выключен».
+	if (typeof raw.pushBridge === "string" && raw.pushBridge) out.pushBridge = raw.pushBridge;
 	// AUDIT-EGOROD: явное разрешение слать события на inbox-relay ПОЛУЧАТЕЛЯ (чужие
 	// серверы). По умолчанию выключено — см. dm-relay-list.js::selectInboxRelays.
 	if (raw.allowForeignInboxRelays === true) out.allowForeignInboxRelays = true;

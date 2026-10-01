@@ -134,6 +134,20 @@ function info() {
 	};
 }
 
+// push — Э-PUSH (TZ-PUSH-ANDROID.md, П3.1): «Веб и Tauri: available() → false,
+// остальное ничего не делает» — явное, буквальное указание ТЗ, сознательное
+// отступление от общего для этого файла правила «не готово — бросает»
+// (см. заголовок файла): функция ограничена Android не потому, что на Tauri
+// её «ещё не реализовали», а потому что архитектура (foreground-service с
+// постоянным соединением) не имеет аналога на десктопе в принципе.
+function pushAvailable() {
+	return false;
+}
+async function pushNoop() {}
+async function pushStatus() {
+	return { running: false, batteryExempt: false, fullScreenAllowed: false, notificationsAllowed: false, lastConnectedAt: null };
+}
+
 export function createPlatform() {
 	return {
 		shell: SHELL,
@@ -188,10 +202,13 @@ export function createPlatform() {
 		},
 
 		push: {
-			supported: notImplemented(SHELL, "push.supported"),
-			getToken: notImplemented(SHELL, "push.getToken"),
-			onTokenChange: notImplemented(SHELL, "push.onTokenChange"),
-			onWake: notImplemented(SHELL, "push.onWake"),
+			available: pushAvailable,
+			enable: pushNoop,
+			disable: pushNoop,
+			status: pushStatus,
+			syncFilters: pushNoop,
+			openBatterySettings: pushNoop,
+			openAutostartSettings: pushNoop,
 		},
 	};
 }

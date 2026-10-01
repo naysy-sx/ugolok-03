@@ -1,0 +1,28 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+*.log
+
+captures/
+*.iml
+.idea/
+
+.externalNativeBuild
+.cxx/
+*.hprof

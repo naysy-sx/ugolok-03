@@ -4,6 +4,7 @@ import android.os.Bundle;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import tech.ugolok.app.push.UgolokPushPlugin;
 
 // Э4.7 ТЗ-NATIVE-APPS — найдено живьём (эмулятор, Android 16/API 36):
 // WebView не меняет размер при появлении клавиатуры (поле ввода может
@@ -22,9 +23,10 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-		// Э4.10 — registerPlugin ОБЯЗАН быть ДО super.onCreate(): Bridge
+		// Э4.10/Э-PUSH — registerPlugin ОБЯЗАН быть ДО super.onCreate(): Bridge
 		// загружает уже зарегистрированные плагины внутри super.onCreate().
 		registerPlugin(SecureScreenPlugin.class);
+		registerPlugin(UgolokPushPlugin.class);
 		super.onCreate(savedInstanceState);
 		final android.webkit.WebView webView = getBridge().getWebView();
 		ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {

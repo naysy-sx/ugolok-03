@@ -32,12 +32,14 @@ test("getPlatform(): __TARGET__='capacitor' -> capacitor-адаптер (Э2.1/�
 	resetPlatformForTests();
 	const platform = getPlatform();
 	assert.equal(platform.shell, "capacitor");
-	assert.throws(() => platform.push.supported(), /не реализовано/);
+	// Э-PUSH П3.1 — available() реализован по-настоящему (не заготовка): без
+	// загруженного config.json.pushBridge -> false, не бросает.
+	assert.equal(platform.push.available(), false);
 	delete globalThis.__TARGET__;
 	resetPlatformForTests();
 });
 
-test("getPlatform(): __TARGET__='tauri' -> tauri-адаптер (Э3: config/notifications/files/links/media реализованы, lifecycle/updates/ui/call/push — ещё нет)", () => {
+test("getPlatform(): __TARGET__='tauri' -> tauri-адаптер (Э3: config/notifications/files/links/media реализованы, lifecycle/updates/ui/call — ещё нет; push — П3.1, буквально всегда available()=false на этой платформе)", () => {
 	globalThis.__TARGET__ = "tauri";
 	resetPlatformForTests();
 	const platform = getPlatform();
@@ -66,12 +68,21 @@ test("web: shell/os/info() — форма контракта", () => {
 	assert.equal(typeof info.buildHash, "string");
 });
 
-test("web: push — стаб, ничего не поддерживает (PUSH-DESIGN.md, реализации ещё нет)", async () => {
+test("web: push — available()=false, остальное ничего не делает (TZ-PUSH-ANDROID.md П3.1: функция Android-only)", async () => {
 	const platform = createWebPlatform();
-	assert.equal(platform.push.supported(), false);
-	assert.equal(await platform.push.getToken(), null);
-	assert.equal(typeof platform.push.onTokenChange(() => {}), "function");
-	assert.equal(typeof platform.push.onWake(() => {}), "function");
+	assert.equal(platform.push.available(), false);
+	await assert.doesNotReject(() => platform.push.enable());
+	await assert.doesNotReject(() => platform.push.disable());
+	await assert.doesNotReject(() => platform.push.syncFilters([{ accountId: "a", endpoint: "https://x" }]));
+	await assert.doesNotReject(() => platform.push.openBatterySettings());
+	await assert.doesNotReject(() => platform.push.openAutostartSettings());
+	assert.deepEqual(await platform.push.status(), {
+		running: false,
+		batteryExempt: false,
+		fullScreenAllowed: false,
+		notificationsAllowed: false,
+		lastConnectedAt: null,
+	});
 });
 
 test("web: media.getPlayableSource — бросает (Э2.4: веб навсегда остаётся на SW-плеере, метод там не вызывается)", async () => {
@@ -324,11 +335,11 @@ test("capacitor/tauri: не-media методы бросают 'не реализ
 	// SecureScreenPlugin.java), не тестируются тут юнит-тестом: реальный
 	// вызов требует нативного моста, мок был бы фиктивным.
 	assert.throws(() => capacitor.ui.keepAwake(), /ui\.keepAwake/);
-	assert.throws(() => capacitor.push.supported(), /push\.supported/);
 	// tauri.js — Э3: config/notifications/files/links/info реализованы по-
-	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call/push — ещё нет.
+	// настоящему (см. отдельные тесты ниже), lifecycle/updates/ui/call — ещё нет.
+	// push — реализован на обеих (П3.1: no-op на tauri, реальный мост на
+	// capacitor), больше не входит в этот список "бросающих" методов.
 	assert.throws(() => tauri.lifecycle.onResume(), /lifecycle\.onResume/);
-	assert.throws(() => tauri.push.supported(), /push\.supported/);
 });
 
 // НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini, Э3, 2026-09-27) — platform.info() был
@@ -358,5 +369,22 @@ test("capacitor: config.load — настоящая реализация (loadRu
 	const fetchImpl = async () => ({ ok: true, json: async () => ({ relays: ["wss://relay.example"] }) });
 	await capacitor.config.load({ fetchImpl });
 	assert.deepEqual(getRuntimeConfig().relays, ["wss://relay.example"]);
+	resetRuntimeConfig();
+});
+
+// Э-PUSH П1.3/П3.1 — available() синхронно читает уже загруженный runtime-
+// конфиг (не обращается к нативному плагину вовсе): реальная логика, не
+// сквозной проброс в native — в отличие от enable/disable/status/syncFilters/
+// openBatterySettings/openAutostartSettings, которые тонко оборачивают
+// UgolokPush и намеренно не юнит-тестируются здесь (комментарий выше, строка
+// ~330: реальный вызов требует нативного моста, мок был бы фиктивным).
+test("capacitor: push.available() — зависит от config.json.pushBridge, не от нативного плагина", async () => {
+	const capacitor = createCapacitorPlatform();
+	resetRuntimeConfig();
+	assert.equal(capacitor.push.available(), false);
+
+	const fetchImpl = async () => ({ ok: true, json: async () => ({ pushBridge: "https://relay.ugolok.tech/push" }) });
+	await capacitor.config.load({ fetchImpl });
+	assert.equal(capacitor.push.available(), true);
 	resetRuntimeConfig();
 });

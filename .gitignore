@@ -21,6 +21,12 @@ deploy/.env
 deploy/island/coturn.conf
 # TURN_STATIC_AUTH_SECRET для turncreds-server (этап 6, TZ-cicd-hardening) — тот же принцип.
 deploy/island/turncreds.env
+# Э-PUSH (TZ-PUSH-ANDROID.md, П1) — секреты моста/ntfy, тот же принцип.
+deploy/island/push-bridge.env
+deploy/island/push-bridge-plugin.env
+# ntfy auth.db/cache.db создаются в volume /var/lib/ugolok/ntfy на VPS, не в git —
+# перечислено здесь на случай локального docker compose up с bind-mount вместо volume.
+deploy/island/ntfy-data/
 
 # server/strfry — тестовый relay, поднимается локально по docs в server/README.md.
 # Исходники/сборка/БД не версионируются (бинарь платформозависим, БД — локальные
