@@ -133,7 +133,7 @@ rollback_deploy() {
 		rsync -a --delete --omit-dir-times "$WWW_PREV/" "$WWW/" || echo "deploy-env: не удалось откатить PWA" >&2
 	fi
 	if [[ -d "$ISLAND_PREV" ]]; then
-		rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" --exclude coturn.conf --exclude turncreds.env "$ISLAND_PREV/" "$ISLAND_DST/" || echo "deploy-env: не удалось откатить конфиги" >&2
+		rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" --exclude coturn.conf --exclude turncreds.env --exclude push-bridge.env --exclude push-bridge-plugin.env "$ISLAND_PREV/" "$ISLAND_DST/" || echo "deploy-env: не удалось откатить конфиги" >&2
 	fi
 	for img in "${DEPLOY_IMAGES[@]}"; do
 		docker image inspect "$img:prev" >/dev/null 2>&1 && docker tag "$img:prev" "$img:local" || true
@@ -232,13 +232,20 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	# живёт только в $ISLAND_DST. Живая проверка (прод, run #33) — без этого
 	# исключения --delete стирал его же в ЭТОМ прогоне, до docker compose up,
 	# который его тут же требует (env_file) — деплой ронял то, что сам создал
-	# оператор минуту назад.
+	# оператор минуту назад. push-bridge.env/push-bridge-plugin.env (Э-PUSH
+	# П1) — тот же самый класс бага, живая проверка (прод, run 210,
+	# 2026-10-01): созданы вручную на VPS ЗАРАНЕЕ (см. deploy/island/README.md,
+	# «Секрет push-моста»), этот rsync стёр их в первом же prod-деплое после
+	# добавления push-bridge-server в docker-compose.yml, тот тут же потребовал
+	# их обратно (env_file) и упал.
 	rsync -a --omit-dir-times --delete \
 		--exclude 'relay-src' \
 		--exclude 'blossom-src' \
 		--exclude 'agent-src' \
 		--exclude 'coturn.conf' \
 		--exclude 'turncreds.env' \
+		--exclude 'push-bridge.env' \
+		--exclude 'push-bridge-plugin.env' \
 		--exclude 'policy' \
 		--exclude 'policy-conf' \
 		--exclude '.git' \

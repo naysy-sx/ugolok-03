@@ -387,6 +387,12 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	const islandRsyncBlock = deploy.slice(deploy.indexOf("rsync -a --omit-dir-times"), deploy.indexOf('"$ISLAND_SRC/"'));
 	assert.match(islandRsyncBlock, /--exclude 'coturn\.conf'/);
 	assert.match(islandRsyncBlock, /--exclude 'turncreds\.env'/);
+	// Живая проверка (прод, run 210, 2026-10-01): ровно тот же класс бага —
+	// push-bridge.env/push-bridge-plugin.env (Э-PUSH П1, созданы вручную на
+	// VPS заранее) стёрты этим же --delete в первом prod-деплое, который их
+	// добавил в docker-compose.yml (env_file) — деплой упал тут же.
+	assert.match(islandRsyncBlock, /--exclude 'push-bridge\.env'/);
+	assert.match(islandRsyncBlock, /--exclude 'push-bridge-plugin\.env'/);
 
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
 	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
