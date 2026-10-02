@@ -423,6 +423,13 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /ICE_JSON='\[.*\]'/);
 	assert.equal(/username|credential/.test(deploy.match(/ICE_JSON='(\[.*\])'/)[1]), false, "ICE_JSON не должен нести username/credential");
 	assert.match(deploy, /turnCredentialsUrl:\\"\/api\/turn-credentials\\"/);
+	// Живая находка (владелец, релиз v0.0.1, 2026-10-02) — pushBridge никогда
+	// не попадал в config.json ни на одном окружении, из-за чего весь экран
+	// "Уведомления в фоне" был невидим (isPushSupported() требует строку).
+	// Остров без push-bridge-server (test) не должен его получать (ИП6) —
+	// только prod, тем же "остров себя не выдаёт" принципом, что уже есть у
+	// push-forward.mjs (tests/push-forward.test.js).
+	assert.match(deploy, /isProd\s*\?\s*\{pushBridge:\\"https:\/\/relay\.ugolok\.tech\/push\\"\}\s*:\s*\{\}/);
 
 	// Этап 7: flock (два быстрых push не гонят rsync --delete параллельно),
 	// BUILD_HASH с хоста, схлопнутые if/elif (было — два одинаковых блока).

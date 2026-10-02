@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"ugolok.tech/agent/internal/auth"
@@ -74,6 +75,23 @@ func main() {
 		addr = defaultListenAddr
 	}
 
+	// Тот же набор origin'ов и тот же приём переопределения, что у
+	// turncreds-server (agent/cmd/turncreds-server/main.go) — тот же класс
+	// проблемы (нативная оболочка грузит страницу со своего, не ugolok.tech,
+	// origin), найден здесь позже и независимо, см. комментарий у
+	// handleRegister (pushbridge/server.go).
+	allowedOrigins := map[string]bool{
+		"https://ugolok.tech":      true,
+		"https://test.ugolok.tech": true,
+		"tauri://localhost":        true,
+		"http://tauri.localhost":   true,
+		"https://tauri.localhost":  true,
+		"https://localhost":        true,
+	}
+	if raw := os.Getenv("PUSH_CORS_ORIGINS"); raw != "" {
+		allowedOrigins = parseOrigins(raw)
+	}
+
 	store, err := pushbridge.OpenStore(dbPath)
 	if err != nil {
 		log.Fatalf("push-bridge-server: %v", err)
@@ -82,7 +100,7 @@ func main() {
 
 	coalescer := pushbridge.NewCoalescer(hourlyCap)
 	publisher := pushbridge.NewNtfyPublisher(ntfyBaseURL, ntfyToken)
-	srv := pushbridge.NewServer(store, coalescer, publisher, internalToken, registerURL, publicTopicPrefix)
+	srv := pushbridge.NewServer(store, coalescer, publisher, internalToken, registerURL, publicTopicPrefix, allowedOrigins)
 
 	go expireLoop(store)
 
@@ -118,4 +136,15 @@ func expireLoop(store *pushbridge.Store) {
 			log.Printf("push-bridge-server: удалено истёкших регистраций: %d", n)
 		}
 	}
+}
+
+func parseOrigins(raw string) map[string]bool {
+	out := map[string]bool{}
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			out[o] = true
+		}
+	}
+	return out
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +59,7 @@ func newTestServer(t *testing.T) (*Server, *mockNtfy, []byte) {
 	mock := newMockNtfy(t)
 	publisher := NewNtfyPublisher(mock.srv.URL, "ntfy-token")
 	internalToken := []byte("0123456789abcdef0123456789abcdef")
-	srv := NewServer(store, coalescer, publisher, internalToken, registerURL, "https://relay.ugolok.test/push")
+	srv := NewServer(store, coalescer, publisher, internalToken, registerURL, "https://relay.ugolok.test/push", map[string]bool{"https://localhost": true})
 	return srv, mock, internalToken
 }
 
@@ -112,6 +113,53 @@ func TestHandleRegister_POST_CreatesRegistration(t *testing.T) {
 	}
 	if got.Topic != resp.Topic || len(got.Groups) != 2 {
 		t.Fatalf("stored registration mismatch: %+v", got)
+	}
+}
+
+// НАЙДЕНО ЖИВЬЁ (владелец, релизный APK v0.0.1, 2026-10-02) — без этих
+// заголовков нативная оболочка (Origin: https://localhost) не могла
+// зарегистрироваться вовсе, браузер/WebView блокировал fetch ещё до отправки.
+func TestHandleRegister_CORS_AllowedOriginGetsHeader(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	sk := nostr.GeneratePrivateKey()
+	req := signedRegisterRequest(t, sk, http.MethodPost, nil)
+	req.Header.Set("Origin", "https://localhost")
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://localhost" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, хотим https://localhost", got)
+	}
+}
+
+func TestHandleRegister_CORS_UnknownOriginGetsNoHeader(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	sk := nostr.GeneratePrivateKey()
+	req := signedRegisterRequest(t, sk, http.MethodPost, nil)
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Access-Control-Allow-Origin не должен быть выставлен для чужого origin, получено %q", got)
+	}
+}
+
+func TestHandleRegister_CORS_PreflightOPTIONS(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodOptions, "/push/register", nil)
+	req.Header.Set("Origin", "https://localhost")
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://localhost" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, хотим https://localhost", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") || !strings.Contains(got, "DELETE") {
+		t.Fatalf("Access-Control-Allow-Methods = %q, хотим POST/PUT/DELETE", got)
 	}
 }
 

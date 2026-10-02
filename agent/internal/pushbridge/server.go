@@ -30,22 +30,24 @@ import (
 const MaxGroupsPerRegistration = 300
 
 type Server struct {
-	store        *Store
-	coalescer    *Coalescer
-	publisher    *NtfyPublisher
-	internalAuth []byte // agent/internal/auth токен для /internal/event
-	registerURL  string // точный внешний URL /push/register — сверяется с тегом u (NIP-98)
-	publicTopic  string // внешний префикс для поля endpoint в ответе (см. ntfy.go/README)
+	store          *Store
+	coalescer      *Coalescer
+	publisher      *NtfyPublisher
+	internalAuth   []byte // agent/internal/auth токен для /internal/event
+	registerURL    string // точный внешний URL /push/register — сверяется с тегом u (NIP-98)
+	publicTopic    string // внешний префикс для поля endpoint в ответе (см. ntfy.go/README)
+	allowedOrigins map[string]bool
 }
 
-func NewServer(store *Store, coalescer *Coalescer, publisher *NtfyPublisher, internalAuthToken []byte, registerURL, publicTopicPrefix string) *Server {
+func NewServer(store *Store, coalescer *Coalescer, publisher *NtfyPublisher, internalAuthToken []byte, registerURL, publicTopicPrefix string, allowedOrigins map[string]bool) *Server {
 	return &Server{
-		store:        store,
-		coalescer:    coalescer,
-		publisher:    publisher,
-		internalAuth: internalAuthToken,
-		registerURL:  registerURL,
-		publicTopic:  strings.TrimRight(publicTopicPrefix, "/"),
+		store:          store,
+		coalescer:      coalescer,
+		publisher:      publisher,
+		internalAuth:   internalAuthToken,
+		registerURL:    registerURL,
+		publicTopic:    strings.TrimRight(publicTopicPrefix, "/"),
+		allowedOrigins: allowedOrigins,
 	}
 }
 
@@ -72,7 +74,24 @@ type registerResponse struct {
 	ExpiresAt int64  `json:"expires_at"`
 }
 
+// НАЙДЕНО ЖИВЬЁ (владелец, релизный APK v0.0.1, 2026-10-02) — нативная
+// оболочка грузит страницу не с ugolok.tech, а со своего внутреннего origin
+// (https://localhost на Capacitor/Android, tauri://localhost и т.п. на
+// десктопе) — тот же класс проблемы, что уже чинили для TURN-кредов
+// (turncreds-server/main.go, Э3). Без Access-Control-Allow-Origin браузер/
+// WebView блокировал ЛЮБОЙ fetch к /push/register ещё до отправки — кнопка
+// "Включить уведомления в фоне" в настройках всегда падала с общей ошибкой.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if origin := r.Header.Get("Origin"); origin != "" && s.allowedOrigins[origin] {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+	}
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Methods", "POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
