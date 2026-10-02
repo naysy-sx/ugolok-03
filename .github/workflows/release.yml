@@ -1,7 +1,16 @@
-# Зеркало для GitHub (naysy-sx/ugolok-03) — гоняется только если тег туда
-# тоже запушен. origin — Forgejo (git.ugolok.tech). На Forgejo не
-# используется (.forgejo/workflows/release.yml — не запускается вовсе,
-# см. docs/delivery.md §5, PROCESS-DOCS/VPS/TZ-cicd-hardening.md этап 5).
+# Единственное место, где собираются и публикуются релизы (PWA + Android +
+# Windows + Linux + macOS). Запускается только на GitHub (ubuntu-latest/
+# windows-latest/macos-latest) — self-hosted раннер "ugolok" на Forgejo
+# ограничен 2 ГБ RAM в Docker и не тянет Android SDK/Gradle или сборку Tauri
+# (тот же принцип, что в native-android-build.yml и native-desktop-build.yml).
+#
+# Тег нужно запушить в ОБА remote (scripts/cut-release.sh делает это) — у
+# Forgejo (origin) нет push-mirror на GitHub (проверено API), так что без
+# ручного/скриптового push сюда тег этот workflow не увидит.
+#
+# Готовые пакеты публикуются в Forgejo Releases (git.ugolok.tech/naysy/
+# ugolok/releases) через REST API последним job-ом (publish) — отдельного
+# действия от человека после этого не требуется.
 name: release
 
 on:
@@ -10,10 +19,10 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  pack-pwa:
     if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     steps:
@@ -34,12 +43,8 @@ jobs:
         run: bash scripts/release-pack.sh "${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v5
         with:
-          name: ugolok-updates
-          path: dist-updates/
-      # GitHub-only. На Forgejo заменить на forgejo-release / загрузку файлов в Release.
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
+          name: release-pwa
+          path: |
             dist-updates/version.json
             dist-updates/changelog.md
             dist-updates/latest/index.html
@@ -47,3 +52,229 @@ jobs:
             dist-updates/latest/SHA256SUMS
             dist-updates/latest/version.json
             dist-updates/latest/config.example.json
+          if-no-files-found: error
+
+  android:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # fetch-depth: 0 обязателен — build.gradle берёт versionCode из
+          # `git rev-list --count HEAD`, при поверхностном клоне он всегда
+          # стал бы 1 (Android отказывается ставить такое "обновление").
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Установить Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: npm ci (корень)
+        run: npm ci
+
+      - name: Собрать веб-бандл под Capacitor
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npm run build:capacitor
+
+      - name: npm ci (native/mobile)
+        working-directory: native/mobile
+        run: npm ci
+
+      - name: cap sync android
+        working-directory: native/mobile
+        run: npx cap sync android
+
+      - name: Декодировать release-keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "${{ runner.temp }}/ugolok-release.jks"
+
+      - name: Собрать подписанный release APK + AAB
+        working-directory: native/mobile/android
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/ugolok-release.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_NAME: ${{ github.ref_name }}
+        run: |
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Удалить keystore с раннера
+        if: always()
+        run: rm -f "${{ runner.temp }}/ugolok-release.jks"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-android
+          path: |
+            native/mobile/android/app/build/outputs/apk/release/*.apk
+            native/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  windows:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Отключить Windows Defender real-time scanning (известная причина файловых блокировок в tauri-build на windows-latest, см. Э0)
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Собрать и упаковать (NSIS, release)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-windows
+          path: native/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  linux:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Установить системные зависимости Tauri 2 (webkit2gtk-4.1)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            build-essential \
+            curl wget file libssl-dev
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Добавить своп (линковка Tauri+WebKit пикует по памяти на ubuntu-latest, см. Э0)
+        run: |
+          sudo fallocate -l 8G /extra-swapfile
+          sudo chmod 600 /extra-swapfile
+          sudo mkswap /extra-swapfile
+          sudo swapon /extra-swapfile
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Собрать и упаковать (AppImage + deb, release)
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-linux
+          path: |
+            native/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            native/desktop/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+  macos:
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: npm ci
+        run: npm ci
+
+      - name: "Собрать и упаковать (DMG, release) — ad-hoc подпись, без нотаризации Apple: Gatekeeper предупредит про неизвестного разработчика"
+        working-directory: native/desktop/src-tauri
+        env:
+          NATIVE_CONFIG_JSON: deploy/config.native-prod.json
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release-macos
+          path: native/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [pack-pwa, android, windows, linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - name: Опубликовать релиз в Forgejo (git.ugolok.tech) и загрузить все пакеты
+        env:
+          FORGEJO_RELEASE_TOKEN: ${{ secrets.FORGEJO_RELEASE_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          api="https://git.ugolok.tech/api/v1/repos/naysy/ugolok"
+
+          # Релиз мог уже существовать (например, создан вручную для первого
+          # пакета до полной настройки этого pipeline) — тогда используем его.
+          existing_id=$(curl -sf -H "Authorization: token ${FORGEJO_RELEASE_TOKEN}" \
+            "${api}/releases/tags/${TAG}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).id)}catch{console.log('')}})" || true)
+
+          if [ -n "$existing_id" ]; then
+            release_id="$existing_id"
+          else
+            release_id=$(curl -sf -X POST "${api}/releases" \
+              -H "Authorization: token ${FORGEJO_RELEASE_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$(node -e "console.log(JSON.stringify({tag_name: process.env.TAG, name: process.env.TAG, body: 'Автоматический релиз CI.', draft: false, prerelease: false}))")" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).id))")
+          fi
+
+          upload() {
+            # name строится из пути внутри артефакта (не только basename) —
+            # dist-updates/version.json и dist-updates/latest/version.json
+            # иначе дали бы одинаковое имя ассета и второй POST отклонился бы.
+            local file="$1" root="$2" prefix="$3"
+            local rel="${file#"$root"/}"
+            local name="${TAG}-${prefix}-${rel//\//_}"
+            curl -sf -X POST "${api}/releases/${release_id}/assets?name=${name}" \
+              -H "Authorization: token ${FORGEJO_RELEASE_TOKEN}" \
+              -F "attachment=@${file}" > /dev/null
+            echo "загружено: ${name}"
+          }
+
+          # download-artifact сохраняет исходную относительную структуру путей
+          # внутри каждого артефакта (не кладёт файлы плоско в корень) — ищем
+          # по расширению, а не по фиксированной глубине пути.
+          while IFS= read -r -d '' f; do upload "$f" artifacts/release-pwa pwa; done < <(find artifacts/release-pwa -type f -print0)
+          while IFS= read -r -d '' f; do upload "$f" artifacts/release-android android; done < <(find artifacts/release-android -type f \( -name '*.apk' -o -name '*.aab' \) -print0)
+          while IFS= read -r -d '' f; do upload "$f" artifacts/release-windows windows; done < <(find artifacts/release-windows -type f -name '*.exe' -print0)
+          while IFS= read -r -d '' f; do upload "$f" artifacts/release-linux linux; done < <(find artifacts/release-linux -type f \( -name '*.AppImage' -o -name '*.deb' \) -print0)
+          while IFS= read -r -d '' f; do upload "$f" artifacts/release-macos macos; done < <(find artifacts/release-macos -type f -name '*.dmg' -print0)
+
+          echo "Релиз: https://git.ugolok.tech/naysy/ugolok/releases/tag/${TAG}"
