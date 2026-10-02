@@ -1,6 +1,14 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+// Релиз-пайплайн (TZ-release-pipeline) — versionCode обязан строго
+// возрастать от релиза к релизу, иначе Android откажется ставить
+// "обновление" поверх старой версии (придётся удалять приложение).
+// git rev-list --count — монотонно растёт с историей, не зависит от тегов.
+def releaseVersionCode = System.getenv("ANDROID_VERSION_CODE")?.toInteger()
+    ?: ['git', 'rev-list', '--count', 'HEAD'].execute().text.trim().toInteger()
+def releaseVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
+
 android {
     namespace = "tech.ugolok.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,8 +16,8 @@ android {
         applicationId "tech.ugolok.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode
+        versionName releaseVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,10 +25,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // TZ-release-pipeline — подпись через переменные окружения (CI secrets
+    // или локальная оболочка разработчика), не через закоммиченный keystore.
+    // Без всех четырёх переменных release собирается НЕПОДПИСАННЫМ, как и
+    // раньше (см. .github/workflows/native-android-build.yml, Э4) — это
+    // осознанный fallback для CI-проверки "просто компилируется", а не для
+    // публикации. Публикуемый релиз обязан идти с заданными переменными.
+    def storeFilePath = System.getenv("RELEASE_STORE_FILE")
+    def hasReleaseSigning = storeFilePath && System.getenv("RELEASE_STORE_PASSWORD") &&
+        System.getenv("RELEASE_KEY_ALIAS") && System.getenv("RELEASE_KEY_PASSWORD")
+    if (hasReleaseSigning) {
+        signingConfigs {
+            release {
+                storeFile file(storeFilePath)
+                storePassword System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    } else {
+        logger.warn("RELEASE_STORE_FILE и сопутствующие переменные не заданы — release APK/AAB будет неподписанным (годится для CI-проверки сборки, не для публикации)")
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     // Э-PUSH П2 — jvmTarget синхронизирован с compileOptions.sourceCompatibility/

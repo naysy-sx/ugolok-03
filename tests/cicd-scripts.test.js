@@ -177,29 +177,28 @@ test("GitHub Actions ci.yml вызывает ci-check, Node 22, без pull_requ
 	assert.equal(src.includes("npx serve"), false);
 });
 
-test("GitHub Actions release.yml на semver-тег, pack, contents write", () => {
+test("GitHub Actions release.yml на semver-тег, pack, публикация в Forgejo Releases", () => {
 	const src = read(join(ROOT, ".github/workflows/release.yml"));
 	assert.match(src, /v\*\.\*\.\*/);
 	assert.match(src, /scripts\/ci-check\.sh/);
 	assert.match(src, /scripts\/release-pack\.sh/);
-	assert.match(src, /contents:\s*write/);
 	assert.match(src, /actions\/checkout@v5/);
 	assert.match(src, /actions\/setup-node@v6/);
+	// Публикация в GitHub Release (contents: write + action) больше не
+	// нужна — релиз целиком живёт на Forgejo (TZ-release-pipeline), job
+	// publish пишет туда через REST API своим токеном.
+	assert.match(src, /FORGEJO_RELEASE_TOKEN/);
+	assert.match(src, /git\.ugolok\.tech/);
 	assert.equal(src.includes("npx serve"), false);
 	assert.equal(src.includes("pull_request_target"), false);
 });
 
-test("Forgejo workflows копируют смысл GitHub, не второй алгоритм", () => {
+test("Forgejo ci.yml и GitHub ci.yml копируют смысл друг друга, не второй алгоритм", () => {
 	const gCi = read(join(ROOT, ".github/workflows/ci.yml"));
 	const fCi = read(join(ROOT, ".forgejo/workflows/ci.yml"));
-	const gRel = read(join(ROOT, ".github/workflows/release.yml"));
-	const fRel = read(join(ROOT, ".forgejo/workflows/release.yml"));
 	assert.match(fCi, /scripts\/ci-check\.sh/);
-	assert.match(fRel, /scripts\/release-pack\.sh/);
 	assert.match(gCi, /scripts\/ci-check\.sh/);
-	assert.match(gRel, /scripts\/release-pack\.sh/);
 	assert.equal(fCi.includes("npx serve"), false);
-	assert.equal(fRel.includes("npx serve"), false);
 });
 
 test("release-hash.sh — без SKIP_GPG и без ключа не падает на set -u", () => {
@@ -511,10 +510,15 @@ test("Forgejo ci.yml: раннер ugolok, без dev/prod, ci-check.sh внут
 	assert.match(fCi, /bash scripts\/ci-check\.sh/);
 });
 
-test("Forgejo release.yml: помечен нерабочим (см. этап 5), не удалён", () => {
-	const fRel = read(join(ROOT, ".forgejo/workflows/release.yml"));
-	assert.match(fRel, /не запускается на Forgejo/i);
-	assert.match(fRel, /этап 5/);
+test("Forgejo release.yml: решение этапа 5 принято — файл удалён, не оставлен нерабочей заглушкой", () => {
+	// TZ-cicd-hardening, этап 2.5, откладывал решение до этапа 5: "не
+	// удалять" до выбора архитектуры канала релиза. Решение принято
+	// (TZ-release-pipeline) — self-hosted раннер "ugolok" физически не
+	// может собрать Android/Tauri (2 ГБ RAM), весь релиз теперь целиком
+	// на GitHub Actions (.github/workflows/release.yml), публикация в
+	// Forgejo Releases идёт через REST API, а не параллельный Forgejo-job.
+	// Нерабочая заглушка больше не нужна и не должна возвращаться.
+	assert.equal(existsSync(join(ROOT, ".forgejo/workflows/release.yml")), false);
 });
 
 test("package.json — engines node>=22, allowScripts зафиксирован, version не источник релиза", () => {

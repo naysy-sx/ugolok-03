@@ -18,10 +18,17 @@ _Актуально на 2026-09-05, описывает origin Forgejo (`git.ugo
 
 ## 2. Откуда берутся артефакты
 
-Источник для людей и аудита:
+Источник для людей и аудита (пакеты для скачивания — PWA/Android/Windows/
+Linux/macOS):
 
-- `git.ugolok.tech` (Forgejo) — origin с 2026-09-05; Release там по тегу пока **не собирается** (`.forgejo/workflows/release.yml` не запускается — `runs-on: ubuntu-latest`, такого раннера на Forgejo нет);
-- GitHub (`naysy-sx/ugolok-03`) остаётся вторым remote — Release там собирается, если туда тоже пушат тег.
+- `git.ugolok.tech/naysy/ugolok/releases` (Forgejo) — канон. Собирается и
+  публикуется туда `.github/workflows/release.yml` (job `publish`, через
+  REST API) — **не** `.forgejo/workflows/release.yml` (такого файла больше
+  нет, self-hosted раннер `ugolok` на 2 ГБ RAM не тянет Android SDK/Gradle
+  или сборку Tauri). Тег нужно запушить в оба remote — `scripts/
+  cut-release.sh vX.Y.Z` делает это одной командой, см. `docs/local-cicd.md`.
+- GitHub (`naysy-sx/ugolok-03`) — второй remote, площадка сборки (Actions),
+  отдельной публикации релизов там нет.
 
 Источник для клиентов:
 
@@ -84,7 +91,7 @@ updates root/
 Ниже — контракт канала `updates.ugolok.tech`, тег `vX.Y.Z`, `version.json`/`SHA256SUMS`. Описание оставлено (дерево канала пригодится), но по факту:
 
 - клиент `version.json` **не читает** — ни на `updates.ugolok.tech`, ни где-либо ещё;
-- `.forgejo/workflows/release.yml` **не запускается** на Forgejo (`runs-on: ubuntu-latest` — такого раннера там нет; см. `PROCESS-DOCS/VPS/TZ-cicd-hardening.md`, этап 5).
+- `version.json`/`SHA256SUMS` для PWA по тегу теперь действительно собираются (`.github/workflows/release.yml`, job `pack-pwa`) и публикуются как ассеты релиза на `git.ugolok.tech/naysy/ugolok/releases` — но это та же площадка, что и Android/desktop (§2), не отдельный хост `updates.ugolok.tech`; сам `updates.ugolok.tech` клиентом не используется (см. выше).
 
 1. Манифест: `https://updates.ugolok.tech/version.json` (latest) и `https://updates.ugolok.tech/vX.Y.Z/version.json`.
 2. Артефакты (`index.html`, `service-worker.js`, суммы) — с того же хоста.
