@@ -197,10 +197,12 @@ const fs=require(\"fs\");
 const ice=JSON.parse(fs.readFileSync(\"/ice.json\",\"utf8\"));
 const relays=JSON.parse(process.env.BUILD_DEFAULT_RELAYS);
 const blossom=JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
-const name=process.env.UGOLK_INSTANCE===\"prod\"?\"ugolok.tech\":\"test.ugolok.tech\";
+const isProd=process.env.UGOLK_INSTANCE===\"prod\";
+const name=isProd?\"ugolok.tech\":\"test.ugolok.tech\";
 fs.writeFileSync(\"dist/config.json\", JSON.stringify({
   instanceName:name, relays, bootstrapRelays:relays, blossomServers:blossom, iceServers:ice,
-  turnCredentialsUrl:\"/api/turn-credentials\"
+  turnCredentialsUrl:\"/api/turn-credentials\",
+  ...(isProd ? {pushBridge:\"https://relay.ugolok.tech/push\"} : {})
 }, null, 2)+\"\\n\");
 "'
 

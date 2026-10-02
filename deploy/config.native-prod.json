@@ -8,5 +8,6 @@
     { "urls": "turn:ugolok.tech:3478?transport=udp" },
     { "urls": "turn:ugolok.tech:3478?transport=tcp" }
   ],
-  "turnCredentialsUrl": "https://ugolok.tech/api/turn-credentials"
+  "turnCredentialsUrl": "https://ugolok.tech/api/turn-credentials",
+  "pushBridge": "https://relay.ugolok.tech/push"
 }
