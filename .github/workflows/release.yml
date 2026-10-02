@@ -75,6 +75,26 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      # НАЙДЕНО ЖИВЬЁ (владелец, релизный APK v1.0.1, 2026-10-02) — без этого
+      # шага relay/blossom на экране входа навсегда застревают на дев-дефолте
+      # ws://127.0.0.1:7777 (connection-endpoints.jsx читает их синхронно до
+      # того, как config.json успевает загрузиться; на вебе deploy-env.sh
+      # всегда задаёт BUILD_DEFAULT_*, поэтому там это не проявлялось). Берём
+      # значения из того же файла, что уже идёт в NATIVE_CONFIG_JSON — один
+      # источник правды, оба слоя не могут разойтись.
+      - name: Экспортировать BUILD_DEFAULT_* из deploy/config.native-prod.json
+        run: |
+          node -e '
+            const c = require("./deploy/config.native-prod.json");
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_ENV, [
+              `BUILD_DEFAULT_RELAYS=${JSON.stringify(c.relays)}`,
+              `BUILD_BOOTSTRAP_RELAYS=${JSON.stringify(c.bootstrapRelays)}`,
+              `BUILD_DEFAULT_BLOSSOM_SERVERS=${JSON.stringify(c.blossomServers)}`,
+              `BUILD_DEFAULT_ICE_SERVERS=${JSON.stringify(c.iceServers)}`,
+            ].join("\n") + "\n");
+          '
+
       - name: npm ci (корень)
         run: npm ci
 
@@ -131,6 +151,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Экспортировать BUILD_DEFAULT_* из deploy/config.native-prod.json (см. android job — тот же живой баг v1.0.1)
+        run: |
+          node -e '
+            const c = require("./deploy/config.native-prod.json");
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_ENV, [
+              `BUILD_DEFAULT_RELAYS=${JSON.stringify(c.relays)}`,
+              `BUILD_BOOTSTRAP_RELAYS=${JSON.stringify(c.bootstrapRelays)}`,
+              `BUILD_DEFAULT_BLOSSOM_SERVERS=${JSON.stringify(c.blossomServers)}`,
+              `BUILD_DEFAULT_ICE_SERVERS=${JSON.stringify(c.iceServers)}`,
+            ].join("\n") + "\n");
+          '
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: npm ci
@@ -171,6 +204,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Экспортировать BUILD_DEFAULT_* из deploy/config.native-prod.json (см. android job — тот же живой баг v1.0.1)
+        run: |
+          node -e '
+            const c = require("./deploy/config.native-prod.json");
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_ENV, [
+              `BUILD_DEFAULT_RELAYS=${JSON.stringify(c.relays)}`,
+              `BUILD_BOOTSTRAP_RELAYS=${JSON.stringify(c.bootstrapRelays)}`,
+              `BUILD_DEFAULT_BLOSSOM_SERVERS=${JSON.stringify(c.blossomServers)}`,
+              `BUILD_DEFAULT_ICE_SERVERS=${JSON.stringify(c.iceServers)}`,
+            ].join("\n") + "\n");
+          '
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Добавить своп (линковка Tauri+WebKit пикует по памяти на ubuntu-latest, см. Э0)
@@ -206,6 +252,19 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+
+      - name: Экспортировать BUILD_DEFAULT_* из deploy/config.native-prod.json (см. android job — тот же живой баг v1.0.1)
+        run: |
+          node -e '
+            const c = require("./deploy/config.native-prod.json");
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_ENV, [
+              `BUILD_DEFAULT_RELAYS=${JSON.stringify(c.relays)}`,
+              `BUILD_BOOTSTRAP_RELAYS=${JSON.stringify(c.bootstrapRelays)}`,
+              `BUILD_DEFAULT_BLOSSOM_SERVERS=${JSON.stringify(c.blossomServers)}`,
+              `BUILD_DEFAULT_ICE_SERVERS=${JSON.stringify(c.iceServers)}`,
+            ].join("\n") + "\n");
+          '
 
       - uses: dtolnay/rust-toolchain@stable
 

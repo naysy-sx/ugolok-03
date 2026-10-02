@@ -10,6 +10,7 @@ import {
 	parseIceUrl,
 	iceUrlFromServers,
 	resolveCallIceServers,
+	isLoopbackHost,
 } from "../../domain/settings/bootstrap-endpoints.js";
 import { loadRuntimeConfig, getRuntimeConfig } from "../../domain/settings/runtime-config.js";
 import { probeRelay, probeBlossom, probeIce, withRetry } from "../../core/transport/endpoint-health.js";
@@ -200,6 +201,41 @@ export default function ConnectionEndpoints() {
 			writeHealthCacheEntry(kind, value, next);
 		}
 	}
+
+	// НАЙДЕНО ЖИВЬЁ (владелец, релизный APK v1.0.1, 2026-10-02) — тот же класс
+	// бага, что уже исправлен для TURN ниже (строки ~246-254) и для адресов
+	// уже созданной личности (ui-settings.js, isLoopbackHost): relay/blossom
+	// читались ТОЛЬКО синхронно из readBootstrapEndpoints() при монтировании
+	// (строки 183-187), не дожидаясь loadRuntimeConfig() вовсе — на вебе это
+	// маскировалось тем, что deploy-env.sh всегда прописывает правильные
+	// build-time дефолты (см. config.js) в саму сборку, а
+	// нативные воркфлоу (release.yml) задают только NATIVE_CONFIG_JSON — без
+	// BUILD_DEFAULT_* компонент навсегда застревал на дев-дефолте
+	// ws://127.0.0.1:7777 на экране входа. Дожидаемся config.json один раз
+	// при монтировании и, если сейчас показан loopback, а config.json даёт
+	// настоящий адрес, — исправляем и запоминаем (та же защита, что и там).
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			if (!getRuntimeConfig().relays && !getRuntimeConfig().blossomServers) {
+				await loadRuntimeConfig();
+			}
+			if (cancelled) return;
+			const fresh = readBootstrapEndpoints();
+			if (isLoopbackHost(relay) && fresh.relayUrl && !isLoopbackHost(fresh.relayUrl)) {
+				writeBootstrapEndpoints({ relayUrl: fresh.relayUrl });
+				setRelay(fresh.relayUrl);
+			}
+			if (isLoopbackHost(blossom) && fresh.blossomUrl && !isLoopbackHost(fresh.blossomUrl)) {
+				writeBootstrapEndpoints({ blossomUrl: fresh.blossomUrl });
+				setBlossom(fresh.blossomUrl);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	useDebouncedProbe(
 		relay,
