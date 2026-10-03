@@ -813,3 +813,40 @@ test("heartbeat: heartbeatIntervalMs:0 отключает механизм по�
 	assert.equal(WS.instances[0].sent.length, 0, "heartbeatIntervalMs:0 не должен заводить никакого таймера/REQ");
 	t.mock.timers.reset();
 });
+
+// Живой баг (найден live-тестом с реальными устройствами, 2026-10-03):
+// heartbeat-тесты выше гоняют createRelayConnection В ИЗОЛЯЦИИ — но
+// production ВСЕГДА идёт через createRelayPool, который регистрирует свой
+// onMemberMessage на ТОМ ЖЕ connection-уровневом messageHandlers массиве,
+// что и heartbeatHandler (оба — connection.addMessageHandler). Диспетчер
+// этого массива — "первый вернувший true побеждает" (for...of + break).
+// onMemberMessage регистрируется ПЕРВЫМ (на создании пула) и раньше
+// безусловно возвращал true для ЛЮБОГО EVENT/EOSE — heartbeatHandler
+// (добавляется ПОЗЖЕ, на каждый цикл) физически не мог получить СВОЙ же
+// EOSE. Итог: каждый heartbeat гарантированно таймаутился, соединение
+// форсированно переподключалось каждые ~(interval+timeout) НЕПРЕРЫВНО —
+// живые подписки (gift-wrap заявки/accept, discovery) теряли события до
+// полного релогина. Этот тест обязан идти через createRelayPool, иначе
+// регресс снова пройдёт незамеченным мимо тестов выше.
+test("heartbeat через createRelayPool: EOSE должен доходить до heartbeatHandler, не поглощаться onMemberMessage пула", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const pool = createRelayPool([{ url: "wss://a", read: true, write: true }], {
+		WebSocketImpl: WS,
+		heartbeatIntervalMs: 1000,
+		heartbeatTimeoutMs: 500,
+	});
+	pool.connect();
+	WS.instances[0]._open();
+
+	t.mock.timers.tick(1000); // heartbeat REQ уходит
+	const [, hbSubId] = JSON.parse(WS.instances[0].sent[0]);
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", hbSubId]) });
+
+	// Прежде чем таймаут успеет сработать — соединение не должно быть закрыто
+	// форсированным watchdog'ом: EOSE обязан был дойти и сбросить его.
+	t.mock.timers.tick(500);
+	assert.equal(WS.instances[0].readyState, 1, "heartbeatHandler должен был получить EOSE и не закрывать соединение");
+	assert.equal(WS.instances.length, 1, "не должно было произойти форсированного reconnect");
+	t.mock.timers.reset();
+});
