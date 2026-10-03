@@ -11,6 +11,9 @@ import IconSend from "../icons/send.jsx";
 import IconExit from "../icons/exit.jsx";
 import IconCopy from "../icons/copy.jsx";
 import IconShare from "../icons/share.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconKey from "../icons/key.jsx";
+import IconFormatLink from "../icons/format-link.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry, getLastTurnStatus } from "../../domain/settings/bootstrap-endpoints.js";
@@ -778,7 +781,10 @@ export default function Quick({ onExit }) {
 				>
 					<div class="folder-shared form-group">
 						<label for="quick-nick">{t("quick.entry.nickLabel")}</label>
-						<input id="quick-nick" type="text" value={nick} onInput={(e) => setNick(e.currentTarget.value)} placeholder={t("quick.anonymousNick")} />
+						<div class="field-icon">
+							<IconPerson class="icon field-icon__ico" aria-hidden="true" />
+							<input id="quick-nick" type="text" value={nick} onInput={(e) => setNick(e.currentTarget.value)} placeholder={t("quick.anonymousNick")} />
+						</div>
 					</div>
 
 					{error && (
@@ -791,11 +797,17 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleCreate}>
 							<div class="form-group">
 								<label for="quick-create-name">{t("quick.entry.nameLabel")}</label>
-								<input id="quick-create-name" type="text" required value={roomName} onInput={(e) => setRoomName(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconQuickRoomPeople class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-create-name" type="text" required value={roomName} onInput={(e) => setRoomName(e.currentTarget.value)} />
+								</div>
 							</div>
 							<div class="form-group">
 								<label for="quick-create-password">{t("quick.entry.passwordLabel")}</label>
-								<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconKey class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
+								</div>
 							</div>
 							<label class="switch-row">
 								<span>{t("quick.entry.openModeLabel")}</span>
@@ -812,7 +824,10 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinLink}>
 							<div class="form-group">
 								<label for="quick-join-link">{t("quick.entry.linkLabel")}</label>
-								<input id="quick-join-link" type="text" required value={inviteInput} onInput={(e) => setInviteInput(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconFormatLink class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-join-link" type="text" required value={inviteInput} onInput={(e) => setInviteInput(e.currentTarget.value)} />
+								</div>
 							</div>
 							<button type="submit" class="btn btn-block" disabled={busy}>
 								{t("quick.entry.joinButton")}
@@ -824,11 +839,17 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinPassword}>
 							<div class="form-group">
 								<label for="quick-joinpw-name">{t("quick.entry.nameLabel")}</label>
-								<input id="quick-joinpw-name" type="text" required value={joinPwName} onInput={(e) => setJoinPwName(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconQuickRoomPeople class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-joinpw-name" type="text" required value={joinPwName} onInput={(e) => setJoinPwName(e.currentTarget.value)} />
+								</div>
 							</div>
 							<div class="form-group">
 								<label for="quick-joinpw-password">{t("quick.entry.passwordLabel")}</label>
-								<input id="quick-joinpw-password" type="text" required value={joinPwPassword} onInput={(e) => setJoinPwPassword(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconKey class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-joinpw-password" type="text" required value={joinPwPassword} onInput={(e) => setJoinPwPassword(e.currentTarget.value)} />
+								</div>
 							</div>
 							<button type="submit" class="btn btn-block" disabled={busy}>
 								{t("quick.entry.joinButton")}

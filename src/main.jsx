@@ -12,11 +12,20 @@ import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
 import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
 import { logInfo } from "./core/diag/boot-log.js";
+import { applyThemeMode } from "./ui/theme/theme-mode.js";
+import { getPreLoginTheme } from "./ui/theme/pre-login-theme.js";
 // TZ-diag-trace.md — main.jsx не домен, импорт трассировщика напрямую
 // разрешён и здесь единственно уместен (§0.3 запрещает это только домену).
 import { record as traceRecord, isTraceEnabled } from "./core/diag/call-trace.js";
 
 logInfo(`запуск, сборка ${BUILD_HASH}`);
+
+// Применить ДО первого рендера — иначе на системной тёмной теме экран
+// входа на миг мигнёт тёмным, прежде чем пользователь успеет выбрать (а на
+// экране входа выбирать ещё нечего, аккаунт/его тема не расшифрованы).
+// Логин переопределит на тему аккаунта (unlock.jsx: applyThemeMode(loaded.
+// themeMode)) — это только дефолт ДО него.
+applyThemeMode(getPreLoginTheme());
 
 // TZ §2.6 — окружение/lifecycle. record() сам решает, писать ли (флаг может
 // быть выставлен ?diag=1 чуть выше по цепочке импорта call-trace.js), поэтому
@@ -49,12 +58,16 @@ if (isTraceEnabled()) {
 
 startIdleWatcher();
 
-// Э4.7 ТЗ-NATIVE-APPS — только Android/Capacitor (см. keyboard-inset.js);
-// глобально и безусловно с самого старта (не только внутри залогиненного
-// MainShell) — клавиатура нужна и на экране входа/регистрации (пароль,
-// мнемоника). Никогда не отписывается — живёт всю жизнь вкладки, тот же
-// принцип, что startIdleWatcher() выше.
-if (__TARGET__ === "capacitor") startKeyboardInsetTracking();
+// На Android/Capacitor --keyboard-inset считает и инжектит MainActivity
+// из нативного WindowInsetsCompat.Type.ime() (см. MainActivity.java) —
+// запускать здесь тот же трекер поверх него означало бы два источника
+// одной CSS-переменной, гоняющиеся друг за другом. На вебе нативного
+// источника нет, трекер остаётся единственным. Глобально и безусловно с
+// самого старта (не только внутри залогиненного MainShell) — клавиатура
+// нужна и на экране входа/регистрации (пароль, мнемоника). Никогда не
+// отписывается — живёт всю жизнь вкладки, тот же принцип, что
+// startIdleWatcher() выше.
+if (__TARGET__ === "web") startKeyboardInsetTracking();
 
 const SW_RELOAD_ONCE_KEY = "ugolok.swReloadOnce";
 let refreshing = false;
