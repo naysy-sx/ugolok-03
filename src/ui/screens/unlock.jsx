@@ -11,6 +11,7 @@ import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { applyCustomPalette } from "../theme/palette-apply.js";
 import { applyUiScale } from "../theme/ui-scale.js";
 import { applyThemeMode } from "../theme/theme-mode.js";
+import { getPreLoginTheme, setPreLoginTheme } from "../theme/pre-login-theme.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
@@ -23,6 +24,8 @@ import IconArrowRight from "../icons/arrow-right.jsx";
 import IconVault from "../icons/vault.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconKey from "../icons/key.jsx";
+import IconSun from "../icons/sun.jsx";
+import IconMoon from "../icons/moon.jsx";
 import Quick from "./quick.jsx";
 
 
@@ -46,6 +49,14 @@ function lastUnlockLabel(ts) {
 export default function Unlock() {
 	const [step, setStep] = useState("loading");
 	const [accounts, setAccounts] = useState([]);
+	const [preLoginThemeState, setPreLoginThemeState] = useState(() => getPreLoginTheme());
+
+	function togglePreLoginTheme() {
+		const next = preLoginThemeState === "dark" ? "light" : "dark";
+		applyThemeMode(next);
+		setPreLoginTheme(next);
+		setPreLoginThemeState(next);
+	}
 
 	// Метка для ui/reload-gate.js: на каком шаге входа/регистрации человек. Пока идёт
 	// регистрация (сид-фраза, подтверждение, пароль), автоперезагрузка страницы запрещена.
@@ -61,6 +72,48 @@ export default function Unlock() {
 	// "help" — переиспользует ту же справку, что и залогиненный раздел
 	// (см. components/help-content.jsx).
 	const [mainView, setMainView] = useState("home");
+
+	// Общая шапка (лого + Справка + переключатель темы) — одна и та же на
+	// step==="main" и на всех остальных шагах (мнемоника/подтверждение/
+	// импорт/пароль/done), которые раньше возвращали голый <main> без неё
+	// (живая находка: заголовок "подтверждения фразы" никак не был связан с
+	// Справкой/темой, выглядело как другой экран). И там, и там клик по
+	// логотипу/Справке просто возвращает на главный шаг — на остальных
+	// шагах там всё равно нет своего mainView==="help" контента.
+	function renderAuthHeader() {
+		return (
+			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+				<button
+					type="button"
+					class="logo row logo-link"
+					style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+					onClick={() => {
+						setStep("main");
+						setMainView("home");
+					}}
+					aria-label={t("unlock.main.logoHomeAria")}
+				>
+					<img class="unlock-logo-mark" src={`${import.meta.env.BASE_URL}logo-source.png`} width="28" height="28" alt="" aria-hidden="true" />
+					<span class="logo-name">{t("app.name")}</span>
+				</button>
+				<div class="header-actions">
+					<button
+						type="button"
+						class={mainView === "help" ? "btn-link nav-link-btn--active" : "btn-link"}
+						onClick={() => {
+							setStep("main");
+							setMainView(mainView === "help" ? "home" : "help");
+						}}
+					>
+						{t("unlock.main.helpLink")}
+					</button>
+					<button type="button" class="icon-btn unlock-theme-toggle" onClick={togglePreLoginTheme} aria-label={t("themeStatus.panelAria")}>
+						{preLoginThemeState === "dark" ? <IconSun /> : <IconMoon />}
+					</button>
+				</div>
+			</header>
+		);
+	}
 
 	// Вкладки Войти | Создать на step === "main" (взаимоисключающие).
 	const [authMode, setAuthMode] = useState("create");
@@ -308,7 +361,9 @@ export default function Unlock() {
 
 	if (step === "create-generate") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createGenerate.title")}</h1>
@@ -335,13 +390,16 @@ export default function Unlock() {
 						</button>
 					</div>
 				</div>
-			</main>
+				</main>
+			</>
 		);
 	}
 
 	if (step === "create-confirm") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createConfirm.title")}</h1>
@@ -395,12 +453,15 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "import-mnemonic") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importMnemonic.title")}</h1>
@@ -438,12 +499,15 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "import-key") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importKey.title")}</h1>
@@ -496,12 +560,15 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "advanced-password") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.advancedPassword.title")}</h1>
@@ -531,12 +598,15 @@ export default function Unlock() {
 					)}
 				</form>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "done") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
 					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.done.title")}</h1>
@@ -586,6 +656,7 @@ export default function Unlock() {
 					</button>
 				</div>
 			</main>
+			</>
 		);
 	}
 
@@ -595,47 +666,15 @@ export default function Unlock() {
 
 	return (
 		<div class="screen auth-layout">
-			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button
-					type="button"
-					class="logo row logo-link"
-					style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
-					onClick={() => setMainView("home")}
-					aria-label={t("unlock.main.logoHomeAria")}
-				>
-					<img
-						class="unlock-logo-mark"
-						src={`${import.meta.env.BASE_URL}logo-source.png`}
-						width="28"
-						height="28"
-						alt=""
-						aria-hidden="true"
-					/>
-					<span class="logo-name">{t("app.name")}</span>
-				</button>
-				<div class="header-actions">
-					<button
-						type="button"
-						class={mainView === "help" ? "btn-link nav-link-btn--active" : "btn-link"}
-						onClick={() => setMainView(mainView === "help" ? "home" : "help")}
-					>
-						{t("unlock.main.helpLink")}
-					</button>
-				</div>
-			</header>
+			{renderAuthHeader()}
 
 			<main class="main">
 				{mainView === "home" && (
 					<div class="unlock-home">
 						<section class="hero-section">
-							<p class="unlock-brand bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								{/* Знак «уголок» (макет Bbl2A3.jpg): контур-угол с чертой, цвет — акцент темы. */}
-								<svg class="brand-mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false">
-									<path d="M6 28V13a7 7 0 0 1 7-7h11a2 2 0 0 1 2 2v9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-									<path d="M17 26h9" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" />
-								</svg>
-								<span class="logo-name">{t("app.name")}</span>
-							</p>
+							{/* Живой фидбек — логотип теперь всегда в шапке (renderAuthHeader,
+							    видна на этом же шаге), свой отдельный .unlock-brand здесь стал
+							    чистым дублем ("Уголок" дважды подряд). */}
 							<h1>{t("unlock.main.hero.title")}</h1>
 							<p class="hero-lead">{t("unlock.main.hero.lead")}</p>
 						</section>

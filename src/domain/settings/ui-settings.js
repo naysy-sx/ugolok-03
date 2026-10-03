@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS = {
 	// стали бы неотличимы.
 	customPalette: null,
 	uiScale: "medium",
-	themeMode: null, // null = "как в системе" (prefers-color-scheme); "light"|"dark" = явный выбор
+	themeMode: "light", // "light"|"dark" = явный выбор; null = "как в системе" (prefers-color-scheme) — дефолт для НОВЫХ аккаунтов светлый (решение владельца), не системный
 	language: "ru",
 	notifications: DEFAULT_NOTIFICATIONS,
 	relayUrls: [],

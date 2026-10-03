@@ -3249,6 +3249,11 @@ body:has(.auth-layout) {
 	max-width: 60rem;
 	margin-inline: auto;
 	padding-inline: var(--space-m);
+	/* app.jsx рендерит <Unlock/> напрямую, без .screen/.shell — safe-area
+	   сам себе не добавляет. Это обёртка только step==="main" (вкладки
+	   Войти/Создать); остальные шаги unlock.jsx защищает правило ниже. */
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 
 	display: grid;
 	row-gap: var(--space-m);
@@ -3265,6 +3270,11 @@ body:has(.auth-layout) {
 
 .site-header {
 	grid-area: header;
+	/* .bar (раскладка) задаёт только flex/gap, не justify-content — без
+	   этого лого и Справка+тема слипались в один угол вместо разъезда по
+	   краям (находка пользователя: "логотип Уголок и Справка... в один
+	   stack... разнесены по сторонам"). */
+	justify-content: space-between;
 }
 .main {
 	grid-area: main;
@@ -3278,6 +3288,18 @@ body:has(.auth-layout) {
 
 .auth-layout input {
 	background-color: var(--bg);
+}
+
+/* unlock.jsx: шаги loading/db-error/create-generate/create-confirm/
+   import-mnemonic/import-key/advanced-password/done возвращают СВОЙ
+   голый <main class="center stack"> вместо .screen/.auth-layout (ранний
+   return до общей обёртки) — без этого правила заголовок и кнопки
+   упираются в статус-бар/навигацию (живой баг, подтверждён на телефоне:
+   "Уголок" под часами на шаге подтверждения фразы). html[data-auth-flow]
+   выставляется и снимается самим Unlock() ровно на время этих шагов. */
+html[data-auth-flow] main.center.stack {
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
 .unlock-home {
@@ -4434,7 +4456,7 @@ body:has(.auth-layout) {
 .toast-host {
 	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
-	inset-block-start: var(--space-m);
+	inset-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 	inset-inline-end: var(--space-m);
 	z-index: 1000;
 	pointer-events: none;
@@ -4558,6 +4580,7 @@ body:has(.auth-layout) {
 	inset-block-start: 0;
 	z-index: 200;
 	padding: var(--space-l);
+	padding-block-start: calc(var(--space-l) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 	background: var(--surface);
 	border-block-end: var(--border-width) solid var(--border);
 	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
@@ -5142,7 +5165,7 @@ button[type="button"].media-overlay-nav {
 .media-mini-bar-shell {
 	position: fixed;
 	inset-inline-end: var(--space-s);
-	inset-block-end: var(--space-s);
+	inset-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	z-index: 190;
 	display: flex;
 	flex-direction: column;
@@ -6022,6 +6045,30 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius-sm);
 }
 
+/* Та же форма на самом экране "Контакты" (contacts.jsx, .contacts-add-panel,
+   не модалка) — живой фидбек: поле ключа и кнопка делили ширину пополам,
+   ключу почти не оставалось места. Поле на всю ширину, кнопка под ним по
+   центру (не растянута, как в модалке — здесь ширина экрана не так
+   стеснена), скруглена со всех сторон. */
+.contacts-add-panel .row.contacts-add-form {
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+.contacts-add-panel .contact-add-field {
+	flex-basis: 100%;
+	border-inline-end: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+}
+.contacts-add-panel .contacts-add-form button[type="submit"] {
+	flex: none;
+	/* align-self центрирует по ПОПЕРЕЧНОЙ оси (вертикали) — кнопка одна на
+	   своей строке после wrap, по факту прижималась к левому краю. auto-
+	   отступы по инлайн-оси — стандартный приём центрирования flex-item
+	   вдоль ГЛАВНОЙ оси. Живой фидбек. */
+	margin-inline: auto;
+	border-radius: var(--radius-sm);
+}
+
 /* VISUAL.md v2 (пользователь): "юзай css grid на всю катушку, все эти
    area штуки... container queries" — было flex-row + @media(min-width);
    теперь grid-template-areas + @container (контейнер — .content-wrapper,
@@ -6304,6 +6351,11 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--fg);
 	border-color: var(--border);
 	font-weight: var(--weight-normal);
+	/* На узких экранах подпись кнопки переносилась посреди слова
+	   ("Откло-нить") — nowrap запрещает это; если из-за этого кнопки
+	   перестают помещаться в ряд, .contacts-requests .ucard__actions
+	   ниже разрешает перенос всего ряда в столбец. */
+	white-space: nowrap;
 }
 .ucard__actions button:hover {
 	background-color: var(--surface-raised);
@@ -6607,6 +6659,15 @@ button[type="button"].media-mini-bar-btn {
 	font-size: var(--step--2);
 	line-height: 1.4;
 	color: var(--warn);
+}
+/* Живой фидбек — relay в деве отваливается/восстанавливается часто;
+   content.jsx больше не снимает панель из потока (return null), а только
+   прячет её visibility — высота зарезервирована всегда, содержимое под
+   ней (aside, "Каналы" и т.п.) больше не прыгает вверх-вниз при каждом
+   переключении. "Тишина = норма" (SIDEBAR-SPEC.md §6) — просто тишина
+   невидима, а не нулевого размера. */
+.conn[data-quiet] {
+	visibility: hidden;
 }
 .conn-dot {
 	flex: none;
@@ -7766,6 +7827,7 @@ button[type="button"].media-mini-bar-btn {
 	   (и block, и inline): <input> ниже обнуляет свой собственный,
 	   иначе набивка удваивается — тот же приём для обоих направлений,
 	   живой фидбек пользователя (сначала поймали только inline). */
+	margin-block-start: var(--space-s);
 	max-width: 24rem;
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
@@ -7774,6 +7836,53 @@ button[type="button"].media-mini-bar-btn {
 	background-color: var(--surface);
 	color: var(--muted);
 	transition: border-color var(--transition-speed) var(--transition-ease);
+}
+
+/* Загрузка нескольких файлов — своя строка-прогресс на файл (files.jsx:
+   handleFilesSelected, concurrency:2). Раньше был один общий текстовый
+   статус, который гоняли между собой до 2 параллельных job'а — мелькал.
+   Таблица: имя | прогресс-бар, по готовности строка молча превращается
+   в галочку; вся панель исчезает, когда партия долита (uploadFiles=null). */
+.upload-progress-panel {
+	padding: var(--space-s);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	background-color: var(--surface);
+}
+.upload-progress-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.upload-progress-table__name {
+	padding-block: var(--space-3xs);
+	padding-inline-end: var(--space-s);
+	max-width: 0; /* инлайновые таблицы: 0 + width:100% на колонке — ячейка сжимается, не распирает таблицу длинным именем */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--step--1);
+}
+.upload-progress-table__bar {
+	padding-block: var(--space-3xs);
+	inline-size: 8rem;
+}
+.upload-progress-bar {
+	inline-size: 100%;
+	block-size: 0.4rem;
+	border-radius: var(--radius-full);
+	background-color: var(--border);
+	overflow: hidden;
+}
+.upload-progress-bar__fill {
+	block-size: 100%;
+	background-color: var(--accent);
+	transition: inline-size var(--transition-speed) var(--transition-ease);
+}
+.upload-progress-table__done {
+	color: var(--good);
+}
+.upload-progress-table__error {
+	color: var(--bad);
 }
 .file-search-field:focus-within {
 	border-color: var(--accent);
@@ -8085,7 +8194,7 @@ button[type="button"].media-mini-bar-btn {
 	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
 	inset-inline: 0;
-	inset-block-start: 0;
+	inset-block-start: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 	z-index: 500;
 	pointer-events: none;
 }
@@ -10262,7 +10371,7 @@ button[type="button"].media-mini-bar-btn {
    z-index ниже toast-host (1000), чтобы уведомления не перекрывались. */
 .diag-trace-badge {
 	position: fixed;
-	inset-block-end: var(--space-s);
+	inset-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	inset-inline-start: var(--space-s);
 	z-index: 400;
 	padding: var(--space-3xs) var(--space-xs);
@@ -10348,15 +10457,13 @@ button[type="button"].media-mini-bar-btn {
 .shell {
 	padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
 	padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
-	/* Э4.7 → v0.0.5 ТЗ-NATIVE-APPS — adjustResize в манифесте резайзил окно
-	   нативно при каждой клавиатуре, что на реальном телефоне ломало ввод
-	   текста (апстрим-баг Chromium issues.chromium.org/issues/457682720,
-	   курсор теряет позицию при ресайзе с открытой IME). Теперь манифест —
-	   adjustNothing (окно/WebView НИКОГДА не резайзится нативно), и ЭТОТ
-	   calc() — единственное место, где контент подстраивается под
-	   клавиатуру: --keyboard-inset инжектит MainActivity.java из реального
-	   WindowInsetsCompat.Type.ime(). На Android — значение из нативного
-	   кода; на остальных платформах переменная никогда не установлена,
+	/* Манифест Android — adjustNothing, окно/WebView никогда не резайзится
+	   нативно (ресайз с открытой IME ломает курсор — Chromium-баг
+	   issues.chromium.org/issues/457682720), поэтому этот calc() —
+	   единственное место, где контент подстраивается под клавиатуру.
+	   --keyboard-inset: на Android инжектит MainActivity.java из
+	   WindowInsetsCompat.Type.ime(), на вебе — keyboard-inset.js из
+	   visualViewport; на остальных платформах переменная не установлена,
 	   calc() вырождается в обычный 100dvh. */
 	block-size: calc(100dvh - var(--keyboard-inset, 0px));
 }
@@ -11558,7 +11665,9 @@ nav.tabs.reel .tab {
 	gap: var(--space-m);
 }
 .contact-groups {
-	gap: var(--space-2xs);
+	/* Живой фидбег — зазор между рядом групп/"+" и формой новой группы был
+	   едва заметен. */
+	gap: var(--space-m);
 }
 .contact-chips {
 	display: flex;
@@ -11783,6 +11892,11 @@ nav.tabs.reel .tab {
 }
 .contacts-requests .ucard__actions {
 	justify-self: stretch;
+	/* nowrap-кнопки (custom.css выше) на совсем узкой ширине могут вместе
+	   не поместиться в ряд даже на всю ширину карточки — пускай тогда
+	   переносятся в столбец (flex-basis:0 у кнопок ниже делает каждую
+	   строку шириной во всю карточку), а не вылезают за край. */
+	flex-wrap: wrap;
 }
 .contacts-requests .ucard__actions button {
 	flex: 1 1 0;
@@ -11836,8 +11950,16 @@ nav.tabs.reel .tab {
 	gap: var(--space-s);
 }
 .profile-hero {
+	/* Было 16:9 (макет 0teqm.jpg, "фото-герой") — живой фидбек: превью на
+	   редактировании расходилось с тем, как аватар реально рендерится
+	   везде в приложении (.account-avatar — квадрат, см. выше) и как его
+	   реально хранит avatar-resize.js (центр-кроп в квадрат ≤256px).
+	   Широкий превью вводил в заблуждение, что сохранится не то, что
+	   видно при редактировании. */
 	inline-size: 100%;
-	aspect-ratio: 16 / 9;
+	aspect-ratio: 1 / 1;
+	max-inline-size: 20rem;
+	margin-inline: auto;
 	border-radius: var(--radius-lg);
 	overflow: hidden;
 	background-color: var(--surface-raised);
@@ -12068,7 +12190,11 @@ nav.tabs.reel .tab {
 	min-block-size: 0;
 	padding: 0;
 	border-radius: var(--radius-full);
-	border: 0;
+	/* Живой фидбег (после перехода на светлую тему по умолчанию) — дорожка
+	   на 22%-непрозрачном fg почти сливалась со светлым фоном, оставался
+	   виден только белый ползунок ("выглядит как кругляш, не переключатель").
+	   border держит форму пилюли видимой независимо от темы/фона. */
+	border: var(--border-width) solid var(--hairline);
 	background-color: color-mix(in oklch, var(--fg), transparent 78%);
 	position: relative;
 	transition: background-color var(--transition-speed) var(--transition-ease);
@@ -12101,8 +12227,15 @@ nav.tabs.reel .tab {
 	font-weight: var(--weight-normal);
 	color: var(--fg);
 }
-/* Флажок: скруглённый квадрат акцентной рамки с галочкой (макет doESI.jpg). */
-.set-row__check {
+/* Флажок: скруглённый квадрат акцентной рамки с галочкой (макет doESI.jpg).
+   Живой фидбек — этот вид раньше был только у "Кто здесь" → "Показать
+   себя" (.set-row__check), везде ещё чекбоксы стояли нативной формы ОС
+   (только accent-color, minimal.css). Теперь это дефолт для ЛЮБОГО
+   чекбокса — кроме .set-row__switch (другой виджет, пилюля вкл/выкл) и
+   .group-filter-chip (у неё checkbox нулевого размера, вид целиком на
+   чипе/label, выше по специфичности — не пересекается). */
+.set-row__check,
+input[type="checkbox"]:not(.set-row__switch) {
 	appearance: none;
 	flex: none;
 	inline-size: 1.75rem;
@@ -12116,7 +12249,8 @@ nav.tabs.reel .tab {
 	place-items: center;
 	cursor: pointer;
 }
-.set-row__check:checked::after {
+.set-row__check:checked::after,
+input[type="checkbox"]:not(.set-row__switch):checked::after {
 	content: "";
 	inline-size: 0.4rem;
 	block-size: 0.8rem;
@@ -13115,10 +13249,17 @@ nav.tabs.reel .tab {
 }
 
 /* ---- 13. Быстрая связь (макеты a9axE.jpg, pZ6X2.jpg) ------------------- */
-/* Телефон: окно на весь экран, без карточки и подсветки. */
+/* Телефон: окно на весь экран, без карточки и подсветки. padding:0 здесь
+   раньше стирал safe-area-top/bottom из базового .rooms-overlay выше —
+   заголовок и кнопки закрытия/сворачивания уходили под статус-бар (живой
+   баг, подтверждён на телефоне). Инлайн — 0 (полноэкранный edge-to-edge),
+   блочный — только safe-area, без --space-l: внутренний отступ уже даёт
+   .quick-entry (padding-block-start своего header). */
 @media (max-width: 47.99em) {
 	.rooms-overlay {
-		padding: 0;
+		padding-inline: 0;
+		padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+		padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 		align-items: stretch;
 	}
 	.rooms-overlay-panel {
@@ -13192,12 +13333,23 @@ nav.tabs.reel .tab {
 	display: flex;
 	gap: 0;
 	border-block-end: var(--border-width) solid var(--hairline);
+	/* Живой фидбег — "По названию и паролю" не помещалось в треть ширины
+	   экрана, переносилось на 2 строки и растягивало ряд по высоте (align-
+	   items:stretch — все три вкладки подстраиваются под самую высокую).
+	   Вкладки теперь размером по содержимому в одну строку; если втроём не
+	   помещаются — сам ряд уходит в горизонтальный скролл (внутри себя, не
+	   страницы), а не ломает высоту. */
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.folder-tabs::-webkit-scrollbar {
+	display: none;
 }
 .folder-tab,
 .folder-tab + .folder-tab {
-	flex: 1 1 0;
+	flex: none;
 	margin: 0;
-	padding: var(--space-xs) var(--space-3xs);
+	padding: var(--space-xs) var(--space-s);
 	background: none;
 	border: 0;
 	border-block-end: 2px solid transparent;
@@ -13209,6 +13361,7 @@ nav.tabs.reel .tab {
 	font-weight: var(--weight-normal);
 	line-height: 1.25;
 	text-align: center;
+	white-space: nowrap;
 }
 .folder-tab::before {
 	display: none;
@@ -13323,6 +13476,11 @@ nav.tabs.reel .tab {
 	background: none;
 	border: 0;
 	padding: 0;
+	/* Живой фидбек — ссылка-приглашение (base64, без пробелов/дефисов) не
+	   содержит точек переноса: .truncate (-webkit-line-clamp) клипует по
+	   ВЫСОТЕ, но строке без точек переноса всё равно есть куда "вытянуться"
+	   по ширине до клипа — экран расползался горизонтальным скроллом. */
+	overflow-wrap: anywhere;
 }
 .quick-ephemeral {
 	margin: 0;
@@ -13465,23 +13623,6 @@ body:has(.auth-layout) {
 	gap: var(--space-s);
 	padding-block: var(--space-s) var(--space-l);
 }
-.unlock-brand {
-	margin: 0 0 var(--space-l);
-	color: var(--accent);
-	gap: var(--space-2xs);
-}
-.brand-mark {
-	inline-size: 2rem;
-	block-size: 2rem;
-	color: var(--accent);
-	flex: none;
-}
-.unlock-brand .logo-name {
-	color: var(--fg);
-	font-size: var(--step-2);
-	font-weight: var(--weight-medium);
-	letter-spacing: -0.01em;
-}
 .unlock-home h1 {
 	font-family: var(--font-body);
 	font-size: var(--step-3);
@@ -13489,12 +13630,14 @@ body:has(.auth-layout) {
 	letter-spacing: -0.02em;
 	line-height: var(--line-height-heading);
 	color: var(--fg);
-	margin: 0 0 var(--space-2xs);
+	/* Живой фидбек — заголовку и особенно абзацу под ним не хватало воздуха
+	   (--space-2xs/0 читались как слипшийся блок). */
+	margin: 0 0 var(--space-s);
 }
 .hero-lead {
 	color: var(--muted);
 	font-size: var(--step-0);
-	margin: 0;
+	margin: 0 0 var(--space-l);
 }
 .hero-section {
 	gap: 0;
@@ -13525,7 +13668,13 @@ body:has(.auth-layout) {
 }
 /* Аккаунт на устройстве: круг-аватар, имя, подпись. */
 .unlock-home .account-picker-btn {
-	background: none;
+	/* Живой фидбек — var(--surface-raised) внутри .auth-layout намеренно
+	   приравнен к var(--surface) (см. .auth-layout выше, панель входа сама
+	   красится в --surface) — кнопка аккаунта на этом фоне была видна
+	   только по border'у. Формула "raised" (color-mix.../--fg 5%) — та же,
+	   что даёт сам --surface-raised вне .auth-layout, но явно, в обход
+	   локального переопределения переменной. */
+	background-color: color-mix(in oklch, var(--surface), var(--fg) 5%);
 	border: var(--border-width) solid transparent;
 	border-radius: var(--radius-lg);
 	padding: var(--space-2xs) var(--space-xs);
@@ -13630,17 +13779,6 @@ body:has(.rooms-overlay:not(.is-minimized)) .top-corner-actions {
 	text-align: start;
 }
 
-/* Логотип уже в самой колонке входа (.unlock-brand) — дубль в шапке прячем визуально. */
-.auth-layout:has(.unlock-home) .site-header .logo-link {
-	position: absolute;
-	inline-size: 1px;
-	block-size: 1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-}
-.auth-layout:has(.unlock-home) .site-header {
-	justify-content: flex-end;
-}
 .unlock-conn details,
 .unlock-conn details[open] > summary {
 	box-shadow: none;
@@ -14218,6 +14356,9 @@ button:has(> .icon),
 	background-color: var(--surface);
 	border: var(--border-width) solid var(--hairline);
 	border-radius: var(--radius-lg);
+	/* Живой фидбег — форма создания и "Мои каналы"/подписки под ней почти
+	   слипались, не было видимого контейнера-разделителя между ними. */
+	margin-block-end: var(--space-l);
 }
 .channel-form > h2 {
 	font-family: var(--font-body);
@@ -14246,6 +14387,10 @@ button:has(> .icon),
 .field-icon input,
 .field-icon textarea {
 	padding-inline-start: 2.75rem;
+	/* Живой фидбег — базовое input/textarea (minimal.css) красится в тот же
+	   --surface, что и .channel-form-панель вокруг — поле было видно
+	   только по border'у. var(--bg) обычно светлее --surface. */
+	background-color: var(--bg);
 }
 .field-icon:focus-within .field-icon__ico {
 	color: var(--accent);
@@ -14367,7 +14512,9 @@ button:has(> .icon),
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: var(--space-m);
+	padding-inline: var(--space-m);
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	background-color: var(--overlay-backdrop-tint);
 }
 .modal-card {

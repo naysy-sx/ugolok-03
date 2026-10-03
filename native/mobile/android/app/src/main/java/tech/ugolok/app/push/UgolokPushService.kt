@@ -360,9 +360,12 @@ class UgolokPushService : Service() {
     }
 
     // П2.4 «m»: без отправителя и текста (В1) — заменяет, не плодит (фикс. id).
+    // Заголовок нейтральный, не "Новое сообщение" — "m" приходит и для заявок
+    // в контакты/канал (тот же p-тег gift wrap, push-мост не может их
+    // различить, см. matcher.go), конкретная формулировка была бы неточной.
     private fun showMessageNotification() {
         val notif = NotificationCompat.Builder(this, CHANNEL_MESSAGES)
-            .setContentTitle("Новое сообщение")
+            .setContentTitle("Новое уведомление")
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setAutoCancel(true)
             .setContentIntent(openAppIntent(UgolokPushPlugin.ROUTE_MESSAGE))

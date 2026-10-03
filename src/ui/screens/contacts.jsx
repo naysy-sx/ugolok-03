@@ -418,7 +418,7 @@ export default function Contacts() {
 					</ul>
 
 					{showGroupForm && (
-						<form class="contact-group-form row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleCreateGroup}>
+						<form class="contact-group-form row" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={handleCreateGroup}>
 							<label class="visually-hidden" for="new-group-name">
 								{t("contacts.newGroupNameLabel")}
 							</label>
@@ -431,7 +431,7 @@ export default function Contacts() {
 								onInput={(e) => setNewGroupName(e.currentTarget.value)}
 							/>
 							<button type="submit" disabled={busy}>
-								{t("common.add")}
+								<IconPlus /> {t("common.add")}
 							</button>
 						</form>
 					)}

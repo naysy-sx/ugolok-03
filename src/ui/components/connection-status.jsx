@@ -40,14 +40,19 @@ export default function ConnectionStatusPanel() {
 
 	const relay = relayStatusInfo(connState.value, synced.value);
 	const blossom = BLOSSOM_LABEL_KEYS[blossomStatus.value];
-
-	if (relay.tone === "ok" && blossomStatus.value === "reachable") return null;
+	const isQuiet = relay.tone === "ok" && blossomStatus.value === "reachable";
 
 	// bad важнее warn (§6).
 	const worst = TONE_RANK[blossom.tone] > TONE_RANK[relay.tone] ? blossom : relay;
 
+	// Живой фидбек — relay в деве отваливается/восстанавливается часто,
+	// панель раньше монтировалась/демонтировалась (return null) вместе с
+	// этим, из-за чего всё содержимое под ней (aside, экраны типа «Каналы»)
+	// прыгало вверх-вниз при каждом переключении. "Тишина = норма" (§6)
+	// остаётся — просто тишина теперь невидимый, а не нулевой по высоте
+	// элемент, место зарезервировано всегда.
 	return (
-		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-live="polite">
+		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-live="polite" aria-hidden={isQuiet || undefined} data-quiet={isQuiet || undefined}>
 			<span class="conn-dot" aria-hidden="true" />
 			{worst.labelKey ? t(worst.labelKey) : worst.label}
 		</div>

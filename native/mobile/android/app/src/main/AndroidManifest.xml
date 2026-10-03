@@ -16,22 +16,13 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Э4.7 ТЗ-NATIVE-APPS — adjustResize стоял здесь (см. git-историю),
-             живая проверка v0.0.4 на РЕАЛЬНОМ телефоне (не эмуляторе — там
-             плавающая клавиатура не воспроизводит это) вскрыла гораздо худший
-             баг: adjustResize заставляет ОС физически резайзить окно/WebView
-             на КАЖДОЕ появление клавиатуры, а это — задокументированный
-             нерешённый в WebView <144 баг Chromium (issues.chromium.org/
-             issues/457682720): курсор теряет позицию при ресайзе с открытой
-             IME, новый символ вставляется в начало поля вместо конца
-             ("Здесь" → "ьседЗ" посимвольно) — ввод текста вслепую ломается
-             полностью, это хуже, чем решаемая adjustResize проблема
-             (клавиатура перекрывает поле). adjustNothing — ОС никогда не
-             трогает размер окна; вместо неё раскладку под клавиатуру делает
-             CSS: MainActivity кладёt реальный WindowInsetsCompat.Type.ime()
-             в CSS-переменную keyboard-inset, а .shell (custom.css) сама
-             уменьшает высоту через calc() от неё — тот же результат, но без
-             единого вызова на resize окна. -->
+        <!-- adjustNothing: ОС никогда не резайзит окно/WebView при показе
+             клавиатуры. adjustResize задокументированно ломает позицию
+             курсора при вводе на WebView <144 (issues.chromium.org/issues/
+             457682720). Раскладку под клавиатуру вместо resize делает CSS:
+             MainActivity кладёт WindowInsetsCompat.Type.ime() в CSS-переменную
+             keyboard-inset, .shell (custom.css) уменьшает высоту через
+             calc() от неё. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"

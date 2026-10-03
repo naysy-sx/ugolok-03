@@ -170,27 +170,20 @@ function errorMessage(result) {
 // FILES-FIX-SPEC.md §5.1.2, TZ-FIX-FILES-MEDIA-STATIC.md решение №2 — прогресс
 // обязан отражать СЕТЬ, не только шифрование (аудит: "100% за секунды, потом
 // минуты тишины на единственном PUT" читалось пользователем как зависание).
-// index — порядковый номер ТЕКУЩЕГО в работе файла (concurrency=2 — несколько
-// job'ов идут одновременно, index=filesDone+1 — тот же смысл, что раньше
-// имел однопоточный for, "который по счёту").
-function uploadProgressText(state) {
-	const index = state.filesDone + 1;
-	const total = state.filesTotal;
-	const name = state.fileName ?? "";
-	if (state.phase === "upload") {
-		return t("files.uploadingProgressUpload", {
-			name,
-			index,
-			total,
-			sent: formatFileSize(state.bytesSent ?? 0),
-			size: formatFileSize(state.bytesTotal ?? 0),
-		});
-	}
-	if (state.phase === "manifest") {
-		return t("files.uploadingProgressManifest", { name, index, total });
-	}
-	const percent = state.chunksTotal ? Math.round((state.chunksDone / state.chunksTotal) * 100) : 0;
-	return t("files.uploadingProgress", { name, index, total, percent });
+// Единая шкала 0-100% на файл: encrypt — первая половина (по chunksDone/
+// chunksTotal), upload — вторая половина (по bytesSent/bytesTotal), manifest —
+// короткий финальный штрих перед done. Раньше (однострочный общий статус,
+// concurrency:2 — см. handleFilesSelected) progress двух параллельных job'ов
+// писался в ОДНО общее поле и гонялся — строка мелькала то одним, то другим
+// файлом. Живой фидбек (по памяти, не на этой сессии): "быстро сменяющие
+// друг друга сообщения". Таблица строк на файл ниже — свой прогресс на
+// свою строку, гонки нет по построению (каждый job пишет только в "свой" i).
+function fileProgressPercent(p) {
+	if (!p) return 0;
+	if (p.phase === "encrypt" && p.chunksTotal) return Math.round((p.chunksDone / p.chunksTotal) * 50);
+	if (p.phase === "upload" && p.bytesTotal) return 50 + Math.round((p.bytesSent / p.bytesTotal) * 50);
+	if (p.phase === "manifest") return 95;
+	return 0;
 }
 
 // Пока БЕЗ виртуализации (задача 3.2) и миниатюр (3.8) — вторая волна
@@ -239,7 +232,7 @@ export default function Files() {
 	// понятным как "файл N из M"). uploadAbortRef — ОДИН AbortController на
 	// ТЕКУЩИЙ файл; отмена останавливает и его, и всю оставшуюся очередь
 	// (не переходит к следующему файлу молча).
-	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, phase, chunksDone, chunksTotal, bytesSent, bytesTotal} | null
+	const [uploadFiles, setUploadFiles] = useState(null); // [{name, percent, status: "active"|"done"|"error"}] | null — по одной записи на файл, индекс === позиция в исходном files[]
 	const [uploadError, setUploadError] = useState("");
 	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
 	const [typeFilter, setTypeFilter] = useState("all");
@@ -287,16 +280,25 @@ export default function Files() {
 
 		const succeeded = []; // {i, result}
 		const failed = []; // {i, err}
-		setUploadState({ filesTotal: files.length, filesDone: 0 });
+		setUploadFiles(files.map((file) => ({ name: file.name, percent: 0, status: "active" })));
 
-		const jobs = files.map((file) => ({
+		function updateFileAt(i, patch) {
+			setUploadFiles((prev) => {
+				if (!prev) return prev;
+				const next = [...prev];
+				next[i] = { ...next[i], ...patch };
+				return next;
+			});
+		}
+
+		const jobs = files.map((file, i) => ({
 			file,
 			options: {
 				name: file.name,
 				mime: file.type || "application/octet-stream",
 				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
-				onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, fileName: file.name, ...p } : prev)),
+				onProgress: (p) => updateFileAt(i, { percent: fileProgressPercent(p) }),
 			},
 		}));
 
@@ -322,12 +324,12 @@ export default function Files() {
 					recordBlobs(result.blobs, { purpose: "files", target: currentFolderId.value, name: files[i].name, server: uploadTarget() }).catch(() => {});
 					succeeded.push({ i, result });
 					noteSettled();
-					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+					updateFileAt(i, { percent: 100, status: "done" });
 				},
 				onJobError: (i, err) => {
 					failed.push({ i, err });
 					noteSettled();
-					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+					updateFileAt(i, { status: "error" });
 				},
 			}).catch(() => {}); // ошибки уже собраны per-job через onJobError выше
 		});
@@ -355,7 +357,7 @@ export default function Files() {
 		}
 
 		uploadAbortRef.current = null;
-		setUploadState(null);
+		setUploadFiles(null);
 	}
 
 	function cancelUpload() {
@@ -786,7 +788,7 @@ export default function Files() {
 				<>
 					{view === "own" && (
 						<>
-							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadState} aria-label={t("files.uploadFileButton")} title={t("files.uploadFileButton")}>
+							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadFiles} aria-label={t("files.uploadFileButton")} title={t("files.uploadFileButton")}>
 								<IconUpload aria-hidden="true" /> <span class="btn-label">{t("files.uploadFileButton")}</span>
 							</button>
 							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)} aria-label={t("files.newFolderButton")} title={t("files.newFolderButton")}>
@@ -971,9 +973,28 @@ export default function Files() {
 						{error}
 					</p>
 				)}
-				{uploadState && (
-					<div class="row file-upload-progress" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
-						<span>{uploadProgressText(uploadState)}</span>
+				{uploadFiles && (
+					<div class="upload-progress-panel stack" style={{ "--gap": "var(--space-s)" }} role="status">
+						<table class="upload-progress-table">
+							<tbody>
+								{uploadFiles.map((f, i) => (
+									<tr key={i}>
+										<td class="upload-progress-table__name">{f.name}</td>
+										<td class="upload-progress-table__bar">
+											{f.status === "done" ? (
+												<IconCheck class="icon upload-progress-table__done" aria-hidden="true" />
+											) : f.status === "error" ? (
+												<IconCross class="icon upload-progress-table__error" aria-hidden="true" />
+											) : (
+												<div class="upload-progress-bar">
+													<div class="upload-progress-bar__fill" style={{ inlineSize: `${f.percent}%` }} />
+												</div>
+											)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 						<button type="button" class="btn--ghost" onClick={cancelUpload}>
 							{t("common.undo")}
 						</button>
