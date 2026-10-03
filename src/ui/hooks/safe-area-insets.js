@@ -18,7 +18,7 @@ function ensureProbe() {
 	probe.setAttribute("aria-hidden", "true");
 	probe.style.cssText =
 		"position:fixed;inset:0;visibility:hidden;pointer-events:none;" +
-		"padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);";
+		"padding:var(--safe-area-inset-top,env(safe-area-inset-top,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)) var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) var(--safe-area-inset-left,env(safe-area-inset-left,0px));";
 	document.body.appendChild(probe);
 	return probe;
 }
