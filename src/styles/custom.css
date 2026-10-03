@@ -3290,16 +3290,40 @@ body:has(.auth-layout) {
 	background-color: var(--bg);
 }
 
-/* unlock.jsx: шаги loading/db-error/create-generate/create-confirm/
-   import-mnemonic/import-key/advanced-password/done возвращают СВОЙ
-   голый <main class="center stack"> вместо .screen/.auth-layout (ранний
-   return до общей обёртки) — без этого правила заголовок и кнопки
-   упираются в статус-бар/навигацию (живой баг, подтверждён на телефоне:
-   "Уголок" под часами на шаге подтверждения фразы). html[data-auth-flow]
-   выставляется и снимается самим Unlock() ровно на время этих шагов. */
+/* unlock.jsx: шаги loading/db-error возвращают СВОЙ голый
+   <main class="center stack"> вместо .screen/.auth-layout (ранний return
+   до общей обёртки) — без этого правила заголовок и кнопки упираются в
+   статус-бар/навигацию. html[data-auth-flow] выставляется и снимается
+   самим Unlock() ровно на время этих шагов. Шаги create-generate/
+   create-confirm/import-mnemonic/import-key/advanced-password/done тоже
+   голые, но у них ПЕРЕД main есть renderAuthHeader() — там отступ сверху
+   не на main (иначе шапка остаётся над отступом, то есть под статус-баром
+   — живой баг, подтверждён на телефоне: лого и часы в одной строке), а
+   на самой шапке, см. .site-header--standalone ниже. */
 html[data-auth-flow] main.center.stack {
-	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+}
+html[data-auth-flow] main.center.stack:first-child {
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+}
+/* Экран — голый фрагмент <header/><main/> без .auth-layout-родителя,
+   чей padding-block-start иначе взял бы это на себя (см. главный
+   step==="main", там шапка безопасна под .auth-layout). Здесь шапка —
+   первый элемент на странице и сама отвечает за отступ под статус-бар. */
+/* Специфичность важна: .site-header (строка ниже в файле) задаёт
+   padding-block: var(--space-s) ШОРТХЕНДОМ — при равной специфичности
+   (оба — один класс) она идёт позже по тексту файла и побеждала бы,
+   стирая наш padding-block-start обратно в space-s без safe-area (живой
+   баг: лого всё равно под часами, хотя правило выше технически есть).
+   Два класса в селекторе — специфичность выше, побеждает независимо
+   от порядка объявления в файле. */
+.site-header.site-header--standalone {
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	/* main рядом (той же разметки) уже получает paddingInline var(--space-m)
+	   инлайн-стилем в JSX — у шапки своего горизонтального отступа не было
+	   вовсе (на step==="main" это давал .auth-layout, тут такого родителя
+	   нет), лого прилипало к левому краю экрана (живой баг на телефоне). */
+	padding-inline: var(--space-m);
 }
 
 .unlock-home {

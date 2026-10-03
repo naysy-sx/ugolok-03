@@ -81,8 +81,14 @@ export default function Unlock() {
 	// логотипу/Справке просто возвращает на главный шаг — на остальных
 	// шагах там всё равно нет своего mainView==="help" контента.
 	function renderAuthHeader() {
+		// Шаги мнемоники/подтверждения/импорта/пароля/done возвращают голый
+		// <>…<main></> без .screen/.auth-layout — тот wrapper обычно и
+		// отвечает за отступ под статус-бар (его padding-block-start на
+		// самом .auth-layout, см. custom.css). Здесь шапка — первый элемент
+		// на экране, значит ей и считать этот отступ самой (--standalone).
+		const standalone = step !== "main";
 		return (
-			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+			<header class={standalone ? "site-header site-header--standalone bar" : "site-header bar"} style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<button
 					type="button"
 					class="logo row logo-link"
@@ -365,7 +371,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createGenerate.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -401,7 +406,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createConfirm.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -463,7 +467,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importMnemonic.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -509,7 +512,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importKey.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -570,7 +572,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.advancedPassword.title")}</h1>
 				</header>
 				<form class="stack" style={{ "--gap": "var(--space-m)" }} onSubmit={handleAdvancedPasswordSubmit}>
@@ -608,7 +609,6 @@ export default function Unlock() {
 				{renderAuthHeader()}
 				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.done.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
