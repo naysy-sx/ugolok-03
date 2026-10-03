@@ -4,12 +4,21 @@
 // не пишем (ALGO.MD §8: "будет неверен для кириллицы").
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
+function extOf(name) {
+	if (typeof name !== "string") return "";
+	const i = name.lastIndexOf(".");
+	return i <= 0 || i === name.length - 1 ? "" : name.slice(i + 1);
+}
+
 const COMPARATORS = {
 	name: (a, b) => collator.compare(a.displayName, b.displayName),
 	// Папки перед файлами внутри одного критерия сортировки — общий
 	// файл-менеджерный обычай, не запрошено явно, но ожидаемо по умолчанию.
 	kind: (a, b) => (a.kind === b.kind ? 0 : a.kind === "dir" ? -1 : 1),
-	size: (a, b) => (a.blob?.size ?? 0) - (b.blob?.size ?? 0),
+	// size — размер файла (из манифеста; вызывающий кладёт его в entry.size), blob.size — прежняя форма записей.
+	size: (a, b) => (a.size ?? a.blob?.size ?? 0) - (b.size ?? b.blob?.size ?? 0),
+	// type — расширение из имени (без манифеста): «jpg» < «pdf»; без расширения — в начале.
+	type: (a, b) => collator.compare(extOf(a.displayName), extOf(b.displayName)),
 };
 
 // entries: [{id, displayName, kind, blob, ...}] — узлы ОДНОЙ папки (уже

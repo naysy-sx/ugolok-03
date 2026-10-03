@@ -63,3 +63,17 @@ export async function loadChannelChatWindow(ownerPubkey, dbKey, channelId, { lim
 	const hasMore = source.length > limit;
 	return { messages: windowMessages, hasMore };
 }
+
+// Счётчики на вкладках канала: сколько записей видно на «Постах» и сколько сообщений в
+// «Общем чате канала». Те же фильтры, что у loadPostsWindow/loadChannelChatWindow (без
+// удалённых, без черновиков, без игнорируемых), но считаются по ВСЕМУ каналу, не по окну.
+// Расшифровка не нужна: deleted/status/authorPubkey лежат в открытых полях строки.
+export async function countChannelContent(ownerPubkey, channelId) {
+	const postRows = await db.table("posts").where("ownerPubkey").equals(ownerPubkey).toArray();
+	const posts = postRows.filter((r) => r.channelId === channelId && !r.deleted && r.status !== "draft").length;
+	let chatRows = await db.table("channelMessages").where("ownerPubkey").equals(ownerPubkey).toArray();
+	chatRows = chatRows.filter((r) => r.channelId === channelId && !r.deleted);
+	const ignored = await getIgnoredSet(ownerPubkey, channelId);
+	if (ignored.size > 0) chatRows = chatRows.filter((r) => !ignored.has(r.authorPubkey));
+	return { posts, chat: chatRows.length };
+}

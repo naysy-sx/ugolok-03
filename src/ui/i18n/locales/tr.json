@@ -46,6 +46,12 @@
 			"default": "(varsayılan)"
 		},
 		"scaleLabel": "Arayüz ölçeği",
+		"scale": {
+			"small": "Küçük (%90)",
+			"medium": "Orta (%100)",
+			"large": "Büyük (%110)",
+			"xlarge": "Çok büyük (%125)"
+		},
 		"accentColorTitle": "Vurgu rengi",
 		"paletteCustomizeButton": "Özelleştir",
 		"paletteHueLabel": "Ton",
@@ -65,7 +71,11 @@
 			"amethyst": "Ametist",
 			"magenta": "Macenta",
 			"fuchsia": "Fuşya",
-			"pink": "Pembe"
+			"pink": "Pembe",
+			"terracotta": "Terrakota",
+			"steel": "Çelik",
+			"sand": "Kum",
+			"ink": "Mürekkep"
 		},
 		"notificationsTitle": "Bildirimler",
 		"enableNotifications": "Bildirimleri etkinleştir",
@@ -110,7 +120,8 @@
 			"view": "Görünüm",
 			"notifications": "Bildirimler",
 			"network": "Ağ",
-			"session": "Oturum"
+			"session": "Oturum",
+			"storage": "Depolama"
 		},
 		"viewSectionHint": "Vurgu rengi tüm paleti belirler — arka plan, yüzeyler ve kenarlıklar ona göre şekillenir.",
 		"themeLabel": "Tema",
@@ -131,7 +142,27 @@
 		"perfLogCopied": "Panoya kopyalandı",
 		"perfLogManualHint": "Pano kullanılamıyor — seçip elle kopyalayın",
 		"sendReadReceiptsLabel": "Okundu bilgisi gönder",
-		"sendReadReceiptsHint": "Kişiniz sohbeti açtığınızı görür. İletildi bilgisi yine gider — yalnızca iletinin bu aygıta ulaştığını gösterir."
+		"sendReadReceiptsHint": "Kişiniz sohbeti açtığınızı görür. İletildi bilgisi yine gider — yalnızca iletinin bu aygıta ulaştığını gösterir.",
+		"pushBackground": {
+			"title": "Arka plan bildirimleri",
+			"hint": "Ugolok kapalıyken bile yeni mesaj ve arama bildirimleri alın",
+			"enableLabel": "Arka plan bildirimlerini etkinleştir",
+			"actionError": "Bir şeyler ters gitti — lütfen tekrar deneyin",
+			"batteryLabel": "Pil kısıtlaması yok",
+			"notificationsLabel": "Bildirimlere izin verildi",
+			"fullScreenLabel": "Tam ekran arama gösterimine izin verildi",
+			"runningLabel": "Bağlantı aktif",
+			"fixButton": "Düzelt",
+			"lastConnectedLabel": "Son bağlantı",
+			"neverConnected": "hiç",
+			"autostartTitle": "Otomatik başlatma",
+			"autostartHint": "Bazı telefonlarda (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) sistem, pil tasarrufu için arka plan uygulamalarını kendiliğinden kapatır. Bildirimlerin güvenilir şekilde gelmesi için üretici ayarlarından Ugolok'un arka planda çalışmasına ve otomatik başlamasına izin verin.",
+			"openAutostartButton": "Otomatik başlatma ayarlarını aç",
+			"privacyExplanation": "Bildirim sunucusu yalnızca bir mesajın veya aramanın ulaştığı anı bilir — sıradan bir aktarım sunucusu gibi. Metni, göndereni veya içeriği asla görmez.",
+			"unlockLimitation": "Sistem uygulamayı bellekten kaldırmışsa, bir bildirime dokunmak parolanızı yeniden girmenizi gerektirir — siz yazmayı bitirmeden arama sona erebilir.",
+			"onboardingToastTitle": "Arka plan bildirimleri",
+			"onboardingToastBody": "Ugolok kapalıyken bile mesaj ve arama bildirimleri alın. Ayarlamak için dokunun."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil ve ana menü",
@@ -140,7 +171,9 @@
 		"unreadAriaLabel": "okunmamış: {{count}}",
 		"searchLabel": "Search chats and channels",
 		"searchPlaceholder": "Search chats and channels",
-		"discoverHeading": "Keşfet",
+		"discoverHeading": "Kimler burada",
+		"discoverHintVisible": "{{time}} saatine kadar görünüyorsun",
+		"discoverHintHidden": "Görünmüyorsun",
 		"addContact": "Kişi ekle",
 		"emptyTitle": "Henüz boş",
 		"emptyBody": "Listende kimse yok. “Keşfet”e göz at — orada tanışmaya açık kişiler var.",
@@ -160,7 +193,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Küçültüldü — dönmek için dokunun",
-		"serviceUnavailable": "hizmet kullanılamıyor"
+		"serviceUnavailable": "hizmet kullanılamıyor",
+		"copyAddress": "Adresi kopyala",
+		"sectionTalk": "Sohbet",
+		"sectionServices": "Servisler",
+		"sectionMore": "Diğer",
+		"navChats": "Sohbetler",
+		"navRequests": "İstekler",
+		"navNetwork": "Ağ"
 	},
 	"unlock": {
 		"checking": "Kontrol ediliyor…",
@@ -521,7 +561,9 @@
 			"publishingButton": "Yayınlanıyor…",
 			"publishButton": "Yayınla",
 			"tooLongError": "Metin çok uzun (sınır: {{max}} karakter)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Yeni gönderi",
+			"editPostHeading": "Gönderiyi düzenle"
 		},
 		"commentComposer": {
 			"ariaLabel": "Yeni yorum",
@@ -552,7 +594,7 @@
 		"tabsAriaLabel": "Kanal bölümleri",
 		"tabs": {
 			"posts": "Gönderiler",
-			"chat": "Sohbet",
+			"chat": "Kanal sohbeti",
 			"moderation": "Moderasyon",
 			"editChannelWithName": "«{{name}}» kanalını düzenle",
 			"settings": "Settings"
@@ -600,6 +642,12 @@
 		"showPermissions": "İzinler",
 		"blockAction": "Engelle",
 		"removeFromGroupAria": "{{name}} grubundan çıkar",
+		"removeDialog": {
+			"title": "“{{name}}” kişisi silinsin mi?",
+			"body": "Bu kişiyle olan sohbeti de silebilirsin: bu cihazdaki sohbet listesinden kalıcı olarak kaybolur ve yeniden başlatınca geri gelmez. Karşı tarafta sohbet kalır.",
+			"withChat": "Kişiyi ve sohbeti sil",
+			"contactOnly": "Yalnızca kişiyi sil"
+		},
 		"addToGroupLabel": "gruba",
 		"noContactsAtAll": "Henüz hiç kişiniz yok.",
 		"noContactsInGroups": "Seçili gruplara ait hiçbir kişi yok.",
@@ -615,7 +663,19 @@
 		"addAnywayButton": "Yine de ekle",
 		"blockedSummary": "Engellenenler",
 		"unblockButton": "Engeli kaldır",
-		"noBlocked": "Engellenen kişi yok."
+		"noBlocked": "Engellenen kişi yok.",
+		"card": {
+			"aria": "Kişi kartı: {{name}}",
+			"openAria": "{{name}} kişi kartını aç",
+			"lastSeen": "Son görülme: {{when}}",
+			"openChat": "Sohbeti aç",
+			"about": "Hakkında",
+			"noAbout": "Bu kişi henüz kendisi hakkında bir şey yazmadı.",
+			"details": "Ayrıntılar",
+			"contactSince": "Kişilerde şu tarihten beri",
+			"profileUpdated": "Profil güncellendi",
+			"key": "Anahtar"
+		}
 	},
 	"chat": {
 		"list": {
@@ -629,7 +689,13 @@
 			"backToChatsButton": "Sohbet listesine dön",
 			"toLabel": "Kime",
 			"attachmentsLabel": "Ekler",
-			"composeInvalidRecipient": "Kişilerinizden bir alıcı seçin"
+			"composeInvalidRecipient": "Kişilerinizden bir alıcı seçin",
+			"deleteAria": "{{name}} ile sohbeti sil",
+			"deleteDialog": {
+				"title": "{{name}} ile sohbet silinsin mi?",
+				"body": "Sohbet bu cihazdan kalıcı olarak silinecek. Karşı taraf bilgilendirilmez ve kendi kopyası kalır. İkinizden biri tekrar yazarsa sohbet listede yeniden görünür.",
+				"confirm": "Sohbeti sil"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Sohbeti temizle",
@@ -698,7 +764,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Videoyu aç {{name}}",
 		"openAudioAria": "Sesi aç {{name}}",
@@ -714,7 +781,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Kaydedilen kopyanın anahtarı bulunamadı."
 	},
 	"media": {
 		"buttons": {
@@ -735,7 +803,9 @@
 			"repeatOff": "Tekrar: kapalı",
 			"repeatAll": "Tekrar: tümü",
 			"repeatOne": "Tekrar: bir",
-			"autoplay": "Otomatik oynatma"
+			"autoplay": "Otomatik oynatma",
+			"zoomIn": "Yakınlaştır",
+			"zoomOut": "Uzaklaştır"
 		},
 		"classNames": {
 			"audio": "ses",
@@ -839,7 +909,20 @@
 		"pasteInto": "Yapıştır",
 		"pasteHere": "Buraya yapıştır",
 		"clipboardCopied": "Kopyalandı: {{count}}",
-		"clipboardCut": "Kesildi: {{count}}"
+		"clipboardCut": "Kesildi: {{count}}",
+		"freedFromServer": "Sunucudan silindi",
+		"freedOpenHint": "“{{name}}” sunucudan boşaltıldı ve artık açılmıyor. Gerek yoksa listeden kaldırın.",
+		"shareProgress": "Okuyucular için kopyalanıyor: dosya {{done}} / {{total}} · %{{percent}} · {{name}}",
+		"shareProgressStart": "Okuyucular için dosyalar hazırlanıyor…",
+		"columnPreview": "Simge",
+		"columnName": "Ad",
+		"columnType": "Tür",
+		"columnActions": "İşlemler",
+		"columnSelect": "Seçim",
+		"columnSize": "Boyut",
+		"columnAccess": "Erişim",
+		"kindFolder": "Klasör",
+		"sortBy": "Sırala: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -913,7 +996,7 @@
 		"photoAlt": "Profil fotoğrafı",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Dosyalar",
-		"menuProfile": "Profilim",
+		"menuProfile": "Avatar veya biyografi",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Anahtar ve kurtarma",
@@ -1172,11 +1255,15 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin."
+		"welcomeTooLargeForDeviceCount": "Bu kişinin tek bir mesajda davet gönderilemeyecek kadar çok cihazı var. Lütfen biraz sonra tekrar deneyin.",
+		"blobGone": "Dosya artık sunucuda mevcut değil (sunucudan boşaltılmış olabilir).",
+		"fileTooLargeForServer": "“{{name}}” {{size}} boyutunda, ancak sunucu en fazla {{max}} boyutundaki dosyaları kabul ediyor.",
+		"quotaExceeded": "“{{name}}” için yeterli yer yok: {{need}} gerekli, {{free}} boş.",
+		"storageReadonly": "Depolama şu anda salt okunur: yeni dosya yüklenemez. Daha önce yüklediğiniz her şey açılmaya devam eder."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
-		"exitButton": "Back",
+		"exitButton": "Çık",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
 		"closeAria": "Close and end the call",
@@ -1206,6 +1293,7 @@
 			"chatPlaceholder": "Message…",
 			"sendButton": "Send",
 			"copyInviteAria": "Copy invite link",
+			"inviteHint": "Oda bağlantısı. Davet etmek istediğin kişilere gönder; bu bağlantıyla odaya girip burada sohbet edebilirler.",
 			"inviteCopiedStatus": "Copied",
 			"inviteCopyFailedStatus": "Couldn't copy — select and copy manually",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
@@ -1314,5 +1402,123 @@
 			"share": "Share",
 			"clear": "Clear recording"
 		}
+	},
+	"storage": {
+		"title": "Depolama",
+		"hint": "Yüklediğiniz dosyaların sunucuda ne kadar yer kapladığı ve neyi boşaltabileceğiniz.",
+		"loading": "Yükleniyor…",
+		"empty": "Henüz hiçbir şey yüklemediniz.",
+		"serverFailed": "Sunucudan veri alınamadı.",
+		"retry": "Tekrar dene",
+		"usedTitle": "Sunucuda kullanılan",
+		"usedValue": "{{size}} · dosya: {{count}}",
+		"byPurposeTitle": "Yere göre",
+		"byKindTitle": "Türe göre",
+		"purpose": {
+			"dm": "Sohbetler",
+			"group": "Gruplar",
+			"channel": "Kanallar",
+			"files": "Dosyalar",
+			"share": "Paylaşılan klasörler",
+			"avatar": "Avatarlar",
+			"unknown": "Henüz adsız"
+		},
+		"kind": {
+			"image": "Fotoğraflar",
+			"video": "Video",
+			"audio": "Ses",
+			"document": "Belgeler",
+			"other": "Diğer",
+			"unknown": "Henüz adsız"
+		},
+		"listTitle": "En büyük yüklemeler",
+		"showMore": "Daha fazla göster",
+		"unnamed": "Adsız dosya",
+		"unknownEntry": "{{date}} tarihinde yüklenen dosya",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "gönderildiği yer: {{count}}",
+		"journalLoading": "Dosya adları yükleniyor…",
+		"journalPartial": "Adlar yalnızca kısmen yüklendi — bazı dosyalar adsız gösteriliyor.",
+		"journalMore": "Daha fazla ad yükle",
+		"journalFailed": "Dosya adları ağdan yüklenemedi. Boyutlar doğru, ancak bazı adlar eksik olabilir.",
+		"reconcile": {
+			"button": "Sunucuyla karşılaştır",
+			"running": "Karşılaştırılıyor…",
+			"needFull": "Tüm adlar henüz yüklenmedi. Tekrar deneyin — aksi hâlde gerçek dosyalar tanınmıyor gibi görünebilir.",
+			"clean": "Sunucudaki her şey kayıtlı.",
+			"unknownTitle": "Tanınmayan dosyalar: {{count}} · {{size}}",
+			"unknownRange": "Yüklenme {{from}} – {{to}}",
+			"unknownHint": "Bu dosyalar sunucuda var ama günlüğünüzde yok. Eski mesajlara ait olabilir — silinirse artık açılmazlar.",
+			"deleteUnknown": "Tanınmayanların hepsini sil",
+			"confirmBody": "Sunucudan {{count}} tanınmayan dosya ({{size}}) silinsin mi? Bu geri alınamaz.",
+			"missingTitle": "Günlükte var, sunucuda yok: {{count}}",
+			"forgetMissing": "Günlükten kaldır"
+		},
+		"free": {
+			"button": "Yer aç",
+			"title": "Yer aç",
+			"body": "“{{name}}” ({{size}}) sunucudan silinecek.",
+			"usage": "{{count}} yere gönderildi: henüz indirmemiş olanlar için artık açılmayacak.",
+			"usageNone": "Bu dosya için kayıtlı bir gönderim yok.",
+			"limit": "Alıcıların zaten indirdikleri onlarda kalır. Bu geri alınamaz.",
+			"filesNote": "“Dosyalar” içindeki kayıt varsa, o da çöp kutusuna taşınır.",
+			"confirm": "Yer aç",
+			"cancel": "İptal",
+			"working": "Siliniyor… {{done}} / {{total}}",
+			"done": "Yer açıldı.",
+			"failed": "{{count}} dosya silinemedi. Daha sonra tekrar deneyin.",
+			"sharedCopy": "Bu dosya paylaşılan bir klasörde. Klasörün okuyucuları için açılmayacak.",
+			"sharedOriginal": "Bu dosya paylaşılan bir klasörde. Erişimi olanlarda kalır, ancak yeni okuyucular için açılmaz."
+		},
+		"journalPublishFailed": "Yükleme günlüğü relay’e ulaşmıyor: {{reason}}. Dosyalarınız etkilenmez, ancak diğer cihazlarda adlar görünmez.",
+		"quota": {
+			"unlimited": "Bu sunucuda yer sınırı yok.",
+			"barAria": "Kullanılan depolama",
+			"usedOfLimit": "{{limit}} içinde {{used}} kullanılıyor",
+			"warning": "Yer azalıyor: {{free}} kaldı.",
+			"full": "Depolama dolu. Yeni dosya yüklemek için yer açın veya daha fazlasını edinin.",
+			"readonly": "Depolama salt okunur: yeni dosya yüklenemez, daha önce yüklediğiniz her şey açılmaya devam eder.",
+			"getMore": "Daha fazla yer edin",
+			"plansLink": "Planlar ve daha fazla yer nasıl edinilir"
+		},
+		"notice": {
+			"readonly": "Depolama salt okunur: yeni dosya yüklenemez.",
+			"full": "Depolama dolu: yeni dosya yüklenemez.",
+			"warning": "{{limit}} içinde yalnızca {{free}} kaldı.",
+			"toStorage": "Depolamayı aç",
+			"toPlans": "Daha fazla yer edin"
+		},
+		"serverLabel": "Depolama sunucusu: {{server}}",
+		"filesCount": "Dosya: {{count}}"
+	},
+	"plans": {
+		"title": "Depolama planları",
+		"intro": "Sunucudaki yer anahtar başına sayılır: yüklediğiniz her şey sayılır — dosyalar, önizlemeler, avatarlar.",
+		"yourUsage": "{{limit}} içinden {{used}} kullanıyorsunuz.",
+		"free": {
+			"name": "Ücretsiz",
+			"size": "1 GB",
+			"desc": "Sohbetler ve günlük dosyalar için yeterli."
+		},
+		"paid": {
+			"name": "Genişletilmiş",
+			"size": "100 GB",
+			"price": "Ayda 5 $",
+			"desc": "Fotoğraf, video ve arşiv için."
+		},
+		"how": {
+			"title": "Daha fazla yer nasıl edinilir",
+			"text": "Ödeme şimdilik elle alınıyor. {{email}} adresine yazın ve aşağıdaki açık anahtarınızı (npub) belirtin — yeri ekleyip yanıtlayacağız.",
+			"write": "Destek ekibine yaz",
+			"note": "Açık anahtarınızı paylaşmakta sakınca yok: bize yalnızca yerin kime verileceğini söyler."
+		},
+		"mailSubject": "Daha fazla depolama alanı",
+		"mailBody": "Merhaba! Lütfen anahtarıma daha fazla yer verin: {{npub}}",
+		"back": "Depolamaya dön"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView'i güncelleyin",
+		"body": "{{appName}}, yüklü Android System WebView sürümünüzün henüz desteklemediği modern tarayıcı özelliklerini kullanıyor. Devam etmek için Google Play üzerinden güncelleyin.",
+		"updateButton": "Google Play'de güncelle"
 	}
 }

@@ -203,7 +203,7 @@ test("плагин работает в раскладке контейнера (
 	const dst = join(root, "policy");
 	mkdirSync(join(dst, "server/strfry"), { recursive: true });
 	mkdirSync(join(dst, "src/domain/discovery"), { recursive: true });
-	for (const f of ["whitelist-plugin.mjs", "write-policy.mjs", "rate-limit.mjs"]) writeFileSync(join(dst, "server/strfry", f), readFileSync(resolve("server/strfry", f)));
+	for (const f of ["whitelist-plugin.mjs", "write-policy.mjs", "rate-limit.mjs", "push-forward.mjs"]) writeFileSync(join(dst, "server/strfry", f), readFileSync(resolve("server/strfry", f)));
 	for (const f of ["wordfilter.js", "stopwords.json"]) writeFileSync(join(dst, "src/domain/discovery", f), readFileSync(resolve("src/domain/discovery", f)));
 	writeFileSync(join(dst, "package.json"), '{"type":"module"}\n');
 	const conf = join(root, "conf");

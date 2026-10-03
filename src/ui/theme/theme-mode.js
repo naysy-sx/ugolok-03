@@ -1,3 +1,5 @@
+import { getPlatform } from "../../platform/index.js";
+
 // Этап "визуальный редизайн" (VISUAL.md, Claude Opus) — пользователь: демо-образец
 // форсировал тёмную тему кодом ("не надо так"), но переключатель наверху приложения
 // стоит добавить. mode: "light" | "dark" | null (null = "как в системе", data-theme
@@ -9,6 +11,7 @@ export function applyThemeMode(mode) {
 	} else {
 		document.documentElement.removeAttribute("data-theme");
 	}
+	syncSystemBarsTheme(mode);
 }
 
 // Текущая ЭФФЕКТИВНАЯ тема — либо явный выбор пользователя, либо (mode=null)
@@ -17,6 +20,18 @@ export function applyThemeMode(mode) {
 export function resolveEffectiveTheme(mode) {
 	if (mode === "light" || mode === "dark") return mode;
 	return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+// Э4.6 ТЗ-NATIVE-APPS — "цвет иконок статус-бара следует теме". Best-effort и
+// молчаливо (та же форма, что openExternal в app.jsx) — web.js уже честный
+// no-op, tauri.js пока notImplemented (throw синхронный, native-stub.js) —
+// сбой здесь не должен ронять применение самой темы интерфейса выше.
+function syncSystemBarsTheme(mode) {
+	try {
+		Promise.resolve(getPlatform().ui.setSystemBarsTheme(resolveEffectiveTheme(mode))).catch(() => {});
+	} catch {
+		// не реализовано на этой платформе — статус-бар просто не подстроился
+	}
 }
 
 // Простой бинарный тумблер (тот же UX, что демо Opus: одна кнопка "день/ночь",

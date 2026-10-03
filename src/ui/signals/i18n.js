@@ -41,6 +41,13 @@ export function t(key, vars) {
 	return interpolate(value, vars);
 }
 
+// Blossom ответил 404 на чтение: байтов на сервере нет (их «освободили» с сервера или блоб пропал).
+// Показывать сырое «Blossom download failed: 404» человеку незачем.
+function isBlobGone(err) {
+	const msg = String(err?.message ?? "");
+	return /Blossom/i.test(msg) && (err?.status === 404 || /failed: 404|получен 404/.test(msg));
+}
+
 // Этап 65 — доменные ошибки (DomainError/PreconditionError/
 // SelfHostedFingerprintMismatchError) несут key/params РЯДОМ с message
 // (см. domain/errors.js) — единая точка для UI-катч-блоков экранов вместо
@@ -48,7 +55,9 @@ export function t(key, vars) {
 // локали; key нет (ошибка не из "переводимого" списка — например, чужой
 // текст от relay) -> message как раньше, без изменений в поведении.
 export function errorMessage(err) {
-	return err?.key ? t(err.key, err.params) : err?.message || String(err);
+	if (err?.key) return t(err.key, err.params);
+	if (isBlobGone(err)) return t("errors.blobGone");
+	return err?.message || String(err);
 }
 
 const PLURAL_RULES_CACHE = {};

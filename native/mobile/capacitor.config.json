@@ -1,0 +1,17 @@
+{
+  "appId": "tech.ugolok.app",
+  "appName": "Уголок",
+  "webDir": "../../dist-capacitor",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable"
+    }
+  }
+}

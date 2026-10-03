@@ -19,6 +19,7 @@ import {
   clientStateEncoder,
   clientStateDecoder,
 } from "ts-mls";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { getPublicKey } from "./keys.js";
 
 // Выбор ciphersuite и обоснование — DESIGN.md, раздел "Этап 13".
@@ -53,9 +54,67 @@ const nostrCredentialAuthService = {
   },
 };
 
+// Найдено живьём (Android/Capacitor, эмулятор, Э4 ТЗ-NATIVE-APPS, 2026-09-28):
+// WebView сообщает crypto.subtle как определённый (не undefined), но
+// generateKey("Ed25519", ...) бросает "NotSupportedError: Unrecognized name" —
+// ts-mls's makeNobleSignatureImpl проверяет только НАЛИЧИЕ subtle, не его
+// реальную поддержку конкретного алгоритма, и уходит в этот путь безусловно.
+// Раньше это выглядело как бесконечное зависание на "Публикация ключа и
+// профиля…" — publish() ТАЙМАУТИТ за 8с (publisher.js), но сам keygen()
+// не имеет срока вовсе и ничего не бросает — просто вечно ждёт промис,
+// который браузер никогда не резолвит и не реджектит для неподдерживаемого
+// алгоритма на некоторых сборках WebView (эмпирически — сама генерация
+// РЕДЖЕКТИТСЯ мгновенно; зависание было в СЛЕДУЮЩЕЙ строке кода вызывающего
+// приложения, которая никогда не выполнялась, потому что await так и не
+// вернул управление — см. PROCESS-DOCS/NATIVE/PROGRESS.md, Э4).
+// X25519 (HPKE KEM) на той же сборке работает нормально — подмена только
+// подписи, остального (kdf/hash/aead/hpke) не касается.
+//
+// Пробуем НАТИВНУЮ реализацию ОДИН раз (полный round-trip keygen+sign+verify,
+// не только keygen — некоторые платформы теоретически могут поддержать одно,
+// не другое) и кэшируем результат. Если платформа справляется — поведение
+// НЕ МЕНЯЕТСЯ вообще (те же байты формата PKCS8 в signKey, что и раньше,
+// сохранённые identity на проде это уже используют — менять формат безусловно
+// для ВСЕХ платформ сломало бы подпись уже созданных на web/desktop identity,
+// т.к. noble ждёт сырые 32 байта, а subtle отдаёт PKCS8). Один лишний
+// keygen на старте сессии (кэшируется, не на каждый KeyPackage) — цена
+// незначительна на платформах, где subtle и так работает.
+function makeNobleEd25519Signature() {
+  return {
+    async sign(signKey, message) {
+      return ed25519.sign(message, signKey);
+    },
+    async verify(publicKey, message, signature) {
+      return ed25519.verify(signature, message, publicKey);
+    },
+    async keygen() {
+      const signKey = ed25519.utils.randomSecretKey();
+      return { signKey, publicKey: ed25519.getPublicKey(signKey) };
+    },
+  };
+}
+
+async function withEd25519Fallback(nativeSignature) {
+  try {
+    const probeKeys = await nativeSignature.keygen();
+    const probeMessage = new TextEncoder().encode("ugolok-ed25519-capability-probe");
+    const probeSignature = await nativeSignature.sign(probeKeys.signKey, probeMessage);
+    const verified = await nativeSignature.verify(probeKeys.publicKey, probeMessage, probeSignature);
+    if (!verified) throw new Error("round-trip verify провалился");
+    return nativeSignature;
+  } catch (err) {
+    console.warn(`mls-session: нативный Ed25519 (WebCrypto) недоступен на этой платформе, использую @noble/curves: ${err?.message ?? err}`);
+    return makeNobleEd25519Signature();
+  }
+}
+
 let cachedImpl = null;
 async function getImpl() {
-  if (!cachedImpl) cachedImpl = await getCiphersuiteImpl(CIPHERSUITE_NAME);
+  if (!cachedImpl) {
+    const impl = await getCiphersuiteImpl(CIPHERSUITE_NAME);
+    impl.signature = await withEd25519Fallback(impl.signature);
+    cachedImpl = impl;
+  }
   return cachedImpl;
 }
 

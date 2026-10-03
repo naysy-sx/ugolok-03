@@ -11,6 +11,7 @@
 // снаружи).
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { getManifest, getRange, putStream } from "./content.js";
+import { recordBlobs } from "../uploads/journal.js";
 import { saveFileKey } from "./store.js";
 import { liveChildrenOf, nameOwnerInDir } from "./tree.js";
 
@@ -59,7 +60,9 @@ export async function saveToOwn(recipientPubkey, dbKey, mountState, sourceNodeId
 		const manifest = await getManifest(node.blob, netOpts);
 		const readKey = await resolveFileKey(node, manifest);
 		const plaintext = await getRange(manifest, readKey, 0, manifest.size, netOpts);
-		const { manifestDigest, fileKey: newFileKey } = await putStream(plaintext, { ...netOpts, name, mime: manifest.mime });
+		const { manifestDigest, fileKey: newFileKey, blobs } = await putStream(plaintext, { ...netOpts, name, mime: manifest.mime });
+		// ТЗ-03: копия — свой блоб на своей квоте; sourceDigest = что копировали.
+		await recordBlobs(blobs, { purpose: "files", target: newId, name, server: netOpts.serverUrl, sourceDigest: node.blob });
 		// Этап 57 — announced: true сразу (ключ едет в этой же create-операции,
 		// довыдавать backfillOwnFileKeys нечего), тот же принцип, что createFileEntry.
 		await saveFileKey(recipientPubkey, dbKey, manifestDigest, newFileKey, true);

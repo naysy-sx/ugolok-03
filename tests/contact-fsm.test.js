@@ -93,12 +93,43 @@ test("I1: CONTACT (resolvedAt=1000) + REMOTE_ACCEPT(createdAt=500, старее)
 	assert.deepEqual(r.commands, []);
 });
 
-// --- 7. I2: ГЛАВНЫЙ регресс-тест бага пользователя ---
-test("I2 (ГЛАВНЫЙ регресс-тест): CONTACT + REMOTE_REQUEST(ЛЮБОЙ createdAt, даже далёкое будущее) -> остаёмся CONTACT, никакой заявки не создаётся", () => {
+// --- 7. I1 (было I2-безусловный, правка 2026-09-28 — см. CONTACTS-FSM.md §1.1-довесок): ГЛАВНЫЙ регресс-тест бага пользователя ---
+test("I1: CONTACT + REMOTE_REQUEST(createdAt <= resolvedAt, redelivery уже учтённой заявки) -> остаёмся CONTACT, никакой заявки не создаётся", () => {
 	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
-	const farFuture = 99999999999;
-	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "снова привет", createdAt: farFuture });
+	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "снова привет", createdAt: 1000 });
 	assert.equal(r.state.name, "CONTACT", "уже принятый контакт НЕ должен снова попасть во входящие");
+	assert.deepEqual(r.state, s);
+	assert.deepEqual(r.commands, []);
+});
+
+// --- 7a: собеседник потерял состояние (разблокировка+заявка заново; переустановка; ...) ---
+test("7a: CONTACT(resolvedAt=T) + REMOTE_REQUEST(createdAt > T) -> остаёмся CONTACT, автоматический PUBLISH_ACCEPT, resolvedAt продвинут", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const r = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.equal(r.state.name, "CONTACT", "остаёмся CONTACT — это не новая входящая заявка, а автоответ");
+	assert.equal(r.state.resolvedAt, 2000);
+	assert.deepEqual(names(r.commands), ["PUBLISH_ACCEPT", "UPSERT"]);
+	assert.deepEqual(findCmd(r.commands, "PUBLISH_ACCEPT"), { type: "PUBLISH_ACCEPT", peer: BOB });
+	assert.deepEqual(findCmd(r.commands, "UPSERT"), { type: "UPSERT", peer: BOB, fields: { resolvedAt: 2000 } });
+	assert.ok(!names(r.commands).includes("EMIT"), "видимое для UI состояние не меняется — EMIT не нужен");
+});
+
+// --- 7b: повтор ТОЙ ЖЕ новой заявки (следующий relogin) не даёт второго PUBLISH_ACCEPT ---
+test("7b: 7a применена дважды подряд (redelivery на relogin) -> второй раз commands пустые, resolvedAt не откатывается", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const first = reduce(s, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.deepEqual(names(first.commands), ["PUBLISH_ACCEPT", "UPSERT"]);
+
+	const second = reduce(first.state, { type: "REMOTE_REQUEST", peer: BOB, greeting: "мы разве не знакомы?", createdAt: 2000 });
+	assert.equal(second.state.name, "CONTACT");
+	assert.equal(second.state.resolvedAt, 2000, "resolvedAt не откатывается и не дублируется");
+	assert.deepEqual(second.commands, [], "тот же createdAt второй раз — I1-гейт гасит, PUBLISH_ACCEPT не повторяется");
+});
+
+// --- 7c: REMOTE_ACCEPT на CONTACT по-прежнему безусловный игнор (I2 для ACCEPT/REJECT/CANCEL не тронут 7a) ---
+test("7c: CONTACT + REMOTE_ACCEPT(даже свежий createdAt) -> состояние и resolvedAt не меняются, команды пустые", () => {
+	const s = withState("CONTACT", BOB, { resolvedAt: 1000 });
+	const r = reduce(s, { type: "REMOTE_ACCEPT", peer: BOB, createdAt: 5000 });
 	assert.deepEqual(r.state, s);
 	assert.deepEqual(r.commands, []);
 });
@@ -315,4 +346,32 @@ test("адверсарно: reduce не мутирует замороженны�
 	for (const [s, event] of scenarios) {
 		assert.doesNotThrow(() => reduce(s, event));
 	}
+});
+
+// --- Регресс: «удалённый контакт воскресает при перезапуске» ---
+test("I1 в NONE: после удаления контакта старая (историческая) заявка того же человека игнорируется", () => {
+	const contact = { name: "CONTACT", peerPubkey: BOB, resolvedAt: 1000, greeting: null };
+	const removed = reduce(contact, { type: "USER_REMOVE_CONTACT", peer: BOB }).state;
+	assert.equal(removed.name, "NONE");
+	assert.ok(removed.resolvedAt > 0);
+	// relay передоставил заявку, отправленную ДО удаления
+	const r = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "привет", createdAt: 900 });
+	assert.equal(r.state.name, "NONE");
+	assert.deepEqual(r.commands, []);
+	// ровно в момент удаления — тоже старая
+	const same = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "", createdAt: removed.resolvedAt });
+	assert.equal(same.state.name, "NONE");
+	assert.deepEqual(same.commands, []);
+});
+
+test("I1 в NONE: СВЕЖАЯ заявка после удаления проходит (человек имеет право постучаться снова)", () => {
+	const removed = { name: "NONE", peerPubkey: BOB, resolvedAt: 1000, greeting: null };
+	const r = reduce(removed, { type: "REMOTE_REQUEST", peer: BOB, greeting: "это снова я", createdAt: 1001 });
+	assert.equal(r.state.name, "INCOMING_PENDING");
+	assert.ok(r.commands.some((c) => c.type === "EMIT"));
+});
+
+test("NONE без истории (resolvedAt = 0): первая заявка проходит как раньше", () => {
+	const r = reduce({ name: "NONE", peerPubkey: BOB, resolvedAt: 0, greeting: null }, { type: "REMOTE_REQUEST", peer: BOB, greeting: "", createdAt: 5 });
+	assert.equal(r.state.name, "INCOMING_PENDING");
 });

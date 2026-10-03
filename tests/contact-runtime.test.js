@@ -230,22 +230,70 @@ test("removeContact: CONTACT -> публикует kind-3 без peer, перс�
 });
 
 // --- I2, ГЛАВНЫЙ регресс-тест бага пользователя, теперь на уровне runtime ---
-test("I2 (регресс, runtime): CONTACT + входящий REMOTE_REQUEST (даже далёкий createdAt) -> остаётся CONTACT, НЕ создаёт дубликат во входящих", async () => {
-	const { runtime, journal } = makeRuntime();
+test("I1 (регресс, runtime): CONTACT + redelivery ТОЙ ЖЕ (старой) входящей заявки -> остаётся CONTACT, НЕ создаёт дубликат во входящих, ничего не публикует", async () => {
+	const { runtime, journal, published } = makeRuntime();
+	await runtime.load();
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "x", 100));
+	await runtime.accept(BOB_PUBKEY);
+	const publishedCountAfterAccept = published.length;
+
+	// та же заявка (createdAt=100) "передоставлена" relay повторно — redelivery,
+	// не новое рукопожатие: createdAt <= resolvedAt (resolvedAt проставлен accept()).
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "снова привет", 100));
+
+	const state = runtime.getPeerState(BOB_PUBKEY);
+	assert.equal(state.name, "CONTACT", "уже принятый контакт не должен снова попасть во входящие — это и есть найденный пользователем баг");
+	assert.equal(published.length, publishedCountAfterAccept, "redelivery старой заявки ничего не публикует повторно");
+	assert.equal(
+		journal.length,
+		1,
+		"единственная запись — от ПЕРВОГО REMOTE_REQUEST (категория newRequest); USER_ACCEPT не порождает LOG_JOURNAL по дизайну, а redelivery — тем более",
+	);
+	assert.equal(journal[0].category, "newRequest");
+});
+
+// --- 7a/7b (правка 2026-09-28, CONTACTS-FSM.md §1.1-довесок): собеседник потерял
+// состояние (разблокировка+заявка заново; переустановка; ...) — автоответ на
+// уровне runtime, не только чистого reduce().
+test("7a (регресс, runtime): CONTACT + ГЕНУИННО НОВЫЙ входящий REMOTE_REQUEST (createdAt позже resolvedAt) -> автоматически публикует CONTACT_ACCEPTED_KIND, остаётся CONTACT", async () => {
+	const { runtime, published } = makeRuntime();
+	await runtime.load();
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "x", 100));
+	await runtime.accept(BOB_PUBKEY);
+	const resolvedAtAfterAccept = (await readRelationship(OWNER_PUBKEY, BOB_PUBKEY)).resolvedAt;
+
+	// Bob прислал заявку ПОЗЖЕ, чем я его принял(а), — либо он потерял состояние
+	// (переустановка/восстановление по мнемонике), либо это моя же разблокировка
+	// без сброса состояния у него (FSM не различает и не обязана).
+	const freshCreatedAt = resolvedAtAfterAccept + 1000;
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "мы разве не знакомы?", freshCreatedAt));
+
+	const state = runtime.getPeerState(BOB_PUBKEY);
+	assert.equal(state.name, "CONTACT", "не превращается в новую входящую заявку — тихий автоответ");
+	const acceptRumor = findGiftWrapOfKind(published, CONTACT_ACCEPTED_KIND, BOB_PRIV);
+	assert.ok(acceptRumor, "должен быть автоматически отправлен CONTACT_ACCEPTED_KIND в ответ Бобу");
+	const persisted = await readRelationship(OWNER_PUBKEY, BOB_PUBKEY);
+	assert.equal(persisted.resolvedAt, freshCreatedAt, "resolvedAt продвинут вперёд — защита от повторного accept на следующий relogin");
+});
+
+test("7b (регресс, runtime): redelivery ТОЙ ЖЕ новой заявки (следующий relogin) -> второй PUBLISH_ACCEPT НЕ отправляется", async () => {
+	const { runtime, published } = makeRuntime();
 	await runtime.load();
 	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "x", 100));
 	await runtime.accept(BOB_PUBKEY);
 
-	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "снова привет", 99999999999));
+	const freshCreatedAt = 999999;
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "мы разве не знакомы?", freshCreatedAt));
+	const acceptCountAfterFirst = published.filter((e) => e.kind === 1059).length;
 
-	const state = runtime.getPeerState(BOB_PUBKEY);
-	assert.equal(state.name, "CONTACT", "уже принятый контакт не должен снова попасть во входящие — это и есть найденный пользователем баг");
-	assert.equal(
-		journal.length,
-		1,
-		"единственная запись — от ПЕРВОГО REMOTE_REQUEST (категория newRequest); USER_ACCEPT не порождает LOG_JOURNAL по дизайну, а второй (проигнорированный I2) REMOTE_REQUEST — тем более",
-	);
-	assert.equal(journal[0].category, "newRequest");
+	// giftWrapSubscriber в проекте не имеет since-фильтра, isNewEvent — in-memory,
+	// не переживает reload (см. transport.js) — relay передоставит ЭТО ЖЕ событие
+	// на следующем relogin. rumor.id в тесте меняется на каждый nip59Wrap (свежая
+	// gift-wrap обёртка), но created_at ВНУТРИ него — тот же самый freshCreatedAt.
+	await runtime.handleIncomingRumor(incomingRequestRumor(BOB_PRIV, OWNER_PUBKEY, "мы разве не знакомы?", freshCreatedAt));
+	const acceptCountAfterSecond = published.filter((e) => e.kind === 1059).length;
+
+	assert.equal(acceptCountAfterSecond, acceptCountAfterFirst, "тот же createdAt второй раз — I1-гейт в reduce() гасит, второй PUBLISH_ACCEPT не отправляется");
 });
 
 // --- I3, crossed-requests: LOG_JOURNAL должен реально дойти до onJournal ---

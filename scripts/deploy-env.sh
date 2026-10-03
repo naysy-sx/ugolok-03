@@ -75,7 +75,8 @@ elif [[ "$ENV" == "prod" ]]; then
 	echo "deploy-env: нет доступа к $STATE_DIR — снимок для отката не будет сохранён" >&2
 fi
 ISLAND_EXCLUDES=(--exclude relay-src --exclude blossom-src --exclude agent-src --exclude policy --exclude policy-conf --exclude '.git')
-DEPLOY_IMAGES=(ugolok-strfry ugolok-blossom ugolok-turncreds-server)
+# ugolok-blossom здесь нет: образ пинуется тегом в compose, откат — сменой тега.
+DEPLOY_IMAGES=(ugolok-strfry ugolok-turncreds-server)
 
 pre_deploy_backup() {
 	[[ "$ENV" == "prod" ]] || return 0
@@ -103,13 +104,36 @@ snapshot_island() {
 	done
 }
 
+# Перезапускает контейнер, если изменились файлы, которые он монтирует с хоста
+# (compose up -d этого не замечает). stamp хранит отпечаток прошлой выкладки; первый запуск
+# без отпечатка перезапускает один раз (безвредно) и запоминает.
+restart_if_changed() {
+	local container="$1" stamp="$2"; shift 2
+	local now prev=""
+	now="$(cat "$@" 2>/dev/null | sha256sum | awk '{print $1}')"
+	[[ -f "$stamp" ]] && prev="$(cat "$stamp")"
+	if [[ "$now" == "$prev" ]]; then
+		return 0
+	fi
+	if docker inspect "$container" >/dev/null 2>&1; then
+		echo "deploy-env: изменились смонтированные файлы — перезапускаю $container"
+		if docker restart "$container" >/dev/null 2>&1; then
+			echo "$now" >"$stamp" 2>/dev/null || true
+		else
+			echo "deploy-env: не удалось перезапустить $container (отпечаток не сохранён, повтор при следующей выкладке)" >&2
+		fi
+	else
+		echo "deploy-env: контейнера $container нет — перезапуск пропущен" >&2
+	fi
+}
+
 rollback_deploy() {
 	echo "deploy-env: ОТКАТ кода к предыдущей версии" >&2
 	if [[ -d "$WWW_PREV" ]]; then
 		rsync -a --delete --omit-dir-times "$WWW_PREV/" "$WWW/" || echo "deploy-env: не удалось откатить PWA" >&2
 	fi
 	if [[ -d "$ISLAND_PREV" ]]; then
-		rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" --exclude coturn.conf --exclude turncreds.env "$ISLAND_PREV/" "$ISLAND_DST/" || echo "deploy-env: не удалось откатить конфиги" >&2
+		rsync -a --delete --omit-dir-times "${ISLAND_EXCLUDES[@]}" --exclude coturn.conf --exclude turncreds.env --exclude push-bridge.env --exclude push-bridge-plugin.env "$ISLAND_PREV/" "$ISLAND_DST/" || echo "deploy-env: не удалось откатить конфиги" >&2
 	fi
 	for img in "${DEPLOY_IMAGES[@]}"; do
 		docker image inspect "$img:prev" >/dev/null 2>&1 && docker tag "$img:prev" "$img:local" || true
@@ -173,10 +197,12 @@ const fs=require(\"fs\");
 const ice=JSON.parse(fs.readFileSync(\"/ice.json\",\"utf8\"));
 const relays=JSON.parse(process.env.BUILD_DEFAULT_RELAYS);
 const blossom=JSON.parse(process.env.BUILD_DEFAULT_BLOSSOM_SERVERS);
-const name=process.env.UGOLK_INSTANCE===\"prod\"?\"ugolok.tech\":\"test.ugolok.tech\";
+const isProd=process.env.UGOLK_INSTANCE===\"prod\";
+const name=isProd?\"ugolok.tech\":\"test.ugolok.tech\";
 fs.writeFileSync(\"dist/config.json\", JSON.stringify({
   instanceName:name, relays, bootstrapRelays:relays, blossomServers:blossom, iceServers:ice,
-  turnCredentialsUrl:\"/api/turn-credentials\"
+  turnCredentialsUrl:\"/api/turn-credentials\",
+  ...(isProd ? {pushBridge:\"https://relay.ugolok.tech/push\"} : {})
 }, null, 2)+\"\\n\");
 "'
 
@@ -208,13 +234,20 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	# живёт только в $ISLAND_DST. Живая проверка (прод, run #33) — без этого
 	# исключения --delete стирал его же в ЭТОМ прогоне, до docker compose up,
 	# который его тут же требует (env_file) — деплой ронял то, что сам создал
-	# оператор минуту назад.
+	# оператор минуту назад. push-bridge.env/push-bridge-plugin.env (Э-PUSH
+	# П1) — тот же самый класс бага, живая проверка (прод, run 210,
+	# 2026-10-01): созданы вручную на VPS ЗАРАНЕЕ (см. deploy/island/README.md,
+	# «Секрет push-моста»), этот rsync стёр их в первом же prod-деплое после
+	# добавления push-bridge-server в docker-compose.yml, тот тут же потребовал
+	# их обратно (env_file) и упал.
 	rsync -a --omit-dir-times --delete \
 		--exclude 'relay-src' \
 		--exclude 'blossom-src' \
 		--exclude 'agent-src' \
 		--exclude 'coturn.conf' \
 		--exclude 'turncreds.env' \
+		--exclude 'push-bridge.env' \
+		--exclude 'push-bridge-plugin.env' \
 		--exclude 'policy' \
 		--exclude 'policy-conf' \
 		--exclude '.git' \
@@ -235,7 +268,7 @@ if [[ -d "$ISLAND_SRC" ]]; then
 	if [[ "$ENV" == "prod" ]]; then
 		POLICY_DST="$ISLAND_DST/policy"
 		mkdir -p "$POLICY_DST/server/strfry" "$POLICY_DST/src/domain/discovery" "$ISLAND_DST/policy-conf"
-		for f in whitelist-plugin.mjs write-policy.mjs rate-limit.mjs; do
+		for f in whitelist-plugin.mjs write-policy.mjs rate-limit.mjs push-forward.mjs; do
 			install -m 755 "$ROOT/server/strfry/$f" "$POLICY_DST/server/strfry/$f"
 		done
 		for f in wordfilter.js stopwords.json; do
@@ -259,46 +292,10 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# закрытой, повторно применить рубильник
 		[[ -x "$BIN_DIR/island-watchdog.sh" ]] && "$BIN_DIR/island-watchdog.sh" --reapply || true
 	fi
-	# blossom-src исключён из rsync (сторонний форк, клон один раз). Патчи
-	# живут в deploy/island/patches — без этого шага test-деплой обновляет
-	# только PWA, а ugolok-test-blossom крутит старый образ (415 audio/webm).
-	# Образ общий (ugolok-blossom:local), собираем из /opt/ugolok/island.
-	BLOSSOM_SRC="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/blossom-src"
-	BLOSSOM_PATCHES="$ROOT/deploy/island/patches"
-	BLOSSOM_REF="${BLOSSOM_REF:-ba1444c31d517de9fcb512f7fff92bfed421aaa7}"
-	BLOSSOM_STAMP_FILE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/.blossom-patches.sha"
-	BLOSSOM_REBUILT=0
-	if [[ -d "$BLOSSOM_SRC/.git" && -d "$BLOSSOM_PATCHES" ]]; then
-		BLOSSOM_STAMP="$(ls -1 "$BLOSSOM_PATCHES"/*.patch 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
-		if [[ ! -f "$BLOSSOM_STAMP_FILE" || "$(cat "$BLOSSOM_STAMP_FILE")" != "$BLOSSOM_STAMP" ]]; then
-			echo "deploy-env: blossom patches changed — checkout $BLOSSOM_REF + apply + build"
-			# blossom-src на VPS принадлежит root, раннер — ugolok: без
-			# safe.directory git 2.35+ орёт "dubious ownership" и set -e
-			# роняет ВЕСЬ деплой уже после rsync PWA (живая проверка:
-			# test 15af37c / prod 945fc42 — Action красный, сайт обновлён).
-			git_blossom() { git -c safe.directory="$BLOSSOM_SRC" -C "$BLOSSOM_SRC" "$@"; }
-			blossom_ok=0
-			git_blossom fetch --tags origin || true
-			if git_blossom checkout -f "$BLOSSOM_REF"; then
-				blossom_ok=1
-				for p in "$BLOSSOM_PATCHES"/*.patch; do
-					[[ -f "$p" ]] || continue
-					if ! git_blossom apply "$p"; then
-						blossom_ok=0
-						break
-					fi
-				done
-			fi
-			PROD_COMPOSE="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}/docker-compose.yml"
-			PROD_DIR="${UGOLK_ISLAND_PROD:-/opt/ugolok/island}"
-			if [[ "$blossom_ok" == 1 ]] && docker compose -f "$PROD_COMPOSE" --project-directory "$PROD_DIR" build blossom; then
-				echo "$BLOSSOM_STAMP" > "$BLOSSOM_STAMP_FILE" || true
-				BLOSSOM_REBUILT=1
-			else
-				echo "deploy-env: blossom rebuild не удался — PWA уже выложена, образ не трогаем" >&2
-			fi
-		fi
-	fi
+	# Blossom — готовый образ форка по пинованному тегу из docker-compose.yml
+	# (prod и test). Ничего не собираем: смена тега в compose + up -d сама
+	# подтягивает образ и пересоздаёт контейнер. Раньше здесь был checkout
+	# апстрима, применение deploy/island/patches и docker compose build.
 	if [[ -f "$ISLAND_DST/docker-compose.yml" ]]; then
 		# --build: без него compose переиспользует уже существующий образ
 		# ugolok-turncreds-server:local как есть, даже если agent-src только что
@@ -307,11 +304,27 @@ if [[ -d "$ISLAND_SRC" ]]; then
 		# ПОСЛЕ фикса 127.0.0.1->0.0.0.0 в коде: контейнер не пересобрался,
 		# работал старый образ со старой привязкой.
 		docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --build
-		# test-compose берёт готовый ugolok-blossom:local без build: — без
-		# recreate контейнер останется на старом sha даже после build выше.
-		if [[ "$BLOSSOM_REBUILT" == 1 ]]; then
-			docker compose -f "$ISLAND_DST/docker-compose.yml" --project-directory "$ISLAND_DST" up -d --force-recreate --no-deps blossom
+
+		# `compose up -d` пересоздаёт контейнер только при смене образа/его параметров в compose.
+		# Файлы, смонтированные с хоста (конфиг и код политики relay, конфиг Blossom), он НЕ
+		# замечает: плагин политики — долгоживущий процесс и работал бы на старом коде. Поэтому
+		# точечно перезапускаем ТОЛЬКО тот сервис, у которого изменились такие файлы (отпечаток
+		# по репозиторию, не по хосту: watchdog сам правит blossom-config.yml на хосте). Не
+		# «перезапускать всё»: на хосте живут Forgejo с раннером (перезапуск убил бы саму
+		# CI-задачу), почта и coturn (обрыв звонков).
+		if [[ "$ENV" == "test" ]]; then
+			RELAY_RESTART_C="${RELAY_CONTAINER:-ugolok-test-relay}"; BLOSSOM_RESTART_C="${BLOSSOM_CONTAINER:-ugolok-test-blossom}"
+		else
+			RELAY_RESTART_C="${RELAY_CONTAINER:-ugolok-relay}"; BLOSSOM_RESTART_C="${BLOSSOM_CONTAINER:-ugolok-blossom}"
 		fi
+		STAMP_DIR="$ISLAND_DST/.restart-stamps"
+		mkdir -p "$STAMP_DIR" 2>/dev/null || true
+		RELAY_FILES=("$ISLAND_SRC/strfry.conf")
+		if [[ "$ENV" == "prod" ]]; then
+			RELAY_FILES+=("$ROOT/server/strfry/whitelist-plugin.mjs" "$ROOT/server/strfry/write-policy.mjs" "$ROOT/server/strfry/rate-limit.mjs" "$ROOT/server/strfry/push-forward.mjs" "$ROOT/src/domain/discovery/wordfilter.js" "$ROOT/src/domain/discovery/stopwords.json")
+		fi
+		restart_if_changed "$RELAY_RESTART_C" "$STAMP_DIR/relay" "${RELAY_FILES[@]}"
+		restart_if_changed "$BLOSSOM_RESTART_C" "$STAMP_DIR/blossom" "$ISLAND_SRC/blossom-config.yml"
 	fi
 	# AUDIT-EGOROD H1: «поднялось» != «работает». Провал проверки на prod откатывает
 	# код (см. rollback_deploy); на test — только красный прогон.

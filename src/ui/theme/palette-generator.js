@@ -68,6 +68,71 @@ function gamutClamp(chroma, l) {
 	return Math.min(chroma, highCap, lowCap);
 }
 
+// Максимальная хрома, при которой oklch(l c h) ещё внутри гаммы sRGB, — бинарный
+// поиск по тем же опубликованным матрицам CSS Color 4, что и tests/oklch-contrast.js
+// (там они нужны для проверки, здесь — чтобы не выходить за гамму по построению).
+function inSrgbGamut(l, c, hDeg) {
+	const hRad = (hDeg * Math.PI) / 180;
+	const a = c * Math.cos(hRad);
+	const b = c * Math.sin(hRad);
+	const l3 = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+	const m3 = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+	const s3 = (l - 0.0894841775 * a - 1.291485548 * b) ** 3;
+	const r = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+	const g = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+	const bl = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+	return [r, g, bl].every((ch) => ch >= 0 && ch <= 1);
+}
+
+function maxGamutChroma(l, hDeg, ceiling) {
+	if (inSrgbGamut(l, ceiling, hDeg)) return ceiling;
+	let lo = 0;
+	let hi = ceiling;
+	for (let i = 0; i < 12; i++) {
+		const mid = (lo + hi) / 2;
+		if (inSrgbGamut(l, mid, hDeg)) lo = mid;
+		else hi = mid;
+	}
+	return lo;
+}
+
+// Насыщенность акцента. 0.085 — безопасный минимум на всём круге (см. комментарий
+// у cAccent ниже), но на тёплом краю (терракота/кирпич, hue ≈ 40–70 и 340–5) гамма
+// sRGB позволяет заметно больше, и с 0.085 «терракота» читалась коричневой.
+// Колокол вокруг hue 45: в центре до 0.14, к краю окна (±40°) сходит к 0.085;
+// потолок — 92% реальной границы гаммы для этой пары (L, hue), с запасом.
+const WARM_ACCENT_HUE = 45;
+const WARM_ACCENT_HALF_WIDTH = 40;
+const WARM_ACCENT_PEAK_CHROMA = 0.14;
+
+function warmWeight(hue) {
+	const diff = Math.abs(((hue - WARM_ACCENT_HUE + 540) % 360) - 180);
+	if (diff >= WARM_ACCENT_HALF_WIDTH) return 0;
+	return 0.5 * (1 + Math.cos((Math.PI * diff) / WARM_ACCENT_HALF_WIDTH));
+}
+
+// Нейтрали (фон, поверхности, границы, текст) у терракоты сдвигаются к тёплому
+// кремовому (hue ≈ +25°): на самом hue кирпича они читались розоватыми, а макеты
+// рисуют кремовый/песочный фон. Вне тёплого окна сдвиг нулевой — нейтрали по-прежнему
+// делят hue с акцентом, как задумано этапом 70.
+export const WARM_NEUTRAL_SHIFT = 25;
+export function neutralHue(accentHue) {
+	return (accentHue + WARM_NEUTRAL_SHIFT * warmWeight(accentHue)) % 360;
+}
+
+// Общий уровень насыщенности акцента вне тёплого окна: 0.085 было запасом «на всех hue
+// сразу», но для большинства оттенков гамма sRGB даёт больше — с 0.085 выбранные цвета
+// выглядели блёклыми. Потолок по-прежнему — 92% реальной границы гаммы для пары (L, hue).
+const GENERAL_ACCENT_CHROMA = 0.115;
+
+function accentChroma(l, hue, base) {
+	const weight = warmWeight(hue);
+	const warmTarget = base + (WARM_ACCENT_PEAK_CHROMA - base) * weight;
+	const target = Math.max(warmTarget, GENERAL_ACCENT_CHROMA);
+	const safe = maxGamutChroma(l, hue, target) * 0.92;
+	return Math.max(base, Math.min(target, safe));
+}
+
 function formatOklch(l, c, h) {
 	return `oklch(${l.toFixed(4)} ${c.toFixed(4)} ${h.toFixed(2)})`;
 }
@@ -82,7 +147,7 @@ function validateConfig(config) {
 	if (isHueForbidden(config.accentHue)) throw new PaletteConfigError(`accentHue ${config.accentHue} в запретной зоне`);
 }
 
-const ROLE_DELTAS = { surface: 0.05, surfaceRaised: 0.11, border: 0.16, muted: 0.45, fg: 0.72 };
+const ROLE_DELTAS = { surface: 0.04, surfaceRaised: 0.085, border: 0.16, muted: 0.45, fg: 0.72 };
 
 // Значения подобраны расчётом (tests/oklch-contrast.js), не на глаз: для каждого
 // тона — максимальная хрома, при которой ОБЕ полярности проходят контраст ≥4.5
@@ -106,17 +171,18 @@ export function generatePalette(config) {
 	// gamutClamp обязателен и тут: у самой светлой границы lBg (0.995/0.93 см.
 	// validateConfig) даже нейтральная cNeutral=0.035 реально клиппится в
 	// sRGB на части hue-круга (найдено этим же тестом).
-	tokens["--bg"] = formatOklch(lBg, gamutClamp(cNeutral, lBg), accentHue);
+	const nHue = neutralHue(accentHue);
+	tokens["--bg"] = formatOklch(lBg, gamutClamp(cNeutral, lBg), nHue);
 
 	for (const role of ["surface", "surfaceRaised", "border", "muted"]) {
 		const l = clamp(lBg + dir * ROLE_DELTAS[role], 0, 1);
 		const cssName = "--" + role.replace(/([A-Z])/g, "-$1").toLowerCase();
-		tokens[cssName] = formatOklch(l, gamutClamp(cNeutral, l), accentHue);
+		tokens[cssName] = formatOklch(l, gamutClamp(cNeutral, l), nHue);
 	}
 
 	const fgL = clamp(lBg + dir * ROLE_DELTAS.fg, 0, 1);
 	const fgChroma = Math.min(cNeutral * 1.6, 0.05);
-	tokens["--fg"] = formatOklch(fgL, gamutClamp(fgChroma, fgL), accentHue);
+	tokens["--fg"] = formatOklch(fgL, gamutClamp(fgChroma, fgL), nHue);
 
 	const accentL = dir === 1 ? 0.74 : 0.55;
 	// 0.085, не 0.14: --accent/--accent-2 обязаны оставаться в гамме sRGB на ЛЮБОМ
@@ -128,7 +194,7 @@ export function generatePalette(config) {
 	// позволяет больше. По-hue таблица максимальной безопасной хромы — задел на
 	// будущее (DESIGN.md, этап 70), не блокирует эту версию.
 	const cAccent = 0.085;
-	tokens["--accent"] = formatOklch(accentL, gamutClamp(cAccent, accentL), accentHue);
+	tokens["--accent"] = formatOklch(accentL, gamutClamp(accentChroma(accentL, accentHue, cAccent), accentL), accentHue);
 	// Раньше --accent-contrast был захардкожен в белый (0.99) — ломался на тёмной
 	// теме, где accentL=0.74 (светлый акцент на тёмном фоне): белый текст поверх
 	// светлого акцента даёт контраст ~2.3, а не 4.5 (найдено этим же тестом на

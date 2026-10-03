@@ -8,9 +8,8 @@ import { videoPosterStyle, videoPosterUrl } from "./video-poster-style.js";
 import { getMemoryCachedUrl } from "../attachment-memory-cache.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
 import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // M:SS — attachment.duration (секунды, MEDIA-PERF-TZ-5.md §3) снят с
 // <video>.duration при заливке, дробный. Часы не нужны: видео-вложения чата
@@ -31,6 +30,17 @@ function visibleCap(layout) {
 	return Infinity;
 }
 
+// Соотношение сторон одиночного вложения — CSS-переменная --media-ar (число), если размеры
+// известны (у вложений до появления превью их нет — тогда остаётся 16:10 из CSS). Ширина
+// плитки в ленте общего чата считается из него и потолка высоты, поэтому вертикальное
+// видео остаётся вертикальным, а не растягивается в полосу.
+function mediaRatioStyle(attachment) {
+	const w = attachment?.width;
+	const h = attachment?.height;
+	if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return undefined;
+	return { "--media-ar": String(Math.round((w / h) * 1000) / 1000) };
+}
+
 function VideoTile({ attachment, onOpen, moreCount = 0 }) {
 	const [previewUrl, setPreviewUrl] = useState(null);
 	const [cachedPoster, setCachedPoster] = useState(null);
@@ -43,7 +53,7 @@ function VideoTile({ attachment, onOpen, moreCount = 0 }) {
 	useEffect(() => {
 		if (!attachment.previewDigest || videoPosterUrl(attachment.poster)) return;
 		let cancelled = false;
-		resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL }).then((url) => {
+		resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() }).then((url) => {
 			if (!cancelled && url) setPreviewUrl(url);
 		});
 		return () => {
@@ -145,7 +155,7 @@ function MediaCluster({ layout, visual, onOpen }) {
 	const shown = Number.isFinite(cap) ? visual.slice(0, cap) : visual;
 	const overflow = Math.max(0, visual.length - shown.length);
 	return (
-		<div class={`bubble-media bubble-media--${usedLayout}`}>
+		<div class={`bubble-media bubble-media--${usedLayout}`} style={usedLayout === "single" ? mediaRatioStyle(shown[0]) : undefined}>
 			{shown.map((a, i) => (
 				<Tile key={i} attachment={a} onOpen={onOpen} moreCount={i === shown.length - 1 ? overflow : 0} />
 			))}

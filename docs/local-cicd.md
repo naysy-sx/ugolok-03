@@ -40,12 +40,12 @@ Compose — отдельно, только если Docker уже стоит: `d
 1. `push` в `dev` → `deploy-test.yml` → `scripts/deploy-env.sh test`. Тесты, сборка и проверка размера идут **внутри** этого деплоя (в контейнере `node:22-bookworm`, до `rsync`) — отдельного гейта перед деплоем нет, красная джоба означает, что `test.ugolok.tech` не тронут.
 2. `push` в `prod` (ручной `main` → `prod`) → `deploy-prod.yml` → `scripts/deploy-env.sh prod`, тот же принцип.
 3. `pull_request` и `push` в `main` → `.forgejo/workflows/ci.yml` (`runs-on: ugolok`, `ci-check.sh` внутри контейнера — Node на самом хосте не установлен и не планируется). Для `dev`/`prod` этот workflow не гоняется — проверка уже внутри деплоя, двойной прогон на 2 ГБ RAM не нужен.
-4. `.forgejo/workflows/release.yml` по тегу `vX.Y.Z` — **не запускается** (`runs-on: ubuntu-latest`, такого раннера на Forgejo нет). Канал релиза решается отдельно, см. `docs/delivery.md` §5.
+4. Релиз по тегу `vX.Y.Z` на Forgejo **не собирается** (`.forgejo/workflows/release.yml` удалён — self-hosted раннер `ugolok` на 2 ГБ RAM не тянет Android SDK/Gradle или Tauri). Релиз целиком идёт через GitHub Actions, см. ниже.
 
-На GitHub (`.github/workflows/`) — независимая копия, только если код туда тоже запушен:
+На GitHub (`.github/workflows/`) — независимая копия, только если код туда тоже запушен (`scripts/cut-release.sh vX.Y.Z` пушит тег в оба remote одной командой):
 
 1. PR и push в `main`/`dev`/`prod` → `.github/workflows/ci.yml` (Node 22, `bash scripts/ci-check.sh`, `ubuntu-latest` — реальный хостед раннер GitHub).
-2. Тег `vX.Y.Z` → `.github/workflows/release.yml`: проверка, pack, GitHub Release с деревом канала. Всегда с `SKIP_GPG=1` (секрета `GPG_PRIVATE_KEY` в Actions нет). Подпись — ручной путь на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
+2. Тег `vX.Y.Z` → `.github/workflows/release.yml`: пять параллельных job-ов на разных раннерах (`pack-pwa`/`android`/`windows`/`linux`/`macos` — `ubuntu-latest`/`windows-latest`/`macos-latest`, Android подписывается секретами `ANDROID_KEYSTORE_BASE64`/`ANDROID_KEYSTORE_PASSWORD`/`ANDROID_KEY_ALIAS`/`ANDROID_KEY_PASSWORD`), затем job `publish` собирает все артефакты и публикует их как ассеты релиза на `git.ugolok.tech/naysy/ugolok/releases` через REST API (секрет `FORGEJO_RELEASE_TOKEN`). PWA-пакет всегда с `SKIP_GPG=1` (секрета `GPG_PRIVATE_KEY` в Actions нет). Подпись PWA-пакета — отдельный ручной путь на Mini: `./scripts/release-hash.sh` или `./scripts/release-hash.sh <key-id>`.
 
 ## Два пути сервера
 

@@ -359,6 +359,65 @@ export async function removeNode(id) {
 	canUndo.value = canUndoNow(undoStack);
 }
 
+// Узел уже в корзине или лежит внутри удалённой папки.
+function isTrashed(state, node) {
+	let cur = node;
+	for (let i = 0; i < 64 && cur; i++) {
+		const parentId = cur.par?.value;
+		if (parentId === TRASH_ID) return true;
+		if (!parentId || parentId === ROOT_ID) return false;
+		cur = state.nodes.get(parentId);
+	}
+	return false;
+}
+
+// ТЗ-03: «освободить место» стёрло байты блоба с сервера — записи «Файлов», которые на него
+// ссылались, теперь бесполезны (открыть их нельзя), и оставлять их в списке значило бы сбивать
+// человека с толку: «удалил в хранилище, а в Файлах осталось». Убираем их в корзину — как
+// обычное удаление, но без записи в стек отмены (возвращать нечего, файла нет). Возвращает
+// число убранных узлов.
+export async function trashNodesForBlobs(hashes) {
+	const set = new Set(hashes);
+	const state = treeState.value;
+	const lbl = await label();
+	const ops = [];
+	for (const node of state.nodes.values()) {
+		if (node.kind !== "file" || !node.blob || !set.has(node.blob)) continue;
+		if (isTrashed(state, node)) continue;
+		ops.push(opRemove(state, node.id, lbl));
+	}
+	if (ops.length > 0) await applyAndPersist(ops);
+	return ops.length;
+}
+
+// «Освободить место» и доли. Возвращает, чем рискуют читатели общих папок:
+//   ownCopy  — среди стираемых блобов есть копия, залитая для доли (purpose "share"): у читателей
+//              доли файл перестанет открываться;
+//   original — стирается оригинал узла, лежащего в общей папке: у уже получивших доступ остаётся
+//              их копия, но новым читателям файл не отдать (перезаливка в долю берёт оригинал).
+// sharedIds — узлы с прямым грантом (signals/shares.js::sharedNodeIds).
+export function shareRiskForBlobs(hashes, sharedIds, shareBlobHashes = new Set()) {
+	const set = new Set(hashes);
+	const state = treeState.value;
+	const ownCopy = hashes.some((h) => shareBlobHashes.has(h));
+	let original = false;
+	for (const node of state.nodes.values()) {
+		if (node.kind !== "file" || !node.blob || !set.has(node.blob) || isTrashed(state, node)) continue;
+		let cur = node;
+		for (let i = 0; i < 64 && cur; i++) {
+			if (sharedIds.has(cur.id)) {
+				original = true;
+				break;
+			}
+			const parentId = cur.par?.value;
+			if (!parentId || parentId === ROOT_ID) break;
+			cur = state.nodes.get(parentId);
+		}
+		if (original) break;
+	}
+	return { ownCopy, original };
+}
+
 export async function purgeNode(id) {
 	const op = opPurge(treeState.value, id);
 	await applyAndPersist([op]); // НЕ кладём в undo-стек — purge монотонен, необратим (§5.6 MATH.md)

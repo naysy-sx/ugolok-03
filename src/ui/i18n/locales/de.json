@@ -46,6 +46,12 @@
 			"default": "(Standard)"
 		},
 		"scaleLabel": "Oberflächenskalierung",
+		"scale": {
+			"small": "Klein (90%)",
+			"medium": "Mittel (100%)",
+			"large": "Groß (110%)",
+			"xlarge": "Sehr groß (125%)"
+		},
 		"accentColorTitle": "Akzentfarbe",
 		"paletteCustomizeButton": "Anpassen",
 		"paletteHueLabel": "Farbton",
@@ -65,7 +71,11 @@
 			"amethyst": "Amethyst",
 			"magenta": "Magenta",
 			"fuchsia": "Fuchsia",
-			"pink": "Rosa"
+			"pink": "Rosa",
+			"terracotta": "Terrakotta",
+			"steel": "Stahl",
+			"sand": "Sand",
+			"ink": "Tinte"
 		},
 		"notificationsTitle": "Benachrichtigungen",
 		"enableNotifications": "Benachrichtigungen aktivieren",
@@ -110,7 +120,8 @@
 			"view": "Ansicht",
 			"notifications": "Benachrichtigungen",
 			"network": "Netzwerk",
-			"session": "Sitzung"
+			"session": "Sitzung",
+			"storage": "Speicher"
 		},
 		"viewSectionHint": "Die Akzentfarbe bestimmt die gesamte Palette — Hintergrund, Oberflächen und Ränder folgen ihr.",
 		"themeLabel": "Thema",
@@ -131,7 +142,27 @@
 		"perfLogCopied": "In die Zwischenablage kopiert",
 		"perfLogManualHint": "Zwischenablage nicht verfügbar — markieren und manuell kopieren",
 		"sendReadReceiptsLabel": "Lesebestätigungen senden",
-		"sendReadReceiptsHint": "Ihr Kontakt sieht, dass Sie den Chat geöffnet haben. Zustellbestätigungen werden weiter gesendet — sie bedeuten nur, dass die Nachricht dieses Gerät erreicht hat."
+		"sendReadReceiptsHint": "Ihr Kontakt sieht, dass Sie den Chat geöffnet haben. Zustellbestätigungen werden weiter gesendet — sie bedeuten nur, dass die Nachricht dieses Gerät erreicht hat.",
+		"pushBackground": {
+			"title": "Hintergrundbenachrichtigungen",
+			"hint": "Benachrichtigungen über neue Nachrichten und Anrufe erhalten, auch wenn Ugolok geschlossen ist",
+			"enableLabel": "Hintergrundbenachrichtigungen aktivieren",
+			"actionError": "Fehlgeschlagen — bitte erneut versuchen",
+			"batteryLabel": "Keine Akku-Einschränkungen",
+			"notificationsLabel": "Benachrichtigungen erlaubt",
+			"fullScreenLabel": "Vollbildanzeige für Anrufe erlaubt",
+			"runningLabel": "Verbindung aktiv",
+			"fixButton": "Beheben",
+			"lastConnectedLabel": "Letzte Verbindung",
+			"neverConnected": "noch nie",
+			"autostartTitle": "Autostart",
+			"autostartHint": "Auf manchen Telefonen (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) beendet das System Hintergrund-Apps selbst, um Akku zu sparen. Damit Benachrichtigungen zuverlässig ankommen, erlauben Sie Ugolok in den Herstellereinstellungen, im Hintergrund zu laufen und automatisch zu starten.",
+			"openAutostartButton": "Autostart-Einstellungen öffnen",
+			"privacyExplanation": "Der Benachrichtigungsserver erfährt nur den Zeitpunkt, zu dem eine Nachricht oder ein Anruf eintrifft — genau wie ein gewöhnlicher Relay-Server. Er sieht weder den Text noch den Absender noch den Inhalt.",
+			"unlockLimitation": "Wenn das System die App aus dem Speicher entfernt hat, müssen Sie beim Antippen einer Benachrichtigung erneut Ihr Passwort eingeben — ein Anruf kann enden, bevor Sie fertig sind.",
+			"onboardingToastTitle": "Hintergrundbenachrichtigungen",
+			"onboardingToastBody": "Erhalten Sie Benachrichtigungen über Nachrichten und Anrufe, auch wenn Ugolok geschlossen ist. Tippen Sie, um es einzurichten."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil und Hauptmenü",
@@ -140,7 +171,9 @@
 		"unreadAriaLabel": "ungelesen: {{count}}",
 		"searchLabel": "Search chats and channels",
 		"searchPlaceholder": "Search chats and channels",
-		"discoverHeading": "Entdecken",
+		"discoverHeading": "Wer ist da",
+		"discoverHintVisible": "Sichtbar bis {{time}}",
+		"discoverHintHidden": "Nicht sichtbar",
 		"addContact": "Kontakt hinzufügen",
 		"emptyTitle": "Noch leer",
 		"emptyBody": "Niemand in deiner Liste. Schau bei „Entdecken“ vorbei — dort sind Leute, die offen für Kontakt sind.",
@@ -160,7 +193,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Minimiert — zum Zurückkehren tippen",
-		"serviceUnavailable": "Dienst nicht erreichbar"
+		"serviceUnavailable": "Dienst nicht erreichbar",
+		"copyAddress": "Adresse kopieren",
+		"sectionTalk": "Gespräch",
+		"sectionServices": "Dienste",
+		"sectionMore": "Mehr",
+		"navChats": "Chats",
+		"navRequests": "Anfragen",
+		"navNetwork": "Netzwerk"
 	},
 	"unlock": {
 		"checking": "Wird geprüft…",
@@ -521,7 +561,9 @@
 			"publishingButton": "Wird veröffentlicht…",
 			"publishButton": "Veröffentlichen",
 			"tooLongError": "Text zu lang (Limit: {{max}} Zeichen)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Neuer Beitrag",
+			"editPostHeading": "Beitrag bearbeiten"
 		},
 		"commentComposer": {
 			"ariaLabel": "Neuer Kommentar",
@@ -552,7 +594,7 @@
 		"tabsAriaLabel": "Kanalbereiche",
 		"tabs": {
 			"posts": "Beiträge",
-			"chat": "Chat",
+			"chat": "Kanal-Chat",
 			"moderation": "Moderation",
 			"editChannelWithName": "Kanal „{{name}}“ bearbeiten",
 			"settings": "Settings"
@@ -600,6 +642,12 @@
 		"showPermissions": "Berechtigungen",
 		"blockAction": "Blockieren",
 		"removeFromGroupAria": "Aus Gruppe {{name}} entfernen",
+		"removeDialog": {
+			"title": "Kontakt „{{name}}“ entfernen?",
+			"body": "Du kannst auch den Chat mit dieser Person löschen: Er verschwindet für immer aus deiner Chatliste auf diesem Gerät und kommt nach einem Neustart nicht zurück. Die andere Person behält ihre Kopie.",
+			"withChat": "Kontakt und Chat löschen",
+			"contactOnly": "Nur Kontakt löschen"
+		},
 		"addToGroupLabel": "zur Gruppe",
 		"noContactsAtAll": "Sie haben noch keine Kontakte.",
 		"noContactsInGroups": "Kein Kontakt gehört zu den ausgewählten Gruppen.",
@@ -615,7 +663,19 @@
 		"addAnywayButton": "Trotzdem hinzufügen",
 		"blockedSummary": "Blockiert",
 		"unblockButton": "Entsperren",
-		"noBlocked": "Keine blockierten Kontakte."
+		"noBlocked": "Keine blockierten Kontakte.",
+		"card": {
+			"aria": "Kontaktkarte: {{name}}",
+			"openAria": "Kontaktkarte von {{name}} öffnen",
+			"lastSeen": "Zuletzt online: {{when}}",
+			"openChat": "Chat öffnen",
+			"about": "Über mich",
+			"noAbout": "Diese Person hat noch nichts über sich geschrieben.",
+			"details": "Details",
+			"contactSince": "Im Kontakt seit",
+			"profileUpdated": "Profil aktualisiert",
+			"key": "Schlüssel"
+		}
 	},
 	"chat": {
 		"list": {
@@ -629,7 +689,13 @@
 			"backToChatsButton": "Zurück zur Chatliste",
 			"toLabel": "An",
 			"attachmentsLabel": "Anhänge",
-			"composeInvalidRecipient": "Wählen Sie einen Empfänger aus Ihren Kontakten"
+			"composeInvalidRecipient": "Wählen Sie einen Empfänger aus Ihren Kontakten",
+			"deleteAria": "Unterhaltung mit {{name}} löschen",
+			"deleteDialog": {
+				"title": "Unterhaltung mit {{name}} löschen?",
+				"body": "Die Unterhaltung wird dauerhaft von diesem Gerät entfernt. Die andere Person erfährt nichts davon und behält ihre Kopie. Schreibt einer von euch erneut, erscheint der Chat wieder in der Liste.",
+				"confirm": "Unterhaltung löschen"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Verlauf löschen",
@@ -698,7 +764,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Video öffnen {{name}}",
 		"openAudioAria": "Audio öffnen {{name}}",
@@ -714,7 +781,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Der Schlüssel der gespeicherten Kopie wurde nicht gefunden."
 	},
 	"media": {
 		"buttons": {
@@ -735,7 +803,9 @@
 			"repeatOff": "Wiederholen: aus",
 			"repeatAll": "Wiederholen: alle",
 			"repeatOne": "Wiederholen: einzeln",
-			"autoplay": "Automatische Wiedergabe"
+			"autoplay": "Automatische Wiedergabe",
+			"zoomIn": "Vergrößern",
+			"zoomOut": "Verkleinern"
 		},
 		"classNames": {
 			"audio": "Audio",
@@ -839,7 +909,20 @@
 		"pasteInto": "Einfügen",
 		"pasteHere": "Hier einfügen",
 		"clipboardCopied": "Kopiert: {{count}}",
-		"clipboardCut": "Ausgeschnitten: {{count}}"
+		"clipboardCut": "Ausgeschnitten: {{count}}",
+		"freedFromServer": "Vom Server gelöscht",
+		"freedOpenHint": "„{{name}}“ wurde vom Server freigegeben und lässt sich nicht mehr öffnen. Entferne es aus der Liste, wenn du es nicht brauchst.",
+		"shareProgress": "Kopiere für Leser: Datei {{done}} von {{total}} · {{percent}} % · {{name}}",
+		"shareProgressStart": "Dateien für Leser werden vorbereitet…",
+		"columnPreview": "Symbol",
+		"columnName": "Name",
+		"columnType": "Typ",
+		"columnActions": "Aktionen",
+		"columnSelect": "Auswahl",
+		"columnSize": "Größe",
+		"columnAccess": "Zugriff",
+		"kindFolder": "Ordner",
+		"sortBy": "Sortieren nach: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -913,7 +996,7 @@
 		"photoAlt": "Profilfoto",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Dateien",
-		"menuProfile": "Mein Profil",
+		"menuProfile": "Avatar oder Bio",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Schlüssel und Wiederherstellung",
@@ -1172,11 +1255,15 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Dieser Kontakt hat zu viele Geräte, um eine Einladung in einer einzigen Nachricht zu senden. Bitte versuchen Sie es später erneut."
+		"welcomeTooLargeForDeviceCount": "Dieser Kontakt hat zu viele Geräte, um eine Einladung in einer einzigen Nachricht zu senden. Bitte versuchen Sie es später erneut.",
+		"blobGone": "Die Datei ist auf dem Server nicht mehr verfügbar (möglicherweise wurde sie vom Server freigegeben).",
+		"fileTooLargeForServer": "„{{name}}“ ist {{size}} groß, der Server nimmt aber nur Dateien bis {{max}} an.",
+		"quotaExceeded": "Nicht genug Platz für „{{name}}“: {{need}} nötig, {{free}} frei.",
+		"storageReadonly": "Der Speicher ist gerade schreibgeschützt: neue Dateien lassen sich nicht hochladen. Alles bereits Hochgeladene öffnet sich weiter."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
-		"exitButton": "Back",
+		"exitButton": "Verlassen",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
 		"closeAria": "Close and end the call",
@@ -1206,6 +1293,7 @@
 			"chatPlaceholder": "Message…",
 			"sendButton": "Send",
 			"copyInviteAria": "Copy invite link",
+			"inviteHint": "Link zum Raum. Schick ihn Personen, die du einladen möchtest – damit können sie beitreten und hier chatten.",
 			"inviteCopiedStatus": "Copied",
 			"inviteCopyFailedStatus": "Couldn't copy — select and copy manually",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
@@ -1314,5 +1402,123 @@
 			"share": "Share",
 			"clear": "Clear recording"
 		}
+	},
+	"storage": {
+		"title": "Speicher",
+		"hint": "Wie viel Platz deine hochgeladenen Dateien auf dem Server belegen und was du freigeben kannst.",
+		"loading": "Lädt…",
+		"empty": "Du hast noch nichts hochgeladen.",
+		"serverFailed": "Daten vom Server konnten nicht abgerufen werden.",
+		"retry": "Erneut versuchen",
+		"usedTitle": "Auf dem Server belegt",
+		"usedValue": "{{size}} · Dateien: {{count}}",
+		"byPurposeTitle": "Nach Ort",
+		"byKindTitle": "Nach Typ",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Gruppen",
+			"channel": "Kanäle",
+			"files": "Dateien",
+			"share": "Geteilte Ordner",
+			"avatar": "Avatare",
+			"unknown": "Noch ohne Bezeichnung"
+		},
+		"kind": {
+			"image": "Fotos",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Dokumente",
+			"other": "Sonstiges",
+			"unknown": "Noch ohne Bezeichnung"
+		},
+		"listTitle": "Größte Uploads",
+		"showMore": "Mehr anzeigen",
+		"unnamed": "Datei ohne Namen",
+		"unknownEntry": "Am {{date}} hochgeladene Datei",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "gesendet an: {{count}}",
+		"journalLoading": "Dateinamen werden geladen…",
+		"journalPartial": "Dateinamen sind nur teilweise geladen — einige Dateien werden ohne Namen angezeigt.",
+		"journalMore": "Weitere Namen laden",
+		"journalFailed": "Dateinamen konnten nicht aus dem Netz geladen werden. Die Größen stimmen, manche Namen können fehlen.",
+		"reconcile": {
+			"button": "Mit Server abgleichen",
+			"running": "Gleiche ab…",
+			"needFull": "Noch nicht alle Dateinamen sind geladen. Versuche es erneut — sonst könnten echte Dateien als unbekannt erscheinen.",
+			"clean": "Alles auf dem Server ist erfasst.",
+			"unknownTitle": "Unbekannte Dateien: {{count}} · {{size}}",
+			"unknownRange": "Hochgeladen {{from}} – {{to}}",
+			"unknownHint": "Diese Dateien liegen auf dem Server, fehlen aber in deinem Journal. Sie könnten zu alten Nachrichten gehören — nach dem Löschen lassen sie sich nicht mehr öffnen.",
+			"deleteUnknown": "Alle unbekannten löschen",
+			"confirmBody": "{{count}} unbekannte Dateien ({{size}}) vom Server löschen? Das lässt sich nicht rückgängig machen.",
+			"missingTitle": "Im Journal, aber nicht auf dem Server: {{count}}",
+			"forgetMissing": "Aus dem Journal entfernen"
+		},
+		"free": {
+			"button": "Speicher freigeben",
+			"title": "Speicher freigeben",
+			"body": "„{{name}}“ ({{size}}) wird vom Server gelöscht.",
+			"usage": "Es wurde an {{count}} Orte gesendet: Für alle, die es noch nicht heruntergeladen haben, lässt es sich nicht mehr öffnen.",
+			"usageNone": "Für diese Datei ist kein Versand vermerkt.",
+			"limit": "Was Empfänger bereits heruntergeladen haben, bleibt bei ihnen. Das lässt sich nicht rückgängig machen.",
+			"filesNote": "Der Eintrag unter „Dateien“ (falls vorhanden) wandert ebenfalls in den Papierkorb.",
+			"confirm": "Speicher freigeben",
+			"cancel": "Abbrechen",
+			"working": "Lösche… {{done}} von {{total}}",
+			"done": "Speicher freigegeben.",
+			"failed": "{{count}} Dateien konnten nicht gelöscht werden. Versuche es später erneut.",
+			"sharedCopy": "Diese Datei liegt in einem geteilten Ordner. Sie lässt sich für dessen Leser nicht mehr öffnen.",
+			"sharedOriginal": "Diese Datei liegt in einem geteilten Ordner. Wer schon Zugriff hat, behält sie, für neue Leser lässt sie sich aber nicht öffnen."
+		},
+		"journalPublishFailed": "Das Upload-Journal erreicht das Relay nicht: {{reason}}. Deine Dateien sind nicht betroffen, aber auf anderen Geräten erscheinen keine Namen.",
+		"quota": {
+			"unlimited": "Auf diesem Server gibt es keine Speichergrenze.",
+			"barAria": "Belegter Speicher",
+			"usedOfLimit": "{{used}} von {{limit}} belegt",
+			"warning": "Wird knapp: noch {{free}} frei.",
+			"full": "Der Speicher ist voll. Gib Platz frei oder hole dir mehr, um neue Dateien hochzuladen.",
+			"readonly": "Der Speicher ist schreibgeschützt: neue Dateien lassen sich nicht hochladen, alles Vorhandene öffnet sich weiter.",
+			"getMore": "Mehr Speicher holen",
+			"plansLink": "Tarife und wie du mehr Speicher bekommst"
+		},
+		"notice": {
+			"readonly": "Der Speicher ist schreibgeschützt: neue Dateien lassen sich nicht hochladen.",
+			"full": "Der Speicher ist voll: neue Dateien lassen sich nicht hochladen.",
+			"warning": "Nur noch {{free}} von {{limit}} frei.",
+			"toStorage": "Speicher öffnen",
+			"toPlans": "Mehr Speicher holen"
+		},
+		"serverLabel": "Speicherserver: {{server}}",
+		"filesCount": "Dateien: {{count}}"
+	},
+	"plans": {
+		"title": "Speichertarife",
+		"intro": "Der Platz auf dem Server wird pro Schlüssel gezählt: alles, was du hochlädst, zählt — Dateien, Vorschauen, Avatare.",
+		"yourUsage": "Du nutzt {{used}} von {{limit}}.",
+		"free": {
+			"name": "Kostenlos",
+			"size": "1 GB",
+			"desc": "Genug für Chats und alltägliche Dateien."
+		},
+		"paid": {
+			"name": "Erweitert",
+			"size": "100 GB",
+			"price": "5 $ pro Monat",
+			"desc": "Für Fotos, Videos und ein Archiv."
+		},
+		"how": {
+			"title": "So bekommst du mehr Speicher",
+			"text": "Die Zahlung läuft vorerst manuell. Schreib an {{email}} und gib unten deinen öffentlichen Schlüssel (npub) an — wir schalten den Platz frei und antworten.",
+			"write": "An den Support schreiben",
+			"note": "Den öffentlichen Schlüssel kannst du bedenkenlos weitergeben: er sagt uns nur, wem wir den Platz geben."
+		},
+		"mailSubject": "Mehr Speicherplatz",
+		"mailBody": "Hallo! Bitte gebt meinem Schlüssel mehr Platz: {{npub}}",
+		"back": "Zurück zum Speicher"
+	},
+	"webviewOutdated": {
+		"title": "Android System WebView aktualisieren",
+		"body": "{{appName}} nutzt moderne Browserfunktionen, die deine installierte Version von Android System WebView noch nicht unterstützt. Aktualisiere sie über Google Play, um fortzufahren.",
+		"updateButton": "In Google Play aktualisieren"
 	}
 }

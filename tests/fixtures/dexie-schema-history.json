@@ -268,5 +268,25 @@
 			"peerCursors": "[ownerPubkey+contactPubkey]",
 			"peerPresence": "[ownerPubkey+contactPubkey]"
 		}
+	},
+	{
+		"version": 38,
+		"stores": {
+			"uploads": "[ownerPubkey+hash], ownerPubkey, [ownerPubkey+at], [ownerPubkey+group], [ownerPubkey+purpose]",
+			"uploadBatches": "[ownerPubkey+d], ownerPubkey",
+			"uploadSync": "ownerPubkey"
+		}
+	},
+	{
+		"version": 39,
+		"stores": {
+			"uploadFreed": "[ownerPubkey+hash], ownerPubkey"
+		}
+	},
+	{
+		"version": 40,
+		"stores": {
+			"chatTombstones": "[ownerPubkey+contactPubkey], [ownerPubkey+groupId], ownerPubkey"
+		}
 	}
 ]

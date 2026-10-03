@@ -4,6 +4,7 @@ import { putStream } from "../src/domain/files/content.js";
 import { acquireMediaUrl, releaseMediaUrlHandle, mediaElementSrc } from "../src/domain/media/adapters/media-url.js";
 import { clearPlaintextCache } from "../src/domain/media/plaintext-cache.js";
 import { clearManifestCache } from "../src/domain/files/content.js";
+import { resetPlatformForTests } from "../src/platform/index.js";
 
 const ALICE_PRIV = new Uint8Array(32).fill(1);
 const SERVER_URL = "https://blossom.test";
@@ -73,4 +74,58 @@ test("acquireMediaUrl: без SW-controller — object-url, src пригоден
 	await releaseMediaUrlHandle(ref.digest);
 	clearPlaintextCache();
 	clearManifestCache();
+});
+
+// Э2.1 ТЗ-NATIVE-APPS — "в браузере с принудительным __TARGET__=capacitor"
+// (ворота Э2, ТЗ формулирует ровно так): реальный сквозной путь через ту же
+// acquireMediaUrl, что зовут все существующие UI-компоненты (attachment-view.jsx
+// и т.д.) БЕЗ единого изменения в них — на нативной платформе она сама уходит
+// в platform.media.getPlayableSource вместо SW-моста/auto-detect.
+test("acquireMediaUrl: __TARGET__=capacitor (auto, без явного useFilesContentBridge) — platform-media, тот же decrypt-конвейер", async () => {
+	globalThis.__TARGET__ = "capacitor";
+	resetPlatformForTests();
+	clearPlaintextCache();
+	clearManifestCache();
+	try {
+		const { fetchImpl } = makeFakeBlossom();
+		const bytes = new Uint8Array(1024);
+		for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 7) % 256;
+		const { manifest, manifestDigest, fileKey } = await putStream(bytes, {
+			name: "clip.mp4",
+			mime: "video/mp4",
+			chunkSize: 256,
+			serverUrl: SERVER_URL,
+			privateKey: ALICE_PRIV,
+			fetchImpl,
+		});
+		const ref = { digest: manifestDigest, key: fileKey, mime: "video/mp4", name: "clip.mp4", size: manifest.size, sourceKind: "attachment", sourceMeta: {} };
+		const handle = await acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl });
+		assert.equal(handle.kind, "platform-media");
+		assert.match(handle.src, /^blob:/);
+		assert.equal(mediaElementSrc(handle), handle.src);
+		await releaseMediaUrlHandle(ref.digest);
+	} finally {
+		delete globalThis.__TARGET__;
+		resetPlatformForTests();
+		clearPlaintextCache();
+		clearManifestCache();
+	}
+});
+
+test("acquireMediaUrl: __TARGET__=capacitor, файл больше лимита Android (256 МБ) — отклоняется без единого сетевого чанка (Р2.2)", async () => {
+	globalThis.__TARGET__ = "capacitor";
+	resetPlatformForTests();
+	try {
+		let fetchCalled = false;
+		const fetchImpl = async () => {
+			fetchCalled = true;
+			throw new Error("не должен был обратиться к сети — лимит проверяется ДО манифеста");
+		};
+		const ref = { digest: "deadbeef", key: new Uint8Array(32), mime: "video/mp4", name: "huge.mp4", size: 300 * 1024 * 1024, sourceKind: "attachment", sourceMeta: {} };
+		await assert.rejects(() => acquireMediaUrl(ref, { serverUrl: SERVER_URL, fetchImpl }), /больше лимита/);
+		assert.equal(fetchCalled, false, "проверка размера обязана быть ДО любого сетевого обращения");
+	} finally {
+		delete globalThis.__TARGET__;
+		resetPlatformForTests();
+	}
 });

@@ -7,10 +7,12 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { generateFileKey } from "./crypto.js";
 import { planChunks } from "./manifest.js";
 import { MANIFEST_VERSION } from "./content.js";
+import { sanitizeServerHint } from "./servers.js";
 import { uploadBlob, checkUploadRequirements } from "./blob.js";
 import { chunkSizeFor } from "../media/upload-plan.js";
 import { createThumbnailQueue } from "./thumbnail-queue.js";
 import { DomainError } from "../errors.js";
+import { refusalFromRequirements, toDomainRefusal } from "../uploads/quota.js";
 
 // Импорт "?worker&inline" понимает только vite — под node --test (никакого
 // vite в рантайме тестов) резолвер падает буквально при ЗАГРУЗКЕ модуля
@@ -77,13 +79,21 @@ export async function putFileStreaming(
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal, timeoutMs, retries, backoffMs, expirationSec };
 	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: body.size }, privateKey, uploadOptions);
 	if (!requirements.ok) {
+		// ТЗ-04: машинная причина отказа (квота/размер/только чтение) -> понятная ошибка, а не «сервер отклонил»
+		const refusal = refusalFromRequirements(requirements, body.size, name);
+		if (refusal) throw refusal;
 		const detail = requirements.status ? " (" + requirements.status + (requirements.reason ? ": " + requirements.reason : "") + ")" : "";
 		throw new DomainError("Blossom-сервер отклонил файл" + detail, "errors.blossomRejectedFile", { detail });
 	}
-	const uploadResponse = await uploadBlob(serverUrl, body, blobSha256Local, privateKey, {
-		...uploadOptions,
-		onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? body.size }) : undefined,
-	});
+	let uploadResponse;
+	try {
+		uploadResponse = await uploadBlob(serverUrl, body, blobSha256Local, privateKey, {
+			...uploadOptions,
+			onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? body.size }) : undefined,
+		});
+	} catch (err) {
+		throw toDomainRefusal(err, { name, sizeBytes: body.size }); // гонка: HEAD прошёл, а к PUT остаток кончился — тот же понятный отказ
+	}
 
 	onProgress?.({ phase: "manifest" });
 	const manifest = {
@@ -95,12 +105,18 @@ export async function putFileStreaming(
 		mime,
 		name,
 		blobSha256: uploadResponse.sha256,
+		...(sanitizeServerHint(serverUrl).length > 0 ? { servers: sanitizeServerHint(serverUrl) } : {}),
 	};
 	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
 	const manifestDigest = bytesToHex(sha256(manifestBytes));
 	await uploadBlob(serverUrl, manifestBytes, manifestDigest, privateKey, uploadOptions);
 
-	return { manifest, manifestDigest, fileKey, size };
+	// ТЗ-03: список залитых блобов (для журнала загрузок) — аддитивно.
+	const blobs = [
+		{ role: "content", hash: uploadResponse.sha256, size: body.size },
+		{ role: "manifest", hash: manifestDigest, size: manifestBytes.length },
+	];
+	return { manifest, manifestDigest, fileKey, size, blobs };
 }
 
 // jobs: Array<{ file, options }> — options тот же объект, что putFileStreaming

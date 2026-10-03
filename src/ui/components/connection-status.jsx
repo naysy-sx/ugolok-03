@@ -1,10 +1,9 @@
 import { useEffect } from "preact/hooks";
 import { connState, synced } from "../signals/transport.js";
 import { blossomStatus, refreshBlossomStatus } from "../signals/connectivity.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { t } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 const BLOSSOM_CHECK_INTERVAL_MS = 30000;
 const TONE_RANK = { ok: 0, warn: 1, bad: 2 };
 
@@ -34,21 +33,26 @@ const BLOSSOM_LABEL_KEYS = {
 // WebSocket), поэтому периодическая проверка достижимости раз в 30с.
 export default function ConnectionStatusPanel() {
 	useEffect(() => {
-		refreshBlossomStatus(BLOSSOM_URL);
-		const id = setInterval(() => refreshBlossomStatus(BLOSSOM_URL), BLOSSOM_CHECK_INTERVAL_MS);
+		refreshBlossomStatus(uploadTarget());
+		const id = setInterval(() => refreshBlossomStatus(uploadTarget()), BLOSSOM_CHECK_INTERVAL_MS);
 		return () => clearInterval(id);
 	}, []);
 
 	const relay = relayStatusInfo(connState.value, synced.value);
 	const blossom = BLOSSOM_LABEL_KEYS[blossomStatus.value];
-
-	if (relay.tone === "ok" && blossomStatus.value === "reachable") return null;
+	const isQuiet = relay.tone === "ok" && blossomStatus.value === "reachable";
 
 	// bad важнее warn (§6).
 	const worst = TONE_RANK[blossom.tone] > TONE_RANK[relay.tone] ? blossom : relay;
 
+	// Живой фидбек — relay в деве отваливается/восстанавливается часто,
+	// панель раньше монтировалась/демонтировалась (return null) вместе с
+	// этим, из-за чего всё содержимое под ней (aside, экраны типа «Каналы»)
+	// прыгало вверх-вниз при каждом переключении. "Тишина = норма" (§6)
+	// остаётся — просто тишина теперь невидимый, а не нулевой по высоте
+	// элемент, место зарезервировано всегда.
 	return (
-		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-live="polite">
+		<div class="conn bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} aria-live="polite" aria-hidden={isQuiet || undefined} data-quiet={isQuiet || undefined}>
 			<span class="conn-dot" aria-hidden="true" />
 			{worst.labelKey ? t(worst.labelKey) : worst.label}
 		</div>

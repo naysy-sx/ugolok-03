@@ -6,8 +6,9 @@ import { db } from "../../core/store/database.js";
 import { pickLatest } from "../../core/sync/lww.js";
 import { publishDurably } from "../../core/store/outbox.js";
 import { registerTrustedImageOrigins } from "../media/url-guard.js";
-import { BUILD_DEFAULT_RELAYS, BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { readBootstrapEndpoints } from "./bootstrap-endpoints.js";
+import { registerUserServers } from "../files/servers.js";
+import { BUILD_DEFAULT_RELAYS, getBuildBlossomServers } from "../../config.js";
+import { readBootstrapEndpoints, isLoopbackHost } from "./bootstrap-endpoints.js";
 import { buildRelayListEvent } from "../identity/relay-list.js";
 import { buildDmRelayListEvent } from "../identity/dm-relay-list.js";
 import { toEncryptedRow, fromEncryptedRow } from "../../core/store/encrypted-table.js";
@@ -49,7 +50,7 @@ export const DEFAULT_SETTINGS = {
 	// стали бы неотличимы.
 	customPalette: null,
 	uiScale: "medium",
-	themeMode: null, // null = "как в системе" (prefers-color-scheme); "light"|"dark" = явный выбор
+	themeMode: "light", // "light"|"dark" = явный выбор; null = "как в системе" (prefers-color-scheme) — дефолт для НОВЫХ аккаунтов светлый (решение владельца), не системный
 	language: "ru",
 	notifications: DEFAULT_NOTIFICATIONS,
 	relayUrls: [],
@@ -146,17 +147,50 @@ export async function loadUiSettings(ownerPubkey, dbKey) {
 		const relayUrls = boot.relayUrl
 			? [{ url: boot.relayUrl, read: true, write: true }]
 			: BUILD_DEFAULT_RELAYS.map((url) => ({ url, read: true, write: true }));
-		const blossomUrls = boot.blossomUrl ? [boot.blossomUrl] : [...BUILD_DEFAULT_BLOSSOM_SERVERS];
-		return mergeWithDefaults({
+		const blossomUrls = boot.blossomUrl ? [boot.blossomUrl] : getBuildBlossomServers();
+		const first = mergeWithDefaults({
 			language: detectSystemLocale(),
 			relayUrls,
 			blossomUrls,
 			activeBlossomUrl: blossomUrls[0] ?? null,
 		});
+		registerUserServers({ activeUrl: first.activeBlossomUrl, urls: first.blossomUrls });
+		return first;
 	}
 	const { ownerPubkey: _drop, ...settings } = row;
 	const merged = mergeWithDefaults(settings);
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же класс проблемы,
+	// что readBootstrapEndpoints уже решает для relay (см. её isLoopbackHost-
+	// проверку): активный Blossom-сервер, сохранённый ПРИ ПЕРВОМ ЗАПУСКЕ (когда
+	// config.json ещё указывал на локальный тестовый адрес), застревал в
+	// uiSettings навсегда — правка config.json на реальный адрес острова после
+	// этого ничего не меняла для уже существующих личностей на этом устройстве.
+	// Срабатывает только когда И активный адрес, И весь список — loopback (не
+	// трогает случай, где пользователь сам добавил настоящий сервер рядом).
+	if (isLoopbackHost(merged.activeBlossomUrl) && merged.blossomUrls.every(isLoopbackHost)) {
+		const boot = readBootstrapEndpoints();
+		if (boot.blossomUrl && !isLoopbackHost(boot.blossomUrl)) {
+			merged.blossomUrls = [boot.blossomUrl];
+			merged.activeBlossomUrl = boot.blossomUrl;
+		}
+	}
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Э3 native, 2026-09-27) — тот же баг, что
+	// Blossom выше, только для relay: transport.js's connect() берёт
+	// relayEntries = localSettings.relayUrls НАПРЯМУЮ и переключается на
+	// bootstrap-дефолт ТОЛЬКО когда список пуст (relayEntries.length === 0) —
+	// непустой список из ОДНОГО loopback-адреса (личность создана на дев-
+	// конфиге) проходит эту проверку и используется как есть. connState
+	// повисает на "connecting" навсегда (WebSocket на 127.0.0.1 в нативной
+	// оболочке блокируется CSP), хотя config.json давно указывает на
+	// настоящий остров. Тот же принцип защиты, что и для Blossom.
+	if (merged.relayUrls.length > 0 && merged.relayUrls.every((r) => isLoopbackHost(r.url))) {
+		const boot = readBootstrapEndpoints();
+		if (boot.relayUrl && !isLoopbackHost(boot.relayUrl)) {
+			merged.relayUrls = [{ url: boot.relayUrl, read: true, write: true }];
+		}
+	}
 	registerTrustedImageOrigins(merged.blossomUrls);
+	registerUserServers({ activeUrl: merged.activeBlossomUrl, urls: merged.blossomUrls });
 	return merged;
 }
 
@@ -177,6 +211,7 @@ export async function hasLocalUiSettings(ownerPubkey) {
 export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publish) {
 	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
 	registerTrustedImageOrigins(settings.blossomUrls);
+	registerUserServers({ activeUrl: settings.activeBlossomUrl, urls: settings.blossomUrls });
 	try {
 		// AUDIT-EGOROD A2: через постоянный outbox — настройки (включая список relay)
 		// доедут до других устройств и после оффлайна/закрытой вкладки.
@@ -186,13 +221,23 @@ export async function saveUiSettings(ownerPubkey, privKey, dbKey, settings, publ
 	}
 }
 
+// Вынесено из rebuildUiSettings (см. ниже) — тот же приём, что identity/profile.js's
+// hydrateOwnProfile отдельно от его bootstrap-обёртки: применение готового набора
+// kind:30072-событий не обязано знать, ОТКУДА они взялись (широкий bootstrap-скан
+// локального кэша ИЛИ прицельный oneShotRequest напрямую на relay, transport.js —
+// см. "Этап 71-довесок" там же). Возвращает true, если что-то реально применили.
+export async function applyUiSettingsEvents(ownerPubkey, privKey, dbKey, events) {
+	if (events.length === 0) return false;
+	const settings = parseUiSettingsEvent(pickLatest(events), privKey);
+	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
+	return true;
+}
+
 // Тот же паттерн, что rebuildContactsAndGroups (handlers.js, этап 20-24) — событие уже
 // приходит через существующий bootstrap-фильтр {authors:[я]}, нового REQ не нужно.
 export async function rebuildUiSettings(ownerPubkey, privKey, dbKey) {
 	const events = await db.table("events").where("[pubkey+kind]").equals([ownerPubkey, KIND_UI_SETTINGS]).toArray();
-	if (events.length === 0) return;
-	const settings = parseUiSettingsEvent(pickLatest(events), privKey);
-	await db.table("uiSettings").put(toEncryptedRow({ ownerPubkey, ...settings }, UI_SETTINGS_PLAINTEXT_FIELDS, dbKey));
+	await applyUiSettingsEvents(ownerPubkey, privKey, dbKey, events);
 }
 
 // Этап 58 — мультирелейный транспорт: relayUrls теперь {url,read,write}[],

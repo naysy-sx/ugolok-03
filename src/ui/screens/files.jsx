@@ -57,17 +57,21 @@ import { classOf } from "../../domain/media/media-ref.js";
 import { PreconditionError, targetInsideSubtree } from "../../domain/files/ops.js";
 import { getManifest, getRange } from "../../domain/files/content.js";
 import { putFilesStreaming } from "../../domain/files/stream-upload.js";
+import { recordBlobs, getGroupOfHash } from "../../domain/uploads/journal.js";
+import { freedDigests, refreshFreed } from "../signals/uploads.js";
+import FreeSpaceDialog from "../components/free-space-dialog.jsx";
 import TypeFilterBar from "../components/files-type-filter.jsx";
 import FileInfoDialog from "../components/file-info-dialog.jsx";
-import FileKindIcon from "../components/file-kind-icon.jsx";
+import FileThumbnail from "../components/file-thumbnail.jsx";
+import FileTableHead from "../components/file-table-head.jsx";
+import { useManifestInfo } from "../hooks/use-manifest-info.js";
+import MountsView from "../components/mounts-view.jsx";
 import { formatFileSize } from "../components/attachment-view.jsx";
 import { fileExtLabel, joinMeta, liveChildCount } from "../../domain/files/file-meta.js";
 import IconRestore from "../icons/restore.jsx";
+import IconScissors from "../icons/scissors.jsx";
+import IconEmpty from "../icons/empty.jsx";
 import { getCachedManifest, putCachedManifest } from "../../domain/files/store.js";
-import { isThumbnailable, createThumbnailBlob } from "../../domain/files/thumbnails.js";
-import { createThumbnailQueue } from "../../domain/files/thumbnail-queue.js";
-import { getMemoryCachedUrl, putMemoryCachedAttachment } from "../attachment-memory-cache.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import IconMagnifyingGlass from "../icons/magnifying-glass.jsx";
 import IconGlobe from "../icons/globe.jsx";
 import IconPeople from "../icons/people.jsx";
@@ -75,14 +79,10 @@ import { useVirtualWindow } from "../hooks/use-virtual-window.js";
 import { openMedia } from "../signals/media.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
 import { t, tPlural, errorMessage as translateErrorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const FILTER_DEBOUNCE_MS = 150; // ALGO.MD §13 — "дебаунс в 100-150 мс"
-const ROW_HEIGHT_PX = 56; // = --file-row-height в custom.css, держать в синхроне
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
-// Общая на весь экран очередь — иначе каждая строка получила бы СВОЙ
-// параллелизм, и общее число одновременных задач росло бы с числом видимых
-// строк, а не оставалось 2-4 (ALGO.MD §15).
-const thumbnailQueue = createThumbnailQueue(3);
+const ROW_HEIGHT_PX = 72; // = --file-row-height в custom.css, держать в синхроне
 
 const TYPE_MODE = {
 	image: { labelKey: "files.typeImages", Icon: IconImage, playKey: "files.watch" },
@@ -91,88 +91,25 @@ const TYPE_MODE = {
 	other: { labelKey: "files.typeDocs", Icon: IconFileText, playKey: null },
 };
 
-// Миниатюра по видимости (IntersectionObserver) — задача 3.8 TASK.md.
-// Манифест (mime/size) неизвестен из самого узла дерева (Node.blob — только
-// дайджест, §4.1 TASK.md) — приходится сходить за ним (кэш в files_manifests,
-// store.js, сперва; сеть — только если кэш пуст). Отмена — если строка
-// покинула вьюпорт РАНЬШЕ, чем задание стартовало (thumbnail-queue.js);
-// уже стартовавшее докручивается, не прерывается на середине.
-// НАЙДЕНО ПОЛЬЗОВАТЕЛЕМ (этап 53 И7 4.4-довесок): "отправитель видит
-// маленькую фотку, получатель — нормальную". Причина — ключ кэша здесь
-// (entry.blob = manifestDigest) СОВПАДАЛ с ключом, которым attachment-
-// view.jsx кэширует ПОЛНОРАЗМЕРНОЕ вложение чата (тот же manifestDigest,
-// если файл был отправлен через дедупликацию, И7 7.4 — один и тот же
-// блоб). Миниатюра (200px, downscale) — не то же самое содержимое, что
-// полный файл, но раньше делила с ним ОДИН слот в attachment-memory-
-// cache.js — кто первым закэшировал (превью в "Файлы" или полный
-// просмотр в чате), тот и "выигрывал" для ВСЕХ последующих чтений под
-// этим digest'ом. THUMB_CACHE_PREFIX — отдельный неймспейс, чтобы
-// уменьшенная и полная версии никогда не делили один ключ.
-const THUMB_CACHE_PREFIX = "thumb:";
-
-function FileThumbnail({ entry, ownerPubkey, imgClass = "file-row-thumb" }) {
-	const [url, setUrl] = useState(() => getMemoryCachedUrl(THUMB_CACHE_PREFIX + entry.blob) ?? null);
-	const [failed, setFailed] = useState(false);
-	const elRef = useRef(null);
-
-	useEffect(() => {
-		if (url || failed || !entry.blob) return;
-		let handle = null;
-		let cancelled = false;
-
-		const observer = new IntersectionObserver(([observedEntry]) => {
-			if (observedEntry.isIntersecting && !handle) {
-				handle = thumbnailQueue.enqueue(async () => {
-					let manifest = await getCachedManifest(ownerPubkey, entry.blob);
-					if (!manifest) {
-						manifest = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
-						await putCachedManifest(ownerPubkey, entry.blob, manifest);
-					}
-					// Этап E, E1-доп (DESIGN.md) — дозаливка mime старому узлу (⊥),
-					// событийно: манифест и так уже резолвлен ради миниатюры. НЕ
-					// блокирует саму миниатюру (fire-and-forget) — classCount обновится
-					// к следующему открытию/перерисовке шапки, не в этом кадре.
-					if (entry.mime == null) backfillMime(entry.id, manifest.mime).catch(() => {});
-					if (!isThumbnailable(manifest.mime)) return null;
-					const fileKey = await getFileKeyFor(entry.blob);
-					if (!fileKey) return null; // ключ ещё не персистирован/не наш файл
-					const bytes = await getRange(manifest, fileKey, 0, manifest.size, { serverUrl: BLOSSOM_URL });
-					return createThumbnailBlob(bytes, manifest.mime);
-				});
-				handle.promise
-					.then((thumbBytes) => {
-						if (cancelled) return;
-						if (!thumbBytes) {
-							setFailed(true);
-							return;
-						}
-						setUrl(putMemoryCachedAttachment(THUMB_CACHE_PREFIX + entry.blob, thumbBytes, "image/jpeg"));
-					})
-					.catch(() => {
-						if (!cancelled) setFailed(true);
-					});
-			} else if (!observedEntry.isIntersecting && handle) {
-				handle.cancel();
-				handle = null;
-			}
-		});
-		if (elRef.current) observer.observe(elRef.current);
-
-		return () => {
-			cancelled = true;
-			observer.disconnect();
-			handle?.cancel();
-		};
-	}, [entry.blob, url, failed]);
-
-	if (url) return <img src={url} alt="" class={imgClass} />;
-	// ref — на обычный <span>, не напрямую на иконку: Icon* без forwardRef,
-	// ref на него не долетает до DOM (найдено живой проверкой).
-	return (
-		<span ref={elRef} style={{ display: "inline-flex" }}>
-			<FileKindIcon mime={entry.mime} />
-		</span>
-	);
+// Ячейка «Размер» таблицы: для папки — число элементов, для файла — размер из манифеста; статус
+// «ремонта» и пометка «удалён с сервера» (ТЗ-03) показываются вместо размера, как и в плитках.
+function FileSizeCell({ entry, size }) {
+	if (entry.kind === "file" && entry.blob && freedDigests.value.has(entry.blob)) {
+		return (
+			<small class="file-row-status" title={t("files.freedFromServer")} style={{ color: "var(--warn, var(--muted))" }}>
+				{t("files.freedFromServer")}
+			</small>
+		);
+	}
+	if (STATUS_LABEL_KEYS[entry.status]) {
+		return (
+			<small class="file-row-status" title={t(STATUS_LABEL_KEYS[entry.status])}>
+				{t(STATUS_LABEL_KEYS[entry.status])}
+			</small>
+		);
+	}
+	if (entry.kind === "dir") return <small class="file-row-status">{tPlural("files.objectCount", liveChildCount(projected.value.children, entry.id))}</small>;
+	return <small class="file-row-status">{size != null ? formatFileSize(size) : ""}</small>;
 }
 
 function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
@@ -184,7 +121,7 @@ function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 			let m = await getCachedManifest(ownerPubkey, entry.blob);
 			if (!m) {
 				try {
-					m = await getManifest(entry.blob, { serverUrl: BLOSSOM_URL });
+					m = await getManifest(entry.blob, { serverUrl: uploadTarget() });
 					if (m) await putCachedManifest(ownerPubkey, entry.blob, m);
 				} catch {
 					return;
@@ -197,6 +134,14 @@ function FileMetaLabel({ entry, ownerPubkey, class: cls }) {
 		};
 	}, [entry.blob, entry.kind, ownerPubkey]);
 
+	// ТЗ-03: байты стёрты с сервера («освободить место») — узел остался, но не откроется.
+	if (entry.kind === "file" && entry.blob && freedDigests.value.has(entry.blob)) {
+		return (
+			<small class={cls} style={{ color: "var(--warn, var(--muted))" }}>
+				{t("files.freedFromServer")}
+			</small>
+		);
+	}
 	if (STATUS_LABEL_KEYS[entry.status]) {
 		return <small class={cls}>{t(STATUS_LABEL_KEYS[entry.status])}</small>;
 	}
@@ -225,27 +170,20 @@ function errorMessage(result) {
 // FILES-FIX-SPEC.md §5.1.2, TZ-FIX-FILES-MEDIA-STATIC.md решение №2 — прогресс
 // обязан отражать СЕТЬ, не только шифрование (аудит: "100% за секунды, потом
 // минуты тишины на единственном PUT" читалось пользователем как зависание).
-// index — порядковый номер ТЕКУЩЕГО в работе файла (concurrency=2 — несколько
-// job'ов идут одновременно, index=filesDone+1 — тот же смысл, что раньше
-// имел однопоточный for, "который по счёту").
-function uploadProgressText(state) {
-	const index = state.filesDone + 1;
-	const total = state.filesTotal;
-	const name = state.fileName ?? "";
-	if (state.phase === "upload") {
-		return t("files.uploadingProgressUpload", {
-			name,
-			index,
-			total,
-			sent: formatFileSize(state.bytesSent ?? 0),
-			size: formatFileSize(state.bytesTotal ?? 0),
-		});
-	}
-	if (state.phase === "manifest") {
-		return t("files.uploadingProgressManifest", { name, index, total });
-	}
-	const percent = state.chunksTotal ? Math.round((state.chunksDone / state.chunksTotal) * 100) : 0;
-	return t("files.uploadingProgress", { name, index, total, percent });
+// Единая шкала 0-100% на файл: encrypt — первая половина (по chunksDone/
+// chunksTotal), upload — вторая половина (по bytesSent/bytesTotal), manifest —
+// короткий финальный штрих перед done. Раньше (однострочный общий статус,
+// concurrency:2 — см. handleFilesSelected) progress двух параллельных job'ов
+// писался в ОДНО общее поле и гонялся — строка мелькала то одним, то другим
+// файлом. Живой фидбек (по памяти, не на этой сессии): "быстро сменяющие
+// друг друга сообщения". Таблица строк на файл ниже — свой прогресс на
+// свою строку, гонки нет по построению (каждый job пишет только в "свой" i).
+function fileProgressPercent(p) {
+	if (!p) return 0;
+	if (p.phase === "encrypt" && p.chunksTotal) return Math.round((p.chunksDone / p.chunksTotal) * 50);
+	if (p.phase === "upload" && p.bytesTotal) return 50 + Math.round((p.bytesSent / p.bytesTotal) * 50);
+	if (p.phase === "manifest") return 95;
+	return 0;
 }
 
 // Пока БЕЗ виртуализации (задача 3.2) и миниатюр (3.8) — вторая волна
@@ -253,6 +191,10 @@ function uploadProgressText(state) {
 // иконку — размер/mime живут в манифесте (content.js), не в самом узле
 // дерева; подгрузка манифеста по каждой строке — из той же серии, что
 // миниатюры, следующим шагом (3.8), не задача этого прохода.
+// Плитки «Файлов» крупнее строк списка: миниатюра 200px на плитке в ~180 CSS-px при
+// плотности экрана 2 выглядела зернистой — для плитки строим кадр покрупнее.
+const TILE_THUMBNAIL_SIZE = 520;
+
 export default function Files() {
 	const ownerPubkey = currentUser.value.id;
 	const [ready, setReady] = useState(false);
@@ -272,8 +214,10 @@ export default function Files() {
 	// v0.1 производит только read-гранты).
 	const [view, setView] = useState("own"); // "own" | "mounts"
 	const [shareDialogTarget, setShareDialogTarget] = useState(null); // nodeId папки
+	const [freeDialog, setFreeDialog] = useState(null); // ТЗ-03: диалог «освободить место»
 	const [shareSelectedPubkeys, setShareSelectedPubkeys] = useState(() => new Set());
 	const [shareBusy, setShareBusy] = useState(false);
+	const [shareProgress, setShareProgress] = useState(null); // {done, total, name, fraction} — копирование файлов для читателей
 	const [shareError, setShareError] = useState("");
 	const [accessPanelTarget, setAccessPanelTarget] = useState(null); // nodeId папки
 	const [grantees, setGrantees] = useState([]);
@@ -288,10 +232,12 @@ export default function Files() {
 	// понятным как "файл N из M"). uploadAbortRef — ОДИН AbortController на
 	// ТЕКУЩИЙ файл; отмена останавливает и его, и всю оставшуюся очередь
 	// (не переходит к следующему файлу молча).
-	const [uploadState, setUploadState] = useState(null); // {fileName, fileIndex, filesTotal, phase, chunksDone, chunksTotal, bytesSent, bytesTotal} | null
+	const [uploadFiles, setUploadFiles] = useState(null); // [{name, percent, status: "active"|"done"|"error"}] | null — по одной записи на файл, индекс === позиция в исходном files[]
 	const [uploadError, setUploadError] = useState("");
 	const [mediaButtonsBusy, setMediaButtonsBusy] = useState(false);
 	const [typeFilter, setTypeFilter] = useState("all");
+	const [sortKey, setSortKey] = useState("name"); // name | type | size
+	const [sortDir, setSortDir] = useState("asc");
 	const [viewOverride, setViewOverride] = useState({});
 	const [docInfo, setDocInfo] = useState(null); // {entry, mediaRef} | null
 	const fileInputRef = useRef(null);
@@ -334,16 +280,25 @@ export default function Files() {
 
 		const succeeded = []; // {i, result}
 		const failed = []; // {i, err}
-		setUploadState({ filesTotal: files.length, filesDone: 0 });
+		setUploadFiles(files.map((file) => ({ name: file.name, percent: 0, status: "active" })));
 
-		const jobs = files.map((file) => ({
+		function updateFileAt(i, patch) {
+			setUploadFiles((prev) => {
+				if (!prev) return prev;
+				const next = [...prev];
+				next[i] = { ...next[i], ...patch };
+				return next;
+			});
+		}
+
+		const jobs = files.map((file, i) => ({
 			file,
 			options: {
 				name: file.name,
 				mime: file.type || "application/octet-stream",
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
-				onProgress: (p) => setUploadState((prev) => (prev ? { ...prev, fileName: file.name, ...p } : prev)),
+				onProgress: (p) => updateFileAt(i, { percent: fileProgressPercent(p) }),
 			},
 		}));
 
@@ -365,14 +320,16 @@ export default function Files() {
 				concurrency: 2,
 				signal: controller.signal,
 				onJobDone: (i, result) => {
+					// ТЗ-03: журнал загрузок (purpose files, цель — папка, куда грузим).
+					recordBlobs(result.blobs, { purpose: "files", target: currentFolderId.value, name: files[i].name, server: uploadTarget() }).catch(() => {});
 					succeeded.push({ i, result });
 					noteSettled();
-					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+					updateFileAt(i, { percent: 100, status: "done" });
 				},
 				onJobError: (i, err) => {
 					failed.push({ i, err });
 					noteSettled();
-					setUploadState((prev) => (prev ? { ...prev, filesDone: prev.filesDone + 1 } : prev));
+					updateFileAt(i, { status: "error" });
 				},
 			}).catch(() => {}); // ошибки уже собраны per-job через onJobError выше
 		});
@@ -400,7 +357,7 @@ export default function Files() {
 		}
 
 		uploadAbortRef.current = null;
-		setUploadState(null);
+		setUploadFiles(null);
 	}
 
 	function cancelUpload() {
@@ -474,21 +431,25 @@ export default function Files() {
 	async function submitShare() {
 		if (shareSelectedPubkeys.size === 0) return;
 		setShareBusy(true);
+		setShareProgress(null);
 		setShareError("");
 		try {
 			const result = await shareFolder(ownerPubkey, privKeySig.value, dbKeySig.value, shareDialogTarget, [...shareSelectedPubkeys], publish, {
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
+				onShareProgress: setShareProgress,
 			});
 			if (result instanceof Error) {
 				setShareError(translateErrorMessage(result) || t("files.shareFailedGeneric"));
 				return;
 			}
 			setShareDialogTarget(null);
-		} catch {
-			setShareError(t("files.networkUnavailable"));
+		} catch (err) {
+			// Настоящая причина (квота, отказ relay, сеть), а не всегда «сеть недоступна».
+			setShareError(err?.key || err?.message ? translateErrorMessage(err) : t("files.networkUnavailable"));
 		} finally {
 			setShareBusy(false);
+			setShareProgress(null);
 		}
 	}
 
@@ -512,7 +473,7 @@ export default function Files() {
 		setSaveProgress({ filesDone: 0, filesTotal: 1 });
 		try {
 			await saveMountedItemToOwn(ownerPubkey, dbKeySig.value, mountId, nodeId, currentFolderId.value, {
-				serverUrl: BLOSSOM_URL,
+				serverUrl: uploadTarget(),
 				privateKey: privKeySig.value,
 				onProgress: (p) => setSaveProgress(p),
 			});
@@ -546,10 +507,9 @@ export default function Files() {
 
 	const layout = layoutFor(typeFilter, viewOverride);
 	const folderEntries = currentEntries.value;
-	const entries = sortEntries(
-		filterEntries(filterByClass(folderEntries, typeFilter), debouncedQuery),
-		"name",
-	);
+	const baseEntries = filterEntries(filterByClass(folderEntries, typeFilter), debouncedQuery);
+	// Порядок без размеров (по имени/типу) — дёшево; по размеру нужны манифесты ВСЕХ файлов папки.
+	const sortedNoSize = sortEntries(baseEntries, sortKey === "size" ? "name" : sortKey, sortDir);
 	const path = breadcrumbPath.value;
 	const inTrash = currentFolderId.value === TRASH_ID;
 	const classArr = treeState.value.classCount.get(currentFolderId.value);
@@ -565,10 +525,26 @@ export default function Files() {
 	// рендерится целиком". Рендерятся только entries[start:end] — окно
 	// строк, видимое (+overscan) в единственной скролл-зоне экрана.
 	const { anchorRef, start: windowStart, end: windowEnd } = useVirtualWindow({
-		count: entries.length,
+		count: baseEntries.length,
 		rowHeight: ROW_HEIGHT_PX,
 	});
+	// Размеры/типы из манифестов: видимому окну — всегда, целой папке — только при сортировке по размеру.
+	const manifestInfo = useManifestInfo(
+		ownerPubkey,
+		(sortKey === "size" ? baseEntries : sortedNoSize.slice(windowStart, windowEnd)).filter((e) => e.kind === "file"),
+		uploadTarget(),
+	);
+	const entries =
+		sortKey === "size" ? sortEntries(baseEntries.map((e) => (e.kind === "file" ? { ...e, size: manifestInfo[e.id]?.size ?? 0 } : e)), "size", sortDir) : sortedNoSize;
 	const visibleEntries = entries.slice(windowStart, windowEnd);
+
+	function changeSort(key) {
+		if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+		else {
+			setSortKey(key);
+			setSortDir("asc");
+		}
+	}
 
 	function toggleSelect(id) {
 		setSelected((prev) => {
@@ -617,7 +593,7 @@ export default function Files() {
 	async function resolveMediaRef(node) {
 		let manifest = await getCachedManifest(ownerPubkey, node.blob);
 		if (!manifest) {
-			manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_URL });
+			manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			await putCachedManifest(ownerPubkey, node.blob, manifest);
 		}
 		if (node.mime == null) backfillMime(node.id, manifest.mime).catch(() => {});
@@ -663,6 +639,10 @@ export default function Files() {
 			setSelected(new Set());
 			return;
 		}
+		if (entry.blob && freedDigests.value.has(entry.blob)) {
+			setError(t("files.freedOpenHint", { name: entry.displayName }));
+			return;
+		}
 		const cls = entry.mime ? classOf(entry.mime) : "other";
 		if (cls === "audio" || cls === "video" || cls === "image") {
 			await openVisibleMedia(entry.id);
@@ -687,6 +667,23 @@ export default function Files() {
 	function setLayoutForType(next) {
 		if (typeFilter === "all") return;
 		setViewOverride((prev) => ({ ...prev, [typeFilter]: next }));
+	}
+
+	// ТЗ-03, раздел 6: «освободить место» — стирает байты этого файла с сервера. Журнал
+	// знает все блобы вложения; без журнала (новое устройство) берём то, что видно из
+	// самого узла: манифест и содержимое.
+	async function openFreeSpace(entry) {
+		try {
+			const group = await getGroupOfHash(entry.blob);
+			if (group) {
+				setFreeDialog({ hashes: group.rows.map((r) => r.hash), name: entry.displayName, size: group.rows.reduce((sum, r) => sum + r.size, 0), targets: group.rows.flatMap((r) => r.targets).filter((x, i, a) => a.indexOf(x) === i), inFiles: true });
+				return;
+			}
+			const manifest = await getManifest(entry.blob, { serverUrl: uploadTarget() });
+			setFreeDialog({ hashes: [entry.blob, manifest.blobSha256], name: entry.displayName, size: manifest.size, targets: [], inFiles: true });
+		} catch (err) {
+			setUploadError(translateErrorMessage(err));
+		}
 	}
 
 	async function handleDelete(ids) {
@@ -779,21 +776,23 @@ export default function Files() {
 	return (
 		<>
 		<Screen
+			// Внутри полученной доли — стрелка «назад» перед заголовком (вместо кнопки «К списку долей» в теле).
+			breadcrumb={view === "mounts" && openMountId !== null ? { label: t("files.receivedFoldersTab"), onBack: () => setOpenMountId(null) } : undefined}
 			// Живой фидбег: пункт меню назывался "Хранилище", а сюда попадали на
 			// экран "Файлы" — разнобой в названии одного и того же места.
 			// sidebarCard.storageMenuItem переименован в "Файлы" (account-card.jsx),
 			// плюс имя пользователя — тот же приём, что "Профиль и аватар"/
 			// "Секретная фраза".
-			title={`${currentUser.value.login || t("profile.noNameFallback")}: ${path[path.length - 1]?.name || t("nav.files")}`}
+			title={path[path.length - 1]?.name || t("nav.files")}
 			actions={
 				<>
 					{view === "own" && (
 						<>
-							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadState}>
-								<IconUpload aria-hidden="true" /> {t("files.uploadFileButton")}
+							<button type="button" class="bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={triggerFileUpload} disabled={!!uploadFiles} aria-label={t("files.uploadFileButton")} title={t("files.uploadFileButton")}>
+								<IconUpload aria-hidden="true" /> <span class="btn-label">{t("files.uploadFileButton")}</span>
 							</button>
-							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)}>
-								<IconFolderPlus aria-hidden="true" /> {t("files.newFolderButton")}
+							<button type="button" class="btn--ghost bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onClick={() => setNewFolderOpen((v) => !v)} aria-label={t("files.newFolderButton")} title={t("files.newFolderButton")}>
+								<IconFolderPlus aria-hidden="true" /> <span class="btn-label">{t("files.newFolderButton")}</span>
 							</button>
 							<input
 								ref={fileInputRef}
@@ -810,9 +809,11 @@ export default function Files() {
 						class={(view === "mounts" ? "" : "btn--ghost ") + "bar"}
 						style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
 						aria-pressed={view === "mounts"}
+						aria-label={t("files.receivedFoldersTab")}
+						title={t("files.receivedFoldersTab")}
 						onClick={() => setView((v) => (v === "mounts" ? "own" : "mounts"))}
 					>
-						<IconGlobe aria-hidden="true" /> {t("files.receivedFoldersTab")}
+						<IconGlobe aria-hidden="true" /> <span class="btn-label">{t("files.receivedFoldersTab")}</span>
 						{activeMounts.value.length > 0 ? <span class="slice__n">{activeMounts.value.length}</span> : null}
 					</button>
 					{view === "own" && !inTrash && (
@@ -972,9 +973,28 @@ export default function Files() {
 						{error}
 					</p>
 				)}
-				{uploadState && (
-					<div class="row file-upload-progress" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
-						<span>{uploadProgressText(uploadState)}</span>
+				{uploadFiles && (
+					<div class="upload-progress-panel stack" style={{ "--gap": "var(--space-s)" }} role="status">
+						<table class="upload-progress-table">
+							<tbody>
+								{uploadFiles.map((f, i) => (
+									<tr key={i}>
+										<td class="upload-progress-table__name">{f.name}</td>
+										<td class="upload-progress-table__bar">
+											{f.status === "done" ? (
+												<IconCheck class="icon upload-progress-table__done" aria-hidden="true" />
+											) : f.status === "error" ? (
+												<IconCross class="icon upload-progress-table__error" aria-hidden="true" />
+											) : (
+												<div class="upload-progress-bar">
+													<div class="upload-progress-bar__fill" style={{ inlineSize: `${f.percent}%` }} />
+												</div>
+											)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 						<button type="button" class="btn--ghost" onClick={cancelUpload}>
 							{t("common.undo")}
 						</button>
@@ -993,7 +1013,7 @@ export default function Files() {
 							<IconCopy /> {t("common.copy")}
 						</button>
 						<button type="button" class="btn--ghost" onClick={cutSelected}>
-							{t("files.cutButton")}
+							<IconScissors /> {t("files.cutButton")}
 						</button>
 						<button type="button" class="btn--ghost btn--danger" onClick={() => handleDelete([...selected])}>
 							<IconTrash /> {t("common.delete")}
@@ -1034,7 +1054,7 @@ export default function Files() {
 									{entry.kind === "dir" ? (
 										<IconFolder aria-hidden="true" class="icon" />
 									) : (
-										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" />
+										<FileThumbnail entry={entry} ownerPubkey={ownerPubkey} imgClass="" maxDimension={TILE_THUMBNAIL_SIZE} />
 									)}
 								</button>
 								{!inTrash && (
@@ -1047,7 +1067,7 @@ export default function Files() {
 												<IconCopy /> {t("common.copy")}
 											</button>
 											<button type="button" onClick={() => cutSelection([entry.id])}>
-												{t("files.cutButton")}
+												<IconScissors /> {t("files.cutButton")}
 											</button>
 											{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
 												<button type="button" onClick={() => pasteHere(entry.id)}>
@@ -1064,6 +1084,11 @@ export default function Files() {
 														<IconGlobe /> {t("files.shareButton")}
 													</button>
 												))}
+											{entry.kind === "file" && (
+												<button type="button" onClick={() => openFreeSpace(entry)}>
+													<IconEmpty /> {t("storage.free.button")}
+												</button>
+											)}
 											<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 												<IconTrash /> {t("common.delete")}
 											</button>
@@ -1088,68 +1113,83 @@ export default function Files() {
 				) : (
 					<>
 						<div ref={anchorRef} aria-hidden="true" />
-						<ul
-							role="list"
-							class="file-row-list"
-							style={{
-								paddingBlockStart: `${windowStart * ROW_HEIGHT_PX}px`,
-								paddingBlockEnd: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px`,
-							}}
-						>
-						{visibleEntries.map((entry) => (
-							<li
-								key={entry.id}
-								class={"row file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
-								style={{ "--gap": "var(--space-s)", "--align": "center" }}
-								onContextMenu={openRowActionsMenu}
-								draggable={!inTrash && renamingId !== entry.id}
-								onDragStart={(e) => handleRowDragStart(entry, e)}
-								onDragEnd={handleRowDragEnd}
-								onDragOver={entry.kind === "dir" ? (e) => handleFolderDragOver(entry, e) : undefined}
-								onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
-								onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
-							>
-								{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
-								{renamingId === entry.id ? (
-									<form class="row grow file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
-										<label class="visually-hidden" for={`rename-${entry.id}`}>
-											{t("files.newNameLabel")}
-										</label>
-										<input id={`rename-${entry.id}`} type="text" value={renameValue} onInput={(e) => setRenameValue(e.currentTarget.value)} autoFocus />
-										<button type="submit" class="icon-btn" aria-label={t("common.save")}>
-											<IconCheck />
-										</button>
-										<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label={t("files.cancelRenameAria")}>
-											<IconCross />
-										</button>
-									</form>
-								) : (
-									<button
-										type="button"
-										class="file-row-name grow truncate"
-										style={{ "--lines": 1 }}
-										onClick={(e) => {
-											if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
-											openEntry(entry);
-										}}
+						<table class={"file-table" + (inTrash ? " file-table--trash" : "")}>
+							<FileTableHead sortKey={sortKey} sortDir={sortDir} onSort={changeSort} />
+							<tbody>
+								{windowStart > 0 && (
+									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${windowStart * ROW_HEIGHT_PX}px` }}>
+										<td colSpan={6} />
+									</tr>
+								)}
+								{visibleEntries.map((entry) => (
+									<tr
+										key={entry.id}
+										class={"file-row" + (dragOverId === entry.id ? " file-row--drag-over" : "")}
+										onContextMenu={openRowActionsMenu}
+										draggable={!inTrash && renamingId !== entry.id}
+										onDragStart={(e) => handleRowDragStart(entry, e)}
+										onDragEnd={handleRowDragEnd}
+										onDragOver={entry.kind === "dir" ? (e) => handleFolderDragOver(entry, e) : undefined}
+										onDragLeave={entry.kind === "dir" ? () => handleFolderDragLeave(entry) : undefined}
+										onDrop={entry.kind === "dir" ? (e) => handleFolderDrop(entry, e) : undefined}
 									>
-										{entry.displayName}
-									</button>
-								)}
-								<FileMetaLabel entry={entry} ownerPubkey={ownerPubkey} class="file-row-status" />
-								{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
-									<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="file-row-icon" />
-								)}
-								{inTrash ? (
-									<>
-										<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)}>
-											{t("files.restoreButton")}
-										</button>
-										<button type="button" class="btn--ghost btn--danger" onClick={() => handlePurge(entry.id)}>
-											{t("files.purgeButton")}
-										</button>
-									</>
-								) : (
+										<td class="file-table__icon">
+											{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="icon file-row-icon" /> : <FileThumbnail entry={entry} ownerPubkey={ownerPubkey} />}
+										</td>
+										<td>
+											{renamingId === entry.id ? (
+												<form class="row file-rename-form" style={{ "--gap": "var(--space-s)", "--align": "center" }} onSubmit={submitRename}>
+													<label class="visually-hidden" for={`rename-${entry.id}`}>
+														{t("files.newNameLabel")}
+													</label>
+													<input id={`rename-${entry.id}`} type="text" value={renameValue} onInput={(e) => setRenameValue(e.currentTarget.value)} autoFocus />
+													<button type="submit" class="icon-btn" aria-label={t("common.save")}>
+														<IconCheck />
+													</button>
+													<button type="button" class="icon-btn" onClick={() => setRenamingId(null)} aria-label={t("files.cancelRenameAria")}>
+														<IconCross />
+													</button>
+												</form>
+											) : (
+												<button
+													type="button"
+													class="file-row-name"
+													title={entry.displayName}
+													onClick={(e) => {
+														if (entry.kind !== "dir") setMediaOrigin(e.currentTarget.getBoundingClientRect());
+														openEntry(entry);
+													}}
+												>
+													<span class="file-row-title">{entry.displayName}</span>
+													<small class="file-row-sub">
+														{entry.kind === "dir" ? t("files.kindFolder") : fileExtLabel(entry.displayName)}
+														{manifestInfo[entry.id]?.size ? ` · ${formatFileSize(manifestInfo[entry.id].size)}` : ""}
+													</small>
+												</button>
+											)}
+										</td>
+										<td class="file-table__type">
+											<small class="file-row-status">{entry.kind === "dir" ? t("files.kindFolder") : fileExtLabel(entry.displayName)}</small>
+										</td>
+										<td class="file-table__size">
+											<FileSizeCell entry={entry} size={manifestInfo[entry.id]?.size} />
+										</td>
+										<td class="file-table__access">
+											{entry.kind === "dir" && sharedNodeIds.value.has(entry.id) && (
+												<IconGlobe aria-hidden="true" title={t("files.sharedTooltip")} class="icon file-row-icon file-row-icon--shared" />
+											)}
+										</td>
+										<td class="file-table__actions">
+											{inTrash ? (
+												<>
+													<button type="button" class="btn--ghost" onClick={() => handleRestore(entry.id)} aria-label={t("files.restoreButton")} title={t("files.restoreButton")}>
+														<IconRestore /> <span class="slice__label">{t("files.restoreButton")}</span>
+													</button>
+													<button type="button" class="btn--ghost btn--danger" onClick={() => handlePurge(entry.id)} aria-label={t("files.purgeButton")} title={t("files.purgeButton")}>
+														<IconTrash /> <span class="slice__label">{t("files.purgeButton")}</span>
+													</button>
+												</>
+											) : (
 									<ActionsMenu label={t("files.rowActionsAria", { name: entry.displayName })}>
 										<button type="button" onClick={() => startRename(entry)}>
 											<IconPencil /> {t("contacts.renameAction")}
@@ -1158,7 +1198,7 @@ export default function Files() {
 											<IconCopy /> {t("common.copy")}
 										</button>
 										<button type="button" onClick={() => cutSelection([entry.id])}>
-											{t("files.cutButton")}
+											<IconScissors /> {t("files.cutButton")}
 										</button>
 										{entry.kind === "dir" && clipboardHasContent.value && !clipboard.value.selection.includes(entry.id) && (
 											<button type="button" onClick={() => pasteHere(entry.id)}>
@@ -1176,22 +1216,36 @@ export default function Files() {
 												</button>
 											)
 										)}
+										{entry.kind === "file" && (
+											<button type="button" onClick={() => openFreeSpace(entry)}>
+													<IconEmpty /> {t("storage.free.button")}
+												</button>
+										)}
 										<button type="button" class="danger" onClick={() => handleDelete([entry.id])}>
 											<IconTrash /> {t("common.delete")}
 										</button>
 									</ActionsMenu>
+											)}
+										</td>
+									</tr>
+								))}
+								{windowEnd < entries.length && (
+									<tr class="file-table__spacer" aria-hidden="true" style={{ height: `${(entries.length - windowEnd) * ROW_HEIGHT_PX}px` }}>
+										<td colSpan={6} />
+									</tr>
 								)}
-							</li>
-						))}
-						</ul>
+							</tbody>
+						</table>
 					</>
 				)}
 			</div>
 			)}
 		</Screen>
+		{freeDialog && <FreeSpaceDialog {...freeDialog} serverUrl={uploadTarget()} privKey={privKeySig.value} onClose={() => setFreeDialog(null)} onDone={() => refreshFreed()} />}
 		{shareDialogTarget && (
 			<ShareDialog
 				busy={shareBusy}
+				progress={shareProgress}
 				error={shareError}
 				selected={shareSelectedPubkeys}
 				onToggle={toggleShareRecipient}
@@ -1228,7 +1282,7 @@ function ModalShell({ label, onClose, children }) {
 // Диалог "Поделиться" (этап 53 И6, задача 6.7) — выбор контактов чекбоксами.
 // share() в v0.1 производит только read-гранты (CONTRACTS.md 6.2) — второй
 // уровень доступа выбирать не из чего, поэтому его в интерфейсе просто нет.
-function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
+function ShareDialog({ busy, progress, error, selected, onToggle, onSubmit, onCancel }) {
 	return (
 		<ModalShell label={t("files.shareButton")} onClose={onCancel}>
 			<h2>{t("files.shareButton")}</h2>
@@ -1246,6 +1300,16 @@ function ShareDialog({ busy, error, selected, onToggle, onSubmit, onCancel }) {
 						</li>
 					))}
 				</ul>
+			)}
+			{busy && (
+				<div role="status" class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+					<progress max="100" value={progress ? Math.round(progress.fraction * 100) : undefined} style={{ width: "100%" }} />
+					<small style={{ color: "var(--muted)" }}>
+						{progress && progress.total > 0
+							? t("files.shareProgress", { done: Math.min(progress.done + (progress.done < progress.total ? 1 : 0), progress.total), total: progress.total, percent: Math.round(progress.fraction * 100), name: progress.name })
+							: t("files.shareProgressStart")}
+					</small>
+				</div>
 			)}
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -1291,87 +1355,3 @@ function AccessPanel({ grantees, onRevoke, onClose }) {
 	);
 }
 
-// Раздел "Полученные доли" (этап 53 И6, задача 6.7 — сужение MVP, CONTRACTS.md):
-// СВОЯ локальная навигация внутри ОДНОЙ доли, read-only (share() в v0.1 —
-// только read-гранты), получение содержимого — ТОЛЬКО через "Сохранить себе".
-function MountsView({ openMountId, mountFolderId, setMountFolderId, openMountView, closeMountView, handleSaveToOwn, handleUnmountShare, saveProgress }) {
-	if (openMountId === null) {
-		return (
-			<div class="stack">
-				{activeMounts.value.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>{t("files.noSharedWithYou")}</p>
-				) : (
-					<ul role="list" class="stack">
-						{activeMounts.value.map((m) => (
-							<li key={m.mountId} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-								<IconGlobe aria-hidden="true" class="file-row-icon" />
-								<span class="grow">{profiles.value[m.ownerPubkey]?.name || `${m.ownerPubkey.slice(0, 16)}…`}</span>
-								<button type="button" class="btn--ghost" onClick={() => openMountView(m.mountId)}>
-									{t("files.openButton")}
-								</button>
-								<button type="button" class="btn--ghost btn--danger" onClick={() => handleUnmountShare(m.mountId)}>
-									{t("files.disconnectButton")}
-								</button>
-							</li>
-						))}
-					</ul>
-				)}
-			</div>
-		);
-	}
-
-	const R = mountProjections.value.get(openMountId);
-	if (!R) return null;
-	// Mount.state — createInitialState() СОЗДАЁТ $trash/$lost+found (тот же
-	// старт, что любой TreeState, mount.js) — это ТЕХНИЧЕСКИЕ узлы получателя
-	// (пустые, никогда не наполняются владельцем доли — snapshotSubtree/
-	// subtreeOpsRootedAt пишут только под ROOT_ID реального содержимого),
-	// показывать их в списке доли бессмысленно и вводит в заблуждение
-	// (найдено живым тестированием — пустая доля показывала "Корзину"/
-	// "lost+found", будто это содержимое владельца).
-	const entries = (R.children.get(mountFolderId) ?? [])
-		.filter((id) => id !== TRASH_ID && id !== LOST_FOUND_ID)
-		.map((id) => ({ id, ...R.nodes.get(id) }));
-
-	return (
-		<div class="stack">
-			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button type="button" class="btn--ghost" onClick={closeMountView}>
-					<IconChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} /> {t("files.backToMountsList")}
-				</button>
-				{mountFolderId !== ROOT_ID && (
-					<button type="button" class="btn--ghost" onClick={() => setMountFolderId(ROOT_ID)}>
-						{t("files.mountRootButton")}
-					</button>
-				)}
-			</div>
-			{saveProgress && (
-				<p role="status">
-					{t("files.savingProgress", { done: saveProgress.filesDone, total: saveProgress.filesTotal })}
-				</p>
-			)}
-			{entries.length === 0 ? (
-				<p style={{ color: "var(--muted)" }}>{t("files.folderEmpty")}</p>
-			) : (
-				<ul role="list" class="file-row-list">
-					{entries.map((entry) => (
-						<li key={entry.id} class="row file-row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-							{entry.kind === "dir" ? <IconFolder aria-hidden="true" class="file-row-icon" /> : <IconFileText aria-hidden="true" class="file-row-icon" />}
-							{entry.kind === "dir" ? (
-								<button type="button" class="file-row-name" onClick={() => setMountFolderId(entry.id)}>
-									{entry.displayName}
-								</button>
-							) : (
-								<span class="file-row-name">{entry.displayName}</span>
-							)}
-							<span class="grow" />
-							<button type="button" class="btn--ghost" onClick={() => handleSaveToOwn(openMountId, entry.id)} disabled={!!saveProgress}>
-								{t("files.saveToOwnButton")}
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
-		</div>
-	);
-}

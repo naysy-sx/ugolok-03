@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { decide } from "./write-policy.mjs";
 import { createLimiter } from "./rate-limit.mjs";
+import { forward as forwardToPushBridge } from "./push-forward.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // POLICY_CONF_DIR — каталог с редактируемыми оператором файлами (whitelist.json,
@@ -21,6 +22,15 @@ const PEERS_PATH = join(CONF_DIR, "peers.json");
 const POLICY_PATH = join(CONF_DIR, "policy.json");
 const LOCK_PATH = join(CONF_DIR, "policy.lock");
 const STOPWORDS_PATH = join(HERE, "../../src/domain/discovery/stopwords.json");
+
+// Э-PUSH, П1.2 — адрес и токен моста push-уведомлений. Деплой-константы (не
+// оперативно редактируемый файл, в отличие от whitelist.json/policy.json —
+// секрет и адрес контейнера меняются только при перевыкладке), поэтому из
+// окружения, читаются один раз при старте процесса плагина, не на каждое
+// событие. Обе переменные не заданы — остров без push (ИП6, П1.4 «по
+// умолчанию выключен») — forward() сама по себе ничего не делает без них.
+const PUSH_BRIDGE_URL = process.env.PUSH_BRIDGE_INTERNAL_URL || "";
+const PUSH_BRIDGE_TOKEN = process.env.PUSH_BRIDGE_INTERNAL_TOKEN || "";
 
 function loadWhitelist() {
 	try {
@@ -113,5 +123,17 @@ rl.on("line", (line) => {
 		process.stderr.write(`[policy] ошибка политики, событие ${req.event?.id} пропущено без лимитов: ${e?.message}\n`);
 		res = decide(req, { whitelist: loadWhitelist(), peers: loadPeers(), stopwords: loadStopwords });
 	}
+
+	// Э-PUSH П0.3(Б)/П1.2 — пересылка мосту СТРОГО после того, как res уже
+	// посчитан, и без ожидания (forward() не возвращает промис вызывающему,
+	// см. push-forward.mjs). Только для принятых событий — отклонённое relay
+	// не сохраняет и никому не доставит, уведомлять о нём нечего. Зеркальный
+	// поток (isMirrorSource) тоже проходит сюда естественным образом: gift
+	// wrap/MLS/звонки в NEVER_MIRROR_KINDS и с зеркала не приходят вовсе, так
+	// что двойной push из двух islands на одно и то же событие не возникает.
+	if (res.action === "accept") {
+		forwardToPushBridge(req.event, { url: PUSH_BRIDGE_URL, token: PUSH_BRIDGE_TOKEN });
+	}
+
 	process.stdout.write(JSON.stringify(res) + "\n");
 });

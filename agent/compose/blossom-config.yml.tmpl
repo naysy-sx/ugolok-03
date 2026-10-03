@@ -3,8 +3,8 @@
 # относительный путь "config.yml" от рабочей директории (WORKDIR /app в
 # blossom.Dockerfile), флага --config нет (тот же факт, что server/blossom/).
 
-db_path: "./db/database.sqlite3"
-blobs_dir: "./db/blobs"
+db_path: "./data/database.sqlite3"
+blobs_dir: "./data/blobs"
 log_level: "INFO"
 
 # 0.0.0.0, НЕ 127.0.0.1 — этот процесс живёт ВНУТРИ docker-сети, Caddy
@@ -31,3 +31,17 @@ access_control_rules:
   - action: "ALLOW"
     pubkey: "ALL"
     resource: "GET"
+
+# Хранилище байтов блобов (образ 1.1.0+). disk — файлы в blobs_dir, как раньше.
+# s3 — диск становится горячим кэшем над S3-совместимым бакетом; параметры и ключи
+# задаются переменными окружения из blossom.env (STORAGE_MODE, S3_ENDPOINT, S3_BUCKET,
+# S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY). Ключи в этот файл не пишутся.
+storage:
+  mode: disk
+
+# Квоты (ТЗ-04). false = поведение как до квот: /list открыт, предел файла = max_upload_size_bytes.
+# max_file_bytes должен совпадать с max_upload_size_bytes.
+quota:
+  enabled: false
+  default_bytes: 1073741824
+  max_file_bytes: 314572800

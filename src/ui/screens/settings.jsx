@@ -1,4 +1,5 @@
 import { useState, useEffect, useId } from "preact/hooks";
+import { resetQuotaForServerChange } from "../signals/quota.js";
 import { currentUser, privKeySig, dbKeySig, lock } from "../signals/auth.js";
 import {
 	loadUiSettings,
@@ -25,12 +26,18 @@ import { SCALE_OPTIONS, applyUiScale } from "../theme/ui-scale.js";
 import { applyThemeMode } from "../theme/theme-mode.js";
 import { SUPPORTED_LOCALES, setLocale, t, errorMessage } from "../signals/i18n.js";
 import { isPerfTraceEnabled, getPerfLog, readControllerCounters } from "../../domain/media/perf-trace.js";
+import { getPlatform } from "../../platform/index.js";
+import { isPushSupported, isPushEnabled, enablePushForAccount, disablePushEverywhere } from "../../domain/push/registration.js";
 import Screen from "../components/screen.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconPlus from "../icons/plus.jsx";
-import IconGear from "../icons/gear.jsx";
 import IconBell from "../icons/bell.jsx";
 import IconServer from "../icons/server.jsx";
+import IconShield from "../icons/shield.jsx";
+import IconCheckCircleFill from "../icons/check-circle-fill.jsx";
+import IconWarning from "../icons/warning.jsx";
+import StoragePanel from "../components/storage-panel.jsx";
+import { place } from "../signals/place.js";
 import IconPower from "../icons/power.jsx";
 import IconChevronDown from "../icons/chevron-down.jsx";
 
@@ -45,19 +52,18 @@ const LEVEL_LABEL_KEYS = {
 
 const DEFAULT_SENTINEL = "__default__";
 
-// Этап 70 — именованные пресеты-стартовые точки нового генератора палитры
-// (accent-palette.js/ACCENT_COLORS удалены целиком, см. CONTRACTS.md): только
-// hue, cNeutral пресет не трогает (остаётся текущим значением пользователя —
-// "Настроить" ниже позволяет донастроить обе оси после выбора стартовой точки).
-// Значения — вне запретных зон служебных тонов (ACCENT_FORBIDDEN_ZONES:
-// 25/85/145/235 ±20°), проверено расчётом при подборе.
+// Шестнадцать стартовых точек «Вида»: от тёплых (терракота, янтарь, песок) через зелёно-
+// голубые к холодным и ягодным. Все hue вне запретных зон служебных тонов (край зоны
+// допустим: 45/65/215); подписи — существующие ключи settings.palettePresets.*.
+// cNeutral пресет не трогает. Остальной круг — слайдер «Настроить». swatch — только кружок.
 const PALETTE_PRESETS = [
+	{ id: "terracotta", hue: 45 },
 	{ id: "amber", hue: 55 },
+	{ id: "sand", hue: 65 },
 	{ id: "olive", hue: 115 },
 	{ id: "teal", hue: 172 },
-	{ id: "cyan", hue: 184 },
 	{ id: "sky", hue: 196 },
-	{ id: "azure", hue: 208 },
+	{ id: "steel", hue: 215 },
 	{ id: "blue", hue: 260 },
 	{ id: "indigo", hue: 272 },
 	{ id: "violet", hue: 284 },
@@ -65,8 +71,8 @@ const PALETTE_PRESETS = [
 	{ id: "purple", hue: 308 },
 	{ id: "amethyst", hue: 320 },
 	{ id: "magenta", hue: 332 },
-	{ id: "fuchsia", hue: 344 },
 	{ id: "pink", hue: 356 },
+	{ id: "ink", hue: 255, swatch: "oklch(0.28 0.03 255)" },
 ];
 
 // customPalette — всегда {cNeutral, accentHue}, никогда null (вызывающий код
@@ -76,7 +82,11 @@ function PaletteSection({ customPalette, onChange }) {
 	const instanceId = useId();
 
 	return (
-		<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+		<div class="palette-section stack" style={{ "--gap": "var(--space-s)" }}>
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<p class="set-label">{t("settings.accentColorTitle")}</p>
+				<p class="set-hint">{t("settings.viewSectionHint")}</p>
+			</div>
 			{/* Было: пятнадцать <button>, то есть пятнадцать заливок акцентным
 			    цветом, и внутри каждой кружок нужного оттенка плюс подпись.
 			    Цвет, который выбираешь, конкурировал с цветом кнопки, на
@@ -94,7 +104,7 @@ function PaletteSection({ customPalette, onChange }) {
 						title={t(`settings.palettePresets.${p.id}`)}
 						onClick={() => onChange({ cNeutral: customPalette.cNeutral, accentHue: p.hue })}
 					>
-						<span style={{ background: `oklch(0.6 0.17 ${p.hue})` }} />
+						<span style={{ background: p.swatch ?? `oklch(0.6 0.12 ${p.hue})` }} />
 					</button>
 				))}
 			</div>
@@ -526,9 +536,9 @@ function RelayBlossomSection({ ownerPubkey, privKey, dbKey }) {
 				urls={settings.blossomUrls}
 				activeUrl={settings.activeBlossomUrl}
 				busy={busy}
-				onAdd={(url) => withBusy(() => addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onRemove={(url) => withBusy(() => removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
-				onSetActive={(url) => withBusy(() => setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish))}
+				onAdd={(url) => withBusy(async () => { await addBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
+				onRemove={(url) => withBusy(async () => { await removeBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
+				onSetActive={(url) => withBusy(async () => { await setActiveBlossomUrl(ownerPubkey, privKey, dbKey, url, publish); resetQuotaForServerChange(); })}
 			/>
 		</div>
 	);
@@ -618,6 +628,153 @@ function PerfLogExport() {
 	);
 }
 
+// Э-PUSH П3.4 — «Уведомления в фоне», только Android + сервер настроен на
+// push (isPushSupported() уже проверяет оба условия разом). Видимость и
+// статус пунктов не кешируются между рендерами панели нарочно просто —
+// нет lifecycle-подписки на "приложение вернулось из системных настроек"
+// (fix-кнопки уводят в system intent и не возвращают колбэк); пользователь
+// видит актуальное состояние по возврату на этот экран (unmount/mount) или
+// по кнопке "Обновить".
+function PushBackgroundPanel() {
+	const [status, setStatus] = useState(null);
+	const [enabled, setEnabled] = useState(isPushEnabled());
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+
+	const supported = isPushSupported();
+
+	async function refreshStatus() {
+		if (!supported) return;
+		try {
+			setStatus(await getPlatform().push.status());
+		} catch {
+			setStatus(null);
+		}
+	}
+
+	useEffect(() => {
+		refreshStatus();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [supported]);
+
+	if (!supported) return null;
+
+	async function handleToggle(checked) {
+		setBusy(true);
+		setError("");
+		try {
+			if (checked) {
+				await enablePushForAccount(currentUser.value.id, privKeySig.value, dbKeySig.value);
+			} else {
+				await disablePushEverywhere(currentUser.value.id, privKeySig.value);
+			}
+			setEnabled(checked);
+		} catch {
+			setError(t("settings.pushBackground.actionError"));
+		} finally {
+			setBusy(false);
+			await refreshStatus();
+		}
+	}
+
+	async function runFix(action) {
+		setBusy(true);
+		try {
+			await action();
+		} catch {
+			// система сама покажет свой экран/диалог — здесь молчим, ошибка
+			// в основном из-за недоступного конкретного intent (fallback уже
+			// встроен в сам нативный метод, UgolokPushPlugin.kt)
+		} finally {
+			setBusy(false);
+			await refreshStatus();
+		}
+	}
+
+	const items = status
+		? [
+				{
+					key: "battery",
+					ok: status.batteryExempt,
+					label: t("settings.pushBackground.batteryLabel"),
+					fix: () => runFix(() => getPlatform().push.openBatterySettings()),
+				},
+				{
+					key: "notifications",
+					ok: status.notificationsAllowed,
+					label: t("settings.pushBackground.notificationsLabel"),
+					fix: () => runFix(() => getPlatform().notifications.requestPermission()),
+				},
+				{
+					key: "fullScreen",
+					ok: status.fullScreenAllowed,
+					label: t("settings.pushBackground.fullScreenLabel"),
+					fix: () => runFix(() => getPlatform().push.requestFullScreenPermission()),
+				},
+				{
+					key: "running",
+					ok: status.running,
+					label: t("settings.pushBackground.runningLabel"),
+					fix: () => runFix(() => enablePushForAccount(currentUser.value.id, privKeySig.value, dbKeySig.value)),
+				},
+			]
+		: [];
+
+	const lastConnectedLabel = status?.lastConnectedAt ? new Date(status.lastConnectedAt).toLocaleString() : t("settings.pushBackground.neverConnected");
+
+	return (
+		<Panel title={t("settings.pushBackground.title")} icon={IconShield} hint={t("settings.pushBackground.hint")}>
+			<div class="stack" style={{ "--gap": "var(--space-m)" }}>
+				<label class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+					<span class="set-row__text">{t("settings.pushBackground.enableLabel")}</span>
+					<input type="checkbox" class="set-row__switch" checked={enabled} disabled={busy} onChange={(e) => handleToggle(e.currentTarget.checked)} />
+				</label>
+
+				{error && <p role="alert" class="callout callout--warn">{error}</p>}
+
+				{enabled && (
+					<div class="stack" style={{ "--gap": "var(--space-s)" }}>
+						<div class="set-list stack" style={{ "--gap": "var(--space-2xs)" }}>
+							{items.map((item) => (
+								<div key={item.key} class="set-row row" style={{ "--gap": "var(--space-2xs) var(--space-m)", "--align": "center" }}>
+									<span class="set-row__text row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
+										{item.ok ? <IconCheckCircleFill aria-hidden="true" /> : <IconWarning aria-hidden="true" />}
+										{item.label}
+									</span>
+									{!item.ok && (
+										<button type="button" class="btn--ghost rigid" disabled={busy} onClick={item.fix}>
+											{t("settings.pushBackground.fixButton")}
+										</button>
+									)}
+								</div>
+							))}
+						</div>
+
+						<p class="panel__hint">
+							{t("settings.pushBackground.lastConnectedLabel")}: {lastConnectedLabel}
+						</p>
+
+						<div class="stack" style={{ "--gap": "var(--space-2xs)" }}>
+							<h3 class="sect-title">{t("settings.pushBackground.autostartTitle")}</h3>
+							<p class="panel__hint">{t("settings.pushBackground.autostartHint")}</p>
+							<button type="button" class="btn--ghost rigid" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => runFix(() => getPlatform().push.openAutostartSettings())}>
+								{t("settings.pushBackground.openAutostartButton")}
+							</button>
+						</div>
+
+						<p class="panel__hint">{t("settings.pushBackground.privacyExplanation")}</p>
+						{/* П3.6 — известное ограничение, сознательно не исправляется (ключ не
+						    хранится вне памяти, Р5): если ОС убила процесс, по нажатию на
+						    уведомление потребуется ввести пароль заново — звонок может успеть
+						    истечь, пока это происходит. */}
+						<p class="panel__hint">{t("settings.pushBackground.unlockLimitation")}</p>
+					</div>
+				)}
+			</div>
+		</Panel>
+	);
+}
+
 // Строка настройки: подпись слева, контрол справа. В проекте эта молекула
 // была написана руками 46 раз через инлайновый justify-content:
 // space-between. Здесь она названа — и вместе с именем получает поведение
@@ -679,8 +836,16 @@ export default function Settings() {
 	// Статус — ОТДЕЛЬНОЕ состояние, не производное от settings, чтобы кнопка ниже
 	// могла явно предложить запросить его.
 	const [browserPermission, setBrowserPermission] = useState(() => globalThis.Notification?.permission ?? "unsupported");
-	const [tab, setTab] = useState("view");
+	// ТЗ-04: ссылки «открыть хранилище» из лотка/тарифов открывают нужную вкладку сразу
+	const [tab, setTab] = useState(() => (["view", "notifications", "network", "storage", "session"].includes(place.value?.tab) ? place.value.tab : "view"));
 	const instanceId = useId();
+
+	// Пункт меню «Сеть» открывает эти же настройки сразу на нужной вкладке: экран уже
+	// смонтирован, поэтому useState-инициализатора мало — следим за самим place.
+	useEffect(() => {
+		const wanted = place.value?.tab;
+		if (place.value?.kind === "settings" && ["view", "notifications", "network", "storage", "session"].includes(wanted)) setTab(wanted);
+	}, [place.value]);
 
 	useEffect(() => {
 		loadUiSettings(ownerPubkey, dbKey).then((loaded) => {
@@ -824,7 +989,7 @@ export default function Settings() {
 			title={t("nav.settings")}
 			slices={
 				<div class="tabs bar" style={{ "--gap": "0" }} role="tablist" aria-label={t("settings.tabsAria")}>
-					{["view", "notifications", "network", "session"].map((id) => (
+					{["view", "notifications", "network", "storage", "session"].map((id) => (
 						<button
 							key={id}
 							type="button"
@@ -848,7 +1013,7 @@ export default function Settings() {
 
 			{tab === "view" && (
 				<div class="stack" style={{ "--gap": "var(--space-l)" }}>
-					<Panel title={t("settings.tabs.view")} hint={t("settings.viewSectionHint")} icon={IconGear}>
+					<Panel>
 						<div class="set-list stack" style={{ "--gap": "var(--space-s)" }}>
 							<SetRow label={t("settings.themeLabel")}>
 								<div class="seg bar rigid" style={{ "--gap": "0" }} role="group" aria-label={t("settings.themeLabel")}>
@@ -870,7 +1035,7 @@ export default function Settings() {
 								<select id={`${instanceId}-scale`} class="set-row__control" value={settings.uiScale} onChange={(e) => handleScaleChange(e.currentTarget.value)}>
 									{SCALE_OPTIONS.map((opt) => (
 										<option key={opt.id} value={opt.id}>
-											{opt.label}
+											{t(`settings.scale.${opt.id}`)}
 										</option>
 									))}
 								</select>
@@ -1006,6 +1171,8 @@ export default function Settings() {
 							</div>
 						</div>
 					</Panel>
+
+					<PushBackgroundPanel />
 				</div>
 			)}
 
@@ -1018,6 +1185,16 @@ export default function Settings() {
 						<SelfHostedSection ownerPubkey={ownerPubkey} privKey={privKey} dbKey={dbKey} />
 					</Panel>
 					<PerfLogExport />
+				</div>
+			)}
+
+			{tab === "storage" && (
+				<div class="stack" style={{ "--gap": "var(--space-l)" }}>
+					{/* ТЗ-03: занятое место (с сервера), журнал загрузок, освобождение места. Именно
+					    вкладкой настроек, а не пунктом навигации: `storage` там уже занят «Файлами». */}
+					<Panel title={t("storage.title")} hint={t("storage.hint")} icon={IconServer}>
+						<StoragePanel ownerPubkey={ownerPubkey} privKey={privKey} />
+					</Panel>
 				</div>
 			)}
 

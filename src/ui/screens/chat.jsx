@@ -11,13 +11,15 @@ import {
 	refreshLiveProfileSubscription,
 	nextLamportTick,
 } from "../signals/transport.js";
-import { place, openChat } from "../signals/place.js";
+import { place, openChat, goTo, getChatBackTo } from "../signals/place.js";
 import { contacts, profiles, refreshAll, refreshProfiles } from "../signals/contacts.js";
 import { placeCall } from "../signals/call.js";
 import IconPhoneCall from "../icons/phone-call.jsx";
 import IconSend from "../icons/send.jsx";
 import IconEraser from "../icons/eraser.jsx";
 import IconPencil from "../icons/pencil.jsx";
+import IconTrash from "../icons/trash.jsx";
+import DeleteChatDialog from "../components/delete-chat-dialog.jsx";
 import IconArrowLeft from "../icons/arrow-left.jsx";
 import { ContactIdentity } from "./contacts.jsx";
 import { record as traceDelivery } from "../../core/diag/delivery-trace.js";
@@ -28,6 +30,7 @@ import {
 	deleteChatMessageAction,
 	deleteMessageForMeAction,
 	clearChatHistoryAction,
+	deleteChatForeverAction,
 	editChatMessageAction,
 	markChatReadAction,
 	saveChatDraftAction,
@@ -37,6 +40,7 @@ import { refreshInboxRequests, acceptInboxRequestAction, rejectInboxRequestActio
 import { loadChatWindow, markWindowLoaded } from "../../core/sync/lazy-chat.js";
 import { getDraft } from "../../domain/messaging/drafts.js";
 import { getUnreadCount } from "../../domain/messaging/read-status.js";
+import { listConversations } from "../../domain/messaging/chat-activity.js";
 import { refreshUnreadMessagesCount } from "../signals/notifications.js";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "../../domain/files/attachment-validation.js";
 import MessageBubble from "../components/message-bubble.jsx";
@@ -59,6 +63,7 @@ import { getPeerCursor, flushCursorNow } from "../../domain/messaging/peer-curso
 import { armPeerCursorAck } from "../../domain/messaging/chat.js";
 import MarkdownFormatToolbar from "../components/markdown-format-toolbar.jsx";
 import EmojiQuickSend from "../components/emoji-quick-send.jsx";
+import FavStar from "../components/fav-star.jsx";
 import { isComposeSubmitKey } from "../hooks/compose-submit-key.js";
 
 const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
@@ -66,13 +71,29 @@ const MAX_MESSAGE_LENGTH = 10000; // F-MS-08
 // contacts.jsx уже вызывает ensureConnected при заходе на вкладку "Контакты" — но
 // пользователь может открыть "Сообщения" напрямую, минуя её. ensureConnected идемпотентна
 // (singleton-соединение на вкладку), повторный вызов отсюда безопасен.
+// Подпись времени в строке списка: сегодня — часы:минуты, до недели назад — день
+// недели, дальше — дата. Локаль — текущая локаль интерфейса.
+function formatRowTime(ms) {
+	const now = new Date();
+	const d = new Date(ms);
+	const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+	const days = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+	const locale = currentLocale.value;
+	if (days <= 0) return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+	if (days < 7) return d.toLocaleDateString(locale, { weekday: "short" });
+	return d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+}
+
 function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 	const [chatPartners, setChatPartners] = useState([]);
 	const [inboxList, setInboxList] = useState([]);
 	const [unreadByPartner, setUnreadByPartner] = useState({});
+	const [lastAtByPartner, setLastAtByPartner] = useState({});
 	const [listError, setListError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const busyRef = useRef(false);
+	// Диалог «Удалить переписку» — {pubkey, name} или null.
+	const [deleteTarget, setDeleteTarget] = useState(null);
 
 	// Находка 2 (CONTRACTS.md, этап 27): messagingActivity — диспетчер transport.js
 	// работает вне React re-render, этот сигнал сообщает "что-то изменилось".
@@ -86,7 +107,11 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 				for (const partnerPubkey of partners) {
 					unread[partnerPubkey] = await getUnreadCount(ownerPubkey, partnerPubkey);
 				}
+				// Время последней активности — только для подписи и порядка строк.
+				const lastAt = {};
+				for (const c of await listConversations(ownerPubkey, dbKey)) lastAt[c.chatId] = c.lastAt;
 				if (cancelled) return;
+				setLastAtByPartner(lastAt);
 				setChatPartners(partners);
 				setInboxList(inbox);
 				setUnreadByPartner(unread);
@@ -146,6 +171,17 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 		});
 	}
 
+	// Переписка исчезает из списка на этом устройстве насовсем (надгробие, см.
+	// chat-delete.js), даже если контакт уже удалён или аккаунт собеседника мёртв.
+	function handleDeleteChat() {
+		const { pubkey } = deleteTarget;
+		setDeleteTarget(null);
+		return runAction(async () => {
+			await deleteChatForeverAction(ownerPubkey, privKey, dbKey, pubkey, publish, refreshGroupMessageSubscription);
+			setChatPartners((prev) => prev.filter((pk) => pk !== pubkey));
+		});
+	}
+
 	function handleReject(senderPubkey) {
 		return runAction(async () => {
 			await rejectInboxRequestAction(ownerPubkey, senderPubkey);
@@ -162,7 +198,7 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 	return (
 		<Screen
-			title={totalUnread > 0 ? `${t("nav.messages")} [${totalUnread}]` : t("nav.messages")}
+			title={t("shell.navChats")}
 			actions={
 				<button type="button" onClick={onCompose}>
 					<IconPencil /> {t("chat.list.composeButton")}
@@ -187,25 +223,15 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 			{inboxList.length > 0 && (
 				<section class="stack" aria-label={t("chat.list.inboxHeading", { count: inboxList.length })} style={{ "--gap": "var(--space-s)" }}>
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+					<ul role="list" class="inbox-list">
 						{inboxList.map((req) => (
-							<li
-								key={req.senderPubkey}
-								class="row"
-								style={{
-									"--gap": "var(--space-s)",
-									"--align": "center",
-									justifyContent: "space-between",
-									paddingBlock: "var(--space-s)",
-									borderBlockEnd: "var(--border-width) solid var(--border)",
-								}}
-							>
+							<li key={req.senderPubkey} class="inbox-row">
 								<ContactIdentity pubkey={req.senderPubkey} />
-								<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+								<div class="inbox-row__actions">
 									<button type="button" class="btn--ghost btn--good" disabled={busy} onClick={() => handleAccept(req.senderPubkey)}>
 										{t("contacts.acceptButton")}
 									</button>
-									<button type="button" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
+									<button type="button" class="btn--ghost" disabled={busy} onClick={() => handleReject(req.senderPubkey)}>
 										{t("contacts.rejectButton")}
 									</button>
 								</div>
@@ -217,42 +243,53 @@ function ChatList({ ownerPubkey, privKey, dbKey, connectionError, onCompose }) {
 
 			<section class="stack" aria-label={t("chat.list.chatsHeading", { count: chatPartners.length })} style={{ "--gap": "var(--space-s)" }}>
 				{chatPartners.length === 0 ? (
-					<p style={{ color: "var(--muted)" }}>
-						{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}
-					</p>
+					<p class="empty-note">{t("chat.list.noChatsYet", { contactsLabel: t("nav.contacts") })}</p>
 				) : (
-					<ul role="list" style={{ listStyle: "none", paddingInlineStart: 0 }}>
-						{chatPartners.map((pubkey) => (
-							<li
-								key={pubkey}
-								style={{ paddingBlock: "var(--space-s)", borderBlockEnd: "var(--border-width) solid var(--border)" }}
-							>
-								<button
-									type="button"
-									onClick={() => openChat(pubkey)}
-									aria-label={t("contacts.openChatAria", { name: profiles.value[pubkey]?.name || shortPubkey(pubkey) })}
-									class="row"
-									style={{
-										"--gap": "var(--space-s)",
-										"--align": "center",
-										justifyContent: "space-between",
-										width: "100%",
-										background: "none",
-										border: "none",
-										padding: 0,
-										cursor: "pointer",
-										font: "inherit",
-										color: "inherit",
-									}}
-								>
-									<ContactIdentity pubkey={pubkey} unreadCount={unreadByPartner[pubkey]} />
-								</button>
-							</li>
-						))}
+					<ul role="list" class="chat-list">
+						{[...chatPartners]
+							.sort((a, b) => (lastAtByPartner[b] ?? 0) - (lastAtByPartner[a] ?? 0))
+							.map((pubkey) => {
+								const profile = profiles.value[pubkey];
+								const name = profile?.name || shortPubkey(pubkey);
+								const unread = unreadByPartner[pubkey] ?? 0;
+								return (
+									<li key={pubkey} class="chat-list__item">
+										<button type="button" class="chat-row" onClick={() => openChat(pubkey)} aria-label={t("contacts.openChatAria", { name })}>
+											<span class="chat-row__ava">
+												<AccountAvatar avatar={profile?.picture} login={name} />
+											</span>
+											<span class="chat-row__body">
+												<span class="chat-row__name">{name}</span>
+												{profile?.about && <span class="chat-row__snippet">{profile.about}</span>}
+											</span>
+											<span class="chat-row__meta">
+												{lastAtByPartner[pubkey] != null && <time class="chat-row__time">{formatRowTime(lastAtByPartner[pubkey] * 1000)}</time>}
+												{unread > 0 && (
+													<span class="chat-row__badge" aria-label={t("chat.list.unreadAria", { count: unread })}>
+														{unread}
+													</span>
+												)}
+											</span>
+										</button>
+										<FavStar kind="person" id={pubkey} name={name} />
+										<button
+											type="button"
+											class="chat-list__delete"
+											disabled={busy}
+											onClick={() => setDeleteTarget({ pubkey, name })}
+											aria-label={t("chat.list.deleteAria", { name })}
+											title={t("chat.list.deleteAria", { name })}
+										>
+											<IconTrash />
+										</button>
+									</li>
+								);
+							})}
 					</ul>
 				)}
 			</section>
 			</div>
+			{deleteTarget && <DeleteChatDialog name={deleteTarget.name} busy={busy} onCancel={() => setDeleteTarget(null)} onConfirm={handleDeleteChat} />}
 		</Screen>
 	);
 }
@@ -310,6 +347,7 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
 	const voice = useVoiceRecording();
 	const [uploadingAttachment, setUploadingAttachment] = useState(false);
+	const [uploadFraction, setUploadFraction] = useState(0);
 
 	useEffect(() => {
 		// Найденный баг (пользователь): при входе в чат подтягиваем СВЕЖИЙ профиль
@@ -424,9 +462,10 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 	// UI: старт записи вызывает tray.reset(), выбор файла сбрасывает запись),
 	// поэтому здесь простое ветвление, не слияние.
 	async function buildOutgoingAttachments() {
-		if (tray.items.length > 0) return tray.uploadAll(privKey);
+		const journal = { purpose: "dm", target: contactPubkey }; // ТЗ-03: куда уходит файл
+		if (tray.items.length > 0) return tray.uploadAll(privKey, undefined, { journal, onBytes: setUploadFraction });
 		if (voice.hasRecording) {
-			const descriptor = await voice.buildAttachment(privKey);
+			const descriptor = await voice.buildAttachment(privKey, { journal });
 			return descriptor ? [descriptor] : undefined;
 		}
 		return undefined;
@@ -700,9 +739,15 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 		}
 	}
 
+	// «Назад» ведёт туда, откуда пришли: из «Контактов» — в контакты, иначе в список чатов.
+	const backTo = getChatBackTo();
+	const chatBreadcrumb = backTo
+		? { label: t("nav.contacts"), onBack: () => goTo(backTo) }
+		: { label: t("shell.navChats"), onBack: () => openChat(null) };
+
 	return (
 		<Screen
-			breadcrumb={{ label: t("nav.messages"), onBack: () => openChat(null) }}
+			breadcrumb={chatBreadcrumb}
 			lead={<AccountAvatar avatar={profile?.picture} login={displayName} />}
 			title={displayName}
 			subtitle={(() => {
@@ -717,8 +762,8 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					    текст нигде не был обёрнут в этот класс — "Позвонить" с
 					    полным текстом распирал и без того тесную строку шапки
 					    (шла внахлёст с глобальным бургером в углу). */}
-					<button type="button" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
-						<IconPhoneCall /> <span class="btn-label">{t("common.call")}</span>
+					<button type="button" class="icon-btn" onClick={() => placeCall(contactPubkey)} aria-label={t("contacts.callAria", { name: displayName })}>
+						<IconPhoneCall />
 					</button>
 					<ActionsMenu label={t("chat.window.chatMenuAria")}>
 						{/* Живой фидбег — пункт добавлен заранее (вид меню важнее самой
@@ -762,27 +807,40 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 					{uploadingAttachment && (
 						<p class="row recording-status" style={{ "--gap": "var(--space-s)", "--align": "center" }} role="status">
 							<span class="spinner" aria-hidden="true" /> {t("chat.window.uploadingAttachment")}
+							<progress class="upload-progress" max="100" value={Math.round(uploadFraction * 100)} aria-label={t("chat.window.uploadingAttachment")} />
+							<span class="upload-percent">{Math.round(uploadFraction * 100)}%</span>
 						</p>
 					)}
 
-					<form class="message-compose row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+					<form class="composer bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }} onSubmit={handleSend}>
+						<div class="composer__attach">
+							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
+						</div>
 						<label class="visually-hidden" for="chat-message-input">
 							{t("chat.window.messageLabel")}
 						</label>
-						<textarea
-							id="chat-message-input"
-							ref={composerTextareaRef}
-							class="message-compose-field"
-							value={text}
-							maxLength={MAX_MESSAGE_LENGTH}
-							onInput={handleTextInput}
-							onKeyDown={(e) => {
-								if (!isComposeSubmitKey(e)) return;
-								e.preventDefault();
-								handleSend(e);
-							}}
-							rows={2}
-						/>
+						<div class="composer__field">
+							<textarea
+								id="chat-message-input"
+								ref={composerTextareaRef}
+								class="message-compose-field"
+								value={text}
+								placeholder={t("chat.window.messageLabel")}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onInput={handleTextInput}
+								onKeyDown={(e) => {
+									if (!isComposeSubmitKey(e)) return;
+									e.preventDefault();
+									handleSend(e);
+								}}
+								rows={1}
+							/>
+							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
+							<details class="composer-aa">
+								<summary class="message-compose-tool-btn" aria-label={t("markdownToolbar.boldAria")}>Aa</summary>
+								<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
+							</details>
+						</div>
 						<button
 							type="submit"
 							class="message-compose-send-btn row"
@@ -793,15 +851,6 @@ function ChatWindow({ ownerPubkey, privKey, dbKey, contactPubkey }) {
 							<IconSend />
 						</button>
 					</form>
-					<div class="compose-tools row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-						<div class="compose-tools__attach row" style={{ "--gap": "var(--space-2xs)" }}>
-							<ComposeAttachButtons tray={tray} voice={voice} onError={setError} />
-						</div>
-						<MarkdownFormatToolbar textareaRef={composerTextareaRef} value={text} onChange={applyTextChange} />
-						<div class="compose-tools__emoji">
-							<EmojiQuickSend onSend={sendQuickMessage} disabled={busy} />
-						</div>
-					</div>
 				</div>
 			}
 		>
@@ -911,7 +960,7 @@ function ComposeMessage({ ownerPubkey, privKey, dbKey, onCancel, onSent }) {
 		setError("");
 		setBusy(true);
 		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : undefined;
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "dm", target: contactPubkey } }) : undefined;
 			await ensureConnected(ownerPubkey, privKey, dbKey);
 			const publishToRecipient = (event) => publishToContact(event, recipient);
 			const lamportTs = await nextLamportTick(ownerPubkey);

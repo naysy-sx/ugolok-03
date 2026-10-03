@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from "preact/hooks";
+import { useState, useEffect, useId, useMemo } from "preact/hooks";
 import { currentUser, privKeySig, dbKeySig } from "../signals/auth.js";
 import { ensureConnected, publish, refreshChannelContentSubscription } from "../signals/transport.js";
 import { groups, refreshGroups } from "../signals/contacts.js";
@@ -12,19 +12,23 @@ import {
 } from "../../domain/content/channel.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { place, openChannel } from "../signals/place.js";
 import ChannelDetail from "./channel.jsx";
 import ChannelAvatarThumb from "../components/channel-avatar-thumb.jsx";
+import FavStar from "../components/fav-star.jsx";
 import Screen from "../components/screen.jsx";
 import IconPlus from "../icons/plus.jsx";
+import IconHash from "../icons/hash.jsx";
+import IconReader from "../icons/reader.jsx";
+import IconScroll from "../icons/scroll.jsx";
+import IconCamera from "../icons/camera.jsx";
 import { t, currentLocale, errorMessage } from "../signals/i18n.js";
 import { pushToast } from "../signals/toasts.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const NAME_MAX_LENGTH = 100; // ТЗ пользователя
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function formatUpdatedDate(unixSeconds) {
 	if (typeof unixSeconds !== "number") return null;
@@ -43,10 +47,12 @@ function ChannelCard({ channel, showSubscribe, onSubscribe, onOpen, busy }) {
 					{updated && <small class="channel-card-updated">{t("channels.card.updated", { date: updated })}</small>}
 				</span>
 			</button>
-			{showSubscribe && (
+			{showSubscribe ? (
 				<button type="button" disabled={busy} onClick={() => onSubscribe(channel.id)}>
 					{t("channels.card.subscribeButton")}
 				</button>
+			) : (
+				<FavStar kind="channel" id={channel.id} name={channel.name || t("channels.card.untitled")} />
 			)}
 		</li>
 	);
@@ -72,6 +78,8 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 	const [rules, setRules] = useState("");
 	const [avatarFile, setAvatarFile] = useState(null);
 	const [avatarError, setAvatarError] = useState("");
+	const avatarPreviewUrl = useMemo(() => (avatarFile ? URL.createObjectURL(avatarFile) : ""), [avatarFile]);
+	useEffect(() => () => avatarPreviewUrl && URL.revokeObjectURL(avatarPreviewUrl), [avatarPreviewUrl]);
 	const [allowChatAttachments, setAllowChatAttachments] = useState(true);
 	const [selectedGroupIds, setSelectedGroupIds] = useState(() => new Set());
 	const [error, setError] = useState("");
@@ -113,7 +121,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+				avatarDescriptor = await uploadMessageAttachment(uploadTarget(), bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: "channel" } });
 			}
 			await createChannel(
 				ownerPubkey,
@@ -133,7 +141,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 	}
 
 	return (
-		<form class="stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)", border: "var(--border-width) solid var(--border)", borderRadius: "var(--radius)" }}>
+		<form class="channel-form stack box" onSubmit={handleSubmit} style={{ "--gap": "var(--space-s)", "--pad": "var(--space-m)" }}>
 			<h2>{t("channels.create.title")}</h2>
 			{error && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
@@ -143,42 +151,57 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-name`}>{t("channels.create.nameLabel")}</label>
-				<input
-					id={`${instanceId}-name`}
-					type="text"
-					value={name}
-					maxLength={NAME_MAX_LENGTH}
-					onInput={(e) => setName(e.currentTarget.value)}
-					required
-				/>
+				<div class="field-icon">
+					<IconHash class="icon field-icon__ico" aria-hidden="true" />
+					<input
+						id={`${instanceId}-name`}
+						type="text"
+						value={name}
+						maxLength={NAME_MAX_LENGTH}
+						onInput={(e) => setName(e.currentTarget.value)}
+						required
+					/>
+				</div>
 			</div>
 
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-description`}>{t("channels.create.descriptionLabel")}</label>
-				<textarea
-					id={`${instanceId}-description`}
-					value={description}
-					maxLength={DESCRIPTION_MAX_LENGTH}
-					onInput={(e) => setDescription(e.currentTarget.value)}
-					rows={3}
-				/>
+				<div class="field-icon field-icon--area">
+					<IconReader class="icon field-icon__ico" aria-hidden="true" />
+					<textarea
+						id={`${instanceId}-description`}
+						value={description}
+						maxLength={DESCRIPTION_MAX_LENGTH}
+						onInput={(e) => setDescription(e.currentTarget.value)}
+						rows={6}
+					/>
+				</div>
 			</div>
 
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
 				<label for={`${instanceId}-rules`}>{t("channels.create.rulesLabel")}</label>
-				<textarea
-					id={`${instanceId}-rules`}
-					value={rules}
-					maxLength={RULES_MAX_LENGTH}
-					onInput={(e) => setRules(e.currentTarget.value)}
-					rows={4}
-				/>
+				<div class="field-icon field-icon--area">
+					<IconScroll class="icon field-icon__ico" aria-hidden="true" />
+					<textarea
+						id={`${instanceId}-rules`}
+						value={rules}
+						maxLength={RULES_MAX_LENGTH}
+						onInput={(e) => setRules(e.currentTarget.value)}
+						rows={4}
+					/>
+				</div>
 			</div>
 
 			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
-				<label for={`${instanceId}-avatar`}>{t("channels.create.avatarLabel")}</label>
-				<input id={`${instanceId}-avatar`} type="file" accept="image/*" onChange={handleAvatarSelected} />
-				{avatarFile && <small style={{ color: avatarError ? "var(--bad)" : "var(--muted)" }}>{avatarError || avatarFile.name}</small>}
+				<label class="avatar-pick" for={`${instanceId}-avatar`}>
+					<span class="avatar-pick__circle">
+						{avatarPreviewUrl && !avatarError ? <img src={avatarPreviewUrl} alt="" /> : <IconCamera class="icon" aria-hidden="true" />}
+					</span>
+					<span class="avatar-pick__text" style={avatarError ? { color: "var(--bad)" } : undefined}>
+						{avatarError || (avatarFile ? avatarFile.name : t("channels.create.avatarLabel"))}
+					</span>
+				</label>
+				<input id={`${instanceId}-avatar`} class="visually-hidden" type="file" accept="image/*" onChange={handleAvatarSelected} />
 			</div>
 
 			<div class="row" style={{ "--gap": "var(--space-3xs)", "--align": "center" }}>
@@ -228,7 +251,7 @@ function CreateChannelForm({ ownerPubkey, privKey, dbKey, onCreated, onCancel })
 				<button type="submit" disabled={busy || name.length === 0}>
 					{busy ? t("channels.create.submitting") : t("common.create")}
 				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
+				<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 					{t("common.cancel")}
 				</button>
 			</div>

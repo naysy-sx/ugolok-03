@@ -135,7 +135,7 @@ function JournalItem({ entry, onOpen, onMarkRead }) {
 
 	return (
 		<li class="jitem" data-read={entry.read || undefined}>
-			<button type="button" class="jitem__link" onClick={onOpen}>
+			<button type="button" class="jitem__link chat-row" onClick={onOpen}>
 				<span class={`jtype jtype--${meta?.tone ?? "muted"} row`} style={{ "--align": "center", justifyContent: "center" }} aria-hidden="true">
 					<Icon />
 				</span>

@@ -6,10 +6,12 @@ import { t, tPlural, errorMessage, currentLocale } from "../signals/i18n.js";
 import { resetLocalDatabase } from "../../core/store/database.js";
 import { navigate } from "../router.js";
 import { login, setRememberedAccountId, getRememberedAccountId, dbKeySig } from "../signals/auth.js";
+import { syncPushOnLogin } from "../../domain/push/registration.js";
 import { loadUiSettings } from "../../domain/settings/ui-settings.js";
 import { applyCustomPalette } from "../theme/palette-apply.js";
 import { applyUiScale } from "../theme/ui-scale.js";
 import { applyThemeMode } from "../theme/theme-mode.js";
+import { getPreLoginTheme, setPreLoginTheme } from "../theme/pre-login-theme.js";
 import { decode as nip19Decode, npubEncode } from "nostr-tools/nip19";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import MnemonicDisplay from "../components/mnemonic-display.jsx";
@@ -22,6 +24,8 @@ import IconArrowRight from "../icons/arrow-right.jsx";
 import IconVault from "../icons/vault.jsx";
 import IconCheck from "../icons/check.jsx";
 import IconKey from "../icons/key.jsx";
+import IconSun from "../icons/sun.jsx";
+import IconMoon from "../icons/moon.jsx";
 import Quick from "./quick.jsx";
 
 
@@ -45,6 +49,21 @@ function lastUnlockLabel(ts) {
 export default function Unlock() {
 	const [step, setStep] = useState("loading");
 	const [accounts, setAccounts] = useState([]);
+	const [preLoginThemeState, setPreLoginThemeState] = useState(() => getPreLoginTheme());
+
+	function togglePreLoginTheme() {
+		const next = preLoginThemeState === "dark" ? "light" : "dark";
+		applyThemeMode(next);
+		setPreLoginTheme(next);
+		setPreLoginThemeState(next);
+	}
+
+	// Метка для ui/reload-gate.js: на каком шаге входа/регистрации человек. Пока идёт
+	// регистрация (сид-фраза, подтверждение, пароль), автоперезагрузка страницы запрещена.
+	useEffect(() => {
+		document.documentElement.setAttribute("data-auth-flow", step);
+		return () => document.documentElement.removeAttribute("data-auth-flow");
+	}, [step]);
 
 	// Какой раздел показан в <main> стартовой страницы (не связано с "step" —
 	// тот управляет всем экраном целиком: логин/регистрация/раскрытие мнемоники
@@ -53,6 +72,54 @@ export default function Unlock() {
 	// "help" — переиспользует ту же справку, что и залогиненный раздел
 	// (см. components/help-content.jsx).
 	const [mainView, setMainView] = useState("home");
+
+	// Общая шапка (лого + Справка + переключатель темы) — одна и та же на
+	// step==="main" и на всех остальных шагах (мнемоника/подтверждение/
+	// импорт/пароль/done), которые раньше возвращали голый <main> без неё
+	// (живая находка: заголовок "подтверждения фразы" никак не был связан с
+	// Справкой/темой, выглядело как другой экран). И там, и там клик по
+	// логотипу/Справке просто возвращает на главный шаг — на остальных
+	// шагах там всё равно нет своего mainView==="help" контента.
+	function renderAuthHeader() {
+		// Шаги мнемоники/подтверждения/импорта/пароля/done возвращают голый
+		// <>…<main></> без .screen/.auth-layout — тот wrapper обычно и
+		// отвечает за отступ под статус-бар (его padding-block-start на
+		// самом .auth-layout, см. custom.css). Здесь шапка — первый элемент
+		// на экране, значит ей и считать этот отступ самой (--standalone).
+		const standalone = step !== "main";
+		return (
+			<header class={standalone ? "site-header site-header--standalone bar" : "site-header bar"} style={{ "--gap": "var(--space-s)", "--align": "center" }}>
+				<button
+					type="button"
+					class="logo row logo-link"
+					style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
+					onClick={() => {
+						setStep("main");
+						setMainView("home");
+					}}
+					aria-label={t("unlock.main.logoHomeAria")}
+				>
+					<img class="unlock-logo-mark" src={`${import.meta.env.BASE_URL}logo-source.png`} width="28" height="28" alt="" aria-hidden="true" />
+					<span class="logo-name">{t("app.name")}</span>
+				</button>
+				<div class="header-actions">
+					<button
+						type="button"
+						class={mainView === "help" ? "btn-link nav-link-btn--active" : "btn-link"}
+						onClick={() => {
+							setStep("main");
+							setMainView(mainView === "help" ? "home" : "help");
+						}}
+					>
+						{t("unlock.main.helpLink")}
+					</button>
+					<button type="button" class="icon-btn unlock-theme-toggle" onClick={togglePreLoginTheme} aria-label={t("themeStatus.panelAria")}>
+						{preLoginThemeState === "dark" ? <IconSun /> : <IconMoon />}
+					</button>
+				</div>
+			</header>
+		);
+	}
 
 	// Вкладки Войти | Создать на step === "main" (взаимоисключающие).
 	const [authMode, setAuthMode] = useState("create");
@@ -161,6 +228,12 @@ export default function Unlock() {
 			login(openLoginForId, account?.login ?? "", key);
 			setRememberedAccountId(openLoginForId);
 			recordLastUnlock(openLoginForId).catch(() => {});
+			// Э-PUSH П3.2 «продление раз в неделю при запуске» + первая регистрация
+			// для аккаунта, который ещё не видели, пока функция уже включена
+			// (мультиаккаунт). Fire-and-forget — тот же приём, что recordLastUnlock
+			// строкой выше: не блокирует вход сетевым запросом, сам по себе no-op,
+			// если push выключен/не поддерживается/сервер не настроен.
+			syncPushOnLogin(openLoginForId, key, dbKeySig.value).catch(() => {});
 			// Найдено пользователем (баг) — тема/масштаб/акцент применялись только
 			// внутри MainShell'а ПОСЛЕ навигации (app.jsx), поэтому на секунду
 			// показывался build-дефолт вместо сохранённой темы ЭТОГО аккаунта.
@@ -294,9 +367,10 @@ export default function Unlock() {
 
 	if (step === "create-generate") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createGenerate.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -321,15 +395,17 @@ export default function Unlock() {
 						</button>
 					</div>
 				</div>
-			</main>
+				</main>
+			</>
 		);
 	}
 
 	if (step === "create-confirm") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.createConfirm.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -381,14 +457,16 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "import-mnemonic") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importMnemonic.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -424,14 +502,16 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "import-key") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.importKey.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -482,14 +562,16 @@ export default function Unlock() {
 					)}
 				</div>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "advanced-password") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.advancedPassword.title")}</h1>
 				</header>
 				<form class="stack" style={{ "--gap": "var(--space-m)" }} onSubmit={handleAdvancedPasswordSubmit}>
@@ -517,14 +599,16 @@ export default function Unlock() {
 					)}
 				</form>
 			</main>
+			</>
 		);
 	}
 
 	if (step === "done") {
 		return (
-			<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
+			<>
+				{renderAuthHeader()}
+				<main class="center stack" style={{ "--measure": "44rem", paddingInline: "var(--space-m)", "--gap": "var(--space-m)" }}>
 				<header class="stack" style={{ "--gap": "var(--space-m)" }}>
-					<p class="eyebrow">{t("app.name")}</p>
 					<h1>{t("unlock.done.title")}</h1>
 				</header>
 				<div class="stack" style={{ "--gap": "var(--space-m)" }}>
@@ -563,6 +647,8 @@ export default function Unlock() {
 							login(id, pendingLogin, privKey);
 							setRememberedAccountId(id);
 							recordLastUnlock(id).catch(() => {});
+							// Э-PUSH П3.2 — см. комментарий у другого вызова login() выше в этом файле.
+							syncPushOnLogin(id, privKey, dbKeySig.value).catch(() => {});
 							navigate("/main");
 						}}
 					>
@@ -570,6 +656,7 @@ export default function Unlock() {
 					</button>
 				</div>
 			</main>
+			</>
 		);
 	}
 
@@ -579,39 +666,15 @@ export default function Unlock() {
 
 	return (
 		<div class="screen auth-layout">
-			<header class="site-header bar" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-				<button
-					type="button"
-					class="logo row logo-link"
-					style={{ "--gap": "var(--space-2xs)", "--align": "center" }}
-					onClick={() => setMainView("home")}
-					aria-label={t("unlock.main.logoHomeAria")}
-				>
-					<img
-						class="unlock-logo-mark"
-						src={`${import.meta.env.BASE_URL}logo-source.png`}
-						width="28"
-						height="28"
-						alt=""
-						aria-hidden="true"
-					/>
-					<span class="logo-name">{t("app.name")}</span>
-				</button>
-				<div class="header-actions">
-					<button
-						type="button"
-						class={mainView === "help" ? "btn-link nav-link-btn--active" : "btn-link"}
-						onClick={() => setMainView(mainView === "help" ? "home" : "help")}
-					>
-						{t("unlock.main.helpLink")}
-					</button>
-				</div>
-			</header>
+			{renderAuthHeader()}
 
 			<main class="main">
 				{mainView === "home" && (
 					<div class="unlock-home">
 						<section class="hero-section">
+							{/* Живой фидбек — логотип теперь всегда в шапке (renderAuthHeader,
+							    видна на этом же шаге), свой отдельный .unlock-brand здесь стал
+							    чистым дублем ("Уголок" дважды подряд). */}
 							<h1>{t("unlock.main.hero.title")}</h1>
 							<p class="hero-lead">{t("unlock.main.hero.lead")}</p>
 						</section>

@@ -23,13 +23,15 @@ import { applyCustomPalette } from "./ui/theme/palette-apply.js";
 import { applyUiScale } from "./ui/theme/ui-scale.js";
 import { applyThemeMode, toggleThemeMode } from "./ui/theme/theme-mode.js";
 import { setLocale, t } from "./ui/signals/i18n.js";
-import { place, goTo } from "./ui/signals/place.js";
+import { place, goTo, goBackOnePlace } from "./ui/signals/place.js";
 import { pendingNavTarget, applyNavTarget } from "./ui/signals/notification-nav.js";
 import { messagingActivity } from "./ui/signals/chats.js";
 import { refreshContacts } from "./ui/signals/contacts.js";
 import { journalEntries, refreshJournal } from "./ui/signals/journal.js";
 import { configureDefaultBackend } from "./domain/notifications/notifier.js";
+import { getPlatform } from "./platform/index.js";
 import { pushToast } from "./ui/signals/toasts.js";
+import { isPushSupported, isPushEnabled, hasSeenPushOnboarding, markPushOnboardingSeen } from "./domain/push/registration.js";
 import ToastHost from "./ui/components/toast-host.jsx";
 import CallOverlay from "./ui/components/call-overlay.jsx";
 import DiagTraceBadge from "./ui/components/diag-trace-badge.jsx";
@@ -42,6 +44,9 @@ import ServicesStatusPanel from "./ui/components/services-status-panel.jsx";
 import RoomsOverlay from "./ui/components/rooms-overlay.jsx";
 import IconExit from "./ui/icons/exit.jsx";
 import { roomsScreenActive, roomsMinimized } from "./ui/signals/rooms.js";
+import "./ui/signals/uploads.js";
+import "./ui/signals/quota.js";
+import Plans from "./ui/screens/plans.jsx";
 
 onLock(() => {
 	roomsScreenActive.value = false;
@@ -97,6 +102,86 @@ function MainShell() {
 	// перехвата Range (CONTRACTS.md/DESIGN.md). Один раз на приложение,
 	// не завязан на ownerPubkey (реестр открытых файлов — player-bridge.js).
 	useEffect(() => startPlayerBridge(), []);
+
+	// Э-PUSH П3.5 — одноразовое ненавязчивое предложение включить функцию
+	// (ИП6: не включать без согласия). Тост — уже существующая инфраструктура
+	// (toasts.js), не новый компонент: сам собой исчезает через ~4.5с, если
+	// проигнорировать, это и есть "ненавязчиво" — постоянный доступ к функции
+	// всегда есть в Настройках (П3.4). Флаг "видели" — device-local, не
+	// per-account (markPushOnboardingSeen), поэтому переключение между
+	// аккаунтами на этом устройстве не показывает тост повторно; отмечается
+	// ТОЛЬКО когда реально показан — если сейчас не supported (например
+	// сервер ещё не настроен), тост остаётся "не показанным" и появится
+	// позже, когда условие выполнится.
+	useEffect(() => {
+		if (hasSeenPushOnboarding()) return;
+		if (!isPushSupported() || isPushEnabled()) return;
+		markPushOnboardingSeen();
+		pushToast({
+			title: t("settings.pushBackground.onboardingToastTitle"),
+			body: t("settings.pushBackground.onboardingToastBody"),
+			onClick: () => goTo({ kind: "settings", tab: "notifications" }),
+		});
+	}, [ownerPubkey]);
+
+	// Э1.4/§4.3 ТЗ-NATIVE-APPS — на вебе клик по внешней ссылке остаётся
+	// стандартным поведением браузера (перехватчик сразу выходит, ничего не
+	// трогает). В нативных оболочках клик по target="_blank"/обычной <a>
+	// внутри WebView обычно уводит либо в никуда, либо в свой же WebView без
+	// системного браузера — перехватываем capture-фазой и открываем явно.
+	// Единственное реальное место сегодня — target="_blank" в markdown-view.jsx
+	// (E1-INVENTORY.md), но перехватчик глобальный, не завязан на конкретный компонент.
+	useEffect(() => {
+		if (getPlatform().shell === "web") return;
+		function onClickCapture(e) {
+			const a = e.target.closest?.("a[href]");
+			if (!a) return;
+			const href = a.getAttribute("href");
+			if (!href || href.startsWith("#")) return;
+			e.preventDefault();
+			// Найдено на platform.info()/config.load() (Э3, живые баги) — тот же
+			// принцип: метод адаптера может быть ещё не реализован (capacitor.js) —
+			// не даём клику по ссылке молча зависнуть необработанным исключением.
+			try {
+				Promise.resolve(getPlatform().links.openExternal(a.href)).catch(() => {});
+			} catch {
+				// не реализовано на этой платформе — ссылка просто не открылась
+			}
+		}
+		document.addEventListener("click", onClickCapture, true);
+		return () => document.removeEventListener("click", onClickCapture, true);
+	}, []);
+
+	// Э4.5 ТЗ-NATIVE-APPS — аппаратная кнопка «Назад» на Android: закрыть
+	// оверлей/модалку → закрыть drawer → шаг назад по навигации → на корне
+	// свернуть (App.minimizeApp() в capacitor.js, если cb вернул false — не
+	// завершать процесс). Первые два уровня — ОДИН механизм: [role="dialog"]
+	// (общий атрибут, уже последовательно применяемый во ВСЕХ модалках/
+	// оверлеях проекта — add-contact-modal/call-overlay/file-picker/contact-
+	// modal/free-space-dialog/file-info-dialog/delete-chat-dialog/image-modal/
+	// rooms-overlay/remove-contact-dialog) и .sidebar-open (drawer) уже
+	// закрываются СВОИМИ локальными keydown-Escape-обработчиками (см. выше в
+	// этом файле и в каждом из компонентов) — синтетический Escape переиспользует
+	// их БЕЗ дублирования логики закрытия в каждом месте. Третий уровень —
+	// goBackOnePlace() (place.js, 10.1 "состояние места" — единственный
+	// источник "где я нахожусь"). Только Android: на desktop нет аппаратной
+	// кнопки "Назад" вообще, на iOS (Э5, отложен) контракт тот же метод, но
+	// пока не проверено — сознательно не включаем шире, чем capacitor.
+	//
+	// НЕ покрыто: экран входа/регистрации (unlock.jsx, до логина) — та же
+	// граница, что уже принята для перехватчика внешних ссылок выше (эффект
+	// живёт в MainShell, не в App) — на Unlock "Назад" даёт дефолтное
+	// поведение Android (закрыть activity), не проверено живьём отдельно.
+	useEffect(() => {
+		if (getPlatform().shell !== "capacitor") return;
+		return getPlatform().ui.setBackHandler(() => {
+			if (document.querySelector('[role="dialog"], .sidebar.sidebar-open')) {
+				document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+				return true;
+			}
+			return goBackOnePlace();
+		});
+	}, []);
 
 	// Простой бинарный тумблер (тот же UX, что демо Opus, VISUAL.md) — переключает
 	// от ТЕКУЩЕЙ эффективной темы даже если пользователь ещё ни разу не выбирал
@@ -256,13 +341,10 @@ function MainShell() {
 					    не рендерится здесь). */}
 					<AccountCard
 						onEditProfile={() => selectNavItem("profile")}
-						onOpenStorage={() => selectNavItem("storage")}
 						onOpenSettings={() => selectNavItem("settings")}
 						onOpenSecurity={() => selectNavItem("security")}
 						onOpenHelp={() => selectNavItem("help")}
 						onOpenDiagnostics={() => selectNavItem("diagnostics")}
-						onOpenJournal={() => selectNavItem("journal")}
-						unreadJournalCount={unreadJournalCount}
 						themeMode={themeMode}
 						onToggleTheme={handleToggleTheme}
 					/>
@@ -296,9 +378,10 @@ function MainShell() {
 				{place.value.kind === "journal" && <Journal />}
 				{place.value.kind === "today" && <Today onBack={() => goTo({ kind: "journal" })} />}
 				{place.value.kind === "storage" && <Files />}
+				{place.value.kind === "plans" && <Plans />}
 				{place.value.kind === "search" && <Search />}
 				{(() => {
-					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage", "search"];
+					const KNOWN_KINDS = ["diagnostics", "profile", "help", "people", "discovery", "chat", "channels", "channel", "settings", "security", "journal", "today", "storage", "plans", "search"];
 					if (KNOWN_KINDS.includes(place.value.kind)) return null;
 					return <Placeholder title={place.value.kind} />;
 				})()}

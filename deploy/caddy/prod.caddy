@@ -51,14 +51,27 @@ relay.ugolok.tech {
 	tls {
 		alpn http/1.1
 	}
-	reverse_proxy 127.0.0.1:7777 {
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Real-IP {remote_host}
-		flush_interval -1
-		transport http {
-			versions 1.1
-			read_timeout 0
-			write_timeout 0
+	# Э-PUSH П1.1/П1.3 — «тот же домен, что relay», путь /push/…, чтобы не
+	# светить отдельный порт. Порядок handle-блоков — тот же приём, что
+	# /api/turn-credentials выше по файлу и @blob в blossom.ugolok.tech: явный
+	# путь ПЕРЕД общим врезается раньше, try_files/catch-all ниже не успевает
+	# сработать первым.
+	handle /push/register {
+		reverse_proxy 127.0.0.1:8091
+	}
+	handle_path /push/* {
+		reverse_proxy 127.0.0.1:2586
+	}
+	handle {
+		reverse_proxy 127.0.0.1:7777 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			flush_interval -1
+			transport http {
+				versions 1.1
+				read_timeout 0
+				write_timeout 0
+			}
 		}
 	}
 	header -Alt-Svc

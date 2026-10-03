@@ -19,7 +19,9 @@
 //   потребовало бы расшифровать КАЖДОЕ отправленное сообщение/пост ради
 //   извлечения digest'а, сознательно вне периметра этого прохода.
 import { db } from "../../core/store/database.js";
+import { unregisterPushForAccount } from "../push/registration.js";
 import { buildProfileEvent } from "./profile.js";
+import { getProfile } from "../../core/crypto/keystore.js";
 import { listOwnedChannels, deleteChannel } from "../content/channel.js";
 import { loadTreeState } from "../files/store.js";
 import { getManifest } from "../files/content.js";
@@ -63,6 +65,10 @@ const OWNER_PUBKEY_TABLES = [
 	"files_mountKeys",
 	"files_mount_nodes",
 	"files_mount_file_meta",
+	"uploads",
+	"uploadBatches",
+	"uploadSync",
+	"uploadFreed",
 ];
 
 // Таблицы, owner-scoped полем "owner" (легаси-именование, этапы 11-50 —
@@ -92,8 +98,18 @@ const OWNER_TABLES = [
 // кэшируется в IndexedDB у контактов (только in-memory signal + живая
 // подписка, ui/signals/contacts.js) — обновление придёт само тем, у кого
 // открыт чат, без отдельного протокола "аккаунт удалён".
-async function tombstoneProfile(login, privKey, publish) {
-	const event = buildProfileEvent(privKey, { name: `${login} (удалённый аккаунт)` });
+//
+// kind:0 replaceable — публикация нового события целиком заменяет старое
+// на relay. Меняем только имя, поэтому about/picture берём из локального
+// keystore и переносим как есть — иначе тем же путём, что и в
+// ensureProfilePublished, безвозвратно стёрли бы био/аватар на relay.
+async function tombstoneProfile(ownerPubkey, login, privKey, publish) {
+	const current = await getProfile(ownerPubkey);
+	const event = buildProfileEvent(privKey, {
+		name: `${login} (удалённый аккаунт)`,
+		about: current?.bio || undefined,
+		picture: current?.avatarUrl || undefined,
+	});
 	await publish(event);
 }
 
@@ -172,8 +188,15 @@ async function wipeLocalData(ownerPubkey) {
 // Точка входа — вызывается из UI (settings.jsx) ПОСЛЕ подтверждения
 // (повторный ввод логина+пароля — проверяется вызывающей стороной).
 export async function deleteAccountEverywhere(ownerPubkey, privKey, dbKey, login, publish, serverUrl, opts = {}) {
+	// Э-PUSH П3.2 «при удалении аккаунта — DELETE и снятие топика». privKey
+	// ещё валиден (параметр, не перечитывается из keystore) — не важно, что это
+	// best-effort ДО wipeLocalData ниже: unregisterPushForAccount читает только
+	// localStorage, keystore здесь не трогает.
 	try {
-		await tombstoneProfile(login, privKey, publish);
+		await unregisterPushForAccount(ownerPubkey, privKey);
+	} catch {}
+	try {
+		await tombstoneProfile(ownerPubkey, login, privKey, publish);
 	} catch {}
 	try {
 		await deleteOwnedChannels(ownerPubkey, privKey, dbKey, publish, serverUrl, opts);

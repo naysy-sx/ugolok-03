@@ -1,12 +1,12 @@
-import { useState } from "preact/hooks";
-import AttachmentView, { AttachmentDownloadLink, AttachmentSaveButton } from "./attachment-view.jsx";
+import { useState, useEffect } from "preact/hooks";
+import { signal } from "@preact/signals";
+import AttachmentView from "./attachment-view.jsx";
 import { t, currentLocale } from "../signals/i18n.js";
 import MarkdownView from "./markdown-view.jsx";
 import StickerView from "./sticker-view.jsx";
 import { parseStickerKey } from "../../domain/content/sticker.js";
 import { planBubbleAttachments } from "./bubble-attachment-plan.js";
 import BubbleAttachmentCluster, { BubbleFileChips } from "./bubble-attachment-cluster.jsx";
-import ActionsMenu from "./actions-menu.jsx";
 import IconPencil from "../icons/pencil.jsx";
 import IconTrash from "../icons/trash.jsx";
 import IconCheck from "../icons/check.jsx";
@@ -47,11 +47,36 @@ function formatTimestamp(sentAt) {
 	return new Date(sentAt * 1000).toLocaleTimeString(currentLocale.value, { hour: "2-digit", minute: "2-digit" });
 }
 
+// На сенсорных экранах (hover: none) наведения нет, а кнопки «Изменить»/«Удалить» всё время
+// на виду загромождали пузыри. Теперь их показывает тап по тексту или пустому месту пузыря
+// (не по вложению, ссылке или кнопке — те делают своё). Раскрыт может быть один пузырь:
+// тап по другому или мимо закрывает предыдущий.
+const toolsOpenId = signal(null);
+const TAP_IGNORE = "a, button, input, textarea, video, audio, img, summary, .bubble-media, .bubble-chips, .bubble-tools";
+
 export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteForBoth, onEdit, maxLength, senderName, onOpenAttachment, originKind = "message", pendingAcceptance = false, deliveredUpTo = 0, readUpTo = 0 }) {
 	const [mode, setMode] = useState(null);
 	const [editText, setEditText] = useState(message.text);
+	const toolsOpen = toolsOpenId.value === message.msgId;
 
-	const bubbleClass = `message-bubble stack box ${isOwn ? "message-bubble-own self-end" : "message-bubble-other self-start"}`;
+	useEffect(() => {
+		if (!toolsOpen) return;
+		// Тап мимо пузыря закрывает кнопки; тап по самому пузырю разбирает handleBubbleTap.
+		function onOutside(e) {
+			if (!e.target.closest?.(".message-bubble")) toolsOpenId.value = null;
+		}
+		document.addEventListener("pointerdown", onOutside);
+		return () => document.removeEventListener("pointerdown", onOutside);
+	}, [toolsOpen]);
+
+	function handleBubbleTap(e) {
+		if (!window.matchMedia?.("(hover: none)").matches) return; // с мышью работает наведение
+		if (e.target.closest(TAP_IGNORE)) return;
+		if (window.getSelection?.()?.toString()) return; // человек выделяет текст — не мешаем
+		toolsOpenId.value = toolsOpen ? null : message.msgId;
+	}
+
+	const bubbleClass = `message-bubble msg stack box ${isOwn ? "message-bubble-own msg--out self-end" : "message-bubble-other msg--in self-start"}`;
 	const bubbleStyle = { "--gap": "var(--space-3xs)", "--pad": "var(--space-2xs)" };
 
 	if (message.deleted) {
@@ -74,10 +99,7 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	const statusLabel = statusLabelKey ? t(statusLabelKey) : undefined;
 	const timestamp = formatTimestamp(message.sentAt);
 	const plan = planBubbleAttachments(message.attachments);
-	const origin = { kind: originKind, id: message.id };
 	const open = (a) => onOpenAttachment?.(message, a);
-	const attachments = message.attachments ?? [];
-	const hasMenu = attachments.length > 0 || (isOwn && typeof onEdit === "function") || typeof onDeleteForMe === "function";
 
 	if (mode === "editing") {
 		return (
@@ -109,7 +131,24 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 	}
 
 	return (
-		<div class={bubbleClass} style={bubbleStyle}>
+		<div class={bubbleClass + (toolsOpen ? " is-tools-open" : "")} style={bubbleStyle} onClick={handleBubbleTap}>
+			{/* Действия по наведению (на сенсорных — по тапу на текст пузыря): «Изменить» и «Удалить» —
+			    компактные круглые кнопки в верхнем углу пузыря вместо меню «⋯». Скачать и
+			    «сохранить к себе» вложения — в полноэкранном просмотре (media-overlay). */}
+			{mode !== "confirming-delete" && (typeof onDeleteForMe === "function" || (isOwn && typeof onEdit === "function")) && (
+				<div class="bubble-tools">
+					{isOwn && typeof onEdit === "function" && (
+						<button type="button" class="bubble-tool" onClick={() => setMode("editing")} aria-label={t("message.editButton")} title={t("message.editButton")}>
+							<IconPencil />
+						</button>
+					)}
+					{typeof onDeleteForMe === "function" && (
+						<button type="button" class="bubble-tool bubble-tool--danger" onClick={() => setMode("confirming-delete")} aria-label={t("common.delete")} title={t("common.delete")}>
+							<IconTrash />
+						</button>
+					)}
+				</div>
+			)}
 			{senderName && <small class="message-bubble-sender">{senderName}</small>}
 			<BubbleAttachmentCluster plan={plan} onOpen={open} />
 			{message.text && (parseStickerKey(message.text) ? <StickerView text={message.text} /> : <MarkdownView source={message.text} profile="lite" />)}
@@ -126,26 +165,6 @@ export default function MessageBubble({ message, isOwn, onDeleteForMe, onDeleteF
 					</span>
 				)}
 				{message.edited && <small>{t("message.editedLabel")}</small>}
-				{mode !== "confirming-delete" && hasMenu && (
-					<ActionsMenu label={t("attachment.actionsMenuAria")} popClass="menu-pop--bubble">
-						{attachments.map((a, i) => (
-							<AttachmentDownloadLink key={`dl-${i}`} attachment={a} menu />
-						))}
-						{attachments.map((a, i) => (
-							<AttachmentSaveButton key={`sv-${i}`} attachment={a} origin={origin} menu />
-						))}
-						{isOwn && typeof onEdit === "function" && (
-							<button type="button" onClick={() => setMode("editing")}>
-								<IconPencil /> {t("message.editButton")}
-							</button>
-						)}
-						{typeof onDeleteForMe === "function" && (
-							<button type="button" class="danger" onClick={() => setMode("confirming-delete")}>
-								<IconTrash /> {t("common.delete")}
-							</button>
-						)}
-					</ActionsMenu>
-				)}
 				{mode === "confirming-delete" && (
 					<>
 						<button

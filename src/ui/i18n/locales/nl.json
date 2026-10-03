@@ -46,6 +46,12 @@
 			"default": "(standaard)"
 		},
 		"scaleLabel": "Schaal van de interface",
+		"scale": {
+			"small": "Klein (90%)",
+			"medium": "Middel (100%)",
+			"large": "Groot (110%)",
+			"xlarge": "Extra groot (125%)"
+		},
 		"accentColorTitle": "Accentkleur",
 		"paletteCustomizeButton": "Aanpassen",
 		"paletteHueLabel": "Tint",
@@ -65,7 +71,11 @@
 			"amethyst": "Amethist",
 			"magenta": "Magenta",
 			"fuchsia": "Fuchsia",
-			"pink": "Roze"
+			"pink": "Roze",
+			"terracotta": "Terracotta",
+			"steel": "Staal",
+			"sand": "Zand",
+			"ink": "Inkt"
 		},
 		"notificationsTitle": "Meldingen",
 		"enableNotifications": "Meldingen inschakelen",
@@ -110,7 +120,8 @@
 			"view": "Weergave",
 			"notifications": "Meldingen",
 			"network": "Netwerk",
-			"session": "Sessie"
+			"session": "Sessie",
+			"storage": "Opslag"
 		},
 		"viewSectionHint": "De accentkleur bepaalt het hele palet — achtergrond, oppervlakken en randen volgen hieruit.",
 		"themeLabel": "Thema",
@@ -131,7 +142,27 @@
 		"perfLogCopied": "Gekopieerd naar klembord",
 		"perfLogManualHint": "Klembord niet beschikbaar — selecteer en kopieer handmatig",
 		"sendReadReceiptsLabel": "Leesbevestigingen sturen",
-		"sendReadReceiptsHint": "Je contact ziet dat je de chat hebt geopend. Afleverbevestigingen gaan nog steeds mee — ze betekenen alleen dat het bericht dit apparaat heeft bereikt."
+		"sendReadReceiptsHint": "Je contact ziet dat je de chat hebt geopend. Afleverbevestigingen gaan nog steeds mee — ze betekenen alleen dat het bericht dit apparaat heeft bereikt.",
+		"pushBackground": {
+			"title": "Meldingen op de achtergrond",
+			"hint": "Ontvang meldingen van nieuwe berichten en oproepen, ook als Ugolok gesloten is",
+			"enableLabel": "Achtergrondmeldingen inschakelen",
+			"actionError": "Mislukt — probeer het opnieuw",
+			"batteryLabel": "Geen batterijbeperkingen",
+			"notificationsLabel": "Meldingen toegestaan",
+			"fullScreenLabel": "Volledig scherm voor oproepen toegestaan",
+			"runningLabel": "Verbinding actief",
+			"fixButton": "Oplossen",
+			"lastConnectedLabel": "Laatste verbinding",
+			"neverConnected": "nooit",
+			"autostartTitle": "Automatisch starten",
+			"autostartHint": "Op sommige telefoons (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) sluit het systeem zelf achtergrond-apps af om de batterij te sparen. Sta Ugolok toe om op de achtergrond te draaien en automatisch te starten in de instellingen van de fabrikant, zodat meldingen betrouwbaar aankomen.",
+			"openAutostartButton": "Instellingen voor automatisch starten openen",
+			"privacyExplanation": "De meldingenserver weet alleen het moment waarop een bericht of oproep binnenkomt — net als een gewone relayserver. Hij ziet nooit de tekst, de afzender of de inhoud.",
+			"unlockLimitation": "Als het systeem de app uit het geheugen heeft verwijderd, moet u bij het aantikken van een melding opnieuw uw wachtwoord invoeren — een oproep kan eindigen voordat u klaar bent met typen.",
+			"onboardingToastTitle": "Meldingen op de achtergrond",
+			"onboardingToastBody": "Ontvang meldingen van berichten en oproepen, ook als Ugolok gesloten is. Tik om in te stellen."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profiel en hoofdmenu",
@@ -140,7 +171,9 @@
 		"unreadAriaLabel": "ongelezen: {{count}}",
 		"searchLabel": "Search chats and channels",
 		"searchPlaceholder": "Search chats and channels",
-		"discoverHeading": "Ontdekken",
+		"discoverHeading": "Wie is er",
+		"discoverHintVisible": "Zichtbaar tot {{time}}",
+		"discoverHintHidden": "Niet zichtbaar",
 		"addContact": "Contact toevoegen",
 		"emptyTitle": "Nog leeg",
 		"emptyBody": "Niemand in je lijst. Kijk bij „Ontdekken“ — daar zijn mensen die open staan om kennis te maken.",
@@ -160,7 +193,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Geminimaliseerd — tik om terug te keren",
-		"serviceUnavailable": "dienst niet beschikbaar"
+		"serviceUnavailable": "dienst niet beschikbaar",
+		"copyAddress": "Adres kopiëren",
+		"sectionTalk": "Gesprek",
+		"sectionServices": "Diensten",
+		"sectionMore": "Meer",
+		"navChats": "Chats",
+		"navRequests": "Verzoeken",
+		"navNetwork": "Netwerk"
 	},
 	"unlock": {
 		"checking": "Bezig met controleren…",
@@ -521,7 +561,9 @@
 			"publishingButton": "Publiceren…",
 			"publishButton": "Publiceren",
 			"tooLongError": "Tekst te lang (limiet: {{max}} tekens)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nieuw bericht",
+			"editPostHeading": "Bericht bewerken"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nieuwe reactie",
@@ -552,7 +594,7 @@
 		"tabsAriaLabel": "Kanaalonderdelen",
 		"tabs": {
 			"posts": "Berichten",
-			"chat": "Chat",
+			"chat": "Kanaalchat",
 			"moderation": "Moderatie",
 			"editChannelWithName": "Kanaal ‘{{name}}’ bewerken",
 			"settings": "Settings"
@@ -600,6 +642,12 @@
 		"showPermissions": "Rechten",
 		"blockAction": "Blokkeren",
 		"removeFromGroupAria": "Verwijderen uit groep {{name}}",
+		"removeDialog": {
+			"title": "Contact “{{name}}” verwijderen?",
+			"body": "Je kunt ook het gesprek met deze persoon verwijderen: het verdwijnt voorgoed uit je chatlijst op dit apparaat en komt na een herstart niet terug. De ander houdt zijn eigen kopie.",
+			"withChat": "Contact en gesprek verwijderen",
+			"contactOnly": "Alleen contact verwijderen"
+		},
 		"addToGroupLabel": "naar groep",
 		"noContactsAtAll": "Je hebt nog geen contacten.",
 		"noContactsInGroups": "Geen enkel contact behoort tot de geselecteerde groepen.",
@@ -615,7 +663,19 @@
 		"addAnywayButton": "Toch toevoegen",
 		"blockedSummary": "Geblokkeerd",
 		"unblockButton": "Deblokkeren",
-		"noBlocked": "Geen geblokkeerde contacten."
+		"noBlocked": "Geen geblokkeerde contacten.",
+		"card": {
+			"aria": "Contactkaart: {{name}}",
+			"openAria": "Contactkaart van {{name}} openen",
+			"lastSeen": "Laatst online: {{when}}",
+			"openChat": "Chat openen",
+			"about": "Over",
+			"noAbout": "Deze persoon heeft nog niets over zichzelf geschreven.",
+			"details": "Details",
+			"contactSince": "In contacten sinds",
+			"profileUpdated": "Profiel bijgewerkt",
+			"key": "Sleutel"
+		}
 	},
 	"chat": {
 		"list": {
@@ -629,7 +689,13 @@
 			"backToChatsButton": "Terug naar chatlijst",
 			"toLabel": "Aan",
 			"attachmentsLabel": "Bijlagen",
-			"composeInvalidRecipient": "Kies een ontvanger uit je contacten"
+			"composeInvalidRecipient": "Kies een ontvanger uit je contacten",
+			"deleteAria": "Gesprek met {{name}} verwijderen",
+			"deleteDialog": {
+				"title": "Gesprek met {{name}} verwijderen?",
+				"body": "Het gesprek wordt definitief van dit apparaat verwijderd. De ander krijgt geen melding en houdt zijn eigen kopie. Als een van jullie opnieuw schrijft, verschijnt de chat weer in de lijst.",
+				"confirm": "Gesprek verwijderen"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Gesprek wissen",
@@ -698,7 +764,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Video openen {{name}}",
 		"openAudioAria": "Audio openen {{name}}",
@@ -714,7 +781,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "De sleutel van de opgeslagen kopie is niet gevonden."
 	},
 	"media": {
 		"buttons": {
@@ -735,7 +803,9 @@
 			"repeatOff": "Herhalen: uit",
 			"repeatAll": "Herhalen: alles",
 			"repeatOne": "Herhalen: één",
-			"autoplay": "Automatisch afspelen"
+			"autoplay": "Automatisch afspelen",
+			"zoomIn": "Inzoomen",
+			"zoomOut": "Uitzoomen"
 		},
 		"classNames": {
 			"audio": "audio",
@@ -839,7 +909,20 @@
 		"pasteInto": "Plakken",
 		"pasteHere": "Hier plakken",
 		"clipboardCopied": "Gekopieerd: {{count}}",
-		"clipboardCut": "Geknipt: {{count}}"
+		"clipboardCut": "Geknipt: {{count}}",
+		"freedFromServer": "Van de server verwijderd",
+		"freedOpenHint": "“{{name}}” is van de server vrijgemaakt en gaat niet meer open. Haal het uit de lijst als je het niet nodig hebt.",
+		"shareProgress": "Kopiëren voor lezers: bestand {{done}} van {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Bestanden voor lezers voorbereiden…",
+		"columnPreview": "Pictogram",
+		"columnName": "Naam",
+		"columnType": "Type",
+		"columnActions": "Acties",
+		"columnSelect": "Selectie",
+		"columnSize": "Grootte",
+		"columnAccess": "Toegang",
+		"kindFolder": "Map",
+		"sortBy": "Sorteren op: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -913,7 +996,7 @@
 		"photoAlt": "Profielfoto",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Bestanden",
-		"menuProfile": "Mijn profiel",
+		"menuProfile": "Avatar of bio",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Sleutel en herstel",
@@ -1172,11 +1255,15 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Dit contact heeft te veel apparaten om een uitnodiging in één bericht te versturen. Probeer het later nog eens."
+		"welcomeTooLargeForDeviceCount": "Dit contact heeft te veel apparaten om een uitnodiging in één bericht te versturen. Probeer het later nog eens.",
+		"blobGone": "Het bestand is niet meer beschikbaar op de server (mogelijk is het van de server vrijgemaakt).",
+		"fileTooLargeForServer": "“{{name}}” is {{size}}, maar de server accepteert bestanden tot {{max}}.",
+		"quotaExceeded": "Niet genoeg ruimte voor “{{name}}”: {{need}} nodig, {{free}} vrij.",
+		"storageReadonly": "De opslag is nu alleen-lezen: nieuwe bestanden uploaden kan niet. Alles wat al is geüpload blijft openen."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
-		"exitButton": "Back",
+		"exitButton": "Verlaten",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
 		"closeAria": "Close and end the call",
@@ -1206,6 +1293,7 @@
 			"chatPlaceholder": "Message…",
 			"sendButton": "Send",
 			"copyInviteAria": "Copy invite link",
+			"inviteHint": "Link naar de kamer. Stuur hem naar mensen die je wilt uitnodigen — daarmee kunnen ze meedoen en hier chatten.",
 			"inviteCopiedStatus": "Copied",
 			"inviteCopyFailedStatus": "Couldn't copy — select and copy manually",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
@@ -1314,5 +1402,123 @@
 			"share": "Share",
 			"clear": "Clear recording"
 		}
+	},
+	"storage": {
+		"title": "Opslag",
+		"hint": "Hoeveel ruimte je geüploade bestanden op de server innemen en wat je kunt vrijmaken.",
+		"loading": "Laden…",
+		"empty": "Je hebt nog niets geüpload.",
+		"serverFailed": "Kon geen gegevens van de server ophalen.",
+		"retry": "Opnieuw proberen",
+		"usedTitle": "In gebruik op de server",
+		"usedValue": "{{size}} · bestanden: {{count}}",
+		"byPurposeTitle": "Per plek",
+		"byKindTitle": "Per type",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Groepen",
+			"channel": "Kanalen",
+			"files": "Bestanden",
+			"share": "Gedeelde mappen",
+			"avatar": "Avatars",
+			"unknown": "Nog zonder naam"
+		},
+		"kind": {
+			"image": "Foto’s",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Documenten",
+			"other": "Overig",
+			"unknown": "Nog zonder naam"
+		},
+		"listTitle": "Grootste uploads",
+		"showMore": "Meer tonen",
+		"unnamed": "Bestand zonder naam",
+		"unknownEntry": "Bestand geüpload op {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "verzonden naar: {{count}}",
+		"journalLoading": "Bestandsnamen laden…",
+		"journalPartial": "Bestandsnamen zijn maar gedeeltelijk geladen — sommige bestanden worden zonder naam getoond.",
+		"journalMore": "Meer namen laden",
+		"journalFailed": "Kon de bestandsnamen niet van het netwerk laden. De groottes kloppen, maar sommige namen kunnen ontbreken.",
+		"reconcile": {
+			"button": "Vergelijken met de server",
+			"running": "Vergelijken…",
+			"needFull": "Nog niet alle bestandsnamen zijn geladen. Probeer opnieuw — anders kunnen echte bestanden onherkend lijken.",
+			"clean": "Alles op de server is verantwoord.",
+			"unknownTitle": "Onherkende bestanden: {{count}} · {{size}}",
+			"unknownRange": "Geüpload {{from}} – {{to}}",
+			"unknownHint": "De server heeft deze bestanden, maar je logboek niet. Ze horen mogelijk bij oude berichten — na verwijderen kunnen ze niet meer worden geopend.",
+			"deleteUnknown": "Alle onherkende verwijderen",
+			"confirmBody": "{{count}} onherkende bestanden ({{size}}) van de server verwijderen? Dit kan niet ongedaan worden gemaakt.",
+			"missingTitle": "In het logboek maar niet op de server: {{count}}",
+			"forgetMissing": "Uit logboek verwijderen"
+		},
+		"free": {
+			"button": "Ruimte vrijmaken",
+			"title": "Ruimte vrijmaken",
+			"body": "“{{name}}” ({{size}}) wordt van de server gewist.",
+			"usage": "Het is naar {{count}} plekken verzonden: het kan niet meer worden geopend door wie het nog niet heeft gedownload.",
+			"usageNone": "Voor dit bestand is geen verzending vastgelegd.",
+			"limit": "Wat ontvangers al hebben gedownload, blijft bij hen. Dit kan niet ongedaan worden gemaakt.",
+			"filesNote": "Het item in “Bestanden”, als dat er is, gaat ook naar de prullenbak.",
+			"confirm": "Ruimte vrijmaken",
+			"cancel": "Annuleren",
+			"working": "Verwijderen… {{done}} van {{total}}",
+			"done": "Ruimte vrijgemaakt.",
+			"failed": "{{count}} bestanden konden niet worden verwijderd. Probeer het later opnieuw.",
+			"sharedCopy": "Dit bestand staat in een gedeelde map. Het opent niet meer voor de lezers van die map.",
+			"sharedOriginal": "Dit bestand staat in een gedeelde map. Wie al toegang heeft, houdt het, maar voor nieuwe lezers opent het niet."
+		},
+		"journalPublishFailed": "Het uploadlogboek bereikt de relay niet: {{reason}}. Je bestanden worden hier niet door geraakt, maar op andere apparaten verschijnen geen namen.",
+		"quota": {
+			"unlimited": "Op deze server is er geen ruimtelimiet.",
+			"barAria": "Gebruikte opslag",
+			"usedOfLimit": "{{used}} van {{limit}} gebruikt",
+			"warning": "Het wordt krap: nog {{free}} vrij.",
+			"full": "De opslag is vol. Maak ruimte vrij of haal meer op om nieuwe bestanden te uploaden.",
+			"readonly": "De opslag is alleen-lezen: nieuwe bestanden uploaden kan niet, alles wat al is geüpload blijft openen.",
+			"getMore": "Meer ruimte krijgen",
+			"plansLink": "Abonnementen en hoe je meer ruimte krijgt"
+		},
+		"notice": {
+			"readonly": "De opslag is alleen-lezen: nieuwe bestanden uploaden kan niet.",
+			"full": "De opslag is vol: nieuwe bestanden uploaden kan niet.",
+			"warning": "Nog maar {{free}} van {{limit}} over.",
+			"toStorage": "Opslag openen",
+			"toPlans": "Meer ruimte krijgen"
+		},
+		"serverLabel": "Opslagserver: {{server}}",
+		"filesCount": "Bestanden: {{count}}"
+	},
+	"plans": {
+		"title": "Opslagabonnementen",
+		"intro": "Ruimte op de server wordt per sleutel geteld: alles wat je uploadt telt mee — bestanden, voorvertoningen, avatars.",
+		"yourUsage": "Je gebruikt {{used}} van {{limit}}.",
+		"free": {
+			"name": "Gratis",
+			"size": "1 GB",
+			"desc": "Genoeg voor chats en alledaagse bestanden."
+		},
+		"paid": {
+			"name": "Uitgebreid",
+			"size": "100 GB",
+			"price": "5 $ per maand",
+			"desc": "Voor foto’s, video en een archief."
+		},
+		"how": {
+			"title": "Zo krijg je meer ruimte",
+			"text": "Betalen gaat voorlopig handmatig. Schrijf naar {{email}} en vermeld hieronder je openbare sleutel (npub) — wij voegen de ruimte toe en antwoorden.",
+			"write": "Schrijf naar support",
+			"note": "Je openbare sleutel kun je gerust delen: hij vertelt ons alleen aan wie we de ruimte geven."
+		},
+		"mailSubject": "Meer opslagruimte",
+		"mailBody": "Hallo! Geef alsjeblieft meer ruimte aan mijn sleutel: {{npub}}",
+		"back": "Terug naar opslag"
+	},
+	"webviewOutdated": {
+		"title": "Werk Android System WebView bij",
+		"body": "{{appName}} gebruikt moderne browserfuncties die je geïnstalleerde versie van Android System WebView nog niet ondersteunt. Werk deze bij via Google Play om door te gaan.",
+		"updateButton": "Bijwerken in Google Play"
 	}
 }

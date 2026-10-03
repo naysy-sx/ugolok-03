@@ -1,6 +1,49 @@
 import { useId } from "preact/hooks";
 import IconNavPrev from "../icons/nav-prev.jsx";
+import { place } from "../signals/place.js";
+import IconChatBubble from "../icons/chat-bubble.jsx";
+import IconActivityLog from "../icons/activity-log.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconPersonAdd from "../icons/person-add.jsx";
+import IconWave from "../icons/wave.jsx";
+import IconHash from "../icons/hash.jsx";
+import IconFolder from "../icons/folder.jsx";
+import IconGear from "../icons/gear.jsx";
+import IconLockClosed from "../icons/lock-closed.jsx";
+import IconHelpCircle from "../icons/help-circle.jsx";
+import IconServer from "../icons/server.jsx";
 import { t } from "../signals/i18n.js";
+
+// Иконка заголовка корневого экрана — та же, что у его пункта в главном меню
+// (nav-groups.jsx): человек видит одну и ту же картинку в меню и над содержимым.
+function titleIconFor(current) {
+	switch (current.kind) {
+		case "journal":
+			return IconActivityLog;
+		case "chat":
+			return IconChatBubble;
+		case "people":
+			return current.section === "requests" ? IconPersonAdd : IconPerson;
+		case "discovery":
+			return IconWave;
+		case "channels":
+			return IconHash;
+		case "storage":
+			return IconFolder;
+		case "settings":
+			return IconGear;
+		case "profile":
+			return IconPerson;
+		case "security":
+			return IconLockClosed;
+		case "help":
+			return IconHelpCircle;
+		case "diagnostics":
+			return IconServer;
+		default:
+			return null;
+	}
+}
 
 // Общий каркас внутреннего экрана (обсуждён с пользователем) — закреплённая
 // шапка (кнопка "назад" + заголовок + действия раздела) и опциональный
@@ -28,6 +71,8 @@ import { t } from "../signals/i18n.js";
 // что, кроме чата, не влияет.
 export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra, actions, slices, footer, feed, anchored, children }) {
 	const titleId = useId();
+	// Иконка — только на корневых экранах: у экрана с «назад» или аватаром есть свой опознавательный знак.
+	const TitleIcon = breadcrumb || lead ? null : titleIconFor(place.value);
 
 	return (
 		<section class="content-section stack">
@@ -53,7 +98,10 @@ export default function Screen({ breadcrumb, title, subtitle, lead, headerExtra,
 				)}
 				{lead && <div class="header-lead">{lead}</div>}
 				<div class="screen-title">
-					<h1 id={titleId} class="screen-title__text">{title}</h1>
+					<h1 id={titleId} class="screen-title__text">
+							{TitleIcon && <TitleIcon class="icon screen-title__icon" aria-hidden="true" />}
+							<span class="screen-title__label">{title}</span>
+						</h1>
 					{subtitle && <div class="screen-title__sub">{subtitle}</div>}
 				</div>
 				{actions && (

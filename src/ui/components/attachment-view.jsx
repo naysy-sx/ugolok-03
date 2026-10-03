@@ -6,25 +6,29 @@ import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-previ
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
 import { currentUser, dbKeySig, privKeySig } from "../signals/auth.js";
 import { publish } from "../signals/transport.js";
-import { initFiles, createFileEntry } from "../signals/files.js";
+import { initFiles, createFileEntry, treeState, getFileKeyFor } from "../signals/files.js";
+import { prepareOwnCopy } from "../../domain/files/copy-attachment.js";
 import { PreconditionError } from "../../domain/files/ops.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { setMediaOrigin } from "../signals/media-origin.js";
+import { getPlatform } from "../../platform/index.js";
 import IconMusicNote from "../icons/music-note.jsx";
 import IconVideoCamera from "../icons/video-camera.jsx";
 import IconFileText from "../icons/file-text.jsx";
 import IconImage from "../icons/image-icon.jsx";
 import IconFolder from "../icons/folder.jsx";
+import IconCheck from "../icons/check.jsx";
+import IconDownload from "../icons/download.jsx";
+import { pushToast } from "../signals/toasts.js";
 import { t, tPlural, errorMessage } from "../signals/i18n.js";
 import { truncateFileName } from "./bubble-attachment-plan.js";
 import { pickIndicator } from "../../domain/media/progress-indicator.js";
 import { reservedBoxStyle } from "./attachment-box.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 // Этап 53 И7 7.4 — дескриптор вложения больше не несёт СВОЙ blossomUrl (старая
 // форма, на сервер, куда конкретно загружено); manifestDigest/fileKey читаются
 // через content.js — тот же ОДИН сконфигурированный Blossom-сервер, что везде
 // в разделе "Файлы" (files.jsx/file-player.jsx), не per-вложение URL.
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function base64ToBytes(str) {
 	return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -102,7 +106,7 @@ export function ImageAttachment({ attachment, onOpen, reserve = true }) {
 		// оригинала — ровно как до этой задачи, ни строки поведения не меняется.
 		async function load() {
 			if (attachment.previewDigest) {
-				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() });
 				if (cancelled) return;
 				if (previewUrl) {
 					setUrl(previewUrl);
@@ -120,7 +124,7 @@ export function ImageAttachment({ attachment, onOpen, reserve = true }) {
 					// onDownload (MEDIA-PERF-TZ-6.md §8.2) уходит в getRange как
 					// onProgress через тот же options-мешок — процент из фактических
 					// байтов, без выдумывания.
-					(trace, onDownload) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL, trace, onProgress: onDownload }),
+					(trace, onDownload) => getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget(), trace, onProgress: onDownload }),
 					undefined,
 					(p) => {
 						if (!cancelled) setProgress(p);
@@ -206,7 +210,7 @@ function AudioAttachment({ attachment, onOpen }) {
 			return;
 		}
 		let cancelled = false;
-		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL })
+		getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget() })
 			.then((bytes) => {
 				if (cancelled) return;
 				setUrl(putMemoryCachedAttachment(attachment.manifestDigest, bytes, attachment.mime));
@@ -330,22 +334,41 @@ function FileAttachment({ attachment }) {
 // — идемпотентный бутстрап (тот же вызов, что file-picker.jsx) — вложение
 // может открываться, даже если "Файлы"/FilePicker ни разу не открывались за
 // сессию, без него createFileEntry писал бы под cachedOwnerPubkey===null.
-function base64ToFileKeyBytes(fileKeyBase64) {
-	return Uint8Array.from(atob(fileKeyBase64), (c) => c.charCodeAt(0));
-}
-
-export function AttachmentSaveButton({ attachment, origin, menu = false }) {
+export function AttachmentSaveButton({ attachment, origin, menu = false, iconOnly = false }) {
 	const [status, setStatus] = useState("idle"); // idle | busy | done | error
 	const [error, setError] = useState("");
 
+	// ТЗ-03, раздел 7: «Сохранить к себе» — настоящая копия (своя заливка, своя квота), а не
+	// ссылка на блоб автора. Повторное нажатие дублей не плодит: журнал помнит, что этот
+	// исходный манифест уже копировали.
 	async function handleSave() {
 		setStatus("busy");
 		setError("");
 		try {
 			const ownerPubkey = currentUser.value.id;
 			await initFiles(ownerPubkey, privKeySig.value, publish);
-			const fileKeyBytes = base64ToFileKeyBytes(attachment.fileKey);
-			const op = await createFileEntry(attachmentDisplayName(attachment) || attachment.name, attachment.manifestDigest, fileKeyBytes, origin, attachment.mime);
+			const name = attachmentDisplayName(attachment) || attachment.name;
+			const res = await prepareOwnCopy({ attachment, name, serverUrl: uploadTarget(), privateKey: privKeySig.value });
+
+			if (res.kind === "existing") {
+				// Копия уже залита. Если в «Файлах» есть живой узел на неё — ничего не делаем;
+				// если узел удалили — заводим заново на ТОТ ЖЕ блоб (ключ хранится у нас).
+				const hasNode = [...treeState.value.nodes.values()].some((n) => n.kind === "file" && n.blob === res.manifestDigest && n.par?.value !== "$trash");
+				if (!hasNode) {
+					const key = await getFileKeyFor(res.manifestDigest);
+					if (!key) throw new Error(t("attachment.copyKeyMissing"));
+					const op = await createFileEntry(name, res.manifestDigest, key, origin, attachment.mime);
+					if (op instanceof PreconditionError) {
+						setError(errorMessage(op));
+						setStatus("error");
+						return;
+					}
+				}
+				setStatus("done");
+				return;
+			}
+
+			const op = await createFileEntry(res.name, res.manifestDigest, res.fileKey, origin, res.mime ?? attachment.mime);
 			if (op instanceof PreconditionError) {
 				setError(errorMessage(op));
 				setStatus("error");
@@ -361,6 +384,22 @@ export function AttachmentSaveButton({ attachment, origin, menu = false }) {
 	const saveLabel = menu
 		? t("attachment.saveNamed", { name: truncateFileName(attachmentDisplayName(attachment)) })
 		: t("attachment.saveToStorage");
+
+	// Полноэкранный просмотр: кнопка-иконка, итог — тостом (места для строки статуса нет).
+	useEffect(() => {
+		if (!iconOnly) return;
+		if (status === "done") pushToast({ title: t("attachment.savedToStorage") });
+		if (status === "error" && error) pushToast({ title: error });
+	}, [status]);
+
+	if (iconOnly) {
+		const label = status === "busy" ? t("attachment.saving") : t("attachment.saveToStorage");
+		return (
+			<button type="button" class="media-overlay-btn" onClick={handleSave} disabled={status === "busy" || status === "done"} aria-label={label} title={label}>
+				{status === "done" ? <IconCheck aria-hidden="true" /> : <IconFolder aria-hidden="true" />}
+			</button>
+		);
+	}
 
 	if (status === "done") {
 		return (
@@ -416,7 +455,7 @@ export function CollectionTile({ attachment, onOpen }) {
 		let cancelled = false;
 		(async () => {
 			if (attachment.previewDigest) {
-				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_URL });
+				const previewUrl = await resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() });
 				if (!cancelled && previewUrl) {
 					setThumb({ digest, url: previewUrl });
 					return;
@@ -429,7 +468,7 @@ export function CollectionTile({ attachment, onOpen }) {
 					attachment.mime,
 					(trace) =>
 						getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, {
-							serverUrl: BLOSSOM_URL,
+							serverUrl: uploadTarget(),
 							trace,
 						}),
 				);
@@ -527,7 +566,7 @@ export default function AttachmentView({ attachment, onOpen, origin }) {
 // используется message-bubble.jsx в футере сообщения, ДО кнопки "Удалить".
 // Формат: {{иконка типа}} Скачать {{имя}} ({{размер}}). voiceInline (F-AT-08,
 // ≤32КБ) декодируется прямо из payload, без сети — как AudioAttachment.
-export function AttachmentDownloadLink({ attachment, menu = false }) {
+export function AttachmentDownloadLink({ attachment, menu = false, iconOnly = false }) {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const Icon = FILE_TYPE_ICONS[attachment.type] || IconFileText;
@@ -542,18 +581,27 @@ export function AttachmentDownloadLink({ attachment, menu = false }) {
 		try {
 			const bytes = attachment.voiceInline
 				? base64ToBytes(attachment.voiceInline)
-				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_URL });
-			const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mime }));
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = attachmentDisplayName(attachment) || "file";
-			a.click();
-			URL.revokeObjectURL(url);
+				: await getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget() });
+			await getPlatform().files.saveAs({
+				name: attachmentDisplayName(attachment) || "file",
+				mime: attachment.mime,
+				data: bytes,
+			});
 		} catch (err) {
 			setError(errorMessage(err));
+			if (iconOnly) pushToast({ title: errorMessage(err) });
 		} finally {
 			setBusy(false);
 		}
+	}
+
+	if (iconOnly) {
+		const iconLabel = busy ? t("attachment.downloading") : t("attachment.download");
+		return (
+			<button type="button" class="media-overlay-btn" onClick={handleDownload} disabled={busy} aria-label={iconLabel} title={iconLabel}>
+				<IconDownload aria-hidden="true" />
+			</button>
+		);
 	}
 
 	return (

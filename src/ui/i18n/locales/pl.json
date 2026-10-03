@@ -46,6 +46,12 @@
 			"default": "(domyślne)"
 		},
 		"scaleLabel": "Skala interfejsu",
+		"scale": {
+			"small": "Mały (90%)",
+			"medium": "Średni (100%)",
+			"large": "Duży (110%)",
+			"xlarge": "Bardzo duży (125%)"
+		},
 		"accentColorTitle": "Kolor akcentu",
 		"paletteCustomizeButton": "Dostosuj",
 		"paletteHueLabel": "Odcień",
@@ -65,7 +71,11 @@
 			"amethyst": "Ametystowy",
 			"magenta": "Karmazynowy",
 			"fuchsia": "Fuksja",
-			"pink": "Różowy"
+			"pink": "Różowy",
+			"terracotta": "Terakota",
+			"steel": "Stal",
+			"sand": "Piasek",
+			"ink": "Atrament"
 		},
 		"notificationsTitle": "Powiadomienia",
 		"enableNotifications": "Włącz powiadomienia",
@@ -110,7 +120,8 @@
 			"view": "Widok",
 			"notifications": "Powiadomienia",
 			"network": "Sieć",
-			"session": "Sesja"
+			"session": "Sesja",
+			"storage": "Pamięć"
 		},
 		"viewSectionHint": "Kolor akcentu określa całą paletę — tło, powierzchnie i obramowania są od niego zależne.",
 		"themeLabel": "Motyw",
@@ -131,7 +142,27 @@
 		"perfLogCopied": "Skopiowano do schowka",
 		"perfLogManualHint": "Schowek niedostępny — zaznacz i skopiuj ręcznie",
 		"sendReadReceiptsLabel": "Wysyłaj potwierdzenia odczytu",
-		"sendReadReceiptsHint": "Kontakt zobaczy, że otworzyłeś rozmowę. Potwierdzenia dostarczenia i tak wychodzą — znaczą tylko, że wiadomość dotarła na to urządzenie."
+		"sendReadReceiptsHint": "Kontakt zobaczy, że otworzyłeś rozmowę. Potwierdzenia dostarczenia i tak wychodzą — znaczą tylko, że wiadomość dotarła na to urządzenie.",
+		"pushBackground": {
+			"title": "Powiadomienia w tle",
+			"hint": "Otrzymuj powiadomienia o nowych wiadomościach i połączeniach, nawet gdy Ugolok jest zamknięty",
+			"enableLabel": "Włącz powiadomienia w tle",
+			"actionError": "Coś poszło nie tak — spróbuj ponownie",
+			"batteryLabel": "Brak ograniczeń baterii",
+			"notificationsLabel": "Powiadomienia dozwolone",
+			"fullScreenLabel": "Pełnoekranowe wyświetlanie połączeń dozwolone",
+			"runningLabel": "Połączenie aktywne",
+			"fixButton": "Napraw",
+			"lastConnectedLabel": "Ostatnie połączenie",
+			"neverConnected": "nigdy",
+			"autostartTitle": "Autostart",
+			"autostartHint": "Na niektórych telefonach (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) system sam zamyka aplikacje działające w tle, aby oszczędzać baterię. Aby powiadomienia docierały niezawodnie, zezwól Ugolokowi na działanie w tle i automatyczne uruchamianie w ustawieniach producenta.",
+			"openAutostartButton": "Otwórz ustawienia autostartu",
+			"privacyExplanation": "Serwer powiadomień zna jedynie moment nadejścia wiadomości lub połączenia — tak samo jak zwykły serwer przekaźnikowy. Nigdy nie widzi treści, nadawcy ani zawartości.",
+			"unlockLimitation": "Jeśli system usunął aplikację z pamięci, dotknięcie powiadomienia będzie wymagało ponownego wpisania hasła — połączenie może się zakończyć, zanim skończysz je wpisywać.",
+			"onboardingToastTitle": "Powiadomienia w tle",
+			"onboardingToastBody": "Otrzymuj powiadomienia o wiadomościach i połączeniach, nawet gdy Ugolok jest zamknięty. Dotknij, aby skonfigurować."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profil i menu główne",
@@ -140,7 +171,9 @@
 		"unreadAriaLabel": "nieprzeczytane: {{count}}",
 		"searchLabel": "Search chats and channels",
 		"searchPlaceholder": "Search chats and channels",
-		"discoverHeading": "Poznaj",
+		"discoverHeading": "Kto tu jest",
+		"discoverHintVisible": "Widoczny do {{time}}",
+		"discoverHintHidden": "Niewidoczny",
 		"addContact": "Dodaj kontakt",
 		"emptyTitle": "Na razie pusto",
 		"emptyBody": "Nikogo nie ma na liście. Zajrzyj do „Poznaj” — tam są ludzie otwarci na poznanie.",
@@ -160,7 +193,14 @@
 		"quickConnect": "Quick Connect",
 		"quickConnectHint": "conversation without an account",
 		"quickConnectActiveHint": "Zminimalizowane — dotknij, aby wrócić",
-		"serviceUnavailable": "usługa niedostępna"
+		"serviceUnavailable": "usługa niedostępna",
+		"copyAddress": "Kopiuj adres",
+		"sectionTalk": "Rozmowy",
+		"sectionServices": "Usługi",
+		"sectionMore": "Więcej",
+		"navChats": "Czaty",
+		"navRequests": "Prośby",
+		"navNetwork": "Sieć"
 	},
 	"unlock": {
 		"checking": "Sprawdzanie…",
@@ -521,7 +561,9 @@
 			"publishingButton": "Publikowanie…",
 			"publishButton": "Opublikuj",
 			"tooLongError": "Tekst zbyt długi (limit: {{max}} znaków)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "Nowy wpis",
+			"editPostHeading": "Edycja wpisu"
 		},
 		"commentComposer": {
 			"ariaLabel": "Nowy komentarz",
@@ -552,7 +594,7 @@
 		"tabsAriaLabel": "Sekcje kanału",
 		"tabs": {
 			"posts": "Posty",
-			"chat": "Czat",
+			"chat": "Czat kanału",
 			"moderation": "Moderacja",
 			"editChannelWithName": "Edytuj kanał „{{name}}”",
 			"settings": "Settings"
@@ -600,6 +642,12 @@
 		"showPermissions": "Uprawnienia",
 		"blockAction": "Zablokuj",
 		"removeFromGroupAria": "Usuń z grupy {{name}}",
+		"removeDialog": {
+			"title": "Usunąć kontakt „{{name}}”?",
+			"body": "Możesz też usunąć rozmowę z tą osobą: zniknie z listy czatów na tym urządzeniu na zawsze i nie wróci po ponownym uruchomieniu. Druga osoba zachowa swoją kopię.",
+			"withChat": "Usuń kontakt i rozmowę",
+			"contactOnly": "Usuń tylko kontakt"
+		},
 		"addToGroupLabel": "do grupy",
 		"noContactsAtAll": "Nie masz jeszcze żadnych kontaktów.",
 		"noContactsInGroups": "Żaden kontakt nie należy do wybranych grup.",
@@ -615,7 +663,19 @@
 		"addAnywayButton": "Dodaj mimo to",
 		"blockedSummary": "Zablokowani",
 		"unblockButton": "Odblokuj",
-		"noBlocked": "Brak zablokowanych kontaktów."
+		"noBlocked": "Brak zablokowanych kontaktów.",
+		"card": {
+			"aria": "Karta kontaktu: {{name}}",
+			"openAria": "Otwórz kartę kontaktu {{name}}",
+			"lastSeen": "Ostatnio online: {{when}}",
+			"openChat": "Otwórz czat",
+			"about": "O sobie",
+			"noAbout": "Ta osoba nie napisała jeszcze nic o sobie.",
+			"details": "Szczegóły",
+			"contactSince": "W kontaktach od",
+			"profileUpdated": "Profil zaktualizowany",
+			"key": "Klucz"
+		}
 	},
 	"chat": {
 		"list": {
@@ -629,7 +689,13 @@
 			"backToChatsButton": "Wróć do listy czatów",
 			"toLabel": "Do",
 			"attachmentsLabel": "Załączniki",
-			"composeInvalidRecipient": "Wybierz odbiorcę z listy kontaktów"
+			"composeInvalidRecipient": "Wybierz odbiorcę z listy kontaktów",
+			"deleteAria": "Usuń rozmowę z {{name}}",
+			"deleteDialog": {
+				"title": "Usunąć rozmowę z {{name}}?",
+				"body": "Rozmowa zniknie z tego urządzenia na zawsze. Rozmówca się o tym nie dowie i zachowa swoją kopię. Jeśli któreś z was napisze ponownie, czat znów pojawi się na liście.",
+				"confirm": "Usuń rozmowę"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Wyczyść rozmowę",
@@ -698,7 +764,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Otwórz wideo {{name}}",
 		"openAudioAria": "Otwórz audio {{name}}",
@@ -714,7 +781,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "Nie znaleziono klucza zapisanej kopii."
 	},
 	"media": {
 		"buttons": {
@@ -735,7 +803,9 @@
 			"repeatOff": "Powtarzanie: wyłączone",
 			"repeatAll": "Powtarzanie: wszystko",
 			"repeatOne": "Powtarzanie: jeden",
-			"autoplay": "Autoodtwarzanie"
+			"autoplay": "Autoodtwarzanie",
+			"zoomIn": "Powiększ",
+			"zoomOut": "Pomniejsz"
 		},
 		"classNames": {
 			"audio": "audio",
@@ -839,7 +909,20 @@
 		"pasteInto": "Wklej",
 		"pasteHere": "Wklej tutaj",
 		"clipboardCopied": "Skopiowano: {{count}}",
-		"clipboardCut": "Wycięto: {{count}}"
+		"clipboardCut": "Wycięto: {{count}}",
+		"freedFromServer": "Usunięto z serwera",
+		"freedOpenHint": "„{{name}}” został zwolniony z serwera i już się nie otwiera. Usuń go z listy, jeśli jest niepotrzebny.",
+		"shareProgress": "Kopiuję dla czytelników: plik {{done}} z {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Przygotowuję pliki dla czytelników…",
+		"columnPreview": "Ikona",
+		"columnName": "Nazwa",
+		"columnType": "Typ",
+		"columnActions": "Akcje",
+		"columnSelect": "Wybór",
+		"columnSize": "Rozmiar",
+		"columnAccess": "Dostęp",
+		"kindFolder": "Folder",
+		"sortBy": "Sortuj: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -913,7 +996,7 @@
 		"photoAlt": "Zdjęcie profilowe",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Pliki",
-		"menuProfile": "Mój profil",
+		"menuProfile": "Awatar lub bio",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Klucz i odzyskiwanie",
@@ -1172,11 +1255,15 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "Ten kontakt ma zbyt wiele urządzeń, aby wysłać zaproszenie w jednej wiadomości. Spróbuj ponownie nieco później."
+		"welcomeTooLargeForDeviceCount": "Ten kontakt ma zbyt wiele urządzeń, aby wysłać zaproszenie w jednej wiadomości. Spróbuj ponownie nieco później.",
+		"blobGone": "Plik nie jest już dostępny na serwerze (mógł zostać zwolniony z serwera).",
+		"fileTooLargeForServer": "„{{name}}” ma {{size}}, a serwer przyjmuje pliki do {{max}}.",
+		"quotaExceeded": "Za mało miejsca na „{{name}}”: potrzeba {{need}}, wolne {{free}}.",
+		"storageReadonly": "Pamięć jest teraz tylko do odczytu: nie można wysyłać nowych plików. Wszystko, co już wysłano, nadal się otwiera."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
-		"exitButton": "Back",
+		"exitButton": "Wyjdź",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
 		"closeAria": "Close and end the call",
@@ -1206,6 +1293,7 @@
 			"chatPlaceholder": "Message…",
 			"sendButton": "Send",
 			"copyInviteAria": "Copy invite link",
+			"inviteHint": "Link do pokoju. Wyślij go osobom, które chcesz zaprosić — dzięki niemu dołączą i porozmawiają tutaj.",
 			"inviteCopiedStatus": "Copied",
 			"inviteCopyFailedStatus": "Couldn't copy — select and copy manually",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
@@ -1314,5 +1402,123 @@
 			"share": "Share",
 			"clear": "Clear recording"
 		}
+	},
+	"storage": {
+		"title": "Pamięć",
+		"hint": "Ile miejsca na serwerze zajmują wysłane przez Ciebie pliki i co można zwolnić.",
+		"loading": "Wczytywanie…",
+		"empty": "Nic jeszcze nie wysłano.",
+		"serverFailed": "Nie udało się pobrać danych z serwera.",
+		"retry": "Spróbuj ponownie",
+		"usedTitle": "Zajęte na serwerze",
+		"usedValue": "{{size}} · plików: {{count}}",
+		"byPurposeTitle": "Według miejsca",
+		"byKindTitle": "Według typu",
+		"purpose": {
+			"dm": "Rozmowy",
+			"group": "Grupy",
+			"channel": "Kanały",
+			"files": "Pliki",
+			"share": "Udostępnione foldery",
+			"avatar": "Awatary",
+			"unknown": "Jeszcze bez opisu"
+		},
+		"kind": {
+			"image": "Zdjęcia",
+			"video": "Wideo",
+			"audio": "Audio",
+			"document": "Dokumenty",
+			"other": "Inne",
+			"unknown": "Jeszcze bez opisu"
+		},
+		"listTitle": "Największe wysłane pliki",
+		"showMore": "Pokaż więcej",
+		"unnamed": "Plik bez nazwy",
+		"unknownEntry": "Plik wysłany {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "wysłano do: {{count}}",
+		"journalLoading": "Wczytywanie nazw plików…",
+		"journalPartial": "Nazwy wczytano tylko częściowo — część plików jest widoczna bez nazwy.",
+		"journalMore": "Wczytaj więcej nazw",
+		"journalFailed": "Nie udało się wczytać nazw z sieci. Rozmiary są dokładne, ale części nazw może brakować.",
+		"reconcile": {
+			"button": "Porównaj z serwerem",
+			"running": "Porównuję…",
+			"needFull": "Nie wszystkie nazwy są jeszcze wczytane. Spróbuj ponownie — inaczej prawdziwe pliki mogłyby wyglądać na nierozpoznane.",
+			"clean": "Wszystko, co jest na serwerze, jest ujęte.",
+			"unknownTitle": "Nierozpoznane pliki: {{count}} · {{size}}",
+			"unknownRange": "Wysłane {{from}} – {{to}}",
+			"unknownHint": "Serwer ma te pliki, ale nie ma ich w Twoim dzienniku. Mogą należeć do starych wiadomości — po usunięciu przestaną się otwierać.",
+			"deleteUnknown": "Usuń wszystkie nierozpoznane",
+			"confirmBody": "Usunąć {{count}} nierozpoznanych plików ({{size}}) z serwera? Nie można tego cofnąć.",
+			"missingTitle": "W dzienniku, ale nie na serwerze: {{count}}",
+			"forgetMissing": "Usuń z dziennika"
+		},
+		"free": {
+			"button": "Zwolnij miejsce",
+			"title": "Zwolnij miejsce",
+			"body": "„{{name}}” ({{size}}) zostanie usunięty z serwera.",
+			"usage": "Wysłano go w {{count}} miejsc: przestanie się otwierać u wszystkich, którzy jeszcze go nie pobrali.",
+			"usageNone": "Brak zapisu o wysłaniu tego pliku.",
+			"limit": "To, co odbiorcy już pobrali, zostaje u nich. Nie można tego cofnąć.",
+			"filesNote": "Wpis w „Plikach”, jeśli istnieje, również trafi do kosza.",
+			"confirm": "Zwolnij miejsce",
+			"cancel": "Anuluj",
+			"working": "Usuwanie… {{done}} z {{total}}",
+			"done": "Miejsce zwolnione.",
+			"failed": "Nie udało się usunąć plików: {{count}}. Spróbuj później.",
+			"sharedCopy": "Ten plik jest we wspólnym folderze. Czytelnicy tego folderu nie będą mogli go otworzyć.",
+			"sharedOriginal": "Ten plik jest we wspólnym folderze. Osoby, które już mają dostęp, zachowają go, ale nowi czytelnicy nie otworzą pliku."
+		},
+		"journalPublishFailed": "Dziennik wysyłania nie dociera do przekaźnika: {{reason}}. Twoje pliki nie są dotknięte, ale na innych urządzeniach nie pojawią się nazwy.",
+		"quota": {
+			"unlimited": "Na tym serwerze nie ma limitu miejsca.",
+			"barAria": "Zajęta pamięć",
+			"usedOfLimit": "Zajęte {{used}} z {{limit}}",
+			"warning": "Kończy się miejsce: zostało {{free}}.",
+			"full": "Pamięć jest pełna. Zwolnij miejsce lub zdobądź więcej, aby wysyłać nowe pliki.",
+			"readonly": "Pamięć jest tylko do odczytu: nie można wysyłać nowych plików, wszystko, co już wysłano, nadal się otwiera.",
+			"getMore": "Zdobądź więcej miejsca",
+			"plansLink": "Plany i jak zdobyć więcej miejsca"
+		},
+		"notice": {
+			"readonly": "Pamięć jest tylko do odczytu: nie można wysyłać nowych plików.",
+			"full": "Pamięć jest pełna: nie można wysyłać nowych plików.",
+			"warning": "Zostało tylko {{free}} z {{limit}}.",
+			"toStorage": "Otwórz pamięć",
+			"toPlans": "Zdobądź więcej miejsca"
+		},
+		"serverLabel": "Serwer przechowywania: {{server}}",
+		"filesCount": "Plików: {{count}}"
+	},
+	"plans": {
+		"title": "Plany pamięci",
+		"intro": "Miejsce na serwerze liczy się na klucz: liczy się wszystko, co wysyłasz — pliki, podglądy, awatary.",
+		"yourUsage": "Używasz {{used}} z {{limit}}.",
+		"free": {
+			"name": "Bezpłatny",
+			"size": "1 GB",
+			"desc": "Wystarczy na rozmowy i zwykłe pliki."
+		},
+		"paid": {
+			"name": "Rozszerzony",
+			"size": "100 GB",
+			"price": "5 $ miesięcznie",
+			"desc": "Na zdjęcia, wideo i archiwum."
+		},
+		"how": {
+			"title": "Jak zdobyć więcej miejsca",
+			"text": "Płatności są na razie obsługiwane ręcznie. Napisz na {{email}} i podaj poniżej swój klucz publiczny (npub) — dodamy miejsce i odpiszemy.",
+			"write": "Napisz do wsparcia",
+			"note": "Kluczem publicznym można się dzielić bez obaw: mówi nam tylko, komu przyznać miejsce."
+		},
+		"mailSubject": "Więcej miejsca w pamięci",
+		"mailBody": "Dzień dobry! Proszę o więcej miejsca dla mojego klucza: {{npub}}",
+		"back": "Wróć do pamięci"
+	},
+	"webviewOutdated": {
+		"title": "Zaktualizuj Android System WebView",
+		"body": "{{appName}} korzysta z nowoczesnych funkcji przeglądarki, których zainstalowana wersja Android System WebView jeszcze nie obsługuje. Zaktualizuj ją w Google Play, aby kontynuować.",
+		"updateButton": "Aktualizuj w Google Play"
 	}
 }

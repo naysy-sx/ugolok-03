@@ -1,19 +1,18 @@
 import { useEffect, useState } from "preact/hooks";
 import { acquireMediaUrl } from "../../../domain/media/adapters/media-url.js";
 import { pickIndicator } from "../../../domain/media/progress-indicator.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../../config.js";
 import { t, errorMessage } from "../../signals/i18n.js";
+import { uploadTarget } from "../../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
-// Просмотрщик картинки внутри медиа-сессии (Этап D) — без zoom/swipe, тот
-// же отказ, что уже был у ImageModal (CONTRACTS.md, этап 29: "модалка +
-// кнопка закрыть", без lightbox-библиотеки). Next/prev/закрытие/сворачивание
-// — общий chrome в media-overlay.jsx, этот компонент — только сама картинка.
+// Просмотрщик картинки внутри медиа-сессии (Этап D). Next/prev/закрытие/сворачивание
+// и зум (щипок, колесо, двойной тап, кнопки — use-image-zoom.js) живут в общем chrome
+// media-overlay.jsx; этот компонент — только сама картинка. imgRef получает <img>
+// текущего слайда, чтобы зум мог писать в него transform.
 // acquireMediaUrl — та же мемоизированная функция, что уже вызвал
 // resourceOwner (ui/signals/media.js) — повторный вызов здесь НЕ повторяет
 // сеть/регистрацию, просто дожидается готового handle (CONTRACTS.md "Этап D").
-export default function ImageViewer({ mediaRef, onMeta }) {
+export default function ImageViewer({ mediaRef, onMeta, imgRef }) {
 	// MEDIA-OVERLAY-UI.md, этап 3 — довесок: в ленте (media-overlay-track)
 	// Preact ПЕРЕИСПОЛЬЗУЕТ этот же экземпляр компонента для соседнего слайда
 	// на каждый next/prev (три позиции — три СТАБИЛЬНЫХ инстанса, без key).
@@ -37,7 +36,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 		setError("");
 		setProgress({ phase: "loading", percent: null });
 		acquireMediaUrl(mediaRef, {
-			serverUrl: BLOSSOM_URL,
+			serverUrl: uploadTarget(),
 			// MEDIA-PERF-TZ-4.md §4 A.1 — цель растра оверлея = вьюпорт по большей
 			// стороне (image-preview.js::overlayTargetWidth сам умножает на DPR и
 			// применяет потолок 2560px). Читаем window ЗДЕСЬ (на момент открытия/
@@ -86,6 +85,7 @@ export default function ImageViewer({ mediaRef, onMeta }) {
 	}
 	return (
 		<img
+			ref={imgRef}
 			src={url}
 			alt={mediaRef.name || ""}
 			draggable={false}

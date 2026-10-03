@@ -1,8 +1,21 @@
 import { createSubscriber } from "../transport/subscriber.js";
+import { logWarn } from "../diag/boot-log.js";
 import { mergeEvents } from "./g-set.js";
 import { getSyncState, setSyncState } from "./bootstrap.js";
 
 const CLOCK_SKEW_THRESHOLD_SECONDS = 30;
+
+// Найдено живой проверкой (native/Android, чек-лист §6 ТЗ-NATIVE-APPS, Ворота
+// Э4) — тот же класс бага, что уже закрыт в bootstrap.js's runBootstrap: EOSE
+// на этот REQ тоже иногда не приходит, и т.к. onCaughtUp (который выставляет
+// synced.value = true в transport.js) вызывается ТОЛЬКО из onEose — баннер
+// "Подключение к серверу…"/SyncProgressBar (sync-progress-bar.jsx, держится
+// на !synced.value) висел НАВСЕГДА, даже когда остальной connect() уже давно
+// отработал и приложение полностью функционально. В отличие от bootstrap.js
+// эта подписка НЕ одноразовая (живая, до stop()) — таймаут здесь не завершает
+// подписку, только гарантирует, что onCaughtUp сработает хотя бы раз (best-effort,
+// та же терпимость к частичному сбою, что у bootstrap.js/outbox.drain()).
+const INCREMENTAL_SYNC_EOSE_TIMEOUT_MS = 20000;
 
 // Скоуп этого этапа — TECH.md §12.5, только подпункты (a) validate→G-Set merge→
 // store и обёртка syncState/clock-skew. Расшифровка приватных kind, rebuildCache
@@ -11,6 +24,15 @@ const CLOCK_SKEW_THRESHOLD_SECONDS = 30;
 export async function startIncrementalSync(connection, pubkey, options = {}) {
   const subId = options.subId ?? "incremental-sync";
   const since = (await getSyncState(connection.getUrl())) ?? 0;
+  let caughtUp = false;
+  let timer;
+
+  function markCaughtUp() {
+    if (caughtUp) return;
+    caughtUp = true;
+    clearTimeout(timer);
+    options.onCaughtUp?.();
+  }
 
   const subscriber = createSubscriber(connection, {
     verifyBatch: options.verifyBatch,
@@ -32,15 +54,22 @@ export async function startIncrementalSync(connection, pubkey, options = {}) {
       // строкой, "устаревший" мог записаться последним и откатить состояние.
       await options.onEvent?.(addedIds.length);
     },
-    onEose: () => {
-      options.onCaughtUp?.();
-    },
+    onEose: markCaughtUp,
   });
 
   connection.addMessageHandler(subscriber.handleMessage);
   subscriber.subscribe(subId, [{ authors: [pubkey], since }]);
 
+  timer = setTimeout(() => {
+    logWarn(`incremental-sync: нет EOSE за ${options.caughtUpTimeoutMs ?? INCREMENTAL_SYNC_EOSE_TIMEOUT_MS}мс — считаю синхронизацию догнанной`);
+    markCaughtUp();
+  }, options.caughtUpTimeoutMs ?? INCREMENTAL_SYNC_EOSE_TIMEOUT_MS);
+  if (typeof timer?.unref === "function") timer.unref();
+
   return {
-    stop: () => subscriber.unsubscribe(subId),
+    stop: () => {
+      clearTimeout(timer);
+      subscriber.unsubscribe(subId);
+    },
   };
 }

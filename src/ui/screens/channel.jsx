@@ -9,7 +9,7 @@ import { groups, refreshGroups } from "../signals/contacts.js";
 import { place, goTo, openChannel } from "../signals/place.js";
 import { editChannel, deleteChannel } from "../../domain/content/channel.js";
 import { addVisibilityGroup, removeVisibilityGroup, listChannelVisibilityGroupIds } from "../../domain/content/channel-visibility.js";
-import { loadPostsWindow } from "../../core/sync/lazy-channel.js";
+import { loadPostsWindow, countChannelContent } from "../../core/sync/lazy-channel.js";
 import { countCommentsByPost } from "../../domain/content/comments.js";
 import { listReactionsForTargets, aggregateReactions } from "../../domain/content/reactions.js";
 import { refFromAttachment, classOf } from "../../domain/media/media-ref.js";
@@ -19,7 +19,6 @@ import AttachmentSlices from "../components/media/attachment-slices.jsx";
 import { createRateLimiter } from "../../domain/content/rate-limiter.js";
 import { validateAttachment } from "../../domain/files/attachment-validation.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import ChannelChat from "../components/channel-chat.jsx";
 import ChannelComposer from "../components/channel-composer.jsx";
 import ModerationPanel from "../components/moderation-panel.jsx";
@@ -32,11 +31,12 @@ import IconShield from "../icons/shield.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import { ChannelLead, ChannelSubtitle, ChannelAbout, ChannelPostsTab } from "../components/channel-feed.jsx";
 import ChannelPostPage from "../components/channel-post-page.jsx";
+import BracketCount from "../components/bracket-count.jsx";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 500;
 const RULES_MAX_LENGTH = 1000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function sameSet(a, b) {
 	if (a.size !== b.size) return false;
@@ -136,7 +136,7 @@ function ChannelSettingsForm({ ownerPubkey, privKey, dbKey, channelId, channelRo
 			let avatarDescriptor;
 			if (avatarFile) {
 				const bytes = new Uint8Array(await avatarFile.arrayBuffer());
-				avatarDescriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey);
+				avatarDescriptor = await uploadMessageAttachment(uploadTarget(), bytes, { mime: avatarFile.type, name: avatarFile.name }, privKey, { journal: { purpose: "avatar", target: channelId } });
 			}
 			await editChannel(ownerPubkey, privKey, dbKey, channelId, { name, description, rules, avatarDescriptor, allowChatAttachments }, publish);
 			for (const groupId of originalGroupIds) {
@@ -331,6 +331,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	// сигнал, на который реагируют chat.jsx/channel-chat.jsx при любой
 	// read/write активности, включая markChannelAsRead внутри ChannelChat).
 	const [chatUnreadCount, setChatUnreadCount] = useState(0);
+	// Общие счётчики на вкладках: всего записей и всего сообщений чата (не окно из 10/15).
+	const [tabCounts, setTabCounts] = useState({ posts: 0, chat: 0 });
 
 	const target = place.value;
 	const onPostPage = target.kind === "channel" && target.id === channelId && !!target.postId && target.subTab !== "chat";
@@ -393,6 +395,13 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 		if (!channelRow) return;
 		getChannelChatUnreadCount(ownerPubkey, channelId)
 			.then(setChatUnreadCount)
+			.catch(() => {});
+	}, [ownerPubkey, channelId, tab, messagingActivity.value, channelRow]);
+
+	useEffect(() => {
+		if (!channelRow) return;
+		countChannelContent(ownerPubkey, channelId)
+			.then(setTabCounts)
 			.catch(() => {});
 	}, [ownerPubkey, channelId, tab, messagingActivity.value, channelRow]);
 
@@ -487,10 +496,10 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 	const tabsBar = (
 		<nav class="tabs reel" role="tablist" aria-label={t("channel.tabsAriaLabel")}>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "posts"} onClick={() => setTab("posts")}>
-				{t("channel.tabs.posts")}
+				{t("channel.tabs.posts")} <BracketCount value={tabCounts.posts} />
 			</button>
 			<button type="button" class="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
-				{t("channel.tabs.chat")}
+				{t("channel.tabs.chat")} <BracketCount value={tabCounts.chat} />
 				{chatUnreadCount > 0 && <span class="tab__badge">{chatUnreadCount}</span>}
 			</button>
 		</nav>
@@ -506,8 +515,8 @@ export default function ChannelDetail({ ownerPubkey, privKey, dbKey, channelId }
 			actions={
 				<>
 					{isOwner && tab === "posts" && (
-						<button type="button" class="btn--primary" onClick={() => setComposerOpen(true)}>
-							<IconPencil /> {t("channel.writePostButton")}
+						<button type="button" class="btn--primary" onClick={() => setComposerOpen(true)} aria-label={t("channel.writePostButton")} title={t("channel.writePostButton")}>
+							<IconPencil /> <span class="btn-label">{t("channel.writePostButton")}</span>
 						</button>
 					)}
 					{/* CHANNEL-V2 часть B5 — «Скопировать ссылку» пропущен: готового

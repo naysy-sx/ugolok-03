@@ -1,12 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import { acquireMediaUrl, mediaElementSrc } from "../../domain/media/adapters/media-url.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { formatFileSize } from "./attachment-view.jsx";
 import { t, errorMessage } from "../signals/i18n.js";
 import FileKindIcon, { fileIconModifier } from "./file-kind-icon.jsx";
 import IconCross from "../icons/cross.jsx";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function typeLabel(mime) {
 	if (mime === "application/pdf") return t("files.kindPdf");
@@ -41,7 +40,7 @@ export default function FileInfoDialog({ entry, mediaRef, onClose }) {
 		let cancelled = false;
 		setSrc(null);
 		setError("");
-		acquireMediaUrl(mediaRef, { serverUrl: BLOSSOM_URL })
+		acquireMediaUrl(mediaRef, { serverUrl: uploadTarget() })
 			.then((handle) => {
 				if (!cancelled) setSrc(mediaElementSrc(handle));
 			})

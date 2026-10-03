@@ -4,7 +4,6 @@ import { getOrDownloadMessageAttachment } from "../../domain/files/content-cache
 import { resolveImagePreviewUrl } from "../../domain/media/image-preview.js";
 import { resolveAttachmentPreviewUrl } from "../../domain/media/attachment-preview-resolver.js";
 import { getPreviewUrl } from "../../domain/media/plaintext-cache.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { kindOf } from "../../domain/content/record-kind.js";
 import { toPreviewText } from "../../core/markdown/preview.js";
 import { CHANNEL_REACTION_SET } from "../../domain/content/reactions.js";
@@ -12,11 +11,13 @@ import { t } from "../signals/i18n.js";
 import { DueChip, formatDateTime } from "./post-card.jsx";
 import { videoPosterUrl } from "./video-poster-style.js";
 import IconChatBubbleFill from "../icons/chat-bubble-fill.jsx";
+import IconPlayerPlay from "../icons/player-play.jsx";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
-function firstVisual(attachments) {
-	return (attachments ?? []).find((a) => a.type === "image" || a.type === "video") ?? null;
+// До двух первых картинок/видео для сетки медиа в карточке записи (макет 99pML.jpg).
+function visualsOf(attachments) {
+	return (attachments ?? []).filter((a) => a.type === "image" || a.type === "video").slice(0, 2);
 }
 
 // CHANNEL-V2 часть C2 — решение отменено: было резать текст заметки без
@@ -70,7 +71,7 @@ function FeedThumb({ attachment }) {
 	useEffect(() => {
 		if (attachment.previewDigest) {
 			let cancelled = false;
-			resolveAttachmentPreviewUrl(attachment, { serverUrl: BLOSSOM_SERVER_URL }).then((previewUrl) => {
+			resolveAttachmentPreviewUrl(attachment, { serverUrl: uploadTarget() }).then((previewUrl) => {
 				if (!cancelled && previewUrl) setUrl(previewUrl);
 			});
 			return () => {
@@ -89,7 +90,7 @@ function FeedThumb({ attachment }) {
 		}
 		let cancelled = false;
 		resolveImagePreviewUrl(attachment.manifestDigest, attachment.mime, (trace) =>
-			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: BLOSSOM_SERVER_URL, trace }),
+			getOrDownloadMessageAttachment(currentUser.value.id, dbKeySig.value, attachment, { serverUrl: uploadTarget(), trace }),
 		)
 			.then((raster) => {
 				if (!cancelled) setUrl(raster.url);
@@ -100,8 +101,16 @@ function FeedThumb({ attachment }) {
 		};
 	}, [attachment.manifestDigest, attachment.previewDigest, attachment.poster, attachment.mime]);
 
-	if (!url) return <div class="feed-thumb" aria-hidden="true" />;
-	return <img class="feed-thumb" src={url} alt="" />;
+	return (
+		<span class="feed-tile" aria-hidden="true">
+			{url ? <img class="feed-thumb" src={url} alt="" /> : <span class="feed-thumb" />}
+			{attachment.type === "video" && (
+				<span class="feed-tile__play">
+					<IconPlayerPlay />
+				</span>
+			)}
+		</span>
+	);
 }
 
 function isoOf(unixSeconds) {
@@ -116,7 +125,7 @@ function isoOf(unixSeconds) {
 export default function FeedItem({ post, commentCount, reactionCounts, unread, onOpen }) {
 	const kind = kindOf(post);
 	const { title, excerpt, synthetic } = feedText(post);
-	const visual = firstVisual(post.attachments);
+	const visuals = visualsOf(post.attachments);
 	const reacts = reactionSummary(reactionCounts);
 	const hasChips = post.dueAt !== null || (post.tags && post.tags.length > 0);
 
@@ -157,7 +166,13 @@ export default function FeedItem({ post, commentCount, reactionCounts, unread, o
 				{reacts ? <span class="feed-reacts">{reacts}</span> : null}
 			</span>
 
-			{visual && <FeedThumb attachment={visual} />}
+			{visuals.length > 0 && (
+				<span class="feed-media" data-count={visuals.length}>
+					{visuals.map((a, i) => (
+						<FeedThumb key={i} attachment={a} />
+					))}
+				</span>
+			)}
 		</button>
 	);
 }

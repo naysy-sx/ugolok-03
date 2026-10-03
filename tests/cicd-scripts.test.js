@@ -177,29 +177,28 @@ test("GitHub Actions ci.yml вызывает ci-check, Node 22, без pull_requ
 	assert.equal(src.includes("npx serve"), false);
 });
 
-test("GitHub Actions release.yml на semver-тег, pack, contents write", () => {
+test("GitHub Actions release.yml на semver-тег, pack, публикация в Forgejo Releases", () => {
 	const src = read(join(ROOT, ".github/workflows/release.yml"));
 	assert.match(src, /v\*\.\*\.\*/);
 	assert.match(src, /scripts\/ci-check\.sh/);
 	assert.match(src, /scripts\/release-pack\.sh/);
-	assert.match(src, /contents:\s*write/);
 	assert.match(src, /actions\/checkout@v5/);
 	assert.match(src, /actions\/setup-node@v6/);
+	// Публикация в GitHub Release (contents: write + action) больше не
+	// нужна — релиз целиком живёт на Forgejo (TZ-release-pipeline), job
+	// publish пишет туда через REST API своим токеном.
+	assert.match(src, /FORGEJO_RELEASE_TOKEN/);
+	assert.match(src, /git\.ugolok\.tech/);
 	assert.equal(src.includes("npx serve"), false);
 	assert.equal(src.includes("pull_request_target"), false);
 });
 
-test("Forgejo workflows копируют смысл GitHub, не второй алгоритм", () => {
+test("Forgejo ci.yml и GitHub ci.yml копируют смысл друг друга, не второй алгоритм", () => {
 	const gCi = read(join(ROOT, ".github/workflows/ci.yml"));
 	const fCi = read(join(ROOT, ".forgejo/workflows/ci.yml"));
-	const gRel = read(join(ROOT, ".github/workflows/release.yml"));
-	const fRel = read(join(ROOT, ".forgejo/workflows/release.yml"));
 	assert.match(fCi, /scripts\/ci-check\.sh/);
-	assert.match(fRel, /scripts\/release-pack\.sh/);
 	assert.match(gCi, /scripts\/ci-check\.sh/);
-	assert.match(gRel, /scripts\/release-pack\.sh/);
 	assert.equal(fCi.includes("npx serve"), false);
-	assert.equal(fRel.includes("npx serve"), false);
 });
 
 test("release-hash.sh — без SKIP_GPG и без ключа не падает на set -u", () => {
@@ -283,7 +282,20 @@ test("deploy/island — боевой стек ugolok.tech без секрета 
 	assert.match(compose, /\/var\/lib\/ugolok\/blossom:\/app\/data/);
 	assert.match(read(join(ROOT, "deploy/island/blossom-config.yml")), /database\.sqlite3/);
 	assert.ok(existsSync(join(ROOT, "deploy/island/relay.Dockerfile")));
-	assert.ok(existsSync(join(ROOT, "deploy/island/blossom.Dockerfile")));
+});
+
+test("ТЗ-01: остров, тестовый остров и self-host берут один и тот же пинованный образ Blossom", () => {
+	const files = ["deploy/island/docker-compose.yml", "deploy/island-test/docker-compose.yml", "agent/compose/docker-compose.yml"];
+	const tags = files.map((f) => {
+		const text = read(join(ROOT, f));
+		const blossom = text.slice(text.indexOf("\n  blossom:"), text.indexOf("\n  coturn:") > 0 ? text.indexOf("\n  coturn:") : undefined);
+		const m = /^\s+image:\s+(git\.ugolok\.tech\/naysy\/ugolok-blossom:\d+\.\d+\.\d+)\s*$/m.exec(blossom);
+		assert.ok(m, f + ": blossom.image должен быть git.ugolok.tech/naysy/ugolok-blossom:X.Y.Z (точный тег, не latest)");
+		assert.equal(/^\s+build:/m.test(blossom), false, f + ": blossom не собирается из исходников");
+		return m[1];
+	});
+	assert.equal(new Set(tags).size, 1, "разные теги образа: " + tags.join(", "));
+	assert.match(read(join(ROOT, "agent/compose/docker-compose.yml")), /env_file:\s*\n\s+- \.\/blossom\.env/);
 });
 
 test("security: TURN без релея во внутренние сети, Caddy admin API за сокетом, HSTS", () => {
@@ -374,6 +386,12 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	const islandRsyncBlock = deploy.slice(deploy.indexOf("rsync -a --omit-dir-times"), deploy.indexOf('"$ISLAND_SRC/"'));
 	assert.match(islandRsyncBlock, /--exclude 'coturn\.conf'/);
 	assert.match(islandRsyncBlock, /--exclude 'turncreds\.env'/);
+	// Живая проверка (прод, run 210, 2026-10-01): ровно тот же класс бага —
+	// push-bridge.env/push-bridge-plugin.env (Э-PUSH П1, созданы вручную на
+	// VPS заранее) стёрты этим же --delete в первом prod-деплое, который их
+	// добавил в docker-compose.yml (env_file) — деплой упал тут же.
+	assert.match(islandRsyncBlock, /--exclude 'push-bridge\.env'/);
+	assert.match(islandRsyncBlock, /--exclude 'push-bridge-plugin\.env'/);
 
 	// Этап 3: кэш npm с хоста (не с нуля на каждый push) + лимит памяти контейнера сборки.
 	assert.match(deploy, /NPM_CACHE="\$\{UGOLK_NPM_CACHE:-\/var\/cache\/ugolok-npm\}"/);
@@ -405,6 +423,13 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	assert.match(deploy, /ICE_JSON='\[.*\]'/);
 	assert.equal(/username|credential/.test(deploy.match(/ICE_JSON='(\[.*\])'/)[1]), false, "ICE_JSON не должен нести username/credential");
 	assert.match(deploy, /turnCredentialsUrl:\\"\/api\/turn-credentials\\"/);
+	// Живая находка (владелец, релиз v0.0.1, 2026-10-02) — pushBridge никогда
+	// не попадал в config.json ни на одном окружении, из-за чего весь экран
+	// "Уведомления в фоне" был невидим (isPushSupported() требует строку).
+	// Остров без push-bridge-server (test) не должен его получать (ИП6) —
+	// только prod, тем же "остров себя не выдаёт" принципом, что уже есть у
+	// push-forward.mjs (tests/push-forward.test.js).
+	assert.match(deploy, /isProd\s*\?\s*\{pushBridge:\\"https:\/\/relay\.ugolok\.tech\/push\\"\}\s*:\s*\{\}/);
 
 	// Этап 7: flock (два быстрых push не гонят rsync --delete параллельно),
 	// BUILD_HASH с хоста, схлопнутые if/elif (было — два одинаковых блока).
@@ -418,21 +443,25 @@ test("pipeline: deploy-env, test-остров, Caddy test, Forgejo deploy workfl
 	// существующий образ ugolok-turncreds-server:local как есть — тег
 	// статический, свежий agent-src сам по себе рекомпиляцию не триггерит.
 	assert.match(deploy, /docker compose -f "\$ISLAND_DST\/docker-compose\.yml" --project-directory "\$ISLAND_DST" up -d --build/);
-	// Живая проверка (test, 415 audio/webm): патчи Blossom не подхватывались —
-	// rsync исключает blossom-src, test-compose берёт готовый образ без build:.
-	// При смене набора патчей — checkout pin + apply + build, затем recreate
-	// контейнера blossom этого env (второй compose, не дубль up --build).
-	assert.match(deploy, /\.blossom-patches\.sha/);
-	assert.match(deploy, /safe\.directory=/);
-	assert.match(deploy, /docker compose -f "\$PROD_COMPOSE" --project-directory "\$PROD_DIR" build blossom/);
-	assert.match(deploy, /up -d --force-recreate --no-deps blossom/);
-	// AUDIT-EGOROD H1: третий вызов — откат образов после провала проверки здоровья
+	// ТЗ-01: Blossom — готовый образ форка по пинованному тегу, деплой его не
+	// собирает. Возврата к сборке из патчей быть не должно.
+	assert.equal(deploy.includes(".blossom-patches.sha"), false);
+	assert.equal(deploy.includes("build blossom"), false);
+	assert.equal(deploy.includes("BLOSSOM_PATCHES"), false);
+	assert.equal(/DEPLOY_IMAGES=\([^)]*ugolok-blossom/.test(deploy), false);
+	// Смонтированные с хоста файлы (политика relay, конфиги) compose не замечает: перезапуск
+	// точечный и по отпечатку, а не «всё после каждой выкладки» (на хосте Forgejo с раннером).
+	assert.match(deploy, /restart_if_changed\(\)/);
+	assert.match(deploy, /restart_if_changed "\$RELAY_RESTART_C" "\$STAMP_DIR\/relay"/);
+	assert.match(deploy, /restart_if_changed "\$BLOSSOM_RESTART_C" "\$STAMP_DIR\/blossom"/);
+	assert.match(deploy, /write-policy\.mjs/);
+	assert.equal(/docker restart forgejo|docker restart ugolok-mail|restart coturn/.test(deploy), false, "перезапускаем только relay/blossom");
+	// AUDIT-EGOROD H1: второй вызов — откат образов после провала проверки здоровья
 	// (up --no-build --force-recreate на :prev-образах), не второй «up --build».
-	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 3, "up --build + force-recreate blossom + откат --no-build, не больше");
+	assert.equal((deploy.match(/docker compose -f "\$ISLAND_DST\/docker-compose\.yml"/g) || []).length, 2, "up --build + откат --no-build, не больше");
 	assert.match(deploy, /up -d --no-build --force-recreate/);
 	assert.match(deploy, /island-health\.sh/);
 	assert.match(deploy, /island-backup\.sh/);
-	assert.match(deploy, /blossom rebuild не удался/);
 	assert.match(deploy, /apply-caddy не применился/);
 });
 
@@ -488,10 +517,15 @@ test("Forgejo ci.yml: раннер ugolok, без dev/prod, ci-check.sh внут
 	assert.match(fCi, /bash scripts\/ci-check\.sh/);
 });
 
-test("Forgejo release.yml: помечен нерабочим (см. этап 5), не удалён", () => {
-	const fRel = read(join(ROOT, ".forgejo/workflows/release.yml"));
-	assert.match(fRel, /не запускается на Forgejo/i);
-	assert.match(fRel, /этап 5/);
+test("Forgejo release.yml: решение этапа 5 принято — файл удалён, не оставлен нерабочей заглушкой", () => {
+	// TZ-cicd-hardening, этап 2.5, откладывал решение до этапа 5: "не
+	// удалять" до выбора архитектуры канала релиза. Решение принято
+	// (TZ-release-pipeline) — self-hosted раннер "ugolok" физически не
+	// может собрать Android/Tauri (2 ГБ RAM), весь релиз теперь целиком
+	// на GitHub Actions (.github/workflows/release.yml), публикация в
+	// Forgejo Releases идёт через REST API, а не параллельный Forgejo-job.
+	// Нерабочая заглушка больше не нужна и не должна возвращаться.
+	assert.equal(existsSync(join(ROOT, ".forgejo/workflows/release.yml")), false);
 });
 
 test("package.json — engines node>=22, allowScripts зафиксирован, version не источник релиза", () => {

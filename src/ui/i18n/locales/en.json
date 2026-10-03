@@ -46,6 +46,12 @@
 			"default": "(default)"
 		},
 		"scaleLabel": "Interface scale",
+		"scale": {
+			"small": "Small (90%)",
+			"medium": "Medium (100%)",
+			"large": "Large (110%)",
+			"xlarge": "Extra Large (125%)"
+		},
 		"accentColorTitle": "Accent color",
 		"paletteCustomizeButton": "Customize",
 		"paletteHueLabel": "Hue",
@@ -65,7 +71,11 @@
 			"amethyst": "Amethyst",
 			"magenta": "Magenta",
 			"fuchsia": "Fuchsia",
-			"pink": "Pink"
+			"pink": "Pink",
+			"terracotta": "Terracotta",
+			"steel": "Steel",
+			"sand": "Sand",
+			"ink": "Ink"
 		},
 		"notificationsTitle": "Notifications",
 		"enableNotifications": "Enable notifications",
@@ -110,7 +120,8 @@
 			"view": "View",
 			"notifications": "Notifications",
 			"network": "Network",
-			"session": "Session"
+			"session": "Session",
+			"storage": "Storage"
 		},
 		"viewSectionHint": "The accent color sets the whole palette — background, surfaces, and borders follow it.",
 		"themeLabel": "Theme",
@@ -131,13 +142,33 @@
 		"perfLogCopied": "Copied to clipboard",
 		"perfLogManualHint": "Clipboard unavailable — select and copy manually",
 		"sendReadReceiptsLabel": "Send read receipts",
-		"sendReadReceiptsHint": "Your contact will see that you opened the chat. Delivered receipts still go out — they only mean the message reached this device."
+		"sendReadReceiptsHint": "Your contact will see that you opened the chat. Delivered receipts still go out — they only mean the message reached this device.",
+		"pushBackground": {
+			"title": "Background notifications",
+			"hint": "Get notified about new messages and calls even when Ugolok is closed",
+			"enableLabel": "Enable background notifications",
+			"actionError": "Something went wrong — please try again",
+			"batteryLabel": "No battery restrictions",
+			"notificationsLabel": "Notifications allowed",
+			"fullScreenLabel": "Full-screen call display allowed",
+			"runningLabel": "Connection active",
+			"fixButton": "Fix",
+			"lastConnectedLabel": "Last connected",
+			"neverConnected": "never",
+			"autostartTitle": "Autostart",
+			"autostartHint": "On some phones (Xiaomi, Huawei, Samsung, Oppo/Realme/OnePlus, Vivo) the system shuts down background apps to save battery. For notifications to arrive reliably, allow Ugolok to run in the background and start automatically in the manufacturer's settings.",
+			"openAutostartButton": "Open autostart settings",
+			"privacyExplanation": "The notification server only learns the moment a message or call arrives — the same as any regular relay server. It never sees the text, the sender, or the content.",
+			"unlockLimitation": "If the system has unloaded the app from memory, tapping a notification will require entering your password again — a call may end before you finish typing it.",
+			"onboardingToastTitle": "Background notifications",
+			"onboardingToastBody": "Get notified about messages and calls even when Ugolok is closed. Tap to set up."
+		}
 	},
 	"shell": {
 		"sidebarAriaLabel": "Profile and main menu",
 		"navAriaLabel": "Main menu",
 		"quickConnect": "Quick Connect",
-		"quickConnectHint": "conversation without an account",
+		"quickConnectHint": "chat without signing up",
 		"quickConnectActiveHint": "Minimized — tap to return",
 		"serviceUnavailable": "service unavailable",
 		"logout": "Log out",
@@ -147,8 +178,17 @@
 		"switchToLightTheme": "Switch to light theme",
 		"switchToDarkTheme": "Switch to dark theme",
 		"searchLabel": "Search chats and channels",
-		"searchPlaceholder": "Search chats and channels",
-		"discoverHeading": "Discovery",
+		"searchPlaceholder": "Search",
+		"copyAddress": "Copy address",
+		"sectionTalk": "Talk",
+		"sectionServices": "Services",
+		"sectionMore": "More",
+		"navChats": "Chats",
+		"navRequests": "Requests",
+		"navNetwork": "Network",
+		"discoverHeading": "Who's here",
+		"discoverHintVisible": "Visible until {{time}}",
+		"discoverHintHidden": "Not visible",
 		"addContact": "Add contact",
 		"emptyTitle": "Nothing here yet",
 		"emptyBody": "No one in your list yet. Check out Discovery — people there are open to meeting.",
@@ -521,7 +561,9 @@
 			"publishingButton": "Publishing…",
 			"publishButton": "Publish",
 			"tooLongError": "Text too long (limit — {{max}} characters)",
-			"titleLabel": "Title (optional)"
+			"titleLabel": "Title (optional)",
+			"newPostHeading": "New post",
+			"editPostHeading": "Editing post"
 		},
 		"commentComposer": {
 			"ariaLabel": "New comment",
@@ -552,7 +594,7 @@
 		"tabsAriaLabel": "Channel sections",
 		"tabs": {
 			"posts": "Posts",
-			"chat": "Chat",
+			"chat": "Channel chat",
 			"moderation": "Moderation",
 			"editChannelWithName": "Edit channel «{{name}}»",
 			"settings": "Settings"
@@ -600,6 +642,12 @@
 		"showPermissions": "Permissions",
 		"blockAction": "Block",
 		"removeFromGroupAria": "Remove from group {{name}}",
+		"removeDialog": {
+			"title": "Remove contact “{{name}}”?",
+			"body": "You can also delete your conversation with this person: it disappears from your chat list on this device for good and will not come back after a restart. The other person keeps their copy.",
+			"withChat": "Remove contact and conversation",
+			"contactOnly": "Remove contact only"
+		},
 		"addToGroupLabel": "to group",
 		"noContactsAtAll": "You don't have any contacts yet.",
 		"noContactsInGroups": "No contact belongs to the selected groups.",
@@ -615,7 +663,19 @@
 		"addAnywayButton": "Add anyway",
 		"blockedSummary": "Blocked",
 		"unblockButton": "Unblock",
-		"noBlocked": "No blocked contacts."
+		"noBlocked": "No blocked contacts.",
+		"card": {
+			"aria": "Contact card: {{name}}",
+			"openAria": "Open contact card for {{name}}",
+			"lastSeen": "Last seen: {{when}}",
+			"openChat": "Open chat",
+			"about": "About",
+			"noAbout": "This person hasn’t written anything about themselves yet.",
+			"details": "Details",
+			"contactSince": "In contacts since",
+			"profileUpdated": "Profile updated",
+			"key": "Key"
+		}
 	},
 	"chat": {
 		"list": {
@@ -629,7 +689,13 @@
 			"backToChatsButton": "Back to chat list",
 			"toLabel": "To",
 			"attachmentsLabel": "Attachments",
-			"composeInvalidRecipient": "Choose a recipient from your contacts"
+			"composeInvalidRecipient": "Choose a recipient from your contacts",
+			"deleteAria": "Delete conversation with {{name}}",
+			"deleteDialog": {
+				"title": "Delete conversation with {{name}}?",
+				"body": "The conversation will be removed from this device for good. The other person won't be notified and keeps their copy. If either of you writes again, the chat will show up in the list anew.",
+				"confirm": "Delete conversation"
+			}
 		},
 		"window": {
 			"clearHistoryButton": "Clear history",
@@ -698,7 +764,8 @@
 		"units": {
 			"bytes": "{{count}} B",
 			"kb": "{{count}} KB",
-			"mb": "{{count}} MB"
+			"mb": "{{count}} MB",
+			"gb": "{{count}} GB"
 		},
 		"openVideoAria": "Open video {{name}}",
 		"openAudioAria": "Open audio {{name}}",
@@ -714,7 +781,8 @@
 		"moreCount": "+{{count}}",
 		"actionsMenuAria": "Message actions",
 		"downloadNamed": "Download {{name}}",
-		"saveNamed": "Save to storage {{name}}"
+		"saveNamed": "Save to storage {{name}}",
+		"copyKeyMissing": "The saved copy's key was not found."
 	},
 	"media": {
 		"buttons": {
@@ -735,7 +803,9 @@
 			"repeatOff": "Repeat: off",
 			"repeatAll": "Repeat: all",
 			"repeatOne": "Repeat: one",
-			"autoplay": "Autoplay"
+			"autoplay": "Autoplay",
+			"zoomIn": "Zoom in",
+			"zoomOut": "Zoom out"
 		},
 		"classNames": {
 			"audio": "audio",
@@ -839,7 +909,20 @@
 		"pasteInto": "Paste",
 		"pasteHere": "Paste here",
 		"clipboardCopied": "Copied: {{count}}",
-		"clipboardCut": "Cut: {{count}}"
+		"clipboardCut": "Cut: {{count}}",
+		"freedFromServer": "Deleted from server",
+		"freedOpenHint": "“{{name}}” was freed from the server and no longer opens. Remove it from the list if you don't need it.",
+		"shareProgress": "Copying for readers: file {{done}} of {{total}} · {{percent}}% · {{name}}",
+		"shareProgressStart": "Preparing files for readers…",
+		"columnPreview": "Icon",
+		"columnName": "Name",
+		"columnType": "Type",
+		"columnActions": "Actions",
+		"columnSelect": "Select",
+		"columnSize": "Size",
+		"columnAccess": "Access",
+		"kindFolder": "Folder",
+		"sortBy": "Sort by: {{label}}"
 	},
 	"profile": {
 		"server": {
@@ -913,7 +996,7 @@
 		"photoAlt": "Profile photo",
 		"accountMenuAria": "Account menu",
 		"storageMenuItem": "Files",
-		"menuProfile": "My profile",
+		"menuProfile": "Avatar or bio",
 		"menuSettings": "Settings",
 		"menuTheme": "Theme",
 		"menuMnemonic": "Key and recovery",
@@ -1172,11 +1255,15 @@
 		"invalidReactionTarget": "invalid reaction target type",
 		"onlyAuthorCanEditPost": "only the author can edit the post",
 		"cannotEditDeletedPost": "cannot edit a deleted post",
-		"welcomeTooLargeForDeviceCount": "This contact has too many devices to send an invitation in a single message. Please try again a bit later."
+		"welcomeTooLargeForDeviceCount": "This contact has too many devices to send an invitation in a single message. Please try again a bit later.",
+		"blobGone": "The file is no longer available on the server (it may have been freed from the server).",
+		"fileTooLargeForServer": "“{{name}}” is {{size}}, but the server accepts files up to {{max}}.",
+		"quotaExceeded": "Not enough space for “{{name}}”: {{need}} needed, {{free}} free.",
+		"storageReadonly": "Storage is read-only right now: new files can't be uploaded. Everything you already uploaded still opens."
 	},
 	"quick": {
 		"anonymousNick": "Guest",
-		"exitButton": "Back",
+		"exitButton": "Leave",
 		"overlayAria": "Quick Connect",
 		"minimizeAria": "Minimize to sidebar",
 		"closeAria": "Close and end the call",
@@ -1206,6 +1293,7 @@
 			"chatPlaceholder": "Message…",
 			"sendButton": "Send",
 			"copyInviteAria": "Copy invite link",
+			"inviteHint": "Room link. Send it to people you want to invite — they can use it to join and chat here.",
 			"inviteCopiedStatus": "Copied",
 			"inviteCopyFailedStatus": "Couldn't copy — select and copy manually",
 			"raceWarning": "Someone else created a room with the same name and password at the same time. This copy is not the primary one.",
@@ -1314,5 +1402,123 @@
 			"share": "Share",
 			"clear": "Clear recording"
 		}
+	},
+	"storage": {
+		"title": "Storage",
+		"hint": "How much space your uploaded files take on the server, and what you can free up.",
+		"loading": "Loading…",
+		"empty": "You haven't uploaded anything yet.",
+		"serverFailed": "Couldn't get data from the server.",
+		"retry": "Try again",
+		"usedTitle": "Used on the server",
+		"usedValue": "{{size}} · files: {{count}}",
+		"byPurposeTitle": "By place",
+		"byKindTitle": "By type",
+		"purpose": {
+			"dm": "Chats",
+			"group": "Groups",
+			"channel": "Channels",
+			"files": "Files",
+			"share": "Shared folders",
+			"avatar": "Avatars",
+			"unknown": "Not labeled yet"
+		},
+		"kind": {
+			"image": "Photos",
+			"video": "Video",
+			"audio": "Audio",
+			"document": "Documents",
+			"other": "Other",
+			"unknown": "Not labeled yet"
+		},
+		"listTitle": "Largest uploads",
+		"showMore": "Show more",
+		"unnamed": "Unnamed file",
+		"unknownEntry": "File uploaded {{date}}",
+		"entryMeta": "{{size}} · {{date}}",
+		"sentTo": "sent to: {{count}}",
+		"journalLoading": "Loading file names…",
+		"journalPartial": "File names are loaded partially — some files are shown without a name.",
+		"journalMore": "Load more names",
+		"journalFailed": "Couldn't load file names from the network. Sizes are exact; some names may be missing.",
+		"reconcile": {
+			"button": "Check against the server",
+			"running": "Checking…",
+			"needFull": "Not all file names are loaded yet. Try again — otherwise real files could look unrecognized.",
+			"clean": "Everything on the server is accounted for.",
+			"unknownTitle": "Unrecognized files: {{count}} · {{size}}",
+			"unknownRange": "Uploaded {{from}} – {{to}}",
+			"unknownHint": "The server has these files but your journal does not. They may belong to old messages — once deleted they will stop opening.",
+			"deleteUnknown": "Delete all unrecognized",
+			"confirmBody": "Delete {{count}} unrecognized files ({{size}}) from the server? This cannot be undone.",
+			"missingTitle": "In the journal but not on the server: {{count}}",
+			"forgetMissing": "Remove from journal"
+		},
+		"free": {
+			"button": "Free up space",
+			"title": "Free up space",
+			"body": "“{{name}}” ({{size}}) will be erased from the server.",
+			"usage": "It was sent to {{count}} places: it will stop opening for everyone who has not downloaded it yet.",
+			"usageNone": "No sending is recorded for this file.",
+			"limit": "What recipients have already downloaded stays with them. This cannot be undone.",
+			"filesNote": "The entry in “Files”, if there is one, will be moved to the trash too.",
+			"confirm": "Free up space",
+			"cancel": "Cancel",
+			"working": "Deleting… {{done}} of {{total}}",
+			"done": "Space freed.",
+			"failed": "Could not delete {{count}} of the files. Try again later.",
+			"sharedCopy": "This file is in a shared folder. It will stop opening for the readers of that folder.",
+			"sharedOriginal": "This file is in a shared folder. People who already have access keep it, but it will not open for new readers."
+		},
+		"journalPublishFailed": "Upload journal isn't reaching the relay: {{reason}}. Your files are not affected, but names won't appear on other devices.",
+		"quota": {
+			"unlimited": "No space limit on this server.",
+			"barAria": "Storage used",
+			"usedOfLimit": "{{used}} of {{limit}} used",
+			"warning": "Running low: {{free}} left.",
+			"full": "Storage is full. Free up space or get more to upload new files.",
+			"readonly": "Storage is read-only: new files can't be uploaded, everything already uploaded still opens.",
+			"getMore": "Get more space",
+			"plansLink": "Plans and how to get more space"
+		},
+		"notice": {
+			"readonly": "Storage is read-only: new files can't be uploaded.",
+			"full": "Storage is full: new files can't be uploaded.",
+			"warning": "Only {{free}} of {{limit}} left.",
+			"toStorage": "Open storage",
+			"toPlans": "Get more space"
+		},
+		"serverLabel": "Storage server: {{server}}",
+		"filesCount": "Files: {{count}}"
+	},
+	"plans": {
+		"title": "Storage plans",
+		"intro": "Space on the server is counted per key: everything you upload counts — files, previews, avatars.",
+		"yourUsage": "You're using {{used}} of {{limit}}.",
+		"free": {
+			"name": "Free",
+			"size": "1 GB",
+			"desc": "Enough for chats and everyday files."
+		},
+		"paid": {
+			"name": "Extended",
+			"size": "100 GB",
+			"price": "$5 per month",
+			"desc": "For photos, video and an archive."
+		},
+		"how": {
+			"title": "How to get more space",
+			"text": "Payment is handled manually for now. Write to {{email}} and include your public key (npub) below — we'll add the space and reply.",
+			"write": "Write to support",
+			"note": "Your public key is safe to share: it only tells us whom to give the space to."
+		},
+		"mailSubject": "More storage space",
+		"mailBody": "Hello! Please give more space to my key: {{npub}}",
+		"back": "Back to storage"
+	},
+	"webviewOutdated": {
+		"title": "Update Android System WebView",
+		"body": "{{appName}} uses modern browser features that your installed version of Android System WebView doesn't support yet. Update it via Google Play to continue.",
+		"updateButton": "Update in Google Play"
 	}
 }

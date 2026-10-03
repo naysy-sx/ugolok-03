@@ -4,14 +4,28 @@ import "./styles/prosemirror.css";
 import "./styles/custom.css";
 import { render } from "preact";
 import App from "./app.jsx";
-import { startIdleWatcher } from "./ui/signals/auth.js";
+import WebViewOutdated from "./ui/screens/webview-outdated.jsx";
+import { getPlatform } from "./platform/index.js";
+import { isChromiumTooOld } from "./platform/webview-gate.js";
+import { startKeyboardInsetTracking } from "./platform/keyboard-inset.js";
+import { startIdleWatcher, currentUser, onLock } from "./ui/signals/auth.js";
+import { createReloadScheduler } from "./ui/reload-gate.js";
 import { BUILD_HASH } from "./config.js";
 import { logInfo } from "./core/diag/boot-log.js";
+import { applyThemeMode } from "./ui/theme/theme-mode.js";
+import { getPreLoginTheme } from "./ui/theme/pre-login-theme.js";
 // TZ-diag-trace.md — main.jsx не домен, импорт трассировщика напрямую
 // разрешён и здесь единственно уместен (§0.3 запрещает это только домену).
 import { record as traceRecord, isTraceEnabled } from "./core/diag/call-trace.js";
 
 logInfo(`запуск, сборка ${BUILD_HASH}`);
+
+// Применить ДО первого рендера — иначе на системной тёмной теме экран
+// входа на миг мигнёт тёмным, прежде чем пользователь успеет выбрать (а на
+// экране входа выбирать ещё нечего, аккаунт/его тема не расшифрованы).
+// Логин переопределит на тему аккаунта (unlock.jsx: applyThemeMode(loaded.
+// themeMode)) — это только дефолт ДО него.
+applyThemeMode(getPreLoginTheme());
 
 // TZ §2.6 — окружение/lifecycle. record() сам решает, писать ли (флаг может
 // быть выставлен ?diag=1 чуть выше по цепочке импорта call-trace.js), поэтому
@@ -44,6 +58,17 @@ if (isTraceEnabled()) {
 
 startIdleWatcher();
 
+// На Android/Capacitor --keyboard-inset считает и инжектит MainActivity
+// из нативного WindowInsetsCompat.Type.ime() (см. MainActivity.java) —
+// запускать здесь тот же трекер поверх него означало бы два источника
+// одной CSS-переменной, гоняющиеся друг за другом. На вебе нативного
+// источника нет, трекер остаётся единственным. Глобально и безусловно с
+// самого старта (не только внутри залогиненного MainShell) — клавиатура
+// нужна и на экране входа/регистрации (пароль, мнемоника). Никогда не
+// отписывается — живёт всю жизнь вкладки, тот же принцип, что
+// startIdleWatcher() выше.
+if (__TARGET__ === "web") startKeyboardInsetTracking();
+
 const SW_RELOAD_ONCE_KEY = "ugolok.swReloadOnce";
 let refreshing = false;
 // Живая проверка (прод, 2026-09-06) — только что загруженный видео-файл
@@ -72,9 +97,21 @@ function doReload() {
 	refreshing = true;
 	location.reload();
 }
-function isAuthScreenVisible() {
-	return !!document.querySelector(".auth-layout, .unlock-home");
-}
+
+// Автоперезагрузка — только в безопасный момент (ui/reload-gate.js): не посреди регистрации,
+// не при введённом тексте и не при живой сессии (тогда — после блокировки). Раньше отложенная
+// перезагрузка срабатывала сразу после входа и выкидывала человека на стартовый экран.
+const reloadScheduler = createReloadScheduler({
+	doc: document,
+	isLoggedIn: () => !!currentUser.peek(),
+	onceOnLock: (fn) => {
+		const off = onLock(() => {
+			off();
+			fn();
+		});
+	},
+	reload: doReload,
+});
 
 function reloadForFreshServiceWorker() {
 	if (refreshing) return;
@@ -99,28 +136,11 @@ function reloadForFreshServiceWorker() {
 	reloadWhenIdle();
 }
 
-// Перезагрузка в безопасный момент (не посреди набора пароля/текста) — общая для
-// обновления SW и для закрытия базы другой вкладкой (AUDIT-EGOROD E3).
+// Перезагрузка в безопасный момент — общая для обновления SW и для закрытия базы другой
+// вкладкой (AUDIT-EGOROD E3).
 function reloadWhenIdle() {
 	if (refreshing) return;
-	if (isAuthScreenVisible()) {
-		const root = document.getElementById("app") || document.body;
-		const obs = new MutationObserver(() => {
-			if (!isAuthScreenVisible()) {
-				obs.disconnect();
-				doReload();
-			}
-		});
-		obs.observe(root, { childList: true, subtree: true });
-		return;
-	}
-	const active = document.activeElement;
-	const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
-	if (isTyping) {
-		active.addEventListener("blur", doReload, { once: true });
-		return;
-	}
-	doReload();
+	reloadScheduler.request();
 }
 
 // AUDIT-EGOROD E3: другая вкладка открыла базу более новой версии (обновление
@@ -132,7 +152,12 @@ window.addEventListener("ugolok:db-versionchange", () => {
 	reloadWhenIdle();
 });
 
-if ("serviceWorker" in navigator) {
+// Э1/§4.2 — «в нативных режимах не эмитится service-worker.js и не выполняется
+// его регистрация»: __TARGET__ !== "web" исключает саму попытку регистрации
+// (файла нет в dist-capacitor/dist-tauri, см. vite.config.js), не полагаясь на
+// то, что .catch(() => {}) ниже просто молча проглотит 404 — так честнее и не
+// тратит сетевой запрос внутри нативной оболочки впустую.
+if (__TARGET__ === "web" && "serviceWorker" in navigator) {
 	navigator.serviceWorker.addEventListener("controllerchange", reloadForFreshServiceWorker);
 
 	// НАЙДЕНО ЖИВОЙ ПРОВЕРКОЙ (этап 53-довесок, тот же класс пробела, что
@@ -169,4 +194,16 @@ if ("serviceWorker" in navigator) {
 
 const root = document.getElementById("app");
 root.replaceChildren();
-render(<App />, document.getElementById("app"));
+
+// Э4.4 ТЗ-NATIVE-APPS — буквально "не грузить приложение дальше": проверка
+// ДО render(<App/>), не внутри неё — весь остальной код приложения (домен,
+// IndexedDB, ключи) не должен инициализироваться на слишком старом движке.
+// Только Android (getPlatform().os) — на iOS (Capacitor, ещё не создан, Э5)
+// движок WKWebView, UA не содержит "Chrome/N" вовсе, парсер честно вернёт
+// null/"слишком стар" — их сюда пускать нельзя, ТЗ (раздел 5) ограничивает
+// это требование явно Android'ом.
+if (__TARGET__ === "capacitor" && getPlatform().os === "android" && isChromiumTooOld(navigator.userAgent)) {
+	render(<WebViewOutdated />, root);
+} else {
+	render(<App />, root);
+}

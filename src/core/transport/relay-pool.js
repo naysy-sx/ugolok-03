@@ -42,12 +42,31 @@ export function computeBackoffDelay(attempt, config = DEFAULT_BACKOFF) {
   return raw - spread + Math.random() * spread * 2;
 }
 
+// Найдено живой проверкой (владелец, реальный телефон, 2026-09-29) —
+// приём заявки в контакты долетел только после ручного logout/login.
+// Причина: reconnect в этом файле раньше полагался ИСКЛЮЧИТЕЛЬНО на
+// нативные onclose/onerror браузерного WebSocket. На мобильной сети
+// (переключение вышки, Wi-Fi↔LTE handoff, NAT-таймаут оператора) TCP-
+// соединение может "тихо" зависнуть без единого события — readyState
+// остаётся OPEN, ни onclose, ни onerror не срабатывают, а relay уже
+// давно не видит эту сессию. Application-level heartbeat — REQ с
+// {limit:0} (relay обязан сразу ответить EOSE, NIP-01, без единого
+// EVENT) — единственный способ ЗАМЕТИТЬ это со стороны клиента:
+// JS WebSocket API не даёт доступа к protocol-level ping/pong.
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 25000;
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 10000;
+
 export function createRelayConnection(url, options = {}) {
   const WebSocketImpl = options.WebSocketImpl ?? globalThis.WebSocket;
   const backoff = { ...DEFAULT_BACKOFF, ...options.backoff };
   const autoReconnect = options.autoReconnect ?? true;
   const onMessage = options.onMessage;
   const onStateChange = options.onStateChange;
+  // 0/null — выключить (эфемерные one-shot соединения publishToRelay/
+  // fetchFromRelay ниже сами закрываются раньше, чем heartbeat успел бы
+  // сработать, но явно не заводить лишний таймер и обработчик проще).
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
   // TZ-diag-trace.md §2.5/§0.3 — необязательный, DI (не импорт трассировщика
   // сюда: relay-pool.js обслуживает и звонки, и весь остальной трафик
   // аккаунта, и не должен ничего знать про диагностический экран). Не меняет
@@ -87,6 +106,9 @@ export function createRelayConnection(url, options = {}) {
   // withResumedSince предпочитает, если он есть для этого subId.
   const processedWatermarkBySubId = new Map();
   let lastDisconnectAtMs = null;
+  let heartbeatTimer = null;
+  let heartbeatWatchdogTimer = null;
+  let heartbeatHandler = null;
 
   const messageHandlers = [];
 
@@ -102,6 +124,63 @@ export function createRelayConnection(url, options = {}) {
   function removeMessageHandler(handler) {
     const idx = messageHandlers.indexOf(handler);
     if (idx !== -1) messageHandlers.splice(idx, 1);
+  }
+
+  function clearHeartbeat() {
+    if (heartbeatTimer) {
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    if (heartbeatWatchdogTimer) {
+      clearTimeout(heartbeatWatchdogTimer);
+      heartbeatWatchdogTimer = null;
+    }
+    if (heartbeatHandler) {
+      removeMessageHandler(heartbeatHandler);
+      heartbeatHandler = null;
+    }
+  }
+
+  function scheduleHeartbeat() {
+    if (!heartbeatIntervalMs) return;
+    heartbeatTimer = setTimeout(sendHeartbeat, heartbeatIntervalMs);
+    if (typeof heartbeatTimer?.unref === "function") heartbeatTimer.unref();
+  }
+
+  function sendHeartbeat() {
+    heartbeatTimer = null;
+    // authenticating — тоже "живо" (обмен идёт), просто REQ {limit:0} может
+    // сейчас закрыться auth-required и повторно уйти после AUTH_OK/AUTH_FAIL
+    // (replayActiveReqs) — heartbeat туда специально НЕ попадает (см. send()
+    // ниже, activeReqs его не помнит), но сама попытка безвредна.
+    if (state !== "connected" && state !== "subscribed" && state !== "authenticating") return;
+    const subId = "hb-" + Math.random().toString(36).slice(2);
+    heartbeatHandler = (msg) => {
+      if (msg[0] !== "EOSE" || msg[1] !== subId) return false;
+      trace("heartbeat-ok", { subId });
+      clearHeartbeat();
+      scheduleHeartbeat();
+      return true;
+    };
+    addMessageHandler(heartbeatHandler);
+    try {
+      // Мимо send() намеренно — {limit:0} не подписка, которую нужно
+      // запоминать в activeReqs и реплеить после reconnect (withResumedSince
+      // добавил бы ей since, relay ответил бы тем же пустым EOSE смысла ради).
+      ws.send(JSON.stringify(["REQ", subId, { limit: 0 }]));
+    } catch {
+      return; // ws уже не готов — обычный onclose/onerror разберётся сам
+    }
+    heartbeatWatchdogTimer = setTimeout(() => {
+      trace("heartbeat-timeout", { subId });
+      clearHeartbeat();
+      // EOSE не пришёл за heartbeatTimeoutMs — соединение "тихо" зависло
+      // (readyState всё ещё OPEN, но relay нас не слышит). ws.close()
+      // синхронно зовёт наш же onclose ниже -> apply("CLOSE") ->
+      // scheduleReconnect() — тот же путь, что при обычном обрыве.
+      ws?.close();
+    }, heartbeatTimeoutMs);
+    if (typeof heartbeatWatchdogTimer?.unref === "function") heartbeatWatchdogTimer.unref();
   }
 
   function setState(next) {
@@ -154,6 +233,7 @@ export function createRelayConnection(url, options = {}) {
       apply("OPEN");
       replayActiveReqs(reqsBeforeOpen);
       if (onTrace && reqsBeforeOpen.size > 0) trace("resubscribe", { subIds: [...reqsBeforeOpen.keys()] });
+      scheduleHeartbeat();
     };
     ws.onclose = (evt) => {
       lastDisconnectAtMs = Date.now();
@@ -162,6 +242,7 @@ export function createRelayConnection(url, options = {}) {
         clearTimeout(stableTimer);
         stableTimer = null;
       }
+      clearHeartbeat();
       apply("CLOSE");
       scheduleReconnect();
     };
@@ -252,6 +333,7 @@ export function createRelayConnection(url, options = {}) {
       clearTimeout(stableTimer);
       stableTimer = null;
     }
+    clearHeartbeat();
     ws?.close();
   }
 
@@ -338,6 +420,8 @@ export function createRelayPool(entries, options = {}) {
       privKey: options.privKey,
       onStateChange: handleMemberStateChange,
       onTrace: options.onTrace,
+      heartbeatIntervalMs: options.heartbeatIntervalMs,
+      heartbeatTimeoutMs: options.heartbeatTimeoutMs,
     }),
   );
 
@@ -369,6 +453,21 @@ export function createRelayPool(entries, options = {}) {
 
   function onMemberMessage(msg) {
     const type = msg[0];
+    // Живой баг (найден live-тестом, 2026-10-03): heartbeat (relay-pool.js
+    // createRelayConnection, sendHeartbeat) регистрирует СВОЙ heartbeatHandler
+    // через ТОТ ЖЕ connection.addMessageHandler, что и эта функция — на одном
+    // connection-уровневом messageHandlers массиве, диспетчер которого
+    // (createRelayConnection's ws.onmessage) идёт по циклу "первый вернувший
+    // true — последний" (for...of + break). onMemberMessage регистрируется
+    // ПЕРВЫМ (на создании пула) и раньше безусловно возвращала true для
+    // ЛЮБОГО EVENT/EOSE — heartbeatHandler (добавляется ПОЗЖЕ, на каждый цикл)
+    // физически не мог получить СВОЙ же EOSE. Результат: каждый heartbeat
+    // гарантированно таймаутился, соединение форсированно переподключалось
+    // каждые ~(heartbeatIntervalMs+heartbeatTimeoutMs), НЕПРЕРЫВНО, всю жизнь
+    // сессии — живые подписки (gift-wrap заявки/accept, discovery "Кто здесь")
+    // попадали в эту гонку и теряли события до полного релогина (холодный REQ
+    // без since). Фикс — явно не трогать "hb-"-подписки, они не дело пула.
+    if (typeof msg[1] === "string" && msg[1].startsWith("hb-")) return false;
     if (type === "EVENT") {
       const subId = msg[1];
       const event = msg[2];
@@ -474,6 +573,7 @@ export function publishToRelay(url, event, options = {}) {
     const connection = createRelayConnection(url, {
       WebSocketImpl: options.WebSocketImpl,
       autoReconnect: false,
+      heartbeatIntervalMs: 0, // эфемерное соединение, закрывается раньше первого heartbeat
       onStateChange: (state) => {
         if (settled || state !== "connected") return;
         settled = true;
@@ -524,6 +624,7 @@ export function fetchFromRelay(url, filters, options = {}) {
     const connection = createRelayConnection(url, {
       WebSocketImpl: options.WebSocketImpl,
       autoReconnect: false,
+      heartbeatIntervalMs: 0, // эфемерное соединение, закрывается раньше первого heartbeat
       onStateChange: (state) => {
         if (settled || state !== "connected") return;
         const subId = "fetch-" + Math.random().toString(36).slice(2);

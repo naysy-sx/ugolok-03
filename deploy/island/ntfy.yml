@@ -1,0 +1,28 @@
+# ntfy (self-hosted) — сервер доставки push-уведомлений для Э-PUSH.
+# ТЗ: PROCESS-DOCS/NATIVE-APPS/TZ-PUSH-ANDROID.md, П1.1.
+#
+# Модель доступа (П1.1 «Закрыт: анонимная публикация запрещена, публиковать
+# может только мост по токену; подписка — по знанию топика»):
+#   - auth-default-access: deny-all — по умолчанию НИКТО ничего не может.
+#   - auth-access "*:*:ro" ниже открывает АНОНИМНОЕ чтение любого топика —
+#     это не дыра: топик сам по себе секрет (случайная строка ≥128 бит,
+#     ИП5), знание топика и есть авторизация на подписку, тот же принцип,
+#     что у Blossom-хешей.
+#   - публикует только push-bridge-server, под своим токеном — доступ на
+#     запись выдаётся отдельно, once, командой `docker compose exec ntfy
+#     ntfy user add`/`ntfy token add`/`ntfy access` (см. README.md этой
+#     папки, раздел ntfy) — НЕ декларативно в этом файле: bcrypt-хеш пароля
+#     в конфиге требует того же ntfy-бинаря для генерации, а секрет в
+#     открытом виде в git недопустим. Тот же компромисс, что уже принят для
+#     TURN_STATIC_AUTH_SECRET/turncreds.env — ручная одноразовая установка.
+listen-http: ":80"
+behind-proxy: true
+
+auth-file: "/var/lib/ntfy/auth.db"
+auth-default-access: "deny-all"
+auth-access:
+  - "*:*:ro"
+
+# П1.1 «Кэш сообщений: короткий (≤1ч) — push пустые, но и их хранить незачем».
+cache-duration: "1h"
+cache-file: "/var/lib/ntfy/cache.db"

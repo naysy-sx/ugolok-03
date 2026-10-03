@@ -29,3 +29,7 @@ Wenn Ihnen nicht nur wichtig ist, „dass das Gespräch nicht gelesen wird“, s
 
 - Einen eigenen Server betreiben, wenn Sie nicht einmal von den Servern des Projekts abhängig sein wollen.
 - Werkzeuge zur Umgehung von Sperren auf Netzwerkebene nutzen, falls das für Sie relevant ist — Ugolok versteht sich bewusst nicht als Werkzeug zur Zensurumgehung (siehe Abschnitt „Über das Projekt“), aber nichts hindert Sie daran, es über eine bereits von Ihnen eingerichtete Verbindung zu nutzen.
+
+## Speicher auf dem Server und „Speicher freigeben“
+
+Unter „Einstellungen → Speicher“ siehst du, wie viel Platz deine hochgeladenen Dateien auf dem Server belegen. „Speicher freigeben“ löscht die Bytes der Datei vom Server, nicht nur deinen Eintrag. Es **ruft nicht zurück**, was ein Empfänger bereits heruntergeladen hat: Er behält eine Kopie — der Schlüssel steckt in seiner Nachricht, die Bytes in seinem Cache. Eine Schaltfläche „für alle löschen“ gibt es nicht, weil sie sich ehrlich nicht umsetzen lässt. Eine Datei, die du aus einer fremden Nachricht „bei dir speicherst“, wird jetzt vollständig kopiert und belegt Platz bei dir, nicht beim Autor.

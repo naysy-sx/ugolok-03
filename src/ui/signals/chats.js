@@ -6,6 +6,7 @@ import { wrap as nip59Wrap } from "../../core/crypto/nip59.js";
 import { buildChatOpenRequestRumor } from "../../domain/contacts/requests.js";
 import { touchChatActivity } from "../../domain/messaging/chat-activity.js";
 import { deleteMessage, deleteMessageForMe, clearChatHistory } from "../../domain/messaging/deletions.js";
+import { deleteChatForever } from "../../domain/messaging/chat-delete.js";
 import { editMessage } from "../../domain/messaging/edits.js";
 import { markChatAsRead } from "../../domain/messaging/read-status.js";
 import { saveDraft } from "../../domain/messaging/drafts.js";
@@ -144,6 +145,18 @@ export async function deleteMessageForMeAction(ownerPubkey, contactPubkey, msgId
 // "Очистить переписку" — локально, у собеседника всё остаётся (mlsGroups не трогается).
 export async function clearChatHistoryAction(ownerPubkey, contactPubkey) {
 	return clearChatHistory(ownerPubkey, contactPubkey);
+}
+
+// «Удалить переписку навсегда» (вместе с удалением контакта) — локально, на этом устройстве.
+// refreshGroupMessageSubscription передаётся вызывающим (как везде здесь): набор групп, за
+// которыми следит live-подписка, только что уменьшился.
+export async function deleteChatForeverAction(ownerPubkey, privKey, dbKey, contactPubkey, publish, refreshGroupMessageSubscription) {
+	const result = await deleteChatForever(ownerPubkey, dbKey, contactPubkey);
+	if (typeof refreshGroupMessageSubscription === "function") {
+		await refreshGroupMessageSubscription(ownerPubkey, privKey, dbKey, publish).catch(() => {});
+	}
+	bumpMessagingActivity();
+	return result;
 }
 
 // Редактирование — этап 27-довесок-6, DESIGN.md (LWW-инвариант).

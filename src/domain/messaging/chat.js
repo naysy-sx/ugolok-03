@@ -1,3 +1,4 @@
+import { isBeforeChatDeletion, isBeforeChatDeletionByGroup } from "./chat-tombstone.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { generateSecretKey } from "nostr-tools/pure";
@@ -120,6 +121,9 @@ export async function requirePublishOk(publish, event) {
 // (source:"mirror") авторитетно чинит ТОЛЬКО поле senderPubkey — его пишет
 // само устройство-отправитель под ключом, выводимым из privKey владельца.
 export async function upsertMessage(row, dbKey, source = "live") {
+	// Удалённая переписка («удалить контакт и переписку»): сообщение, отправленное ДО удаления,
+	// не возвращается ни живым путём, ни зеркалом собственных устройств при перезапуске.
+	if (typeof row.sentAt === "number" && (await isBeforeChatDeletion(row.ownerPubkey, row.chatId, row.sentAt))) return;
 	try {
 		await db.table("messages").add(toEncryptedRow(row, MESSAGES_PLAINTEXT_FIELDS, dbKey));
 	} catch (e) {
@@ -155,11 +159,18 @@ async function mirrorBestEffort(privKey, publish, payload, groupIdHex) {
 }
 
 export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, publish) {
+	traceDelivery("ownkp.enter", {});
 	const existing = await db.table("ownKeyPackage").get(ownerPubkey);
-	if (existing) return;
+	if (existing) {
+		traceDelivery("ownkp.already-exists", {});
+		return;
+	}
 
 	const deviceId = await getOrCreateDeviceId();
+	traceDelivery("ownkp.device-id", { deviceId });
+	const t0 = Date.now();
 	const ownKeyPackage = await createOwnKeyPackage(ownerPubkey, deviceId);
+	traceDelivery("ownkp.keypackage-created", { elapsed: Date.now() - t0, wireBytesLen: ownKeyPackage.wireBytes.length });
 	await db.table("ownKeyPackage").put(
 		toEncryptedRow(
 			{
@@ -172,6 +183,7 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, 
 			dbKey,
 		),
 	);
+	traceDelivery("ownkp.db-persisted", {});
 
 	const event = sign(
 		{
@@ -182,7 +194,15 @@ export async function ensureOwnKeyPackagePublished(ownerPubkey, privKey, dbKey, 
 		},
 		privKey,
 	);
-	await requirePublishOk(publish, event);
+	traceDelivery("ownkp.signed", { eventId: event.id });
+	const t1 = Date.now();
+	try {
+		await requirePublishOk(publish, event);
+		traceDelivery("ownkp.publish-ok", { elapsed: Date.now() - t1 });
+	} catch (err) {
+		traceDelivery("ownkp.publish-error", { elapsed: Date.now() - t1, message: String(err?.message ?? err), code: err?.code });
+		throw err;
+	}
 }
 
 // DESIGN.md, этап 24, п.3 — установление 1:1-разговора. Своя (не из NIP-EE
@@ -688,6 +708,9 @@ async function doReceiveGroupMessageEvent(ownerPubkey, privKey, dbKey, event, pu
 	// лок вообще призван устранить.
 	const alreadyProcessed = await db.table("processedGroupEvents").get([ownerPubkey, event.id]);
 	if (alreadyProcessed) return null;
+	// Событие удалённой переписки (до момента удаления) — не обрабатываем: группы больше нет,
+	// а если разговор начат заново, старые сообщения чужой эпохи расшифровать всё равно нельзя.
+	if (await isBeforeChatDeletionByGroup(ownerPubkey, groupIdHex, event.created_at)) return null;
 
 	const raw = await db.table("mlsGroups").get([ownerPubkey, groupIdHex]);
 	if (!raw) {
@@ -1064,7 +1087,7 @@ async function getChatGeneration(ownerPubkey, contactPubkey) {
 	return row?.generation ?? 0;
 }
 
-async function bumpChatGeneration(ownerPubkey, contactPubkey) {
+export async function bumpChatGeneration(ownerPubkey, contactPubkey) {
 	const next = (await getChatGeneration(ownerPubkey, contactPubkey)) + 1;
 	await db.table("chatGeneration").put({ ownerPubkey, contactPubkey, generation: next });
 	return next;

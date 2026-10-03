@@ -10,6 +10,14 @@ services:
     image: ugolok-strfry:local
     container_name: ugolok-relay
     restart: unless-stopped
+    # Э-PUSH П0.3(Б)/П1.2 — whitelist-plugin.mjs (server/strfry/push-forward.mjs)
+    # читает эти две переменные, чтобы переслать событие push-bridge-server.
+    # push-bridge-plugin.env в .gitignore (тот же секрет — PUSH_INTERNAL_TOKEN —
+    # в push-bridge.env у push-bridge-server, см. README.md, раздел «Секрет push-моста»).
+    # Файл может отсутствовать/быть пустым — тогда forward() в push-forward.mjs
+    # тихо ничего не делает (ИП6: без настройки push остров ведёт себя как раньше).
+    env_file:
+      - ./push-bridge-plugin.env
     volumes:
       - ./strfry.conf:/app/strfry.conf:ro
       - /var/lib/ugolok/relay:/app/strfry-db
@@ -34,10 +42,10 @@ services:
       retries: 3
 
   blossom:
-    build:
-      context: ./blossom-src
-      dockerfile: ../blossom.Dockerfile
-    image: ugolok-blossom:local
+    # Готовый образ форка (репозиторий ugolok-blossom, UPSTREAM.md там же).
+    # Тег ПИНИТСЯ точно: обновление — осознанная смена этой строки. Откат —
+    # возврат прежнего тега и docker compose up -d; данные (том) не затрагиваются.
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.2.0
     container_name: ugolok-blossom
     restart: unless-stopped
     volumes:
@@ -96,3 +104,49 @@ services:
       - "127.0.0.1:8090:8090"
     mem_limit: 32m
     logging: *logging
+
+  # Э-PUSH П1.1 — сервер доставки push. Конфиг — ntfy.yml (в git, ничего
+  # секретного). Секрет публикации моста — создаётся once после первого
+  # запуска (README.md, раздел ntfy), не в этом compose-файле.
+  ntfy:
+    image: binwiederhier/ntfy:v2.28.0
+    container_name: ugolok-ntfy
+    restart: unless-stopped
+    command: ["serve"]
+    volumes:
+      - ./ntfy.yml:/etc/ntfy/server.yml:ro
+      - /var/lib/ugolok/ntfy:/var/lib/ntfy
+    ports:
+      - "127.0.0.1:2586:80"
+    mem_limit: 64m
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Э-PUSH П1.2 — мост relay(путь записи)→ntfy. agent-src — общий с
+  # turncreds-server (см. коммент выше про освежение на каждый деплой).
+  push-bridge-server:
+    build:
+      context: ./agent-src
+      dockerfile: ../push-bridge-server.Dockerfile
+    image: ugolok-push-bridge-server:local
+    container_name: ugolok-push-bridge-server
+    restart: unless-stopped
+    depends_on:
+      - ntfy
+    env_file:
+      - ./push-bridge.env
+    volumes:
+      - /var/lib/ugolok/push-bridge:/app/data
+    ports:
+      - "127.0.0.1:8091:8091"
+    mem_limit: 32m
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

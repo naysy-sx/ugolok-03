@@ -160,3 +160,9 @@ export const CHANNEL_REACTIONS_PLAINTEXT_FIELDS = [
   "ownerPubkey", "channelId", "targetType", "targetId", "postId",
   "reactorPubkey", "emoji", "createdAt", "lastEventCreatedAt", "lastEventId"
 ];
+
+// ТЗ-03 — журнал загрузок. Открыты только то, по чему строятся индексы и что не
+// раскрывает содержимого; имена файлов, цели, сервер, sourceDigest — в шифротексте.
+export const UPLOADS_PLAINTEXT_FIELDS = ["ownerPubkey", "hash", "at", "group", "purpose", "role", "size"];
+// Операции пачки (в них имена и цели) целиком в шифротексте.
+export const UPLOAD_BATCHES_PLAINTEXT_FIELDS = ["ownerPubkey", "d", "dev", "day", "seq", "closed", "dirty", "updatedAt", "remoteAt"];

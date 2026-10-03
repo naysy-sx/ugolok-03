@@ -5,8 +5,7 @@
 // скажет чужой профиль. Аватар легитимно лежит на Blossom (profile.jsx →
 // uploadAvatarBlob) либо data:/blob: — всё остальное отбрасывается, интерфейс
 // показывает инициалы.
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
-import { getRuntimeConfig } from "../settings/runtime-config.js";
+import { knownServers } from "../files/servers.js";
 
 const extra = new Set();
 const RASTER_DATA_URL = /^data:image\/(png|jpe?g|webp|gif|avif);base64,/i;
@@ -32,7 +31,7 @@ export function registerTrustedImageOrigins(urls) {
 
 function trustedOrigins() {
 	const out = new Set(extra);
-	for (const url of [...(BUILD_DEFAULT_BLOSSOM_SERVERS ?? []), ...(getRuntimeConfig().blossomServers ?? [])]) {
+	for (const url of knownServers()) {
 		const origin = originOf(url);
 		if (origin) out.add(origin);
 	}

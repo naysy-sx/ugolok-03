@@ -29,3 +29,7 @@ If it's critical for you not just "that the conversation isn't read" but "that t
 
 - Run your own server if you don't want to depend even on the project's servers.
 - Use network-level censorship circumvention tools if that's relevant for you — Ugolok deliberately isn't positioned as a censorship-circumvention tool itself (see the "About the project" section), but nothing stops you from using it on top of a connection you've already set up.
+
+## Server space and “free up space”
+
+“Settings → Storage” shows how much space your uploaded files take on the server. “Free up space” erases the file’s bytes from the server, not just your entry. It **does not recall** what a recipient has already downloaded: they keep a copy — the key is in their message and the bytes are in their cache. There is no “delete for everyone” button because it cannot honestly be built. A file you “save to yourself” from someone else’s message is now copied in full and takes space on your side, not the author’s.

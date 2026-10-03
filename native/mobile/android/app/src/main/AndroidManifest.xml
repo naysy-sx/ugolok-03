@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Э4.3 ТЗ-NATIVE-APPS, решение владельца (2026-09-27) — выключено:
+         зашифрованная БД (MLS-состояние, ключи) не должна уходить в облачный
+         бэкап Google даже в зашифрованном виде. История не переносится на
+         новый телефон автоматически, ключ восстанавливается мнемоникой. -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!-- adjustNothing: ОС никогда не резайзит окно/WebView при показе
+             клавиатуры. adjustResize задокументированно ломает позицию
+             курсора при вводе на WebView <144 (issues.chromium.org/issues/
+             457682720). Раскладку под клавиатуру вместо resize делает CSS:
+             MainActivity кладёт WindowInsetsCompat.Type.ime() в CSS-переменную
+             keyboard-inset, .shell (custom.css) уменьшает высоту через
+             calc() от неё. -->
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustNothing"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- Э-PUSH (TZ-PUSH-ANDROID.md, П2.1/П0.5) — foreground-service типа
+             connectedDevice, держит SSE-соединение к ntfy. -->
+        <service
+            android:name=".push.UgolokPushService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- П2.2 — автозапуск после перезагрузки/обновления приложения, ТОЛЬКО
+             если функция была включена (проверка внутри receiver'а, не здесь). -->
+        <receiver
+            android:name=".push.PushBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- П2.4 — кнопка «Отклонить» на уведомлении входящего звонка. -->
+        <receiver
+            android:name=".push.PushDismissReceiver"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+
+        <!-- Э4.8 ТЗ-NATIVE-APPS — @capacitor/local-notifications приносит этот
+             receiver для восстановления ЗАПЛАНИРОВАННЫХ уведомлений после
+             перезагрузки устройства (BOOT_COMPLETED). Мы используем плагин
+             только для НЕМЕДЛЕННЫХ уведомлений (пришло сообщение, пока
+             приложение свёрнуто) — ничего не планируем на будущее, этот
+             компонент лишний (И5). -->
+        <receiver
+            android:name="com.capacitorjs.plugins.localnotifications.LocalNotificationRestoreReceiver"
+            tools:node="remove" />
+    </application>
+
+    <!-- Permissions — Э4.2 ТЗ-NATIVE-APPS: итоговый манифест содержит ТОЛЬКО
+         эти. Всё остальное, что принесут плагины (Capacitor любит добавлять
+         лишнее из своих собственных манифестов), должно быть явно убрано
+         через tools:node="remove" (И5) — см. проверку в конце этого блока. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Э6 — удержание звонка в фоне, не реализовано ещё, но манифест И5
+         должен содержать это заранее (Э4.2 буквально). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Э4.8 — @capacitor/local-notifications приносило и то, и другое ради
+         ЗАПЛАНИРОВАННЫХ (не немедленных) уведомлений, которыми мы не
+         пользуемся. SCHEDULE_EXACT_ALARM по-прежнему не нужен — остаётся
+         убранным. RECEIVE_BOOT_COMPLETED теперь нужен по-настоящему (Э-PUSH,
+         П2.2/П2.6, PushBootReceiver) — снято tools:node="remove". -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+
+    <!-- Э-PUSH П2.6 — дополнение к списку основного ТЗ Э4.2. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Допустимо: дистрибуция без Google Play по умолчанию (основное ТЗ В8) —
+         при публикации в Play это разрешение ограничено правилами (П2.6). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+</manifest>

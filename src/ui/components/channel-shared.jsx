@@ -22,12 +22,11 @@ import EmojiQuickSend from "./emoji-quick-send.jsx";
 import PostEditor from "../editor/editor.jsx";
 import { parseRich } from "../../core/markdown/parse.js";
 import { toPlainText } from "../../core/markdown/to-plain.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
 const POST_MAX_LENGTH = 10000;
 const POST_SOURCE_MAX_LENGTH = 20000;
 const COMMENT_MAX_LENGTH = 4000;
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 // CHANNEL-V2 часть D1 — isNpub добавлен: вызывающий код раньше не мог
 // отличить настоящее имя от npub-заглушки и красил npub как обычное имя,
@@ -40,6 +39,7 @@ export function commentAuthorInfo(pubkey) {
 
 export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, onPublished, onCancel }) {
 	const [text, setText] = useState("");
+	const [title, setTitle] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const tray = useAttachmentTray({ maxItems: MAX_ATTACHMENTS_PER_MESSAGE });
@@ -62,8 +62,8 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 		setBusy(true);
 		setError("");
 		try {
-			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
-			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments });
+			const attachments = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: channelId } }) : [];
+			const { postId } = await createDraftPost(ownerPubkey, dbKey, channelId, { text, attachments, title: title.trim() || null });
 			await publishPost(ownerPubkey, privKey, dbKey, postId, publish);
 			onPublished();
 		} catch (err) {
@@ -78,7 +78,7 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
 		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
 				setError(t("chat.window.fileKeyNotFoundError"));
@@ -102,10 +102,15 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 					{error}
 				</p>
 			)}
+			{/* Заголовок виден сразу, как и при правке записи, — а не появляется только потом. */}
+			<div class="stack" style={{ "--gap": "var(--space-3xs)" }}>
+				<label for="new-post-title">{t("channel.composer.titleLabel")}</label>
+				<input id="new-post-title" type="text" value={title} onInput={(e) => setTitle(e.currentTarget.value)} />
+			</div>
 			<label class="visually-hidden" for="post-text">
 				{t("channel.composer.postTextLabel")}
 			</label>
-			<PostEditor initialSource={text} onChange={setText} />
+			<PostEditor initialSource={text} onChange={setText} heading={t("channel.composer.newPostHeading")} />
 			{(plainTooLong || sourceTooLong) && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
@@ -116,16 +121,17 @@ export function PostComposer({ ownerPubkey, privKey, dbKey, channelId, limiter, 
 			)}
 			<div class="row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
 				<input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => { tray.addFiles(e.currentTarget.files); e.currentTarget.value = ""; }} />
-				<button type="button" onClick={() => fileInputRef.current?.click()}>
+				<button type="button" class="btn--ghost" onClick={() => fileInputRef.current?.click()}>
 					<IconPaperclip /> {t("channel.composer.attachButton")}
 				</button>
-				<button type="button" onClick={() => setFilePickerOpen(true)}>
+				<button type="button" class="btn--ghost" onClick={() => setFilePickerOpen(true)}>
 					<IconFolder /> {t("channel.composer.attachFromStorageButton")}
 				</button>
+				<span class="grow" />
 				<button type="submit" class="post-cta--compact" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 					<IconSend /> {busy ? t("channel.composer.publishingButton") : t("channel.composer.publishButton")}
 				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
+				<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 					<IconCross /> {t("common.cancel")}
 				</button>
 			</div>
@@ -162,7 +168,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 		setBusy(true);
 		setError("");
 		try {
-			const added = tray.items.length > 0 ? await tray.uploadAll(privKey) : [];
+			const added = tray.items.length > 0 ? await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: post.channelId } }) : [];
 			await editPost(ownerPubkey, privKey, dbKey, post.id, { text, attachments: [...kept, ...added], title: title.trim() || null }, publish);
 			onSaved();
 		} catch (err) {
@@ -177,7 +183,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 		const node = projected.value.nodes.get(nodeId);
 		if (!node || node.kind !== "file") return;
 		try {
-			const manifest = await getManifest(node.blob, { serverUrl: BLOSSOM_SERVER_URL });
+			const manifest = await getManifest(node.blob, { serverUrl: uploadTarget() });
 			const fileKey = await getFileKeyFor(node.blob);
 			if (!fileKey) {
 				setError(t("chat.window.fileKeyNotFoundError"));
@@ -204,7 +210,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 			<label class="visually-hidden" for="edit-post-text">
 				{t("channel.composer.postTextLabel")}
 			</label>
-			<PostEditor initialSource={post.text || ""} onChange={setText} />
+			<PostEditor initialSource={post.text || ""} onChange={setText} heading={t("channel.composer.editPostHeading")} />
 			{(plainTooLong || sourceTooLong) && (
 				<p role="alert" style={{ color: "var(--bad)" }}>
 					{t("channel.composer.tooLongError", { max: POST_MAX_LENGTH })}
@@ -236,7 +242,7 @@ export function PostEditForm({ post, ownerPubkey, privKey, dbKey, limiter, onSav
 				<button type="submit" disabled={busy || emptyPost || plainTooLong || sourceTooLong || tray.items.some((item) => item.error)}>
 					<IconSend /> {busy ? t("common.saving") : t("common.save")}
 				</button>
-				<button type="button" onClick={onCancel} disabled={busy}>
+				<button type="button" class="btn--ghost" onClick={onCancel} disabled={busy}>
 					<IconCross /> {t("common.cancel")}
 				</button>
 			</div>
@@ -270,7 +276,7 @@ export function CommentComposer({ ownerPubkey, privKey, dbKey, channelId, postId
 		setError("");
 		try {
 			let attachments = [];
-			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey);
+			if (tray.items.length > 0) attachments = await tray.uploadAll(privKey, undefined, { journal: { purpose: "channel", target: channelId } });
 			else if (voice.hasRecording) {
 				const descriptor = await voice.buildAttachment(privKey);
 				if (descriptor) attachments = [descriptor];

@@ -12,6 +12,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { liveChildrenOf, ROOT_ID } from "./tree.js";
 import { loadShareMeta, saveShareMeta, saveShareKey, getShareKey, addShareGrantee, removeShareGrantee, listShareGrantees, getFileKey } from "./store.js";
 import { getManifest, getRange, putStream } from "./content.js";
+import { recordBlobs } from "../uploads/journal.js";
 import { DomainError } from "../errors.js";
 
 export const FILE_SHARE_GRANT_KIND = 30075;
@@ -29,13 +30,41 @@ export const FILE_SUBTREE_OP_KIND = 3008;
 // manifestDigest НЕ совпадает со старым (владельца) — читатель никогда
 // не видит блоб владельца напрямую.
 export async function reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, opts) {
+	// opts.onFileProgress(доля 0..1) — прогресс ЭТОГО файла: чтение оригинала — первая половина, заливка копии — вторая.
+	const { onFileProgress, ...netOpts } = opts;
+	opts = netOpts;
 	const ownerFileKey = await getFileKey(ownerPubkey, dbKey, node.blob);
 	const manifest = await getManifest(node.blob, opts);
-	const plaintext = await getRange(manifest, ownerFileKey, 0, manifest.size, opts);
+	const plaintext = await getRange(manifest, ownerFileKey, 0, manifest.size, {
+		...opts,
+		onProgress: onFileProgress ? (p) => onFileProgress(0.5 * (p?.bytesTotal ? p.bytesDone / p.bytesTotal : 0)) : undefined,
+	});
 	const plaintextDigest = bytesToHex(sha256(plaintext));
 	const derivedKey = deriveShareFileKey(subtreeKeyHex, plaintextDigest);
-	const { manifestDigest } = await putStream(plaintext, { ...opts, name: node.name.value, mime: manifest.mime, fileKey: derivedKey });
+	const { manifestDigest, blobs } = await putStream(plaintext, {
+		...opts,
+		name: node.name.value,
+		mime: manifest.mime,
+		fileKey: derivedKey,
+		onProgress: onFileProgress ? (p) => p?.phase === "upload" && onFileProgress(0.5 + 0.5 * (p.bytesTotal ? p.bytesSent / p.bytesTotal : 0)) : undefined,
+	});
+	onFileProgress?.(1);
+	// ТЗ-03: перезаливка в долю — тоже занятое место (тот же файл под тем же производным
+	// ключом даёт тот же блоб: журнал не дублирует запись, а дополняет цель).
+	await recordBlobs(blobs, { purpose: "share", target: opts.journalTarget ?? node.id, name: node.name.value, server: opts.serverUrl });
 	return { blob: manifestDigest, plaintextDigest };
+}
+
+function countLiveFiles(treeState, nodeId) {
+	let n = 0;
+	const stack = [...liveChildrenOf(treeState, nodeId)];
+	while (stack.length > 0) {
+		const id = stack.pop();
+		const node = treeState.nodes.get(id);
+		if (node.kind === "file") n += 1;
+		stack.push(...liveChildrenOf(treeState, id));
+	}
+	return n;
 }
 
 // Текущее содержимое nodeId (рекурсивно, только живые узлы) как пачка
@@ -48,13 +77,23 @@ export async function reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKey
 // op несёт NОВЫЙ blob + plaintextDigest (транзитное поле, только для
 // файлов, tree.js's applyOp его игнорирует). Папки — как раньше, без I/O.
 export async function snapshotSubtree(ownerPubkey, dbKey, treeState, nodeId, subtreeKeyHex, label, opts = {}) {
+	// opts.onShareProgress({ done, total, name, fraction }) — сколько файлов уже скопировано для читателей
+	// (fraction — общий прогресс 0..1 с учётом текущего файла). Без него поведение прежнее.
+	const { onShareProgress, ...netOpts } = opts;
+	opts = netOpts;
+	const total = countLiveFiles(treeState, nodeId);
+	let done = 0;
 	const ops = [];
 	const stack = [...liveChildrenOf(treeState, nodeId)].map((id) => ({ id, parentId: ROOT_ID }));
 	while (stack.length > 0) {
 		const { id, parentId } = stack.pop();
 		const node = treeState.nodes.get(id);
 		if (node.kind === "file") {
-			const { blob, plaintextDigest } = await reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, opts);
+			const report = (f) => onShareProgress?.({ done, total, name: node.name.value, fraction: total ? (done + f) / total : 1 });
+			report(0);
+			const { blob, plaintextDigest } = await reuploadUnderShareKey(ownerPubkey, dbKey, node, subtreeKeyHex, { ...opts, journalTarget: nodeId, onFileProgress: onShareProgress ? report : undefined });
+			done += 1;
+			report(0);
 			ops.push({ type: "create", id, kind: "file", blob, parentId, name: node.name.value, origin: node.origin.value, label, plaintextDigest });
 		} else {
 			ops.push({ type: "create", id, kind: node.kind, blob: null, parentId, name: node.name.value, origin: node.origin.value, label });
@@ -123,17 +162,20 @@ export async function share(ownerPubkey, ownerPrivKey, dbKey, treeState, nodeId,
 	}
 
 	const existingGrantees = new Set(await listShareGrantees(ownerPubkey, nodeId));
-	const newlyGranted = [];
-	for (const pubkey of pubkeys) {
-		if (existingGrantees.has(pubkey)) continue;
-		await sendShareGrant(ownerPubkey, ownerPrivKey, nodeId, subtreeKeyHex, version, pubkey, publish);
-		await addShareGrantee(ownerPubkey, nodeId, pubkey);
-		newlyGranted.push(pubkey);
-	}
+	const newReaders = pubkeys.filter((pubkey) => !existingGrantees.has(pubkey));
 
-	if (newlyGranted.length > 0) {
+	// Порядок важен: СНАЧАЛА снимок (перезаливка файлов — минуты) и его публикация, ПОТОМ гранты.
+	// Раньше грант уходил первым: получатель видел долю сразу, открывал её и находил пустую папку, а
+	// если перезаливка падала — грант и «читатель» уже были записаны, и повторный share() снимок больше
+	// не слал (читатель считался обслуженным). Теперь при сбое ничего не записано, и повтор безопасен.
+	// Хранимые relay-события снимка получатель подтянет подпиской #h, как только смонтирует долю.
+	if (newReaders.length > 0) {
 		const snapshotOps = await snapshotSubtree(ownerPubkey, dbKey, treeState, nodeId, subtreeKeyHex, label, opts);
 		await publishSubtreeOps(ownerPrivKey, nodeId, subtreeKeyHex, version, snapshotOps, publish);
+	}
+	for (const pubkey of newReaders) {
+		await sendShareGrant(ownerPubkey, ownerPrivKey, nodeId, subtreeKeyHex, version, pubkey, publish);
+		await addShareGrantee(ownerPubkey, nodeId, pubkey);
 	}
 	return { nodeId, version };
 }

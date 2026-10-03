@@ -29,3 +29,7 @@ Sizin için önemli olan sadece "yazışmanın okunmaması" değil, aynı zamand
 
 - Projenin sunucularına bile bağımlı olmak istemiyorsanız kendi sunucunuzu çalıştırın.
 - Sizin için önemliyse ağ düzeyinde engelleri aşma araçları kullanın — Ugolok, kendisini bilinçli olarak bir sansür aşma aracı olarak konumlandırmaz ("Proje hakkında" bölümüne bakın), ancak zaten kendi kurduğunuz bir bağlantının üzerinde onu kullanmanızı engelleyen hiçbir şey yoktur.
+
+## Sunucudaki yer ve “yer aç”
+
+“Ayarlar → Depolama” bölümünde yüklediğiniz dosyaların sunucuda ne kadar yer kapladığını görürsünüz. “Yer aç”, yalnızca sizdeki kaydı değil, dosyanın baytlarını da sunucudan siler. Alıcının zaten indirdiğini **geri almaz**: onda bir kopya kalır — anahtar onun mesajındadır, baytlar onun önbelleğindedir. “Herkesten sil” düğmesi yoktur, çünkü bunu dürüstçe yapmak mümkün değildir. Başkasının mesajından “kendime kaydet” dediğiniz dosya artık tamamen kopyalanır ve yazarda değil, sizde yer kaplar.

@@ -1,3 +1,5 @@
+import { recordUploads } from '../uploads/journal.js';
+import { refusalFromRequirements, toDomainRefusal } from '../uploads/quota.js';
 import { safePictureUrl } from '../media/url-guard.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -9,6 +11,7 @@ import { getProfile, updateProfile } from '../../core/crypto/keystore.js';
 import { uploadBlob, checkUploadRequirements } from '../files/blob.js';
 import { validateAttachment } from '../files/attachment-validation.js';
 import { DomainError } from '../errors.js';
+import { oneShotRequest } from '../../core/transport/deadline.js';
 
 // Этап 37 — правка контракта (было: picture сознательно не писалась, этап 26,
 // "локальный stand-in до Blossom"). JSON.stringify сам опускает undefined-поля —
@@ -39,10 +42,19 @@ export async function uploadAvatarBlob(serverUrl, fileBytes, mime, privateKey, o
   const sha256Hex = bytesToHex(sha256(fileBytes));
   const requirements = await checkUploadRequirements(serverUrl, { sha256Hex, mime, size: fileBytes.length }, privateKey, options);
   if (!requirements.ok) {
+    const refusal = refusalFromRequirements(requirements, fileBytes.length, 'avatar');
+    if (refusal) throw refusal;
     const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
     throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
   }
-  const response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  let response;
+  try {
+    response = await uploadBlob(serverUrl, fileBytes, sha256Hex, privateKey, options);
+  } catch (err) {
+    throw toDomainRefusal(err, { name: 'avatar', sizeBytes: fileBytes.length });
+  }
+  // ТЗ-03: аватар — тоже занятое место (публичный блоб без манифеста).
+  await recordUploads([{ hash: sha256Hex, size: fileBytes.length, role: 'content', purpose: 'avatar', target: 'profile', name: 'avatar', server: serverUrl }]);
   return response.url ?? (serverUrl.replace(/\/$/, '') + '/' + sha256Hex);
 }
 
@@ -147,9 +159,43 @@ export async function applyLiveOwnProfileEvent(ownerPubkey, event) {
 // должен ронять connect()/блокировать вход (в отличие от MLS KeyPackage).
 // Цена ретрая — одно kind:0 на connect, пока публикация не пройдёт; дешевле,
 // чем безымянный аккаунт навсегда.
-export async function ensureProfilePublished(ownerPubkey, login, privKey, publish) {
+//
+// Этап 71-довесок (найдено живой проверкой, восстановление по мнемонике на
+// чистом устройстве, ТЗ-NATIVE-APPS §6.3, реальная потеря about/picture на
+// relay — kind:0 replaceable, старую версию не вернуть). Раньше защита от
+// затирания держалась ТОЛЬКО на порядке вызовов в transport.js (hydrateOwnProfile
+// перед ensureProfilePublished) — хрупко: bootstrap мог не успеть донести
+// существующий kind:0 до локального кэша (таймаут runBootstrap, медленная сеть,
+// заблокированный relay), keystore оставался пустым, и эта функция публиковала
+// ГОЛЫЙ {name}, стирая существующие about/picture. Порядок вызовов НЕ трогаем —
+// вместо этого функция сама явно спрашивает write-relay, прежде чем решить,
+// публиковать ли что-то: "не знаю, что там" ДОЛЖНО значить "не трогаю", а не
+// "считаю, что там пусто".
+export async function ensureProfilePublished(ownerPubkey, login, privKey, publish, connection, verifyBatch, timeoutMs = 10000) {
   const record = await db.table('keystore').get(ownerPubkey);
   if (record?.profileAutoPublished) return;
+  let existing;
+  try {
+    existing = await oneShotRequest(connection, [{ authors: [ownerPubkey], kinds: [0] }], { timeoutMs, verifyBatch });
+  } catch {
+    // Таймаут/relay недоступен/ответ неполный — состояние на relay НЕИЗВЕСТНО.
+    // Не публикуем НИЧЕГО и не ставим флаг — повторим на следующем connect().
+    return;
+  }
+  if (existing.length > 0) {
+    // На relay УЖЕ есть kind:0 — не наше дело его трогать. Раз уж мы только что
+    // сами его получили (независимо от того, успел ли общий bootstrap донести
+    // его до локального кэша) — применяем сразу, чтобы это устройство не
+    // показывало пустые about/picture до следующего удачного bootstrap.
+    for (const event of existing) {
+      if (!(await hasEvent(event.id))) await appendEvent(event);
+    }
+    await hydrateOwnProfile(ownerPubkey);
+    await db.table('keystore').update(ownerPubkey, { profileAutoPublished: true });
+    return;
+  }
+  // Подтверждено явным запросом (EOSE, ноль событий) — на relay нет ни одного
+  // kind:0 для этого pubkey, безопасно опубликовать первичный профиль.
   try {
     const current = await getProfile(ownerPubkey);
     const event = buildProfileEvent(privKey, { name: login, about: current.bio || undefined, picture: current.avatarUrl || undefined });

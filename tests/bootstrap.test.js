@@ -133,6 +133,28 @@ test("runBootstrap: записывает syncState.lastSeen для URL соед�
 	assert.ok(lastSeen >= before);
 });
 
+test("runBootstrap: если EOSE не приходит за timeoutMs, резолвится (не висит, не бросает) — событие, пришедшее ДО таймаута и УЖЕ прошедшее свой batch-window (subscriber.js, 200мс), всё равно учтено", async () => {
+	const { conn, ws } = setupConnected();
+	// timeoutMs > DEFAULT_BATCH_WINDOW_MS (200мс) — иначе таймаут сработает
+	// раньше, чем subscriber успеет сделать flush() пришедшего батча.
+	const promise = runBootstrap(conn, PUBKEY, { verifyBatch: acceptAllVerify, subId: "boot", timeoutMs: 300 });
+	ws._emit(["EVENT", "boot", ev("e1")]);
+	// EOSE сознательно не эмитируется — таймаут должен сработать сам.
+
+	const result = await promise;
+	assert.equal(result.addedCount, 1);
+	assert.ok(typeof result.lamportValue === "number");
+});
+
+test("runBootstrap: EOSE, пришедший ПОСЛЕ таймаута, не бросает и не пересчитывает уже вернувшийся результат", async () => {
+	const { conn, ws } = setupConnected();
+	const result = await runBootstrap(conn, PUBKEY, { verifyBatch: acceptAllVerify, subId: "boot", timeoutMs: 20 });
+	assert.equal(result.addedCount, 0);
+	// handler снят в finally — этот EOSE должен просто не иметь эффекта, не падать.
+	ws._emit(["EOSE", "boot"]);
+	ws._emit(["EVENT", "boot", ev("late")]);
+});
+
 test("getSyncState/setSyncState: базовый round-trip", async () => {
 	assert.equal(await getSyncState("ws://unknown"), undefined);
 	await setSyncState("ws://r1", 12345);

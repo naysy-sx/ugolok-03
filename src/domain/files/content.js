@@ -5,6 +5,8 @@ import { planChunks, rangeToChunks } from "./manifest.js";
 import { uploadBlob, downloadBlob, downloadBlobRange, checkUploadRequirements } from "./blob.js";
 import { getCachedCipherChunk, putCachedCipherChunk } from "./blob-cache.js";
 import { DomainError } from "../errors.js";
+import { resolveReadServers, sanitizeServerHint } from "./servers.js";
+import { refusalFromRequirements, toDomainRefusal } from "../uploads/quota.js";
 
 export const DEFAULT_CHUNK_SIZE = 256 * 1024; // 256 КБ, ALGO.MD §9.2 — рекомендация, не замер
 const GET_RANGE_CONCURRENCY = 6;
@@ -69,13 +71,21 @@ export async function putStream(
 	const uploadOptions = { ...(fetchImpl ? { fetchImpl } : {}), signal, timeoutMs, retries, backoffMs, expirationSec };
 	const requirements = await checkUploadRequirements(serverUrl, { sha256Hex: blobSha256Local, mime, size: fullCiphertext.length }, privateKey, uploadOptions);
 	if (!requirements.ok) {
+		// ТЗ-04: машинная причина отказа (квота/размер/только чтение) -> понятная ошибка, а не «сервер отклонил»
+		const refusal = refusalFromRequirements(requirements, fullCiphertext.length, name);
+		if (refusal) throw refusal;
 		const detail = requirements.status ? ' (' + requirements.status + (requirements.reason ? ': ' + requirements.reason : '') + ')' : '';
 		throw new DomainError('Blossom-сервер отклонил файл' + detail, 'errors.blossomRejectedFile', { detail });
 	}
-	const uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, {
-		...uploadOptions,
-		onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? fullCiphertext.length }) : undefined,
-	});
+	let uploadResponse;
+	try {
+		uploadResponse = await uploadBlob(serverUrl, fullCiphertext, blobSha256Local, privateKey, {
+			...uploadOptions,
+			onUploadProgress: onProgress ? ({ loaded, total }) => onProgress({ phase: "upload", bytesSent: loaded, bytesTotal: total ?? fullCiphertext.length }) : undefined,
+		});
+	} catch (err) {
+		throw toDomainRefusal(err, { name, sizeBytes: fullCiphertext.length }); // гонка: HEAD прошёл, а к PUT остаток кончился — тот же понятный отказ
+	}
 	onProgress?.({ phase: "manifest" });
 
 	// keyId — непрозрачная ССЫЛКА (§4.1 MATH.md: "Manifest.keyId : KeyId"), не
@@ -90,12 +100,19 @@ export async function putStream(
 		mime,
 		name,
 		blobSha256: uploadResponse.sha256,
+		// ТЗ-05 §4: куда залит контент — подсказка чтения на другом сервере (необязательное поле).
+		...(sanitizeServerHint(serverUrl).length > 0 ? { servers: sanitizeServerHint(serverUrl) } : {}),
 	};
 	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
 	const manifestDigest = bytesToHex(sha256(manifestBytes));
 	await uploadBlob(serverUrl, manifestBytes, manifestDigest, privateKey, uploadOptions);
 
-	return { manifest, manifestDigest, fileKey, size };
+	// ТЗ-03: список залитых блобов (для журнала загрузок) — аддитивно, остальные поля прежние.
+	const blobs = [
+		{ role: "content", hash: uploadResponse.sha256, size: fullCiphertext.length },
+		{ role: "manifest", hash: manifestDigest, size: manifestBytes.length },
+	];
+	return { manifest, manifestDigest, fileKey, size, blobs };
 }
 
 // AUDIT-EGOROD E4. Версия формата манифеста. Раньше поля версии не было, и любое
@@ -266,7 +283,7 @@ async function fetchCipherChunk(manifest, chunkIndex, ramKey, { serverUrl, optio
 		const cipherStart = cipherChunkOffset(chunkIndex, manifest.chunkSize);
 		const cipherEnd = cipherStart + cipherChunkLength(manifest, chunkIndex) - 1;
 		const netStart = trace ? nowMs() : 0;
-		cipherChunk = await downloadBlobRange(serverUrl, manifest.blobSha256, cipherStart, cipherEnd, options);
+		cipherChunk = await downloadBlobRange(resolveReadServers(manifest.servers, serverUrl), manifest.blobSha256, cipherStart, cipherEnd, options);
 		if (trace) {
 			trace.mark("net", nowMs() - netStart);
 			// Только у владельца запроса: счётчик обязан показывать число

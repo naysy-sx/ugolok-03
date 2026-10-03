@@ -2,10 +2,12 @@ import { useState, useCallback } from "preact/hooks";
 import * as core from "./attachment-tray-core.js";
 import { errorMessage } from "../signals/i18n.js";
 import { uploadMessageAttachmentStreaming, referenceStoredFile } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
+import { addTargetToGroupOf } from "../../domain/uploads/journal.js";
+import { getQuotaSnapshot, refreshQuota } from "../signals/quota.js";
+import { checkBatch, isRefusalError } from "../../domain/uploads/quota.js";
 import { extractVideoPoster } from "../media/extract-video-poster.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function schedulePosters(items, setState) {
 	for (const item of items) {
@@ -22,7 +24,7 @@ export function useAttachmentTray({ maxItems }) {
 	const addFiles = useCallback(
 		(files) =>
 			setState((s) => {
-				const next = core.addFiles(s, files, maxItems);
+				const next = core.addFiles(s, files, maxItems, { quota: getQuotaSnapshot() });
 				schedulePosters(next.items, setState);
 				return next;
 			}),
@@ -47,10 +49,33 @@ export function useAttachmentTray({ maxItems }) {
 	// же содержимого не страшен, но недогруженный PUT должен прерываться).
 	const uploadAll = useCallback(
 		async (privKey, onProgress, options = {}) => {
-			const { signal } = options;
+			// options.journal = {purpose, target} — куда уходит вложение (журнал загрузок, ТЗ-03).
+			const { signal, journal, onBytes } = options;
 			const jobs = core.planUpload(state);
 			const results = [];
 			const failures = [];
+
+			// ТЗ-04: остаток проверяется ДО шифрования первого файла. На гигабайте отказ после
+			// шифрования — это минуты ожидания; здесь он мгновенный и без единого залитого байта.
+			const uploads = jobs.filter((j) => j.kind === "upload");
+			if (uploads.length > 0) {
+				await refreshQuota();
+				const chk = checkBatch(uploads.map((j) => ({ name: j.name, size: j.file.size, mime: j.mime })), getQuotaSnapshot());
+				if (!chk.ok) {
+					chk.error.partialResults = [];
+					chk.error.failures = [{ index: 0, error: chk.error }];
+					chk.error.stopped = true;
+					throw chk.error;
+				}
+			}
+
+			// Долевой прогресс по байтам (0..1) — для строки «Загрузка вложения…» в композере.
+			// Шифрование ≈ 40% времени файла, отправка ≈ 55%, манифест — остаток.
+			const totalBytes = uploads.reduce((sum, j) => sum + (j.file?.size ?? 0), 0) || 1;
+			let doneBytes = 0;
+			onBytes?.(0);
+
+			let stopped = false;
 			for (let i = 0; i < jobs.length; i++) {
 				const job = jobs[i];
 				if (signal?.aborted) {
@@ -61,8 +86,19 @@ export function useAttachmentTray({ maxItems }) {
 					let descriptor;
 					if (job.kind === "reference") {
 						descriptor = referenceStoredFile(job.manifestDigest, job.fileKey, job.manifest);
+						// Новых байтов нет — журнал лишь дополняет «куда отправлено» у уже залитой группы.
+						if (journal?.target) await addTargetToGroupOf(job.manifestDigest, journal.target);
 					} else {
-						descriptor = await uploadMessageAttachmentStreaming(BLOSSOM_SERVER_URL, job.file, { mime: job.mime, name: job.name }, privKey, { signal });
+						const jobSize = job.file.size || 0;
+						const onProgress = onBytes
+							? (p) => {
+									const within = p.phase === "encrypt" ? 0.4 * (p.chunksDone / (p.chunksTotal || 1)) : p.phase === "upload" ? 0.4 + 0.55 * (p.bytesSent / (p.bytesTotal || 1)) : 0.97;
+									onBytes(Math.min(1, (doneBytes + within * jobSize) / totalBytes));
+								}
+							: undefined;
+						descriptor = await uploadMessageAttachmentStreaming(uploadTarget(), job.file, { mime: job.mime, name: job.name }, privKey, { signal, journal, onProgress });
+						doneBytes += jobSize;
+						onBytes?.(Math.min(1, doneBytes / totalBytes));
 					}
 					if (job.isImage) descriptor.position = job.position;
 					if (job.layout) descriptor.layout = job.layout;
@@ -78,6 +114,13 @@ export function useAttachmentTray({ maxItems }) {
 					results.push(descriptor);
 				} catch (err) {
 					failures.push({ index: i, error: err });
+					// ТЗ-04: отказ по квоте останавливает ВЕСЬ лоток. Остальные файлы не заливаются:
+					// частичная отправка без ясной пометки — та вещь, из-за которой человек не понимает,
+					// дошло его вложение или нет.
+					if (isRefusalError(err)) {
+						stopped = true;
+						break;
+					}
 				}
 				onProgress?.(i + 1, jobs.length);
 			}
@@ -86,6 +129,7 @@ export function useAttachmentTray({ maxItems }) {
 				const aggregate = first instanceof Error ? first : new Error(String(first));
 				aggregate.partialResults = results;
 				aggregate.failures = failures;
+				if (stopped) aggregate.stopped = true;
 				throw aggregate;
 			}
 			return results;

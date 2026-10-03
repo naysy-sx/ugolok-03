@@ -24,12 +24,20 @@ services:
     restart: unless-stopped
 
   blossom:
-    build:
-      context: ./blossom-src
-      dockerfile: ../blossom.Dockerfile
+    # Готовый образ форка (репозиторий ugolok-blossom), тот же тег, что у
+    # боевого острова (deploy/island/docker-compose.yml). Тег пинится точно:
+    # обновление — осознанная смена этой строки, не latest.
+    image: git.ugolok.tech/naysy/ugolok-blossom:1.2.0
+    # blossom.env создаёт агент (права 600) до compose up. Сейчас пуст —
+    # сюда лягут ключи S3 (ТЗ-02), чтобы секреты не попадали в compose.
+    env_file:
+      - ./blossom.env
     volumes:
       - ./rendered/blossom-config.yml:/app/config.yml:ro
-      - blossom-data:/app/db
+      # /app/data, не /app/db: в образе /app/db — миграции схемы. Именованный
+      # том поверх /app/db при первом монтировании копирует их в себя и потом
+      # держит устаревшими при обновлении образа.
+      - blossom-data:/app/data
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped

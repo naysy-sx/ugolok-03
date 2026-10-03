@@ -723,3 +723,130 @@ test("fetchFromRelay: игнорирует EVENT/EOSE с чужим subId", asyn
 		["e1"],
 	);
 });
+
+// Найдено живой проверкой (владелец, реальный телефон, 2026-09-29) — приём
+// заявки в контакты долетел только после ручного logout/login. TCP-соединение
+// на мобильной сети может "тихо" зависнуть (readyState всё ещё OPEN) без
+// единого onclose/onerror — application-level heartbeat (REQ {limit:0}, relay
+// обязан ответить EOSE без единого EVENT, NIP-01) — единственный способ это
+// заметить: JS WebSocket API не даёт доступа к protocol-level ping/pong.
+
+test("heartbeat: REQ {limit:0} уходит через heartbeatIntervalMs после open, EOSE вовремя -> соединение остаётся connected, следующий heartbeat планируется", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, heartbeatIntervalMs: 1000, heartbeatTimeoutMs: 500 });
+	conn.connect();
+	WS.instances[0]._open();
+	assert.equal(WS.instances[0].sent.length, 0, "heartbeat не уходит сразу же при open");
+
+	t.mock.timers.tick(1000);
+	assert.equal(WS.instances[0].sent.length, 1, "heartbeat REQ должен уйти через heartbeatIntervalMs");
+	const [type, subId, filter] = JSON.parse(WS.instances[0].sent[0]);
+	assert.equal(type, "REQ");
+	assert.deepEqual(filter, { limit: 0 });
+
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", subId]) });
+	assert.equal(conn.getState(), "connected", "EOSE вовремя — соединение не должно закрываться");
+
+	// Следующий heartbeat запланирован заново (не завис после первого цикла).
+	t.mock.timers.tick(1000);
+	assert.equal(WS.instances[0].sent.length, 2, "второй heartbeat должен уйти через ещё heartbeatIntervalMs");
+	t.mock.timers.reset();
+});
+
+test("heartbeat: EOSE не пришёл за heartbeatTimeoutMs -> соединение считается мёртвым, закрывается и планирует переподключение", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", {
+		WebSocketImpl: WS,
+		heartbeatIntervalMs: 1000,
+		heartbeatTimeoutMs: 500,
+		backoff: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0 },
+	});
+	conn.connect();
+	WS.instances[0]._open();
+	t.mock.timers.tick(1000); // heartbeat REQ отправлен
+	assert.equal(WS.instances[0].sent.length, 1);
+	assert.equal(WS.instances[0].readyState, 1, "соединение всё ещё формально открыто — тот самый 'тихий' обрыв");
+
+	t.mock.timers.tick(500); // EOSE так и не пришёл — heartbeatTimeoutMs истёк
+	assert.equal(WS.instances[0].readyState, 3, "watchdog должен закрыть 'зависшее' соединение сам");
+	assert.equal(conn.getState(), "disconnected");
+
+	t.mock.timers.tick(1000); // backoff baseMs
+	assert.equal(WS.instances.length, 2, "после форсированного close() должно последовать обычное автопереподключение");
+	t.mock.timers.reset();
+});
+
+test("heartbeat: подписка hb-* не запоминается в activeReqs — не реплеится при следующем reconnect", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", {
+		WebSocketImpl: WS,
+		heartbeatIntervalMs: 1000,
+		heartbeatTimeoutMs: 500,
+		backoff: { baseMs: 1000, maxMs: 30000, multiplier: 2, jitter: 0 }, // детерминированно — без этого delay плавает ±30%
+	});
+	conn.connect();
+	WS.instances[0]._open();
+	conn.send(["REQ", "real-sub", {}]); // настоящая, "долгоживущая" подписка
+	t.mock.timers.tick(1000);
+	const [, hbSubId] = JSON.parse(WS.instances[0].sent[1]);
+	WS.instances[0]._remoteClose(); // heartbeat не успел получить EOSE, но обрыв пришёл другим путём
+	t.mock.timers.tick(1000); // backoff baseMs -> новая попытка
+	WS.instances[1]._open(); // replayActiveReqs срабатывает внутри onopen
+
+	const resent = WS.instances[1].sent.map((m) => JSON.parse(m));
+	const subIds = resent.filter((m) => m[0] === "REQ").map((m) => m[1]);
+	assert.ok(subIds.includes("real-sub"), "настоящая подписка должна реплеиться");
+	assert.ok(!subIds.includes(hbSubId), "heartbeat-подписка НЕ должна реплеиться — она одноразовая");
+	t.mock.timers.reset();
+});
+
+test("heartbeat: heartbeatIntervalMs:0 отключает механизм полностью (эфемерные one-shot соединения)", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const conn = createRelayConnection("ws://test", { WebSocketImpl: WS, heartbeatIntervalMs: 0 });
+	conn.connect();
+	WS.instances[0]._open();
+	t.mock.timers.tick(60000);
+	assert.equal(WS.instances[0].sent.length, 0, "heartbeatIntervalMs:0 не должен заводить никакого таймера/REQ");
+	t.mock.timers.reset();
+});
+
+// Живой баг (найден live-тестом с реальными устройствами, 2026-10-03):
+// heartbeat-тесты выше гоняют createRelayConnection В ИЗОЛЯЦИИ — но
+// production ВСЕГДА идёт через createRelayPool, который регистрирует свой
+// onMemberMessage на ТОМ ЖЕ connection-уровневом messageHandlers массиве,
+// что и heartbeatHandler (оба — connection.addMessageHandler). Диспетчер
+// этого массива — "первый вернувший true побеждает" (for...of + break).
+// onMemberMessage регистрируется ПЕРВЫМ (на создании пула) и раньше
+// безусловно возвращал true для ЛЮБОГО EVENT/EOSE — heartbeatHandler
+// (добавляется ПОЗЖЕ, на каждый цикл) физически не мог получить СВОЙ же
+// EOSE. Итог: каждый heartbeat гарантированно таймаутился, соединение
+// форсированно переподключалось каждые ~(interval+timeout) НЕПРЕРЫВНО —
+// живые подписки (gift-wrap заявки/accept, discovery) теряли события до
+// полного релогина. Этот тест обязан идти через createRelayPool, иначе
+// регресс снова пройдёт незамеченным мимо тестов выше.
+test("heartbeat через createRelayPool: EOSE должен доходить до heartbeatHandler, не поглощаться onMemberMessage пула", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const WS = freshWS();
+	const pool = createRelayPool([{ url: "wss://a", read: true, write: true }], {
+		WebSocketImpl: WS,
+		heartbeatIntervalMs: 1000,
+		heartbeatTimeoutMs: 500,
+	});
+	pool.connect();
+	WS.instances[0]._open();
+
+	t.mock.timers.tick(1000); // heartbeat REQ уходит
+	const [, hbSubId] = JSON.parse(WS.instances[0].sent[0]);
+	WS.instances[0].onmessage({ data: JSON.stringify(["EOSE", hbSubId]) });
+
+	// Прежде чем таймаут успеет сработать — соединение не должно быть закрыто
+	// форсированным watchdog'ом: EOSE обязан был дойти и сбросить его.
+	t.mock.timers.tick(500);
+	assert.equal(WS.instances[0].readyState, 1, "heartbeatHandler должен был получить EOSE и не закрывать соединение");
+	assert.equal(WS.instances.length, 1, "не должно было произойти форсированного reconnect");
+	t.mock.timers.reset();
+});

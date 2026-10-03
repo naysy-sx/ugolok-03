@@ -429,6 +429,32 @@ db.version(37).stores({
   peerPresence: "[ownerPubkey+contactPubkey]",
 });
 
+// ТЗ-03 — журнал загрузок (domain/uploads). uploads — материализованное состояние
+// («что я залил», ключ — hash блоба); uploadBatches — исходные пачки операций (по ним
+// журнал синхронизируется между устройствами и пересобирается); uploadSync — отметка
+// «докуда дочитаны пачки с relay». Имена файлов и цели шифруются dbKey; индексируемые
+// поля (at/group/purpose) остаются открытыми — см. table-fields.js.
+db.version(38).stores({
+  uploads: "[ownerPubkey+hash], ownerPubkey, [ownerPubkey+at], [ownerPubkey+group], [ownerPubkey+purpose]",
+  uploadBatches: "[ownerPubkey+d], ownerPubkey",
+  uploadSync: "ownerPubkey",
+});
+
+// ТЗ-03, доработка: хеши блобов, стёртых с сервера («освободить место»), — по ним «Файлы»
+// помечают узел «удалён с сервера». Материализация из операций freed журнала.
+db.version(39).stores({
+  uploadFreed: "[ownerPubkey+hash], ownerPubkey",
+});
+
+// «Удалить переписку навсегда» (при удалении контакта): надгробие чата. Хранит момент
+// (секунды), до которого всё, что относится к этой паре, считается удалённым: relay при
+// перезапуске передоставляет всю историю (Welcome, сообщения kind 445, зеркало kind 446),
+// и без надгробия удалённая переписка возвращалась бы. Не секрет — тот же прецедент, что
+// chatGeneration (голые числа и публичные ключи, шифровать нечего).
+db.version(40).stores({
+  chatTombstones: "[ownerPubkey+contactPubkey], [ownerPubkey+groupId], ownerPubkey",
+});
+
 // AUDIT-EGOROD E3: вкладка с НОВЫМ кодом хочет поднять версию базы и ждёт, пока
 // старые вкладки отпустят соединение. Штатное поведение Dexie — тихо закрыть
 // соединение, после чего любая операция этой вкладки падает DatabaseClosedError,

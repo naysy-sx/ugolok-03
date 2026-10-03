@@ -40,12 +40,15 @@ async function captureVideoFrame(file, options = {}) {
 	const createObjectURL = options.createObjectURL ?? (typeof URL !== "undefined" && URL.createObjectURL ? URL.createObjectURL.bind(URL) : null);
 	const revokeObjectURL = options.revokeObjectURL ?? (typeof URL !== "undefined" && URL.revokeObjectURL ? URL.revokeObjectURL.bind(URL) : null);
 
-	if (!makeVideo || !makeCanvas || !createObjectURL) return null;
+	// options.src — готовый адрес (мост /files-content/… для видео из «Файлов»): файла в руках нет,
+	// браузер сам читает нужные диапазоны; object URL не создаём и не освобождаем.
+	const externalSrc = typeof options.src === "string" && options.src ? options.src : null;
+	if (!makeVideo || !makeCanvas || (!createObjectURL && !externalSrc)) return null;
 
 	let objectUrl;
 	let video;
 	try {
-		objectUrl = createObjectURL(file);
+		objectUrl = externalSrc ?? createObjectURL(file);
 		video = makeVideo();
 		video.muted = true;
 		video.playsInline = true;
@@ -84,7 +87,7 @@ async function captureVideoFrame(file, options = {}) {
 		return null;
 	} finally {
 		if (video) video.src = "";
-		if (objectUrl && revokeObjectURL) revokeObjectURL(objectUrl);
+		if (objectUrl && !externalSrc && revokeObjectURL) revokeObjectURL(objectUrl);
 	}
 }
 
@@ -128,4 +131,12 @@ export async function extractVideoPosterCapture(file, options = {}) {
 		height: captured.height,
 		duration: captured.duration,
 	};
+}
+
+// Миниатюра для плитки «Файлов»: кадр видео по адресу моста /files-content/… (читаются только
+// нужные диапазоны, файл целиком не скачивается). null — кадр получить не удалось (иконка остаётся).
+export async function extractVideoFrameFromSrc(src, mime, options = {}) {
+	const captured = await captureVideoFrame({ type: mime }, { timeoutMs: 15000, maxWidth: 240, ...options, src });
+	if (!captured) return null;
+	return new Uint8Array(await captured.blob.arrayBuffer());
 }

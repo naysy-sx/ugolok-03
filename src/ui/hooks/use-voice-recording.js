@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "preact/hooks";
 import { createVoiceRecorder, shouldInlineVoice } from "../../domain/messaging/voice.js";
 import { uploadMessageAttachment } from "../../domain/messaging/attachments.js";
-import { BUILD_DEFAULT_BLOSSOM_SERVERS } from "../../config.js";
 import { t, errorMessage } from "../signals/i18n.js";
+import { uploadTarget } from "../../domain/files/servers.js";
 
-const BLOSSOM_SERVER_URL = BUILD_DEFAULT_BLOSSOM_SERVERS[0];
 
 function base64FromBytes(bytes) {
 	return btoa(String.fromCharCode.apply(null, bytes));
@@ -84,13 +83,13 @@ export function useVoiceRecording() {
 	// undefined, если нечего прикреплять (recordingState !== "recorded") — тот же
 	// контракт, что buildOutgoingAttachments() в chat.jsx раньше. Голосовое
 	// ≤32КБ — inline base64 прямо в сообщении, иначе — обычная загрузка на Blossom.
-	async function buildAttachment(privKey) {
+	async function buildAttachment(privKey, options = {}) {
 		if (!recordedVoiceBlob) return undefined;
 		const bytes = new Uint8Array(await recordedVoiceBlob.arrayBuffer());
 		if (shouldInlineVoice(bytes.length)) {
 			return { type: "audio", voice: true, mime: "audio/webm", name: t("chat.voiceMessageName"), size: bytes.length, voiceInline: base64FromBytes(bytes) };
 		}
-		const descriptor = await uploadMessageAttachment(BLOSSOM_SERVER_URL, bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey);
+		const descriptor = await uploadMessageAttachment(uploadTarget(), bytes, { mime: "audio/webm", name: t("chat.voiceMessageName") }, privKey, { journal: options.journal });
 		descriptor.voice = true;
 		return descriptor;
 	}

@@ -537,7 +537,9 @@ html[data-media-full] .top-corner-actions {
 .sidebar-toggle-btn {
 	display: none;
 }
-@media (max-width: 47.99em) {
+/* Бургер до --bp-tablet (64em): между 48 и 64em сайдбар ещё drawer,
+   не колонка в потоке — иначе список плющится. */
+@media (max-width: 63.99em) {
 	.sidebar-toggle-btn {
 		display: flex;
 	}
@@ -578,7 +580,7 @@ html[data-media-full] .top-corner-actions {
 .sidebar-backdrop {
 	display: none;
 }
-@media (max-width: 47.99em) {
+@media (max-width: 63.99em) {
 	.sidebar {
 		position: fixed;
 		inset-block: 0;
@@ -591,6 +593,8 @@ html[data-media-full] .top-corner-actions {
 		box-shadow: var(--shadow);
 		transform: translateX(-100%);
 		transition: transform var(--transition-speed) var(--transition-ease);
+		padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
+		padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
 	}
 	.sidebar.sidebar-open {
 		transform: translateX(0);
@@ -609,24 +613,22 @@ html[data-media-full] .top-corner-actions {
 	overflow: hidden;
 }
 
-/* ≥768px (тот же порог, что auth-layout, — обсуждено с пользователем):
-   сайдбар сбоку фиксированной ширины, не полосой сверху. На узких экранах
-   сознательно НЕ включаем фикс-высоту/hidden-скролл — это отдельная, не
-   затронутая сейчас задача (просили именно "десктоп, большие разрешения"),
-   ниже порога просто обычная прокручиваемая страница, как было раньше. */
-@media (min-width: 48em) {
+/* В потоке с --bp-tablet (64em). Ниже — drawer из запроса выше.
+   Уже 16rem колонку не сжимаем; с --bp-desk (80em) она 18rem. */
+@media (min-width: 64em) {
 	.app-layout {
 		flex-direction: row;
 	}
 	.sidebar {
 		flex: 0 0 auto;
-		/* Было 18rem (288px, буквально по --aside:292px мокапа) — живой
-		   фидбек пользователя: на экране заметно шире соседних приложений,
-		   контенту не нужно столько места. 16rem (256px) — компромисс между
-		   мокапом и компактностью. */
 		width: 16rem;
 		border-block-end: none;
 		border-inline-end: var(--border-width) solid var(--border);
+	}
+}
+@media (min-width: 80em) {
+	.sidebar {
+		width: 18rem;
 	}
 }
 
@@ -912,37 +914,59 @@ html[data-media-full] .top-corner-actions {
    имя+био справа от него, ключ/статус — отдельными строками во всю ширину
    под ними. Только мобильный порог: десктопная раскладка (полноширинный
    портрет сверху) не тронута ни строкой. */
-@media (max-width: 47.99em) {
-	.account {
-		display: grid;
-		grid-template-columns: 4.375rem 1fr;
-		grid-template-areas:
-			"portrait menu"
-			"portrait bio"
-			"key key"
-			"alert alert";
-		column-gap: var(--space-s);
-		align-items: start;
-	}
-	.account-portrait {
-		grid-area: portrait;
-		inline-size: 4.375rem;
-		aspect-ratio: 1;
-	}
-	.account-menu {
-		grid-area: menu;
-		align-self: center;
-	}
-	.account-bio {
-		grid-area: bio;
-		margin-block-start: 0;
-	}
-	.account-key {
-		grid-area: key;
-	}
-	.account-alert {
-		grid-area: alert;
-	}
+.drawer-me .account-portrait {
+	flex: none;
+	inline-size: 3.25rem;
+	block-size: 3.25rem;
+	aspect-ratio: 1;
+	border-radius: var(--radius-full);
+}
+.drawer-me .account-name {
+	font-size: var(--step-0);
+}
+.drawer-me .account-bio {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.drawer-copy {
+	justify-content: center;
+	border-radius: var(--radius-full);
+	color: var(--fg);
+}
+.drawer-more {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	color: var(--muted);
+	font-size: var(--step--1);
+	cursor: pointer;
+	list-style: none;
+}
+.drawer-section {
+	margin: var(--space-s) 0 0;
+	font-size: var(--step--2);
+	font-weight: var(--weight-bold);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.drawer-link {
+	width: 100%;
+	background: none;
+	border: none;
+	color: var(--fg);
+	padding: var(--space-2xs) var(--space-3xs);
+	border-radius: var(--radius);
+	text-align: start;
+}
+.drawer-link:hover,
+.drawer-link.is-active {
+	background: color-mix(in oklch, var(--accent), transparent 90%);
+}
+.drawer-link .icon {
+	color: var(--fg);
+	flex: none;
 }
 
 /* Строка состояния: тишина означает норму. Появляется в DOM только при
@@ -1555,7 +1579,16 @@ html[data-media-full] .top-corner-actions {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: var(--space-l);
+	padding-inline: var(--space-l);
+	/* Живой фидбек пользователя (реальный телефон, 2026-09-29) — системная
+	   статус-панель (часы/иконки) перекрывала .rooms-overlay-controls
+	   (закрыть/свернуть): var(--space-l) фиксированный отступ не учитывал
+	   safe-area-inset-top вовсе, а панель "Быстрая связь" — единственный
+	   полноэкранный оверлей проекта без этого (Screen/.shell его уже
+	   применяют, см. custom.css выше). env(...,0px) — сам себе fallback,
+	   там где safe-area не поддерживается/равна 0 отступ не меняется. */
+	padding-block-start: calc(var(--space-l) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-l) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 .rooms-overlay-panel {
 	position: relative;
@@ -1955,7 +1988,7 @@ html[data-media-full] .top-corner-actions {
    auto, не сжимается). На той же ширине, на которой бургер появляется
    (47.99em, тот же порог, что .sidebar-toggle-btn), резервируем под него
    место — тот же приём, что уже применён у .call-overlay-ended-close. */
-@media (max-width: 47.99em) {
+@media (max-width: 63.99em) {
 	.section-header {
 		padding-inline-end: calc(var(--space-xs) * 2 + 2.25rem);
 	}
@@ -2242,7 +2275,7 @@ html[data-media-full] .top-corner-actions {
 	padding-block-end: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 47.99em) { /* --bp-phablet */
 	.message-bubble {
 		max-width: 88%;
 	}
@@ -2667,7 +2700,7 @@ button[type="button"].attach-tray-thumb-remove {
    статическая раскладка — тот же случай, что .quick-participants выше;
    порог тот же (48em), чтобы "мобильный режим" всей комнаты включался в
    одной точке, а не в россыпи разных брейкпоинтов. */
-@media (max-width: 47.9375em) {
+@media (max-width: 47.99em) {
 	.quick-stage-header {
 		flex-direction: column;
 		align-items: stretch;
@@ -2767,7 +2800,7 @@ button[type="button"].attach-tray-thumb-remove {
    .row: тот же класс бага (перенос считается по гипотетической ширине,
    не по итоговой) один раз уже ломал раскладку в обе стороны, поэтому
    обе границы теперь заданы явно, а не половина явно/половина расчётом. */
-@media (max-width: 47.9375em) {
+@media (max-width: 47.99em) {
 	.quick-room-layout {
 		flex-direction: column;
 	}
@@ -3204,7 +3237,7 @@ body:has(.auth-layout) {
 	background:
 		radial-gradient(
 			ellipse 80% 50% at 50% -10%,
-			color-mix(in oklch, var(--info) 32%, transparent),
+			color-mix(in oklch, var(--accent) 18%, transparent),
 			transparent
 		),
 		var(--bg);
@@ -3216,6 +3249,11 @@ body:has(.auth-layout) {
 	max-width: 60rem;
 	margin-inline: auto;
 	padding-inline: var(--space-m);
+	/* app.jsx рендерит <Unlock/> напрямую, без .screen/.shell — safe-area
+	   сам себе не добавляет. Это обёртка только step==="main" (вкладки
+	   Войти/Создать); остальные шаги unlock.jsx защищает правило ниже. */
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 
 	display: grid;
 	row-gap: var(--space-m);
@@ -3232,6 +3270,11 @@ body:has(.auth-layout) {
 
 .site-header {
 	grid-area: header;
+	/* .bar (раскладка) задаёт только flex/gap, не justify-content — без
+	   этого лого и Справка+тема слипались в один угол вместо разъезда по
+	   краям (находка пользователя: "логотип Уголок и Справка... в один
+	   stack... разнесены по сторонам"). */
+	justify-content: space-between;
 }
 .main {
 	grid-area: main;
@@ -3247,14 +3290,50 @@ body:has(.auth-layout) {
 	background-color: var(--bg);
 }
 
+/* unlock.jsx: шаги loading/db-error возвращают СВОЙ голый
+   <main class="center stack"> вместо .screen/.auth-layout (ранний return
+   до общей обёртки) — без этого правила заголовок и кнопки упираются в
+   статус-бар/навигацию. html[data-auth-flow] выставляется и снимается
+   самим Unlock() ровно на время этих шагов. Шаги create-generate/
+   create-confirm/import-mnemonic/import-key/advanced-password/done тоже
+   голые, но у них ПЕРЕД main есть renderAuthHeader() — там отступ сверху
+   не на main (иначе шапка остаётся над отступом, то есть под статус-баром
+   — живой баг, подтверждён на телефоне: лого и часы в одной строке), а
+   на самой шапке, см. .site-header--standalone ниже. */
+html[data-auth-flow] main.center.stack {
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+}
+html[data-auth-flow] main.center.stack:first-child {
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+}
+/* Экран — голый фрагмент <header/><main/> без .auth-layout-родителя,
+   чей padding-block-start иначе взял бы это на себя (см. главный
+   step==="main", там шапка безопасна под .auth-layout). Здесь шапка —
+   первый элемент на странице и сама отвечает за отступ под статус-бар. */
+/* Специфичность важна: .site-header (строка ниже в файле) задаёт
+   padding-block: var(--space-s) ШОРТХЕНДОМ — при равной специфичности
+   (оба — один класс) она идёт позже по тексту файла и побеждала бы,
+   стирая наш padding-block-start обратно в space-s без safe-area (живой
+   баг: лого всё равно под часами, хотя правило выше технически есть).
+   Два класса в селекторе — специфичность выше, побеждает независимо
+   от порядка объявления в файле. */
+.site-header.site-header--standalone {
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	/* main рядом (той же разметки) уже получает paddingInline var(--space-m)
+	   инлайн-стилем в JSX — у шапки своего горизонтального отступа не было
+	   вовсе (на step==="main" это давал .auth-layout, тут такого родителя
+	   нет), лого прилипало к левому краю экрана (живой баг на телефоне). */
+	padding-inline: var(--space-m);
+}
+
 .unlock-home {
 	width: 100%;
-	max-width: 34rem;
+	max-width: 24rem;
 	margin-inline: auto;
 	padding-block: var(--space-m) var(--space-xl);
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	align-items: stretch;
 	gap: var(--space-m);
 }
 .auth-layout .main:has(.unlock-home) {
@@ -3360,10 +3439,12 @@ body:has(.auth-layout) {
 
 .unlock-card {
 	width: 100%;
-	max-width: 28rem;
-	padding: var(--space-l);
+	max-width: none;
+	padding: 0;
 	overflow: hidden;
-	background-color: var(--surface);
+	background-color: transparent;
+	border: none;
+	box-shadow: none;
 }
 .unlock-card .btn.btn-block {
 	padding: 0.75rem 1.1rem;
@@ -3385,33 +3466,40 @@ body:has(.auth-layout) {
 }
 
 .unlock-modes {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 3px;
-	width: 100%;
-	background-color: var(--surface-raised);
-	border-radius: var(--radius-sm);
-	padding: 3px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-s);
+	width: auto;
+	background: none;
+	padding: 0;
 }
 .unlock-modes [role="tab"] {
 	background: none;
 	border: 0;
-	padding: var(--space-2xs) var(--space-s);
-	border-radius: calc(var(--radius-sm) - 1px);
+	padding: 0;
+	border-radius: 0;
 	color: var(--muted);
 	font-weight: 550;
-	font-size: 0.9rem;
+	font-size: var(--step-0);
 	box-shadow: none;
 	transform: none;
+}
+.unlock-modes [role="tab"] + [role="tab"]::before {
+	content: "·";
+	margin-inline-end: var(--space-s);
+	color: var(--muted);
+	font-weight: 400;
 }
 .unlock-modes [role="tab"]:hover {
 	background: none;
 	color: var(--fg);
 }
 .unlock-modes [role="tab"][aria-selected="true"] {
-	background-color: var(--surface);
+	background: none;
 	color: var(--fg);
-	box-shadow: 0 1px 3px color-mix(in oklch, var(--fg) 12%, transparent);
+	font-weight: var(--weight-bold);
+	box-shadow: none;
 }
 
 .unlock-home .form-group label {
@@ -4089,8 +4177,9 @@ body:has(.auth-layout) {
 	text-align: start;
 }
 .logo-name {
-	font-size: var(--step-3);
-	font-weight: 900;
+	font-family: var(--font-display);
+	font-size: var(--step-2);
+	font-weight: 500;
 	letter-spacing: var(--heading-letter-spacing);
 	color: var(--accent);
 }
@@ -4347,17 +4436,19 @@ body:has(.auth-layout) {
 }
 
 .hero-section {
-	text-align: center;
-	max-width: 22rem;
+	text-align: start;
+	max-width: none;
 	padding-block: 0;
 }
 .hero-section h1 {
 	max-width: none;
 	margin: 0 0 var(--space-2xs);
-	font-size: clamp(1.45rem, 4vw, 1.8rem);
-	font-weight: 650;
-	letter-spacing: -0.02em;
-	line-height: 1.25;
+	font-family: var(--font-display);
+	font-size: var(--step-3);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: var(--line-height-heading);
+	color: var(--fg);
 }
 .hero-lead {
 	font-size: 0.95rem;
@@ -4389,7 +4480,7 @@ body:has(.auth-layout) {
 .toast-host {
 	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
-	inset-block-start: var(--space-m);
+	inset-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 	inset-inline-end: var(--space-m);
 	z-index: 1000;
 	pointer-events: none;
@@ -4513,6 +4604,7 @@ body:has(.auth-layout) {
 	inset-block-start: 0;
 	z-index: 200;
 	padding: var(--space-l);
+	padding-block-start: calc(var(--space-l) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 	background: var(--surface);
 	border-block-end: var(--border-width) solid var(--border);
 	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
@@ -4745,7 +4837,7 @@ body:has(.auth-layout) {
 	inset-block-start: 0;
 	align-items: flex-start;
 	padding: var(--space-s) var(--space-m);
-	padding-block-start: max(var(--space-s), env(safe-area-inset-top));
+	padding-block-start: max(var(--space-s), var(--safe-area-inset-top, env(safe-area-inset-top)));
 	background: linear-gradient(oklch(0.12 0.02 var(--hue) / 0.75), transparent);
 }
 
@@ -4909,7 +5001,7 @@ button[type="button"].media-overlay-nav {
 	inset-block-end: 0;
 	flex-direction: column;
 	padding: var(--space-l) var(--space-m) var(--space-s);
-	padding-block-end: max(var(--space-s), env(safe-area-inset-bottom));
+	padding-block-end: max(var(--space-s), var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 	background: linear-gradient(transparent, oklch(0.12 0.02 var(--hue) / 0.8) 42%);
 }
 
@@ -5097,7 +5189,7 @@ button[type="button"].media-overlay-nav {
 .media-mini-bar-shell {
 	position: fixed;
 	inset-inline-end: var(--space-s);
-	inset-block-end: var(--space-s);
+	inset-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	z-index: 190;
 	display: flex;
 	flex-direction: column;
@@ -5977,6 +6069,30 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius-sm);
 }
 
+/* Та же форма на самом экране "Контакты" (contacts.jsx, .contacts-add-panel,
+   не модалка) — живой фидбек: поле ключа и кнопка делили ширину пополам,
+   ключу почти не оставалось места. Поле на всю ширину, кнопка под ним по
+   центру (не растянута, как в модалке — здесь ширина экрана не так
+   стеснена), скруглена со всех сторон. */
+.contacts-add-panel .row.contacts-add-form {
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+.contacts-add-panel .contact-add-field {
+	flex-basis: 100%;
+	border-inline-end: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+}
+.contacts-add-panel .contacts-add-form button[type="submit"] {
+	flex: none;
+	/* align-self центрирует по ПОПЕРЕЧНОЙ оси (вертикали) — кнопка одна на
+	   своей строке после wrap, по факту прижималась к левому краю. auto-
+	   отступы по инлайн-оси — стандартный приём центрирования flex-item
+	   вдоль ГЛАВНОЙ оси. Живой фидбек. */
+	margin-inline: auto;
+	border-radius: var(--radius-sm);
+}
+
 /* VISUAL.md v2 (пользователь): "юзай css grid на всю катушку, все эти
    area штуки... container queries" — было flex-row + @media(min-width);
    теперь grid-template-areas + @container (контейнер — .content-wrapper,
@@ -6259,6 +6375,11 @@ button[type="button"].media-mini-bar-btn {
 	color: var(--fg);
 	border-color: var(--border);
 	font-weight: var(--weight-normal);
+	/* На узких экранах подпись кнопки переносилась посреди слова
+	   ("Откло-нить") — nowrap запрещает это; если из-за этого кнопки
+	   перестают помещаться в ряд, .contacts-requests .ucard__actions
+	   ниже разрешает перенос всего ряда в столбец. */
+	white-space: nowrap;
 }
 .ucard__actions button:hover {
 	background-color: var(--surface-raised);
@@ -6497,39 +6618,27 @@ button[type="button"].media-mini-bar-btn {
    раньше он держался на этом единственном ручном margin, из-за чего
    секции БЕЗ такого патча (например "Relay-серверы") слипались с
    соседом — баг был и до REGLAMENT.md, не регрессия миграции. */
-/* display:flex ОСТАЁТСЯ (не .stack) — на ≥40em (медиазапрос ниже) строка
-   вместо столбика, это переключение состояния по брейкпоинту, REGLAMENT.md
-   сознательно не покрывает (тот же принцип, что .app-layout). */
+/* Колонка, не ряд: герой 16:9 на всю ширину карточки, поля под ним.
+   На десктопе колонка не растягивается шире 36rem. */
 .profile-photo-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-l);
+	max-inline-size: 36rem;
 }
-@media (min-width: 40em) {
-	.profile-photo-layout {
-		flex-direction: row;
-		align-items: flex-start;
-	}
-	.profile-photo-col {
-		flex: 0 0 12rem;
-	}
-	.profile-bio-col {
-		flex: 1;
-		min-width: 0;
-	}
-}
-/* .stack (раскладка) уже в JSX. */
-.profile-avatar-square {
-	width: 12rem;
-	height: 12rem;
-	aspect-ratio: 1;
+.profile-avatar-square,
+.profile-avatar-square-fallback {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 9;
 	object-fit: cover;
-	border-radius: var(--radius);
+	border-radius: var(--radius-lg);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface-raised);
 }
 .profile-avatar-square-fallback {
-	/* .row (раскладка) уже в JSX. */
+	display: grid;
+	place-items: center;
 	font-size: var(--step-4);
 	color: var(--muted);
 	font-weight: var(--weight-bold);
@@ -6574,6 +6683,15 @@ button[type="button"].media-mini-bar-btn {
 	font-size: var(--step--2);
 	line-height: 1.4;
 	color: var(--warn);
+}
+/* Живой фидбек — relay в деве отваливается/восстанавливается часто;
+   content.jsx больше не снимает панель из потока (return null), а только
+   прячет её visibility — высота зарезервирована всегда, содержимое под
+   ней (aside, "Каналы" и т.п.) больше не прыгает вверх-вниз при каждом
+   переключении. "Тишина = норма" (SIDEBAR-SPEC.md §6) — просто тишина
+   невидима, а не нулевого размера. */
+.conn[data-quiet] {
+	visibility: hidden;
 }
 .conn-dot {
 	flex: none;
@@ -7733,6 +7851,7 @@ button[type="button"].media-mini-bar-btn {
 	   (и block, и inline): <input> ниже обнуляет свой собственный,
 	   иначе набивка удваивается — тот же приём для обоих направлений,
 	   живой фидбек пользователя (сначала поймали только inline). */
+	margin-block-start: var(--space-s);
 	max-width: 24rem;
 	border: var(--border-width) solid var(--border);
 	border-radius: var(--radius);
@@ -7741,6 +7860,53 @@ button[type="button"].media-mini-bar-btn {
 	background-color: var(--surface);
 	color: var(--muted);
 	transition: border-color var(--transition-speed) var(--transition-ease);
+}
+
+/* Загрузка нескольких файлов — своя строка-прогресс на файл (files.jsx:
+   handleFilesSelected, concurrency:2). Раньше был один общий текстовый
+   статус, который гоняли между собой до 2 параллельных job'а — мелькал.
+   Таблица: имя | прогресс-бар, по готовности строка молча превращается
+   в галочку; вся панель исчезает, когда партия долита (uploadFiles=null). */
+.upload-progress-panel {
+	padding: var(--space-s);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	background-color: var(--surface);
+}
+.upload-progress-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.upload-progress-table__name {
+	padding-block: var(--space-3xs);
+	padding-inline-end: var(--space-s);
+	max-width: 0; /* инлайновые таблицы: 0 + width:100% на колонке — ячейка сжимается, не распирает таблицу длинным именем */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--step--1);
+}
+.upload-progress-table__bar {
+	padding-block: var(--space-3xs);
+	inline-size: 8rem;
+}
+.upload-progress-bar {
+	inline-size: 100%;
+	block-size: 0.4rem;
+	border-radius: var(--radius-full);
+	background-color: var(--border);
+	overflow: hidden;
+}
+.upload-progress-bar__fill {
+	block-size: 100%;
+	background-color: var(--accent);
+	transition: inline-size var(--transition-speed) var(--transition-ease);
+}
+.upload-progress-table__done {
+	color: var(--good);
+}
+.upload-progress-table__error {
+	color: var(--bad);
 }
 .file-search-field:focus-within {
 	border-color: var(--accent);
@@ -7774,28 +7940,46 @@ button[type="button"].media-mini-bar-btn {
 	border-radius: var(--radius);
 }
 
-/* Строка списка — прямой прецедент .contact-row-list (contacts.jsx). */
-/* Высота строки ФИКСИРОВАНА (задача 3.2 TASK.md — виртуализация требует
-   точного совпадения с ROW_HEIGHT_PX, files.jsx): без gap на списке,
-   разделитель — border-block-end на самой строке (тот же приём, что
-   .contact-row) — иначе gap добавлял бы к высоте слота, не учтённую
-   виртуализацией величину, и строки "дрожали" бы при скролле. */
-.file-row-list {
-	list-style: none;
-	padding-inline-start: 0;
+/* Список файлов — настоящая таблица (files.jsx, file-picker.jsx, «Полученные»). Раньше это были
+   ul/li на flex, и длинное имя файла растягивало строку и ломало вёрстку. table-layout: fixed
+   держит ширину колонок по <th>, а ячейка с именем сжимается и обрезается многоточием.
+   Размеры — переменные: --file-thumb-size (иконка/миниатюра) и --file-row-height (высота строки;
+   ROW_HEIGHT_PX в files.jsx обязан совпадать — на нём стоит виртуализация). */
+:root {
+	--file-thumb-size: 2.75rem;
+	--file-row-height: 60px;
+}
+.file-table {
+	inline-size: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
 	margin-block: 0;
 }
-/* .row (раскладка) уже в JSX — height ЗДЕСЬ, не через .box (тот даёт
-   padding на все стороны, а высота строки — точное число ROW_HEIGHT_PX
-   для виртуализации, .box лишний block-padding эту точность сломал бы). */
-.file-row {
-	height: 56px; /* = ROW_HEIGHT_PX, files.jsx */
+.file-table th {
+	text-align: start;
+	font-weight: var(--weight-bold);
+	font-size: var(--step--1);
+	color: var(--muted);
+	padding: var(--space-2xs) var(--space-s);
+	border: none; /* глобальные границы ячеек из minimal.css тут не нужны */
+	border-block-end: var(--border-width) solid var(--border);
+	background-color: transparent;
+	white-space: nowrap;
+}
+.file-table td {
 	padding-inline: var(--space-s);
+	border: none;
+	vertical-align: middle;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* Высота строки ФИКСИРОВАНА (виртуализация): tr.height — минимум, а nowrap+overflow в ячейках
+   не дают строке вырасти. Разделитель — border на самой строке. */
+.file-row {
+	height: var(--file-row-height);
 	border-block-end: var(--border-width) solid var(--border);
 }
-/* НЕ :last-child — с виртуализацией последняя строка В DOM не обязательно
-   последняя в списке (может быть просто последней ВИДИМОЙ). Граница под
-   каждой строкой, включая логически последнюю, — не проблема визуально. */
 .file-row:hover {
 	background-color: var(--surface);
 }
@@ -7806,18 +7990,98 @@ button[type="button"].media-mini-bar-btn {
 	outline: var(--border-width) dashed var(--accent);
 	outline-offset: -2px;
 }
+.file-table__icon {
+	inline-size: calc(var(--file-thumb-size) + var(--space-s) * 2);
+}
+.file-table__check {
+	inline-size: 2.5rem;
+}
+.file-table__type {
+	inline-size: 6rem;
+}
+.file-table__size {
+	inline-size: 7.5rem;
+}
+.file-table__access {
+	inline-size: 3rem;
+	text-align: center;
+}
+.file-row-icon--shared {
+	color: var(--accent);
+	display: inline-block;
+	font-size: 1.25rem;
+}
+/* Кнопка-заголовок сортировки: выглядит как заголовок колонки, не как кнопка. */
+.file-table__sort {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+.file-table__sort--on {
+	color: var(--fg);
+}
+.file-table__sort-icon {
+	font-size: 0.9em;
+}
+.file-table__actions {
+	inline-size: 4.5rem;
+	text-align: end;
+	overflow: visible; /* выпадающее меню действий не должно обрезаться ячейкой */
+}
+.file-table--trash .file-table__actions,
+.file-table__actions--wide {
+	inline-size: 15rem;
+}
+.file-table__spacer td {
+	padding: 0;
+	border: none;
+}
+/* Ячейка иконки/миниатюры: значок и картинка одного размера. */
+.file-table__icon .file-row-icon,
+.file-table__icon .file-row-thumb {
+	display: block;
+	inline-size: var(--file-thumb-size);
+	block-size: var(--file-thumb-size);
+}
+.file-table__icon .file-row-icon {
+	font-size: calc(var(--file-thumb-size) * 0.6);
+	padding: calc(var(--file-thumb-size) * 0.2);
+	box-sizing: border-box;
+}
+/* Ячейка действий: меню/кнопки к правому краю, без переносов. */
+.file-table__actions > * {
+	vertical-align: middle;
+}
+@media (max-width: 35.99em) { /* --bp-phone */
+	.file-table__type,
+	.file-table__access {
+		display: none;
+	}
+	.file-table__size {
+		inline-size: 5rem;
+	}
+	.file-table--trash .file-table__actions,
+	.file-table__actions--wide {
+		inline-size: 6.5rem;
+	}
+}
 .file-row-icon {
 	flex: none;
 	color: var(--muted);
 	font-size: 1.1rem;
 }
-/* Миниатюра (задача 3.8 TASK.md) — тот же слот в строке, что file-row-icon,
-   но сама картинка, не иконка типа. Квадратная, чуть больше просто иконки
-   (иначе изображение неразличимо), обрезана по центру (object-fit). */
+/* Миниатюра (задача 3.8 TASK.md) — тот же слот, что file-row-icon, но сама картинка.
+   Квадратная, обрезана по центру (object-fit). */
 .file-row-thumb {
 	flex: none;
-	width: 1.75rem;
-	height: 1.75rem;
+	width: var(--file-thumb-size);
+	height: var(--file-thumb-size);
 	object-fit: cover;
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
@@ -7833,11 +8097,8 @@ button[type="button"].media-mini-bar-btn {
 	white-space: nowrap;
 	font-weight: var(--weight-normal);
 	color: var(--fg);
-	/* Найдено пользователем (мобильный) — длинные имена файлов не обрезались,
-	   а вылезали за строку и "съезжали" под иконку. Причина: flex-элемент
-	   (.grow, flex:1) по умолчанию min-width:auto — не может сжаться уже
-	   собственного содержимого, что и не давало overflow/ellipsis выше
-	   вообще сработать. */
+	display: block;
+	max-inline-size: 100%;
 	min-width: 0;
 }
 .file-row-name:hover {
@@ -7931,7 +8192,6 @@ button[type="button"].media-mini-bar-btn {
 }
 .mode-bar {
 	padding: var(--space-2xs) var(--space-s);
-	margin-block-end: var(--space-m);
 	border-radius: var(--radius);
 	border: var(--border-width) solid var(--border);
 	background-color: var(--surface);
@@ -7958,7 +8218,7 @@ button[type="button"].media-mini-bar-btn {
 	/* .stack (раскладка) уже в JSX. */
 	position: fixed;
 	inset-inline: 0;
-	inset-block-start: 0;
+	inset-block-start: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 	z-index: 500;
 	pointer-events: none;
 }
@@ -8044,7 +8304,7 @@ button[type="button"].media-mini-bar-btn {
 	gap: var(--space-m);
 	align-items: start;
 }
-@media (max-width: 720px) {
+@media (max-width: 47.99em) { /* --bp-phablet */
 	.app-layout .help-layout,
 	.auth-layout .help-layout {
 		grid-template-columns: 1fr;
@@ -10135,7 +10395,7 @@ button[type="button"].media-mini-bar-btn {
    z-index ниже toast-host (1000), чтобы уведомления не перекрывались. */
 .diag-trace-badge {
 	position: fixed;
-	inset-block-end: var(--space-s);
+	inset-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	inset-inline-start: var(--space-s);
 	z-index: 400;
 	padding: var(--space-3xs) var(--space-xs);
@@ -10146,4 +10406,4762 @@ button[type="button"].media-mini-bar-btn {
 	line-height: 1.4;
 	pointer-events: none;
 	opacity: 0.85;
+}
+
+/* ТЗ-04 — полоса заполнения хранилища (storage-bar): три состояния по data-level. */
+.storage-bar {
+	block-size: 0.5rem;
+	border-radius: 999px;
+	overflow: hidden;
+	background: color-mix(in oklch, var(--muted), transparent 80%);
+}
+.storage-bar__fill {
+	block-size: 100%;
+	border-radius: inherit;
+	background: var(--good, var(--accent, currentColor));
+	transition: inline-size 0.3s ease;
+}
+.storage-bar[data-level="warning"] .storage-bar__fill {
+	background: var(--warn);
+}
+.storage-bar[data-level="full"] .storage-bar__fill,
+.storage-bar[data-level="readonly"] .storage-bar__fill {
+	background: var(--bad);
+}
+
+
+/* Иконка перед заголовком экрана (акцентная, как и сам заголовок). */
+.screen-title__icon {
+	display: inline-block; /* глобально .icon может быть block — тогда текст заголовка уезжает на новую строку */
+	margin-inline-end: var(--space-2xs);
+	vertical-align: -0.125em;
+}
+
+/* Чипы фильтра типа («Файлы»): иконки вдвое крупнее, подписи на узких экранах прячутся —
+   иначе .reel уезжает в горизонтальную прокрутку внутри .slices-zone. */
+.slice .slice__icon {
+	font-size: 2em;
+}
+@media (max-width: 35.99em) { /* --bp-phone */
+	.slice__label {
+		display: none;
+	}
+	/* Чипы только с иконкой и счётчиком: поджимаем отступы, чтобы все пять влезали без прокрутки. */
+	.slice:has(> .slice__icon) {
+		padding-inline: var(--space-2xs);
+		--gap: 0;
+	}
+}
+
+/* ================================================================== *
+ *  REDESIGN-2 — визуальный контракт по макетам PROCESS-DOCS/REDEDIGN-2 *
+ *  Поведение экранов не меняет: только вид. Секции идут сверху вниз:   *
+ *  основа → шапка экрана → меню (drawer) → списки чатов → тред →       *
+ *  контакты/профиль/настройки → быстрая связь → каналы → знакомства →  *
+ *  файлы → вход. Все значения — токены проекта, hex нет.               *
+ *  Правило чтения: этот блок стоит ПОСЛЕДНИМ и перебивает ровно то, что *
+ *  выше в файле задано иначе — при равной специфичности побеждает он.  *
+ * ================================================================== */
+
+/* ---- 0. Основа ---------------------------------------------------- */
+:root {
+	--weight-medium: 500;
+	/* Волосяная линия макетов: рамка мягче полной --border. */
+	--hairline: color-mix(in oklch, var(--border), transparent 35%);
+	/* Ритм: боковое поле экрана на телефоне и его «широкий» вариант. */
+	--gutter: var(--space-s);
+	--tap: 2.75rem; /* минимальная зона нажатия */
+}
+@media (min-width: 48em) {
+	:root {
+		--gutter: var(--space-m);
+	}
+}
+
+.shell {
+	padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
+	padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
+	/* Манифест Android — adjustNothing, окно/WebView никогда не резайзится
+	   нативно (ресайз с открытой IME ломает курсор — Chromium-баг
+	   issues.chromium.org/issues/457682720), поэтому этот calc() —
+	   единственное место, где контент подстраивается под клавиатуру.
+	   --keyboard-inset: на Android инжектит MainActivity.java из
+	   WindowInsetsCompat.Type.ime(), на вебе — keyboard-inset.js из
+	   visualViewport; на остальных платформах переменная не установлена,
+	   calc() вырождается в обычный 100dvh. */
+	block-size: calc(100dvh - var(--keyboard-inset, 0px));
+}
+
+/* Круглые аватары везде: макеты не знают квадратных «плиток». */
+.account-avatar,
+.stream-ava,
+.contact-avatar,
+.ucard__photo {
+	border-radius: var(--radius-full);
+	object-fit: cover;
+}
+
+/* Кнопки: средний вес, а не жирный (на макетах текст кнопок — medium). */
+button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+	font-weight: var(--weight-medium);
+}
+
+/* Поля: высота 44, радиус крупнее, рамка-волосок. */
+input:not([type="button"], [type="reset"], [type="submit"], [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+select {
+	min-block-size: var(--tap);
+	border-radius: var(--radius-md);
+	border-color: var(--hairline);
+}
+textarea {
+	border-radius: var(--radius-md);
+	border-color: var(--hairline);
+}
+input:not([type="button"], [type="reset"], [type="submit"], [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+	border-color: var(--accent);
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent), transparent 82%);
+}
+
+/* Мягкая кнопка («Добавить» на макете контактов): тон акцента, без рамки. */
+.btn-soft,
+.header-actions .btn-soft {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+	color: var(--accent);
+	border-color: transparent;
+	border-radius: var(--radius-full);
+	padding-inline: var(--space-m);
+	min-block-size: 2.5rem;
+	font-weight: var(--weight-medium);
+}
+.btn-soft:hover,
+.header-actions .btn-soft:hover {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 80%);
+	color: var(--accent);
+}
+
+/* Ссылка-кнопка с подчёркиванием («сменить», «сохранить», «как это работает»). */
+.link-btn {
+	display: inline;
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+	font-size: var(--step--1);
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.3em;
+	cursor: pointer;
+}
+.link-btn:hover {
+	background: none;
+	color: var(--accent);
+}
+.link-btn:disabled {
+	background: none;
+}
+
+/* Пустая заметка («Нет заявок»): контур, а не сплошной блок. */
+.empty-note {
+	margin: 0;
+	padding: var(--space-s) var(--space-m);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	color: var(--muted);
+	text-align: center;
+	max-inline-size: none;
+}
+
+/* Метка и пояснение строки настроек / поля. */
+.set-label {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.set-hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+	line-height: 1.4;
+}
+
+/* ---- 1. Шапка экрана ------------------------------------------------ */
+.section-header {
+	background: var(--bg);
+	padding: var(--space-xs) var(--gutter);
+	padding-inline-end: var(--gutter);
+	min-block-size: 3.5rem;
+	column-gap: 0;
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.section-header > *,
+.section-header > :first-child,
+.section-header > :last-child {
+	padding-inline: 0;
+}
+.section-header:has(+ .slices-zone) {
+	border-block-end: none;
+}
+
+/* Корневой экран — заголовок дисплейным шрифтом, без линии под шапкой. */
+.section-header:not(:has(.header-back)) {
+	border-block-end-color: transparent;
+}
+.section-header:not(:has(.header-back)) .screen-title__text {
+	font-family: var(--font-display);
+	font-size: var(--step-3);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: var(--line-height-heading);
+	color: var(--fg);
+}
+/* Экран, куда пришли по «назад»: имя и подпись слева от действий. */
+.section-header:has(.header-back) .screen-title__text {
+	font-family: var(--font-body);
+	font-size: var(--step-1);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--fg);
+}
+.screen-title__sub {
+	font-size: var(--step--1);
+	color: var(--muted);
+}
+.screen-title {
+	padding-inline: 0;
+}
+.header-back + .screen-title,
+.header-lead + .screen-title {
+	padding-inline-start: var(--space-xs);
+}
+.header-back + .header-lead {
+	margin-inline-start: 0;
+}
+
+/* Push-экран без аватара и действий («Запись»): заголовок по центру. */
+.section-header:has(.header-back):not(:has(.header-lead)):not(:has(.header-actions)) {
+	grid-template-areas: "back ident spacer";
+	grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+}
+.section-header:has(.header-back):not(:has(.header-lead)):not(:has(.header-actions)) .screen-title {
+	text-align: center;
+}
+
+/* Стрелка «назад»: голый шеврон акцентного цвета. */
+.header-back {
+	min-block-size: var(--tap);
+	min-inline-size: var(--tap);
+	margin-inline-start: calc(-1 * var(--space-2xs));
+	background: none;
+	border: 0;
+	color: var(--accent);
+	border-radius: var(--radius-full);
+}
+.header-back .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+.header-back:hover,
+.header-back:focus-visible {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+	color: var(--accent);
+	border-color: transparent;
+}
+
+/* Действия шапки: иконки — акцентом, без рамок; текстовые — пилюлями. */
+.header-actions {
+	gap: var(--space-2xs);
+	flex-wrap: nowrap;
+}
+.header-actions .icon-btn,
+.header-actions .icon-btn:has(> .icon) {
+	min-block-size: var(--tap);
+	min-inline-size: var(--tap);
+	border: none;
+	background: none;
+	color: var(--accent);
+	padding: 0;
+	border-radius: var(--radius-full);
+}
+.header-actions .icon-btn:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+}
+.header-actions .icon-btn .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+.header-actions > .menu > summary.icon-btn {
+	color: var(--fg);
+}
+.header-actions button:not(.icon-btn):not(.btn-soft) {
+	min-block-size: 2.5rem;
+	border-color: var(--hairline);
+}
+
+/* Меню-бургер: голая иконка в левом углу шапки корневого экрана. На экране
+   с «назад» его нет (в мобильных приложениях назад заменяет меню).
+   БЕЗ env(safe-area-inset-top) здесь — .top-corner-actions всегда потомок
+   .shell (app.jsx), которая УЖЕ компенсирует safe-area через
+   padding-block-start (см. ".shell" выше в этом же REDESIGN-2 блоке).
+   Раньше это правило добавляло его ЕЩЁ РАЗ — на вебе/desktop inset всегда
+   был 0px, поэтому дубль был математически незаметен; на Android живьём
+   (эмулятор, статус-бар 49px) бургер оказывался на 2×49px ниже нужного
+   места (найдено пользователем, Э4 ТЗ-NATIVE-APPS, 2026-09-28). */
+.top-corner-actions {
+	inset-inline-start: var(--space-xs);
+	inset-inline-end: auto;
+	inset-block-start: calc((3.5rem - var(--tap)) / 2);
+}
+.sidebar-toggle-btn {
+	inline-size: var(--tap);
+	block-size: var(--tap);
+	background: none;
+	border: 0;
+	box-shadow: none;
+	border-radius: var(--radius-full);
+	color: var(--fg);
+	gap: 0.3125rem;
+}
+.sidebar-toggle-btn:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+	filter: none;
+}
+.hamburger-bar {
+	inline-size: 1.375rem;
+}
+.sidebar-toggle-btn.is-open .hamburger-bar:nth-child(1) {
+	transform: translateY(0.4375rem) rotate(45deg);
+}
+.sidebar-toggle-btn.is-open .hamburger-bar:nth-child(3) {
+	transform: translateY(-0.4375rem) rotate(-45deg);
+}
+.app-layout:has(.section-header .header-back) .top-corner-actions {
+	display: none;
+}
+@media (max-width: 63.99em) {
+	/* Место под бургер слева: у корневого экрана. */
+	.section-header:not(:has(.header-back)) {
+		padding-inline-start: calc(var(--space-xs) + var(--tap));
+		padding-inline-end: var(--gutter);
+	}
+	.section-header:has(.header-back) {
+		padding-inline-end: var(--gutter);
+	}
+}
+@media (min-width: 64em) {
+	.section-header:not(:has(.header-back)) .screen-title__text {
+		font-size: var(--step-2);
+	}
+}
+
+/* Полосы вкладок под шапкой. */
+.slices-zone {
+	padding-inline: var(--gutter);
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.slices-zone:has(.tabs) {
+	padding-block-start: 0;
+	padding-block-end: 0;
+}
+.tabs {
+	border-block-end: var(--border-width) solid var(--hairline);
+	margin-block: 0;
+	display: flex;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+	display: none;
+}
+.slices-zone .tabs {
+	border-block-end: none;
+}
+.tab {
+	flex: 0 0 auto;
+	white-space: nowrap;
+	font-weight: var(--weight-medium);
+	font-size: var(--step-0);
+	padding: var(--space-xs) var(--space-s);
+	border-block-end-width: 2px;
+}
+.tab[aria-selected="true"] {
+	font-weight: var(--weight-medium);
+}
+/* Две вкладки (Посты / Чат) делят ширину поровну, как на макете канала. */
+.ch-bar.tabs,
+nav.tabs.reel {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 1fr;
+}
+nav.tabs.reel .tab {
+	text-align: center;
+}
+.tab__badge {
+	font-weight: var(--weight-medium);
+}
+
+/* ---- 2. Меню (drawer) и сайдбар ------------------------------------- */
+.sidebar {
+	background-image: none;
+	background-color: var(--bg);
+}
+@media (max-width: 63.99em) {
+	.sidebar {
+		width: min(84vw, 20rem);
+		border-inline-end: none;
+		box-shadow: 0 0 2.5rem color-mix(in oklch, var(--fg), transparent 80%);
+	}
+}
+@media (min-width: 64em) {
+	.sidebar {
+		background-color: var(--bg);
+		border-inline-end: var(--border-width) solid var(--hairline);
+	}
+}
+.pane__top {
+	padding: var(--space-m) var(--space-m) 0;
+}
+.sidebar-row {
+	padding: var(--space-s) var(--space-m) var(--space-2xs);
+}
+.pane__body {
+	padding: 0 var(--space-s) var(--space-s);
+	gap: var(--space-2xs);
+}
+.pane__bottom {
+	padding: var(--space-2xs) var(--space-m) var(--space-s);
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+
+/* Карточка аккаунта: аватар, имя+био, меню «⌄». */
+.account {
+	padding-block-end: 0;
+	gap: var(--space-s);
+}
+.drawer-me {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+}
+.drawer-me .account-portrait {
+	flex: none;
+	inline-size: 3.75rem;
+	block-size: 3.75rem;
+	border-radius: var(--radius-full);
+	background-color: var(--surface);
+}
+.drawer-me .account-portrait::after {
+	display: none;
+}
+.account-dot {
+	inset-block-start: auto;
+	inset-block-end: 0.15rem;
+	inset-inline-end: 0.15rem;
+	box-shadow: 0 0 0 2px var(--bg);
+}
+.drawer-me__text {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+}
+.drawer-me .account-name {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.25;
+	color: var(--fg);
+}
+.drawer-me .account-bio {
+	margin: 0;
+	font-size: var(--font-size-bio);
+	line-height: 1.3;
+	color: var(--muted);
+}
+.drawer-me .account-menu {
+	margin: 0;
+	flex: none;
+}
+.drawer-more {
+	display: grid;
+	place-items: center;
+	inline-size: 2rem;
+	block-size: 2rem;
+	border-radius: var(--radius-full);
+	color: var(--muted);
+	background: none;
+	padding: 0;
+}
+.drawer-more:hover,
+.account-menu[open] .drawer-more {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+	color: var(--fg);
+}
+.drawer-more .icon {
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+	transition: transform var(--transition-speed) var(--ease);
+}
+.account-menu[open] .drawer-more .icon {
+	transform: rotate(180deg);
+}
+.drawer-copy,
+.drawer-copy:has(> .icon) {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 2.5rem;
+	padding: 0 var(--space-m);
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.drawer-copy:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+	border-color: color-mix(in oklch, var(--accent), transparent 60%);
+	color: var(--fg);
+}
+.drawer-copy .icon {
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+}
+
+/* Поле «Поиск» — контур со скруглением, как на макете. */
+.file-search-field,
+.search-field {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 3rem;
+	padding-inline: var(--space-s);
+	background-color: transparent;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	color: var(--muted);
+}
+.file-search-field:focus-within,
+.search-field:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent), transparent 82%);
+}
+.file-search-field input,
+.search-field input {
+	flex: 1 1 auto;
+	min-block-size: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	border-radius: 0;
+	box-shadow: none;
+	color: var(--fg);
+}
+.file-search-field input:focus-visible,
+.search-field input:focus-visible {
+	box-shadow: none;
+}
+.file-search-field .icon,
+.search-field .icon {
+	flex: none;
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+}
+.sidebar-row .file-search-field {
+	padding-inline: var(--space-s);
+	padding-block: 0;
+	border-radius: var(--radius-md);
+}
+.sidebar-row .file-search-field input {
+	font-size: var(--step-0);
+}
+.sidebar .file-search-field .icon-btn {
+	inline-size: 2rem;
+	block-size: 2rem;
+	min-block-size: 0;
+	min-inline-size: 0;
+}
+
+/* Разделы меню — тихие заглавные подписи. */
+.drawer-nav {
+	gap: 0;
+}
+.drawer-section,
+.sidebar .eyebrow,
+.sidebar .grouphead {
+	margin: var(--space-m) 0 var(--space-2xs);
+	padding-inline: var(--space-xs);
+	font-size: var(--step--2);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.drawer-section:first-child {
+	margin-block-start: var(--space-xs);
+}
+
+/* Пункт меню: иконка 24, подпись, пояснение, бейдж. */
+.drawer-link,
+.drawer-link:has(> .icon) {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	inline-size: 100%;
+	min-block-size: 3rem;
+	padding: var(--space-2xs) var(--space-xs);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-md);
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+	text-align: start;
+}
+.drawer-link:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 94%);
+	color: var(--fg);
+}
+.drawer-link.is-active {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+}
+.drawer-link.is-active .drawer-link__label {
+	font-weight: var(--weight-medium);
+}
+.drawer-link.is-active .drawer-link__icon {
+	color: var(--accent);
+}
+.drawer-link__icon,
+.drawer-link .icon {
+	flex: none;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	color: var(--fg);
+}
+.drawer-link__text {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	display: flex;
+	flex-direction: column;
+}
+.drawer-link__label {
+	font-size: var(--step-0);
+	line-height: 1.3;
+}
+.drawer-link__hint {
+	color: var(--muted);
+	font-size: var(--step--1);
+	line-height: 1.3;
+	font-weight: var(--weight-normal);
+}
+.drawer-link__live {
+	flex: none;
+	inline-size: 0.5rem;
+	block-size: 0.5rem;
+	border-radius: 50%;
+	background-color: var(--good);
+	animation: account-dot-breathe 4s var(--transition-ease) infinite;
+}
+.drawer-link.is-live .drawer-link__icon {
+	color: var(--accent);
+}
+
+/* Бейдж-счётчик: круг акцента, цифра контрастом (макет pgxJP.jpg). */
+.chat-row__badge,
+.group-count,
+.tab__badge {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	min-inline-size: 1.5rem;
+	block-size: 1.5rem;
+	padding-inline: 0.4rem;
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+.group-count {
+	block-size: 1.25rem;
+	min-inline-size: 1.25rem;
+	font-size: var(--step--2);
+}
+
+/* Быстрый доступ (избранное/люди/каналы) — тихий список под основным меню. */
+.grouphead {
+	inline-size: 100%;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	background: none;
+	border: 0;
+	text-align: start;
+	cursor: pointer;
+}
+.grouphead:hover {
+	color: var(--fg);
+	background: none;
+}
+.grouphead__all {
+	letter-spacing: normal;
+	text-transform: none;
+	font-weight: var(--weight-normal);
+}
+.streams {
+	gap: 0;
+}
+.stream-row {
+	border-radius: var(--radius-md);
+	padding-inline-end: var(--space-3xs);
+}
+.stream-row.is-active {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+	box-shadow: none;
+}
+.stream {
+	padding: var(--space-2xs) var(--space-xs);
+	font-size: var(--step-0);
+	gap: var(--space-s);
+	min-block-size: 2.75rem;
+}
+.stream-ava {
+	inline-size: 2rem;
+	block-size: 2rem;
+	border: 0;
+	background-color: var(--surface);
+	font-weight: var(--weight-medium);
+	font-size: var(--step--1);
+	display: grid;
+	place-items: center;
+}
+.stream-row.is-active .stream__name,
+.has-unread .stream__name {
+	font-weight: var(--weight-medium);
+}
+.stream__name {
+	font-weight: var(--weight-normal);
+}
+
+.sidebar-logout-link,
+.sidebar-logout-link:has(> .icon) {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	inline-size: 100%;
+	min-block-size: 3rem;
+	padding: 0 var(--space-xs);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-md);
+	color: var(--fg);
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+}
+.sidebar-logout-link:hover {
+	background-color: color-mix(in oklch, var(--bad), transparent 90%);
+	color: var(--bad);
+}
+.sidebar-logout-link .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	color: currentColor;
+}
+
+/* Меню-выпадашка (⌄ аккаунта, «⋯» строк, «+» композера). */
+.menu-pop {
+	background-image: none;
+	background-color: var(--surface);
+	border-color: var(--hairline);
+	border-radius: var(--radius-md);
+	box-shadow: 0 0.5rem 2rem color-mix(in oklch, var(--fg), transparent 82%);
+}
+.menu-pop button:hover,
+.menu-pop .menu-check:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+}
+
+/* Открытое меню закрывает собственный бургер — закрыть можно тапом по фону
+   или Escape (макет ggQHr.jpg: поверх меню нет второй кнопки). */
+.sidebar-toggle-btn.is-open {
+	opacity: 0;
+	pointer-events: none;
+}
+/* Сводка скорости сервисов — справочная, на телефоне в меню не нужна: она на
+   экране «Диагностика» и видна тут, где есть место (широкий сайдбар). */
+@media (max-width: 63.99em) {
+	.sidebar .services-status {
+		display: none;
+	}
+	.pane__bottom {
+		border-block-start: var(--border-width) solid var(--hairline);
+		padding-block: var(--space-2xs);
+	}
+}
+.drawer-link,
+.drawer-link:has(> .icon) {
+	min-block-size: 2.875rem;
+}
+
+/* ---- 3. Область экрана ---------------------------------------------- */
+.sidebar:not(.sidebar-open) {
+	box-shadow: none;
+}
+.content-wrapper {
+	padding: var(--space-2xs) var(--gutter) var(--space-m);
+}
+.content-wrapper:has(.message-list) {
+	background-image: none;
+	padding-block-end: var(--space-xs);
+}
+
+/* ---- 4. Строки списков: чаты, журнал -------------------------------- */
+/* Макет pgxJP.jpg: каждая строка — отдельная скруглённая плашка на поверхности,
+   аватар 56, имя и время на одной линии, ниже — подпись и бейдж. */
+.chat-list,
+.jfeed {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.jfeed > li,
+.chat-list > li {
+	display: block;
+	margin: 0;
+}
+.chat-list__item {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+.chat-list__item > .chat-row {
+	flex: 1 1 auto;
+}
+.chat-list__item > .fav-toggle {
+	position: absolute;
+	inset-inline-end: var(--space-2xs);
+	inset-block-end: var(--space-2xs);
+}
+.chat-row,
+.jitem__link,
+.jitem__link.chat-row {
+	display: grid;
+	grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--space-s);
+	inline-size: 100%;
+	min-block-size: 4.5rem;
+	padding: var(--space-xs) var(--space-s);
+	background-color: var(--surface);
+	border: 0;
+	border-radius: var(--radius-lg);
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+	text-align: start;
+	cursor: pointer;
+}
+.chat-row:hover,
+.jitem__link:hover {
+	background-color: var(--surface);
+	filter: brightness(0.985);
+}
+.chat-row:active,
+.jitem__link:active {
+	transform: none;
+}
+.chat-row__ava,
+.jtype {
+	inline-size: 3.5rem;
+	block-size: 3.5rem;
+	border-radius: var(--radius-full);
+	overflow: hidden;
+	background-color: var(--surface-raised);
+	display: grid;
+	place-items: center;
+	grid-row: 1 / span 2;
+}
+.chat-row__ava .account-avatar {
+	inline-size: 100%;
+	block-size: 100%;
+	border-radius: 0;
+	font-size: var(--step-1);
+}
+.jtype {
+	font-size: 1.5rem;
+}
+.jtype .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+.chat-row__body,
+.jbody {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	min-inline-size: 0;
+}
+.chat-row__name,
+.jtitle {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.25;
+	color: var(--fg);
+}
+.chat-row__snippet,
+.jmeta {
+	color: var(--muted);
+	font-size: var(--step-0);
+	line-height: 1.3;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.chat-row__meta,
+.jside {
+	grid-column: 3;
+	grid-row: 1 / span 2;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	justify-content: center;
+	gap: var(--space-2xs);
+	align-self: stretch;
+}
+.chat-row__time,
+.jtime {
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.jdot {
+	inline-size: 0.625rem;
+	block-size: 0.625rem;
+}
+.jitem[data-read] .jtitle {
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+}
+.jitem[data-read] .jmeta,
+.jitem[data-read] .jtime {
+	opacity: 0.85;
+}
+.jitem__link .jtype--lamp,
+.jitem__link .jtype--draught {
+	color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+}
+.jread {
+	inset-inline-end: var(--space-xs);
+	inset-block-start: auto;
+	inset-block-end: var(--space-2xs);
+	translate: none;
+}
+.jgroup__date {
+	background: var(--bg);
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.08em;
+	padding-block: var(--space-xs) var(--space-2xs);
+}
+.jlead {
+	margin-block: 0 var(--space-xs);
+}
+.jlead--foot {
+	border-block-start: 0;
+	padding-block-start: var(--space-xs);
+	margin-block-start: var(--space-xs);
+}
+.journal .empty,
+.empty {
+	border-radius: var(--radius-lg);
+	border: var(--border-width) dashed var(--hairline);
+}
+.empty h2,
+.empty h3 {
+	font-family: var(--font-body);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+/* Входящие «незнакомец хочет написать» на экране «Чаты». */
+.inbox-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.inbox-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-xs);
+	padding: var(--space-xs) var(--space-s);
+	background-color: var(--surface);
+	border-radius: var(--radius-lg);
+	margin: 0;
+}
+.inbox-row__actions {
+	display: flex;
+	gap: var(--space-2xs);
+}
+
+/* Звёздочка «в избранное» на строке. */
+.fav-toggle {
+	inset: auto;
+	opacity: 0.55;
+	color: var(--muted);
+}
+.fav-toggle[aria-pressed="true"] {
+	opacity: 1;
+	color: var(--gold);
+}
+
+/* Журнал: фильтр и вкладки. */
+.filter-row {
+	inline-size: 100%;
+	flex-wrap: nowrap;
+	gap: var(--space-2xs);
+}
+.filter-row .tabs {
+	flex: 1 1 auto;
+}
+
+/* ---- 5. Тред: шапка, пузыри, композер ------------------------------- */
+.header-lead .account-avatar {
+	inline-size: 3rem;
+	block-size: 3rem;
+	font-size: var(--step-1);
+}
+.header-lead {
+	padding-inline-end: var(--space-2xs);
+}
+
+.message-list {
+	gap: var(--space-xs);
+	padding-block: var(--space-xs);
+}
+.message-bubble {
+	--bubble-radius: 1.25rem;
+	max-inline-size: min(85%, 26rem);
+	padding: var(--space-xs) var(--space-s) var(--space-2xs);
+	box-shadow: none;
+	background-image: none;
+	border: 0;
+	border-radius: var(--bubble-radius);
+	font-size: var(--step-0);
+	line-height: 1.4;
+	gap: var(--space-3xs);
+}
+.message-bubble-other,
+.msg--in {
+	background-color: var(--surface-raised);
+	color: var(--fg);
+	border: 0;
+	border-radius: var(--bubble-radius);
+}
+.message-bubble-own,
+.msg--out {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 66%);
+	color: var(--fg);
+	border: 0;
+	border-radius: var(--bubble-radius);
+}
+.message-bubble-own .message-bubble-sender,
+.message-bubble-own .message-bubble-meta,
+.message-bubble-own a,
+.message-bubble-own a:hover {
+	color: var(--fg);
+}
+.message-bubble-own .message-bubble-meta {
+	color: color-mix(in oklch, var(--accent), var(--fg) 30%);
+}
+.message-bubble-other .message-bubble-meta {
+	color: var(--muted);
+}
+.message-bubble-meta {
+	justify-content: flex-end;
+	font-size: var(--step--1);
+	font-variant-numeric: tabular-nums;
+}
+.message-bubble-meta .menu {
+	margin-inline-start: 0;
+}
+.message-bubble-sender {
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+}
+.message-receipt[data-kind="read"] {
+	color: var(--accent);
+}
+.message-bubble-own .audio-shell,
+.message-bubble .audio-shell {
+	/* Найдено живьём (владелец, Tauri/macOS, Э3, 2026-09-27) — 18rem (288px)
+	   меньше 320px, задокументированных выше (.audio-shell) как минимум для
+	   нормального отображения нативных <audio controls>; min-inline-size:0
+	   снимал ту защиту. WKWebView особенно требователен к ширине controls —
+	   органы управления становились почти невидимыми. */
+	min-inline-size: 320px;
+	inline-size: min(100%, 20rem);
+	background-color: transparent;
+	border-radius: var(--radius-full);
+}
+.message-bubble-own .audio-shell audio {
+	accent-color: var(--accent);
+}
+.message-bubble:has(.bubble-media) {
+	padding: var(--space-2xs);
+}
+.message-bubble:has(.bubble-media) .message-bubble-meta {
+	padding-inline: var(--space-2xs);
+}
+.bubble-media {
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+
+/* Композер: плашка поверхности [+] [поле · смайл · Aa] [микрофон] [отправить]. */
+.section-footer {
+	border-block-start: 0;
+	background: var(--bg);
+	padding: var(--space-2xs) var(--gutter) calc(var(--space-2xs) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+}
+.composer.bar {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-3xs);
+	padding: var(--space-2xs) var(--space-2xs);
+	background-color: var(--surface);
+	border: 0;
+	border-radius: 1.75rem;
+	box-shadow: none;
+}
+.composer__attach {
+	display: contents;
+}
+.composer.bar > .composer__attach > .menu,
+.composer.bar > .menu {
+	order: 1;
+}
+.composer.bar > .composer__field {
+	order: 2;
+}
+.composer.bar .composer-mic {
+	order: 3;
+}
+.composer.bar .message-compose-send-btn {
+	order: 4;
+}
+.composer__field {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	min-inline-size: 0;
+	min-block-size: 2.75rem;
+	padding: 0 var(--space-3xs) 0 var(--space-s);
+	background-color: var(--bg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: 1.5rem;
+}
+.composer__field:focus-within {
+	border-color: var(--accent);
+}
+.composer .message-compose-field {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	min-block-size: 0;
+	max-block-size: 7.5rem;
+	block-size: auto;
+	padding: var(--space-2xs) 0;
+	border: 0;
+	background: none;
+	border-radius: 0;
+	box-shadow: none;
+	resize: none;
+	line-height: 1.35;
+	overflow-y: auto;
+}
+.composer .message-compose-field:focus-visible {
+	box-shadow: none;
+	border: 0;
+}
+.composer .message-compose-tool-btn,
+.composer .message-compose-tool-btn:has(> .icon),
+.composer .message-compose-send-btn,
+.composer .message-compose-send-btn:has(> .icon) {
+	flex: none;
+	display: inline-grid;
+	place-items: center;
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--accent);
+	box-shadow: none;
+	line-height: 1;
+}
+.composer .message-compose-tool-btn:hover,
+.composer .message-compose-send-btn:hover:not(:disabled) {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+	color: var(--accent);
+}
+.composer .message-compose-send-btn:disabled {
+	color: var(--muted);
+	opacity: 0.6;
+}
+.composer .message-compose-tool-btn .icon,
+.composer .message-compose-send-btn .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+.composer__field .message-compose-tool-btn {
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	color: var(--muted);
+}
+.composer__field .message-compose-tool-btn .icon {
+	inline-size: 1.375rem;
+	block-size: 1.375rem;
+}
+.composer-aa {
+	position: relative;
+	border: 0;
+	padding: 0;
+	background: none;
+	border-radius: 0;
+	display: inline-flex;
+}
+.composer-aa > summary {
+	list-style: none;
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+	font-size: var(--step-1);
+	cursor: pointer;
+}
+.composer-aa > summary::-webkit-details-marker {
+	display: none;
+}
+.composer-aa[open] .markdown-toolbar {
+	position: absolute;
+	inset-inline-end: 0;
+	inset-block-end: calc(100% + var(--space-2xs));
+	background: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	padding: var(--space-2xs);
+	box-shadow: 0 0.5rem 2rem color-mix(in oklch, var(--fg), transparent 82%);
+	z-index: 5;
+}
+
+/* ---- 6. Контакты ---------------------------------------------------- */
+.contacts-page,
+.contacts-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-s);
+}
+.contacts-main {
+	gap: var(--space-m);
+}
+.contact-groups {
+	/* Живой фидбег — зазор между рядом групп/"+" и формой новой группы был
+	   едва заметен. */
+	gap: var(--space-m);
+}
+.contact-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2xs);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.contact-chips > li {
+	margin: 0;
+}
+.contact-chips .group-filter-chip {
+	display: inline-flex;
+	align-items: center;
+	min-block-size: 2.5rem;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--fg);
+	padding: 0;
+}
+.contact-chips .group-filter-chip input[type="checkbox"] {
+	appearance: none;
+	inline-size: 0;
+	block-size: 0;
+	margin: 0;
+	position: absolute;
+	opacity: 0;
+}
+.contact-chips .group-filter-chip label {
+	color: inherit;
+	display: block;
+	margin: 0;
+	padding: 0 var(--space-m);
+	line-height: 2.375rem;
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	cursor: pointer;
+}
+.contact-chips .group-filter-chip:has(input:checked) {
+	background-color: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.contact-chips .group-filter-chip:has(input:checked) label {
+	font-weight: var(--weight-medium);
+}
+.contact-chips .group-filter-chip:has(input:focus-visible) {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.contact-chips .group-filter-chip .menu > summary {
+	color: inherit;
+	inline-size: 2rem;
+	block-size: 2rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+}
+.contact-chips .group-filter-chip label + .menu {
+	margin-inline-start: calc(-1 * var(--space-s));
+	margin-inline-end: var(--space-3xs);
+}
+.chip-add,
+.chip-add:has(> .icon) {
+	display: inline-grid;
+	place-items: center;
+	inline-size: 3.25rem;
+	min-block-size: 2.5rem;
+	padding: 0;
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+}
+.chip-add:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 94%);
+	color: var(--fg);
+}
+.contact-group-form input {
+	flex: 1 1 auto;
+}
+.contacts-add-panel {
+	padding: var(--space-s) var(--space-m);
+	background-color: var(--surface);
+	border-radius: var(--radius-lg);
+}
+.contact-add-label {
+	font-weight: var(--weight-medium);
+}
+.contacts-add-form {
+	gap: var(--space-2xs);
+	flex-wrap: nowrap;
+}
+.contact-add-field {
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	background-color: var(--bg);
+	padding-inline: var(--space-s);
+	min-block-size: var(--tap);
+	flex-wrap: nowrap;
+}
+.contact-add-field input {
+	border: 0;
+	background: none;
+	padding: 0;
+	min-block-size: 0;
+	box-shadow: none;
+}
+.contacts-add-form > button {
+	border-radius: var(--radius-md);
+	white-space: nowrap;
+}
+
+/* Строка контакта: аватар 56, имя и подпись, кнопка чата, «⋯». */
+.ucard-list,
+.ucard-list--divided {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin: 0;
+	padding: 0;
+}
+.ucard-list--divided > * + * {
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.ucard-shell {
+	margin: 0;
+}
+.ucard--row,
+.ucard--row:has(.ucard__who:hover) {
+	--ucard-avatar: 3.5rem;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"who actions"
+		"extra extra"
+		"meta meta";
+	align-items: center;
+	column-gap: var(--space-s);
+	padding: var(--space-xs) 0;
+	border-radius: 0;
+	background: none;
+}
+.ucard--row .ucard__who {
+	grid-template-columns: var(--ucard-avatar) minmax(0, 1fr);
+	align-items: center;
+	column-gap: var(--space-s);
+}
+.ucard--row .ucard__name {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.25;
+}
+.ucard--row .ucard__name--npub {
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+}
+.ucard--row .ucard__bio {
+	font-size: var(--step--1);
+}
+.ucard__photo {
+	border: 0;
+	background-color: var(--surface-raised);
+}
+.ucard__actions {
+	gap: var(--space-2xs);
+	flex-wrap: nowrap;
+}
+.ucard__actions button {
+	background-color: transparent;
+	color: var(--fg);
+	border-color: var(--hairline);
+	font-weight: var(--weight-normal);
+}
+.ucard__actions .icon-btn {
+	border: 0;
+	color: var(--fg);
+	min-inline-size: 2.5rem;
+	min-block-size: 2.5rem;
+}
+.ucard__actions .contact-chat,
+.ucard__actions .contact-chat:has(> .icon) {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	min-inline-size: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-md);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	display: inline-grid;
+	place-items: center;
+}
+.ucard__actions .contact-chat:hover {
+	background-color: var(--accent-hover);
+}
+.ucard__actions .contact-chat .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+@container ucard (max-width: 26rem) {
+	.ucard--row {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"who actions"
+			"extra extra"
+			"meta meta";
+	}
+	.ucard--row .ucard__actions {
+		justify-self: end;
+	}
+}
+/* Заявки: подписи кнопок длинные — действия уходят под строку человека. */
+.contacts-requests .ucard--row,
+.inbox-row .ucard--row {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-areas:
+		"who"
+		"actions";
+	row-gap: var(--space-2xs);
+}
+.contacts-requests .ucard__actions {
+	justify-self: stretch;
+	/* nowrap-кнопки (custom.css выше) на совсем узкой ширине могут вместе
+	   не поместиться в ряд даже на всю ширину карточки — пускай тогда
+	   переносятся в столбец (flex-basis:0 у кнопок ниже делает каждую
+	   строку шириной во всю карточку), а не вылезают за край. */
+	flex-wrap: wrap;
+}
+.contacts-requests .ucard__actions button {
+	flex: 1 1 0;
+	min-block-size: 2.5rem;
+	border-radius: var(--radius-md);
+}
+.contacts-requests > h2,
+.contacts-main > section > h2 {
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	letter-spacing: 0;
+	color: var(--fg);
+	margin: 0;
+}
+.contacts-requests {
+	margin-block-start: var(--space-s);
+}
+.requests {
+	margin-block-start: 0;
+}
+.req {
+	border: 0;
+	border-block-start: var(--border-width) solid var(--hairline);
+	border-radius: 0;
+	background: none;
+}
+.req > summary {
+	display: flex;
+	align-items: center;
+	min-block-size: 3rem;
+	font-weight: var(--weight-normal);
+	padding-inline: 0;
+}
+.req__count {
+	color: var(--muted);
+}
+.group-chip {
+	font-weight: var(--weight-medium);
+}
+
+/* ---- 7. Профиль ----------------------------------------------------- */
+.profile-page {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-m);
+	max-inline-size: 40rem;
+	inline-size: 100%;
+	margin-inline: auto;
+}
+.profile-photo {
+	gap: var(--space-s);
+}
+.profile-hero {
+	/* Было 16:9 (макет 0teqm.jpg, "фото-герой") — живой фидбек: превью на
+	   редактировании расходилось с тем, как аватар реально рендерится
+	   везде в приложении (.account-avatar — квадрат, см. выше) и как его
+	   реально хранит avatar-resize.js (центр-кроп в квадрат ≤256px).
+	   Широкий превью вводил в заблуждение, что сохранится не то, что
+	   видно при редактировании. */
+	inline-size: 100%;
+	aspect-ratio: 1 / 1;
+	max-inline-size: 20rem;
+	margin-inline: auto;
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	background-color: var(--surface-raised);
+}
+.profile-avatar-square {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+	border-radius: 0;
+	border: 0;
+}
+.profile-avatar-square-fallback {
+	font-size: var(--step-5);
+	color: var(--muted);
+	font-weight: var(--weight-medium);
+}
+.profile-photo__actions {
+	display: flex;
+	justify-content: center;
+	gap: var(--space-l);
+}
+.profile-photo__actions label {
+	display: inline;
+	margin: 0;
+	font-weight: var(--weight-normal);
+	font-size: var(--step--1);
+}
+.profile-fields {
+	gap: var(--space-s);
+}
+.field-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	padding: var(--space-s) var(--space-m);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+}
+.field-card__label {
+	display: block;
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.field-card__row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	min-block-size: 2.75rem;
+}
+.field-card__value {
+	background: none;
+	border: 0;
+	padding: 0;
+	font-size: var(--step-1);
+	font-family: var(--font-mono);
+	color: var(--fg);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.field-card__hint {
+	margin: 0;
+	padding-block-start: var(--space-2xs);
+	border-block-start: var(--border-width) solid var(--hairline);
+	color: var(--muted);
+	font-size: var(--step--1);
+	max-inline-size: none;
+}
+.field-card textarea {
+	background-color: var(--bg);
+	min-block-size: 6rem;
+}
+.field-card__foot {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-s);
+}
+.field-card__foot .field-card__hint {
+	border: 0;
+	padding: 0;
+	margin-inline-end: auto;
+}
+.profile-danger {
+	margin-block-start: var(--space-xs);
+	padding-block-start: var(--space-s);
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.profile-danger .btn--ghost.btn--danger {
+	align-self: flex-start;
+	border: 0;
+	background: none;
+	padding: 0;
+	min-block-size: var(--tap);
+	color: var(--bad);
+	font-weight: var(--weight-normal);
+	font-size: var(--step-0);
+}
+.profile-danger .btn--ghost.btn--danger:hover {
+	background: none;
+	text-decoration: underline;
+}
+
+/* ---- 8. Настройки --------------------------------------------------- */
+.panel:has(.set-row, .set-list) {
+	background: none;
+	border: 0;
+	box-shadow: none;
+	padding: 0;
+	border-radius: 0;
+}
+.panel:has(.set-row, .set-list) .panel__title {
+	font-family: var(--font-body);
+	font-weight: 600;
+	font-size: var(--step-1);
+	color: var(--fg);
+}
+.set-list {
+	gap: 0;
+}
+.set-list > * + *,
+.panel > .set-row + .set-row {
+	border-block-start: 0;
+}
+.set-row {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	min-block-size: 3.75rem;
+	padding-block: var(--space-xs);
+	border-block-end: var(--border-width) solid var(--hairline);
+	cursor: default;
+}
+.set-row__text {
+	flex: 1 1 auto;
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	color: var(--fg);
+	min-inline-size: 0;
+}
+.set-row__hint {
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+}
+.set-row > select,
+.set-row > .set-row__control {
+	inline-size: auto;
+	max-inline-size: 60%;
+	min-block-size: 2.5rem;
+	border: 0;
+	background-color: transparent;
+	background-image: none;
+	padding: 0 var(--space-xs) 0 0;
+	text-align: end;
+	text-align-last: end;
+	color: var(--muted);
+	font-size: var(--step-1);
+	cursor: pointer;
+}
+.set-row:has(> select)::after {
+	content: "";
+	flex: none;
+	inline-size: 0.5rem;
+	block-size: 0.5rem;
+	border: solid var(--muted);
+	border-width: 2px 2px 0 0;
+	rotate: 45deg;
+	margin-inline-start: calc(-1 * var(--space-2xs));
+}
+.set-row > input[type="range"] {
+	inline-size: 55%;
+}
+/* Переключатель темы: подпись сверху, три текстовых пункта с подчёркиванием. */
+.set-row:has(.seg) {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-2xs);
+	min-block-size: 0;
+}
+.set-row:has(.seg) > .set-row__text {
+	flex: none;
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+}
+.set-row .seg {
+	display: flex;
+	inline-size: 100%;
+	gap: 0;
+	border: 0;
+	background: none;
+}
+.set-row .seg .slice {
+	flex: 1 1 0;
+	justify-content: center;
+	padding: var(--space-xs) 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	border-block-end: 2px solid transparent;
+	color: var(--muted);
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	box-shadow: none;
+}
+.set-row .seg .slice + .slice {
+	margin-inline-start: 0;
+}
+.set-row .seg .slice--on {
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+	border-block-end-color: var(--accent);
+	background: none;
+}
+/* Тумблер: пилюля 44×26, ползунок белый (макет 3CSIg.jpg). */
+.set-row__switch {
+	appearance: none;
+	flex: none;
+	inline-size: 2.875rem;
+	block-size: 1.75rem;
+	min-block-size: 0;
+	padding: 0;
+	border-radius: var(--radius-full);
+	/* Живой фидбег (после перехода на светлую тему по умолчанию) — дорожка
+	   на 22%-непрозрачном fg почти сливалась со светлым фоном, оставался
+	   виден только белый ползунок ("выглядит как кругляш, не переключатель").
+	   border держит форму пилюли видимой независимо от темы/фона. */
+	border: var(--border-width) solid var(--hairline);
+	background-color: color-mix(in oklch, var(--fg), transparent 78%);
+	position: relative;
+	transition: background-color var(--transition-speed) var(--transition-ease);
+}
+.set-row__switch::before {
+	content: "";
+	position: absolute;
+	inset-block-start: 0.1875rem;
+	inset-inline-start: 0.1875rem;
+	inline-size: 1.375rem;
+	block-size: 1.375rem;
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	box-shadow: 0 1px 3px color-mix(in oklch, var(--fg), transparent 70%);
+	transition: translate var(--transition-speed) var(--ease);
+}
+.set-row__switch:checked {
+	background-color: var(--accent);
+}
+.set-row__switch:checked::before {
+	translate: 1.125rem 0;
+}
+.switch-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	margin: 0;
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	color: var(--fg);
+}
+/* Флажок: скруглённый квадрат акцентной рамки с галочкой (макет doESI.jpg).
+   Живой фидбек — этот вид раньше был только у "Кто здесь" → "Показать
+   себя" (.set-row__check), везде ещё чекбоксы стояли нативной формы ОС
+   (только accent-color, minimal.css). Теперь это дефолт для ЛЮБОГО
+   чекбокса — кроме .set-row__switch (другой виджет, пилюля вкл/выкл) и
+   .group-filter-chip (у неё checkbox нулевого размера, вид целиком на
+   чипе/label, выше по специфичности — не пересекается). */
+.set-row__check,
+input[type="checkbox"]:not(.set-row__switch) {
+	appearance: none;
+	flex: none;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	min-block-size: 0;
+	padding: 0;
+	border: 1.5px solid var(--accent);
+	border-radius: var(--radius-sm);
+	background: none;
+	display: inline-grid;
+	place-items: center;
+	cursor: pointer;
+}
+.set-row__check:checked::after,
+input[type="checkbox"]:not(.set-row__switch):checked::after {
+	content: "";
+	inline-size: 0.4rem;
+	block-size: 0.8rem;
+	border: solid var(--accent);
+	border-width: 0 2px 2px 0;
+	rotate: 45deg;
+	translate: 0 -1px;
+}
+/* Образцы цвета: пять кружков, выбранный — кольцо и галочка. */
+.palette-section {
+	padding-block: var(--space-s);
+}
+.palette-section .set-label {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	color: var(--fg);
+}
+.swatch-grid {
+	gap: var(--space-s);
+	flex-wrap: wrap;
+}
+.swatch,
+.swatch:has(> span) {
+	position: relative;
+	inline-size: 3rem;
+	block-size: 3rem;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: var(--radius-full);
+	background: none;
+	display: grid;
+	place-items: center;
+}
+.swatch > span {
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	border-radius: var(--radius-full);
+}
+.swatch[aria-pressed="true"] {
+	border-color: var(--accent);
+}
+.swatch[aria-pressed="true"]::after {
+	content: "";
+	position: absolute;
+	inset-inline-start: 50%;
+	inset-block-start: 46%;
+	inline-size: 0.5rem;
+	block-size: 0.9rem;
+	border: solid var(--accent-contrast);
+	border-width: 0 2.5px 2.5px 0;
+	rotate: 45deg;
+	translate: -50% -50%;
+	pointer-events: none;
+}
+.exceptions > summary {
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+}
+
+/* Правки по живой сверке настроек. */
+.slices-zone:has(.tabs) {
+	padding-inline: 0;
+}
+.slices-zone .tabs {
+	padding-inline: var(--gutter);
+}
+.slices-zone .tab {
+	padding-inline: var(--space-xs);
+	font-size: var(--font-size-menu);
+}
+.set-row__text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	font-size: var(--step-0);
+}
+.panel .set-row > select.set-row__control,
+.set-row > select {
+	background-color: transparent;
+	background-image: none;
+	border: 0;
+	font-size: var(--step-0);
+	padding: 0 var(--space-3xs) 0 0;
+	inline-size: auto;
+	min-block-size: 2.5rem;
+	box-shadow: none;
+}
+.set-row .seg .slice {
+	font-size: var(--step-0);
+	white-space: nowrap;
+	padding-inline: var(--space-3xs);
+}
+
+/* ---- 9. Каналы ------------------------------------------------------ */
+/* Бургер живёт рядом с .app-layout, не внутри: прячем его от контейнера. */
+.app-shell-inner:has(.section-header .header-back) .top-corner-actions {
+	display: none;
+}
+
+.channels-layout {
+	gap: var(--space-m);
+}
+.channels-block h2,
+.channels-aside h2 {
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	letter-spacing: 0;
+	color: var(--fg);
+	margin-block: 0 var(--space-2xs);
+}
+.channels-aside {
+	background: none;
+	border: 0;
+	border-radius: 0;
+	padding: 0;
+	margin-block-start: 0;
+}
+.channels-aside p,
+.channels-block p {
+	margin-block: 0;
+	color: var(--muted);
+}
+.channel-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	margin: 0;
+	padding: 0;
+}
+.channel-card-item {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	margin: 0;
+	padding: var(--space-xs) var(--space-s);
+	background-color: var(--surface);
+	border: 0;
+	border-radius: var(--radius-lg);
+}
+.channel-card-link {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	min-inline-size: 0;
+	text-align: start;
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+}
+.channel-card-link > .stack {
+	align-items: flex-start;
+	min-inline-size: 0;
+}
+.channel-card-link strong {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.25;
+}
+.channel-card-link small {
+	font-size: var(--step-0);
+	line-height: 1.3;
+}
+.channel-card-updated {
+	font-size: var(--step--1);
+}
+.channel-avatar-thumb,
+.channel-avatar-thumb-sm {
+	border: 0;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	object-fit: cover;
+}
+.channel-avatar-thumb {
+	inline-size: 3.5rem;
+	block-size: 3.5rem;
+}
+.channel-avatar-thumb-fallback {
+	display: grid;
+	place-items: center;
+	font-weight: var(--weight-medium);
+}
+.header-lead .channel-avatar-thumb-sm {
+	inline-size: 3rem;
+	block-size: 3rem;
+}
+.stream .channel-avatar-thumb-sm,
+.stream-row .channel-avatar-thumb-sm {
+	inline-size: 2rem;
+	block-size: 2rem;
+}
+
+/* Шапка канала: назад, аватар, имя + подпись, действия, «О канале». */
+.section-header:has(.header-lead) {
+	grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+.ch-kicker,
+.ch-stats {
+	font-size: var(--step--1);
+}
+.header-actions .btn--primary {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 2.5rem;
+	padding-inline: var(--space-s);
+	background-color: transparent;
+	color: var(--accent);
+	border: var(--border-width) solid var(--accent);
+	border-radius: var(--radius-md);
+	font-weight: var(--weight-medium);
+}
+.header-actions .btn--primary:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 90%);
+}
+@container (width < 30rem) {
+	.header-actions .btn-label {
+		display: none;
+	}
+	.header-actions .btn--primary,
+	.header-actions .btn--primary:has(> .icon) {
+		padding-inline: 0;
+		inline-size: 2.5rem;
+		justify-content: center;
+	}
+}
+.ch-about-toggle {
+	color: var(--muted);
+	font-size: var(--step--1);
+	padding-block: var(--space-3xs);
+}
+.header-extra {
+	padding-block-start: var(--space-3xs);
+}
+
+/* Вкладки канала «Посты / Чат»: поровну, подчёркивание акцентом. */
+nav.tabs.reel {
+	inline-size: 100%;
+}
+nav.tabs.reel .tab {
+	font-size: var(--step-0);
+	padding-block: var(--space-s);
+}
+
+/* Полоса срезов «Всё / Изображения» — мелкий вторичный ряд под вкладками. */
+.attachment-slices-bar {
+	position: static;
+	inline-size: 100%;
+	padding: 0;
+	border-radius: 0;
+	background: none;
+}
+.attachment-slices-bar .tabs {
+	border-block-end: var(--border-width) solid var(--hairline);
+	inline-size: 100%;
+}
+.attachment-slices-bar .tab {
+	padding: var(--space-2xs) var(--space-s);
+	font-size: var(--step--1);
+}
+.ch-toolbar {
+	padding-inline: 0;
+}
+.ch-stats {
+	color: var(--muted);
+}
+.day-sep {
+	font-size: var(--step--1);
+	color: var(--muted);
+	padding-block-start: var(--space-xs);
+}
+
+/* Лента записей: карточка, а не строка (макет 99pML.jpg). */
+.feed-item {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-xs);
+	inline-size: 100%;
+	padding: var(--space-s) var(--space-s) var(--space-xs);
+	background-color: var(--bg);
+	border: var(--border-width) solid var(--hairline);
+	border-block-end: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+	font-weight: var(--weight-normal);
+	color: var(--fg);
+	text-align: start;
+}
+.feed-item:hover {
+	background-color: var(--bg);
+	border-color: color-mix(in oklch, var(--border), var(--fg) 15%);
+}
+.feed-item:last-child {
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.feed-item > * {
+	margin: 0;
+}
+.feed-meta {
+	order: 1;
+}
+.feed-media {
+	order: 2;
+}
+.feed-title,
+.feed-excerpt,
+.feed-chips {
+	order: 3;
+}
+.feed-foot {
+	order: 5;
+	padding-block-start: var(--space-xs);
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.feed-kind {
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.06em;
+}
+.feed-time {
+	font-size: var(--step--1);
+}
+.feed-title {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.3;
+}
+.feed-title--synthetic {
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	line-height: 1.35;
+}
+.feed-excerpt {
+	color: var(--muted);
+}
+.feed-count,
+.feed-reacts {
+	font-size: var(--step-0);
+}
+.feed-count .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	color: var(--muted);
+}
+.feed-media {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-2xs);
+}
+.feed-media[data-count="1"] {
+	grid-template-columns: 1fr;
+}
+.feed-tile {
+	position: relative;
+	display: block;
+	aspect-ratio: 1;
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background-color: var(--surface-raised);
+}
+.feed-media[data-count="1"] .feed-tile {
+	aspect-ratio: 16 / 10;
+}
+.feed-thumb {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	border: 0;
+	border-radius: 0;
+	object-fit: cover;
+}
+.feed-tile__play {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+}
+.feed-tile__play .icon {
+	box-sizing: content-box;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	padding: 0.75rem;
+	border-radius: var(--radius-full);
+	background-color: color-mix(in oklch, var(--fg), transparent 30%);
+	color: var(--bg);
+}
+@container (max-inline-size: 30rem) {
+	.feed-thumb {
+		inline-size: 100%;
+		block-size: 100%;
+	}
+	.feed-title {
+		font-size: var(--step-1);
+	}
+}
+
+/* Форма новой записи: кнопки одной высоты, «Опубликовать» — единственная залитая. */
+.composer-card {
+	background: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+	box-shadow: none;
+}
+.composer-card .row {
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+}
+.composer-card .row > button,
+.composer-card .row > button:has(> .icon) {
+	min-block-size: 2.75rem;
+	padding: 0 var(--space-s);
+	border-radius: var(--radius-md);
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	line-height: 1;
+}
+.composer-card .row > button.btn--ghost {
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+}
+.composer-card .post-cta--compact,
+.post-cta--compact {
+	width: auto;
+	font-size: var(--step-0);
+	padding-block: 0;
+	padding-inline: var(--space-m);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border-color: transparent;
+}
+.composer-card .post-cta--compact:disabled {
+	opacity: 0.5;
+}
+
+/* ---- 10. Страница записи и комментарии (макет 8ZspV.jpg) -------------- */
+.post-page {
+	max-inline-size: 40rem;
+	inline-size: 100%;
+	margin-inline: auto;
+	gap: var(--space-s);
+}
+.post-byline {
+	align-items: center;
+	gap: var(--space-s);
+}
+.post__ava,
+.cmt__ava {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	color: var(--muted);
+	display: grid;
+	place-items: center;
+	font-weight: var(--weight-medium);
+}
+.post__author {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+}
+.post-page__meta {
+	font-size: var(--step--1);
+}
+.post-page__body {
+	font-size: var(--step-1);
+	line-height: 1.5;
+}
+.bubble-media--single,
+.bubble-media {
+	inline-size: 100%;
+	border-radius: var(--radius-md);
+}
+.react-row {
+	gap: var(--space-s);
+}
+.react-add,
+.react-chip {
+	min-block-size: 2.5rem;
+	border-radius: var(--radius-full);
+	background: none;
+	border: var(--border-width) solid var(--hairline);
+	color: var(--fg);
+	font-weight: var(--weight-normal);
+}
+.cmt-section {
+	margin-block-start: var(--space-s);
+}
+.cmt-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	padding-block-end: var(--space-2xs);
+}
+.cmt-head h2 {
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	letter-spacing: 0;
+	margin: 0;
+	color: var(--fg);
+	flex: 1;
+}
+.cmt-head .ch-stats {
+	color: var(--muted);
+}
+
+/* Поле комментария: строка ввода, инструменты — тихим рядом, отправка — акцентом. */
+.composer.stack {
+	gap: var(--space-2xs);
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+.comment-text-field {
+	min-block-size: 3rem;
+	padding: var(--space-xs) var(--space-s);
+	background-color: var(--bg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	resize: none;
+}
+.compose-tools.row {
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-3xs);
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.compose-tools.row::-webkit-scrollbar {
+	display: none;
+}
+.compose-tools__attach,
+.markdown-toolbar,
+.compose-tools__emoji {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-3xs);
+}
+.markdown-toolbar-btn,
+.markdown-toolbar-btn:has(> .icon) {
+	inline-size: 2.25rem;
+	block-size: 2.25rem;
+	padding: 0;
+	display: inline-grid;
+	place-items: center;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-full);
+	color: var(--muted);
+}
+.markdown-toolbar-btn:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+	color: var(--fg);
+}
+.composer__row {
+	justify-content: flex-end;
+}
+.composer__row > button {
+	min-block-size: 2.75rem;
+	padding-inline: var(--space-m);
+	border-radius: var(--radius-md);
+}
+
+/* На широком экране лента и её полоса — колонкой в читаемую ширину, а не на всё окно. */
+.content-wrapper:has(.feed-item) > *,
+.content-wrapper:has(.feed-item) .attachment-slices-bar {
+	max-inline-size: 46rem;
+	margin-inline: auto;
+	inline-size: 100%;
+}
+.feed-media[data-count="1"] .feed-tile {
+	max-block-size: 22rem;
+}
+
+/* ---- 11. Файлы (макеты lIDaE.jpg, Cv8vL.jpg, qfVuy.jpg) ---------------- */
+/* Действия «Файлов» на узком экране — голые иконки акцентом, как «⋯» на макете. */
+@container (width < 30rem) {
+	.header-actions button:has(> .btn-label) {
+		inline-size: 2.5rem;
+		min-inline-size: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--accent);
+		justify-content: center;
+	}
+	.header-actions button:has(> .btn-label):hover {
+		background-color: color-mix(in oklch, var(--accent), transparent 90%);
+	}
+	.header-actions button:has(> .btn-label) .icon {
+		inline-size: 1.5rem;
+		block-size: 1.5rem;
+	}
+	.header-actions {
+		gap: 0;
+	}
+}
+
+.files-shell {
+	gap: var(--space-s);
+}
+.file-breadcrumbs {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+
+/* Полоса режима «Фото / Видео»: пилюля-метка слева, «Смотреть подряд» ссылкой. */
+.mode-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2xs) var(--space-s);
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 0;
+}
+.mode-bar__title {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 2.5rem;
+	padding-inline: var(--space-s);
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+}
+.mode-bar__n {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.mode-bar .btn--ghost {
+	border: 0;
+	background: none;
+	color: var(--accent);
+	padding: 0;
+	min-block-size: 2.5rem;
+	text-decoration: underline;
+	text-underline-offset: 0.3em;
+	font-weight: var(--weight-normal);
+}
+.seg.view-toggle {
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	overflow: hidden;
+	background: none;
+}
+.seg.view-toggle .slice {
+	border: 0;
+	border-radius: 0;
+	min-block-size: 2.25rem;
+	padding-inline: var(--space-xs);
+}
+.seg.view-toggle .slice--on {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 85%);
+	color: var(--accent);
+}
+
+/* Сетка: 2 колонки на телефоне, 3 — от планшета, 4 — на широком (по ширине экрана). */
+.file-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-m) var(--space-s);
+	margin: var(--space-2xs) 0 0;
+	padding: 0;
+	list-style: none;
+}
+@container screen (width >= 40em) {
+	.file-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+@container screen (width >= 64em) {
+	.file-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+.file-tile {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+	margin: 0;
+	min-inline-size: 0;
+	position: relative;
+}
+.file-tile__frame,
+.file-tile__frame:has(> .icon) {
+	position: relative;
+	display: block;
+	padding: 0;
+	inline-size: 100%;
+	aspect-ratio: 1;
+	border: 0;
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	background-color: var(--surface-raised);
+	color: var(--muted);
+}
+.file-tile__frame img {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+	display: block;
+}
+.file-tile__menu {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+}
+.file-tile__menu .icon-btn {
+	inline-size: 2rem;
+	block-size: 2rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+	background-color: color-mix(in oklch, var(--bg), transparent 15%);
+	color: var(--fg);
+	border-radius: var(--radius-full);
+}
+.file-tile__name {
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	color: var(--fg);
+	background: none;
+	border: 0;
+	padding: 0;
+	text-align: start;
+	line-height: 1.3;
+}
+.file-tile__meta {
+	color: var(--muted);
+	font-size: var(--step--1);
+	margin-block-start: calc(-1 * var(--space-3xs));
+}
+
+/* Список: миниатюра 56, название и подпись столбиком, «⋯» справа. */
+.file-table {
+	display: block;
+	inline-size: 100%;
+	background-color: var(--surface);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	margin: 0;
+}
+.file-table thead,
+.file-table tbody {
+	display: block;
+}
+.file-table thead {
+	padding: var(--space-2xs) var(--space-s);
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.file-table thead tr {
+	display: flex;
+	align-items: center;
+	gap: var(--space-m);
+}
+.file-table th,
+.file-table td {
+	border: 0;
+	padding: 0;
+	display: block;
+}
+.file-table thead th.file-table__icon,
+.file-table thead th.file-table__access,
+.file-table thead th.file-table__actions {
+	display: none;
+}
+.file-table__sort {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	padding: var(--space-2xs) 0;
+	background: none;
+	border: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.file-table__sort--on {
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+}
+.file-table__sort:hover {
+	background: none;
+	color: var(--fg);
+}
+.file-table tbody tr {
+	display: grid;
+	grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--space-s);
+	padding: var(--space-2xs) var(--space-s);
+	min-block-size: 4.5rem;
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.file-table tbody tr:first-child {
+	border-block-start: 0;
+}
+.file-table td.file-table__type,
+.file-table td.file-table__size,
+.file-table td.file-table__access {
+	display: none;
+}
+.file-row-name,
+.file-row-name:has(> .icon) {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.125rem;
+	min-inline-size: 0;
+	padding: 0;
+	background: none;
+	border: 0;
+	color: var(--fg);
+	text-align: start;
+	font-weight: var(--weight-normal);
+	white-space: normal;
+}
+.file-row-title {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+.file-row-sub {
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.file-row-thumb,
+.file-table__icon .file-row-icon {
+	inline-size: 3.5rem;
+	block-size: 3.5rem;
+	border-radius: var(--radius-md);
+	object-fit: cover;
+	border: 0;
+	background-color: var(--surface-raised);
+	color: var(--muted);
+	padding: 0.75rem;
+}
+.file-row-thumb {
+	padding: 0;
+}
+.file-table__actions .icon-btn {
+	min-inline-size: 2.5rem;
+	min-block-size: 2.5rem;
+	color: var(--fg);
+}
+/* Широкий экран: настоящая таблица с колонками размера и доступа. */
+@container screen (width >= 48em) {
+	.file-table {
+		display: table;
+	}
+	.file-table thead {
+		display: table-header-group;
+	}
+	.file-table tbody {
+		display: table-row-group;
+	}
+	.file-table tr {
+		display: table-row;
+	}
+	.file-table th,
+	.file-table td {
+		display: table-cell;
+		padding: var(--space-2xs) var(--space-s);
+		vertical-align: middle;
+		border-block-end: var(--border-width) solid var(--hairline);
+	}
+	.file-table thead tr {
+		display: table-row;
+	}
+	.file-table thead th.file-table__icon,
+	.file-table thead th.file-table__access,
+	.file-table thead th.file-table__actions,
+	.file-table td.file-table__type,
+	.file-table td.file-table__size,
+	.file-table td.file-table__access {
+		display: table-cell;
+	}
+	.file-table tbody tr {
+		display: table-row;
+		padding: 0;
+	}
+	.file-table thead {
+		padding: 0;
+		border: 0;
+	}
+	.file-table td.file-table__icon {
+		inline-size: 4.5rem;
+	}
+	.file-table td.file-table__actions {
+		inline-size: 3rem;
+		text-align: end;
+	}
+	.file-row-sub {
+		display: none;
+	}
+}
+
+/* ---- 12. Знакомства (макет doESI.jpg) --------------------------------- */
+.slice__n {
+	margin-inline-start: var(--space-3xs);
+}
+/* Выбор срока: три равные части в общей рамке, выбранная — тоном акцента. */
+.seg:not(.view-toggle) {
+	display: flex;
+	inline-size: 100%;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background-color: var(--surface);
+	gap: 0;
+}
+.seg:not(.view-toggle) .slice {
+	flex: 1 1 0;
+	justify-content: center;
+	min-block-size: 2.75rem;
+	padding: 0 var(--space-xs);
+	border: 0;
+	border-radius: 0;
+	background: none;
+	color: var(--fg);
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	box-shadow: none;
+}
+.seg:not(.view-toggle) .slice + .slice {
+	margin-inline-start: 0;
+	border-inline-start: var(--border-width) solid var(--hairline);
+}
+.seg:not(.view-toggle) .slice--on {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+	color: var(--accent);
+	font-weight: var(--weight-medium);
+}
+/* Превью карточки — обычная поверхность без штриховки. */
+.ucard--accent,
+.ucard--panel {
+	background-image: none;
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+}
+.ucard--panel .ucard__name {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+}
+/* Флажки: подпись справа, галочка слева. */
+.set-row:has(> .set-row__check) {
+	justify-content: flex-start;
+	border-block-end: 0;
+	min-block-size: 3rem;
+}
+.set-row:has(> .set-row__check) .set-row__text {
+	flex: 0 1 auto;
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+}
+/* Низ формы: пояснение, залитая кнопка «Показать себя», «Отмена» ссылкой. */
+.dv-head {
+	flex-wrap: wrap;
+}
+.dv-head .panel__hint {
+	flex: 1 1 100%;
+	text-align: center;
+}
+.dv-head .dv-actions {
+	flex: 1 1 100%;
+	flex-direction: column-reverse;
+	align-items: stretch;
+	gap: var(--space-2xs);
+}
+.dv-actions > button {
+	min-block-size: 3rem;
+	border-radius: var(--radius-md);
+	font-size: var(--step-0);
+}
+.dv-actions > button:first-child:not(:last-child) {
+	background: none;
+	color: var(--fg);
+	border: 0;
+	font-weight: var(--weight-normal);
+}
+.dv-status-icon {
+	color: var(--accent);
+}
+.panel--good {
+	background: none;
+	border: 0;
+	padding: 0;
+}
+
+/* ---- 13. Быстрая связь (макеты a9axE.jpg, pZ6X2.jpg) ------------------- */
+/* Телефон: окно на весь экран, без карточки и подсветки. padding:0 здесь
+   раньше стирал safe-area-top/bottom из базового .rooms-overlay выше —
+   заголовок и кнопки закрытия/сворачивания уходили под статус-бар (живой
+   баг, подтверждён на телефоне). Инлайн — 0 (полноэкранный edge-to-edge),
+   блочный — только safe-area, без --space-l: внутренний отступ уже даёт
+   .quick-entry (padding-block-start своего header). */
+@media (max-width: 47.99em) {
+	.rooms-overlay {
+		padding-inline: 0;
+		padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+		padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+		align-items: stretch;
+	}
+	.rooms-overlay-panel {
+		max-block-size: none;
+		border-radius: 0;
+		box-shadow: none;
+		background-color: var(--bg);
+	}
+}
+.rooms-overlay-panel {
+	background-color: var(--bg);
+	border-radius: var(--radius-lg);
+}
+.rooms-overlay-panel::before {
+	display: none;
+}
+.rooms-overlay-controls {
+	inset-block-start: var(--space-xs);
+	inset-inline-end: var(--gutter);
+}
+.rooms-overlay-minimize,
+.rooms-overlay-close {
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	border: 0;
+	background: none;
+	color: var(--fg);
+	border-radius: var(--radius-full);
+}
+.rooms-overlay-close {
+	color: var(--fg);
+}
+.rooms-overlay-close:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+}
+
+.quick-entry,
+.quick-room {
+	background: none;
+	border: 0;
+	box-shadow: none;
+	max-inline-size: 34rem;
+	margin-inline: auto;
+	padding: var(--space-m) var(--gutter) var(--space-l);
+	--quick-tint: var(--bg);
+}
+.quick-entry::before {
+	display: none;
+}
+.quick-entry {
+	gap: var(--space-s);
+}
+.quick-entry__head h2 {
+	font-size: var(--step-3);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: var(--line-height-heading);
+	margin: 0;
+	color: var(--fg);
+	padding-inline-end: 6rem;
+}
+.quick-entry .hero-lead {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step-0);
+}
+.folder {
+	margin: 0;
+}
+.folder-tabs {
+	display: flex;
+	gap: 0;
+	border-block-end: var(--border-width) solid var(--hairline);
+	/* Живой фидбег — "По названию и паролю" не помещалось в треть ширины
+	   экрана, переносилось на 2 строки и растягивало ряд по высоте (align-
+	   items:stretch — все три вкладки подстраиваются под самую высокую).
+	   Вкладки теперь размером по содержимому в одну строку; если втроём не
+	   помещаются — сам ряд уходит в горизонтальный скролл (внутри себя, не
+	   страницы), а не ломает высоту. */
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.folder-tabs::-webkit-scrollbar {
+	display: none;
+}
+.folder-tab,
+.folder-tab + .folder-tab {
+	flex: none;
+	margin: 0;
+	padding: var(--space-xs) var(--space-s);
+	background: none;
+	border: 0;
+	border-block-end: 2px solid transparent;
+	border-radius: 0;
+	box-shadow: none;
+	clip-path: none;
+	color: var(--fg);
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	line-height: 1.25;
+	text-align: center;
+	white-space: nowrap;
+}
+.folder-tab::before {
+	display: none;
+}
+.folder-tab[aria-selected="true"] {
+	background: none;
+	border-block-end-color: var(--accent);
+	font-weight: var(--weight-medium);
+	color: var(--fg);
+}
+.folder-tab:hover,
+.folder-tab[aria-selected="true"]:hover {
+	background: none;
+	color: var(--fg);
+}
+.folder-body {
+	background: none;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	padding: var(--space-m) 0 0;
+}
+.folder-body {
+	--pad: var(--space-m) 0 0;
+}
+.folder-shared {
+	border: 0;
+	padding: 0;
+	margin: 0;
+}
+.form-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.form-group > label,
+.quick-entry label:not(.switch-row):not(:has(input)) {
+	margin: 0;
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	color: var(--fg);
+}
+.quick-entry input:not([type="checkbox"]) {
+	background-color: var(--surface);
+	min-block-size: 3rem;
+}
+.quick-entry .btn-block,
+.quick-entry .btn.btn-block {
+	min-block-size: 3.25rem;
+	border-radius: var(--radius-md);
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+}
+.quick-entry .auth-widget-subtitle,
+.auth-widget-subtitle {
+	color: var(--muted);
+	font-size: var(--step--1);
+	text-align: start;
+	margin: 0;
+}
+
+/* Комната. */
+.quick-room {
+	padding-block-start: 0;
+	gap: var(--space-s);
+}
+.quick-room-header {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--space-2xs);
+	min-block-size: 3.5rem;
+	padding-inline-end: 5.5rem;
+	border-block-end: var(--border-width) solid var(--hairline);
+	margin-inline: calc(-1 * var(--gutter));
+	padding-inline-start: var(--gutter);
+}
+.quick-room-headtext {
+	min-inline-size: 0;
+	text-align: center;
+}
+.quick-room-title {
+	font-size: var(--step-1);
+	font-weight: 600;
+	margin: 0;
+	color: var(--fg);
+}
+.quick-room-subtitle {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-3xs);
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.quick-room-link {
+	color: var(--accent);
+}
+.quick-invite-strip {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-2xs) var(--space-s);
+	background-color: var(--surface);
+	border-radius: var(--radius-md);
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.quick-invite-strip code {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	background: none;
+	border: 0;
+	padding: 0;
+	/* Живой фидбек — ссылка-приглашение (base64, без пробелов/дефисов) не
+	   содержит точек переноса: .truncate (-webkit-line-clamp) клипует по
+	   ВЫСОТЕ, но строке без точек переноса всё равно есть куда "вытянуться"
+	   по ширине до клипа — экран расползался горизонтальным скроллом. */
+	overflow-wrap: anywhere;
+}
+.quick-ephemeral {
+	margin: 0;
+	text-align: center;
+	color: var(--muted);
+	font-size: var(--step--1);
+	max-inline-size: none;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.quick-empty {
+	text-align: center;
+	color: var(--muted);
+	margin-block: var(--space-xl);
+	max-inline-size: none;
+}
+.quick-stage {
+	background-color: var(--surface);
+	border: 0;
+	border-radius: var(--radius-lg);
+	box-shadow: none;
+}
+.quick-stage-header h3 {
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	margin: 0;
+}
+.quick-stage .btn--good,
+.quick-stage .btn--ghost {
+	background: none;
+	color: var(--accent);
+	border: var(--border-width) solid var(--accent);
+	border-radius: var(--radius-full);
+	font-weight: var(--weight-medium);
+	min-block-size: 2.5rem;
+	padding-inline: var(--space-s);
+}
+.quick-room-layout {
+	flex-direction: column;
+	gap: var(--space-s);
+}
+@media (min-width: 48em) {
+	.quick-room-layout {
+		flex-direction: row;
+		align-items: stretch;
+	}
+	.quick-participants {
+		flex: 0 0 14rem;
+	}
+}
+.quick-participants {
+	background: none;
+	border: 0;
+	padding: 0;
+}
+.quick-participants h3 {
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	color: var(--muted);
+	margin: 0 0 var(--space-2xs);
+}
+.quick-participants ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+	margin: 0;
+	padding: 0;
+}
+.quick-participant {
+	padding: var(--space-3xs) var(--space-xs);
+	background-color: var(--surface);
+	border-radius: var(--radius-full);
+	margin: 0;
+}
+.quick-chat {
+	background: none;
+	border: 0;
+	padding: 0;
+	box-shadow: none;
+}
+.quick-messages {
+	background: none;
+	border: 0;
+	min-block-size: 8rem;
+}
+.quick-compose,
+.quick-compose.bar {
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: 0;
+	background: none;
+	border: 0;
+	box-shadow: none;
+}
+.quick-compose textarea {
+	flex: 1 1 auto;
+	min-block-size: 3rem;
+	padding: var(--space-xs) var(--space-s);
+	background-color: var(--bg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-md);
+	resize: none;
+}
+.quick-send,
+.quick-send:has(> .icon) {
+	flex: none;
+	display: inline-grid;
+	place-items: center;
+	inline-size: 3rem;
+	block-size: 3rem;
+	padding: 0;
+	border-radius: var(--radius-full);
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border: 0;
+}
+.quick-send .icon {
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+
+/* ---- 14. Вход (макет Bbl2A3.jpg) ---------------------------------------- */
+html:has(.auth-layout),
+body:has(.auth-layout) {
+	background: var(--bg);
+}
+.auth-layout {
+	--surface-raised: var(--surface);
+	max-inline-size: 34rem;
+	padding-inline: var(--gutter);
+}
+.site-header {
+	min-block-size: 3rem;
+	border-block-end: 0;
+}
+.unlock-home {
+	max-inline-size: 26rem;
+	gap: var(--space-s);
+	padding-block: var(--space-s) var(--space-l);
+}
+.unlock-home h1 {
+	font-family: var(--font-body);
+	font-size: var(--step-3);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: var(--line-height-heading);
+	color: var(--fg);
+	/* Живой фидбек — заголовку и особенно абзацу под ним не хватало воздуха
+	   (--space-2xs/0 читались как слипшийся блок). */
+	margin: 0 0 var(--space-s);
+}
+.hero-lead {
+	color: var(--muted);
+	font-size: var(--step-0);
+	margin: 0 0 var(--space-l);
+}
+.hero-section {
+	gap: 0;
+}
+/* Вход / Создать — два слова рядом, активное темнее. */
+.unlock-modes {
+	gap: var(--space-s);
+	border: 0;
+	background: none;
+	margin-block: var(--space-2xs) 0;
+}
+.unlock-modes [role="tab"] {
+	background: none;
+	border: 0;
+	padding: 0 0 var(--space-3xs);
+	color: var(--muted);
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+}
+.unlock-modes [role="tab"][aria-selected="true"] {
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+}
+.unlock-card-header h2 {
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	color: var(--muted);
+}
+/* Аккаунт на устройстве: круг-аватар, имя, подпись. */
+.unlock-home .account-picker-btn {
+	/* Живой фидбек — var(--surface-raised) внутри .auth-layout намеренно
+	   приравнен к var(--surface) (см. .auth-layout выше, панель входа сама
+	   красится в --surface) — кнопка аккаунта на этом фоне была видна
+	   только по border'у. Формула "raised" (color-mix.../--fg 5%) — та же,
+	   что даёт сам --surface-raised вне .auth-layout, но явно, в обход
+	   локального переопределения переменной. */
+	background-color: color-mix(in oklch, var(--surface), var(--fg) 5%);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-lg);
+	padding: var(--space-2xs) var(--space-xs);
+	color: var(--fg);
+}
+.unlock-home .account-picker-btn:hover {
+	background-color: var(--surface);
+}
+.unlock-home .account-picker-btn[aria-current="true"] {
+	background-color: var(--surface);
+	border-color: var(--hairline);
+}
+.unlock-home .account-avatar,
+.unlock-home .account-avatar-fallback {
+	inline-size: 3.5rem;
+	block-size: 3.5rem;
+	border: 0;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	font-size: var(--step-1);
+	font-weight: var(--weight-normal);
+	color: var(--accent);
+}
+.unlock-home .account-name {
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+}
+.unlock-home .account-meta {
+	font-size: var(--step--1);
+	color: var(--muted);
+}
+.unlock-recent-badge {
+	background: none;
+	color: var(--muted);
+	border: 0;
+	font-size: var(--step--1);
+}
+.unlock-home input:not([type="button"], [type="submit"], [type="checkbox"], [type="radio"]) {
+	background-color: var(--bg);
+	min-block-size: 3rem;
+	border-radius: var(--radius-md);
+	font-size: var(--step-0);
+}
+.unlock-home .form-group > label {
+	color: var(--muted);
+	font-weight: var(--weight-normal);
+}
+.unlock-card .btn.btn-block {
+	min-block-size: 3.25rem;
+	border-radius: var(--radius-md);
+	font-size: var(--step-1);
+	font-weight: var(--weight-medium);
+	background-image: none;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.unlock-card .btn.btn-block:hover {
+	background-color: var(--accent-hover);
+}
+/* Гость: тихая строка после разделителя, не карточка. */
+.unlock-quick-card {
+	background: none;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+	padding: var(--space-xs) var(--space-s);
+	color: var(--fg);
+}
+.unlock-quick-card:hover {
+	background-color: var(--surface);
+}
+.unlock-quick-icon {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+	color: var(--accent);
+	border-radius: var(--radius-full);
+}
+.unlock-quick-text strong {
+	font-weight: var(--weight-medium);
+}
+.unlock-conn details,
+.unlock-conn summary {
+	border-radius: var(--radius-md);
+}
+.unlock-conn details {
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+}
+.unlock-advanced summary {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+.site-footer {
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+
+/* Под окном «Быстрой связи» бургер приложения не нужен — окно закрывается своими кнопками. */
+body:has(.rooms-overlay:not(.is-minimized)) .top-corner-actions {
+	display: none;
+}
+.quick-entry__head h2,
+.quick-entry .hero-lead {
+	text-align: start;
+}
+
+.unlock-conn details,
+.unlock-conn details[open] > summary {
+	box-shadow: none;
+}
+
+/* ---- 15. Правки по живой проверке (серия 2) ---------------------------- */
+/* Кнопки с иконкой и вторичные не переносят подпись на вторую строку. */
+.btn--ghost,
+button:has(> .icon),
+[type="button"]:has(> .icon) {
+	white-space: nowrap;
+}
+
+/* Корневая шапка: чуть больше воздуха между бургером и заголовком. */
+@media (max-width: 63.99em) {
+	.section-header:not(:has(.header-back)) {
+		padding-inline-start: calc(var(--space-xs) + var(--tap) + var(--space-2xs));
+	}
+}
+/* Экран-колонка (профиль): заголовок встаёт в ту же колонку, что и содержимое. */
+.content-section:has(.profile-page) > .section-header {
+	padding-inline: max(var(--gutter), calc((100cqi - 40rem) / 2));
+}
+@media (max-width: 63.99em) {
+	.content-section:has(.profile-page) > .section-header:not(:has(.header-back)) {
+		padding-inline-start: max(calc(var(--space-xs) + var(--tap) + var(--space-2xs)), calc((100cqi - 40rem) / 2));
+	}
+}
+
+/* Контакты: у списка нет собственных боковых полей. */
+.contacts-primary-section,
+.contacts-main > section {
+	padding: 0;
+}
+
+/* Полоса режима в «Файлах»: воздух сверху и снизу. */
+.mode-bar {
+	margin-block: var(--space-xs);
+}
+.files-shell > .mode-bar:first-child {
+	margin-block-start: var(--space-2xs);
+}
+
+/* Пузырь: действия по наведению вместо меню «⋯». */
+.message-bubble {
+	position: relative;
+}
+.bubble-tools {
+	position: absolute;
+	inset-block-start: -0.625rem;
+	inset-inline-end: -0.375rem;
+	z-index: 2;
+	display: flex;
+	gap: 0.25rem;
+	opacity: 0;
+	translate: 0 2px;
+	pointer-events: none;
+	transition: opacity var(--transition-speed) var(--transition-ease), translate var(--transition-speed) var(--ease);
+}
+.message-bubble:hover > .bubble-tools,
+.bubble-tools:focus-within {
+	opacity: 1;
+	translate: 0 0;
+	pointer-events: auto;
+}
+/* Сенсорные экраны: кнопки скрыты, пока не тапнули по тексту пузыря (message-bubble.jsx). */
+.message-bubble.is-tools-open > .bubble-tools {
+	opacity: 1;
+	translate: 0 0;
+	pointer-events: auto;
+}
+.bubble-tool,
+.bubble-tool:has(> .icon) {
+	display: inline-grid;
+	place-items: center;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	padding: 0;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	color: var(--muted);
+	box-shadow: 0 1px 4px color-mix(in oklch, var(--fg), transparent 82%);
+}
+.bubble-tool .icon {
+	inline-size: 0.9375rem;
+	block-size: 0.9375rem;
+}
+.bubble-tool:hover {
+	background-color: var(--bg);
+	color: var(--fg);
+	transform: none;
+}
+.bubble-tool--danger:hover {
+	color: var(--bad);
+	border-color: color-mix(in oklch, var(--bad), transparent 55%);
+}
+/* Несколько вложений: пузырь не сжимается до размера содержимого. */
+.message-bubble:has(.bubble-media) {
+	min-inline-size: min(85%, 18rem);
+}
+.bubble-media {
+	inline-size: 100%;
+}
+
+/* Загрузка вложения: полоса и проценты. */
+.upload-progress {
+	appearance: none;
+	flex: 1 1 6rem;
+	inline-size: auto;
+	block-size: 0.5rem;
+	border: 0;
+	border-radius: var(--radius-full);
+	background-color: var(--surface-raised);
+	overflow: hidden;
+	accent-color: var(--accent);
+}
+.upload-progress::-webkit-progress-bar {
+	background-color: var(--surface-raised);
+}
+.upload-progress::-webkit-progress-value {
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+	transition: inline-size var(--transition-speed) var(--transition-ease);
+}
+.upload-progress::-moz-progress-bar {
+	background-color: var(--accent);
+	border-radius: var(--radius-full);
+}
+.upload-percent {
+	min-inline-size: 2.75rem;
+	text-align: end;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+/* Полноэкранный просмотр: «скачать» и «сохранить к себе» рядом с закрытием. */
+.media-overlay-save {
+	gap: var(--space-2xs);
+}
+
+/* ---- 16. Быстрая связь: доработки ---------------------------------------- */
+/* Кнопка «Подключиться»: контур акцента, при наведении — мягкий тон, а не тёмная заливка. */
+.quick-stage .btn--good,
+.quick-stage .btn--good:hover,
+.quick-stage .btn--good:focus-visible,
+.quick-stage .btn--ghost:hover {
+	background-image: none;
+	color: var(--accent);
+	border-color: var(--accent);
+}
+.quick-stage .btn--good {
+	background-color: transparent;
+}
+.quick-stage .btn--good:hover,
+.quick-stage .btn--good:focus-visible,
+.quick-stage .btn--ghost:hover {
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 88%);
+}
+.quick-stage .btn--good:disabled {
+	color: var(--muted);
+	border-color: var(--hairline);
+}
+/* Блок голоса компактнее. */
+.quick-stage {
+	padding: var(--space-xs) var(--space-s);
+}
+.room-audio-visualizer,
+.room-audio-visualizer.box {
+	padding: 0;
+}
+.room-speaking-indicators,
+.room-speaking-indicators.row {
+	margin-block-start: 0;
+	padding-block-start: 0;
+}
+/* Шапка комнаты: название и «скопировать» — в одной строке, вся шапка прижата вверх. */
+.quick-room-header {
+	align-items: start;
+	grid-template-columns: auto minmax(0, 1fr);
+}
+.quick-room-headtext {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding-block: var(--space-2xs);
+}
+.quick-room-titlerow {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: var(--space-3xs);
+	max-inline-size: 100%;
+}
+.quick-room-titlerow .quick-room-title {
+	line-height: 2rem;
+}
+.quick-room-titlerow .quick-room-link {
+	flex: none;
+	inline-size: 2rem;
+	block-size: 2rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+	color: var(--muted);
+}
+.quick-room-titlerow .quick-room-link:hover {
+	color: var(--accent);
+}
+/* Кнопка отправки — круг с иконкой (перебивает «недописанный пузырь» из блока комнаты). */
+.quick-compose,
+.quick-compose:focus-within {
+	margin: 0;
+	overflow: visible;
+	outline: none;
+	background: none;
+	border: 0;
+}
+.quick-compose button.quick-send[type="submit"] {
+	flex: none;
+	align-self: center;
+	margin: 0;
+	inline-size: 3rem;
+	block-size: 3rem;
+	padding: 0;
+	border-radius: var(--radius-full);
+	display: inline-grid;
+	place-items: center;
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+}
+.quick-compose button.quick-send[type="submit"]:disabled {
+	background-color: var(--surface-raised);
+	color: var(--muted);
+	opacity: 1;
+}
+.quick-compose button.quick-send .icon {
+	display: block;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+}
+/* Широкий экран: комната и вход занимают ширину под список гостей и чат. */
+@media (min-width: 48em) {
+	.auth-layout:has(.quick-room) {
+		max-inline-size: 76rem;
+	}
+	.auth-layout:has(.quick-entry) {
+		max-inline-size: 48rem;
+	}
+	.auth-layout .quick-room,
+	.quick-room {
+		max-inline-size: none;
+	}
+	.rooms-overlay-panel:has(.quick-room) {
+		max-inline-size: 76rem;
+	}
+	.quick-room-header {
+		margin-inline: 0;
+	}
+}
+.quick-room-header {
+	padding-inline-end: var(--gutter);
+}
+.quick-room-header:not(:has(.header-back)) {
+	grid-template-columns: minmax(0, 1fr);
+	padding-inline-start: var(--gutter);
+}
+.quick-room-header:has(.header-back) {
+	grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+}
+.quick-room-headtext {
+	inline-size: 100%;
+}
+/* В окне поверх приложения справа кнопки «свернуть/закрыть» — оставляем им место. */
+.rooms-overlay-panel .quick-room-header {
+	padding-inline-end: 5.5rem;
+}
+.rooms-overlay-panel .quick-room-header:has(.header-back) {
+	grid-template-columns: var(--tap) minmax(0, 1fr);
+}
+
+/* ---- 17. Модальные окна и поля с рамкой на обёртке ------------------------ */
+[role="dialog"] h2 {
+	font-family: var(--font-body);
+	font-size: var(--step-1);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	margin: 0;
+	color: var(--fg);
+}
+[role="dialog"] .row:has(> h2.grow) {
+	flex-wrap: nowrap;
+	align-items: center;
+}
+[role="dialog"] .row:has(> h2.grow) > .icon-btn {
+	flex: none;
+}
+/* Рамка и фокус у обёртки, а не у самого <input> внутри неё. */
+.contact-add-field:focus-within,
+.file-search-field:focus-within,
+.search-field:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent), transparent 82%);
+}
+.contact-add-field input:focus-visible,
+.contact-add-field input:focus,
+.file-search-field input:focus-visible,
+.search-field input:focus-visible {
+	outline: none;
+	border: 0;
+	box-shadow: none;
+}
+
+/* Переключатель темы в строке настроек — подчёркивание, а не рамка выбора срока. */
+.set-row .seg:not(.view-toggle) {
+	border: 0;
+	border-radius: 0;
+	background: none;
+	overflow: visible;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	border: 0;
+	border-inline-start: 0;
+	border-block-end: 2px solid transparent;
+	border-radius: 0;
+	background: none;
+	color: var(--muted);
+	padding: var(--space-xs) 0;
+}
+.set-row .seg:not(.view-toggle) .slice--on {
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+	border-block-end-color: var(--accent);
+	background: none;
+}
+.exceptions > summary {
+	background: none;
+	border: 0;
+	padding-inline: 0;
+}
+
+/* Вложения «списком» (лента канала/чата): не в натуральном размере, а в аккуратных рамках. */
+.attachment-list {
+	align-items: flex-start;
+}
+.attachment-list img,
+.attachment-list video,
+.attachment-list .attachment-image {
+	display: block;
+	inline-size: 100%;
+	max-inline-size: 24rem;
+	max-block-size: 14rem;
+	object-fit: cover;
+	border-radius: var(--radius-md);
+	background-color: var(--surface-raised);
+}
+.attachment-list > * {
+	max-inline-size: 100%;
+}
+.attachment-list > * {
+	max-inline-size: min(100%, 18rem);
+}
+.attachment-list img,
+.attachment-list .attachment-image {
+	max-inline-size: 100%;
+	max-block-size: 12rem;
+}
+
+/* ---- 18. Серия правок 3 -------------------------------------------------- */
+/* Журнал: фильтр не вылезает за правый край полосы. */
+.filter-row {
+	padding-inline-end: var(--gutter);
+}
+
+/* Заголовок экрана: иконка пункта меню слева, подпись чуть приподнята к линии бургера. */
+.screen-title__text {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+.screen-title__icon {
+	flex: none;
+	inline-size: 1.5rem;
+	block-size: 1.5rem;
+	color: var(--fg);
+}
+.screen-title__label {
+	position: relative;
+	top: -3px;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* На экране с «назад» иконки нет — подпись не поднимаем. */
+.section-header:has(.header-back) .screen-title__label {
+	top: 0;
+}
+
+/* Тема: подпись крупно и жирно, справа от неё — группа кнопок-переключателей. */
+.set-row:has(.seg) {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-xs);
+	min-block-size: 0;
+	border-block-end: var(--border-width) solid var(--hairline);
+	padding-block: var(--space-s);
+}
+.set-row:has(.seg) > .set-row__text {
+	flex: none;
+	font-size: var(--step-1);
+	font-weight: 600;
+	color: var(--fg);
+}
+.set-row .seg:not(.view-toggle) {
+	display: inline-flex;
+	inline-size: auto;
+	align-self: flex-start;
+	gap: 0.25rem;
+	padding: 0.25rem;
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	background-color: var(--surface);
+	overflow: visible;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-block-size: 2.25rem;
+	padding: 0 var(--space-m);
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--fg);
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	line-height: 1;
+}
+.set-row .seg:not(.view-toggle) .slice--on {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: var(--weight-medium);
+}
+@container screen (width >= 40em) {
+	.set-row:has(.seg) {
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-start;
+		gap: var(--space-l);
+	}
+	.set-row .seg:not(.view-toggle) {
+		align-self: center;
+	}
+}
+/* Кнопки-переключатели: текст по центру по вертикали. */
+.seg .slice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
+/* Подсказки в панелях не ограничены шириной прозы. */
+.panel p,
+.panel__hint {
+	max-inline-size: none;
+}
+
+/* Меню: точка статуса у аватара видна целиком. */
+.drawer-me .account-portrait {
+	overflow: visible;
+}
+.drawer-me .account-portrait .account-avatar {
+	border-radius: var(--radius-full);
+}
+.account-dot {
+	inset-block-end: 0;
+	inset-inline-end: 0;
+	inset-block-start: auto;
+	inline-size: 0.75rem;
+	block-size: 0.75rem;
+	box-shadow: 0 0 0 2px var(--bg);
+}
+.drawer-link__count {
+	margin-inline-start: 0.4rem;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--weight-normal);
+}
+
+/* Быстрая связь: название не сжимается до буквы, «Выйти» — подписанная кнопка. */
+.quick-room-titlerow {
+	inline-size: 100%;
+	min-inline-size: 0;
+}
+.quick-room-titlerow .quick-room-title,
+.quick-room-title.truncate {
+	display: block;
+	flex: 0 1 auto;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	-webkit-line-clamp: unset;
+	-webkit-box-orient: unset;
+}
+.quick-room-exit,
+.quick-room-exit:has(> .icon) {
+	grid-area: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	min-block-size: 2.5rem;
+	padding: 0 var(--space-s);
+	margin-block-start: var(--space-2xs);
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-full);
+	font-weight: var(--weight-medium);
+	font-size: var(--step-0);
+}
+.quick-room-exit:hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 94%);
+	color: var(--fg);
+}
+.quick-room-exit .icon {
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+}
+.quick-room-header:has(.quick-room-exit) {
+	grid-template-columns: auto minmax(0, 1fr);
+	padding-inline-start: var(--gutter);
+}
+.quick-participant {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+.quick-participant-icon {
+	display: block;
+	flex: none;
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+}
+.quick-participant-name {
+	line-height: 1.25;
+}
+/* Ссылка-приглашение: пояснение, код и кнопка «скопировать». */
+.quick-invite {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2xs);
+}
+.quick-invite__hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+	max-inline-size: none;
+}
+.quick-invite-strip .icon-btn {
+	flex: none;
+	color: var(--muted);
+}
+.quick-invite-strip .icon-btn:hover {
+	color: var(--accent);
+}
+
+/* Создание канала: поля с иконками, крупное описание, выбор аватара, воздух внизу. */
+.channel-form {
+	padding-block-end: var(--space-l);
+	background-color: var(--surface);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+	/* Живой фидбег — форма создания и "Мои каналы"/подписки под ней почти
+	   слипались, не было видимого контейнера-разделителя между ними. */
+	margin-block-end: var(--space-l);
+}
+.channel-form > h2 {
+	font-family: var(--font-body);
+	font-size: var(--step-1);
+	font-weight: 600;
+	margin: 0;
+}
+.field-icon {
+	position: relative;
+	display: block;
+}
+.field-icon__ico {
+	position: absolute;
+	inset-inline-start: var(--space-s);
+	inset-block-start: 50%;
+	translate: 0 -50%;
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+	color: var(--muted);
+	pointer-events: none;
+}
+.field-icon--area .field-icon__ico {
+	inset-block-start: var(--space-s);
+	translate: none;
+}
+.field-icon input,
+.field-icon textarea {
+	padding-inline-start: 2.75rem;
+	/* Живой фидбег — базовое input/textarea (minimal.css) красится в тот же
+	   --surface, что и .channel-form-панель вокруг — поле было видно
+	   только по border'у. var(--bg) обычно светлее --surface. */
+	background-color: var(--bg);
+}
+.field-icon:focus-within .field-icon__ico {
+	color: var(--accent);
+}
+.avatar-pick__title {
+	font-size: var(--step--1);
+	font-weight: var(--weight-bold);
+}
+.avatar-pick {
+	display: flex;
+	align-items: center;
+	gap: var(--space-s);
+	margin: 0;
+	cursor: pointer;
+	font-size: var(--step-0);
+	font-weight: var(--weight-normal);
+	color: var(--muted);
+}
+.avatar-pick__circle {
+	flex: none;
+	display: grid;
+	place-items: center;
+	inline-size: 4.5rem;
+	block-size: 4.5rem;
+	overflow: hidden;
+	border: 2px dashed color-mix(in oklch, var(--accent), transparent 55%);
+	border-radius: var(--radius-full);
+	background-color: var(--bg);
+	color: var(--accent);
+	transition: border-color var(--transition-speed) var(--transition-ease), background-color var(--transition-speed) var(--transition-ease);
+}
+.avatar-pick__circle .icon {
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+}
+.avatar-pick__circle img {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}
+.avatar-pick:hover .avatar-pick__circle {
+	border-color: var(--accent);
+	background-color: color-mix(in oklch, var(--accent), var(--bg) 92%);
+}
+.avatar-pick:has(+ input:focus-visible) .avatar-pick__circle {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.screen-title__icon {
+	position: relative;
+	top: -2px;
+}
+.section-header:has(.header-back) .screen-title__icon {
+	top: 0;
+}
+.set-row .seg:not(.view-toggle) .slice.slice--on,
+.set-row .seg:not(.view-toggle) .slice + .slice.slice--on {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: var(--weight-medium);
+}
+/* Телефон: группа на всю ширину, три равные кнопки. */
+.set-row .seg:not(.view-toggle) {
+	display: flex;
+	align-self: stretch;
+}
+.set-row .seg:not(.view-toggle) .slice,
+.set-row .seg:not(.view-toggle) .slice + .slice {
+	flex: 1 1 0;
+	padding-inline: var(--space-2xs);
+	white-space: nowrap;
+}
+@container screen (width >= 40em) {
+	.set-row .seg:not(.view-toggle) {
+		display: inline-flex;
+		align-self: center;
+	}
+	.set-row .seg:not(.view-toggle) .slice,
+	.set-row .seg:not(.view-toggle) .slice + .slice {
+		flex: 0 0 auto;
+		padding-inline: var(--space-m);
+	}
+}
+/* Поля создания канала: высота по rows, а не по содержимому. */
+.field-icon textarea {
+	field-sizing: fixed;
+	resize: vertical;
+	min-block-size: 6rem;
+}
+.field-icon--area:has(#description, textarea[rows="6"]) textarea {
+	min-block-size: 10rem;
+}
+.channel-form .avatar-pick {
+	font-size: var(--step-0);
+	color: var(--fg);
+}
+/* Кнопка-крестик в заголовке панели (например «Знакомства»): тихая иконка, а не залитый квадрат. */
+.panel .bar > button.rigid:has(> svg:only-child) {
+	inline-size: 2.5rem;
+	block-size: 2.5rem;
+	min-inline-size: 0;
+	padding: 0;
+	display: inline-grid;
+	place-items: center;
+	background: none;
+	color: var(--fg);
+	border: 0;
+	border-radius: var(--radius-full);
+}
+.panel .bar > button.rigid:has(> svg:only-child):hover {
+	background-color: color-mix(in oklch, var(--fg), transparent 92%);
+}
+
+/* ---- 19. Диалог подтверждения (удаление контакта и переписки) -------------- */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding-inline: var(--space-m);
+	padding-block-start: calc(var(--space-m) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-m) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+	background-color: var(--overlay-backdrop-tint);
+}
+.modal-card {
+	inline-size: 100%;
+	max-inline-size: 26rem;
+	padding: var(--space-m);
+	background-color: var(--bg);
+	border: var(--border-width) solid var(--hairline);
+	border-radius: var(--radius-lg);
+	box-shadow: 0 1rem 3rem color-mix(in oklch, var(--fg), transparent 78%);
+}
+.modal-card__body {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step-0);
+	max-inline-size: none;
+}
+.modal-card__actions {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-2xs);
+	margin-block-start: var(--space-2xs);
+}
+.modal-card__actions > button:not(.link-btn) {
+	min-block-size: 2.75rem;
+	border-radius: var(--radius-md);
+	white-space: normal;
+	line-height: 1.2;
+}
+.modal-card__actions > .link-btn {
+	align-self: center;
+	padding-block: var(--space-2xs);
+	font-size: var(--step-0);
+}
+
+/* ================================================================== *
+ *  СЕРИЯ ПРАВОК 4 — замечания по живой проверке (30 пунктов).          *
+ *  Стоит ПОСЛЕДНИМ и перебивает то, что выше в файле задано иначе.     *
+ * ================================================================== */
+
+/* ---- Вход: стартовая страница -------------------------------------- */
+/* Список аккаунтов — .stack с глобальным margin-block списков (проза, minimal.css):
+   отступ сверху и снизу лишний, ритм задаёт --gap родителя. */
+.accounts-list {
+	margin-block: 0;
+}
+/* Карточка входа: подложка, поле и лёгкое свечение акцентом. */
+.unlock-card {
+	padding: var(--space-s);
+	background-color: var(--surface);
+	border-radius: var(--radius-lg);
+	box-shadow: 0 0 5px 0 color-mix(in oklch, var(--accent), transparent 70%);
+}
+
+/* ---- Компактные контролы -------------------------------------------- */
+.drawer-copy,
+.drawer-copy:has(> .icon) {
+	min-block-size: 2rem;
+	padding-inline: var(--space-xs);
+}
+.file-search-field,
+.sidebar-row .file-search-field {
+	min-block-size: 2.5rem;
+	padding-inline: var(--space-xs);
+}
+
+/* ---- Счётчик «[ 12 ]» в <sup> (пункты 10 и 27) ------------------------ */
+.bracket-count {
+	margin-inline-start: 0.2em;
+	font-size: 0.7em;
+	font-weight: var(--weight-normal);
+	font-variant-numeric: tabular-nums;
+	line-height: 0;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* ---- Меню: акцентные иконки и заголовки разделов (пункт 16) ------------ */
+.drawer-link__icon,
+.drawer-link .icon {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+.drawer-link.is-active .drawer-link__icon,
+.drawer-link.is-active .icon,
+.drawer-link.is-live .drawer-link__icon {
+	color: var(--accent);
+}
+.drawer-section {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+
+/* ---- Заголовок экрана (пункт 17) -------------------------------------- */
+.screen-title__label {
+	color: var(--accent);
+}
+.screen-title__icon {
+	color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+
+/* ---- Список чатов: кнопка «удалить переписку» (пункт 5) --------------- */
+/* Справа у строки — узкая колонка действий: звезда внизу, корзина сверху. Место под неё
+   зарезервировано, чтобы кнопки не налезали на время и счётчик. */
+.chat-list__item > .chat-row {
+	padding-inline-end: 2.5rem;
+}
+.chat-list__delete,
+.chat-list__delete:has(> .icon) {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	display: grid;
+	place-items: center;
+	inline-size: 1.75rem;
+	block-size: 1.75rem;
+	min-inline-size: 0;
+	min-block-size: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: none;
+	color: var(--muted);
+	opacity: 0.55;
+	line-height: 0;
+}
+.chat-list__delete .icon {
+	inline-size: 1.0625rem;
+	block-size: 1.0625rem;
+}
+.chat-list__delete:hover:not(:disabled),
+.chat-list__delete:focus-visible {
+	opacity: 1;
+	color: var(--bad);
+	background-color: color-mix(in oklch, var(--bad), transparent 88%);
+}
+/* С мышью корзина проявляется по наведению на строку; на сенсорных — всегда видна тихо. */
+@media (hover: hover) {
+	.chat-list__delete {
+		opacity: 0;
+	}
+	.chat-list__item:hover .chat-list__delete,
+	.chat-list__item:focus-within .chat-list__delete {
+		opacity: 0.7;
+	}
+	.chat-list__item .chat-list__delete:hover,
+	.chat-list__item .chat-list__delete:focus-visible {
+		opacity: 1;
+	}
+}
+
+/* ---- Карточка контакта (пункт 6) --------------------------------------- */
+.modal-card.contact-modal {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	max-inline-size: 30rem;
+	max-block-size: min(46rem, calc(100dvh - 2 * var(--space-m)));
+	padding: 0;
+	overflow: hidden;
+}
+.contact-modal__close,
+.contact-modal__close:has(> .icon) {
+	position: absolute;
+	inset-block-start: var(--space-2xs);
+	inset-inline-end: var(--space-2xs);
+	z-index: 2;
+	color: var(--muted);
+}
+.contact-modal__body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-m);
+	padding: var(--space-l) var(--space-m) var(--space-m);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.contact-modal__hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-2xs);
+	text-align: center;
+}
+.contact-modal__photo {
+	inline-size: 7rem;
+	block-size: 7rem;
+	border-radius: var(--radius-full);
+	object-fit: cover;
+	background-color: var(--surface-raised);
+	box-shadow: 0 0 0 4px var(--bg), 0 0 0 5px var(--hairline);
+}
+.contact-modal__photo--empty {
+	display: grid;
+	place-items: center;
+	color: var(--accent);
+	font-size: 3rem;
+	font-weight: 600;
+}
+.contact-modal__name {
+	margin: var(--space-2xs) 0 0;
+	font-size: var(--step-2);
+	font-weight: 600;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+.contact-modal__name--npub {
+	font-size: var(--step-0);
+	font-family: var(--font-mono, monospace);
+	font-weight: var(--weight-normal);
+}
+.contact-modal__status {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--step--1);
+}
+/* «Позвонить» и «Открыть чат» — сразу под именем: две крупные кнопки одной высоты. */
+.contact-modal__primary {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--space-xs);
+}
+.contact-modal__call,
+.contact-modal__call:has(> .icon),
+.contact-modal__chat,
+.contact-modal__chat:has(> .icon) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2xs);
+	min-block-size: 3rem;
+	padding: 0 var(--space-s);
+	border-radius: var(--radius-md);
+	font-size: var(--step-0);
+	font-weight: var(--weight-medium);
+	line-height: 1.1;
+}
+.contact-modal__call,
+.contact-modal__call:has(> .icon) {
+	background-color: var(--accent);
+	color: var(--accent-contrast);
+	border: 0;
+}
+.contact-modal__call:hover {
+	background-color: var(--accent-hover);
+}
+.contact-modal__chat,
+.contact-modal__chat:has(> .icon) {
+	background: none;
+	color: var(--fg);
+	border: var(--border-width) solid var(--hairline);
+}
+.contact-modal__chat:hover {
+	background-color: color-mix(in oklch, var(--accent), transparent 92%);
+	border-color: color-mix(in oklch, var(--accent), transparent 60%);
+}
+.contact-modal__section h3 {
+	margin: 0 0 var(--space-2xs);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.contact-modal__about {
+	margin: 0;
+	max-inline-size: none;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.contact-modal__empty {
+	margin: 0;
+	color: var(--muted);
+}
+.contact-modal__facts {
+	display: grid;
+	margin: 0;
+}
+.contact-modal__facts > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-s);
+	padding-block: var(--space-2xs);
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.contact-modal__facts > div:last-child {
+	border-block-end: 0;
+}
+.contact-modal__facts dt {
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-weight: var(--weight-normal);
+}
+.contact-modal__facts dd {
+	margin: 0;
+	text-align: end;
+}
+.contact-modal__key {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-3xs);
+}
+.contact-modal__key code {
+	font-size: var(--step--1);
+	overflow-wrap: anywhere;
+}
+.contact-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2xs);
+	padding: var(--space-s) var(--space-m);
+	background-color: var(--surface);
+	border-block-start: var(--border-width) solid var(--hairline);
+}
+.contact-modal__footer > button,
+.contact-modal__footer > button:has(> .icon) {
+	flex: 1 1 auto;
+	justify-content: center;
+	min-block-size: 2.5rem;
+	border-radius: var(--radius-md);
+}
+.contact-modal__footer .btn--ghost.btn--warn {
+	color: var(--warn);
+}
+/* Телефон: карточка — «шторка» снизу на всю ширину. */
+@media (max-width: 35.99em) {
+	.modal-backdrop:has(.contact-modal) {
+		align-items: flex-end;
+		padding: 0;
+	}
+	.modal-card.contact-modal {
+		max-inline-size: none;
+		max-block-size: 92dvh;
+		border-end-start-radius: 0;
+		border-end-end-radius: 0;
+	}
+	.contact-modal__footer {
+		padding-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+	}
+}
+
+/* ---- Просмотр картинки: зум (пункт 9) ---------------------------------- */
+/* Жесты (щипок, перетаскивание) забирает JS: браузеру отдавать прокрутку/масштаб страницы нельзя. */
+.media-overlay-viewport:has(.media-overlay-track) {
+	touch-action: none;
+}
+.media-overlay-slide img {
+	cursor: zoom-in;
+	transform-origin: center;
+}
+.media-overlay-track.is-zoomed .media-overlay-slide img {
+	cursor: grab;
+	will-change: transform;
+}
+.media-overlay-slide img.is-zoom-anim {
+	transition: transform 0.2s var(--ease);
+}
+/* Увеличенная картинка выходит за рамки слайда на весь экран; соседние слайды прячем. */
+.media-overlay-track.is-zoomed .media-overlay-slide {
+	overflow: visible;
+}
+.media-overlay-track.is-zoomed .media-overlay-slide:not(:nth-child(2)) {
+	visibility: hidden;
+}
+button[type="button"].media-overlay-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ---- Пузыри: кнопки по тапу на сенсорных (пункт 8) — правило .is-tools-open выше ---- */
+
+/* ---- День в ленте (пункт 19) -------------------------------------------- */
+.day-sep {
+	margin-block-end: var(--space-l);
+}
+
+/* ---- Файлы: длинные названия (пункт 13) -------------------------------- */
+/* Строки списка виртуализируются и обязаны быть ФИКСИРОВАННОЙ высоты (ROW_HEIGHT_PX в files.jsx),
+   поэтому «растянуть ячейку под название» нельзя — иначе окно прокрутки считает высоту неверно.
+   Название и подпись обрезаются многоточием; полное название — во всплывающей подсказке. */
+:root {
+	--file-row-height: 72px;
+}
+.file-table tbody tr {
+	block-size: var(--file-row-height);
+	min-block-size: 0;
+}
+.file-row-name,
+.file-row-name:has(> .icon) {
+	max-inline-size: 100%;
+	overflow: hidden;
+}
+.file-row-title,
+.file-row-sub {
+	display: block;
+	max-inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+/* ---- Настройки: список исключений (пункт 14) --------------------------- */
+.exceptions > summary {
+	padding-inline: var(--space-s) 0;
+	color: var(--accent);
+}
+.exceptions > summary:hover {
+	color: var(--accent-hover);
+}
+
+/* ---- Хранилище: «Самые крупные загрузки» (пункт 15) -------------------- */
+.storage-table {
+	inline-size: 100%;
+	margin-block: 0;
+	border-collapse: collapse;
+}
+.storage-table tr {
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.storage-table tr:last-child {
+	border-block-end: 0;
+}
+.storage-table td {
+	padding-block: var(--space-xs);
+	border: 0;
+	vertical-align: middle;
+}
+/* Первая колонка забирает всё свободное место и обрезает текст многоточием
+   (max-inline-size:0 + inline-size:100% — приём для таблиц с авторазмером колонок). */
+.storage-table__file {
+	inline-size: 100%;
+	max-inline-size: 0;
+}
+.storage-table__name,
+.storage-table__meta {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.storage-table__meta {
+	color: var(--muted);
+}
+.storage-table__action {
+	inline-size: 1%;
+	padding-inline-start: var(--space-s);
+	text-align: end;
+	white-space: nowrap;
+}
+.storage-table__action button,
+.storage-table__action button:has(> .icon) {
+	min-block-size: 2.5rem;
+}
+@media (max-width: 35.99em) {
+	.storage-table .btn-label {
+		display: none;
+	}
+	.storage-table__action button,
+	.storage-table__action button:has(> .icon) {
+		inline-size: 2.5rem;
+		padding: 0;
+		justify-content: center;
+	}
+}
+
+/* ---- Диагностика и «Знакомства»: строки с точкой (пункт 18) ------------- */
+/* .set-row__text из настроек — колонка, а .bar в JSX просил строку: точка оказывалась НАД подписью,
+   по центру блока. Возвращаем строку: точка слева от подписи. */
+.set-row__text.bar {
+	flex-direction: row;
+	align-items: center;
+}
+/* Таблица состояний: колонки общие для всех строк, значения — по правому краю. */
+.set-table {
+	inline-size: 100%;
+	margin-block: 0;
+	border-collapse: collapse;
+}
+.set-table tr {
+	border-block-end: var(--border-width) solid var(--hairline);
+}
+.set-table tr:last-child {
+	border-block-end: 0;
+}
+.set-table td {
+	padding-block: var(--space-xs);
+	border: 0;
+	vertical-align: middle;
+}
+.set-table__name {
+	font-size: var(--step-0);
+	overflow-wrap: anywhere;
+}
+.set-table__name .dot {
+	display: inline-block;
+	margin-inline-end: var(--space-2xs);
+	vertical-align: middle;
+}
+.set-table__value {
+	padding-inline-start: var(--space-s);
+	color: var(--muted);
+	font-size: var(--step--1);
+	font-variant-numeric: tabular-nums;
+	text-align: end;
+	overflow-wrap: anywhere;
+}
+.set-table__action {
+	inline-size: 1%;
+	padding-inline-start: var(--space-s);
+	text-align: end;
+	white-space: nowrap;
+}
+
+/* ---- Каналы: текст записи (пункт 20) ------------------------------------ */
+.app-layout .md-view p,
+.auth-layout .md-view p {
+	font-size: var(--font-size-base);
+}
+.app-layout .md-view blockquote,
+.auth-layout .md-view blockquote {
+	margin: var(--space-s) 0;
+}
+
+/* ---- Реакции и аватар комментария (пункты 21–23) ------------------------ */
+/* «+» был вытянутым эллипсом: ширина 2rem при высоте 2.5rem. Теперь круг 2.5rem со смайликом. */
+.react-add,
+.react-add:has(> .icon) {
+	inline-size: 2.5rem;
+	min-inline-size: 2.5rem;
+	block-size: 2.5rem;
+	padding: 0;
+	justify-content: center;
+}
+.react-add .icon {
+	inline-size: 1.25rem;
+	block-size: 1.25rem;
+	flex-shrink: 0;
+}
+/* Чип реакции: глобальное правило кнопок с иконкой обнуляло боковые отступы. */
+.react-chip,
+.react-chip:has(> .icon) {
+	min-inline-size: 2.5rem;
+	padding-inline: var(--space-xs);
+	justify-content: center;
+}
+/* Кнопки выбора реакции «схлопывались в точки» из-за боковых отступов по умолчанию. */
+.react-picker button,
+.react-picker button:has(> .icon) {
+	padding-inline: 0;
+	color: var(--accent);
+}
+/* Аватар комментария: колонка сетки была 2.125rem, а сам аватар 2.75rem — картинку сжимало в эллипс. */
+.cmt__box {
+	grid-template-columns: 2.75rem minmax(0, 1fr);
+}
+.cmt__ava {
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	max-inline-size: none;
+	flex: none;
+}
+
+/* ---- Полоса срезов внутри статьи (пункт 24) ------------------------------ */
+.media-buttons-bar {
+	flex-wrap: wrap;
+}
+.media-buttons-bar .slice,
+.media-buttons-bar .slice:has(> .icon) {
+	min-block-size: 2.25rem;
+	padding-inline: var(--space-s);
+	color: var(--fg);
+	font-weight: var(--weight-medium);
+}
+.media-buttons-bar .slice .icon {
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+	color: var(--accent);
+}
+.media-buttons-bar .slice .slice__n {
+	font-weight: var(--weight-normal);
+}
+
+/* ---- Общий чат канала: вложения (пункт 25) -------------------------------- */
+/* Вложение занимало всю ширину колонки, а высота ограничена — вертикальное видео превращалось
+   в широкую полосу. Ширина одиночного вложения считается из его пропорций и потолка высоты:
+   вертикальное остаётся вертикальным, горизонтальное упирается в 20.5rem. */
+.chat-msg .bubble-media {
+	inline-size: min(100%, 20.5rem);
+}
+.chat-msg .bubble-media--single {
+	--media-max-h: 22rem;
+	inline-size: min(100%, 20.5rem, calc(var(--media-max-h) * var(--media-ar, 1.6)));
+}
+.chat-msg .bubble-media--single .bubble-tile {
+	aspect-ratio: var(--media-ar, 16 / 10);
+	max-height: none;
+}
+
+/* ---- Форма новой записи (пункты 28–30) ------------------------------------- */
+.composer-card .row > button,
+.composer-card .row > button:has(> .icon) {
+	min-block-size: 1.75rem;
+}
+@media (pointer: coarse) {
+	.composer-card .row > button,
+	.composer-card .row > button:has(> .icon) {
+		min-block-size: 2.5rem;
+	}
+}
+.post-editor-toolbar {
+	flex-wrap: wrap;
+}
+.post-editor-toolbar__title {
+	flex: 1 0 100%;
+	font-size: var(--step-1);
+	font-weight: 600;
+}
+/* Поле записи светлее карточки и с еле заметной точечной сеткой — «режим правки». */
+.post-editor {
+	background:
+		radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--accent) 14%, transparent) 1px, transparent 0) 0 0 / 20px 20px,
+		light-dark(var(--bg-light), var(--surface-raised-dark));
 }

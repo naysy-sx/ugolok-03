@@ -262,3 +262,42 @@ test("snapshotSubtree: пустая папка -> пустой список оп
 	const ops = await snapshotSubtree(OWNER_PUB, dbKey, S, empty, "aa".repeat(32), label());
 	assert.deepEqual(ops, []);
 });
+
+test("share: снимок публикуется ДО грантов — получатель, увидев долю, находит в ней файлы", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { S, shared } = await buildTree(fetchImpl);
+	const published = [];
+	await share(OWNER_PUB, OWNER_PRIV, dbKey, S, shared, [ALICE_PUB], label(), makeFakePublish(published), netOpts(fetchImpl));
+	const firstGrant = published.findIndex((e) => e.kind === FILE_SHARE_GRANT_KIND);
+	const snapshot = published.findIndex((e) => e.kind === FILE_SUBTREE_OP_KIND);
+	assert.ok(snapshot >= 0 && firstGrant >= 0);
+	assert.ok(snapshot < firstGrant, "событие со снимком раньше первого гранта");
+});
+
+test("share: сбой перезаливки не оставляет ни гранта, ни записи о читателе — повтор доставит и снимок", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { S, shared } = await buildTree(fetchImpl);
+	const published = [];
+	const failingFetch = async () => {
+		throw new Error("network down");
+	};
+	await assert.rejects(share(OWNER_PUB, OWNER_PRIV, dbKey, S, shared, [ALICE_PUB], label(), makeFakePublish(published), { ...netOpts(failingFetch), retries: 0 }));
+	assert.equal(grantEvents(published).length, 0);
+	assert.deepEqual(await listShareGrantees(OWNER_PUB, shared), []);
+
+	await share(OWNER_PUB, OWNER_PRIV, dbKey, S, shared, [ALICE_PUB], label(), makeFakePublish(published), netOpts(fetchImpl));
+	assert.equal(grantEvents(published).length, 1);
+	assert.equal(subtreeOpEvents(published).length, 1);
+});
+
+test("share: onShareProgress сообщает N из M файлов и растущую долю", async () => {
+	const { fetchImpl } = makeFakeBlossom();
+	const { S, shared } = await buildTree(fetchImpl);
+	const seen = [];
+	await share(OWNER_PUB, OWNER_PRIV, dbKey, S, shared, [ALICE_PUB], label(), makeFakePublish([]), { ...netOpts(fetchImpl), onShareProgress: (p) => seen.push(p) });
+	assert.ok(seen.length >= 2);
+	assert.equal(seen[0].total, 2);
+	assert.equal(seen.at(-1).done, 2);
+	assert.equal(seen.at(-1).fraction, 1);
+	for (let i = 1; i < seen.length; i++) assert.ok(seen[i].fraction >= seen[i - 1].fraction - 1e-9, "доля не убывает");
+});

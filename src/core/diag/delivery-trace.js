@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { getPlatform } from "../../platform/index.js";
 
 // Этап 0 (PROCESS-DOCS/AUDIT/MESSAGE-DELIVERY-TZ.md, З0.1) — журнал доставки
 // 1:1 сообщений. Прямой архитектурный клон src/core/diag/call-trace.js (тот
@@ -24,7 +25,9 @@ const PERSIST_INTERVAL_MS = 5000;
 // keypackages.eose, encrypt.done, state.persisted, event.signed,
 // outbox.enqueued, publish.sent, publish.ok, publish.reject, message.upsert,
 // recv.445, recv.445.nogroup, recv.445.decryptfail, recv.welcome,
-// drain.start, drain.done, relay.state — каждый вызывающий код передаёт своё
+// drain.start, drain.done, relay.state, ownkp.enter, ownkp.already-exists,
+// ownkp.device-id, ownkp.keypackage-created, ownkp.db-persisted, ownkp.signed,
+// ownkp.publish-ok, ownkp.publish-error — каждый вызывающий код передаёт своё
 // имя строкой, модуль их не валидирует (та же позиция, что call-trace.js:
 // список — контракт по конвенции, не enum в коде).
 
@@ -243,15 +246,19 @@ export function deliveryTraceAsJson() {
 
 export function downloadDeliveryTraceFile() {
 	if (typeof document === "undefined") return;
-	const blob = new Blob([deliveryTraceAsJson()], { type: "application/json" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = traceFileName();
-	document.body.appendChild(a);
-	a.click();
-	a.remove();
-	setTimeout(() => URL.revokeObjectURL(url), 1000);
+	// best-effort (тот же принцип, что call-trace.js) — platform.files.saveAs
+	// может быть ещё не реализован (capacitor.js) и бросить синхронно.
+	try {
+		Promise.resolve(
+			getPlatform().files.saveAs({
+				name: traceFileName(),
+				mime: "application/json",
+				data: deliveryTraceAsJson(),
+			}),
+		).catch(() => {});
+	} catch {
+		// платформа не поддерживает
+	}
 }
 
 export async function copyDeliveryTraceToClipboard() {

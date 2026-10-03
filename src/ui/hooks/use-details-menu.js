@@ -1,5 +1,6 @@
 import { useRef, useEffect, useLayoutEffect } from "preact/hooks";
 import { computeMenuPopPosition } from "./compute-menu-pop-position.js";
+import { getSafeAreaInsets } from "./safe-area-insets.js";
 
 // Общее поведение для <details> с .menu-pop (ActionsMenu, account-card,
 // contacts, journal). Нативный <details> не закрывается по клику вне и
@@ -42,14 +43,31 @@ export function useDetailsMenu(closeOn = "button, a") {
 		function applyPlace(w, h) {
 			const summary = details.querySelector("summary");
 			if (!summary || h === 0) return;
-			const pos = computeMenuPopPosition(summary.getBoundingClientRect(), { width: w, height: h }, { width: window.innerWidth, height: window.innerHeight }, { align: pop.dataset.menuAlign || "end" });
+			// window.innerWidth/innerHeight в edge-to-edge WebView включают область
+			// под системными панелями (статус-бар сверху, навигационная снизу) —
+			// без вычета insets меню, прилипающее к краю, пряталось под ними
+			// (живой фидбек, см. safe-area-insets.js). Считаем в системе координат
+			// "безопасной зоны" (сдвиг на insets.top/left), потом сдвигаем обратно.
+			const insets = getSafeAreaInsets();
+			const triggerRect = summary.getBoundingClientRect();
+			const shiftedTrigger = {
+				top: triggerRect.top - insets.top,
+				bottom: triggerRect.bottom - insets.top,
+				left: triggerRect.left - insets.left,
+				right: triggerRect.right - insets.left,
+			};
+			const safeViewport = {
+				width: window.innerWidth - insets.left - insets.right,
+				height: window.innerHeight - insets.top - insets.bottom,
+			};
+			const pos = computeMenuPopPosition(shiftedTrigger, { width: w, height: h }, safeViewport, { align: pop.dataset.menuAlign || "end" });
 			pop.style.position = "fixed";
 			pop.style.zIndex = "400";
 			pop.style.margin = "0";
 			pop.style.right = "auto";
 			pop.style.bottom = "auto";
-			pop.style.top = `${pos.top}px`;
-			pop.style.left = `${pos.left}px`;
+			pop.style.top = `${pos.top + insets.top}px`;
+			pop.style.left = `${pos.left + insets.left}px`;
 			pop.style.width = `${w}px`;
 			pop.style.height = `${h}px`;
 		}

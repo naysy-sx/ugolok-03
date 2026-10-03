@@ -1,7 +1,42 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { requestNotificationPermission, notify, resolveNotificationLevel, NOTIFICATION_LEVELS } from "../src/domain/notifications/notifier.js";
+import { createCapacitorNotificationBackend } from "../src/domain/notifications/backend.js";
 import { DEFAULT_SETTINGS } from "../src/domain/settings/ui-settings.js";
+
+// Э4.8 ТЗ-NATIVE-APPS — fake для getPlatform().notifications.* (capacitor-путь),
+// тот же DI-принцип, что fakeNotificationImpl для browser Notification API.
+function fakePlatform({ permission = "default", requestPermissionResult = "granted" } = {}) {
+	const shown = [];
+	const clickHandlers = [];
+	const badges = [];
+	return {
+		shell: "capacitor",
+		notifications: {
+			permission: async () => permission,
+			requestPermission: async () => requestPermissionResult,
+			show: async (opts) => {
+				shown.push(opts);
+			},
+			onClick: (cb) => {
+				clickHandlers.push(cb);
+				return () => {
+					const i = clickHandlers.indexOf(cb);
+					if (i >= 0) clickHandlers.splice(i, 1);
+				};
+			},
+			setBadge: async (n) => {
+				badges.push(n);
+			},
+		},
+		// тестовый хелпер — не часть реального контракта платформы
+		_fireClick: (route) => {
+			for (const cb of clickHandlers) cb(route);
+		},
+		_shown: shown,
+		_badges: badges,
+	};
+}
 
 function fakeNotificationImpl({ permission = "default", requestPermissionResult = "granted" } = {}) {
 	const created = [];
@@ -50,6 +85,78 @@ test("requestNotificationPermission: default -> реально запрашив�
 	const { FakeNotification } = fakeNotificationImpl({ permission: "default", requestPermissionResult: "granted" });
 	const result = await requestNotificationPermission({ NotificationImpl: FakeNotification });
 	assert.equal(result, "granted");
+});
+
+test("requestNotificationPermission (Capacitor): уже granted -> возвращает granted, requestPermission НЕ вызывается повторно", async () => {
+	const platform = fakePlatform({ permission: "granted" });
+	let calledAgain = false;
+	platform.notifications.requestPermission = async () => {
+		calledAgain = true;
+		return "granted";
+	};
+	const result = await requestNotificationPermission({ platform });
+	assert.equal(result, "granted");
+	assert.equal(calledAgain, false);
+});
+
+test("requestNotificationPermission (Capacitor): default -> реально запрашивает разрешение", async () => {
+	const platform = fakePlatform({ permission: "default", requestPermissionResult: "granted" });
+	const result = await requestNotificationPermission({ platform });
+	assert.equal(result, "granted");
+});
+
+// --- createCapacitorNotificationBackend (Э4.8) ---
+
+test("createCapacitorNotificationBackend.showPopup: вкладка видима -> тост (onToast), platform.notifications.show НЕ зовётся", () => {
+	const platform = fakePlatform();
+	const toasts = [];
+	const backend = createCapacitorNotificationBackend({
+		platform,
+		documentImpl: { visibilityState: "visible" },
+		onToast: (title, body, onClick) => toasts.push({ title, body, onClick }),
+	});
+	backend.showPopup("Заголовок", "Текст", () => {});
+	assert.equal(toasts.length, 1);
+	assert.equal(platform._shown.length, 0);
+});
+
+test("createCapacitorNotificationBackend.showPopup: вкладка невидима -> platform.notifications.show, без onClick — без route", async () => {
+	const platform = fakePlatform();
+	const backend = createCapacitorNotificationBackend({ platform, documentImpl: { visibilityState: "hidden" } });
+	backend.showPopup("Заголовок", "Текст");
+	await new Promise((r) => setTimeout(r, 0));
+	assert.equal(platform._shown.length, 1);
+	assert.equal(platform._shown[0].title, "Заголовок");
+	assert.equal(platform._shown[0].route, undefined);
+});
+
+test("createCapacitorNotificationBackend.showPopup: невидима + onClick -> route с clickId, клик по уведомлению зовёт исходный onClick", async () => {
+	const platform = fakePlatform();
+	const backend = createCapacitorNotificationBackend({ platform, documentImpl: { visibilityState: "hidden" } });
+	let clicked = false;
+	backend.showPopup("Заголовок", "Текст", () => {
+		clicked = true;
+	});
+	await new Promise((r) => setTimeout(r, 0));
+	const route = platform._shown[0].route;
+	assert.equal(typeof route.clickId, "number");
+	platform._fireClick(route);
+	assert.equal(clicked, true);
+});
+
+test("createCapacitorNotificationBackend.showPopup: клик по НЕИЗВЕСТНОМУ route (WebView перезапущен, Map пуста) — тихо ничего, не бросает", () => {
+	const platform = fakePlatform();
+	const backend = createCapacitorNotificationBackend({ platform, documentImpl: { visibilityState: "hidden" } });
+	backend.showPopup("A", "B", () => {});
+	assert.doesNotThrow(() => platform._fireClick({ clickId: 999999 }));
+});
+
+test("createCapacitorNotificationBackend.setBadgeCount: зовёт platform.notifications.setBadge", async () => {
+	const platform = fakePlatform();
+	const backend = createCapacitorNotificationBackend({ platform });
+	backend.setBadgeCount(3);
+	await new Promise((r) => setTimeout(r, 0));
+	assert.deepEqual(platform._badges, [3]);
 });
 
 test("NOTIFICATION_LEVELS: упорядоченное множество off/badge/popup/sound", () => {

@@ -7,7 +7,13 @@ import { relayStatusInfo } from "../components/connection-status.jsx";
 import IconQuickRoomPeople from "../icons/quick-room-people.jsx";
 import IconUserBadge from "../icons/user-badge.jsx";
 import IconVoiceBroadcast from "../icons/voice-broadcast.jsx";
+import IconSend from "../icons/send.jsx";
+import IconExit from "../icons/exit.jsx";
 import IconCopy from "../icons/copy.jsx";
+import IconShare from "../icons/share.jsx";
+import IconPerson from "../icons/person.jsx";
+import IconKey from "../icons/key.jsx";
+import IconFormatLink from "../icons/format-link.jsx";
 import { t, tPlural } from "../signals/i18n.js";
 import { BUILD_DEFAULT_RELAYS } from "../../config.js";
 import { readBootstrapEndpoints, resolveCallIceServers, getCachedTurnCredsExpiry, getLastTurnStatus } from "../../domain/settings/bootstrap-endpoints.js";
@@ -256,13 +262,25 @@ export default function Quick({ onExit }) {
 		}
 	}
 
+	// НАЙДЕНО ЖИВЬЁМ (владелец, Mac mini/Tauri-WKWebView, Э3, 2026-09-27) —
+	// разблокировка пула тихих <audio>-элементов (нужна для последующего
+	// автовоспроизведения удалённых голосов без нового жеста) на этой
+	// платформе заняла 11 СЕКУНД вместо мгновенно — el.play() у WKWebView,
+	// похоже, подвисает на автоплей-политике вместо быстрого resolve/reject.
+	// "Подключиться" выглядел полностью нерабочим все эти 11с (voiceBusy
+	// не имеет отдельного видимого индикатора). Таймаут — best-effort и так
+	// (все .play() уже .catch()'иваются), зависание ничем не лучше отказа.
+	function withTimeout(promise, ms) {
+		return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+	}
+
 	async function ensureAudioPoolUnlocked() {
 		const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
 		if (AC && !audioCtxRef.current) {
 			const ctx = new AC();
 			audioCtxRef.current = ctx;
 			try {
-				await ctx.resume();
+				await withTimeout(ctx.resume(), 1500);
 				const buf = ctx.createBuffer(1, 1, 22050);
 				const src = ctx.createBufferSource();
 				src.buffer = buf;
@@ -272,10 +290,10 @@ export default function Quick({ onExit }) {
 				// жест мог уже истечь
 			}
 		} else if (audioCtxRef.current?.state === "suspended") {
-			await audioCtxRef.current.resume().catch(() => {});
+			await withTimeout(audioCtxRef.current.resume().catch(() => {}), 1500);
 		}
 		if (audioPoolRef.current) {
-			await Promise.all(audioPoolRef.current.map((el) => el.play().catch(() => {})));
+			await Promise.all(audioPoolRef.current.map((el) => withTimeout(el.play().catch(() => {}), 1500)));
 			return;
 		}
 		const els = [];
@@ -289,7 +307,7 @@ export default function Quick({ onExit }) {
 			els.push(el);
 		}
 		audioPoolRef.current = els;
-		await Promise.all(els.map((el) => el.play().catch(() => {})));
+		await Promise.all(els.map((el) => withTimeout(el.play().catch(() => {}), 1500)));
 	}
 
 	function iceServersForCall(opts) {
@@ -433,19 +451,27 @@ export default function Quick({ onExit }) {
 	// joinVoice() (микрофон запрещён/голос заполнен/TURN недоступен) оставляет
 	// комнату и чат полностью рабочими, только показывает сообщение об ошибке.
 	async function handleJoinVoice() {
+		// Временная трассировка (владелец, Mac mini, Э3, 2026-09-27) —
+		// "Подключиться" не даёт вообще никакой видимой реакции, нужно точно
+		// узнать, доходит ли исполнение до каждого шага. Убрать после диагностики.
+		traceRecord("room-join-voice", { phase: "handler-entered", hasSession: !!sessionRef.current });
 		if (!sessionRef.current) return;
 		setVoiceBusy(true);
 		setVoiceError("");
 		await ensureAudioPoolUnlocked();
+		traceRecord("room-join-voice", { phase: "audio-pool-unlocked" });
 		try {
 			const ice = await resolveCallIceServers();
 			setTurnStatus(ice.turn ?? getLastTurnStatus());
 			if (ice.turn) {
 				traceRecord("turn-status", { status: ice.turn, urlCount: ice.urlCount, tookMs: ice.tookMs });
 			}
+			traceRecord("room-join-voice", { phase: "before-joinVoice" });
 			await sessionRef.current.joinVoice();
+			traceRecord("room-join-voice", { phase: "joinVoice-ok" });
 			setVoiceActive(true);
 		} catch (err) {
+			traceRecord("room-join-voice", { phase: "error", errorName: err?.name, errorMessage: err?.message ?? String(err) });
 			const message = err?.message || "";
 			if (message.includes("заполнена")) {
 				setVoiceError(t("quick.room.voiceFullError"));
@@ -456,6 +482,7 @@ export default function Quick({ onExit }) {
 			}
 		} finally {
 			setVoiceBusy(false);
+			traceRecord("room-join-voice", { phase: "finally", voiceActive });
 		}
 	}
 
@@ -507,39 +534,49 @@ export default function Quick({ onExit }) {
 				: tPlural("quick.room.voiceFreeSlots", voiceFree, { max: MAX_VOICE_PARTICIPANTS });
 		return (
 			<div class={voiceActive ? "quick-room stack is-voice-live" : "quick-room stack"} style={{ "--gap": "var(--space-m)" }}>
-				<header class="quick-room-header row" style={{ "--gap": "var(--space-s)", "--align": "center" }}>
-					<div class="bar grow" style={{ "--gap": "var(--space-l)", "--align": "flex-start" }}>
-						<IconQuickRoomPeople class="icon quick-room-icon rigid" aria-hidden="true" />
-						<div class="stack grow" style={{ "--gap": "var(--space-3xs)" }}>
-							<div class="bar" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "space-between" }}>
-								<h2 class="quick-room-title truncate grow">{activeRoomName || t("quick.room.titleFallback")}</h2>
-							</div>
+				{/* Макет pZ6X2.jpg: назад, посередине название и число участников, справа
+				    «поделиться ссылкой». Сообщения не сохраняются — короткой
+				    подписью над лентой (ниже), а не внутри шапки. */}
+				<header class="quick-room-header">
+					{typeof onExit === "function" && (
+						<button type="button" class="quick-room-exit" onClick={onExit}>
+							<IconExit class="icon" aria-hidden="true" />
+							<span>{t("quick.exitButton")}</span>
+						</button>
+					)}
+					<div class="quick-room-headtext">
+						{/* Кнопка «скопировать ссылку» стоит в одной строке с названием: она копирует
+						    приглашение именно в эту комнату, поэтому держится рядом с её именем. */}
+						<div class="quick-room-titlerow">
+							<h2 class="quick-room-title truncate">{activeRoomName || t("quick.room.titleFallback")}</h2>
 							{inviteLink && (
-								<div class="quick-invite-inline bar" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-									<code class="quick-invite-code grow truncate">{inviteLink}</code>
-									<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")}>
-										<IconCopy class="icon" aria-hidden="true" />
-									</button>
-									{inviteCopyStatus && (
-										<small role="status" class="quick-invite-status rigid">
-											{inviteCopyStatus}
-										</small>
-									)}
-								</div>
+								<button type="button" class="icon-btn quick-room-link" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")} title={t("quick.room.copyInviteAria")}>
+									<IconShare class="icon" aria-hidden="true" />
+								</button>
 							)}
-							<p class="quick-room-subtitle">
-								{t("quick.room.participantsTitle", { count: present.length })} · {t("quick.room.ephemeralNotice")}
-							</p>
+						</div>
+						<p class="quick-room-subtitle" aria-label={t("quick.room.participantsTitle", { count: present.length })}>
+							<IconQuickRoomPeople class="icon" aria-hidden="true" /> {present.length}
+						</p>
+					</div>
+				</header>
+
+				{inviteLink && (
+					<div class="quick-invite">
+						<p class="quick-invite__hint">{t("quick.room.inviteHint")}</p>
+						<div class="quick-invite-strip">
+							<code class="quick-invite-code truncate">{inviteLink}</code>
+							<button type="button" class="icon-btn rigid" onClick={handleCopyInvite} aria-label={t("quick.room.copyInviteAria")} title={t("quick.room.copyInviteAria")}>
+								<IconCopy class="icon" aria-hidden="true" />
+							</button>
+							{inviteCopyStatus && (
+								<small role="status" class="quick-invite-status">
+									{inviteCopyStatus}
+								</small>
+							)}
 						</div>
 					</div>
-					{typeof onExit === "function" && (
-						<div class="row rigid" style={{ "--gap": "var(--space-2xs)", "--align": "center", marginInlineStart: "auto" }}>
-							<button type="button" class="btn--ghost" onClick={onExit}>
-								{t("quick.exitButton")}
-							</button>
-						</div>
-					)}
-				</header>
+				)}
 
 				{relayInfo.tone !== "ok" && (
 					<p role="status" class={`status-${relayInfo.tone}`}>
@@ -666,6 +703,7 @@ export default function Quick({ onExit }) {
 
 					<section class="quick-chat stack grow box" style={{ "--gap": "var(--space-s)" }}>
 						<div ref={messagesScrollRef} class="quick-messages stack scroller box" style={{ "--gap": "var(--space-2xs)", "--pad": "var(--space-s)" }}>
+							<p class="quick-ephemeral">{t("quick.room.ephemeralNotice")}</p>
 							{messages.length === 0 && <p class="quick-empty">{t("quick.room.emptyChat")}</p>}
 							{messages.map((m) => (
 								<MessageBubble
@@ -694,8 +732,8 @@ export default function Quick({ onExit }) {
 								placeholder={t("quick.room.chatPlaceholder")}
 								aria-label={t("quick.room.chatPlaceholder")}
 							/>
-							<button type="submit" class="btn self-end" disabled={chatText.trim().length === 0}>
-								{t("quick.room.sendButton")}
+							<button type="submit" class="quick-send" disabled={chatText.trim().length === 0} aria-label={t("quick.room.sendButton")}>
+								<IconSend />
 							</button>
 						</form>
 					</section>
@@ -706,13 +744,12 @@ export default function Quick({ onExit }) {
 
 	return (
 		<div class="quick-entry stack" style={{ "--gap": "var(--space-m)" }}>
-			<span class="quick-lamp" aria-hidden="true" />
 			{/* Живой фидбек пользователя — кнопка "Назад" (onExit) здесь была
 			    дублем: RoomsOverlay (rooms-overlay.jsx) уже оборачивает ВЕСЬ
 			    Quick (и этот экран входа, и комнату) собственной явной кнопкой
 			    закрытия (.rooms-overlay-close) — второй выход рядом с
 			    заголовком больше не нужен. */}
-			<header class="row" style={{ "--gap": "var(--space-s)", "--align": "center", justifyContent: "center" }}>
+			<header class="quick-entry__head">
 				<h2>{t("quick.entry.title")}</h2>
 			</header>
 			<p class="hero-lead">{t("quick.entry.lead")}</p>
@@ -744,7 +781,10 @@ export default function Quick({ onExit }) {
 				>
 					<div class="folder-shared form-group">
 						<label for="quick-nick">{t("quick.entry.nickLabel")}</label>
-						<input id="quick-nick" type="text" value={nick} onInput={(e) => setNick(e.currentTarget.value)} placeholder={t("quick.anonymousNick")} />
+						<div class="field-icon">
+							<IconPerson class="icon field-icon__ico" aria-hidden="true" />
+							<input id="quick-nick" type="text" value={nick} onInput={(e) => setNick(e.currentTarget.value)} placeholder={t("quick.anonymousNick")} />
+						</div>
 					</div>
 
 					{error && (
@@ -757,15 +797,21 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleCreate}>
 							<div class="form-group">
 								<label for="quick-create-name">{t("quick.entry.nameLabel")}</label>
-								<input id="quick-create-name" type="text" required value={roomName} onInput={(e) => setRoomName(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconQuickRoomPeople class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-create-name" type="text" required value={roomName} onInput={(e) => setRoomName(e.currentTarget.value)} />
+								</div>
 							</div>
 							<div class="form-group">
 								<label for="quick-create-password">{t("quick.entry.passwordLabel")}</label>
-								<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconKey class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-create-password" type="text" required value={roomPassword} onInput={(e) => setRoomPassword(e.currentTarget.value)} />
+								</div>
 							</div>
-							<label class="row" style={{ "--gap": "var(--space-2xs)", "--align": "center" }}>
-								<input type="checkbox" checked={openMode} onChange={(e) => setOpenMode(e.currentTarget.checked)} />
-								{t("quick.entry.openModeLabel")}
+							<label class="switch-row">
+								<span>{t("quick.entry.openModeLabel")}</span>
+								<input type="checkbox" class="set-row__switch" checked={openMode} onChange={(e) => setOpenMode(e.currentTarget.checked)} />
 							</label>
 							<p class="auth-widget-subtitle">{openMode ? t("quick.entry.openModeHintOn") : t("quick.entry.openModeHintOff")}</p>
 							<button type="submit" class="btn btn-block" disabled={busy}>
@@ -778,7 +824,10 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinLink}>
 							<div class="form-group">
 								<label for="quick-join-link">{t("quick.entry.linkLabel")}</label>
-								<input id="quick-join-link" type="text" required value={inviteInput} onInput={(e) => setInviteInput(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconFormatLink class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-join-link" type="text" required value={inviteInput} onInput={(e) => setInviteInput(e.currentTarget.value)} />
+								</div>
 							</div>
 							<button type="submit" class="btn btn-block" disabled={busy}>
 								{t("quick.entry.joinButton")}
@@ -790,11 +839,17 @@ export default function Quick({ onExit }) {
 						<form class="stack" style={{ "--gap": "var(--space-s)" }} onSubmit={handleJoinPassword}>
 							<div class="form-group">
 								<label for="quick-joinpw-name">{t("quick.entry.nameLabel")}</label>
-								<input id="quick-joinpw-name" type="text" required value={joinPwName} onInput={(e) => setJoinPwName(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconQuickRoomPeople class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-joinpw-name" type="text" required value={joinPwName} onInput={(e) => setJoinPwName(e.currentTarget.value)} />
+								</div>
 							</div>
 							<div class="form-group">
 								<label for="quick-joinpw-password">{t("quick.entry.passwordLabel")}</label>
-								<input id="quick-joinpw-password" type="text" required value={joinPwPassword} onInput={(e) => setJoinPwPassword(e.currentTarget.value)} />
+								<div class="field-icon">
+									<IconKey class="icon field-icon__ico" aria-hidden="true" />
+									<input id="quick-joinpw-password" type="text" required value={joinPwPassword} onInput={(e) => setJoinPwPassword(e.currentTarget.value)} />
+								</div>
 							</div>
 							<button type="submit" class="btn btn-block" disabled={busy}>
 								{t("quick.entry.joinButton")}
