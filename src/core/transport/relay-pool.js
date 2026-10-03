@@ -453,6 +453,21 @@ export function createRelayPool(entries, options = {}) {
 
   function onMemberMessage(msg) {
     const type = msg[0];
+    // Живой баг (найден live-тестом, 2026-10-03): heartbeat (relay-pool.js
+    // createRelayConnection, sendHeartbeat) регистрирует СВОЙ heartbeatHandler
+    // через ТОТ ЖЕ connection.addMessageHandler, что и эта функция — на одном
+    // connection-уровневом messageHandlers массиве, диспетчер которого
+    // (createRelayConnection's ws.onmessage) идёт по циклу "первый вернувший
+    // true — последний" (for...of + break). onMemberMessage регистрируется
+    // ПЕРВЫМ (на создании пула) и раньше безусловно возвращала true для
+    // ЛЮБОГО EVENT/EOSE — heartbeatHandler (добавляется ПОЗЖЕ, на каждый цикл)
+    // физически не мог получить СВОЙ же EOSE. Результат: каждый heartbeat
+    // гарантированно таймаутился, соединение форсированно переподключалось
+    // каждые ~(heartbeatIntervalMs+heartbeatTimeoutMs), НЕПРЕРЫВНО, всю жизнь
+    // сессии — живые подписки (gift-wrap заявки/accept, discovery "Кто здесь")
+    // попадали в эту гонку и теряли события до полного релогина (холодный REQ
+    // без since). Фикс — явно не трогать "hb-"-подписки, они не дело пула.
+    if (typeof msg[1] === "string" && msg[1].startsWith("hb-")) return false;
     if (type === "EVENT") {
       const subId = msg[1];
       const event = msg[2];
