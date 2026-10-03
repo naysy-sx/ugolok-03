@@ -1053,9 +1053,9 @@
 	.over        { z-index: 1; }
 
 	.screen   { min-block-size: 100dvh;
-	            padding-block-end: env(safe-area-inset-bottom); }
+	            padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom)); }
 	.shell    { block-size: 100dvh; overflow: hidden;
-	            padding-block-end: env(safe-area-inset-bottom); }
+	            padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom)); }
 	.scroller { overflow-y: auto; overscroll-behavior: contain; } /* REGLAMENT.md §5 — overflow-block не существует как свойство */
 	.stick    { position: sticky; inset-block-start: 0; }
 	.anchored { overflow-anchor: auto; }

@@ -593,8 +593,8 @@ html[data-media-full] .top-corner-actions {
 		box-shadow: var(--shadow);
 		transform: translateX(-100%);
 		transition: transform var(--transition-speed) var(--transition-ease);
-		padding-block-start: env(safe-area-inset-top);
-		padding-block-end: env(safe-area-inset-bottom);
+		padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
+		padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
 	}
 	.sidebar.sidebar-open {
 		transform: translateX(0);
@@ -1587,8 +1587,8 @@ html[data-media-full] .top-corner-actions {
 	   полноэкранный оверлей проекта без этого (Screen/.shell его уже
 	   применяют, см. custom.css выше). env(...,0px) — сам себе fallback,
 	   там где safe-area не поддерживается/равна 0 отступ не меняется. */
-	padding-block-start: calc(var(--space-l) + env(safe-area-inset-top, 0px));
-	padding-block-end: calc(var(--space-l) + env(safe-area-inset-bottom, 0px));
+	padding-block-start: calc(var(--space-l) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+	padding-block-end: calc(var(--space-l) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 .rooms-overlay-panel {
 	position: relative;
@@ -4790,7 +4790,7 @@ body:has(.auth-layout) {
 	inset-block-start: 0;
 	align-items: flex-start;
 	padding: var(--space-s) var(--space-m);
-	padding-block-start: max(var(--space-s), env(safe-area-inset-top));
+	padding-block-start: max(var(--space-s), var(--safe-area-inset-top, env(safe-area-inset-top)));
 	background: linear-gradient(oklch(0.12 0.02 var(--hue) / 0.75), transparent);
 }
 
@@ -4954,7 +4954,7 @@ button[type="button"].media-overlay-nav {
 	inset-block-end: 0;
 	flex-direction: column;
 	padding: var(--space-l) var(--space-m) var(--space-s);
-	padding-block-end: max(var(--space-s), env(safe-area-inset-bottom));
+	padding-block-end: max(var(--space-s), var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 	background: linear-gradient(transparent, oklch(0.12 0.02 var(--hue) / 0.8) 42%);
 }
 
@@ -10346,8 +10346,8 @@ button[type="button"].media-mini-bar-btn {
 }
 
 .shell {
-	padding-block-start: env(safe-area-inset-top);
-	padding-block-end: env(safe-area-inset-bottom);
+	padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
+	padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
 	/* Э4.7 ТЗ-NATIVE-APPS — найдено живьём (Android 16/API 36, эмулятор):
 	   WebView не меняет размер при появлении клавиатуры даже с явным
 	   android:windowSoftInputMode="adjustResize" в манифесте — известный
@@ -11415,7 +11415,7 @@ nav.tabs.reel .tab {
 .section-footer {
 	border-block-start: 0;
 	background: var(--bg);
-	padding: var(--space-2xs) var(--gutter) calc(var(--space-2xs) + env(safe-area-inset-bottom, 0px));
+	padding: var(--space-2xs) var(--gutter) calc(var(--space-2xs) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 .composer.bar {
 	display: flex;
@@ -14708,7 +14708,7 @@ button:has(> .icon),
 		border-end-end-radius: 0;
 	}
 	.contact-modal__footer {
-		padding-block-end: calc(var(--space-s) + env(safe-area-inset-bottom, 0px));
+		padding-block-end: calc(var(--space-s) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 	}
 }
 

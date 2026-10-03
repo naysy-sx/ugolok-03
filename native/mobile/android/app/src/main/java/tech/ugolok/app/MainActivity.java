@@ -6,20 +6,19 @@ import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 import tech.ugolok.app.push.UgolokPushPlugin;
 
-// Э4.7 ТЗ-NATIVE-APPS — найдено живьём (эмулятор, Android 16/API 36):
-// WebView не меняет размер при появлении клавиатуры (поле ввода может
-// оказаться частично под ней), причём НИ ОДИН из трёх опробованных путей
-// не помогает: android:windowSoftInputMode="adjustResize" (AndroidManifest.xml)
-// не эффекта; window.visualViewport в самой странице не отражает клавиатуру
-// (.height не меняется); WindowInsetsCompat.Type.ime() здесь тоже всегда 0,
-// даже при видимой клавиатуре (dumpsys подтверждает: EDGE_TO_EDGE_ENFORCED,
-// но insets на decorView не обновляются вовсе). Это подтверждённый, пока
-// НЕ решённый апстрим-баг Capacitor 8 в edge-to-edge на Android 15/16
-// (ionic-team/capacitor#7983, #8432) — не наш код, чинить героически не
-// стали (сообщество само пока не нашло надёжный фикс). Слушатель оставлен
-// как безвредная защита на будущее: если Google/Capacitor это когда-нибудь
-// починят на уровне платформы, --keyboard-inset (custom.css's .shell,
-// keyboard-inset.js) заработает сам, без изменений здесь.
+// Э4.7 ТЗ-NATIVE-APPS — найдено живьём (эмулятор, Android 16/API 36), позже
+// переисследовано (v0.0.3, живая проверка на safe-area-inset-bottom):
+// слушатель --keyboard-inset стоял на getWindow().getDecorView() — на ТОМ ЖЕ
+// view, где плагин Capacitor SystemBars (insetsHandling: native) ставит свой
+// собственный ViewCompat.setOnApplyWindowInsetsListener. Это не список, а
+// слот с одним значением: наш вызов (после super.onCreate()) полностью
+// подменял слушатель SystemBars, и его корректная пересборка инсетов
+// (критичная для нижнего inset — см. SystemBars.java getBottomInset()) ни
+// разу не выполнялась. Отсюда и "ime() всегда 0" (ложно приписано апстрим-
+// багу), и env(safe-area-inset-bottom) всегда 0 в релизе. Фикс: вешаем свой
+// слушатель на webView (потомок decorView), а не на decorView — диспетчеризация
+// инсетов идёт сверху вниз, так что webView получает уже исправленные
+// SystemBars инсеты, и оба механизма не конфликтуют.
 public class MainActivity extends BridgeActivity {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -29,7 +28,17 @@ public class MainActivity extends BridgeActivity {
 		registerPlugin(UgolokPushPlugin.class);
 		super.onCreate(savedInstanceState);
 		final android.webkit.WebView webView = getBridge().getWebView();
-		ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {
+		// Живая проверка (v0.0.3→v0.0.4) — на WebView <140 (все реальные
+		// устройства сейчас) SystemBars.insetsHandling=css физически ресайзит
+		// WebView при каждом показе/скрытии клавиатуры (v.setPadding с
+		// imeInsets.bottom), а дефолтный фон WebView/окна — белый. Пересоздание
+		// поверхности при ресайзе на секунду показывает этот белый фон вместо
+		// кремового фона приложения — отсюда "пугающая белая вспышка" при тапе
+		// на поле ввода. Фикс не устраняет сам ресайз (это внутренняя логика
+		// плагина, вне нашего кода), но меняет цвет "подложки" на тон фона
+		// приложения по умолчанию, так что вспышка становится незаметной.
+		webView.setBackgroundColor(android.graphics.Color.parseColor("#FCF8F3"));
+		ViewCompat.setOnApplyWindowInsetsListener(webView, (view, insets) -> {
 			int imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
 			webView.evaluateJavascript("document.documentElement.style.setProperty('--keyboard-inset','" + imeBottom + "px')", null);
 			return insets;
