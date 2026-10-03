@@ -10348,17 +10348,16 @@ button[type="button"].media-mini-bar-btn {
 .shell {
 	padding-block-start: var(--safe-area-inset-top, env(safe-area-inset-top));
 	padding-block-end: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
-	/* Э4.7 ТЗ-NATIVE-APPS — найдено живьём (Android 16/API 36, эмулятор):
-	   WebView не меняет размер при появлении клавиатуры даже с явным
-	   android:windowSoftInputMode="adjustResize" в манифесте — известный
-	   нерешённый апстрим-баг Capacitor 8 в edge-to-edge на Android 15/16
-	   (ionic-team/capacitor#7983, #8432). --keyboard-inset — 0px везде,
-	   кроме Android/Capacitor, где keyboard-inset.js (Э4.7) выставляет его
-	   через window.visualViewport при появлении/скрытии клавиатуры; на
-	   остальных платформах переменная никогда не установлена, calc()
-	   вырождается в обычный 100dvh — ПОЭТОМУ это не "складывается" с
-	   поведением других платформ (тот самый риск двойного сдвига, о
-	   котором предупреждает ТЗ, — избегается тем, что источник ОДИН). */
+	/* Э4.7 → v0.0.5 ТЗ-NATIVE-APPS — adjustResize в манифесте резайзил окно
+	   нативно при каждой клавиатуре, что на реальном телефоне ломало ввод
+	   текста (апстрим-баг Chromium issues.chromium.org/issues/457682720,
+	   курсор теряет позицию при ресайзе с открытой IME). Теперь манифест —
+	   adjustNothing (окно/WebView НИКОГДА не резайзится нативно), и ЭТОТ
+	   calc() — единственное место, где контент подстраивается под
+	   клавиатуру: --keyboard-inset инжектит MainActivity.java из реального
+	   WindowInsetsCompat.Type.ime(). На Android — значение из нативного
+	   кода; на остальных платформах переменная никогда не установлена,
+	   calc() вырождается в обычный 100dvh. */
 	block-size: calc(100dvh - var(--keyboard-inset, 0px));
 }
 
