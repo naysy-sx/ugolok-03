@@ -3,7 +3,7 @@
 // media-controller.js/signaling-adapter.js, сам держит таймеры и EMIT-колбэк для UI).
 // Написан Claude напрямую (оркестрация, интеграция, порядок эффектов — §5 VOICE.md).
 
-import { reduce, RESTART_JITTER_RATIO, DEFAULT_RECOVERY_SAFETY_CAP_MS } from "./call-fsm.js";
+import { reduce, RESTART_JITTER_RATIO, DEFAULT_RECOVERY_SAFETY_CAP_MS, RING_TIMEOUT } from "./call-fsm.js";
 import { createMediaController as defaultCreateMediaController } from "./media-controller.js";
 import * as defaultSignalingAdapter from "./signaling-adapter.js";
 
@@ -449,9 +449,26 @@ export function createCallRuntime(options = {}) {
 			return; // не наш сигнал / повреждён / чужим ключом — молча пропустить
 		}
 		const fsmEvent = signalingAdapter.toFsmEvent(payload, event.pubkey, myPubkey);
+		if (!fsmEvent) return;
+		// Живой баг "звонок-призрак" (найден live-тестом, 2026-10-04): offer,
+		// доставленный с опозданием (reconnect после сна/фона телефона — своя
+		// подписка ловит бэклог с опозданием, см. transport.js's callSignalSubscriber),
+		// попадал в IDLE и безусловно запускал INCOMING_RINGING — хотя звонящий
+		// к этому моменту уже сам сдался по RING_TIMEOUT и закрыл сессию
+		// (reduceOutgoingRinging/RING_TIMEOUT). toFsmEvent не нёс created_at
+		// вовсе — FSM не могла отличить свежий offer от протухшего. Порог — тот
+		// же RING_TIMEOUT, что и у самого звонящего: отвечать на offer старше
+		// времени, за которое вызывающий сам сдаётся, нечем — звонить уже
+		// некому. Только REMOTE_OFFER (единственный тип, создающий НОВУЮ сессию
+		// из IDLE, см. call-fsm.js's reduceIdle) — остальные типы сигналов для
+		// уже закрытой/неизвестной сессии и так падают в ignore() безвредно.
+		if (fsmEvent.type === "REMOTE_OFFER" && typeof event.created_at === "number") {
+			const ageMs = Date.now() - event.created_at * 1000;
+			if (ageMs > RING_TIMEOUT) return;
+		}
 		// safetyCapMs нужен только REMOTE_OFFER (создаёт сессию с нуля, §2.4) —
 		// безобидно приклеивать всегда, reduceIdle читает поле только там.
-		if (fsmEvent) dispatch({ ...fsmEvent, safetyCapMs });
+		dispatch({ ...fsmEvent, safetyCapMs });
 	}
 
 	function getState() {
