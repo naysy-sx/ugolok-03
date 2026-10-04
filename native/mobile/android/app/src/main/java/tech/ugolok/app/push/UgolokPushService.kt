@@ -46,7 +46,18 @@ class UgolokPushService : Service() {
         const val EXTRA_TOPICS_JSON = "topics_json"
 
         private const val CHANNEL_MESSAGES = "push_messages"
-        private const val CHANNEL_CALLS = "push_calls"
+        // Живой баг (найден live-тестом, 2026-10-04): звук канала уведомлений
+        // Android фиксирует НАВСЕГДА при первом createNotificationChannel() —
+        // повторные вызовы с другими параметрами (даже после обновления кода)
+        // молча игнорируются системой, канал не пересоздаётся и не обновляется.
+        // На тестовом телефоне "push_calls" был создан ДО того, как звук стал
+        // настраиваться правильно (RingtoneManager + USAGE_NOTIFICATION_RINGTONE)
+        // — остался навсегда с generic content://settings/system/notification_sound
+        // и USAGE_NOTIFICATION (без рингтона). Единственный штатный способ
+        // починить уже установленным пользователям — новый id канала, не
+        // патч существующего (см. createChannels() ниже — createNotificationChannel
+        // для "v2" создаст канал с нуля с правильным звуком).
+        private const val CHANNEL_CALLS = "push_calls_v2"
         private const val CHANNEL_BACKGROUND = "push_background"
 
         private const val STATUS_NOTIF_ID = 9001
