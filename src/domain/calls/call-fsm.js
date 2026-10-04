@@ -15,7 +15,11 @@
 // отсутствующий I1, сломанный glare, синтаксис) — переписано Claude напрямую,
 // не патчем поверх (triage 13a: гонки состояний, не рутина).
 
-const RING_TIMEOUT = 30000;
+// Экспортирован (не только внутренний const) — call-runtime.js's
+// handleIncomingSignal использует то же значение как порог устаревания
+// REMOTE_OFFER (живой баг "звонок-призрак", 2026-10-04): один и тот же
+// RING_TIMEOUT, не рассинхронизированная копия числа.
+export const RING_TIMEOUT = 30000;
 const CONNECT_TIMEOUT = 15000;
 
 // TZ-recovery-policy.md §2.2 — пауза после ICE_DISCONNECTED/ICE_FAILED перед

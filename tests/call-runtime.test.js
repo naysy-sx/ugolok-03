@@ -311,6 +311,32 @@ test("handleIncomingSignal: событие для чужой (устаревше
 	assert.deepEqual(runtime.getState(), before);
 });
 
+// Живой баг "звонок-призрак" (найден live-тестом, 2026-10-04): offer,
+// доставленный с опозданием (телефон проснулся/переподключился позже, чем
+// звонящий сдался по RING_TIMEOUT), безусловно запускал INCOMING_RINGING в
+// IDLE — на экране "звонит" контакт, который уже сам закрыл свою сессию.
+test("handleIncomingSignal: REMOTE_OFFER старше RING_TIMEOUT (доставлен с опозданием, напр. после сна телефона) игнорируется — IDLE не превращается в звонок-призрак", async () => {
+	const { runtime } = makeRuntime(BOB_PRIV, BOB_PUB);
+	const staleCreatedAt = Math.floor(Date.now() / 1000) - 45; // старше RING_TIMEOUT=30с
+	const staleOffer = buildCallSignalEvent(ALICE_PRIV, BOB_PUB, { type: "offer", sessionId: "ghost", sdp: { type: "offer", sdp: "x" } }, staleCreatedAt);
+
+	runtime.handleIncomingSignal(staleOffer);
+	await flush();
+
+	assert.equal(runtime.getState().name, "IDLE", "протухший offer не должен поднимать INCOMING_RINGING");
+});
+
+test("handleIncomingSignal: REMOTE_OFFER моложе RING_TIMEOUT доставляется как обычно (порог не слишком агрессивен)", async () => {
+	const { runtime } = makeRuntime(BOB_PRIV, BOB_PUB);
+	const freshCreatedAt = Math.floor(Date.now() / 1000) - 5; // моложе RING_TIMEOUT=30с
+	const freshOffer = buildCallSignalEvent(ALICE_PRIV, BOB_PUB, { type: "offer", sessionId: "real", sdp: { type: "offer", sdp: "x" } }, freshCreatedAt);
+
+	runtime.handleIncomingSignal(freshOffer);
+	await flush();
+
+	assert.equal(runtime.getState().name, "INCOMING_RINGING", "свежий offer в пределах RING_TIMEOUT обязан звонить как обычно");
+});
+
 // --- Rooms, этап 4 (ROOMS-SPEC §5.3) — hTopic пробрасывается в ctx сигналинга ---
 
 test("createCallRuntime({hTopic}): опубликованные сигнальные события несут тег h (mesh-supervisor.js использует эту опцию)", async () => {
